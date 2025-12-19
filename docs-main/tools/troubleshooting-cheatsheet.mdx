@@ -1,0 +1,795 @@
+---
+title: "Troubleshooting Cheat Sheet"
+description: "Quick-reference solutions for common Canton Network issues"
+---
+
+Quick-reference guide for resolving common Canton Network issues. Each entry provides immediate diagnostic steps and solutions derived from production support cases.
+
+---
+
+## Installation & Setup Issues
+
+### Nix Installation Problems
+
+<AccordionGroup>
+
+<Accordion title="Nix not found after installation">
+**Symptom:** Terminal returns "command not found: nix" after installation.
+
+**Solution:**
+```bash
+source ~/.nix-profile/etc/profile.d/nix.sh
+```
+
+Or restart your terminal session entirely.
+</Accordion>
+
+<Accordion title="Nix breaks after macOS update">
+**Symptom:** Nix commands fail after a macOS system update.
+
+**Solution:**
+```bash
+sudo HOME=/var/root /nix/var/nix/profiles/default/bin/nix-channel --update
+```
+
+If the issue persists, perform a complete Nix reinstallation:
+```bash
+# Uninstall
+/nix/nix-installer uninstall
+
+# Reinstall from https://nixos.org/download
+```
+</Accordion>
+
+</AccordionGroup>
+
+---
+
+### Docker & Container Issues
+
+<AccordionGroup>
+
+<Accordion title="Docker memory error during quickstart">
+**Symptom:** Container crashes with memory-related errors or OOM (Out of Memory) kills.
+
+**Solution:**
+Increase Docker memory allocation to **8GB minimum** in Docker Desktop settings:
+
+1. Open Docker Desktop → Settings → Resources
+2. Set Memory to 8GB or higher
+3. Set CPU to 4 cores or higher
+4. Apply & Restart
+
+For **Colima** users on Mac:
+```bash
+colima stop
+colima start --memory 8 --cpu 4
+```
+</Accordion>
+
+<Accordion title="Docker Compose version mismatch">
+**Symptom:** Error message containing `'env_file[1]' expected type 'string', got unconvertible type 'map[string]interface {}'`
+
+**Cause:** Docker Compose version is below 2.26.0.
+
+**Solution:**
+```bash
+# Check your version
+docker compose version
+
+# Upgrade if below 2.26.0
+# On Mac with Homebrew:
+brew install docker-compose
+
+# Or update Docker Desktop to latest version
+```
+
+Canton Quickstart requires **Docker Compose version 2.26.0 or higher**.
+</Accordion>
+
+<Accordion title="Splice container keeps restarting (unhealthy)">
+**Symptom:** `Container splice errors; looks it tries to start and fails after about 20 seconds. Other containers start ok.`
+
+**Diagnostic Steps:**
+1. Check container logs:
+   ```bash
+   docker logs splice-validator-participant-1
+   ```
+
+2. Verify resource allocation (memory/CPU)
+
+3. Check for configuration errors in `.env` file
+
+**Common Causes:**
+- Insufficient system resources (increase Docker memory to 8GB+)
+- Network/DNS resolution issues
+- Configuration errors in environment variables
+
+**Solution:**
+If using Colima, restart with increased resources:
+```bash
+colima stop
+colima start --memory 8 --cpu 4
+```
+
+Then restart the quickstart from scratch following documentation exactly.
+</Accordion>
+
+<Accordion title="Java version incompatibility">
+**Symptom:** Build or startup failures mentioning Java version issues.
+
+**Solution:**
+Canton Network requires Java 17 or 21. Java 25 is **not supported**.
+
+```bash
+# Check Java version
+java -version
+
+# Use SDKMAN to manage Java versions
+sdk install java 21-tem
+sdk use java 21-tem
+```
+</Accordion>
+
+</AccordionGroup>
+
+---
+
+### Node.js & NPM Issues
+
+<AccordionGroup>
+
+<Accordion title="make build fails with NodeJS error">
+**Symptom:** Build process fails with Node.js related errors.
+
+**Solution:**
+Verify Node.js 18.x or higher is installed:
+```bash
+node --version
+```
+
+Use nvm to manage versions:
+```bash
+nvm install 18
+nvm use 18
+```
+</Accordion>
+
+</AccordionGroup>
+
+---
+
+## Configuration Issues
+
+### Authentication & OIDC
+
+<AccordionGroup>
+
+<Accordion title="Empty auth-services URL configuration error">
+**Symptom:** 
+```
+GENERIC_CONFIG_ERROR(8,0): Cannot convert configuration...
+at 'canton.participants.participant.ledger-api.auth-services.0.url':
+The value you gave for this configuration setting ('') was the empty string
+```
+
+**Cause:** `LEDGER_API_AUTH_AUDIENCE` is not properly configured.
+
+**Solution:**
+Ensure all authentication environment variables are set in your `.env` file:
+
+```bash
+AUTH_URL="https://your-tenant.auth0.com"
+AUTH_JWKS_URL="https://your-tenant.auth0.com/.well-known/jwks.json"
+AUTH_WELLKNOWN_URL="https://your-tenant.auth0.com/.well-known/openid-configuration"
+LEDGER_API_AUTH_AUDIENCE="https://ledger_api.your-domain.com"
+VALIDATOR_ADMIN_USER="your-admin-user-id"
+WALLET_ADMIN_USER="your-wallet-user-id"
+```
+
+<Warning>
+Do not leave any authentication variable as an empty string. Either set a valid value or remove the variable entirely if not using authentication.
+</Warning>
+</Accordion>
+
+<Accordion title="ACCESS_TOKEN_EXPIRED errors">
+**Symptom:**
+```
+ACCESS_TOKEN_EXPIRED(2,0): Claims were valid until 2025-09-08T08:32:07Z, 
+current time is 2025-09-08T08:32:07.254413051Z
+```
+
+**Cause:** Token refresh timing is too tight. Default 5-minute token lifetime may be insufficient for newer splice versions.
+
+**Solution:**
+Increase the access token timeout in your OIDC provider (Auth0/Keycloak):
+
+1. In Auth0: Applications → Your App → Settings → Advanced → Access Token Lifetime
+2. Set to **15 minutes** or higher
+3. Restart your validator
+
+For Keycloak:
+- Realm Settings → Tokens → Access Token Lifespan → Set to 900 (15 minutes)
+</Accordion>
+
+<Accordion title="UNAUTHENTICATED error when enabling parties">
+**Symptom:**
+```
+GrpcClientError: UNAUTHENTICATED/An error occurred
+Request: ListKnownParties()
+```
+
+**Cause:** JWT token is misconfigured or expired. The first command (listing parties) uses the admin API without auth, but party enablement queries the Ledger API which requires valid authentication.
+
+**Solution:**
+1. Verify your JWT token is valid and not expired
+2. Check that the token has the correct scope (`daml_ledger_api`)
+3. Ensure the token audience matches `LEDGER_API_AUTH_AUDIENCE`
+
+To enable a party without the ledger API check:
+```scala
+participant.parties.enable("PartyName", synchronize = None)
+```
+</Accordion>
+
+<Accordion title="Wallet shows 'Onboard Yourself' button after upgrade">
+**Symptom:** After upgrading, logging into the wallet shows the onboarding screen instead of existing wallet data.
+
+**Cause:** User-to-party mapping may not have been migrated correctly during authentication setup.
+
+**Solution:**
+1. Verify the logged-in user ID matches your configured `WALLET_ADMIN_USER`
+2. If migrating to authenticated setup, follow the documentation precisely:
+   - Stop validator with `./stop.sh`
+   - Restart with `-a` flag: `./start.sh -a`
+3. Ensure `WALLET_ADMIN_USER` matches the user ID in your OIDC provider
+</Accordion>
+
+</AccordionGroup>
+
+---
+
+### Synchronizer & Network Configuration
+
+<AccordionGroup>
+
+<Accordion title="Cannot connect to synchronizer">
+**Symptom:** Logs show `Request failed for sequencer` or `Cannot connect to synchronizer`
+
+**Diagnostic Steps:**
+```bash
+# Check VPN connection (for DevNet)
+ping sequencer.dev.sync.global
+
+# Verify synchronizer URL in config
+grep -r "svSponsorAddress" ./
+
+# Check firewall allows port 443
+nc -zv sequencer.dev.sync.global 443
+```
+
+**Common Causes:**
+- VPN not connected (DevNet requires VPN)
+- Incorrect synchronizer URL
+- Firewall blocking port 443
+
+**Solution:**
+1. Verify VPN connection for DevNet
+2. Ensure synchronizer URL is correct:
+   - DevNet: `https://sv.sv-2.global.canton.network.digitalasset.com`
+   - TestNet: `https://sequencer.test.sync.global`
+   - MainNet: `https://sequencer.sync.global`
+</Accordion>
+
+<Accordion title="Using scan URL instead of SV URL">
+**Symptom:** 
+```
+Gave up getting 'app version of https://scan.sv-1.global.canton.network...
+```
+
+**Cause:** Configuration is using the **scan** address instead of the **sv** address.
+
+**Solution:**
+Replace the scan URL with the SV URL in your configuration:
+
+❌ Wrong: `https://scan.sv-2.global.canton.network.digitalasset.com/api/sv`
+
+✅ Correct: `https://sv.sv-2.global.canton.network.digitalasset.com`
+
+The SV (Super Validator) URL is for onboarding. The scan URL is for viewing network data.
+</Accordion>
+
+<Accordion title="TLS handshake failed">
+**Symptom:** Connection errors mentioning TLS, SSL, or certificate issues.
+
+**Diagnostic Checklist:**
+- [ ] Certificate not expired
+- [ ] Certificate chain is complete
+- [ ] Hostname matches certificate
+- [ ] Correct TLS version (1.2 or 1.3)
+
+**Solution:**
+```bash
+# Check certificate expiration
+openssl s_client -connect your-domain:443 -servername your-domain 2>/dev/null | openssl x509 -noout -dates
+
+# Verify certificate chain
+openssl s_client -connect your-domain:443 -servername your-domain -showcerts
+```
+</Accordion>
+
+</AccordionGroup>
+
+---
+
+## Runtime Errors
+
+### Package & Vetting Issues
+
+<AccordionGroup>
+
+<Accordion title="PACKAGE_SELECTION_FAILED">
+**Symptom:** Transactions fail with package selection errors.
+
+**Solution:**
+Upload and vet the required DAR file:
+
+```scala
+// In Canton Console
+dars.upload("path/to/file.dar")
+dars.vetting.enable(packageId)
+```
+
+Or via API:
+```bash
+curl -X POST "http://localhost/api/validator/v0/admin/dars" \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "dar=@path/to/file.dar"
+```
+</Accordion>
+
+<Accordion title="No package vetting state found for domain">
+**Symptom:**
+```
+NOT_FOUND: No package vetting state found for domain Some(global-domain::1220b1431ef2...)
+```
+
+**Cause:** Validator startup failed because package vetting didn't complete successfully.
+
+**Solution:**
+1. Ensure you're using the correct SV sponsor URL (not the scan URL)
+2. Check network connectivity to the synchronizer
+3. Restart the validator to retry package vetting
+
+If the issue persists, check validator logs for the specific vetting failure.
+</Accordion>
+
+<Accordion title="Authorization failed">
+**Symptom:** Commands fail with authorization-related errors.
+
+**Checklist:**
+- [ ] Party has signatory rights on the contract
+- [ ] Observer list includes the requesting party
+- [ ] Choice controller is correctly specified
+- [ ] Delegation pattern is properly configured
+
+**Example Fix:**
+Ensure the party is properly authorized:
+```scala
+// Check party authorization
+participant.parties.list().filter(_.party.contains("yourParty"))
+
+// Verify signatory status on contract
+ledger.contracts.filter(c => c.signatories.contains(yourParty))
+```
+</Accordion>
+
+</AccordionGroup>
+
+---
+
+### Transaction & Mediator Issues
+
+<AccordionGroup>
+
+<Accordion title="MEDIATOR_SAYS_TX_TIMED_OUT">
+**Symptom:**
+```
+Rejected transaction as the mediator did not receive sufficient confirmations
+within the expected timeframe.
+context = 'unresponsiveParties=>...'
+```
+
+**Cause:** One or more parties in the transaction didn't respond in time. Common reasons:
+- Insufficient Canton Coin balance for traffic top-ups
+- Network connectivity issues
+- Validator unhealthy or offline
+
+**Solution:**
+1. Check Canton Coin balance for all involved parties
+2. Top up if necessary:
+   ```bash
+   curl -X POST "http://localhost/api/validator/v0/admin/traffic/purchase" \
+     -H "Authorization: Bearer $TOKEN"
+   ```
+3. Verify all validators involved are healthy
+</Accordion>
+
+<Accordion title="Synchronizer outbox flusher failed">
+**Symptom:**
+```
+synchronizer outbox flusher failed Did not observe transactions in target synchronizer store
+```
+
+**Cause:** Topology transactions may not be getting submitted to the synchronizer properly. This can indicate network latency or participant synchronization issues.
+
+**Solution:**
+1. Check network connectivity to the synchronizer
+2. If persistent, consider enabling topology batching:
+   ```hocon
+   canton.participants.participant.parameters.topology-batching {
+     enabled = true
+     batch-timeout = 10s
+   }
+   ```
+3. Check if the issue is transient (TestNet may have periods of slower response)
+</Accordion>
+
+</AccordionGroup>
+
+---
+
+### Performance Issues
+
+<AccordionGroup>
+
+<Accordion title="503 timeouts when submitting commands">
+**Symptom:** Frequent 503 Service Unavailable errors when submitting to the Ledger API.
+
+**Diagnostic - Check for database degradation:**
+```bash
+grep "DB_STORAGE_DEGRADATION" participant.log
+grep "RejectedExecutionException" participant.log
+```
+
+If you see queue overflow:
+```
+[Running]
+pool size = 32
+active threads = 2
+queued tasks = 2000  # ← Queue is full!
+```
+
+**Solution:**
+1. **Enable pruning** to reduce database size:
+   ```yaml
+   # In validator-values.yaml
+   participantPruningSchedule:
+     cron: "0 */10 * * * ?"
+     maxDuration: 30m
+     retention: 90d
+   ```
+
+2. **Increase database resources:**
+   - Upgrade to gp3 storage (AWS)
+   - Increase IOPS
+   - Remove CPU limits on PostgreSQL pod
+
+3. **Consider using PQS** (Participant Query Store) for read-heavy workloads
+
+4. **Implement retry logic** with exponential backoff in your application
+</Accordion>
+
+<Accordion title="Pruning not running on MainNet">
+**Symptom:** Pruning schedule is configured but `/v2/state/latest-pruned-offsets` shows no pruning activity.
+
+**Cause:** First-time pruning on MainNet with large history may exceed `maxDuration`.
+
+**Solution:**
+1. Increase `maxDuration` significantly for initial pruning:
+   ```yaml
+   participantPruningSchedule:
+     cron: "0 */10 * * * ?"
+     maxDuration: 60m  # Increase from default
+     retention: 90d
+   ```
+
+2. Or temporarily increase `retention` to reduce initial volume:
+   ```yaml
+   retention: 180d  # Start with larger retention, reduce later
+   ```
+
+3. Monitor pruning progress via Canton Console:
+   ```scala
+   participant.pruning.status()
+   ```
+
+See [Monitor Pruning Progress](https://docs.daml.com/canton/usermanual/pruning.html#monitor-pruning-progress) in the documentation.
+</Accordion>
+
+<Accordion title="ContentionOnSharedResources errors">
+**Symptom:** Errors with `category = ContentionOnSharedResources`
+
+**Cause:** Multiple transactions competing for the same resources (locked contracts).
+
+**Solution:**
+1. Implement retry logic with appropriate backoff:
+   ```typescript
+   async function submitWithRetry(command, maxRetries = 5) {
+     for (let i = 0; i < maxRetries; i++) {
+       try {
+         return await submit(command);
+       } catch (e) {
+         if (e.code === 'ABORTED' && i < maxRetries - 1) {
+           await sleep(Math.pow(2, i) * 100); // Exponential backoff
+           continue;
+         }
+         throw e;
+       }
+     }
+   }
+   ```
+
+2. Consider batching related operations to reduce contention
+
+3. Review contract design for unnecessary contention points
+</Accordion>
+
+</AccordionGroup>
+
+---
+
+## Upgrade & Migration Issues
+
+<AccordionGroup>
+
+<Accordion title="Version mismatch after upgrade (still showing old version)">
+**Symptom:** Public explorers show old validator version despite successful helm upgrade.
+
+**Cause:** Using `--reuse-values` flag with helm upgrade can cause version configuration to be retained from the previous release.
+
+**Solution:**
+Upgrade without the `--reuse-values` flag:
+```bash
+helm upgrade validator splice-validator/splice-validator \
+  --version 0.5.4 \
+  -f validator-values.yaml \
+  --namespace validator
+```
+
+Verify the upgrade:
+```bash
+kubectl -n validator get deploy validator-app \
+  -o "jsonpath={.spec.template.spec.containers[0].image}"
+```
+</Accordion>
+
+<Accordion title="Node crashes after upgrade - UnrecoverableError">
+**Symptom:**
+```
+Fatal error occurred, crashing the node to recover from invalid state: 
+UnrecoverableError(Synchronizer 'global', handler returned error: ApplicationHandlerException
+```
+
+**Recovery Steps:**
+1. **DO NOT** repeatedly restart - this may compound the issue
+2. Check if you have a pre-upgrade snapshot/backup
+3. Verify migration configuration in `standalone-validator-values.yaml`:
+   ```yaml
+   migration:
+     id: 4  # Should match current network migration
+     migrating: true
+   ```
+4. Ensure participant database name is updated:
+   ```yaml
+   persistence:
+     databaseName: participant_4  # Matches migration id
+   ```
+5. If stuck, contact support with full logs
+
+<Warning>
+Always take snapshots/backups before upgrading. For Kubernetes: snapshot both Validator and Participant Persistent Volumes.
+</Warning>
+</Accordion>
+
+<Accordion title="'You don't speak 0.5.x' errors">
+**Symptom:** Version compatibility errors during upgrade attempts.
+
+**Cause:** Network has upgraded to a newer version than your node.
+
+**Solution:**
+1. Check current network version at [canton.foundation/sv-network-status](https://canton.foundation/sv-network-status/)
+2. Upgrade directly to the current network version (don't stop at intermediate versions)
+3. Follow the upgrade guide for your deployment method:
+   - [Docker Compose Upgrade Guide](https://docs.sync.global/validator_operator/validator_compose.html#upgrading)
+   - [Kubernetes Upgrade Guide](https://docs.sync.global/validator_operator/validator_k8s.html#upgrading)
+</Accordion>
+
+<Accordion title="Disaster recovery from old node ID backup">
+**Symptom:** Restoration fails with `Expected exactly one OwnerToKeyMapping for old node id... but got List()`
+
+**Cause:** Node ID dump format changed between versions. Old format used different key names.
+
+**Solution:**
+Update the JSON key names in your node ID dump to match current format:
+
+**Old format:**
+```json
+{
+  "keys": [
+    { "keyPair": "...", "name": "participant-namespace" },
+    { "keyPair": "...", "name": "participant-signing" },
+    { "keyPair": "...", "name": "participant-encryption" }
+  ],
+  "version": "0.3.20"
+}
+```
+
+**Current format:**
+```json
+{
+  "keys": [
+    { "keyPair": "...", "name": "namespace" },
+    { "keyPair": "...", "name": "signing" },
+    { "keyPair": "...", "name": "encryption" }
+  ],
+  "version": "0.4.19"
+}
+```
+</Accordion>
+
+</AccordionGroup>
+
+---
+
+## Wallet & Balance Issues
+
+<AccordionGroup>
+
+<Accordion title="Balance shows 0 after upgrade">
+**Symptom:** Wallet UI displays 0 balance after validator upgrade, but validator rewards appear.
+
+**Diagnostic Steps:**
+1. Check participant logs for connectivity issues:
+   ```bash
+   grep "Request failed for sequencer" logs-participant.log
+   grep "503 Service Unavailable" logs-validator.log
+   ```
+
+2. Verify all components are healthy:
+   ```bash
+   curl http://localhost/api/validator/readyz
+   ```
+
+**Solution:**
+1. Allow time for the validator to resync (may take several hours after major upgrade)
+2. Verify no 503 errors or UNAVAILABLE responses in logs
+3. Check that all upstream components are healthy
+4. If issue persists, restart the validator pods in sequence:
+   ```bash
+   kubectl rollout restart deployment/participant -n validator
+   kubectl rollout restart deployment/validator-app -n validator
+   ```
+</Accordion>
+
+</AccordionGroup>
+
+---
+
+## Access & Permissions
+
+<AccordionGroup>
+
+<Accordion title="JFrog Artifactory access denied">
+**Symptom:** Cannot access Canton Network artifacts from JFrog.
+
+**Solution:**
+1. If you don't have an account, request one via [support.digitalasset.com](https://support.digitalasset.com)
+2. Provide:
+   - Organization name
+   - Email addresses for access
+   - Specific artifacts needed (CN Quickstart, Canton Enterprise, etc.)
+
+3. After receiving credentials, log in at [digitalasset.jfrog.io](https://digitalasset.jfrog.io)
+
+<Info>
+JFrog access is required for Canton Enterprise licenses and certain quickstart artifacts. Community artifacts are available on GitHub.
+</Info>
+</Accordion>
+
+<Accordion title="IP Whitelisting request">
+**Symptom:** Cannot connect validator to DevNet/TestNet/MainNet.
+
+**Process:**
+1. **DevNet:** Contact your Super Validator sponsor for VPN credentials and IP whitelisting
+2. **TestNet:** Submit IP whitelisting request via support portal
+3. **MainNet:** Follow the [validator onboarding documentation](https://docs.sync.global/validator_operator/validator_onboarding.html)
+
+**Information Required:**
+- Static IP address(es) for your validator
+- Organization name
+- Super Validator sponsor (DevNet/TestNet)
+- Validator party hint
+
+Allow 2-4 weeks for DevNet/TestNet approval process.
+</Accordion>
+
+</AccordionGroup>
+
+---
+
+## Diagnostic Commands Reference
+
+### Health Checks
+
+```bash
+# Check validator health
+curl http://localhost/api/validator/readyz
+
+# Check participant health
+curl http://localhost:5003/health
+
+# Check all container status
+docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+
+# Kubernetes health
+kubectl get pods -n validator -o wide
+```
+
+### Log Analysis
+
+```bash
+# View recent validator errors
+docker logs --tail 500 validator-app 2>&1 | grep -i error
+
+# Search for specific error codes
+grep "ABORTED\|UNAVAILABLE\|NOT_FOUND" participant.log
+
+# Check for authentication issues
+grep "ACCESS_TOKEN\|UNAUTHENTICATED\|JWT" validator.log
+```
+
+### Canton Console Diagnostics
+
+```scala
+// Check node health
+health.status
+
+// List connected synchronizers
+participant.domains.list_connected()
+
+// Check party status
+participant.parties.list()
+
+// View active contracts count
+participant.ledger_api.state.acs.of_all().size
+
+// Check pruning status
+participant.pruning.status()
+```
+
+---
+
+## Getting Help
+
+If these troubleshooting steps don't resolve your issue:
+
+1. **Gather Information:**
+   - Full validator and participant logs
+   - Splice version and environment (Docker/Kubernetes)
+   - Steps to reproduce
+   - Error messages and stack traces
+
+2. **Support Channels:**
+   - **Discretionary Support:** [da-support@digitalasset.com](mailto:da-support@digitalasset.com)
+   - **Community:** Slack channels (#validator-operations, #gsf-global-synchronizer-appdev)
+
+3. **Include:**
+   - Validator ID
+   - Network (DevNet/TestNet/MainNet)
+   - Timeline of when issue started
+   - Any recent changes made
+
+<Note>
+When sharing logs, redact sensitive information (private keys, passwords, JWTs) but preserve error context and timestamps.
+</Note>
