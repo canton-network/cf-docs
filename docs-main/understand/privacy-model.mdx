@@ -174,19 +174,19 @@ template RegulatedAsset
     value : Decimal
   where
     signatory issuer
-    observer owner, regulator  -- Both can see, neither can act alone
-    
+    observer owner, regulator
+
     choice Transfer : ContractId RegulatedAsset
       with
         newOwner : Party
-      controller owner
+      controller owner  -- owner can transfer unilaterally
       do
         create this with owner = newOwner
 ```
 
 **Use when**: Third parties need visibility for compliance, audit, or information purposes.
 
-**Visibility**: `issuer` (signatory), `owner` and `regulator` (observers).
+**Visibility**: `issuer` (signatory), `owner` and `regulator` (observers). Note that `owner` is also the controller for `Transfer`, so they can execute that choice unilaterally.
 
 ### Pattern 3: Divulgence
 
@@ -288,6 +288,10 @@ template OverShared
 **Fix**: Only add observers who genuinely need visibility.
 
 ### Mistake 2: Leaking via Contract Keys
+
+<Note>
+Contract keys are not currently available in Daml 3.x / Canton 3.x but are planned for a future release. This section is included for awareness when the feature becomes available.
+</Note>
 
 ```haskell
 -- BAD: Key reveals private information

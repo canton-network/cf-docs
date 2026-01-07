@@ -7,16 +7,18 @@ If you're coming from Ethereum, Solana, or another blockchain platform, Canton w
 
 ## Core Concept Mapping
 
-| Ethereum Concept | Canton Equivalent | Key Difference |
-|-----------------|-------------------|----------------|
-| Blockchain | Synchronizer | Coordinates consensus, doesn't store state |
-| Smart Contract | Template | Defines data schema and choices (actions) |
-| Contract Instance | Contract | Immutable; changes create new contracts |
-| Function | Choice | Actions that archive/create contracts |
-| EOA (Address) | Party | Cryptographic identity with permissions |
-| Transaction | Transaction | Similar, but only parties see relevant views |
-| Global State | Distributed State | No global state - each node sees its shard |
-| Node | Validator (Participant) | Stores party data, validates transactions |
+The following table maps familiar Ethereum concepts to their Canton equivalents.
+
+| Ethereum Concept | Canton Equivalent | Canton Notes |
+|-----------------|-------------------|--------------|
+| Blockchain | Synchronizer | Coordinates consensus without storing state |
+| Smart Contract | Template | Defines data schema and executable choices |
+| Contract Instance | Contract | Immutable; state changes create new contracts |
+| Function | Choice | Actions that archive and/or create contracts |
+| EOA (Address) | Party | Cryptographic identity with explicit permissions |
+| Transaction | Transaction | Only entitled parties see their relevant views |
+| Global State | Distributed State | No global state; each node stores its parties' data |
+| Node | Validator (Participant) | Stores data only for its hosted parties |
 | Gas | Traffic | Network usage fee paid in Canton Coin |
 
 ## The Mental Model Shift
@@ -89,12 +91,14 @@ template Token
 
 ### Key Differences
 
+These are the fundamental differences between Solidity and Daml programming models.
+
 | Aspect | Solidity | Daml |
 |--------|----------|------|
-| **State** | Mutable storage variables | Immutable contracts; changes create new contracts |
+| **State model** | Mutable storage variables | Immutable contracts; changes create new contracts |
 | **Authorization** | Runtime `msg.sender` checks | Compile-time `signatory`/`controller` declarations |
-| **Visibility** | Public by default | Private by default; explicit `observer` declarations |
-| **Execution** | Anyone can call public functions | Only declared controllers can exercise choices |
+| **Default visibility** | Public by default | Private by default; explicit `observer` declarations |
+| **Execution control** | Anyone can call public functions | Only declared controllers can exercise choices |
 
 The `Transfer` choice in Daml doesn't mutate the existing contract. It **archives** the current contract and **creates** a new one with the new owner. This immutability is fundamental to Canton's privacy and integrity guarantees.
 
@@ -128,25 +132,27 @@ sequenceDiagram
 
 On Ethereum, any node can answer queries about any state. On Canton, **you must connect to the validator that hosts the party whose data you want**.
 
-> "There is no single, all-encompassing blockchain RPC endpoint you can call to retrieve all data. Instead, you'll need to use your node's RPC for private data ('Ledger API') and potentially an app provider's API for their data."
+<Note>
+There is no single, all-encompassing blockchain RPC endpoint you can call to retrieve all data. Instead, you use your validator's Ledger API for your parties' data, and potentially an application provider's API for their data.
+</Note>
 
 This is a direct consequence of privacy. If Charlie can't see Alice's data on-ledger, Charlie's node doesn't have Alice's data to query.
 
 ## Authorization Model
 
+Authorization works fundamentally differently in Canton compared to Ethereum.
+
 | Ethereum | Canton |
 |----------|--------|
-| `msg.sender` determines authorization | `signatory` and `controller` declarations |
+| `msg.sender` determines authorization | `signatory` and `controller` determine authorization |
 | Anyone can call any public function | Only specified parties can exercise choices |
 | Authorization is runtime check | Authorization is compile-time guarantee |
 
 Canton's authorization model uses three key roles:
 
-| Role | Can See Contract | Can Exercise Choices | Required for Creation |
-|------|-----------------|---------------------|----------------------|
-| **Signatory** | Always | If also controller | Yes |
-| **Observer** | Yes | No | No |
-| **Controller** | If exercising | Specified choices only | No |
+- **Signatory**: The party or parties that must authorize contract creation. Signatories always see the contract and can exercise choices if also declared as controller.
+- **Observer**: A party permitted to see the contract but cannot exercise choices unless also declared as controller.
+- **Controller**: The party permitted to execute a particular choice on a contract. Controllers see the contract when exercising.
 
 ### Authorization Example
 
@@ -169,19 +175,34 @@ template Asset
 ```
 
 In this template:
-- `issuer` must sign to create the contract
-- `owner` and `auditor` can see the contract
-- Only `owner` can exercise the `Transfer` choice
+- `issuer` must sign to create the contract (signatory)
+- `owner` and `auditor` can see the contract (observers)
+- Only `owner` can exercise the `Transfer` choice (controller)
+
+Note that `controller` declarations are per-choice. A template can have multiple choices with different controllers:
+
+```haskell
+    choice Transfer : ContractId Asset
+      controller owner      -- Only owner can transfer
+      do
+        create this with owner = newOwner
+
+    choice Audit : AuditReport
+      controller auditor    -- Only auditor can audit
+      do
+        return AuditReport with ...
+```
 
 ## Developer Tooling Comparison
 
+Canton has equivalent tooling for most Ethereum development workflows.
+
 | Ethereum Tool | Canton Equivalent | Notes |
 |--------------|-------------------|-------|
-| Solidity | Daml | Functional vs imperative; different paradigm |
+| Solidity | Daml | Functional vs imperative paradigm |
 | Hardhat / Foundry | Daml SDK + dpm | Build, test, deploy toolchain |
-| Remix | VS Code + Daml Extension | IDE with transaction visualization |
+| Remix | VS Code + Daml Extension | IDE with language support |
 | MetaMask | Wallet SDK | User wallet integration |
-| Infura / Alchemy | Node-as-a-Service providers | Hosted validator access |
 | Web3.js / ethers.js | Ledger API (gRPC/JSON) | Application integration |
 
 ## Multi-Party Workflows
@@ -230,23 +251,28 @@ template Agreement
 
 The Daml version is enforced at the protocol level. There's no way to create the contract without both signatures, and no way to exercise `Execute` without both parties.
 
+<Note>
+Multi-party authorization in Canton requires collecting signatures from parties that may be hosted on different validators. This typically involves workflow patterns where one party proposes an action and others accept it. See the developer modules for detailed patterns on implementing multi-party workflows.
+</Note>
+
 ## What You'll Need to Unlearn
+
+Coming from Ethereum, these habits will need to change.
 
 | Ethereum Habit | Canton Reality |
 |----------------|----------------|
-| **Query all state from any node** | You must query from validators hosting relevant parties |
+| **Query all state from any node** | Query from validators hosting relevant parties |
 | **Mutate contract storage** | State changes create new contracts; old ones are archived |
-| **Implicit authorization via msg.sender** | Explicit declaration of signatories, observers, controllers |
-| **Public by default** | Private by default; must explicitly add observers |
-| **Interchangeable nodes** | Validators store their parties' state; they're not interchangeable |
+| **Implicit authorization via msg.sender** | Explicit declaration of signatories and controllers |
+| **Public by default** | Private by default; explicitly add observers for visibility |
+| **Interchangeable nodes** | Validators store their hosted parties' state |
 
-### The Five Mental Shifts
+### The Four Mental Shifts
 
 1. **No global state queries**: You can't query "all tokens" across the network
 2. **Immutable contracts**: State changes create new contracts; old ones are archived
-3. **Explicit authorization**: Every action requires explicit authorization declarations
+3. **Explicit authorization**: Every action requires explicit signatory/controller declarations
 4. **Privacy by default**: You must opt-in to visibility, not opt-out
-5. **Stateful nodes**: Canton validators store their parties' state; they're not interchangeable
 
 ## Common Gotchas
 
@@ -259,8 +285,7 @@ These are the most common mistakes blockchain developers make when first buildin
 | **Building public state lookups** | Expecting Ethereum-style global queries | Design for party-scoped queries from the start |
 | **Forgetting multi-party authorization** | Ethereum's permissionless model | Always consider: who must sign? who can act? |
 | **Trying to mutate contracts** | Solidity's mutable storage model | Embrace create/archive pattern |
-| **Expecting global state queries** | Ethereum's replicated state | Query via Ledger API or PQS for your parties only |
-| **Ignoring party costs** | Addresses are free on Ethereum | Parties create state; design party structure deliberately |
+| **Designing too many parties** | Ethereum addresses are free | Each party creates storage overhead; design party structure deliberately |
 
 ## Next Steps
 
