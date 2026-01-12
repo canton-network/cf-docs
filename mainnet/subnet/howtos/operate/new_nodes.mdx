@@ -1,0 +1,171 @@
+<!-- source: canton / canton/3.4/synchronizer/howtos/operate/new_nodes.rst -->
+<!-- Copyright (c) 2025 Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved. -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
+# Add New Nodes
+
+<a id="dynamically-adding-sequencers"></a>
+
+## Add a new Sequencer to a distributed Synchronizer
+
+You can either initialize Sequencers as part of the regular
+[distributed synchronizer bootstrapping process](bootstrap.md#synchronizer-bootstrap), or dynamically add a new Sequencer
+at a later point as described in this section.
+
+The reverse procedure is documented in the [Sequencer decommissioning section](../decommission/index.md#decommissioning-sequencers).
+
+### Database Sequencer
+
+The Database Sequencer is currently unsupported.
+
+### BFT Sequencer
+
+1. Assuming that at least one existing Sequencer is accessible, [prepare a new Sequencer](bootstrap.md#synchronizer-bootstrap) and make sure it’s running.
+2. Run the following bootstrap command using instance references of the new Sequencer, the existing Sequencer, and the owners of the current Synchronizer:
+   > ```scala
+   > bootstrap
+   >   .onboard_new_sequencer(
+   >     synchronizerId.logical,
+   >     newSequencerReference,
+   >     existingSequencerReference,
+   >     synchronizerOwners,
+   >     // Avoid issues if things are slow
+   >     customCommandTimeout = Some(config.NonNegativeDuration.tryFromDuration(2.minutes)),
+   >     isBftSequencer = true,
+   >   )
+   > ```
+3. Set up new connections in either or both directions for all Sequencers using the following commands:
+   > ```scala
+   >   newSequencerReference.bft.add_peer_endpoint(existingSequencerEndpoint)
+   > // existingSequencerReference.bft.add_peer_endpoint(newSequencerEndpoint) // Optional, one direction is enough
+   > ```
+
+   > For the newly-onboarded Sequencer, the endpoints can be [configured as part of the initial network](../configure/sequencer_backend.md#sequencer-backend-bft-initial-peers).
+4. Wait for the new Sequencer to get initialized:
+   > ```scala
+   > newSequencerReference.health.wait_for_initialized()
+   > ```
+
+At this point, other nodes should be able to connect to the new Sequencer. To avoid problems, the best practice is to wait at least for the “maximum decision duration”
+(the sum of the participant_response_timeout and mediator_reaction_timeout dynamic synchronizer parameters with a default of 30 seconds each) before connecting
+nodes to a newly-onboarded Sequencer.
+
+If you encounter issues, refer to the [troubleshooting guide](../troubleshoot/index.md#synchronizer-troubleshoot-new-sequencer-onboarding).
+
+For details on the necessary admin commands, check the reference documentation.
+
+### Use separate consoles
+
+Similarly to [initializing a distributed synchronizer with separate consoles](bootstrap.md#synchronizer-bootstrapping-separate-consoles),
+dynamically onboarding new Sequencers can be achieved in separate consoles as follows:
+
+```scala
+// Third sequencer's console:
+// * write file with identity topology transactions
+{
+  sequencer3.topology.transactions.export_identity_transactionsV2(identityFile)
+}
+
+// Fist and second sequencers' (i.e., owners) console:
+// * load third sequencer's identity transactions
+// * add the third sequencer to the sequencer synchronizer state
+// * write the topology snapshot, sequencer snapshot and static synchronizer parameters to files
+{
+  // Store the third sequencer's identity topology transactions on the synchronizer
+  sequencer1.topology.transactions
+    .import_topology_snapshot_fromV2(identityFile, store = synchronizerId)
+  sequencer2.topology.transactions
+    .import_topology_snapshot_fromV2(identityFile, store = synchronizerId)
+
+  // wait for the identity transactions to become effective
+  sequencer1.topology.synchronisation.await_idle()
+  sequencer2.topology.synchronisation.await_idle()
+
+  // find the current sequencer synchronizer state
+  val sequencerSynchronizerState =
+    sequencer1.topology.sequencers
+      .list(store = synchronizerId)
+      .headOption
+      .getOrElse(sys.error("Did not find sequencer synchronizer state on the synchronizer"))
+
+  // add the third sequencer to the synchronizer state
+  val threshold = sequencerSynchronizerState.item.threshold
+  val activeSequencers = sequencerSynchronizerState.item.active :+ sequencer3.id
+  val newSerial = Some(sequencerSynchronizerState.context.serial.increment)
+  sequencer1.topology.sequencers.propose(
+    synchronizerId,
+    threshold,
+    activeSequencers,
+    serial = newSerial,
+  )
+  sequencer2.topology.sequencers.propose(
+    synchronizerId,
+    threshold,
+    activeSequencers,
+    serial = newSerial,
+  )
+  // wait for the topology change to be observed by the sequencer
+  utils.retry_until_true(commandTimeouts.bounded) {
+    sequencer1.topology.sequencers
+      .list(sequencer1.synchronizer_id)
+      .headOption
+      .map(_.item.allSequencers.forgetNE)
+      .getOrElse(Seq.empty)
+      .contains(sequencer3.id)
+  }
+
+  // fetch the onboarding state and write it to a file
+  val onboardingState = sequencer1.setup.onboarding_state_for_sequencer(sequencer3.id)
+  utils.write_to_file(onboardingState, onboardingStateFile)
+}
+
+// Third sequencer's console:
+// * read the onboarding state from file
+// * initialize the third sequencer with the onboarding state
+{
+  val onboardingState = utils.read_byte_string_from_file(onboardingStateFile)
+  sequencer3.setup.assign_from_onboarding_state(onboardingState)
+
+  sequencer3.health.initialized() shouldBe true
+}
+```
+
+<a id="dynamically-adding-mediators"></a>
+
+## Add a new Mediator to a distributed Synchronizer
+
+You can either initialize Mediators as part of the regular
+[distributed synchronizer bootstrapping process](bootstrap.md#synchronizer-bootstrap), or dynamically add a new Mediator
+at a later point as described in this section.
+
+1. [Prepare a new Mediator](bootstrap.md#synchronizer-bootstrap) node and make sure it’s running.
+2. Save the new Mediator’s identity and load it to relevant Sequencers:
+   > ```scala
+   > val mediator2Identity = mediator2.topology.transactions.identity_transactions()
+   > sequencer1.topology.transactions.load(
+   >   mediator2Identity,
+   >   store = synchronizer1Id,
+   >   ForceFlag.AlienMember,
+   > )
+   > ```
+3. Propose a new Mediator state with active Mediators including the newly-onboarding Mediator:
+   > ```scala
+   > sequencer1.topology.mediators.propose(
+   >   synchronizer1Id,
+   >   threshold = PositiveInt.one,
+   >   active = Seq(mediator1.id, mediator2.id),
+   >   group = NonNegativeInt.zero,
+   > )
+   > ```
+4. Initialize the new Mediator:
+   > ```scala
+   > mediator2.setup.assign(
+   >   synchronizer1Id,
+   >   SequencerConnections.single(sequencer1.sequencerConnection),
+   > )
+   > mediator2.health.wait_for_initialized()
+   > ```
+
+The reverse procedure is documented in the [Mediator decommissioning section](../decommission/index.md#decommissioning-mediators).
+
+For details on the necessary admin commands, check the reference documentation.

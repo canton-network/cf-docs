@@ -1,0 +1,121 @@
+<!-- source: daml / daml/3.4/sdk/reference/daml/expressions.rst -->
+<!-- Copyright (c) 2023 Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved. -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
+# Reference: Expressions
+
+This page gives reference information for Daml expressions that are not [updates](updates.md).
+
+<a id="daml-ref-def"></a>
+
+## Definitions
+
+Use assignment to bind values or functions at the top level of a Daml file or in a contract template body.
+
+### Values
+
+For example:
+
+```daml
+pi = 3.1415926535
+```
+
+The fact that `pi` has type `Decimal` is inferred from the value. To explicitly annotate the type, mention it after a colon following the variable name:
+
+```daml
+pi : Decimal = 3.1415926535
+```
+
+### Functions
+
+You can define functions. Here’s an example: a function for computing the surface area of a tube:
+
+```daml
+tubeSurfaceArea : Decimal -> Decimal -> Decimal 
+tubeSurfaceArea r h  =
+  2.0 * pi * r * h
+```
+
+Here you see:
+
+- the name of the function
+- the function’s type signature `Decimal -> Decimal -> Decimal`
+
+  This means it takes two Decimals and returns another Decimal.
+- the definition `= 2.0 * pi * r * h` (which uses the previously defined `pi`)
+
+## Arithmetic Operators
+
+| Operator                          | Works for                   |
+|-----------------------------------|-----------------------------|
+| `+`                               | `Int`, `Decimal`, `RelTime` |
+| `-`                               | `Int`, `Decimal`, `RelTime` |
+| `*`                               | `Int`, `Decimal`            |
+| `/` (integer division)            | `Int`                       |
+| `%` (integer remainder operation) | `Int`                       |
+| `^` (integer exponentiation)      | `Int`                       |
+
+The result of the modulo operation has the same sign as the dividend:
+
+* `7 / 3` and `(-7) / (-3)` evaluate to `2`
+* `(-7) / 3` and `7 / (-3)` evaluate to `-2`
+* `7 % 3` and `7 % (-3)` evaluate to `1`
+* `(-7) % 3` and `(-7) % (-3)` evaluate to `-1`
+
+To write infix expressions in prefix form, wrap the operators in parentheses. For example, `(+) 1 2` is another way of writing `1 + 2`.
+
+## Comparison Operators
+
+| Operator             | Works for                                                                                                                                                                   |
+|----------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `<`, `<=`, `>`, `>=` | `Bool`, `Text`, `Int`, `Decimal`, `Party`, `Time`                                                                                                                           |
+| `==`, `/=`           | `Bool`, `Text`, `Int`, `Decimal`, `Party`, `Time`, and [identifiers of contracts](file-structure.md#daml-ref-contract-identifiers) stemming from the same contract template |
+
+## Logical Operators
+
+The logical operators in Daml are:
+
+- `not` for negation, e.g., `not True == False`
+- `&&` for conjunction, where `a && b == and a b`
+- `||` for disjunction, where `a || b == or a b`
+
+for `Bool` variables `a` and `b`.
+
+<a id="daml-ref-if-then-else"></a>
+
+## If-then-else
+
+You can use conditional *if-then-else* expressions, for example:
+
+```daml
+if owner == scroogeMcDuck then "sell" else "buy"
+```
+
+<a id="daml-ref-let"></a>
+
+## Let
+
+To bind values or functions to be in scope beneath the expression, use the block keyword `let`:
+
+```daml
+doubled =
+  -- let binds values or functions to be in scope beneath the expression
+  let
+    double (x : Int) = 2 * x
+    up = 5
+  in double up
+```
+
+You can also use `let` inside `do` blocks:
+
+```daml
+blah = script
+  do
+    let
+      x = 1
+      y = 2
+      -- x and y are in scope for all subsequent expressions of the do block,
+      -- so can be used in expression1 and expression2.
+    expression1
+    expression2
+```

@@ -1,0 +1,556 @@
+<!-- source: canton-network-utilities / canton-network-utilities/testnet/daml-api-reference/collateral-app-model/Utility-Collateral-App-Model-Collateral.rst -->
+
+<a id="module-utility-collateral-app-model-collateral-20462"></a>
+
+# Utility.Collateral.App.Model.Collateral
+
+A collateral agreement between two counterparties and corresponding workflows.
+
+## Templates
+
+<a id="type-utility-collateral-app-model-collateral-collateralagreement-19388"></a>
+
+**template** [CollateralAgreement]()
+
+<a id="type-utility-collateral-app-model-collateral-collateralagreement-19388"></a>
+
+> Collateral agreement on-ledger which reflects an existing CSA.
+
+> Signatory: partyA, partyB, operator
+
+> | Field    | Type                                                                                                                | Description                        |
+> |----------|---------------------------------------------------------------------------------------------------------------------|------------------------------------|
+> | partyA   | [Party](https://docs.digitalasset.com/build/3.3/reference/daml/stdlib/Prelude.html#type-da-internal-lf-party-57932) | The party for Party A in the CSA.  |
+> | partyB   | [Party](https://docs.digitalasset.com/build/3.3/reference/daml/stdlib/Prelude.html#type-da-internal-lf-party-57932) | The party for Party B in the CSA.  |
+> | operator | [Party](https://docs.digitalasset.com/build/3.3/reference/daml/stdlib/Prelude.html#type-da-internal-lf-party-57932) | The Collateral App operator party. |
+> | id       | [Text](https://docs.digitalasset.com/build/3.3/reference/daml/stdlib/Prelude.html#type-ghc-types-text-51952)        | Agreement id.                      |
+> | terms    | [Terms](Utility-Collateral-App-Types.md#type-utility-collateral-app-types-terms-54778)                              | Collateral agreement terms.        |
+> + **Choice** Archive
+
+>   Controller: partyA, partyB, operator
+
+>   Returns: ()
+
+>   (no fields)
+> + <a id="type-utility-collateral-app-model-collateral-collateralagreementproposechange-98085"></a>
+
+>   **Choice** [CollateralAgreement_ProposeChange]()
+
+>   <a id="type-utility-collateral-app-model-collateral-collateralagreementproposechange-98085"></a>
+
+>   Request a modification to the collateral agreement.
+
+>   Controller: actor, operator
+
+>   Returns: [CollateralAgreement_ProposeChange_Result]()
+
+>   <a id="type-utility-collateral-app-model-collateral-collateralagreementproposechangeresult-72014"></a>
+
+>   | Field        | Type                                                                                                                | Description                         |
+>   |--------------|---------------------------------------------------------------------------------------------------------------------|-------------------------------------|
+>   | actor        | [Party](https://docs.digitalasset.com/build/3.3/reference/daml/stdlib/Prelude.html#type-da-internal-lf-party-57932) | The party exercising the choice.    |
+>   | updatedTerms | [Terms](Utility-Collateral-App-Types.md#type-utility-collateral-app-types-terms-54778)                              | Updated collateral agreement terms. |
+> + <a id="type-utility-collateral-app-model-collateral-collateralagreementterminate-82894"></a>
+
+>   **Choice** [CollateralAgreement_Terminate]()
+
+>   <a id="type-utility-collateral-app-model-collateral-collateralagreementterminate-82894"></a>
+
+>   Terminate the collateral agreement.
+
+>   Controller: actor, operator
+
+>   Returns: [CollateralAgreement_Terminate_Result]()
+
+>   <a id="type-utility-collateral-app-model-collateral-collateralagreementterminateresult-64847"></a>
+
+>   | Field              | Type                                                                                                                                                                                                                                                | Description                          |
+>   |--------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|--------------------------------------|
+>   | actor              | [Party](https://docs.digitalasset.com/build/3.3/reference/daml/stdlib/Prelude.html#type-da-internal-lf-party-57932)                                                                                                                                 | The actor to terminate the contract. |
+>   | collateralStateCid | [ContractId](https://docs.digitalasset.com/build/3.3/reference/daml/stdlib/Prelude.html#type-da-internal-lf-contractid-95282) [CollateralState](Utility-Collateral-App-Model-State.md#type-utility-collateral-app-model-state-collateralstate-5952) | Collateral State.                    |
+> + <a id="type-utility-collateral-app-model-collateral-collateralagreementtransfercollateral-26348"></a>
+
+>   **Choice** [CollateralAgreement_TransferCollateral]()
+
+>   <a id="type-utility-collateral-app-model-collateral-collateralagreementtransfercollateral-26348"></a>
+
+>   Initiate process to transfer collateral to the counterparty.
+
+>   Controller: actor, operator
+
+>   Returns: [CollateralAgreement_TransferCollateral_Result]()
+
+>   <a id="type-utility-collateral-app-model-collateral-collateralagreementtransfercollateralresult-84969"></a>
+
+>   | Field          | Type                                                                                                                | Description                                                                           |
+>   |----------------|---------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------|
+>   | actor          | [Party](https://docs.digitalasset.com/build/3.3/reference/daml/stdlib/Prelude.html#type-da-internal-lf-party-57932) | The party calling the choice. Will be the pledgor to the positions being transferred. |
+>   | positions      | [[InstrumentQuantity](Utility-Collateral-App-Types.md#type-utility-collateral-app-types-instrumentquantity-32826)]  | The positions that will be transferred.                                               |
+>   | reference      | [Text](https://docs.digitalasset.com/build/3.3/reference/daml/stdlib/Prelude.html#type-ghc-types-text-51952)        | Textual reference, used for deduplication. Please, ensure this is unique.             |
+>   | createdAt      | [Time](https://docs.digitalasset.com/build/3.3/reference/daml/stdlib/Prelude.html#type-da-internal-lf-time-63886)   | Time at which the request to Transfer Collateral is created.                          |
+>   | allocateBefore | [Time](https://docs.digitalasset.com/build/3.3/reference/daml/stdlib/Prelude.html#type-da-internal-lf-time-63886)   | Until when (exclusive) the senders are given time to allocate their assets.           |
+>   | settleBefore   | [Time](https://docs.digitalasset.com/build/3.3/reference/daml/stdlib/Prelude.html#type-da-internal-lf-time-63886)   | Until when (exclusive) the executor is given time to execute the settlement.          |
+
+<a id="type-utility-collateral-app-model-collateral-collateralagreementchangerequest-64180"></a>
+
+**template** [CollateralAgreementChangeRequest]()
+
+<a id="type-utility-collateral-app-model-collateral-collateralagreementchangerequest-64180"></a>
+
+> A request to change the terms of an existing collateral agreement.
+
+> Signatory: requestor, operator
+
+> | Field                  | Type                                                                                                                                                                                                                                               | Description                         |
+> |------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------------|
+> | operator               | [Party](https://docs.digitalasset.com/build/3.3/reference/daml/stdlib/Prelude.html#type-da-internal-lf-party-57932)                                                                                                                                | The Collateral App operator party.  |
+> | requestor              | [Party](https://docs.digitalasset.com/build/3.3/reference/daml/stdlib/Prelude.html#type-da-internal-lf-party-57932)                                                                                                                                | The requesting party.               |
+> | counterparty           | [Party](https://docs.digitalasset.com/build/3.3/reference/daml/stdlib/Prelude.html#type-da-internal-lf-party-57932)                                                                                                                                | The counterparty to the request.    |
+> | id                     | [Text](https://docs.digitalasset.com/build/3.3/reference/daml/stdlib/Prelude.html#type-ghc-types-text-51952)                                                                                                                                       | Id of the collateral agreement.     |
+> | terms                  | [Terms](Utility-Collateral-App-Types.md#type-utility-collateral-app-types-terms-54778)                                                                                                                                                             | Updated collateral agreement terms. |
+> | collateralAgreementCid | [ContractId](https://docs.digitalasset.com/build/3.3/reference/daml/stdlib/Prelude.html#type-da-internal-lf-contractid-95282) [CollateralAgreement]()<br/><br/><a id="type-utility-collateral-app-model-collateral-collateralagreement-19388"></a> | The collateral agreement to modify. |
+> + **Choice** Archive
+
+>   Controller: requestor, operator
+
+>   Returns: ()
+
+>   (no fields)
+> + <a id="type-utility-collateral-app-model-collateral-collateralagreementchangerequestaccept-174"></a>
+
+>   **Choice** [CollateralAgreementChangeRequest_Accept]()
+
+>   <a id="type-utility-collateral-app-model-collateral-collateralagreementchangerequestaccept-174"></a>
+
+>   Counterparty accepts the request.
+
+>   Controller: counterparty, operator
+
+>   Returns: [CollateralAgreementChangeRequest_Accept_Result]()
+
+>   <a id="type-utility-collateral-app-model-collateral-collateralagreementchangerequestacceptresult-52147"></a>
+
+>   (no fields)
+> + <a id="type-utility-collateral-app-model-collateral-collateralagreementchangerequestcancel-71216"></a>
+
+>   **Choice** [CollateralAgreementChangeRequest_Cancel]()
+
+>   <a id="type-utility-collateral-app-model-collateral-collateralagreementchangerequestcancel-71216"></a>
+
+>   Requestor cancels the request.
+
+>   Controller: requestor
+
+>   Returns: [CollateralAgreementChangeRequest_Cancel_Result]()
+
+>   <a id="type-utility-collateral-app-model-collateral-collateralagreementchangerequestcancelresult-64413"></a>
+
+>   (no fields)
+> + <a id="type-utility-collateral-app-model-collateral-collateralagreementchangerequestreject-18607"></a>
+
+>   **Choice** [CollateralAgreementChangeRequest_Reject]()
+
+>   <a id="type-utility-collateral-app-model-collateral-collateralagreementchangerequestreject-18607"></a>
+
+>   Receiver rejects the request.
+
+>   Controller: counterparty
+
+>   Returns: [CollateralAgreementChangeRequest_Reject_Result]()
+
+>   <a id="type-utility-collateral-app-model-collateral-collateralagreementchangerequestrejectresult-19104"></a>
+
+>   | Field   | Type                                                                                                         | Description                                                                                                                                             |
+>   |---------|--------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------|
+>   | reason  | [Text](https://docs.digitalasset.com/build/3.3/reference/daml/stdlib/Prelude.html#type-ghc-types-text-51952) | Rejection reason. The rejection reason is not recorded on-ledger but should be available in the requestor’s and the operator’s transaction tree stream. |
+
+<a id="type-utility-collateral-app-model-collateral-collateralagreementrequest-20806"></a>
+
+**template** [CollateralAgreementRequest]()
+
+<a id="type-utility-collateral-app-model-collateral-collateralagreementrequest-20806"></a>
+
+> A request to enter into a collateral agreement with a counterparty.
+
+> Signatory: requestor, operator
+
+> | Field             | Type                                                                                                                | Description                                   |
+> |-------------------|---------------------------------------------------------------------------------------------------------------------|-----------------------------------------------|
+> | operator          | [Party](https://docs.digitalasset.com/build/3.3/reference/daml/stdlib/Prelude.html#type-da-internal-lf-party-57932) | The Collateral App operator party..           |
+> | requestor         | [Party](https://docs.digitalasset.com/build/3.3/reference/daml/stdlib/Prelude.html#type-da-internal-lf-party-57932) | The requesting party.                         |
+> | counterparty      | [Party](https://docs.digitalasset.com/build/3.3/reference/daml/stdlib/Prelude.html#type-da-internal-lf-party-57932) | The counterparty to the request.              |
+> | id                | [Text](https://docs.digitalasset.com/build/3.3/reference/daml/stdlib/Prelude.html#type-ghc-types-text-51952)        | Agreement id.                                 |
+> | requestorIsPartyA | [Bool](https://docs.digitalasset.com/build/3.3/reference/daml/stdlib/Prelude.html#type-ghc-types-bool-66265)        | Whether the requestor is `PartyA` in the CSA. |
+> | terms             | [Terms](Utility-Collateral-App-Types.md#type-utility-collateral-app-types-terms-54778)                              | Terms of the collateral agreement.            |
+> + **Choice** Archive
+
+>   Controller: requestor, operator
+
+>   Returns: ()
+
+>   (no fields)
+> + <a id="type-utility-collateral-app-model-collateral-collateralagreementrequestaccept-90104"></a>
+
+>   **Choice** [CollateralAgreementRequest_Accept]()
+
+>   <a id="type-utility-collateral-app-model-collateral-collateralagreementrequestaccept-90104"></a>
+
+>   Receiver accepts the request.
+
+>   Controller: counterparty, operator
+
+>   Returns: [CollateralAgreementRequest_Accept_Result]()
+
+>   <a id="type-utility-collateral-app-model-collateral-collateralagreementrequestacceptresult-54793"></a>
+
+>   (no fields)
+> + <a id="type-utility-collateral-app-model-collateral-collateralagreementrequestcancel-89806"></a>
+
+>   **Choice** [CollateralAgreementRequest_Cancel]()
+
+>   <a id="type-utility-collateral-app-model-collateral-collateralagreementrequestcancel-89806"></a>
+
+>   Requestor cancels the request.
+
+>   Controller: requestor
+
+>   Returns: [CollateralAgreementRequest_Cancel_Result]()
+
+>   <a id="type-utility-collateral-app-model-collateral-collateralagreementrequestcancelresult-17799"></a>
+
+>   (no fields)
+> + <a id="type-utility-collateral-app-model-collateral-collateralagreementrequestreject-94341"></a>
+
+>   **Choice** [CollateralAgreementRequest_Reject]()
+
+>   <a id="type-utility-collateral-app-model-collateral-collateralagreementrequestreject-94341"></a>
+
+>   Receiver rejects the request.
+
+>   Controller: counterparty
+
+>   Returns: [CollateralAgreementRequest_Reject_Result]()
+
+>   <a id="type-utility-collateral-app-model-collateral-collateralagreementrequestrejectresult-1774"></a>
+
+>   | Field   | Type                                                                                                         | Description                                                                                                                                             |
+>   |---------|--------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------|
+>   | reason  | [Text](https://docs.digitalasset.com/build/3.3/reference/daml/stdlib/Prelude.html#type-ghc-types-text-51952) | Rejection reason. The rejection reason is not recorded on-ledger but should be available in the requestor’s and the operator’s transaction tree stream. |
+
+<a id="type-utility-collateral-app-model-collateral-executedcollateraltransfer-67579"></a>
+
+**template** [ExecutedCollateralTransfer]()
+
+<a id="type-utility-collateral-app-model-collateral-executedcollateraltransfer-67579"></a>
+
+> Settled collateral transfer.
+
+> Signatory: operator
+
+> | Field            | Type                                                                                                                | Description                            |
+> |------------------|---------------------------------------------------------------------------------------------------------------------|----------------------------------------|
+> | partyA           | [Party](https://docs.digitalasset.com/build/3.3/reference/daml/stdlib/Prelude.html#type-da-internal-lf-party-57932) | The party for Party A in the CSA.      |
+> | partyB           | [Party](https://docs.digitalasset.com/build/3.3/reference/daml/stdlib/Prelude.html#type-da-internal-lf-party-57932) | The party for Party B in the CSA.      |
+> | operator         | [Party](https://docs.digitalasset.com/build/3.3/reference/daml/stdlib/Prelude.html#type-da-internal-lf-party-57932) | The Collateral App operator party.     |
+> | agreementId      | [Text](https://docs.digitalasset.com/build/3.3/reference/daml/stdlib/Prelude.html#type-ghc-types-text-51952)        | Agreement id.                          |
+> | id               | [Text](https://docs.digitalasset.com/build/3.3/reference/daml/stdlib/Prelude.html#type-ghc-types-text-51952)        | Identifier of the collateral movement. |
+> | settledPositions | [[CollateralPosition](Utility-Collateral-App-Types.md#type-utility-collateral-app-types-collateralposition-89524)]  | Executed collateral movements.         |
+> + **Choice** Archive
+
+>   Controller: operator
+
+>   Returns: ()
+
+>   (no fields)
+
+<a id="type-utility-collateral-app-model-collateral-failedcollateraltransfer-13005"></a>
+
+**template** [FailedCollateralTransfer]()
+
+<a id="type-utility-collateral-app-model-collateral-failedcollateraltransfer-13005"></a>
+
+> Failed collateral transfer.
+
+> Signatory: operator
+
+> | Field         | Type                                                                                                                | Description                                                                                                                                                                   |
+> |---------------|---------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+> | partyA        | [Party](https://docs.digitalasset.com/build/3.3/reference/daml/stdlib/Prelude.html#type-da-internal-lf-party-57932) | The party for Party A in the CSA.                                                                                                                                             |
+> | partyB        | [Party](https://docs.digitalasset.com/build/3.3/reference/daml/stdlib/Prelude.html#type-da-internal-lf-party-57932) | The party for Party B in the CSA.                                                                                                                                             |
+> | operator      | [Party](https://docs.digitalasset.com/build/3.3/reference/daml/stdlib/Prelude.html#type-da-internal-lf-party-57932) | The Collateral App operator party.                                                                                                                                            |
+> | agreementId   | [Text](https://docs.digitalasset.com/build/3.3/reference/daml/stdlib/Prelude.html#type-ghc-types-text-51952)        | Agreement id.                                                                                                                                                                 |
+> | id            | [Text](https://docs.digitalasset.com/build/3.3/reference/daml/stdlib/Prelude.html#type-ghc-types-text-51952)        | Proposal id.                                                                                                                                                                  |
+> | failedPledges | [[InstrumentQuantity](Utility-Collateral-App-Types.md#type-utility-collateral-app-types-instrumentquantity-32826)]  | Proposed collateral pledges. A positive amount is used to post collateral from PartyA to PartyB. A negative amount is used to reduce posted collateral from PartyA to PartyB. |
+> + **Choice** Archive
+
+>   Controller: operator
+
+>   Returns: ()
+
+>   (no fields)
+
+<a id="type-utility-collateral-app-model-collateral-instructedcollateral-41098"></a>
+
+**template** [InstructedCollateral]()
+
+<a id="type-utility-collateral-app-model-collateral-instructedcollateral-41098"></a>
+
+> Instructed collateral transfer.
+
+> Signatory: partyA, partyB, operator
+
+> | Field               | Type                                                                                                                | Description                                             |
+> |---------------------|---------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------|
+> | partyA              | [Party](https://docs.digitalasset.com/build/3.3/reference/daml/stdlib/Prelude.html#type-da-internal-lf-party-57932) | The party for Party A in the CSA.                       |
+> | partyB              | [Party](https://docs.digitalasset.com/build/3.3/reference/daml/stdlib/Prelude.html#type-da-internal-lf-party-57932) | The party for Party B in the CSA.                       |
+> | operator            | [Party](https://docs.digitalasset.com/build/3.3/reference/daml/stdlib/Prelude.html#type-da-internal-lf-party-57932) | The Collateral App operator party.                      |
+> | agreementId         | [Text](https://docs.digitalasset.com/build/3.3/reference/daml/stdlib/Prelude.html#type-ghc-types-text-51952)        | Collateral Agreement id.                                |
+> | id                  | [Text](https://docs.digitalasset.com/build/3.3/reference/daml/stdlib/Prelude.html#type-ghc-types-text-51952)        | Identifier of the collateral movement.                  |
+> | instructedPositions | [[CollateralPosition](Utility-Collateral-App-Types.md#type-utility-collateral-app-types-collateralposition-89524)]  | Proposed collateral movements.                          |
+> | createdAt           | [Time](https://docs.digitalasset.com/build/3.3/reference/daml/stdlib/Prelude.html#type-da-internal-lf-time-63886)   | The creation time.                                      |
+> | allocateBefore      | [Time](https://docs.digitalasset.com/build/3.3/reference/daml/stdlib/Prelude.html#type-da-internal-lf-time-63886)   | The time until which all allocations should be created. |
+> | settleBefore        | [Time](https://docs.digitalasset.com/build/3.3/reference/daml/stdlib/Prelude.html#type-da-internal-lf-time-63886)   | The time before which the trade should be settled.      |
+> + **Choice** Archive
+
+>   Controller: partyA, partyB, operator
+
+>   Returns: ()
+
+>   (no fields)
+> + <a id="type-utility-collateral-app-model-collateral-instructedcollateralcancel-46086"></a>
+
+>   **Choice** [InstructedCollateral_Cancel]()
+
+>   <a id="type-utility-collateral-app-model-collateral-instructedcollateralcancel-46086"></a>
+
+>   Cancel the instructed collateral.
+>   This does not unlock allocated instruments yet.
+
+>   Controller: actor
+
+>   Returns: [InstructedCollateral_Cancel_Result]()
+
+>   <a id="type-utility-collateral-app-model-collateral-instructedcollateralcancelresult-25579"></a>
+
+>   | Field       | Type                                                                                                                                                                                                                                                                                                    | Description                                                           |
+>   |-------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------|
+>   | actor       | [Party](https://docs.digitalasset.com/build/3.3/reference/daml/stdlib/Prelude.html#type-da-internal-lf-party-57932)                                                                                                                                                                                     | The party invoking this choice.                                       |
+>   | allocations | [[ContractId](https://docs.digitalasset.com/build/3.3/reference/daml/stdlib/Prelude.html#type-da-internal-lf-contractid-95282) [Allocation](https://docs.sync.global/app_dev/api/splice-api-token-allocation-v1/Splice-Api-Token-AllocationV1.html#type-splice-api-token-allocationv1-allocation-9928)] | The allocations to settle.                                            |
+>   | extraArgs   | [[ExtraArgs](https://docs.sync.global/app_dev/api/splice-api-token-metadata-v1/Splice-Api-Token-MetadataV1.html#type-splice-api-token-metadatav1-extraargs-90869)]                                                                                                                                      | For each allocation, the arguments to the `Allocation_Cancel` choice. |
+> + <a id="type-utility-collateral-app-model-collateral-instructedcollateralexecutetransfer-87719"></a>
+
+>   **Choice** [InstructedCollateral_ExecuteTransfer]()
+
+>   <a id="type-utility-collateral-app-model-collateral-instructedcollateralexecutetransfer-87719"></a>
+
+>   Execute the collateral transfer.
+>   This choice is compatible with external signing as long as `collateralStateCid` is
+>   stable (i.e. no other transfer for the same collateral agreement gets settled during
+>   the signing window for this choice).
+
+>   Controller: actor
+
+>   Returns: [InstructedCollateral_ExecuteTransfer_Result]()
+
+>   <a id="type-utility-collateral-app-model-collateral-instructedcollateralexecutetransferresult-30816"></a>
+
+>   | Field               | Type                                                                                                                                                                                                                                                                                                    | Description                                                                    |
+>   |---------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------|
+>   | actor               | [Party](https://docs.digitalasset.com/build/3.3/reference/daml/stdlib/Prelude.html#type-da-internal-lf-party-57932)                                                                                                                                                                                     | The party invoking this choice.                                                |
+>   | allocations         | [[ContractId](https://docs.digitalasset.com/build/3.3/reference/daml/stdlib/Prelude.html#type-da-internal-lf-contractid-95282) [Allocation](https://docs.sync.global/app_dev/api/splice-api-token-allocation-v1/Splice-Api-Token-AllocationV1.html#type-splice-api-token-allocationv1-allocation-9928)] | The allocations to settle.                                                     |
+>   | executeTransferArgs | [[ExtraArgs](https://docs.sync.global/app_dev/api/splice-api-token-metadata-v1/Splice-Api-Token-MetadataV1.html#type-splice-api-token-metadatav1-extraargs-90869)]                                                                                                                                      | For each allocation, the arguments to the `Allocation_ExecuteTransfer` choice. |
+>   | collateralStateCid  | [ContractId](https://docs.digitalasset.com/build/3.3/reference/daml/stdlib/Prelude.html#type-da-internal-lf-contractid-95282) [CollateralState](Utility-Collateral-App-Model-State.md#type-utility-collateral-app-model-state-collateralstate-5952)                                                     | Collateral State contract to update.                                           |
+> + **interface instance** [AllocationRequest](https://docs.sync.global/app_dev/api/splice-api-token-allocation-request-v1/Splice-Api-Token-AllocationRequestV1.html#type-splice-api-token-allocationrequestv1-allocationrequest-90278) **for** [InstructedCollateral]()
+
+>   <a id="type-utility-collateral-app-model-collateral-instructedcollateral-41098"></a>
+
+## Data Types
+
+<a id="type-utility-collateral-app-model-collateral-collateralagreementchangerequestacceptresult-52147"></a>
+
+**data** [CollateralAgreementChangeRequest_Accept_Result]()
+
+<a id="type-utility-collateral-app-model-collateral-collateralagreementchangerequestacceptresult-52147"></a>
+
+> Return record type for `CollateralAgreementChangeRequest_Accept`.
+
+> <a id="constr-utility-collateral-app-model-collateral-collateralagreementchangerequestacceptresult-66822"></a>
+
+> [CollateralAgreementChangeRequest_Accept_Result]()
+
+> <a id="constr-utility-collateral-app-model-collateral-collateralagreementchangerequestacceptresult-66822"></a>
+
+> > | Field                  | Type                                                                                                                                                                                                                                               | Description                        |
+> > |------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------|
+> > | collateralAgreementCid | [ContractId](https://docs.digitalasset.com/build/3.3/reference/daml/stdlib/Prelude.html#type-da-internal-lf-contractid-95282) [CollateralAgreement]()<br/><br/><a id="type-utility-collateral-app-model-collateral-collateralagreement-19388"></a> | The modified collateral agreement. |
+
+<a id="type-utility-collateral-app-model-collateral-collateralagreementchangerequestcancelresult-64413"></a>
+
+**data** [CollateralAgreementChangeRequest_Cancel_Result]()
+
+<a id="type-utility-collateral-app-model-collateral-collateralagreementchangerequestcancelresult-64413"></a>
+
+> Return record type for `CollateralAgreementChangeRequest_Cancel`.
+
+> <a id="constr-utility-collateral-app-model-collateral-collateralagreementchangerequestcancelresult-71648"></a>
+
+> [CollateralAgreementChangeRequest_Cancel_Result]()
+
+> <a id="constr-utility-collateral-app-model-collateral-collateralagreementchangerequestcancelresult-71648"></a>
+
+> > (no fields)
+
+<a id="type-utility-collateral-app-model-collateral-collateralagreementchangerequestrejectresult-19104"></a>
+
+**data** [CollateralAgreementChangeRequest_Reject_Result]()
+
+<a id="type-utility-collateral-app-model-collateral-collateralagreementchangerequestrejectresult-19104"></a>
+
+> Return record type for `CollateralAgreementChangeRequest_Reject`.
+
+> <a id="constr-utility-collateral-app-model-collateral-collateralagreementchangerequestrejectresult-28449"></a>
+
+> [CollateralAgreementChangeRequest_Reject_Result]()
+
+> <a id="constr-utility-collateral-app-model-collateral-collateralagreementchangerequestrejectresult-28449"></a>
+
+> > | Field   | Type                                                                                                         | Description       |
+> > |---------|--------------------------------------------------------------------------------------------------------------|-------------------|
+> > | reason  | [Text](https://docs.digitalasset.com/build/3.3/reference/daml/stdlib/Prelude.html#type-ghc-types-text-51952) | Rejection reason. |
+
+<a id="type-utility-collateral-app-model-collateral-collateralagreementrequestacceptresult-54793"></a>
+
+**data** [CollateralAgreementRequest_Accept_Result]()
+
+<a id="type-utility-collateral-app-model-collateral-collateralagreementrequestacceptresult-54793"></a>
+
+> Return record type for `CollateralAgreementRequest_Accept`.
+
+> <a id="constr-utility-collateral-app-model-collateral-collateralagreementrequestacceptresult-41984"></a>
+
+> [CollateralAgreementRequest_Accept_Result]()
+
+> <a id="constr-utility-collateral-app-model-collateral-collateralagreementrequestacceptresult-41984"></a>
+
+> > | Field                  | Type                                                                                                                                                                                                                                                | Description                                       |
+> > |------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------|
+> > | collateralAgreementCid | [ContractId](https://docs.digitalasset.com/build/3.3/reference/daml/stdlib/Prelude.html#type-da-internal-lf-contractid-95282) [CollateralAgreement]()<br/><br/><a id="type-utility-collateral-app-model-collateral-collateralagreement-19388"></a>  | The created collateral agreement.                 |
+> > | collateralStateCid     | [ContractId](https://docs.digitalasset.com/build/3.3/reference/daml/stdlib/Prelude.html#type-da-internal-lf-contractid-95282) [CollateralState](Utility-Collateral-App-Model-State.md#type-utility-collateral-app-model-state-collateralstate-5952) | The companion contract tracking collateral state. |
+
+<a id="type-utility-collateral-app-model-collateral-collateralagreementrequestcancelresult-17799"></a>
+
+**data** [CollateralAgreementRequest_Cancel_Result]()
+
+<a id="type-utility-collateral-app-model-collateral-collateralagreementrequestcancelresult-17799"></a>
+
+> Return record type for `CollateralAgreementRequest_Cancel`.
+
+> <a id="constr-utility-collateral-app-model-collateral-collateralagreementrequestcancelresult-35006"></a>
+
+> [CollateralAgreementRequest_Cancel_Result]()
+
+> <a id="constr-utility-collateral-app-model-collateral-collateralagreementrequestcancelresult-35006"></a>
+
+> > (no fields)
+
+<a id="type-utility-collateral-app-model-collateral-collateralagreementrequestrejectresult-1774"></a>
+
+**data** [CollateralAgreementRequest_Reject_Result]()
+
+<a id="type-utility-collateral-app-model-collateral-collateralagreementrequestrejectresult-1774"></a>
+
+> Return record type for `CollateralAgreementRequest_Reject`.
+
+> <a id="constr-utility-collateral-app-model-collateral-collateralagreementrequestrejectresult-99507"></a>
+
+> [CollateralAgreementRequest_Reject_Result]()
+
+> <a id="constr-utility-collateral-app-model-collateral-collateralagreementrequestrejectresult-99507"></a>
+
+> > | Field   | Type                                                                                                         | Description       |
+> > |---------|--------------------------------------------------------------------------------------------------------------|-------------------|
+> > | reason  | [Text](https://docs.digitalasset.com/build/3.3/reference/daml/stdlib/Prelude.html#type-ghc-types-text-51952) | Rejection reason. |
+
+<a id="type-utility-collateral-app-model-collateral-collateralagreementproposechangeresult-72014"></a>
+
+**data** [CollateralAgreement_ProposeChange_Result]()
+
+<a id="type-utility-collateral-app-model-collateral-collateralagreementproposechangeresult-72014"></a>
+
+> Return record type for `CollateralAgreement_ProposeChange`.
+
+> <a id="constr-utility-collateral-app-model-collateral-collateralagreementproposechangeresult-71783"></a>
+
+> [CollateralAgreement_ProposeChange_Result]()
+
+> <a id="constr-utility-collateral-app-model-collateral-collateralagreementproposechangeresult-71783"></a>
+
+> > | Field                               | Type                                                                                                                                                                                                                                                                         | Description                                       |
+> > |-------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------|
+> > | collateralAgreementChangeRequestCid | [ContractId](https://docs.digitalasset.com/build/3.3/reference/daml/stdlib/Prelude.html#type-da-internal-lf-contractid-95282) [CollateralAgreementChangeRequest]()<br/><br/><a id="type-utility-collateral-app-model-collateral-collateralagreementchangerequest-64180"></a> | The requested change to the collateral agreement. |
+
+<a id="type-utility-collateral-app-model-collateral-collateralagreementterminateresult-64847"></a>
+
+**data** [CollateralAgreement_Terminate_Result]()
+
+<a id="type-utility-collateral-app-model-collateral-collateralagreementterminateresult-64847"></a>
+
+> Return record type for `CollateralAgreement_Terminate`.
+
+> <a id="constr-utility-collateral-app-model-collateral-collateralagreementterminateresult-79330"></a>
+
+> [CollateralAgreement_Terminate_Result]()
+
+> <a id="constr-utility-collateral-app-model-collateral-collateralagreementterminateresult-79330"></a>
+
+> > (no fields)
+
+<a id="type-utility-collateral-app-model-collateral-collateralagreementtransfercollateralresult-84969"></a>
+
+**data** [CollateralAgreement_TransferCollateral_Result]()
+
+<a id="type-utility-collateral-app-model-collateral-collateralagreementtransfercollateralresult-84969"></a>
+
+> Return record type for `CollateralAgreement_TransferCollateral`.
+
+> <a id="constr-utility-collateral-app-model-collateral-collateralagreementtransfercollateralresult-39538"></a>
+
+> [CollateralAgreement_TransferCollateral_Result]()
+
+> <a id="constr-utility-collateral-app-model-collateral-collateralagreementtransfercollateralresult-39538"></a>
+
+> > | Field                   | Type                                                                                                                                                                                                                                                 | Description                         |
+> > |-------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------------|
+> > | instructedCollateralCid | [ContractId](https://docs.digitalasset.com/build/3.3/reference/daml/stdlib/Prelude.html#type-da-internal-lf-contractid-95282) [InstructedCollateral]()<br/><br/><a id="type-utility-collateral-app-model-collateral-instructedcollateral-41098"></a> | The instructed collateral movement. |
+
+<a id="type-utility-collateral-app-model-collateral-instructedcollateralcancelresult-25579"></a>
+
+**data** [InstructedCollateral_Cancel_Result]()
+
+<a id="type-utility-collateral-app-model-collateral-instructedcollateralcancelresult-25579"></a>
+
+> <a id="constr-utility-collateral-app-model-collateral-instructedcollateralcancelresult-31810"></a>
+
+> [InstructedCollateral_Cancel_Result]()
+
+> <a id="constr-utility-collateral-app-model-collateral-instructedcollateralcancelresult-31810"></a>
+
+> > (no fields)
+
+<a id="type-utility-collateral-app-model-collateral-instructedcollateralexecutetransferresult-30816"></a>
+
+**data** [InstructedCollateral_ExecuteTransfer_Result]()
+
+<a id="type-utility-collateral-app-model-collateral-instructedcollateralexecutetransferresult-30816"></a>
+
+> Result of `InstructedCollateral_ExecuteTransfer`.
+
+> <a id="constr-utility-collateral-app-model-collateral-instructedcollateralexecutetransferresult-57911"></a>
+
+> [InstructedCollateral_ExecuteTransfer_Result]()
+
+> <a id="constr-utility-collateral-app-model-collateral-instructedcollateralexecutetransferresult-57911"></a>
+
+> > | Field              | Type                                                                                                                                                                                                                                                | Description                            |
+> > |--------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------|
+> > | collateralStateCid | [ContractId](https://docs.digitalasset.com/build/3.3/reference/daml/stdlib/Prelude.html#type-da-internal-lf-contractid-95282) [CollateralState](Utility-Collateral-App-Model-State.md#type-utility-collateral-app-model-state-collateralstate-5952) | The updated collateral state contract. |

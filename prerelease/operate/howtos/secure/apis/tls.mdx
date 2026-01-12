@@ -1,0 +1,133 @@
+<!-- source: canton / canton/3.5/participant/howtos/secure/apis/tls.rst -->
+<!-- Copyright (c) 2026 Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved. -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
+<a id="tls-configuration"></a>
+
+# TLS API Configuration
+
+Both the gRPC Ledger API and the Admin API support the same TLS capabilities and can be configured using
+identical directives. TLS provides end-to-end channel encryption between the server and the client,
+and—depending on the configuration—can enforce either server-only or mutual authentication.
+
+The example configurations presented in this section are for the Ledger API, but they are the same for the Admin API.
+All private keys mentioned in these how-tos must be in the PKCS#8 PEM format.
+
+## Enable TLS for server side authentication
+
+The following settings allow a connecting client to verify that it is communicating with the intended server.
+
+```none
+canton.participants.participant4.ledger-api {
+  address = "127.0.0.1" // IP / DNS must be SAN of certificate to allow local connections from the canton process
+  port = 5041
+  tls {
+    // the certificate to be used by the server
+    cert-chain-file = "./tls/ledger-api.crt"
+    // private key of the server
+    private-key-file = "./tls/ledger-api.pem"
+    // trust collection, which means that all client certificates will be verified using the trusted
+    // certificates in this store. if omitted, the JVM default trust store is used.
+    trust-collection-file = "./tls/root-ca.crt"
+  }
+}
+
+// architecture-handbook-entry-begin: ParticipantTLSApiClient
+canton.participants.participant4.ledger-api.tls.client-auth =
+  {
+    // none, optional and require are supported
+    type = require
+    // If clients are required to authenticate as well, we need to provide a client
+    // certificate and the key, as Canton has internal processes that need to connect to these
+    // APIs. If the server certificate is trusted by the trust-collection, then you can
+    // just use the server certificates. Otherwise, you need to create separate ones.
+    admin-client {
+      cert-chain-file = "./tls/admin-client.crt"
+      private-key-file = "./tls/admin-client.pem"
+    }
+  }
+// architecture-handbook-entry-end: ParticipantTLSApiClient
+
+
+// architecture-handbook-entry-begin: ParticipantTLSApiRestrict
+// optional, if omitted, defaults to the latest TLS protocol version
+canton.participants.participant4.ledger-api.tls.minimum-server-protocol-version = TLSv1.3
+// optional, if omitted, defaults to the latest supported secure ciphers
+canton.participants.participant4.ledger-api.tls.ciphers =
+  [
+    "TLS_AES_256_GCM_SHA384",
+    "TLS_CHACHA20_POLY1305_SHA256"
+  ]
+// architecture-handbook-entry-end: ParticipantTLSApiRestrict
+
+canton.participants.participant4 {
+  admin-api {
+    address = "localhost"
+    port= 5042
+    tls {
+      cert-chain-file = "./community/app/src/test/resources/tls/admin-api.crt"
+      private-key-file = "./community/app/src/test/resources/tls/admin-api.pem"
+    }
+  }
+
+  storage {
+    type = "h2"
+    config = {
+      url = "jdbc:h2:mem:db4;MODE=PostgreSQL;LOCK_TIMEOUT=10000;DB_CLOSE_DELAY=-1"
+      user = "participant4"
+      password = "pwd"
+      driver = org.h2.Driver
+    }
+  }
+}
+```
+
+The `trust-collection-file` allows you to provide a file-based trust store. If omitted, the system
+will default to the built-in `JVM` trust store.
+The format is a collection of PEM certificates (in the right order or hierarchy), not a Java-based trust store.
+
+## Enable TLS for client side authentication
+
+Client-side authentication is disabled by default. To enable it, you must configure the `client-auth.type` to
+`require`.
+
+```none
+canton.participants.participant4.ledger-api.tls.client-auth =
+  {
+    // none, optional and require are supported
+    type = require
+    // If clients are required to authenticate as well, we need to provide a client
+    // certificate and the key, as Canton has internal processes that need to connect to these
+    // APIs. If the server certificate is trusted by the trust-collection, then you can
+    // just use the server certificates. Otherwise, you need to create separate ones.
+    admin-client {
+      cert-chain-file = "./tls/admin-client.crt"
+      private-key-file = "./tls/admin-client.pem"
+    }
+  }
+```
+
+This new `client-auth` setting enables client authentication, which means that the client needs to
+present a valid certificate (and have the corresponding private key).
+
+The `trust-collection-file` must contain all client certificates
+(or parent certificates that were used to sign the client certificate) that are trusted to use
+the API. A certificate is valid if it has been signed by a key in the trust store.
+
+## Restrict TLS ciphers and protocols
+
+Assuming the server-side configuration has been completed as described in the howto above,
+the following settings can be used to restrict the allowed TLS ciphers and protocol versions.
+By default, Canton uses the JVM default values, but you can override them using the
+variables `ciphers` and `minimum-server-protocol-version`.
+
+```none
+// optional, if omitted, defaults to the latest TLS protocol version
+canton.participants.participant4.ledger-api.tls.minimum-server-protocol-version = TLSv1.3
+// optional, if omitted, defaults to the latest supported secure ciphers
+canton.participants.participant4.ledger-api.tls.ciphers =
+  [
+    "TLS_AES_256_GCM_SHA384",
+    "TLS_CHACHA20_POLY1305_SHA256"
+  ]
+```

@@ -1,0 +1,319 @@
+<!-- source: canton / canton/3.4/synchronizer/howtos/operate/traffic.rst -->
+<!-- Copyright (c) 2025 Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved. -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
+<a id="sequencer-traffic"></a>
+
+# Sequencer Traffic Management
+
+#### NOTE
+Currently traffic management is supported only on Byzantine Fault Tolerant (BFT) Synchronizers.
+
+This page describes how to enable and configure traffic management on a Synchronizer,
+and how to inspect and manage the traffic balances of its members.
+
+Inspecting how much traffic a Synchronizer member has from the member’s perspective
+(for Participant Nodes and Mediator Nodes) is discussed in
+Manage Node traffic.
+
+## Enable traffic management on a Synchronizer
+
+Traffic management can be enabled or disabled on an existing Synchronizer via adjusting its dynamic synchronizer parameters.
+Please refer to the [Change dynamic synchronizer parameters](dynamic_params.md#dynamic-sync-params) for more details.
+
+First let’s check the current traffic management status of a Synchronizer:
+
+```none
+@ sequencer1.topology.synchronizer_parameters.get_dynamic_synchronizer_parameters(sequencer1.synchronizer_id)
+    res1: DynamicSynchronizerParameters = DynamicSynchronizerParameters(
+      confirmation response timeout = 30s,
+      mediator reaction timeout = 30s,
+      assignment exclusivity timeout = 1m,
+      ledger time record time tolerance = 1m,
+      mediator deduplication timeout = 48h,
+      reconciliation interval = 1m,
+      confirmation requests max rate = 1000000,
+      max request size = 10485760,
+      sequencer aggregate submission timeout = 6m,
+      ACS commitment catchup = AcsCommitmentsCatchUpParameters(
+        catch up interval skip = 5,
+        number of intervals to trigger catch up = 2
+      ),
+      participant synchronizer limits = ParticipantSynchronizerLimits(
+        confirmation requests max rate = 1000000
+      ),
+      preparation time record time tolerance = 24h,
+      onboarding restriction = UnrestrictedOpen
+    )
+```
+
+If the field `trafficControl` of type `TrafficControlParameters` is not set (absent in the output above)
+or has `enforceRateLimiting` set to `false` then the traffic management is inactive.
+
+To enable traffic management, you update the dynamic synchronizer parameters, setting the TrafficControlParameters
+with the `enforceRateLimiting = true` and specifying desired values for the other parameters
+documented in `:brokenref:`configuration class Scaladoc reference``.
+
+#### NOTE
+If you are using a Synchronizer with multiple owners, you need to ensure that the command
+to enable traffic management is submitted by at least the configured threshold of owners.
+
+Assuming `sequencer1` being the only synchronizer owner, run the following command to enable traffic management:
+
+```none
+@ import com.digitalasset.canton.config.RequireTypes.{NonNegativeNumeric, PositiveNumeric}
+  import com.digitalasset.canton.config.PositiveFiniteDuration
+  import com.digitalasset.canton.admin.api.client.data.TrafficControlParameters
+  val trafficControlParameters = TrafficControlParameters(
+    enforceRateLimiting = true,
+    maxBaseTrafficAmount = NonNegativeNumeric.tryCreate(20000L),
+    readVsWriteScalingFactor = PositiveNumeric.tryCreate(200),
+    maxBaseTrafficAccumulationDuration = PositiveFiniteDuration.ofSeconds(10L),
+    setBalanceRequestSubmissionWindowSize = PositiveFiniteDuration.ofMinutes(5L),
+    baseEventCost = NonNegativeNumeric.tryCreate(500L),
+  )
+  sequencer1.topology.synchronizer_parameters.propose_update(
+    synchronizerId = sequencer1.synchronizer_id,
+    _.update(trafficControl = Some(trafficControlParameters)),
+  )
+```
+
+Let’s confirm that the traffic management is now enabled by checking the synchronizer parameters again:
+
+```none
+@ sequencer1.topology.synchronizer_parameters
+  .get_dynamic_synchronizer_parameters(sequencer1.synchronizer_id)
+    res3: DynamicSynchronizerParameters = DynamicSynchronizerParameters(
+      confirmation response timeout = 30s,
+      mediator reaction timeout = 30s,
+      assignment exclusivity timeout = 1m,
+      ledger time record time tolerance = 1m,
+      mediator deduplication timeout = 48h,
+      reconciliation interval = 1m,
+      confirmation requests max rate = 1000000,
+      max request size = 10485760,
+      sequencer aggregate submission timeout = 6m,
+      traffic control = TrafficControlParameters(
+        max base traffic amount = 20000,
+        read vs write scaling factor = 200,
+        max base traffic accumulation duration = 10s,
+        set balance request submission window size = 5m,
+        enforce rate limiting = true,
+        base event cost = 500
+      ),
+      ACS commitment catchup = AcsCommitmentsCatchUpParameters(
+        catch up interval skip = 5,
+        number of intervals to trigger catch up = 2
+      ),
+      participant synchronizer limits = ParticipantSynchronizerLimits(
+        confirmation requests max rate = 1000000
+      ),
+      preparation time record time tolerance = 24h,
+      onboarding restriction = UnrestrictedOpen
+    )
+```
+
+Note the `traffic control` in the output above.
+
+## Check the latest traffic balances of Synchronizer members
+
+One can interactively inspect and modify the traffic balances of Synchronizer members using the Canton console
+commands under `sequencer.traffic_control`.
+
+To inspect the traffic balances of all members of a Synchronizer, you can use the following command:
+
+```none
+@ val allMembersTrafficState = sequencer1.traffic_control.traffic_state_of_all_members()
+  allMembersTrafficState
+    allMembersTrafficState : com.digitalasset.canton.synchronizer.sequencer.traffic.SequencerTrafficStatus = SequencerTrafficStatus(
+      trafficStatesOrErrors = Map(
+        PAR::participant1::12201ff69b1d... -> Right(
+          value = TrafficState(
+            extraTrafficLimit = 0,
+            extraTrafficConsumed = 0,
+            baseTrafficRemainder = 20000,
+            lastConsumedCost = 0,
+            timestamp = 2026-01-10T22:25:46.696079Z,
+            availableTraffic = 20000
+          )
+        ),
+        MED::mediator1::122009299340... -> Right(
+          value = TrafficState(
+            extraTrafficLimit = 0,
+            extraTrafficConsumed = 0,
+            baseTrafficRemainder = 20000,
+            lastConsumedCost = 0,
+            timestamp = 2026-01-10T22:25:46.696079Z,
+            availableTraffic = 20000
+          )
+        ),
+        PAR::participant3::1220d6908163... -> Right(
+          value = TrafficState(
+            extraTrafficLimit = 0,
+            extraTrafficConsumed = 0,
+            baseTrafficRemainder = 20000,
+            lastConsumedCost = 0,
+            timestamp = 2026-01-10T22:25:46.696079Z,
+            availableTraffic = 20000
+          )
+        ),
+        PAR::participant2::1220a4d7463b... -> Right(
+          value = TrafficState(
+            extraTrafficLimit = 0,
+            extraTrafficConsumed = 0,
+            baseTrafficRemainder = 20000,
+            lastConsumedCost = 0,
+            timestamp = 2026-01-10T22:25:46.696079Z,
+            availableTraffic = 20000
+          )
+        )
+      )
+    )
+```
+
+If you only want to check the traffic balance of a specific member, you can use:
+
+```none
+@ sequencer1.traffic_control.traffic_state_of_members(Seq(participant1))
+    res5: com.digitalasset.canton.synchronizer.sequencer.traffic.SequencerTrafficStatus = SequencerTrafficStatus(
+      trafficStatesOrErrors = Map(
+        PAR::participant1::12201ff69b1d... -> Right(
+          value = TrafficState(
+            extraTrafficLimit = 0,
+            extraTrafficConsumed = 0,
+            baseTrafficRemainder = 20000,
+            lastConsumedCost = 0,
+            timestamp = 2026-01-10T22:25:46.743732Z,
+            availableTraffic = 20000
+          )
+        )
+      )
+    )
+```
+
+## Top up the traffic balance for a Synchronizer member
+
+#### NOTE
+Traffic balance entitlements of members are decided by an external workflow and communicated
+via submitting the same traffic balance via one or multiple Sequencers.
+
+#### NOTE
+Top ups must be submitted by a quorum of Sequencers to become effective. This is configured by the
+`threshold` parameter of the `SequencerSynchronizerState` topology mapping.
+
+Let’s add some traffic for a member, for example, `participant1`. First we need to know the current `serial`
+(a per-member monotonically increasing `PositiveInt`), which corresponds
+to the last traffic balance top up for that member.
+
+```none
+@ val nextSerial = allMembersTrafficState.trafficStates(participant1).serial
+  .getOrElse(PositiveNumeric.tryCreate(1))
+  .increment
+    nextSerial : PositiveNumeric[Int] = PositiveNumeric(value = 2)
+```
+
+Now we can submit a command to increase the traffic balance for `participant1` by `newBalance`:
+
+```none
+@ sequencer1.traffic_control.set_traffic_balance(
+    member = participant1,
+    serial =  nextSerial,
+    newBalance = NonNegativeNumeric.tryCreate(1000000L),
+  )
+```
+
+Now the traffic balance for `participant1` has been updated. You can verify this by checking the traffic state again:
+
+```none
+@ utils.retry_until_true(
+    sequencer1.traffic_control.traffic_state_of_members(Seq(participant1))
+      .trafficStates(participant1)
+      .serial
+      .exists(_ >= nextSerial)
+  )
+```
+
+```none
+@ val trafficStateBeforePing = sequencer1.traffic_control.traffic_state_of_members(Seq(participant1))
+  trafficStateBeforePing
+    trafficStateBeforePing : com.digitalasset.canton.synchronizer.sequencer.traffic.SequencerTrafficStatus = SequencerTrafficStatus(
+      trafficStatesOrErrors = Map(
+        PAR::participant1::12201ff69b1d... -> Right(
+          value = TrafficState(
+            extraTrafficLimit = 1000000,
+            extraTrafficConsumed = 0,
+            baseTrafficRemainder = 20000,
+            lastConsumedCost = 0,
+            timestamp = 2026-01-10T22:25:47.077782Z,
+            serial = 2,
+            availableTraffic = 1020000
+          )
+        )
+      )
+    )
+```
+
+Now let’s run `ping` between participants and observe the traffic consumption:
+
+```none
+@ participant1.health.ping(participant2)
+    res10: Duration = 1475 milliseconds
+```
+
+```none
+@ participant2.health.ping(participant3)
+    res11: Duration = 1020 milliseconds
+```
+
+```none
+@ sequencer1.traffic_control.traffic_state_of_all_members()
+    res12: com.digitalasset.canton.synchronizer.sequencer.traffic.SequencerTrafficStatus = SequencerTrafficStatus(
+      trafficStatesOrErrors = Map(
+        PAR::participant1::12201ff69b1d... -> Right(
+          value = TrafficState(
+            extraTrafficLimit = 1000000,
+            extraTrafficConsumed = 0,
+            baseTrafficRemainder = 18766,
+            lastConsumedCost = 0,
+            timestamp = 2026-01-10T22:25:49.782479Z,
+            serial = 2,
+            availableTraffic = 1018766
+          )
+        ),
+        MED::mediator1::122009299340... -> Right(
+          value = TrafficState(
+            extraTrafficLimit = 0,
+            extraTrafficConsumed = 0,
+            baseTrafficRemainder = 19351,
+            lastConsumedCost = 0,
+            timestamp = 2026-01-10T22:25:49.782479Z,
+            availableTraffic = 19351
+          )
+        ),
+        PAR::participant3::1220d6908163... -> Right(
+          value = TrafficState(
+            extraTrafficLimit = 0,
+            extraTrafficConsumed = 0,
+            baseTrafficRemainder = 15926,
+            lastConsumedCost = 0,
+            timestamp = 2026-01-10T22:25:49.782479Z,
+            availableTraffic = 15926
+          )
+        ),
+        PAR::participant2::1220a4d7463b... -> Right(
+          value = TrafficState(
+            extraTrafficLimit = 0,
+            extraTrafficConsumed = 0,
+            baseTrafficRemainder = 13047,
+            lastConsumedCost = 0,
+            timestamp = 2026-01-10T22:25:49.782479Z,
+            availableTraffic = 13047
+          )
+        )
+      )
+    )
+```
+
+Observe the traffic balances for the Participants and the Mediator decrease.
+
+For more information on traffic control and its configuration parameters, read the traffic control overview.

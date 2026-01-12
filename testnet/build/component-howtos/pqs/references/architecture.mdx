@@ -1,0 +1,83 @@
+<!-- source: pqs / pqs/3.4/component-howtos/pqs/references/architecture.rst -->
+<!-- Copyright (c) 2025, Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved. -->
+
+<a id="pqs-references-architecture"></a>
+
+# Architecture
+
+PQS is a service that operates within the trusted core infrastructure of a Participant Node. It can be configured via
+command line arguments, environment variables and configuration files. It is intended as a long-running process and
+is resilient to network outages. It is also designed to be idempotent (or “crash tolerant”) so that it can be
+restarted safely at any time. It does not write to the ledger; it is a passive consumer of data from a Canton
+Participant Node. PQS focuses on providing a powerful and scaleable “read” pipeline - as per the CQRS <sup>[1](#id6)</sup> design pattern.
+
+The following diagram shows that PQS initiates connections to both the Participant Node and the datastore (arrows
+indicate the direction of connection):
+
+Similarly, from the perspective of data-flow:
+
+Expanding the application node from the above, you can imagine many potential architectures, including:
+
+## PostgreSQL schema
+
+The PostgreSQL schema is designed to be generic and not tied to any specific Daml model. This is achieved by a fixed
+schema that relates to the general ledger model but uses a documented-oriented approach (JSONB) to store the data
+whose schema lies in the Daml models.
+
+#### WARNING
+Any database artifact starting with an underscore character (`_`) is explicitly denoted an internal
+implementation, subject to change, and should not be relied upon. Since every table is prefixed this way, they
+may change in the future - for example as a result of future functional and performance enhancements.
+
+Ledger data consumers should interact with the database via the provided SQL functions (see [SQL API](sql-api.md#pqs-references-sql-api)), which
+enables a stable supported interface. Database Administrators who wish to have a deeper understanding of the schema
+specifics, in order to understand it’s operational characteristics, can easily inspect the schema (see
+[Manual handling of schema upgrades](../upgrade.md#pqs-manual-handling-of-schema-upgrades)).
+
+### Objectives
+
+Overall, the objectives of the schema design are to facilitate:
+
+* **Scaleable writes**: high-throughput and efficient to free up as much capacity for useful work (reads) as possible.
+* **Scaleable reads**: queries can able to be parallelized, and do not become blocked behind writes. They produce
+  sensible query plans that do not result in unnecessary table scans.
+* **Ease of use**: readers can use familiar tools and techniques to query the database, without needing to understand
+  the specifics of the schema design. Instead, they can use simple entry points that provide access to data in
+  familiar ledger terms: active contracts, creates, exercises, archives, offsets, etc. Readers do not need to worry
+  about an offset-based model for point-in-time snapshot isolation.
+* **Read consistency**: readers can achieve the level of consistency that they require, including consistency with
+  other queries they are conducting.
+* **Crash tollerance**: the schema is designed to be simple and ensure recovery from any kind of crash, taking a
+  pessimistic view of what races may occur, however unlikely.
+* **Static schema**: the schema is designed to be static and not require any changes to the schema as the ledger
+  evolves, to the extent possible. Note: discovering adding new templates during normal operation does currently
+  require additional table partitions to be created.
+
+### Design
+
+To facilitate these objectives, the following design approaches have been used:
+
+* **Concurrent append-only writes**: ledger transactions are written with significant parallelism without contention,
+  ensuring that writes can be high-throughput and unconstrained by latency.
+* **Bulk batching**: using `COPY` <sup>[2](#id7)</sup> (not `INSERT` <sup>[3](#id8)</sup>) to deliver large batches of data efficiently.
+* **Offset indexed**: all data is appropriately indexed by offset to provide efficient access to slice the result by
+  offset. `BRIN` <sup>[4](#id9)</sup> indexes are used to ensure contiguity of data that is often accessed together.
+* **Implicit offset**: readers can opt for queries with implicit offset, meaning they can ignore the role of offset
+  in their queries but still receive a stable view of the ledger data. We seek to provide a similar experience to
+  PostgreSQL’s MVCC <sup>[5](#id10)</sup>, where users receive consistency benefits without needing to understand the underlying
+  implementation.
+* **Idempotent**: PQS is designed to be restarted safely at any time. All state is maintained in the datastore.
+* **Watermarks**: a single thread maintains a watermark denoting the most recent contiguous transaction -
+  representing the offset of the most recent consistent ledger transaction. In addition, the watermark processes the
+  “archive” mutation on any archived contracts or interface views, in a batch. This reintroduces data consistency
+  without needing readers to perform complex query paths. This efficiently resolves the uncertainty created by the
+  parallel writes.
+* **Schemaless content**: content defined in Daml templates uses the JSONB datatype to store the data. This allows
+  for a schemaless approach and can store any Daml model without needing to change the schema, other than custom JSONB
+  indexes.
+
+* <a id='id6'>**[1]**</a> [https://learn.microsoft.com/en-us/azure/architecture/patterns/cqrs](https://learn.microsoft.com/en-us/azure/architecture/patterns/cqrs)
+* <a id='id7'>**[2]**</a> [https://www.postgresql.org/docs/current/sql-copy.html](https://www.postgresql.org/docs/current/sql-copy.html)
+* <a id='id8'>**[3]**</a> [https://www.postgresql.org/docs/current/sql-insert.html](https://www.postgresql.org/docs/current/sql-insert.html)
+* <a id='id9'>**[4]**</a> [https://www.postgresql.org/docs/current/brin.html](https://www.postgresql.org/docs/current/brin.html)
+* <a id='id10'>**[5]**</a> [https://www.postgresql.org/docs/current/mvcc.html](https://www.postgresql.org/docs/current/mvcc.html)

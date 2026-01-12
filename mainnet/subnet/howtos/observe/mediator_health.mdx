@@ -1,0 +1,83 @@
+<!-- source: canton / canton/3.4/synchronizer/howtos/observe/mediator_health.rst -->
+<!-- Copyright (c) 2025 Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved. -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
+<a id="mediator-health"></a>
+
+# Check and monitor Mediator Node health
+
+This page describes how to inspect and understand the current status of a Mediator Node,
+and how to continuously monitor it using health checks.
+
+See also the generic guide on How to check the status of a Node and monitor its health.
+
+## Interactively check Node status
+
+Canton console can be used to interactively inspect the state and get information about a running Mediator Node.
+Execute the following command against a `mediator` reference of interest.
+
+```scala
+mediator.health.status
+```
+
+For a Mediator Node that has never been connected to a Synchronizer, the output looks like this:
+
+```none
+@ mediator1.health.status
+    res1: NodeStatus[mediator1.Status] = NotInitialized(active = true, waitingFor = Initialization)
+```
+
+For a healthy state expect the Mediator Node to report a status similar to:
+
+```none
+@ mediator1.health.status
+    res2: NodeStatus[mediator1.Status] = Node uid: mediator1::12200929934059da3e012af672ee8a5d26a7e4b3e5084920be298f791f7619843c78
+    Synchronizer id: da::122032922613929d67857e621fb13e3da49ec13883e24908404520319eee6d31fb4d::34-0
+    Uptime: 0.057176s
+    Ports:
+            admin: 30094
+    Active: true
+    Components:
+            db-storage : Ok()
+            sequencer-client : Ok()
+    Version: 3.4.11-SNAPSHOT
+    Protocol version: 34
+```
+
+The components status includes `db-storage` for the database storage backend, and `sequencer-client`.
+The latter not being `Ok()` indicates problems with the Synchronizer connectivity.
+
+The status also shows Active: true or Active: false for the Mediator Node, which in High Availability (HA)
+configuration indicates whether this Mediator Node is the active HA replica or not.
+
+## Health check endpoints
+
+To monitor the health of a Mediator Node with external tools, use the Canton Node health check endpoints.
+
+Enabling the endpoint is described in the generic guide on How to check the status of a Node and monitor its health.
+
+A Mediator Node exposes a pair of health check endpoints: `readiness` (accepts traffic)
+and `liveness` (does not require a restart), to be used respectively for load balancing and orchestration
+with tools like Kubernetes.
+
+The `readiness` endpoint corresponds to the health of the storage backend of the Mediator,
+and the `liveness` endpoint corresponds to the health of `sequencer-client` component
+in the status command output described above. This means that a fatal failure of the Sequencer connection
+of the Mediator Node requires a restart of the Mediator Node.
+
+## Liveness watchdog
+
+A Mediator Node can be configured to automatically exit when it becomes unhealthy.
+The following configuration enables an internal watchdog service that checks the Mediator Node health
+every `check-interval` seconds and kills the process after `kill-delay` seconds after
+the `liveness` reports the Node unhealthy.
+
+```none
+watchdog {
+  enabled = true
+  check-interval = 15s
+  kill-delay = 30s
+}
+```
+
+Place the above under `canton.mediators.mediator.parameters` in the configuration file of the Mediator Node.

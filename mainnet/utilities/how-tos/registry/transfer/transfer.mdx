@@ -1,0 +1,1307 @@
+<!-- source: canton-network-utilities / canton-network-utilities/mainnet/how-tos/registry/transfer/transfer.rst -->
+
+# Registry Utility - Transfer API Example
+
+This example shows how to perform a transfer offer on CNU 0.9.x and later using the HTTP JSON API.
+
+It is assumed that both the sender and receiver have all the required credentials as holders of the
+specific instrument.
+
+## Preparation
+
+Add all the required information to the source.sh file:
+
+```bash
+#!/usr/bin/env bash
+
+## =================================================================================================
+## Purpose: Configurations for this example, amend variables as needed.
+## Script: source.sh
+## =================================================================================================
+
+# sender's details
+SENDER_TOKEN="eyJhbGciOiJIUzI1NiJ9.eyJzY29wZSI6ImRhbWxfbGVkZ2VyX2FwaSIsImlhdCI6MTc1OTk5MjEzMiwiYXVkIjoiaHR0cHM6Ly91dGlsaXR5LmNhbnRvbi5uZXR3b3JrIiwic3ViIjoiaXNzdWVyIn0.6wP8xNyQopoyKk_rGv9agcIK8TLyJVYLq3oRo983z8Q"
+SENDER_PARTY_ID="issuer::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567"
+SENDER_USER_ID="issuer"
+
+# receiver's details
+RECEIVER_TOKEN="eyJhbGciOiJIUzI1NiJ9.eyJzY29wZSI6ImRhbWxfbGVkZ2VyX2FwaSIsImlhdCI6MTc1OTk5MjE0NiwiYXVkIjoiaHR0cHM6Ly91dGlsaXR5LmNhbnRvbi5uZXR3b3JrIiwic3ViIjoiaG9sZGVyIn0.4zuioSDoiysXfNLmobyW0xqXmJEY1tnvX7QOnHv1ASU"
+RECEIVER_PARTY_ID="holder::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567"
+RECEIVER_USER_ID="holder"
+
+# update your asset and amount to be transferred
+ADMIN_PARTY_ID="registrar::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567"
+ASSET_ID="INST"
+ASSET_AMOUNT="10.0"
+
+# example 1
+# BACKEND_API="https://api.utilities.digitalasset-dev.com/api/token-standard"
+# HTTP_JSON_API="https://utility.demo.registry.digitalasset.com/api/json-api"
+# example 2
+# BACKEND_API="https://api.utilities.digitalasset-dev.com/api/token-standard"
+# HTTP_JSON_API="https://utility.demo.registry.digitalasset.com/api/json-api"
+BACKEND_API="http://localhost:8080/api/token-standard"
+HTTP_JSON_API="http://localhost:8001/api/json-api"
+
+# token standard holding interface, may change when new versions of splice exists
+TRANSFERFACTORY_INTERFACE="55ba4deb0ad4662c4168b39859738a0e91388d252286480c7331b3f71a517281:Splice.Api.Token.TransferInstructionV1:TransferFactory"
+HOLDING_INTERFACE="718a0f77e505a8de22f188bd4c87fe74101274e9d4cb1bfac7d09aec7158d35b:Splice.Api.Token.HoldingV1:Holding"
+TRANSFER_INSTRUCTION_INTERFACE="55ba4deb0ad4662c4168b39859738a0e91388d252286480c7331b3f71a517281:Splice.Api.Token.TransferInstructionV1:TransferInstruction"
+```
+
+The required information is:
+
+#### Required Information
+
+| Details of   | Description                                |
+|--------------|--------------------------------------------|
+| Sender       | JWT, user ID, and party ID of the sender   |
+| Receiver     | JWT, user ID, and party ID of the receiver |
+| Operator     | Backend API and JSON Ledger API            |
+| Transfer     | Instrument ID and amount to be transferred |
+
+If possible, open three CNU UI windows, one each for the admin, sender, and receiver. This allows
+you to observe changes in holdings for the parties throughout the transfer process. The image
+below shows the initial holdings for both the sender (issuer) and the receiver (holder) for the
+instrument INST.
+
+![Initial positions](how-tos/registry/transfer/pictures/initial-position.png)
+
+### Step 1: Sender Offers a Transfer
+
+#### Step 1a - Obtain the Ledger End Offset
+
+Run the following script to obtain the ledger end offset:
+
+```bash
+#!/usr/bin/env bash
+
+## =================================================================================================
+## Sender offers a transfer
+## Step 1a: Obtains ledger end offset
+## Authorized by: Sender
+## Script: step-1a-sender-offers.sh
+## =================================================================================================
+
+DATAFILE="source.sh"
+source "$DATAFILE"
+
+OFFSET=$(curl -s GET \
+    --url "${HTTP_JSON_API}/v2/state/ledger-end" \
+    --header "Accept: application/json" \
+    --header "Authorization: Bearer ${SENDER_TOKEN}")
+
+echo "$OFFSET" | jq
+
+OUTPUTFILE="response-step-1a.json"
+echo "$OFFSET" > "$OUTPUTFILE"
+```
+
+The result is the ledger end offset at this moment, stored in response-offset.json. For
+example:
+
+```json
+{
+  "offset": 4246
+}
+```
+
+#### Step 1b - Retrieve Holding Cids
+
+Run the following script to retrieve the Holding Cids:
+
+```bash
+#!/usr/bin/env bash
+
+## =================================================================================================
+## Sender offers a transfer
+## Step 1b: Retrieve sender's holdings as of the offset from step 1a to use for the transfer
+## Authorized by: Sender
+## Script: step-1b-sender-offers.sh
+## =================================================================================================
+
+DATAFILE="source.sh"
+source "$DATAFILE"
+
+# Get offset from previous step
+if [[ -f "response-step-1a.json" ]]; then
+  JSONCONTENT=$(cat "response-step-1a.json")
+  OFFSET=$(echo "$JSONCONTENT" | jq -r ".offset")
+else
+  echo "Error: response-step-1a.json not found"
+  exit 1
+fi
+
+RESULT=$(
+    curl -s \
+    --url "${HTTP_JSON_API}/v2/state/active-contracts" \
+    --header "Authorization: Bearer ${SENDER_TOKEN}" \
+    --header "Content-Type: application/json" \
+    --request POST \
+    --data @- <<EOF
+{
+    "verbose": false,
+    "activeAtOffset": "${OFFSET}",
+    "filter": {
+        "filtersByParty": {
+            "${SENDER_PARTY_ID}": {
+                "cumulative": [{
+                    "identifierFilter": {
+                        "InterfaceFilter": {
+                            "value": {
+                                "interfaceId":"$HOLDING_INTERFACE",
+                                "includeInterfaceView": true,
+                                "includeCreatedEventBlob": false
+                            }
+                        }
+                    }
+                }]
+            }
+        }
+    }
+}
+EOF
+)
+
+
+# Filter holdings for a specific holder, instrument ID, admin and extract contractId
+HOLDINGCIDS=$(echo "$RESULT" | jq \
+  --arg SENDER_PARTY_ID "$SENDER_PARTY_ID" \
+  --arg ASSET_ID "$ASSET_ID" \
+  --arg ADMIN_PARTY_ID "$ADMIN_PARTY_ID" \
+  '[
+    .[] as $c
+    | $c.contractEntry.JsActiveContract.createdEvent.interfaceViews[]
+    | select(
+        .viewValue.owner == $SENDER_PARTY_ID and
+        .viewValue.instrumentId.id == $ASSET_ID and
+        .viewValue.instrumentId.admin == $ADMIN_PARTY_ID
+    )
+    | $c.contractEntry.JsActiveContract.createdEvent.contractId
+  ]'
+)
+
+echo "--- Holdings of sender (${SENDER_USER_ID}) as of offset ${OFFSET} ---"
+echo "$HOLDINGCIDS" | jq
+
+OUTPUTFILE="response-step-1b.json"
+echo "$HOLDINGCIDS" > "$OUTPUTFILE"
+```
+
+The result is the Holding Cids, stored in response-step-1b.json. For example:
+
+```json
+[
+  "0016ddecdd744c90c7d25fd9609369223c44337fb73dba5c63613c14f9f4e1e44eca111220c8227ae252e5767438faccd649c077c907e394ed476a7129b2af48ff9a242049",
+  "00d37133155054a7a4788c59d2f318bea3a78ab046cf1cb5e437774668b48a6f4bca11122072d862fa4cac490a05de4fedc8a3f421ed399ce0fe4a6e85155cdf5988c35dbf"
+]
+```
+
+#### Step 1c - Access the Backend API
+
+The request URL is
+${BACKEND_API}/v0/registrars/${ADMIN_PARTY_ID}/registry/transfer-instruction/v1/transfer-factory.
+To hit this endpoint, run the following script:
+
+```bash
+#!/usr/bin/env bash
+
+## =================================================================================================
+## Sender offers a transfer
+## Step 1c: Gets choice context and disclosure for the transfer-offer command
+## Authorized by: anyone
+## Script: step-1c-sender-offers.sh
+## =================================================================================================
+
+DATAFILE="source.sh"
+source "$DATAFILE"
+
+DATE_FORMAT='+%Y-%m-%dT%H:%M:%SZ'
+NOW_ISO_TIMESTAMP=$(date -u "$DATE_FORMAT")
+ONEHOUR_ISO_TIMESTAMP=$(date -u -d '+1 hour' "$DATE_FORMAT")
+
+HOLDINGCIDS=$(cat "response-step-1b.json")
+
+RESULT=$(
+    curl -s \
+    --url "${BACKEND_API}/v0/registrars/${ADMIN_PARTY_ID}/registry/transfer-instruction/v1/transfer-factory" \
+    --header "Content-Type: application/json" \
+    --request POST \
+    --data @- <<EOF
+{
+   "choiceArguments":{
+      "expectedAdmin":"${ADMIN_PARTY_ID}",
+      "transfer":{
+         "sender":"${SENDER_PARTY_ID}",
+         "receiver":"${RECEIVER_PARTY_ID}",
+         "amount":"${ASSET_AMOUNT}",
+         "instrumentId":{
+            "admin":"${ADMIN_PARTY_ID}",
+            "id":"${ASSET_ID}"
+         },
+         "requestedAt":"${NOW_ISO_TIMESTAMP}",
+         "executeBefore":"${ONEHOUR_ISO_TIMESTAMP}",
+         "inputHoldingCids":${HOLDINGCIDS},
+         "meta":{
+            "values":{
+               "splice.lfdecentralizedtrust.org/reason":""
+            }
+         }
+      },
+      "extraArgs":{
+         "context":{
+            "values":{
+
+            }
+         },
+         "meta":{
+            "values":{
+
+            }
+         }
+      }
+   },
+   "excludeDebugFields":true
+}
+EOF
+)
+
+echo "--- Endpoint response ---"
+echo $RESULT | jq
+
+OUTPUTFILE="response-step-1c.json"
+echo "$RESULT" > "$OUTPUTFILE"
+```
+
+The result contains the required choice context for executing the command, stored in
+response-step-1c.json. For example:
+
+```json
+{
+  "factoryId": "000b99a12b36d9d3b865060c19eab4558b63b105ea8f6917442aef10394712ee7dca1112205046662015ee57e20143d8ae8f9985e069d1db31e3d8540c0543f3e4ccb8e863",
+  "transferKind": "offer",
+  "choiceContext": {
+    "choiceContextData": {
+      "values": {
+        "utility.digitalasset.com/instrument-configuration": {
+          "tag": "AV_ContractId",
+          "value": "00eca75bf1e14e192de69b58054cf62f2a60a9c0aae8f4d3491a4b2fad9f9731eaca111220b5fd51ccd498385b0ceaef63243fdfef6c2e62dd8d3a2f59fdb61a9099956481"
+        },
+        "utility.digitalasset.com/sender-credentials": {
+          "tag": "AV_List",
+          "value": [
+            {
+              "tag": "AV_ContractId",
+              "value": "00840216df4df7f46e853231f4cfcd23dfb98bc4a3d670b1e0ed3b9b9afa218aecca1112207057c74dc0da345b4ec3006eae3a55ac1cd7fc34aa23c13cf453f5b9a9884235"
+            }
+          ]
+        },
+        "instrument-configuration": {
+          "tag": "AV_ContractId",
+          "value": "00eca75bf1e14e192de69b58054cf62f2a60a9c0aae8f4d3491a4b2fad9f9731eaca111220b5fd51ccd498385b0ceaef63243fdfef6c2e62dd8d3a2f59fdb61a9099956481"
+        },
+        "sender-credentials": {
+          "tag": "AV_List",
+          "value": [
+            {
+              "tag": "AV_ContractId",
+              "value": "00840216df4df7f46e853231f4cfcd23dfb98bc4a3d670b1e0ed3b9b9afa218aecca1112207057c74dc0da345b4ec3006eae3a55ac1cd7fc34aa23c13cf453f5b9a9884235"
+            }
+          ]
+        }
+      }
+    },
+    "disclosedContracts": [
+      {
+        "templateId": "170929b11d5f0ed1385f890f42887c31ff7e289c0f4bc482aff193a7173d576c:Utility.Registry.App.V0.Service.AllocationFactory:AllocationFactory",
+        "contractId": "000b99a12b36d9d3b865060c19eab4558b63b105ea8f6917442aef10394712ee7dca1112205046662015ee57e20143d8ae8f9985e069d1db31e3d8540c0543f3e4ccb8e863",
+        "createdEventBlob": "CgMyLjESmQYKRQALmaErNtnTuGUGDBnqtFWLY7EF6o9pF0Qq7xA5RxLufcoREiBQRmYgFe5X4gFD2K6PmYXgadHbMePYVAwFQ/PkzLjoYxIXdXRpbGl0eS1yZWdpc3RyeS1hcHAtdjAajQEKQDE3MDkyOWIxMWQ1ZjBlZDEzODVmODkwZjQyODg3YzMxZmY3ZTI4OWMwZjRiYzQ4MmFmZjE5M2E3MTczZDU3NmMSB1V0aWxpdHkSCFJlZ2lzdHJ5EgNBcHASAlYwEgdTZXJ2aWNlEhFBbGxvY2F0aW9uRmFjdG9yeRoRQWxsb2NhdGlvbkZhY3RvcnkigAJq/QEKUgpQOk5wcm92aWRlcjo6MTIyMGQzMDFhYmFiYmVkN2JjOGQ2ZjZhODBjZTE2ZjMzOTMzYTcyNzRhMzAxMzI0MWI3ZmIzNzNjYTdlNGYwZDY1NjcKUwpROk9yZWdpc3RyYXI6OjEyMjBkMzAxYWJhYmJlZDdiYzhkNmY2YTgwY2UxNmYzMzkzM2E3Mjc0YTMwMTMyNDFiN2ZiMzczY2E3ZTRmMGQ2NTY3ClIKUDpOb3BlcmF0b3I6OjEyMjBiMzlkZjVlZDBlM2M1ODRjZDk3ZTg2ZTc3OWRlZjkzM2Q1NDViZjlhNGZhYjNjMGZkM2U0YWQzZjdhMzZiOGZlKk5wcm92aWRlcjo6MTIyMGQzMDFhYmFiYmVkN2JjOGQ2ZjZhODBjZTE2ZjMzOTMzYTcyNzRhMzAxMzI0MWI3ZmIzNzNjYTdlNGYwZDY1NjcqT3JlZ2lzdHJhcjo6MTIyMGQzMDFhYmFiYmVkN2JjOGQ2ZjZhODBjZTE2ZjMzOTMzYTcyNzRhMzAxMzI0MWI3ZmIzNzNjYTdlNGYwZDY1NjcyTm9wZXJhdG9yOjoxMjIwYjM5ZGY1ZWQwZTNjNTg0Y2Q5N2U4NmU3NzlkZWY5MzNkNTQ1YmY5YTRmYWIzYzBmZDNlNGFkM2Y3YTM2YjhmZTnKhnS2q0AGAEIqCiYKJAgBEiCdfF/uuVvbYVGCBftUb6P/SwJDPzwGmCDQ4jzAdtOMPBAe",
+        "synchronizerId": "",
+        "debugPackageName": null,
+        "debugPayload": null,
+        "debugCreatedAt": null
+      },
+      {
+        "templateId": "ed73d5b9ab717333f3dbd122de7be3156f8bf2614a67360c3dd61fc0135133fa:Utility.Registry.V0.Configuration.Instrument:InstrumentConfiguration",
+        "contractId": "00eca75bf1e14e192de69b58054cf62f2a60a9c0aae8f4d3491a4b2fad9f9731eaca111220b5fd51ccd498385b0ceaef63243fdfef6c2e62dd8d3a2f59fdb61a9099956481",
+        "createdEventBlob": "CgMyLjESpgkKRQDsp1vx4U4ZLeabWAVM9i8qYKnAquj000kaSy+tn5cx6soREiC1/VHM1Jg4Wwzq72MkP9/vbC5i3Y06L1n9thqQmZVkgRITdXRpbGl0eS1yZWdpc3RyeS12MBqNAQpAZWQ3M2Q1YjlhYjcxNzMzM2YzZGJkMTIyZGU3YmUzMTU2ZjhiZjI2MTRhNjczNjBjM2RkNjFmYzAxMzUxMzNmYRIHVXRpbGl0eRIIUmVnaXN0cnkSAlYwEg1Db25maWd1cmF0aW9uEgpJbnN0cnVtZW50GhdJbnN0cnVtZW50Q29uZmlndXJhdGlvbiKRBWqOBQpSClA6Tm9wZXJhdG9yOjoxMjIwYjM5ZGY1ZWQwZTNjNTg0Y2Q5N2U4NmU3NzlkZWY5MzNkNTQ1YmY5YTRmYWIzYzBmZDNlNGFkM2Y3YTM2YjhmZQpSClA6TnByb3ZpZGVyOjoxMjIwZDMwMWFiYWJiZWQ3YmM4ZDZmNmE4MGNlMTZmMzM5MzNhNzI3NGEzMDEzMjQxYjdmYjM3M2NhN2U0ZjBkNjU2NwpTClE6T3JlZ2lzdHJhcjo6MTIyMGQzMDFhYmFiYmVkN2JjOGQ2ZjZhODBjZTE2ZjMzOTMzYTcyNzRhMzAxMzI0MWI3ZmIzNzNjYTdlNGYwZDY1NjcKgAEKfmp8ClMKUTpPcmVnaXN0cmFyOjoxMjIwZDMwMWFiYWJiZWQ3YmM4ZDZmNmE4MGNlMTZmMzM5MzNhNzI3NGEzMDEzMjQxYjdmYjM3M2NhN2U0ZjBkNjU2NwoICgZCBElOU1QKGwoZQhdSZWdpc3RyYXJJbnRlcm5hbFNjaGVtZQoECgJaAAqBAQp/Wn0Ke2p5ClMKUTpPcmVnaXN0cmFyOjoxMjIwZDMwMWFiYWJiZWQ3YmM4ZDZmNmE4MGNlMTZmMzM5MzNhNzI3NGEzMDEzMjQxYjdmYjM3M2NhN2U0ZjBkNjU2NwoiCiBaHgocahoKDgoMQgppc0lzc3Vlck9mCggKBkIESU5TVAqBAQp/Wn0Ke2p5ClMKUTpPcmVnaXN0cmFyOjoxMjIwZDMwMWFiYWJiZWQ3YmM4ZDZmNmE4MGNlMTZmMzM5MzNhNzI3NGEzMDEzMjQxYjdmYjM3M2NhN2U0ZjBkNjU2NwoiCiBaHgocahoKDgoMQgppc0hvbGRlck9mCggKBkIESU5TVCpOcHJvdmlkZXI6OjEyMjBkMzAxYWJhYmJlZDdiYzhkNmY2YTgwY2UxNmYzMzkzM2E3Mjc0YTMwMTMyNDFiN2ZiMzczY2E3ZTRmMGQ2NTY3Kk9yZWdpc3RyYXI6OjEyMjBkMzAxYWJhYmJlZDdiYzhkNmY2YTgwY2UxNmYzMzkzM2E3Mjc0YTMwMTMyNDFiN2ZiMzczY2E3ZTRmMGQ2NTY3Mk5vcGVyYXRvcjo6MTIyMGIzOWRmNWVkMGUzYzU4NGNkOTdlODZlNzc5ZGVmOTMzZDU0NWJmOWE0ZmFiM2MwZmQzZTRhZDNmN2EzNmI4ZmU5rPtttqtABgBCKgomCiQIARIgQ1DsOZLYGVRiscestTBDQ3CqU27WvKQODudfxMesKCEQHg==",
+        "synchronizerId": "",
+        "debugPackageName": null,
+        "debugPayload": null,
+        "debugCreatedAt": null
+      }
+    ]
+  }
+}
+```
+
+#### Step 1d - Offer the Transfer
+
+Finally, run the following script to offer the transfer:
+
+```bash
+#!/usr/bin/env bash
+
+## =================================================================================================
+## Sender offers a transfer
+## Step 1d: Executes the transfer-offer command
+## Authorized by: Sender
+## Script: step-1d-sender-offers.sh
+## =================================================================================================
+
+DATAFILE="source.sh"
+source "$DATAFILE"
+
+DATE_FORMAT='+%Y-%m-%dT%H:%M:%SZ'
+NOW_ISO_TIMESTAMP=$(date -u "$DATE_FORMAT")
+ONEHOUR_ISO_TIMESTAMP=$(date -u -d '+1 hour' "$DATE_FORMAT")
+
+HOLDINGCIDS=$(cat "response-step-1b.json")
+
+JSONCONTENT=$(cat "response-step-1c.json")
+FACTORYID=$(echo $JSONCONTENT | jq .factoryId)
+CHOICECONTEXTDATA=$(echo $JSONCONTENT | jq .choiceContext.choiceContextData)
+DISCLOSEDCONTRACTS=$(echo $JSONCONTENT | jq .choiceContext.disclosedContracts)
+
+RESULT=$(
+    curl -s \
+    --url "${HTTP_JSON_API}/v2/commands/submit-and-wait-for-transaction" \
+    --header "Authorization: Bearer ${SENDER_TOKEN}" \
+    --header "Content-Type: application/json" \
+    --request POST \
+    --data @- <<EOF
+{
+   "commands":{
+        "commands":[
+            {
+                "ExerciseCommand":{
+                    "templateId":"${TRANSFERFACTORY_INTERFACE}",
+                    "contractId":${FACTORYID},
+                    "choice":"TransferFactory_Transfer",
+                    "choiceArgument":{
+                        "expectedAdmin":"${ADMIN_PARTY_ID}",
+                        "transfer":{
+                            "sender":"${SENDER_PARTY_ID}",
+                            "receiver":"${RECEIVER_PARTY_ID}",
+                            "amount":"${ASSET_AMOUNT}",
+                            "instrumentId":{
+                                "admin":"${ADMIN_PARTY_ID}",
+                                "id":"${ASSET_ID}"
+                            },
+                            "requestedAt":"${NOW_ISO_TIMESTAMP}",
+                            "executeBefore":"${ONEHOUR_ISO_TIMESTAMP}",
+                            "inputHoldingCids":${HOLDINGCIDS},
+                            "meta":{
+                                "values":{
+                                    "splice.lfdecentralizedtrust.org/reason":""
+                                }
+                            }
+                        },
+                        "extraArgs":{
+                            "context":${CHOICECONTEXTDATA},
+                            "meta":{
+                                "values":{
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        ],
+        "workflowId":"",
+        "userId":"${SENDER_USER_ID}",
+        "commandId":"$(uuidgen | tr -d '\n')",
+        "deduplicationPeriod":{
+            "DeduplicationDuration":{
+                "value":{
+                    "seconds":30,
+                    "nanos":0
+                }
+            }
+        },
+        "actAs":[
+            "${SENDER_PARTY_ID}"
+        ],
+        "readAs":[
+
+        ],
+        "submissionId":"$(uuidgen | tr -d '\n')",
+        "disclosedContracts": ${DISCLOSEDCONTRACTS},
+        "domainId":"",
+        "packageIdSelectionPreference":[]
+    }
+}
+EOF
+)
+
+echo "--- Command response ---"
+echo $RESULT | jq
+
+OUTPUTFILE="response-step-1d.json"
+echo "$RESULT" > "$OUTPUTFILE"
+```
+
+For example, this is the response of this command:
+
+```json
+{
+  "transaction": {
+    "updateId": "1220c6b7f0a55d77b5a1634c322fa2e63bed70814d25c89ee1d07d719473a3208676",
+    "commandId": "E13861F6-F6E0-4802-B9DB-F4B70E1048BF",
+    "workflowId": "",
+    "effectiveAt": "2025-10-10T10:31:55.117218Z",
+    "events": [
+      {
+        "ArchivedEvent": {
+          "offset": 4249,
+          "nodeId": 4,
+          "contractId": "0016ddecdd744c90c7d25fd9609369223c44337fb73dba5c63613c14f9f4e1e44eca111220c8227ae252e5767438faccd649c077c907e394ed476a7129b2af48ff9a242049",
+          "templateId": "dd3a9f2d51cc4c52d9ec2e1d7ff235298dcfb3afd1d50ab44328b1aaa9a18587:Utility.Registry.Holding.V0.Holding:Holding",
+          "witnessParties": [
+            "issuer::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567"
+          ],
+          "packageName": "utility-registry-holding-v0",
+          "implementedInterfaces": []
+        }
+      },
+      {
+        "ArchivedEvent": {
+          "offset": 4249,
+          "nodeId": 6,
+          "contractId": "00d37133155054a7a4788c59d2f318bea3a78ab046cf1cb5e437774668b48a6f4bca11122072d862fa4cac490a05de4fedc8a3f421ed399ce0fe4a6e85155cdf5988c35dbf",
+          "templateId": "dd3a9f2d51cc4c52d9ec2e1d7ff235298dcfb3afd1d50ab44328b1aaa9a18587:Utility.Registry.Holding.V0.Holding:Holding",
+          "witnessParties": [
+            "issuer::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567"
+          ],
+          "packageName": "utility-registry-holding-v0",
+          "implementedInterfaces": []
+        }
+      },
+      {
+        "CreatedEvent": {
+          "offset": 4249,
+          "nodeId": 7,
+          "contractId": "0041f93610a76b343fe5e969b953805a23674304341ff36a8e61fa1df0be6fc7f3ca111220877889786a97380f80e2a00e0da81525833982d789c9d72dc43ddc24d215eecb",
+          "templateId": "dd3a9f2d51cc4c52d9ec2e1d7ff235298dcfb3afd1d50ab44328b1aaa9a18587:Utility.Registry.Holding.V0.Holding:Holding",
+          "contractKey": null,
+          "createArgument": {
+            "operator": "operator::1220b39df5ed0e3c584cd97e86e779def933d545bf9a4fab3c0fd3e4ad3f7a36b8fe",
+            "provider": "provider::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+            "registrar": "registrar::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+            "owner": "issuer::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+            "instrument": {
+              "source": "registrar::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+              "id": "INST",
+              "scheme": "RegistrarInternalScheme"
+            },
+            "label": "",
+            "amount": "10.0000000000",
+            "lock": {
+              "lockers": {
+                "map": [
+                  [
+                    "registrar::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+                    {}
+                  ]
+                ]
+              },
+              "context": "",
+              "observers": {
+                "map": [
+                  [
+                    "holder::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+                    {}
+                  ]
+                ]
+              }
+            }
+          },
+          "createdEventBlob": "",
+          "interfaceViews": [],
+          "witnessParties": [
+            "issuer::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567"
+          ],
+          "signatories": [
+            "issuer::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+            "registrar::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567"
+          ],
+          "observers": [
+            "holder::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+            "operator::1220b39df5ed0e3c584cd97e86e779def933d545bf9a4fab3c0fd3e4ad3f7a36b8fe",
+            "provider::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567"
+          ],
+          "createdAt": "2025-10-10T10:31:55.117218Z",
+          "packageName": "utility-registry-holding-v0"
+        }
+      },
+      {
+        "CreatedEvent": {
+          "offset": 4249,
+          "nodeId": 8,
+          "contractId": "00c5ebf11bba0ef8c43531a83906453997253ed8493334cabc0852e057e01d849dca111220b95fcfdcd054ab8f88a0196f3129651facd8c6f1103db092824a1f857ffd53f5",
+          "templateId": "dd3a9f2d51cc4c52d9ec2e1d7ff235298dcfb3afd1d50ab44328b1aaa9a18587:Utility.Registry.Holding.V0.Holding:Holding",
+          "contractKey": null,
+          "createArgument": {
+            "operator": "operator::1220b39df5ed0e3c584cd97e86e779def933d545bf9a4fab3c0fd3e4ad3f7a36b8fe",
+            "provider": "provider::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+            "registrar": "registrar::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+            "owner": "issuer::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+            "instrument": {
+              "source": "registrar::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+              "id": "INST",
+              "scheme": "RegistrarInternalScheme"
+            },
+            "label": "",
+            "amount": "30.0000000000",
+            "lock": null
+          },
+          "createdEventBlob": "",
+          "interfaceViews": [],
+          "witnessParties": [
+            "issuer::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567"
+          ],
+          "signatories": [
+            "issuer::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+            "registrar::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567"
+          ],
+          "observers": [
+            "operator::1220b39df5ed0e3c584cd97e86e779def933d545bf9a4fab3c0fd3e4ad3f7a36b8fe",
+            "provider::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567"
+          ],
+          "createdAt": "2025-10-10T10:31:55.117218Z",
+          "packageName": "utility-registry-holding-v0"
+        }
+      },
+      {
+        "CreatedEvent": {
+          "offset": 4249,
+          "nodeId": 9,
+          "contractId": "00faddf948ee97e0d70be1baad6517e8af6a1bbd57e0646c300e2d23857bacb38fca11122059a0b3f54bafc2deab11e7964961c1ecda4b6a1fdeec4435d01726663666484f",
+          "templateId": "170929b11d5f0ed1385f890f42887c31ff7e289c0f4bc482aff193a7173d576c:Utility.Registry.App.V0.Model.Transfer:TransferOffer",
+          "contractKey": null,
+          "createArgument": {
+            "operator": "operator::1220b39df5ed0e3c584cd97e86e779def933d545bf9a4fab3c0fd3e4ad3f7a36b8fe",
+            "provider": "provider::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+            "transfer": {
+              "sender": "issuer::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+              "receiver": "holder::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+              "amount": "10.0000000000",
+              "instrumentId": {
+                "admin": "registrar::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+                "id": "INST"
+              },
+              "requestedAt": "2025-10-10T10:31:54Z",
+              "executeBefore": "2025-10-10T11:31:54Z",
+              "inputHoldingCids": [
+                "0041f93610a76b343fe5e969b953805a23674304341ff36a8e61fa1df0be6fc7f3ca111220877889786a97380f80e2a00e0da81525833982d789c9d72dc43ddc24d215eecb"
+              ],
+              "meta": {
+                "values": {
+                  "splice.lfdecentralizedtrust.org/reason": ""
+                }
+              }
+            }
+          },
+          "createdEventBlob": "",
+          "interfaceViews": [],
+          "witnessParties": [
+            "issuer::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567"
+          ],
+          "signatories": [
+            "issuer::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+            "provider::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+            "registrar::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567"
+          ],
+          "observers": [
+            "holder::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+            "operator::1220b39df5ed0e3c584cd97e86e779def933d545bf9a4fab3c0fd3e4ad3f7a36b8fe"
+          ],
+          "createdAt": "2025-10-10T10:31:55.117218Z",
+          "packageName": "utility-registry-app-v0"
+        }
+      }
+    ],
+    "offset": 4249,
+    "synchronizerId": "global-domain::1220f0c14212edfc6ca9b0dfc6f5943b51a80efe71de8abf5759c8f57b7510f633eb",
+    "traceContext": {
+      "traceparent": "00-4ddd5bfb8c08ed720dea79fb2e988cdb-6a13bc923bea9975-01",
+      "tracestate": null
+    },
+    "recordTime": "2025-10-10T10:31:55.154179Z"
+  }
+}
+```
+
+After the exercise command is executed, the amount is locked by the admin.
+
+![Positions after the sender has offered the transfer](how-tos/registry/transfer/pictures/locked-position.png)
+
+### Step 2: Receiver Accepts the Transfer Offer
+
+#### Step 2a - Obtain the Ledger End Offset
+
+To obtain the ledger end offset, run the following script:
+
+```bash
+#!/usr/bin/env bash
+
+## =================================================================================================
+## Receiver accepts offer
+## Step 2a: Obtains ledger end offset
+## Authorized by: Receiver
+## Script: step-2a-receiver-accepts.sh
+## =================================================================================================
+
+DATAFILE="source.sh"
+source "$DATAFILE"
+
+# obtain ledger end
+OFFSET=$(curl -s GET \
+    --url "${HTTP_JSON_API}/v2/state/ledger-end" \
+    --header "Accept: application/json" \
+    --header "Authorization: Bearer ${RECEIVER_TOKEN}")
+
+echo "$OFFSET" | jq
+
+OUTPUTFILE="response-step-2a.json"
+echo "$OFFSET" > "$OUTPUTFILE"
+```
+
+The result is the ledger end offset at this moment, stored in response-step-2a.json. For
+example:
+
+```json
+{
+  "offset": 4251
+}
+```
+
+#### Step 2b - Retrieve Transfer Offer
+
+To retrieve the Transfer Offer created in Step 1d, run the following script:
+
+```bash
+#!/usr/bin/env bash
+
+## =================================================================================================
+## Receiver accepts offer
+## Step 2b: Retrieves the transfer offer to accept
+## Authorized by: Receiver
+## Script: step-2b-receiver-accepts.sh
+## =================================================================================================
+
+DATAFILE="source.sh"
+source "$DATAFILE"
+
+JSONCONTENT=$(cat "response-step-2a.json")
+OFFSET=$(echo "$JSONCONTENT" | jq -r ".offset")
+
+RESULT=$(
+    curl -s \
+    --url "${HTTP_JSON_API}/v2/state/active-contracts" \
+    --header "Authorization: Bearer ${RECEIVER_TOKEN}" \
+    --header "Content-Type: application/json" \
+    --request POST \
+    --data @- <<EOF
+{
+    "verbose": false,
+    "activeAtOffset": "${OFFSET}",
+    "filter": {
+        "filtersByParty": {
+            "${RECEIVER_PARTY_ID}": {
+                "cumulative": [{
+                    "identifierFilter": {
+                        "InterfaceFilter": {
+                            "value": {
+                                "interfaceId":"$TRANSFER_INSTRUCTION_INTERFACE",
+                                "includeInterfaceView": true,
+                                "includeCreatedEventBlob": false
+                            }
+                        }
+                    }
+                }]
+            }
+        }
+    }
+}
+EOF
+)
+
+echo "--- Transfer Offer for Sender ---"
+echo "$RESULT" | jq
+
+OUTPUTFILE="response-step-2b.json"
+echo "$RESULT" > "$OUTPUTFILE"
+```
+
+The result is the Transfer Offer, stored in response-step-2b.json. For example,
+
+```json
+[
+  {
+    "workflowId": "",
+    "contractEntry": {
+      "JsActiveContract": {
+        "createdEvent": {
+          "offset": 4249,
+          "nodeId": 9,
+          "contractId": "00faddf948ee97e0d70be1baad6517e8af6a1bbd57e0646c300e2d23857bacb38fca11122059a0b3f54bafc2deab11e7964961c1ecda4b6a1fdeec4435d01726663666484f",
+          "templateId": "170929b11d5f0ed1385f890f42887c31ff7e289c0f4bc482aff193a7173d576c:Utility.Registry.App.V0.Model.Transfer:TransferOffer",
+          "contractKey": null,
+          "createArgument": null,
+          "createdEventBlob": "",
+          "interfaceViews": [
+            {
+              "interfaceId": "55ba4deb0ad4662c4168b39859738a0e91388d252286480c7331b3f71a517281:Splice.Api.Token.TransferInstructionV1:TransferInstruction",
+              "viewStatus": {
+                "code": 0,
+                "message": "",
+                "details": []
+              },
+              "viewValue": {
+                "originalInstructionCid": null,
+                "transfer": {
+                  "sender": "issuer::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+                  "receiver": "holder::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+                  "amount": "10.0000000000",
+                  "instrumentId": {
+                    "admin": "registrar::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+                    "id": "INST"
+                  },
+                  "requestedAt": "2025-10-10T10:31:54Z",
+                  "executeBefore": "2025-10-10T11:31:54Z",
+                  "inputHoldingCids": [
+                    "0041f93610a76b343fe5e969b953805a23674304341ff36a8e61fa1df0be6fc7f3ca111220877889786a97380f80e2a00e0da81525833982d789c9d72dc43ddc24d215eecb"
+                  ],
+                  "meta": {
+                    "values": {
+                      "splice.lfdecentralizedtrust.org/reason": ""
+                    }
+                  }
+                },
+                "status": {
+                  "tag": "TransferPendingReceiverAcceptance",
+                  "value": {}
+                },
+                "meta": {
+                  "values": {}
+                }
+              }
+            }
+          ],
+          "witnessParties": [
+            "holder::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567"
+          ],
+          "signatories": [
+            "issuer::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+            "provider::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+            "registrar::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567"
+          ],
+          "observers": [
+            "holder::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+            "operator::1220b39df5ed0e3c584cd97e86e779def933d545bf9a4fab3c0fd3e4ad3f7a36b8fe"
+          ],
+          "createdAt": "2025-10-10T10:31:55.117218Z",
+          "packageName": "utility-registry-app-v0"
+        },
+        "synchronizerId": "global-domain::1220f0c14212edfc6ca9b0dfc6f5943b51a80efe71de8abf5759c8f57b7510f633eb",
+        "reassignmentCounter": 0
+      }
+    }
+  }
+]
+```
+
+#### Step 2c - Access the Backend API
+
+The request URL is
+${BACKEND_API}/v0/registrars/${ADMIN_PARTY_ID}/registry/transfer-instruction/v1/${TRANSFEROFFER_CID}/choice-contexts/accept.
+To hit this endpoint, run the following script:
+
+```bash
+#!/usr/bin/env bash
+
+## =================================================================================================
+## Receiver accepts offer
+## Step 2c: Gets choice context and disclosure for the accept-transfer-offer command
+## Authorized by: anyone
+## Script: step-2c-receiver-accepts.sh
+## =================================================================================================
+
+DATAFILE="source.sh"
+source "$DATAFILE"
+
+DATE_FORMAT='+%Y-%m-%dT%H:%M:%SZ'
+NOW_ISO_TIMESTAMP=$(date -u "$DATE_FORMAT")
+ONEHOUR_ISO_TIMESTAMP=$(date -u -v +1H "$DATE_FORMAT")
+
+TRANSFEROFFER=$(cat "response-step-2b.json")
+TRANSFEROFFER_CID=$(echo $TRANSFEROFFER |jq '.[] | .contractEntry.JsActiveContract.createdEvent.contractId' | tr -d '"')
+
+RESULT=$(
+    curl -s \
+    --url "${BACKEND_API}/v0/registrars/${ADMIN_PARTY_ID}/registry/transfer-instruction/v1/${TRANSFEROFFER_CID}/choice-contexts/accept" \
+    --header "Content-Type: application/json" \
+    --request POST \
+    --data @- <<EOF
+{
+   "meta":{
+
+   },
+   "excludeDebugFields": true
+}
+EOF
+)
+
+echo "--- Endpoint response ---"
+echo $RESULT | jq
+
+OUTPUTFILE="response-step-2c.json"
+echo "$RESULT" > "$OUTPUTFILE"
+```
+
+The result contains the required choice context for executing the command, stored in
+response-step-2c.json. For example:
+
+```json
+{
+  "choiceContextData": {
+    "values": {
+      "app-reward-configuration": {
+        "tag": "AV_ContractId",
+        "value": "00525af6a6fd8c1580b6d80aad3dbcc298218ffcd501c9f30e126836a3bb9ada8bca111220c22ce1c7f07a549ad6c6739c7953dd8847f69773b5996169b7afd8c6d66438b9"
+      },
+      "utility.digitalasset.com/receiver-credentials": {
+        "tag": "AV_List",
+        "value": [
+          {
+            "tag": "AV_ContractId",
+            "value": "0074aa76902b5f1641eff3bb2e86cccce989b35a6ecaddafe0d39989026b4a3d0aca111220a0d5a8472cea3189ce92e26398225b466edc904a2bf4e85f8636ca7e93bd1df8"
+          }
+        ]
+      },
+      "utility.digitalasset.com/app-reward-configuration": {
+        "tag": "AV_ContractId",
+        "value": "00525af6a6fd8c1580b6d80aad3dbcc298218ffcd501c9f30e126836a3bb9ada8bca111220c22ce1c7f07a549ad6c6739c7953dd8847f69773b5996169b7afd8c6d66438b9"
+      },
+      "receiver-credentials": {
+        "tag": "AV_List",
+        "value": [
+          {
+            "tag": "AV_ContractId",
+            "value": "0074aa76902b5f1641eff3bb2e86cccce989b35a6ecaddafe0d39989026b4a3d0aca111220a0d5a8472cea3189ce92e26398225b466edc904a2bf4e85f8636ca7e93bd1df8"
+          }
+        ]
+      },
+      "instrument-configuration": {
+        "tag": "AV_ContractId",
+        "value": "00eca75bf1e14e192de69b58054cf62f2a60a9c0aae8f4d3491a4b2fad9f9731eaca111220b5fd51ccd498385b0ceaef63243fdfef6c2e62dd8d3a2f59fdb61a9099956481"
+      },
+      "sender-credentials": {
+        "tag": "AV_List",
+        "value": [
+          {
+            "tag": "AV_ContractId",
+            "value": "00840216df4df7f46e853231f4cfcd23dfb98bc4a3d670b1e0ed3b9b9afa218aecca1112207057c74dc0da345b4ec3006eae3a55ac1cd7fc34aa23c13cf453f5b9a9884235"
+          }
+        ]
+      },
+      "utility.digitalasset.com/transfer-rule": {
+        "tag": "AV_ContractId",
+        "value": "0015765518fb417897baac4c0a1fa1eb05971900e98bd731ad46095b0685f101c0ca1112209c56cdafaf9bb1fad5e72d054af025c441a1d0185cd6a309c216a25b6b708dca"
+      },
+      "utility.digitalasset.com/sender-credentials": {
+        "tag": "AV_List",
+        "value": [
+          {
+            "tag": "AV_ContractId",
+            "value": "00840216df4df7f46e853231f4cfcd23dfb98bc4a3d670b1e0ed3b9b9afa218aecca1112207057c74dc0da345b4ec3006eae3a55ac1cd7fc34aa23c13cf453f5b9a9884235"
+          }
+        ]
+      },
+      "utility.digitalasset.com/instrument-configuration": {
+        "tag": "AV_ContractId",
+        "value": "00eca75bf1e14e192de69b58054cf62f2a60a9c0aae8f4d3491a4b2fad9f9731eaca111220b5fd51ccd498385b0ceaef63243fdfef6c2e62dd8d3a2f59fdb61a9099956481"
+      },
+      "transfer-rule": {
+        "tag": "AV_ContractId",
+        "value": "0015765518fb417897baac4c0a1fa1eb05971900e98bd731ad46095b0685f101c0ca1112209c56cdafaf9bb1fad5e72d054af025c441a1d0185cd6a309c216a25b6b708dca"
+      }
+    }
+  },
+  "disclosedContracts": [
+    {
+      "templateId": "ed73d5b9ab717333f3dbd122de7be3156f8bf2614a67360c3dd61fc0135133fa:Utility.Registry.V0.Configuration.Instrument:InstrumentConfiguration",
+      "contractId": "00eca75bf1e14e192de69b58054cf62f2a60a9c0aae8f4d3491a4b2fad9f9731eaca111220b5fd51ccd498385b0ceaef63243fdfef6c2e62dd8d3a2f59fdb61a9099956481",
+      "createdEventBlob": "CgMyLjESpgkKRQDsp1vx4U4ZLeabWAVM9i8qYKnAquj000kaSy+tn5cx6soREiC1/VHM1Jg4Wwzq72MkP9/vbC5i3Y06L1n9thqQmZVkgRITdXRpbGl0eS1yZWdpc3RyeS12MBqNAQpAZWQ3M2Q1YjlhYjcxNzMzM2YzZGJkMTIyZGU3YmUzMTU2ZjhiZjI2MTRhNjczNjBjM2RkNjFmYzAxMzUxMzNmYRIHVXRpbGl0eRIIUmVnaXN0cnkSAlYwEg1Db25maWd1cmF0aW9uEgpJbnN0cnVtZW50GhdJbnN0cnVtZW50Q29uZmlndXJhdGlvbiKRBWqOBQpSClA6Tm9wZXJhdG9yOjoxMjIwYjM5ZGY1ZWQwZTNjNTg0Y2Q5N2U4NmU3NzlkZWY5MzNkNTQ1YmY5YTRmYWIzYzBmZDNlNGFkM2Y3YTM2YjhmZQpSClA6TnByb3ZpZGVyOjoxMjIwZDMwMWFiYWJiZWQ3YmM4ZDZmNmE4MGNlMTZmMzM5MzNhNzI3NGEzMDEzMjQxYjdmYjM3M2NhN2U0ZjBkNjU2NwpTClE6T3JlZ2lzdHJhcjo6MTIyMGQzMDFhYmFiYmVkN2JjOGQ2ZjZhODBjZTE2ZjMzOTMzYTcyNzRhMzAxMzI0MWI3ZmIzNzNjYTdlNGYwZDY1NjcKgAEKfmp8ClMKUTpPcmVnaXN0cmFyOjoxMjIwZDMwMWFiYWJiZWQ3YmM4ZDZmNmE4MGNlMTZmMzM5MzNhNzI3NGEzMDEzMjQxYjdmYjM3M2NhN2U0ZjBkNjU2NwoICgZCBElOU1QKGwoZQhdSZWdpc3RyYXJJbnRlcm5hbFNjaGVtZQoECgJaAAqBAQp/Wn0Ke2p5ClMKUTpPcmVnaXN0cmFyOjoxMjIwZDMwMWFiYWJiZWQ3YmM4ZDZmNmE4MGNlMTZmMzM5MzNhNzI3NGEzMDEzMjQxYjdmYjM3M2NhN2U0ZjBkNjU2NwoiCiBaHgocahoKDgoMQgppc0lzc3Vlck9mCggKBkIESU5TVAqBAQp/Wn0Ke2p5ClMKUTpPcmVnaXN0cmFyOjoxMjIwZDMwMWFiYWJiZWQ3YmM4ZDZmNmE4MGNlMTZmMzM5MzNhNzI3NGEzMDEzMjQxYjdmYjM3M2NhN2U0ZjBkNjU2NwoiCiBaHgocahoKDgoMQgppc0hvbGRlck9mCggKBkIESU5TVCpOcHJvdmlkZXI6OjEyMjBkMzAxYWJhYmJlZDdiYzhkNmY2YTgwY2UxNmYzMzkzM2E3Mjc0YTMwMTMyNDFiN2ZiMzczY2E3ZTRmMGQ2NTY3Kk9yZWdpc3RyYXI6OjEyMjBkMzAxYWJhYmJlZDdiYzhkNmY2YTgwY2UxNmYzMzkzM2E3Mjc0YTMwMTMyNDFiN2ZiMzczY2E3ZTRmMGQ2NTY3Mk5vcGVyYXRvcjo6MTIyMGIzOWRmNWVkMGUzYzU4NGNkOTdlODZlNzc5ZGVmOTMzZDU0NWJmOWE0ZmFiM2MwZmQzZTRhZDNmN2EzNmI4ZmU5rPtttqtABgBCKgomCiQIARIgQ1DsOZLYGVRiscestTBDQ3CqU27WvKQODudfxMesKCEQHg==",
+      "synchronizerId": "",
+      "debugPackageName": "utility-registry-v0",
+      "debugPayload": {
+        "operator": "operator::1220b39df5ed0e3c584cd97e86e779def933d545bf9a4fab3c0fd3e4ad3f7a36b8fe",
+        "provider": "provider::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+        "registrar": "registrar::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+        "defaultIdentifier": {
+          "source": "registrar::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+          "id": "INST",
+          "scheme": "RegistrarInternalScheme"
+        },
+        "additionalIdentifiers": [],
+        "issuerRequirements": [
+          {
+            "issuer": "registrar::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+            "requiredClaims": [
+              {
+                "_1": "isIssuerOf",
+                "_2": "INST"
+              }
+            ]
+          }
+        ],
+        "holderRequirements": [
+          {
+            "issuer": "registrar::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+            "requiredClaims": [
+              {
+                "_1": "isHolderOf",
+                "_2": "INST"
+              }
+            ]
+          }
+        ],
+        "providerAppRewardBeneficiaries": null
+      },
+      "debugCreatedAt": "2025-10-08T20:41:44.51Z"
+    },
+    {
+      "templateId": "ed73d5b9ab717333f3dbd122de7be3156f8bf2614a67360c3dd61fc0135133fa:Utility.Registry.V0.Rule.Transfer:TransferRule",
+      "contractId": "0015765518fb417897baac4c0a1fa1eb05971900e98bd731ad46095b0685f101c0ca1112209c56cdafaf9bb1fad5e72d054af025c441a1d0185cd6a309c216a25b6b708dca",
+      "createdEventBlob": "CgMyLjES/gUKRQAVdlUY+0F4l7qsTAofoesFlxkA6YvXMa1GCVsGhfEBwMoREiCcVs2vr5ux+tXnLQVK8CXEQaHQGFzWownCFqJba3CNyhITdXRpbGl0eS1yZWdpc3RyeS12MBp3CkBlZDczZDViOWFiNzE3MzMzZjNkYmQxMjJkZTdiZTMxNTZmOGJmMjYxNGE2NzM2MGMzZGQ2MWZjMDEzNTEzM2ZhEgdVdGlsaXR5EghSZWdpc3RyeRICVjASBFJ1bGUSCFRyYW5zZmVyGgxUcmFuc2ZlclJ1bGUigAJq/QEKUgpQOk5vcGVyYXRvcjo6MTIyMGIzOWRmNWVkMGUzYzU4NGNkOTdlODZlNzc5ZGVmOTMzZDU0NWJmOWE0ZmFiM2MwZmQzZTRhZDNmN2EzNmI4ZmUKUgpQOk5wcm92aWRlcjo6MTIyMGQzMDFhYmFiYmVkN2JjOGQ2ZjZhODBjZTE2ZjMzOTMzYTcyNzRhMzAxMzI0MWI3ZmIzNzNjYTdlNGYwZDY1NjcKUwpROk9yZWdpc3RyYXI6OjEyMjBkMzAxYWJhYmJlZDdiYzhkNmY2YTgwY2UxNmYzMzkzM2E3Mjc0YTMwMTMyNDFiN2ZiMzczY2E3ZTRmMGQ2NTY3Kk5wcm92aWRlcjo6MTIyMGQzMDFhYmFiYmVkN2JjOGQ2ZjZhODBjZTE2ZjMzOTMzYTcyNzRhMzAxMzI0MWI3ZmIzNzNjYTdlNGYwZDY1NjcqT3JlZ2lzdHJhcjo6MTIyMGQzMDFhYmFiYmVkN2JjOGQ2ZjZhODBjZTE2ZjMzOTMzYTcyNzRhMzAxMzI0MWI3ZmIzNzNjYTdlNGYwZDY1NjcyTm9wZXJhdG9yOjoxMjIwYjM5ZGY1ZWQwZTNjNTg0Y2Q5N2U4NmU3NzlkZWY5MzNkNTQ1YmY5YTRmYWIzYzBmZDNlNGFkM2Y3YTM2YjhmZTmkGJERtEAGAEIqCiYKJAgBEiAwHP4MvAbKwprrvngECIRBF9TJCxtOaWUOffwO0FoJxhAe",
+      "synchronizerId": "",
+      "debugPackageName": "utility-registry-v0",
+      "debugPayload": {
+        "operator": "operator::1220b39df5ed0e3c584cd97e86e779def933d545bf9a4fab3c0fd3e4ad3f7a36b8fe",
+        "provider": "provider::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+        "registrar": "registrar::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567"
+      },
+      "debugCreatedAt": "2025-10-09T06:39:53.276Z"
+    },
+    {
+      "templateId": "dd3a9f2d51cc4c52d9ec2e1d7ff235298dcfb3afd1d50ab44328b1aaa9a18587:Utility.Registry.Holding.V0.Holding:Holding",
+      "contractId": "0041f93610a76b343fe5e969b953805a23674304341ff36a8e61fa1df0be6fc7f3ca111220877889786a97380f80e2a00e0da81525833982d789c9d72dc43ddc24d215eecb",
+      "createdEventBlob": "CgMyLjES7QoKRQBB+TYQp2s0P+XpablTgFojZ0MENB/zao5h+h3wvm/H88oREiCHeIl4apc4D4DioA4NqBUlgzmC14nJ1y3EPdwk0hXuyxIbdXRpbGl0eS1yZWdpc3RyeS1ob2xkaW5nLXYwGnQKQGRkM2E5ZjJkNTFjYzRjNTJkOWVjMmUxZDdmZjIzNTI5OGRjZmIzYWZkMWQ1MGFiNDQzMjhiMWFhYTlhMTg1ODcSB1V0aWxpdHkSCFJlZ2lzdHJ5EgdIb2xkaW5nEgJWMBIHSG9sZGluZxoHSG9sZGluZyLOBWrLBQpSClA6Tm9wZXJhdG9yOjoxMjIwYjM5ZGY1ZWQwZTNjNTg0Y2Q5N2U4NmU3NzlkZWY5MzNkNTQ1YmY5YTRmYWIzYzBmZDNlNGFkM2Y3YTM2YjhmZQpSClA6TnByb3ZpZGVyOjoxMjIwZDMwMWFiYWJiZWQ3YmM4ZDZmNmE4MGNlMTZmMzM5MzNhNzI3NGEzMDEzMjQxYjdmYjM3M2NhN2U0ZjBkNjU2NwpTClE6T3JlZ2lzdHJhcjo6MTIyMGQzMDFhYmFiYmVkN2JjOGQ2ZjZhODBjZTE2ZjMzOTMzYTcyNzRhMzAxMzI0MWI3ZmIzNzNjYTdlNGYwZDY1NjcKUApOOkxpc3N1ZXI6OjEyMjBkMzAxYWJhYmJlZDdiYzhkNmY2YTgwY2UxNmYzMzkzM2E3Mjc0YTMwMTMyNDFiN2ZiMzczY2E3ZTRmMGQ2NTY3CoABCn5qfApTClE6T3JlZ2lzdHJhcjo6MTIyMGQzMDFhYmFiYmVkN2JjOGQ2ZjZhODBjZTE2ZjMzOTMzYTcyNzRhMzAxMzI0MWI3ZmIzNzNjYTdlNGYwZDY1NjcKCAoGQgRJTlNUChsKGUIXUmVnaXN0cmFySW50ZXJuYWxTY2hlbWUKBAoCQgAKEQoPMg0xMC4wMDAwMDAwMDAwCt0BCtoBUtcBCtQBatEBCmMKYWpfCl0KW2JZClcKUTpPcmVnaXN0cmFyOjoxMjIwZDMwMWFiYWJiZWQ3YmM4ZDZmNmE4MGNlMTZmMzM5MzNhNzI3NGEzMDEzMjQxYjdmYjM3M2NhN2U0ZjBkNjU2NxICCgAKBAoCQgAKZApiUmAKXmpcCloKWGJWClQKTjpMaG9sZGVyOjoxMjIwZDMwMWFiYWJiZWQ3YmM4ZDZmNmE4MGNlMTZmMzM5MzNhNzI3NGEzMDEzMjQxYjdmYjM3M2NhN2U0ZjBkNjU2NxICCgAqTGlzc3Vlcjo6MTIyMGQzMDFhYmFiYmVkN2JjOGQ2ZjZhODBjZTE2ZjMzOTMzYTcyNzRhMzAxMzI0MWI3ZmIzNzNjYTdlNGYwZDY1NjcqT3JlZ2lzdHJhcjo6MTIyMGQzMDFhYmFiYmVkN2JjOGQ2ZjZhODBjZTE2ZjMzOTMzYTcyNzRhMzAxMzI0MWI3ZmIzNzNjYTdlNGYwZDY1NjcyTGhvbGRlcjo6MTIyMGQzMDFhYmFiYmVkN2JjOGQ2ZjZhODBjZTE2ZjMzOTMzYTcyNzRhMzAxMzI0MWI3ZmIzNzNjYTdlNGYwZDY1NjcyTm9wZXJhdG9yOjoxMjIwYjM5ZGY1ZWQwZTNjNTg0Y2Q5N2U4NmU3NzlkZWY5MzNkNTQ1YmY5YTRmYWIzYzBmZDNlNGFkM2Y3YTM2YjhmZTJOcHJvdmlkZXI6OjEyMjBkMzAxYWJhYmJlZDdiYzhkNmY2YTgwY2UxNmYzMzkzM2E3Mjc0YTMwMTMyNDFiN2ZiMzczY2E3ZTRmMGQ2NTY3OaLmNm3LQAYAQioKJgokCAESIKCtk3K2ucXddGo/5as+zuHiMCpqN8f/zBeUHYdkncTzEB4=",
+      "synchronizerId": "",
+      "debugPackageName": "utility-registry-holding-v0",
+      "debugPayload": {
+        "operator": "operator::1220b39df5ed0e3c584cd97e86e779def933d545bf9a4fab3c0fd3e4ad3f7a36b8fe",
+        "provider": "provider::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+        "registrar": "registrar::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+        "owner": "issuer::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+        "instrument": {
+          "source": "registrar::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+          "id": "INST",
+          "scheme": "RegistrarInternalScheme"
+        },
+        "label": "",
+        "amount": "10.0000000000",
+        "lock": {
+          "lockers": {
+            "map": [
+              [
+                "registrar::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+                {}
+              ]
+            ]
+          },
+          "context": "",
+          "observers": {
+            "map": [
+              [
+                "holder::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+                {}
+              ]
+            ]
+          }
+        }
+      },
+      "debugCreatedAt": "2025-10-10T10:31:55.117Z"
+    },
+    {
+      "templateId": "77df4e7b980c12de438d7b052141a762215fae790d81f71179c8fb534beb68f7:Utility.Credential.V0.Credential:Credential",
+      "contractId": "00840216df4df7f46e853231f4cfcd23dfb98bc4a3d670b1e0ed3b9b9afa218aecca1112207057c74dc0da345b4ec3006eae3a55ac1cd7fc34aa23c13cf453f5b9a9884235",
+      "createdEventBlob": "CgMyLjESrAcKRQCEAhbfTff0boUyMfTPzSPfuYvEo9ZwseDtO5ua+iGK7MoREiBwV8dNwNo0W07DAG6uOlWsHNf8NKojwTz0U/W5qYhCNRIVdXRpbGl0eS1jcmVkZW50aWFsLXYwGnMKQDc3ZGY0ZTdiOTgwYzEyZGU0MzhkN2IwNTIxNDFhNzYyMjE1ZmFlNzkwZDgxZjcxMTc5YzhmYjUzNGJlYjY4ZjcSB1V0aWxpdHkSCkNyZWRlbnRpYWwSAlYwEgpDcmVkZW50aWFsGgpDcmVkZW50aWFsIrIDaq8DClMKUTpPcmVnaXN0cmFyOjoxMjIwZDMwMWFiYWJiZWQ3YmM4ZDZmNmE4MGNlMTZmMzM5MzNhNzI3NGEzMDEzMjQxYjdmYjM3M2NhN2U0ZjBkNjU2NwpQCk46TGlzc3Vlcjo6MTIyMGQzMDFhYmFiYmVkN2JjOGQ2ZjZhODBjZTE2ZjMzOTMzYTcyNzRhMzAxMzI0MWI3ZmIzNzNjYTdlNGYwZDY1NjcKDwoNQgtJTlNUX0hvbGRlcgoPCg1CC0lOU1RfSG9sZGVyCgQKAlIACgQKAlIACnQKclpwCm5qbApQCk5CTGlzc3Vlcjo6MTIyMGQzMDFhYmFiYmVkN2JjOGQ2ZjZhODBjZTE2ZjMzOTMzYTcyNzRhMzAxMzI0MWI3ZmIzNzNjYTdlNGYwZDY1NjcKDgoMQgppc0hvbGRlck9mCggKBkIESU5TVApiCmBqXgpcClpiWApWClA6Tm9wZXJhdG9yOjoxMjIwYjM5ZGY1ZWQwZTNjNTg0Y2Q5N2U4NmU3NzlkZWY5MzNkNTQ1YmY5YTRmYWIzYzBmZDNlNGFkM2Y3YTM2YjhmZRICCgAqTGlzc3Vlcjo6MTIyMGQzMDFhYmFiYmVkN2JjOGQ2ZjZhODBjZTE2ZjMzOTMzYTcyNzRhMzAxMzI0MWI3ZmIzNzNjYTdlNGYwZDY1NjcqT3JlZ2lzdHJhcjo6MTIyMGQzMDFhYmFiYmVkN2JjOGQ2ZjZhODBjZTE2ZjMzOTMzYTcyNzRhMzAxMzI0MWI3ZmIzNzNjYTdlNGYwZDY1NjcyTm9wZXJhdG9yOjoxMjIwYjM5ZGY1ZWQwZTNjNTg0Y2Q5N2U4NmU3NzlkZWY5MzNkNTQ1YmY5YTRmYWIzYzBmZDNlNGFkM2Y3YTM2YjhmZTkcDve1q0AGAEIqCiYKJAgBEiAwqMkxtFdza9zEqr/gjGp0tLPnvuPsSDVBE/nBZoKEwBAe",
+      "synchronizerId": "",
+      "debugPackageName": "utility-credential-v0",
+      "debugPayload": {
+        "issuer": "registrar::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+        "holder": "issuer::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+        "id": "INST_Holder",
+        "description": "INST_Holder",
+        "validFrom": null,
+        "validUntil": null,
+        "claims": [
+          {
+            "subject": "issuer::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+            "property": "isHolderOf",
+            "value": "INST"
+          }
+        ],
+        "observers": {
+          "map": [
+            [
+              "operator::1220b39df5ed0e3c584cd97e86e779def933d545bf9a4fab3c0fd3e4ad3f7a36b8fe",
+              {}
+            ]
+          ]
+        }
+      },
+      "debugCreatedAt": "2025-10-08T20:41:36.716Z"
+    },
+    {
+      "templateId": "ed73d5b9ab717333f3dbd122de7be3156f8bf2614a67360c3dd61fc0135133fa:Utility.Registry.V0.Configuration.AppReward:AppRewardConfiguration",
+      "contractId": "00525af6a6fd8c1580b6d80aad3dbcc298218ffcd501c9f30e126836a3bb9ada8bca111220c22ce1c7f07a549ad6c6739c7953dd8847f69773b5996169b7afd8c6d66438b9",
+      "createdEventBlob": "CgMyLjEStgYKRQBSWvam/YwVgLbYCq09vMKYIY/81QHJ8w4SaDaju5rai8oREiDCLOHH8HpUmtbGc5x5U92IR/aXc7WZYWm3r9jG1mQ4uRITdXRpbGl0eS1yZWdpc3RyeS12MBqLAQpAZWQ3M2Q1YjlhYjcxNzMzM2YzZGJkMTIyZGU3YmUzMTU2ZjhiZjI2MTRhNjczNjBjM2RkNjFmYzAxMzUxMzNmYRIHVXRpbGl0eRIIUmVnaXN0cnkSAlYwEg1Db25maWd1cmF0aW9uEglBcHBSZXdhcmQaFkFwcFJld2FyZENvbmZpZ3VyYXRpb24i9AJq8QIKUgpQOk5vcGVyYXRvcjo6MTIyMGIzOWRmNWVkMGUzYzU4NGNkOTdlODZlNzc5ZGVmOTMzZDU0NWJmOWE0ZmFiM2MwZmQzZTRhZDNmN2EzNmI4ZmUKUgpQOk5wcm92aWRlcjo6MTIyMGQzMDFhYmFiYmVkN2JjOGQ2ZjZhODBjZTE2ZjMzOTMzYTcyNzRhMzAxMzI0MWI3ZmIzNzNjYTdlNGYwZDY1NjcKxgEKwwFqwAEKTQpLOklEU086OjEyMjBmMGMxNDIxMmVkZmM2Y2E5YjBkZmM2ZjU5NDNiNTFhODBlZmU3MWRlOGFiZjU3NTljOGY1N2I3NTEwZjYzM2ViCm8KbWprClcKVTpTZmVlUmVjZWl2ZXJVczo6MTIyMGIzOWRmNWVkMGUzYzU4NGNkOTdlODZlNzc5ZGVmOTMzZDU0NWJmOWE0ZmFiM2MwZmQzZTRhZDNmN2EzNmI4ZmUKEAoOMgwwLjIwMDAwMDAwMDAqTm9wZXJhdG9yOjoxMjIwYjM5ZGY1ZWQwZTNjNTg0Y2Q5N2U4NmU3NzlkZWY5MzNkNTQ1YmY5YTRmYWIzYzBmZDNlNGFkM2Y3YTM2YjhmZTJOcHJvdmlkZXI6OjEyMjBkMzAxYWJhYmJlZDdiYzhkNmY2YTgwY2UxNmYzMzkzM2E3Mjc0YTMwMTMyNDFiN2ZiMzczY2E3ZTRmMGQ2NTY3ORA5UrarQAYAQioKJgokCAESIFdnuWlL+9/sSZnL9GgPVRMT0KYfFkQqkD1ffAXT9KgQEB4=",
+      "synchronizerId": "",
+      "debugPackageName": "utility-registry-v0",
+      "debugPayload": {
+        "operator": "operator::1220b39df5ed0e3c584cd97e86e779def933d545bf9a4fab3c0fd3e4ad3f7a36b8fe",
+        "provider": "provider::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+        "details": {
+          "dso": "DSO::1220f0c14212edfc6ca9b0dfc6f5943b51a80efe71de8abf5759c8f57b7510f633eb",
+          "operatorAppRewardBeneficiary": {
+            "beneficiary": "feeReceiverUs::1220b39df5ed0e3c584cd97e86e779def933d545bf9a4fab3c0fd3e4ad3f7a36b8fe",
+            "weight": "0.2000000000"
+          }
+        }
+      },
+      "debugCreatedAt": "2025-10-08T20:41:42.691Z"
+    }
+  ]
+}
+```
+
+#### Step 2d - Accept the Transfer Offer
+
+To finalize the transfer and move the asset from the sender to the receiver, execute the following
+script:
+
+```bash
+#!/usr/bin/env bash
+
+## =================================================================================================
+## Receiver accepts offer
+## Step 2d: Executes the accept transfer command
+## Authorized by: Receiver
+## Script: step-2d-receiver-accepts.sh
+## =================================================================================================
+
+DATAFILE="source.sh"
+source "$DATAFILE"
+
+INSTRUCTION=$(cat "response-step-2b.json")
+INSTRUCTION_TEMPLATE=$(echo $INSTRUCTION | jq '.[] | .contractEntry.JsActiveContract.createdEvent.interfaceViews[0].interfaceId' | tr -d '"')
+INSTRUCTION_CID=$(echo $INSTRUCTION | jq '.[] | .contractEntry.JsActiveContract.createdEvent.contractId')
+
+JSONCONTENT=$(cat "response-step-2c.json")
+CHOICECONTEXTDATA=$(echo $JSONCONTENT | jq .choiceContextData)
+DISCLOSEDCONTRACTS=$(echo $JSONCONTENT | jq .disclosedContracts)
+
+RESULT=$(
+    curl -s \
+    --url "${HTTP_JSON_API}/v2/commands/submit-and-wait-for-transaction" \
+    --header "Authorization: Bearer ${RECEIVER_TOKEN}" \
+    --header "Content-Type: application/json" \
+    --request POST \
+    --data @- <<EOF
+{
+   "commands":{
+        "commands":[
+            {
+                "ExerciseCommand":{
+                    "templateId":"${INSTRUCTION_TEMPLATE}",
+                    "contractId":${INSTRUCTION_CID},
+                    "choice":"TransferInstruction_Accept",
+                    "choiceArgument":{
+                        "extraArgs": {
+                            "context": $CHOICECONTEXTDATA,
+                            "meta":{
+                                "values":{
+
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        ],
+        "workflowId":"",
+        "userId":"${RECEIVER_USER_ID}",
+        "commandId":"$(uuidgen | tr -d '\n')",
+        "deduplicationPeriod":{
+            "DeduplicationDuration":{
+                "value":{
+                    "seconds":30,
+                    "nanos":0
+                }
+            }
+        },
+        "actAs":[
+            "${RECEIVER_PARTY_ID}"
+        ],
+        "readAs":[
+
+        ],
+        "submissionId":"$(uuidgen | tr -d '\n')",
+        "disclosedContracts": ${DISCLOSEDCONTRACTS},
+        "domainId":"",
+        "packageIdSelectionPreference":[]
+    }
+}
+EOF
+)
+
+echo "--- Command response ---"
+echo $RESULT | jq
+
+OUTPUTFILE="response-step-2d.json"
+echo "$RESULT" > "$OUTPUTFILE"
+```
+
+For example, this is the response of this command:
+
+```json
+{
+  "transaction": {
+    "updateId": "1220aa3f401f39f902aff4a092e4d310bbc4acc0f2de8ae641d7659ed6334a83d1b8",
+    "commandId": "94058279-B1B1-4B2D-BF5D-EA0B33DDDAD8",
+    "workflowId": "",
+    "effectiveAt": "2025-10-10T10:33:03.967184Z",
+    "events": [
+      {
+        "ArchivedEvent": {
+          "offset": 4253,
+          "nodeId": 0,
+          "contractId": "00faddf948ee97e0d70be1baad6517e8af6a1bbd57e0646c300e2d23857bacb38fca11122059a0b3f54bafc2deab11e7964961c1ecda4b6a1fdeec4435d01726663666484f",
+          "templateId": "170929b11d5f0ed1385f890f42887c31ff7e289c0f4bc482aff193a7173d576c:Utility.Registry.App.V0.Model.Transfer:TransferOffer",
+          "witnessParties": [
+            "holder::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567"
+          ],
+          "packageName": "utility-registry-app-v0",
+          "implementedInterfaces": []
+        }
+      },
+      {
+        "ArchivedEvent": {
+          "offset": 4253,
+          "nodeId": 7,
+          "contractId": "0041f93610a76b343fe5e969b953805a23674304341ff36a8e61fa1df0be6fc7f3ca111220877889786a97380f80e2a00e0da81525833982d789c9d72dc43ddc24d215eecb",
+          "templateId": "dd3a9f2d51cc4c52d9ec2e1d7ff235298dcfb3afd1d50ab44328b1aaa9a18587:Utility.Registry.Holding.V0.Holding:Holding",
+          "witnessParties": [
+            "holder::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567"
+          ],
+          "packageName": "utility-registry-holding-v0",
+          "implementedInterfaces": []
+        }
+      },
+      {
+        "CreatedEvent": {
+          "offset": 4253,
+          "nodeId": 8,
+          "contractId": "0071cf43411dd636eb4d6b63716f7138df3e2d77c42225e2ad7383e2a49358d07bca111220536af478df272adf2cfc4e3488e6d709397cc368112ec82a518f416fb9b0dc00",
+          "templateId": "dd3a9f2d51cc4c52d9ec2e1d7ff235298dcfb3afd1d50ab44328b1aaa9a18587:Utility.Registry.Holding.V0.Holding:Holding",
+          "contractKey": null,
+          "createArgument": {
+            "operator": "operator::1220b39df5ed0e3c584cd97e86e779def933d545bf9a4fab3c0fd3e4ad3f7a36b8fe",
+            "provider": "provider::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+            "registrar": "registrar::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+            "owner": "holder::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+            "instrument": {
+              "source": "registrar::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+              "id": "INST",
+              "scheme": "RegistrarInternalScheme"
+            },
+            "label": "",
+            "amount": "10.0000000000",
+            "lock": null
+          },
+          "createdEventBlob": "",
+          "interfaceViews": [],
+          "witnessParties": [
+            "holder::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567"
+          ],
+          "signatories": [
+            "holder::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+            "registrar::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567"
+          ],
+          "observers": [
+            "operator::1220b39df5ed0e3c584cd97e86e779def933d545bf9a4fab3c0fd3e4ad3f7a36b8fe",
+            "provider::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567"
+          ],
+          "createdAt": "2025-10-10T10:33:03.967184Z",
+          "packageName": "utility-registry-holding-v0"
+        }
+      },
+      {
+        "CreatedEvent": {
+          "offset": 4253,
+          "nodeId": 9,
+          "contractId": "00134a9fbf51efd74d80fdaedde5d4ceeae0d0ebfd54dc1e359044c5e251e313c5ca1112205a60f7549af5531c01d163e74c428f54ffa0698f90947ecb6f50e4e831e33f30",
+          "templateId": "ed73d5b9ab717333f3dbd122de7be3156f8bf2614a67360c3dd61fc0135133fa:Utility.Registry.V0.Holding.Transfer:ExecutedTransfer",
+          "contractKey": null,
+          "createArgument": {
+            "transfer": {
+              "operator": "operator::1220b39df5ed0e3c584cd97e86e779def933d545bf9a4fab3c0fd3e4ad3f7a36b8fe",
+              "provider": "provider::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+              "registrar": "registrar::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+              "sender": "issuer::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+              "receiver": "holder::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+              "instrumentIdentifier": {
+                "source": "registrar::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+                "id": "INST",
+                "scheme": "RegistrarInternalScheme"
+              },
+              "amount": "10.0000000000",
+              "reference": "",
+              "batch": {
+                "id": "",
+                "size": "1",
+                "settlementFrom": null,
+                "settlementUntil": null
+              }
+            },
+            "senderLabel": "",
+            "receiverLabel": "",
+            "observers": null
+          },
+          "createdEventBlob": "",
+          "interfaceViews": [],
+          "witnessParties": [
+            "holder::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567"
+          ],
+          "signatories": [
+            "registrar::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567"
+          ],
+          "observers": [
+            "holder::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+            "issuer::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+            "operator::1220b39df5ed0e3c584cd97e86e779def933d545bf9a4fab3c0fd3e4ad3f7a36b8fe",
+            "provider::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567"
+          ],
+          "createdAt": "2025-10-10T10:33:03.967184Z",
+          "packageName": "utility-registry-v0"
+        }
+      }
+    ],
+    "offset": 4253,
+    "synchronizerId": "global-domain::1220f0c14212edfc6ca9b0dfc6f5943b51a80efe71de8abf5759c8f57b7510f633eb",
+    "traceContext": {
+      "traceparent": "00-be96f03df4261d384f3cfba5c03bf78e-a2134d9051f3a399-01",
+      "tracestate": null
+    },
+    "recordTime": "2025-10-10T10:33:04.009428Z"
+  }
+}
+```
+
+After the exercise command is executed, the transfer is complete.
+
+![Positions after the receiver has accepted the transfer offer](how-tos/registry/transfer/pictures/final-position.png)

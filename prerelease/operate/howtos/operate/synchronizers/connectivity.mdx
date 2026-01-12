@@ -1,0 +1,510 @@
+<!-- source: canton / canton/3.5/participant/howtos/operate/synchronizers/connectivity.rst -->
+<!-- Copyright (c) 2026 Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved. -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
+<a id="synchronizer-connections"></a>
+
+# Synchronizer connections
+
+A Participant Node connects to the Synchronizer by connecting to one or many Sequencers of this Synchronizer.
+
+A Participant Node can connect to multiple Synchronizers at once. The [synchronizer connectivity commands](../../../reference/console.md#participant-synchronizer-connectivity)
+allow the administrator of a Participant Node to manage connectivity to Synchronizers.
+
+The following sections explain how to manage such Sequencer connections for a Participant Node.
+
+## Connect
+
+<a id="connectivity-participant-connect-local"></a>
+
+### Connect to a Sequencer by Reference
+
+To connect a Participant Node to a Sequencer by reference (local or [remote reference](../console/console.md#canton-remote-console)), follow the steps below.
+
+1. Define a Synchronizer alias. An alias is a name chosen by the Participant’s operator to manage the connection. For example:
+
+```none
+@ val synchronizerAlias = "mysynchronizer"
+    synchronizerAlias : String = "mysynchronizer"
+```
+
+2. Set Optional Sequencer Connection Validation. This parameter determines how thoroughly the provided Sequencer connections
+are validated before being persisted.
+
+<!-- TODO(#25904): Add link to the reference doc of ``SequencerConnectionValidation`` -->
+```none
+@ val sequencerConnectionValidation = SequencerConnectionValidation.Active
+    sequencerConnectionValidation : Active.type = com.digitalasset.canton.admin.api.client.data.SequencerConnectionValidation$Active$@7756de33
+```
+
+1. Execute the `connect_local` command:
+
+```none
+@ participantReference.synchronizers.connect_local(sequencerReference, synchronizerAlias, validation = sequencerConnectionValidation)
+```
+
+1. List the connected Synchronizers to verify that the connection is listed. See [inspect connections](#connectivity-participant-inspect-connections).
+
+<a id="connectivity-participant-connect-remote"></a>
+
+### Connect to a Sequencer by URL
+
+To connect to a remote Sequencer:
+
+1. Obtain the Sequencer address and port from the Synchronizer Operator.
+
+```none
+@ val sequencerUrl = s"https://${sequencerAddress}:${port}"
+    sequencerUrl : String = "https://127.0.0.1:30176"
+```
+
+2. Provide custom certificates (if necessary). If the Sequencer uses TLS certificates
+that cannot be automatically validated using your JVM’s trust store (for example, self-signed certificates), you have to provide a custom certificate
+such that the client can verify the Sequencer’s public API TLS certificate. The operate must trust the custom root CA. Let’s assume that this root certificate is given by:
+
+```none
+@ val certificatesPath = "tls/root-ca.crt"
+    certificatesPath : String = "tls/root-ca.crt"
+```
+
+1. Connect the Participant to the Sequencer using the `connect` console command.
+
+```none
+@ participantReference.synchronizers.connect("mysynchronizer", connection = sequencerUrl, certificatesPath = certificatesPath)
+    res6: SynchronizerConnectionConfig = SynchronizerConnectionConfig(
+      synchronizer = Synchronizer 'mysynchronizer',
+      sequencerConnections = SequencerConnections(
+        connections = Sequencer 'DefaultSequencer' -> GrpcSequencerConnection(
+          sequencerAlias = Sequencer 'DefaultSequencer',
+          endpoints = https://127.0.0.1:30176,
+          transportSecurity,
+          customTrustCertificates
+        ),
+        sequencer trust threshold = 1,
+        sequencer liveness margin = 0,
+        submission request amplification = SubmissionRequestAmplification(factor = 1, patience = 0s),
+        sequencer connection pool delays = SequencerConnectionPoolDelays(
+          minRestartDelay = 0.01s,
+          maxRestartDelay = 10s,
+          warnValidationDelay = 20s,
+          subscriptionRequestDelay = 1s
+        )
+      ),
+      manualConnect = false
+    )
+```
+
+1. List the connected Synchronizers to verify that the connection is listed. See [inspect connections](#connectivity-participant-inspect-connections).
+
+<a id="connectivity-participant-connect-bft"></a>
+
+### Connect to decentralized Sequencers
+
+To enhance reliability and security, you can connect to multiple Sequencers of the same Synchronizer using the `connect_bft` command.
+
+1. Create the URL for each Sequencer by referencing its public API address and port.
+
+```none
+@ val sequencer1Url = s"http://${sequencer1Address}:${sequencer1Port}"
+    sequencer1Url : String = "http://0.0.0.0:30172"
+```
+
+```none
+@ val sequencer2Url = s"http://${sequencer2Address}:${sequencer2Port}"
+    sequencer2Url : String = "http://127.0.0.1:30174"
+```
+
+```none
+@ val sequencer3Url = s"https://${sequencer3Address}:${sequencer3Port}"
+    sequencer3Url : String = "https://127.0.0.1:30176"
+```
+
+```none
+@ val sequencer3Certificate = com.digitalasset.canton.util.BinaryFileUtil.tryReadByteStringFromFile(certificatesPath)
+    sequencer3Certificate : com.google.protobuf.ByteString = <ByteString@5031836c size=1960 contents="-----BEGIN CERTIFICATE-----\nMIIFeTCCA2GgAwIBAgI...">
+```
+
+1. Create the Sequencer connections.
+
+```none
+@ val connections = Seq(
+     GrpcSequencerConnection.tryCreate(sequencer1Url, sequencerAlias = "sequencer1"),
+     GrpcSequencerConnection.tryCreate(sequencer2Url, sequencerAlias = "sequencer2"),
+     GrpcSequencerConnection.tryCreate(sequencer3Url, sequencerAlias = "sequencer3", customTrustCertificates = Some(sequencer3Certificate)),
+   )
+    connections : Seq[GrpcSequencerConnection] = List(
+      GrpcSequencerConnection(sequencerAlias = Sequencer 'sequencer1', endpoints = http://0.0.0.0:30172),
+      GrpcSequencerConnection(
+        sequencerAlias = Sequencer 'sequencer2',
+        endpoints = http://127.0.0.1:30174
+      ),
+      GrpcSequencerConnection(
+        sequencerAlias = Sequencer 'sequencer3',
+        endpoints = https://127.0.0.1:30176,
+        transportSecurity,
+        customTrustCertificates
+      )
+    )
+```
+
+1. Configure the Sequencer trust threshold by setting the minimum number of Sequencers that must agree before a message is considered valid.
+
+- Default: 1
+- Maximum: Number of connections
+
+For example, setting the threshold to 2:
+
+<!-- TODO(#25904) Add link to the explanation of the sequencer trust threshold. -->
+```none
+@ val sequencerTrustThreshold = 2
+    sequencerTrustThreshold : Int = 2
+```
+
+1. [Specific to the connection pool] Configure the Sequencer liveness margin; this sets the number of Sequencer connections, in addition to `sequencerTrustThreshold`-many, from which we attempt to read messages.
+
+- Default: 0
+- Higher values increase the resilience to Sequencer delays or failures, but having (`sequencerTrustThreshold` + `sequencerLivenessMargin` > number of connections) provides no benefit.
+
+For example, setting the liveness margin to 1:
+
+```none
+@ val sequencerLivenessMargin = 1
+    sequencerLivenessMargin : Int = 1
+```
+
+<a id="configure-request-amplification"></a>
+1. Configure submission request amplification: define how often the client should try to send a submission request that is eligible for deduplication.
+
+- Higher values increase the chance of a submission request being accepted by the system, but also increase the load on the Sequencers.
+- Default: `SubmissionRequestAmplification.NoAmplification`
+
+<!-- TODO(#25904) Add link to the refence doc of ``SubmissionRequestAmplification`` and the explanation. -->
+
+In this example, I want to ensure that submission requests are sent to two Sequencers. Therefore, I set the amplification factor to 2 and the patience to 0 seconds.
+
+```none
+@ val submissionRequestAmplification = SubmissionRequestAmplification(factor = 2, patience = 0.seconds)
+    submissionRequestAmplification : SubmissionRequestAmplification = SubmissionRequestAmplification(factor = 2, patience = 0s)
+```
+
+1. Connect using the `connect_bft` command.
+
+```none
+@ participantReference.synchronizers.connect_bft(
+     connections,
+     synchronizerAlias,
+     sequencerTrustThreshold = sequencerTrustThreshold,
+     sequencerLivenessMargin = sequencerLivenessMargin,
+     submissionRequestAmplification = submissionRequestAmplification,
+   )
+```
+
+```none
+@ participantReference.synchronizers.list_registered()
+    res16: Seq[(SynchronizerConnectionConfig, ConfiguredPhysicalSynchronizerId, Boolean)] = Vector(
+      (
+        SynchronizerConnectionConfig(
+          synchronizer = Synchronizer 'mysynchronizer',
+          sequencerConnections = SequencerConnections(
+            connections = Map(
+              Sequencer 'sequencer1' -> GrpcSequencerConnection(
+                sequencerAlias = Sequencer 'sequencer1',
+                sequencerId = SEQ::sequencer1::1220cb0a22fb...,
+                endpoints = http://0.0.0.0:30172
+              ),
+              Sequencer 'sequencer2' -> GrpcSequencerConnection(
+                sequencerAlias = Sequencer 'sequencer2',
+                sequencerId = SEQ::sequencer2::12203a55a279...,
+                endpoints = http://127.0.0.1:30174
+              ),
+              Sequencer 'sequencer3' -> GrpcSequencerConnection(
+                sequencerAlias = Sequencer 'sequencer3',
+                sequencerId = SEQ::sequencer3::122076e8bfb8...,
+                endpoints = https://127.0.0.1:30176,
+                transportSecurity,
+                customTrustCertificates
+              )
+            ),
+            sequencer trust threshold = 2,
+            sequencer liveness margin = 1,
+            submission request amplification = SubmissionRequestAmplification(factor = 2, patience = 0s),
+            sequencer connection pool delays = SequencerConnectionPoolDelays(
+              minRestartDelay = 0.01s,
+              maxRestartDelay = 10s,
+              warnValidationDelay = 20s,
+              subscriptionRequestDelay = 1s
+            )
+          ),
+          manualConnect = false
+        ),
+        da::1220222f081c6c7d7dd4cba1612b1c80e12e0a7c1eef2139be2d928d903fccf9f090::34-0,
+        true
+      )
+    )
+```
+
+1. List the connected Synchronizers to verify that the connection is listed. See [inspect connections](#connectivity-participant-inspect-connections).
+
+<a id="connectivity-participant-inspect-connections"></a>
+
+## Inspect connections
+
+You can inspect the connected Synchronizer connections, as well as the configuration of a specific connection.
+
+1. List connected Synchronizer connections. You can get the Synchronizer aliases and Synchronizer IDs of all connected Synchronizers:
+
+```none
+@ participantReference.synchronizers.list_connected()
+    res17: Seq[ListConnectedSynchronizersResult] = Vector(
+      ListConnectedSynchronizersResult(
+        synchronizerAlias = Synchronizer 'mysynchronizer',
+        physicalSynchronizerId = da::1220222f081c...::34-0,
+        healthy = true
+      )
+    )
+```
+
+And you can inspect the configuration of a specific Synchronizer connection using:
+
+1. Inspect the configuration of a specific connection:
+
+```none
+@ participantReference.synchronizers.config("mysynchronizer")
+    res18: Option[SynchronizerConnectionConfig] = Some(
+      value = SynchronizerConnectionConfig(
+        synchronizer = Synchronizer 'mysynchronizer',
+        sequencerConnections = SequencerConnections(
+          connections = Map(
+            Sequencer 'sequencer1' -> GrpcSequencerConnection(
+              sequencerAlias = Sequencer 'sequencer1',
+              sequencerId = SEQ::sequencer1::1220cb0a22fb...,
+              endpoints = http://0.0.0.0:30172
+            ),
+            Sequencer 'sequencer2' -> GrpcSequencerConnection(
+              sequencerAlias = Sequencer 'sequencer2',
+              sequencerId = SEQ::sequencer2::12203a55a279...,
+              endpoints = http://127.0.0.1:30174
+            ),
+            Sequencer 'sequencer3' -> GrpcSequencerConnection(
+              sequencerAlias = Sequencer 'sequencer3',
+              sequencerId = SEQ::sequencer3::122076e8bfb8...,
+              endpoints = https://127.0.0.1:30176,
+              transportSecurity,
+              customTrustCertificates
+            )
+          ),
+          sequencer trust threshold = 2,
+          sequencer liveness margin = 1,
+          submission request amplification = SubmissionRequestAmplification(factor = 2, patience = 0s),
+          sequencer connection pool delays = SequencerConnectionPoolDelays(
+            minRestartDelay = 0.01s,
+            maxRestartDelay = 10s,
+            warnValidationDelay = 20s,
+            subscriptionRequestDelay = 1s
+          )
+        ),
+        manualConnect = false
+      )
+    )
+```
+
+## Modify
+
+<!-- TODO(#25904) Add a section on how to modify the Sequencer connection. -->
+
+### Update Sequencer trust threshold
+
+You can modify the Sequencer trust threshold to control how many Sequencers must agree before a message is considered valid.
+
+<!-- TODO(#25904) Add link to the explanation of the Sequencer trust threshold. -->
+1. Define a valid threshold. Set the threshold value between 1 and the number of connected Sequencers.
+
+```none
+@ participantReference.synchronizers.modify("mysynchronizer", _.tryWithSequencerTrustThreshold(1))
+```
+
+1. Verify the updated configuration using:
+
+```none
+@ participantReference.synchronizers.config("mysynchronizer")
+    res20: Option[SynchronizerConnectionConfig] = Some(
+      value = SynchronizerConnectionConfig(
+        synchronizer = Synchronizer 'mysynchronizer',
+        sequencerConnections = SequencerConnections(
+          connections = Map(
+            Sequencer 'sequencer1' -> GrpcSequencerConnection(
+              sequencerAlias = Sequencer 'sequencer1',
+              sequencerId = SEQ::sequencer1::1220cb0a22fb...,
+              endpoints = http://0.0.0.0:30172
+            ),
+            Sequencer 'sequencer2' -> GrpcSequencerConnection(
+              sequencerAlias = Sequencer 'sequencer2',
+              sequencerId = SEQ::sequencer2::12203a55a279...,
+              endpoints = http://127.0.0.1:30174
+            ),
+            Sequencer 'sequencer3' -> GrpcSequencerConnection(
+              sequencerAlias = Sequencer 'sequencer3',
+              sequencerId = SEQ::sequencer3::122076e8bfb8...,
+              endpoints = https://127.0.0.1:30176,
+              transportSecurity,
+              customTrustCertificates
+            )
+          ),
+          sequencer trust threshold = 1,
+          sequencer liveness margin = 1,
+          submission request amplification = SubmissionRequestAmplification(factor = 2, patience = 0s),
+          sequencer connection pool delays = SequencerConnectionPoolDelays(
+            minRestartDelay = 0.01s,
+            maxRestartDelay = 10s,
+            warnValidationDelay = 20s,
+            subscriptionRequestDelay = 1s
+          )
+        ),
+        manualConnect = false
+      )
+    )
+```
+
+### [Specific to the connection pool] Update Sequencer liveness margin
+
+You can modify the Sequencer liveness margin to control the resilience to faulty Sequencers.
+
+1. Update the configuration with the new liveness margin:
+
+```none
+@ participantReference.synchronizers.modify("mysynchronizer", _.withSequencerLivenessMargin(0))
+```
+
+1. Verify the updated configuration using:
+
+```none
+@ participantReference.synchronizers.config("mysynchronizer")
+    res22: Option[SynchronizerConnectionConfig] = Some(
+      value = SynchronizerConnectionConfig(
+        synchronizer = Synchronizer 'mysynchronizer',
+        sequencerConnections = SequencerConnections(
+          connections = Map(
+            Sequencer 'sequencer1' -> GrpcSequencerConnection(
+              sequencerAlias = Sequencer 'sequencer1',
+              sequencerId = SEQ::sequencer1::1220cb0a22fb...,
+              endpoints = http://0.0.0.0:30172
+            ),
+            Sequencer 'sequencer2' -> GrpcSequencerConnection(
+              sequencerAlias = Sequencer 'sequencer2',
+              sequencerId = SEQ::sequencer2::12203a55a279...,
+              endpoints = http://127.0.0.1:30174
+            ),
+            Sequencer 'sequencer3' -> GrpcSequencerConnection(
+              sequencerAlias = Sequencer 'sequencer3',
+              sequencerId = SEQ::sequencer3::122076e8bfb8...,
+              endpoints = https://127.0.0.1:30176,
+              transportSecurity,
+              customTrustCertificates
+            )
+          ),
+          sequencer trust threshold = 1,
+          sequencer liveness margin = 0,
+          submission request amplification = SubmissionRequestAmplification(factor = 2, patience = 0s),
+          sequencer connection pool delays = SequencerConnectionPoolDelays(
+            minRestartDelay = 0.01s,
+            maxRestartDelay = 10s,
+            warnValidationDelay = 20s,
+            subscriptionRequestDelay = 1s
+          )
+        ),
+        manualConnect = false
+      )
+    )
+```
+
+### Update request amplification
+
+1. Configure submission request amplification. Amplification makes Sequencer clients send
+eligible submission requests to multiple Sequencers to overcome message loss in faulty Sequencers.
+
+```none
+@ participantReference.synchronizers.modify("mysynchronizer", _.withSubmissionRequestAmplification(SubmissionRequestAmplification.NoAmplification))
+```
+
+1. Same as above, verify the updated configuration using `config` command.
+
+### Synchronizer priority
+
+When connected to multiple Synchronizers, transaction routing will select the Synchronizer with the highest priority
+for submitting transactions. You can adjust the priority of a Synchronizer to control which one is preferred
+for submissions. For more details, refer to the multiple synchronizer documentation
+
+1. Update the priority of the Synchronizer connection.
+
+```none
+@ participantReference.synchronizers.modify("mysynchronizer", _.withPriority(0))
+```
+
+1. Same as above, verify the updated configuration using `config` command.
+
+<a id="connectivity-participant-modify"></a>
+
+### Update a custom TLS trust certificate
+
+<!-- TODO(#25904) Fix this section once the issue with the sequencer alias is resolved. -->
+
+Whenever the root of trust changes, the clients need to update the custom root certificate accordingly.
+To update a custom TLS trust certificate, particularly when using self-signed certificates as the root of trust for a TLS Sequencer connection, follow these steps:
+
+1. Load the root certificate from a file:
+
+```none
+@ val certificate = com.digitalasset.canton.util.BinaryFileUtil.tryReadByteStringFromFile("tls/root-ca.crt")
+    certificate : com.google.protobuf.ByteString = <ByteString@2c20cd57 size=1960 contents="-----BEGIN CERTIFICATE-----\nMIIFeTCCA2GgAwIBAgI...">
+```
+
+1. Create a new connection instance and pass the certificate into this new connection.
+
+```none
+@ val connection = GrpcSequencerConnection.tryCreate(sequencerUrl, customTrustCertificates = Some(certificate))
+    connection : GrpcSequencerConnection = GrpcSequencerConnection(
+      sequencerAlias = Sequencer 'DefaultSequencer',
+      endpoints = https://127.0.0.1:30176,
+      transportSecurity,
+      customTrustCertificates
+    )
+```
+
+1. Update the Sequencer connection settings on the Participant Node:
+
+```none
+@ participantReference.synchronizers.modify("mysynchronizer", _.copy(sequencerConnections=SequencerConnections.single(connection)))
+```
+
+For Mediators, update the certificate settings using a similar approach.
+
+<a id="connectivity-participant-reconnect"></a>
+
+## Disconnect and reconnect
+
+1. Disconnect from the Synchronizer by using the `disconnect` command with the Synchronizer alias:
+
+```none
+@ participantReference.synchronizers.disconnect("mysynchronizer")
+```
+
+1. Verify the disconnection:
+
+```none
+@ participantReference.synchronizers.list_connected().isEmpty
+    res29: Boolean = true
+```
+
+1. Reconnect to a specific Synchronizer using the `reconnect` command with the Synchronizer alias:
+
+```none
+@ participantReference.synchronizers.reconnect("mysynchronizer")
+    res30: Boolean = true
+```
+
+4. To reconnect all Synchronizers that are not configured to require a manual connection,
+use the following command:
+
+```none
+@ participantReference.synchronizers.reconnect_all()
+```

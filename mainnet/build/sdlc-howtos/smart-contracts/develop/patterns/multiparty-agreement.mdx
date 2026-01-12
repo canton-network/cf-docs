@@ -1,0 +1,124 @@
+<!-- source: daml / daml/3.4/sdk/sdlc-howtos/smart-contracts/develop/patterns/multiparty-agreement.rst -->
+<!-- Copyright (c) 2023 Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved. -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
+<a id="patterns-multiparty-agreement"></a>
+
+# The Multiple Party Agreement Pattern
+
+The Multiple Party Agreement pattern uses a Pending contract as a wrapper for the Agreement contract. Any one of the signatory parties can kick off the workflow by creating a Pending contract on the ledger, filling in themselves in all the signatory fields. The Agreement contract is not created on the ledger until all parties have agreed to the Pending contract, and replaced the initiator’s signature with their own.
+
+## Motivation
+
+The [The Propose and Accept Pattern](propose-accept.md) shows how to create bilateral agreements in Daml. However, a project or a workflow often requires more than two parties to reach a consensus and put their signatures on a multi-party contract. For example, in a large construction project, there are at least three major stakeholders: Owner, Architect and Builder. All three parties need to establish agreement on key responsibilities and project success criteria before starting the construction.
+
+If such an agreement were modeled as three separate bilateral agreements, no party could be sure if there are conflicts between their two contracts and the third contract between their partners. If the [The Propose and Accept Pattern](propose-accept.md) were used to collect three signatures on a multi-party agreement, unnecessary restrictions would be put on the order of consensus and a number of additional contract templates would be needed as the intermediate steps. Both solution are suboptimal.
+
+Following the Multiple Party Agreement pattern, it is easy to write an agreement contract with multiple signatories and have each party accept explicitly.
+
+## Implementation
+
+Agreement contract
+: The *Agreement* contract represents the final agreement among a group of stakeholders. Its content can vary per business case, but in this pattern, it always has multiple signatories.
+  <br/>
+  ```daml
+  template Agreement
+    with
+      signatories: [Party]
+    where
+      signatory signatories
+      ensure
+        unique signatories
+    -- The rest of the template to be agreed to would follow here
+  ```
+
+Pending contract
+: The *Pending* contract needs to contain the contents of the proposed *Agreement* contract, as a parameter. This is so that parties know what they are agreeing to, and also so that when all parties have signed, the *Agreement* contract can be created.
+  <br/>
+  The *Pending* contract has a list of parties who have signed it, and a list of parties who have yet to sign it. If you add these lists together, it has to be the same set of parties as the `signatories` of the *Agreement* contract.
+  <br/>
+  All of the `toSign` parties have the choice to `Sign`. This choice checks that the party is indeed a member of `toSign`, then creates a new instance of the *Pending* contract where they have been moved to the `signed` list.
+  <br/>
+  ```daml
+  -- | The parties who need to sign are the finalContract.signatories with alreadySigned filtered out
+  toSign : Pending -> [Party]
+  toSign Pending { alreadySigned, finalContract } =
+    filter (`notElem` alreadySigned) finalContract.signatories
+  <br/>
+  template Pending
+    with
+      finalContract: Agreement
+      alreadySigned: [Party]
+    where
+      signatory alreadySigned
+      observer finalContract.signatories
+      ensure
+        -- Can't have duplicate signatories
+        unique alreadySigned
+  <br/>
+      choice Sign : ContractId Pending with
+          signer : Party
+        controller signer
+          do
+            -- Check the controller is in the toSign list, and if they are, sign the Pending contract
+            assert (signer `elem` toSign this)
+            create this with alreadySigned = signer :: alreadySigned
+  ```
+  <br/>
+  Once all of the parties have signed, any of them can create the final Agreement contract using the `Finalize` choice. This checks that all of the signatories for the *Agreement* have signed the *Pending* contract.
+  <br/>
+  ```daml
+      choice Finalize : ContractId Agreement with
+          signer : Party
+        controller signer
+          do
+            -- Check that all the required signatories have signed Pending
+            assert (sort alreadySigned == sort finalContract.signatories)
+            create finalContract
+  ```
+
+Collecting the signatures in practice
+: Since the final Pending contract has multiple signatories, **it cannot be created in that state by any one stakeholder**.
+  <br/>
+  However, a party can create a pending contract, with all of the other parties in the `toSign` list.
+  <br/>
+  ```daml
+    parties@[person1, person2, person3, person4] <- makePartiesFrom ["Alice", "Bob", "Clare", "Dave"]
+    let finalContract = Agreement with signatories = parties
+  <br/>
+    -- Parties cannot create a contract already signed by someone else
+    initialFailTest <- person1 `submitMustFail` do
+      createCmd Pending with finalContract; alreadySigned = [person1, person2]
+  <br/>
+    -- Any party can create a Pending contract provided they list themselves as the only signatory
+    pending <- person1 `submit` do
+      createCmd Pending with finalContract; alreadySigned = [person1]
+  ```
+  <br/>
+  Once the Pending contract is created, the other parties can sign it. For simplicity, the example code only has choices to express consensus (but you might want to add choices to Accept, Reject, or Negotiate).
+  <br/>
+  ```daml
+    -- Each signatory of the finalContract can Sign the Pending contract
+    pending <- person2 `submit` do
+      exerciseCmd pending Sign with signer = person2
+    pending <- person3 `submit` do
+      exerciseCmd pending Sign with signer = person3
+    pending <- person4 `submit` do
+      exerciseCmd pending Sign with signer = person4
+  <br/>
+    -- A party can't sign the Pending contract twice
+    pendingFailTest <- person3 `submitMustFail` do
+      exerciseCmd pending Sign with signer = person3
+    -- A party can't sign on behalf of someone else
+    pendingFailTest <- person3 `submitMustFail` do
+      exerciseCmd pending Sign with signer = person4
+  ```
+  <br/>
+  Once all of the parties have signed the Pending contract, any of them can then exercise the `Finalize` choice. This creates the Agreement contract on the ledger.
+  <br/>
+  ```daml
+    person1 `submit` do
+      exerciseCmd pending Finalize with signer = person1
+  ```
+
+![The Multiparty Agreement pattern, in which the Pending contract recreates itself each time a party signs until all have signed and one exercises the Finalize choice to create the Agreement contract.](sdlc-howtos/smart-contracts/develop/patterns/images/multiplepartyAgreement.png)

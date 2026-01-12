@@ -1,0 +1,191 @@
+<!-- source: daml / daml/3.5/sdk/reference/daml/structure.rst -->
+<!-- Copyright (c) 2023 Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved. -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
+# Overview: Template Structure
+
+This page covers what a template looks like: what parts of a template there are, and where they go.
+
+For the structure of a Daml file *outside* a template, see [Reference: Daml File Structure](file-structure.md).
+
+<a id="daml-ref-template-structure"></a>
+
+## Template Outline Structure
+
+Here’s the structure of a Daml template:
+
+```default
+template NameOfTemplate
+  with
+    exampleParty : Party
+    exampleParty2 : Party
+    exampleParty3 : Party
+    exampleParameter : Text
+    -- more parameters here
+  where
+    signatory exampleParty
+    observer exampleParty2
+    ensure
+      -- boolean condition
+      True
+    key (exampleParty, exampleParameter) : (Party, Text)
+    maintainer (exampleFunction key)
+    -- a choice goes here; see next section
+```
+
+[template name](templates.md#daml-ref-template-name)
+: `template` keyword
+
+[parameters](templates.md#daml-ref-template-parameters)
+: `with` followed by the names of parameters and their types
+
+template body
+: `where` keyword
+  <br/>
+  Can include:
+  <br/>
+  [template-local definitions (deprecated)](templates.md#daml-ref-template-let)
+  : `let` keyword
+    <br/>
+    Lets you make definitions that have access to the contract arguments and are available in the rest of the template definition.
+  <br/>
+  [signatories](templates.md#daml-ref-signatories)
+  : `signatory` keyword
+    <br/>
+    Required. The parties (see the [Party](data-types.md#daml-ref-built-in-types) type) who must consent to the creation of this contract. You won’t be able to create this contract until all of these parties have authorized it.
+  <br/>
+  [observers](templates.md#daml-ref-observers)
+  : `observer` keyword
+    <br/>
+    Optional. Parties that aren’t signatories but who you still want to be able to see this contract.
+  <br/>
+  [a precondition](templates.md#daml-ref-preconditions)
+  : `ensure` keyword
+    <br/>
+    Only create the contract if the conditions after `ensure` evaluate to true.
+  <br/>
+  [a contract key](templates.md#daml-ref-contract-keys)
+  : `key` keyword
+    <br/>
+    Optional. Lets you specify a combination of a party and other data that uniquely identifies a contract of this template. See [Reference: Contract Keys](contract-keys.md#contractkeys).
+  <br/>
+  [maintainers](templates.md#daml-ref-maintainers)
+  : `maintainer` keyword
+    <br/>
+    Required if you have specified a `key`. Keys are only unique to a `maintainer`. See [Reference: Contract Keys](contract-keys.md#contractkeys).
+  <br/>
+  [choices](#daml-ref-choice-structure)
+  : `choice NameOfChoice : ReturnType controller nameOfParty do`
+    <br/>
+    Defines choices that can be exercised. See [Choice structure]() for what can go in a choice.
+
+<a id="daml-ref-choice-structure"></a>
+
+## Choice Structure
+
+Here is the structure of a choice inside a template:
+
+```daml
+choice NameOfChoice
+  : () -- replace () with the actual return type
+  with
+    party : Party -- parameters here
+  controller party
+  do
+    return () -- replace this line with the choice body
+```
+
+[consumption annotation](choices.md#daml-ref-consumability)
+: Optionally one of `preconsuming`, `postconsuming`, `nonconsuming`, which changes the behavior of the choice with respect to privacy and if and when the contract is archived.
+  See [contract consumption in choices](choices.md#daml-ref-consumability) for more details.
+
+[a name](choices.md#daml-ref-choice-name)
+: Must begin with a capital letter. Must be unique - choices in different templates can’t have the same name.
+
+[a return type](choices.md#daml-ref-return-type)
+: after a `:`, the return type of the choice
+
+[choice arguments](choices.md#daml-ref-choice-arguments)
+: `with` keyword
+  <br/>
+  If you include a `Party` as a choice argument, you can make that `Party` the `controller` of the choice. This means that the controller can be specified when the choice is exercised, rather than when the contract is created. For the exercise to work, the party needs to be able to see the contract, i.e. it must be an `observer` or a `signatory`.
+
+[a controller (or controllers)](choices.md#daml-ref-controllers)
+: `controller` keyword
+  <br/>
+  Who can exercise the choice.
+
+[choice observers](choices.md#daml-ref-choice-observers)
+: `observer` keyword
+  <br/>
+  Optional. Additional parties that are guaranteed to be informed of an exercise of the choice.
+  <br/>
+  To specify choice observers, you must start you choice with the `choice` keyword.
+  <br/>
+  The optional `observer` keyword must precede the mandatory `controller` keyword.
+
+[a choice body](choices.md#daml-ref-choice-body)
+: After `do` keyword
+  <br/>
+  What happens when someone exercises the choice. A choice body can contain update statements: see [Choice body structure]() below.
+
+<a id="daml-ref-choice-body-structure"></a>
+
+## Choice Body Structure
+
+A choice body contains `Update` expressions, wrapped in a [do](updates.md#daml-ref-do) block.
+
+The update expressions are:
+
+[create](updates.md#daml-ref-create)
+: Create a new contract of this template.
+  <br/>
+  `create NameOfContract with contractArgument1 = value1; contractArgument2 = value2; ...`
+
+[exercise](updates.md#daml-ref-exercise)
+: Exercise a choice on a particular contract.
+  <br/>
+  `exercise idOfContract NameOfChoiceOnContract with choiceArgument1 = value1; choiceArgument2 = value 2; ...`
+
+[fetch](updates.md#daml-ref-fetch)
+: Fetch a contract using its ID. Often used with assert to check conditions on the contract’s content.
+  <br/>
+  `fetchedContract <- fetch IdOfContract`
+
+[fetchByKey](updates.md#daml-ref-fetch-by-key)
+: Like `fetch`, but uses a [contract key](contract-keys.md#contractkeys) rather than an ID.
+  <br/>
+  `fetchedContract <- fetchByKey @ContractType contractKey`
+
+[lookupByKey](updates.md#daml-ref-lookup-by-key)
+: Confirm that a contract with the given [contract key](contract-keys.md#contractkeys) exists.
+  <br/>
+  `fetchedContractId <- lookupByKey @ContractType contractKey`
+
+[abort](updates.md#daml-ref-abort)
+: Stop execution of the choice, fail the update.
+  <br/>
+  `if False then abort`
+
+[assert](updates.md#daml-ref-assert)
+: Fail the update unless the condition is true. Usually used to limit the arguments that can be supplied to a contract choice.
+  <br/>
+  `assert (amount > 0)`
+
+[getTime](updates.md#daml-ref-gettime)
+: Gets the ledger time. Usually used to restrict when a choice can be exercised.
+  <br/>
+  `currentTime <- getTime`
+
+[return](updates.md#daml-ref-return)
+: Explicitly return a value. By default, a choice returns the result of its last update expression. This means you only need to use `return` if you want to return something else.
+  <br/>
+  `return ContractID ExampleTemplate`
+
+The choice body can also contain:
+
+[let](updates.md#daml-ref-let-update) keyword
+: Used to assign values or functions.
+
+assign a value to the result of an update statement
+: For example: `contractFetched <- fetch someContractId`

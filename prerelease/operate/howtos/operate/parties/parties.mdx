@@ -1,0 +1,268 @@
+<!-- source: canton / canton/3.5/participant/howtos/operate/parties/parties.rst -->
+<!-- Copyright (c) 2026 Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved. -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
+<a id="party-management"></a>
+
+# Party Management
+
+Parties are the entities that interact with the Daml ledger, representing users or organizations. They can be onboarded
+to a Participant Node, which allows them to submit transactions and access the ledger.
+
+The following section explains how to onboard a (local) party. Refer to the following howtos for onboarding of other kind of parties:
+
+- For decentralized parties, refer to the [Decentralized Party Overview documentation](decentralized_parties.md#howto-decentralized-parties).
+- For external parties, refer to the Onboard External Party tutorial.
+- For a party that is already hosted on a participant, refer to the [Party Replication documentation](party_replication.md#party-replication).
+
+## Onboard a new party via the ledger API
+
+If you have access to the ledger API, you can onboard a new party using the `parties` command.
+This command is simply a wrapper around the underlying Ledger API endpoints.
+For more information, see the Ledger API documentation.
+
+1. Define a name for the Party. You can choose the name freely, but it must conform to the following format: [a-zA-Z0-9:-_ ], must not
+exceed 185 characters, must not use two consecutive colons, and must be unique in the namespace.
+
+For example, we want to host the Party `bob`.
+
+```none
+@ val bob = "bob"
+    bob : String = "bob"
+```
+
+2. Specify an optional Synchronizer ID to which the party should be allocated.
+The participant must be connected to this Synchronizer. You may omit this parameter if the participant is connected to only one Synchronizer,
+otherwise the party needs to be enabled on each synchronizer explicitly.
+
+```none
+@ val synchronizerId = participant1.synchronizers.id_of("my-synchronizer")
+    synchronizerId : SynchronizerId = da::122032922613...
+```
+
+3. Define optional annotations. These are key-value pairs associated with this party and stored locally on this Ledger API server.
+Annotations are useful for maintaining metadata about allocated parties.
+
+```none
+@ val annotations = Map("k1" -> "v1", "k2" -> "v2", "k3" -> "v3")
+    annotations : Map[String, String] = Map("k1" -> "v1", "k2" -> "v2", "k3" -> "v3")
+```
+
+1. Define an optional identity provider id.
+
+```none
+@ val idpId = "idp-id-" + java.util.UUID.randomUUID().toString
+    idpId : String = "idp-id-51b4fea0-e95b-43a7-af16-1c63fdfb9de4"
+```
+
+```none
+@ participant1.ledger_api.identity_provider_config.create(identityProviderId = idpId, jwksUrl = "https://jwks:900", issuer = java.util.UUID.randomUUID().toString, audience = Option("someAudience"))
+    res5: com.digitalasset.canton.ledger.api.IdentityProviderConfig = IdentityProviderConfig(
+      identityProviderId = Id(value = "idp-id-51b4fea0-e95b-43a7-af16-1c63fdfb9de4"),
+      isDeactivated = false,
+      jwksUrl = JwksUrl(value = "https://jwks:900"),
+      issuer = "b1d4dd23-a6c4-41dc-9458-1e672ff51d50",
+      audience = Some(value = "someAudience")
+    )
+```
+
+1. Enable the Party on this participant on “”my-synchronizer””
+
+```none
+@ participant1.ledger_api.parties.allocate(bob, annotations = annotations, identityProviderId = idpId, synchronizerId = Some(synchronizerId))
+    res6: parties.PartyDetails = PartyDetails(
+      party = bob::12201ff69b1d...,
+      isLocal = true,
+      annotations = Map("k1" -> "v1", "k2" -> "v2", "k3" -> "v3"),
+      identityProviderId = "idp-id-51b4fea0-e95b-43a7-af16-1c63fdfb9de4"
+    )
+```
+
+1. If you want to onboard the party on a second Synchronizer, you can do so by running the `allocate` command again with a different Synchronizer ID.
+
+```none
+@ val mySecondSynchronizerId = participant1.synchronizers.id_of("my-second-synchronizer")
+    mySecondSynchronizerId : SynchronizerId = acme::122054fe9ea4...
+```
+
+```none
+@ participant1.ledger_api.parties.allocate(bob, annotations = annotations, identityProviderId = idpId, synchronizerId = Some(mySecondSynchronizerId))
+    res8: parties.PartyDetails = PartyDetails(
+      party = bob::12201ff69b1d...,
+      isLocal = true,
+      annotations = Map("k1" -> "v1", "k2" -> "v2", "k3" -> "v3"),
+      identityProviderId = "idp-id-51b4fea0-e95b-43a7-af16-1c63fdfb9de4"
+    )
+```
+
+### Update a party
+
+1. You can update the annotations of a party. To do so, use the `update` command.
+
+```none
+@ participant1.ledger_api.parties.update(bobPartyId, modifier = _.copy(annotations = Map("foo" -> "bar")), identityProviderId = idpId)
+    res9: parties.PartyDetails = PartyDetails(
+      party = bob::12201ff69b1d...,
+      isLocal = true,
+      annotations = Map("foo" -> "bar"),
+      identityProviderId = "idp-id-51b4fea0-e95b-43a7-af16-1c63fdfb9de4"
+    )
+```
+
+1. You can also update the identity provider of a party. To do so, use the `update_idp` command.
+
+```none
+@ participant1.ledger_api.parties.update_idp(bobPartyId, sourceIdentityProviderId = idpId, targetIdentityProviderId = "")
+```
+
+### Find a party
+
+To find a party, you can use the `list` command.
+
+1. You can filter parties by identity provider. Otherwise, all parties hosted on the participant will be returned.
+
+```none
+@ participant1.ledger_api.parties.list(idpId)
+    res11: Seq[parties.PartyDetails] = Vector(
+      PartyDetails(
+        party = bob::12201ff69b1d...,
+        isLocal = false,
+        annotations = Map(),
+        identityProviderId = ""
+      ),
+      PartyDetails(
+        party = participant1::12201ff69b1d...,
+        isLocal = false,
+        annotations = Map(),
+        identityProviderId = ""
+      )
+    )
+```
+
+## Onboard a new party via the admin API
+
+If you need finer control when allocating a party, use the Admin API.
+To onboard a new party to a Participant Node, follow these steps:
+
+1. Define a name for the Party (same rules as explained above).
+For example, we want to host the Party `alice`.
+
+```none
+@ val alice = "alice"
+    alice : String = "alice"
+```
+
+1. Define an optional namespace. By default, Alice will use the namespace of the participant from whom you submit the command.
+
+For more information on namespaces, refer to the Namespaces documentation.
+
+3. Specify an optional Synchronizer alias to which the party should be allocated.
+The participant must be connected to this Synchronizer. You may omit this parameter if the participant is connected to only one Synchronizer,
+otherwise the party needs to be enabled on each synchronizer explicitly.
+
+1. Enable the Party on this participant
+
+```none
+@ participant1.parties.enable(alice, synchronizer = Some("my-synchronizer"))
+    res13: PartyId = alice::12201ff69b1d...
+```
+
+1. Verify that the party has been onboarded.
+
+```none
+@ participant1.parties.list("alice", filterParticipant = participant1.filterString)
+    res14: Seq[ListPartiesResult] = Vector(
+      ListPartiesResult(
+        partyResult = alice::12201ff69b1d...,
+        participants = Vector(
+          ParticipantSynchronizers(
+            participant = PAR::participant1::12201ff69b1d...,
+            synchronizers = Vector(
+              SynchronizerPermission(synchronizerId = da::122032922613..., permission = Submission)
+            )
+          )
+        )
+      )
+    )
+```
+
+1. If you want to onboard the party on a second Synchronizer, you can do so by running the `enable` command again with a different Synchronizer alias.
+
+```none
+@ participant1.parties.enable("alice", synchronizer = Some("my-second-synchronizer"))
+    res15: PartyId = alice::12201ff69b1d...
+```
+
+### Find a party
+
+To find a party, you can use the `list` command.
+
+```none
+@ participant1.parties.list("alice")
+    res16: Seq[ListPartiesResult] = Vector(
+      ListPartiesResult(
+        partyResult = alice::12201ff69b1d...,
+        participants = Vector(
+          ParticipantSynchronizers(
+            participant = PAR::participant1::12201ff69b1d...,
+            synchronizers = Vector(
+              SynchronizerPermission(synchronizerId = da::122032922613..., permission = Submission),
+              SynchronizerPermission(synchronizerId = acme::122054fe9ea4..., permission = Submission)
+            )
+          )
+        )
+      )
+    )
+```
+
+You can also filter by Participant Node and Synchronizers.
+
+```none
+@ val synchronizerId = participant1.synchronizers.id_of("my-synchronizer")
+    synchronizerId : SynchronizerId = da::122032922613...
+```
+
+```none
+@ participant1.parties.list("alice", filterParticipant = participant1.filterString, synchronizerIds = Set(synchronizerId))
+    res18: Seq[ListPartiesResult] = Vector(
+      ListPartiesResult(
+        partyResult = alice::12201ff69b1d...,
+        participants = Vector(
+          ParticipantSynchronizers(
+            participant = PAR::participant1::12201ff69b1d...,
+            synchronizers = Vector(
+              SynchronizerPermission(synchronizerId = da::122032922613..., permission = Submission)
+            )
+          )
+        )
+      )
+    )
+```
+
+### Disable a party
+
+#### WARNING
+Disabling a party is not currently supported and is considered a dangerous operation.
+
+If you are certain about what you are doing, you can disable a party on a specific Synchronizer using the following command:
+
+```none
+@ participant1.parties.disable(alicePartyId, synchronizer = Some("my-synchronizer"))
+```
+
+```none
+@ participant1.parties.disable(alicePartyId, synchronizer = Some("my-second-synchronizer"))
+```
+
+<a id="multi-hosted-parties"></a>
+
+## Multi-hosted parties
+
+A *multi-hosted party* is a party which is hosted on more than
+one participant. This poses the question how you can [replicate a party](party_replication.md#party-replication)
+from one participant to another?
+
+The [simplest and safest way to multi-host a party](party_replication.md#replicate-before-party-is-used)
+is only available to you while the party has not been involved in any Daml transaction.
+Otherwise, you have to perform an [offline party replication](party_replication.md#offline-party-replication)
+procedure.

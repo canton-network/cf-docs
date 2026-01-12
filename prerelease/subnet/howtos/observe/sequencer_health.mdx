@@ -1,0 +1,111 @@
+<!-- source: canton / canton/3.5/synchronizer/howtos/observe/sequencer_health.rst -->
+<!-- Copyright (c) 2026 Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved. -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
+<a id="sequencer-health"></a>
+
+# Check and monitor Sequencer Node health
+
+This page describes how to inspect and understand the current status of a Sequencer Node,
+and how to continuously monitor it using health checks.
+
+See also the generic guide on How to check the status of a Node and monitor its health.
+
+## Interactively check Node status
+
+Canton console can be used to interactively inspect the state and get information about a running Sequencer Node.
+Execute the following command against a `sequencer` reference of interest.
+
+```scala
+sequencer.health.status
+```
+
+For a Sequencer Node that has never been connected to a Synchronizer, the output looks like this:
+
+```none
+@ sequencer1.health.status
+    res1: NodeStatus[sequencer1.Status] = NotInitialized(active = true, waitingFor = Initialization)
+```
+
+For a healthy state expect the Sequencer Node to report a status similar to:
+
+```none
+@ sequencer1.health.status
+    res2: NodeStatus[sequencer1.Status] = Sequencer id: da::1220222f081c6c7d7dd4cba1612b1c80e12e0a7c1eef2139be2d928d903fccf9f090
+    Synchronizer id: da::1220222f081c6c7d7dd4cba1612b1c80e12e0a7c1eef2139be2d928d903fccf9f090::34-0
+    Uptime: 6.971623s
+    Ports:
+            public: 30081
+            admin: 30082
+    Connected participants:
+            PAR::participant2::1220a4d7463b...
+            PAR::participant1::12201ff69b1d...
+            PAR::participant3::1220d6908163...
+    Connected mediators: None
+    Sequencer: SequencerHealthStatus(active = true)
+    details-extra: None
+    Components:
+            db-storage : Ok()
+            sequencer : Ok()
+    Accepts admin changes: true
+    Version: 3.5.0-SNAPSHOT
+    Protocol version: 34
+```
+
+The components status includes `sequencer` for the Sequencer Node itself, and `db-storage`.
+The latter not being `Ok()` indicates problems with the database storage backend or connectivity to it.
+
+The status also shows the Synchronizer members connected to the Sequencer Node. These members have an active
+subscription to the Sequencer Node. They can send new submissions to, and read ordered transactions from the Synchronizer.
+
+## BFT Orderer peer network status
+
+For a BFT (Byzantine Fault Tolerance) Sequencer Node, you can inspect the connection status to the other peers of its BFT peer network.
+
+```none
+@ sequencer1.bft.get_peer_network_status()
+    res3: com.digitalasset.canton.synchronizer.sequencer.block.bftordering.admin.SequencerBftAdminData.PeerNetworkStatus = PeerNetworkStatus(
+      endpoint statuses = Seq(
+        PeerEndpointStatus(
+          p2pEndpointId = Id(url = "http://localhost:30083", tls = false),
+          health = PeerEndpointHealth(status = Authenticated(sequencerId = SEQ::sequencer3::122076e8bfb8...))
+        ),
+        PeerEndpointStatus(
+          p2pEndpointId = Id(url = "http://localhost:30084", tls = false),
+          health = PeerEndpointHealth(status = Authenticated(sequencerId = SEQ::sequencer2::12203a55a279...))
+        )
+      )
+    )
+```
+
+## Health check endpoints
+
+To monitor the health of a Sequencer Node with external tools, use the Canton Node health check endpoints.
+
+Enabling the endpoint is described in the generic guide on How to check the status of a Node and monitor its health.
+
+A Sequencer Node exposes a pair of health check endpoints: `readiness` (accepts traffic)
+and `liveness` (does not require a restart), to be used respectively for load balancing and orchestration
+with tools like Kubernetes.
+
+The `readiness` endpoint corresponds to the health of `sequencer` (including the BFT Orderer),
+and the `liveness` endpoint corresponds to the health of `db-storage` component
+in the status command output described above. This means that a fatal failure of the database connection
+causes a restart of the Sequencer Node.
+
+## Liveness watchdog
+
+A Sequencer Node can be configured to automatically exit when it becomes unhealthy.
+The following configuration enables an internal watchdog service that checks the Sequencer Node health
+every `check-interval` seconds and kills the process after `kill-delay` seconds after
+the `liveness` reports the Node unhealthy.
+
+```none
+watchdog {
+  enabled = true
+  check-interval = 15s
+  kill-delay = 30s
+}
+```
+
+Place the above under `canton.sequencers.sequencer.parameters` in the configuration file of the Sequencer Node.

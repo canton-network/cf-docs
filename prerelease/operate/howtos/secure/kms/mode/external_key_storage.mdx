@@ -1,0 +1,103 @@
+<!-- source: canton / canton/3.5/participant/howtos/secure/kms/mode/external_key_storage.rst -->
+<!-- Copyright (c) 2026 Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved. -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
+<a id="external-key-storage"></a>
+
+# Enable external key storage with a KMS
+
+This section shows how to enable external key storage for a Canton Participant,
+so that private keys are stored and managed by a KMS, and all cryptographic operations using those keys
+must go through the KMS.
+
+#### NOTE
+This assumes the KMS provider has already been configured.
+See [Configure a KMS](../configuration/kms_configuration.md#kms-configuration).
+
+To enable external key storage and usage, apply the configuration below before the initial bootstrap of a new
+Participant node. **If you’re updating an existing Participant, you must instead follow the migration guide:**
+[Migrate to external key storage with a KMS](../migration/external_key_storage_migration.md#external-key-storage-migration).
+
+```none
+canton.participants.participant1.crypto.provider = kms
+```
+
+A complete example configuration that puts together both AWS KMS configuration and external
+key storage configuration is shown below:
+
+```none
+canton.participants.participant1.crypto.provider = kms
+canton.participants.participant1.crypto.kms {
+    type = aws
+    region = us-east-1
+    multi-region-key = false # optional, default is false
+    audit-logging = true # optional, default is false
+}
+```
+
+The same configuration is applicable for all KMS types, by selecting the correct type
+([AWS](../configuration/kms_aws_config.md#kms-aws-config), [GCP](../configuration/kms_gcp_config.md#kms-gcp-config) or [Driver](../configuration/kms_driver_config.md#kms-driver-config)).
+
+This configuration tells Canton that we want to use external keys in a KMS, which are **automatically created by
+default when a Participant starts — no further action is required.**
+Read on if you prefer to use your own manually generated keys that are already stored in the KMS.
+
+<a id="external-key-management"></a>
+
+## Run with manually-generated keys
+
+This howto shows how to configure a participant node with keys that are generated manually in the KMS and
+not rely on automatic key generation by Canton
+
+The first step is to manually generate new keys for the Participant in your KMS. All the necessary keys are
+listed below and include:
+
+- a (signing) namespace key;
+- a protocol signing key;
+- a sequencer authentication key;
+- an asymmetric encryption key;
+
+Generate each key in your KMS with a supported key algorithm and purpose as shown in Table
+[Key configuration for external keys](../../../../reference/crypto_schemes.md#key-configuration-external-keys) and record the generated keys identifier.
+
+To be able to use these keys, you must configure manual initialization in the Participant.
+This is explained in detail in [Initialize node identity manually](../../../operate/identity/manual_identity_init.md#setup-manual-identity).
+However, it is important to note that contrary to what is described there, the keys
+are expected to be registered, not generated. Each key must be assigned the correct usage
+(see [Signing Key Usage](../../keys/key_restrictions.md#signing-key-usage-restrictions)).
+
+```scala
+// Register the KMS signing key used to define the node identity.
+val namespaceKey = node.keys.secret
+  .register_kms_signing_key(
+    namespaceKmsKeyId,
+    SigningKeyUsage.NamespaceOnly,
+    name = s"${node.name}-${SigningKeyUsage.Namespace.identifier}",
+  )
+
+// Register the KMS signing key used to authenticate the node toward the Sequencer.
+val sequencerAuthKey = node.keys.secret
+  .register_kms_signing_key(
+    sequencerAuthKmsKeyId,
+    SigningKeyUsage.SequencerAuthenticationOnly,
+    name = s"${node.name}-${SigningKeyUsage.SequencerAuthentication.identifier}",
+  )
+
+// Register the signing key used to sign protocol messages.
+val signingKey = node.keys.secret
+  .register_kms_signing_key(
+    signingKmsKeyId,
+    SigningKeyUsage.ProtocolOnly,
+    name = s"${node.name}-${SigningKeyUsage.Protocol.identifier}",
+  )
+
+// Register the encryption key.
+val encryptionKey = node.keys.secret
+  .register_kms_encryption_key(encryptionKmsKeyId, name = node.name + "-encryption")
+```
+
+where xyzKmsKeyId is the KMS key identifier for a specific key (e.g. KMS Key ARN).
+
+#### NOTE
+When using [AWS cross account keys](https://docs.aws.amazon.com/kms/latest/developerguide/key-policy-modifying-external-accounts.html)
+the key ID can’t be used, use the key ARN instead.

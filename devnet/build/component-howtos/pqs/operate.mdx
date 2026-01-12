@@ -1,0 +1,336 @@
+<!-- source: pqs / pqs/3.4/component-howtos/pqs/operate.rst -->
+<!-- Copyright (c) 2025, Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved. -->
+
+<a id="pqs-operate"></a>
+
+# Operate
+
+To run PQS you need the following:
+
+* PostgreSQL database server
+* Daml Sandbox or Canton Participant Node as the source of ledger data
+* Any access tokens or TLS certificates required by the above
+* PQS’ `scribe.jar` or Docker image
+
+<!-- vale DigitalAsset.SentenceCaseHeadings = NO -->
+
+## Running PQS
+
+<!-- vale DigitalAsset.SentenceCaseHeadings = YES -->
+
+PQS application mostly runs as a long-running process, but also includes several user-interactive commands:
+
+| Command                                    | Description                                                     |
+|--------------------------------------------|-----------------------------------------------------------------|
+| `pipeline ledger postgres-document`        | Initiate continuous ledger data export                          |
+| `datastore postgres-document schema show`  | Infer required database schema, display it and quit             |
+| `datastore postgres-document schema apply` | Infer required database schema, apply it to data store and quit |
+| `datastore postgres-document prune`        | Prune transactions to a given offset inclusively and quit       |
+
+Consult [Configuration options](references/configuration-options.md#pqs-references-configuration-options) how to configure each command.
+
+PQS pipeline is crash friendly and restarts automatically. See [Ledger streaming & recovery](recover.md#pqs-ledger-streaming-and-recovery) for more
+details on how PQS recovers from a crash.
+
+## Getting help
+
+Exploring commands and parameters is easiest via the `--help` (and `--help-verbose`) arguments: For example, if
+you are running a downloaded `.jar` file:
+
+```text
+$ ./scribe.jar --help
+Usage: scribe COMMAND
+
+An efficient ledger data exporting tool
+
+Options:
+  -h, --help            Print help information and quit
+  -H, --help-verbose    Print help information with extra details and quit
+  -v, --version         Print version information and quit
+
+Commands:
+  pipeline     Initiate continuous ledger data export
+  datastore    Perform operations supporting a certified data store
+
+Run 'scribe COMMAND --help[-verbose]' for more information on a command.
+```
+
+Or similarly, using Docker:
+
+```text
+$ docker run -it europe-docker.pkg.dev/da-images/public/docker/participant-query-store:0.6.14 --help
+Picked up JAVA_TOOL_OPTIONS: -javaagent:/open-telemetry.jar
+Usage: scribe COMMAND
+
+An efficient ledger data exporting tool
+
+Commands:
+  pipeline     Initiate continuous ledger data export
+  datastore    Perform operations supporting a certified data store
+
+Run 'scribe COMMAND --help[-verbose]' for more information on a command.
+```
+
+<a id="pqs-history-slicing"></a>
+
+## History slicing
+
+As described in [Ledger streaming & recovery](recover.md#pqs-ledger-streaming-and-recovery) you can use PQS with `--pipeline-ledger-start` and
+`--pipeline-ledger-stop` to ask for the slice of the history you want. There are some constraints on start and stop
+offsets which cause PQS to fail-fast if they are violated.
+
+You cannot use:
+
+1. **Offsets that are outside ledger history**
+2. **Pruned offsets or Genesis on pruned ledger**
+3. **Offsets that lead to a gap in datastore history**
+4. **Offsets that are before the PQS datastore history**
+
+#### NOTE
+In the above examples:
+
+* **Request** represents offsets requested via `--pipeline-ledger-start` and `--pipeline-ledger-stop` arguments
+* **Participant Node** represents the availability of unpruned ledger history in the Participant Node
+* **Datastore** represents data in the PQS database
+
+<a id="pqs-pruning"></a>
+
+## Pruning
+
+Pruning ledger data from the database can help reduce storage size and improve query performance by removing old and
+irrelevant data. PQS provides two approaches to prune ledger data: using the PQS CLI or using the `prune_to_offset()`
+function (see [SQL API](references/sql-api.md#pqs-references-sql-api)).
+
+Decide on what are the oldest offsets that you will ever need in PQS and setup periodic pruning for data at offsets
+older than that. Thereby ensuring that your query performance does not deteriorate over time as your PQS database
+continuously increases in size. In case you need all data from ledger begin consider:
+
+* data growth rate, and
+* size your database server to comfortably hold that data
+
+#### WARNING
+Calling either the `prune` CLI command with `--prune-mode Force` or calling the PostgreSQL function
+`prune_to_offset()` deletes data irrevocably
+
+### Data deletion and changes
+
+Both pruning approaches (CLI and SQL function) share the same behavior in terms of data deletion and changes.
+
+Active contracts are preserved under a new offset, while all other transaction-related data up to, and including the
+target offset is deleted. This approach is in line with ledger pruning recommendation
+`:brokenref:`https://docs.daml.com/ops/pruning.html#how-the-daml-ledger-api-is-affected``:
+
+> As a consequence, after pruning, a Daml application must bootstrap from the Active Contract Service and a recent offset.
+
+PQS helps users avoid an unnecessary bootstrapping process, but achieves the same outcome as if it had obtained a
+fresh snapshot (of the Active Contract Set) from the ledger.
+
+The target offset, that is, the offset provided via `--prune-target` or as argument to `prune_to_offset()` SQL
+function is the transaction with the highest offset to be deleted by the pruning operation.
+
+#### NOTE
+If the provided offset does not have a transaction associated with it, the effective target offset becomes the
+oldest offset that succeeds (is greater than) the provided offset.
+
+When using either pruning method, the following data will be changed:
+
+* The offset of active contracts is moved to the oldest known offset which succeeds the pruning target offset. For
+  example, this could be the offset of the oldest transaction that is unaffected by the pruning operation.
+* Transactions with offsets up to and including the target offset, including associated archived contracts and
+  exercise events, are deleted.
+
+The following data is unaffected:
+
+* Transaction-related data (event/choices/contracts) for transaction with an offset greater than the pruning target.
+
+Pruning is a destructive operation and cannot be undone. If necessary, make sure to back up your data before
+performing any pruning operations.
+
+### Constraints
+
+Some constraints apply to pruning operations (see also [PQS time model](references/sql-api.md#pqs-references-pqs-time-model)):
+
+1. The provided target offset must be within the bounds of the contiguous history. If the target offset is outside
+   the bounds, an error is raised.
+2. The pruning operation cannot coincide with the latest consistent checkpoint of the contiguous history. If so, it
+   raises an error.
+
+### Pruning from the command line
+
+The PQS CLI provides a `prune` command that allows you to prune the ledger data up to a specified offset,
+timestamp, or duration.
+
+For detailed information on all available options, please run:
+
+```text
+$ ./scribe.jar datastore postgres-document prune --help-verbose
+```
+
+To use the `prune` command, you need to provide a pruning target as an argument. The pruning target can be an
+offset, a timestamp, or a duration (ISO 8601 <sup>[1](#id2)</sup>):
+
+```text
+$ ./scribe.jar datastore postgres-document prune --prune-target '<offset>'
+```
+
+By default, the `prune` command performs a dry run, meaning it displays the effects of the pruning operation
+without actually deleting any data. To execute the pruning operation, add the `--prune-mode Force` option:
+
+```text
+$ ./scribe.jar datastore postgres-document prune --prune-target '<offset>' --prune-mode Force
+```
+
+### Example with timestamp and duration
+
+In addition to providing an offset as `--prune-target`, a timestamp or duration can also be used as a pruning
+cut-off. For example, to prune data older than 30 days (relative to now), you can use the following command:
+
+```text
+$ ./scribe.jar datastore postgres-document prune --prune-target P30D
+```
+
+To prune data up to a specific timestamp, you can use the following command:
+
+```text
+$ ./scribe.jar datastore postgres-document prune --prune-target 2023-01-30T00:00:00.000Z
+```
+
+### Pruning with sql function
+
+The `prune_to_offset()` is a SQL function that allows you to prune the ledger data up to a specified offset. It has
+the same behavior as the `datastore postgres-document prune` command, but does not feature a dry-run option.
+
+To use `prune_to_offset()`, you need to provide an offset:
+
+```sql
+select * from prune_to_offset('<offset>');
+```
+
+The function deletes transactions and updates active contracts as described above.
+
+You can use `prune_to_offset()` in combination with the `nearest_offset()` function to prune data up to a specific
+timestamp or interval:
+
+```sql
+select * from prune_to_offset(nearest_offset('1970-01-01 08:01:00+08' :: timestamp with time zone));
+select * from prune_to_offset(nearest_offset('PT2H' :: interval));
+select * from prune_to_offset(nearest_offset(interval '3 days'));
+```
+
+<a id="pqs-resetting"></a>
+
+## Resetting
+
+Reset-to-offset is a manual procedure that deletes all transactions from the PQS database after a given offset. This
+allows you to restart processing from the offset as if subsequent transactions have never been processed.
+
+#### WARNING
+Reset is a dangerous, destructive, and permanent procedure that needs to be coordinated within the entire
+ecosystem and not performed in isolation.
+
+Reset can be useful to perform a point-in-time rollback of the ledger in a range of circumstances. For example, in
+the event of:
+
+1. **Unexepected new entities** - A new scope, such as a Party or template, appears in ledger transactions without
+   coordination. That is, new transactions arrive without ensuring PQS is restarted - to ensure it knows about these
+   new enitities prior.
+2. **Ledger roll-back** - If a ledger is rolled-back due to the disaster recovery process, you will need to perform a
+   similar roll back with PQS. This is a manual process that requires coordination with the Participant Node.
+
+The procedure:
+
+* Stop any applications that use the PQS database.
+* Stop the PQS process.
+* Connect to the PostgreSQL as an administrator.
+* Prevent PQS database readers from interacting (`revoke connect`).
+* Terminate any other remaining connections:
+  ```sql
+  select pg_terminate_backend(pid)
+  from pg_stat_activity
+  where pid <> pg_backend_pid() and datname = current_database();
+  ```
+* Obtain a summary of the scope of the proposed reset and validate that the intended outcome matches your
+  expectations by performing a dry run:
+  ```sql
+  select * from validate_reset_offset("0000000000000a8000");
+  ```
+* Implement the destructive changes of removing all transactions after the given offset and adjust internal metadata
+  to allow PQS to resume processing from the supplied offset:
+  ```sql
+  select * from reset_to_offset("0000000000000a8000");
+  ```
+* Re-enable access for PQS database users (`grant connect`)
+* Wait for the Participant Node to be available post-repair.
+* Start PQS.
+* Conduct any remedial action required in PQS database consumers, to account for the fact that the ledger appears to
+  be rolled back to the specified offset.
+* Start applications that use the PQS database and resume operation.
+
+#### WARNING
+The provided target offset must be within the bounds of the contiguous history. If the target offset is outside the
+bounds, it raises an error.
+
+## Redacting
+
+The redaction feature enables removal of sensitive or personally identifiable information from contracts and
+exercises within the PQS database. This operation is particularly useful for complying with privacy regulations and
+data protection laws, as it enables the permanent removal of contract payloads, contract keys, choice arguments, and
+choice results. Note that redaction is a destructive operation and once redacted, information cannot be restored.
+
+The redaction process involves assigning a `redaction_id` to a contract or an exercise and nullifying its sensitive
+data fields. For contracts, the `payload` and `contract_key` fields are redacted, while for exercises, the
+`argument` and `result` fields are redacted.
+
+### Conditions for redaction
+
+The following conditions apply to contracts and interface views:
+
+* You cannot redact an active contract
+* A redacted contract cannot be redacted again
+
+There are no restrictions on the redaction of choice exercise events.
+
+A redaction operation requires a redaction ID, which is an arbitrary label to identify the redaction and provide
+information about its reason, and correlate with other systems that coordinate such activity.
+
+### Examples
+
+#### Redacting an archived contract
+
+To redact an archived contract, use the `redact_contract` function by providing the `contract_id` and a
+`redaction_id`. The intent of the `redaction_id` is to provide a case reference to identify the reason why the
+redaction has taken place, and it should be set according to organizational policies. This operation nullifies the
+`payload` and `contract_key` of the contract and assigns the `redaction_id`.
+
+```sql
+select redact_contract('<contract_id>', '<redaction_id>');
+```
+
+Redaction is applied to the contract and its interface views, if any, and it returns the number of affected entries.
+
+#### Redacting a choice exercise
+
+To redact an exercise, use the `redact_exercise` function by providing the `event_id` of the exercise and a
+`redaction_id`. This nullifies the `argument` and `result` of the exercise and assigns the `redaction_id`.
+
+```sql
+select redact_exercise('<event_id>', '<redaction_id>');
+```
+
+### Accessing redaction information
+
+The `redaction_id` of a contract is exposed as a column in the following functions of the SQL API. The columns
+`payload` and `contract_key` for a redacted contract are `NULL`.
+
+* `creates(...)`
+* `archives(...)`
+* `active(...)`
+* `lookup_contract(...)`
+
+The `redaction_id` of an exercise event is exposed as a column in the following functions of the SQL API. The
+columns `argument` and `result` for a redacted exercise are `NULL`:
+
+* `exercises(...)`
+* `lookup_exercises(...)`
+
+* <a id='id2'>**[1]**</a> [https://en.wikipedia.org/wiki/ISO_8601#Durations](https://en.wikipedia.org/wiki/ISO_8601#Durations)

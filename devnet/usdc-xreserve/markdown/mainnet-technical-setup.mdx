@@ -1,0 +1,225 @@
+# MainNet Technical Setup
+
+## Token Details (MainNet)
+
+On Canton Network, the uniqueness of the token is the combination of the token’s Instrument Id and the party ID of the token’s admin (registrar).  Below are these details for USDCx.
+
+Only the USDC that contains these details is the official USDC on the Canton Network’s MainNet.
+
+`InstrumentId.id`  = `USDCx`
+
+`InstrumentId.admin` = `decentralized-usdc-interchain-rep::12208115f1e168dd7e792320be9c4ca720c751a02a3053c7606e1c1cd3dad9bf60ef`
+
+Explicit disclosure URLs - used to get additional data, for apps looking to interoperate with USDC and use it in their workflows, can be found here: Token Standard Endpoints.
+
+\*\* **See the information for TestNet in the Appendix**
+
+## DAR file
+
+[Download DAR](https://get.digitalasset.com/usdc-dars/utility-bridge-v0-0.1.2.dar)
+
+[Download checksum file](https://get.digitalasset.com/usdc-dars/utility-bridge-v0-0.1.2.dar.sha256)
+
+## Technical Deployment with Kubernetes (MainNet)
+
+### Utilities Setup:
+
+USDCx is a standard Registry Utility token. Refer to the Utilities setup outlined here prior to installing the xReserve UI as below.
+
+### Helm Chart:
+
+```default
+helm install cub -f values.yaml \
+    oci://europe-docker.pkg.dev/da-images/public/charts/cub:0.2.10
+```
+
+### Example Ingress:
+
+```default
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cub-ingress
+  namespace: validator
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: *HOSTNAME*
+    http:
+      paths:
+      - backend:
+          service:
+            name: bridge-frontend
+            port:
+              number: 80
+        path: /
+        pathType: Prefix
+    - backend:
+          service:
+            name: participant
+            port:
+              number: 7575
+        path: /api/json-api/
+        pathType: Prefix
+    - backend:
+          service:
+            name: validator-app
+            port:
+              number: 5003
+        path: /api/validator/
+        pathType: ImplementationSpecific
+tls:
+- hosts:
+    - *HOSTNAME*
+    secretName: *CERT-SECRET-NAME*
+```
+
+### Example Values file:
+
+```default
+imageRepository: europe-docker.pkg.dev/da-images/public/docker
+
+oidc:
+  issuerUri: ""
+  audience: https://canton.network.global
+  scope: daml_ledger_api
+  frontendClientId: ""
+
+  # the frontend chart uses the validator credentials to upload DARs
+  clientId: ""
+  clientSecret:
+      name: ""
+      key: ""
+
+network:
+  participant:
+    host: participant
+    ports:
+      admin: 5002
+      ledger: 5001
+      jsonApi: 7575
+  validator:
+    host: validator-app
+    port: 5003
+
+# MainNet Constants below. Do not change.
+parties:
+  utilityOperator: "auth0_007c6643538f2eadd3e573dd05b9::12205bcc106efa0eaa7f18dc491e5c6f5fb9b0cc68dc110ae66f4ed6467475d7c78e"
+  bridgeOperator: "Bridge-Operator::1220c8448890a70e65f6906bd48d797ee6551f094e9e6a53e329fd5b2b549334f13f"
+  crossChainRepresentative: "decentralized-usdc-interchain-rep::12208115f1e168dd7e792320be9c4ca720c751a02a3053c7606e1c1cd3dad9bf60ef"
+
+contracts:
+  allocationFactory:
+    templateId: "8c335bb7d522489d71faf3eef046ad1a56f091b55b4f2d3086c7266afca1d647:Utility.Registry.App.V0.Service.AllocationFactory:AllocationFactory"
+    contractId: "006289e882123613ea96d71fad9cc38a529e613a8d4b550ef6a0422383e1925934ca11122003bc3af7d468f09465fa72db6182b63e349804e430a81eeeffa9076f5099f796"
+    eventBlob: "CgMyLjESiwcKRQBiieiCEjYT6pbXH62cw4pSnmE6jUtVDvagQiOD4ZJZNMoREiADvDr31GjwlGX6ctthgrY+NJgE5DCoHu7/qQdvUJn3lhIXdXRpbGl0eS1yZWdpc3RyeS1hcHAtdjAajQEKQDhjMzM1YmI3ZDUyMjQ4OWQ3MWZhZjNlZWYwNDZhZDFhNTZmMDkxYjU1YjRmMmQzMDg2YzcyNjZhZmNhMWQ2NDcSB1V0aWxpdHkSCFJlZ2lzdHJ5EgNBcHASAlYwEgdTZXJ2aWNlEhFBbGxvY2F0aW9uRmFjdG9yeRoRQWxsb2NhdGlvbkZhY3RvcnkiuQJqtgIKWQpXOlVCcmlkZ2UtT3BlcmF0b3I6OjEyMjBjODQ0ODg5MGE3MGU2NWY2OTA2YmQ0OGQ3OTdlZTY1NTFmMDk0ZTllNmE1M2UzMjlmZDViMmI1NDkzMzRmMTNmCmsKaTpnZGVjZW50cmFsaXplZC11c2RjLWludGVyY2hhaW4tcmVwOjoxMjIwODExNWYxZTE2OGRkN2U3OTIzMjBiZTljNGNhNzIwYzc1MWEwMmEzMDUzYzc2MDZlMWMxY2QzZGFkOWJmNjBlZgpsCmo6aGF1dGgwXzAwN2M2NjQzNTM4ZjJlYWRkM2U1NzNkZDA1Yjk6OjEyMjA1YmNjMTA2ZWZhMGVhYTdmMThkYzQ5MWU1YzZmNWZiOWIwY2M2OGRjMTEwYWU2NmY0ZWQ2NDY3NDc1ZDdjNzhlKlVCcmlkZ2UtT3BlcmF0b3I6OjEyMjBjODQ0ODg5MGE3MGU2NWY2OTA2YmQ0OGQ3OTdlZTY1NTFmMDk0ZTllNmE1M2UzMjlmZDViMmI1NDkzMzRmMTNmKmdkZWNlbnRyYWxpemVkLXVzZGMtaW50ZXJjaGFpbi1yZXA6OjEyMjA4MTE1ZjFlMTY4ZGQ3ZTc5MjMyMGJlOWM0Y2E3MjBjNzUxYTAyYTMwNTNjNzYwNmUxYzFjZDNkYWQ5YmY2MGVmMmhhdXRoMF8wMDdjNjY0MzUzOGYyZWFkZDNlNTczZGQwNWI5OjoxMjIwNWJjYzEwNmVmYTBlYWE3ZjE4ZGM0OTFlNWM2ZjVmYjliMGNjNjhkYzExMGFlNjZmNGVkNjQ2NzQ3NWQ3Yzc4ZTlPYpygnEEGAEIqCiYKJAgBEiC7t2lHB3NuKxVhVA0EL5T+JGl5YJ6hVSv8wD+vxG3/+BAe"
+  instrumentConfig:
+    templateId: "b4ae77b8c0c7faa8bc8bb048f035dfe3d85d3e36d4bafaa4cf59631ec635ddb2:Utility.Registry.V0.Configuration.Instrument:InstrumentConfiguration"
+    contractId: "002a23aed42edb51940f74f6fc5f7b8267c9192ab8e72296673420ffc4c4f22debca1112201d94617a63f11a4ce245498930752e56313d200b6a0976ee621f6add2788ba1b"
+    eventBlob: "CgMyLjESwAkKRQAqI67ULttRlA909vxfe4JnyRkquOcilmc0IP/ExPIt68oREiAdlGF6Y/EaTOJFSYkwdS5WMT0gC2oJdu5iH2rdJ4i6GxITdXRpbGl0eS1yZWdpc3RyeS12MBqNAQpAYjRhZTc3YjhjMGM3ZmFhOGJjOGJiMDQ4ZjAzNWRmZTNkODVkM2UzNmQ0YmFmYWE0Y2Y1OTYzMWVjNjM1ZGRiMhIHVXRpbGl0eRIIUmVnaXN0cnkSAlYwEg1Db25maWd1cmF0aW9uEgpJbnN0cnVtZW50GhdJbnN0cnVtZW50Q29uZmlndXJhdGlvbiLyBGrvBApsCmo6aGF1dGgwXzAwN2M2NjQzNTM4ZjJlYWRkM2U1NzNkZDA1Yjk6OjEyMjA1YmNjMTA2ZWZhMGVhYTdmMThkYzQ5MWU1YzZmNWZiOWIwY2M2OGRjMTEwYWU2NmY0ZWQ2NDY3NDc1ZDdjNzhlClkKVzpVQnJpZGdlLU9wZXJhdG9yOjoxMjIwYzg0NDg4OTBhNzBlNjVmNjkwNmJkNDhkNzk3ZWU2NTUxZjA5NGU5ZTZhNTNlMzI5ZmQ1YjJiNTQ5MzM0ZjEzZgprCmk6Z2RlY2VudHJhbGl6ZWQtdXNkYy1pbnRlcmNoYWluLXJlcDo6MTIyMDgxMTVmMWUxNjhkZDdlNzkyMzIwYmU5YzRjYTcyMGM3NTFhMDJhMzA1M2M3NjA2ZTFjMWNkM2RhZDliZjYwZWYKmwEKmAFqlQEKawppOmdkZWNlbnRyYWxpemVkLXVzZGMtaW50ZXJjaGFpbi1yZXA6OjEyMjA4MTE1ZjFlMTY4ZGQ3ZTc5MjMyMGJlOWM0Y2E3MjBjNzUxYTAyYTMwNTNjNzYwNmUxYzFjZDNkYWQ5YmY2MGVmCgkKB0IFVVNEQ3gKGwoZQhdSZWdpc3RyYXJJbnRlcm5hbFNjaGVtZQoECgJaAAqMAQqJAVqGAQqDAWqAAQpZClc6VUJyaWRnZS1PcGVyYXRvcjo6MTIyMGM4NDQ4ODkwYTcwZTY1ZjY5MDZiZDQ4ZDc5N2VlNjU1MWYwOTRlOWU2YTUzZTMyOWZkNWIyYjU0OTMzNGYxM2YKIwohWh8KHWobCg4KDEIKSXNJc3N1ZXJPZgoJCgdCBVVTREN4CgQKAloAKlVCcmlkZ2UtT3BlcmF0b3I6OjEyMjBjODQ0ODg5MGE3MGU2NWY2OTA2YmQ0OGQ3OTdlZTY1NTFmMDk0ZTllNmE1M2UzMjlmZDViMmI1NDkzMzRmMTNmKmdkZWNlbnRyYWxpemVkLXVzZGMtaW50ZXJjaGFpbi1yZXA6OjEyMjA4MTE1ZjFlMTY4ZGQ3ZTc5MjMyMGJlOWM0Y2E3MjBjNzUxYTAyYTMwNTNjNzYwNmUxYzFjZDNkYWQ5YmY2MGVmMmhhdXRoMF8wMDdjNjY0MzUzOGYyZWFkZDNlNTczZGQwNWI5OjoxMjIwNWJjYzEwNmVmYTBlYWE3ZjE4ZGM0OTFlNWM2ZjVmYjliMGNjNjhkYzExMGFlNjZmNGVkNjQ2NzQ3NWQ3Yzc4ZTlPYpygnEEGAEIqCiYKJAgBEiDG2u5/5aFqKxIBQ1NhOOUuMloJWjlgtAJ9hY+R5wQVHRAe"
+  appConfig:
+    templateId: "ed73d5b9ab717333f3dbd122de7be3156f8bf2614a67360c3dd61fc0135133fa:Utility.Registry.V0.Configuration.AppReward:AppRewardConfiguration"
+    contractId: "00ad54961b99aa48d545fe0d74a6b56737e8cb0d7935e831ee1afce0619a4a82bfca1112202c765d54dfcc7a1db8d0bbb5f06951ceb4562a1acaaf74de13c6d05ebe4a64c4"
+    eventBlob: "CgMyLjESkAcKRQCtVJYbmapI1UX+DXSmtWc36MsNeTXoMe4a/OBhmkqCv8oREiAsdl1U38x6HbjQu7XwaVHOtFYqGsqvdN4TxtBevkpkxBITdXRpbGl0eS1yZWdpc3RyeS12MBqLAQpAZWQ3M2Q1YjlhYjcxNzMzM2YzZGJkMTIyZGU3YmUzMTU2ZjhiZjI2MTRhNjczNjBjM2RkNjFmYzAxMzUxMzNmYRIHVXRpbGl0eRIIUmVnaXN0cnkSAlYwEg1Db25maWd1cmF0aW9uEglBcHBSZXdhcmQaFkFwcFJld2FyZENvbmZpZ3VyYXRpb24irQNqqgMKbApqOmhhdXRoMF8wMDdjNjY0MzUzOGYyZWFkZDNlNTczZGQwNWI5OjoxMjIwNWJjYzEwNmVmYTBlYWE3ZjE4ZGM0OTFlNWM2ZjVmYjliMGNjNjhkYzExMGFlNjZmNGVkNjQ2NzQ3NWQ3Yzc4ZQpZClc6VUJyaWRnZS1PcGVyYXRvcjo6MTIyMGM4NDQ4ODkwYTcwZTY1ZjY5MDZiZDQ4ZDc5N2VlNjU1MWYwOTRlOWU2YTUzZTMyOWZkNWIyYjU0OTMzNGYxM2YK3gEK2wFq2AEKTQpLOklEU086OjEyMjBiMTQzMWVmMjE3MzQyZGI0NGQ1MTZiYjliZWZkZTgwMmJlN2Q4ODk5NjM3ZDI5MDg5NWZhNTg4ODBmMTlhY2NjCoYBCoMBaoABCmwKajpoYXV0aDBfMDA3YzY2NDM1MzhmMmVhZGQzZTU3M2RkMDViOTo6MTIyMDViY2MxMDZlZmEwZWFhN2YxOGRjNDkxZTVjNmY1ZmI5YjBjYzY4ZGMxMTBhZTY2ZjRlZDY0Njc0NzVkN2M3OGUKEAoOMgwwLjAwMDAwMDAwMDAqaGF1dGgwXzAwN2M2NjQzNTM4ZjJlYWRkM2U1NzNkZDA1Yjk6OjEyMjA1YmNjMTA2ZWZhMGVhYTdmMThkYzQ5MWU1YzZmNWZiOWIwY2M2OGRjMTEwYWU2NmY0ZWQ2NDY3NDc1ZDdjNzhlMlVCcmlkZ2UtT3BlcmF0b3I6OjEyMjBjODQ0ODg5MGE3MGU2NWY2OTA2YmQ0OGQ3OTdlZTY1NTFmMDk0ZTllNmE1M2UzMjlmZDViMmI1NDkzMzRmMTNmOcSAY/8mQgYAQioKJgokCAESIK+PKFSW8cBTvl2P8GALcq6BORe5200JDD0n1z+pnQylEB4="
+```
+
+## Technical Deployment with Docker (MainNet)
+
+### Utilities Setup:
+
+USDCx is a standard Registry Utility token. Refer to the Utilities setup outlined here prior to installing the xReserve UI as below.
+
+### Additional Environment Variables:
+
+Add the following to your `splice-node/docker-compose/validator/.env`
+
+```default
+CUB_IMAGE_REPO="europe-docker.pkg.dev/da-images/public/docker"
+CUB_IMAGE_VERSION="0.2.10"
+
+# MainNet constants below:
+
+UTILITY_OPERATOR_PARTY_ID="auth0_007c6643538f2eadd3e573dd05b9::12205bcc106efa0eaa7f18dc491e5c6f5fb9b0cc68dc110ae66f4ed6467475d7c78e"
+CUB_OPERATOR_PARTY_ID="Bridge-Operator::1220c8448890a70e65f6906bd48d797ee6551f094e9e6a53e329fd5b2b549334f13f"
+CROSS_CHAIN_REPRESENTATIVE_PARTY_ID="decentralized-usdc-interchain-rep::12208115f1e168dd7e792320be9c4ca720c751a02a3053c7606e1c1cd3dad9bf60ef"
+FACTORY_CONTRACT_ID="006289e882123613ea96d71fad9cc38a529e613a8d4b550ef6a0422383e1925934ca11122003bc3af7d468f09465fa72db6182b63e349804e430a81eeeffa9076f5099f796"
+FACTORY_CREATED_EVENT_BLOB="CgMyLjESiwcKRQBiieiCEjYT6pbXH62cw4pSnmE6jUtVDvagQiOD4ZJZNMoREiADvDr31GjwlGX6ctthgrY+NJgE5DCoHu7/qQdvUJn3lhIXdXRpbGl0eS1yZWdpc3RyeS1hcHAtdjAajQEKQDhjMzM1YmI3ZDUyMjQ4OWQ3MWZhZjNlZWYwNDZhZDFhNTZmMDkxYjU1YjRmMmQzMDg2YzcyNjZhZmNhMWQ2NDcSB1V0aWxpdHkSCFJlZ2lzdHJ5EgNBcHASAlYwEgdTZXJ2aWNlEhFBbGxvY2F0aW9uRmFjdG9yeRoRQWxsb2NhdGlvbkZhY3RvcnkiuQJqtgIKWQpXOlVCcmlkZ2UtT3BlcmF0b3I6OjEyMjBjODQ0ODg5MGE3MGU2NWY2OTA2YmQ0OGQ3OTdlZTY1NTFmMDk0ZTllNmE1M2UzMjlmZDViMmI1NDkzMzRmMTNmCmsKaTpnZGVjZW50cmFsaXplZC11c2RjLWludGVyY2hhaW4tcmVwOjoxMjIwODExNWYxZTE2OGRkN2U3OTIzMjBiZTljNGNhNzIwYzc1MWEwMmEzMDUzYzc2MDZlMWMxY2QzZGFkOWJmNjBlZgpsCmo6aGF1dGgwXzAwN2M2NjQzNTM4ZjJlYWRkM2U1NzNkZDA1Yjk6OjEyMjA1YmNjMTA2ZWZhMGVhYTdmMThkYzQ5MWU1YzZmNWZiOWIwY2M2OGRjMTEwYWU2NmY0ZWQ2NDY3NDc1ZDdjNzhlKlVCcmlkZ2UtT3BlcmF0b3I6OjEyMjBjODQ0ODg5MGE3MGU2NWY2OTA2YmQ0OGQ3OTdlZTY1NTFmMDk0ZTllNmE1M2UzMjlmZDViMmI1NDkzMzRmMTNmKmdkZWNlbnRyYWxpemVkLXVzZGMtaW50ZXJjaGFpbi1yZXA6OjEyMjA4MTE1ZjFlMTY4ZGQ3ZTc5MjMyMGJlOWM0Y2E3MjBjNzUxYTAyYTMwNTNjNzYwNmUxYzFjZDNkYWQ5YmY2MGVmMmhhdXRoMF8wMDdjNjY0MzUzOGYyZWFkZDNlNTczZGQwNWI5OjoxMjIwNWJjYzEwNmVmYTBlYWE3ZjE4ZGM0OTFlNWM2ZjVmYjliMGNjNjhkYzExMGFlNjZmNGVkNjQ2NzQ3NWQ3Yzc4ZTlPYpygnEEGAEIqCiYKJAgBEiC7t2lHB3NuKxVhVA0EL5T+JGl5YJ6hVSv8wD+vxG3/+BAe"
+INSTRUMENT_CONTRACT_ID="002a23aed42edb51940f74f6fc5f7b8267c9192ab8e72296673420ffc4c4f22debca1112201d94617a63f11a4ce245498930752e56313d200b6a0976ee621f6add2788ba1b"
+INSTRUMENT_CREATED_EVENT_BLOB="CgMyLjESwAkKRQAqI67ULttRlA909vxfe4JnyRkquOcilmc0IP/ExPIt68oREiAdlGF6Y/EaTOJFSYkwdS5WMT0gC2oJdu5iH2rdJ4i6GxITdXRpbGl0eS1yZWdpc3RyeS12MBqNAQpAYjRhZTc3YjhjMGM3ZmFhOGJjOGJiMDQ4ZjAzNWRmZTNkODVkM2UzNmQ0YmFmYWE0Y2Y1OTYzMWVjNjM1ZGRiMhIHVXRpbGl0eRIIUmVnaXN0cnkSAlYwEg1Db25maWd1cmF0aW9uEgpJbnN0cnVtZW50GhdJbnN0cnVtZW50Q29uZmlndXJhdGlvbiLyBGrvBApsCmo6aGF1dGgwXzAwN2M2NjQzNTM4ZjJlYWRkM2U1NzNkZDA1Yjk6OjEyMjA1YmNjMTA2ZWZhMGVhYTdmMThkYzQ5MWU1YzZmNWZiOWIwY2M2OGRjMTEwYWU2NmY0ZWQ2NDY3NDc1ZDdjNzhlClkKVzpVQnJpZGdlLU9wZXJhdG9yOjoxMjIwYzg0NDg4OTBhNzBlNjVmNjkwNmJkNDhkNzk3ZWU2NTUxZjA5NGU5ZTZhNTNlMzI5ZmQ1YjJiNTQ5MzM0ZjEzZgprCmk6Z2RlY2VudHJhbGl6ZWQtdXNkYy1pbnRlcmNoYWluLXJlcDo6MTIyMDgxMTVmMWUxNjhkZDdlNzkyMzIwYmU5YzRjYTcyMGM3NTFhMDJhMzA1M2M3NjA2ZTFjMWNkM2RhZDliZjYwZWYKmwEKmAFqlQEKawppOmdkZWNlbnRyYWxpemVkLXVzZGMtaW50ZXJjaGFpbi1yZXA6OjEyMjA4MTE1ZjFlMTY4ZGQ3ZTc5MjMyMGJlOWM0Y2E3MjBjNzUxYTAyYTMwNTNjNzYwNmUxYzFjZDNkYWQ5YmY2MGVmCgkKB0IFVVNEQ3gKGwoZQhdSZWdpc3RyYXJJbnRlcm5hbFNjaGVtZQoECgJaAAqMAQqJAVqGAQqDAWqAAQpZClc6VUJyaWRnZS1PcGVyYXRvcjo6MTIyMGM4NDQ4ODkwYTcwZTY1ZjY5MDZiZDQ4ZDc5N2VlNjU1MWYwOTRlOWU2YTUzZTMyOWZkNWIyYjU0OTMzNGYxM2YKIwohWh8KHWobCg4KDEIKSXNJc3N1ZXJPZgoJCgdCBVVTREN4CgQKAloAKlVCcmlkZ2UtT3BlcmF0b3I6OjEyMjBjODQ0ODg5MGE3MGU2NWY2OTA2YmQ0OGQ3OTdlZTY1NTFmMDk0ZTllNmE1M2UzMjlmZDViMmI1NDkzMzRmMTNmKmdkZWNlbnRyYWxpemVkLXVzZGMtaW50ZXJjaGFpbi1yZXA6OjEyMjA4MTE1ZjFlMTY4ZGQ3ZTc5MjMyMGJlOWM0Y2E3MjBjNzUxYTAyYTMwNTNjNzYwNmUxYzFjZDNkYWQ5YmY2MGVmMmhhdXRoMF8wMDdjNjY0MzUzOGYyZWFkZDNlNTczZGQwNWI5OjoxMjIwNWJjYzEwNmVmYTBlYWE3ZjE4ZGM0OTFlNWM2ZjVmYjliMGNjNjhkYzExMGFlNjZmNGVkNjQ2NzQ3NWQ3Yzc4ZTlPYpygnEEGAEIqCiYKJAgBEiDG2u5/5aFqKxIBQ1NhOOUuMloJWjlgtAJ9hY+R5wQVHRAe"
+APP_CONFIG_CONTRACT_ID="00ad54961b99aa48d545fe0d74a6b56737e8cb0d7935e831ee1afce0619a4a82bfca1112202c765d54dfcc7a1db8d0bbb5f06951ceb4562a1acaaf74de13c6d05ebe4a64c4"
+APP_CONFIG_CREATED_EVENT_BLOB="CgMyLjESkAcKRQCtVJYbmapI1UX+DXSmtWc36MsNeTXoMe4a/OBhmkqCv8oREiAsdl1U38x6HbjQu7XwaVHOtFYqGsqvdN4TxtBevkpkxBITdXRpbGl0eS1yZWdpc3RyeS12MBqLAQpAZWQ3M2Q1YjlhYjcxNzMzM2YzZGJkMTIyZGU3YmUzMTU2ZjhiZjI2MTRhNjczNjBjM2RkNjFmYzAxMzUxMzNmYRIHVXRpbGl0eRIIUmVnaXN0cnkSAlYwEg1Db25maWd1cmF0aW9uEglBcHBSZXdhcmQaFkFwcFJld2FyZENvbmZpZ3VyYXRpb24irQNqqgMKbApqOmhhdXRoMF8wMDdjNjY0MzUzOGYyZWFkZDNlNTczZGQwNWI5OjoxMjIwNWJjYzEwNmVmYTBlYWE3ZjE4ZGM0OTFlNWM2ZjVmYjliMGNjNjhkYzExMGFlNjZmNGVkNjQ2NzQ3NWQ3Yzc4ZQpZClc6VUJyaWRnZS1PcGVyYXRvcjo6MTIyMGM4NDQ4ODkwYTcwZTY1ZjY5MDZiZDQ4ZDc5N2VlNjU1MWYwOTRlOWU2YTUzZTMyOWZkNWIyYjU0OTMzNGYxM2YK3gEK2wFq2AEKTQpLOklEU086OjEyMjBiMTQzMWVmMjE3MzQyZGI0NGQ1MTZiYjliZWZkZTgwMmJlN2Q4ODk5NjM3ZDI5MDg5NWZhNTg4ODBmMTlhY2NjCoYBCoMBaoABCmwKajpoYXV0aDBfMDA3YzY2NDM1MzhmMmVhZGQzZTU3M2RkMDViOTo6MTIyMDViY2MxMDZlZmEwZWFhN2YxOGRjNDkxZTVjNmY1ZmI5YjBjYzY4ZGMxMTBhZTY2ZjRlZDY0Njc0NzVkN2M3OGUKEAoOMgwwLjAwMDAwMDAwMDAqaGF1dGgwXzAwN2M2NjQzNTM4ZjJlYWRkM2U1NzNkZDA1Yjk6OjEyMjA1YmNjMTA2ZWZhMGVhYTdmMThkYzQ5MWU1YzZmNWZiOWIwY2M2OGRjMTEwYWU2NmY0ZWQ2NDY3NDc1ZDdjNzhlMlVCcmlkZ2UtT3BlcmF0b3I6OjEyMjBjODQ0ODg5MGE3MGU2NWY2OTA2YmQ0OGQ3OTdlZTY1NTFmMDk0ZTllNmE1M2UzMjlmZDViMmI1NDkzMzRmMTNmOcSAY/8mQgYAQioKJgokCAESIK+PKFSW8cBTvl2P8GALcq6BORe5200JDD0n1z+pnQylEB4="
+FACTORY_TEMPLATE_ID="8c335bb7d522489d71faf3eef046ad1a56f091b55b4f2d3086c7266afca1d647:Utility.Registry.App.V0.Service.AllocationFactory:AllocationFactory"
+INSTRUMENT_TEMPLATE_ID="b4ae77b8c0c7faa8bc8bb048f035dfe3d85d3e36d4bafaa4cf59631ec635ddb2:Utility.Registry.V0.Configuration.Instrument:InstrumentConfiguration"
+APP_CONFIG_TEMPLATE_ID="ed73d5b9ab717333f3dbd122de7be3156f8bf2614a67360c3dd61fc0135133fa:Utility.Registry.V0.Configuration.AppReward:AppRewardConfiguration"
+```
+
+### Update `compose.yaml` to add the CUB UI and Darsyncer:
+
+```default
+cub-ui:
+  image: "${CUB_IMAGE_REPO}/cub-frontend:${CUB_IMAGE_VERSION}"
+  environment:
+    - AUTH_AUTHORITY=${AUTH_AUTHORITY}
+    - AUTH_CLIENT_ID=${AUTH_CLIENT_ID}
+    - AUTH_AUDIENCE=${AUTH_AUDIENCE}
+    - BRIDGE_APP_UTILITY_OPERATOR_PARTY_ID=${UTILITY_OPERATOR_PARTY_ID}
+    - BRIDGE_APP_BRIDGE_OPERATOR_PARTY_ID=${CUB_OPERATOR_PARTY_ID}
+    - BRIDGE_APP_CROSS_CHAIN_REPRESENTATIVE_PARTY_ID=${CROSS_CHAIN_REPRESENTATIVE_PARTY_ID}
+    - BRIDGE_APP_FACTORY_CONTRACT_ID=${FACTORY_CONTRACT_ID}
+    - BRIDGE_APP_FACTORY_CREATED_EVENT_BLOB=${FACTORY_CREATED_EVENT_BLOB}
+    - BRIDGE_APP_INSTRUMENT_CONTRACT_ID=${INSTRUMENT_CONTRACT_ID}
+    - BRIDGE_APP_INSTRUMENT_CREATED_EVENT_BLOB=${INSTRUMENT_CREATED_EVENT_BLOB}
+    - BRIDGE_APP_CONFIG_CONTRACT_ID=${APP_CONFIG_CONTRACT_ID}
+    - BRIDGE_APP_CONFIG_CREATED_EVENT_BLOB=${APP_CONFIG_CREATED_EVENT_BLOB}
+    - BRIDGE_APP_FACTORY_TEMPLATE_ID=${FACTORY_TEMPLATE_ID}
+    - BRIDGE_APP_INSTRUMENT_TEMPLATE_ID=${INSTRUMENT_TEMPLATE_ID}
+    - BRIDGE_APP_CONFIG_TEMPLATE_ID=${APP_CONFIG_TEMPLATE_ID}
+  depends_on:
+    - participant
+    - validator
+  networks:
+    - ${DOCKER_NETWORK:-splice_validator}
+
+cub-darsyncer:
+  image: "${CUB_IMAGE_REPO}/cub-darsyncer-client:${CUB_IMAGE_VERSION}"
+  command:
+    - --endpoint=participant:5002
+  environment:
+    - DARS=/dars
+    - CLIENT_ID=${VALIDATOR_AUTH_CLIENT_ID}
+    - CLIENT_SECRET=${VALIDATOR_AUTH_CLIENT_SECRET}
+    - OAUTH_DOMAIN=${AUTH_AUTHORITY}
+  depends_on:
+    - participant
+    - validator
+  networks:
+    - ${DOCKER_NETWORK:-splice_validator}
+```
+
+### Update nginx.conf
+
+Add this to splice-node/docker-compose/validator/nginx.conf to access the cub UI at `http://cub.localhost`
+
+```default
+http {
+  ...
+  server {
+    listen 80;
+    server_name cub.localhost;
+
+    location /api/validator/ {
+      rewrite ^\/(.*) /$1 break;
+      proxy_pass http://validator:5003/api/validator;
+    }
+
+    location /api/json-api {
+      rewrite ^\/(.*) /$1 break;
+      proxy_pass http://participant:7575/;
+    }
+
+    location / {
+      proxy_pass http://cub-ui:8080/;
+    }
+  }
+}
+```

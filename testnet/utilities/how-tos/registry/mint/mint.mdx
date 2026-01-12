@@ -1,0 +1,670 @@
+<!-- source: canton-network-utilities / canton-network-utilities/testnet/how-tos/registry/mint/mint.rst -->
+
+# Registry Utility - Mint Request API Example
+
+This example shows how to perform a mint request on CNU 0.9.x and later using the HTTP JSON API.
+
+It is assumed that the minter has all the required credentials as issuer of the specific instrument.
+
+## Preparation
+
+Add all the required information to the source.sh file:
+
+```bash
+#!/usr/bin/env bash
+
+## =================================================================================================
+## Purpose: Configurations for this example, amend variables as needed.
+## Script: source.sh
+## =================================================================================================
+
+# receiver's details
+MINTER_TOKEN="eyJhbGciOiJIUzI1NiJ9.eyJzY29wZSI6ImRhbWxfbGVkZ2VyX2FwaSIsImlhdCI6MTc1OTk5MjEzMiwiYXVkIjoiaHR0cHM6Ly91dGlsaXR5LmNhbnRvbi5uZXR3b3JrIiwic3ViIjoiaXNzdWVyIn0.6wP8xNyQopoyKk_rGv9agcIK8TLyJVYLq3oRo983z8Q"
+MINTER_PARTY_ID="issuer::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567"
+MINTER_USER_ID="issuer"
+
+# admin/registrar details
+ADMIN_TOKEN="eyJhbGciOiJIUzI1NiJ9.eyJzY29wZSI6ImRhbWxfbGVkZ2VyX2FwaSIsImlhdCI6MTc1OTk5Nzk3OSwiYXVkIjoiaHR0cHM6Ly91dGlsaXR5LmNhbnRvbi5uZXR3b3JrIiwic3ViIjoicmVnaXN0cmFyIn0.zveSqMNH9LQIcGOXlyKoidGWJm0ldsj2R1gXiPzmAQk"
+ADMIN_PARTY_ID="registrar::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567"
+ADMIN_USER_ID="registrar"
+
+# unique reference for the action
+MINT_REF="mint-ref-002"
+
+# update your asset and amount to be transferred
+ASSET_ID="INST"
+ASSET_AMOUNT="5.0"
+
+# example 1
+# BACKEND_API="https://api.utilities.digitalasset-dev.com/api/token-standard"
+# HTTP_JSON_API="https://utility.demo.registry.digitalasset.com/api/json-api"
+# example 2
+BACKEND_API="http://localhost:8080/api/utilities"
+HTTP_JSON_API="http://localhost:8001/api/json-api"
+
+# token standard holding interface, may change when new versions of splice exists
+# TRANSFERFACTORY_INTERFACE="55ba4deb0ad4662c4168b39859738a0e91388d252286480c7331b3f71a517281:Splice.Api.Token.TransferInstructionV1:TransferFactory"
+HOLDING_INTERFACE="718a0f77e505a8de22f188bd4c87fe74101274e9d4cb1bfac7d09aec7158d35b:Splice.Api.Token.HoldingV1:Holding"
+TRANSFER_INSTRUCTION_INTERFACE="55ba4deb0ad4662c4168b39859738a0e91388d252286480c7331b3f71a517281:Splice.Api.Token.TransferInstructionV1:TransferInstruction"
+
+# utility templates
+ALLOCATIONFACTORY_TEMPLATE="#utility-registry-app-v0:Utility.Registry.App.V0.Service.AllocationFactory:AllocationFactory"
+MINTREQUEST_TEMPLATE="#utility-registry-app-v0:Utility.Registry.App.V0.Model.Mint:MintRequest"
+```
+
+The required information is:
+
+#### Required Information
+
+| Details of   | Description                                       |
+|--------------|---------------------------------------------------|
+| Minter       | JWT, user ID, and party ID of the sender          |
+| Admin        | JWT, user ID, and party ID of the receiver        |
+| Operator     | Backend API and JSON Ledger API                   |
+| Mint         | Instrument ID, amount to be burned, and reference |
+
+If possible, open the CNU UIs for both the minter and the admin, to observe the request and change
+in holdings. These are the initial holdings of the minter (issuer) for INST.
+
+![Initial positions before mint](how-tos/registry/mint/pictures/initial-position.png)
+
+### Step 1: Minter Requests a Mint
+
+#### Step 1a - Access the Backend API
+
+The request URL is ${BACKEND_API}/v0/registry/mint/v0/request. To hit this endpoint, run the
+following script:
+
+```bash
+#!/usr/bin/env bash
+
+## =================================================================================================
+## Minter requests a mint
+## Step 1a: Gets choice context and disclosure for mint request
+## Authorized by: Minter
+## Script: step-1a-minter-requests.sh
+## =================================================================================================
+
+DATAFILE="source.sh"
+source "$DATAFILE"
+
+DATE_FORMAT='+%Y-%m-%dT%H:%M:%SZ'
+NOW_ISO_TIMESTAMP=$(date -u "$DATE_FORMAT")
+ONEHOUR_ISO_TIMESTAMP=$(date -u -d '+1 hour' "$DATE_FORMAT")
+
+RESULT=$(
+    curl -s \
+    --url "${BACKEND_API}/v0/registry/mint/v0/request" \
+    --header "Content-Type: application/json" \
+    --request POST \
+    --data @- <<EOF
+{
+  "holder": "${MINTER_PARTY_ID}",
+  "instrumentId": {
+    "admin": "${ADMIN_PARTY_ID}",
+    "id": "${ASSET_ID}"
+  }
+}
+EOF
+)
+
+echo "--- Endpoint response ---"
+echo $RESULT | jq
+
+OUTPUTFILE="response-step-1a.json"
+echo "$RESULT" > "$OUTPUTFILE"
+```
+
+The result contains the required information when constructing the command, stored in
+response-step-1a.json. For example:
+
+```json
+{
+  "factoryId": "000b99a12b36d9d3b865060c19eab4558b63b105ea8f6917442aef10394712ee7dca1112205046662015ee57e20143d8ae8f9985e069d1db31e3d8540c0543f3e4ccb8e863",
+  "choiceContext": {
+    "choiceContextData": {
+      "values": {
+        "utility.digitalasset.com/instrument-configuration": {
+          "tag": "AV_ContractId",
+          "value": "00eca75bf1e14e192de69b58054cf62f2a60a9c0aae8f4d3491a4b2fad9f9731eaca111220b5fd51ccd498385b0ceaef63243fdfef6c2e62dd8d3a2f59fdb61a9099956481"
+        },
+        "utility.digitalasset.com/issuer-credentials": {
+          "tag": "AV_List",
+          "value": [
+            {
+              "tag": "AV_ContractId",
+              "value": "0031a2300ef5833a5dd1204c603ea296ae9558645bc354721e5e01e618d00c1495ca1112206f197de929cdb48f2509cb72249c1040f67f8e64bb2d6c7ec7b17bcd761e045c"
+            }
+          ]
+        }
+      }
+    },
+    "disclosedContracts": [
+      {
+        "createdAt": "2025-10-08T20:41:44.939Z",
+        "contractId": "000b99a12b36d9d3b865060c19eab4558b63b105ea8f6917442aef10394712ee7dca1112205046662015ee57e20143d8ae8f9985e069d1db31e3d8540c0543f3e4ccb8e863",
+        "templateId": "170929b11d5f0ed1385f890f42887c31ff7e289c0f4bc482aff193a7173d576c:Utility.Registry.App.V0.Service.AllocationFactory:AllocationFactory",
+        "domainId": null,
+        "createdEventBlob": "CgMyLjESmQYKRQALmaErNtnTuGUGDBnqtFWLY7EF6o9pF0Qq7xA5RxLufcoREiBQRmYgFe5X4gFD2K6PmYXgadHbMePYVAwFQ/PkzLjoYxIXdXRpbGl0eS1yZWdpc3RyeS1hcHAtdjAajQEKQDE3MDkyOWIxMWQ1ZjBlZDEzODVmODkwZjQyODg3YzMxZmY3ZTI4OWMwZjRiYzQ4MmFmZjE5M2E3MTczZDU3NmMSB1V0aWxpdHkSCFJlZ2lzdHJ5EgNBcHASAlYwEgdTZXJ2aWNlEhFBbGxvY2F0aW9uRmFjdG9yeRoRQWxsb2NhdGlvbkZhY3RvcnkigAJq/QEKUgpQOk5wcm92aWRlcjo6MTIyMGQzMDFhYmFiYmVkN2JjOGQ2ZjZhODBjZTE2ZjMzOTMzYTcyNzRhMzAxMzI0MWI3ZmIzNzNjYTdlNGYwZDY1NjcKUwpROk9yZWdpc3RyYXI6OjEyMjBkMzAxYWJhYmJlZDdiYzhkNmY2YTgwY2UxNmYzMzkzM2E3Mjc0YTMwMTMyNDFiN2ZiMzczY2E3ZTRmMGQ2NTY3ClIKUDpOb3BlcmF0b3I6OjEyMjBiMzlkZjVlZDBlM2M1ODRjZDk3ZTg2ZTc3OWRlZjkzM2Q1NDViZjlhNGZhYjNjMGZkM2U0YWQzZjdhMzZiOGZlKk5wcm92aWRlcjo6MTIyMGQzMDFhYmFiYmVkN2JjOGQ2ZjZhODBjZTE2ZjMzOTMzYTcyNzRhMzAxMzI0MWI3ZmIzNzNjYTdlNGYwZDY1NjcqT3JlZ2lzdHJhcjo6MTIyMGQzMDFhYmFiYmVkN2JjOGQ2ZjZhODBjZTE2ZjMzOTMzYTcyNzRhMzAxMzI0MWI3ZmIzNzNjYTdlNGYwZDY1NjcyTm9wZXJhdG9yOjoxMjIwYjM5ZGY1ZWQwZTNjNTg0Y2Q5N2U4NmU3NzlkZWY5MzNkNTQ1YmY5YTRmYWIzYzBmZDNlNGFkM2Y3YTM2YjhmZTnKhnS2q0AGAEIqCiYKJAgBEiCdfF/uuVvbYVGCBftUb6P/SwJDPzwGmCDQ4jzAdtOMPBAe"
+      },
+      {
+        "createdAt": "2025-10-08T20:41:44.51Z",
+        "contractId": "00eca75bf1e14e192de69b58054cf62f2a60a9c0aae8f4d3491a4b2fad9f9731eaca111220b5fd51ccd498385b0ceaef63243fdfef6c2e62dd8d3a2f59fdb61a9099956481",
+        "templateId": "ed73d5b9ab717333f3dbd122de7be3156f8bf2614a67360c3dd61fc0135133fa:Utility.Registry.V0.Configuration.Instrument:InstrumentConfiguration",
+        "domainId": null,
+        "createdEventBlob": "CgMyLjESpgkKRQDsp1vx4U4ZLeabWAVM9i8qYKnAquj000kaSy+tn5cx6soREiC1/VHM1Jg4Wwzq72MkP9/vbC5i3Y06L1n9thqQmZVkgRITdXRpbGl0eS1yZWdpc3RyeS12MBqNAQpAZWQ3M2Q1YjlhYjcxNzMzM2YzZGJkMTIyZGU3YmUzMTU2ZjhiZjI2MTRhNjczNjBjM2RkNjFmYzAxMzUxMzNmYRIHVXRpbGl0eRIIUmVnaXN0cnkSAlYwEg1Db25maWd1cmF0aW9uEgpJbnN0cnVtZW50GhdJbnN0cnVtZW50Q29uZmlndXJhdGlvbiKRBWqOBQpSClA6Tm9wZXJhdG9yOjoxMjIwYjM5ZGY1ZWQwZTNjNTg0Y2Q5N2U4NmU3NzlkZWY5MzNkNTQ1YmY5YTRmYWIzYzBmZDNlNGFkM2Y3YTM2YjhmZQpSClA6TnByb3ZpZGVyOjoxMjIwZDMwMWFiYWJiZWQ3YmM4ZDZmNmE4MGNlMTZmMzM5MzNhNzI3NGEzMDEzMjQxYjdmYjM3M2NhN2U0ZjBkNjU2NwpTClE6T3JlZ2lzdHJhcjo6MTIyMGQzMDFhYmFiYmVkN2JjOGQ2ZjZhODBjZTE2ZjMzOTMzYTcyNzRhMzAxMzI0MWI3ZmIzNzNjYTdlNGYwZDY1NjcKgAEKfmp8ClMKUTpPcmVnaXN0cmFyOjoxMjIwZDMwMWFiYWJiZWQ3YmM4ZDZmNmE4MGNlMTZmMzM5MzNhNzI3NGEzMDEzMjQxYjdmYjM3M2NhN2U0ZjBkNjU2NwoICgZCBElOU1QKGwoZQhdSZWdpc3RyYXJJbnRlcm5hbFNjaGVtZQoECgJaAAqBAQp/Wn0Ke2p5ClMKUTpPcmVnaXN0cmFyOjoxMjIwZDMwMWFiYWJiZWQ3YmM4ZDZmNmE4MGNlMTZmMzM5MzNhNzI3NGEzMDEzMjQxYjdmYjM3M2NhN2U0ZjBkNjU2NwoiCiBaHgocahoKDgoMQgppc0lzc3Vlck9mCggKBkIESU5TVAqBAQp/Wn0Ke2p5ClMKUTpPcmVnaXN0cmFyOjoxMjIwZDMwMWFiYWJiZWQ3YmM4ZDZmNmE4MGNlMTZmMzM5MzNhNzI3NGEzMDEzMjQxYjdmYjM3M2NhN2U0ZjBkNjU2NwoiCiBaHgocahoKDgoMQgppc0hvbGRlck9mCggKBkIESU5TVCpOcHJvdmlkZXI6OjEyMjBkMzAxYWJhYmJlZDdiYzhkNmY2YTgwY2UxNmYzMzkzM2E3Mjc0YTMwMTMyNDFiN2ZiMzczY2E3ZTRmMGQ2NTY3Kk9yZWdpc3RyYXI6OjEyMjBkMzAxYWJhYmJlZDdiYzhkNmY2YTgwY2UxNmYzMzkzM2E3Mjc0YTMwMTMyNDFiN2ZiMzczY2E3ZTRmMGQ2NTY3Mk5vcGVyYXRvcjo6MTIyMGIzOWRmNWVkMGUzYzU4NGNkOTdlODZlNzc5ZGVmOTMzZDU0NWJmOWE0ZmFiM2MwZmQzZTRhZDNmN2EzNmI4ZmU5rPtttqtABgBCKgomCiQIARIgQ1DsOZLYGVRiscestTBDQ3CqU27WvKQODudfxMesKCEQHg=="
+      },
+      {
+        "createdAt": "2025-10-08T20:41:34.877Z",
+        "contractId": "0031a2300ef5833a5dd1204c603ea296ae9558645bc354721e5e01e618d00c1495ca1112206f197de929cdb48f2509cb72249c1040f67f8e64bb2d6c7ec7b17bcd761e045c",
+        "templateId": "77df4e7b980c12de438d7b052141a762215fae790d81f71179c8fb534beb68f7:Utility.Credential.V0.Credential:Credential",
+        "domainId": null,
+        "createdEventBlob": "CgMyLjESrAcKRQAxojAO9YM6XdEgTGA+opaulVhkW8NUch5eAeYY0AwUlcoREiBvGX3pKc20jyUJy3IknBBA9n+OZLstbH7HsXvNdh4EXBIVdXRpbGl0eS1jcmVkZW50aWFsLXYwGnMKQDc3ZGY0ZTdiOTgwYzEyZGU0MzhkN2IwNTIxNDFhNzYyMjE1ZmFlNzkwZDgxZjcxMTc5YzhmYjUzNGJlYjY4ZjcSB1V0aWxpdHkSCkNyZWRlbnRpYWwSAlYwEgpDcmVkZW50aWFsGgpDcmVkZW50aWFsIrIDaq8DClMKUTpPcmVnaXN0cmFyOjoxMjIwZDMwMWFiYWJiZWQ3YmM4ZDZmNmE4MGNlMTZmMzM5MzNhNzI3NGEzMDEzMjQxYjdmYjM3M2NhN2U0ZjBkNjU2NwpQCk46TGlzc3Vlcjo6MTIyMGQzMDFhYmFiYmVkN2JjOGQ2ZjZhODBjZTE2ZjMzOTMzYTcyNzRhMzAxMzI0MWI3ZmIzNzNjYTdlNGYwZDY1NjcKDwoNQgtJTlNUX0lzc3VlcgoPCg1CC0lOU1RfSXNzdWVyCgQKAlIACgQKAlIACnQKclpwCm5qbApQCk5CTGlzc3Vlcjo6MTIyMGQzMDFhYmFiYmVkN2JjOGQ2ZjZhODBjZTE2ZjMzOTMzYTcyNzRhMzAxMzI0MWI3ZmIzNzNjYTdlNGYwZDY1NjcKDgoMQgppc0lzc3Vlck9mCggKBkIESU5TVApiCmBqXgpcClpiWApWClA6Tm9wZXJhdG9yOjoxMjIwYjM5ZGY1ZWQwZTNjNTg0Y2Q5N2U4NmU3NzlkZWY5MzNkNTQ1YmY5YTRmYWIzYzBmZDNlNGFkM2Y3YTM2YjhmZRICCgAqTGlzc3Vlcjo6MTIyMGQzMDFhYmFiYmVkN2JjOGQ2ZjZhODBjZTE2ZjMzOTMzYTcyNzRhMzAxMzI0MWI3ZmIzNzNjYTdlNGYwZDY1NjcqT3JlZ2lzdHJhcjo6MTIyMGQzMDFhYmFiYmVkN2JjOGQ2ZjZhODBjZTE2ZjMzOTMzYTcyNzRhMzAxMzI0MWI3ZmIzNzNjYTdlNGYwZDY1NjcyTm9wZXJhdG9yOjoxMjIwYjM5ZGY1ZWQwZTNjNTg0Y2Q5N2U4NmU3NzlkZWY5MzNkNTQ1YmY5YTRmYWIzYzBmZDNlNGFkM2Y3YTM2YjhmZTl8/9q1q0AGAEIqCiYKJAgBEiBikJteQ0a37UH10AsBGGTcDTteF7QH0nxSmVQemm0uLRAe"
+      }
+    ]
+  }
+}
+```
+
+#### Step 1b - Request the Mint
+
+Finally, run the following script to request the mint:
+
+```bash
+#!/usr/bin/env bash
+
+## =================================================================================================
+## Minter requests a mint
+## Step 1b: Executes the mint request command
+## Authorized by: Minter
+## Script: step-1b-minter-requests.sh
+## =================================================================================================
+
+DATAFILE="source.sh"
+source "$DATAFILE"
+
+DATE_FORMAT='+%Y-%m-%dT%H:%M:%SZ'
+NOW_ISO_TIMESTAMP=$(date -u "$DATE_FORMAT")
+ONEHOUR_ISO_TIMESTAMP=$(date -u -d '+1 hour' "$DATE_FORMAT")
+
+JSONCONTENT=$(cat "response-step-1a.json")
+FACTORYID=$(echo $JSONCONTENT | jq .factoryId)
+CHOICECONTEXTDATA=$(echo $JSONCONTENT | jq .choiceContext.choiceContextData)
+DISCLOSEDCONTRACTS=$(echo $JSONCONTENT | jq .choiceContext.disclosedContracts)
+DISCLOSEDCONTRACTS=$(echo $JSONCONTENT | jq '.choiceContext.disclosedContracts // [] | map(. + {"synchronizerId": ""})')
+
+RESULT=$(
+    curl -s \
+    --url "${HTTP_JSON_API}/v2/commands/submit-and-wait-for-transaction" \
+    --header "Authorization: Bearer ${MINTER_TOKEN}" \
+    --header "Content-Type: application/json" \
+    --request POST \
+    --data @- <<EOF
+{
+   "commands":{
+        "commands":[
+            {
+                "ExerciseCommand":{
+                    "templateId":"${ALLOCATIONFACTORY_TEMPLATE}",
+                    "contractId":${FACTORYID},
+                    "choice":"AllocationFactory_RequestMint",
+                    "choiceArgument":{
+                        "expectedAdmin":"${ADMIN_PARTY_ID}",
+                        "mint": {
+                            "instrumentId": {
+                              "admin": "${ADMIN_PARTY_ID}",
+                              "id": "${ASSET_ID}"
+                            },
+                            "amount": "${ASSET_AMOUNT}",
+                            "holder": "${MINTER_PARTY_ID}",
+                            "reference": "${MINT_REF}",
+                            "requestedAt": "${NOW_ISO_TIMESTAMP}",
+                            "executeBefore": "${ONEHOUR_ISO_TIMESTAMP}",
+                            "meta": {
+                              "values": {}
+                            }
+                        },
+                        "extraArgs":{
+                            "context":${CHOICECONTEXTDATA},
+                            "meta":{
+                                "values":{
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        ],
+        "workflowId":"",
+        "userId":"${MINTER_USER_ID}",
+        "commandId":"$(uuidgen | tr -d '\n')",
+        "deduplicationPeriod":{
+            "DeduplicationDuration":{
+                "value":{
+                    "seconds":30,
+                    "nanos":0
+                }
+            }
+        },
+        "actAs":[
+            "${MINTER_PARTY_ID}"
+        ],
+        "readAs":[
+        ],
+        "submissionId":"$(uuidgen | tr -d '\n')",
+        "disclosedContracts": ${DISCLOSEDCONTRACTS},
+        "domainId":"",
+        "packageIdSelectionPreference":[
+        ]
+    }
+}
+EOF
+)
+
+echo "--- Command response ---"
+echo $RESULT | jq
+
+OUTPUTFILE="response-step-1b.json"
+echo "$RESULT" > "$OUTPUTFILE"
+```
+
+For example, this is the response of this command:
+
+```json
+{
+  "transaction": {
+    "updateId": "12201f759a9133404044c8a6f928f7c605997307ddbf6f085b0c65a6a05e8f008318",
+    "commandId": "467A1903-116E-43FE-A9DE-380B779BA570",
+    "workflowId": "",
+    "effectiveAt": "2025-10-10T10:05:05.935431Z",
+    "events": [
+      {
+        "CreatedEvent": {
+          "offset": 4113,
+          "nodeId": 3,
+          "contractId": "00113ba9d39c4b568ecaf2308c4448dc3f5bccf011cf89f6b7d769b05c4a43b16bca111220f4265b962e7bf2e7b5d20156366216bcbf09fafc0733ce97ea209aaaa7f13b55",
+          "templateId": "170929b11d5f0ed1385f890f42887c31ff7e289c0f4bc482aff193a7173d576c:Utility.Registry.App.V0.Model.Mint:MintRequest",
+          "contractKey": null,
+          "createArgument": {
+            "operator": "operator::1220b39df5ed0e3c584cd97e86e779def933d545bf9a4fab3c0fd3e4ad3f7a36b8fe",
+            "provider": "provider::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+            "mint": {
+              "instrumentId": {
+                "admin": "registrar::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+                "id": "INST"
+              },
+              "amount": "5.0000000000",
+              "holder": "issuer::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+              "reference": "mint-ref-002",
+              "requestedAt": "2025-10-10T10:05:05Z",
+              "executeBefore": "2025-10-10T11:05:05Z",
+              "meta": {
+                "values": {}
+              }
+            }
+          },
+          "createdEventBlob": "",
+          "interfaceViews": [],
+          "witnessParties": [
+            "issuer::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567"
+          ],
+          "signatories": [
+            "issuer::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+            "provider::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567"
+          ],
+          "observers": [
+            "operator::1220b39df5ed0e3c584cd97e86e779def933d545bf9a4fab3c0fd3e4ad3f7a36b8fe",
+            "registrar::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567"
+          ],
+          "createdAt": "2025-10-10T10:05:05.935431Z",
+          "packageName": "utility-registry-app-v0"
+        }
+      }
+    ],
+    "offset": 4113,
+    "synchronizerId": "global-domain::1220f0c14212edfc6ca9b0dfc6f5943b51a80efe71de8abf5759c8f57b7510f633eb",
+    "traceContext": {
+      "traceparent": "00-ad94136df03eda595740bf1eb1d9a68b-e00ab527f2a3ca18-01",
+      "tracestate": null
+    },
+    "recordTime": "2025-10-10T10:05:05.965264Z"
+  }
+}
+```
+
+### Step 2: Admin Accepts Mint Request
+
+#### Step 2a - Obtain the Ledger End Offset
+
+To obtain the ledger end offset, run the following script:
+
+```bash
+#!/usr/bin/env bash
+
+## =================================================================================================
+## Admin accepts the mint request
+## Step 2a: Obtains ledger end offset
+## Authorized by: Admin
+## Script: step-2a-admin-accepts.sh
+## =================================================================================================
+
+DATAFILE="source.sh"
+source "$DATAFILE"
+
+# Get offset from previous step
+OFFSET=$(curl -s GET \
+    --url "${HTTP_JSON_API}/v2/state/ledger-end" \
+    --header "Accept: application/json" \
+    --header "Authorization: Bearer ${ADMIN_TOKEN}")
+
+echo "$OFFSET" | jq
+
+OUTPUTFILE="response-step-2a.json"
+echo "$OFFSET" > "$OUTPUTFILE"
+```
+
+The result is the ledger end offset at this moment, stored in response-step-2a.json. For
+example:
+
+```json
+{
+  "offset": 4118
+}
+```
+
+#### Step 2b - Retrieve Mint Request
+
+To retrieve the Mint Request created in Step 1d, run the following script:
+
+```bash
+#!/usr/bin/env bash
+
+## =================================================================================================
+## Admin accepts the mint request
+## Step 2b: Retrieves the mint request to accept
+## Authorized by: Admin
+## Script: step-2b-admin-accepts.sh
+## =================================================================================================
+
+DATAFILE="source.sh"
+source "$DATAFILE"
+
+JSONCONTENT=$(cat "response-step-2a.json")
+OFFSET=$(echo "$JSONCONTENT" | jq -r ".offset")
+
+RESULT=$(
+    curl -s \
+    --url "${HTTP_JSON_API}/v2/state/active-contracts" \
+    --header "Authorization: Bearer ${ADMIN_TOKEN}" \
+    --header "Content-Type: application/json" \
+    --request POST \
+    --data @- <<EOF
+{
+    "verbose": false,
+    "activeAtOffset": "${OFFSET}",
+    "filter": {
+        "filtersByParty": {
+            "${ADMIN_PARTY_ID}": {
+                "cumulative": [{
+                    "identifierFilter": {
+                        "TemplateFilter": {
+                            "value": {
+                                "templateId":"${MINTREQUEST_TEMPLATE}",
+                                "includeCreatedEventBlob": false
+                            }
+                        }
+                    }
+                }]
+            }
+        }
+    }
+}
+EOF
+)
+
+echo "--- Mint Request ---"
+echo "$RESULT" | jq
+
+OUTPUTFILE="response-step-2b.json"
+echo "$RESULT" > "$OUTPUTFILE"
+```
+
+The result is the Mint Request, stored in response-step-2b.json. For example,
+
+```json
+[
+  {
+    "workflowId": "",
+    "contractEntry": {
+      "JsActiveContract": {
+        "createdEvent": {
+          "offset": 4113,
+          "nodeId": 3,
+          "contractId": "00113ba9d39c4b568ecaf2308c4448dc3f5bccf011cf89f6b7d769b05c4a43b16bca111220f4265b962e7bf2e7b5d20156366216bcbf09fafc0733ce97ea209aaaa7f13b55",
+          "templateId": "170929b11d5f0ed1385f890f42887c31ff7e289c0f4bc482aff193a7173d576c:Utility.Registry.App.V0.Model.Mint:MintRequest",
+          "contractKey": null,
+          "createArgument": {
+            "operator": "operator::1220b39df5ed0e3c584cd97e86e779def933d545bf9a4fab3c0fd3e4ad3f7a36b8fe",
+            "provider": "provider::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+            "mint": {
+              "instrumentId": {
+                "admin": "registrar::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+                "id": "INST"
+              },
+              "amount": "5.0000000000",
+              "holder": "issuer::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+              "reference": "mint-ref-002",
+              "requestedAt": "2025-10-10T10:05:05Z",
+              "executeBefore": "2025-10-10T11:05:05Z",
+              "meta": {
+                "values": {}
+              }
+            }
+          },
+          "createdEventBlob": "",
+          "interfaceViews": [],
+          "witnessParties": [
+            "registrar::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567"
+          ],
+          "signatories": [
+            "issuer::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+            "provider::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567"
+          ],
+          "observers": [
+            "operator::1220b39df5ed0e3c584cd97e86e779def933d545bf9a4fab3c0fd3e4ad3f7a36b8fe",
+            "registrar::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567"
+          ],
+          "createdAt": "2025-10-10T10:05:05.935431Z",
+          "packageName": "utility-registry-app-v0"
+        },
+        "synchronizerId": "global-domain::1220f0c14212edfc6ca9b0dfc6f5943b51a80efe71de8abf5759c8f57b7510f633eb",
+        "reassignmentCounter": 0
+      }
+    }
+  }
+]
+```
+
+#### Step 2c - Access the Backend API
+
+The request URL is
+“${BACKEND_API}/v0/registry/mint/v0/request/${MINTREQUEST_CID}/choice-contexts/accept”.
+To hit this endpoint, run the following script:
+
+```bash
+#!/usr/bin/env bash
+
+## =================================================================================================
+## Admin accepts the mint request
+## Step 2c: Gets choice context and disclosure for the accept-mint-request command
+## Authorized by: anyone
+## Script: step-2c-admin-accepts.sh
+## =================================================================================================
+
+DATAFILE="source.sh"
+source "$DATAFILE"
+
+DATE_FORMAT='+%Y-%m-%dT%H:%M:%SZ'
+NOW_ISO_TIMESTAMP=$(date -u "$DATE_FORMAT")
+ONEHOUR_ISO_TIMESTAMP=$(date -u -d '+1 hour' "$DATE_FORMAT")
+
+MINTREQUESTS=$(cat "response-step-2b.json")
+MINTREQUEST_CID=$(echo "$MINTREQUESTS" | jq -r --arg MINT_REF "$MINT_REF" '[.[] | select(.contractEntry.JsActiveContract.createdEvent.createArgument.mint.reference == $MINT_REF)][0].contractEntry.JsActiveContract.createdEvent.contractId')
+
+RESULT=$(
+    curl -s \
+    --url "${BACKEND_API}/v0/registry/mint/v0/request/${MINTREQUEST_CID}/choice-contexts/accept" \
+    --header "Content-Type: application/json" \
+    --request POST \
+    --data @- <<EOF
+{
+   "meta":{
+
+   },
+   "excludeDebugFields": true
+}
+EOF
+)
+
+echo "--- Endpoint response ---"
+echo $RESULT | jq
+
+OUTPUTFILE="response-step-2c.json"
+echo "$RESULT" > "$OUTPUTFILE"
+```
+
+The result contains the required choice context for executing the command, stored in
+response-step-2c.json. For example:
+
+```json
+{
+  "choiceContextData": {
+    "values": {
+      "utility.digitalasset.com/instrument-configuration": {
+        "tag": "AV_ContractId",
+        "value": "00eca75bf1e14e192de69b58054cf62f2a60a9c0aae8f4d3491a4b2fad9f9731eaca111220b5fd51ccd498385b0ceaef63243fdfef6c2e62dd8d3a2f59fdb61a9099956481"
+      },
+      "utility.digitalasset.com/issuer-credentials": {
+        "tag": "AV_List",
+        "value": [
+          {
+            "tag": "AV_ContractId",
+            "value": "0031a2300ef5833a5dd1204c603ea296ae9558645bc354721e5e01e618d00c1495ca1112206f197de929cdb48f2509cb72249c1040f67f8e64bb2d6c7ec7b17bcd761e045c"
+          }
+        ]
+      },
+      "utility.digitalasset.com/app-reward-configuration": {
+        "tag": "AV_ContractId",
+        "value": "00525af6a6fd8c1580b6d80aad3dbcc298218ffcd501c9f30e126836a3bb9ada8bca111220c22ce1c7f07a549ad6c6739c7953dd8847f69773b5996169b7afd8c6d66438b9"
+      }
+    }
+  },
+  "disclosedContracts": [
+    {
+      "createdAt": "2025-10-08T20:41:34.877Z",
+      "contractId": "0031a2300ef5833a5dd1204c603ea296ae9558645bc354721e5e01e618d00c1495ca1112206f197de929cdb48f2509cb72249c1040f67f8e64bb2d6c7ec7b17bcd761e045c",
+      "templateId": "77df4e7b980c12de438d7b052141a762215fae790d81f71179c8fb534beb68f7:Utility.Credential.V0.Credential:Credential",
+      "domainId": null,
+      "createdEventBlob": "CgMyLjESrAcKRQAxojAO9YM6XdEgTGA+opaulVhkW8NUch5eAeYY0AwUlcoREiBvGX3pKc20jyUJy3IknBBA9n+OZLstbH7HsXvNdh4EXBIVdXRpbGl0eS1jcmVkZW50aWFsLXYwGnMKQDc3ZGY0ZTdiOTgwYzEyZGU0MzhkN2IwNTIxNDFhNzYyMjE1ZmFlNzkwZDgxZjcxMTc5YzhmYjUzNGJlYjY4ZjcSB1V0aWxpdHkSCkNyZWRlbnRpYWwSAlYwEgpDcmVkZW50aWFsGgpDcmVkZW50aWFsIrIDaq8DClMKUTpPcmVnaXN0cmFyOjoxMjIwZDMwMWFiYWJiZWQ3YmM4ZDZmNmE4MGNlMTZmMzM5MzNhNzI3NGEzMDEzMjQxYjdmYjM3M2NhN2U0ZjBkNjU2NwpQCk46TGlzc3Vlcjo6MTIyMGQzMDFhYmFiYmVkN2JjOGQ2ZjZhODBjZTE2ZjMzOTMzYTcyNzRhMzAxMzI0MWI3ZmIzNzNjYTdlNGYwZDY1NjcKDwoNQgtJTlNUX0lzc3VlcgoPCg1CC0lOU1RfSXNzdWVyCgQKAlIACgQKAlIACnQKclpwCm5qbApQCk5CTGlzc3Vlcjo6MTIyMGQzMDFhYmFiYmVkN2JjOGQ2ZjZhODBjZTE2ZjMzOTMzYTcyNzRhMzAxMzI0MWI3ZmIzNzNjYTdlNGYwZDY1NjcKDgoMQgppc0lzc3Vlck9mCggKBkIESU5TVApiCmBqXgpcClpiWApWClA6Tm9wZXJhdG9yOjoxMjIwYjM5ZGY1ZWQwZTNjNTg0Y2Q5N2U4NmU3NzlkZWY5MzNkNTQ1YmY5YTRmYWIzYzBmZDNlNGFkM2Y3YTM2YjhmZRICCgAqTGlzc3Vlcjo6MTIyMGQzMDFhYmFiYmVkN2JjOGQ2ZjZhODBjZTE2ZjMzOTMzYTcyNzRhMzAxMzI0MWI3ZmIzNzNjYTdlNGYwZDY1NjcqT3JlZ2lzdHJhcjo6MTIyMGQzMDFhYmFiYmVkN2JjOGQ2ZjZhODBjZTE2ZjMzOTMzYTcyNzRhMzAxMzI0MWI3ZmIzNzNjYTdlNGYwZDY1NjcyTm9wZXJhdG9yOjoxMjIwYjM5ZGY1ZWQwZTNjNTg0Y2Q5N2U4NmU3NzlkZWY5MzNkNTQ1YmY5YTRmYWIzYzBmZDNlNGFkM2Y3YTM2YjhmZTl8/9q1q0AGAEIqCiYKJAgBEiBikJteQ0a37UH10AsBGGTcDTteF7QH0nxSmVQemm0uLRAe"
+    },
+    {
+      "createdAt": "2025-10-08T20:41:42.691Z",
+      "contractId": "00525af6a6fd8c1580b6d80aad3dbcc298218ffcd501c9f30e126836a3bb9ada8bca111220c22ce1c7f07a549ad6c6739c7953dd8847f69773b5996169b7afd8c6d66438b9",
+      "templateId": "ed73d5b9ab717333f3dbd122de7be3156f8bf2614a67360c3dd61fc0135133fa:Utility.Registry.V0.Configuration.AppReward:AppRewardConfiguration",
+      "domainId": null,
+      "createdEventBlob": "CgMyLjEStgYKRQBSWvam/YwVgLbYCq09vMKYIY/81QHJ8w4SaDaju5rai8oREiDCLOHH8HpUmtbGc5x5U92IR/aXc7WZYWm3r9jG1mQ4uRITdXRpbGl0eS1yZWdpc3RyeS12MBqLAQpAZWQ3M2Q1YjlhYjcxNzMzM2YzZGJkMTIyZGU3YmUzMTU2ZjhiZjI2MTRhNjczNjBjM2RkNjFmYzAxMzUxMzNmYRIHVXRpbGl0eRIIUmVnaXN0cnkSAlYwEg1Db25maWd1cmF0aW9uEglBcHBSZXdhcmQaFkFwcFJld2FyZENvbmZpZ3VyYXRpb24i9AJq8QIKUgpQOk5vcGVyYXRvcjo6MTIyMGIzOWRmNWVkMGUzYzU4NGNkOTdlODZlNzc5ZGVmOTMzZDU0NWJmOWE0ZmFiM2MwZmQzZTRhZDNmN2EzNmI4ZmUKUgpQOk5wcm92aWRlcjo6MTIyMGQzMDFhYmFiYmVkN2JjOGQ2ZjZhODBjZTE2ZjMzOTMzYTcyNzRhMzAxMzI0MWI3ZmIzNzNjYTdlNGYwZDY1NjcKxgEKwwFqwAEKTQpLOklEU086OjEyMjBmMGMxNDIxMmVkZmM2Y2E5YjBkZmM2ZjU5NDNiNTFhODBlZmU3MWRlOGFiZjU3NTljOGY1N2I3NTEwZjYzM2ViCm8KbWprClcKVTpTZmVlUmVjZWl2ZXJVczo6MTIyMGIzOWRmNWVkMGUzYzU4NGNkOTdlODZlNzc5ZGVmOTMzZDU0NWJmOWE0ZmFiM2MwZmQzZTRhZDNmN2EzNmI4ZmUKEAoOMgwwLjIwMDAwMDAwMDAqTm9wZXJhdG9yOjoxMjIwYjM5ZGY1ZWQwZTNjNTg0Y2Q5N2U4NmU3NzlkZWY5MzNkNTQ1YmY5YTRmYWIzYzBmZDNlNGFkM2Y3YTM2YjhmZTJOcHJvdmlkZXI6OjEyMjBkMzAxYWJhYmJlZDdiYzhkNmY2YTgwY2UxNmYzMzkzM2E3Mjc0YTMwMTMyNDFiN2ZiMzczY2E3ZTRmMGQ2NTY3ORA5UrarQAYAQioKJgokCAESIFdnuWlL+9/sSZnL9GgPVRMT0KYfFkQqkD1ffAXT9KgQEB4="
+    }
+  ]
+}
+```
+
+#### Step 2d - Accept the Mint Request
+
+To finalize the mint and create the asset for the minter, execute the following script:
+
+```bash
+#!/usr/bin/env bash
+
+## =================================================================================================
+## Admin accepts the mint request
+## Step 2d: Executes the accept-mint-request command
+## Authorized by: Admin
+## Script: step-2d-admin-accepts.sh
+## =================================================================================================
+
+DATAFILE="source.sh"
+source "$DATAFILE"
+
+MINTREQUESTS=$(cat "response-step-2b.json")
+MINTREQUEST=$(echo "$MINTREQUESTS" | jq -r --arg MINT_REF "$MINT_REF" '[.[] | select(.contractEntry.JsActiveContract.createdEvent.createArgument.mint.reference == $MINT_REF)][0]')
+MINTREQUEST_CID=$(echo "$MINTREQUEST" | jq -r .contractEntry.JsActiveContract.createdEvent.contractId)
+MINTREQUEST_TEMPLATE=$(echo "$MINTREQUEST" | jq -r .contractEntry.JsActiveContract.createdEvent.templateId)
+
+JSONCONTENT=$(cat "response-step-2c.json")
+CHOICECONTEXTDATA=$(echo $JSONCONTENT | jq .choiceContextData)
+DISCLOSEDCONTRACTS=$(echo $JSONCONTENT | jq .disclosedContracts)
+DISCLOSEDCONTRACTS=$(echo $JSONCONTENT | jq '.choiceContext.disclosedContracts // [] | map(. + {"synchronizerId": ""})')
+
+RESULT=$(
+    curl -s \
+    --url "${HTTP_JSON_API}/v2/commands/submit-and-wait-for-transaction" \
+    --header "Authorization: Bearer ${ADMIN_TOKEN}" \
+    --header "Content-Type: application/json" \
+    --request POST \
+    --data @- <<EOF
+{
+   "commands":{
+        "commands":[
+            {
+                "ExerciseCommand":{
+                    "templateId":"${MINTREQUEST_TEMPLATE}",
+                    "contractId":"${MINTREQUEST_CID}",
+                    "choice":"MintRequest_Accept",
+                    "choiceArgument":{
+                        "extraArgs": {
+                            "context": $CHOICECONTEXTDATA,
+                            "meta":{
+                                "values":{
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        ],
+        "workflowId":"",
+        "userId":"${ADMIN_USER_ID}",
+        "commandId":"$(uuidgen | tr -d '\n')",
+        "deduplicationPeriod":{
+            "DeduplicationDuration":{
+                "value":{
+                    "seconds":30,
+                    "nanos":0
+                }
+            }
+        },
+        "actAs":[
+            "${ADMIN_PARTY_ID}"
+        ],
+        "readAs":[
+
+        ],
+        "submissionId":"$(uuidgen | tr -d '\n')",
+        "disclosedContracts": ${DISCLOSEDCONTRACTS},
+        "domainId":"",
+        "packageIdSelectionPreference":[]
+    }
+}
+EOF
+)
+
+echo "--- Command response ---"
+echo $RESULT | jq
+
+OUTPUTFILE="response-step-2d.json"
+echo "$RESULT" > "$OUTPUTFILE"
+```
+
+After the exercise command is executed, the mint is complete.
+
+![Final positions after mint](how-tos/registry/mint/pictures/final-position.png)

@@ -1,0 +1,28 @@
+<!-- source: canton / canton/3.4/participant/howtos/secure/kms/migration/encrypted_key_storage_migration.rst -->
+<!-- Copyright (c) 2025 Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved. -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
+<a id="encrypted-key-storage-migration"></a>
+
+# Migrate to encrypted private key storage with KMS
+
+To migrate from a non-encrypted key storage to an encrypted private key storage using a KMS with an
+externally hosted symmetric wrapper key, you only need to configure a Participant (or any other node)
+to operate in this mode, as explained [here](../mode/encrypted_key_storage.md#encrypted-key-storage). The process is
+seamless — after restarting the Participant, the new configuration is picked up and Canton’s private keys are
+automatically encrypted and stored.
+
+## Revert encrypted private key storage
+
+Encrypted private key storage can be reverted back to unencrypted storage.
+To prevent accidental reverts, simply deleting the private-key-store configuration does **not** revert
+to unencrypted storage. Instead, the following configuration must be added, and the node restarted:
+
+```none
+canton.participants.participant1.crypto.private-key-store.encryption.reverted = true # default is false
+```
+
+#### WARNING
+This forces Canton to decrypt its private keys and store them in clear; it is not recommended.
+
+Encrypted private key storage can be enabled again by deleting the `reverted` field and reconfiguring the KMS.

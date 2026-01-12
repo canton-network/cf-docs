@@ -1,0 +1,124 @@
+<!-- source: canton / canton/3.4/participant/howtos/troubleshoot/tls.rst -->
+<!-- Copyright (c) 2025 Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved. -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
+<a id="troubleshoot-tls"></a>
+
+# Troubleshoot TLS
+
+TLS can be configured using the parameters described [here](../secure/apis/tls.md#tls-configuration).
+
+If you are having trouble setting up SSL/TLS, you can enable SSL debugging, increase netty logging,
+or generate test keys and certificates to validate your configuration.
+
+## Enable debug logging for ssl
+
+You can enable SSL debugging by adding the following flag to the command line when starting Canton:
+
+```bash
+bin/canton -Djavax.net.debug=all
+```
+
+This will print verbose SSL-related information to the console, including details of the handshake process.
+It is recommended to use this flag only when troubleshooting, as the output can be very verbose and
+may impact performance of your application.
+
+## Enable debug logging for netty
+
+The error messages on TLS issues provided by the networking library `netty` are less than optimal.
+If you are struggling with setting up TLS, please enable `DEBUG` logging on the `io.netty` logger.
+This can typically be done by adding the following line to your logback logging configuration:
+
+```xml
+<logger name="io.grpc.netty.shaded.io.netty.handler.ssl" level="DEBUG"/>
+```
+
+## Generate test keys and certificates
+
+If you need to generate test TLS certificates to test your configuration, you can use the following OpenSSL script:
+
+```none
+# include certs-common.sh from config/tls
+. "$(dirname "${BASH_SOURCE[0]}")/certs-common.sh"
+
+# create root certificate such that we can issue self-signed certs
+create_key "root-ca"
+create_certificate "root-ca" "/O=TESTING/OU=ROOT CA/emailAddress=canton@digitalasset.com"
+print_certificate "root-ca"
+
+# create public api certificate
+create_key "public-api"
+create_csr "public-api" "/O=TESTING/OU=DOMAIN/CN=localhost/emailAddress=canton@digitalasset.com" "DNS:localhost,IP:127.0.0.1"
+sign_csr "public-api" "root-ca"
+print_certificate "public-api"
+
+# create participant ledger-api certificate
+create_key "ledger-api"
+create_csr "ledger-api" "/O=TESTING/OU=PARTICIPANT/CN=localhost/emailAddress=canton@digitalasset.com" "DNS:localhost,IP:127.0.0.1"
+sign_csr "ledger-api" "root-ca"
+
+# create participant admin-api certificate
+create_key "admin-api"
+create_csr "admin-api" "/O=TESTING/OU=PARTICIPANT ADMIN/CN=localhost/emailAddress=canton@digitalasset.com" "DNS:localhost,IP:127.0.0.1"
+sign_csr "admin-api" "root-ca"
+
+# create participant client key and certificate
+create_key "admin-client"
+create_csr "admin-client" "/O=TESTING/OU=PARTICIPANT ADMIN CLIENT/CN=localhost/emailAddress=canton@digitalasset.com"
+sign_csr "admin-client" "root-ca"
+print_certificate "admin-client"
+```
+
+If you’d prefer to manually generate your own set of keys and certificates, the commands used in this process
+are documented here:
+
+```none
+DAYS=3650
+
+function create_key {
+  local name=$1
+  openssl genrsa -out "${name}.key" 4096
+  # netty requires the keys in pkcs8 format, therefore convert them appropriately
+  openssl pkcs8 -topk8 -nocrypt -in "${name}.key" -out "${name}.pem"
+}
+
+# create self signed certificate
+function create_certificate {
+  local name=$1
+  local subj=$2
+  openssl req -new -x509 -sha256 -key "${name}.key" \
+              -out "${name}.crt" -days ${DAYS} -subj "$subj"
+}
+
+# create certificate signing request with subject and SAN
+# we need the SANs as our certificates also need to include localhost or the
+# loopback IP for the console access to the admin-api and the ledger-api
+function create_csr {
+  local name=$1
+  local subj=$2
+  local san=$3
+  (
+    echo "authorityKeyIdentifier=keyid,issuer"
+    echo "basicConstraints=CA:FALSE"
+    echo "keyUsage = digitalSignature, nonRepudiation, keyEncipherment, dataEncipherment"
+  ) > ${name}.ext
+  if [[ -n $san ]]; then
+    echo "subjectAltName=${san}" >> ${name}.ext
+  fi
+  # create certificate (but ensure that localhost is there as SAN as otherwise, admin local connections won't work)
+  openssl req -new -sha256 -key "${name}.key" -out "${name}.csr" -subj "$subj"
+}
+
+function sign_csr {
+  local name=$1
+  local sign=$2
+  openssl x509 -req -sha256 -in "${name}.csr" -extfile "${name}.ext" -CA "${sign}.crt" -CAkey "${sign}.key" -CAcreateserial  \
+               -out "${name}.crt" -days ${DAYS}
+  rm "${name}.ext" "${name}.csr"
+}
+
+function print_certificate {
+  local name=$1
+  openssl x509 -in "${name}.crt" -text -noout
+}
+```

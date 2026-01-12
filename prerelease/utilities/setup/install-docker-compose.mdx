@@ -1,0 +1,126 @@
+<!-- source: canton-network-utilities / canton-network-utilities/devnet/setup/install-docker-compose.rst -->
+
+# Install (Docker Compose)
+
+#### NOTE
+Make sure to complete the [Prerequisites](prerequisites.md#utility-prerequisites) before proceeding.
+
+If you deploy your validator [using Docker Compose](https://docs.sync.global/validator_operator/validator_compose.html),
+then you can use this guide to add the DA Utilities to your setup.
+
+## Prerequisite: Auth
+
+You need to [set up auth](https://docs.sync.global/validator_operator/validator_compose.html#configuring-authentication)
+for the utilities to work.
+
+Don’t forget to use the `-a` flag when starting your node:
+
+```default
+./start.sh -s "<SPONSOR_SV_URL>" -o "<ONBOARDING_SECRET>" -p "<party_hint>" -m "<MIGRATION_ID>" -w -a
+```
+
+### Additional Environment Variables for Utilities
+
+Add the following to your `splice-node/docker-compose/validator/.env`:
+
+```bash
+# Utility
+AUTH_AUTHORITY=${AUTH_URL}
+OIDC_AUTHORITY_URL=${AUTH_URL}
+AUTH_AUDIENCE=${LEDGER_API_AUTH_AUDIENCE}
+OIDC_AUTHORITY_LEDGER_API_AUDIENCE=${LEDGER_API_AUTH_AUDIENCE}
+VALIDATOR_CLIENT_SECRET=${VALIDATOR_AUTH_CLIENT_SECRET}
+VALIDATOR_CLIENT_ID=${VALIDATOR_AUTH_CLIENT_ID}
+CNS_UI_CLIENT_ID=${ANS_UI_CLIENT_ID}
+UTILITIES_IMAGE_REPO="europe-docker.pkg.dev/da-images/public/docker"
+UTILITIES_IMAGE_VERSION="0.10.16"
+AUTH_CLIENT_ID="<see below>"
+UTILITY_APP_UTILITY_BACKEND_URL="<see below>"
+```
+
+- `AUTH_CLIENT_ID`: the one you [created for the Utility UI](prerequisites.md#oidc-setup)
+- `UTILITY_APP_UTILITY_BACKEND_URL`: [depends on which network you’re connecting to](../reference/operator-backend-api/index.md#operator-backend-url)
+
+## Update compose.yaml
+
+### Edit your participant deployment
+
+```diff
+   participant:
+     image: "${IMAGE_REPO}canton-participant:${IMAGE_TAG}"
+     environment:
++      - CANTON_PARTICIPANT_JSON_API_SERVER_PATH_PREFIX=/api/json-api
+       - AUTH_JWKS_URL=${AUTH_JWKS_URL}
+```
+
+### Add the Utilities
+
+```yaml
+utility-ui:
+  image: "${UTILITIES_IMAGE_REPO}/frontend:${UTILITIES_IMAGE_VERSION}"
+  environment:
+    - AUTH_AUTHORITY=${AUTH_AUTHORITY}
+    - AUTH_CLIENT_ID=${AUTH_CLIENT_ID}
+    - AUTH_AUDIENCE=${AUTH_AUDIENCE}
+    - UTILITY_APP_UTILITY_BACKEND_URL=${UTILITY_APP_UTILITY_BACKEND_URL}
+  depends_on:
+    - participant
+    - validator
+  networks:
+    - ${DOCKER_NETWORK:-splice_validator}
+
+darsyncer:
+  image: "${UTILITIES_IMAGE_REPO}/utilities-darsyncer-client:${UTILITIES_IMAGE_VERSION}"
+  command:
+    - --endpoint=participant:5002
+  environment:
+    - DARS=/dars
+    - CLIENT_ID=${VALIDATOR_AUTH_CLIENT_ID}
+    - CLIENT_SECRET=${VALIDATOR_AUTH_CLIENT_SECRET}
+    - OAUTH_DOMAIN=${AUTH_AUTHORITY}
+  depends_on:
+    - participant
+    - validator
+  networks:
+    - ${DOCKER_NETWORK:-splice_validator}
+```
+
+### Make nginx depend on `utility-ui`
+
+```diff
+   nginx:
+     image: "nginx:${NGINX_VERSION}"
+     depends_on:
+       - ans-web-ui
+       - wallet-web-ui
+       - validator
++      - utility-ui
+```
+
+## Update nginx.conf
+
+Add this to `splice-node/docker-compose/validator/nginx.conf` to access the Utility UI at [http://utility.localhost](http://utility.localhost):
+
+```nginx
+http {
+  ...
+  server {
+    listen 80;
+    server_name utility.localhost;
+
+    location /api/validator/ {
+      rewrite ^\/(.*) /$1 break;
+      proxy_pass http://validator:5003/api/validator;
+    }
+
+    location /api/json-api {
+      rewrite ^\/(.*) /$1 break;
+      proxy_pass http://participant:7575/;
+    }
+
+    location / {
+      proxy_pass http://utility-ui:8080/;
+    }
+  }
+}
+```

@@ -1,0 +1,134 @@
+<!-- source: canton-network-utilities / canton-network-utilities/devnet/overview/registry-user-guide/introduction.rst -->
+
+# Introduction
+
+This guide is designed to help you understand and effectively utilize the application’s capabilities
+to create/mint tokens, delete/burn tokens, transfer them, and track ownership records. We will
+explore various workflows from a business perspective and provide workflow examples with diagrams
+to illustrate each process.
+
+## Utility Overview
+
+The Registry utility is a core application for asset tokenization, leveraging Canton and Daml
+technologies to securely register and manage assets. It provides the foundational infrastructure
+needed to tokenize assets, ensuring transparency, immutability, and decentralized control.
+
+Traditionally, asset registries are closed systems accessible only to operators. Users interact
+indirectly through messaging, relying on operators to perform actions and receiving periodic
+reports. To maintain local access to their data, users often replicate information internally,
+necessitating frequent reconciliation with the central registry.
+
+In contrast, the Canton-ledger-based Registry provides users with direct access and control over
+their tokenized assets. This system allows users to perform actions—such as transfers, deposits, or
+withdrawals—directly through their local participant node, eliminating the need for operator
+intermediation. This direct access is crucial for asset tokenization, as it enables users to
+interact with their digital assets seamlessly and securely.
+
+Furthermore, the utility empowers users to delegate specific actions to third-party applications,
+facilitating more advanced workflows and use cases. For instance, a third-party Delivery versus
+Payment (DvP) application could use party delegation to settle asset movements across multiple
+registries atomically, making it ideal for complex tokenized transactions.
+
+The local participant node also ensures that users have a consistent, real-time view of the
+registry, thanks to the Canton protocol’s guaranteed synchronization. By storing data locally with
+assured consistency, users no longer need to maintain separate data stores or engage in ongoing
+reconciliation with the central registry.
+
+As a core application for asset tokenization, the Registry utility enables the creation, management,
+and transfer of digital assets with the security and transparency necessary for modern decentralized
+systems. This makes it an essential tool for any organization looking to leverage blockchain
+technology for asset management.
+
+## Use Cases
+
+- **Streamlined Collateral and Margin Management**
+
+  A hedge fund uses tokenized assets as collateral for its trading strategies. These assets are
+  tokenized and registered on the Canton Network, allowing the hedge fund to adjust its collateral
+  in real time as market conditions change. The instant, atomic settlement of tokenized assets
+  reduces the time and cost associated with margin calls and enhances the fund’s operational
+  efficiency.
+- **Self-Sovereign Asset Control**
+
+  A private investor holds a diversified portfolio of tokenized stocks and commodities on the Canton
+  Network. The investor has full control over their assets, managing them directly from their
+  participant node. They can transfer, sell, or lend their tokenized assets without needing to go
+  through a broker, giving them greater autonomy and reducing transaction costs.
+- **Cross-Application Composability**
+
+  A registered tokenized asset on the Canton Network is used as collateral in a decentralized
+  lending platform. The asset’s token can be seamlessly integrated and used in other DeFi
+  applications, like automated market makers or yield farming protocols, allowing the holder to
+  leverage their assets across multiple financial products and services, increasing the asset’s
+  utility and potential returns.
+- **Enhanced Liquidity in Secondary Markets**
+
+  A real estate investment trust (REIT) tokenizes its property assets on the Canton Network.
+  Investors can buy and sell fractions of these properties as tokens on a secondary market, allowing
+  for near-instant transactions. This dramatically increases the liquidity of these traditionally
+  illiquid assets, making it easier for investors to enter and exit positions quickly.
+
+## Business Roles
+
+The Registry Utility distinguishes between four business roles, namely:
+
+| Role      | Description                                                                                                                                                                                                           |
+|-----------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Operator  | - Maintains Daml models and application configuration<br/>- Provides various API endpoints for users, e.g. Token Standard endpoints<br/>- Onboards Providers to the Registry Utility according to predefined criteria |
+| Provider  | - Onboards Registrars to the Registry Utility according to predefined criteria<br/>- Can provide automation services<br/>- Example: Financial Infrastructure Provider, Tokenization Provider                          |
+| Registrar | - Maintains ownership records for assets on behalf of Issuers<br/>- Maintains criteria for holding, minting, and burning asset tokens<br/>- Example: SS&C, CSDs, custodians                                           |
+| Holder    | - Any ledger party can send, receive, mint, and burn tokens, provided they fulfill<br/>  the predefined criteria set by the registrar.<br/>- Example: Institutional investors or token issuers                        |
+
+#### NOTE
+A ledger party can take on one or more roles in the registry.
+
+## Governance via Credentials
+
+The Registry Utility makes use of Credentials issued through the Credential Utility to verify a
+party’s eligibility to perform specific actions within the Registry Utility. These credentials
+govern access and permissions for roles such as Provider, Registrar, and Holder, ensuring that only
+qualified parties can interact with the app.
+
+For example, to mint or transfer tokens, a party must possess the appropriate Credential contract
+that satisfies the predefined credential requirements for that action.
+
+#### NOTE
+Actions (such as transferring an asset) may be configured to require no credentials.
+
+## How to interact with the Registry Utility
+
+Any ledger party can interact directly with the Registry Utility using its DARs:
+
+- To onboard as a Provider, submit a request to the Operator. If you meet the Operator’s Provider
+  Credential requirements (which might be none), your request may be accepted. Upon approval, you
+  receive a `ProviderService` contract instance for operational workflows. As a Provider, you are
+  responsible for onboarding Registrars and maintaining the Credential requirements for Registrar
+  onboarding.
+- To onboard as a Registrar, submit a request to a Provider. If you meet the Provider’s Registrar
+  Credential requirements (which might be none), your request may be accepted. Upon approval, you
+  receive a `RegistrarService` contract instance for operational workflows.
+- As a Holder, you don’t onboard with any party. Your ability to transfer, mint, or burn assets is
+  determined by whether you meet the Credential requirements specified for each asset. If no
+  credentials are required for a particular action (such as transferring an asset), you can perform
+  that action without any credentials.
+
+Note that only Providers and Registrars require onboarding to the Registry Utility. The onboarding
+process follows a propose-accept workflow. For detailed steps, see
+[onboarding](onboarding-offboarding.md#id1).
+
+#### NOTE
+The `HolderService` contract has been deprecated.
+
+![image](overview/registry-user-guide/pictures/registry-utility.png)
+
+## The Asset Model
+
+A holding contract instance represents the ownership of a certain number of units of an instrument
+by an owner at a registrar. Whereas an instrument defines what a ledger party holds (the rights and
+obligations), a holding defines how much (i.e., the amount) of an instrument and against which
+ledger party (i.e., a registrar) the instrument is being held. It’s crucial to note that the
+economic terms of an asset (instrument) are distinct from its representation in a holding. This
+segregation enables centralized management of instruments (e.g., lifecycling, KYC requirements) and
+facilitates the reuse of instruments and associated logic across various entities (e.g.,
+custodians). Moreover, it prevents data redundancy by eliminating the need to replicate instrument
+data and logic in every holding contract.

@@ -1,0 +1,230 @@
+<!-- source: pqs / pqs/3.4/component-howtos/pqs/optimize/index.rst -->
+<!-- Copyright (c) 2025, Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved. -->
+
+<a id="pqs-optimize"></a>
+
+# Optimize
+
+It is important to ensure that proper capacity planning of resources is performed to match the expected workload.
+
+## Host infrastructure
+
+The following are the minimum requirements for the host operating system running any kind of production workload, and
+should be seen as a starting point for determining the appropriate resources required by a particular workload:
+
+PQS host:
+
+* Memory: 4 GB
+* CPU: 4 cores
+
+PostgreSQL:
+
+* Memory: 8 GB
+* CPU: 8 cores
+
+### Importance of deliberate PostgreSQL tuning
+
+It is hard to predict what a client’s needs are without knowing their traffic shapes, usage patterns, etc.
+
+If PQS data is used heavily in read scenarios with large active ACS, it is advisable to increase RAM available to
+PostgreSQL to maximise its cache capabilities.
+
+The number of CPU cores is strongly correlated with the maximum number of connections. Larger parallelism in query
+execution will require more simultaneous connections and therefore more CPUs.
+
+Please note that if you intend to run OLAP-like queries (**reporting-style** - lots of aggregations, many joins with
+large result sets, etc) it will influence the need for additional resources that are typically unnecessary in OLTP-like
+workloads. In practice, this means that the number of CPUs should match the number of maximum connections to avoid
+process scheduling in the presence of concurrent long-running queries.
+
+By default, the PostgreSQL Docker image is shipped untuned with irrelevant settings (assuming HDD is used on a
+Raspberry Pi, which is inadequate in most common contemporary scenarios). One needs to actively tune PostgreSQL
+according to the hardware used to run it.
+
+As a starting point, please use online calculator <sup>[1](#id13)</sup> to correlate hardware parameters with PostgreSQL startup
+settings.
+
+In Docker container environment pass the configuration parameters as startup arguments, for example:
+
+```yaml
+services:
+  postgres:
+    command:
+      - postgres
+      - -c
+      - max_connections=100
+      - -c
+      - shared_buffers=1GB
+      - -c
+      - effective_cache_size=3GB # and so on
+```
+
+AWS Aurora comes already pre-configured <sup>[2](#id14)</sup> with sensible defaults which take into account underlying provisioned
+cloud resources, but do verify unreasonable overrides (with query below or Aurora management UI).
+
+```sql
+select name, setting, source from pg_settings;
+```
+
+### Can PQS run against AWS Aurora?
+
+It has been proven in production environments that PQS works within expected parameters with AWS Aurora (Serverful)
+as a datastore, provided default settings are in use (for both PQS and Aurora).
+
+AWS Aurora Serverless had not been tested yet.
+
+<a id="pqs-optimize-java-virtual-machine-jvm-configuration"></a>
+
+## Java virtual machine configuration
+
+Appropriate JVM configuration is important to ensure that PQS has enough resources to run efficiently. At minimum the
+following should be considered for any realistic deployment:
+
+```text
+-XX:+AlwaysPreTouch
+-XX:-UseAdaptiveSizePolicy
+
+## containers:
+-XX:InitialRAMPercentage=75.0
+-XX:MaxRAMPercentage=75.0
+
+## host/vm:
+-Xms4g
+-Xmx4g
+```
+
+In resources constrained scenarios an out-of-memory error may occur. To diagnose this, a heap-dump will need to be
+collected for analysis, by adding the following JVM parameters:
+
+```text
+-XX:+HeapDumpOnOutOfMemoryError
+-XX:HeapDumpPath=/path/to/heap.dump
+```
+
+## PostgreSQL configuration
+
+Users should at least consider the following PostgreSQL configuration items which are relevant to the workloads it will
+be expected to satisfy (see `postgresql.conf` <sup>[3](#id15)</sup>):
+
+* `autovacuum_*` <sup>[4](#id16)</sup>
+* `maintenance_work_mem` <sup>[5](#id17)</sup>
+* `checkpoint_*` <sup>[6](#id18)</sup>
+* `*_wal_size` <sup>[7](#id19)</sup>
+* `bgwriter_*` <sup>[8](#id20)</sup>
+
+In cases where high performance is required, a Database Administrator will be required to tune PostgreSQL for the
+intended workload and infrastructure, and iteratively adjust the configuration whilst the system is under simulated
+workload.
+
+## Host environment
+
+PQS requires write access to a local cache directory (configured through `--source-ledger-cachedir`, default
+`/tmp/scribe`) in order to temporarily cache Daml packages. The size of this cache is proportional to the size of
+all Daml packages observable on the ledger. It is an ephemeral cache - so it does not need to persist beyond a single
+execution. Containerized environments should configure a disk-based mount, as it is not important for overall
+performance.
+
+## Processing pipeline configuration
+
+If you wish to have more detailed logging for diagnosis, you can adjust the `--logger-level` parameter to `DEBUG`
+or `TRACE`. However, be aware that this will generate a lot of log output and may negatively impact performance.
+Therefore it is recommended you de-scope particularly verbose components (such as Netty) to `INFO` level (see
+[Logging](../observe.md#pqs-logging)).
+
+Setting the Ledger API queue length is a trade-off between memory usage and performance. The default value is 128,
+and can be increased to deliver more stable performance, at the cost of requiring additional memory. Note that the
+buffer will consume memory equal to the size of transactions in the rolling window of the buffer size:
+
+```text
+--source-ledger-buffersize 1024
+```
+
+The anticipated workload might necessitate increasing the number of JDBC connections utilized by PQS (default 16). This
+can be controlled via:
+
+```text
+--target-postgres-maxconnections 64
+```
+
+It is paramount to make sure that PostgreSQL’s `max_connections` <sup>[9](#id21)</sup> parameters is set to no less than the number of
+connections requested from all clients of the database.
+
+## Query analysis
+
+This section briefly discusses optimizing the PQS database to make the most of the capabilities of PostgreSQL. The
+topic is broad, and there are many resources available. Refer to the PostgreSQL documentation for more information.
+
+PQS makes extensive use of JSONB columns to store ledger data. Familiarity with JSONB is essential to optimize
+queries.
+
+To get an explanation of how the query performs, prefix query text with `explain analyze`. This helps verify that a
+query executes as expected, using the indexes that you expect it to.
+
+```sql
+explain analyze
+select * from active('MyModule:MyTemplate');
+```
+
+To learn more how to interpret the query planner output refer to series of articles <sup>[10](#id22)</sup> and to visualize use the online
+tool <sup>[11](#id23)</sup>.
+
+## Indexing
+
+Indexes are an important tool for improving the performance of queries with JSONB content. Users are expected to
+create JSONB-based indexes to optimize their model-specific queries, where additional read efficiency justifies the
+inevitable write-amplification. Simple indexes can be created using the following helper function:
+
+```sql
+call create_index_for_contract('token_wallet_holder_idx',
+                               'register:DA.Register:Token',
+                               '(payload->''wallet''->>''holder'')',
+                               'hash');
+```
+
+In this example, the index allows comparisons on the wallet holder. It has the additional advantage that the results
+of the JSON inspection are cached/materialized and do not have to be recomputed for every access.
+
+PostgreSQL provides several index types. Each index type uses a different algorithm that is best suited to different
+types of queries. The table below provides a basic explanation of where they can be used. For a more thorough
+understanding, consult the chapter on indexes <sup>[12](#id24)</sup> in the PostgreSQL manual.
+
+| Index Type   | Comment                                                                                                                                                                                                                                                                                                                                       |
+|--------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Hash         | Compact. Useful only for filters that use `=`.                                                                                                                                                                                                                                                                                                |
+| B-tree       | Can be used in filters that use `<`, `<=`, `=`, `>=`, `>` as well as prefix string<br/>comparisons (for example `like 'foo%'`). B-trees can also speed up `order by` clauses and can<br/>be used to retrieve subexpressions values from the index rather than evaluating the subexpressions<br/>(for example when used in a `select` clause). |
+| GIN          | Useful for subset operators.                                                                                                                                                                                                                                                                                                                  |
+| BRIN         | Efficient for tables where rows are already physically sorted for a particular column.                                                                                                                                                                                                                                                        |
+
+More sophisticated indexes can be created using the standard PostgreSQL syntax.
+
+## Testing
+
+Any of modified settings need to be independently assessed and tuned. Users should establish performance testing and
+benchmarking environment in order to validate the performance of PQS on a given workload. It should be noted that the
+following variables are extremely relevant to overall PQS performance characteristics:
+
+* Network latency
+* Ledger transaction throughput
+* Ledger transaction sizes
+* Contract data sizes
+
+Changing any of these variables requires re-testing to ensure that the impact on system performance is understood,
+and within acceptable tolerances.
+
+There are no “one size fits all” settings for PQS, so it is important to understand the workload and empirically test
+the configuration to ensure that it meets the performance requirements of your specific use case.
+
+* <a id='id13'>**[1]**</a> [https://pgtune.leopard.in.ua/?dbVersion=15&osType=linux&dbType=oltp&cpuNum=8&totalMemory=64&totalMemoryUnit=GB&connectionNum=100&hdType=ssd](https://pgtune.leopard.in.ua/?dbVersion=15&osType=linux&dbType=oltp&cpuNum=8&totalMemory=64&totalMemoryUnit=GB&connectionNum=100&hdType=ssd)
+* <a id='id14'>**[2]**</a> [https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/AuroraPostgreSQL.Reference.ParameterGroups.html#AuroraPostgreSQL.Reference.Parameters.Instance](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/AuroraPostgreSQL.Reference.ParameterGroups.html#AuroraPostgreSQL.Reference.Parameters.Instance)
+* <a id='id15'>**[3]**</a> [https://postgresqlco.nf/](https://postgresqlco.nf/)
+* <a id='id16'>**[4]**</a> [https://www.postgresql.org/docs/current/runtime-config-autovacuum.html#RUNTIME-CONFIG-AUTOVACUUM](https://www.postgresql.org/docs/current/runtime-config-autovacuum.html#RUNTIME-CONFIG-AUTOVACUUM)
+* <a id='id17'>**[5]**</a> [https://www.postgresql.org/docs/current/runtime-config-resource.html#GUC-MAINTENANCE-WORK-MEM](https://www.postgresql.org/docs/current/runtime-config-resource.html#GUC-MAINTENANCE-WORK-MEM)
+* <a id='id18'>**[6]**</a> [https://www.postgresql.org/docs/current/runtime-config-wal.html#RUNTIME-CONFIG-WAL-CHECKPOINTS](https://www.postgresql.org/docs/current/runtime-config-wal.html#RUNTIME-CONFIG-WAL-CHECKPOINTS)
+* <a id='id19'>**[7]**</a> [https://www.postgresql.org/docs/current/runtime-config-wal.html#GUC-MAX-WAL-SIZE](https://www.postgresql.org/docs/current/runtime-config-wal.html#GUC-MAX-WAL-SIZE)
+* <a id='id20'>**[8]**</a> [https://www.postgresql.org/docs/current/runtime-config-resource.html#RUNTIME-CONFIG-RESOURCE-BACKGROUND-WRITER](https://www.postgresql.org/docs/current/runtime-config-resource.html#RUNTIME-CONFIG-RESOURCE-BACKGROUND-WRITER)
+* <a id='id21'>**[9]**</a> [https://postgresqlco.nf/doc/en/param/max_connections/](https://postgresqlco.nf/doc/en/param/max_connections/)
+* <a id='id22'>**[10]**</a> [https://www.depesz.com/tag/unexplainable/](https://www.depesz.com/tag/unexplainable/)
+* <a id='id23'>**[11]**</a> [https://explain.depesz.com/](https://explain.depesz.com/)
+* <a id='id24'>**[12]**</a> [https://www.postgresql.org/docs/current/indexes.html](https://www.postgresql.org/docs/current/indexes.html)
+
+* [Optimize payload queries](payload-queries.md)

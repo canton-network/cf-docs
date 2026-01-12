@@ -1,0 +1,962 @@
+<!-- source: splice-wallet-kernel / splice-wallet-kernel/devnet/src/token-standard/index.rst -->
+<!-- Copyright (c) 2024 Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved. -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- #TODO: copy of https://raw.githubusercontent.com/hyperledger-labs/splice/3c0770e648b21a48ef8dde202ef27065592f9422/docs/src/deployment/traffic.rst -->
+
+<a id="token-standard"></a>
+
+# Token Standard
+
+The Wallet SDK support performing basic token standard operations, these are exposed through the sdk.tokenStandard a complete
+overview of the underlying integration can be found here <https://docs.sync.global/app_dev/token_standard/index.html#> and the CIP
+is defined here <https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0056/cip-0056.md>.
+
+## How do i quickly perform a transfer between two parties?
+
+The below performs a 2-step transfer between Alice and Bob and expose their holdings:
+
+```typescript
+import {
+    WalletSDKImpl,
+    localNetAuthDefault,
+    localNetLedgerDefault,
+    localNetTopologyDefault,
+    localNetTokenStandardDefault,
+    createKeyPair,
+    localNetStaticConfig,
+} from '@canton-network/wallet-sdk'
+import { pino } from 'pino'
+import { v4 } from 'uuid'
+
+const logger = pino({ name: '04-token-standard-localnet', level: 'info' })
+
+// it is important to configure the SDK correctly else you might run into connectivity or authentication issues
+const sdk = new WalletSDKImpl().configure({
+    logger,
+    authFactory: localNetAuthDefault,
+    ledgerFactory: localNetLedgerDefault,
+    topologyFactory: localNetTopologyDefault,
+    tokenStandardFactory: localNetTokenStandardDefault,
+})
+
+logger.info('SDK initialized')
+
+await sdk.connect()
+logger.info('Connected to ledger')
+
+const keyPairSender = createKeyPair()
+const keyPairReceiver = createKeyPair()
+
+await sdk.connectAdmin()
+await sdk.connectTopology(localNetStaticConfig.LOCALNET_SCAN_PROXY_API_URL)
+
+const sender = await sdk.userLedger?.signAndAllocateExternalParty(
+    keyPairSender.privateKey,
+    'alice'
+)
+logger.info(`Created party: ${sender!.partyId}`)
+await sdk.setPartyId(sender!.partyId)
+
+const receiver = await sdk.userLedger?.signAndAllocateExternalParty(
+    keyPairReceiver.privateKey,
+    'bob'
+)
+logger.info(`Created party: ${receiver!.partyId}`)
+
+await sdk.userLedger
+    ?.listWallets()
+    .then((wallets) => {
+        logger.info(wallets, 'Wallets:')
+    })
+    .catch((error) => {
+        logger.error({ error }, 'Error listing wallets')
+    })
+
+sdk.tokenStandard?.setTransferFactoryRegistryUrl(
+    localNetStaticConfig.LOCALNET_REGISTRY_API_URL
+)
+const instrumentAdminPartyId =
+    (await sdk.tokenStandard?.getInstrumentAdmin()) || ''
+
+const [tapCommand, disclosedContracts] = await sdk.tokenStandard!.createTap(
+    sender!.partyId,
+    '2000000',
+    {
+        instrumentId: 'Amulet',
+        instrumentAdmin: instrumentAdminPartyId,
+    }
+)
+
+await sdk.userLedger?.prepareSignExecuteAndWaitFor(
+    tapCommand,
+    keyPairSender.privateKey,
+    v4(),
+    disclosedContracts
+)
+
+const utxos = await sdk.tokenStandard?.listHoldingUtxos(false)
+
+logger.info(utxos, 'List Available Token Standard Holding UTXOs')
+
+await sdk.tokenStandard
+    ?.listHoldingTransactions()
+    .then((transactions) => {
+        logger.info(transactions, 'Token Standard Holding Transactions:')
+    })
+    .catch((error) => {
+        logger.error(
+            { error },
+            'Error listing token standard holding transactions:'
+        )
+    })
+
+logger.info('Creating transfer transaction')
+
+const [transferCommand, disclosedContracts2] =
+    await sdk.tokenStandard!.createTransfer(
+        sender!.partyId,
+        receiver!.partyId,
+        '100',
+        {
+            instrumentId: 'Amulet',
+            instrumentAdmin: instrumentAdminPartyId,
+        },
+        utxos?.map((t) => t.contractId),
+        'memo-ref'
+    )
+
+await sdk.userLedger?.prepareSignExecuteAndWaitFor(
+    transferCommand,
+    keyPairSender.privateKey,
+    v4(),
+    disclosedContracts2
+)
+logger.info('Submitted transfer transaction')
+
+await sdk.setPartyId(receiver!.partyId)
+
+const pendingInstructions =
+    await sdk.tokenStandard?.fetchPendingTransferInstructionView()
+
+const transferCid = pendingInstructions?.[0].contractId!
+
+const [acceptTransferCommand, disclosedContracts3] =
+    await sdk.tokenStandard!.exerciseTransferInstructionChoice(
+        transferCid,
+        'Accept'
+    )
+
+await sdk.userLedger?.prepareSignExecuteAndWaitFor(
+    acceptTransferCommand,
+    keyPairReceiver.privateKey,
+    v4(),
+    disclosedContracts3
+)
+
+logger.info('Accepted transfer instruction')
+
+{
+    await sdk.setPartyId(sender!.partyId)
+    const aliceHoldings = await sdk.tokenStandard?.listHoldingTransactions()
+    logger.info(aliceHoldings, '[ALICE] holding transactions')
+
+    await sdk.setPartyId(receiver!.partyId)
+    const bobHoldings = await sdk.tokenStandard?.listHoldingTransactions()
+    logger.info(bobHoldings, '[BOB] holding transactions')
+}
+```
+
+## Listing holdings (UTXO’s)
+
+Canton uses created and archived events to determine the state of the ledger. This correlates to how UTXO’s are handled on other blockchains
+like Bitcoin. This means that at any point in time you can retrieve all your active contracts with the interface ‘Holding’ to see all assets
+you posses across different instruments.
+
+```typescript
+import {
+    WalletSDKImpl,
+    localNetAuthDefault,
+    localNetLedgerDefault,
+    localNetStaticConfig,
+    localNetTokenStandardDefault,
+} from '@canton-network/wallet-sdk'
+
+export default async function () {
+    const sdk = new WalletSDKImpl().configure({
+        logger: console,
+        authFactory: localNetAuthDefault,
+        ledgerFactory: localNetLedgerDefault,
+        tokenStandardFactory: localNetTokenStandardDefault,
+    })
+
+    const myParty = global.EXISTING_PARTY_1
+
+    await sdk.connect()
+    await sdk.tokenStandard!.setTransferFactoryRegistryUrl(
+        localNetStaticConfig.LOCALNET_REGISTRY_API_URL
+    )
+    await sdk.setPartyId(myParty)
+
+    // takes an option boolean whether to include locked holdings
+    // default is 'true' and in this case utxos locked in a 2-step transfer (awaiting accept or reject)
+    // is included in the output
+    const utxos = await sdk.tokenStandard?.listHoldingUtxos(false)
+}
+```
+
+the above script can safely be used to determine used in a transfer, if you provide no boolean value or true then you need to filter
+out the locked ones manually.
+
+<a id="list-holding-transactions"></a>
+
+## Listing holding transactions
+
+In order to stream transaction events as they happen on ledger the listHoldingTransactions endpoint can be used. This takes two ledger
+offset and gives an overview of all token standard transactions that have happened between. It also returns a nextOffset that can be used
+when calling the endpoint again. This will allow you to easily ensure you do not receive any transaction twice and you are only querying the
+transactions that have happened after.
+
+```typescript
+import {
+    WalletSDKImpl,
+    localNetAuthDefault,
+    localNetLedgerDefault,
+    localNetStaticConfig,
+    localNetTokenStandardDefault,
+} from '@canton-network/wallet-sdk'
+import { v4 } from 'uuid'
+
+export default async function () {
+    const sdk = new WalletSDKImpl().configure({
+        logger: console,
+        authFactory: localNetAuthDefault,
+        ledgerFactory: localNetLedgerDefault,
+        tokenStandardFactory: localNetTokenStandardDefault,
+    })
+
+    const myParty = global.EXISTING_PARTY_1
+
+    await sdk.connect()
+    await sdk.tokenStandard!.setTransferFactoryRegistryUrl(
+        localNetStaticConfig.LOCALNET_REGISTRY_API_URL
+    )
+    await sdk.setPartyId(myParty)
+
+    let startLedger = 0
+    let step = 100
+
+    const holdings = await sdk.tokenStandard!.listHoldingTransactions(
+        startLedger,
+        step
+    )
+
+    //increment steps to get more holdings if there are more
+}
+```
+
+to quickly convert the stream into deposit and withdrawal you can use this function:
+
+```javascript
+function convertToTransaction(pt: Transaction, associatedParty: string): object[] {
+    return pt.events.flatMap((event) => {
+        if (event.label.type === 'TransferIn') {
+            return [{
+                updateId: pt.updateId,
+                recordTime: pt.recordTime,
+                from: event.label.sender,
+                to: associatedParty,
+                amount: Number(event.unlockedHoldingsChangeSummary.amountChange),
+                instrumentId: 'Amulet', //hardcoded instrumentId from local net
+                fee: Number(event.label.burnAmount),
+                memo: event.label.reason,
+            }];
+        } else if (event.label.type === 'TransferOut') {
+            const label = event.label
+            return event.label.receiverAmounts.map((receiverAmount: any) => ({
+                updateId: pt.updateId,
+                recordTime: pt.recordTime,
+                from: associatedParty,
+                to: receiverAmount.receiver,
+                amount: Number(receiverAmount.amount),
+                instrumentId: 'Amulet', //hardcoded instrumentId from local net
+                fee: Number(label.burnAmount),
+                memo: label.meta.reason,
+            }));
+        } else {
+            return [];
+        }
+    });
+}
+```
+
+<a id="performing-tap"></a>
+
+## Performing a Tap on DevNet or LocalNet
+
+When writing scripts and setup it is important to have funds present, this can be very tedious on blockchains. Therefor
+most blockchains support some form of a faucet (that allows to receive a small amount of funds to play with). On canton
+we allow the tap method that is only present on DevNet (or LocalNet), by using this you can stock funds to easily attempt
+some of the CC transfer flows:
+
+```typescript
+import {
+    WalletSDKImpl,
+    localNetAuthDefault,
+    localNetLedgerDefault,
+    localNetStaticConfig,
+    localNetTokenStandardDefault,
+} from '@canton-network/wallet-sdk'
+import { v4 } from 'uuid'
+
+export default async function () {
+    const sdk = new WalletSDKImpl().configure({
+        logger: console,
+        authFactory: localNetAuthDefault,
+        ledgerFactory: localNetLedgerDefault,
+        tokenStandardFactory: localNetTokenStandardDefault,
+    })
+
+    const myParty = global.EXISTING_PARTY_1
+    const myPrivateKey = global.EXISTING_PARTY_1_KEYS.privateKey
+    const instrumentAdminPartyId = global.INSTRUMENT_ADMIN_PARTY
+
+    await sdk.connect()
+    await sdk.setPartyId(myParty)
+    sdk.tokenStandard!.setTransferFactoryRegistryUrl(
+        localNetStaticConfig.LOCALNET_REGISTRY_API_URL
+    )
+
+    const [tapCommand, disclosedContracts] = await sdk.tokenStandard!.createTap(
+        myParty,
+        '2000000',
+        {
+            instrumentId: 'Amulet',
+            instrumentAdmin: instrumentAdminPartyId,
+        }
+    )
+
+    await sdk.userLedger?.prepareSignExecuteAndWaitFor(
+        tapCommand,
+        myPrivateKey,
+        v4(),
+        disclosedContracts
+    )
+}
+```
+
+this is an important pre-requisite for the creating of transfer in your script.
+
+## Creating a transfer
+
+In order to create a simple transfer you can use the createTransfer on the token standard. Then like any other operation
+you can use the prepareSubmission endpoint, sign the returned hash and finally executeSubmission.
+
+```typescript
+import {
+    WalletSDKImpl,
+    localNetAuthDefault,
+    localNetLedgerDefault,
+    localNetStaticConfig,
+    localNetTokenStandardDefault,
+} from '@canton-network/wallet-sdk'
+
+export default async function () {
+    const sdk = new WalletSDKImpl().configure({
+        logger: console,
+        authFactory: localNetAuthDefault,
+        ledgerFactory: localNetLedgerDefault,
+        tokenStandardFactory: localNetTokenStandardDefault,
+    })
+
+    await sdk.connect()
+    await sdk.tokenStandard!.setTransferFactoryRegistryUrl(
+        localNetStaticConfig.LOCALNET_REGISTRY_API_URL
+    )
+
+    const sender = global.EXISTING_PARTY_1
+    const receiver = global.EXISTING_PARTY_2
+    const instrumentAdminPartyId = global.INSTRUMENT_ADMIN_PARTY
+
+    const [transferCommand, disclosedContracts] =
+        await sdk.tokenStandard!.createTransfer(
+            sender,
+            receiver,
+            '100',
+            {
+                instrumentId: 'Amulet',
+                instrumentAdmin: instrumentAdminPartyId,
+            },
+            [],
+            'memo-ref'
+        )
+}
+```
+
+## UTXO management and locked funds
+
+The default script for creating a transfer above uses automated utxo selection, the automatic being to simply select all utxo’s.
+In a more professional way, you would want to carefully pick which utxo’s you would like to use as input for your transfers, alongside
+you might also want to define a custom expiration time for when the transaction should automatically expire.
+
+```typescript
+import {
+    WalletSDKImpl,
+    localNetAuthDefault,
+    localNetLedgerDefault,
+    localNetStaticConfig,
+    localNetTokenStandardDefault,
+} from '@canton-network/wallet-sdk'
+
+export default async function () {
+    const sdk = new WalletSDKImpl().configure({
+        logger: console,
+        authFactory: localNetAuthDefault,
+        ledgerFactory: localNetLedgerDefault,
+        tokenStandardFactory: localNetTokenStandardDefault,
+    })
+
+    await sdk.connect()
+    await sdk.tokenStandard!.setTransferFactoryRegistryUrl(
+        localNetStaticConfig.LOCALNET_REGISTRY_API_URL
+    )
+
+    const sender = global.EXISTING_PARTY_1
+    const receiver = global.EXISTING_PARTY_2
+    const instrumentAdminPartyId = global.INSTRUMENT_ADMIN_PARTY
+
+    await sdk.setPartyId(sender)
+    const utxos = await sdk.tokenStandard?.listHoldingUtxos(false)
+
+    //let's assume we have 3 utxos of 100,50,25
+    const utxosToUse = utxos!.filter((t) => t.interfaceViewValue.amount != '50') //we filter out the 50, since we want to send 125
+
+    //we only want the recipient to have 1 minute to accept
+    const expireDate = new Date(Date.now() + 60 * 1000)
+    const [transferCommand, disclosedContracts] =
+        await sdk.tokenStandard!.createTransfer(
+            sender,
+            receiver,
+            '125',
+            {
+                instrumentId: 'Amulet',
+                instrumentAdmin: instrumentAdminPartyId,
+            },
+            utxosToUse.map((t) => t.contractId),
+            'memo-ref',
+            expireDate
+        )
+}
+```
+
+if we call sdk.tokenStandard?.listHoldingUtxos(false) then it will show 1 utxo of 50 (then one we excluded).
+
+if we call sdk.tokenStandard?.listHoldingUtxos(true) then it will show all 3 utxos (100 and 25 both will have a lock).
+
+## 2-step transfer vs 1-step transfer
+
+The default behavior for all tokens are a 2-step transfer, this matches how funds are usually transferred in TradFi, however this is
+counter-intuitive in the blockchain world. Canton Coin supports setting up a “Transfer Pre-approval”, this allows a party to designate
+that he wants to auto-accept all incoming transfer, giving a similar behavior of the blockchain world.
+
+```typescript
+import {
+    WalletSDKImpl,
+    localNetAuthDefault,
+    localNetLedgerDefault,
+    localNetStaticConfig,
+    localNetTokenStandardDefault,
+    localValidatorDefault,
+} from '@canton-network/wallet-sdk'
+import { v4 } from 'uuid'
+
+export default async function () {
+    const sdk = new WalletSDKImpl().configure({
+        logger: console,
+        authFactory: localNetAuthDefault,
+        ledgerFactory: localNetLedgerDefault,
+        tokenStandardFactory: localNetTokenStandardDefault,
+        validatorFactory: localValidatorDefault,
+    })
+
+    const myParty = global.EXISTING_PARTY_1
+    const myPrivateKey = global.EXISTING_PARTY_1_KEYS.privateKey
+
+    await sdk.connect()
+    await sdk.setPartyId(myParty)
+    await sdk.tokenStandard!.setTransferFactoryRegistryUrl(
+        localNetStaticConfig.LOCALNET_REGISTRY_API_URL
+    )
+
+    const validatorOperatorParty = await sdk.validator?.getValidatorUser()
+
+    const instrumentAdminPartyId =
+        (await sdk.tokenStandard?.getInstrumentAdmin()) || ''
+
+    await new Promise((res) => setTimeout(res, 5000))
+
+    const transferPreApprovalProposal =
+        await sdk.userLedger?.createTransferPreapprovalCommand(
+            validatorOperatorParty!, //operator party
+            myParty, //party to auto accept for
+            instrumentAdminPartyId //admin of the instrument
+        )
+
+    await sdk.userLedger?.prepareSignAndExecuteTransaction(
+        [transferPreApprovalProposal],
+        myPrivateKey,
+        v4()
+    )
+}
+```
+
+## Accepting or rejecting a 2-step transfer
+
+If no Transfer pre-approval have been set up, then it is required to fetch incoming transfer instructions and consume either the Accept
+or Reject choice, this can be done easily using the Wallet SDK.
+
+```typescript
+import {
+    WalletSDKImpl,
+    localNetAuthDefault,
+    localNetLedgerDefault,
+    localNetStaticConfig,
+    localNetTokenStandardDefault,
+} from '@canton-network/wallet-sdk'
+
+export default async function () {
+    const sdk = new WalletSDKImpl().configure({
+        logger: console,
+        authFactory: localNetAuthDefault,
+        ledgerFactory: localNetLedgerDefault,
+        tokenStandardFactory: localNetTokenStandardDefault,
+    })
+
+    const myParty = global.EXISTING_PARTY_1
+
+    await sdk.connect()
+    await sdk.setPartyId(myParty)
+    await sdk.tokenStandard!.setTransferFactoryRegistryUrl(
+        localNetStaticConfig.LOCALNET_REGISTRY_API_URL
+    )
+
+    //this returns a list of all transfer instructions, you can then accept or reject them
+    const pendingInstructions =
+        await sdk.tokenStandard!.fetchPendingTransferInstructionView()
+}
+```
+
+the above give a list of pending transfer instructions, you can then exercise the accept or reject choice on them:
+
+```typescript
+import {
+    WalletSDKImpl,
+    localNetAuthDefault,
+    localNetLedgerDefault,
+    localNetStaticConfig,
+    localNetTokenStandardDefault,
+    localValidatorDefault,
+} from '@canton-network/wallet-sdk'
+import { v4 } from 'uuid'
+
+export default async function () {
+    const sdk = new WalletSDKImpl().configure({
+        logger: console,
+        authFactory: localNetAuthDefault,
+        ledgerFactory: localNetLedgerDefault,
+        tokenStandardFactory: localNetTokenStandardDefault,
+    })
+
+    const myParty = global.EXISTING_PARTY_2
+    const myPrivateKey = global.EXISTING_PARTY_2_KEYS.privateKey
+    const Reject = true
+
+    await sdk.connect()
+    await sdk.setPartyId(myParty)
+    await sdk.tokenStandard!.setTransferFactoryRegistryUrl(
+        localNetStaticConfig.LOCALNET_REGISTRY_API_URL
+    )
+
+    const myPendingTransaction =
+        await sdk.tokenStandard!.fetchPendingTransferInstructionView()
+    const myPendingTransactionCid = myPendingTransaction[0].contractId
+    if (Reject) {
+        //reject the transaction
+        const [rejectTransferCommand, disclosedContracts] =
+            await sdk.tokenStandard!.exerciseTransferInstructionChoice(
+                myPendingTransactionCid,
+                'Reject'
+            )
+
+        const rejectCommandId =
+            await sdk.userLedger?.prepareSignAndExecuteTransaction(
+                rejectTransferCommand,
+                myPrivateKey,
+                v4(),
+                disclosedContracts
+            )
+    } else {
+        //accept the transaction
+        const [acceptTransferCommand, disclosedContracts] =
+            await sdk.tokenStandard!.exerciseTransferInstructionChoice(
+                myPendingTransactionCid,
+                'Accept'
+            )
+
+        const acceptCommandId =
+            await sdk.userLedger?.prepareSignAndExecuteTransaction(
+                acceptTransferCommand,
+                myPrivateKey,
+                v4(),
+                disclosedContracts
+            )
+    }
+}
+```
+
+## Withdrawing a 2-step transfer before it gets accepted
+
+Apart from accepting or rejecting a transfer instruction, it is also possible for the sender to withdraw the offer, thereby retrieving
+the locked funds.
+
+```typescript
+import {
+    WalletSDKImpl,
+    localNetAuthDefault,
+    localNetLedgerDefault,
+    localNetStaticConfig,
+    localNetTokenStandardDefault,
+    localValidatorDefault,
+} from '@canton-network/wallet-sdk'
+import { v4 } from 'uuid'
+
+export default async function () {
+    const sdk = new WalletSDKImpl().configure({
+        logger: console,
+        authFactory: localNetAuthDefault,
+        ledgerFactory: localNetLedgerDefault,
+        tokenStandardFactory: localNetTokenStandardDefault,
+        validatorFactory: localValidatorDefault,
+    })
+
+    const myParty = global.EXISTING_PARTY_1
+    const myPrivateKey = global.EXISTING_PARTY_1_KEYS.privateKey
+
+    await sdk.connect()
+    await sdk.setPartyId(myParty)
+    sdk.tokenStandard!.setTransferFactoryRegistryUrl(
+        localNetStaticConfig.LOCALNET_REGISTRY_API_URL
+    )
+
+    const myPendingTransaction =
+        await sdk.tokenStandard!.fetchPendingTransferInstructionView()
+    const myPendingTransactionCid = myPendingTransaction[0].contractId
+
+    //withdraw the transaction
+    const [withdrawTransferCommand, disclosedContracts] =
+        await sdk.tokenStandard!.exerciseTransferInstructionChoice(
+            myPendingTransactionCid,
+            'Withdraw'
+        )
+
+    const withdrawCommandId =
+        await sdk.userLedger?.prepareSignAndExecuteTransaction(
+            withdrawTransferCommand,
+            myPrivateKey,
+            v4(),
+            disclosedContracts
+        )
+}
+```
+
+## How do i quickly setup transfer preapproval?
+
+It is worth nothing that using the validator operator party as the providing party causes the transfer pre-approval to auto-renew.
+The below script setup transfer preapproval for Bob and performs a 1-step transfer from Alice to Bob:
+
+```typescript
+import {
+    WalletSDKImpl,
+    localNetAuthDefault,
+    localNetLedgerDefault,
+    localNetTopologyDefault,
+    localNetTokenStandardDefault,
+    createKeyPair,
+    localValidatorDefault,
+    localNetStaticConfig,
+    LedgerController,
+} from '@canton-network/wallet-sdk'
+import { pino } from 'pino'
+import { v4 } from 'uuid'
+
+const logger = pino({ name: '05-external-party-setup', level: 'info' })
+
+// it is important to configure the SDK correctly else you might run into connectivity or authentication issues
+const sdk = new WalletSDKImpl().configure({
+    logger,
+    authFactory: localNetAuthDefault,
+    ledgerFactory: localNetLedgerDefault,
+    topologyFactory: localNetTopologyDefault,
+    tokenStandardFactory: localNetTokenStandardDefault,
+    validatorFactory: localValidatorDefault,
+})
+
+logger.info('SDK initialized')
+
+await sdk.connect()
+logger.info('Connected to ledger')
+
+const keyPairSender = createKeyPair()
+const keyPairReceiver = createKeyPair()
+
+await sdk.connectAdmin()
+await sdk.connectTopology(localNetStaticConfig.LOCALNET_SCAN_PROXY_API_URL)
+
+const sender = await sdk.userLedger?.signAndAllocateExternalParty(
+    keyPairSender.privateKey,
+    'alice'
+)
+logger.info(`Created party: ${sender!.partyId}`)
+await sdk.setPartyId(sender!.partyId)
+
+sender?.topologyTransactions!.map((topologyTx) => {
+    const decodedTx = LedgerController.toDecodedTopologyTransaction(topologyTx)
+    logger.info(decodedTx)
+})
+
+const receiver = await sdk.userLedger?.signAndAllocateExternalParty(
+    keyPairReceiver.privateKey,
+    'bob'
+)
+logger.info(`Created party: ${receiver!.partyId}`)
+
+await sdk.userLedger
+    ?.listWallets()
+    .then((wallets) => {
+        logger.info(wallets, 'Wallets:')
+    })
+    .catch((error) => {
+        logger.error({ error }, 'Error listing wallets')
+    })
+
+sdk.tokenStandard?.setTransferFactoryRegistryUrl(
+    localNetStaticConfig.LOCALNET_REGISTRY_API_URL
+)
+
+await sdk.setPartyId(receiver?.partyId!)
+const validatorOperatorParty = await sdk.validator?.getValidatorUser()
+
+const instrumentAdminPartyId =
+    (await sdk.tokenStandard?.getInstrumentAdmin()) || ''
+
+await new Promise((res) => setTimeout(res, 5000))
+
+logger.info('creating transfer preapproval proposal')
+
+await sdk.setPartyId(validatorOperatorParty!)
+await sdk.tokenStandard?.createAndSubmitTapInternal(
+    validatorOperatorParty!,
+    '20000000',
+    {
+        instrumentId: 'Amulet',
+        instrumentAdmin: instrumentAdminPartyId,
+    }
+)
+
+await sdk.setPartyId(receiver?.partyId!)
+
+const transferPreApprovalProposal =
+    await sdk.userLedger?.createTransferPreapprovalCommand(
+        validatorOperatorParty!,
+        receiver?.partyId!,
+        instrumentAdminPartyId
+    )
+
+await sdk.userLedger?.prepareSignExecuteAndWaitFor(
+    [transferPreApprovalProposal],
+    keyPairReceiver.privateKey,
+    v4()
+)
+
+logger.info('transfer pre approval proposal is created')
+
+await sdk.setPartyId(sender?.partyId!)
+
+const [tapCommand, disclosedContracts] = await sdk.tokenStandard!.createTap(
+    sender!.partyId,
+    '20000000',
+    {
+        instrumentId: 'Amulet',
+        instrumentAdmin: instrumentAdminPartyId,
+    }
+)
+
+await sdk.userLedger?.prepareSignExecuteAndWaitFor(
+    tapCommand,
+    keyPairSender.privateKey,
+    v4(),
+    disclosedContracts
+)
+
+const utxos = await sdk.tokenStandard?.listHoldingUtxos()
+logger.info(utxos, 'List Token Standard Holding UTXOs')
+
+await sdk.tokenStandard
+    ?.listHoldingTransactions()
+    .then((transactions) => {
+        logger.info(transactions, 'Token Standard Holding Transactions:')
+    })
+    .catch((error) => {
+        logger.error(
+            { error },
+            'Error listing token standard holding transactions:'
+        )
+    })
+
+logger.info('Creating transfer transaction')
+
+const [transferCommand, disclosedContracts2] =
+    await sdk.tokenStandard!.createTransfer(
+        sender!.partyId,
+        receiver!.partyId,
+        '100',
+        {
+            instrumentId: 'Amulet',
+            instrumentAdmin: instrumentAdminPartyId,
+        },
+        [],
+        'memo-ref'
+    )
+
+await sdk.userLedger?.prepareSignExecuteAndWaitFor(
+    transferCommand,
+    keyPairSender.privateKey,
+    v4(),
+    disclosedContracts2
+)
+logger.info('Submitted transfer transaction')
+
+await sdk.setPartyId(validatorOperatorParty!)
+
+const validatorFeatureAppRights =
+    await sdk.tokenStandard!.grantFeatureAppRightsForInternalParty()
+
+logger.info(
+    validatorFeatureAppRights,
+    `Featured App Rights for validator ${validatorOperatorParty}`
+)
+
+{
+    await sdk.setPartyId(sender!.partyId)
+    const aliceHoldings = await sdk.tokenStandard?.listHoldingTransactions()
+    logger.info(aliceHoldings, '[ALICE] holding transactions')
+
+    await sdk.setPartyId(receiver!.partyId)
+    const bobHoldings = await sdk.tokenStandard?.listHoldingTransactions()
+    logger.info(bobHoldings, '[BOB] holding transactions')
+    const transferPreApprovalStatus =
+        await sdk.tokenStandard?.getTransferPreApprovalByParty(
+            receiver!.partyId,
+            'Amulet'
+        )
+    logger.info(transferPreApprovalStatus, '[BOB] transfer preapproval status')
+}
+```
+
+## How to renew or cancel a transfer preapproval
+
+If you have used the validator operator party as the provider, then it will automatically renew the transfer preapproval approximately
+20 days before expiry, however there are cases where you would like to perform the preapproval renewal manually:
+
+```typescript
+import {
+    WalletSDKImpl,
+    localNetAuthDefault,
+    localNetLedgerDefault,
+    localNetStaticConfig,
+    localNetTokenStandardDefault,
+} from '@canton-network/wallet-sdk'
+
+export default async function () {
+    const sdk = new WalletSDKImpl().configure({
+        logger: console,
+        authFactory: localNetAuthDefault,
+        ledgerFactory: localNetLedgerDefault,
+        tokenStandardFactory: localNetTokenStandardDefault,
+    })
+
+    const myParty = global.EXISTING_PARTY_WITH_PREAPPROVAL
+    const validatorOperatorParty = global.VALIDATOR_OPERATOR_PARTY
+
+    await sdk.connect()
+    await sdk.setPartyId(myParty)
+    await sdk.tokenStandard!.setTransferFactoryRegistryUrl(
+        localNetStaticConfig.LOCALNET_REGISTRY_API_URL
+    )
+
+    //Fetch the existing preapproval
+    const preapproval =
+        await sdk.tokenStandard!.waitForPreapprovalFromScanProxy(
+            myParty,
+            'Amulet'
+        )
+    const [renewCmd, disclosedContractsRenew] =
+        await sdk.tokenStandard!.createRenewTransferPreapproval(
+            preapproval!.contractId,
+            preapproval!.templateId,
+            validatorOperatorParty!
+        )
+
+    //Sign and execute the above command
+}
+```
+
+You can also deploy a secondary transfer preapproval, however this means that there are simply two preapprovals instead of it replacing
+the existing.
+
+If you have accidentally created a transfer preapproval that you dont want to keep you can perform a cancel instead:
+
+```typescript
+import {
+    WalletSDKImpl,
+    localNetAuthDefault,
+    localNetLedgerDefault,
+    localNetStaticConfig,
+    localNetTokenStandardDefault,
+    localValidatorDefault,
+} from '@canton-network/wallet-sdk'
+import { v4 } from 'uuid'
+
+export default async function () {
+    const sdk = new WalletSDKImpl().configure({
+        logger: console,
+        authFactory: localNetAuthDefault,
+        ledgerFactory: localNetLedgerDefault,
+        tokenStandardFactory: localNetTokenStandardDefault,
+        validatorFactory: localValidatorDefault,
+    })
+
+    const myParty = global.EXISTING_PARTY_WITH_PREAPPROVAL
+
+    await sdk.connect()
+    await sdk.setPartyId(myParty)
+    await sdk.tokenStandard!.setTransferFactoryRegistryUrl(
+        localNetStaticConfig.LOCALNET_REGISTRY_API_URL
+    )
+
+    const validatorOperatorParty = await sdk.validator!.getValidatorUser()
+
+    const preapproval =
+        await sdk.tokenStandard!.waitForPreapprovalFromScanProxy(
+            myParty,
+            'Amulet'
+        )
+    const [renewCmd, disclosedContractsRenew] =
+        await sdk.tokenStandard!.createCancelTransferPreapproval(
+            preapproval!.contractId,
+            preapproval!.templateId,
+            validatorOperatorParty!
+        )
+
+    //Sign and execute the above command
+}
+```

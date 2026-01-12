@@ -1,0 +1,908 @@
+<!-- source: splice-wallet-kernel / splice-wallet-kernel/devnet/src/preparing-and-signing-transactions/index.rst -->
+
+# Preparing and Signing Transactions Using External Party
+
+<!-- TODO figure out what trust assumptions should be aboue -->
+<!-- trust assumptions -->
+<!-- ----------------- -->
+
+## High-level Signing Process
+
+The basic steps of preparing and signing a transaction using an external party are as follows:
+
+1. **Creating a command** - You start by simply creating a command.
+2. **Preparing the transaction** - You send the command to the blockchain RPC, offered by your node, to prepare the transaction.
+3. **Validating the transaction** - You inspect the transaction and decide whether to sign it.
+4. **Signing the transaction** - Once validated, you sign the transaction hash using your private key (typically with ECDSA/EdDSA).
+5. **Submitting the transaction** - You submit the signed transaction to be executed.
+6. **Observing the transaction** - You observe the blockchain until the transaction is committed.
+
+In the examples below, the SDK examples use the Pint app which comes pre-installed with the validator
+and the cURL examples show the underlying HTTP requests using Canton Coin following a token standard transfer.
+
+## How do I quickly execute a Ping?
+
+Below shows how to quickly execute a ping command against yourself on a running Splice LocalNet:
+
+```typescript
+import {
+    WalletSDKImpl,
+    localNetAuthDefault,
+    localNetLedgerDefault,
+    localNetTopologyDefault,
+    createKeyPair,
+    localNetStaticConfig,
+} from '@canton-network/wallet-sdk'
+import { v4 } from 'uuid'
+import { pino } from 'pino'
+
+const logger = pino({ name: '03-ping-localnet', level: 'info' })
+
+// it is important to configure the SDK correctly else you might run into connectivity or authentication issues
+const sdk = new WalletSDKImpl().configure({
+    logger: logger,
+    authFactory: localNetAuthDefault,
+    ledgerFactory: localNetLedgerDefault,
+    topologyFactory: localNetTopologyDefault,
+})
+
+logger.info('SDK initialized')
+
+await sdk.connect()
+logger.info('Connected to ledger')
+
+const wallets = await sdk.userLedger?.listWallets()
+
+logger.info(wallets, 'user Wallets')
+
+const keyPair = createKeyPair()
+await sdk.connectTopology(localNetStaticConfig.LOCALNET_SCAN_PROXY_API_URL)
+
+logger.info('generated keypair')
+const allocatedParty = await sdk.userLedger?.signAndAllocateExternalParty(
+    keyPair.privateKey
+)
+await sdk.setPartyId(allocatedParty!.partyId)
+
+logger.info('Create ping command')
+const createPingCommand = sdk.userLedger?.createPingCommand(
+    allocatedParty!.partyId!
+)
+
+logger.info('Prepare command submission for ping create command')
+const prepareResponse = await sdk.userLedger?.prepareSignExecuteAndWaitFor(
+    createPingCommand,
+    keyPair.privateKey,
+    v4()
+)
+```
+
+## Creating a Command
+
+Commands are the intents of an user on the validator, there are two kinds of commands: `CreateCommand` and `ExerciseCommand`.
+
+The `CreateCommand` is used to create a new implementation of a template with the given arguments and can result in one or more
+new contracts being created. The `ExerciseCommand` takes an existing contract and exercises a choice on it, which also can
+result in new contracts being created.
+
+In the Canton Network, it is often necessary to need to include input data when creating commands which needs to be read from the ledger.
+For example, which UTXOs to include in a transfer.
+This is private data which you read from your own node.
+It’s also often necessary to include contextual information in a transfer.
+For example, information about a particular asset which you don’t get from your own node - you get from an API provided by the asset issuer.
+See here <https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0056/cip-0056.md> for more information.
+
+The general process for forming a transaction is:
+
+1. Call your own node’s RPC to get the current ledger end (think “latest block”)
+2. Call your own node’s RPC to get relevant private data at ledger end (e.g. wallet’s holdings)
+3. Call app/token specific APIs to get context information (e.g. mining round contracts)
+4. Assemble the data into the full command using the OpenAPI/JSON or gRPC schemas.
+
+In the examples below, the SDK example uses the Token Standards inside the a validator to create a simple transfer command.
+The transfer command is sent to a recipient party who can then exercise accept or reject on the created contract (thereby archiving it).
+In the cURL example, we show the steps above gaining information from a validator and context information from the Canton Coin scan API.
+
+The Wallet SDK allow us to build such a command easily:
+
+<!-- Often commands need input data that you need to read from the ledger. E.g.:
+Which holding UTXOs to use in a transfer.
+Context information about the current mining round.
+Some of this - private data - you get from your own node, some of it from other nodes.
+
+So the general process is: -->
+
+SDK
+
+```typescript
+import {
+    WalletSDKImpl,
+    localNetAuthDefault,
+    localNetLedgerDefault,
+    localNetStaticConfig,
+    localNetTokenStandardDefault,
+} from '@canton-network/wallet-sdk'
+
+export default async function () {
+    const sdk = new WalletSDKImpl().configure({
+        logger: console,
+        authFactory: localNetAuthDefault,
+        ledgerFactory: localNetLedgerDefault,
+        tokenStandardFactory: localNetTokenStandardDefault,
+    })
+
+    await sdk.connect()
+    await sdk.tokenStandard!.setTransferFactoryRegistryUrl(
+        localNetStaticConfig.LOCALNET_REGISTRY_API_URL
+    )
+
+    const sender = global.EXISTING_PARTY_1
+    const receiver = global.EXISTING_PARTY_2
+    const instrumentAdminPartyId = global.INSTRUMENT_ADMIN_PARTY
+
+    const [transferCommand, disclosedContracts] =
+        await sdk.tokenStandard!.createTransfer(
+            sender,
+            receiver,
+            '100',
+            {
+                instrumentId: 'Amulet',
+                instrumentAdmin: instrumentAdminPartyId,
+            },
+            [],
+            'memo-ref'
+        )
+}
+```
+
+cURL
+
+```bash
+# In the examples below, replace the following with your own values: "YOUR_NODE_JSON_API", "OFFSET_FROM_1", "WALLET_ID", "YOUR_CHOICE_OF_INPUT_CIDs",
+# "SENDER_PARTY_ID", "RECEIVER_PARTY_ID"
+
+# 1. Call your own node’s RPC to get the latest offset / ledger end
+curl -X GET http://YOUR_NODE_JSON_API/v2/state/ledger-end
+
+# 2. Get the contract ID of an active Amulet contract via
+curl -X POST http://YOUR_NODE_JSON_API/v2/state/active-contracts -d 
+'{  "verbose" : true, 
+    "activeAtOffset": OFFSET_FROM_1, 
+    "filter" : {
+        "filtersByParty" : {
+            "WALLET_ID" : {
+                "cumulative":  
+                    [{"identifierFilter": {
+                        "InterfaceFilter": {
+                            "value": {
+                                "includeInterfaceView":true,
+                                "includeCreatedEventBlob": false, 
+                                "interfaceId": "#splice-api-token-holding-v1:Splice.Api.Token.HoldingV1:Holding"}}}}]}}}}'
+
+# 3. Get context information for Canton Coin
+    #3. a) the Registry admin party id:
+curl -X GET https://scan.sv-1.global.canton.network.sync.global/registry/metadata/v1/info
+# Example output:
+# {"adminId":"DSO::1220b143…","supportedApis":{"splice-api-token-metadata-v1":1}}
+
+    # 3. b) the instrument ID:
+curl -X GET https://scan.sv-1.global.canton.network.sync.global/registry/metadata/v1/instruments
+# Example output:
+# "instrumentId" : {
+#   "admin" : "DSO::1220b1431ef217342db44d516bb9befde802be7d8899637d290895fa58880f19accc",
+#   "id" : "Amulet"}
+
+    # 3. c) Get the TransferFactory and context from the asset admin:
+curl -X POST -H "Content-Type: application/json" https://scan.sv-1.dev.global.canton.network.sync.global/registry/transfer-instruction/v1/transfer-factory -d '{
+"choiceArguments" : {
+  "expectedAdmin" : "DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
+  "transfer" : {
+    "sender" : "SENDER_PARTY_ID",
+    "receiver" : "RECEIVER_PARTY_ID",
+    "amount" : "1000.0",
+    "instrumentId" : {
+      "admin" : "DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
+      "id" : "Amulet"
+    },
+    "requestedAt" : "2025-07-11T12:45:00Z",
+    "executeBefore" : "2025-07-12T12:45:00Z",
+    "inputHoldingCids" : [
+      "YOUR_CHOICE_OF_INPUT_CIDs"
+    ],
+    "meta" : { "values" : {} }
+  },
+  "extraArgs" : {
+    "context": { "values" : {} },
+    "meta" : { "values" : {} }
+  }
+    }
+  }'
+# Example output:
+# {
+#   "factoryId": "009f00e5bf0…", – ContractId of the transferfactory to use
+#   "transferKind": "direct", – type of transfer - see pre-approvals for more information
+#   "choiceContext": { … }, – data to stick in the extra arguments
+#   "disclosedContracts": [ … ] – any admin-private contracts on chain needed for preparation
+# }
+
+
+
+# 4. The information obtained can be used to construct the transfer and transaction in the prepare step:
+#
+# Transfer:
+#   "transfer" : {
+#     "sender" : "SENDER_PARTY_ID",
+#     "receiver" : "RECEIVER_PARTY_ID",
+#     "amount" : "1000.0",
+#     "instrumentId" : {
+#       "admin" : "DSO::1220b1431ef217342db44d516bb9befde802be7d8899637d290895fa58880f19accc",
+#       "id" : "Amulet"
+#     },
+#     "requestedAt" : "2025-08-11T12:45:00Z",
+#     "executeBefore" : "2025-08-12T12:45:00Z",
+#     "inputHoldingCids" : [
+#   "YOUR_CHOICE_OF_INPUT_CIDs"
+#     ],
+#     "meta" : { "values" : {} }
+#   }
+```
+
+## Preparing the Transaction
+
+Now that we have a command we need to prepare the transaction by calling a node’s RPC API which will return an unsigned transaction.
+It must be a validator which hosts the party initiating the transaction as private information is needed to construct the transaction.
+This is unlike other chains where you construct the transaction fully offline using an SDK.
+A transaction is a collection of commands that are atomic, meaning that either all commands succeed or none of them do.
+
+Note: contractId’s are pinned as part of prepare step, the execution of the transfer will only go succeed if the contractId’s haven’t been archived between preparation and execution steps.
+
+To prepare a transaction we need to send the commands to the ledger.
+
+SDK
+
+```typescript
+import {
+    WalletSDKImpl,
+    localNetAuthDefault,
+    localNetLedgerDefault,
+    localNetStaticConfig,
+    localNetTokenStandardDefault,
+} from '@canton-network/wallet-sdk'
+import { v4 } from 'uuid'
+
+export default async function () {
+    const sdk = new WalletSDKImpl().configure({
+        logger: console,
+        authFactory: localNetAuthDefault,
+        ledgerFactory: localNetLedgerDefault,
+        tokenStandardFactory: localNetTokenStandardDefault,
+    })
+
+    const sender = global.EXISTING_PARTY_1
+    const receiver = global.EXISTING_PARTY_2
+    const instrumentAdminPartyId = global.INSTRUMENT_ADMIN_PARTY
+
+    await sdk.connect()
+    await sdk.setPartyId(sender)
+    await sdk.tokenStandard!.setTransferFactoryRegistryUrl(
+        localNetStaticConfig.LOCALNET_REGISTRY_API_URL
+    )
+
+    const [transferCommand, disclosedContracts] =
+        await sdk.tokenStandard!.createTransfer(
+            sender,
+            receiver,
+            '100',
+            {
+                instrumentId: 'Amulet',
+                instrumentAdmin: instrumentAdminPartyId,
+            },
+            [],
+            'memo-ref'
+        )
+
+    const transaction = await sdk.userLedger?.prepareSubmission(
+        transferCommand, //the prepared ping command
+        v4(), //a unique deduplication id for this transaction
+        disclosedContracts //contracts that needs to be disclosed in our to execute the command
+    )
+}
+```
+
+cURL
+
+```bash
+# In the example below, replace the values with your own
+
+# PrepareTransaction call with all the inputs gathered.
+ curl -X POST http://YOUR_NODE_JSON_API/v2/interactive-submission/prepare -d {
+    "userId" : "USER_ID",
+    "commandId" : "curl-transfer-test",
+    "actAs" : ["SENDER_PARTY_ID"],
+    "readAs" : [],
+    "synchronizerId": "global-domain::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
+    "verboseHashing": false,
+    "packageIdSelectionPreference" : [],
+    "commands" : [ {
+      "ExerciseCommand" : {
+        "templateId" : "#splice-api-token-transfer-instruction-v1:Splice.Api.Token.TransferInstructionV1:TransferFactory",
+        "contractId" : "009f00e5bf0…",
+        "choice" : "TransferFactory_Transfer",
+        "choiceArgument" : { 
+          ... ,
+          "extraArgs" : {
+            "context": { ... },
+            ...
+          }
+        }
+      }
+    } ],
+    "disclosedContracts" : [ … ]
+  }
+```
+
+The return type is an unsigned transaction if the combination of the commands are possible, otherwise an error is returned. The transaction can then be visualised and signed by the party.
+
+## Validating the Transaction
+
+The result from the prepare step is an encoded protobuf message and easily decoded and inspected to go through a policy engine, for example.
+The transaction is returned alongside with the hash that needs to be signed. If the validator is not controlled by you, then it might
+be a good idea to validate that the transaction is what you expect it to be. You can use the Wallet SDK to visualize the transaction
+as described in the [Visualizing a transaction section](../finding-and-reading-data/index.md#visualizing-a-transaction).
+
+On top of visualizing the transaction, it’s also important to compute the transaction hash yourself and confirm that it matches the hash of the transaction provided by the validator from the prepare step.
+
+<!-- TODO: Add the alternative method for this step and those below -->
+
+The hash can be computed using the Wallet SDK:
+
+```typescript
+import { TopologyController } from '@canton-network/wallet-sdk'
+
+export default async function () {
+    const transaction = global.PREPARED_TRANSACTION
+
+    TopologyController.createTransactionHash(transaction.preparedTransaction!)
+}
+```
+
+You can then compare the hash with the transaction.preparedTransactionHash to ensure they match.
+
+## Signing the Transaction
+
+Once the transaction is validated, the hash retrieved from the prepare step can be signed using the private key of the party.
+
+Below shows an example in the Wallet SDK and using cURL commands:
+
+SDK
+
+```typescript
+import {
+    createKeyPair,
+    localNetAuthDefault,
+    localNetLedgerDefault,
+    localNetStaticConfig,
+    signTransactionHash,
+    WalletSDKImpl,
+} from '@canton-network/wallet-sdk'
+
+export default async function () {
+    const keys = createKeyPair()
+    const transaction = EXISTING_TOPOLOGY
+
+    signTransactionHash(transaction.multiHash, keys.privateKey)
+}
+```
+
+cURL
+
+```bash
+# In this example the hash is signed using openssl and "PREPARE_TRANSACTION_RESPONSE.json" is the JSON output from the prepare 
+# transaction step is here. "PRIVATE_KEY_FILE" should be the private key of the namespace of the external party. For more information
+# on the openssl commands to generate the key see here: https://docs.digitalasset.com/build/3.3/tutorials/app-dev/external_signing_topology_transaction.html#signing-keys
+
+TRANSACTION_HASH=$(cat create_ping_prepare_response.json | jq -r .prepared_transaction_hash)
+PREPARED_TRANSACTION=$(cat create_ping_prepare_response.json | jq -r .prepared_transaction)
+SIGNATURE=$(echo -n "$TRANSACTION_HASH" | base64 --decode | openssl pkeyutl -rawin -inkey "PRIVATE_KEY_FILE" -keyform DER -sign | openssl base64 -e -A)
+```
+
+## Submitting the Transaction
+
+Once the transaction is signed, it can be executed on the validator.
+You can observe completions by seeing the committed transactions.
+If they don’t appear on your ledger, you are guaranteed some response, and you can keep retrying; signed transactions are idempotent.
+Finality usually takes 3-10s.
+
+SDK
+
+```typescript
+import {
+    localNetAuthDefault,
+    localNetLedgerDefault,
+    signTransactionHash,
+    WalletSDKImpl,
+} from '@canton-network/wallet-sdk'
+import { v4 } from 'uuid'
+
+export default async function () {
+    const sdk = new WalletSDKImpl().configure({
+        logger: console,
+        authFactory: localNetAuthDefault,
+        ledgerFactory: localNetLedgerDefault,
+    })
+
+    const myParty = global.EXISTING_PARTY_1
+    const transaction = global.PREPARED_TRANSACTION
+    const keys = global.EXISTING_PARTY_1_KEYS
+
+    await sdk.connect()
+    await sdk.setPartyId(myParty)
+
+    const signature = signTransactionHash(
+        transaction.preparedTransactionHash,
+        keys.privateKey
+    )
+
+    await sdk.userLedger!.executeSubmission(
+        transaction,
+        signature,
+        keys.publicKey,
+        v4()
+    )
+}
+```
+
+cURL
+
+```bash
+curl http://localhost:7575/v2/interactive-submission/execute -d {
+    "preparedTransaction": "$PREPARED_TRANSACTION",
+    "hashingSchemeVersion": "HASHING_SCHEME_VERSION_V2",
+    "userId": "USER_ID",
+    "submissionId": "51dd5a0e-2ab6-4ca4-aa9d-9333fb603eb0",
+    "deduplicationPeriod": {
+        "Empty": {}
+    },
+    "partySignatures": {
+        "signatures": [
+            {
+                "party": "PARTY_ID",
+                "signatures": [
+                {
+                    "format": "SIGNATURE_FORMAT_CONCAT",
+                    "signature": "$SIGNATURE",
+                    "signingAlgorithmSpec": "SIGNING_ALGORITHM_SPEC_EC_DSA_SHA_256",
+                    "signedBy": "FINGERPRINT"
+                }
+                ]
+            }
+        ]
+    }
+}
+```
+
+## Observing the Transaction
+
+There are two ways to observe the transaction you have submitted. You can either:
+
+1. continuously monitor holdings changes using [token standard history parser](../token-standard/index.md#list-holding-transactions).
+2. use WaitFor to get the updateId and retrieve the transaction:
+
+```typescript
+import {
+    WalletSDKImpl,
+    localNetAuthDefault,
+    localNetLedgerDefault,
+    localNetStaticConfig,
+    localNetTokenStandardDefault,
+} from '@canton-network/wallet-sdk'
+import { v4 } from 'uuid'
+
+export default async function () {
+    const sdk = new WalletSDKImpl().configure({
+        logger: console,
+        authFactory: localNetAuthDefault,
+        ledgerFactory: localNetLedgerDefault,
+        tokenStandardFactory: localNetTokenStandardDefault,
+    })
+
+    const sender = global.EXISTING_PARTY_1
+    const senderKey = global.EXISTING_PARTY_1_KEYS.privateKey
+    const instrumentAdminPartyId = global.INSTRUMENT_ADMIN_PARTY
+
+    const receiver = global.EXISTING_PARTY_2
+
+    await sdk.connect()
+    await sdk.setPartyId(sender)
+    await sdk.tokenStandard!.setTransferFactoryRegistryUrl(
+        localNetStaticConfig.LOCALNET_REGISTRY_API_URL
+    )
+
+    const [transferCommand, disclosedContracts2] =
+        await sdk.tokenStandard!.createTransfer(
+            sender,
+            receiver,
+            '100',
+            {
+                instrumentId: 'Amulet',
+                instrumentAdmin: instrumentAdminPartyId,
+            },
+            [],
+            'memo-ref'
+        )
+
+    //we use the AndWaitFor to get a completion result
+    const completionResult = await sdk.userLedger?.prepareSignExecuteAndWaitFor(
+        transferCommand,
+        senderKey,
+        v4(),
+        disclosedContracts2
+    )
+
+    const transaction = await sdk.tokenStandard!.getTransactionById(
+        completionResult!.updateId
+    )
+}
+```
+
+## How to use the SDK to Offline sign a Transaction
+
+The SDK exposes functionality that can be used in an offline environment to sign and validate transactions the below script shows an entire
+interaction between Alice and Bob with signing happening in an offline environment and online environment that performs the prepare and
+submit.
+
+```typescript
+import {
+    WalletSDKImpl,
+    localNetAuthDefault,
+    localNetLedgerDefault,
+    localNetTopologyDefault,
+    localNetTokenStandardDefault,
+    createKeyPair,
+    localNetStaticConfig,
+    signTransactionHash,
+    TopologyController,
+} from '@canton-network/wallet-sdk'
+import { pino } from 'pino'
+import { v4 } from 'uuid'
+
+const onlineLogger = pino({ name: '08-online-localnet', level: 'info' })
+const offlineLogger = pino({ name: '08-offline-localnet', level: 'info' })
+// it is important to configure the SDK correctly else you might run into connectivity or authentication issues
+const onlineSDK = new WalletSDKImpl().configure({
+    logger: onlineLogger,
+    authFactory: localNetAuthDefault,
+    ledgerFactory: localNetLedgerDefault,
+    topologyFactory: localNetTopologyDefault,
+    tokenStandardFactory: localNetTokenStandardDefault,
+})
+
+onlineLogger.info(
+    '===================== CONNECTING ONLINE SDK ====================='
+)
+
+await onlineSDK.connect()
+onlineLogger.info('Connected to ledger')
+await onlineSDK.connectAdmin()
+onlineLogger.info('Connected as admin')
+await onlineSDK.connectTopology(
+    localNetStaticConfig.LOCALNET_SCAN_PROXY_API_URL
+)
+onlineLogger.info(
+    `Connected to topology: ${localNetStaticConfig.LOCALNET_SCAN_PROXY_API_URL}`
+)
+onlineSDK.tokenStandard?.setTransferFactoryRegistryUrl(
+    localNetStaticConfig.LOCALNET_REGISTRY_API_URL
+)
+onlineLogger.info(
+    `defined registry url: ${localNetStaticConfig.LOCALNET_REGISTRY_API_URL}`
+)
+
+//this can go to fast, so sleep to make logging clearer
+await new Promise((resolve) => setTimeout(resolve, 100))
+offlineLogger.info(
+    '===================== OFFLINE KEY GENERATION ====================='
+)
+
+const keyPairSender = createKeyPair()
+offlineLogger.info(
+    `Created sender key pair with public key: ${keyPairSender.publicKey}`
+)
+const keyPairReceiver = createKeyPair()
+offlineLogger.info(
+    `Created receiver key pair with public key: ${keyPairReceiver.publicKey}`
+)
+
+//this can go to fast, so sleep to make logging clearer
+await new Promise((resolve) => setTimeout(resolve, 100))
+onlineLogger.info(
+    '===================== PREPARING ONBOARDING ====================='
+)
+
+const senderPrepared = await onlineSDK.userLedger?.generateExternalParty(
+    keyPairSender.publicKey,
+    'alice'
+)
+
+if (!senderPrepared) {
+    throw new Error('Failed to prepare sender onboarding')
+}
+
+onlineLogger.info(
+    `Prepared sender onboarding with multi hash: ${senderPrepared!.multiHash}`
+)
+const receiverPrepared = await onlineSDK.userLedger?.generateExternalParty(
+    keyPairReceiver.publicKey,
+    'bob'
+)
+
+if (!receiverPrepared) {
+    throw new Error('Failed to prepare receiver onboarding')
+}
+
+onlineLogger.info(
+    `Prepared receiver onboarding with multi hash: ${receiverPrepared!.multiHash}`
+)
+
+//this can go to fast, so sleep to make logging clearer
+await new Promise((resolve) => setTimeout(resolve, 100))
+offlineLogger.info(
+    '===================== OFFLINE ONBOARDING SIGNING ====================='
+)
+
+const recomputedSenderHash = await TopologyController.computeTopologyTxHash(
+    senderPrepared.topologyTransactions!
+)
+
+if (recomputedSenderHash !== senderPrepared.multiHash) {
+    throw new Error(
+        'Recomputed sender hash does not match prepared combined hash'
+    )
+}
+
+const senderSigned = signTransactionHash(
+    senderPrepared.multiHash,
+    keyPairSender.privateKey
+)
+offlineLogger.info(`Signed sender onboarding hash: ${senderSigned}`)
+
+const recomputedReceiverHash = await TopologyController.computeTopologyTxHash(
+    receiverPrepared.topologyTransactions!
+)
+
+if (recomputedReceiverHash !== receiverPrepared.multiHash) {
+    throw new Error(
+        'Recomputed receiver hash does not match prepared multi hash'
+    )
+}
+
+const receiverSigned = signTransactionHash(
+    receiverPrepared.multiHash,
+    keyPairReceiver.privateKey
+)
+offlineLogger.info(`Signed receiver onboarding hash: ${receiverSigned}`)
+
+//this can go to fast, so sleep to make logging clearer
+await new Promise((resolve) => setTimeout(resolve, 100))
+onlineLogger.info(
+    '===================== SUBMITTING ONBOARDING ====================='
+)
+
+const senderParty = await onlineSDK.userLedger?.allocateExternalParty(
+    senderSigned,
+    senderPrepared
+)
+
+onlineLogger.info(`created sender: ${senderParty!.partyId}`)
+
+const receiverParty = await onlineSDK.userLedger?.allocateExternalParty(
+    receiverSigned,
+    receiverPrepared
+)
+
+onlineLogger.info(`created receiver: ${receiverParty!.partyId}`)
+
+//this can go to fast, so sleep to make logging clearer
+await new Promise((resolve) => setTimeout(resolve, 100))
+onlineLogger.info(
+    '===================== SENDER TAP (PREPARE) ====================='
+)
+await onlineSDK.setPartyId(senderParty!.partyId)
+
+const instrumentAdminPartyId =
+    (await onlineSDK.tokenStandard?.getInstrumentAdmin()) || ''
+
+const [tapCommand, disclosedContracts] =
+    await onlineSDK.tokenStandard!.createTap(senderParty!.partyId, '2000000', {
+        instrumentId: 'Amulet',
+        instrumentAdmin: instrumentAdminPartyId,
+    })
+
+const preparedTap = await onlineSDK.userLedger?.prepareSubmission(
+    tapCommand,
+    v4(),
+    disclosedContracts
+)
+
+onlineLogger.info(
+    `Prepared tap with hash: ${preparedTap!.preparedTransactionHash}`
+)
+
+//this can go to fast, so sleep to make logging clearer
+await new Promise((resolve) => setTimeout(resolve, 100))
+offlineLogger.info(
+    '===================== OFFLINE TAP SIGNING ====================='
+)
+
+const recomputedTapHash = await TopologyController.createTransactionHash(
+    preparedTap!.preparedTransaction!
+)
+
+if (recomputedTapHash !== preparedTap!.preparedTransactionHash) {
+    throw new Error('Recomputed tap hash does not match prepared tap hash')
+}
+
+const signedTapHash = signTransactionHash(
+    preparedTap!.preparedTransactionHash!,
+    keyPairSender.privateKey
+)
+offlineLogger.info(`Signed tap hash: ${signedTapHash}`)
+
+//this can go to fast, so sleep to make logging clearer
+await new Promise((resolve) => setTimeout(resolve, 100))
+onlineLogger.info('===================== SUBMITTING TAP =====================')
+
+await onlineSDK.userLedger?.executeSubmissionAndWaitFor(
+    preparedTap!,
+    signedTapHash,
+    keyPairSender.publicKey,
+    v4()
+)
+
+onlineLogger.info('Tap completed')
+
+//this can go to fast, so sleep to make logging clearer
+await new Promise((resolve) => setTimeout(resolve, 100))
+onlineLogger.info(
+    '===================== SENDER TRANSFER (PREPARE) ====================='
+)
+
+const [transferCommand, disclosedContracts2] =
+    await onlineSDK.tokenStandard!.createTransfer(
+        senderParty!.partyId,
+        receiverParty!.partyId,
+        '100',
+        {
+            instrumentId: 'Amulet',
+            instrumentAdmin: instrumentAdminPartyId,
+        },
+        [],
+        'memo-ref'
+    )
+
+const preparedTransfer = await onlineSDK.userLedger?.prepareSubmission(
+    transferCommand,
+    v4(),
+    disclosedContracts2
+)
+
+onlineLogger.info(
+    `Prepared transfer with hash: ${preparedTransfer!.preparedTransactionHash}`
+)
+
+//this can go to fast, so sleep to make logging clearer
+await new Promise((resolve) => setTimeout(resolve, 100))
+offlineLogger.info(
+    '===================== OFFLINE TRANSFER SIGNING ====================='
+)
+
+const recomputedTransactionHash =
+    await TopologyController.createTransactionHash(
+        preparedTransfer!.preparedTransaction!
+    )
+
+if (recomputedTransactionHash !== preparedTransfer!.preparedTransactionHash) {
+    throw new Error(
+        'Recomputed transfer hash does not match prepared transfer hash'
+    )
+}
+
+const signedTransferHash = signTransactionHash(
+    preparedTransfer!.preparedTransactionHash!,
+    keyPairSender.privateKey
+)
+
+offlineLogger.info(`Signed transfer hash: ${signedTransferHash}`)
+
+//this can go to fast, so sleep to make logging clearer
+await new Promise((resolve) => setTimeout(resolve, 100))
+onlineLogger.info(
+    '====================== SUBMITTING TRANSFER ====================='
+)
+
+await onlineSDK.userLedger?.executeSubmissionAndWaitFor(
+    preparedTransfer!,
+    signedTransferHash,
+    keyPairSender.publicKey,
+    v4()
+)
+
+onlineLogger.info('Transfer submitted')
+
+//this can go to fast, so sleep to make logging clearer
+await new Promise((resolve) => setTimeout(resolve, 100))
+onlineLogger.info(
+    '===================== ACCEPT TRANSFER (PREPARE) ====================='
+)
+await onlineSDK.setPartyId(receiverParty!.partyId)
+
+const pendingOffers =
+    await onlineSDK.tokenStandard?.fetchPendingTransferInstructionView()
+
+if (pendingOffers?.length !== 1) {
+    throw new Error(
+        `Expected exactly one pending transfer instruction, but found ${pendingOffers?.length}`
+    )
+}
+
+onlineLogger.info(`Found pending offer: ${pendingOffers[0].contractId}`)
+
+const pendingOffer = pendingOffers[0]
+const [acceptTransferCommand, disclosedContracts3] =
+    await onlineSDK.tokenStandard!.exerciseTransferInstructionChoice(
+        pendingOffer.contractId,
+        'Accept'
+    )
+
+const preparedAccept = await onlineSDK.userLedger?.prepareSubmission(
+    acceptTransferCommand,
+    v4(),
+    disclosedContracts3
+)
+
+onlineLogger.info(
+    `Prepared accept with hash: ${preparedAccept!.preparedTransactionHash}`
+)
+
+//this can go to fast, so sleep to make logging clearer
+await new Promise((resolve) => setTimeout(resolve, 100))
+offlineLogger.info(
+    '===================== OFFLINE ACCEPT SIGNING ====================='
+)
+
+const recomputedAcceptHash = await TopologyController.createTransactionHash(
+    preparedAccept!.preparedTransaction!
+)
+
+if (recomputedAcceptHash !== preparedAccept!.preparedTransactionHash) {
+    throw new Error(
+        'Recomputed accept hash does not match prepared accept hash'
+    )
+}
+
+const signedAcceptHash = signTransactionHash(
+    preparedAccept!.preparedTransactionHash!,
+    keyPairReceiver.privateKey
+)
+
+offlineLogger.info(`Signed accept hash: ${signedAcceptHash}`)
+
+//this can go to fast, so sleep to make logging clearer
+await new Promise((resolve) => setTimeout(resolve, 100))
+onlineLogger.info(
+    '===================== SUBMITTING ACCEPT ====================='
+)
+
+await onlineSDK.userLedger?.executeSubmissionAndWaitFor(
+    preparedAccept!,
+    signedAcceptHash,
+    keyPairReceiver.publicKey,
+    v4()
+)
+
+onlineLogger.info('Accepted transfer instruction')
+```
+
+<!-- Link to this afterwards - https://docs.digitalasset.com/operate/3.3/howtos/troubleshoot/troubleshooting_guide.html#key-knowledge -->
+<!-- TODO showcase exercise of the pong choice -->
+<!-- TODO Observe the transaction until it is committed -->

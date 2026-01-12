@@ -1,0 +1,71 @@
+<!-- source: canton / canton/3.4/synchronizer/howtos/decommission/index.rst -->
+<!-- Copyright (c) 2025 Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved. -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
+#### NOTE
+This page is a work in progress. It may contain incomplete or incorrect information.
+
+<a id="synchronizer-decommissioning-nodes"></a>
+
+# Decommissioning Canton nodes and Synchronizer entities
+
+This guide assumes general familiarity with Canton, in particular Canton identity management concepts
+and operations from the Canton console.
+
+Note that, while onboarding new nodes is always possible,
+**a decommissioned node or entity is effectively disposed of and cannot rejoin a synchronizer**.
+**Decommissioning is thus an irreversible operation**.
+
+In addition, **decommissioning procedures are currently experimental**; regardless, **backing up nodes to be decommissioned
+before decommissioning them is strongly recommended**.
+
+<a id="decommissioning-sequencers"></a>
+
+## Decommissioning a Sequencer
+
+Sequencers are part of a synchronizer’s messaging infrastructure and do not store application contracts,
+so they are disposable as long as precautions are taken to avoid disrupting the synchronization services.
+This means, concretely, ensuring that:
+
+1. No active participant nor active mediator is connected to the sequencer to be decommissioned.
+2. All active participants and mediators are connected to an active sequencer.
+
+After that, the sequencer can be decommissioned by removing it from the synchronizer’s topology and finally disposed of.
+
+### Disconnecting all nodes from the sequencer to be decommissioned
+
+* Change the sequencer connection on the mediators connected to the sequencer to be decommissioned
+  to use another active sequencer, as per [mediator connectivity](../operate/connectivity.md#mediator-connectivity):
+
+* Reconnect participants to the Synchronizer, as described in Synchronizer connectivity, using a sequencer connection
+  to another active sequencer:
+
+### Decommissioning the sequencer
+
+Sequencers are part of the synchronizer by virtue of having their node ID equal to the synchronizer id,
+which also means they all have the same node ID. Since a sequencer’s identity is the same as the synchronizer’s identity,
+you should leave identity and namespace mappings intact.
+
+However, a sequencer may use its own cryptographic material distinct from other sequencers.
+In that case, owner-to-key mappings must be removed for the keys it exclusively owns:
+
+1. Find the keys on the sequencer to be decommissioned using the keys.secret.list command.
+2. Among those keys, find the ones not shared by other sequencers. You can do this by issuing the keys.secret.list command
+   on each of them: the fingerprints that appear only on the sequencer node to be decommissioned
+   correspond to its exclusively-owned keys.
+
+Finally, the cryptographic material exclusively owned by a decommissioned sequencer must also be disposed of:
+
+- If it was stored only on the decommissioned sequencer, it must be disposed of together with the decommissioned
+  sequencer node.
+- However, if a decommissioned sequencer’s cryptographic material is managed via a KMS system, it must be disposed of
+  through the KMS; refer to your KMS’ documentation and internal procedures to handle this.
+  KMS-managed cryptographic material of sequencer nodes.
+
+<a id="decommissioning-mediators"></a>
+
+## Decommissioning a Mediator
+
+Mediators are also part of a synchronizer’s messaging infrastructure and do not store application contracts,
+so they are disposable as long as precautions are taken to avoid disrupting the synchronization services.
+This means ensuring that at least one mediator remains on the synchronizer.

@@ -1,0 +1,98 @@
+<!-- source: canton-network-utilities / canton-network-utilities/devnet/setup/auto-topup.rst -->
+<!-- Copyright (c) 2025 Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved. -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
+<a id="auto-topup"></a>
+
+# Auto TopUp Application
+
+Perform automated topping up of either CredentialBilling or CommercialAgreement contracts when the locked deposits
+fall below a configurable threshold. If sufficient amulet is available, it is locked, and the respective contract has its
+deposit amount topped up to the configured balance using these newly locked amulets. The app tolerates transaction failure and
+backs off from retrying transactions. The total number of retries across a set of contracts is configurable via the MAX_RETRY_TOPUP_COUNT
+environment variable, defaulting to 8 retries. If the retry contract set is exhausted before the MAX_RETRY_TOPUP_COUNT is reached, the app is deemed to have run
+successfully.
+
+## Setup
+
+You can configure the Auto TopUp image by setting environment variables in the container.
+
+Deploy the application as either a native Kubernetes [cronjob](https://kubernetes.io/docs/concepts/workloads/controllers/cron-jobs/), where it runs as a script (`APP_EXECUTION_MODE_SCRIPT=true`), or as a
+regular long-running container (`APP_EXECUTION_MODE_SCRIPT=false`), where it is triggered based on a configured node cronjob. Configure appropriately to suit your case:
+
+```bash
+APP_EXECUTION_MODE_SCRIPT={true|false}
+```
+
+When configured as a long-running service ( `APP_EXECUTION_MODE_SCRIPT=false`), the application runs as a node cronjob on a schedule defined in the environment variable:
+
+```bash
+# This will run the job every day at midnight
+AUTO_TOPUP_CRON_SCHEDULE="0 0 * * *"
+```
+
+Configure the deployments to target either CredentialBilling or CommercialAgreement contracts, or both:
+
+```bash
+ENABLE_CREDENTIAL_BILLING_TOPUP={true|false}
+ENABLE_COMMERCIAL_AGREEMENT_TOPUP={true|false}
+```
+
+The app works by querying all live CredentialBilling or CommercialAgreement contracts and inspecting the respective
+locked amulet fields to compute the existing locked amulet amounts. It compares these amounts with the configurable top-up minimums, and if they fall below these values, it queries
+existing unlocked amulets in anticipation of performing the top-up to the configured maximum amounts.
+If sufficient amulet is available, the app locks the appropriate amount and updates the underlying contracts with the newly locked amounts. Configure the minimum threshold and
+the maximums in the environment file:
+
+```bash
+CREDENTIAL_BILLING_TOPUP_MIN_AMULET_BALANCE=1000
+CREDENTIAL_BILLING_TOPUP_MAX_AMULET_BALANCE=10000
+
+COMMERCIAL_AGREEMENT_TOPUP_MIN_AMULET_BALANCE=1000
+COMMERCIAL_AGREEMENT_TOPUP_MAX_AMULET_BALANCE=10000
+```
+
+The app produces a detailed console log as it proceeds with the top-up. When the top-up fails to complete, the log provides the reason for the failure.
+
+When topping up CommercialBilling contracts, the app interacts with the ledger as the issuer party and tops up the issuer’s deposit. In the case
+of CredentialBilling contracts, the app operates on behalf of the holder party and tops up the holder’s deposit. The issuer party is configured in the same environment
+file as the top-up minimums and maximums.
+
+In the current configuration, the app calls an OpenID Connect (OIDC) provider to authenticate and obtain the token for the issuer.
+
+When the app operates as a native cronjob (running as a node cronjob, as opposed to being in a Kubernetes cronjob container), the app caches the token to minimize the network overhead.
+
+The following is a complete list of the environment variables. The values are solely for illustration. You must replace them with the actual values for your deployment:
+
+```bash
+APP_EXECUTION_MODE_SCRIPT=false
+
+# This will run the job every day at midnight
+AUTO_TOPUP_CRON_SCHEDULE="0 0 * * *"
+
+ENABLE_CREDENTIAL_BILLING_TOPUP=true
+ENABLE_COMMERCIAL_AGREEMENT_TOPUP=false
+
+CREDENTIAL_BILLING_TOPUP_MIN_AMULET_BALANCE=1000
+CREDENTIAL_BILLING_TOPUP_MAX_AMULET_BALANCE=10000
+COMMERCIAL_AGREEMENT_TOPUP_MIN_AMULET_BALANCE=1000
+COMMERCIAL_AGREEMENT_TOPUP_MAX_AMULET_BALANCE=10000
+
+ISSUER=auth0_dgsd8h7yb6dcw1b3av7tvacf9l9k::j5sombp2tsu5foh04bnbdiu93llt0ujy1uhut88l03se8gg4cl2o042ro4lu7jog1234
+OAUTH_CLIENT_ID=00000000000000000000000000000000
+OAUTH_OIDC_CONF_URL=https://my-oidc-auth-provider.com/.well-known/openid-configuration
+OAUTH_CLIENT_SECRET=XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+OAUTH_AUDIENCE=https://canton.registry.app
+
+# Optional, defaults to 30 seconds
+MINING_ROUND_OPEN_TIME_OFFSET_SECONDS=30
+
+# Optional, defaults to 8 retries
+MAX_RETRY_TOPUP_COUNT=8
+
+# JSON API URL
+JSON_API_URL=http://participant.validatornamespace.svc.cluster.local:7575/
+
+# scan proxy API URL
+SP_API_URL=http://validator-app.validatornamespace.svc.cluster.local:5003/api/validator
+```

@@ -1,0 +1,244 @@
+<!-- source: canton / canton/3.4/participant/howtos/secure/keys/key_management.rst -->
+<!-- Copyright (c) 2025 Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved. -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
+<a id="key-management"></a>
+
+# Crypto key management
+
+This page explains how to list, rotate, generate, deactivate, and delete keys of a Canton node.
+It also explains how to configure the cryptographic schemes supported by a node.
+
+There is a separate section on the [management of namespace keys](namespace_key.md#namespace-key-management).
+
+## List keys
+
+Use the following command to enumerate the public keys that the node `myNode` stores in its vault:
+
+```none
+@ myNode.keys.public.list()
+    res1: Seq[PublicKeyWithName] = Vector(
+      SigningPublicKeyWithName(
+        publicKey = SigningPublicKey(
+          id = 12207b12d4ce...,
+          format = DER-encoded X.509 SubjectPublicKeyInfo,
+          keySpec = EC-Curve25519,
+          usage = Set(signing, proof-of-ownership)
+        ),
+        name = Some(KeyName(mediator1-signing))
+      ),
+    ..
+```
+
+This will show a non-empty sequence of keys, assuming myNode is running and has created keys during startup,
+which is the default behavior.
+
+Similarly, a user can enumerate the private keys of `myNode`:
+
+```none
+@ myNode.keys.secret.list()
+    res2: Seq[com.digitalasset.canton.crypto.admin.grpc.PrivateKeyMetadata] = Vector(
+      PrivateKeyMetadata(
+        publicKeyWithName = SigningPublicKeyWithName(
+          publicKey = SigningPublicKey(
+            id = 12207b12d4ce...,
+            format = DER-encoded X.509 SubjectPublicKeyInfo,
+            keySpec = EC-Curve25519,
+            usage = Set(signing, proof-of-ownership)
+          ),
+          name = Some(KeyName(mediator1-signing))
+    ..
+```
+
+A user can list the keys that a node has authorized for usage at a Synchronizer like this:
+
+```none
+@ myNode.topology.owner_to_key_mappings
+                                .list(store = mySynchronizerId, filterKeyOwnerUid = myNode.id.filterString)
+                                .flatMap(_.item.keys)
+    res3: Seq[PublicKey] = Vector(
+      SigningPublicKey(
+        id = 1220a04be00b...,
+        format = DER-encoded X.509 SubjectPublicKeyInfo,
+        keySpec = EC-Curve25519,
+        usage = Set(sequencer-auth, proof-of-ownership)
+      ),
+      SigningPublicKey(
+        id = 12207b12d4ce...,
+        format = DER-encoded X.509 SubjectPublicKeyInfo,
+    ..
+```
+
+<a id="rotating-canton-keys"></a>
+
+## Rotate keys
+
+Canton supports rotating the keys of a node `myNode` with a single command:
+
+```none
+@ myNode.keys.secret.rotate_node_keys()
+```
+
+In order to ensure continuous operation, the command first activates the new key and only then deactivates the old key.
+The command rotates **all** keys of `myNode`.
+But the command does not rotate namespace keys.
+The node deactivates the old keys on all Synchronizers, but they remain in the vault of `myNode`.
+
+The following command rotates a single key of `myNode`:
+
+```none
+@ myNode.keys.secret.rotate_node_key(oldKeyFingerprint, "newKeyName")
+    res5: PublicKey = SigningPublicKey(
+      id = 12203ca0a1b3...,
+      format = DER-encoded X.509 SubjectPublicKeyInfo,
+      keySpec = EC-Curve25519,
+      usage = Set(sequencer-auth, proof-of-ownership)
+    )
+```
+
+#### NOTE
+Key rotation should be [interleaved with taking a backup](../../recover/backup-restore.md#backup-restore-private-key-rotation).
+
+<a id="deleting-canton-keys"></a>
+
+## Generate and activate keys
+
+Canton creates keys with default parameters for all nodes.
+To have different key parameters, generate keys manually.
+
+To generate and activate a new signing key for `myNode`, run the following commands:
+
+```none
+@ val key = myNode.keys.secret.generate_signing_key(
+      "mySigningKeyName",
+      SigningKeyUsage.ProtocolOnly,
+      Some(SigningKeySpec.EcCurve25519)
+    )
+    key : SigningPublicKey = SigningPublicKey(
+      id = 12202d73af8d...,
+      format = DER-encoded X.509 SubjectPublicKeyInfo,
+      keySpec = EC-Curve25519,
+      usage = Set(signing, proof-of-ownership)
+    )
+```
+
+```none
+@ myNode.topology.owner_to_key_mappings.add_key(key.fingerprint, key.purpose)
+```
+
+Likewise, the following commands generate and activate a new encryption key:
+
+```none
+@ val key = myNode.keys.secret.generate_encryption_key(
+      "myEncryptionKeyName",
+      Some(EncryptionKeySpec.EcP256)
+    )
+    key : EncryptionPublicKey = EncryptionPublicKey(
+      id = 1220d2869578...,
+      format = DER-encoded X.509 SubjectPublicKeyInfo,
+      keySpec = EC-P256
+    )
+```
+
+```none
+@ myNode.topology.owner_to_key_mappings.add_key(key.fingerprint, key.purpose)
+```
+
+Refer to the page on [key restrictions](key_restrictions.md#key-restrictions) for further information on `SigningKeyUsage`.
+Keys are generated according to specific cryptographic key formats. Please refer to the
+following [tables](../../../reference/crypto_schemes.md#canton-supported-key-formats) for more information on the expected key formats in Canton.
+
+## Deactivate keys
+
+To deactivate a key on all Synchronizers run the following command:
+
+```none
+@ myNode.topology.owner_to_key_mappings.remove_key(key.fingerprint, key.purpose)
+```
+
+Node operators normally do not need to deactivate keys, as a node deactivates old keys when rolling keys.
+When changing to a different scheme, it may be necessary that an operator explicitly deactivates a key.
+
+## Delete keys
+
+After rotating or deactivating a key it remains in the node’s vault.
+To permanently delete a key from the vault, use the following console command:
+
+```none
+@ myNode.keys.secret.delete(key.fingerprint, force = true)
+```
+
+#### WARNING
+Exercise caution when deleting a private key.
+Ensure that the key is no longer in use and is not needed for decrypting or creating signatures for old messages.
+Therefore, only delete a key after deactivating the key and pruning the node for a timestamp later than the deactivation.
+This is especially crucial for sequencers in open networks.
+For example, if a participant lags in retrieving sequenced events, and the operator of the sequencer rolls the sequencer’s signing key,
+the old signing key must remain accessible to sign the events from before the key
+roll for lagging participants. Otherwise, deleting the key prematurely may cause irreversible issues for these
+participants.
+
+## Configure cryptographic schemes
+
+Canton supports several [cryptographic schemes](../../../reference/crypto_schemes.md#crypto-schemes).
+By default, a node allows for using all cryptographic schemes supported by Canton.
+
+To configure the default and allowed schemes for a node include a snippet like the following into the Canton configuration:
+
+```none
+canton {
+  participants.participant1 {
+     crypto {
+       provider = jce
+
+       # signing
+       signing.algorithms {
+         default = ed-25519
+         allowed = [ed-25519, ec-dsa-sha-256, ec-dsa-sha-384]
+       }
+       signing.keys {
+         default = ec-curve-25519
+         allowed = [ec-curve-25519, ec-p-256, ec-p-384, ec-secp-256k-1]
+       }
+
+       # asymmetric encryption
+       encryption.algorithms {
+         default = ecies-hkdf-hmac-sha-256-aes-128-cbc
+         allowed = [ecies-hkdf-hmac-sha-256-aes-128-cbc, rsa-oaep-sha-256]
+       }
+       encryption.keys {
+         default = ec-p-256
+         allowed = [ec-p-256, rsa-2048]
+       }
+    }
+  }
+}
+```
+
+#### NOTE
+Every Synchronizer imposes a minimum set of cryptographic schemes that its members must support.
+If a node does not support this minimum set of schemes, it is unable to connect to the Synchronizer.
+
+## Disable Session keys
+
+An explanation of the purpose and security implications of session keys is available
+in [Session Keys](../../../explanations/security.md#canton-security).
+
+While session keys improve performance, they also introduce a security risk, as the keys are stored in memory—even if
+only for a short duration. If you prefer to disable session keys and accept the resulting performance degradation,
+you can do so by setting the following configurations.
+
+To disable **session encryption keys**:
+
+```scala
+canton.participants.participant3.caching.session-encryption-key-cache.enabled = false
+```
+
+To disable **session signing keys**:
+
+```scala
+canton.participants.participant3.crypto.kms.session-signing-keys.enabled = false
+```
+
+Please note that **session signing keys** are only used with an
+[external KMS (Key Management Service) provider](../kms/mode/external_key_storage.md#external-key-storage).

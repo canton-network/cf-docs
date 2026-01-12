@@ -1,0 +1,123 @@
+<!-- source: canton / canton/3.4/synchronizer/howtos/operate/dynamic_params.rst -->
+<!-- Copyright (c) 2025 Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved. -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
+<a id="dynamic-sync-params"></a>
+
+# Manage dynamic Synchronizer parameters
+
+<a id="dynamic-synchronizer-parameters"></a>
+
+In addition to the static Synchronizer parameters that you specify during
+[Synchronizer bootstrap](bootstrap.md#synchronizer-bootstrap), you can change some parameters at runtime (
+while the Synchronizer is running); these are referred to as dynamic synchronizer parameters. When the Synchronizer is bootstrapped,
+the default values are used for the dynamic Synchronizer parameters.
+
+## Get dynamic Synchronizer parameters
+
+You can get the current parameters on a Synchronizer you are connected to using the following command:
+
+```scala
+myParticipant.topology.synchronizer_parameters.get_dynamic_synchronizer_parameters(
+  synchronizerId
+)
+```
+
+## Change dynamic Synchronizer parameters
+
+<a id="id1"></a>
+
+You can set several dynamic parameters at the same time:
+
+```scala
+mySequencer.topology.synchronizer_parameters
+  .propose_update(
+    synchronizerId,
+    _.update(
+      confirmationResponseTimeout = 40.seconds,
+      mediatorDeduplicationTimeout = 2.minutes,
+      preparationTimeRecordTimeTolerance = 1.minute,
+      mediatorReactionTimeout = 20.seconds,
+      assignmentExclusivityTimeout = 1.second,
+      reconciliationInterval = 5.seconds,
+      confirmationRequestsMaxRate = 100,
+      maxRequestSize = 100000,
+      sequencerAggregateSubmissionTimeout = 5.minutes,
+      trafficControl = Some(
+        TrafficControlParameters(
+          maxBaseTrafficAmount = NonNegativeLong.tryCreate(204800),
+          readVsWriteScalingFactor = 200,
+          maxBaseTrafficAccumulationDuration = 12.minutes,
+          setBalanceRequestSubmissionWindowSize = 10.minutes,
+          enforceRateLimiting = false,
+          baseEventCost = NonNegativeLong.zero,
+        )
+      ),
+    ),
+  )
+
+// For ledger time record time tolerance, use the dedicated set method
+mySequencer.topology.synchronizer_parameters
+  .set_ledger_time_record_time_tolerance(synchronizerId, 60.seconds)
+```
+
+#### NOTE
+When increasing max request size, the sequencer nodes need to be restarted
+for the new value to be taken into account.
+
+## Recover from too-small *max request size*
+
+MaxRequestSize is a dynamic parameter. This parameter configures both the gRPC channel size on the Sequencer node
+and the maximum size that a Sequencer client is allowed to transfer.
+
+If the parameter is set to a very small value (roughly under 30kb), Canton can crash because all messages are rejected by the sequencer client or
+by the sequencer node. This cannot be corrected by setting a higher value within the console, because this change request needs to be sent via the sequencer and will
+also be rejected.
+
+To recover from this crash, you need to configure override-max-request-size on both the Sequencer node and all Sequencer clients.
+
+This means you need to modify both the Synchronizer and the Participant Node configuration as follows:
+
+```none
+mediators {
+  mediator1 {
+    sequencer-client.override-max-request-size = 30000
+  }
+}
+participants {
+  participant1 {
+    sequencer-client.override-max-request-size = 30000
+  }
+  participant2 {
+    sequencer-client.override-max-request-size = 30000
+  }
+}
+mediators {
+  mediator1 {
+    sequencer-client.override-max-request-size = 30000
+  }
+}
+sequencers {
+  sequencer1 {
+    # overrides the maxRequestSize in bytes on the sequencer node
+    public-api.override-max-request-size = 30000
+  }
+}
+```
+
+After the configuration is modified, disconnect all the Participant Nodes from the Synchronizer and then restart all nodes.
+
+```scala
+participants.all.synchronizers.disconnect(daName)
+nodes.local.stop()
+```
+
+Then perform the restart:
+
+```scala
+nodes.local.start()
+participants.all.synchronizers.reconnect_all()
+```
+
+Once Canton has recovered, use the admin command to set the maxRequestSize value, then delete the added configuration
+in the previous step, and finally perform the restart again.

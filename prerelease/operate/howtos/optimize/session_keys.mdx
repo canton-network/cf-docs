@@ -1,0 +1,63 @@
+<!-- source: canton / canton/3.5/participant/howtos/optimize/session_keys.rst -->
+<!-- Copyright (c) 2026 Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved. -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
+<a id="optimize-session-keys"></a>
+
+# Configure session keys
+
+Canton uses session keys to reduce expensive cryptographic operations during protocol execution, improving performance.
+There are two types: session encryption keys, which reduce the number of asymmetric encryptions, and
+session signing keys, which help avoid frequent calls to external signers such as a KMS.
+
+You can read more about the rationale and security considerations in [Session Keys](../../explanations/security.md#canton-security).
+
+Extending the lifetime of session keys minimizes the need for repeated key negotiation or remote signing—but it also
+increases the window during which keys are stored in memory, raising the risk of compromise.
+
+## Increase session **encryption** keys lifetime
+
+You can control how long a session encryption key remains active by adjusting the `expire-after-timeout`
+values in your configuration. To globally increase the lifetime of session encryption keys,
+increase the `expire-after-timeout` for both the `sender-cache` and `receiver-cache`.
+
+```scala
+canton.participants.participant1 {
+    caching {
+        session-encryption-key-cache {
+            # these are the default values
+            enabled = true
+            sender-cache {
+                maximum-size = 10000
+                expire-after-timeout = 10s
+            }
+            receiver-cache {
+                maximum-size = 10000
+                expire-after-timeout = 10s
+            }
+        }
+    }
+}
+```
+
+## Increase session **signing** keys lifetime
+
+When using [external KMS (Key Management Service) provider](../secure/kms/mode/external_key_storage.md#external-key-storage) you can control how
+long a session signing key remains active by adjusting the `key-validity-duration`
+and the `key-eviction-period`. The `key-eviction-period` should always be longer than the `key-validity-duration`
+and at least as long as the sum of `confirmation_response_timeout` and `mediator_reaction_timeout`, as configured
+in the dynamic Synchronizer parameters.
+
+```scala
+canton.participants.participant1.crypto.kms {
+  session-signing-keys {
+    # these are the default values
+    enabled = true
+    key-validity-duration = 5m
+    cut-off-duration = 30s,
+    key-eviction-period = 10m,
+    signing-algorithm-spec = ed-25519,
+    signing-key-spec = ec-curve-25519,
+  }
+}
+```

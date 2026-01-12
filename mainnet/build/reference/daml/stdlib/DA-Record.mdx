@@ -1,0 +1,118 @@
+<!-- source: daml / daml/3.4/sdk/reference/daml/stdlib/DA-Record.rst -->
+<!-- Copyright (c) 2025 Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved. -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
+<a id="module-da-record-78710"></a>
+
+# DA.Record
+
+Exports the record machinery necessary to allow one to annotate
+code that is polymorphic in the underlying record type.
+
+## Typeclasses
+
+<a id="class-da-internal-record-getfield-53979"></a>
+
+**class** [GetField]()
+
+<a id="class-da-internal-record-getfield-53979"></a>
+ x r a **where**
+
+> `GetField x r a` provides the getter part of `HasField`
+
+> <a id="function-da-internal-record-getfield-6942"></a>
+
+> [getField]()
+> : : r -> a
+
+<a id="class-da-internal-record-setfield-4311"></a>
+
+**class** [SetField]()
+
+<a id="class-da-internal-record-setfield-4311"></a>
+ x r a **where**
+
+> `SetField x r a` provides the setter part of `HasField`
+
+> <a id="function-da-internal-record-setfield-14978"></a>
+
+> [setField]()
+> : : a -> r -> r
+
+## Data Types
+
+<a id="type-da-internal-record-hasfield-59910"></a>
+
+**type** [HasField]() x r a
+: = ([GetField]()
+  <br/>
+  <a id="class-da-internal-record-getfield-53979"></a>
+   x r a, [SetField]()
+  <br/>
+  <a id="class-da-internal-record-setfield-4311"></a>
+   x r a)
+  <br/>
+  `HasField` is a class synonym for `GetField` and `SetField`, which
+  respectively give you getter and setter functions for each record field
+  automatically.
+  <br/>
+  **In the vast majority of use-cases, plain Record syntax should be
+  preferred**:
+  <br/>
+  ```daml
+  daml> let a = MyRecord 1 "hello"
+  daml> a.foo
+  1
+  daml> a.bar
+  "hello"
+  daml> a { bar = "bye" }
+  MyRecord {foo = 1, bar = "bye"}
+  daml> a with foo = 3
+  MyRecord {foo = 3, bar = "hello"}
+  daml>
+  ```
+  <br/>
+  For more on Record syntax, see https://docs.digitalasset.com/build/3.4/reference/daml/stdlib/DA-Record.html.
+  <br/>
+  `GetField x r a` and `SetField x r a` are typeclasses taking three parameters. The first
+  parameter `x` is the field name, the second parameter `r` is the record type,
+  and the last parameter `a` is the type of the field in this record. For
+  example, if we define a type:
+  <br/>
+  ```daml
+  data MyRecord = MyRecord with
+      foo : Int
+      bar : Text
+  ```
+  <br/>
+  Then we get, for free, the following GetField and SetField instances:
+  <br/>
+  ```daml
+  GetField "foo" MyRecord Int
+  SetField "foo" MyRecord Int
+  GetField "bar" MyRecord Text
+  SetField "bar" MyRecord Text
+  ```
+  <br/>
+  If we want to get a value, we can use the `getField` method of class `GetField`:
+  <br/>
+  ```daml
+  getFoo : MyRecord -> Int
+  getFoo r = getField @"foo" r
+  <br/>
+  getBar : MyRecord -> Text
+  getBar r = getField @"bar" r
+  ```
+  <br/>
+  Note that this uses the “type application” syntax ( `f @t` ) to specify the
+  field name.
+  <br/>
+  Likewise, if we want to set the value in the field, we can use the `setField` method of class `SetField`:
+  <br/>
+  ```daml
+  setFoo : Int -> MyRecord -> MyRecord
+  setFoo a r = setField @"foo" a r
+  <br/>
+  setBar : Text -> MyRecord -> MyRecord
+  setBar a r = setField @"bar" a r
+  ```

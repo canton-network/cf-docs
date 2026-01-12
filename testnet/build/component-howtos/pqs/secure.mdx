@@ -1,0 +1,243 @@
+<!-- source: pqs / pqs/3.4/component-howtos/pqs/secure.rst -->
+<!-- Copyright (c) 2025, Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved. -->
+
+<a id="pqs-secure"></a>
+
+# Secure
+
+PQS application is a client to backend services (ledger and database) as such it needs to respect security settings
+mandated by those services - TLS and authentication:
+
+## TLS
+
+Your server-side components (Canton and PostgreSQL) may require TLS to be used. Please refer to their documentation
+for instructions:
+
+* for PostgreSQL see [https://www.postgresql.org/docs/current/ssl-tcp.html](https://www.postgresql.org/docs/current/ssl-tcp.html)
+* for Canton see tls-configuration
+
+Once configured, use appropriate values for dedicated parameters:
+
+```text
+$ ./scribe.jar pipeline ledger postgres-document \
+     --source-ledger-tls-cert /path/to/ledger.crt \
+     --source-ledger-tls-key /path/to/ledger.pem \
+     --source-ledger-tls-cafile /path/to/ledger.crt \
+     --target-postgres-tls-cert /path/to/postgres.crt \
+     --target-postgres-tls-key /path/to/postgres.der \
+     --target-postgres-tls-cafile /path/to/postgres.crt \
+     --target-postgres-tls-mode VerifyFull
+```
+
+## Ledger authentication
+
+To run PQS with authentication you need to turn it on via `--source-ledger-auth OAuth`. PQS uses OAuth 2.0 Client
+Credentials flow <sup>[1](#id4)</sup>.
+
+```text
+$ ./scribe.jar pipeline ledger postgres-document \
+     --source-ledger-auth OAuth \
+     --pipeline-oauth-clientid my_client_id \
+     --pipeline-oauth-clientsecret deadbeef \
+     --pipeline-oauth-cafile ca.crt \
+     --pipeline-oauth-endpoint https://my-auth-server/token
+```
+
+If your issuer is OIDC compliant, you can specify the issuer instead of the token URL.
+
+```text
+$ ./scribe.jar pipeline ledger postgres-document \
+     --source-ledger-auth OAuth \
+     --pipeline-oauth-clientid my_client_id \
+     --pipeline-oauth-clientsecret deadbeef \
+     --pipeline-oauth-cafile ca.crt \
+     --pipeline-oauth-issuer https://my-auth-server
+```
+
+PQS uses the supplied client credentials (`clientid` and `clientsecret`) to access the token endpoint
+(`endpoint`) of the OAuth service of your choice. Optional `cafile` parameter is a path to the Certification
+Authority certificate used to access the token endpoint. If `cafile` is not set, the Java TrustStore is used.
+
+Please make sure you have configured your Participant Node to use authorization
+(see ledger-api-jwt-configuration) and an authorization server to
+accept your client credentials for `grant_type=client_credentials` and `scope=daml_ledger_api`.
+
+### Audience-based token
+
+For Audience-Based Tokens use the `--pipeline-oauth-parameters-audience` parameter:
+
+```text
+$ ./scribe.jar pipeline ledger postgres-document \
+    --source-ledger-auth OAuth \
+    --pipeline-oauth-clientid my_client_id \
+    --pipeline-oauth-clientsecret deadbeef \
+    --pipeline-oauth-cafile ca.crt \
+    --pipeline-oauth-endpoint https://my-auth-server/token \
+    --pipeline-oauth-scope None \
+    --pipeline-oauth-parameters-audience https://daml.com/jwt/aud/participant/my_participant_id
+```
+
+### Scope-based token
+
+For Scope-Based Tokens use the `--pipeline-oauth-scope` parameter:
+
+```text
+$ ./scribe.jar pipeline ledger postgres-document \
+     --source-ledger-auth OAuth \
+     --pipeline-oauth-clientid my_client_id \
+     --pipeline-oauth-clientsecret deadbeef \
+     --pipeline-oauth-cafile ca.crt \
+     --pipeline-oauth-endpoint https://my-auth-server/token \
+     --pipeline-oauth-scope myScope \
+     --pipeline-oauth-parameters-audience https://daml.com/jwt/aud/participant/my_participant_id
+```
+
+#### NOTE
+The default value of the `--pipeline-oauth-scope` parameter is `daml_ledger_api`. Ledger API requires
+`daml_ledger_api` in the list of scopes unless custom target scope is configured.
+
+### Custom Daml claims tokens
+
+PQS authenticates as a user defined through the User Identity Management feature of Canton. Consequently, Custom
+Daml Claims Access Tokens are not supported. An audience-based or scope-based token must be used instead.
+
+### Static access token
+
+Alternatively, you can configure PQS to use a static access token (meaning it is not refreshed) using the
+`--pipeline-oauth-accesstoken` parameter:
+
+```text
+$ ./scribe.jar pipeline ledger postgres-document \
+     --source-ledger-auth OAuth \
+     --pipeline-oauth-accesstoken my_access_token
+```
+
+### Ledger API users and Daml parties
+
+PQS connects to a Participant Node (via Ledger API) as a user defined through the User Identity Management feature of Canton.
+PQS gets its user identity by providing an OAuth token of that user. After authenticating, the Participant Node has the
+authorization information to know what Daml Party data the user is allowed to access. By default, PQS will subscribe
+to data for all parties available to PQS’ authenticated user. However, this scope can be limited via the
+`--pipeline-filter-parties` filter parameter (see [Party filtering](configure.md#pqs-party-filtering)).
+
+It is important to keep in mind that a PQS database instance might contain data for multiple Daml parties. To that
+extent, it is of paramount significance to ensure that queries are always scoped to the relevant parties, to avoid
+data leaks:
+
+```sql
+-- partyA needs to be signatory on the contract
+select * from active() where signatories @> '{partyA}';
+
+-- partyB needs to be observer on the contract
+select * from active() where observers @> '{partyB}';
+
+-- partyC can be either signatory or observer on the contract
+select a.* from active() a where a.stakeholders @> '{partyC}';
+-- `stakeholders` is really a function which can be called like a "virtual" column
+select a.* from active() a where stakeholders(a) @> '{partyC}';
+select a.* from active() a where stakeholders(a.*) @> '{partyC}';
+
+-- partyD needs to be witness on the divulgence
+select * from creates() where divulged_only and witnesses @> '{partyD}';
+```
+
+### Token expiry
+
+JWT tokens <sup>[2](#id5)</sup> have an expiration time. PQS has a mechanism to automatically request a new access token from the Auth
+Server, before the old access token expires. To set when PQS should try to request a new access token, use
+`--pipeline-oauth-preemptexpiry` (default “PT1M” - one minute), meaning: request a new access token one minute
+before the current access token expires. This new access token is used for any future Ledger API calls.
+
+However, for streaming calls such as [GetUpdates](../../reference/lapi-proto-docs.md#com-daml-ledger-api-v2-updateservice-getupdates) the
+access token is part of the request that initiates the streaming. Canton versions prior to `2.9` terminate the
+stream with error `PERMISSION_DENIED` as soon as the old access token expires to prevent streaming forever based on
+the old access token. Versions `2.9+` fail with code `ABORTED` and description `ACCESS_TOKEN_EXPIRED` and PQS
+streams from the offset of the last successfully processed transaction.
+
+## PostgreSQL authentication
+
+To authenticate to PostgreSQL, use dedicated parameters when launching the pipeline:
+
+```text
+$ ./scribe.jar pipeline ledger postgres-document \
+     --target-postgres-password "${YOUR_DB_PASSWORD}" \
+     --target-postgres-username "${YOUR_DB_USER}"
+```
+
+## Hardening recommendations
+
+**Use TLS**: Always use TLS to encrypt data being transmitted to/from the Participant Node and the PostgreSQL
+datastore. This is especially important when dealing with sensitive information. Ensure that only secure TLS versions
+are used (for example TLS `1.2+`) and that strong cipher suites are configured. Client authentication should be used to
+ensure that only trusted clients can connect to the Participant Node and PostgreSQL datastore, such that network
+level security is not overly relied upon.
+
+**Logging**: Ensure that logging is configured (see [Logging](observe.md#pqs-logging)) to avoid logging sensitive information. This
+includes transaction details and metadata (eg. size) that is revealed in `TRACE` and `DEBUG` levels. These log
+levels should be used with caution, and only in a controlled environment. In production, we recommend using `INFO`
+or `WARN` levels.
+
+**Ledger Authorization**: Follow the principle of least privilege when granting access to the Participant Node
+Ledger API User that PQS uses:
+
+* Only `canReadAs` authorization to only Party’s that it requires; OR
+* Only `readAsAnyParty` authorization if PQS is used as a participant-wide service and needs access to all Party
+  data.
+* No `canActAs` authorization (to submit commands). PQS has no capability to submit commands to the Canton Ledger API
+* No `admin` access to the Canton Ledger API.
+
+**Database Access**: The datastore contains all ledger information obtained from the Participant Node. Ensure that
+the database users are tightly controlled, and set to the minimum required privileges:
+
+* Operational user: SQL Insert/Update/Delete/Copy - so PQS can maintain the datastore contents. No DDL rights should
+  be in place - PQS does not need to change the database schema.
+* Others user: No write access should be granted to any other user. Excessive reading my other clients (leading to
+  overload) should be avoided, to ensure that PQS has sufficient resources to operate.
+* Admin user: PQS will need to be able to apply schema changes to the database when deploying a new version
+  containing database changes. This should be a separate user with the minimum required privileges to perform these
+  operations. Also, redaction operations performed by an administrator will require Select/Update rights to the
+  database.
+
+**Network Security**: Ensure that the network security is configured to restrict access to only essential connections:
+
+* Using firewalls to restrict access to PostgreSQL database, Participant Node and auth server.
+* Using firewalls to restrict access to PQS. Even though it does not listen for any client connections, there are
+  listing TCP ports for health and diagnostic purposes. By default, health and diagnostic ports are only accessible
+  from `localhost`. Before changing this configuration, ensure that all hosts granted network level access are
+  necessary & trusted: to mitigate the risk of exploit or exposing sensitive information.
+
+**Runtime Environment**: Ensure that the runtime environment is secure:
+
+* Keeping the operating system and all software up to date with security patches.
+* Using a firewall to restrict access to the PQS process (and associated PostgreSQL datastore).
+* Monitoring logs for any suspicious activity, as well as errors and warnings.
+* Validate that the runtime enforces least privilege principles, and contains only intended tools. We recommend using
+  a minimal Java runtime environment (JRE) to reduce the attack surface:
+  * Use a minimal JRE (not JDK), for example Amazon Corretto or Azul Zulu, to reduce the attack surface.
+  * Consider allowing only the `jdk.attach` <sup>[3](#id6)</sup> module, in your chosen JRE. This enables the running process to
+    produce more accurate stack traces when diagnostics are extracted.
+  * Use a security manager to restrict the infrastructure permissions of the PQS process, if possible.
+* Use a containerized environment (for example Docker) to isolate the PQS process from the host system and other processes.
+
+**Observability**: Ensure that the environment is monitored for logs, metrics and alerts of events of interest (see
+[Observe](observe.md#pqs-observe)).
+
+* PQS log is monitored for errors and warnings, to ensure these do not go unnoticed.
+* PQS runtime is monitored for disk, memory and other JRE concerns such as heap, garbage collection cycle rates.
+* PQS health endpoint is polled regularly to verify availability.
+* PostgreSQL and Participant Node servers are similarly monitored.
+
+**Database Backups**: Ensure that the database backups are encrypted and stored securely. This is especially
+important when dealing with sensitive information. The database should be backed up regularly, and the backup process
+should be tested to ensure that it works as expected.
+
+**Data Retention**: Ensure that the data retention policy is in place and enforced. This includes regular purging of
+old data (eg. PQS [Pruning](operate.md#pqs-pruning)), and ensuring that sensitive information is redacted or deleted as required by
+your organization’s policies and regulations.
+
+**Software Updates**: Ensure that the PQS software is kept up to date with the latest security patches and updates.
+This includes both the PQS software itself and any dependencies it may have.
+
+* <a id='id4'>**[1]**</a> [https://datatracker.ietf.org/doc/html/rfc6749#section-4.4](https://datatracker.ietf.org/doc/html/rfc6749#section-4.4)
+* <a id='id5'>**[2]**</a> [https://datatracker.ietf.org/doc/html/rfc6749#section-1.5](https://datatracker.ietf.org/doc/html/rfc6749#section-1.5)
+* <a id='id6'>**[3]**</a> [https://docs.oracle.com/en/java/javase/17/docs/api/jdk.attach/module-summary.html](https://docs.oracle.com/en/java/javase/17/docs/api/jdk.attach/module-summary.html)

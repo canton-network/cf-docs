@@ -1,0 +1,221 @@
+<!-- source: quickstart / quickstart/3.4/sdk/quickstart/secure/keycloak-in-cnqs.rst -->
+
+<a id="keycloak-quickstart"></a>
+
+# Keycloak in the CN QS
+
+#### NOTE
+This page is a work in progress. It may contain incomplete or incorrect information.
+
+**Contents**
+
+[Keycloak in the CN QS](#keycloak-in-the-cn-qs)
+
+> [Realm structure](#realm-structure)
+
+> [Keycloak configuration](#keycloak-configuration)
+
+> [Customizing Keycloak for business needs](#customizing-keycloak-for-business-needs)
+
+> [Accessing the admin console](#accessing-the-admin-console)
+
+> [Customization scenarios](#customization-scenarios)
+
+> [Add a new user](#add-a-new-user)
+
+> [Modify client settings](#modify-client-settings)
+
+> [Add a new client](#add-a-new-client)
+
+> [Update environment variables](#update-environment-variables)
+
+> [Troubleshooting](#troubleshooting)
+
+Keycloak is an open-source Identity and Access Management (IAM) solution that provides authentication, authorization, and user management for modern applications and services.
+It acts as a centralized authentication server that handles user logins, session management, and security token issuance.
+
+The CN QS uses Keycloak to provide secure authentication across its distributed architecture.
+Keycloak maintains separation between authentication concerns and business logic.
+
+## Realm structure
+
+The CN QS defines two Keycloak realms.
+The AppProvider realm manages authentication for services and users on the provider side of the application.
+The AppUser realm handles authentication for the consumer side.
+When components like validators or participant nodes receive requests, they validate the authentication tokens against the appropriate realm.
+
+## Keycloak configuration
+
+Predefined users each have their own environment file.
+`app-provider`’s `.env` file is `/env/app-provider-auth-on.env`,
+and
+The default .env configuration includes predefined users in each realm:
+
+- **User “app-provider”** (AUTH_APP_PROVIDER_WALLET_ADMIN_USER_NAME=app-provider)
+- **UUID**: 553c6754-8879-41c9-ae80-b302f5af92c9
+  : (AUTH_APP_PROVIDER_WALLET_ADMIN_USER_ID)
+
+AppUser realm:
+
+- **User “AppUser”** (AUTH_APP_USER_WALLET_ADMIN_USER_NAME=app-user)
+- **UUID**: 92a520cb-2f09-4e55-b465-d178c6cfe5e4
+  : (AUTH_APP_USER_WALLET_ADMIN_USER_ID)
+- **Password**: abc123 (AUTH_APP_USER_WALLET_ADMIN_USER_PASSWORD)
+
+## Customizing Keycloak for business needs
+
+You can customize the Keycloak configuration to meet your specific
+business requirements.
+
+### Accessing the admin console
+
+The Keycloak admin console is available at:
+
+[http://keycloak.localhost:8082/admin/master/console/#/master](http://keycloak.localhost:8082/admin/master/console/#/master)
+
+To log in use the default credentials:
+
+- **Username**: \`\`admin\`\`
+- **Password**: \`\`admin\`\`
+
+![Keycloak sign in](quickstart/secure/images/41-keycloack-login.png)
+
+## Customization scenarios
+
+### Add a new user
+
+1. Log in to the Keycloak Admin console
+
+> ![Keycloak admin console](quickstart/secure/images/42-keycloak-new-user.png)
+1. Select the appropriate realm (AppProvider or AppUser)
+
+> ![Select Keycloak realm](quickstart/secure/images/43-keycloak-realm.png)
+1. Navigate to the “Users” -> “Add user”
+
+> ![Keycloak users view](quickstart/secure/images/44-keycloak-add-user.png)
+
+Click **Add user**
+
+> ![add user](quickstart/secure/images/45-keycloak-user-bob.png)
+1. Fill in the user details and click **Create**
+
+> ![user details](quickstart/secure/images/46-keycloak-bob-details.png)
+1. Go to the **Credentials** tab to set a password
+
+> ![user password credentials](quickstart/secure/images/47-keycloak-credentials.png)
+
+Set the password
+
+> ![set password](quickstart/secure/images/48-keycloak-set-pw.png)
+1. Save the password
+
+> ![save password](quickstart/secure/images/49-keycloak-save-pw.png)
+1. You can now sign in using the new user and their password.
+   1. Return to the login page and click **AppUser**
+
+> ![login screen](quickstart/secure/images/50-keycloak-oauth-login.png)
+
+Log in as Bob
+
+> ![sign in screen](quickstart/secure/images/51-keycloak-bob-signin.png)
+1. Bob is now a user
+
+> ![logged in as Bob](quickstart/secure/images/52-user-bob.png)
+
+### Modify client settings
+
+1. Return to the realm selection view
+2. Navigate to **Clients** -> select the client to modify
+
+> ![modify client settings](quickstart/secure/images/53-keycloak-client-settings.png)
+1. Update settings per your needs
+
+> ![update user settings](quickstart/secure/images/54-keycloak-update-settings.png)
+1. Save changes
+
+### Add a new client
+
+1. Select the appropriate realm
+2. Navigate to “Clients” -> “Create”
+
+> ![client list](quickstart/secure/images/55-keycloak-add-client.png)
+1. Configure the client’s general settings. Click **Next** for additional
+   : configuration options
+
+> ![client details](quickstart/secure/images/56-keycloak-config-client.png)
+1. Configure additional settings
+
+> ![additional settings](quickstart/secure/images/57-config-adt-settings.png)
+
+Click **Next** for additional configuration options
+
+> ![additional settings 2](quickstart/secure/images/58-cofig-settings-2.png)
+1. Save the client
+
+### Update environment variables
+
+After making changes to Keycloak configuration, you may need to update the corresponding environment variables in the `.env` file:
+
+1. The Keycloak user must have the same ID as the ledger user’s ID. This is not the party id.
+2. For client changes, update the corresponding client ID and secret
+3. For user changes, update the corresponding user ID and credentials
+4. Restart the services to apply the changes:
+
+`make stop && make start`
+
+## Troubleshooting
+
+**Login failures**:
+
+1. Verify Keycloak is running: `make status`
+
+> ![verify keycloak running](quickstart/secure/images/59-verify-keycloak-running.png)
+
+Find **keycloak** near **grafana** and **loki** in the list.
+
+**Keycloak** should show as “healthy”
+
+> ![keycloak healthy](quickstart/secure/images/60-keycloak-healthy.png)
+1. Check keycloak credentials in `.env` file
+
+```default
+AUTH_APP_USER_ISSUER_URL_BACKEND=http://nginx-keycloak:8082/realms/AppUser
+# for backend
+
+AUTH_APP_USER_ISSUER_URL=http://keycloak.localhost:8082/realms/AppUser #
+for backend, wallet-ui
+
+AUTH_APP_PROVIDER_ISSUER_URL=http://keycloak.localhost:8082/realms/AppProvider
+# for backend oidc client conf, wallet-ui
+
+AUTH_APP_PROVIDER_ISSUER_URL_BACKEND=http://nginx-keycloak:8082/realms/AppProvider
+# for backends
+```
+
+1. Check that the Keycloak user ID matches the ledger user ID
+
+**App User**
+
+Compare the **ID** value in Keycloak’s User Details with the `AUTH_APP_USER_WALLET_ADMIN_USER_ID` value in `.env`.
+
+#### NOTE
+In this example, `AUTH_APP_USER_WALLET_ADMIN_USER_ID=92a520cb-2f09-4e55-b465-d178c6cfe5e4`
+
+![Keycloak user details](quickstart/secure/images/61-keycloak-alice.png)
+
+**App Provider**
+
+Compare the **ID** value in Keycloak’s User Details with the `AUTH_APP_PROVIDER_WALLET_ADMIN_USER_ID` value in `.env`.
+
+#### NOTE
+In this example, `AUTH_APP_PROVIDER_WALLET_ADMIN_USER_ID=553c6754-8879-41c9-ae80-b302f5af92c9`
+
+![Keycloak user details](quickstart/secure/images/61-keycloak-participant.png)
+
+Learn more about using Keycloak through their documentation portal:
+
+[Keycloak official documentation](https://www.keycloak.org/documentation)
+
+[Keycloak server administration guide](https://www.keycloak.org/docs/latest/server_admin/)
+
+[Securing applications with Keycloak](https://www.keycloak.org/guides.html#securing-apps)

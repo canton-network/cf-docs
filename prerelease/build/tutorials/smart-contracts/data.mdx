@@ -1,0 +1,674 @@
+<!-- source: daml / daml/3.5/sdk/tutorials/smart-contracts/data.rst -->
+<!-- Copyright (c) 2023 Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved. -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
+# Data types
+
+In [Basic contracts](contracts.md), you learnt about contract templates, which specify the types of contracts that can be created on the ledger, and what data those contracts hold in their arguments.
+
+In [Test templates using Daml scripts](daml-scripts.md), you learnt about the script view in Daml Studio, which displays the current ledger state. It shows one table per template, with one row per contract of that type and one column per field in the arguments.
+
+This actually provides a useful way of thinking about templates: like tables in databases. Templates specify a data schema for the ledger:
+
+- each template corresponds to a table
+- each field in the `with` block of a template corresponds to a column in that table
+- each contract of that type corresponds to a table row
+
+In this section, you’ll learn how to create rich data schemas for your ledger. Specifically you’ll learn about:
+
+- Daml’s built-in and native data types
+- Record types
+- Derivation of standard properties
+- Variants
+- Data manipulation
+- Contract manipulation
+
+After this section, you should be able to use a Daml ledger as a simple database where individual parties can write, read, and delete complex data.
+
+#### HINT
+Remember that you can load all the code for this section into a folder called `intro-data` by running `dpm new intro-data  --template daml-intro-data`
+
+<a id="native-types"></a>
+
+## Native types
+
+You have already encountered a few native Daml types: `Party` in [Basic contracts](contracts.md), and `Text` and `ContractId` in [Test templates using Daml scripts](daml-scripts.md). Here are those native types and more:
+
+- `Party`
+  Stores the identity of an entity that is able to act on the ledger, in the sense that they can sign contracts and submit transactions. In general, `Party` is opaque.
+- `Text`
+  Stores a unicode character string like `"Alice"`.
+- `ContractId a`
+  Stores a reference to a contract of type `a`.
+- `Int`
+  Stores signed 64-bit integers. For example, `-123`.
+- `Decimal`
+  Stores fixed-point number with 28 digits before and 10 digits after the decimal point. For example, `0.0000000001` or `-9999999999999999999999999999.9999999999`.
+- `Bool`
+  Stores `True` or `False`.
+- `Date`
+  Stores a date.
+- `Time`
+  Stores absolute UTC time.
+- `RelTime`
+  Stores a difference in time.
+
+The below script instantiates each one of these types, manipulates it where appropriate, and tests the result:
+
+```daml
+import Daml.Script
+import DA.Time
+import DA.Date
+
+native_test = script do
+  alice <- allocateParty "Alice"
+  bob <- allocateParty "Bob"
+  let
+    my_int = -123
+    my_dec = 0.001 : Decimal
+    my_text = "Alice"
+    my_bool = False
+    my_date = date 2020 Jan 01
+    my_time = time my_date 00 00 00
+    my_rel_time = hours 24
+
+  assert (alice /= bob)
+  assert (-my_int == 123)
+  assert (1000.0 * my_dec == 1.0)
+  assert (my_text == "Alice")
+  assert (not my_bool)
+  assert (addDays my_date 1 == date 2020 Jan 02)
+  assert (addRelTime my_time my_rel_time == time (addDays my_date 1) 00 00 00)
+```
+
+Despite its simplicity, there are quite a few things to note in this script:
+
+- The `import` statements at the top import two packages from the Daml standard library, which contain all the date and time related functions we use here as well as the functions used in Daml Scripts. More on packages, imports and the standard library later.
+- Most of the variables are declared inside a `let` block.
+
+  That’s because the `script do` block expects script actions like `submit` or `allocateParty`. An integer like `123` is not an action, it’s a pure expression, something we can evaluate without any ledger. You can think of the `let` as turning variable declaration into an action.
+- Most variables do not have annotations to say what type they are.
+
+  That’s because Daml is very good at *inferring* types. The compiler knows that `123` is an `Int`, so if you declare `my_int = 123`, it can infer that `my_int` is also an `Int`. This means you don’t have to write the type annotation `my_int : Int = 123`.
+
+  However, if the type is ambiguous so that the compiler can’t infer
+  it, you do have to add a type annotation. This is the case for
+  `0.001` which could be any `Numeric n`. Here we
+  specify `0.001 : Decimal` which is a synonym for `Numeric 10`. You can always choose to add type annotations to aid readability.
+- The `assert` function is an action that takes a boolean value and succeeds with `True` and fails with `False`.
+
+  Try putting `assert False` somewhere in a script and see what happens to the script result.
+
+With templates and these native types, it’s already possible to write a schema akin to a table in a relational database. Below, `Token` is extended into a simple `CashBalance`, administered by a party in the role of an accountant:
+
+```daml
+template CashBalance
+  with
+    accountant : Party
+    currency : Text
+    amount : Decimal
+    owner : Party
+    account_number : Text
+    bank : Party
+    bank_address : Text
+    bank_telephone : Text
+  where
+    signatory accountant
+
+cash_balance_test = script do
+  accountant <- allocateParty "Bob"
+  alice <- allocateParty "Alice"
+  bob <- allocateParty "Bank of Bob"
+
+  submit accountant do
+    createCmd CashBalance with
+      accountant
+      currency = "USD"
+      amount = 100.0
+      owner = alice
+      account_number = "ABC123"
+      bank = bob
+      bank_address = "High Street"
+      bank_telephone = "012 3456 789"
+```
+
+## Assemble types
+
+There’s quite a lot of information on the `CashBalance` above and it would be nice to be able to give that data more structure. Fortunately, Daml’s type system has a number of ways to assemble these native types into much more expressive structures.
+
+### Tuples
+
+A common task is to group values in a generic way. Take, for example, a key-value pair with a `Text` key and an `Int` value. In Daml, you could use a two-tuple of type `(Text, Int)` to do so. If you wanted to express a coordinate in three dimensions, you could group three `Decimal` values using a three-tuple `(Decimal, Decimal, Decimal)`:
+
+```daml
+import DA.Tuple
+import Daml.Script
+
+tuple_test = script do
+  let
+    my_key_value = ("Key", 1)
+    my_coordinate = (1.0 : Decimal, 2.0 : Decimal, 3.0 : Decimal)
+
+  assert (fst my_key_value == "Key")
+  assert (snd my_key_value == 1)
+  assert (my_key_value._1 == "Key")
+  assert (my_key_value._2 == 1)
+
+  assert (my_coordinate == (fst3 my_coordinate, snd3 my_coordinate, thd3 my_coordinate))
+  assert (my_coordinate == (my_coordinate._1, my_coordinate._2, my_coordinate._3))
+```
+
+You can access the data in the tuples using:
+
+- functions `fst`, `snd`, `fst3`, `snd3`, `thd3`
+- a dot-syntax with field names `_1`, `_2`, `_3`, etc.
+
+Daml supports tuples with up to 20 elements, but accessor functions like `fst` are only included for 2- and 3-tuples.
+
+### Lists
+
+Lists in Daml take a single type parameter defining the type of thing in the list. So you can have a list of integers `[Int]` or a list of strings `[Text]`, but not a list mixing integers and strings.
+
+That’s because Daml is statically and strongly typed. When you get an element out of a list, the compiler needs to know what type that element has.
+
+The below script instantiates a few lists of integers and demonstrates the most important list functions.
+
+```daml
+import DA.List
+import Daml.Script
+
+list_test = script do
+  let
+    empty : [Int] = []
+    one = [1]
+    two = [2]
+    many = [3, 4, 5]
+
+  -- `head` gets the first element of a list
+  assert (head one == 1)
+  assert (head many == 3)
+
+  -- `tail` gets the remainder after head
+  assert (tail one == empty)
+  assert (tail many == [4, 5])
+
+  -- `++` concatenates lists
+  assert (one ++ two ++ many == [1, 2, 3, 4, 5])
+  assert (empty ++ many ++ empty == many)
+
+  -- `::` adds an element to the beginning of a list.
+  assert (1 :: 2 :: 3 :: 4 :: 5 :: empty == 1 :: 2 :: many)
+```
+
+Note the type annotation on `empty : [Int] = []`. It’s necessary because `[]` is ambiguous. It could be a list of integers or of strings, but the compiler needs to know which it is.
+
+### Records
+
+You can think of records as named tuples with named fields. Declare them using the `data` keyword: `data T = C with`, where `T` is the type name and `C` is the data constructor. In practice, it’s a good idea to always use the same name for type and data constructor:
+
+```daml
+data MyRecord = MyRecord with
+  my_txt : Text
+  my_int : Int
+  my_dec : Decimal
+  my_list : [Text]
+
+-- Fields of same type can be declared in one line
+data Coordinate = Coordinate with
+  x, y, z : Decimal
+
+-- Custom data types can also have variables
+data KeyValue k v = KeyValue with
+  my_key : k
+  my_val : v
+
+data Nested = Nested with
+  my_coord : Coordinate
+  my_record : MyRecord
+  my_kv : KeyValue Text Int
+
+record_test = script do
+  let
+    my_record = MyRecord with
+      my_txt = "Text"
+      my_int = 2
+      my_dec = 2.5
+      my_list = ["One", "Two", "Three"]
+
+    my_coord = Coordinate with
+      x = 1.0
+      y = 2.0
+      z = 3.0
+
+    -- `my_text_int` has type `KeyValue Text Int`
+    my_text_int = KeyValue with
+      my_key = "Key"
+      my_val = 1
+
+    -- `my_int_decimal` has type `KeyValue Int Decimal`
+    my_int_decimal = KeyValue with
+      my_key = 2
+      my_val = 2.0 : Decimal
+
+    -- If variables are in scope that match field names, we can pick them up
+    -- implicitly, writing just `my_coord` instead of `my_coord = my_coord`.
+    my_nested = Nested with
+      my_coord
+      my_record
+      my_kv = my_text_int
+
+  -- Fields can be accessed with dot syntax
+  assert (my_coord.x == 1.0)
+  assert (my_text_int.my_key == "Key")
+  assert (my_nested.my_record.my_dec == 2.5)
+```
+
+You’ll notice that the syntax to declare records is very similar to the syntax used to declare templates. That’s no accident because a template is really just a special record. When you write `template Token with`, one of the things that happens in the background is that this becomes a `data Token = Token with`.
+
+In the `assert` statements above, we always compared values of in-built types. If you wrote `assert (my_record == my_record)` in the script, you may be surprised to get an error message `No instance for (Eq MyRecord) arising from a use of ‘==’`. Equality in Daml is always value equality and we haven’t written a function to check value equality for `MyRecord` values. But don’t worry, you don’t have to implement this rather obvious function yourself. The compiler is smart enough to do it for you, if you use `deriving (Eq)`:
+
+```daml
+data EqRecord = EqRecord with
+  my_txt : Text
+  my_int : Int
+  my_dec : Decimal
+  my_list : [Text]
+    deriving (Eq)
+
+data MyContainer a = MyContainer with
+  contents : a
+    deriving (Eq)
+
+eq_test = script do
+  let
+    eq_record = EqRecord with
+      my_txt = "Text"
+      my_int = 2
+      my_dec = 2.5
+      my_list = ["One", "Two", "Three"]
+
+    my_container = MyContainer with
+      contents = eq_record
+    other_container = MyContainer with
+      contents = eq_record
+
+  assert(my_container.contents == eq_record)
+  assert(my_container == other_container)
+```
+
+`Eq` is what is called a *typeclass*. You can think of a typeclass as being like an interface in other languages: it is the mechanism by which you can define a set of functions (for example, `==` and `/=` in the case of `Eq`) to work on multiple types, with a specific implementation for each type they can apply to.
+
+There are some other typeclasses that the compiler can derive automatically. Most prominently, `Show` to get access to the function `show` (equivalent to `toString` in many languages) and `Ord`, which gives access to comparison operators `<`, `>`, `<=`, `>=`.
+
+It’s a good idea to always derive `Eq` and `Show` using `deriving (Eq, Show)`. The record types created using `template T with` do this automatically, and the native types have appropriate typeclass instances. For example, `Int` derives `Eq`, `Show`, and `Ord`. As another example, `ContractId a` derives `Eq` and `Show`.
+
+Records can give the data on `CashBalance` a bit more structure:
+
+```daml
+data Bank = Bank with
+  party : Party
+  address: Text
+  telephone : Text
+    deriving (Eq, Show)
+
+data Account = Account with
+  owner : Party
+  number : Text
+  bank : Bank
+    deriving (Eq, Show)
+
+data Cash = Cash with
+  currency : Text
+  amount : Decimal
+    deriving (Eq, Show)
+
+template CashBalance
+  with
+    accountant : Party
+    cash : Cash
+    account : Account
+  where
+    signatory accountant
+
+cash_balance_test = script do
+  accountant <- allocateParty "Bob"
+  owner <- allocateParty "Alice"
+  bank_party <- allocateParty "Bank"
+  let
+    bank = Bank with
+      party = bank_party
+      address = "High Street"
+      telephone = "012 3456 789"
+    account = Account with
+      owner
+      bank
+      number = "ABC123"
+    cash = Cash with
+      currency = "USD"
+      amount = 100.0
+
+  submit accountant do
+    createCmd CashBalance with
+      accountant
+      cash
+      account
+  pure ()
+```
+
+If you look at the resulting script view, you’ll see that this still gives rise to one table. The records are expanded out into columns using dot notation.
+
+### Variants and pattern matching
+
+Suppose now that you also wanted to keep track of cash in hand. Cash in hand doesn’t have a bank, but you can’t just leave `bank` empty. Daml doesn’t have an equivalent to `null`. Variants can express that cash can either be in hand or at a bank:
+
+```daml
+data Bank = Bank with
+  party : Party
+  address: Text
+  telephone : Text
+    deriving (Eq, Show)
+
+data Account = Account with
+  number : Text
+  bank : Bank
+    deriving (Eq, Show)
+
+data Cash = Cash with
+  currency : Text
+  amount : Decimal
+    deriving (Eq, Show)
+
+data Location
+  = InHand
+  | InAccount Account
+    deriving (Eq, Show)
+
+template CashBalance
+  with
+    accountant : Party
+    owner : Party
+    cash : Cash
+    location : Location
+  where
+    signatory accountant
+
+cash_balance_test = do
+  accountant <- allocateParty "Bob"
+  owner <- allocateParty "Alice"
+  bank_party <- allocateParty "Bank"
+  let
+    bank = Bank with
+      party = bank_party
+      address = "High Street"
+      telephone = "012 3456 789"
+    account = Account with
+      bank
+      number = "ABC123"
+    cash = Cash with
+      currency = "USD"
+      amount = 100.0
+
+  submit accountant do
+    createCmd CashBalance with
+      accountant
+      owner
+      cash
+      location = InHand
+
+  submit accountant do
+    createCmd CashBalance with
+      accountant
+      owner
+      cash
+      location = InAccount account
+```
+
+The way to read the declaration of `Location` is “*A Location either has value* `InHand` *OR has a value* `InAccount a` *where* `a` *is of type Account*”. This is quite an explicit way to say that there may or may not be an `Account` associated with a `CashBalance` and gives both cases suggestive names.
+
+Another option is to use the built-in `Optional` type. The `None` value of type `Optional a` is the closest Daml has to a `null` value:
+
+```daml
+data Optional a
+  = None
+  | Some a
+    deriving (Eq, Show)
+```
+
+Variant types where none of the data constructors take a parameter are called enums:
+
+```daml
+data DayOfWeek
+  = Monday
+  | Tuesday
+  | Wednesday
+  | Thursday
+  | Friday
+  | Saturday
+  | Sunday
+    deriving (Eq, Show)
+```
+
+To access the data in variants, you need to distinguish the different possible cases. For example, you can no longer access the account number of a `Location` directly, because if it is `InHand`, there may be no account number.
+
+To do this, you can use *pattern matching* and either throw errors or return compatible types for all cases:
+
+```daml
+{-
+-- Commented out as `Either` is defined in the standard library.
+data Either a b
+  = Left a
+  | Right b
+-}
+
+variant_access_test = script do
+  let
+    l : Either Int Text = Left 1
+    r : Either Int Text = Right "r"
+
+    -- If we know that `l` is a `Left`, we can error on the `Right` case.
+    l_value = case l of
+      Left i -> i
+      Right i -> error "Expecting Left"
+    -- Comment out at your own peril
+    {-
+    r_value = case r of
+      Left i -> i
+      Right i -> error "Expecting Left"
+    -}
+
+    -- If we are unsure, we can return an `Optional` in both cases
+    ol_value = case l of
+      Left i -> Some i
+      Right i -> None
+    or_value = case r of
+      Left i -> Some i
+      Right i -> None
+
+    -- If we don't care about values or even constructors, we can use wildcards
+    l_value2 = case l of
+      Left i -> i
+      Right _ -> error "Expecting Left"
+    l_value3 = case l of
+      Left i -> i
+      _ -> error "Expecting Left"
+
+    day = Sunday
+    weekend = case day of
+      Saturday -> True
+      Sunday -> True
+      _ -> False
+
+  assert (l_value == 1)
+  assert (l_value2 == 1)
+  assert (l_value3 == 1)
+  assert (ol_value == Some 1)
+  assert (or_value == None)
+  assert weekend
+```
+
+## Manipulate data
+
+You’ve got all the ingredients to build rich types expressing the data you want to be able to write to the ledger, and you have seen how to create new values and read fields from values. But how do you manipulate values once created?
+
+All data in Daml is immutable, meaning once a value is created, it will never change. Rather than changing values, you create new values based on old ones with some changes applied:
+
+```daml
+manipulation_demo = script do
+  let
+    eq_record = EqRecord with
+      my_txt = "Text"
+      my_int = 2
+      my_dec = 2.5
+      my_list = ["One", "Two", "Three"]
+
+    -- A verbose way to change `eq_record`
+    changed_record = EqRecord with
+      my_txt = eq_record.my_txt
+      my_int = 3
+      my_dec = eq_record.my_dec
+      my_list = eq_record.my_list
+
+    -- A better way
+    better_changed_record = eq_record with
+      my_int = 3
+
+    record_with_changed_list = eq_record with
+      my_list = "Zero" :: eq_record.my_list
+
+  assert (eq_record.my_int == 2)
+  assert (changed_record == better_changed_record)
+
+  -- The list on `eq_record` can't be changed.
+  assert (eq_record.my_list == ["One", "Two", "Three"])
+  -- The list on `record_with_changed_list` is a new one.
+  assert (record_with_changed_list.my_list == ["Zero", "One", "Two", "Three"])
+```
+
+`changed_record` and `better_changed_record` are each a copy of `eq_record` with the field `my_int` changed. `better_changed_record` shows the recommended way to change fields on a record. The syntax is almost the same as for a new record, but the record name is replaced with the old value: `eq_record with` instead of `EqRecord with`. The `with` block no longer needs to give values to all fields of `EqRecord`. Any missing fields are taken from `eq_record`.
+
+Throughout the script, `eq_record` never changes. The expression `"Zero" :: eq_record.my_list` doesn’t change the list in-place, but creates a new list, which is `eq_record.my_list` with an extra element in the beginning.
+
+<a id="manipulate-contracts"></a>
+
+## Manipulate contracts
+
+Daml’s type system allows you to store structured data within Daml contracts.
+Like records and other data structures, contracts are immutable.
+They can only be created and archived.
+If you need to change a contract, you must archive the original contract and create a new one with the updated data.
+
+```daml
+data Bank = Bank with
+  party : Party
+  address: Text
+  telephone : Text
+    deriving (Eq, Show)
+
+template Account
+  with
+    accountant : Party
+    owner : Party
+    number : Text
+    bank : Bank
+  where
+    signatory accountant
+
+contract_manipulation_test = do
+  accountant <- allocateParty "Bob"
+  owner <- allocateParty "Alice"
+  bank_party <- allocateParty "Bank"
+  let
+    bank = Bank with
+      party = bank_party
+      address = "High Street"
+      telephone = "012 3456 789"
+
+  accountCid <- submit accountant do
+     createCmd Account with
+      accountant
+      owner
+      bank
+      number = "ABC123"
+
+  -- Now the accountant updates the telephone number for the bank on the account
+  Some account <- queryContractId accountant accountCid
+  newAccountCid <- submit accountant do
+    archiveCmd accountCid
+    cid <- createCmd account with
+      bank = account.bank with
+        telephone = "098 7654 321"
+    pure cid
+  
+  newAccountCid =/= accountCid
+```
+
+The script above uses `archiveCmd` and `createCmd` to modify a contract of type `Account` in the same transaction.
+This process creates a new contract, and a new, distinct contract ID, as shown by `newAccountCid =/= accountCid`
+
+When you modify a contract, by archiving it and creating a new one, you generate a new contract ID.
+That makes contract IDs unstable, and it can cause stale references.
+
+```daml
+data Cash = Cash with
+  currency : Text
+  amount : Decimal
+    deriving (Eq, Show)
+
+template CashBalance
+  with
+    accountant : Party
+    cash : Cash
+    account : ContractId Account
+  where
+    signatory accountant
+
+stale_contract_id_test = do
+  accountant <- allocateParty "Bob"
+  owner <- allocateParty "Alice"
+  bank_party <- allocateParty "Bank"
+  let
+    bank = Bank with
+      party = bank_party
+      address = "High Street"
+      telephone = "012 3456 789"
+    cash = Cash with
+      currency = "USD"
+      amount = 100.0
+
+  accountCid <- submit accountant do
+     createCmd Account with
+      accountant
+      owner
+      bank
+      number = "ABC123"
+
+  balanceCid <- submit accountant do
+    createCmd CashBalance with
+      accountant
+      cash
+      account = accountCid
+
+  -- Now the accountant updates the telephone number for the bank on the account
+  Some account <- queryContractId accountant accountCid
+  _ <- submit accountant do
+    archiveCmd accountCid
+    cid <- createCmd account with
+      bank = account.bank with
+        telephone = "098 7654 321"
+    pure cid
+
+  -- The `account` field on the balance now refers to the archived
+  -- contract, so this returns None.
+  Some balance <- queryContractId accountant balanceCid
+  optAccount <- queryContractId accountant balance.account
+  optAccount === None
+```
+
+In the script above, the `ContractId` in `balance.account` still refers to the archived contract.
+Consequently, querying the `balance.account` fails and returns `None`.
+
+## Next up
+
+You can now define data schemas for the ledger, read, write, and delete data from the ledger.
+
+In [Transform contracts using choices](choices.md) you’ll learn how to define data transformations and give other parties the right to manipulate data in restricted ways.

@@ -1,0 +1,80 @@
+<!-- source: canton / canton/3.5/synchronizer/howtos/observe/mediator_inspection.rst -->
+<!-- Copyright (c) 2026 Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved. -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
+<a id="mediator-inspect"></a>
+
+# Mediator inspection
+
+The Mediator inspection provides access to metadata associated with finalized transactions, also known as verdicts,
+to give insights on the transactions completed on a Synchronizer.
+This page describes how to obtain the verdicts from the admin console.
+
+## Obtain verdicts from the mediator
+
+Use the verdicts admin command to inspect verdicts:
+
+```none
+@ import com.digitalasset.canton.data.CantonTimestamp
+```
+
+```none
+@ mediator1.inspection.verdicts(fromRecordTimeOfRequestExclusive = CantonTimestamp.MinValue, maxItems = 1)
+    res2: Seq[com.digitalasset.canton.mediator.admin.v30.Verdict] = List(
+      Verdict(
+        submittingParties = Vector(
+          "participant1::12201ff69b1d24edbf0ee2028a304ea702ee8536790dab1a31e7136e6d90ff6d473c"
+        ),
+        submittingParticipantUid = "participant1::12201ff69b1d24edbf0ee2028a304ea702ee8536790dab1a31e7136e6d90ff6d473c",
+        verdict = VERDICT_RESULT_ACCEPTED,
+        finalizationTime = Some(
+          value = Timestamp(
+            seconds = 1768084753L,
+            nanos = 789501000,
+            unknownFields = UnknownFieldSet(fields = Map())
+          )
+        ),
+        recordTime = Some(
+          value = Timestamp(
+            seconds = 1768084752L,
+            nanos = 110436000,
+            unknownFields = UnknownFieldSet(fields = Map())
+          )
+        ),
+        mediatorGroup = 0,
+        views = TransactionViews(
+          value = TransactionViews(
+            views = Map(
+              0 -> TransactionView(
+                informees = Vector(
+                  "participant1::12201ff69b1d24edbf0ee2028a304ea702ee8536790dab1a31e7136e6d90ff6d473c"
+                ),
+                confirmingParties = Vector(
+                  Quorum(
+                    parties = Vector(
+                      "participant1::12201ff69b1d24edbf0ee2028a304ea702ee8536790dab1a31e7136e6d90ff6d473c"
+                    ),
+                    threshold = 1
+                  )
+                ),
+                subViews = Vector()
+              )
+            ),
+            rootViews = Vector(0)
+          )
+        ),
+        updateId = "12208327a5b1874db38f4c75cb0ef1ee06e4c1239b830b4a251d6760a62e0221334f"
+      )
+    )
+```
+
+The command requires a starting record time (exclusive) and a maximum number of verdicts to list.
+CantonTimestamp.MinValue can be used to obtain all verdicts from the beginning.
+
+The output is a list of verdicts. Each verdict contains, among others, its result (accepted, rejected, unspecified),
+a submitting participant, submitting parties, a finalization time, a record time of the corresponding confirmation request,
+and metadata of transaction views.
+
+For more details on the verdicts admin command, check the reference documentation.
+
+To learn more about related concepts, see `:brokenref:`the Mediator overview<mediator-overview>``.

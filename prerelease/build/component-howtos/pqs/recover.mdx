@@ -1,0 +1,192 @@
+<!-- source: pqs / pqs/3.5/component-howtos/pqs/recover.rst -->
+<!-- Copyright (c) 2025, Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved. -->
+
+<a id="pqs-recover"></a>
+
+# Recover
+
+PQS is designed to operate as a long-running process which uses these principles to enhance availability:
+
+* **Redundancy** involves running multiple instances of PQS in parallel to ensure that the system remains available
+  even if one instance fails.
+* **Retry** involves healing from transient and recoverable failures without shutting down the process or requiring
+  operator intervention.
+* **Recovery** entails reconciling the current state of the ledger with already exported data in the datastore after
+  a cold start, and continuing from the latest checkpoint.
+
+<a id="pqs-high-availability"></a>
+
+## High availability
+
+Multiple isolated instances of PQS can be instantiated without any cross-dependency. This allows for an active-active
+high availability clustering model. Please note that different instances might not be at the same offset due to
+different processing rates and general network non-determinism. PQS’ SQL API provides capabilities to deal with
+this ‘eventual consistency’ model, to ensure that readers have at least ‘repeatable read’ consistency. See
+`validate_offset_exists()` in [Offset management](references/sql-api.md#pqs-references-offset-management) for more details.
+
+<a id="pqs-retries"></a>
+
+## Retries
+
+PQS’ `pipeline` command is a unidirectional streaming process that heavily relies on the availability of its
+`source` and `target` dependencies. When PQS encounters an error, it attempts to recover by restarting its
+internal engine, if the error is designated as recoverable:
+
+* gRPC <sup>[1](#id3)</sup> (white-listed; retries if):
+  * `CANCELLED`
+  * `DEADLINE_EXCEEDED`
+  * `NOT_FOUND`
+  * `PERMISSION_DENIED`
+  * `RESOURCE_EXHAUSTED`
+  * `FAILED_PRECONDITION`
+  * `ABORTED`
+  * `INTERNAL`
+  * `UNAVAILABLE`
+  * `DATA_LOSS`
+  * `UNAUTHENTICATED`
+* JDBC <sup>[2](#id4)</sup> (black-listed; retries unless):
+  * `INVALID_PARAMETER_TYPE`
+  * `PROTOCOL_VIOLATION`
+  * `NOT_IMPLEMENTED`
+  * `INVALID_PARAMETER_VALUE`
+  * `SYNTAX_ERROR`
+  * `UNDEFINED_COLUMN`
+  * `UNDEFINED_OBJECT`
+  * `UNDEFINED_TABLE`
+  * `UNDEFINED_FUNCTION`
+  * `NUMERIC_CONSTANT_OUT_OF_RANGE`
+  * `NUMERIC_VALUE_OUT_OF_RANGE`
+  * `DATA_TYPE_MISMATCH`
+  * `INVALID_NAME`
+  * `CANNOT_COERCE`
+  * `UNEXPECTED_ERROR`
+
+### Configuration
+
+The following [Configuration options](references/configuration-options.md#pqs-references-configuration-options) are available to control the retry behavior of PQS:
+
+```text
+--retry-backoff-base string      Base time (ISO 8601) for backoff retry strategy (default: PT1S)
+--retry-backoff-cap string       Max duration (ISO 8601) between attempts (default: PT1M)
+--retry-backoff-factor double    Factor for backoff retry strategy (default: 2.0)
+--retry-counter-attempts int     Max attempts before giving up (optional)
+--retry-counter-reset string     Reset retry counters after period (ISO 8601) of stability (default: PT10M)
+--retry-counter-duration string  Time limit (ISO 8601) before giving up (optional)
+```
+
+Configuring `--retry-backoff-*` settings control periodicity of retries and the maximum duration between attempts.
+
+Configuring `--retry-counter-attempts` and `--retry-counter-duration` controls the maximum *instability*
+tolerance before shutting down.
+
+Configuring `--retry-counter-reset` controls the period of *stability* after which the retry counters are reset
+across the board.
+
+### Logging
+
+While PQS recovers, the following log messages are emitted to indicate the progress of the recovery:
+
+```text
+12:52:26.753 I [zio-fiber-257] com.digitalasset.scribe.appversion.package:14 scribe, version: UNSPECIFIED  application=scribe
+12:52:16.725 I [zio-fiber-0] com.digitalasset.scribe.pipeline.Retry.retryRecoverable:48 Recoverable GRPC exception. Attempt 1, unstable for 0 seconds. Remaining attempts: 42. Remaining time: 10 minutes. Exception in thread "zio-fiber-" java.lang.Throwable: Recoverable GRPC exception.
+    Suppressed: io.grpc.StatusException: UNAVAILABLE: io exception
+        Suppressed: io.netty.channel.AbstractChannel$AnnotatedConnectException: Connection refused: localhost/[0:0:0:0:0:0:0:1]:6865
+            Suppressed: java.net.ConnectException: Connection refused application=scribe
+12:52:29.007 I [zio-fiber-0] com.digitalasset.scribe.pipeline.Retry.retryRecoverable:48 Recoverable GRPC exception. Attempt 2, unstable for 12 seconds. Remaining attempts: 41. Remaining time: 9 minutes 47 seconds. Exception in thread "zio-fiber-" java.lang.Throwable: Recoverable GRPC exception.
+    Suppressed: io.grpc.StatusException: UNAVAILABLE: io exception
+        Suppressed: io.netty.channel.AbstractChannel$AnnotatedConnectException: Connection refused: localhost/[0:0:0:0:0:0:0:1]:6865
+            Suppressed: java.net.ConnectException: Connection refused application=scribe
+12:52:51.237 I [zio-fiber-0] com.digitalasset.scribe.pipeline.Retry.retryRecoverable:48 Recoverable GRPC exception. Attempt 3, unstable for 34 seconds. Remaining attempts: 40. Remaining time: 9 minutes 25 seconds. Exception in thread "zio-fiber-" java.lang.Throwable: Recoverable GRPC exception.
+    Suppressed: io.grpc.StatusException: UNAVAILABLE: io exception
+        Suppressed: io.netty.channel.AbstractChannel$AnnotatedConnectException: Connection refused: localhost/[0:0:0:0:0:0:0:1]:6865
+            Suppressed: java.net.ConnectException: Connection refused application=scribe
+12:53:33.473 I [zio-fiber-0] com.digitalasset.scribe.pipeline.Retry.retryRecoverable:48 Recoverable GRPC exception. Attempt 4, unstable for 1 minute 16 seconds. Remaining attempts: 39. Remaining time: 8 minutes 43 seconds. Exception in thread "zio-fiber-" java.lang.Throwable: Recoverable GRPC exception.
+    Suppressed: io.grpc.StatusException: UNAVAILABLE: io exception
+        Suppressed: io.netty.channel.AbstractChannel$AnnotatedConnectException: Connection refused: localhost/[0:0:0:0:0:0:0:1]:6865
+            Suppressed: java.net.ConnectException: Connection refused application=scribe
+12:54:36.328 I [zio-fiber-0] com.digitalasset.scribe.pipeline.Retry.retryRecoverable:48 Recoverable JDBC exception. Attempt 5, unstable for 2 minutes 19 seconds. Remaining attempts: 38. Remaining time: 7 minutes 40 seconds. Exception in thread "zio-fiber-" java.lang.Throwable: Recoverable JDBC exception.
+    Suppressed: org.postgresql.util.PSQLException: Connection to localhost:5432 refused. Check that the hostname and port are correct and that the postmaster is accepting TCP/IP connections.
+        Suppressed: java.net.ConnectException: Connection refused application=scribe
+```
+
+### Metrics
+
+The following metrics are available to monitor stability of PQS’ dependencies. See [Application metrics](observe.md#pqs-application-metrics)
+for more details on general observability:
+
+```text
+## TYPE app_restarts_total counter
+## HELP app_restarts_total Number of total app restarts due to recoverable errors
+app_restarts_total{,exception="Recoverable GRPC exception."} 5.0
+
+## TYPE grpc_up gauge
+## HELP grpc_up Grpc channel is up
+grpc_up{} 1.0
+
+## TYPE jdbc_conn_pool_up gauge
+## HELP jdbc_conn_pool_up JDBC connection pool is up
+jdbc_conn_pool_up{} 1.0
+```
+
+### Retry counters reset
+
+If PQS encounters network unavailability it starts incrementing retry counters with each attempt. These counters are
+reset only after a period of stability, as defined by `--retry-counter-reset`. As such, during the prolonged
+periods of intermittent failures that alternate with brief periods of operating normally, PQS keeps maintaining a
+cautious stance on assumptions regarding the stability of the overall system. This can be illustrated with an example
+below:
+
+As an example, for the setting `--retry-counter-reset PT5M` the following timeline illustrates how the retry works:
+
+```text
+time -->       1:00            5:00               10:00
+                v               v                   v
+operation:  ====xx=x====x=======x========================
+                ^               ^                   ^
+                A               B                   C
+
+x - a failure causing retry happens
+= - operating normally
+```
+
+In the timeline above, intermittent failures start at point A, and each retry attempt contributes to the increase of
+the overall backoff schedule. Consequently, each subsequent retry allows more time for the system to recover. This
+schedule does not reset to its initial values until after the configured period of stability is reached following the
+last failure (point B), such as after operating without any failures for 5 minutes (point C).
+
+### Exit codes
+
+PQS terminates with the following exit codes:
+
+* `0`: Normal termination
+* `1`: Termination due to unrecoverable error or all retry attempts for recoverable errors have been exhausted
+
+<a id="pqs-ledger-streaming-and-recovery"></a>
+
+## Ledger streaming & recovery
+
+On (re-)start, PQS determines last saved checkpoint and continues incremental processing from that point onward. PQS
+is able to start and finish at prescribed ledger offsets, specified via args.
+
+In many scenarios `--pipeline-ledger-start Oldest --pipeline-ledger-stop Never` is the most appropriate
+configuration, for both initial population of all available history, and also catering for resumption/recovery
+processing.
+
+Start offset meanings:
+
+| Value      | Meaning                                                                                                 |
+|------------|---------------------------------------------------------------------------------------------------------|
+| `Genesis`  | Commence from the first offset of the ledger, failing if not available.                                 |
+| `Oldest`   | Resume processing, or start from the oldest available offset of the ledger (if the datastore is empty). |
+| `Latest`   | Resume processing, or start from the latest available offset of the ledger (if the datastore is empty). |
+| `<offset>` | Offset from which to start processing, terminating if it does not match the state of the datastore.     |
+
+Stop offset meanings:
+
+| Value      | Meaning                                                                           |
+|------------|-----------------------------------------------------------------------------------|
+| `Latest`   | Process until reaching the latest available offset of the ledger, then terminate. |
+| `Never`    | Keep processing and never terminate.                                              |
+| `<offset>` | Process until reaching this offset, then terminate.                               |
+* <a id='id3'>**[1]**</a> [https://grpc.io/docs/guides/status-codes/](https://grpc.io/docs/guides/status-codes/)
+* <a id='id4'>**[2]**</a> [https://github.com/pgjdbc/pgjdbc/blob/master/pgjdbc/src/main/java/org/postgresql/util/PSQLState.java](https://github.com/pgjdbc/pgjdbc/blob/master/pgjdbc/src/main/java/org/postgresql/util/PSQLState.java)
