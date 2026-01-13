@@ -1,0 +1,256 @@
+---
+title: "Use Cases"
+description: "Real-world applications where Canton's privacy model enables solutions impossible on traditional blockchains"
+---
+
+Canton's architecture enables use cases that are fundamentally impossible on transparent blockchains. This page explores key patterns and concrete examples.
+
+## Delivery vs. Payment (DvP)
+
+The canonical example of Canton's capabilities is atomic delivery vs. payment across different assets and parties.
+
+### The Scenario
+
+Alice wants to buy a tokenized asset from Bob. She'll pay with Canton Coin, which she obtained from Carol. The settlement should be:
+
+- **Atomic**: Either both legs complete, or neither does
+- **Private**: Carol shouldn't know about Alice's purchase; observers shouldn't see the price
+
+### On Traditional Blockchains
+
+This is problematic:
+
+- If done in two transactions: risk of one completing without the other
+- If done atomically: all parties (and observers) see all legs of the trade
+- Carol learns Alice bought something from Bob
+- Anyone watching can see the price and terms
+
+### On Canton
+
+The entire exchange happens in a single atomic transaction with sub-transaction privacy:
+
+```mermaid
+flowchart TB
+    subgraph TX[Atomic DvP Transaction]
+        direction LR
+        L1[Leg 1: Carol → Alice<br>Canton Coin transfer]
+        L2[Leg 2: Alice → Bob<br>Canton Coin payment]
+        L3[Leg 3: Bob → Alice<br>Asset delivery]
+    end
+
+    subgraph Views[What Each Party Sees]
+        VC[Carol's View<br>- Sent CC to Alice<br>- Doesn't see Bob or asset]
+        VA[Alice's View<br>- Received CC from Carol<br>- Paid Bob<br>- Received asset]
+        VB[Bob's View<br>- Received CC from Alice<br>- Transferred asset<br>- Doesn't see Carol]
+    end
+
+    TX --> Views
+```
+
+| Party | Sees | Doesn't See |
+|-------|------|-------------|
+| **Carol** | CC transfer to Alice | Bob's involvement, the asset, the price |
+| **Alice** | All three legs | N/A (she's the central party) |
+| **Bob** | CC receipt, asset transfer | Carol's involvement, source of funds |
+| **Observers** | Nothing | Everything |
+
+### Why This Matters
+
+- **Regulatory compliance**: Each party sees only their entitled information
+- **Atomic settlement**: No settlement risk—both legs or neither
+- **Privacy**: Trading relationships and prices protected
+- **Audit trail**: Entitled auditors can be added as observers
+
+## Syndicated Loan Management
+
+Multiple banks participate in a loan without seeing each other's positions or terms.
+
+### The Problem
+
+In syndicated loans:
+- Multiple banks hold portions of the same loan
+- Each bank's position is confidential
+- The agent bank coordinates payments
+- Borrower interacts with the group as a whole
+
+On transparent systems, all participants would see all positions, defeating confidentiality.
+
+### Canton Solution
+
+```mermaid
+flowchart TB
+    subgraph Loan[Syndicated Loan Structure]
+        Agent[Agent Bank<br>Coordinates]
+        B1[Bank A<br>$100M position]
+        B2[Bank B<br>$75M position]
+        B3[Bank C<br>$50M position]
+        Borrower[Borrower]
+    end
+
+    Borrower --> Agent
+    Agent --> B1
+    Agent --> B2
+    Agent --> B3
+
+    Note1[Bank A sees: own position, agent coordination<br>Bank A doesn't see: Bank B or C positions]
+```
+
+Each bank sees:
+- Their own position and terms
+- Payments flowing to/from them
+- Agent coordination for their portion
+
+Each bank doesn't see:
+- Other banks' positions
+- Other banks' terms
+- Total syndicate size (unless explicitly shared)
+
+## Supply Chain Finance
+
+Track goods and payments across multiple parties without exposing commercial relationships.
+
+### The Scenario
+
+A manufacturer ships to a distributor, who ships to a retailer. Financing is provided at each step.
+
+### Privacy Requirements
+
+- Manufacturer shouldn't see retailer's purchase price
+- Retailer shouldn't see manufacturing cost
+- Each financier sees only their debtor's portion
+- Logistics providers see shipping info, not financial terms
+
+### Canton Approach
+
+```haskell
+-- Each leg is visible only to relevant parties
+template ShipmentLeg
+  with
+    shipper : Party
+    receiver : Party
+    logisticsProvider : Party
+    financier : Party
+    goods : GoodsDescription
+    terms : FinancingTerms
+  where
+    signatory shipper, receiver
+    observer logisticsProvider, financier
+
+    -- Financier sees terms; logistics provider sees goods
+    -- Next leg participants don't see previous leg terms
+```
+
+The supply chain operates with full traceability for entitled parties while maintaining commercial confidentiality.
+
+## Tokenized Securities
+
+Issue and trade securities with regulatory compliance built in.
+
+### Requirements
+
+- Issuer controls who can hold the security
+- Regulator has audit visibility
+- Trades are private between buyer and seller
+- Corporate actions affect all holders (but holdings remain private)
+
+### Canton Design
+
+```haskell
+template Security
+  with
+    issuer : Party
+    holder : Party
+    regulator : Party
+    cusip : Text
+    quantity : Decimal
+  where
+    signatory issuer
+    observer holder, regulator  -- Regulator sees all holdings
+
+    choice Transfer : ContractId Security
+      with
+        newHolder : Party
+        transferAgent : Party
+      controller holder, transferAgent
+      do
+        -- Compliance checks happen here
+        assert (newHolder `elem` approvedHolders)
+        create this with holder = newHolder
+```
+
+The regulator observes all holdings (for compliance) without that data being public. Trades remain private between counterparties while still being auditable.
+
+## Cross-Border Payments
+
+Move value across jurisdictions while respecting data sovereignty requirements.
+
+### The Challenge
+
+- Sender's bank is in Country A with data localization requirements
+- Receiver's bank is in Country B with different requirements
+- Correspondent banking requires coordination
+- Neither country's regulator should see the other's customer data
+
+### Canton Solution
+
+Each jurisdiction's data stays with validators in that jurisdiction:
+
+```mermaid
+flowchart LR
+    subgraph CountryA[Country A]
+        SenderBank[Sender's Bank<br>Validator A]
+        RegA[Regulator A<br>Observer]
+    end
+
+    subgraph CountryB[Country B]
+        ReceiverBank[Receiver's Bank<br>Validator B]
+        RegB[Regulator B<br>Observer]
+    end
+
+    SenderBank <--> |atomic settlement<br>via synchronizer| ReceiverBank
+
+    RegA --> |sees sender details| SenderBank
+    RegB --> |sees receiver details| ReceiverBank
+```
+
+- Sender's details stay in Country A
+- Receiver's details stay in Country B
+- Settlement is atomic across the synchronizer
+- Each regulator sees only their jurisdiction's data
+
+## When Canton Fits
+
+Canton is ideal when you need:
+
+| Requirement | Canton Provides |
+|-------------|-----------------|
+| **Multi-party coordination** | Native multi-party contracts with explicit authorization |
+| **Confidential execution** | Sub-transaction privacy by design |
+| **Regulatory compliance** | Selective disclosure to authorized parties |
+| **Atomic settlement** | All-or-nothing execution across parties |
+| **Audit trails** | Observer roles for entitled auditors |
+
+## When Canton May Not Fit
+
+Consider alternatives if you need:
+
+| Requirement | Consideration |
+|-------------|---------------|
+| **Fully public applications** | Transparency is a feature, not a limitation |
+| **EVM compatibility** | Canton uses Daml, not Solidity |
+| **Anonymous participation** | Canton parties have identity |
+| **Simple single-party apps** | Blockchain overhead may not be justified |
+
+## Next Steps
+
+<CardGroup cols={2}>
+
+<Card title="Core Concepts" icon="book" href="/overview/understand/core-concepts">
+  Understand parties, validators, and synchronizers.
+</Card>
+
+<Card title="Start Building" icon="code" href="/appdev/get-started/choose-your-path">
+  Begin your development journey.
+</Card>
+
+</CardGroup>
