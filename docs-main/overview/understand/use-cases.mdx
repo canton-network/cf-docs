@@ -122,25 +122,39 @@ A manufacturer ships to a distributor, who ships to a retailer. Financing is pro
 
 ### Canton Approach
 
+Canton's privacy works at the contract level—observers see entire contracts, not individual fields. To give different parties access to different information, you design separate contracts for each audience:
+
 ```haskell
--- Each leg is visible only to relevant parties
-template ShipmentLeg
+-- Shipping details: visible to logistics provider
+template ShipmentTracking
   with
     shipper : Party
     receiver : Party
     logisticsProvider : Party
-    financier : Party
     goods : GoodsDescription
-    terms : FinancingTerms
+    trackingId : Text
   where
     signatory shipper, receiver
-    observer logisticsProvider, financier
+    observer logisticsProvider
+    -- Logistics provider sees goods and routing, not financial terms
 
-    -- Financier sees terms; logistics provider sees goods
-    -- Next leg participants don't see previous leg terms
+-- Financing terms: visible to financier
+template ShipmentFinancing
+  with
+    shipper : Party
+    receiver : Party
+    financier : Party
+    terms : FinancingTerms
+    shipmentRef : Text  -- Reference to link related contracts
+  where
+    signatory shipper, receiver
+    observer financier
+    -- Financier sees payment terms, not goods details or other legs' pricing
 ```
 
-The supply chain operates with full traceability for entitled parties while maintaining commercial confidentiality.
+A single atomic transaction can create both contracts. The logistics provider and financier each see only their relevant contract, while the shipper and receiver (as signatories on both) see everything. Downstream participants in the supply chain never see upstream pricing, because those contracts have different stakeholders.
+
+This pattern—separating data by audience into distinct contracts—is how Canton achieves fine-grained privacy while maintaining atomicity.
 
 ## Tokenized Securities
 
@@ -163,6 +177,7 @@ template Security
     regulator : Party
     cusip : Text
     quantity : Decimal
+    approvedHolders : [Party]  -- Issuer maintains list of eligible holders
   where
     signatory issuer
     observer holder, regulator  -- Regulator sees all holdings
@@ -170,15 +185,13 @@ template Security
     choice Transfer : ContractId Security
       with
         newHolder : Party
-        transferAgent : Party
-      controller holder, transferAgent
+      controller holder, issuer  -- Issuer approval required for compliance
       do
-        -- Compliance checks happen here
         assert (newHolder `elem` approvedHolders)
         create this with holder = newHolder
 ```
 
-The regulator observes all holdings (for compliance) without that data being public. Trades remain private between counterparties while still being auditable.
+The regulator observes all holdings (for compliance) without that data being public. The issuer must approve all transfers, ensuring only eligible parties can hold the security. Trades remain private between counterparties while still being auditable.
 
 ## Cross-Border Payments
 
