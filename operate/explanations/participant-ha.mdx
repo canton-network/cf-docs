@@ -1,7 +1,9 @@
 {/* source: canton / canton/3.4/participant/explanations/participant-ha.rst */}
 {/* Copyright (c) 2025 Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved. */}
 {/* SPDX-License-Identifier: Apache-2.0 */}
-<Danger>[Daml Enterprise license](/canton/3.3/usermanual/downloading.html) required</Danger>
+<Danger>
+[Daml Enterprise license](/canton/3.3/usermanual/downloading.html) required
+</Danger>
 
 <a id="ha-participant-arch"></a>
 
@@ -23,7 +25,9 @@ The load balancer configuration contains details of all gRPC Ledger API server a
 
 Periodically polling the health API endpoint, the load balancer identifies a node as offline if it is passive. Requests are then *only* sent to the active participant node.
 
-<Danger>The health endpoint polling frequency can affect the failover duration.</Danger>
+<Danger>
+The health endpoint polling frequency can affect the failover duration.
+</Danger>
 
 During failover, requests may still go to the former active node; which rejects them. The application retries until the requests are forwarded to the new active node.
 
@@ -41,13 +45,17 @@ A leader election establishes the active node. The participant node sets the cho
 
 Exclusive, application-level database locks - tied to the database connection lifetime - enforce the leader election and set the chosen node as the single writer.
 
-<Note>Alternative approaches for leader election, such as Raft, are unsuitable because the leader status can be lost between the leader check and the use of the shared resource, i.e. writing to the database. Therefore, we cannot guarantee a single writer.</Note>
+<Note>
+Alternative approaches for leader election, such as Raft, are unsuitable because the leader status can be lost between the leader check and the use of the shared resource, i.e. writing to the database. Therefore, we cannot guarantee a single writer.
+</Note>
 
 ### Exclusive Lock Acquisition
 
 A participant node uses a write connection pool that is tied to an exclusive lock on a main connection, and a shared lock on all pool connections. If the main lock is lost, the pool’s connections are ramped down. The new active node must wait until all the passive node’s pool connections are closed, which is done by trying to acquire the shared lock in exclusive mode.
 
-<Note>Using the same connection for writes ensures that the lock is active while writes are performed.</Note>
+<Note>
+Using the same connection for writes ensures that the lock is active while writes are performed.
+</Note>
 
 ### Lock ID Allocation
 
@@ -55,13 +63,17 @@ Exclusive application-level locks are identified by a 30-bit integer lock ID whi
 
 The lock counter differentiates locks used in Canton from each other, depending on their usage. The scope name ensures the uniqueness of the lock ID for a given lock counter. The allocation process generates a unique lock ID by hashing and truncating the scope and counter to 30 bits.
 
-<Note>On Oracle, the lock scope is the schema name, i.e. user name. On PostgreSQL, it is the name of the database.</Note>
+<Note>
+On Oracle, the lock scope is the schema name, i.e. user name. On PostgreSQL, it is the name of the database.
+</Note>
 
 Participant nodes must allocate lock IDs and counters consistently. It is, therefore, crucial that nodes are configured with the same storage configuration, e.g. for Oracle using the correct username to allocate the lock IDs within the correct scope.
 
 ## Prevent Passive Node Replica Activity
 
-<Danger>A passive node replica does not hold the exclusive lock and cannot write to the shared database.</Danger>
+<Danger>
+A passive node replica does not hold the exclusive lock and cannot write to the shared database.
+</Danger>
 
 To avoid passive node replicas attempting to write to the database - any such attempt fails and produces an error - we use a coarse-grained guard on synchronizer connectivity and API services.
 

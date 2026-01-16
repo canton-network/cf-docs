@@ -77,7 +77,9 @@ Furthermore, protobuf numeric values are encoded according to their Java type re
 Refer to the official protobuf documentation for more information about protobuf to Java type mappings: [https://protobuf.dev/programming-guides/proto3/#scalar](https://protobuf.dev/programming-guides/proto3/#scalar)
 In particular:
 
-<Note>In Java, unsigned 32-bit and 64-bit integers are represented using their signed counterparts, with the top bit simply being stored in the sign bit</Note>
+<Note>
+In Java, unsigned 32-bit and 64-bit integers are represented using their signed counterparts, with the top bit simply being stored in the sign bit
+</Note>
 
 Additionally, this is the java library used under the hood in Canton to serialize and deserialize protobuf: [https://github.com/protocolbuffers/protobuf/tree/v3.25.5/java](https://github.com/protocolbuffers/protobuf/tree/v3.25.5/java)
 
@@ -161,10 +163,14 @@ See encoding of optional values below for details.
 
 Unless otherwise specified, this is how primitive protobuf types should be encoded.
 
-<Note>Not all protobuf types are described here, only the ones necessary to encode a PreparedTransaction message.</Note>
-<Danger>Even default values must be included in the encoding.
+<Note>
+Not all protobuf types are described here, only the ones necessary to encode a PreparedTransaction message.
+</Note>
+<Danger>
+Even default values must be included in the encoding.
 For instance if an int32 field is not set in the serialized protobuf, its default value (0) should be encoded.
-Similarly, an empty repeated field still results in a 0x00 byte encoding (see the repeated section below for more details)</Danger>
+Similarly, an empty repeated field still results in a 0x00 byte encoding (see the repeated section below for more details)
+</Danger>
 
 #### google.protobuf.Empty
 
@@ -259,7 +265,9 @@ fn encode(list):
    return result
 ```
 
-<Note>This encoding function also applies to lists generated from utility functions (e.g: `split`).</Note>
+<Note>
+This encoding function also applies to lists generated from utility functions (e.g: `split`).
+</Note>
 
 #### optional
 
@@ -511,14 +519,18 @@ fn encode(node_id):
     fail("Missing node") # All node ids should have a unique node in the nodes list. If a node is missing it should be reported as a bug.
 ```
 
-<Danger>`encode(node_id)` effectively finds the corresponding node in the list of nodes and encodes the node.
+<Danger>
+`encode(node_id)` effectively finds the corresponding node in the list of nodes and encodes the node.
 The node_id is an opaque value only used to reference nodes and is itself never encoded.
 Additionally, each node’s encoding is **hashed using the sha_256 hashing algorithm**. This is relevant when encoding root nodes here as well as
-when recursively encoding sub-nodes of `Exercise` and `Rollback` nodes as seen below.</Danger>
+when recursively encoding sub-nodes of `Exercise` and `Rollback` nodes as seen below.
+</Danger>
 
 ### Node
 
-<Note>Each node’s encoding is prefixed with additional meta-information about the node, this is made explicit in the encoding of each node.</Note>
+<Note>
+Each node’s encoding is prefixed with additional meta-information about the node, this is made explicit in the encoding of each node.
+</Note>
 
 `Exercise` and `Rollback` nodes both have a `children` field that references other nodes by their `NodeId`.
 
@@ -584,10 +596,14 @@ fn encode_node(exercise):
     encode(exercise.children)
 ```
 
-<Danger>For Exercise nodes, the node seed **MUST** be defined. Therefore it is encoded as a **non** optional field, as noted via the
+<Danger>
+For Exercise nodes, the node seed **MUST** be defined. Therefore it is encoded as a **non** optional field, as noted via the
 `.get` in `find_seed(node.node_id).get`. If the seed of an exercise node cannot be found in the list of `node_seeds`, encoding must be stopped
-and it should be reported as a bug.</Danger>
-<Note>The last encoded value of the exercise node is its `children` field. This recursively traverses the transaction tree.</Note>
+and it should be reported as a bug.
+</Danger>
+<Note>
+The last encoded value of the exercise node is its `children` field. This recursively traverses the transaction tree.
+</Note>
 
 <a id="fetch-node-encoding"></a>
 
@@ -616,7 +632,9 @@ fn encode_node(rollback):
    encode(rollback.children)
 ```
 
-<Note>Rollback nodes do not have an lf version.</Note>
+<Note>
+Rollback nodes do not have an lf version.
+</Note>
 
 #### Transaction Hash
 

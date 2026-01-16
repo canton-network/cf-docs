@@ -40,8 +40,10 @@ The node operator decides on when to prune and what data to retain, subject to t
 Canton implementation. Please refer to the how-to guide on participant pruning,
 and how-to guide on sequencer and mediator pruning for details on how to configure pruning.
 
-<Note>Pruning means that nodes can forget a prefix of the history, and instead store a state snapshot that summarizes
-the history.</Note>
+<Note>
+Pruning means that nodes can forget a prefix of the history, and instead store a state snapshot that summarizes
+the history.
+</Note>
 
 The following sections explain the differences between history and state snapshot, then introduce pruning safeguards in
 order to ensure nodes do not delete data that is needed, and finally explain how nodes agree on the state snapshot before
@@ -66,15 +68,19 @@ and t. The figure below illustrates the contrast between history and snapshot in
 active contracts.
 
 {/* https://lucid.app/lucidchart/6e815c36-b8e8-4f77-919b-2ff1d02d169f/edit?invitationId=inv_cfe298c2-1432-46df-b1b0-270878f6e253 */}![image](explanations/canton/images/pruning-history_v_snapshot.svg)
-<Note>The participant retains some of its historical data in a long-term store, called the
+<Note>
+The participant retains some of its historical data in a long-term store, called the
 [Participant Query Store (PQS)](https://docs.digitalasset-staging.com/build/3.3/component-howtos/pqs/).
 The PQS is a store separate from the Canton internal stores.
 The PQS stores a distilled version of history and its role is to answer queries about the past, for example for
-regulatory purposes.</Note>
-<Note>Pruning a node at time t deletes the history stored on that node up to time t, but retains the node’s snapshot
+regulatory purposes.
+</Note>
+<Note>
+Pruning a node at time t deletes the history stored on that node up to time t, but retains the node’s snapshot
 at time t.
 A node’s snapshot depends on the type of node: participant, synchronizer, mediator.
-Once a node has been pruned up to time t, it will not be able to serve events that precede t.</Note>
+Once a node has been pruned up to time t, it will not be able to serve events that precede t.
+</Note>
 
 For clarity, it is worth distinguishing between the pruning timestamp versus the latest timestamp that the application
 processed. Consider a participant node whose ledger end is at offset off_end, and its operator that wants to prune this
@@ -147,7 +153,9 @@ A sequencer’s snapshot consists of:
   The BFT Orderer organizes transactions in a sequence of ordered blocks, and it needs to retain these blocks in order
   to catch up and onboard other BFT nodes, and for retransmitting blocks to nodes that missed recent messages in order to
   get them unstuck.
-  <Note>For ordering layers other than the BFT orderer, such as those based on external drivers, pruning is handled separately.</Note>
+  <Note>
+  For ordering layers other than the BFT orderer, such as those based on external drivers, pruning is handled separately.
+  </Note>
 * The sequencer’s private keys valid at time t, needed for authentication purposes.
 
 ## Pruning Safeguards
@@ -231,9 +239,11 @@ There are also data items that the operator must manage manually instead of via 
 
 ## Non-repudiation
 
-<Note>A fork represents a situation where two or more participant nodes in the network diverge in their view of their shared
+<Note>
+A fork represents a situation where two or more participant nodes in the network diverge in their view of their shared
 state. Forks can happen due to misconfiguration, e.g., when changing contract stores via the repair service, bugs, or
-malicious behavior.</Note>
+malicious behavior.
+</Note>
 
 For the protection of each participant node’s operations, the Canton protocol includes a fork-detection mechanism by ensuring
 that any two participant nodes sharing contracts agree on
@@ -249,7 +259,9 @@ Thus, participant nodes might want a proof of agreement. The evidence of agreeme
 contracts were active, might need to stand in front of a court. Therefore, we require agreement proofs that hold for
 a third party, i.e., **non-repudiation**.
 
-<Note>Commitments enable participant nodes to verify agreement on their shared state, so that they can prune history.</Note>
+<Note>
+Commitments enable participant nodes to verify agreement on their shared state, so that they can prune history.
+</Note>
 
 It is important that an inactive or malicious participant cannot block its counter-participants from pruning simply by
 not sending commitments. Canton ensures this by enabling
@@ -264,7 +276,9 @@ matching commitments cannot deny having the same shared ACS state. Commitment ge
 exchange is an independent process for each synchronizer the two participant nodes are connected to and where they share
 active contracts. Matching commitments between two participant nodes is a proof that they agree on their shared state.
 
-<Note>Two participant nodes that have no shared active contracts do not exchange commitments.</Note>
+<Note>
+Two participant nodes that have no shared active contracts do not exchange commitments.
+</Note>
 
 Note that the absence of forks does not imply that the shared transaction history of the participant nodes is
 identical, rather it implies that their current shared state, i.e. the shared active contracts, is identical. The
@@ -291,8 +305,10 @@ guarantees. A smaller period enables timely fork detection, at the cost of more 
 node and more bandwidth overhead on the synchronizer. The synchronizer operator can adjust the period length in the dynamic
 synchronizer parameters as a duration (referred to as **reconciliation interval**).
 
-<Note>The reconciliation interval can be adjusted on a running synchronizer. The period length change takes effect
-immediately.</Note>
+<Note>
+The reconciliation interval can be adjusted on a running synchronizer. The period length change takes effect
+immediately.
+</Note>
 
 ### The format of a commitment
 
@@ -306,8 +322,10 @@ trigger commitment generation if the time crosses a period boundary. Participant
 ACS contract activations with a timestamp lower or equal to the period end of the commitment, and that are not deactivated
 before the period end.
 
-<Note>Sequencer time advancements that a participant node observers are called **ticks**, and are said to *tick* the ACS
-commitment processor.</Note>
+<Note>
+Sequencer time advancements that a participant node observers are called **ticks**, and are said to *tick* the ACS
+commitment processor.
+</Note>
 
 In some situations, an honest participant node may not issue commitments for all period ends.
 The reconciliation interval merely sets an upper bound on the number of commitments
@@ -324,8 +342,10 @@ end, each commitment also contains a period start, and represents the state at a
 The participant node receiving the commitment can
 use it to compare it with its own state at any period end within the interval.
 
-<Note>Each commitment contains the cryptographic hash summarizing the ACS state, as well as metadata about the period and
-sender.</Note>
+<Note>
+Each commitment contains the cryptographic hash summarizing the ACS state, as well as metadata about the period and
+sender.
+</Note>
 
 Despite the fact that some participant nodes may not issue commitments for all period ends, honest, well-functioning
 participant nodes do not block each other from pruning. Assume that participant nodes A and B share active

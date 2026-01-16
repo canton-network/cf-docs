@@ -22,11 +22,13 @@ Otherwise, you must apply an
 [offline party replication](#offline-party-replication)
 procedure.
 
-<Note>**Party replication** is different from **party migration**. A party
+<Note>
+**Party replication** is different from **party migration**. A party
 migration includes an additional final step, that is removing (or *offboarding*)
 the party from its original participant.
 
-Party offboarding, and thus party migration, is currently not supported.</Note>
+Party offboarding, and thus party migration, is currently not supported.
+</Note>
 
 <a id="party-replication-authorization"></a>
 
@@ -89,9 +91,11 @@ participant.
 The simplest and safest way to replicate a party is to do so **before** it
 becomes a stakeholder in any contract.
 
-<Warning>If a party has already participated in any Daml transaction, you must use
+<Warning>
+If a party has already participated in any Daml transaction, you must use
 [offline party replication](#offline-party-replication)
-instead.</Warning>
+instead.
+</Warning>
 
 The simple party replication consists of these steps, follow them **in the order**
 they are listed:
@@ -128,19 +132,23 @@ The following demonstrates these steps using two participants:
     alice : PartyId = Alice::12201ff69b1d...
 ```
 
-<Note>In this example, the **local party Alice** is owned by the `source` participant,
+<Note>
+In this example, the **local party Alice** is owned by the `source` participant,
 which is a simplification. It means that Alice is registered in the participant’s
 namespace, but it is not a requirement.
 
 Alternatively, you can create the party in its own dedicated
-namespace, or create an external party.</Note>
+namespace, or create an external party.
+</Note>
 
 ### 2. Vet packages
 
 [Vet packages](../packages/packages.mdx#package-vetting) on the target participant(s) **before** proceeding.
 
-<Note>If you are unfamiliar with this process, read this general explanation of
-package vetting.</Note>
+<Note>
+If you are unfamiliar with this process, read this general explanation of
+package vetting.
+</Note>
 
 <a id="multi-hosting-authorization"></a>
 
@@ -230,8 +238,10 @@ topology transaction on the `target` participant:
     )
 ```
 
-<Note>The participant permission here must be the same as in the previous step.
-For external parties in particular this must be either `Confirmation` or `Observation`.</Note>
+<Note>
+The participant permission here must be the same as in the previous step.
+For external parties in particular this must be either `Confirmation` or `Observation`.
+</Note>
 
 Once the party-to-participant mapping takes effect, the replication is complete.
 This results in party Alice being multi-hosted on both the `source` and `target`
@@ -243,8 +253,10 @@ the original `source` and `newTarget` participants.
 
 ### 3.a Replicate party with simultaneous confirmation threshold change (Variant to 3)
 
-<Note>For **external parties**, the threshold is defined during the onboarding process already,
-so this section is not relevant to them.</Note>
+<Note>
+For **external parties**, the threshold is defined during the onboarding process already,
+so this section is not relevant to them.
+</Note>
 
 To change a party’s confirmation threshold, you must use a different procedure for
 proposing the party-to-participant mapping than previously shown.
@@ -338,7 +350,8 @@ Before replication can start, both the target participant and the party itself m
 Afterwards, the replication consists of exporting the party’s Active Contract Set (ACS)
 from a source participant, and importing it to the target participant.
 
-<Note>* Connect a single Canton console to both the source and target participants
+<Note>
+* Connect a single Canton console to both the source and target participants
   to export and import the party’s ACS file using a single physical machine or
   environment. Otherwise, you need to securely transfer the ACS export file
   to the place where you import it to the target participant.
@@ -346,13 +359,16 @@ from a source participant, and importing it to the target participant.
   synchronizers before importing the party’s ACS. Hence the name *offline* party replication.
 * While you onboard the party on the target participant you may detect ACS
   commitment mismatches. This is expected and resolves itself in time; ignore such errors
-  during the party replication procedure.</Note>
-<Warning>**Be advised: You must back up the target participant before you start the ACS import!**
+  during the party replication procedure.
+</Note>
+<Warning>
+**Be advised: You must back up the target participant before you start the ACS import!**
 
 This ensures you have a clean recovery point if the ACS import is interrupted (crash,
 unintended node restart, etc.), or when you otherwise were unable to follow this manual
 operational steps to completion. Having this backup allows you to safely reset the target
-participant and **still complete the ongoing offline party replication**.</Warning>
+participant and **still complete the ongoing offline party replication**.
+</Warning>
 
 <a id="offline-party-replication-steps"></a>
 
@@ -372,12 +388,14 @@ These are the steps, which you must perform in **the exact order** they are list
 10. **Target: Onboarding Flag Clearance** - The target participant issues the onboarding flag clearance.
 11. **Source: Resume Pruning** - Reschedule the automatic pruning on the source participant.
 
-<Warning>Offline party replication must be performed with care, strictly following
+<Warning>
+Offline party replication must be performed with care, strictly following
 the documented **steps in order**. Not following the outlined operational
 flow will result in errors potentially requiring significant manual correction.
 
 This documentation provides a guide. Your environment may require
-adjustments. Test thoroughly in a test environment before production use.</Warning>
+adjustments. Test thoroughly in a test environment before production use.
+</Warning>
 
 ### Scenario description
 
@@ -468,7 +486,9 @@ Clear the pruning schedule, disabling the automatic pruning on the `source` node
 First, have the `target` participant agree to host party Alice with the desired
 participant permission (*observation* in this example).
 
-<Warning>Please ensure the onboarding flag is set with `requiresPartyToBeOnboarded = true`.</Warning>
+<Warning>
+Please ensure the onboarding flag is set with `requiresPartyToBeOnboarded = true`.
+</Warning>
 ```none
 @ target.topology.party_to_participant_mappings
     .propose_delta(
@@ -517,8 +537,10 @@ as a starting point:
 **Only after** the target participant has been disconnected from all synchronizers,
 have party Alice agree to be hosted on it.
 
-<Warning>Again, please ensure the onboarding flag is set with `requiresPartyToBeOnboarded = true`
-for a local party, and with `onboarding = HostingParticipant.Onboarding()` for external party.</Warning>
+<Warning>
+Again, please ensure the onboarding flag is set with `requiresPartyToBeOnboarded = true`
+for a local party, and with `onboarding = HostingParticipant.Onboarding()` for external party.
+</Warning>
 
 Local Party
 
@@ -586,7 +608,9 @@ it in the export file named `party_replication.alice.acs.gz`.
 
 ### 7. Back up target participant
 
-<Warning>**Please back up the target participant before importing the ACS!**</Warning>
+<Warning>
+**Please back up the target participant before importing the ACS!**
+</Warning>
 
 ### 8. Import ACS
 
@@ -655,7 +679,9 @@ snippet demonstrates how this command can be polled.
     }
 ```
 
-<Note>The `timeout` is based on the default *decision timeout* of 1 minute.</Note>
+<Note>
+The `timeout` is based on the default *decision timeout* of 1 minute.
+</Note>
 
 ### 11. Re-enable automatic pruning
 

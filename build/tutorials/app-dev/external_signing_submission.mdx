@@ -44,8 +44,10 @@ template Ping
 - In Part 1 `Alice` creates a `Ping` contract.
 - In Part 2 `Bob` exercises the `Respond` choice on the contract and archives it.
 
-<Danger>This tutorial is for demo purposes.
-The code snippets should not be used directly in a production environment.</Danger>
+<Danger>
+This tutorial is for demo purposes.
+The code snippets should not be used directly in a production environment.
+</Danger>
 
 ## Prerequisites
 
@@ -56,7 +58,9 @@ For simplicity, this tutorial assumes a minimal Canton setup consisting of one p
 To obtain a Canton artifact refer to the getting started section.
 First, navigate to the interactive submission example folder located at `examples/08-interactive-submission` in the Canton release artifact.
 
-<Note>All commands in this tutorial are expected to be run from that folder.</Note>
+<Note>
+All commands in this tutorial are expected to be run from that folder.
+</Note>
 
 From the artifact directory, start Canton using the command:
 
@@ -924,7 +928,9 @@ cat create_ping_prepare_response.json
 
 Python
 
-<Danger>Ensure you have followed the [setup instructions for Python](#canton-externally-signing-tutorial-python-instructions) before proceeding.</Danger>
+<Danger>
+Ensure you have followed the [setup instructions for Python](#canton-externally-signing-tutorial-python-instructions) before proceeding.
+</Danger>
 ```none
  import argparse
  import sys
@@ -1071,7 +1077,9 @@ Represents the explicit ledger changes upon successful commitment.
 - `version`: Version of the transaction. This is also called `LF Version`.
 - `roots`: List of root node ids. A Daml transaction is a list of trees. The nodes are flattened in a single list (see below). The root node ids design the root node of each individual tree in the transaction.
 
-<Note>A current limitation of externally signed transactions is that they can only contain a single root node, and therefore a single transaction tree.</Note>
+<Note>
+A current limitation of externally signed transactions is that they can only contain a single root node, and therefore a single transaction tree.
+</Note>
 - `nodes`: List of all nodes in the transaction. There are 4 types of nodes: `Create`, `Exercise`, `Fetch` and `Rollback`.
   The number, type and content of each node depends on the Daml model and the state of the ledger.
 - `node_seeds`: List of seeds used by the Canton protocol to generate cryptographically secure salts. They can be ignored.
@@ -1095,11 +1103,13 @@ Additional information required for transaction processing.
 
 - `prepared_transaction_hash`: Pre-computed transaction hash. For security reasons the hash should be re-computed client-side as mentioned in the [Compute transaction hash](#canton-recompute-external-transaction-hash) section.
 
-<Note>The `prepare` API can return additional details on how the Canton node is hashing the transaction to help troubleshoot hash-related errors (for example: pre-computed and re-computed hash mismatch).
+<Note>
+The `prepare` API can return additional details on how the Canton node is hashing the transaction to help troubleshoot hash-related errors (for example: pre-computed and re-computed hash mismatch).
 : To enable it:
   <br/>
   1. Enable verbose hashing on the participant config `ledger-api.interactive-submission-service.enable-verbose-hashing = true`.
-  2. Set the `verbose_hashing` field in the `PrepareSubmissionRequest` to `true`.</Note>
+  2. Set the `verbose_hashing` field in the `PrepareSubmissionRequest` to `true`.
+</Note>
 
 #### Hashing scheme version
 
@@ -1108,7 +1118,9 @@ Version of the hashing scheme:
 |   Protocol Version | Hashing Scheme Version    |
 |--------------------|---------------------------|
 |                 33 | HASHING_SCHEME_VERSION_V2 |
-<Note>If the gRPC Ledger API authorization is enabled, the user must have the `readAs` claim on behalf of `Alice` to call the `prepare` endpoint.</Note>
+<Note>
+If the gRPC Ledger API authorization is enabled, the user must have the `readAs` claim on behalf of `Alice` to call the `prepare` endpoint.
+</Note>
 
 #### Traffic cost estimation
 
@@ -1162,17 +1174,21 @@ The pre-computed hash provided in the `Prepare` step is for debugging purposes.
 
 Using `Alice`’s protocol signing private key, sign the hash.
 
-<Note>Technically what is needed is the ability to sign with `Alice`’s key, not the key itself.
+<Note>
+Technically what is needed is the ability to sign with `Alice`’s key, not the key itself.
 The management of the key can be delegated to a wallet, HSM or crypto custody provider. In this tutorial the
 key is managed locally and explicitly to demonstrate the signing process. Refer to the [onboarding tutorial](external_signing_onboarding.mdx#tutorial-onboard-external-party)
-for details on how to generate a key for this tutorial.</Note>
+for details on how to generate a key for this tutorial.
+</Note>
 
 Bash
 
 Assuming `Alice's` private key is stored in a file called `alice::1220d466a5d96a3509736c821e25fe81fc8a73f226d92e57e94a65170e58b07fc08e-private-key.der`, he hash can be signed using `openssl`.
 
-<Note>In this tutorial the hash retrieved from the response of step 1 will be signed, without re-computing it as suggested in step 3.
-For an example of how to re-compute the hash, see the `Python` example.</Note>
+<Note>
+In this tutorial the hash retrieved from the response of step 1 will be signed, without re-computing it as suggested in step 3.
+For an example of how to re-compute the hash, see the `Python` example.
+</Note>
 ```bash
 TRANSACTION_HASH=$(cat create_ping_prepare_response.json | jq -r .prepared_transaction_hash)
 PREPARED_TRANSACTION=$(cat create_ping_prepare_response.json | jq -r .prepared_transaction)
@@ -1266,7 +1282,9 @@ In the request, note the presence of:
   > - `signing_algorithm_spec`: Will vary depending on the key used during onboarding.
   > - `signed_by`: Fingerprint of the protocol signing *public* key of `Alice`. This tutorial assumes the same key was used to create `Alice`’s namespace and her protocol signing key. This is why the fingerprint of the signing key matches the second part of her Party Id (after `::`). For more details check out the [onboarding tutorial](external_signing_onboarding.mdx#tutorial-onboard-external-party) and the [parties documentation](https://docs.daml.com/app-dev/parties-users.html#party-id-hints-and-display-names).
 
-<Note>If the gRPC Ledger API authorization is enabled, the user must have the `actAs` claim on behalf of `Alice` to call the `execute` endpoint.</Note>
+<Note>
+If the gRPC Ledger API authorization is enabled, the user must have the `actAs` claim on behalf of `Alice` to call the `execute` endpoint.
+</Note>
 
 <a id="tutorial-observe-externally-signed-transaction"></a>
 
@@ -1329,7 +1347,9 @@ UPDATE_ID="122049bb312e4ba2e6f142b2221f58589b75b0ad253685d3fc82f5758686b037efdb"
 OFFSET="24"
 ```
 
-<Note>You may need to interrupt the command with `Ctrl-C` as the completion stream is a gRPC server streaming RPC which waits for updates from the server until interrupted.</Note>
+<Note>
+You may need to interrupt the command with `Ctrl-C` as the completion stream is a gRPC server streaming RPC which waits for updates from the server until interrupted.
+</Note>
 
 Let’s now retrieve the corresponding transaction:
 
