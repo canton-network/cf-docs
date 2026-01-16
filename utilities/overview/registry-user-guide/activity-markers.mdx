@@ -1,0 +1,77 @@
+{/* source: canton-network-utilities / canton-network-utilities/devnet/overview/registry-user-guide/activity-markers.rst */}
+
+# Featured App Activity Markers
+
+The Utility Registry supports **featured app activity markers**, which reward parties for their
+participation in asset activity on the network.
+
+## Creation Conditions
+
+Featured app activity markers are created when the following prerequisites are met:
+
+- A **provider** in the Utility Registry is **featured**, i.e., holds a
+  `Splice.Amulet:FeaturedAppRight`.
+- The **provider** has an `AppRewardConfiguration` created by the **operator**. This configuration
+  specifies how activity marker rewards are split between the **provider** and the **operator**.
+
+Once these conditions are satisfied, activity markers are created during the following workflows:
+
+- **Token Standard Activity**
+  - `Splice.Api.Token.TransferInstructionV1.TransferInstruction_Accept`: When a `TransferOffer`
+    is accepted by the receiving party.
+  - `Splice.Api.Token.AllocationV1.Allocation_ExecuteTransfer`: When a `DvpLegAllocation` is
+    executed, typically as part of a delivery-versus-payment (DvP) process.
+- **Other Activity**
+  - `MintRequest_Accept/MintOffer_Accept`: When a two-step mint request or offer is accepted.
+  - `BurnRequest_Accept/BurnOffer_Accept`: When a two-step burn request or offer is accepted.
+
+## Example Scenario
+
+1. The **operator** onboards the **provider**. As part of this process, the **operator** creates an
+   `AppRewardConfiguration` for the **provider**, assigning a weight w to the **operator** and
+   1-w to the **provider**.
+2. The **provider** onboards the **registrar**.
+3. The **registrar** sets up an instrument.
+4. A mint request by a **token holder (sender)** of that instrument is accepted by the
+   **registrar**.
+5. A **token holder (sender)** transfers tokens of that instrument to a **token holder (receiver)**.
+6. A burn request by the **token holder (receiver)** of that instrument is being accepted by the
+   **registrar**.
+
+For each of the steps 4-6, a `Splice.Amulet:FeaturedAppActivityMarker` is created for the
+**provider** and the **operator**, with weight 1-w and w, respectively, as specified by the
+`AppRewardConfiguration` in step 1. This results in six markers overall.
+
+## Reward Configuration
+
+An `AppRewardConfiguration` is typically created for the **provider** when a
+`ProviderServiceRequest` is accepted. However, the **operator** can also create, update, or
+archive an `AppRewardConfiguration` at any time.
+
+A **provider** can further refine reward sharing for a given instrument by specifying
+**beneficiaries** in the instrument’s `InstrumentConfiguration`. For example, the **provider**
+could allocate 60% of its own default share 1-w to itself and 40% to the **registrar** (or other
+parties). The provider beneficiary configuration of the instrument configuration would then
+be:
+
+| Party         |   Share |
+|---------------|---------|
+| **provider**  |     0.6 |
+| **registrar** |     0.4 |
+
+The resulting reward distribution for activity markers would be:
+
+| Party         | Share        |
+|---------------|--------------|
+| **operator**  | w            |
+| **provider**  | (1-w) \* 0.6 |
+| **registrar** | (1-w) \* 0.4 |
+<Note>1. The **provider** **must** define beneficiary weights that sum to exactly 1 for the instrument
+   configuration to be valid.
+2. Minor rounding adjustments **may** be applied to ensure the final distribution totals 1.
+3. If the **operator** changes its weight to w’ in the AppRewardConfiguration, the
+   distribution will still equal 1, with the **provider**’s beneficiaries scaled proportionally
+   (e.g., to  (1 - w’) \* 0.6 and (1 - w’) \* 0.4 in the case above).</Note>
+
+If you are a **provider**, please contact Digital Asset to ensure this functionality is enabled for
+your party with the correct reward split.

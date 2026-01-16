@@ -1,0 +1,76 @@
+{/* source: pqs / pqs/3.4/component-howtos/pqs/troubleshoot/index.rst */}
+{/* Copyright (c) 2025, Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved. */}
+
+<a id="pqs-troubleshoot"></a>
+
+# Troubleshoot
+
+When things go wrong, it is important to be able to diagnose the problem quickly and effectively. This section aims
+to get an operator up to speed with the most common troubleshooting techniques and tools available in PQS. You might
+want to refer to it for ideas when devising your own troubleshooting procedures.
+
+PQS application (`pipeline` process) quick facts:
+
+* exports ledger events into queryable data store
+* does not send ledger commands
+* is stateless
+* is restart [friendly](../recover.mdx#pqs-retries) (fast restarts in absence of migration, Daml model changes, etc)
+* is tolerant to unavailable dependencies (through retry loop)
+* uses only 1 Ledger API stream connection (flat transaction or transaction tree) after
+  [initialisation](runbooks.mdx#pqs-troubleshoot-runbooks-why-might-it-take-a-long-time-before-pqs-starts-processing-streams)
+* uses a pool of connections to Postgres (16 by default)
+* can be secured with TLS on both connections
+* uses OpenTelemetry [Agent](../observe.mdx#pqs-observe) for its observability signals exports
+* can export [diagnostics](../observe.mdx#pqs-diagnostics) archive (with metrics and thread dumps over time)
+
+Look into exit codes of PQS process or Docker/Kubernetes container orchestrator:
+
+* `137` indicates the process was killed by external forces with
+  `SIGKILL` (`-9`), see [also](runbooks.mdx#pqs-troubleshoot-runbooks-jvm-metrics)
+* non-zero exit might indicate invalid starting conditions which are treated as non-recoverable errors. Causes might
+  include:
+  > * misspelled startup [parameter](runbooks.mdx#pqs-troubleshoot-runbooks-pqs-does-not-accept-the-passed-in-settings) names or values
+
+Look into logs for activity indicators:
+
+* ledger [keep-alives](runbooks.mdx#pqs-troubleshoot-runbooks-there-is-a-suspicion-that-pqs-is-stalled) are present
+* watermark advances in the presence of expected ledger traffic, see also [here](runbooks.mdx#pqs-troubleshoot-runbooks-dont-see-expected-templates-in-pqs) and [here](runbooks.mdx#pqs-troubleshoot-runbooks-no-data-for-a-recently-onboarded-party)
+* retry loop indicates [recoverable errors](../recover.mdx#pqs-retries) (both upstream and downstream), examine message for
+  indication of underlying cause
+* in case of non-recoverable errors, keep in mind that the last visible stacktrace does not necessarily represent the
+  true root cause - explore events that preceded it by requesting a bigger slice of logs before the termination
+
+Look into [metrics](runbooks.mdx#pqs-troubleshoot-runbooks-which-metrics-are-available-how-to-integrate-them) for detailed breakdown of PQS
+internals:
+
+* correlate [transactions](runbooks.mdx#pqs-troubleshoot-runbooks-throughput-transactions-and-events)
+  (`pipeline_events_total{type="transaction"}`) and [watermark](runbooks.mdx#pqs-troubleshoot-runbooks-throughput-watermark-history)
+  (`watermark_ix`) throughput metrics to identify if any slowdowns are present in the PQS pipeline
+* get an idea of PQS pipeline introduced latency - see
+  [here](runbooks.mdx#pqs-troubleshoot-runbooks-latency-total-transaction-handling-latency)
+* get an idea of contract churn (which correlates with write activity of PQS) by template - see
+  [here](runbooks.mdx#pqs-troubleshoot-runbooks-contracts-churn)
+
+Look into database to get familiar with Daml model footprint:
+
+* get an idea of data volumes in terms of Daml structure - see [here](runbooks.mdx#pqs-troubleshoot-runbooks-all-non-empty-tables-rows-count)
+  and [here](runbooks.mdx#pqs-troubleshoot-runbooks-total-sizes-of-tables)
+
+Look into database statistics for resource utilisation
+
+* get an idea of I/O split - [disk vs index](runbooks.mdx#pqs-troubleshoot-runbooks-statistics-on-disk-vs-index-io), cache sizing
+  ([tables](runbooks.mdx#pqs-troubleshoot-runbooks-table-data-in-cache-per-table)
+  and [indexes](runbooks.mdx#pqs-troubleshoot-runbooks-index-data-in-cache-per-table))
+* probe for heavy queries ([current](runbooks.mdx#pqs-troubleshoot-runbooks-currently-executing-queries) and
+  [over time](runbooks.mdx#pqs-troubleshoot-runbooks-top-10-queries-by-run-time))
+* inspect if `bgwriter` [flush](runbooks.mdx#pqs-troubleshoot-runbooks-bgwriter-frequency) triggers too frequently
+
+Try correlating representative metrics between PQS & Canton (if available).
+
+To escalate issues to Digital Asset’s support team, please provide forensics by collecting
+[diagnostics](../observe.mdx#pqs-diagnostics) dump in proximity of the incident time and attach the resulting archive to the
+support ticket.
+
+## Runbooks
+
+* [Runbooks](runbooks.mdx)

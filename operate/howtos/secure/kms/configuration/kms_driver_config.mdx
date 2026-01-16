@@ -1,0 +1,47 @@
+{/* source: canton / canton/3.4/participant/howtos/secure/kms/configuration/kms_driver_config.rst */}
+{/* Copyright (c) 2025 Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved. */}
+{/* SPDX-License-Identifier: Apache-2.0 */}
+
+<a id="kms-driver-config"></a>
+
+# Configure a Driver-based KMS
+
+Canton allows integration with a variety of KMS and HSM solutions through a KMS Driver.
+This approach enables you to connect Canton to an external key manager by building your own integration layer.
+
+Configuring Canton to run with a KMS Driver is done similarly to other KMS providers by specifying:
+
+```default
+type = driver
+name = <name_of_driver>
+```
+
+For example, for a Participant named participant1:
+
+```none
+canton.participants.participant1.crypto.provider = kms
+canton.participants.participant1.crypto.kms {
+  type = driver
+  name = "aws-kms"
+    config = {
+      region = us-east-1
+      multi-region-key = false
+      audit-logging = true
+    }
+}
+```
+
+- `type` specifies which KMS to use; in this case, a driver.
+- `name` is a uniquely identifying name configured for the driver.
+- KMS driver-specific configuration can be passed in through the `config` field.
+
+In addition to this configuration, you must also provide a .jar file that implements the required API and acts
+as the bridge between Canton and the target KMS.
+
+Run Canton with your driver .jar on its class path:
+
+`java -cp driver.jar:canton.jar com.digitalasset.canton.CantonEnterpriseApp -c canton.conf # further canton arguments`
+
+For guidance on developing and deploying your own KMS Driver in Canton, refer to the
+[Canton KMS Driver developer guide](../../../../tutorials/kms_driver_guide.mdx#kms-driver-guide). This guide includes instructions for building a
+custom driver, details on the necessary APIs, and steps to configure Canton to use the driver.

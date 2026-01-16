@@ -1,0 +1,130 @@
+{/* source: daml / daml/3.4/sdk/reference/daml/choices.rst */}
+{/* Copyright (c) 2023 Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved. */}
+{/* SPDX-License-Identifier: Apache-2.0 */}
+
+<a id="reference-choices"></a>
+
+# Reference: Choices
+
+This page gives reference information on choices. For information on the high-level structure of a choice, see [Overview: Template Structure](structure.mdx).
+
+<a id="daml-ref-choice-name"></a>
+
+## Choice Name
+
+```daml
+    choice ExampleChoice
+      : () -- replace () with the actual return type
+```
+
+- `choice` keyword
+- The name of the choice. Must begin with a capital letter.
+- Must be unique in the module. Different templates defined in the same module cannot share a choice name.
+
+<a id="daml-ref-controllers"></a>
+
+## Controllers
+
+```daml
+      controller exampleParty
+```
+
+- `controller` keyword
+- The controller is a comma-separated list of values, where each value is either a party or a collection of parties.
+
+  The conjunction of **all** the parties are required to authorize when this choice is exercised.
+
+<Warning>You **must** make sure that the controller parties are observers (or signatories) of the contract, otherwise they cannot see the contract (and therefore cannot exercise the choice).</Warning>
+
+<a id="daml-ref-choice-observers"></a>
+
+## Choice Observers
+
+*Choice observers* can be attached to a choice using the `observer` keyword. The choice observers are a list of parties who are not stakeholders but who see all the consequences of the action.
+
+```daml
+    choice NameOfChoiceWithObserver
+      : () -- replace () with the actual return type
+      with
+        party : Party -- parameters here
+      observer party -- optional specification of choice observers
+      controller exampleParty
+      do
+        return () -- replace this line with the choice body
+```
+
+<a id="daml-ref-consumability"></a>
+
+### Contract Consumption
+
+If no qualifier is present, choices are *consuming*: the contract is archived before the evaluation of the choice body and both the controllers and all contract stakeholders see all consequences of the action.
+
+## Preconsuming Choices
+
+```daml
+    preconsuming choice ExamplePreconsumingChoice
+      : () -- replace () with the actual return type
+```
+
+- `preconsuming` keyword. Optional.
+- Makes a choice pre-consuming: the contract is archived before the body of the exercise is executed.
+- The create arguments of the contract can still be used in the body of the exercise, but cannot be fetched by its contract id.
+- The archival behavior is analogous to the *consuming* default behavior.
+- Only the controllers and signatories of the contract see all consequences of the action. Other stakeholders merely see an archive action.
+- Can be thought as a non-consuming choice that implicitly archives the contract before anything else happens
+
+## Postconsuming Choices
+
+```daml
+    postconsuming choice ExamplePostconsumingChoice
+      : () -- replace () with the actual return type
+```
+
+- `postconsuming` keyword. Optional.
+- Makes a choice post-consuming: the contract is archived after the body of the exercise is executed.
+- The create arguments of the contract can still be used in the body of the exercise as well as the contract id for fetching it.
+- Only the controllers and signatories of the contract see all consequences of the action. Other stakeholders merely see an archive action.
+- Can be thought as a non-consuming choice that implicitly archives the contract after the choice has been exercised
+
+## Non-consuming Choices
+
+```daml
+    nonconsuming choice ExampleNonconsumingChoice
+      : () -- replace () with the actual return type
+```
+
+- `nonconsuming` keyword. Optional.
+- Makes a choice non-consuming: that is, exercising the choice does not archive the contract.
+- Only the controllers and signatories of the contract see all consequences of the action.
+- Useful in the many situations when you want to be able to exercise a choice more than once.
+
+<a id="daml-ref-return-type"></a>
+
+### Return Type
+
+- Return type is written immediately after choice name.
+- All choices have a return type. A contract returning nothing should be marked as returning a “unit”, ie `()`.
+- If a contract is/contracts are created in the choice body, usually you would return the contract ID(s) (which have the type `ContractId <name of template>`). This is returned when the choice is exercised, and can be used in a variety of ways.
+
+<a id="daml-ref-choice-arguments"></a>
+
+## Choice Arguments
+
+```daml
+      with
+        exampleParameter : Text
+```
+
+- `with` keyword.
+- Choice arguments are similar in structure to [Template Parameters](templates.mdx#daml-ref-template-parameters): a [record type](data-types.mdx#daml-ref-record-types).
+- A choice argument can’t have the same name as any [parameter to the template](templates.mdx#daml-ref-template-parameters) the choice is in.
+- Optional - only if you need extra information passed in to exercise the choice.
+
+<a id="daml-ref-choice-body"></a>
+
+## Choice Body
+
+- Introduced with `do`
+- The logic in this section is what is executed when the choice gets exercised.
+- The choice body contains `Update` expressions. For detail on this, see [Reference: Updates](updates.mdx).
+- By default, the last expression in the choice is returned. You can return multiple updates in tuple form or in a custom data type. To return something that isn’t of type `Update`, use the `return` keyword.

@@ -1,0 +1,1077 @@
+{/* source: canton / canton/3.4/synchronizer/howtos/operate/bootstrap.rst */}
+{/* Copyright (c) 2025 Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved. */}
+{/* SPDX-License-Identifier: Apache-2.0 */}
+
+<a id="synchronizer-bootstrap"></a>
+
+# Bootstrap a Synchronizer
+
+This howto assumes familiarity with general Synchronizer concepts.
+Refer to the Canton overview for more information.
+
+## Set up a centralized Synchronizer
+
+In a **centralized** Synchronizer, the operator has access to all Sequencer and Mediator nodes.
+
+A centralized Synchronizer is the simplest to set up and manage, but it assumes that a single fully trusted entity
+owns and operates the Synchronizer.
+
+You can bootstrap a centralized Synchronizer by specifying a single owner and a `synchronizerThreshold` of 1.
+This respectively means that only that owner can authorize topology changes on the Synchronizer, and that
+one signature is sufficient for that.
+
+First, make sure that the nodes are fresh and haven’t yet been initialized:
+
+```none
+@ mediator1.health.initialized()
+    res1: Boolean = false
+```
+
+```none
+@ sequencer1.health.initialized()
+    res2: Boolean = false
+```
+
+Now you can initialize the centralized Synchronizer as follows:
+
+```none
+@ bootstrap.synchronizer(
+      synchronizerName = "mySynchronizer",
+      sequencers = Seq(sequencer1),
+      mediators = Seq(mediator1),
+      synchronizerOwners = Seq(sequencer1),
+      synchronizerThreshold = 1,
+      staticSynchronizerParameters = StaticSynchronizerParameters.defaultsWithoutKMS(ProtocolVersion.latest),
+    )
+    res3: PhysicalSynchronizerId = mySynchronizer::122032922613...::34-0
+```
+
+Instead of using the defaults, you can customize the static Synchronizer parameters. Refer to the
+parameters configuration section for more information about which
+static Synchronizer parameters are available and their value.
+
+Now a Participant Node can connect to the Synchronizer via a Sequencer. Check that the Participant Node can use the
+Synchronizer through a `ping` command:
+
+```none
+@ participant1.synchronizers.connect_local(sequencer1, "mySynchronizer")
+```
+
+```none
+@ participant1.health.ping(participant1)
+    res5: Duration = 1274 milliseconds
+```
+
+<a id="synchronizer-bootstrapping-separate-consoles"></a>
+
+## Set up a decentralized Synchronizer
+
+This subsection covers the most frequent case where distinct operators manage **decentralized** Synchronizer nodes
+on behalf of the respective owners. This also means that they’re managed from separate console environments.
+
+In this case, the bootstrapping process must be coordinated in lockstep between the Synchronizer nodes,
+with the coordination and exchange of data happening through secure communication channels.
+
+As an overview, to bootstrap a decentralized Synchronizer with separate consoles, operators:
+
+1. Fix the initial parameters.
+2. Exchange Synchronizer identities.
+3. Collectively create a decentralized namespace (see the Canton overview for more information);
+   each operator:
+   1. Signs the bootstrapping topology transactions.
+   2. Exchanges the bootstrapping topology transactions with other operators.
+   3. Initializes their Synchronizer nodes.
+
+This how-to uses two Sequencer nodes and two Mediator nodes. The Sequencer nodes are Synchronizer
+owners and are managed by distinct operators on behalf of the respective entities.
+
+This diagram illustrates the exchange of information between the operators:
+
+{/* https://lucid.app/lucidchart/72c28bfe-c110-4922-9d19-93adaa35377f/edit?beaconFlowId=17067B091FED8E89&invitationId=inv_56f800da-54ae-49b8-af3f-ad690e74a0c5&page=0_0# */}![image](howtos/operate/decentralized-synchronizer-bootstrap-data-exchange.png)
+<Note>Before proceeding, ensure that all of the nodes in the decentralized Synchronizer are started.</Note>
+
+All Synchronizer owners must agree on the static Synchronizer parameters
+in advance. You can achieve that, for example, by exporting and sharing a file containing their definition:
+
+```none
+@ val synchronizerParameters = StaticSynchronizerParameters.defaultsWithoutKMS(ProtocolVersion.latest)
+    synchronizerParameters : StaticSynchronizerParameters = StaticSynchronizerParameters(
+      required signing specs = RequiredSigningSpecs(
+        algorithms = Set(Ed25519, EC-DSA-SHA256, EC-DSA-SHA384),
+        keys = Set(EC-Curve25519, EC-P256, EC-P384, EC-Secp256k1)
+      ),
+      required encryption specs = RequiredEncryptionSpecs(
+        algorithms = Set(ECIES_HMAC256_AES128-CBC, RSA-OAEP-SHA256),
+        keys = Set(EC-P256, RSA-2048)
+      ),
+      required symmetric key schemes = AES128-GCM,
+      required hash algorithms = SHA-256,
+      required crypto key formats = Set(
+        Raw,
+        DER-encoded X.509 SubjectPublicKeyInfo,
+        DER-encoded PKCS #8 PrivateKeyInfo
+      ),
+      topology change delay = 0.25s,
+      protocol version = 34,
+      serial = 0
+    )
+```
+
+```none
+@ synchronizerParameters.writeToFile("tmp/synchronizer-bootstrapping-files/params.proto")
+```
+
+Now create temporary topology stores to bootstrap the Synchronizer’s topology in both Sequencers’ consoles:
+
+```none
+@ val sequencer1Id = sequencer1.id
+    sequencer1Id : SequencerId = SEQ::sequencer1::1220cb0a22fb...
+```
+
+```none
+@ val sequencer1TempStore = sequencer1.topology.stores.create_temporary_topology_store("sequencer1-synchronizer-setup", synchronizerParameters.protocolVersion)
+    sequencer1TempStore : TopologyStoreId.Temporary = Temporary(name = String185(str = "sequencer1-synchronizer-setup"))
+```
+
+```none
+@ val sequencer2Id = sequencer2.id
+    sequencer2Id : SequencerId = SEQ::sequencer2::12203a55a279...
+```
+
+```none
+@ val sequencer2TempStore = sequencer2.topology.stores.create_temporary_topology_store("sequencer2-synchronizer-setup", synchronizerParameters.protocolVersion)
+    sequencer2TempStore : TopologyStoreId.Temporary = Temporary(name = String185(str = "sequencer2-synchronizer-setup"))
+```
+
+Export the Sequencer and Mediator identities from both Sequencers’ consoles:
+
+```none
+@ sequencer1.topology.transactions.export_identity_transactions("tmp/synchronizer-bootstrapping-files/sequencer1-identity.proto")
+```
+
+```none
+@ mediator1.topology.transactions.export_identity_transactions("tmp/synchronizer-bootstrapping-files/mediator1-identity.proto")
+```
+
+```none
+@ sequencer2.topology.transactions.export_identity_transactions("tmp/synchronizer-bootstrapping-files/sequencer2-identity.proto")
+```
+
+```none
+@ mediator2.topology.transactions.export_identity_transactions("tmp/synchronizer-bootstrapping-files/mediator2-identity.proto")
+```
+
+Import the node identities into the respective temporary topology stores from the respective consoles:
+
+```none
+@ sequencer1.topology.transactions.import_topology_snapshot_from("tmp/synchronizer-bootstrapping-files/sequencer1-identity.proto", sequencer1TempStore)
+```
+
+```none
+@ sequencer1.topology.transactions.import_topology_snapshot_from("tmp/synchronizer-bootstrapping-files/sequencer2-identity.proto", sequencer1TempStore)
+```
+
+```none
+@ sequencer1.topology.transactions.import_topology_snapshot_from("tmp/synchronizer-bootstrapping-files/mediator1-identity.proto", sequencer1TempStore)
+```
+
+```none
+@ sequencer1.topology.transactions.import_topology_snapshot_from("tmp/synchronizer-bootstrapping-files/mediator2-identity.proto", sequencer1TempStore)
+```
+
+```none
+@ sequencer2.topology.transactions.import_topology_snapshot_from("tmp/synchronizer-bootstrapping-files/sequencer1-identity.proto", sequencer2TempStore)
+```
+
+```none
+@ sequencer2.topology.transactions.import_topology_snapshot_from("tmp/synchronizer-bootstrapping-files/sequencer2-identity.proto", sequencer2TempStore)
+```
+
+```none
+@ sequencer2.topology.transactions.import_topology_snapshot_from("tmp/synchronizer-bootstrapping-files/mediator1-identity.proto", sequencer2TempStore)
+```
+
+```none
+@ sequencer2.topology.transactions.import_topology_snapshot_from("tmp/synchronizer-bootstrapping-files/mediator2-identity.proto", sequencer2TempStore)
+```
+
+Propose and export the decentralized namespace declaration with the first Sequencer’s signature:
+
+```none
+@ val seq1DND = sequencer1.topology.decentralized_namespaces.propose_new(
+        owners = Set(sequencer1Id.namespace, sequencer2Id.namespace),
+        threshold = PositiveInt.two,
+        store = sequencer1TempStore,
+      )
+    seq1DND : SignedTopologyTransaction[TopologyChangeOp, DecentralizedNamespaceDefinition] = SignedTopologyTransaction(
+      TopologyTransaction(
+        DecentralizedNamespaceDefinition(
+          12209266a807...,
+          PositiveNumeric(2),
+          Set(1220cb0a22fb..., 12203a55a279...)
+        ),
+        serial = 1,
+        operation = Replace,
+        hash = SHA-256:baa5c4401f12...
+      ),
+      signatures = 1220cb0a22fb...,
+      proposal
+    )
+```
+
+```none
+@ seq1DND.writeToFile("tmp/synchronizer-bootstrapping-files/decentralized-namespace.proto")
+```
+
+```none
+@ val synchronizerId = SynchronizerId(UniqueIdentifier.tryCreate("mySynchronizer", seq1DND.mapping.namespace.toProtoPrimitive))
+    synchronizerId : SynchronizerId = mySynchronizer::12209266a807...
+```
+
+```none
+@ val physicalSynchronizerId = PhysicalSynchronizerId(synchronizerId, synchronizerParameters.toInternal)
+    physicalSynchronizerId : PhysicalSynchronizerId = mySynchronizer::12209266a807...::34-0
+```
+
+On the second Sequencer’s console, load the first Sequencer’s decentralized namespace declaration, sign it, and share it again:
+
+```none
+@ sequencer2.topology.transactions.load_single_from_file(
+        "tmp/synchronizer-bootstrapping-files/decentralized-namespace.proto",
+        sequencer2TempStore,
+        ForceFlag.AlienMember,
+      )
+```
+
+```none
+@ val seq2DND = sequencer2.topology.decentralized_namespaces.propose_new(
+        owners = Set(sequencer1Id.namespace, sequencer2Id.namespace),
+        threshold = PositiveInt.two,
+        store = sequencer2TempStore,
+      )
+    seq2DND : SignedTopologyTransaction[TopologyChangeOp, DecentralizedNamespaceDefinition] = SignedTopologyTransaction(
+      TopologyTransaction(
+        DecentralizedNamespaceDefinition(
+          12209266a807...,
+          PositiveNumeric(2),
+          Set(1220cb0a22fb..., 12203a55a279...)
+        ),
+        serial = 1,
+        operation = Replace,
+        hash = SHA-256:baa5c4401f12...
+      ),
+      signatures = 12203a55a279...,
+      proposal
+    )
+```
+
+```none
+@ seq2DND.writeToFile("tmp/synchronizer-bootstrapping-files/decentralized-namespace.proto")
+```
+
+Generate the Synchronizer bootstrap transactions with the second Sequencer’s signature and share them
+with the first Sequencer:
+
+```none
+@ val synchronizerBootstrap =
+        sequencer2.topology.synchronizer_bootstrap.download_genesis_topology(
+          physicalSynchronizerId,
+          synchronizerOwners = Seq(sequencer1Id, sequencer2Id),
+          sequencers = Seq(sequencer1Id, sequencer2Id),
+          mediators = Seq(mediator1.id, mediator2.id),
+          outputFile = "tmp/synchronizer-bootstrapping-files/synchronizer-bootstrap.proto",
+          store = sequencer2TempStore,
+        )
+```
+
+On the first Sequencer’s console, load the second Sequencer’s decentralized namespace declaration and
+Synchronizer bootstrap transactions:
+
+```none
+@ sequencer1.topology.transactions.load_single_from_file(
+        "tmp/synchronizer-bootstrapping-files/decentralized-namespace.proto",
+        sequencer1TempStore,
+        ForceFlag.AlienMember,
+      )
+```
+
+```none
+@ sequencer1.topology.transactions.load_multiple_from_file(
+        "tmp/synchronizer-bootstrapping-files/synchronizer-bootstrap.proto",
+        sequencer1TempStore,
+        ForceFlag.AlienMember,
+      )
+```
+
+Still on the first Sequencer’s console, generate and re-export the genesis topology.
+This also merges the signatures from both Sequencers:
+
+```none
+@ sequencer1.topology.synchronizer_bootstrap.download_genesis_topology(
+        physicalSynchronizerId,
+        synchronizerOwners = Seq(sequencer1Id, sequencer2Id),
+        sequencers = Seq(sequencer1Id, sequencer2Id),
+        mediators = Seq(mediator1.id, mediator2.id),
+        outputFile = "tmp/synchronizer-bootstrapping-files/synchronizer-bootstrap.proto",
+        store = sequencer1TempStore
+      )
+```
+
+On the second Sequencer’s console, load the first Sequencer’s Synchronizer bootstrap transactions, which
+contain both Sequencers’ signatures:
+
+```none
+@ sequencer2.topology.transactions.load_multiple_from_file(
+        "tmp/synchronizer-bootstrapping-files/synchronizer-bootstrap.proto",
+        sequencer2TempStore,
+        ForceFlag.AlienMember,
+      )
+```
+
+Bootstrap both Sequencers with the fully authorized initial topology snapshot from the respective consoles:
+
+```none
+@ val initialSnapshot = sequencer1.topology.transactions.export_topology_snapshot(store = sequencer1TempStore)
+    initialSnapshot : com.google.protobuf.ByteString = <ByteString@7f461eac size=6295 contents="\n\2221\n\303\002\n\f\b\220\244\213\313\006\020\310\302\247\343\001\032\244\002\n\237\002\n\215\001\n\210\001\b\001\020\001\032\201\001\n\177\nD1220...">
+```
+
+```none
+@ val synchronizerParams = StaticSynchronizerParameters.tryReadFromFile("tmp/synchronizer-bootstrapping-files/params.proto")
+    synchronizerParams : StaticSynchronizerParameters = StaticSynchronizerParameters(
+      required signing specs = RequiredSigningSpecs(
+        algorithms = Set(Ed25519, EC-DSA-SHA256, EC-DSA-SHA384),
+        keys = Set(EC-Curve25519, EC-P256, EC-P384, EC-Secp256k1)
+      ),
+      required encryption specs = RequiredEncryptionSpecs(
+        algorithms = Set(ECIES_HMAC256_AES128-CBC, RSA-OAEP-SHA256),
+        keys = Set(EC-P256, RSA-2048)
+      ),
+      required symmetric key schemes = AES128-GCM,
+      required hash algorithms = SHA-256,
+      required crypto key formats = Set(
+        Raw,
+        DER-encoded X.509 SubjectPublicKeyInfo,
+        DER-encoded PKCS #8 PrivateKeyInfo
+      ),
+      topology change delay = 0.25s,
+      protocol version = 34,
+      serial = 0
+    )
+```
+
+```none
+@ sequencer1.setup.assign_from_genesis_state(initialSnapshot, synchronizerParams)
+    res33: com.digitalasset.canton.synchronizer.sequencer.admin.grpc.InitializeSequencerResponse = InitializeSequencerResponse(replicated = false)
+```
+
+```none
+@ val initialSnapshot = sequencer2.topology.transactions.export_topology_snapshot(store = sequencer2TempStore)
+    initialSnapshot : com.google.protobuf.ByteString = <ByteString@123fa326 size=6293 contents="\n\2201\n\303\002\n\f\b\220\244\213\313\006\020\330\311\223\267\002\032\244\002\n\237\002\n\215\001\n\210\001\b\001\020\001\032\201\001\n\177\nD1220...">
+```
+
+```none
+@ val synchronizerParams = StaticSynchronizerParameters.tryReadFromFile("tmp/synchronizer-bootstrapping-files/params.proto")
+    synchronizerParams : StaticSynchronizerParameters = StaticSynchronizerParameters(
+      required signing specs = RequiredSigningSpecs(
+        algorithms = Set(Ed25519, EC-DSA-SHA256, EC-DSA-SHA384),
+        keys = Set(EC-Curve25519, EC-P256, EC-P384, EC-Secp256k1)
+      ),
+      required encryption specs = RequiredEncryptionSpecs(
+        algorithms = Set(ECIES_HMAC256_AES128-CBC, RSA-OAEP-SHA256),
+        keys = Set(EC-P256, RSA-2048)
+      ),
+      required symmetric key schemes = AES128-GCM,
+      required hash algorithms = SHA-256,
+      required crypto key formats = Set(
+        Raw,
+        DER-encoded X.509 SubjectPublicKeyInfo,
+        DER-encoded PKCS #8 PrivateKeyInfo
+      ),
+      topology change delay = 0.25s,
+      protocol version = 34,
+      serial = 0
+    )
+```
+
+```none
+@ sequencer2.setup.assign_from_genesis_state(initialSnapshot, synchronizerParams)
+    res36: com.digitalasset.canton.synchronizer.sequencer.admin.grpc.InitializeSequencerResponse = InitializeSequencerResponse(replicated = false)
+```
+
+Now that the Synchronizer has been successfully bootstrapped and the Sequencers initialized,
+remove the temporary topology stores:
+
+```none
+@ sequencer1.topology.stores.drop_temporary_topology_store(sequencer1TempStore)
+```
+
+```none
+@ sequencer2.topology.stores.drop_temporary_topology_store(sequencer2TempStore)
+```
+
+On both Sequencers’ consoles, initialize the Mediators by connecting each of them to the associated Sequencer:
+
+```none
+@
+      mediator1.setup.assign(
+        physicalSynchronizerId,
+        SequencerConnections.single(sequencer1.sequencerConnection),
+      )
+      mediator1.health.wait_for_initialized()
+```
+
+```none
+@
+      mediator2.setup.assign(
+        physicalSynchronizerId,
+        SequencerConnections.single(sequencer2.sequencerConnection),
+      )
+      mediator2.health.wait_for_initialized()
+```
+
+Now the decentralized Synchronizer is completely initialized and a Participant Node is able to operate
+on this Synchronizer through its Sequencer connection:
+
+```none
+@ participant1.synchronizers.connect_local(sequencer1, alias = "mySynchronizer")
+```
+
+```none
+@ participant2.synchronizers.connect_local(sequencer2, alias = "mySynchronizer")
+```
+
+```none
+@ participant1.health.ping(participant2)
+    res43: Duration = 1389 milliseconds
+```
+
+<a id="synchronizer-bootstrapping-decentralized-and-subset-owners"></a>
+
+## Set up a decentralized Synchronizer with a subset of Sequencers as owners
+
+The [previous subsection](#synchronizer-bootstrapping-separate-consoles) describes how to
+bootstrap a decentralized Synchronizer using multiple Sequencers that are all
+Synchronizer owners. This subsection describes how to bootstrap a decentralized Synchronizer using
+multiple Sequencers when only a subset of Sequencers are Synchronizer owners.
+
+Similar to the previous subsection, distinct operators may manage different Synchronizer nodes from
+separate console environments. The bootstrapping process must be coordinated in lockstep between
+the Synchronizer nodes, with the coordination and exchange of data happening through secure communication
+channels.
+
+This how-to uses four Sequencer nodes and two Mediator nodes. Only **two** of the Sequencer nodes (the first
+and second) are Synchronizer owners, and all four Sequencer nodes are managed by distinct operators.
+Although this how-to shares many bootstrapping commands in common with the previous subsection, there are
+subtle differences showing the commands that owner and non-owner Sequencer nodes should perform, respectively.
+
+<Note>Before proceeding, ensure that all of the nodes in the decentralized Synchronizer are started.</Note>
+
+All Synchronizer owners must agree on the static Synchronizer parameters
+in advance. You can achieve that, for example, by exporting and sharing a file containing their definition:
+
+```none
+@ val synchronizerParameters = StaticSynchronizerParameters.defaultsWithoutKMS(ProtocolVersion.latest)
+    synchronizerParameters : StaticSynchronizerParameters = StaticSynchronizerParameters(
+      required signing specs = RequiredSigningSpecs(
+        algorithms = Set(Ed25519, EC-DSA-SHA256, EC-DSA-SHA384),
+        keys = Set(EC-Curve25519, EC-P256, EC-P384, EC-Secp256k1)
+      ),
+      required encryption specs = RequiredEncryptionSpecs(
+        algorithms = Set(ECIES_HMAC256_AES128-CBC, RSA-OAEP-SHA256),
+        keys = Set(EC-P256, RSA-2048)
+      ),
+      required symmetric key schemes = AES128-GCM,
+      required hash algorithms = SHA-256,
+      required crypto key formats = Set(
+        Raw,
+        DER-encoded X.509 SubjectPublicKeyInfo,
+        DER-encoded PKCS #8 PrivateKeyInfo
+      ),
+      topology change delay = 0.25s,
+      protocol version = 34,
+      serial = 0
+    )
+```
+
+```none
+@ synchronizerParameters.writeToFile("tmp/synchronizer-bootstrapping-files/params.proto")
+```
+
+Now create temporary topology stores to bootstrap the Synchronizer’s topology in all four Sequencer nodes’ consoles:
+
+```none
+@ val sequencer1Id = sequencer1.id
+    sequencer1Id : SequencerId = SEQ::sequencer1::1220cb0a22fb...
+```
+
+```none
+@ val sequencer1TempStore = sequencer1.topology.stores.create_temporary_topology_store("sequencer1-synchronizer-setup", synchronizerParameters.protocolVersion)
+    sequencer1TempStore : TopologyStoreId.Temporary = Temporary(name = String185(str = "sequencer1-synchronizer-setup"))
+```
+
+```none
+@ val sequencer2Id = sequencer2.id
+    sequencer2Id : SequencerId = SEQ::sequencer2::12203a55a279...
+```
+
+```none
+@ val sequencer2TempStore = sequencer2.topology.stores.create_temporary_topology_store("sequencer2-synchronizer-setup", synchronizerParameters.protocolVersion)
+    sequencer2TempStore : TopologyStoreId.Temporary = Temporary(name = String185(str = "sequencer2-synchronizer-setup"))
+```
+
+```none
+@ val sequencer3Id = sequencer3.id
+    sequencer3Id : SequencerId = SEQ::sequencer3::122076e8bfb8...
+```
+
+```none
+@ val sequencer4Id = sequencer4.id
+    sequencer4Id : SequencerId = SEQ::sequencer4::1220990c49ca...
+```
+
+Export the Sequencer and Mediator identities from all four Sequencer nodes’ consoles:
+
+```none
+@ sequencer1.topology.transactions.export_identity_transactions("tmp/synchronizer-bootstrapping-files/sequencer1-identity.proto")
+```
+
+```none
+@ mediator1.topology.transactions.export_identity_transactions("tmp/synchronizer-bootstrapping-files/mediator1-identity.proto")
+```
+
+```none
+@ sequencer2.topology.transactions.export_identity_transactions("tmp/synchronizer-bootstrapping-files/sequencer2-identity.proto")
+```
+
+```none
+@ mediator2.topology.transactions.export_identity_transactions("tmp/synchronizer-bootstrapping-files/mediator2-identity.proto")
+```
+
+```none
+@ sequencer3.topology.transactions.export_identity_transactions("tmp/synchronizer-bootstrapping-files/sequencer3-identity.proto")
+```
+
+```none
+@ sequencer4.topology.transactions.export_identity_transactions("tmp/synchronizer-bootstrapping-files/sequencer4-identity.proto")
+```
+
+Import the node identities into the respective temporary topology stores from the respective consoles:
+
+```none
+@ sequencer1.topology.transactions.import_topology_snapshot_from("tmp/synchronizer-bootstrapping-files/sequencer1-identity.proto", sequencer1TempStore)
+```
+
+```none
+@ sequencer1.topology.transactions.import_topology_snapshot_from("tmp/synchronizer-bootstrapping-files/sequencer2-identity.proto", sequencer1TempStore)
+```
+
+```none
+@ sequencer1.topology.transactions.import_topology_snapshot_from("tmp/synchronizer-bootstrapping-files/sequencer3-identity.proto", sequencer1TempStore)
+```
+
+```none
+@ sequencer1.topology.transactions.import_topology_snapshot_from("tmp/synchronizer-bootstrapping-files/sequencer4-identity.proto", sequencer1TempStore)
+```
+
+```none
+@ sequencer1.topology.transactions.import_topology_snapshot_from("tmp/synchronizer-bootstrapping-files/mediator1-identity.proto", sequencer1TempStore)
+```
+
+```none
+@ sequencer1.topology.transactions.import_topology_snapshot_from("tmp/synchronizer-bootstrapping-files/mediator2-identity.proto", sequencer1TempStore)
+```
+
+```none
+@ sequencer2.topology.transactions.import_topology_snapshot_from("tmp/synchronizer-bootstrapping-files/sequencer1-identity.proto", sequencer2TempStore)
+```
+
+```none
+@ sequencer2.topology.transactions.import_topology_snapshot_from("tmp/synchronizer-bootstrapping-files/sequencer2-identity.proto", sequencer2TempStore)
+```
+
+```none
+@ sequencer2.topology.transactions.import_topology_snapshot_from("tmp/synchronizer-bootstrapping-files/sequencer3-identity.proto", sequencer2TempStore)
+```
+
+```none
+@ sequencer2.topology.transactions.import_topology_snapshot_from("tmp/synchronizer-bootstrapping-files/sequencer4-identity.proto", sequencer2TempStore)
+```
+
+```none
+@ sequencer2.topology.transactions.import_topology_snapshot_from("tmp/synchronizer-bootstrapping-files/mediator1-identity.proto", sequencer2TempStore)
+```
+
+```none
+@ sequencer2.topology.transactions.import_topology_snapshot_from("tmp/synchronizer-bootstrapping-files/mediator2-identity.proto", sequencer2TempStore)
+```
+
+Propose and export the decentralized namespace declaration with the first Sequencer’s signature:
+
+```none
+@ val seq1DND = sequencer1.topology.decentralized_namespaces.propose_new(
+        owners = Set(sequencer1Id.namespace, sequencer2Id.namespace),
+        threshold = PositiveInt.two,
+        store = sequencer1TempStore,
+      )
+    seq1DND : SignedTopologyTransaction[TopologyChangeOp, DecentralizedNamespaceDefinition] = SignedTopologyTransaction(
+      TopologyTransaction(
+        DecentralizedNamespaceDefinition(
+          12209266a807...,
+          PositiveNumeric(2),
+          Set(1220cb0a22fb..., 12203a55a279...)
+        ),
+        serial = 1,
+        operation = Replace,
+        hash = SHA-256:baa5c4401f12...
+      ),
+      signatures = 1220cb0a22fb...,
+      proposal
+    )
+```
+
+```none
+@ seq1DND.writeToFile("tmp/synchronizer-bootstrapping-files/decentralized-namespace.proto")
+```
+
+```none
+@ val synchronizerId = SynchronizerId(UniqueIdentifier.tryCreate("mySynchronizer", seq1DND.mapping.namespace.toProtoPrimitive))
+    synchronizerId : SynchronizerId = mySynchronizer::12209266a807...
+```
+
+```none
+@ val physicalSynchronizerId = PhysicalSynchronizerId(synchronizerId, synchronizerParameters.toInternal)
+    physicalSynchronizerId : PhysicalSynchronizerId = mySynchronizer::12209266a807...::34-0
+```
+
+On the second Sequencer’s console, load the first Sequencer’s decentralized namespace declaration, sign it, and share it again:
+
+```none
+@ sequencer2.topology.transactions.load_single_from_file(
+        "tmp/synchronizer-bootstrapping-files/decentralized-namespace.proto",
+        sequencer2TempStore,
+        ForceFlag.AlienMember,
+      )
+```
+
+```none
+@ val seq2DND = sequencer2.topology.decentralized_namespaces.propose_new(
+        owners = Set(sequencer1Id.namespace, sequencer2Id.namespace),
+        threshold = PositiveInt.two,
+        store = sequencer2TempStore,
+      )
+    seq2DND : SignedTopologyTransaction[TopologyChangeOp, DecentralizedNamespaceDefinition] = SignedTopologyTransaction(
+      TopologyTransaction(
+        DecentralizedNamespaceDefinition(
+          12209266a807...,
+          PositiveNumeric(2),
+          Set(1220cb0a22fb..., 12203a55a279...)
+        ),
+        serial = 1,
+        operation = Replace,
+        hash = SHA-256:baa5c4401f12...
+      ),
+      signatures = 12203a55a279...,
+      proposal
+    )
+```
+
+```none
+@ seq2DND.writeToFile("tmp/synchronizer-bootstrapping-files/decentralized-namespace.proto")
+```
+
+Generate the Synchronizer bootstrap transactions with the second Sequencer’s signature and share them
+with the first Sequencer:
+
+```none
+@ val synchronizerBootstrap =
+        sequencer2.topology.synchronizer_bootstrap.download_genesis_topology(
+          physicalSynchronizerId,
+          synchronizerOwners = Seq(sequencer1Id, sequencer2Id),
+          sequencers = Seq(sequencer1Id, sequencer2Id, sequencer3Id, sequencer4Id),
+          mediators = Seq(mediator1.id, mediator2.id),
+          outputFile = "tmp/synchronizer-bootstrapping-files/synchronizer-bootstrap.proto",
+          store = sequencer2TempStore,
+        )
+```
+
+On the first Sequencer’s console, load the second Sequencer’s decentralized namespace declaration and
+Synchronizer bootstrap transactions:
+
+```none
+@ sequencer1.topology.transactions.load_single_from_file(
+        "tmp/synchronizer-bootstrapping-files/decentralized-namespace.proto",
+        sequencer1TempStore,
+        ForceFlag.AlienMember,
+      )
+```
+
+```none
+@ sequencer1.topology.transactions.load_multiple_from_file(
+        "tmp/synchronizer-bootstrapping-files/synchronizer-bootstrap.proto",
+        sequencer1TempStore,
+        ForceFlag.AlienMember,
+      )
+```
+
+Still on the first Sequencer’s console, generate and re-export the genesis topology.
+This also merges the signatures from both Sequencers:
+
+```none
+@ sequencer1.topology.synchronizer_bootstrap.download_genesis_topology(
+        physicalSynchronizerId,
+        synchronizerOwners = Seq(sequencer1Id, sequencer2Id),
+        sequencers = Seq(sequencer1Id, sequencer2Id, sequencer3Id, sequencer4Id),
+        mediators = Seq(mediator1.id, mediator2.id),
+        outputFile = "tmp/synchronizer-bootstrapping-files/synchronizer-bootstrap.proto",
+        store = sequencer1TempStore
+      )
+```
+
+On the second Sequencer’s console, load the first Sequencer’s Synchronizer bootstrap transactions, which
+contain both Sequencers’ signatures:
+
+```none
+@ sequencer2.topology.transactions.load_multiple_from_file(
+        "tmp/synchronizer-bootstrapping-files/synchronizer-bootstrap.proto",
+        sequencer2TempStore,
+        ForceFlag.AlienMember,
+      )
+```
+
+Bootstrap all Sequencers with the fully authorized initial topology snapshot from the respective consoles.
+For the two Sequencers that are Synchronizer owners, the initial snapshot already exists locally in their
+respective temporary stores from the Synchronizer bootstrap process:
+
+```none
+@ val initialSnapshot = sequencer1.topology.transactions.export_topology_snapshot(store = sequencer1TempStore)
+    initialSnapshot : com.google.protobuf.ByteString = <ByteString@5b750fe4 size=8461 contents="\n\210B\n\301\002\n\v\b\250\244\213\313\006\020\370\236\273*\032\244\002\n\237\002\n\215\001\n\210\001\b\001\020\001\032\201\001\n\177\nD1220c...">
+```
+
+```none
+@ utils.write_to_file(initialSnapshot, "tmp/synchronizer-bootstrapping-files/initial-snapshot.proto")
+```
+
+```none
+@ val synchronizerParams = StaticSynchronizerParameters.tryReadFromFile("tmp/synchronizer-bootstrapping-files/params.proto")
+    synchronizerParams : StaticSynchronizerParameters = StaticSynchronizerParameters(
+      required signing specs = RequiredSigningSpecs(
+        algorithms = Set(Ed25519, EC-DSA-SHA256, EC-DSA-SHA384),
+        keys = Set(EC-Curve25519, EC-P256, EC-P384, EC-Secp256k1)
+      ),
+      required encryption specs = RequiredEncryptionSpecs(
+        algorithms = Set(ECIES_HMAC256_AES128-CBC, RSA-OAEP-SHA256),
+        keys = Set(EC-P256, RSA-2048)
+      ),
+      required symmetric key schemes = AES128-GCM,
+      required hash algorithms = SHA-256,
+      required crypto key formats = Set(
+        Raw,
+        DER-encoded X.509 SubjectPublicKeyInfo,
+        DER-encoded PKCS #8 PrivateKeyInfo
+      ),
+      topology change delay = 0.25s,
+      protocol version = 34,
+      serial = 0
+    )
+```
+
+```none
+@ sequencer1.setup.assign_from_genesis_state(initialSnapshot, synchronizerParams)
+    res42: com.digitalasset.canton.synchronizer.sequencer.admin.grpc.InitializeSequencerResponse = InitializeSequencerResponse(replicated = false)
+```
+
+```none
+@ val initialSnapshot = sequencer2.topology.transactions.export_topology_snapshot(store = sequencer2TempStore)
+    initialSnapshot : com.google.protobuf.ByteString = <ByteString@3b65e9a3 size=8483 contents="\n\236B\n\303\002\n\f\b\250\244\213\313\006\020\250\201\242\243\001\032\244\002\n\237\002\n\215\001\n\210\001\b\001\020\001\032\201\001\n\177\nD1220...">
+```
+
+```none
+@ val synchronizerParams = StaticSynchronizerParameters.tryReadFromFile("tmp/synchronizer-bootstrapping-files/params.proto")
+    synchronizerParams : StaticSynchronizerParameters = StaticSynchronizerParameters(
+      required signing specs = RequiredSigningSpecs(
+        algorithms = Set(Ed25519, EC-DSA-SHA256, EC-DSA-SHA384),
+        keys = Set(EC-Curve25519, EC-P256, EC-P384, EC-Secp256k1)
+      ),
+      required encryption specs = RequiredEncryptionSpecs(
+        algorithms = Set(ECIES_HMAC256_AES128-CBC, RSA-OAEP-SHA256),
+        keys = Set(EC-P256, RSA-2048)
+      ),
+      required symmetric key schemes = AES128-GCM,
+      required hash algorithms = SHA-256,
+      required crypto key formats = Set(
+        Raw,
+        DER-encoded X.509 SubjectPublicKeyInfo,
+        DER-encoded PKCS #8 PrivateKeyInfo
+      ),
+      topology change delay = 0.25s,
+      protocol version = 34,
+      serial = 0
+    )
+```
+
+```none
+@ sequencer2.setup.assign_from_genesis_state(initialSnapshot, synchronizerParams)
+    res45: com.digitalasset.canton.synchronizer.sequencer.admin.grpc.InitializeSequencerResponse = InitializeSequencerResponse(replicated = false)
+```
+
+For the non-owner Sequencers, externally share the initial topology snapshot to enable the
+*assign from genesis state* command. In this example, assume the first Sequencer externally shares
+the initial topology snapshot with the third and fourth Sequencers by sharing a written file:
+
+```none
+@ val initialSnapshot = utils.read_byte_string_from_file("tmp/synchronizer-bootstrapping-files/initial-snapshot.proto")
+    initialSnapshot : com.google.protobuf.ByteString = <ByteString@18f1bc70 size=8461 contents="\n\210B\n\301\002\n\v\b\250\244\213\313\006\020\370\236\273*\032\244\002\n\237\002\n\215\001\n\210\001\b\001\020\001\032\201\001\n\177\nD1220c...">
+```
+
+```none
+@ val synchronizerParams = StaticSynchronizerParameters.tryReadFromFile("tmp/synchronizer-bootstrapping-files/params.proto")
+    synchronizerParams : StaticSynchronizerParameters = StaticSynchronizerParameters(
+      required signing specs = RequiredSigningSpecs(
+        algorithms = Set(Ed25519, EC-DSA-SHA256, EC-DSA-SHA384),
+        keys = Set(EC-Curve25519, EC-P256, EC-P384, EC-Secp256k1)
+      ),
+      required encryption specs = RequiredEncryptionSpecs(
+        algorithms = Set(ECIES_HMAC256_AES128-CBC, RSA-OAEP-SHA256),
+        keys = Set(EC-P256, RSA-2048)
+      ),
+      required symmetric key schemes = AES128-GCM,
+      required hash algorithms = SHA-256,
+      required crypto key formats = Set(
+        Raw,
+        DER-encoded X.509 SubjectPublicKeyInfo,
+        DER-encoded PKCS #8 PrivateKeyInfo
+      ),
+      topology change delay = 0.25s,
+      protocol version = 34,
+      serial = 0
+    )
+```
+
+```none
+@ sequencer3.setup.assign_from_genesis_state(initialSnapshot, synchronizerParams)
+    res48: com.digitalasset.canton.synchronizer.sequencer.admin.grpc.InitializeSequencerResponse = InitializeSequencerResponse(replicated = false)
+```
+
+```none
+@ sequencer4.setup.assign_from_genesis_state(initialSnapshot, synchronizerParams)
+    res49: com.digitalasset.canton.synchronizer.sequencer.admin.grpc.InitializeSequencerResponse = InitializeSequencerResponse(replicated = false)
+```
+
+Now that the Synchronizer has been successfully bootstrapped and the Sequencers initialized,
+remove the temporary topology stores:
+
+```none
+@ sequencer1.topology.stores.drop_temporary_topology_store(sequencer1TempStore)
+```
+
+```none
+@ sequencer2.topology.stores.drop_temporary_topology_store(sequencer2TempStore)
+```
+
+On both Sequencer owners’ consoles, initialize the Mediators by connecting each of them to the associated Sequencer:
+
+```none
+@
+      mediator1.setup.assign(
+        physicalSynchronizerId,
+        SequencerConnections.single(sequencer1.sequencerConnection),
+      )
+      mediator1.health.wait_for_initialized()
+```
+
+```none
+@
+      mediator2.setup.assign(
+        physicalSynchronizerId,
+        SequencerConnections.single(sequencer2.sequencerConnection),
+      )
+      mediator2.health.wait_for_initialized()
+```
+
+Now the decentralized Synchronizer is completely initialized and a Participant Node is able to operate
+on this Synchronizer through its Sequencer connection:
+
+```none
+@ participant1.synchronizers.connect_local(sequencer1, alias = "mySynchronizer")
+```
+
+```none
+@ participant2.synchronizers.connect_local(sequencer2, alias = "mySynchronizer")
+```
+
+```none
+@ participant1.health.ping(participant2)
+    res56: Duration = 1309 milliseconds
+```
+
+<a id="permissioned-synchronizer"></a>
+
+## Bootstrap a permissioned Synchronizer
+
+The first layer of Synchronizer security is restricting access to the Public API network endpoints of the Sequencers.
+This can be done using standard network tools such as firewall rules and virtual private networks.
+
+Individual Synchronizers can be **open**, allowing any Participant with a connection to a Sequencer node to join
+and participate in the network, or **permissioned**, in which case the Synchronizer owners need to explicitly authorize
+a Participant before it can register with the Synchronizer and use it.
+
+While the Canton architecture is designed to be resilient against malicious Participant Nodes, explicitly restricting
+which Participant Nodes can join the network constitutes an effective second line of defense.
+
+This subsection explains how to make a decentralized Synchronizer permissioned. For simplicity, it assumes a single
+trusted operator accessing all nodes from a single console environment.
+
+First, let all Synchronizer owners set the `onboardingRestriction`
+dynamic Synchronizer parameter to `RestrictedOpen`:
+
+```none
+@ val synchronizerId = sequencer1.synchronizer_id
+    synchronizerId : SynchronizerId = mySynchronizer::1220a82692ab...
+```
+
+```none
+@ sequencer1.topology.synchronizer_parameters.propose_update(synchronizerId, _.update(onboardingRestriction = OnboardingRestriction.RestrictedOpen))
+```
+
+```none
+@ mediator1.topology.synchronizer_parameters.propose_update(synchronizerId, _.update(onboardingRestriction = OnboardingRestriction.RestrictedOpen))
+```
+
+Now, when a Participant Node attempts to join the Synchronizer, it’s rejected because it’s unknown:
+
+```none
+@ participant1.synchronizers.register(sequencer1, alias = synchronizerName, manualConnect = true)
+    ERROR com.digitalasset.canton.integration.EnvironmentDefinition$$anon$3:SynchronizerInstallationManual - Request failed for participant1.
+      GrpcRequestRefusedByServer: FAILED_PRECONDITION/INITIAL_ONBOARDING_ERROR(9,5473eec7): Transport(Status{code=FAILED_PRECONDITION, description=TOPOLOGY_PARTICIPANT_ONBOARDING_REFUSED(9,5473eec7): The PAR::participant1::12201ff69b1d... can not join the synchronizer because onboarding restrictions are in place, cause=null})
+      Request: RegisterSynchronizer(SynchronizerConnectionConfig(
+      synchronizer = Synchronizer 'mySynchronizer',
+      sequencerConnections = SequencerConnections(
+        connections = Sequencer 'sequencer1' -> GrpcSequencerConnection(sequencerAlias = Sequencer 'sequence ...
+      DecodedCantonError(
+      code = 'INITIAL_ONBOARDING_ERROR',
+      category = InvalidGivenCurrentSystemStateOther,
+      cause = "Transport(Status{code=FAILED_PRECONDITION, description=TOPOLOGY_PARTICIPANT_ONBOARDING_REFUSED(9,5473eec7): The PAR::participant1::12201ff69b1d... can not join the synchronizer because onboarding restrictions are in place, cause=null})",
+      traceId = '5473eec7a2e2ef3700f4764338848db7',
+      context = Seq('participant=>participant1', 'test=>SynchronizerInstallationManual', 'synchronizer=>mySynchronizer')
+    )
+      Command ParticipantAdministration$synchronizers$.register invoked from cmd10000013.sc:1
+```
+
+To allow the Participant Node to join the Synchronizer, the Synchronizer owners must authorize it.
+
+First, export the Participant Node’s ID to a string:
+
+Extract the ID of the Participant Node into a string:
+
+```none
+@ val participantAsString = participant1.id.toProtoPrimitive
+    participantAsString : String = "PAR::participant1::12201ff69b1d24edbf0ee2028a304ea702ee8536790dab1a31e7136e6d90ff6d473c"
+```
+
+Communicate this string to the Synchronizer owners, who import it as follows:
+
+```none
+@ val participantIdFromString = ParticipantId.tryFromProtoPrimitive(participantAsString)
+    participantIdFromString : ParticipantId = PAR::participant1::12201ff69b1d...
+```
+
+Let all Synchronizer owners authorize the Participant Node:
+
+```none
+@ sequencer1.topology.participant_synchronizer_permissions.propose(synchronizerId, participantIdFromString, ParticipantPermission.Submission, store = Some(synchronizerId))
+    res6: SignedTopologyTransaction[TopologyChangeOp, ParticipantSynchronizerPermission] = SignedTopologyTransaction(
+      TopologyTransaction(
+        ParticipantSynchronizerPermission(
+          mySynchronizer::1220a82692ab...,
+          PAR::participant1::12201ff69b1d...,
+          Submission,
+          None,
+          None
+        ),
+        serial = 1,
+        operation = Replace,
+        hash = SHA-256:0f3f9883b343...
+      ),
+      signatures = 1220cb0a22fb...,
+      proposal
+    )
+```
+
+```none
+@ mediator1.topology.participant_synchronizer_permissions.propose(synchronizerId, participantIdFromString, ParticipantPermission.Submission, store = Some(synchronizerId))
+    res7: SignedTopologyTransaction[TopologyChangeOp, ParticipantSynchronizerPermission] = SignedTopologyTransaction(
+      TopologyTransaction(
+        ParticipantSynchronizerPermission(
+          mySynchronizer::1220a82692ab...,
+          PAR::participant1::12201ff69b1d...,
+          Submission,
+          None,
+          None
+        ),
+        serial = 1,
+        operation = Replace,
+        hash = SHA-256:0f3f9883b343...
+      ),
+      signatures = 122009299340...,
+      proposal
+    )
+```
+
+Check that the Participant Node isn’t active yet:
+
+```none
+@ participant1.synchronizers.active(synchronizerName)
+    res8: Boolean = false
+```
+
+When issuing the Participant Node Synchronizer permission for a given Participant Node, the Synchronizer
+owners declare that they agree that the Participant Node joins the Synchronizer. Inspect this declaration:
+
+```none
+@ sequencer1.topology.participant_synchronizer_permissions.list(synchronizerId).map(_.item.permission)
+    res9: Seq[ParticipantPermission] = Vector(Submission)
+```
+
+```none
+@ mediator1.topology.participant_synchronizer_permissions.list(synchronizerId).map(_.item.permission)
+    res10: Seq[ParticipantPermission] = Vector(Submission)
+```
+
+<Note>Propagating and processing topology proposals may require some time, so you may have to retry before the
+submission authorization is visible.</Note>
+
+To activate the Participant Node on the Synchronizer, register the signing keys and the “Synchronizer trust certificate”
+of the Participant Node (the Participant Node generates this certificate automatically and sends it to the Synchronizer
+during the initial handshake).
+
+Trigger the handshake again by letting the Participant Node reconnect to the Synchronizer:
+
+```none
+@ participant1.synchronizers.reconnect_all()
+```
+
+Now, check that the Participant Node is active:
+
+```none
+@ participant1.synchronizers.active(synchronizerName)
+    res12: Boolean = true
+```
+
+You can also confirm that the Participant Node is active with:
+
+```none
+@ sequencer1.topology.participant_synchronizer_states.active(synchronizerId, participantIdFromString)
+    res13: Boolean = true
+```
+
+```none
+@ mediator1.topology.participant_synchronizer_states.active(synchronizerId, participantIdFromString)
+    res14: Boolean = true
+```
+
+Finally, check that the Participant Node is healthy and can use the Synchronizer:
+
+```none
+@ participant1.health.ping(participant1)
+    res15: Duration = 1261 milliseconds
+```

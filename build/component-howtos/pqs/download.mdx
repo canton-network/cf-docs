@@ -1,0 +1,56 @@
+{/* source: pqs / pqs/3.4/component-howtos/pqs/download.rst */}
+{/* Copyright (c) 2025, Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved. */}
+
+<a id="pqs-download"></a>
+
+# Download
+
+PQS is a component available only to enterprise customers.
+
+| Source          | Location                                                                                                                                                                                                                 |
+|-----------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Browse UI       | [https://console.cloud.google.com/artifacts/docker/da-images/europe/public/docker%2Fparticipant-query-store](https://console.cloud.google.com/artifacts/docker/da-images/europe/public/docker%2Fparticipant-query-store) |
+| Docker Registry | `europe-docker.pkg.dev/da-images/public/docker/participant-query-store:<version-tag>`                                                                                                                                    |
+
+## Daml platform support
+
+PQS is built and tested against multiple Daml SDK targets. Each Daml SDK target generates it’s own `.jar` file.
+
+The [dpm](https://docs.digitalasset.com/build/3.4/dpm/dpm.html) CLI tool is used to download the `scribe.jar` file, as follows:
+
+> 1. `dpm install <version>` (e.g., `dpm install 3.4.8`) to get the latest SDK release which includes `scribe.jar`.
+> 2. To locate the directory where the scribe.jar file is, enter `dpm resolve | grep scribe` which will show the path to the jar file.
+
+The published Docker image already includes `scribe.jar`. If an operator wants to run PQS against a new, target Docker image,
+they will need to set the container’s `workdir` <sup>[1](#id2)</sup> at runtime to the desired Daml SDK target.
+
+The supported targets are:
+
+* `/daml2`
+* `/daml3.3`
+* `/daml3.4` << default
+
+Please note that the preceeding `/` is required as the target is the path to the `scribe.jar` file.
+An example of selecting the `/daml3.4` target:
+
+```text
+docker run -it --workdir /daml3.4 europe-docker.pkg.dev/da-images/public/docker/participant-query-store:0.6.14 --version
+Picked up JAVA_TOOL_OPTIONS: -javaagent:/open-telemetry.jar
+scribe, version: v0.6.14
+daml-sdk.version: 3.4.9
+postgres-document.schema: 034
+```
+
+Alternatively
+set the `working_dir` parameter to `/daml3.4` in a `docker-compose.yml` file (e.g., `working_dir: /daml3.4`).
+
+## Compatibility
+
+PQS is tested for compatibility with multiple versions of dependencies, as follows:
+
+| Dependency              | Versions                 |
+|-------------------------|--------------------------|
+| Canton Participant Node | 2.8, 2.9, 2.10, 3.3, 3.4 |
+| Java Runtime (Temurin)  | 17, 21                   |
+| PostgreSQL              | 13, 14, 15, 16, 17       |
+* <a id='id2'>**[1]**</a> [https://docs.docker.com/reference/cli/docker/container/run/#workdir](https://docs.docker.com/reference/cli/docker/container/run/#workdir)

@@ -1,0 +1,176 @@
+{/* source: canton / canton/3.4/sdk/tutorials/app-dev/external_signing_onboarding_multihosted.rst */}
+{/* Copyright (c) 2025 Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved. */}
+{/* SPDX-License-Identifier: Apache-2.0 */}
+
+<a id="tutorial-onboard-external-multi-hosted"></a>
+
+# Onboard Multi-Hosted External Party
+
+This tutorial demonstrates how to onboard an **external party** using the Ledger API which is hosted on multiple validators.
+It is a simple extension to the [onboard external party tutorial](external_signing_onboarding_lapi.mdx#tutorial-onboard-external-party-lapi).
+
+## Prerequisites
+
+Make sure that you have completed the [onboard external party tutorial](external_signing_onboarding_lapi.mdx#tutorial-onboard-external-party-lapi)
+and still have a running Canton example instance.
+
+## Run The Script
+
+The example script used in the previous tutorial also supports onboarding a multi-hosted external party. It will
+onboard by default on two nodes if invoked with the `--multi-hosted` command line argument.
+
+```default
+./examples/08-interactive-submission/external_party_onboarding.sh --multi-hosted
+```
+
+## The Details of the Script
+
+The flag `--multi-hosted` will pass the second participant id into the `generate-topology` request through the
+
+```default
+`"otherConfirmingParticipantUids" : [$OTHER_PARTICIPANT_ID]`
+```
+
+field. This will cause the generated topology transaction to include the additional participant id in the hosting
+relation ship. Other options are fields such as `observingParticipantUids`, `confirmationThreshold` and more.
+If not configured, then the confirmation threshold will be set to the number of confirming nodes.
+
+The generated topology transactions then just need to be uploaded to the Ledger API of the second participant:
+
+```bash
+  ALLOCATE=$(cat << EOF
+  {
+    "synchronizer" : $SYNCHRONIZER_ID,
+    "onboardingTransactions": $TRANSACTIONS
+  }
+EOF
+  )
+  RESULT=$(curl -f -s -d "$ALLOCATE" -H "Content-Type: application/json" \
+    -X POST ${PARTICIPANT2}/v2/parties/external/allocate)
+```
+
+In fact, only the party to participant mapping needs to be uploaded. Uploading all topology transactions is not
+necessary but harmless.
+
+When a party to participant mapping is uploaded through the allocate endpoint which mentions the local validator,
+it will automatically be signed by the local validator and forwarded to the network. If the topology transaction
+is not fully authorized, which means that still some signatures are missing, it is treated as a proposal.
+
+If the proposal already exists on the network, the new signatures are merged into the proposal and once enough
+signatures are present, the topology transaction is accepted and added to the state. Because of this, the signature
+of the external party can also be omitted when uploading the topology transaction to the second participant.
+
+## Distribute Topology Transactions Using the Ledger
+
+The described topology transaction distribution process can also be used to avoid passing the topology
+transactions between the different actors for uploading to the Ledger API. Instead, using the Admin API
+of the second participant, the hosting proposal can be listed, as an example, using the console command
+list_hosting_proposals:
+
+You can try this out on the Canton console if you have two participants connected to the same synchronizer.
+In the following example, you will use the participant1 to create the hosting proposal for an internal party.
+This way, you don’t need to deal with creating signatures for the topology transactions externally. The
+approval of the proposal will be done using participant2.
+
+First, create a hosting proposal using participant1:
+
+```none
+@ participant1.topology.party_to_participant_mappings.propose(
+        com.digitalasset.canton.topology.PartyId.tryCreate("Alice", participant1.id.uid.namespace),
+        newParticipants = Seq(
+            (participant1.id, ParticipantPermission.Confirmation),
+            (participant2.id, ParticipantPermission.Confirmation),
+        ),
+    )
+    res1: SignedTopologyTransaction[TopologyChangeOp, PartyToParticipant] = SignedTopologyTransaction(
+      TopologyTransaction(
+        PartyToParticipant(
+          Alice::12201ff69b1d...,
+          PositiveNumeric(1),
+          Vector(
+            HostingParticipant(PAR::participant1::12201ff69b1d..., Confirmation, false),
+            HostingParticipant(PAR::participant2::1220a4d7463b..., Confirmation, false)
+          ),
+          None
+        ),
+        serial = 1,
+        operation = Replace,
+        hash = SHA-256:483ecaff7581...
+      ),
+      signatures = 12201ff69b1d...,
+      proposal
+    )
+```
+
+Then, list the proposals on participant2. The new proposal should appear shortly:
+
+```none
+@ participant2.topology.party_to_participant_mappings.list_hosting_proposals(sequencer1.synchronizer_id, participant2.id)
+    res2: Seq[com.digitalasset.canton.admin.api.client.data.topology.ListMultiHostingProposal] = Vector(
+      ListMultiHostingProposal(
+        txHash = SHA-256:483ecaff7581...,
+        party = Alice::12201ff69b1d...,
+        permission = Confirmation$,
+        others = PAR::participant1::12201ff69b1d... -> Confirmation$,
+        threshold = 1
+      )
+    )
+```
+
+This will show the pending proposal, awaiting the signature of the second participant. The proposal is identified
+by the transaction hash `txHash`, which can be obtained from the output of the previous command:
+
+```none
+@ val txHash = participant2.topology.party_to_participant_mappings.list_hosting_proposals(sequencer1.synchronizer_id, participant2.id).head.txHash
+    txHash : TopologyTransaction.TxHash = TxHash(hash = SHA-256:483ecaff7581...)
+```
+
+Authorize the proposal using the console command topology.transactions.authorize:
+
+```none
+@ participant2.topology.transactions.authorize(sequencer1.synchronizer_id, txHash)
+    res4: SignedTopologyTransaction[TopologyChangeOp, TopologyMapping] = SignedTopologyTransaction(
+      TopologyTransaction(
+        PartyToParticipant(
+          Alice::12201ff69b1d...,
+          PositiveNumeric(1),
+          Vector(
+            HostingParticipant(PAR::participant1::12201ff69b1d..., Confirmation, false),
+            HostingParticipant(PAR::participant2::1220a4d7463b..., Confirmation, false)
+          ),
+          None
+        ),
+        serial = 1,
+        operation = Replace,
+        hash = SHA-256:483ecaff7581...
+      ),
+      signatures = Seq(12201ff69b1d..., 1220a4d7463b...),
+      proposal
+    )
+```
+
+This will add the signature of participant2 to the proposal. Because the proposal is now fully signed, the party
+will appear as being hosted on both nodes:
+
+```none
+@ participant1.parties.hosted("Alice")
+    res5: Seq[ListPartiesResult] = Vector(
+      ListPartiesResult(
+        party = Alice::12201ff69b1d...,
+        participants = Vector(
+          ParticipantSynchronizers(
+            participant = PAR::participant1::12201ff69b1d...,
+            synchronizers = Vector(
+              SynchronizerPermission(synchronizerId = local::122032922613..., permission = Confirmation)
+            )
+          ),
+          ParticipantSynchronizers(
+            participant = PAR::participant2::1220a4d7463b...,
+            synchronizers = Vector(
+              SynchronizerPermission(synchronizerId = local::122032922613..., permission = Confirmation)
+            )
+          )
+        )
+      )
+    )
+```

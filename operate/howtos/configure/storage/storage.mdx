@@ -1,0 +1,72 @@
+{/* source: canton / canton/3.4/participant/howtos/configure/storage/storage.rst */}
+{/* Copyright (c) 2025 Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved. */}
+{/* SPDX-License-Identifier: Apache-2.0 */}
+
+<a id="storage-config"></a>
+
+# Configure storage
+
+Canton needs to persist data to operate. Participant Nodes, Mediator Nodes, and Synchronizer Nodes all require storage configuration.
+
+<Note>Canton creates, manages and upgrades the database schema directly on startup.</Note>
+
+## Configure production storage
+
+For production deployments, the only supported storage is [PostgreSQL](https://www.postgresql.org/).  Please see [Configure Canton with Postgres](postgres.mdx#postgres-config) for details on how to configure it.
+
+## Other storage configurations
+
+<Warning>The following storage configurations are not supported for production deployments. They are provided for testing, development, and experimental purposes only.</Warning>
+
+### Configure in-memory storage
+
+By default, in-memory storage is used if no other storage configuration is provided. With in-memory storage, in place of a relational database, in-memory data structures store the data. A consequence of this is that all data is lost when the node is stopped.
+
+This example shows explicit in-memory configuration for a Sequencer, Mediator, and Participant Node:
+
+```none
+# Configures sequencer1, mediator1, and participant1 to use in-memory storage.
+canton {
+  sequencers.sequencer1.storage.type = memory
+  mediators.mediator1.storage.type = memory
+  participants.participant1.storage.type = memory
+}
+```
+
+### Configure H2 storage
+
+This example shows [H2](https://www.h2database.com/) storage configuration for a Sequencer, Mediator, and Participant Node:
+
+```none
+# Configures sequencer1, mediator1, and participant1 to use file based H2 storage.
+canton {
+  sequencers.sequencer1.storage {
+    type = h2
+    config.url = "jdbc:h2:file:./data/sequencer1;MODE=PostgreSQL;LOCK_TIMEOUT=10000;DB_CLOSE_DELAY=-1"
+  }
+  mediators.mediator1.storage {
+    type = h2
+    config.url = "jdbc:h2:file:./data/mediator1;MODE=PostgreSQL;LOCK_TIMEOUT=10000;DB_CLOSE_DELAY=-1"
+  }
+  participants.participant1.storage {
+    type = h2
+    config.url = "jdbc:h2:file:./data/participant1;MODE=PostgreSQL;LOCK_TIMEOUT=10000;DB_CLOSE_DELAY=-1"
+  }
+}
+```
+
+The `jdbc:` prefixed `url` can be [configured in many ways](https://www.h2database.com/html/features.html#database_url). The example above configures:
+
+Embedded file based storage
+: On canton startup embedded H2 databases will be created in the `./data` directory relative to the Canton node’s working directory and will have the file suffix `.mv.db`.
+  When using H2 [embedded connection mode](https://www.h2database.com/html/features.html#connection_modes) only a single process can access the database at a time, so to inspect the database, it will be necessary to stop Canton first.
+  Once no other process is accessing the database, it can be inspected using the H2 tools, such as the [H2 Console](https://www.h2database.com/html/quickstart.html#h2-console).
+
+MODE=PostgreSQL
+: This is essential as the SQL dialect used by Canton is PostgreSQL. This setting enables [PostgreSQL compatibility mode](https://www.h2database.com/html/features.html#postgresql_mode).
+
+LOCK_TIMEOUT=10000
+: This gives a thread 10 seconds to acquire a database lock before timing out.
+
+DB_CLOSE_DELAY=-1
+: This setting keeps the database open until the Canton process terminates.

@@ -1,0 +1,37 @@
+{/* source: canton / canton/3.4/participant/howtos/secure/kms/key_rotation/rotate_wrapper_key.rst */}
+{/* Copyright (c) 2025 Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved. */}
+{/* SPDX-License-Identifier: Apache-2.0 */}
+
+<a id="rotate-wrapper-key"></a>
+
+# Rotate the envelope wrapper key
+
+Some KMS providers (e.g., AWS) offer automatic rotation of symmetric KMS keys (typically yearly).
+Canton extends this by allowing node administrators to manually rotate the KMS wrapper key.
+
+<Note>You can change the key specification (e.g., enabling multi-region in AWS) during rotation
+by updating the configuration before rotating the wrapper key.</Note>
+
+Key rotation does not delete the previous key. While the old key becomes inactive, it is still persisted.
+To permanently delete the previous key, see [Delete Canton node keys](../../keys/key_management.mdx#deleting-canton-keys).
+
+## Rotate with an auto-generated key
+
+Use the following command:
+
+```scala
+participant1.keys.secret.rotate_wrapper_key()
+```
+
+Canton will automatically create a new wrapper key using the configured KMS.
+
+## Rotate with a manually generated key
+
+First, you must create a new wrapper key in your KMS that meets the requirements described [here](../mode/encrypted_key_storage.mdx#wrapper-key-requirements).
+Afterwards, you can rotate to that key using the following command:
+
+```scala
+participant1.keys.secret.rotate_wrapper_key(newWrapperKeyId)
+```
+
+- newWrapperKeyId: the identifier of the wrapper key you want to rotate to.

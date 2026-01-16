@@ -1,0 +1,494 @@
+{/* source: daml / daml/3.4/sdk/reference/daml/contract-keys.rst */}
+{/* Copyright (c) 2023 Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved. */}
+{/* SPDX-License-Identifier: Apache-2.0 */}
+
+<a id="contractkeys"></a>
+
+# Reference: Contract Keys
+
+<Danger>Contract keys are not supported in this release of Canton 3.x.
+Support for **non-unique contract keys** will come in a future release of Canton 3.x.
+Unique contract keys are not planned be supported in Canton 3.x, as
+there are no known good solutions for enforcing uniqueness constraints at the
+infrastructure level when there are multiple independent subnetworks that can
+be (dis)connected at any point in time.
+
+The documentation below is kept for completeness, but can be ignored for this release of Canton 3.x.</Danger>
+
+## Unsupported feature
+
+Contract keys are an optional addition to templates. They let you specify a way of uniquely identifying contracts, using the parameters to the template - similar to a primary key for a database.
+
+Contract keys do not change and can be used to refer to a contract even when the contract id changes.
+
+Here’s an example of setting up a contract key for a bank account, to act as a bank account ID:
+
+```daml
+type AccountKey = (Party, Text)
+
+template Account with
+    bank : Party
+    number : Text
+    owner : Party
+    balance : Decimal
+    observers : [Party]
+  where
+    signatory [bank, owner]
+    observer observers
+
+    key (bank, number) : AccountKey
+    maintainer key._1
+```
+
+## What Can Be a Contract Key
+
+The key can be an arbitrary serializable expression that does **not** contain contract IDs. However, it **must** include every party that you want to use as a `maintainer` (see [Specify Maintainers]() below).
+
+It’s best to use simple types for your keys like `Text` or `Int`, rather than a list or more complex type.
+
+## Specify Maintainers
+
+If you specify a contract key for a template, you must also specify a `maintainer` or maintainers, in a similar way to specifying signatories or observers. The maintainers “own” the key in the same way the signatories “own” a contract. Just like signatories of contracts prevent double spends or use of false contract data, maintainers of keys prevent double allocation or incorrect lookups. Since the key is part of the contract, the maintainers **must** be signatories of the contract. However, maintainers are computed from the `key` instead of the template arguments. In the example above, the `bank` is ultimately the maintainer of the key.
+
+Uniqueness of keys is guaranteed per template. Since multiple templates may use the same key type, some key-related functions must be annotated using the `@ContractType` as shown in the examples below.
+
+When you are writing Daml models, the maintainers matter since they affect authorization – much like signatories and observers. You don’t need to do anything to “maintain” the keys. In the above example, it is guaranteed that there can only be one `Account` with a given `number` at a given `bank`.
+
+Checking of the keys is done automatically at execution time, by the Daml execution engine: if someone tries to create a new contract that duplicates an existing contract key, the execution engine will cause that creation to fail.
+
+## Contract Lookups
+
+The primary purpose of contract keys is to provide a stable, and possibly meaningful, identifier that can be used in Daml to fetch contracts. There are two functions to perform such lookups: [fetchByKey](#fetchbykey) and [lookupByKey](#lookupbykey). Both types of lookup are performed at interpretation time on the submitting Participant Node, on a best-effort basis. Currently, that best-effort means lookups only return contracts if the submitting Party is a stakeholder of that contract.
+
+In particular, the above means that if multiple commands are submitted simultaneously, all using contract lookups to find and consume a given contract, there will be contention between these commands, and at most one will succeed. For more information, see the section on [Avoiding Contention](../resource-management/contention-avoiding.html).
+
+Limiting key usage to stakeholders also means that keys cannot be used to access a divulged contract, i.e. there can be cases where fetch succeeds and fetchByKey does not. See the example at the end of this section for details.
+
+<a id="fetchbykey"></a>
+
+### fetchByKey
+
+`(fetchedContractId, fetchedContract) <- fetchByKey @ContractType contractKey`
+
+Use `fetchByKey` to fetch the ID and data of the contract with the specified key. It is an alternative to `fetch` and behaves the same in most ways.
+
+It returns a tuple of the ID and the contract object (containing all its data).
+
+Like `fetch`, `fetchByKey` needs to be authorized by at least one stakeholder.
+
+`fetchByKey` fails and aborts the transaction if:
+
+- The submitting Party is not a stakeholder on a contract with the given key, or
+- A contract was found, but the `fetchByKey` violates the authorization rule, meaning no stakeholder authorized the `fetch`.
+
+This means that if it fails, it doesn’t guarantee that a contract with that key doesn’t exist, just that the submitting Party doesn’t know about it, or there are issues with authorization.
+
+<a id="visiblebykey"></a>
+
+### visibleByKey
+
+`boolean <- visibleByKey @ContractType contractKey`
+
+Use `visibleByKey` to check whether you can see an active contract for the given key with the current authorizations. If the contract exists and you have permission to see it, returns `True`, otherwise returns `False`.
+
+To clarify, ignoring contention:
+
+1. `visibleByKey` will return `True` if all of these are true: there exists a contract for the given key, the submitter is a stakeholder on that contract, and at the point of call we have the authorization of **all** of the maintainers of the key.
+2. `visibleByKey` will return `False` if all of those are true: there is no contract for the given key, and at the point of call we have authorization from **all** the maintainers of the key.
+3. `visibleByKey` will abort the transaction at interpretation time if, at the point of call, we are missing the authorization from any one maintainer of the key.
+4. `visibleByKey` will fail at validation time (after returning `False` at interpretation time) if all of these are true: at the point of call, we have the authorization of **all** the maintainers, and a valid contract exists for the given key, but the submitter is not a stakeholder on that contract.
+
+While it may at first seem too restrictive to require **all** maintainers to authorize the call, this is actually required in order to validate negative lookups. In the positive case, when you can see the contract, it’s easy for the transaction to mention which contract it found, and therefore for validators to check that this contract does indeed exist, and is active as of the time of executing the transaction.
+
+For the negative case, however, the transaction submitted for execution cannot say *which* contract it has not found (as, by definition, it has not found it, and it may not even exist). Still, validators have to be able to reproduce the result of not finding the contract, and therefore they need to be able to look for it, which means having the authorization to ask the maintainers about it.
+
+<a id="lookupbykey"></a>
+
+### lookupByKey
+
+`optionalContractId <- lookupByKey @ContractType contractKey`
+
+Use `lookupByKey` to check whether a contract with the specified key exists. If it does exist, `lookupByKey` returns the `Some contractId`, where `contractId` is the ID of the contract; otherwise, it returns `None`.
+
+`lookupByKey` is conceptually equivalent to
+
+```daml
+lookupByKey : forall c k. (HasFetchByKey c k) => k -> Update (Optional (ContractId c))
+lookupByKey k = do
+  visible <- visibleByKey @c k
+  if visible then do
+    (contractId, _ignoredContract) <- fetchByKey @c k
+    return $ Some contractId
+  else
+    return None
+```
+
+Therefore, `lookupByKey` needs all the same authorizations as visibleByKey, for the same reasons, and fails in the same cases.
+
+To get the data from the contract once you’ve confirmed it exists, you’ll still need to use `fetch`.
+
+<a id="exercisebykey"></a>
+
+## exerciseByKey
+
+`exerciseByKey @ContractType contractKey`
+
+Use `exerciseByKey` to exercise a choice on a contract identified by its `key` (compared to `exercise`, which lets you exercise a contract identified by its `ContractId`). Just like `exercise`, running `exerciseByKey` requires visibility of the contract (either through divulgence, `readAs` or being a stakeholder) and authorization from the controllers of the choice.
+
+## Example
+
+A complete example of possible success and failure scenarios of fetchByKey and lookupByKey is shown below.
+
+```daml
+-- Copyright (c) 2025 Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved.
+-- SPDX-License-Identifier: Apache-2.0
+
+module Keys where
+
+import Daml.Script
+import DA.Assert
+import DA.Optional
+
+template Keyed
+  with
+    sig : Party
+    obs : Party
+  where
+    signatory sig
+    observer obs
+
+    key sig : Party
+    maintainer key
+
+template Divulger
+  with
+    divulgee : Party
+    sig : Party
+  where
+    signatory divulgee
+    observer sig
+
+    nonconsuming choice DivulgeKeyed
+      : Keyed
+      with
+        keyedCid : ContractId Keyed
+      controller sig
+      do
+        fetch keyedCid
+
+template Delegation
+  with
+    sig : Party
+    delegees : [Party]
+  where
+    signatory sig
+    observer delegees
+
+    nonconsuming choice CreateKeyed
+      : ContractId Keyed
+      with
+        delegee : Party
+        obs : Party
+      controller delegee
+      do
+        create Keyed with sig; obs
+
+    nonconsuming choice ArchiveKeyed
+      : ()
+      with
+        delegee : Party
+        keyedCid : ContractId Keyed
+      controller delegee
+      do
+        archive keyedCid
+
+    nonconsuming choice UnkeyedFetch
+      : Keyed
+      with
+        cid : ContractId Keyed
+        delegee : Party
+      controller delegee
+      do
+        fetch cid
+
+    nonconsuming choice VisibleKeyed
+      : Bool
+      with
+        key : Party
+        delegee : Party
+      controller delegee
+      do
+        visibleByKey @Keyed key
+
+    nonconsuming choice LookupKeyed
+      : Optional (ContractId Keyed)
+      with
+        lookupKey : Party
+        delegee : Party
+      controller delegee
+      do
+        lookupByKey @Keyed lookupKey
+
+    nonconsuming choice FetchKeyed
+      : (ContractId Keyed, Keyed)
+      with
+        lookupKey : Party
+        delegee : Party
+      controller delegee
+      do
+        fetchByKey @Keyed lookupKey
+
+template Helper
+  with
+    p : Party
+  where
+    signatory p
+
+    choice FetchByKey : (ContractId Keyed, Keyed)
+      with
+        keyedKey : Party
+      controller p
+      do fetchByKey @Keyed keyedKey
+
+    choice VisibleByKey : Bool
+      with
+        keyedKey : Party
+      controller p
+      do visibleByKey @Keyed keyedKey
+
+    choice LookupByKey : (Optional (ContractId Keyed))
+      with
+        keyedKey : Party
+      controller p
+      do lookupByKey @Keyed keyedKey
+
+    choice AssertNotVisibleKeyed : ()
+      with
+        delegationCid : ContractId Delegation
+        delegee : Party
+        key : Party
+      controller p
+      do
+        b <- exercise delegationCid VisibleKeyed with
+          delegee
+          key
+        assert $ not b
+
+    choice AssertLookupKeyedIsNone : ()
+      with
+        delegationCid : ContractId Delegation
+        delegee : Party
+        lookupKey : Party
+      controller p
+      do
+        b <- exercise delegationCid LookupKeyed with
+          delegee
+          lookupKey
+        assert $ isNone b
+
+    choice AssertFetchKeyedEqExpected : ()
+      with
+        delegationCid : ContractId Delegation
+        delegee : Party
+        lookupKey : Party
+        expectedCid : ContractId Keyed
+      controller p
+      do
+        (cid, keyed) <- exercise delegationCid FetchKeyed with
+          delegee
+          lookupKey
+        cid === expectedCid
+
+
+lookupTest = script do
+
+  -- Put four parties in the four possible relationships with a `Keyed`
+  sig <- allocateParty "s" -- Signatory
+  obs <- allocateParty "o" -- Observer
+  divulgee <- allocateParty "d" -- Divulgee
+  blind <- allocateParty "b" -- Blind
+
+  keyedCid <- submit sig do createCmd Keyed with ..
+  divulgercid <- submit divulgee do createCmd Divulger with ..
+  submit sig do exerciseCmd divulgercid DivulgeKeyed with ..
+
+  -- Now the signatory and observer delegate their choices
+  sigDelegationCid <- submit sig do
+    createCmd Delegation with
+      sig
+      delegees = [obs, divulgee, blind]
+  obsDelegationCid <- submit obs do
+    createCmd Delegation with
+      sig = obs
+      delegees = [divulgee, blind]
+
+  -- TESTING LOOKUPS AND FETCHES
+
+  -- Maintainer can fetch
+  (cid, keyed) <- submit sig do
+    Helper sig `createAndExerciseCmd` FetchByKey sig
+  cid === keyedCid
+  -- Maintainer can see
+  b <- submit sig do
+    Helper sig `createAndExerciseCmd` VisibleByKey sig
+  assert b
+  -- Maintainer can lookup
+  mcid <- submit sig do
+    Helper sig `createAndExerciseCmd` LookupByKey sig
+  mcid === Some keyedCid
+
+
+  -- Stakeholder can fetch
+  (cid, l) <- submit obs do
+    Helper obs `createAndExerciseCmd` FetchByKey sig
+  keyedCid === cid
+  -- Stakeholder can't see without authorization
+  submitMustFail obs do
+    Helper obs `createAndExerciseCmd` VisibleByKey sig
+
+  -- Stakeholder can see with authorization
+  b <- submit obs do
+    exerciseCmd sigDelegationCid VisibleKeyed with
+      delegee = obs
+      key = sig
+  assert b
+  -- Stakeholder can't lookup without authorization
+  submitMustFail obs do
+    Helper obs `createAndExerciseCmd` LookupByKey sig
+  -- Stakeholder can lookup with authorization
+  mcid <- submit obs do
+    exerciseCmd sigDelegationCid LookupKeyed with
+      delegee = obs
+      lookupKey = sig
+  mcid === Some keyedCid
+
+  -- Divulgee can't fetch the contract directly
+  submitMustFail divulgee do
+    exerciseCmd obsDelegationCid UnkeyedFetch with
+        delegee = divulgee
+        cid = keyedCid
+  -- Divulgee can't fetch through the key
+  submitMustFail divulgee do
+    Helper divulgee `createAndExerciseCmd` FetchByKey sig
+  -- Divulgee can't see
+  submitMustFail divulgee do
+    Helper divulgee `createAndExerciseCmd` VisibleByKey sig
+  -- Divulgee can't see with stakeholder authority
+  submitMustFail divulgee do
+    exerciseCmd obsDelegationCid VisibleKeyed with
+        delegee = divulgee
+        key = sig
+  -- Divulgee can't lookup
+  submitMustFail divulgee do
+    Helper divulgee `createAndExerciseCmd` LookupByKey sig
+  -- Divulgee can't lookup with stakeholder authority
+  submitMustFail divulgee do
+    exerciseCmd obsDelegationCid LookupKeyed with
+        delegee = divulgee
+        lookupKey = sig
+  -- Divulgee can't do positive lookup with maintainer authority.
+  submitMustFail divulgee do
+    Helper divulgee `createAndExerciseCmd` AssertNotVisibleKeyed with
+      delegationCid = sigDelegationCid
+      delegee = divulgee
+      key = sig
+  -- Divulgee can't do positive lookup with maintainer authority.
+  -- Note that the lookup returns `None` so the assertion passes.
+  -- If the assertion is changed to `isSome`, the assertion fails,
+  -- which means the error message changes. The reason is that the
+  -- assertion is checked at interpretation time, before the lookup
+  -- is checked at validation time.
+  submitMustFail divulgee do
+    Helper divulgee `createAndExerciseCmd` AssertLookupKeyedIsNone with
+      delegationCid = sigDelegationCid
+      delegee = divulgee
+      lookupKey = sig
+  -- Divulgee can't fetch with stakeholder authority
+  submitMustFail divulgee do
+    Helper divulgee `createAndExerciseCmd` AssertFetchKeyedEqExpected with
+      delegationCid = obsDelegationCid
+      delegee = divulgee
+      lookupKey = sig
+      expectedCid = keyedCid
+
+  -- Blind party can't fetch
+  submitMustFail blind do
+    Helper blind `createAndExerciseCmd` FetchByKey sig
+  -- Blind party can't see
+  submitMustFail blind do
+    Helper blind `createAndExerciseCmd` VisibleByKey sig
+  -- Blind party can't see with stakeholder authority
+  submitMustFail blind do
+    exerciseCmd obsDelegationCid VisibleKeyed with
+      delegee = blind
+      key = sig
+  -- Blind party can't see with maintainer authority
+  submitMustFail blind do
+    Helper blind `createAndExerciseCmd` AssertNotVisibleKeyed with
+      delegationCid = sigDelegationCid
+      delegee = blind
+      key = sig
+  -- Blind party can't lookup
+  submitMustFail blind do
+    Helper blind `createAndExerciseCmd` LookupByKey sig
+  -- Blind party can't lookup with stakeholder authority
+  submitMustFail blind do
+    exerciseCmd obsDelegationCid LookupKeyed with
+      delegee = blind
+      lookupKey = sig
+  -- Blind party can't lookup with maintainer authority.
+  -- The lookup initially returns `None`, but is rejected at
+  -- validation time
+  submitMustFail blind do
+    Helper blind `createAndExerciseCmd` AssertLookupKeyedIsNone with
+      delegationCid = sigDelegationCid
+      delegee = blind
+      lookupKey = sig
+  -- Blind party can't fetch with stakeholder authority as lookup is negative
+  submitMustFail blind do
+    exerciseCmd obsDelegationCid FetchKeyed with
+      delegee = blind
+      lookupKey = sig
+  -- Blind party can see nonexistence of a contract
+  submit blind do
+    Helper blind `createAndExerciseCmd` AssertNotVisibleKeyed with
+      delegationCid = obsDelegationCid
+      delegee = blind
+      key = obs
+  -- Blind can do a negative lookup on a truly nonexistant contract
+  submit blind do
+    Helper blind `createAndExerciseCmd` AssertLookupKeyedIsNone with
+      delegationCid = obsDelegationCid
+      delegee = blind
+      lookupKey = obs
+
+  -- TESTING CREATES AND ARCHIVES
+
+  -- Divulgee can't archive
+  submitMustFail divulgee do
+    exerciseCmd sigDelegationCid ArchiveKeyed with
+      delegee = divulgee
+      keyedCid
+
+  submit sig do
+     exerciseCmd keyedCid Archive
+
+  -- Divulgee can create
+  keyedCid2 <- submit divulgee do
+    exerciseCmd sigDelegationCid CreateKeyed with
+      delegee = divulgee
+      obs
+
+  -- Stakeholder can archive
+  submit obs do
+    exerciseCmd sigDelegationCid ArchiveKeyed with
+      delegee = obs
+      keyedCid = keyedCid2
+  -- Stakeholder can create
+  keyedCid3 <- submit obs do
+    exerciseCmd sigDelegationCid CreateKeyed with
+      delegee = obs
+      obs
+
+  return ()
+```

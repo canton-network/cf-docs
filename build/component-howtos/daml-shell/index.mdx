@@ -1,0 +1,279 @@
+{/* source: daml-shell / daml-shell/3.4/component-howtos/daml-shell/index.rst */}
+{/* Copyright (c) 2025, Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved. */}
+
+<a id="build-daml-shell-component-howto"></a>
+
+# Daml Shell
+
+Daml Shell is a component that enables you to interactively query ledger data made available
+in the [Participant Query Store](../pqs/index.mdx#build-pqs-component-howto) (`PQS`) PostgreSQL database.
+
+## Overview
+
+Daml Shell provides an interactive terminal session to examine the current and historical state of
+the ledger by querying ledger transactions and associated events (creates and exercises/archives) stored in a PostgreSQL
+database by an active PQS deployment.
+
+With Daml Shell you can do the following:
+
+* Find a specific contract and display it. For example, if you have a contract ID, you can use
+  Daml Shell to inspect the corresponding contract using the `contract` command.
+* Find all events related to a transaction ID. A transaction is displayed as a series of ledger
+  events (creates, archives, and exercises).
+* Auto-completion for identifiers such as contract IDs, fully qualified names, and package names.
+* List active, inactive, or all contracts for a template using a template FQN.
+* Apply queries and filters to commands to manage the output.
+* Use the `compare-contracts` command to highlight the delta between two contract IDs for the
+  same template.
+* Query between a range of offset values.
+
+The diagram below illustrates where Daml Shell sits within the overall architecture of a Canton ledger
+and how it interacts with PQS’s database:
+
+### Compatibility
+
+Daml Shell is compatible with multiple versions of PQS:
+
+| Dependency               | Versions   |
+|--------------------------|------------|
+| PQS                      | >= 0.4.11  |
+| postgres-document.schema | >= 014     |
+
+## Download
+
+Daml Shell is only available to enterprise customers. Daml Shell is available as both a
+Java `jar` file and a `Docker` container image.
+
+| Source          | Location                                                                                                                                                                                       |
+|-----------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Browse UI       | [https://console.cloud.google.com/artifacts/docker/da-images/europe/public/docker%2Fdaml-shell](https://console.cloud.google.com/artifacts/docker/da-images/europe/public/docker%2Fdaml-shell) |
+| Docker Registry | `europe-docker.pkg.dev/da-images/public/docker/daml-shell`                                                                                                                                     |
+
+<a id="daml-shell-configuration"></a>
+
+## Configure
+
+Daml Shell ascertains its configuration from the following sources, in order of priority:
+
+1. HOCON configuration files (`--config` argument)
+2. Command-line arguments
+3. Java system properties (`-D` arguments to `java` command)
+4. Environment variables
+5. Interactively via `set` command once running
+
+<Note>While Daml Shell’s configuration is read at start up many of the values can be adjusted
+interactively. Please consult the [Interactive configuration](#build-daml-shell-interactive-configuration) section.</Note>
+
+Consult [Configuration options](#build-daml-shell-configuration-options) for all available configuration options.
+
+## Secure
+
+Daml Shell is a client to PostgreSQL database as such it needs to respect security settings
+mandated by those services - TLS and authentication:
+
+### TLS
+
+Your server-side components (PostgreSQL) may require TLS to be used. Please refer to their
+documentation for instructions:
+
+* for PostgreSQL see <sup>[1](#id2)</sup>
+
+Once configured, use appropriate values for dedicated parameters:
+
+```text
+$ ./daml-shell.jar \
+     --postgres-tls-cert /path/to/postgres.crt \
+     --postgres-tls-key /path/to/postgres.der \
+     --postgres-tls-cafile /path/to/postgres.crt \
+     --postgres-tls-mode VerifyFull
+```
+
+## Operate
+
+### Pre-requisites
+
+To run Daml Shell you need the following:
+
+> * PQS deployment with Populated PostgreSQL database
+> * Daml Shell application jar or Docker image
+
+### Run Daml Shell
+
+Daml Shell is an interactive client and requires a PQS database.
+
+Start Daml Shell with a downloaded `jar` file:
+
+```sh
+$ ./daml-shell.jar
+```
+
+<Note>You will need to ensure you have a suitable Java Runtime Environment (17+) installed on your host
+to run the `.jar` artifact</Note>
+
+#### Docker image considerations
+
+Due to Daml Shell being an interactive terminal application please ensure your `docker run`
+command has the interactive (`-i` / `--interactive`)  and TTY (`-t` / `--tty`)
+arguments set as a TTY is required.
+
+```sh
+$ docker run --interactive --tty \
+    europe-docker.pkg.dev/da-images/docker/daml-shell:<version-tag>
+```
+
+<Note>If using container orchestration tooling such as Docker Compose or Kubernetes, please
+consult the respective documentation for enabling TTY and interactivity for Daml Shell</Note>
+
+### Get help
+
+Exploring configuration options is easiest via the –help argument:
+
+```sh
+$ ./daml-shell.jar --help
+   Usage: daml-shell [options]
+
+     -h, --help               prints this usage text
+     --config <file>          HOCON config file with settings as key-value pairs
+     -v, --version            Print the version of Daml Shell
+     --wildcard-char <char>   wildcard character used to abbreviate identifiers. Default: "…"
+     --identifier-hash-length <length>
+                              Number of characters to render for hashes inside identifiers. Default: 20
+     --full-identifiers       Disable identifier shortening.
+     --identifier-trim-location <leading|middle|trailing>
+                              Where to trim long identifiers. Default: "trailing"
+     --completion-query-items <count>
+                              How many completions to show unprompted. Default: 100
+     --disable-color          Disable ANSI colored output.
+     --postgres-host <host>   Postgres host to connect to. Implies --connect. Default: "localhost"
+     --postgres-port <port>   Postgres port to connect to. Implies --connect. Default: 5432
+     --postgres-username <username>
+                              Postgres username to connect with. Implies --connect. Default: "postgres"
+     --postgres-password <password>
+                              Postgres password to connect with. Implies --connect. Default: none
+     --postgres-database <name>
+                              Postgres database to connect to. Implies --connect. Default: "postgres"
+     --postgres-schema <schema>
+                              Postgres schema to connect to. Implies --connect. Default: "public"
+     --postgres-tls-mode <Disable|VerifyCA|VerifyFull|Require>
+                              TLS mode for Postgres connection. Implies --connect. Default: "Disable"
+     --postgres-tls-cafile <path>
+                              Path to the TLS CA file for Postgres connection. Implies --connect. Default: none
+     --postgres-tls-cert <path>
+                              Path to the TLS certificate file for Postgres connection. Implies --connect. Default: none
+     --postgres-tls-key <path>
+                              Path to the TLS key file for Postgres connection. Implies --connect. Default: none
+     --connect                Auto-connect to the database on startup.
+```
+
+<a id="build-daml-shell-troubleshoot"></a>
+
+## Troubleshoot
+
+<a id="build-daml-shell-no-archived-contracts"></a>
+
+### Why don’t I see any archived contracts?
+
+If you don’t see any archived contracts, PQS might be configured to seed the
+database from the latest available ACS, which does not include historical events.
+
+To see pre-existing archived contracts, seed the database from the `Transaction Stream` or `Transaction Tree Stream`.
+
+To ingest as much history as possible, set `--pipeline-ledger-start` to `Genesis` when running PQS for the first time, refer to the [PQS documentation](../pqs/recover.mdx#pqs-ledger-streaming-and-recovery).
+
+### Why don’t I see any choices?
+
+Choices are only visible on the Ledger API’s `Transaction Tree Stream`. Set `--pipeline-datasource` to `TransactionTreeStream` when running PQS, refer to the [PQS documentation](../pqs/configure.mdx#pqs-references-configuration-options-transactions-data-source-warning).
+
+If you still don’t see choices, see [Why don’t I see any archived contracts?](#build-daml-shell-no-archived-contracts)
+
+### Why don’t I see any interface views?
+
+Interfaces are only visible on the Ledger API’s `Transaction Stream` or ACS (not the `Transaction Tree Stream`).
+
+Set `--pipeline-datasource` to `TransactionStream` when running PQS, refer to the [PQS documentation](../pqs/configure.mdx#pqs-references-configuration-options-transactions-data-source-warning).
+
+### Why do all contracts show the same ledger offset?
+
+See [Why don’t I see any archived contracts?](#build-daml-shell-no-archived-contracts)
+
+## Contribute
+
+Please, visit [https://discuss.daml.com/tag/daml-shell](https://discuss.daml.com/tag/daml-shell) to ask questions and raise feature requests.
+
+<a id="build-daml-sell-references"></a>
+
+## References
+
+<a id="build-daml-shell-configuration-options"></a>
+
+### Configuration options
+
+`./daml-shell.jar` parameters
+
+| Parameter                           | Description                                                                                                                                                                                                                                                         |
+|-------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `--config <file>`                   | Path to configuration overrides via an external HOCON file (optional)<br/>+ Environment variable: `DAML_SHELL_CONFIG`<br/><br/>+ System property:      `config`                                                                                                     |
+| `--wildcard-char <char>`            | Wildcard character used to abbreviate identifiers. (default: `…`)<br/><br/>+ Environment variable: `DAML_SHELL_WILDCARD_CHAR`<br/>+ System property:      `wildcard-char`                                                                                           |
+| `--identifier-hash-length <length>` | Number of characters to render for hashes inside identifiers. (default: `20`)<br/><br/>+ Environment variable: `DAML_SHELL_IDENTIFIER_HASH_LENGTH`<br/>+ System property:      `identifier-hash-length`                                                             |
+| `--full-identifiers`                | Disable identifier shortening.<br/><br/>+ Environment variable: `DAML_SHELL_FULL_INDENTIFIERS`<br/>+ System property: full-identifiers                                                                                                                              |
+| `--identifier-trim-location <enum>` | Where to trim long identifiers. (default: `trailing`)<br/><br/>+ Environment variable: `DAML_SHELL_IDENTIFIER_TRIM_LOCATION`<br/>+ System property:      `identifier-trim-location`<br/>+ Enumeration values:   `leading`, `middle`, `trailing`                     |
+| `--completion-query-items <count>`  | How many completions to show unprompted. (default: `100`)<br/><br/>+ Environment variable: `DAML_SHELL_COMPLETION_QUERY_ITEMS`<br/>+ System property:      `completion-query-items`                                                                                 |
+| `--disable-color`                   | Disable ANSI colored output (optional)<br/><br/>+ Environment variable: `DAML_SHELL_DISABLE_COLOR`<br/>+ System property:      `disable-color`                                                                                                                      |
+| `--postgres-host <host>`            | Postgres host to connect to. Implies –connect. (default: `localhost`)<br/><br/>+ Environment variable: `DAML_SHELL_POSTGRES_HOST`<br/>+ System property:      `postgres-host`                                                                                       |
+| `--postgres-port <port>`            | Postgres port to connect to. Implies –connect. (default: `5432`)<br/><br/>+ Environment variable: `DAML_SHELL_POSTGRES_PORT`<br/>+ System property:      `postgres-port`                                                                                            |
+| `--postgres-username <username>`    | Postgres username to connect with. Implies –connect. (default: `postgres`)<br/><br/>+ Environment variable: `DAML_SHELL_POSTGRES_USERNAME`<br/>+ System property:      `postgres-username`                                                                          |
+| `--postgres-password <password>`    | Postgres password to connect with. Implies –connect. (default: `none`)<br/><br/>+ Environment variable: `DAML_SHELL_POSTGRES_PASSWORD`<br/>+ System property:      `postgres-password`                                                                              |
+| `--postgres-database <name>`        | Postgres database to connect to. Implies –connect. (default: `postgres`)<br/><br/>+ Environment variable: `DAML_SHELL_POSTGRES_DATABASE`<br/>+ System property:      `postgres-database`                                                                            |
+| `--postgres-schema <name>`          | Postgres schema to connect to. Implies –connect. (default: `public`)<br/><br/>+ Environment variable: `DAML_SHELL_POSTGRES_SCHEMA`<br/>+ System property:      `postgres-schema`                                                                                    |
+| `--postgres-tls-mode <enum>`        | TLS mode for Postgres connection. Implies –connect. (default: `Disable`)<br/><br/>+ Environment variable: `DAML_SHELL_POSTGRES_TLS_MODE`<br/>+ System property:      `postgres-tls-mode`<br/>+ Enumeration values:   `Disable`, `VerifyCA`, `VerifyFull`, `Require` |
+| `--postgres-tls-cafile <path>`      | Path to the TLS CA file for Postgres connection. Implies –connect. (default: `none`)<br/><br/>+ Environment variable: `DAML_SHELL_POSTGRES_TLS_CAFILE`<br/>+ System property:      `postgres-tls-cafile`                                                            |
+| `--postgres-tls-cert <path>`        | Path to the TLS certificate file for Postgres connection. Implies –connect. (default: `none`)<br/><br/>+ Environment variable: `DAML_SHELL_POSTGRES_TLS_CERT`<br/>+ System property:      `postgres-tls-cert`                                                       |
+| `--postgres-tls-key <path>`         | Path to the TLS key file for Postgres connection. Implies –connect. (default: `none`)<br/><br/>+ Environment variable: `DAML_SHELL_POSTGRES_TLS_KEY`<br/>+ System property:      `postgres-tls-key`                                                                 |
+| `--connect`                         | Auto-connect to the database on startup.<br/><br/>+ Environment variable: `DAML_SHELL_CONNECT`<br/>+ System property:      `connect`                                                                                                                                |
+
+<a id="build-daml-shell-interactive-configuration"></a>
+
+### Interactive configuration
+
+You can set or adjust configuration values interactively using the `set` command once Daml Shell
+has been started.
+
+Change the length of the identifier hash:
+
+```text
+> set identifier-hash-length full
+Disabled identifier shortening
+```
+
+Type `help set` or `help set <setting>` to learn more about specific settings:
+
+```text
+> help set
+NAME
+    set - configure application settings
+
+SYNOPSIS
+    set [<command>]
+
+DESCRIPTION
+    Available settings:
+      * postgres-database <database> - PostgreSQL database
+      * oldest <start|offset> - lower offset bound
+      * postgres-tls-key <path> - PostgreSQL TLS key file
+      * postgres-username <username> - PostgreSQL username
+      * postgres-port <port> - PostgreSQL port
+      * latest <end|previous|next|offset> - upper offset bound
+      * identifier-hash-length <length|full> - identifier length
+      * postgres-host <host> - PostgreSQL host
+      * disable-color  - disable color output
+      * postgres-password <password> - PostgreSQL password
+      * postgres-tls-cafile <path> - PostgreSQL TLS CA file
+      * postgres-tls-cert <path> - PostgreSQL TLS cert file
+      * identifier-trim-location <leading|middle|trailing> - identifier trim location
+      * postgres-tls-mode <mode> - PostgreSQL TLS mode
+      * wildcard-char <char> - identifier wildcard
+      * enable-color  - enable color output
+      * completion-query-items <count> - completion count
+```
+
+* <a id='id2'>**[1]**</a> [https://www.postgresql.org/docs/current/ssl-tcp.html](https://www.postgresql.org/docs/current/ssl-tcp.html)

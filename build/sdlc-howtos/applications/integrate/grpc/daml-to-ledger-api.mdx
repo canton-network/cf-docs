@@ -1,0 +1,335 @@
+{/* source: daml / daml/3.4/sdk/sdlc-howtos/applications/integrate/grpc/daml-to-ledger-api.rst */}
+{/* Copyright (c) 2025 Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved. */}
+{/* SPDX-License-Identifier: Apache-2.0 */}
+
+<a id="daml-to-ledger-api"></a>
+
+# How Daml Types are Translated to Protobuf
+
+This page gives an overview and reference on how Daml types and contracts are represented by the gRPC Ledger API as protobuf messages, most notably:
+
+- in the stream of transactions from the `:brokenref:`com.daml.ledger.api.v1.transactionservice``
+- as payload for `:brokenref:`com.daml.ledger.api.v1.createcommand`` and `:brokenref:`com.daml.ledger.api.v1.exercisecommand`` sent to `:brokenref:`com.daml.ledger.api.v1.commandsubmissionservice`` and `:brokenref:`com.daml.ledger.api.v1.commandservice``.
+
+The Daml code in the examples below is written in Daml *1.1*.
+
+## Notation
+
+The notation used on this page for the protobuf messages is the same as you get if you invoke `protoc --decode=Foo < some_payload.bin`. To illustrate the notation, here is a simple definition of the messages `Foo` and `Bar`:
+
+```protobuf
+message Foo {
+  string field_with_primitive_type = 1;
+  Bar field_with_message_type = 2;
+}
+
+message Bar {
+  repeated int64 repeated_field_inside_bar = 1;
+}
+```
+
+A particular value of `Foo` is then represented by the Ledger API in this way:
+
+```default
+{ // Foo
+  field_with_primitive_type: "some string"
+  field_with_message_type { // Bar
+    repeated_field_inside_bar: 17
+    repeated_field_inside_bar: 42
+    repeated_field_inside_bar: 3
+  }
+}
+```
+
+The name of messages is added as a comment after the opening curly brace.
+
+## Records and Primitive Types
+
+Records or product types are translated to `:brokenref:`com.daml.ledger.api.v1.record``. Here’s an example Daml record type that contains a field for each primitive type:
+
+```daml
+data MyProductType = MyProductType with
+  intField : Int
+  textField : Text
+  decimalField : Decimal
+  boolField : Bool
+  partyField : Party
+  timeField : Time
+  listField : [Int]
+  contractIdField : ContractId SomeTemplate
+```
+
+And here’s an example of creating a value of type MyProductType:
+
+```daml
+    alice <- allocateParty "Alice"
+    bob <- allocateParty "Bob"
+    someCid <- submit alice do createCmd SomeTemplate with owner=alice
+
+    let myProduct = MyProductType with
+                intField = 17
+                textField = "some text"
+                decimalField = 17.42
+                boolField = False
+                partyField = bob
+                timeField = datetime 2018 May 16 0 0 0
+                listField = [1,2,3]
+                contractIdField = someCid
+```
+
+For this data, the respective data on the Ledger API is shown below. Note that this value would be enclosed by a particular contract containing a field of type MyProductType. See [Contract templates]() for the translation of Daml contracts to the representation by the Ledger API.
+
+```default
+{ // Record
+  record_id { // Identifier
+    package_id: "some-hash"
+    name: "Types.MyProductType"
+  }
+  fields { // RecordField
+    label: "intField"
+    value { // Value
+      int64: 17
+    }
+  }
+  fields { // RecordField
+    label: "textField"
+    value { // Value
+      text: "some text"
+    }
+  }
+  fields { // RecordField
+    label: "decimalField"
+    value { // Value
+      decimal: "17.42"
+    }
+  }
+  fields { // RecordField
+    label: "boolField"
+    value { // Value
+      bool: false
+    }
+  }
+  fields { // RecordField
+    label: "partyField"
+    value { // Value
+      party: "Bob"
+    }
+  }
+  fields { // RecordField
+    label: "timeField"
+    value { // Value
+      timestamp: 1526428800000000
+    }
+  }
+  fields { // RecordField
+    label: "listField"
+    value { // Value
+      list { // List
+        elements { // Value
+          int64: 1
+        }
+        elements { // Value
+          int64: 2
+        }
+        elements { // Value
+          int64: 3
+        }
+      }
+    }
+  }
+  fields { // RecordField
+    label: "contractIdField"
+    value { // Value
+      contract_id: "some-contract-id" 
+    }
+  }
+}
+```
+
+## Variants
+
+Variants or sum types are types with multiple constructors. This example defines a simple variant type with two constructors:
+
+```daml
+data MySumType = MySumConstructor1 Int
+               | MySumConstructor2 (Text, Bool)
+```
+
+The constructor `MyConstructor1` takes a single parameter of type `Integer`, whereas the constructor `MyConstructor2` takes a tuple with two fields as parameter. The snippet below shows how you can create values with either of the constructors.
+
+```daml
+    let mySum1 = MySumConstructor1 17
+    let mySum2 = MySumConstructor2 ("it's a sum", True)
+```
+
+Similar to records, variants are also enclosed by a contract, a record, or another variant.
+
+The snippets below shows the value of `mySum1` and `mySum2` respectively as they would be transmitted on the Ledger API within a contract.
+
+```default
+{ // Value
+  variant { // Variant
+    variant_id { // Identifier
+      package_id: "some-hash"
+      name: "Types.MySumType"
+    }
+    constructor: "MyConstructor1"
+    value { // Value
+      int64:  17
+    }
+  }
+}
+```
+
+```default
+{ // Value
+  variant { // Variant
+    variant_id { // Identifier
+      package_id: "some-hash"
+      name: "Types.MySumType"
+    }
+    constructor: "MyConstructor2"
+    value { // Value
+      record { // Record
+        fields { // RecordField
+          label: "sumTextField"
+          value { // Value
+            text: "it's a sum"
+          }
+        }
+        fields { // RecordField
+          label: "sumBoolField"
+          value { // Value
+            bool: true
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+## Contract Templates
+
+Contract templates are represented as records with the same identifier as the template.
+
+This first example template below contains only the signatory party and a simple choice to exercise:
+
+```daml
+data MySimpleTemplateKey =
+  MySimpleTemplateKey
+    with
+      party: Party
+
+template MySimpleTemplate
+    with
+        owner: Party
+    where
+        signatory owner
+
+        key MySimpleTemplateKey owner: MySimpleTemplateKey
+        maintainer key.party
+```
+
+### Create a Contract
+
+Creating contracts is done by sending a `:brokenref:`com.daml.ledger.api.v1.createcommand`` to the `:brokenref:`com.daml.ledger.api.v1.commandsubmissionservice`` or the `:brokenref:`com.daml.ledger.api.v1.commandservice``. The message to create a MySimpleTemplate contract with *Alice* being the owner is shown below:
+
+```default
+{ // CreateCommand
+  template_id { // Identifier
+    package_id: "some-hash"
+    name: "Templates.MySimpleTemplate"
+  }
+  create_arguments { // Record
+    fields { // RecordField
+      label: "owner"
+      value { // Value
+        party: "Alice"
+      }
+    }
+  }
+}
+```
+
+### Receive a Contract
+
+Contracts are received from the `:brokenref:`com.daml.ledger.api.v1.transactionservice`` in the form of a `:brokenref:`com.daml.ledger.api.v1.createdevent``. The data contained in the event corresponds to the data that was used to create the contract.
+
+```default
+{ // CreatedEvent
+  event_id: "some-event-id"
+  contract_id: "some-contract-id"
+  template_id { // Identifier
+    package_id: "some-hash"
+    name: "Templates.MySimpleTemplate"
+  }
+  create_arguments { // Record
+    fields { // RecordField
+      label: "owner"
+      value { // Value
+        party: "Alice"
+      }
+    }
+  }
+  witness_parties: "Alice"
+}
+
+```
+
+### Exercise a Choice
+
+A choice is exercised by sending an `:brokenref:`com.daml.ledger.api.v1.exercisecommand``. Taking the same contract template again, exercising the choice `MyChoice` would result in a command similar to the following:
+
+```default
+{ // ExerciseCommand
+  template_id { // Identifier
+    package_id: "some-hash"
+    name: "Templates.MySimpleTemplate"
+  }
+  contract_id: "some-contract-id"
+  choice: "MyChoice"
+  choice_argument { // Value
+    record { // Record
+      fields { // RecordField
+        label: "parameter"
+        value { // Value
+          int64: 42
+        }
+      }
+    }
+  }
+}
+```
+
+If the template specifies a key, the `:brokenref:`com.daml.ledger.api.v1.exercisebykeycommand`` can be used. It works in a similar way as `:brokenref:`com.daml.ledger.api.v1.exercisecommand``, but instead of specifying the contract identifier you have to provide its key. The example above could be rewritten as follows:
+
+```default
+{ // ExerciseByKeyCommand
+  template_id { // Identifier
+    package_id: "some-hash"
+    name: "Templates.MySimpleTemplate"
+  }
+  contract_key { // Value
+    record { // Record
+      fields { // RecordField
+        label: "party"
+        value { // Value
+          party: "Alice"
+        }
+      }
+    }
+  }
+  choice: "MyChoice"
+  choice_argument { // Value
+    record { // Record
+      fields { // RecordField
+        label: "parameter"
+        value { // Value
+          int64: 42
+        }
+      }
+    }
+  }
+}
+```

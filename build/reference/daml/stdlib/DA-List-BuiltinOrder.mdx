@@ -1,0 +1,145 @@
+{/* source: daml / daml/3.4/sdk/reference/daml/stdlib/DA-List-BuiltinOrder.rst */}
+{/* Copyright (c) 2025 Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved. */}
+{/* SPDX-License-Identifier: Apache-2.0 */}
+
+<a id="module-da-list-builtinorder-49213"></a>
+
+# DA.List.BuiltinOrder
+
+Note: This is only supported in Daml-LF 1.11 or later.
+
+This module provides variants of other standard library
+functions that are based on the builtin Daml-LF ordering rather
+than user-defined ordering. This is the same order also used
+by `DA.Map`.
+
+These functions are usually much more efficient than their
+`Ord`-based counterparts.
+
+Note that the functions in this module still require `Ord`
+constraints. This is purely to enforce that you don’t
+pass in values that cannot be compared, e.g., functions. The
+implementation of those instances is not used.
+
+## Functions
+
+<a id="function-da-list-builtinorder-dedup-38418"></a>
+
+[dedup]()
+: : [Ord](Prelude.mdx#class-ghc-classes-ord-6395) a => [a] -> [a]
+  <br/>
+  `dedup l` removes duplicate elements from a list. In particular,
+  it keeps only the first occurrence of each element.
+  <br/>
+  `dedup` is stable so the elements in the output are ordered
+  by their first occurrence in the input. If you do not need
+  stability, consider using `dedupSort` which is more efficient.
+  <br/>
+  ```daml
+  >>> dedup [3, 1, 1, 3]
+  [3, 1]
+  ```
+
+<a id="function-da-list-builtinorder-dedupon-23739"></a>
+
+[dedupOn]()
+: : [Ord](Prelude.mdx#class-ghc-classes-ord-6395) k => (v -> k) -> [v] -> [v]
+  <br/>
+  A version of `dedup` where deduplication is done
+  after applying the given function. Example use: `dedupOn (.employeeNo) employees`.
+  <br/>
+  `dedupOn` is stable so the elements in the output are ordered
+  by their first occurrence in the input. If you do not need
+  stability, consider using `dedupOnSort` which is more efficient.
+  <br/>
+  ```daml
+  >>> dedupOn fst [(3, "a"), (1, "b"), (1, "c"), (3, "d")]
+  [(3, "a"), (1, "b")]
+  ```
+
+<a id="function-da-list-builtinorder-dedupsort-5846"></a>
+
+[dedupSort]()
+: : [Ord](Prelude.mdx#class-ghc-classes-ord-6395) a => [a] -> [a]
+  <br/>
+  `dedupSort` is a more efficient variant of `dedup`
+  that does not preserve the order of the input elements.
+  Instead the output will be sorted acoording to the builtin Daml-LF
+  ordering.
+  <br/>
+  ```daml
+  >>> dedupSort [3, 1, 1, 3]
+  [1, 3]
+  ```
+
+<a id="function-da-list-builtinorder-deduponsort-69087"></a>
+
+[dedupOnSort]()
+: : [Ord](Prelude.mdx#class-ghc-classes-ord-6395) k => (v -> k) -> [v] -> [v]
+  <br/>
+  `dedupOnSort` is a more efficient variant of `dedupOn`
+  that does not preserve the order of the input elements.
+  Instead the output will be sorted on the values returned by the function.
+  <br/>
+  For duplicates, the first element in the list will be included in the output.
+  <br/>
+  ```daml
+  >>> dedupOnSort fst [(3, "a"), (1, "b"), (1, "c"), (3, "d")]
+  [(1, "b"), (3, "a")]
+  ```
+
+<a id="function-da-list-builtinorder-sort-65819"></a>
+
+[sort]()
+: : [Ord](Prelude.mdx#class-ghc-classes-ord-6395) a => [a] -> [a]
+  <br/>
+  Sort the list according to the Daml-LF ordering.
+  <br/>
+  Values that are identical according to the builtin Daml-LF ordering
+  are indistinguishable so stability is not relevant here.
+  <br/>
+  ```daml
+  >>> sort [3,1,2]
+  [1,2,3]
+  ```
+
+<a id="function-da-list-builtinorder-sorton-7978"></a>
+
+[sortOn]()
+: : [Ord](Prelude.mdx#class-ghc-classes-ord-6395) b => (a -> b) -> [a] -> [a]
+  <br/>
+  `sortOn f` is a version of sort that allows sorting
+  on the result of the given function.
+  <br/>
+  `sortOn` is stable so elements that map to the same sort key
+  will be ordered by their position in the input.
+  <br/>
+  ```daml
+  >>> sortOn fst [(3, "a"), (1, "b"), (3, "c"), (2, "d")]
+  [(1, "b"), (2, "d"), (3, "a"), (3, "c")]
+  ```
+
+<a id="function-da-list-builtinorder-unique-2492"></a>
+
+[unique]()
+: : [Ord](Prelude.mdx#class-ghc-classes-ord-6395) a => [a] -> [Bool](Prelude.mdx#type-ghc-types-bool-66265)
+  <br/>
+  Returns True if and only if there are no duplicate elements in the given list.
+  <br/>
+  ```daml
+  >>> unique [1, 2, 3]
+  True
+  ```
+
+<a id="function-da-list-builtinorder-uniqueon-93017"></a>
+
+[uniqueOn]()
+: : [Ord](Prelude.mdx#class-ghc-classes-ord-6395) k => (a -> k) -> [a] -> [Bool](Prelude.mdx#type-ghc-types-bool-66265)
+  <br/>
+  Returns True if and only if there are no duplicate elements in the given list
+  after applyng function.
+  <br/>
+  ```daml
+  >>> uniqueOn fst [(1, 2), (2, 42), (1, 3)]
+  False
+  ```

@@ -1,0 +1,308 @@
+{/* source: canton-network-utilities / canton-network-utilities/devnet/how-tos/registry/holding/retrieve.rst */}
+
+# Registry Utility - Retrieve Holdings API Example
+
+This example shows how to retrieve holdings on CNU 0.9.x and later using the HTTP JSON API.
+
+The example below retrieves all holdings of a user for a specific registrar, instrument, and
+minimum amount.
+
+## Prerequisites
+
+1. A running validator node connected to one of DevNet, TestNet, or MainNet
+2. The Utility DARs installed on your validator node
+3. A valid business user token (`<user-token>`) obtained from the IAM of the validator node
+4. A business user and associated party (`<user-party>`) created through the Validator API
+5. The JSON API endpoint (`<http-json-api>`) of the participant node
+6. `curl` and `jq` installed on your system
+
+## Preparation
+
+Add all the required information to the source.sh file:
+
+```bash
+#!/usr/bin/env bash
+
+## =================================================================================================
+## Purpose: Configurations for this example, amend variables as needed.
+## Script: source.sh
+## =================================================================================================
+
+# users's details
+USER_TOKEN="eyJhbGciOiJIUzI1NiJ9.eyJzY29wZSI6ImRhbWxfbGVkZ2VyX2FwaSIsImlhdCI6MTc1OTk5MjE0NiwiYXVkIjoiaHR0cHM6Ly91dGlsaXR5LmNhbnRvbi5uZXR3b3JrIiwic3ViIjoiaG9sZGVyIn0.4zuioSDoiysXfNLmobyW0xqXmJEY1tnvX7QOnHv1ASU"
+USER_PARTY_ID="holder::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567"
+
+# filtering criteria
+ADMIN_PARTY_ID="registrar::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567"
+INSTRUMENT_ID="INST"
+MIN_AMOUNT="5.0"
+
+# endpoint for json-api
+HTTP_JSON_API="http://localhost:8001/api/json-api"
+
+# token standard holding interface, may change when new versions of splice exists
+HOLDING_INTERFACE="718a0f77e505a8de22f188bd4c87fe74101274e9d4cb1bfac7d09aec7158d35b:Splice.Api.Token.HoldingV1:Holding"
+
+# utility holding template, may change when a new version of the utility exists
+HOLDING_TEMPLATE="dd3a9f2d51cc4c52d9ec2e1d7ff235298dcfb3afd1d50ab44328b1aaa9a18587:Utility.Registry.Holding.V0.Holding:Holding"
+```
+
+The required information is:
+
+#### Required Information
+
+| Details of     | Description                                                               |
+|----------------|---------------------------------------------------------------------------|
+| User           | JWT, user ID, and party ID of the user                                    |
+| Registrar      | Party ID of the registrar you want to query holdings for.                 |
+| Instrument     | The identifier of the specific instrument you want to query holdings for. |
+| Minimum amount | The minimum amount for the holdings you want to query.                    |
+
+## Retrieve Holdings
+
+### 1. Obtain the Ledger End Offset
+
+Run the following script to obtain the ledger end offset:
+
+```bash
+#!/usr/bin/env bash
+
+# obtain-ledger-offset.sh - Obtains the ledger end offset
+
+DATAFILE="source.sh"
+source "$DATAFILE"
+
+OFFSET=$(curl -s GET \
+    --url "${HTTP_JSON_API}/v2/state/ledger-end" \
+    --header "Accept: application/json" \
+    --header "Authorization: Bearer ${USER_TOKEN}")
+
+echo "$OFFSET" | jq
+
+OUTPUTFILE="response-obtain-ledger-offset.json"
+echo "$OFFSET" > "$OUTPUTFILE"
+```
+
+The result is the ledger end offset at this moment, stored in response-obtain-ledger-offset.json.
+For example:
+
+```json
+{
+  "offset": 4308
+}
+```
+
+### 2. Retrieve Utility Holdings
+
+Run the following script to retrieve the Utility Holdings of the user, filtered by the specified
+instrument ID and minimum amount:
+
+```bash
+#!/usr/bin/env bash
+
+## =================================================================================================
+## Purpose: Retrieves holdings of the user for a specific instrument and minimum amount
+## Authorized by: User
+## Script: retrieve-utility-holdings.sh
+## =================================================================================================
+
+DATAFILE="source.sh"
+source "$DATAFILE"
+
+# Get offset from previous step
+if [[ -f "response-obtain-ledger-offset.json" ]]; then
+  JSONCONTENT=$(cat "response-obtain-ledger-offset.json")
+  OFFSET=$(echo "$JSONCONTENT" | jq -r ".offset")
+else
+  echo "Error: response-obtain-ledger-offset.json not found"
+  exit 1
+fi
+
+RESULT=$(curl -s \
+    --url "${HTTP_JSON_API}/v2/state/active-contracts" \
+    --header "Authorization: Bearer ${USER_TOKEN}" \
+    --header "Content-Type: application/json" \
+    --request POST \
+    --data @- <<EOF
+{
+    "verbose": false,
+    "activeAtOffset": "${OFFSET}",
+    "filter": {
+        "filtersByParty": {
+            "${USER_PARTY_ID}": {
+                "cumulative": [{
+                    "identifierFilter": {
+                        "TemplateFilter": {
+                            "value": {
+                                "templateId": "${HOLDING_TEMPLATE}",
+                                "includeCreatedEventBlob": false
+                            }
+                        }
+                    }
+                }]
+            }
+        }
+    }
+}
+EOF
+)
+
+# Filter holdings for a specific holder, instrument ID, admin, and minimum amount
+FILTERED=$(echo "$RESULT" | jq \
+  --arg USER_PARTY_ID "$USER_PARTY_ID" \
+  --arg INSTRUMENT_ID "$INSTRUMENT_ID" \
+  --arg ADMIN_PARTY_ID "$ADMIN_PARTY_ID" \
+  --arg MIN_AMOUNT "$MIN_AMOUNT" \
+  '[
+    .[]
+    | .contractEntry.JsActiveContract.createdEvent.createArgument
+    | select(
+        .registrar == $ADMIN_PARTY_ID and
+        .owner == $USER_PARTY_ID and
+        .instrument.id == $INSTRUMENT_ID and
+        .instrument.source == $ADMIN_PARTY_ID and
+        (.amount | tonumber) >= ($MIN_AMOUNT | tonumber)
+    )
+  ]'
+)
+
+echo "--- All utility holdings of ${USER_PARTY_ID} with amount>=${MIN_AMOUNT} as of offset ${OFFSET} ---"
+echo "$FILTERED" | jq
+
+OUTPUTFILE="response-retrieve-utility-holdings.json"
+echo "$FILTERED" > "$OUTPUTFILE"
+```
+
+The result is the Holding Cids, stored in response-retrieve-utility-holdings.json. For example:
+
+```json
+[
+  {
+    "operator": "operator::1220b39df5ed0e3c584cd97e86e779def933d545bf9a4fab3c0fd3e4ad3f7a36b8fe",
+    "provider": "provider::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+    "registrar": "registrar::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+    "owner": "holder::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+    "instrument": {
+      "source": "registrar::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+      "id": "INST",
+      "scheme": "RegistrarInternalScheme"
+    },
+    "label": "",
+    "amount": "10.0000000000"
+  }
+]
+```
+
+### 3. Retrieve Canton Network Token Standard Holdings
+
+Run the following script to retrieve the Canton Network Token Standard Holdings of the user,
+filtered by the specified instrument ID and minimum amount:
+
+```bash
+#!/usr/bin/env bash
+
+## =================================================================================================
+## Purpose: Retrieves holdings of the user for a specific instrument and minimum amount
+## Authorized by: User
+## Script: retrieve-holdings.sh
+## =================================================================================================
+
+DATAFILE="source.sh"
+source "$DATAFILE"
+
+# Get offset from previous step
+if [[ -f "response-obtain-ledger-offset.json" ]]; then
+  JSONCONTENT=$(cat "response-obtain-ledger-offset.json")
+  OFFSET=$(echo "$JSONCONTENT" | jq -r ".offset")
+else
+  echo "Error: response-obtain-ledger-offset.json not found"
+  exit 1
+fi
+
+RESULT=$(curl -s \
+    --url "${HTTP_JSON_API}/v2/state/active-contracts" \
+    --header "Authorization: Bearer ${USER_TOKEN}" \
+    --header "Content-Type: application/json" \
+    --request POST \
+    --data @- <<EOF
+{
+    "verbose": false,
+    "activeAtOffset": "${OFFSET}",
+    "filter": {
+        "filtersByParty": {
+            "${USER_PARTY_ID}": {
+                "cumulative": [{
+                    "identifierFilter": {
+                        "InterfaceFilter": {
+                            "value": {
+                                "interfaceId":"$HOLDING_INTERFACE",
+                                "includeInterfaceView": true,
+                                "includeCreatedEventBlob": false
+                            }
+                        }
+                    }
+                }]
+            }
+        }
+    }
+}
+EOF
+)
+
+# Filter holdings for a specific holder, instrument ID, admin, and minimum amount
+FILTERED=$(echo "$RESULT" | jq \
+  --arg USER_PARTY_ID "$USER_PARTY_ID" \
+  --arg INSTRUMENT_ID "$INSTRUMENT_ID" \
+  --arg ADMIN_PARTY_ID "$ADMIN_PARTY_ID" \
+  --arg MIN_AMOUNT "$MIN_AMOUNT" \
+  '[
+    .[]
+    | .contractEntry.JsActiveContract.createdEvent.interfaceViews[]
+    | select(
+        .viewValue.owner == $USER_PARTY_ID and
+        .viewValue.instrumentId.id == $INSTRUMENT_ID and
+        .viewValue.instrumentId.admin == $ADMIN_PARTY_ID and
+        (.viewValue.amount | tonumber) > ($MIN_AMOUNT | tonumber)
+    )
+  ]'
+)
+
+echo "--- All interface holdings of ${USER_PARTY_ID} with amount>=${MIN_AMOUNT} as of offset ${OFFSET} ---"
+echo "$FILTERED" | jq
+
+OUTPUTFILE="response-retrieve-holdings.json"
+echo "$FILTERED" > "$OUTPUTFILE"
+```
+
+The result is the Holding Cids, stored in response-retrieve-holdings.json. For example:
+
+```json
+[
+  {
+    "interfaceId": "718a0f77e505a8de22f188bd4c87fe74101274e9d4cb1bfac7d09aec7158d35b:Splice.Api.Token.HoldingV1:Holding",
+    "viewStatus": {
+      "code": 0,
+      "message": "",
+      "details": []
+    },
+    "viewValue": {
+      "owner": "holder::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+      "instrumentId": {
+        "admin": "registrar::1220d301ababbed7bc8d6f6a80ce16f33933a7274a3013241b7fb373ca7e4f0d6567",
+        "id": "INST"
+      },
+      "amount": "10.0000000000",
+      "lock": null,
+      "meta": {
+        "values": {
+          "utility.digitalasset.com/holding-label": ""
+        }
+      }
+    }
+  }
+]
+```
+
+<Note>In Canton 3, the JSON API no longer supports direct querying as in Canton 2. As a result, any
+filtering of holdings must be performed client-side after retrieving the data. For advanced
+querying and filtering, it is recommended to use the PQS.</Note>

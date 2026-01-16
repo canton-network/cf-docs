@@ -1,0 +1,82 @@
+{/* source: canton / canton/3.4/participant/howtos/configure/apis/ledger_api.rst */}
+{/* Copyright (c) 2025 Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved. */}
+{/* SPDX-License-Identifier: Apache-2.0 */}
+
+<a id="ledger-api-configuration"></a>
+
+# gRPC Ledger API Configuration
+
+The configuration of the gRPC Ledger API is similar to the Admin API configuration, except that the
+group starts with `ledger-api` instead of `admin-api`.
+
+```none
+canton {
+  participants {
+    participant {
+      ledger-api {
+        port = 5011
+        address = localhost
+        auth-services = [{
+          type = jwt-jwks
+          url = "https://target.audience.url/jwks.json"
+          target-audience = "https://rewrite.target.audience.url"
+        }]
+        jwt-timestamp-leeway {
+          default = 5
+          expires-at = 10
+          issued-at = 15
+          not-before = 20
+        }
+        keep-alive-server {
+          time = 40s
+          timeout = 20s
+          permit-keep-alive-time = 20s
+        }
+        max-inbound-message-size = 20971520
+      }
+    }
+  }
+}
+```
+
+To configure the gRPC Ledger API connectivity, you should specify **address** and **port**. All other attributes are
+optional and have intuitive default values.
+
+- Define **tls** parameter group to to configure [TLS](../../secure/apis/tls.mdx#tls-configuration)
+- Define **auth-services** parameter group to to configure [JWT authorization](../../secure/apis/jwt.mdx#jwt-authnz-api-configuration)
+- Define **jwt-timestamp-leeway** parameter group to to configure [JWT leeway](../../secure/apis/jwt.mdx#jwt-leeway-configuration)
+- Define **keep-alive-server** parameter group to to configure [gRPC keepalive](apis.mdx#keepalive-configuration)
+- Define **max-inbound-message-size** parameter to control the [max size of gRPC messages](../../secure/apis/limits.mdx#max-inbound-message-size-configuration)
+
+## Ledger API Caches
+
+The `max-contract-state-cache-size` and `max-contract-key-state-cache-size` parameters control the sizes of the
+Ledger API contract and contract key caches, respectively. Modifying these parameters changes the likelihood that a
+transaction using a contract or a contract key that was recently accessed (created or read) can still find it in the
+memory, rather than needing to query it from the database. Larger caches might be of interest when there is a big pool of
+ambient contracts that are consistently being fetched or used for non-consuming exercises. Larger caches can also benefit
+use cases where a big pool of contracts rotates through a create -> archive -> create-successor cycle.
+Consider adjusting these parameters explicitly if the performance of your specific workflow depends on large caches.
+
+```none
+canton.participants.participant.ledger-api.index-service {
+    max-contract-state-cache-size = 100000      // default 1e4
+    max-contract-key-state-cache-size = 100000  // default 1e4
+}
+```
+
+## Max Transactions in the In-Memory Fan-Out
+
+The `max-transactions-in-memory-fan-out-buffer-size` parameter controls the size of the in-memory fan-out buffer.
+This buffer allows serving the transaction streams from memory as they are finalized, rather than from the database.
+Make sure this buffer is large enough so applications are less likely to have to stream transactions
+from the database. In most cases, a 10s buffer works well. For example, if you expect a throughput of 20 tx/s,
+set this number to 200. The new default setting of 1000 assumes 100 tx/s.
+Consider adjusting these parameters explicitly if the performance of your workflow foresees transaction rates larger
+than 100 tx/s.
+
+```none
+canton.participants.participant.ledger-api.index-service {
+    max-transactions-in-memory-fan-out-buffer-size = 10000 // default 1000
+}
+```

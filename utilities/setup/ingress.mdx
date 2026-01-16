@@ -1,0 +1,71 @@
+{/* source: canton-network-utilities / canton-network-utilities/devnet/setup/ingress.rst */}
+
+<a id="ingress"></a>
+
+# Ingress
+
+<Warning>Your ingress must be created in the same namespace where you have installed your validator, participant and utilities app.</Warning>
+
+All ingress traffic is routed through an included proxy listening on `<chart-release-name>-ingress:80`.
+
+To setup ingress, two things are required:
+
+1. Set the host in the values file:
+
+```yaml
+# values.yaml
+
+frontend:
+  hostname: <hostname>
+```
+
+1. Configure your ingress provider to route traffic to the `<chart-release-name>-ingress` service on port `80` in the namespace you installed your validator, participant and utilities app.
+
+## Example
+
+Using the Kubernetes default Ingress provider:
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: utilities-ingress
+  namespace: <chart-release-namespace>
+spec:
+  rules:
+    - host: <hostname>
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: <chart-release-name>-ingress
+                port:
+                  number: 80
+```
+
+Using an Istio virtual service:
+
+Note: This assumes that you are using the Istio setup which is provided in the official Splice docs [here](https://github.com/DACH-NY/canton-network-utilities/pull/6068).
+
+```yaml
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: utilities-ingress
+  namespace: <chart-release-namespace>
+spec:
+  gateways: cluster-ingress/cn-http-gateway
+  hosts: <hostname>
+  http:
+  - match:
+    - port: 443
+      uri:
+        prefix: /
+    route:
+    - destination:
+        host: utilities-ingress.<chart-release-namespace>.svc.cluster.local
+        port:
+          number: 80
+```

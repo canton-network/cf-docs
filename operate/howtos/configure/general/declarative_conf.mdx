@@ -1,0 +1,91 @@
+{/* source: canton / canton/3.4/participant/howtos/configure/general/declarative_conf.rst */}
+{/* Copyright (c) 2025 Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved. */}
+{/* SPDX-License-Identifier: Apache-2.0 */}
+
+<a id="declarative-configuration"></a>
+
+# Declarative Configuration
+
+<Note>Declarative configuration is an alpha feature and initially only available for participant nodes.</Note>
+
+By default, Canton at runtime is administered using API requests for scalability purposes.
+For smaller-sized deployments, Canton also supports configuration settings for dynamic changes.
+This configuration can add or remove DARs, parties, synchronizers, users, and identity providers,
+and can be used as follows:
+
+```none
+// enable dynamic configuration explicitly (alpha feature, turned off by default)
+canton.parameters.enable-alpha-state-via-config = yes
+canton.parameters.state-refresh-interval = 5s
+
+// this is an example configuration file
+// note that the configuration format will possibly change in the future based
+// on the feedback we get from the community
+canton.participants.myparticipant.alpha-dynamic {
+  fetched-dar-directory = "fetched-dars"
+  // upload dars
+  dars = [
+    { location = "dars/CantonExamples.dar", expected-main-package = "abcd" }
+    { location = "https://path.to/repo/token.dar", request-headers = { AuthenticationToken : "mytoken" }}
+  ],
+  // define parties
+  parties = [
+    { party = "Alice", synchronizers = ["mysync"] }
+    { party = "Bob" }
+  ],
+  // if true, then parties found which are not in the configuration file will be deleted
+  remove-parties = false
+  // define identity providers
+  idps = [
+    { identity-provider-id = "idp1", issuer = "issuer", jwks-url = "https://path.to/jwks", audience = "optional", is-deactivated = false }
+  ]
+  // if true, then idps found which are not in the configuration file will be deleted
+  remove-idps = false
+  // define users
+  users = [
+    { user = "User1", primary-party = "Alice", is-deactivated = false, annotations = {"key" : "value"},
+      identity-provider-id = "idp1", rights = {
+        act-as = ["Alice"],
+        read-as = ["Bob"],
+        read-as-any-party = true
+        participant-admin = true
+        identity-provider-admin = true
+      }
+    }
+  ]
+  // if true, then users found which are not in the configuration file will be deleted
+  remove-users = false
+  // define synchronizers
+  connections = [{
+    synchronizer-alias = "mysync"
+    manual-connect = false
+    priority = 0
+    trust-threshold = 1
+    connections = {
+      "first" : {
+        endpoints = [{ host = "localhost", port = 1234 }]
+        transport-security = true
+        custom-trust-certificate = "cert.pem"
+      }
+    }
+  }]
+}
+```
+
+Please note that all configuration files will be checked regularly for file modifications, triggering
+a reload and applying the changes to the node.
+
+The metrics `daml.declarative_api.items` and `daml.declarative_api.errors` provide insights
+into the amount of items managed through the state configuration file. Negative error codes mean
+that something fundamental with the sync did not succeed (-1 if the config file cannot be parsed,
+-2 if something failed during the preparation of the sync, and -3 if the sync itself failed fundamentally),
+while positive error codes point to a number of items that failed. Anything other than 0 errors means
+something is wrong.
+
+Some settings can only be applied if certain preconditions are met. Assigning a party to a user
+is only possible if a synchronizer is already registered. Therefore, some of the changes will
+only appear once these preconditions are met. However, it is safe to define a target state
+with parties before the participant is connected to a synchronizer.
+
+It is also possible to mix declarative and imperative configurations. Excess items defined through
+the API will not be deleted unless explicitly configured to do so.
