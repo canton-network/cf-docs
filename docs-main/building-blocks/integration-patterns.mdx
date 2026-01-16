@@ -77,7 +77,7 @@ flowchart LR
 
 ### Use Case
 
-Create, manage, and transfer tokens following the Canton Token Standard (CIP-0056).
+Create, manage, and transfer tokens following the Canton Token Standard ([CIP-0056](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0056/cip-0056.md)).
 
 ### Architecture
 
@@ -113,19 +113,25 @@ template MyToken
 
     -- Implement standard holding interface
     interface instance HoldingInterface for MyToken where
-      view = ...
+      view = HoldingView with
+        custodian = issuer
+        owner = holder
+        amount = amount
 
-    -- Implement standard transfer interface
+    -- Standard transfer choice
     choice Transfer : ContractId MyToken
+      with
+        newHolder : Party
       controller holder
-      do ...
+      do
+        create this with holder = newHolder
 ```
 
 ### Key Considerations
 
 | Consideration | Approach |
 |---------------|----------|
-| **Interoperability** | Follow CIP-0056 for wallet compatibility |
+| **Interoperability** | Follow [CIP-0056](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0056/cip-0056.md) for wallet compatibility |
 | **Authorization** | Define clear signatory/controller roles |
 | **Privacy** | Token balances visible only to holders |
 
@@ -252,7 +258,7 @@ Integrations should handle common error scenarios:
 ### Retry Strategy
 
 ```typescript
-async function submitWithRetry(command: Command, maxRetries = 3) {
+async function submitWithRetry<T>(command: Command, maxRetries = 3): Promise<T> {
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
       return await ledgerApi.submit(command);
@@ -264,6 +270,7 @@ async function submitWithRetry(command: Command, maxRetries = 3) {
       throw error;
     }
   }
+  throw new Error("Max retries exceeded");
 }
 ```
 

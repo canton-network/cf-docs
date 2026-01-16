@@ -55,7 +55,9 @@ flowchart LR
     DECOMPOSE --> VC[Charlie's View<br>- encrypted context<br>- Bob pays Charlie]
 ```
 
-> "Sub-transaction privacy: Participants see only those parts of a transaction they are entitled to according to the privacy model. For the other parts of a transaction they are not entitled to, the Participants see neither any transaction payload nor metadata like involved Participants or parties."
+In other words, participants see only those parts of a transaction they are entitled to according to the privacy model. For the other parts of a transaction they are not entitled to, participants see neither any transaction payload nor metadata like involved participants or parties.
+
+The synchronizer sees **none of this**—only encrypted messages and confirmation results.
 
 ### What Each Party Sees
 
@@ -126,19 +128,6 @@ template Payment
 <Check>
 **Validators only store** data for their hosted parties - no global state replication.
 </Check>
-
-### What Canton Does Not Guarantee
-
-<Warning>
-Canton's privacy model has limitations you should understand.
-</Warning>
-
-| Limitation | Description |
-|------------|-------------|
-| **Traffic analysis** | Timing, message sizes, and patterns may reveal information |
-| **Validator visibility** | Your hosting validator sees all your data |
-| **Transaction occurrence** | That *some* transaction happened may be observable (but not content) |
-| **External data exposure** | Off-ledger integrations may expose data Canton protects |
 
 ## Privacy Patterns
 
@@ -287,30 +276,7 @@ template OverShared
 
 **Fix**: Only add observers who genuinely need visibility.
 
-### Mistake 2: Leaking via Contract Keys
-
-<Note>
-Contract keys are not currently available in Daml 3.x / Canton 3.x but are planned for a future release. This section is included for awareness when the feature becomes available.
-</Note>
-
-```haskell
--- BAD: Key reveals private information
-template LeakyKey
-  with
-    owner : Party
-    secretPartner : Party
-    value : Decimal
-  where
-    signatory owner
-    key (owner, secretPartner) : (Party, Party)  -- Key reveals relationship!
-    maintainer key._1
-```
-
-**Problem**: Contract key lookups may reveal the existence of relationships.
-
-**Fix**: Design keys to avoid encoding sensitive relationships.
-
-### Mistake 3: Ignoring Divulgence
+### Mistake 2: Ignoring Divulgence
 
 ```haskell
 -- Transaction reveals more than intended
@@ -326,7 +292,7 @@ choice RevealingChoice : ()
 
 **Fix**: Understand which contracts get fetched and who sees the transaction.
 
-### Mistake 4: Timing Attacks
+### Mistake 3: Timing Attacks
 
 **Problem**: Even without seeing content, observers might infer information from:
 - When transactions occur
