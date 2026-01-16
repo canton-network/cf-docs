@@ -37,7 +37,7 @@ Be aware that only the Daml primitive types exported by the [Prelude](../daml/st
 
 Daml tuple type constructors take types `T1, T2, …, TN` to the type `(T1, T2, …, TN)`. These are exposed in the Daml surface language through the [Prelude](../daml/stdlib/Prelude.mdx#module-prelude-72703) module.
 
-The equivalent Daml-LF type constructors are `daml-prim:DA.Types:TupleN`, for each particular N (where 2 <= N <= 20). This qualified name refers to the package name (`ghc-prim`) and the module name (`GHC.Tuple`).
+The equivalent Daml-LF type constructors are `daml-prim:DA.Types:TupleN`, for each particular N (where 2 &lt;= N &lt;= 20). This qualified name refers to the package name (`ghc-prim`) and the module name (`GHC.Tuple`).
 
 For example: the Daml pair type `(Int, Text)` is translated to `daml-prim:DA.Types:Tuple2 Int64 Text`.
 
@@ -79,10 +79,10 @@ This section uses the syntax for Daml [records](../daml/data-types.mdx#daml-ref-
 | `data Foo = Bar Int`                                                           | `variant Foo ↦ Bar Int64`                                                                                                                   |
 | `data Foo = Foo ()`                                                            | `variant Foo ↦ Foo Unit`                                                                                                                    |
 | `data Foo = Bar ()`                                                            | `variant Foo ↦ Bar Unit`                                                                                                                    |
-| `data Foo = Bar { bar: Int } | Baz Text`                                       | `variant Foo ↦ Bar Foo.Bar | Baz Text`, `record Foo.Bar ↦ { bar: Int64 }`                                                                   |
-| `data Foo = Foo { foo: Int } | Baz Text`                                       | `variant Foo ↦ Foo Foo.Foo | Baz Text`, `record Foo.Foo ↦ { foo: Int64 }`                                                                   |
-| `data Foo = Bar { bar1: Int; bar2: Decimal } | Baz Text`                       | `variant Foo ↦ Bar Foo.Bar | Baz Text`, `record Foo.Bar ↦ { bar1: Int64; bar2: Decimal }`                                                   |
-| `data Foo = Bar { bar1: Int; bar2: Decimal } | Baz { baz1: Text; baz2: Date }` | `variant Foo ↦ Bar Foo.Bar | Baz Foo.Baz`, `record Foo.Bar ↦ { bar1: Int64; bar2: Decimal }`, `record Foo.Baz ↦ { baz1: Text; baz2: Date }` |
+| `data Foo = Bar \{ bar: Int } | Baz Text`                                       | `variant Foo ↦ Bar Foo.Bar | Baz Text`, `record Foo.Bar ↦ \{ bar: Int64 }`                                                                   |
+| `data Foo = Foo \{ foo: Int } | Baz Text`                                       | `variant Foo ↦ Foo Foo.Foo | Baz Text`, `record Foo.Foo ↦ \{ foo: Int64 }`                                                                   |
+| `data Foo = Bar \{ bar1: Int; bar2: Decimal } | Baz Text`                       | `variant Foo ↦ Bar Foo.Bar | Baz Text`, `record Foo.Bar ↦ \{ bar1: Int64; bar2: Decimal }`                                                   |
+| `data Foo = Bar \{ bar1: Int; bar2: Decimal } | Baz { baz1: Text; baz2: Date }` | `variant Foo ↦ Bar Foo.Bar | Baz Foo.Baz`, `record Foo.Bar ↦ \{ bar1: Int64; bar2: Decimal }`, `record Foo.Baz ↦ \{ baz1: Text; baz2: Date }` |
 
 ### Enum declarations
 
@@ -97,17 +97,17 @@ There are two gotchas to be aware of: things you might expect to be able to do i
 
 The first: a single constructor data type must be made unambiguous as to whether it is a record or a variant type. Concretely, the data type declaration `data Foo = Foo` causes a compile-time error, because it is unclear whether it is declaring a record or a variant type.
 
-To fix this, you must make the distinction explicitly. Write `data Foo = Foo {}` to declare a record type with no fields, or `data Foo = Foo ()` for a variant with a single constructor taking unit argument.
+To fix this, you must make the distinction explicitly. Write `data Foo = Foo \{}` to declare a record type with no fields, or `data Foo = Foo ()` for a variant with a single constructor taking unit argument.
 
 The second gotcha is that a constructor in a data type declaration can have at most one unlabelled argument type. This restriction is so that we can provide a straight-forward encoding of Daml-LF types in a variety of client languages.
 
 | Banned declaration              | Workaround                                                                                                  |
 |---------------------------------|-------------------------------------------------------------------------------------------------------------|
-| `data Foo = Foo`                | `data Foo = Foo {}` to produce `record Foo ↦ {}` OR `data Foo = Foo ()` to produce `variant Foo ↦ Foo Unit` |
-| `data Foo = Bar`                | `data Foo = Bar {} to produce record Foo ↦ {}` OR `data Foo = Bar () to produce variant Foo ↦ Bar Unit`     |
-| `data Foo = Foo Int Text`       | Name constructor arguments using a record declaration, for example `data Foo = Foo { x: Int; y: Text }`     |
-| `data Foo = Bar Int Text`       | Name constructor arguments using a record declaration, for example `data Foo = Bar { x: Int; y: Text }`     |
-| `data Foo = Bar | Baz Int Text` | Name arguments to the Baz constructor, for example `data Foo = Bar | Baz { x: Int; y: Text }`               |
+| `data Foo = Foo`                | `data Foo = Foo \{}` to produce `record Foo ↦ \{}` OR `data Foo = Foo ()` to produce `variant Foo ↦ Foo Unit` |
+| `data Foo = Bar`                | `data Foo = Bar \{} to produce record Foo ↦ \{}` OR `data Foo = Bar () to produce variant Foo ↦ Bar Unit`     |
+| `data Foo = Foo Int Text`       | Name constructor arguments using a record declaration, for example `data Foo = Foo \{ x: Int; y: Text }`     |
+| `data Foo = Bar Int Text`       | Name constructor arguments using a record declaration, for example `data Foo = Bar \{ x: Int; y: Text }`     |
+| `data Foo = Bar | Baz Int Text` | Name arguments to the Baz constructor, for example `data Foo = Bar | Baz \{ x: Int; y: Text }`               |
 
 ### Restrictions for upgrades
 
