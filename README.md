@@ -5,3 +5,8 @@ docs
 ====
 
 This repo manages the contents of the docs.canton.network website.
+
+Local preview
+=============
+
+Run `mintlify dev` to preview the docs site locally.
