@@ -39,3 +39,17 @@ mintlify broken-links
 nvm install 20
 nvm use 20
 ```
+
+### Direnv + Nix workflow
+
+If you use Nix, this repo includes `.envrc` and `shell.nix`:
+
+```bash
+direnv allow
+```
+
+Then run:
+
+```bash
+mintlify dev
+```
