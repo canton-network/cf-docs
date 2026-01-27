@@ -7,7 +7,10 @@ Canton resolves the privacy-integrity tradeoff through three architectural pilla
 
 ## Pillar 1: Sub-Transaction Privacy
 
-Canton's core innovation is **sub-transaction privacy**: decomposing transactions into views where each party sees only what they're entitled to see.
+Canton's core innovation is **sub-transaction privacy**. This works at two levels:
+
+1. **Transaction isolation**: Different transactions are kept completely separate—unrelated parties don't even know other transactions exist
+2. **View decomposition**: Within a single transaction, different parties see only their relevant portions
 
 ### How Views Work
 
@@ -21,18 +24,20 @@ When a transaction involves multiple parties, Canton doesn't send the entire tra
 
 ```mermaid
 flowchart LR
-    subgraph TX[Transaction: Alice pays Bob, Bob pays Charlie]
+    subgraph TX[Transaction]
         direction TB
-        A1[Action 1: Alice → Bob]
-        A2[Action 2: Bob → Charlie]
+        A1[Alice → Bob]
+        A2[Bob → Charlie]
     end
 
     TX --> DECOMP[Decompose]
 
-    DECOMP --> VA[Alice's View<br>Sees: Action 1<br>Hidden: Action 2, Charlie]
-    DECOMP --> VB[Bob's View<br>Sees: Action 1, Action 2]
-    DECOMP --> VC[Charlie's View<br>Sees: Action 2<br>Hidden: Action 1, Alice]
+    DECOMP --> VA[Alice's View<br>Sees: Alice → Bob]
+    DECOMP --> VB[Bob's View<br>Sees: Both]
+    DECOMP --> VC[Charlie's View<br>Sees: Bob → Charlie]
 ```
+
+In this example, a single atomic transaction moves value from Alice to Bob to Charlie. But Alice never learns about Charlie, and Charlie never learns about Alice.
 
 ### What Each Party Sees
 
@@ -106,7 +111,7 @@ The **synchronizer** (sequencer + mediator nodes) coordinates transaction orderi
 | Limitation | Guarantee |
 |------------|-----------|
 | **Read content** | Only sees encrypted views |
-| **Identify users** | Doesn't know which users are involved |
+| **Identify end users** | Knows parties for routing, but not the humans/systems behind them |
 | **Modify transactions** | Can only pass through or reject |
 | **Store state** | No persistent transaction data |
 

@@ -61,6 +61,81 @@ flowchart TB
 - **Privacy**: Trading relationships and prices protected
 - **Audit trail**: Entitled auditors can be added as observers
 
+## Tokenized Securities
+
+Issue and trade securities with regulatory compliance built in.
+
+### Requirements
+
+- Issuer controls who can hold the security
+- Regulator has audit visibility
+- Trades are private between buyer and seller
+- Corporate actions affect all holders (but holdings remain private)
+
+### Canton Design
+
+```haskell
+template Security
+  with
+    issuer : Party
+    holder : Party
+    regulator : Party
+    cusip : Text
+    quantity : Decimal
+    approvedHolders : [Party]  -- Issuer maintains list of eligible holders
+  where
+    signatory issuer
+    observer holder, regulator  -- Regulator sees all holdings
+
+    choice Transfer : ContractId Security
+      with
+        newHolder : Party
+      controller holder, issuer  -- Issuer approval required for compliance
+      do
+        assert (newHolder `elem` approvedHolders)
+        create this with holder = newHolder
+```
+
+The regulator observes all holdings (for compliance) without that data being public. The issuer must approve all transfers, ensuring only eligible parties can hold the security. Trades remain private between counterparties while still being auditable.
+
+## Cross-Border Payments
+
+Move value across jurisdictions while respecting data sovereignty requirements.
+
+### The Challenge
+
+- Sender's bank is in Country A with data localization requirements
+- Receiver's bank is in Country B with different requirements
+- Correspondent banking requires coordination
+- Neither country's regulator should see the other's customer data
+
+### Canton Solution
+
+Each jurisdiction's data stays with validators in that jurisdiction:
+
+```mermaid
+flowchart LR
+    subgraph CountryA[Country A]
+        SenderBank[Sender's Bank<br>Validator A]
+        RegA[Regulator A<br>Observer]
+    end
+
+    subgraph CountryB[Country B]
+        ReceiverBank[Receiver's Bank<br>Validator B]
+        RegB[Regulator B<br>Observer]
+    end
+
+    SenderBank <--> |atomic settlement<br>via synchronizer| ReceiverBank
+
+    RegA --> |sees sender details| SenderBank
+    RegB --> |sees receiver details| ReceiverBank
+```
+
+- Sender's details stay in Country A
+- Receiver's details stay in Country B
+- Settlement is atomic across the synchronizer
+- Each regulator sees only their jurisdiction's data
+
 ## Syndicated Loan Management
 
 Multiple banks participate in a loan without seeing each other's positions or terms.
@@ -155,81 +230,6 @@ template ShipmentFinancing
 A single atomic transaction can create both contracts. The logistics provider and financier each see only their relevant contract, while the shipper and receiver (as signatories on both) see everything. Downstream participants in the supply chain never see upstream pricing, because those contracts have different stakeholders.
 
 This pattern—separating data by audience into distinct contracts—is how Canton achieves fine-grained privacy while maintaining atomicity.
-
-## Tokenized Securities
-
-Issue and trade securities with regulatory compliance built in.
-
-### Requirements
-
-- Issuer controls who can hold the security
-- Regulator has audit visibility
-- Trades are private between buyer and seller
-- Corporate actions affect all holders (but holdings remain private)
-
-### Canton Design
-
-```haskell
-template Security
-  with
-    issuer : Party
-    holder : Party
-    regulator : Party
-    cusip : Text
-    quantity : Decimal
-    approvedHolders : [Party]  -- Issuer maintains list of eligible holders
-  where
-    signatory issuer
-    observer holder, regulator  -- Regulator sees all holdings
-
-    choice Transfer : ContractId Security
-      with
-        newHolder : Party
-      controller holder, issuer  -- Issuer approval required for compliance
-      do
-        assert (newHolder `elem` approvedHolders)
-        create this with holder = newHolder
-```
-
-The regulator observes all holdings (for compliance) without that data being public. The issuer must approve all transfers, ensuring only eligible parties can hold the security. Trades remain private between counterparties while still being auditable.
-
-## Cross-Border Payments
-
-Move value across jurisdictions while respecting data sovereignty requirements.
-
-### The Challenge
-
-- Sender's bank is in Country A with data localization requirements
-- Receiver's bank is in Country B with different requirements
-- Correspondent banking requires coordination
-- Neither country's regulator should see the other's customer data
-
-### Canton Solution
-
-Each jurisdiction's data stays with validators in that jurisdiction:
-
-```mermaid
-flowchart LR
-    subgraph CountryA[Country A]
-        SenderBank[Sender's Bank<br>Validator A]
-        RegA[Regulator A<br>Observer]
-    end
-
-    subgraph CountryB[Country B]
-        ReceiverBank[Receiver's Bank<br>Validator B]
-        RegB[Regulator B<br>Observer]
-    end
-
-    SenderBank <--> |atomic settlement<br>via synchronizer| ReceiverBank
-
-    RegA --> |sees sender details| SenderBank
-    RegB --> |sees receiver details| ReceiverBank
-```
-
-- Sender's details stay in Country A
-- Receiver's details stay in Country B
-- Settlement is atomic across the synchronizer
-- Each regulator sees only their jurisdiction's data
 
 ## When Canton Fits
 
