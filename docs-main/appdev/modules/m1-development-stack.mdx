@@ -16,10 +16,12 @@ flowchart TB
     end
 
     subgraph Tools[Development Tools]
-        SDK[Canton SDK]
+        SDK[Daml SDK]
         DPM[dpm<br>Package Manager]
         DAML[Daml Compiler]
+        SCRIPT[Daml Script]
         VSC[VS Code Extension]
+        SANDBOX[Sandbox]
     end
 
     subgraph Infra[Canton Infrastructure]
@@ -69,11 +71,11 @@ template Token
 
 ### Daml Compiler
 
-The Daml compiler (`daml build`) compiles Daml source code into DAR files (Daml Archives) that can be deployed to participant nodes.
+The Daml compiler (`dpm build`) compiles Daml source code into DAR files (Daml Archives) that can be deployed to participant nodes.
 
 ```bash
 # Compile Daml code
-daml build
+dpm build
 
 # Output: .dar file containing compiled contracts
 ```
@@ -90,10 +92,11 @@ Your backend connects to Canton via the Ledger API.
 | **JSON API** | HTTP/JSON | Simpler integration, web-friendly |
 
 **Language support:**
-- TypeScript/JavaScript (code generation available)
-- Java (code generation available)
-- Python
-- Any language via gRPC
+- TypeScript/JavaScript (code generation available via `dpm codegen-js`)
+- Java (code generation available via `dpm codegen-java`)
+- Any language via gRPC or JSON API
+
+Community-supported bindings also exist for Python, Rust, and Go.
 
 ### Code Generation
 
@@ -101,10 +104,10 @@ Generate type-safe bindings from your Daml code:
 
 ```bash
 # Generate TypeScript bindings
-daml codegen ts .dar -o generated
+dpm codegen-js .dar -o generated
 
 # Generate Java bindings
-daml codegen java .dar -o generated
+dpm codegen-java .dar -o generated
 ```
 
 Generated code provides:
@@ -126,13 +129,15 @@ The frontend typically connects via your backend, which handles Ledger API commu
 
 ## Development Tools
 
-### Canton SDK
+### Daml SDK
 
-The Canton SDK bundles everything needed for Canton development:
+The Daml SDK bundles everything needed for Canton development:
 
 | Component | Purpose |
 |-----------|---------|
 | **Daml compiler** | Compile smart contracts |
+| **Daml Script** | Test and interact with contracts |
+| **Sandbox** | Run a single Canton node for testing |
 | **Canton runtime** | Run local participant nodes |
 | **Console** | Interactive administration |
 | **Templates** | Project scaffolding |
@@ -162,20 +167,22 @@ The Daml VS Code extension ([Daml Studio](https://marketplace.visualstudio.com/i
 - Code navigation
 - Integrated terminal
 
-**Install:** Search "Daml" in VS Code extensions.
+**Install:** See the [Daml Studio installation guide](https://docs.digitalasset.com/build/3.4/component-howtos/smart-contracts/daml-studio.html#install) for setup instructions.
 
 ## Infrastructure Components
 
 ### LocalNet
 
-LocalNet is a local Canton environment for development:
+LocalNet is a local Global Synchronizer simulation for development:
 
 ```bash
 # Start LocalNet (via QuickStart)
+make setup
+make build
 make start
 
-# Or via Canton SDK
-canton-sandbox
+# Or run a single Canton node via Daml SDK
+dpm sandbox
 ```
 
 LocalNet provides:
@@ -186,13 +193,13 @@ LocalNet provides:
 
 ### Participant Node
 
-The participant node is the Canton runtime that:
+The participant node is the portion of the validator that hosts the Canton runtime which:
 - Hosts your parties
 - Stores contract data
 - Executes Daml logic
 - Exposes the Ledger API
 
-In production, this runs on your infrastructure or a service provider's.
+In production, this runs as part of your validator.
 
 ### PQS (Participant Query Store)
 
@@ -203,7 +210,7 @@ PQS provides SQL-based querying for complex data access:
 | Simple queries | Good | Good |
 | Complex aggregations | Limited | Excellent |
 | Reporting | Difficult | Easy |
-| Real-time updates | Excellent | Good |
+| Real-time updates | Excellent | Excellent |
 
 PQS maintains a PostgreSQL database synchronized with ledger state.
 
@@ -234,7 +241,7 @@ flowchart LR
 
 ## QuickStart Project
 
-The [cn-quickstart](https://github.com/digital-asset/cn-quickstart) repository provides a complete example:
+The [cn-quickstart](https://github.com/digital-asset/cn-quickstart) repository provides a complete example that includes build tooling:
 
 | Component | Technology |
 |-----------|------------|
@@ -250,6 +257,8 @@ cd cn-quickstart
 direnv allow
 cd quickstart
 make install-daml-sdk
+make setup
+make build
 make start
 ```
 

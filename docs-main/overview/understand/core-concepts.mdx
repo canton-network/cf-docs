@@ -3,7 +3,7 @@ title: "Core Concepts"
 description: "Essential building blocks of Canton Network: parties, validators, synchronizers, and smart contracts"
 ---
 
-Understanding Canton requires grasping four fundamental concepts: **parties**, **validators** (participant nodes), **synchronizers**, and **templates** (smart contracts). This page introduces each and explains how they work together.
+Understanding Canton requires grasping four fundamental concepts: **parties**, **validator** node, **synchronizers**, and **templates** (smart contracts). This page introduces each and explains how they work together.
 
 ## Parties
 
@@ -30,7 +30,7 @@ name                                fingerprint (hash of public key)
 
 | Type | Keys Held By | Use Case |
 |------|--------------|----------|
-| **Local Party** | Validator | Simpler; validator signs on party's behalf |
+| **Local Party** | Validator | Simpler; validator signs on party's behalf. Good for automation. |
 | **External Party** | External system | User wallets; requires explicit signing workflow |
 
 <Note>
@@ -65,7 +65,7 @@ template Asset
 
 ## Validators (Participant Nodes)
 
-A **validator** (also called participant node) hosts parties, stores their contract data, and participates in the Canton protocol.
+A **validator** hosts parties, stores their contract data, and participates in the Canton protocol. A validator contains a participant node (the Daml execution engine) plus a validator process.
 
 ### What Validators Do
 
@@ -94,10 +94,11 @@ flowchart TB
 
 ### Key Characteristics
 
-- Each validator maintains a **localized, private view** of the ledger
+- Each validator maintains a **localized, private view** of the ledger (called the _Active Contract Store_)
 - Validators only store contracts where their hosted parties are stakeholders
 - Multiple parties can be hosted on a single validator
 - Validators can connect to multiple synchronizers
+- A party can be hosted on multiple validators
 
 <Warning>
 Your hosting validator sees all your data. Choose your validator carefully—this is a trust relationship.
@@ -120,12 +121,12 @@ The sequencer orders and distributes messages:
 The sequencer **does not**:
 - Decrypt messages
 - See transaction content
-- Store transaction data
-- Know which parties are involved
+- Permanently store transaction data (though it may cache it)
+- Know which end users are involved (though it routes based on party information)
 
 ### Mediator
 
-The mediator facilitates the confirmation protocol:
+The mediator facilitates the consensus protocol that confirms the transaction:
 
 | Function | Description |
 |----------|-------------|
@@ -162,7 +163,7 @@ flowchart TB
 
 - Operated by **Super Validators** (major institutions)
 - Decentralized—no single operator controls it
-- Uses **Canton Coin (CC)** for transaction fees
+- Uses **Canton Coin (CC)** to purchase traffic to pay transaction fees
 - Governed by the **Global Synchronizer Foundation**
 
 ## Smart Contracts (Templates)
@@ -198,7 +199,7 @@ template Token
 
 ### Contracts Are Immutable
 
-Unlike Solidity contracts with mutable state, Daml contracts (template instances) are immutable:
+Unlike Solidity contracts with mutable state, Daml contracts (template instances) are immutable. They can only be `created` or `archived`.
 
 | Solidity | Daml |
 |----------|------|
@@ -213,7 +214,7 @@ This immutability is key to Canton's privacy and integrity guarantees.
 | Type | Effect | Use Case |
 |------|--------|----------|
 | **Consuming** | Archives the contract | State transitions, transfers |
-| **Non-consuming** | Contract remains active | Queries, read operations |
+| **Non-consuming** | Contract remains active | Queries, read operations, events for listening clients |
 
 ```haskell
 -- Consuming: archives the contract
