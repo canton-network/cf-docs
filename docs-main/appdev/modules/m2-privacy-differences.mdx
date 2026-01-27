@@ -128,12 +128,7 @@ flowchart LR
 
 **Approach:** Prove validity without revealing data.
 
-| Aspect | ZK Solutions | Canton |
-|--------|--------------|--------|
-| **Complexity** | ZK circuits are difficult to write | Standard programming model |
-| **Performance** | Proof generation is expensive | No proof generation needed |
-| **Expressiveness** | Limited by ZK constraints | Full programming language |
-| **Setup** | Often requires trusted setup | No cryptographic trusted setup (though users trust their validator) |
+Canton does not use zero-knowledge proofs. Instead, privacy is achieved through selective data distribution—parties only receive the transaction views they're entitled to see. This provides a simpler programming model without ZK circuit complexity or proof generation overhead.
 
 ### Private Channels (Hyperledger Fabric)
 
@@ -157,9 +152,9 @@ flowchart LR
 | **Future risk** | May be decrypted later | Not stored to decrypt |
 | **Computation** | Can't compute on encrypted data | Full computation on views |
 
-## Composite Ledger Per Party
+## Private Ledger View
 
-In Canton, each party has their own **composite ledger view**—the collection of all contracts where they're a stakeholder.
+In Canton, each party has their own **private ledger view**—the collection of all contracts where they're a stakeholder.
 
 ### What This Means
 
@@ -187,7 +182,7 @@ flowchart TB
 |-------------|-----------|
 | Query all tokens: `getAllTokens()` | Query *your* tokens: `getMyContracts()` |
 | Global state exists | No global state concept |
-| Total supply is known | Total supply may not be visible |
+| Total supply is known | Total supply visible only if explicitly designed for visibility |
 | Any node answers any query | Only your validator answers your queries |
 
 ### Querying Data
@@ -217,32 +212,50 @@ The synchronizer (sequencer + mediator) coordinates transactions but never sees 
 
 ### Synchronizer Can See
 
-| Data | Why |
-|------|-----|
-| Encrypted message blobs | Must deliver them |
-| Message sizes | Network routing |
-| Timestamps | Ordering |
-| Confirmation results (yes/no) | Finality |
-| Validator identifiers | Routing |
+- Encrypted message blobs (must deliver them)
+- Message sizes (network routing)
+- Timestamps (ordering)
+- Confirmation results, such as committed or rejected (finality)
+- Validator identifiers (routing)
+- Party identifiers (for routing, but not end-user identity)
 
 ### Synchronizer Cannot See
 
-| Data | Protection |
-|------|------------|
-| Transaction content | Encrypted |
-| Party identifiers | Not revealed |
-| Contract data | Never transmitted |
-| Choice being exercised | Encrypted |
-| Amounts, prices, terms | Encrypted |
+- Transaction content (encrypted)
+- Contract data (never transmitted to synchronizer)
+- Choice being exercised (encrypted)
+- Amounts, prices, terms (encrypted)
 
 ### Trust Implications
 
+Canton's trust model differs fundamentally from traditional blockchains:
+
+**What you trust the synchronizer for:**
+- Ordering transactions fairly (not reordering to favor certain parties)
+- Delivering messages to all entitled participants
+- Availability (being online when you need to transact)
+
+**What you don't need to trust the synchronizer for:**
+- Your data privacy—it only sees encrypted blobs
+- Transaction validation—your validator does this
+- Correct execution—the protocol enforces this cryptographically
+
+**What you trust your validator for:**
+- Storing your contract data securely
+- Executing transactions correctly on your behalf
+- Not revealing your data to unauthorized parties
+
+<Warning>
+Your hosting validator sees all your party's data. Choose your validator carefully—this is a trust relationship similar to choosing a bank or custodian.
+</Warning>
+
 | Ethereum | Canton |
 |----------|--------|
-| Trust validators not to censor | Trust synchronizer not to censor |
-| Validators see everything | Synchronizer sees only encrypted views |
-| MEV is possible | MEV is significantly harder due to encryption |
-| Front-running is structural | Front-running is much harder (transactions are encrypted) |
+| Trust all validators not to censor | Trust synchronizer not to censor |
+| All validators see everything | Synchronizer sees only encrypted views |
+| MEV is possible (validators see pending txs) | MEV is significantly harder (transactions encrypted) |
+| Front-running is structural | Front-running is much harder |
+| Trust any node for queries | Trust only your validator for your data |
 
 ## Design Implications for Developers
 

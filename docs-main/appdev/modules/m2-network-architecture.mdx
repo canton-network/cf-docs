@@ -59,36 +59,25 @@ flowchart TB
 - Validators store only their parties' data
 - Synchronizer coordinates without storing
 - Consensus involves only affected parties
-- Horizontally scalable
+- A party can be hosted on multiple validators (multihosting)
 
-## Component Comparison
+## Canton Components
 
-### Nodes/Validators
+### Validators
 
-| Aspect | Ethereum Node | Canton Validator |
-|--------|---------------|------------------|
-| **State stored** | All network state | Only hosted parties' state |
-| **Queries answered** | Any query | Only queries for hosted parties |
-| **Consensus role** | Validate all transactions | Validate only relevant transactions |
-| **Scaling impact** | More nodes = more replication | More validators = more capacity |
+Validators store only their parties' data and answer queries only for hosted parties. In consensus, they validate only transactions affecting their parties.
 
-### Consensus Layer
+### Synchronizers
 
-| Aspect | Ethereum | Canton |
-|--------|----------|--------|
-| **Who participates** | All validators | Only affected validators |
-| **What's validated** | Full transaction | Only relevant views |
-| **Visibility** | Full transaction visible | Encrypted to participants |
-| **Finality** | Probabilistic → finalized | Deterministic |
+Synchronizers coordinate transaction ordering without storing state. They ensure all affected parties see consistent ordering.
 
-### State Model
+### Key Differences from Traditional Blockchains
 
-| Aspect | Ethereum | Canton |
-|--------|----------|--------|
-| **Global state** | Yes, on all nodes | No global state |
-| **State visibility** | Public | Private to stakeholders |
-| **State queries** | Any node answers | Only hosting validator answers |
-| **Total supply visible** | Yes | Only if explicitly designed |
+In Canton:
+- There is no global state—each party has their own view
+- State visibility is private to stakeholders
+- Only hosting validators can answer queries for their parties
+- Finality is deterministic after confirmation
 
 ## Data Flow Comparison
 
@@ -182,11 +171,7 @@ const myContracts = await ledgerApi.getActiveContracts({
 
 ### Scaling
 
-| Strategy | Ethereum | Canton |
-|----------|----------|--------|
-| **More nodes** | More replication | More capacity |
-| **L2 solutions** | Move computation off-chain | Not needed the same way |
-| **Sharding** | Complex to implement | Possible via multiple validators |
+Canton's architecture naturally distributes load because validators only process transactions affecting their hosted parties. Additional capacity can be achieved by distributing parties across more validators.
 
 ## Network Topology
 
