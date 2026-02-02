@@ -1,0 +1,53 @@
+<a id="utility-prerequisites"></a>
+
+# Prerequisites
+
+## Validator
+
+- Having a running and properly configured validator node is a pre-requisite for using the Utilities on the Network.
+- Follow the instructions provided by the Global Synchronizer Foundation [DevNet](https://docs.dev.sync.global/validator_operator/index.html) | [TestNet](https://docs.test.sync.global/validator_operator/index.html) | [MainNet](https://docs.sync.global/validator_operator/index.html) to setup a Validator Node
+
+### Participant Configuration
+
+```yaml
+
+# required for the Utilities frontend
+jsonApiServerPathPrefix: /api/json-api
+
+# optional -- minimizes the amount of archived data in your Validator Node
+participantPruningSchedule:
+  cron: 0 0 14 * * ?
+  maxDuration: 1h
+  retention: 30d
+
+```
+<a id="oidc_setup"></a>
+
+## Utilities Auth Setup
+
+<Warning>
+
+The `audience` configured for your utilities app should match the audience you have configured for your validator.
+
+</Warning>
+### Utilities User/Party
+
+While the Utility could work with the Validator Operator party (created via
+[Validator setup](https://docs.dev.sync.global/validator_operator/validator_helm.html#configuring-the-helm-charts)),
+we recommend creating a separate user/party for the Utility workflows because this user is also used to pay for traffic
+on behalf of all other parties hosted on the validator and receives liveliness rewards. Separating these concerns
+facilitates easier accounting and management.
+
+1. Create a separate user for the Utilities in your IAM system
+2. Log into the Wallet UI with this new user
+3. Click **Onboard yourself** (this creates the party)
+
+### Create Client ID for Frontend and Auto-Topup
+
+Follow the same steps for setting up an [External OIDC Provider](https://docs.test.sync.global/validator_operator/validator_helm.html#oidc-provider-requirements) as you have done for your Validator.
+
+Specifically, you need to create a new application similar to the Wallet/CNS named 'Utility UI'.
+
+Once this has been created, ensure you copy the Client ID and Client Secret as these will be needed later as you specify this
+configuration in your values.yaml (using a Helm chart for deployment to Kubernetes) or as environment variables (if you are deploying via Docker Compose).
+

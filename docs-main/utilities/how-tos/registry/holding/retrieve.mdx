@@ -1,0 +1,94 @@
+# Registry Utility - Retrieve Holdings API Example
+
+This example shows how to retrieve holdings on CNU `0.9.x` and later using the HTTP JSON API.
+
+The example below retrieves all holdings of a user for a specific registrar, instrument, and
+minimum amount.
+
+## Prerequisites
+
+#. A running validator node connected to one of DevNet, TestNet, or MainNet
+#. The Utility DARs installed on your validator node
+#. A valid business user token (`&lt;user-token&gt;`) obtained from the IAM of the validator node
+#. A business user and associated party (`&lt;user-party&gt;`) created through the Validator API
+#. The JSON API endpoint (`&lt;http-json-api&gt;`) of the participant node
+#. `curl` and `jq` installed on your system
+
+## Preparation
+
+Add all the required information to the `source.sh` file:
+
+```{literalinclude} ./scripts/source.sh
+:language: bash
+:linenos:
+```
+The required information is:
+
+```{list-table}
+:header-rows: 1
+
+* - Details of
+  - Description
+* - User
+  - JWT, user ID, and party ID of the user
+* - Registrar
+  - Party ID of the registrar you want to query holdings for.
+* - Instrument
+  - The identifier of the specific instrument you want to query holdings for.
+* - Minimum amount
+  - The minimum amount for the holdings you want to query.
+
+```
+## Retrieve Holdings
+
+### 1. Obtain the Ledger End Offset
+
+Run the following script to obtain the ledger end offset:
+
+```{literalinclude} ./scripts/obtain-ledger-offset.sh
+:language: bash
+:linenos:
+```
+The result is the ledger end offset at this moment, stored in `response-obtain-ledger-offset.json`.
+For example:
+
+```{literalinclude} ./response/response-obtain-ledger-offset.json
+:language: json
+:linenos:
+```
+### 2. Retrieve Utility Holdings
+
+Run the following script to retrieve the Utility Holdings of the user, filtered by the specified
+instrument ID and minimum amount:
+
+```{literalinclude} ./scripts/retrieve-utility-holdings.sh
+:language: bash
+:linenos:
+```
+The result is the Holding Cids, stored in `response-retrieve-utility-holdings.json`. For example:
+
+```{literalinclude} ./response/response-retrieve-utility-holdings.json
+:language: json
+:linenos:
+```
+### 3. Retrieve Canton Network Token Standard Holdings
+
+Run the following script to retrieve the Canton Network Token Standard Holdings of the user,
+filtered by the specified instrument ID and minimum amount:
+
+```{literalinclude} ./scripts/retrieve-holdings.sh
+:language: bash
+:linenos:
+```
+The result is the Holding Cids, stored in `response-retrieve-holdings.json`. For example:
+
+```{literalinclude} ./response/response-retrieve-holdings.json
+:language: json
+:linenos:
+```
+<Note>
+
+In Canton 3, the JSON API no longer supports direct querying as in Canton 2. As a result, any
+filtering of holdings must be performed client-side after retrieving the data. For advanced
+querying and filtering, it is recommended to use the `PQS`.
+</Note>

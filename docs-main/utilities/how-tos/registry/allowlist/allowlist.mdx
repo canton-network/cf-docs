@@ -1,0 +1,123 @@
+# Registry Utility - Allowlist-Entry Credential API Example
+
+This example shows how to create allowlist-entry
+[Credential](/docs-main/utilities/daml-api-reference/credential-model/Utility-Credential-V0-Credential#type-utility-credential-v0-credential-credential-66032)\s
+via the HTTP JSON API (v2), i.e., credentials where the issuer is also the holder.
+
+The workflows covered here are for the Credential issuer to:
+
+1. Create new allowlist-entry credentials in a batch (atomically).
+2. Query the ledger end offset.
+3. Read all currently-active allowlist-entry credentials of the given issuer with matching claims.
+4. Revoke (archieve) the corresponding credentials.
+
+## Preparation
+
+Prerequisites:
+
+- Access to a running Canton HTTP JSON API (v2).
+- Local tools: `bash`, `curl`, `jq`, and `uuidgen`.
+
+Add all the required information to the `source.sh` file:
+
+```{literalinclude} ./scripts/source.sh
+:language: bash
+:linenos:
+```
+The required information is:
+
+```{list-table}
+:header-rows: 1
+
+* - Details of
+  - Description
+* - Credential issuer
+  - `CREDENTIAL_ISSUER_TOKEN`, `CREDENTIAL_ISSUER_USER_ID`, `CREDENTIAL_ISSUER_PARTY_ID`
+* - Subjects
+  - `CREDENTIAL_SUBJECT_PARTY_IDS`: JSON array of subject party IDs (strings)
+* - Claims
+  - `CREDENTIAL_CLAIMS_JSON`: JSON list of (property + value) pairs
+* - Description
+  - `CREDENTIAL_DESCRIPTION`: description applied to all created credentials
+* - JSON API base URL
+  - `HTTP_JSON_API`: HTTP JSON API base URL
+
+```
+### Step 1: Create Allowlist-Entry Credentials (in a Batch)
+
+This step submits a single transaction that contains one `CreateCommand` per subject from
+`CREDENTIAL_SUBJECT_PARTY_IDS`. The transaction is atomic, either all credentials are created, or
+none are.
+
+Run the following script:
+
+```{literalinclude} ./scripts/step-1-credential-issuer-creates-allowlist-entries.sh
+:language: bash
+:linenos:
+```
+The result is the transaction response stored in `response-step-1.json`.
+
+Example response:
+
+```{literalinclude} ./response/response-step-1.json
+:language: json
+:linenos:
+```
+### Step 2: Get Ledger Offset
+
+Run the following script to obtain the ledger end offset:
+
+```{literalinclude} ./scripts/step-2-credential-issuer-gets-offset.sh
+:language: bash
+:linenos:
+```
+The result is the ledger end offset at this moment, stored in `response-step-2.json`.
+
+Example response:
+
+```{literalinclude} ./response/response-step-2.json
+:language: json
+:linenos:
+```
+### Step 3: Read All Issued Allowlist-Entry Credentials
+
+This step queries active contracts visible to the issuer for the credential template, and filters
+the result to only those where `createArgument.issuer == CREDENTIAL_ISSUER_PARTY_ID`, and where
+the claims match those specified in `CREDENTIAL_CLAIMS_JSON` (ignoring the subject).
+
+This script expects the ledger end offset from step 2 to be present in `response-step-2.json`.
+
+Run the following script:
+
+```{literalinclude} ./scripts/step-3-credential-issuer-retrieves-issued-credentials.sh
+:language: bash
+:linenos:
+```
+The result is a JSON array written to `response-step-3.json`.
+
+Example response:
+
+```{literalinclude} ./response/response-step-3.json
+:language: json
+:linenos:
+```
+### Step 4: Revoke Issued Allowlist-Entry Credentials
+
+This step revokes or archives (consumes) the active credential contracts returned by step 3.
+
+This script expects the filtered list from step 3 to be present in `response-step-3.json`.
+
+Run the following script:
+
+```{literalinclude} ./scripts/step-4-credential-issuer-revokes-issued-credentials.sh
+:language: bash
+:linenos:
+```
+The result is the transaction response stored in `response-step-4.json`.
+
+Example response:
+
+```{literalinclude} ./response/response-step-4.json
+:language: json
+:linenos:
+```
