@@ -387,8 +387,18 @@ def parse_args() -> argparse.Namespace:
     default_docs_json = repo_root / "docs.json"
 
     parser = argparse.ArgumentParser(description="Migrate utilities docs from generated to Mintlify.")
-    parser.add_argument("--source", type=Path, default=default_source)
-    parser.add_argument("--dest", type=Path, default=default_dest)
+    parser.add_argument(
+        "--source",
+        type=Path,
+        default=default_source,
+        help="Source docs root (default: canton-network-utilities/docs/generated).",
+    )
+    parser.add_argument(
+        "--dest",
+        type=Path,
+        default=default_dest,
+        help="Destination root in docs repo (default: docs-main/utilities).",
+    )
     parser.add_argument("--docs-json", type=Path, default=default_docs_json)
     parser.add_argument(
         "--scope",
