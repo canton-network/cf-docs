@@ -3,6 +3,7 @@ import argparse
 import json
 import re
 import shutil
+import subprocess
 from pathlib import Path
 from typing import Iterable, List, Tuple
 
@@ -117,6 +118,19 @@ def convert_markdown(content: str, label_map: dict) -> str:
     return strip_local_link_ext(text)
 
 
+def convert_rst_to_markdown(content: str, source_path: Path) -> str:
+    result = subprocess.run(
+        ["pandoc", "-f", "rst", "-t", "gfm", "--wrap=none"],
+        input=content,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"pandoc failed for {source_path}: {result.stderr}")
+    return result.stdout
+
+
 def normalize_inline_html(text: str) -> str:
     text = text.replace("<br>", "<br />")
 
@@ -159,7 +173,7 @@ def convert_myst_ref_roles(text: str, label_map: dict) -> str:
 
 def iter_source_files(source_root: Path, scope: List[str]) -> Iterable[Path]:
     if scope:
-        paths = [source_root / "index.md"]
+        paths = [source_root / "index.md", source_root / "index.rst"]
         for item in scope:
             paths.append(source_root / item)
         for path in paths:
@@ -174,9 +188,9 @@ def iter_source_files(source_root: Path, scope: List[str]) -> Iterable[Path]:
 def build_label_index(source_root: Path, dest_root: Path, repo_root: Path, scope: List[str]) -> dict:
     label_map = {}
     for src_path in iter_source_files(source_root, scope):
-        if src_path.is_dir() or src_path.suffix.lower() != ".md":
+        if src_path.is_dir() or src_path.suffix.lower() not in (".md", ".rst"):
             continue
-        if src_path.name == "index.md":
+        if src_path.name in ("index.md", "index.rst"):
             continue
         rel = src_path.relative_to(source_root)
         dest_rel = rel.with_suffix(".mdx")
@@ -186,6 +200,10 @@ def build_label_index(source_root: Path, dest_root: Path, repo_root: Path, scope
             match = re.match(r"^\(([^)]+)\)=$", line.strip())
             if match:
                 label = match.group(1)
+                label_map[label] = f"/{page_path}#{label}"
+            rst_match = re.match(r"^\.\.\s+_([^:]+):$", line.strip())
+            if rst_match:
+                label = rst_match.group(1).strip()
                 label_map[label] = f"/{page_path}#{label}"
     return label_map
 
@@ -201,14 +219,22 @@ def copy_and_convert(source_root: Path, dest_root: Path, repo_root: Path, scope:
         if src_path.is_dir():
             continue
         rel = src_path.relative_to(source_root)
+        if src_path.name in ("index.md", "index.rst", "_toc.yml"):
+            continue
         if src_path.suffix.lower() == ".md":
-            if src_path.name == "index.md":
-                continue
             dest_rel = rel.with_suffix(".mdx")
             dest_path = dest_root / dest_rel
             dest_path.parent.mkdir(parents=True, exist_ok=True)
             content = src_path.read_text(encoding="utf-8")
             converted = convert_markdown(content, label_map)
+            dest_path.write_text(converted, encoding="utf-8")
+        elif src_path.suffix.lower() == ".rst":
+            dest_rel = rel.with_suffix(".mdx")
+            dest_path = dest_root / dest_rel
+            dest_path.parent.mkdir(parents=True, exist_ok=True)
+            content = src_path.read_text(encoding="utf-8")
+            markdown = convert_rst_to_markdown(content, src_path)
+            converted = convert_markdown(markdown, label_map)
             dest_path.write_text(converted, encoding="utf-8")
         else:
             dest_path = dest_root / rel
@@ -243,6 +269,32 @@ def parse_toctree_entries(index_path: Path) -> List[str]:
     return entries
 
 
+def parse_toctree_entries_rst(index_path: Path) -> List[str]:
+    if not index_path.exists():
+        return []
+    lines = index_path.read_text(encoding="utf-8").splitlines()
+    entries: List[str] = []
+    in_toctree = False
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith(".. toctree::"):
+            in_toctree = True
+            continue
+        if not in_toctree:
+            continue
+        if not line.startswith((" ", "\t")) and stripped:
+            break
+        if not stripped or stripped.startswith(":"):
+            continue
+        title_match = re.match(r".*<([^>]+)>", stripped)
+        entry = title_match.group(1).strip() if title_match else stripped
+        entry = entry.replace("\\", "/")
+        if entry.endswith(".rst"):
+            entry = entry[:-4]
+        entries.append(entry)
+    return entries
+
+
 def collect_pages(section_root: Path, repo_root: Path, source_root: Path, dest_root: Path) -> List[str]:
     pages: List[str] = []
 
@@ -254,6 +306,8 @@ def collect_pages(section_root: Path, repo_root: Path, source_root: Path, dest_r
         rel_dir = dir_path.relative_to(dest_root)
         source_dir = source_root / rel_dir
         toctree_entries = parse_toctree_entries(source_dir / "index.md")
+        if not toctree_entries:
+            toctree_entries = parse_toctree_entries_rst(source_dir / "index.rst")
 
         referenced = set()
         for entry in toctree_entries:
