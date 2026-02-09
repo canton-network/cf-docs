@@ -1,0 +1,57 @@
+---
+title: "Networking and Configuration"
+description: "Configure networking, security, and operational parameters for your Canton Network validator node"
+---
+
+{/* COPIED_START source="splice:docs/src/validator_operator/validator_networking.rst" hash="59d9c925" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was copied from existing reviewed documentation.
+**Source:** `docs/src/validator_operator/validator_networking.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+# Validator Ingress & Egress requirements
+
+## Ingress
+
+The validators have no external ingress requirements and don't need to whitelist any other SVs or validators.
+
+## Egress
+
+The validators must be able to connect to all the SVs, thus whitelisting of egress on port 443 for the IPs of all the SVs is required (refer to the [network diagram](/docs-main/global-synchronizer/deploy/k8s-setup#validator-network-diagram) for a networking overview). Note that egress is often allowed by default, so in many cases this requires no action.
+
+
+{/* COPIED_END */}
+
+## Required network parameters
+
+To initialize your validator node, you need the following parameters that define which network you are joining and the credentials for onboarding.
+
+- **MIGRATION_ID** — The current migration ID of the network (dev, test, or mainnet) you are connecting to. You can find this at [sync.global/sv-network](https://sync.global/sv-network/).
+- **SPONSOR_SV_URL** — The URL of the SV app of your sponsoring super-validator. If the Global Synchronizer Foundation is your sponsor, use their published SV URL.
+- **ONBOARDING_SECRET** — A one-time secret provided by your sponsor. Onboarding secrets expire after 48 hours. If yours expires before you complete onboarding, request a new one from your SV sponsor.
+
+<Note>
+On DevNet, you can obtain an onboarding secret automatically by calling the `/api/sv/v0/devnet/onboard/validator/prepare` endpoint on any SV node. This self-served secret is valid for 1 hour.
+</Note>
+
+## Security hardening
+
+### External KMS for participant keys
+
+Production deployments should use an external Key Management Service (KMS) to manage participant signing keys rather than storing them locally. KMS integration is supported for Helm-based deployments and works with both Google Cloud KMS and AWS KMS.
+
+To switch an existing validator to KMS, the recommended approach is:
+
+1. Set up a fresh validator with the desired KMS configuration
+2. Transfer all relevant assets from the existing validator to the new KMS-enabled one
+3. Retire the old validator
+
+KMS configuration is done through the `splice-participant` Helm chart values. See the [splice documentation](https://github.com/hyperledger-labs/splice) for detailed KMS configuration instructions.
+
+## Authentication
+
+Validator nodes should be deployed with OAuth/OIDC authentication to protect the wallet UI and validator APIs. Auth0 is the most commonly used provider, but any OIDC-compliant provider works.
+
+For development and testing, auth-less deployment is possible but strongly discouraged for any environment connected to a real network.
