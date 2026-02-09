@@ -1,0 +1,102 @@
+---
+title: "Backend Development"
+description: "Patterns for building a backend service that connects to the Canton Ledger API and PQS"
+---
+
+The backend is the layer between your frontend and the Canton ledger. It submits commands, reads transactions, and queries contract state. This page covers the common patterns used in Canton backend development, with the cn-quickstart Java backend as the primary reference.
+
+## Backend Language
+
+The [cn-quickstart](https://github.com/digital-asset/cn-quickstart) project uses a [Java backend](https://github.com/digital-asset/cn-quickstart/tree/main/quickstart/backend) built on Spring Boot. Java has first-class code generation support (`dpm codegen-java`) and is the most mature option for Canton backends.
+
+TypeScript is also supported through `dpm codegen-js`. A TypeScript backend uses the same Ledger API (via gRPC-js or the JSON API) and can be a good choice if your team prefers a single language across frontend and backend.
+
+## Connecting to the Ledger API
+
+The Ledger API is a gRPC service exposed by the validator's participant node. Your backend connects to it as an authenticated client, acting on behalf of one or more parties.
+
+In cn-quickstart, the `ledger/LedgerApi` class manages this connection. A typical setup involves:
+
+- The gRPC channel pointing to the validator's Ledger API port (e.g., `localhost:3901` for the App Provider validator on LocalNet)
+- An authentication token (from Keycloak on LocalNet, or your OAuth2 provider in production)
+- The party ID that the backend acts as
+
+Once connected, you use the generated Java bindings to interact with the ledger.
+
+## Command Submission
+
+Commands are how you write to the ledger. There are two primary operations:
+
+**Creating a contract** -- Instantiate a Daml template with specific field values. The validator checks that the submitting party is authorized (matches the template's signatory or is otherwise entitled), then commits the contract through the synchronizer.
+
+**Exercising a choice** -- Execute an action on an existing contract by providing the contract ID and choice arguments. The choice body runs on the ledger, potentially archiving contracts and creating new ones.
+
+In generated Java code, these operations look like method calls on the generated template classes. The cn-quickstart backend wraps them in service methods that the REST API endpoints call.
+
+### Handling Contract IDs
+
+Every active contract has a unique contract ID. To exercise a choice, you need the contract ID of the target contract. Your backend typically obtains contract IDs by querying PQS or reading them from the transaction stream. The cn-quickstart REST API passes contract IDs in URL paths (e.g., `POST /api/contracts/{contractId}/exercise`).
+
+Contract IDs are opaque strings. Do not parse or construct them manually.
+
+## Reading Transactions
+
+The Ledger API exposes a transaction stream that your backend can subscribe to. Each transaction includes the created and archived contracts visible to your party.
+
+Reactive event processing works well here: your backend subscribes to the stream on startup and processes events as they arrive. Common patterns include:
+
+- Updating local caches or databases when contracts are created or archived
+- Triggering side effects (sending notifications, calling external APIs) in response to specific contract events
+- Maintaining a running view of active contracts for fast lookups
+
+In cn-quickstart, PQS handles most of the read-side projection, so the backend does not need to maintain its own event-sourced state. If you are not using PQS, streaming transactions and maintaining your own projections is the alternative.
+
+## Querying PQS
+
+For read operations, the cn-quickstart backend queries PQS rather than the Ledger API directly. PQS maintains a PostgreSQL database that mirrors the ledger state visible to the validator's hosted parties.
+
+The backend's `pqs/` module generates SQL queries from contract metadata, and the `repository/` module provides domain-specific methods like "get all active licenses for a user" or "find all pending install requests."
+
+Typical query patterns:
+
+- Filter active contracts by template type and field values
+- Join across contract types (e.g., link licenses to their installation records)
+- Aggregate data for dashboards (e.g., count active users, sum outstanding payments)
+- Page through large result sets with SQL `LIMIT` and `OFFSET`
+
+PQS tables store contract payloads as JSON columns alongside indexed metadata (template ID, contract ID, party visibility). You can create additional PostgreSQL indexes on JSON fields for performance.
+
+## Error Handling
+
+Canton uses structured error codes. When a command fails, the Ledger API returns a gRPC status with a Canton-specific error code and description. Common error categories include:
+
+- **NOT_FOUND** -- The contract ID does not exist or is not visible to the submitting party
+- **ALREADY_EXISTS** -- A duplicate command was submitted (commands are deduplicated by command ID)
+- **INVALID_ARGUMENT** -- The command payload does not match the template or choice signature
+- **FAILED_PRECONDITION** -- A contract was archived between the time you read it and the time you exercised a choice on it (contention)
+
+For contention errors, a retry strategy often resolves the issue: re-read the current contract ID from PQS, then resubmit the command. The cn-quickstart backend implements retry logic for common transient failures.
+
+<Note>
+Set a unique command ID on each submission. The Ledger API deduplicates commands by this ID, which prevents double-submission if your backend retries a command that actually succeeded but whose response was lost in transit.
+</Note>
+
+## Backend Architecture in cn-quickstart
+
+The cn-quickstart backend follows this module structure (under `backend/src/main/java/com/digitalasset/quickstart/`):
+
+- `service/` -- REST endpoint implementations. Each endpoint combines a PQS query or a Ledger API command.
+- `ledger/` -- The gRPC Ledger API client. Submits commands to the validator.
+- `repository/` -- Domain-specific PQS query methods.
+- `pqs/` -- Low-level SQL generation and PostgreSQL access.
+- `utility/` -- General utilities. JSON configuration, tracing, and helper methods.
+- `security/` -- OAuth2 bearer token validation.
+- `config/` -- Spring Boot configuration properties.
+
+This structure cleanly separates read concerns (PQS) from write concerns (Ledger API) while keeping the REST layer thin.
+
+## Next Steps
+
+- [Frontend Development](/docs-main/appdev/modules/m4-frontend-dev) -- Build a React UI that consumes this backend's REST API
+- [Canton Coin and Traffic](/docs-main/appdev/modules/m4-canton-coin) -- Understand traffic costs and wallet integration for payments
+- [cn-quickstart repository](https://github.com/digital-asset/cn-quickstart) -- Full working backend implementation

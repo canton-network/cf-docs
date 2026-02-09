@@ -1,0 +1,92 @@
+---
+title: "Frontend Development"
+description: "Build a React frontend for Canton applications with TypeScript bindings and wallet integration"
+---
+
+The frontend is the user-facing layer of your Canton application. In the cn-quickstart reference architecture, the frontend is a React application that communicates with the backend over HTTP. It does not connect to the Ledger API directly.
+
+## React Frontend in cn-quickstart
+
+The [cn-quickstart frontend](https://github.com/digital-asset/cn-quickstart/tree/main/quickstart/frontend) is a React application built with TypeScript and Vite. It uses Axios as its HTTP client and consumes the backend's REST API through types generated from an OpenAPI schema (`common/openapi.yaml`).
+
+The `frontend/` directory contains the full source. Running `make build-frontend` in the parent directory compiles it, and `make start` serves it alongside the rest of the LocalNet stack.
+
+## Connecting to the Backend
+
+The frontend never talks to Canton or the Ledger API. All ledger interactions go through the backend's REST endpoints. The OpenAPI schema defines the contract between frontend and backend:
+
+- **GET** endpoints return contract data (the backend queries PQS)
+- **POST** endpoints exercise choices or create contracts (the backend submits commands via the Ledger API)
+
+Generated TypeScript types from the OpenAPI schema give you compile-time safety on request and response shapes. If the backend API changes, the frontend build breaks rather than failing silently at runtime.
+
+## TypeScript Code Generation
+
+`dpm codegen-js` generates TypeScript types from your compiled DAR file. These types mirror your Daml templates, choices, and data types.
+
+```bash
+dpm codegen-js <DAR-FILES> -o <DIR>
+```
+
+Whether you use these generated types depends on your architecture:
+
+- **Fully mediated** (cn-quickstart default) -- The frontend uses OpenAPI-generated types from the backend's REST schema. The Daml-generated TypeScript types are not needed in the frontend because the backend translates between ledger concepts and REST DTOs.
+- **CQRS / direct ledger access** -- The frontend submits commands directly to the Ledger API using the Daml-generated TypeScript bindings. This gives tighter integration with the ledger but requires the frontend to handle party IDs, contract IDs, and command submission.
+
+For most applications, the fully mediated approach is simpler.
+
+## Displaying Contract Data
+
+The frontend fetches contract data from the backend's GET endpoints and renders it in React components. A typical flow:
+
+1. A React component calls a backend endpoint (e.g., `GET /api/licenses`)
+2. The backend queries PQS and returns a list of license objects
+3. The component renders the data in a table, card, or detail view
+4. Polling or WebSocket subscriptions keep the UI up to date as contracts change
+
+Because the backend handles all ledger translation, the frontend works with plain JSON objects. Fields like `owner`, `expirationDate`, and `amount` appear as simple strings and numbers, not ledger-specific types.
+
+## Wallet Integration
+
+Applications that involve Canton Coin payments integrate with a wallet component in the frontend. In cn-quickstart, the license renewal flow triggers a payment through the Splice wallet system:
+
+1. The user clicks "Renew License" in the UI
+2. The backend exercises the `License_Renew` choice, which creates a `LicenseRenewalRequest` on the ledger. This contract implements the Splice `AllocationRequest` interface.
+3. The Splice wallet detects the allocation request and creates an `AppPaymentRequest` for the user to approve
+4. Once payment is confirmed, the backend creates a renewed license contract
+
+The wallet handles CC transfers, balance display, and payment confirmations. Your frontend integrates with the wallet UI for any flows that involve CC.
+
+## Authentication
+
+Canton applications typically use OAuth2 / OpenID Connect (OIDC) for user authentication. On LocalNet, cn-quickstart uses Keycloak as the identity provider.
+
+The authentication flow:
+
+1. The user logs in through the OIDC provider (Keycloak on LocalNet)
+2. The frontend receives a bearer token
+3. Every HTTP request to the backend includes this token in the `Authorization` header
+4. The backend validates the token and maps it to a Canton party
+
+The backend handles all authorization decisions. The frontend is responsible only for obtaining and attaching the token.
+
+## Development Workflow
+
+When developing the frontend iteratively:
+
+```bash
+make build-frontend   # Rebuild after source changes
+make restart          # Restart services to pick up changes
+```
+
+For faster iteration, you can run the Vite dev server directly against a running LocalNet backend:
+
+```bash
+make start-vite-dev
+```
+
+## Next Steps
+
+- [Canton Coin and Traffic](/docs-main/appdev/modules/m4-canton-coin) -- How CC and traffic affect your application
+- [Backend Development](/docs-main/appdev/modules/m4-backend-dev) -- The backend that the frontend communicates with
+- [cn-quickstart frontend source](https://github.com/digital-asset/cn-quickstart/tree/main/quickstart/frontend) -- Full working frontend implementation
