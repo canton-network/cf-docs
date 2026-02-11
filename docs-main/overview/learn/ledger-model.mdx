@@ -74,7 +74,7 @@ Signatories are the primary authorities on a contract.
 
 **Properties:**
 - Must authorize contract creation
-- Must authorize contract archival
+- May authorize contract archival (if controller on a consuming choice)
 - Always see the contract and all actions on it
 - Defined in the template with `signatory` keyword
 
@@ -87,7 +87,7 @@ template Asset
     signatory issuer, owner  -- Both must agree to create/archive
 ```
 
-**When to use:** Parties whose agreement is essential to the contract's existence.
+**When to use:** When a party's agreement is essential to the contract's existence.
 
 ### Observers
 
@@ -108,7 +108,7 @@ template RegulatedAsset
     observer regulator  -- Regulator can see but not act
 ```
 
-**When to use:** Parties who need visibility for compliance, audit, or information.
+**When to use:** When a party needs visibility for compliance, audit, or information.
 
 ### Controllers
 
@@ -134,24 +134,24 @@ template Proposal
         create Agreement with party1 = proposer, party2 = accepter
 ```
 
-**When to use:** Parties who should be able to trigger specific actions.
+**When to use:** When a party should be able to trigger specific actions.
 
 ### Actors
 
-Actors are the parties actually submitting a transaction. They must have authorization (be a controller) for the choices they exercise.
+Actors are the parties submitting or authorizing a transaction.
 
 ### Role Comparison
 
 | Role | Can Create? | Can See? | Can Exercise? | Can Archive? |
 |------|-------------|----------|---------------|--------------|
-| **Signatory** | Must authorize | Always | If controller | Must authorize |
+| **Signatory** | Yes | Always | If controller | Must authorize |
 | **Observer** | No | Always | If controller | No |
 | **Controller** | No | Choice + consequences | Yes (their choices) | Via consuming choice |
 | **Actor** | If signatory | If stakeholder | If controller | If signatory |
 
 ## Transaction Structure
 
-Transactions in Canton are trees of **actions**. Each action creates, exercises, or fetches contracts.
+Transactions in Canton are trees of **actions**. Each action creates, exercises, or fetches contracts. (*Note that fetches are not typically returned in the transaction stream.*)
 
 ### Action Types
 
@@ -161,7 +161,7 @@ Transactions in Canton are trees of **actions**. Each action creates, exercises,
 
 ### Transaction Tree
 
-When a choice exercises other choices, it creates a tree:
+A transaction tree records all creates, exercises, fetches, and archives that occur within a single transaction:
 
 ```mermaid
 flowchart TB
@@ -191,9 +191,9 @@ nonconsuming choice GetBalance : Decimal
     return balance
 ```
 
-## Views and Projections
+## Views
 
-Each stakeholder sees a **view** of the transaction—only the parts they're entitled to.
+Each stakeholder sees a **view** of the transaction: only the parts they're entitled to.
 
 ### View Composition
 
@@ -226,10 +226,9 @@ flowchart TB
 
 ### Visibility Rules
 
-1. **Signatories see everything** about their contracts
-2. **Observers see the contract** and actions on it
+1. **Signatories see the contract**, consuming, and non-consuming choices exercised on it
+2. **Observers see the contract** and consuming choices exercised on it
 3. **Controllers see choices** they can exercise and their consequences
-4. **If you see an action, you see its direct consequences**
 
 ## Contract Keys
 
