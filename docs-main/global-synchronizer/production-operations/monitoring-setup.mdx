@@ -1,6 +1,134 @@
 ---
 title: "Monitoring Setup"
-description: "Setting up monitoring for Canton Network validators"
+description: "Configuring Prometheus metrics collection and Grafana dashboards for Canton Network nodes"
 ---
 
-Content coming soon.
+Every Canton Network node exposes Prometheus-format metrics on port 10013 at the `/metrics` path. This page covers how to configure metrics scraping, enable optional metric triggers, and set up Grafana dashboards.
+
+## Components That Expose Metrics
+
+{/* COPIED_START source="splice:deployment/observability/metrics.rst" hash="metrics-components" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was adapted from existing reviewed documentation.
+**Source:** `deployment/observability/metrics.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+For a validator, the following components expose metrics:
+
+- The validator app
+- The participant
+
+For a Super Validator, these additional components also expose metrics:
+
+- The SV app
+- The scan app
+
+{/* COPIED_END */}
+
+## Scraping Metrics
+
+{/* COPIED_START source="splice:deployment/observability/metrics.rst" hash="metrics-scraping" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was adapted from existing reviewed documentation.
+**Source:** `deployment/observability/metrics.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+Metrics are built with OpenTelemetry and exposed in Prometheus format. Any Prometheus-compatible server can scrape them.
+
+### Histograms
+
+Histograms are exposed as [exponential histograms](https://opentelemetry.io/docs/specs/otel/metrics/data-model/#exponentialhistogram), which convert to [Prometheus native histograms](https://prometheus.io/docs/specs/native_histograms/).
+
+<Note>
+Prometheus native histogram support must be enabled with the flag `-enable-feature=native-histograms`. Native histograms are only available via the protobuf format, so Prometheus will switch to protobuf collection automatically.
+</Note>
+
+To switch back to regular histograms, add the following environment variable to a node:
+
+```bash
+ADDITIONAL_CONFIG_DISABLE_NATIVE_HISTOGRAMS="canton.monitoring.metrics.histograms=[]"
+```
+
+{/* COPIED_END */}
+
+## Enabling Metrics in Kubernetes
+
+{/* COPIED_START source="splice:deployment/observability/metrics.rst" hash="metrics-helm" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was adapted from existing reviewed documentation.
+**Source:** `deployment/observability/metrics.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+Set `metrics.enable` to `true` in your Helm values (default: `false`). This creates a `ServiceMonitor` Kubernetes custom resource, which requires the [Prometheus Operator](https://github.com/prometheus-operator/prometheus-operator) to be installed in your cluster.
+
+Alternatively, add Prometheus scrape annotations to your charts configured to scrape port 10013.
+
+{/* COPIED_END */}
+
+## Enabling Metrics in Docker Compose
+
+{/* COPIED_START source="splice:deployment/observability/metrics.rst" hash="metrics-compose" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was adapted from existing reviewed documentation.
+**Source:** `deployment/observability/metrics.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+<Note>
+Docker Compose metrics are for validator nodes only.
+</Note>
+
+Metrics are enabled by default in Docker Compose deployments. Access them at:
+
+- `http://validator.localhost/metrics` — validator app metrics
+- `http://participant.localhost/metrics` — participant metrics
+
+{/* COPIED_END */}
+
+## Enabling Extra Metric Triggers
+
+{/* COPIED_START source="splice:deployment/observability/metrics.rst" hash="metrics-extra-triggers" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was adapted from existing reviewed documentation.
+**Source:** `deployment/observability/metrics.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+The validator app can run a trigger that polls topology state and exports metrics summarizing it. These metrics use the `splice.synchronizer-topology` prefix. The trigger is disabled by default.
+
+To enable it with a 5-minute polling interval, add this environment variable:
+
+```bash
+ADDITIONAL_CONFIG_TOPOLOGY_METRICS_EXPORT=canton.validator-apps.validator_backend.automation.topology-metrics-polling-interval = 5m
+```
+
+{/* COPIED_END */}
+
+## Grafana Dashboards
+
+{/* COPIED_START source="splice:deployment/observability/metrics.rst" hash="metrics-grafana" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was adapted from existing reviewed documentation.
+**Source:** `deployment/observability/metrics.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+The release bundle contains pre-built Grafana dashboards in the `grafana-dashboards` folder. Import these into your Grafana instance.
+
+The dashboards assume a Kubernetes deployment and may need modification for other deployment types. Dashboard queries use Prometheus native histogram syntax.
+
+{/* COPIED_END */}
+
+## Next Steps
+
+- [Key Metrics](/docs-main/global-synchronizer/production-operations/key-metrics) — Which metrics to monitor and what they mean
+- [Metrics Reference](/docs-main/global-synchronizer/reference/metrics-reference) — Complete metrics catalog
