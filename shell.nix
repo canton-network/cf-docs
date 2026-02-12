@@ -2,7 +2,7 @@
 
 pkgs.mkShell {
   packages = [
-    pkgs.nodejs_23
+    pkgs.nodejs_22
   ];
 
   shellHook = ''
@@ -10,7 +10,11 @@ pkgs.mkShell {
 
     if [ -f package.json ] && [ ! -d node_modules ]; then
       echo "Installing npm dependencies..."
-      npm install
+      if [ -f package-lock.json ]; then
+        npm ci
+      else
+        npm install
+      fi
     fi
   '';
 }
