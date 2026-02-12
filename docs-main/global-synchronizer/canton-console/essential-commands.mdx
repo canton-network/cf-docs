@@ -1,6 +1,187 @@
 ---
 title: "Essential Commands"
-description: "Essential Canton console commands for validator operators"
+description: "Key Canton Console commands for health checks, party management, package management, and topology inspection"
 ---
 
-Content coming soon.
+This reference covers the most commonly used Canton Console commands, organized by task. All examples assume you're connected to a participant console unless otherwise noted.
+
+## Health and Status
+
+Check whether the node is healthy and connected to the synchronizer:
+
+```scala
+// Overall health status
+participant.health.status
+
+// Check if the node is active (processing transactions)
+participant.health.is_running
+
+// Check synchronizer connectivity
+participant.domains.list_connected
+```
+
+For sequencer nodes:
+
+```scala
+sequencer.health.status
+```
+
+## Party Management
+
+### Listing Parties
+
+```scala
+// List all parties hosted on this participant
+participant.parties.hosted()
+
+// Filter by party name
+participant.parties.hosted("Alice")
+
+// List all known parties (hosted locally or seen via the synchronizer)
+participant.parties.list()
+```
+
+### Party Details
+
+```scala
+// Get detailed information about a party, including hosting participants
+participant.parties.hosted("Alice").head
+// Returns: ListPartiesResult with participant IDs and synchronizer permissions
+```
+
+## Package Management
+
+### Listing Packages
+
+```scala
+// List all uploaded DAR packages
+participant.dars.list()
+
+// List packages by name
+participant.packages.list().filter(_.packageId.startsWith("com-example"))
+```
+
+### Uploading Packages
+
+```scala
+// Upload a DAR file
+participant.dars.upload("/path/to/package.dar")
+```
+
+### Package Vetting
+
+```scala
+// List vetted packages
+participant.topology.vetted_packages.list()
+
+// Vet a specific package
+participant.topology.vetted_packages.authorize(
+  TopologyChangeOp.Add,
+  participant.id,
+  Seq(packageId)
+)
+```
+
+## Topology Inspection
+
+Topology commands show the current state of party-to-participant mappings, package vetting, and other network-wide configuration.
+
+### Party-to-Participant Mappings
+
+```scala
+// List all party-to-participant mappings on a synchronizer
+participant.topology.party_to_participant_mappings.list(
+  synchronizerId
+)
+
+// List hosting proposals (pending multi-hosting approvals)
+participant.topology.party_to_participant_mappings.list_hosting_proposals(
+  synchronizerId,
+  participant.id
+)
+```
+
+### Synchronizer Parameters
+
+```scala
+// List current synchronizer parameters
+participant.topology.synchronizer_parameters.list(synchronizerId)
+```
+
+### Namespace Delegations
+
+```scala
+// List namespace delegations (who can manage topology for a namespace)
+participant.topology.namespace_delegations.list()
+```
+
+## Synchronizer Operations
+
+### Listing Connected Synchronizers
+
+```scala
+// List all synchronizers this participant is connected to
+participant.domains.list_connected
+
+// Get the synchronizer ID
+val syncId = participant.domains.list_connected.head.synchronizerId
+```
+
+### Reconnecting to a Synchronizer
+
+```scala
+// Disconnect and reconnect
+participant.domains.disconnect(syncId)
+participant.domains.reconnect(syncId)
+```
+
+## Querying the Ledger
+
+### Active Contract Set (ACS)
+
+```scala
+// Count active contracts by template
+participant.testing.acs_search(
+  synchronizerId,
+  filterTemplate = "MyModule:MyTemplate"
+).size
+
+// Search for specific contracts
+participant.testing.acs_search(
+  synchronizerId,
+  filterTemplate = "MyModule:MyTemplate",
+  filterParty = partyId
+)
+```
+
+<Note>
+The `testing.acs_search` command is intended for debugging, not production queries. For production read access, use PQS.
+</Note>
+
+## Common Patterns
+
+### Getting the Participant ID
+
+```scala
+val participantId = participant.id
+// Returns: PAR::participant1::1220abcd...
+```
+
+### Getting a Party ID
+
+```scala
+val partyId = participant.parties.hosted("Alice").head.party
+// Returns: Alice::1220abcd...
+```
+
+### Getting the Synchronizer ID
+
+```scala
+val syncId = participant.domains.list_connected.head.synchronizerId
+// Returns: global-synchronizer::1220abcd...
+```
+
+## Next Steps
+
+- [Debugging Workflows](/docs-main/global-synchronizer/canton-console/debugging-workflows) — Using these commands in diagnostic scenarios
+- [Console Overview](/docs-main/global-synchronizer/canton-console/console-overview) — How to start the console
