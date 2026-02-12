@@ -1,6 +1,180 @@
 ---
 title: "Error Codes"
-description: "Complete list of Canton development error codes"
+description: "Reference for Canton error codes, categories, gRPC status mappings, and retry strategies"
 ---
 
-Content coming soon.
+Canton returns structured error information through gRPC responses. Every error carries a machine-readable code, a category that determines the gRPC status code, and a human-readable description. You can use these components to build automated error handling in your application.
+
+## Error message format
+
+{/* COPIED_START - source: error_codes.rst */}
+
+Error descriptions follow this format:
+
+```
+ERROR_CODE_ID(CATEGORY_ID,CORRELATION_ID_PREFIX):HUMAN_READABLE_MESSAGE
+```
+
+- `ERROR_CODE_ID` -- a unique string of upper-case letters, underscores, or digits (max 63 characters). Identifies the error code.
+- `CATEGORY_ID` -- a small integer identifying the error category.
+- `CORRELATION_ID_PREFIX` -- the first 8 characters of the request's submission ID, or `0` if no correlation ID is available.
+- `:` -- separates the machine-readable prefix from the human-readable message.
+- `HUMAN_READABLE_MESSAGE` -- a description for human readers. Do not parse this in application code; the text may change between releases.
+
+For example:
+
+```
+TRANSACTION_NOT_FOUND(11,12345): Transaction not found, or not visible.
+```
+
+{/* COPIED_END */}
+
+## Machine-readable error details
+
+Each gRPC error response includes structured details following the [rich gRPC error model](https://cloud.google.com/apis/design/errors#error_details):
+
+- `ErrorInfo` (mandatory) -- contains the error code ID in `reason` and the category ID in `metadata["category"]`
+- `RequestInfo` (mandatory) -- contains the full correlation ID (not truncated) in `requestId`
+- `RetryInfo` (optional) -- contains the recommended retry interval when the error is retryable
+- `ResourceInfo` (optional) -- identifies the resource involved in the failure (contract, contract key, package, party, synchronizer, etc.)
+
+<Warning>
+Some errors are redacted for security. The API response omits sensitive details, but the full error message appears in server-side logs. Work with your operator if you need the complete error context.
+</Warning>
+
+## Error categories
+
+{/* COPIED_START - source: canton-error-categories-inventory.rst.inc */}
+
+Error categories group error codes by their expected handling strategy. Each category maps to exactly one [gRPC status code](https://grpc.github.io/grpc/core/md_doc_statuscodes.html). Handle errors at the category level when possible, and fall back to specific error code IDs only when category-level handling is too broad.
+
+| Category ID | Category name | gRPC status | Retry strategy |
+|---|---|---|---|
+| 1 | TransientServerFailure | UNAVAILABLE | Retry quickly, including in load balancer |
+| 2 | ContentionOnSharedResources | ABORTED | Retry with backoff; do not retry in load balancer |
+| 3 | DeadlineExceededRequestStateUnknown | DEADLINE_EXCEEDED | Limited retries with deduplication |
+| 4 | SystemInternalAssumptionViolated | INTERNAL | Contact operator; do not retry automatically |
+| 5 | SecurityAlert | INVALID_ARGUMENT | Non-retryable; contact operator |
+| 6 | AuthInterceptorInvalidAuthenticationCredentials | UNAUTHENTICATED | Fix credentials, then retry |
+| 7 | InsufficientPermission | PERMISSION_DENIED | Fix permissions, then retry |
+| 8 | InvalidIndependentOfSystemState | INVALID_ARGUMENT | Fix application code or configuration |
+| 9 | InvalidGivenCurrentSystemStateOther | FAILED_PRECONDITION | Application-specific; may resolve with state changes |
+| 10 | InvalidGivenCurrentSystemStateResourceExists | ALREADY_EXISTS | Inspect resource, resolve conflict |
+| 11 | InvalidGivenCurrentSystemStateResourceMissing | NOT_FOUND | Inspect resource, resolve absence |
+| 12 | InvalidGivenCurrentSystemStateSeekAfterEnd | OUT_OF_RANGE | Wait and retry; state may advance naturally |
+| 13 | BackgroundProcessDegradationWarning | N/A | Not an API error; operator-facing only |
+| 14 | InternalUnsupportedOperation | UNIMPLEMENTED | Non-retryable; requires operator intervention |
+
+{/* COPIED_END */}
+
+## Retry strategy by category
+
+**Automatic retry (categories 1-3):**
+Categories 1, 2, and 3 represent transient conditions. Your application should retry these automatically. For category 1 (UNAVAILABLE), retry quickly -- a load balancer can handle this. For category 2 (ABORTED), use exponential backoff since the issue is resource contention. For category 3 (DEADLINE_EXCEEDED), retry a limited number of times and use command deduplication to avoid duplicate submissions.
+
+**Fix and retry (categories 6-8):**
+These errors indicate a problem with the request itself. Category 6 (UNAUTHENTICATED) means your JWT token is missing or invalid. Category 7 (PERMISSION_DENIED) means the token lacks the required rights. Category 8 (INVALID_ARGUMENT) means the request is malformed regardless of system state. Fix the issue in your application or configuration before retrying.
+
+**State-dependent (categories 9-12):**
+These errors depend on the current state of the ledger. A `CONTRACT_NOT_FOUND` (category 11) might be expected in a multi-party workflow where another party archived the contract, or it might indicate an application bug. Your handling strategy depends on your application's logic.
+
+**Do not retry (categories 4, 5, 14):**
+These indicate internal errors, security issues, or unimplemented operations. Escalate to your operator or check server-side logs for details.
+
+## Common error codes for app developers
+
+### Authentication and authorization
+
+| Error code | Category | Description |
+|---|---|---|
+| `UNAUTHENTICATED` | 6 | No JWT token provided on a participant that requires authentication |
+| `PERMISSION_DENIED` | 7 | JWT token lacks sufficient rights for the operation |
+| `ACCESS_TOKEN_EXPIRED` | 2 | JWT token has expired; obtain a fresh token |
+| `INVALID_TOKEN` | 8 | JWT token is malformed or otherwise invalid |
+| `STALE_STREAM_AUTHORIZATION` | 2 | User rights changed during an active stream; reconnect |
+
+### Contracts and transactions
+
+| Error code | Category | Description |
+|---|---|---|
+| `CONTRACT_NOT_FOUND` | 11 | Contract does not exist or is not visible to the requesting party |
+| `TRANSACTION_NOT_FOUND` | 11 | Transaction does not exist or is not visible |
+| `CONTRACT_KEY_NOT_FOUND` | 11 | No active contract found for the given key |
+| `DUPLICATE_CONTRACT_KEY` | 10 | A contract with this key already exists |
+| `INCONSISTENT_CONTRACTS` | 9 | Contracts referenced in the command have changed |
+
+### Submission and processing
+
+| Error code | Category | Description |
+|---|---|---|
+| `ABORTED_DUE_TO_SHUTDOWN` | 1 | Node is shutting down; retry against an available node |
+| `SERVER_OVERLOADED` | 2 | Node is at capacity; retry with exponential backoff |
+| `SEQUENCER_REQUEST_FAILED` | 2 | Request to the sequencer failed (e.g., batch size exceeded) |
+| `PACKAGE_SELECTION_FAILED` | 9 | Required package not found or not vetted |
+
+## Extracting error details from gRPC responses
+
+The following Scala example shows how to extract error components from a `StatusRuntimeException`:
+
+{/* COPIED_START - source: error_codes.rst */}
+
+```scala
+import com.google.rpc.{ErrorInfo, RequestInfo, RetryInfo, ResourceInfo}
+import io.grpc.StatusRuntimeException
+import scala.jdk.CollectionConverters._
+
+try {
+  // your gRPC call here
+} catch {
+  case e: StatusRuntimeException =>
+    val status = io.grpc.protobuf.StatusProto.fromThrowable(e)
+
+    // gRPC status code
+    val code = status.getCode
+
+    // Full error description: "ERROR_CODE_ID(CATEGORY,CORRELATION): message"
+    val message = status.getMessage
+
+    // Extract structured details
+    val details = status.getDetailsList.asScala.toSeq
+
+    // Error code ID and category
+    details.collectFirst {
+      case any if any.is(classOf[ErrorInfo]) =>
+        val info = any.unpack(classOf[ErrorInfo])
+        val errorId = info.getReason           // e.g. "CONTRACT_NOT_FOUND"
+        val category = info.getMetadataMap.get("category") // e.g. "11"
+    }
+
+    // Full correlation ID for log lookup
+    details.collectFirst {
+      case any if any.is(classOf[RequestInfo]) =>
+        val requestId = any.unpack(classOf[RequestInfo]).getRequestId
+    }
+
+    // Retry interval (if error is retryable)
+    details.collectFirst {
+      case any if any.is(classOf[RetryInfo]) =>
+        val delay = any.unpack(classOf[RetryInfo]).getRetryDelay
+        val retryMs = delay.getSeconds * 1000 + delay.getNanos / 1_000_000
+    }
+
+    // Resource that caused the failure (if applicable)
+    details.collectFirst {
+      case any if any.is(classOf[ResourceInfo]) =>
+        val resource = any.unpack(classOf[ResourceInfo])
+        val resType = resource.getResourceType  // e.g. "CONTRACT_ID"
+        val resName = resource.getResourceName  // e.g. the contract ID
+    }
+}
+```
+
+{/* COPIED_END */}
+
+For other languages, use the equivalent gRPC status and protobuf utilities to unpack `com.google.rpc.Status` details from the trailing metadata.
+
+## Further reading
+
+- [Troubleshooting cheat sheet](/docs-main/appdev/troubleshooting) -- quick-reference solutions for common issues including specific error codes
+- [gRPC status codes](https://grpc.github.io/grpc/core/md_doc_statuscodes.html) -- official gRPC status code definitions
+- [gRPC rich error model](https://cloud.google.com/apis/design/errors#error_details) -- the error detail types used in Canton responses

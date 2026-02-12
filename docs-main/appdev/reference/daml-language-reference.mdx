@@ -1,6 +1,155 @@
 ---
 title: "Daml Language Reference"
-description: "Reference documentation for the Daml programming language"
+description: "Quick reference for Daml syntax, built-in functions, operator precedence, and the standard library"
 ---
 
-Content coming soon.
+This page collects the most commonly needed Daml reference material in one place: core syntax patterns, built-in functions, operator precedence, and the standard library module list.
+
+For a printable overview, see the [Daml language cheat sheet](https://docs.digitalasset.com/build/3.4/reference/cheat-sheet.html). Full language documentation is available at [docs.digitalasset.com](https://docs.digitalasset.com/build/3.4).
+
+## Syntax Fundamentals
+
+### Templates
+
+A template defines a contract type. Every template has a `signatory`, and may declare `observer`, `ensure`, `key`, and `choice` blocks.
+
+```daml
+template Iou
+  with
+    issuer : Party
+    owner  : Party
+    amount : Decimal
+  where
+    signatory issuer
+    observer owner
+
+    choice Transfer : ContractId Iou
+      with newOwner : Party
+      controller owner
+      do create this with owner = newOwner
+```
+
+### Data Types
+
+Daml supports records, variants (sum types), and newtypes.
+
+```daml
+data Address = Address
+  { street : Text
+  , city   : Text
+  }
+
+data Color = Red | Green | Blue
+
+newtype Token = Token Int
+```
+
+### Parties and Authorization
+
+`Party` is a built-in type representing a ledger identity. Authorization is enforced through `signatory` and `controller` declarations on templates and choices. A contract can only be created when all its signatories authorize the transaction.
+
+## Built-in Functions
+
+{/* COPIED_START - source: working-with.rst */}
+
+### Time
+
+- `datetime` -- creates a `Time` given year, month, day, hours, minutes, and seconds as argument.
+- `subTime` -- subtracts one time from another. Returns the `RelTime` difference between `time1` and `time2`.
+- `addRelTime` -- add times. Takes a `Time` and `RelTime` and adds the `RelTime` to the `Time`.
+- `days`, `hours`, `minutes`, `seconds` -- constructs a `RelTime` of the specified length.
+- `pass` -- (in Daml Script tests only) use `pass : RelTime -> Script Time` to advance the ledger time by the argument amount. Returns the new time.
+
+### Numbers
+
+- `round` -- rounds a `Decimal` number to `Int`. `round d` is the nearest `Int` to `d`. Tie-breaks are resolved by rounding away from zero (`round 2.5 == 3`, `round (-2.5) == -3`).
+- `truncate` -- converts a `Decimal` number to `Int`, truncating the value towards zero (`truncate 2.2 == 2`, `truncate (-2.2) == -2`).
+- `intToDecimal` -- converts an `Int` to `Decimal`.
+
+The set of numbers expressed by `Decimal` is not closed under division, as the result may require more than 10 decimal places to represent. For example, `1.0 / 3.0 == 0.3333...` is a rational number but not a `Decimal`.
+
+### Text
+
+- `<>` operator -- concatenates two `Text` values.
+- `show` -- converts a value of primitive types (`Bool`, `Int`, `Decimal`, `Party`, `Time`, `RelTime`) to `Text`.
+
+Escape sequences in Daml strings: `\\` (backslash), `\"` (double quote), `\'` (single quote), `\n` (newline), `\t` (tab), `\r` (carriage return). Unicode escapes are also supported: decimal (`\33`), octal (`\o41`), hexadecimal (`\x21`).
+
+### Lists and Fold
+
+- `foldl` -- processes list elements left-to-right. Takes a binary operator, an initial accumulator, and a list. The operator is applied to the accumulator and each successive element, producing a new accumulator each time.
+- `foldr` -- same as `foldl` but processes right-to-left.
+
+<Note>
+Prefer `foldl` over `foldr` in most cases, since `foldr` must traverse the entire list before it can begin reducing.
+</Note>
+
+Example -- summing a list:
+
+```daml
+sumList : [Int] -> Int
+sumList xs = foldl (+) 0 xs
+```
+
+{/* COPIED_END */}
+
+## Operator Fixity and Precedence
+
+{/* COPIED_START - source: fixity.rst */}
+
+Infix operators in Daml have a declared *associativity* (left, right, or non-associative) and an integer *precedence* from 0 (lowest) to 9 (highest). Left-associative means `x - y - z` parses as `(x - y) - z`. Right-associative means `a -> b -> c` parses as `a -> (b -> (c))`. Non-associative operators (such as `==` and `>`) produce a parse error when chained ambiguously.
+
+You declare fixity with `infixl`, `infix`, or `infixr` followed by a precedence level and the operator name. For example, `infixl 6 +`.
+
+| Precedence | Left-associative | Non-associative | Right-associative |
+|:---:|---|---|---|
+| 9 | `` `!!` `` | | `.` |
+| 8 | | | `<#&&>`, `^`, `**` |
+| 7 | `*`, `/`, `%` | | |
+| 6 | `+`, `-` | | `<>` |
+| 5 | | | `` `++` ``, `::` |
+| 4 | `<$`, `<$>`, `$>`, `<*`, `<*>`, `*>` | `==`, `/=`, `<`, `<=`, `>==`, `>`, `===`, `=/=` | |
+| 3 | | | `&&`, `&&&` |
+| 2 | | | `\|\|`, `\|\|\|` |
+| 1 | `>>`, `>>=`, `<&>` | | `=<<`, `<=<`, `>=>` |
+| 0 | | | `$` |
+
+{/* COPIED_END */}
+
+## Standard Library
+
+{/* COPIED_START - source: stdlib/index.rst */}
+
+The Daml standard library ships with the SDK. The `Prelude` module is imported automatically in every Daml module. Other modules require an explicit import:
+
+```daml
+import DA.Optional
+import DA.Time
+```
+
+Key modules:
+
+- **Prelude** -- automatically imported; core types, type classes, and functions
+- **DA.List** / **DA.List.Total** -- list operations and total (non-partial) variants
+- **DA.Optional** -- `Optional` type utilities (`fromOptional`, `isSome`, `isNone`)
+- **DA.Map** / **DA.TextMap** -- map data structures keyed by ordered types or `Text`
+- **DA.Set** -- set data structure
+- **DA.Time** / **DA.Date** -- time and date utilities
+- **DA.Text** -- text manipulation functions
+- **DA.Math** / **DA.Numeric** -- math operations and numeric type conversions
+- **DA.Action** / **DA.Action.State** -- monadic utilities and stateful computations
+- **DA.Assert** -- assertion helpers for scripts and tests
+- **DA.Either** -- `Either` type utilities
+- **DA.Foldable** / **DA.Traversable** -- type class abstractions for folding and traversal
+- **DA.Exception** -- exception types
+- **DA.Logic** -- propositional logic combinators
+- **DA.Validation** -- applicative validation
+- **DA.NonEmpty** -- non-empty list type
+- **DA.Crypto.Text** -- cryptographic text utilities
+- **DA.Bifunctor** / **DA.Functor** -- functor abstractions
+- **DA.Monoid** / **DA.Semigroup** -- algebraic type classes
+- **DA.Record** / **DA.Tuple** -- record and tuple utilities
+
+{/* COPIED_END */}
+
+For full API documentation of each module, see the [standard library reference](https://docs.digitalasset.com/build/3.4/reference/stdlib/index.html).
