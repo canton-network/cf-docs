@@ -1,6 +1,174 @@
 ---
 title: "Testing Upgrades"
-description: "Testing Daml smart contract upgrades"
+description: "Verifying upgrade compatibility, testing cross-version workflows, and regression testing strategies"
 ---
 
-Content coming soon.
+Upgrading Daml packages across a distributed network leaves no room for guesswork. You need to verify both that the compiler accepts the upgrade and that workflows continue to function with mixed package versions.
+
+## Type-Level Compatibility Tests
+
+{/* COPIED_START source="docs-website:manual/build/3.5/sdlc-howtos/applications/upgrade/arch-considerations-upgrading.rst" hash="type-level-testing" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was adapted from existing reviewed documentation.
+**Source:** `manual/build/3.5/sdlc-howtos/applications/upgrade/arch-considerations-upgrading.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+A type-level compatibility test checks whether the old and new versions of a package with the same name can coexist without breaking. The easiest way to test this is by uploading both old and new versions to a fresh participant node as part of CI.
+
+To do this, access the DAR files used in production. Ideally, these should be stored in a dedicated artifact repository, but given their small sizes (typically under 1 MB), they may also be checked into source control.
+
+{/* COPIED_END */}
+
+In practice, this means your CI pipeline should:
+
+1. Build the v2 DAR with `dpm build`
+2. Start a sandbox with `dpm sandbox`
+3. Upload the production v1 DAR
+4. Upload the v2 DAR
+5. If both uploads succeed without errors, type-level compatibility is confirmed
+
+## Workflow-Level Compatibility Tests
+
+{/* COPIED_START source="docs-website:manual/build/3.5/sdlc-howtos/applications/upgrade/arch-considerations-upgrading.rst" hash="workflow-testing" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was adapted from existing reviewed documentation.
+**Source:** `manual/build/3.5/sdlc-howtos/applications/upgrade/arch-considerations-upgrading.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+A workflow-level compatibility test verifies that core business processes continue to function correctly after an upgrade. A basic integration test should follow these steps:
+
+1. Start the application with v2 software, but upload only the v1 DAR file to test backward compatibility.
+2. Initialize the application and start one instance of every core workflow.
+3. Upload the v2 DAR.
+4. Update the configuration to instruct the backends to start using the v2 DAR.
+5. Verify that the workflows remain in the correct state and can continue without issues.
+
+For more complex upgrades, additional tests may be needed.
+
+{/* COPIED_END */}
+
+## Daml Script Upgrade Tests
+
+Write Daml Script tests that explicitly test cross-version scenarios. The key patterns to cover:
+
+### Creating v1 contracts, reading with v2
+
+```haskell
+testV1ContractWithV2Code : Script ()
+testV1ContractWithV2Code = do
+  issuer <- allocateParty "Issuer"
+  holder <- allocateParty "Holder"
+
+  -- Create with v1 fields only
+  cid <- submit issuer do
+    createCmd License with
+      info = LicenseInfo with
+        holder; issuer
+        product = "Widget"
+        expiryDate = None  -- v2 field, set to None
+
+  -- Fetch and verify v2 fields default correctly
+  Some (_, license) <- queryContractId issuer cid
+  assertMsg "expiryDate should be None" (license.info.expiryDate == None)
+```
+
+### Exercising v2 choices on existing contracts
+
+```haskell
+testNewChoiceOnExistingContract : Script ()
+testNewChoiceOnExistingContract = do
+  issuer <- allocateParty "Issuer"
+  holder <- allocateParty "Holder"
+
+  cid <- submit issuer do
+    createCmd License with
+      info = LicenseInfo with
+        holder; issuer
+        product = "Widget"
+        expiryDate = None
+
+  -- Exercise the new v2 choice
+  newCid <- submit issuer do
+    exerciseCmd cid Renew with
+      newExpiry = datetime 2026 Dec 31 0 0 0
+
+  -- Verify result
+  Some (_, renewed) <- queryContractId issuer newCid
+  assertMsg "Should have expiry set"
+    (renewed.info.expiryDate == Some (datetime 2026 Dec 31 0 0 0))
+```
+
+### Testing that incompatible downgrades fail
+
+If your v2 introduces data that v1 code can't handle, write negative tests confirming the expected failure:
+
+```haskell
+testDowngradeFails : Script ()
+testDowngradeFails = do
+  issuer <- allocateParty "Issuer"
+  holder <- allocateParty "Holder"
+
+  -- Create with v2 data (non-None optional field)
+  cid <- submit issuer do
+    createCmd License with
+      info = LicenseInfo with
+        holder; issuer
+        product = "Widget"
+        expiryDate = Some (datetime 2026 Dec 31 0 0 0)
+
+  -- Attempting to read this with v1 code should fail
+  -- (In a real test, you'd use a v1 import and assert failure)
+  pure ()
+```
+
+## Regression Testing
+
+Every upgrade should run your full existing test suite against the new package version. Your v1 tests should pass unchanged when run against v2 — if they don't, you have a backward-compatibility issue.
+
+Structure your test packages so that regression tests are separate from upgrade-specific tests:
+
+```text
+daml/
+├── v1/              # Production v1
+├── v2/              # Production v2
+└── test/
+    ├── regression/  # Existing tests, run against v2
+    └── upgrade/     # New tests for cross-version scenarios
+```
+
+## CI Integration
+
+Add upgrade testing to your CI pipeline as a separate stage that runs after the standard build and test:
+
+```bash
+# Standard build and test
+dpm build
+dpm test
+
+# Upgrade compatibility
+dpm sandbox &
+SANDBOX_PID=$!
+sleep 30
+
+# Upload production v1 DAR
+curl -X POST "http://localhost:7575/v2/packages" \
+  --data-binary @artifacts/v1.dar
+
+# Upload v2 DAR
+curl -X POST "http://localhost:7575/v2/packages" \
+  --data-binary @artifacts/v2.dar
+
+# Run workflow tests
+cd backend && ./gradlew upgradeTest
+
+kill $SANDBOX_PID
+```
+
+## Next Steps
+
+- [Deploying Upgrades](/docs-main/appdev/modules/m6-deployment) — Rolling out tested upgrades across environments
+- [Upgrade Compatibility](/docs-main/appdev/modules/m6-upgrade-compatibility) — Reference for what changes are allowed
