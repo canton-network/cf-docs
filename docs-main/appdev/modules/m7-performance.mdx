@@ -1,6 +1,130 @@
 ---
 title: "Performance Best Practices"
-description: "Performance optimization for Canton applications"
+description: "On-ledger and off-ledger optimization strategies for Canton applications"
 ---
 
-Content coming soon.
+Performance optimization for Canton applications means understanding the boundary between on-ledger and off-ledger operations, and making deliberate choices about what crosses that boundary. Ledger operations carry synchronization overhead that database operations don't, so the goal is to minimize unnecessary ledger interaction while keeping business-critical state on-ledger.
+
+## On-Ledger vs. Off-Ledger
+
+{/* COPIED_START source="docs-website:manual/build/3.5/sdlc-howtos/sdlc-best-practices.rst" hash="on-off-ledger" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was adapted from existing reviewed documentation.
+**Source:** `manual/build/3.5/sdlc-howtos/sdlc-best-practices.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+Canton Network application design should account for performance characteristics, carefully considering on-ledger versus off-ledger implementation. When deciding whether information should be stored on-ledger:
+
+- **State** — Essential facts in the workflow. When these facts require agreement across organizations, store them on-ledger.
+- **Data** — Non-essential facts. For efficiency, use off-ledger technologies for sharing non-critical data.
+- **Workflows** — Only workflows that cross organizational boundaries should be on-ledger.
+
+{/* COPIED_END */}
+
+A practical example: in a licensing application, the license itself (who holds it, what it covers, whether it's active) belongs on-ledger because both parties need to agree on its status. The license's detailed description text, marketing materials, or usage analytics belong off-ledger in a conventional database.
+
+## Contract Design for Performance
+
+### Avoid contract fan-out
+
+When a single transaction creates or archives many contracts, it requires all stakeholders of all those contracts to participate in the transaction. Design your templates to avoid creating large numbers of contracts in a single transaction.
+
+Instead of creating one contract per item in a batch:
+
+```haskell
+-- Avoid: creates N contracts in one transaction
+choice ProcessBatch : [ContractId Item]
+  controller processor
+  do mapA (\item -> create Item with ...) items
+```
+
+Consider batching into a single contract with a list field, or processing items in separate transactions:
+
+```haskell
+-- Better: one contract representing the batch
+choice ProcessBatch : ContractId BatchResult
+  controller processor
+  do create BatchResult with items = processedItems
+```
+
+### Minimize stakeholders per transaction
+
+Each additional signatory or observer on a contract adds a validator that must participate in the transaction protocol. Keep the stakeholder set as small as the business logic requires.
+
+### Use contract keys judiciously
+
+Contract keys enable efficient lookups but introduce contention. If multiple transactions try to create or exercise contracts with the same key concurrently, they will conflict. Design keys that partition naturally by party or business entity to reduce contention.
+
+## PQS Query Optimization
+
+{/* COPIED_START source="docs-website:replicated/pqs/3.5/component-howtos/pqs/optimize/index.rst" hash="pqs-optimize" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was adapted from existing reviewed documentation.
+**Source:** `replicated/pqs/3.5/component-howtos/pqs/optimize/index.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+PQS stores contract data in JSONB columns in PostgreSQL. For read-heavy workloads, proper indexing is critical.
+
+### Creating indexes
+
+Use the PQS helper function to create JSONB indexes:
+
+```sql
+call create_index_for_contract('token_wallet_holder_idx',
+                               'register:DA.Register:Token',
+                               '(payload->''wallet''->>''holder'')',
+                               'hash');
+```
+
+This index allows efficient lookups on the wallet holder field without scanning the entire JSONB payload.
+
+### PostgreSQL tuning
+
+The default PostgreSQL Docker image ships with minimal settings. For any realistic workload, tune the following:
+
+- `shared_buffers` — Set to 25% of available RAM
+- `effective_cache_size` — Set to 75% of available RAM
+- `max_connections` — Match to your expected connection pool size
+- `autovacuum` settings — Tune for your write patterns
+
+Minimum recommended resources for production:
+- PQS host: 4 GB RAM, 4 CPU cores
+- PostgreSQL: 8 GB RAM, 8 CPU cores
+
+If your workload includes reporting-style queries (aggregations, joins, large result sets), allocate additional CPU cores to match the number of maximum concurrent connections.
+
+{/* COPIED_END */}
+
+### Query patterns
+
+- Use `explain analyze` to verify that queries use your indexes
+- Prefer filtering in SQL over fetching all contracts and filtering in application code
+- For time-series queries, use the event tables rather than the active contract set
+- Consider materialized views for frequently-run aggregation queries
+
+## Parallel Command Submission
+
+The Ledger API supports parallel command submissions. Commands that affect different contracts can execute concurrently on the synchronizer. Structure your backend to take advantage of this:
+
+- Use async/concurrent command submission from your backend
+- Assign unique command IDs to enable deduplication
+- Group commands by the contracts they affect to avoid contention
+- Monitor command completion times to detect bottleneck patterns
+
+## Traffic Management
+
+On DevNet, TestNet, and MainNet, every ledger transaction consumes traffic credits purchased with Canton Coin (CC). Optimize your traffic costs by:
+
+- Reducing the number and size of on-ledger transactions
+- Using batch operations where possible
+- Configuring auto-top-up to avoid running out of traffic during peak usage
+- Monitoring traffic consumption patterns to forecast costs
+
+## Next Steps
+
+- [Security Best Practices](/docs-main/appdev/modules/m7-security) — Authorization and secure configuration
+- [Package Management](/docs-main/appdev/modules/m7-package-management) — Efficient DAR management
