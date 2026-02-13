@@ -34,8 +34,24 @@ mintlify broken-links
 ### Troubleshooting
 
 **Node version error**: If you see "mint dev is not supported on node versions below 20.17", upgrade Node.js:
+
 ```bash
 # Using nvm
 nvm install 20
 nvm use 20
+```
+
+### Direnv + Nix workflow
+
+This repo includes `.envrc` and `shell.nix` for a reproducible local toolchain.
+
+Required:
+- `direnv`
+- `nix`
+
+Then run:
+
+```bash
+direnv allow
+mintlify dev
 ```
