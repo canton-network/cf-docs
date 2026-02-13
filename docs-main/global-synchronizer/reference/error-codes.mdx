@@ -1,6 +1,177 @@
 ---
 title: "Error Codes"
-description: "Complete list of Canton Network error codes"
+description: "Operator reference for Canton error codes, log-level meanings, and error categories"
 ---
 
-Content coming soon.
+Canton uses a structured error code system across all components. Every error logged or returned via the API follows the format `ERROR_CODE_ID(category_id, correlation_id_prefix): human-readable message`. This page explains how to read these errors, which categories require operator action, and what the most common operational errors mean.
+
+For gRPC error codes encountered during application development, see the [AppDev error codes reference](/appdev/reference/error-codes).
+
+## Reading Error Codes in Logs
+
+{/* COPIED_START: Adapted from docs-website error_codes.rst, "Error Codes In Canton Operations" section */}
+
+A typical log entry looks like this:
+
+```text
+2024-11-15 09:22:41,301 [thread-42] WARN c.d.c.p.p.AcsCommitmentProcessor:participant=participant1/synchronizer=global-domain - ACS_COMMITMENT_DEGRADATION(13,0): Participant is behind in commitment computation and enters catch-up mode.
+```
+
+The structured portion `ACS_COMMITMENT_DEGRADATION(13,0)` breaks down as follows:
+
+- **`ACS_COMMITMENT_DEGRADATION`** -- the unique error code ID, which you can search for in this reference or in logs
+- **`13`** -- the error category ID (here, `BackgroundProcessDegradationWarning`)
+- **`0`** -- the correlation ID prefix (the first 8 characters of the request's submission ID, or `0` if the error is not tied to a specific request)
+
+The human-readable message after the colon may change between releases. Build automation around the error code ID and category, not the message text.
+
+{/* COPIED_END */}
+
+## Log Levels
+
+Canton uses log levels consistently:
+
+- **INFO** -- user errors where the request failed but the system remains healthy. Most category 1, 2, 8, 9, 10, 11, and 12 errors log at this level.
+- **WARN** -- system degradation or unusual behavior that may need attention. Security alerts (category 5) and degradation warnings (category 13) log here.
+- **ERROR** -- internal errors where the system is not behaving correctly and requires immediate attention. Category 4 (`SystemInternalAssumptionViolated`) errors log here.
+
+As an operator, you should set up alerting on WARN and ERROR level messages. INFO-level error codes are typically transient or caused by client-side issues, though persistent INFO-level errors (such as repeated `SEQUENCER_REQUEST_FAILED`) can signal connectivity problems that need investigation.
+
+## Error Categories
+
+{/* COPIED_START: From canton-error-categories-inventory.rst.inc */}
+
+Each error code belongs to exactly one category. The category determines the gRPC status code, default log level, and recommended retry strategy. The categories most relevant to operators are listed below.
+
+| Category ID | Name | gRPC Status | Log Level | Operator Action |
+|---|---|---|---|---|
+| 1 | `TransientServerFailure` | UNAVAILABLE | INFO | Retry with backoff. If persistent, check node health and connectivity. |
+| 2 | `ContentionOnSharedResources` | ABORTED | INFO | Retry with backoff. If frequent, investigate load, traffic credits, or resource contention. |
+| 3 | `DeadlineExceededRequestStateUnknown` | DEADLINE_EXCEEDED | INFO | May resolve on its own. Persistent occurrences may need timeout configuration changes. |
+| 4 | `SystemInternalAssumptionViolated` | INTERNAL | ERROR | Indicates a bug or data corruption. Requires operator intervention and potentially vendor support. |
+| 5 | `SecurityAlert` | INVALID_ARGUMENT | WARN | Potential attack or faulty peer. Requires investigation and potentially vendor support. Non-retryable. |
+| 6 | `AuthInterceptorInvalidAuthenticationCredentials` | UNAUTHENTICATED | WARN | Application or ledger misconfiguration. Check JWT/OIDC settings. |
+| 13 | `BackgroundProcessDegradationWarning` | N/A | WARN | Internal degradation signal. Not returned via API. Inspect details for the specific issue. |
+
+{/* COPIED_END */}
+
+Categories 8 through 12 (`InvalidIndependentOfSystemState`, `InvalidGivenCurrentSystemState*`) are typically application-level issues rather than operator-level. If you see them persistently in operator logs, they may indicate configuration problems.
+
+## Synchronizer Connectivity Errors
+
+These errors appear when your participant cannot communicate with the synchronizer.
+
+{/* COPIED_START: Adapted from docs-website error_codes.rst, sync service and sequencer sections */}
+
+**`SYNC_SERVICE_BAD_CONNECTIVITY(9,...):`** Sequencer connection validation failed. Common causes include unreachable sequencer nodes, bad TLS configuration, or a synchronizer ID mismatch between sequencers. Verify your connection settings and that the target sequencer is online.
+
+**`SYNC_SERVICE_SYNCHRONIZER_DISABLED_US(9,...):`** The remote sequencer is denying access. Contact the sequencer operator (for the Global Synchronizer, this means the Super Validators) to understand why your participant was disabled. This typically happens when a participant has been down longer than the 30-day sequencer pruning window.
+
+**`SYNC_SERVICE_SYNCHRONIZER_DISCONNECTED(4,...):`** A previously connected synchronizer was unexpectedly disconnected. Logged at ERROR level. Check network connectivity, sequencer health, and contact support if it persists.
+
+**`NOT_CONNECTED_TO_ANY_SYNCHRONIZER(9,...):`** or **`NOT_CONNECTED_TO_SYNCHRONIZER(9,...):`** The participant is not connected to the required synchronizer. Connect your participant using the Canton Console or verify your startup configuration.
+
+**`SYNC_SERVICE_STARTUP_ERROR(9,...):`** A synchronizer failed to start or initialize. Check the underlying error message for specifics -- this often points to configuration issues or database problems.
+
+{/* COPIED_END */}
+
+## Sequencer Errors
+
+{/* COPIED_START: Adapted from docs-website error_codes.rst, sequencer sections */}
+
+**`SEQUENCER_UNAVAILABLE(1,...):`** The sequencer is temporarily unavailable. Retry quickly. If persistent, check network connectivity and sequencer health.
+
+**`SEQUENCER_REQUEST_FAILED(2,...):`** A command could not be sent to the synchronizer. Often transient; retry with backoff. Persistent failures indicate connectivity issues between your participant and the sequencer.
+
+**`SEQUENCER_BACKPRESSURE(2,...):`** The sequencer refused the command due to load. Retry with exponential backoff. If you see this frequently, your workload may be exceeding the synchronizer's throughput capacity.
+
+**`SEQUENCER_NOT_ENOUGH_TRAFFIC_CREDIT(9,...):`** Your participant lacks sufficient traffic credits. Purchase more traffic credits using Canton Coin, or wait for traffic credits to replenish over time.
+
+**`SEQUENCER_SUBSCRIPTION_LOST(13,...):`** The sequencer subscription was interrupted. The system retries automatically. Monitor the situation -- if it does not resolve, contact the sequencer operator.
+
+**`SEQUENCER_FORK_DETECTED(4,...):`** A ledger fork was detected, meaning a sequencer returned different events for the same timestamp. This should not happen in normal operation and may indicate incorrectly ordered backups. Recovery requires restoring from a correctly ordered backup. Contact support.
+
+**`SEQUENCER_TOMBSTONE_ENCOUNTERED(9,...):`** Your participant tried to read an event that was replaced with a tombstone on a recently onboarded sequencer. Connect to a different sequencer with older event history, consume the tombstoned events, then reconnect.
+
+{/* COPIED_END */}
+
+## Mediator Errors
+
+{/* COPIED_START: Adapted from docs-website error_codes.rst, mediator section */}
+
+**`MEDIATOR_SAYS_TX_TIMED_OUT(2,...):`** The mediator did not receive enough confirmations within the timeout. The `unresponsiveParties` field (protocol version 6+) lists parties that failed to respond. Check that all involved validators are online and have sufficient traffic credits.
+
+**`MEDIATOR_INVALID_MESSAGE(9,...):`** The mediator received an invalid request or response, which will be discarded. Expected after a mediator restart or failover. If persistent, investigate the sending node.
+
+**`MEDIATOR_INTERNAL_ERROR(4,...):`** An internal invariant violation at the mediator. Contact support.
+
+**`MEDIATOR_RECEIVED_MALFORMED_MESSAGE(5,...):`** A security alert indicating the mediator received a malformed message, possibly from a faulty or malicious node. Contact support.
+
+{/* COPIED_END */}
+
+## ACS Commitment Errors
+
+Active Contract Set (ACS) commitment errors relate to the integrity checking mechanism that participants use to verify they agree on shared contract state.
+
+{/* COPIED_START: Adapted from docs-website error_codes.rst, ACS commitment sections */}
+
+**`ACS_COMMITMENT_DEGRADATION(13,...):`** Your participant is falling behind in commitment computation, likely due to heavy load, and has entered catch-up mode. The participant should recover on its own, but counter-participants may blacklist slow participants to unblock their own pruning.
+
+**`ACS_COMMITMENT_MISMATCH(5,...):`** A commitment mismatch between your participant and a counter-participant. Between honest participants this should not happen. Causes include bugs, manual changes via the repair service, or misbehavior. Consult the [Canton runbook on inspecting commitment mismatches](https://docs.digitalasset.com/canton/usermanual/operational_processes.html) to determine the cause and repair accordingly.
+
+**`ACS_COMMITMENT_ALARM(5,...):`** A counter-participant sent a commitment with an invalid signature or sent two different commitments for the same interval. This indicates potential malicious behavior. Contact support.
+
+**`ACS_COMMITMENT_INTERNAL_ERROR(4,...):`** An internal error in ACS commitment processing. Contact support.
+
+{/* COPIED_END */}
+
+## Database and Storage Errors
+
+**`DB_STORAGE_DEGRADATION(13,...):`** Database task queue is rejecting tasks, usually because the queue is too small for the current workload. Tasks will be retried after a delay. If this occurs frequently, increase the task queue size via `canton.<path-to-node>.storage.config.queueSize` or improve your database's I/O capacity (IOPS, storage type).
+
+**`DB_CONNECTION_LOST(13,...):`** The connection to the database was lost. Check that your PostgreSQL instance is running and reachable, and that connection limits have not been exhausted.
+
+## Topology Management Errors
+
+These errors occur when managing topology state -- party allocations, package vetting, key management, and synchronizer configuration.
+
+**`TOPOLOGY_UNAUTHORIZED_TRANSACTION(9,...):`** The topology transaction was not authorized. Verify that the signing key has the required permissions.
+
+**`TOPOLOGY_INSUFFICIENT_KEYS(9,...):`** Required keys are missing. Ensure the node has the necessary signing and encryption keys registered.
+
+**`TOPOLOGY_INVALID_MAPPING(9,...):`** The topology mapping is invalid. Check the parameters of the topology transaction you are submitting.
+
+**`TOPOLOGY_MANAGER_ALARM(5,...):`** A security alert from the topology manager. Investigate and contact support.
+
+## Splice-Specific Operational Errors
+
+These errors are specific to Splice validator and SV app operation on the Canton Network.
+
+**Traffic balance below reserved amount** -- Your validator app has not been able to purchase traffic. The validator blocks transactions (except traffic purchases) once the balance drops below the reserved threshold. Check logs for `TopupMemberTrafficTrigger` to find the root cause. If you only want to use free traffic, remove the validator top-up configuration.
+
+```text
+ABORTED: Traffic balance below reserved traffic amount (0 < 200000)
+```
+
+**Insufficient funds to buy configured traffic amount** -- The validator attempted to purchase traffic but does not have enough Canton Coin. New nodes on TestNet and MainNet start with a zero balance and accrue CC through validator liveness rewards over time. You can also receive a CC transfer from another node. If you only want free traffic, remove the validator top-up configuration.
+
+**Node identity mismatch** -- You changed the participant identifier after initialization. For validators, the node identifier defaults to `validatorPartyHint`, so changing that also triggers this error. On a fresh node, you can reset by dropping the databases and restarting. On an established node, revert to the original identifier.
+
+**MemberDisabled when connecting to sequencer** -- Your participant has been down longer than the 30-day sequencer pruning window, and the SVs have disabled it. Recover your CC balance by spinning up a new node and re-onboarding.
+
+## Error Escalation
+
+When you encounter an error, use this decision path:
+
+1. **Check the category.** Categories 1 and 2 are transient -- retry with backoff. If retries fail for more than a few minutes, move to step 2.
+2. **Check connectivity.** Verify network connectivity, VPN status (for DevNet), DNS resolution, and that the target sequencer endpoint is reachable.
+3. **Check resources.** Look for `DB_STORAGE_DEGRADATION`, `SERVER_OVERLOADED`, or `SEQUENCER_BACKPRESSURE` in logs. These point to resource constraints.
+4. **Category 4 or 5 errors require investigation.** Gather full logs, the error code, correlation ID, and node version. Do not repeatedly restart a node showing category 4 errors without understanding the cause.
+5. **Contact support** with the error code, full correlation ID, timestamps, node version, and relevant log excerpts. Support channels:
+   - Discretionary support: [da-support@digitalasset.com](mailto:da-support@digitalasset.com)
+   - SLA-based support: [support@digitalasset.com](mailto:support@digitalasset.com)
+   - Community: Slack `#validator-operations` channel
+
+<Note>
+When sharing logs with support, redact private keys, passwords, and JWT tokens, but preserve error codes, correlation IDs, and timestamps.
+</Note>

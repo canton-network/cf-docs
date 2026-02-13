@@ -1,6 +1,190 @@
 ---
 title: "Metrics Reference"
-description: "Reference guide for Canton Network metrics"
+description: "Reference for monitoring metrics exposed by Canton Network validator and super validator nodes"
 ---
 
-Content coming soon.
+Every Canton Network node exposes metrics on port `10013` at the `/metrics` path in Prometheus format. These metrics are built with OpenTelemetry and cover the participant, validator app, and (for super validators) the SV and scan apps.
+
+{/* COPIED_START: splice/docs/src/deployment/observability/metrics.rst - component list */}
+For a validator, the following components expose metrics:
+
+- The validator app
+- The participant
+
+For a super validator, you also get metrics from:
+
+- The SV app
+- The scan app
+{/* COPIED_END */}
+
+## Enabling metrics
+
+### Kubernetes (Helm)
+
+Set `metrics.enable` to `true` in your Helm values. This creates a `ServiceMonitor` custom resource, which requires the Prometheus Operator to be installed in your cluster. Alternatively, add Prometheus scrape annotations targeting port `10013`.
+
+### Docker Compose
+
+{/* COPIED_START: splice/docs/src/deployment/observability/metrics.rst - docker compose */}
+When using Docker Compose for deployment, metrics are enabled by default. You can access them at `http://validator.localhost/metrics` for the validator app and `http://participant.localhost/metrics` for the participant.
+{/* COPIED_END */}
+
+### Histogram format
+
+{/* COPIED_START: splice/docs/src/deployment/observability/metrics.rst - histograms */}
+Histograms are exposed as [OpenTelemetry exponential histograms](https://opentelemetry.io/docs/specs/otel/metrics/data-model/#exponentialhistogram), which are converted to [Prometheus native histograms](https://prometheus.io/docs/specs/native_histograms/). You must enable native histogram support in Prometheus with the flag `--enable-feature=native-histograms`. This switches Prometheus to protobuf collection format.
+{/* COPIED_END */}
+
+To revert to regular histograms on a specific node, set the environment variable:
+
+```bash
+ADDITIONAL_CONFIG_DISABLE_NATIVE_HISTOGRAMS="canton.monitoring.metrics.histograms=[]"
+```
+
+## Health metrics
+
+{/* COPIED_START: docs-website canton 3.5 metrics.rst - health metrics */}
+All components expose a `daml_health_status` gauge.
+
+| Metric | Type | Description |
+|---|---|---|
+| `daml_health_status` | gauge | `1` if the component is healthy, `0` if not. The `component` label identifies which component is being reported. |
+{/* COPIED_END */}
+
+You can also check health through the readiness and liveness HTTP endpoints (`/readyz` and `/livez`) on port `5003`. In Kubernetes, these probes are preconfigured. For Docker, query them with:
+
+```bash
+docker exec <container-name> curl -v https://localhost:5003/api/validator/readyz
+```
+
+An HTTP 200 response means the node is ready.
+
+## Splice app metrics
+
+{/* COPIED_START: splice/docs/src/deployment/observability/validator_health.rst - store metric */}
+The `splice_store_last_ingested_record_time_ms` metric represents the last ingested record time in each validator store. Use it to track general node activity:
+
+- If this value continues to increase over time, your node is active and in sync with the network. For a validator collecting liveness rewards, this advances every round, so you should expect the lag to never go above 20 minutes.
+- If it remains static, investigate further.
+{/* COPIED_END */}
+
+### Topology metrics (optional)
+
+{/* COPIED_START: splice/docs/src/deployment/observability/metrics.rst - topology metrics */}
+The validator app can run a trigger that polls topology state and exports metrics with the prefix `splice.synchronizer-topology`. This trigger is disabled by default. To enable it with a 5-minute polling interval, add the following environment variable:
+
+```bash
+ADDITIONAL_CONFIG_TOPOLOGY_METRICS_EXPORT="canton.validator-apps.validator_backend.automation.topology-metrics-polling-interval = 5m"
+```
+{/* COPIED_END */}
+
+## Key participant metrics
+
+These are the most operationally significant metrics from the participant node. For the full catalog of several hundred metrics, see the [Canton 3.x metrics reference](https://docs.digitalasset.com/canton/3.5/participant/reference/metrics).
+
+### Sequencer client
+
+The sequencer client metrics tell you whether your node is keeping up with the synchronizer's message stream.
+
+| Metric | Type | What to watch for |
+|---|---|---|
+| `daml.sequencer-client.handler.delay` | gauge | Event processing delay in milliseconds. A large, growing value means the node is falling behind. Cross-reference with clock skew before assuming a processing bottleneck. |
+| `daml.sequencer-client.handler.sequencer-events` | counter | Number of events received from the sequencer. Tracks overall event throughput. |
+| `daml.sequencer-client.handler.actual-in-flight-event-batches` | counter | How many event batches are being processed in parallel. If this constantly sits near `max-in-flight-event-batches`, the node's resources may be under-utilized (raise the limit). If you see OOM errors, lower it. |
+| `daml.sequencer-client.submissions.dropped` | counter | Send requests that were not sequenced within the max-sequencing-time. An increasing count points to sequencer capacity issues or network problems. |
+| `daml.sequencer-client.submissions.overloaded` | counter | Requests that received an overloaded response from the sequencer. |
+| `daml.sequencer-client.submissions.sequencing` | timer | End-to-end time from submission to sequencing confirmation. |
+| `daml.sequencer-client.submissions.in-flight` | counter | Submissions waiting for an outcome. High values indicate backpressure. |
+
+### Connection pool
+
+These metrics track the health of connections between your node and the synchronizer's sequencers.
+
+| Metric | Type | What to watch for |
+|---|---|---|
+| `daml.sequencer-client.sequencer-connection-pool.active-subscriptions` | gauge | Number of active sequencer subscriptions. Should stay at or above the subscription threshold. |
+| `daml.sequencer-client.sequencer-connection-pool.validated-connections` | gauge | Connections that are up and validated. A drop signals connectivity problems. |
+| `daml.sequencer-client.sequencer-connection-pool.trust-threshold` | gauge | The minimum number of consistent sequencer connections needed before the pool will initialize. |
+
+### ACS commitments
+
+Commitment metrics reveal whether your participant is staying in sync with counter-participants during reconciliation.
+
+| Metric | Type | What to watch for |
+|---|---|---|
+| `daml.participant.sync.commitments.compute` | timer | Time spent computing bilateral commitments. If this approaches or exceeds the reconciliation interval, the participant will perpetually lag behind. |
+| `daml.participant.sync.commitments.sequencing-time` | gauge | Time between the end of a commitment period and when the sequencer observes the commitment. An unexplained increase may indicate the participant is falling behind. |
+| `daml.participant.sync.commitments.catch-up-mode-triggered` | meter | How often catch-up mode has been activated. A healthy value is 0. An increasing count signals intermittent performance degradation. |
+
+### Ledger API command processing
+
+| Metric | Type | What to watch for |
+|---|---|---|
+| `daml.participant.api.commands.submissions` | timer | Time to validate and interpret a command before it is sent for finalization. |
+| `daml.participant.api.commands.submissions_running` | counter | Commands currently being processed. Indicates load on the Ledger API server. |
+| `daml.participant.api.commands.failed_command_interpretations` | meter | Commands rejected by the Daml interpreter (for example, unauthorized actions). |
+| `daml.grpc.server.requests.rejections` | counter | Requests rejected due to active request limits. Sustained rejections mean you need to raise limits or reduce load. |
+
+### Database
+
+Database metrics share a common pattern across all node types. The `general` pool handles reads; the `write` pool handles writes.
+
+| Metric | Type | What to watch for |
+|---|---|---|
+| `daml.db-storage.{general,write}.executor.load` | gauge | Current queries running divided by available connections. A sustained value near 1.0 means the pool is saturated. |
+| `daml.db-storage.{general,write}.executor.queued` | counter | Tasks waiting for a database connection. A growing queue indicates the database cannot keep up. |
+| `daml.db-storage.{general,write}.executor.waittime` | timer | Time tasks spend waiting in the queue before execution. |
+| `daml.db-storage.{general,write}.executor.exectime` | timer | Time tasks spend executing on the database. |
+
+### Pruning
+
+| Metric | Type | What to watch for |
+|---|---|---|
+| `daml.pruning.max-event-age` | gauge | Age of the oldest unpruned event in hours. A large or growing value means pruning is falling behind, which increases storage consumption. |
+| `daml_services_pruning_prune_started_total` | counter | Number of pruning processes started. |
+| `daml_services_pruning_prune_completed_total` | counter | Number of pruning processes completed. Compare with started count to detect stalled pruning. |
+
+### Traffic control
+
+These metrics are relevant if your node participates in traffic-based rate limiting.
+
+| Metric | Type | What to watch for |
+|---|---|---|
+| `daml.sequencer-client.traffic-control.event-delivered` | counter | Events that were sequenced and delivered. |
+| `daml.sequencer-client.traffic-control.event-rejected` | counter | Events sequenced but not delivered (insufficient traffic credits). |
+| `daml.sequencer-client.traffic-control.submitted-event-cost` | meter | Cost of events submitted. May not exactly match actual consumed traffic since some events may not be sequenced. |
+
+## JVM metrics
+
+{/* COPIED_START: docs-website canton 3.5 metrics.rst - JVM metrics */}
+All Canton nodes expose standard JVM metrics when enabled:
+
+| Metric | Type | Description |
+|---|---|---|
+| `runtime_jvm_gc_time` | counter | Time spent in garbage collection (ms). Labeled by `gc` region (e.g., `G1 Old Generation`). |
+| `runtime_jvm_gc_count` | counter | Number of GC collections. Labeled by `gc` region. |
+| `runtime_jvm_memory_area` | gauge | Heap and non-heap memory statistics. Labeled by `area` (`heap`/`non_heap`) and `type` (`committed`/`used`/`max`). |
+| `runtime_jvm_memory_pool` | gauge | Per-pool memory statistics. Labeled by `pool` name and `type`. |
+{/* COPIED_END */}
+
+## Grafana dashboards
+
+{/* COPIED_START: splice/docs/src/deployment/observability/metrics.rst - grafana dashboards */}
+The release bundle contains a set of Grafana dashboards built on the metrics described above. Import these dashboards into your Grafana instance from the `grafana-dashboards` folder in the release bundle. The dashboards assume a Kubernetes deployment and may need adjustment for other deployment types.
+{/* COPIED_END */}
+
+The dashboards use queries specific to Prometheus native histograms, so make sure native histogram support is enabled in your Prometheus instance.
+
+## Alerting recommendations
+
+The following thresholds are starting points. Adjust them based on your environment and workload patterns.
+
+- **Node health**: Alert when `daml_health_status` equals `0` for any component for more than 2 minutes.
+- **Sequencer delay**: Alert when `daml.sequencer-client.handler.delay` exceeds 30 seconds and is increasing.
+- **Dropped submissions**: Alert on any sustained increase in `daml.sequencer-client.submissions.dropped`.
+- **Overloaded responses**: Alert on any increase in `daml.sequencer-client.submissions.overloaded`.
+- **Database pool saturation**: Alert when `daml.db-storage.*.executor.load` exceeds 0.85 for more than 5 minutes.
+- **Pruning backlog**: Alert when `daml.pruning.max-event-age` exceeds your retention policy threshold.
+- **Store ingestion lag**: Alert when `splice_store_last_ingested_record_time_ms` stops advancing for more than 20 minutes.
+- **JVM memory**: Alert when `runtime_jvm_memory_area` with `area=heap` and `type=used` exceeds 85% of `type=max` over a sustained period.
+- **Commitment computation**: Alert when `daml.participant.sync.commitments.catch-up-mode-triggered` is non-zero.

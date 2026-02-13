@@ -1,6 +1,335 @@
 ---
 title: "Canton Console Reference"
-description: "Complete reference for Canton console commands"
+description: "Reference for Canton console commands used by validators and SV operators on the Global Synchronizer"
 ---
 
-Content coming soon.
+The Canton console is a Scala-based REPL (built on [Ammonite](http://ammonite.io)) that provides administrative access to Canton nodes. All console commands are valid Scala expressions. String arguments are automatically converted to the appropriate Canton types (`SynchronizerAlias`, `Fingerprint`, `Identifier`) where needed.
+
+This page covers the commands most relevant to validator and SV operators. For the full
+command reference, see the [Canton documentation](https://docs.digitalasset.com/canton/3.5/reference/console).
+
+## Starting the Console
+
+{/* COPIED_START - source: console.rst */}
+
+### Local Console
+
+Start a Canton instance with an interactive console:
+
+```bash
+./bin/canton -c <config-file>
+```
+
+Start in daemon mode (no interactive console):
+
+```bash
+./bin/canton daemon -c <config-file>
+```
+
+### Remote Console
+
+{/* COPIED_END */}
+
+You can connect a console to a running Canton node over its Admin API and Ledger API ports. This is the standard approach for production validators, where nodes run as background services or containers.
+
+{/* COPIED_START - source: console_access.rst */}
+
+Create a remote configuration file (for example, `console.conf`):
+
+```
+canton {
+  remote-participants {
+    participant {
+      admin-api {
+        port = 5002
+        address = localhost
+      }
+      ledger-api {
+        port = 5001
+        address = localhost
+      }
+      token = "<auth-token>"
+    }
+  }
+  features.enable-preview-commands = yes
+  features.enable-testing-commands = yes
+  features.enable-repair-commands = yes
+}
+```
+
+Then start the console with that configuration:
+
+```bash
+./bin/canton -c console.conf
+```
+
+{/* COPIED_END */}
+
+To run a script against a remote node without entering the interactive REPL:
+
+```bash
+./bin/canton run <script.canton> -c console.conf
+```
+
+{/* COPIED_START - source: console_access.rst */}
+
+### Docker-Based Console Access
+
+If your validator runs in Docker, start a console container on the same network:
+
+```bash
+docker run -it --rm --network host \
+  -v $(pwd)/console.conf:/app/app.conf \
+  digitalasset/canton:<version> --console
+```
+
+When using Docker Compose, replace `--network host` with the network your validator container uses (for example, `--network splice-validator`) and set the `address` fields in your configuration to the container names instead of `localhost`.
+
+### Kubernetes Console Access
+
+In a Kubernetes cluster, create a debug pod from the same image as the target node:
+
+```bash
+kubectl debug "${POD_NAME}" \
+  --image "$(kubectl get pod "${POD_NAME}" -o json | jq -re '.spec.containers[0].image')" \
+  -i -t -- bash
+```
+
+Inside the pod, create your `console.conf` and start the console:
+
+```bash
+/app/bin/canton -v -c console.conf
+```
+
+{/* COPIED_END */}
+
+### TLS and Authorization
+
+{/* COPIED_START - source: console.rst */}
+
+For production deployments where the Admin API is not bound to localhost, enable TLS with mutual authentication.
+
+The remote console supports installations that use authorization tokens. Pass the token through the configuration or on the command line:
+
+```bash
+./bin/canton daemon \
+  -c remote-participant.conf \
+  -C canton.remote-participants.<name>.token="<encoded-access-token>" \
+  --bootstrap <script>
+```
+
+The console extracts the user ID from the token and uses it for Ledger API command submissions and completion subscriptions.
+
+{/* COPIED_END */}
+
+## Node References
+
+{/* COPIED_START - source: console.rst */}
+
+Each configured node is available as a named Scala variable matching its configuration identifier. For example, if your configuration defines a participant called `participant`, you access it as `participant` in the console.
+
+Generic references let you work with groups of nodes:
+
+```scala
+participants.local    // locally configured participants
+participants.remote   // remote participants
+participants.all      // both local and remote
+```
+
+The same pattern applies to `sequencers` and `mediators`. You can iterate over these:
+
+```scala
+participants.all.foreach(_.dars.upload("my.dar"))
+```
+
+{/* COPIED_END */}
+
+## Help System
+
+{/* COPIED_START - source: console.rst */}
+
+The built-in help works at every level of the command hierarchy:
+
+```scala
+help                                     // top-level overview
+participant.help()                       // all commands on a participant
+participant.synchronizers.help()         // commands in the synchronizers group
+participant.parties.help("list")         // detailed help for a specific command
+help("list")                             // search all commands matching "list"
+```
+
+{/* COPIED_END */}
+
+## Command Groups for Operators
+
+The following groups are the most relevant for day-to-day validator and SV operations. Each group is accessed as `<node-ref>.<group>`.
+
+### health
+
+Status checks, liveness probes, and diagnostics.
+
+| Command | Description |
+|---------|-------------|
+| `health.status` | Current node status |
+| `health.active` | Whether the node is the active instance (for HA setups) |
+| `health.ping(targetParticipant)` | Round-trip connectivity check between participants |
+| `health.dump(outputFile)` | Generate a diagnostic bundle for support |
+| `health.initialized` | Whether the node has completed initialization |
+| `health.is_running` | Whether the node process is up |
+| `health.set_log_level(level)` | Change log verbosity at runtime |
+| `health.last_errors` | Recent errors from the node's error log |
+
+### synchronizers
+
+Manage connections between your validator's participant node and synchronizers.
+
+| Command | Description |
+|---------|-------------|
+| `synchronizers.connect(alias, url)` | Connect to a synchronizer |
+| `synchronizers.disconnect(alias)` | Disconnect from a synchronizer |
+| `synchronizers.reconnect(alias)` | Reconnect after a disconnection |
+| `synchronizers.reconnect_all` | Reconnect to all previously connected synchronizers |
+| `synchronizers.list_connected` | List active synchronizer connections |
+| `synchronizers.list_registered` | List all registered synchronizers (connected or not) |
+| `synchronizers.is_connected(alias)` | Check connectivity to a specific synchronizer |
+| `synchronizers.config(alias)` | View the connection configuration for a synchronizer |
+
+### parties
+
+Register and manage parties hosted on your validator.
+
+| Command | Description |
+|---------|-------------|
+| `parties.enable(name)` | Register a new party on the participant |
+| `parties.disable(party)` | Remove a party from the participant |
+| `parties.list` | List all parties known to this participant |
+| `parties.find(name)` | Look up a party by name or identifier |
+
+### dars
+
+Upload and manage Daml archive (DAR) packages.
+
+| Command | Description |
+|---------|-------------|
+| `dars.upload(path)` | Upload a DAR file |
+| `dars.list` | List uploaded DARs |
+| `dars.remove(darHash)` | Remove a DAR (only if not in use) |
+| `dars.validate(path)` | Validate a DAR without uploading |
+| `dars.vetting.enable(darHash)` | Vet a DAR for use in transactions |
+| `dars.vetting.disable(darHash)` | Unvet a DAR |
+
+### topology
+
+Manage identity and topology state, including keys, namespace delegations, and synchronizer parameters.
+
+| Command | Description |
+|---------|-------------|
+| `topology.init_id(name)` | Initialize the node's identity |
+| `topology.transactions.list` | List topology transactions |
+| `topology.transactions.authorize(...)` | Authorize a topology transaction |
+| `topology.transactions.export_topology_snapshot(...)` | Export the current topology state |
+| `topology.synchronizer_parameters.list(...)` | View synchronizer parameters |
+| `topology.synchronizer_parameters.propose_update(...)` | Propose a synchronizer parameter change (SV operators) |
+
+### ledger_api
+
+Interact with the Ledger API from the console. Useful for debugging contract state and testing submissions.
+
+| Command | Description |
+|---------|-------------|
+| `ledger_api.state.acs.of_party(party)` | Active contract set for a party |
+| `ledger_api.state.acs.of_all` | Active contracts across all parties on this participant |
+| `ledger_api.updates.flat(...)` | Flat transaction stream |
+| `ledger_api.updates.trees(...)` | Transaction tree stream |
+| `ledger_api.commands.submit(...)` | Submit a command |
+| `ledger_api.commands.submit_async(...)` | Submit a command without waiting for completion |
+| `ledger_api.completions.list(...)` | List command completions |
+| `ledger_api.packages.list` | List packages known to the Ledger API server |
+
+### pruning
+
+Control data retention and storage growth.
+
+| Command | Description |
+|---------|-------------|
+| `pruning.prune(offset)` | Prune ledger data up to a given offset |
+| `pruning.prune_internally` | Prune Canton-internal data |
+| `pruning.find_safe_offset(beforeOrAt)` | Find the latest safe pruning offset for a timestamp |
+| `pruning.set_schedule(cron, maxDuration, retention)` | Configure automatic pruning |
+| `pruning.get_schedule` | View the current pruning schedule |
+| `pruning.clear_schedule` | Disable automatic pruning |
+
+## Console Scripting
+
+Canton scripts are files with a `.canton` extension containing valid Scala code. They run in the same environment as the interactive console, with full access to node references and all command groups.
+
+```bash
+./bin/canton run my-script.canton -c console.conf
+```
+
+A typical operator script might look like this:
+
+```scala
+// health-check.canton
+val status = participant.health.status
+println(s"Participant status: $status")
+
+val connected = participant.synchronizers.list_connected
+println(s"Connected synchronizers: ${connected.size}")
+
+connected.foreach { sync =>
+  println(s"  - ${sync.synchronizerAlias}")
+}
+```
+
+{/* COPIED_START - source: console.rst */}
+
+### Timeouts
+
+Console command timeouts are configurable:
+
+```
+canton.parameters.timeouts.console = {
+  bounded = 2.minutes
+  unbounded = Inf
+  ledger-command = 2.minutes
+  ping = 30.seconds
+}
+```
+
+Individual commands accept explicit timeout arguments using Scala duration syntax:
+
+```scala
+participant.health.ping(participant, timeout = 10.seconds)
+```
+
+{/* COPIED_END */}
+
+### Database Migrations
+
+{/* COPIED_START - source: console.rst */}
+
+Nodes with database persistence support `db.migrate` to apply schema migrations. Migrations run automatically on first startup, but new migrations from version upgrades must be run manually unless you enable automatic migrations:
+
+```
+canton.participants.participant.storage.parameters.migrate-and-start = yes
+```
+
+Data continuity is only guaranteed across minor and patch version updates.
+
+{/* COPIED_END */}
+
+## Sequencer and Mediator Commands
+
+SV operators who manage sequencer and mediator nodes have access to additional command groups on those node references.
+
+**Sequencer-specific commands** include BFT ordering topology management (`sequencer.bft.get_ordering_topology`, `sequencer.bft.get_peer_network_status`) and pruning operations.
+
+**Mediator-specific commands** include `mediator.setup.assign` for assigning a mediator to a synchronizer and `mediator.inspection` for examining mediator state.
+
+Both sequencer and mediator nodes also expose `health`, `keys`, and `topology` command groups with the same interface as the participant versions.
+
+## Related Resources
+
+- [Canton documentation - Console reference](https://docs.digitalasset.com/canton/3.5/reference/console) for the full command listing
+- [Canton documentation - Administration APIs](https://docs.digitalasset.com/canton/3.5/reference/apis) for the underlying gRPC APIs

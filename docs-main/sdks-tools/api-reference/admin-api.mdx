@@ -1,6 +1,169 @@
 ---
 title: Admin API
-description: Reference documentation for the Admin API.
+description: Reference documentation for the Canton Admin API, covering node administration, key management, topology, and party management.
 ---
 
-Content coming soon.
+The Canton Admin API is a gRPC API exposed by every Canton node (participant, sequencer, mediator). It provides administrative operations that go beyond the [Ledger API](/docs-main/sdks-tools/api-reference/ledger-api) — managing keys, topology state, synchronizer connections, packages, users, pruning, and node health. Unlike the Ledger API, which handles command submission and transaction reads, the Admin API controls the node itself.
+
+{/* COPIED_START — source: replicated/canton/3.5/participant/howtos/configure/apis/admin_api.rst */}
+
+The nature and scope of the Admin API on participant nodes and the Admin API on synchronizers has some overlap. You will find the same key management commands on the synchronizer and the participant node API, whereas the participant has different commands to connect to several synchronizers.
+
+The configuration is currently simple and specifically takes an address and a port. The address defaults to `127.0.0.1` and a default port is assigned if not explicitly configured.
+
+{/* COPIED_END */}
+
+<Warning>
+Do not expose the Admin API publicly without proper security controls. It serves administrative purposes only and grants full control over the node. Use TLS and restrict network access to trusted operators.
+</Warning>
+
+## Admin API Services
+
+The Admin API is split across two layers: the **Ledger API admin services** (defined in the `com.daml.ledger.api.v2.admin` package) and the **Canton-specific admin services** (accessed through the Canton console or direct gRPC calls).
+
+### Ledger API Admin Services
+
+These services run on participant nodes alongside the Ledger API. They are defined in the [gRPC Ledger API proto specifications](https://docs.digitalasset.com/canton/3.x/reference/lapi-proto-docs).
+
+{/* COPIED_START — source: replicated/canton/3.5/sdk/reference/lapi-proto-docs.rst */}
+
+- **PartyManagementService** — allocate parties, list known parties, and update party details. Parties are the identity anchors for all Ledger API operations.
+- **UserManagementService** — create, modify, and delete users and their rights for interacting with the Ledger API. Rights control which parties a user can act as or read as, and whether the user has admin privileges.
+- **PackageManagementService** — upload DAR files, list uploaded packages, and validate package contents. All Daml templates used by commands must be uploaded before use.
+- **ParticipantPruningService** — remove historical data up to a given offset, freeing storage. Pruning is irreversible and removes transaction data that is no longer needed for active contract queries.
+- **IdentityProviderConfigService** — manage identity provider configurations for participant nodes that delegate user authentication to external identity providers (e.g., Auth0, Keycloak).
+- **CommandInspectionService** *(experimental)* — inspect the status of in-flight commands for debugging. Command status is tracked in memory only and not persisted.
+
+{/* COPIED_END */}
+
+### Canton-Specific Admin Services
+
+Canton extends the standard Ledger API admin services with operations specific to Canton's architecture. Access these through the [Canton Console](/docs-main/global-synchronizer/reference/canton-console-reference) or directly via gRPC.
+
+- **Key management** — generate, import, export, and rotate signing and encryption keys. List keys by purpose (signing, encryption) and view key metadata.
+- **Topology management** — inspect and modify the topology state: party-to-participant mappings, namespace delegations, synchronizer trust certificates, and package vetting. Topology transactions are the mechanism through which Canton nodes discover each other's capabilities.
+- **Synchronizer connectivity** — connect participants to synchronizers, disconnect, reconnect, and list active connections. Manage synchronizer connection configurations and aliases.
+- **Node health and status** — query the node's running status, health, and identity. Check whether the node has been initialized and retrieve its unique identifier.
+
+## Configuration
+
+{/* COPIED_START — source: replicated/canton/3.5/participant/howtos/configure/apis/apis.rst */}
+
+Ports for the Admin API, gRPC Ledger API, and JSON Ledger API must be provided explicitly:
+
+```hocon
+participant1 {
+  storage.type = memory
+  admin-api.port = 5012
+  ledger-api.port = 5011
+  http-ledger-api.port = 5013
+}
+```
+
+{/* COPIED_END */}
+
+For synchronizer nodes, the Admin API is configured at the same level as other node settings:
+
+{/* COPIED_START — source: replicated/canton/3.5/synchronizer/howtos/configure/apis.rst */}
+
+```hocon
+sequencers {
+  sequencer1 {
+    storage.type = memory
+    public-api.port = 5001
+    admin-api.port = 5002
+    sequencer.type = BFT
+  }
+}
+
+mediators {
+  mediator1 {
+    storage.type = memory
+    admin-api.port = 5202
+  }
+}
+```
+
+{/* COPIED_END */}
+
+### Keep-Alive Settings
+
+{/* COPIED_START — source: replicated/canton/3.5/participant/howtos/configure/apis/apis.rst */}
+
+Canton enables keep-alive by default on all gRPC connections to prevent load-balancers or firewalls from terminating long-running RPC calls during periods of silence.
+
+The Admin API defaults are:
+
+- `time`: 40s
+- `timeout`: 20s
+- `permit-keep-alive-time`: 20s
+- `permit-keep-alive-without-calls`: false
+
+To customize keep-alive for the Admin API:
+
+```hocon
+admin-api {
+  keep-alive-server {
+    time = 40s
+    timeout = 20s
+    permit-keep-alive-time = 20s
+  }
+}
+```
+
+{/* COPIED_END */}
+
+See the [gRPC keep-alive documentation](https://grpc.io/docs/guides/keepalive/) for details on how these parameters affect connection behavior.
+
+## TLS
+
+{/* COPIED_START — source: replicated/canton/3.5/synchronizer/howtos/secure/apis.rst */}
+
+Network traffic to the Admin API can and should be encrypted using TLS. Enable TLS by providing certificate and key files in the Admin API configuration:
+
+```hocon
+admin-api {
+  port = 5012
+  tls {
+    cert-chain-file = "./tls/admin-api.crt"
+    private-key-file = "./tls/admin-api.pem"
+  }
+}
+```
+
+{/* COPIED_END */}
+
+For production deployments, use mutual TLS (mTLS) to authenticate both the server and the client.
+
+## Common Operations for App Developers
+
+While the Admin API is primarily an operator tool, app developers interact with it during development and testing for tasks that the Ledger API does not cover.
+
+**Party allocation** — before your application can submit commands as a party, that party must exist on the participant. In production, operators handle this. During development with the Sandbox, you allocate parties yourself:
+
+```bash
+dpm sandbox -- canton.participants(0).parties.enable("Alice")
+```
+
+Or via gRPC using the `PartyManagementService.AllocateParty` RPC.
+
+**DAR uploads** — your compiled Daml packages must be uploaded to the participant before contracts can be created. In `dpm`-based workflows, `dpm deploy` handles this. For direct API access, use `PackageManagementService.UploadDarFile`.
+
+**User management** — the Ledger API authorizes requests based on user rights (act-as, read-as). Create and configure users through `UserManagementService` to control which parties your application can operate as.
+
+## Related Pages
+
+<CardGroup cols={2}>
+  <Card title="Ledger API" href="/docs-main/sdks-tools/api-reference/ledger-api">
+    gRPC API for submitting commands and reading transactions
+  </Card>
+  <Card title="JSON API" href="/docs-main/sdks-tools/api-reference/json-api">
+    HTTP/REST wrapper for the Ledger API
+  </Card>
+  <Card title="Splice APIs" href="/docs-main/sdks-tools/api-reference/splice-apis">
+    Scan, Validator, and SV REST APIs
+  </Card>
+  <Card title="Canton Console Reference" href="/docs-main/global-synchronizer/reference/canton-console-reference">
+    Console commands for interacting with the Admin API
+  </Card>
+</CardGroup>
