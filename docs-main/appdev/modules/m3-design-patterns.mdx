@@ -314,24 +314,247 @@ This is because the `create` action of these contracts are in the transitive con
 
 ## Common Daml design patterns
 
-Beyond the composition patterns above, this section covers common multi-party workflow patterns used in Daml.
+Beyond the composition patterns above, this section covers common multi-party workflow patterns used in Daml. All examples below use a `Coin` asset model to illustrate each pattern.
+
+{/* COPIED_START source="docs-website:docs/replicated/daml/3.4/sdk/sdlc-howtos/smart-contracts/develop/patterns/" hash="patterns-all" */}
 
 ### Propose-Accept
 
-The most common way to get multiple parties to agree on a shared contract. One party creates a proposal contract that the other party can accept, reject, or let expire. The `IouProposal` [in the authorization module](/docs-main/appdev/modules/m3-authorization#use-propose-accept-workflow-for-one-off-authorization) is a classic example. See the [Propose-Accept pattern documentation](https://docs.digitalasset.com/build/3.4/sdk/howtos/smart-contracts/develop/patterns/propose-accept) for a full walkthrough.
+The most common way to get multiple parties to agree on a shared contract. One party creates a proposal contract that the other party can accept, reject, or let expire. The `IouProposal` [in the authorization module](/docs-main/appdev/modules/m3-authorization#use-propose-accept-workflow-for-one-off-authorization) is another example of this pattern.
+
+The issuer creates a `CoinMaster` contract, then uses it to invite an owner. The invitation is a proposal contract with the issuer as signatory and the owner as observer:
+
+```daml
+template CoinMaster
+  with
+    issuer: Party
+  where
+    signatory issuer
+
+    nonconsuming choice Invite : ContractId CoinIssueProposal
+      with owner: Party
+      controller issuer
+      do create CoinIssueProposal
+            with coinAgreement = CoinIssueAgreement with issuer; owner
+```
+
+The proposal gives the owner a choice to accept. In a complete model, it would also include `Reject` and `Counter` choices:
+
+```daml
+template CoinIssueProposal
+  with
+    coinAgreement: CoinIssueAgreement
+  where
+    signatory coinAgreement.issuer
+    observer coinAgreement.owner
+
+    choice AcceptCoinProposal
+      : ContractId CoinIssueAgreement
+      controller coinAgreement.owner
+      do create coinAgreement
+```
+
+When the owner accepts, the result contract has both parties as signatories — neither can be forced into the agreement without consent:
+
+```daml
+template CoinIssueAgreement
+  with
+    issuer: Party
+    owner: Party
+  where
+    signatory issuer, owner
+
+    nonconsuming choice Issue : ContractId Coin
+      with amount: Decimal
+      controller issuer
+      do create Coin with issuer; owner; amount; delegates = []
+```
+
+This pattern can be verbose when more than two signatures are needed — see Multiple Party Agreement below for that case.
 
 ### Delegation
 
-Gives one party the right to exercise a choice on behalf of another. A principal creates a delegation contract that authorizes an agent to act for them. The agent can then control contracts on the ledger without the principal committing each action. See the [Delegation pattern documentation](https://docs.digitalasset.com/build/3.4/sdk/howtos/smart-contracts/develop/patterns/delegation) for a full walkthrough.
+Gives one party the right to exercise a choice on behalf of another. The principal creates a delegation contract that authorizes an agent to act for them, without the principal committing each action. This models real-world custodian relationships where a bank holds securities and settles transactions on a client's behalf.
+
+The delegation contract (`CoinPoA` — Power of Attorney) has the principal as signatory. The attorney controls a `TransferCoin` choice that exercises `Transfer` on the principal's coin:
+
+```daml
+template CoinPoA
+  with
+    attorney: Party
+    principal: Party
+  where
+    signatory principal
+    observer attorney
+
+    choice WithdrawPoA
+      : ()
+      controller principal
+      do return ()
+
+    -- Attorney has the delegated right to Transfer
+    nonconsuming choice TransferCoin
+      : ContractId TransferProposal
+      with
+        coinId: ContractId Coin
+        newOwner: Party
+      controller attorney
+      do
+        exercise coinId Transfer with newOwner
+```
+
+The coin must be disclosed to the attorney before they can exercise the delegated choice. This is done by adding them as an observer via a `Disclose` choice on `Coin`:
+
+```daml
+    choice Disclose : ContractId Coin
+      with p : Party
+      controller owner
+      do create this with delegates = p :: delegates
+```
 
 ### Authorization
 
-Verifies that a controlling party has the right permissions before they take certain actions. An authorization contract serves as proof. Before performing a restricted action (like transferring an asset), the choice body checks for the existence and validity of the authorization contract. See the [Authorization pattern documentation](https://docs.digitalasset.com/build/3.4/sdk/howtos/smart-contracts/develop/patterns/authorization) for a full walkthrough.
+Verifies that a controlling party has the right permissions before they take certain actions. An authorization contract serves as proof — the choice body checks for its existence and validity before proceeding.
+
+For example, an issuer wants to ensure that only accredited parties can receive coin transfers. The issuer creates an authorization token for approved owners:
+
+```daml
+template CoinOwnerAuthorization
+  with
+    owner: Party
+    issuer: Party
+  where
+    signatory issuer
+    observer owner
+
+    choice WithdrawAuthorization
+      : ()
+      controller issuer
+      do return ()
+```
+
+The `AcceptTransfer` choice on `TransferProposal` requires the new owner to supply their authorization token. The asserts verify the token matches the issuer and the new owner:
+
+```daml
+    choice AcceptTransfer
+      : ContractId Coin
+      with token: ContractId CoinOwnerAuthorization
+      controller newOwner
+      do
+        t <- fetch token
+        assert (coin.issuer == t.issuer)
+        assert (newOwner == t.owner)
+        create coin with owner = newOwner
+```
+
+If the issuer withdraws the authorization before the transfer is accepted, the transfer fails.
 
 ### Locking
 
-Prevents choices from being exercised on a contract while it is in a locked state. Useful for scenarios like securities settlement where assets must be frozen during clearing. Three approaches exist: locking by archiving (recreating the contract with a lock flag), locking by state (adding a lock field to the template), and locking by safekeeping (transferring the contract to a trusted third party). See the [Locking pattern documentation](https://docs.digitalasset.com/build/3.4/sdk/howtos/smart-contracts/develop/patterns/locking) for a full walkthrough.
+Prevents choices from being exercised on a contract while it is in a locked state. Useful for scenarios like securities settlement where assets must be frozen during clearing.
+
+One approach is **locking by state change** — the contract carries a `locker` field. When `owner == locker`, the coin is unlocked and can be transferred. When they differ, a third-party locker controls the unlock:
+
+```daml
+template LockableCoin
+  with
+    owner: Party
+    issuer: Party
+    amount: Decimal
+    locker: Party
+  where
+    signatory issuer, owner
+    observer locker
+
+    ensure amount > 0.0
+
+    -- Transfer can only happen if not locked
+    choice Transfer : ContractId TransferProposal
+      with newOwner: Party
+      controller owner
+      do
+        assert (locker == owner)
+        create TransferProposal with coin=this; newOwner
+
+    -- Lock by bringing a locker on board
+    choice Lock : ContractId LockableCoin
+      with newLocker: Party
+      controller owner
+      do
+        assert (newLocker /= owner)
+        create this with locker = newLocker
+
+    -- Unlock restores owner control
+    choice Unlock
+      : ContractId LockableCoin
+      controller locker
+      do
+        assert (locker /= owner)
+        create this with locker = owner
+```
+
+Two other approaches exist: **locking by archiving** (archive the original contract and create a `LockedCoin` wrapper with `Unlock` and `Clawback` choices) and **locking by safekeeping** (transfer custody to a trusted third party who controls the unlock).
 
 ### Multiple party agreement
 
-Collects signatures from more than two parties. A pending contract is created by one party and passed around for others to sign. Once all parties have signed, any signatory can finalize the agreement and create the actual contract. This avoids the limitations of chaining bilateral Propose-Accept workflows when three or more parties need to reach consensus. See the [Multiple Party Agreement pattern documentation](https://docs.digitalasset.com/build/3.4/sdk/howtos/smart-contracts/develop/patterns/multiple-party-agreement) for a full walkthrough.
+Collects signatures from more than two parties. A `Pending` contract wraps the final `Agreement` and tracks who has signed. Each party signs by exercising a `Sign` choice, and once all parties have signed, any of them can `Finalize` to create the agreement.
+
+The final agreement contract has multiple signatories:
+
+```daml
+template Agreement
+  with
+    signatories: [Party]
+  where
+    signatory signatories
+    ensure unique signatories
+```
+
+The `Pending` contract collects signatures one by one. It is observable by all required signatories, so each can see when it is their turn to sign:
+
+```daml
+toSign : Pending -> [Party]
+toSign Pending { alreadySigned, finalContract } =
+  filter (`notElem` alreadySigned) finalContract.signatories
+
+template Pending
+  with
+    finalContract: Agreement
+    alreadySigned: [Party]
+  where
+    signatory alreadySigned
+    observer finalContract.signatories
+    ensure unique alreadySigned
+
+    choice Sign : ContractId Pending with
+        signer : Party
+      controller signer
+        do
+          assert (signer `elem` toSign this)
+          create this with alreadySigned = signer :: alreadySigned
+
+    choice Finalize : ContractId Agreement with
+        signer : Party
+      controller signer
+        do
+          assert (sort alreadySigned == sort finalContract.signatories)
+          create finalContract
+```
+
+One party kicks off the workflow by creating a `Pending` contract listing only themselves as signed. The others sign in any order, and once complete, any signatory can finalize:
+
+```daml
+-- Any party can kick off by creating a Pending listing only themselves
+pending <- person1 `submit` do
+  createCmd Pending with finalContract; alreadySigned = [person1]
+
+-- Each party signs
+pending <- person2 `submit` do exerciseCmd pending Sign with signer = person2
+pending <- person3 `submit` do exerciseCmd pending Sign with signer = person3
+pending <- person4 `submit` do exerciseCmd pending Sign with signer = person4
+
+-- Once all have signed, any signatory can finalize
+person1 `submit` do exerciseCmd pending Finalize with signer = person1
+```
+
+{/* COPIED_END */}
