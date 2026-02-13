@@ -3,17 +3,17 @@ title: "Frontend Development"
 description: "Build a React frontend for Canton applications with TypeScript bindings and wallet integration"
 ---
 
-The frontend is the user-facing layer of your Canton application. In the cn-quickstart reference architecture, the frontend is a React application that communicates with the backend over HTTP. It does not connect to the Ledger API directly.
+The frontend is the user-facing layer of your Canton application. In the cn-quickstart reference architecture, the frontend is a React application that communicates with the backend over HTTP.
 
 ## React Frontend in cn-quickstart
 
-The [cn-quickstart frontend](https://github.com/digital-asset/cn-quickstart/tree/main/quickstart/frontend) is a React application built with TypeScript and Vite. It uses Axios as its HTTP client and consumes the backend's REST API through types generated from an OpenAPI schema (`common/openapi.yaml`).
+The [cn-quickstart frontend](https://github.com/digital-asset/cn-quickstart/tree/main/quickstart/frontend) is a React application built with TypeScript and Vite. It uses Axios as its HTTP client and consumes the backend's REST API through types generated from an OpenAPI schema ([`common/openapi.yaml`](https://github.com/digital-asset/cn-quickstart/blob/main/quickstart/common/openapi.yaml)).
 
 The `frontend/` directory contains the full source. Running `make build-frontend` in the parent directory compiles it, and `make start` serves it alongside the rest of the LocalNet stack.
 
 ## Connecting to the Backend
 
-The frontend never talks to Canton or the Ledger API. All ledger interactions go through the backend's REST endpoints. The OpenAPI schema defines the contract between frontend and backend:
+In cn-quickstart, the frontend does not talk to the Ledger API directly — all ledger interactions go through the backend's REST endpoints. Canton does provide a [JSON API](/docs-main/sdks-tools/api-reference/json-api) that frontends can use for direct ledger access, but the cn-quickstart architecture routes everything through the backend for separation of concerns. The OpenAPI schema defines the contract between frontend and backend:
 
 - **GET** endpoints return contract data (the backend queries PQS)
 - **POST** endpoints exercise choices or create contracts (the backend submits commands via the Ledger API)
@@ -31,9 +31,9 @@ dpm codegen-js <DAR-FILES> -o <DIR>
 Whether you use these generated types depends on your architecture:
 
 - **Fully mediated** (cn-quickstart default) -- The frontend uses OpenAPI-generated types from the backend's REST schema. The Daml-generated TypeScript types are not needed in the frontend because the backend translates between ledger concepts and REST DTOs.
-- **CQRS / direct ledger access** -- The frontend submits commands directly to the Ledger API using the Daml-generated TypeScript bindings. This gives tighter integration with the ledger but requires the frontend to handle party IDs, contract IDs, and command submission.
+- **Direct ledger access via JSON API** -- The frontend submits commands through the [JSON API](/docs-main/sdks-tools/api-reference/json-api) using the Daml-generated TypeScript bindings. This gives tighter integration with the ledger but requires the frontend to handle party IDs, contract IDs, and command submission directly. The JSON API is an HTTP/WebSocket wrapper around the gRPC Ledger API, designed for browser-based clients.
 
-For most applications, the fully mediated approach is simpler.
+For most applications, the fully mediated approach is simpler. The JSON API approach makes sense when you want a thin or no backend layer.
 
 ## Displaying Contract Data
 

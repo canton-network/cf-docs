@@ -1,13 +1,13 @@
 ---
 title: "Backend Development"
-description: "Patterns for building a backend service that connects to the Canton Ledger API and PQS"
+description: "Build a backend service that connects to the Canton Ledger API and PQS, with code examples from cn-quickstart"
 ---
 
-The backend is the layer between your frontend and the Canton ledger. It submits commands, reads transactions, and queries contract state. This page covers the common patterns used in Canton backend development, with the cn-quickstart Java backend as the primary reference.
+The backend is the layer between your frontend and the Canton ledger. It submits commands, reads transactions, and queries contract state. This page walks through the common patterns used in Canton backend development, using the [cn-quickstart Java backend](https://github.com/digital-asset/cn-quickstart/tree/main/quickstart/backend) as the primary reference.
 
 ## Backend Language
 
-The [cn-quickstart](https://github.com/digital-asset/cn-quickstart) project uses a [Java backend](https://github.com/digital-asset/cn-quickstart/tree/main/quickstart/backend) built on Spring Boot. Java has first-class code generation support (`dpm codegen-java`) and is the most mature option for Canton backends.
+The [cn-quickstart](https://github.com/digital-asset/cn-quickstart) project uses a Java backend built on Spring Boot. Java has first-class code generation support (`dpm codegen-java`) and is the most mature option for Canton backends.
 
 TypeScript is also supported through `dpm codegen-js`. A TypeScript backend uses the same Ledger API (via gRPC-js or the JSON API) and can be a good choice if your team prefers a single language across frontend and backend.
 
@@ -15,67 +15,218 @@ TypeScript is also supported through `dpm codegen-js`. A TypeScript backend uses
 
 The Ledger API is a gRPC service exposed by the validator's participant node. Your backend connects to it as an authenticated client, acting on behalf of one or more parties.
 
-In cn-quickstart, the `ledger/LedgerApi` class manages this connection. A typical setup involves:
+In cn-quickstart, [`LedgerApi.java`](https://github.com/digital-asset/cn-quickstart/blob/main/quickstart/backend/src/main/java/com/digitalasset/quickstart/ledger/LedgerApi.java) manages this connection. The constructor builds a gRPC channel with an authentication interceptor that attaches a bearer token to every call:
 
-- The gRPC channel pointing to the validator's Ledger API port (e.g., `localhost:3901` for the App Provider validator on LocalNet)
-- An authentication token (from Keycloak on LocalNet, or your OAuth2 provider in production)
-- The party ID that the backend acts as
+```java
+ManagedChannelBuilder<?> builder = ManagedChannelBuilder
+        .forAddress(ledgerConfig.getHost(), ledgerConfig.getPort())
+        .usePlaintext();
+builder.intercept(new Interceptor(tokenProvider));
+ManagedChannel channel = builder.build();
 
-Once connected, you use the generated Java bindings to interact with the ledger.
+submission = CommandSubmissionServiceGrpc.newFutureStub(channel);
+commands = CommandServiceGrpc.newFutureStub(channel);
+```
+
+The `Interceptor` class attaches the bearer token to gRPC metadata on every call:
+
+```java
+@Override
+public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
+        MethodDescriptor<ReqT, RespT> method, CallOptions callOptions, Channel next) {
+    ClientCall<ReqT, RespT> clientCall = next.newCall(method, callOptions);
+    return new ForwardingClientCall.SimpleForwardingClientCall<>(clientCall) {
+        @Override
+        public void start(Listener<RespT> responseListener, Metadata headers) {
+            headers.put(AUTHORIZATION_HEADER, "Bearer " + tokenProvider.getToken());
+            super.start(responseListener, headers);
+        }
+    };
+}
+```
+
+On LocalNet, the token comes from Keycloak. In production, it comes from your OAuth2 provider.
 
 ## Command Submission
 
-Commands are how you write to the ledger. There are two primary operations:
+Commands are how you write to the ledger. There are two primary operations: creating a contract and exercising a choice.
 
-**Creating a contract** -- Instantiate a Daml template with specific field values. The validator checks that the submitting party is authorized (matches the template's signatory or is otherwise entitled), then commits the contract through the synchronizer.
+### Creating a contract
 
-**Exercising a choice** -- Execute an action on an existing contract by providing the contract ID and choice arguments. The choice body runs on the ledger, potentially archiving contracts and creating new ones.
+To create a contract, build a `Create` command with the template identifier and payload, then submit it. In cn-quickstart, the `LedgerApi.create()` method handles this:
 
-In generated Java code, these operations look like method calls on the generated template classes. The cn-quickstart backend wraps them in service methods that the REST API endpoints call.
+```java
+public <T extends Template> CompletableFuture<Void> create(T entity, String commandId) {
+    CommandsOuterClass.Command.Builder command = CommandsOuterClass.Command.newBuilder();
+    ValueOuterClass.Value payload = dto2Proto.template(entity.templateId()).convert(entity);
+    command.getCreateBuilder()
+        .setTemplateId(toIdentifier(entity.templateId()))
+        .setCreateArguments(payload.getRecord());
+    return submitCommands(List.of(command.build()), commandId)
+        .thenApply(submitResponse -> null);
+}
+```
+
+The `dto2Proto` converter translates generated Java classes into Protobuf values. The `commandId` is a UUID that the Ledger API uses for deduplication.
+
+### Exercising a choice
+
+Exercising a choice requires the contract ID and the choice arguments. The `exerciseAndGetResult()` method builds an `Exercise` command and submits it through the `CommandService`, which waits for the transaction result:
+
+```java
+CommandsOuterClass.Command.Builder cmdBuilder = CommandsOuterClass.Command.newBuilder();
+ValueOuterClass.Value payload =
+    dto2Proto.choiceArgument(choice.templateId(), choice.choiceName()).convert(choice);
+
+cmdBuilder.getExerciseBuilder()
+    .setTemplateId(toIdentifier(choice.templateId()))
+    .setContractId(contractId.getContractId)
+    .setChoice(choice.choiceName())
+    .setChoiceArgument(payload);
+```
+
+A REST endpoint that exercises a choice ties these pieces together. Here's how [`LicenseApiImpl.java`](https://github.com/digital-asset/cn-quickstart/blob/main/quickstart/backend/src/main/java/com/digitalasset/quickstart/service/LicenseApiImpl.java) expires a license:
+
+```java
+@Override
+public CompletableFuture<ResponseEntity<String>> expireLicense(
+        String contractId, String commandId, LicenseExpireRequest request) {
+    return auth.asAuthenticatedParty(party -> {
+        return damlRepository.findLicenseById(contractId).thenCompose(optContract -> {
+            var license = ensurePresent(optContract,
+                "License not found for contract %s", contractId);
+            License_Expire choice = new License_Expire(
+                new Party(auth.getAppProviderPartyId()),
+                toTokenStandardMetadata(request.getMeta().getData()));
+            return ledger.exerciseAndGetResult(license.contractId, choice, commandId)
+                .thenApply(result -> ResponseEntity.ok("License expired successfully"));
+        });
+    });
+}
+```
+
+The pattern is: look up the contract (from PQS), build the choice object (from generated code), and submit it through the Ledger API.
 
 ### Handling Contract IDs
 
-Every active contract has a unique contract ID. To exercise a choice, you need the contract ID of the target contract. Your backend typically obtains contract IDs by querying PQS or reading them from the transaction stream. The cn-quickstart REST API passes contract IDs in URL paths (e.g., `POST /api/contracts/{contractId}/exercise`).
+Every active contract has a unique contract ID. To exercise a choice, you need the target contract's ID. Your backend obtains contract IDs by querying PQS or reading them from the transaction stream. The cn-quickstart REST API passes contract IDs in URL paths (e.g., `POST /api/licenses/{contractId}/expire`).
 
 Contract IDs are opaque strings. Do not parse or construct them manually.
 
-## Reading Transactions
-
-The Ledger API exposes a transaction stream that your backend can subscribe to. Each transaction includes the created and archived contracts visible to your party.
-
-Reactive event processing works well here: your backend subscribes to the stream on startup and processes events as they arrive. Common patterns include:
-
-- Updating local caches or databases when contracts are created or archived
-- Triggering side effects (sending notifications, calling external APIs) in response to specific contract events
-- Maintaining a running view of active contracts for fast lookups
-
-In cn-quickstart, PQS handles most of the read-side projection, so the backend does not need to maintain its own event-sourced state. If you are not using PQS, streaming transactions and maintaining your own projections is the alternative.
-
 ## Querying PQS
 
-For read operations, the cn-quickstart backend queries PQS rather than the Ledger API directly. PQS maintains a PostgreSQL database that mirrors the ledger state visible to the validator's hosted parties.
+For read operations, the cn-quickstart backend queries PQS rather than the Ledger API. PQS maintains a PostgreSQL database that mirrors the ledger state visible to the validator's hosted parties.
 
-The backend's `pqs/` module generates SQL queries from contract metadata, and the `repository/` module provides domain-specific methods like "get all active licenses for a user" or "find all pending install requests."
+### The Pqs adapter
 
-Typical query patterns:
+[`Pqs.java`](https://github.com/digital-asset/cn-quickstart/blob/main/quickstart/backend/src/main/java/com/digitalasset/quickstart/pqs/Pqs.java) wraps Spring's `JdbcTemplate` and uses PQS's `active()` table-valued function to query active contracts:
 
-- Filter active contracts by template type and field values
-- Join across contract types (e.g., link licenses to their installation records)
-- Aggregate data for dashboards (e.g., count active users, sum outstanding payments)
-- Page through large result sets with SQL `LIMIT` and `OFFSET`
+```java
+public <T extends Template> CompletableFuture<List<Contract<T>>> active(Class<T> clazz) {
+    Identifier identifier = Utils.getTemplateIdByClass(clazz);
+    String sql = "select contract_id, payload from active(?)";
+    return runAndTraceAsync(ctx, () ->
+        jdbcTemplate.query(sql, new PqsContractRowMapper<>(identifier),
+            identifier.qualifiedName())
+    );
+}
+```
 
-PQS tables store contract payloads as JSON columns alongside indexed metadata (template ID, contract ID, party visibility). You can create additional PostgreSQL indexes on JSON fields for performance.
+The `active()` function takes a qualified template name (e.g., `quickstart_licensing:Licensing.License:License`) and returns all active contracts of that type. Each row contains a `contract_id` and a JSON `payload`.
+
+For filtered queries, `activeWhere()` appends a `WHERE` clause:
+
+```java
+public <T extends Template> CompletableFuture<List<Contract<T>>> activeWhere(
+        Class<T> clazz, String whereClause, Object... params) {
+    Identifier identifier = Utils.getTemplateIdByClass(clazz);
+    String sql = "select contract_id, payload from active(?) where " + whereClause;
+    return runAndTraceAsync(ctx, () ->
+        jdbcTemplate.query(sql, new PqsContractRowMapper<>(identifier),
+            combineParams(identifier.qualifiedName(), params))
+    );
+}
+```
+
+### Domain-specific queries
+
+[`DamlRepository.java`](https://github.com/digital-asset/cn-quickstart/blob/main/quickstart/backend/src/main/java/com/digitalasset/quickstart/repository/DamlRepository.java) builds higher-level queries. For example, `findActiveLicenses()` joins licenses with their renewal requests and allocation contracts in a single SQL query:
+
+```sql
+SELECT license.contract_id    AS license_contract_id,
+       license.payload        AS license_payload,
+       renewal.contract_id    AS renewal_contract_id,
+       renewal.payload        AS renewal_payload,
+       allocation.contract_id AS allocation_contract_id
+FROM active(?) license
+LEFT JOIN active(?) renewal ON
+    license.payload->>'licenseNum' = renewal.payload->>'licenseNum'
+    AND license.payload->>'user' = renewal.payload->>'user'
+LEFT JOIN active(?) allocation ON
+    renewal.payload->>'requestId' =
+        allocation.payload->'allocation'->'settlement'->'settlementRef'->>'id'
+WHERE license.payload->>'user' = ? OR license.payload->>'provider' = ?
+ORDER BY license.contract_id
+```
+
+PQS stores contract payloads as JSON columns, so you use PostgreSQL's `->` and `->>` operators to filter and join on contract fields. You can create additional PostgreSQL indexes on frequently queried JSON paths for performance.
+
+## Reading Transactions
+
+The Ledger API also exposes a transaction stream that your backend can subscribe to. Each transaction includes the created and archived contracts visible to your party. This is useful when you need real-time event processing rather than polling PQS.
+
+A transaction stream subscription uses gRPC server streaming. Here's the pattern from the [docs-website quickstart](https://github.com/DACH-NY/docs-website):
+
+```java
+UpdateServiceGrpc.UpdateServiceStub updateServiceStub = UpdateServiceGrpc.newStub(channel);
+updateServiceStub.getUpdates(getUpdatesRequest.toProto(), new StreamObserver<>() {
+    public void onNext(UpdateServiceOuterClass.GetUpdatesResponse r) {
+        GetUpdatesResponse response = GetUpdatesResponse.fromProto(r);
+        response.getTransaction().ifPresent(transaction -> {
+            for (Event event : transaction.getEvents()) {
+                if (event instanceof CreatedEvent createdEvent) {
+                    Iou.Contract contract = Iou.Contract.fromCreatedEvent(createdEvent);
+                    // update local cache or trigger side effects
+                } else if (event instanceof ArchivedEvent archivedEvent) {
+                    // remove from local cache
+                }
+            }
+        });
+    }
+    public void onError(Throwable throwable) { /* handle error */ }
+    public void onCompleted() { /* stream ended */ }
+});
+```
+
+In cn-quickstart, PQS handles read-side projection, so the backend does not maintain its own event-sourced state. If you are not using PQS, streaming transactions and maintaining your own projections is the alternative.
 
 ## Error Handling
 
-Canton uses structured error codes. When a command fails, the Ledger API returns a gRPC status with a Canton-specific error code and description. Common error categories include:
+Canton uses structured error codes. When a command fails, the Ledger API returns a gRPC `StatusRuntimeException` with a Canton-specific error code. Common categories:
 
 - **NOT_FOUND** -- The contract ID does not exist or is not visible to the submitting party
 - **ALREADY_EXISTS** -- A duplicate command was submitted (commands are deduplicated by command ID)
 - **INVALID_ARGUMENT** -- The command payload does not match the template or choice signature
 - **FAILED_PRECONDITION** -- A contract was archived between the time you read it and the time you exercised a choice on it (contention)
 
-For contention errors, a retry strategy often resolves the issue: re-read the current contract ID from PQS, then resubmit the command. The cn-quickstart backend implements retry logic for common transient failures.
+In Java, catch `StatusRuntimeException` and inspect the status code:
+
+```java
+import io.grpc.StatusRuntimeException;
+import io.grpc.Status;
+
+try {
+    ledger.exerciseAndGetResult(contractId, choice, commandId).join();
+} catch (CompletionException e) {
+    if (e.getCause() instanceof StatusRuntimeException sre) {
+        if (sre.getStatus().getCode() == Status.Code.NOT_FOUND) {
+            // contract was archived — re-query PQS and retry
+        }
+    }
+}
+```
+
+For contention errors, a retry strategy often resolves the issue: re-read the current contract ID from PQS, then resubmit the command.
 
 <Note>
 Set a unique command ID on each submission. The Ledger API deduplicates commands by this ID, which prevents double-submission if your backend retries a command that actually succeeded but whose response was lost in transit.
@@ -83,15 +234,15 @@ Set a unique command ID on each submission. The Ledger API deduplicates commands
 
 ## Backend Architecture in cn-quickstart
 
-The cn-quickstart backend follows this module structure (under `backend/src/main/java/com/digitalasset/quickstart/`):
+The cn-quickstart backend follows this module structure (under [`backend/src/main/java/com/digitalasset/quickstart/`](https://github.com/digital-asset/cn-quickstart/tree/main/quickstart/backend/src/main/java/com/digitalasset/quickstart)):
 
-- `service/` -- REST endpoint implementations. Each endpoint combines a PQS query or a Ledger API command.
-- `ledger/` -- The gRPC Ledger API client. Submits commands to the validator.
-- `repository/` -- Domain-specific PQS query methods.
-- `pqs/` -- Low-level SQL generation and PostgreSQL access.
-- `utility/` -- General utilities. JSON configuration, tracing, and helper methods.
-- `security/` -- OAuth2 bearer token validation.
-- `config/` -- Spring Boot configuration properties.
+- [`service/`](https://github.com/digital-asset/cn-quickstart/tree/main/quickstart/backend/src/main/java/com/digitalasset/quickstart/service) -- REST endpoint implementations. Each endpoint combines a PQS query or a Ledger API command.
+- [`ledger/`](https://github.com/digital-asset/cn-quickstart/tree/main/quickstart/backend/src/main/java/com/digitalasset/quickstart/ledger) -- The gRPC Ledger API client. Submits commands to the validator.
+- [`repository/`](https://github.com/digital-asset/cn-quickstart/tree/main/quickstart/backend/src/main/java/com/digitalasset/quickstart/repository) -- Domain-specific PQS query methods.
+- [`pqs/`](https://github.com/digital-asset/cn-quickstart/tree/main/quickstart/backend/src/main/java/com/digitalasset/quickstart/pqs) -- Low-level SQL generation and PostgreSQL access.
+- [`utility/`](https://github.com/digital-asset/cn-quickstart/tree/main/quickstart/backend/src/main/java/com/digitalasset/quickstart/utility) -- JSON configuration, tracing, and helper methods.
+- [`security/`](https://github.com/digital-asset/cn-quickstart/tree/main/quickstart/backend/src/main/java/com/digitalasset/quickstart/security) -- OAuth2 bearer token validation and party authentication.
+- [`config/`](https://github.com/digital-asset/cn-quickstart/tree/main/quickstart/backend/src/main/java/com/digitalasset/quickstart/config) -- Spring Boot configuration properties.
 
 This structure cleanly separates read concerns (PQS) from write concerns (Ledger API) while keeping the REST layer thin.
 
