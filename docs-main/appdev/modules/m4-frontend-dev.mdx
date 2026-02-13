@@ -304,6 +304,184 @@ export default defineConfig(({ mode }: ConfigEnv) => {
 
 The `ViteYaml` plugin allows importing the OpenAPI YAML file directly as a JavaScript module, which is how `api.ts` loads the schema at build time.
 
+## Exercise: Add License Comments UI
+
+<Note>
+This exercise builds on the backend exercise in [Backend Development](/docs-main/appdev/modules/m4-backend-dev#exercise-add-license-comments). Complete that first — you need the `LicenseComment` Daml template, the OpenAPI endpoints, and the backend implementation before the frontend can use them.
+</Note>
+
+You'll add a comment list and comment form to the licenses view, following the same store/view patterns that cn-quickstart uses for licenses.
+
+### Step 1: Regenerate TypeScript Types
+
+The backend exercise added `LicenseComment`, `AddCommentRequest`, and two new endpoints to `openapi.yaml`. Regenerate the frontend types so the typed client picks them up:
+
+```bash
+npm run gen:openapi
+```
+
+This runs `openapicmd typegen` against the shared `openapi.yaml` and overwrites `src/openapi.d.ts`. After this, your `Client` type will include `listLicenseComments()` and `addLicenseComment()` methods with the correct parameter and return types.
+
+### Step 2: Create a Comment Store
+
+Create a new store at `quickstart/frontend/src/stores/commentStore.tsx`. Follow the same Context + Provider pattern used by [`licenseStore.tsx`](https://github.com/digital-asset/cn-quickstart/blob/main/quickstart/frontend/src/stores/licenseStore.tsx):
+
+```tsx
+import React, { createContext, useContext, useState, useCallback } from 'react';
+import { useToast } from './toastStore';
+import api from '../api';
+import { generateCommandId } from '../utils/commandId';
+import type { Client, LicenseComment } from '../openapi.d.ts';
+import { withErrorHandling } from '../utils/error';
+
+interface CommentContextType {
+    comments: LicenseComment[];
+    fetchComments: (contractId: string) => Promise<void>;
+    addComment: (contractId: string, body: string) => Promise<void>;
+}
+
+const CommentContext = createContext<CommentContextType | undefined>(undefined);
+
+export const CommentProvider = ({ children }: { children: React.ReactNode }) => {
+    const [comments, setComments] = useState<LicenseComment[]>([]);
+    const toast = useToast();
+
+    const fetchComments = useCallback(
+        withErrorHandling('Fetching Comments')(async (contractId: string) => {
+            const client: Client = await api.getClient();
+            const response = await client.listLicenseComments({ contractId });
+            setComments(response.data);
+        }),
+        [withErrorHandling, setComments, toast]
+    );
+
+    const addComment = useCallback(
+        withErrorHandling('Adding Comment')(async (contractId: string, body: string) => {
+            const client: Client = await api.getClient();
+            const commandId = generateCommandId();
+            await client.addLicenseComment({ contractId, commandId }, { body });
+            await fetchComments(contractId);
+            toast.displaySuccess('Comment added successfully');
+        }),
+        [withErrorHandling, fetchComments, toast]
+    );
+
+    return (
+        <CommentContext.Provider value={{ comments, fetchComments, addComment }}>
+            {children}
+        </CommentContext.Provider>
+    );
+};
+
+export const useCommentStore = () => {
+    const context = useContext(CommentContext);
+    if (context === undefined) {
+        throw new Error('useCommentStore must be used within a CommentProvider');
+    }
+    return context;
+};
+```
+
+The structure mirrors `licenseStore.tsx`: a React Context holds the state, each API call is wrapped with `withErrorHandling` (which displays toast messages on HTTP errors) and `useCallback`, and the typed `Client` provides compile-time checking against the OpenAPI spec. The `addComment` function generates a command ID for deduplication — the same pattern `expireLicense` and `renewLicense` use.
+
+Register the provider in `App.tsx` alongside the existing providers:
+
+```tsx
+const AppProviders = composeProviders(
+    ToastProvider,
+    UserProvider,
+    TenantRegistrationProvider,
+    AppInstallProvider,
+    LicenseProvider,
+    CommentProvider       // add this
+);
+```
+
+### Step 3: Add the Comment UI
+
+Add a comment section to [`LicensesView.tsx`](https://github.com/digital-asset/cn-quickstart/blob/main/quickstart/frontend/src/views/LicensesView.tsx). You'll need to import the comment store and add some local state:
+
+```tsx
+import { useCommentStore } from '../stores/commentStore';
+
+// inside the component:
+const { comments, fetchComments, addComment } = useCommentStore();
+const [showComments, setShowComments] = useState<string | null>(null);
+const [commentBody, setCommentBody] = useState('');
+```
+
+Add an effect that polls for comments when a license's comment panel is open. This follows the same 5-second `setInterval` pattern `LicensesView` already uses for the license list:
+
+```tsx
+useEffect(() => {
+    if (showComments) {
+        fetchComments(showComments);
+        const intervalId = setInterval(() => fetchComments(showComments), 5000);
+        return () => clearInterval(intervalId);
+    }
+}, [showComments, fetchComments]);
+```
+
+Add a "Comments" toggle button in each license row's actions column, and render the comment panel below the license table. The panel shows existing comments and a form for new ones:
+
+```tsx
+{showComments && (
+    <div className="mt-4 card p-3">
+        <h4>
+            Comments for License #
+            {licenses.find(l => l.contractId === showComments)?.licenseNum}
+        </h4>
+        {comments.length === 0 ? (
+            <p className="text-muted">No comments yet.</p>
+        ) : (
+            <ul className="list-group mb-3">
+                {comments.map((c) => (
+                    <li key={c.contractId} className="list-group-item">
+                        <strong>{c.commenter}</strong>
+                        <span className="text-muted ms-2">
+                            {formatDateTime(c.createdAt)}
+                        </span>
+                        <p className="mb-0 mt-1">{c.body}</p>
+                    </li>
+                ))}
+            </ul>
+        )}
+        <form onSubmit={handleAddComment} className="d-flex gap-2">
+            <input
+                className="form-control"
+                value={commentBody}
+                onChange={(e) => setCommentBody(e.target.value)}
+                placeholder="Add a comment..."
+            />
+            <button type="submit" className="btn btn-primary"
+                    disabled={!commentBody.trim()}>
+                Post
+            </button>
+        </form>
+    </div>
+)}
+```
+
+The `showComments` state tracks which license's contract ID is currently expanded. The `formatDateTime` utility is already imported in `LicensesView` for the expiration column. The `handleAddComment` handler calls `addComment` from the store, then clears the input.
+
+### Step 4: Build and Test
+
+Rebuild both the backend (to pick up the OpenAPI changes and new Java code) and the frontend:
+
+```bash
+make build-frontend   # runs npm run gen:openapi && tsc && vite build
+make build-backend    # runs ./gradlew :backend:build
+make restart          # restart all services
+```
+
+Or for faster frontend iteration with hot reload:
+
+```bash
+make start-vite-dev
+```
+
+Open the app, navigate to the Licenses page, click the "Comments" button on a license, and try posting a comment. The comment should appear in the list within 5 seconds (or immediately after the POST completes, since `addComment` calls `fetchComments` after success).
+
 ## Next Steps
 
 - [Canton Coin and Traffic](/docs-main/appdev/modules/m4-canton-coin) -- How CC and traffic affect your application

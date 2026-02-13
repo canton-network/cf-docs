@@ -248,8 +248,270 @@ The cn-quickstart backend follows this module structure (under [`backend/src/mai
 
 This structure cleanly separates read concerns (PQS) from write concerns (Ledger API) while keeping the REST layer thin.
 
+## Exercise: Add License Comments
+
+This exercise walks you through adding a comment feature to cn-quickstart. Users will be able to post comments on licenses and view all comments for a given license. The feature touches every layer of the backend: Daml model, code generation, OpenAPI spec, PQS queries, and REST endpoints.
+
+By the end, you'll have a working `/licenses/{contractId}/comments` API that creates `LicenseComment` contracts on the ledger and reads them back through PQS.
+
+### Step 1: Define the Daml Template
+
+Create a new file `quickstart/daml/licensing/daml/Licensing/LicenseComment.daml`:
+
+```haskell
+module Licensing.LicenseComment where
+
+template LicenseComment
+  with
+    provider : Party
+    user : Party
+    licenseNum : Int
+    commenter : Party
+    body : Text
+    createdAt : Time
+  where
+    signatory commenter
+    observer provider, user
+```
+
+The `commenter` is the signatory — only the person writing the comment can create it. Both `provider` and `user` are observers so they can see comments on their licenses. The `licenseNum` field links the comment to a specific license without requiring a contract ID reference (which would break if the license is renewed or archived).
+
+Compare this with the `License` template in [`Licensing/License.daml`](https://github.com/digital-asset/cn-quickstart/blob/main/quickstart/daml/licensing/daml/Licensing/License.daml), which uses dual signatories (`signatory provider, user`). A comment only needs the commenter's authority, making it simpler to create — no multi-party workflow required.
+
+### Step 2: Build and Generate Java Bindings
+
+Compile the new Daml module and regenerate the Java bindings. If you're working outside cn-quickstart, use `dpm` directly:
+
+```bash
+dpm build
+dpm codegen-java <DAR-file> -o <output-dir>
+```
+
+In cn-quickstart, the Gradle build handles both steps. Run the Daml build task, which compiles the `.daml` files into a DAR and then runs the transcode codegen plugin to produce Java classes:
+
+```bash
+./gradlew :daml:build
+```
+
+After this step, you'll have a generated `LicenseComment` Java class under `backend/build/generated-daml-bindings/` in the `quickstart_licensing.licensing.licensecomment` package. The generated class uses public final fields (`getProvider`, `getUser`, `getLicenseNum`, etc.) rather than getter methods — this is the transcode codegen style used throughout cn-quickstart.
+
+### Step 3: Add the OpenAPI Spec
+
+Add the comment schema and endpoints to `quickstart/common/openapi.yaml`.
+
+First, define the schemas in the `components/schemas` section:
+
+```yaml
+    LicenseComment:
+      type: object
+      required:
+        - contractId
+        - provider
+        - user
+        - licenseNum
+        - commenter
+        - body
+        - createdAt
+      properties:
+        contractId:
+          type: string
+        provider:
+          type: string
+        user:
+          type: string
+        licenseNum:
+          type: integer
+        commenter:
+          type: string
+        body:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    AddCommentRequest:
+      type: object
+      required:
+        - body
+      properties:
+        body:
+          type: string
+```
+
+Then add two endpoints under `paths`:
+
+```yaml
+  /licenses/{contractId}/comments:
+    get:
+      tags: [Licenses]
+      summary: List comments for a license
+      operationId: listLicenseComments
+      parameters:
+        - $ref: '#/components/parameters/ContractId'
+      responses:
+        '200':
+          description: A list of comments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LicenseComment'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    post:
+      tags: [Licenses]
+      summary: Add a comment to a license
+      operationId: addLicenseComment
+      parameters:
+        - $ref: '#/components/parameters/ContractId'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddCommentRequest'
+      responses:
+        '201':
+          description: Comment created
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+```
+
+The GET endpoint takes only the contract ID (to look up the license's `licenseNum`). The POST endpoint also takes a `commandId` for Ledger API deduplication, following the same convention as `renewLicense` and `expireLicense`.
+
+Use `tags: [Licenses]` so these endpoints are grouped with the existing license operations. The cn-quickstart OpenAPI generator produces a `LicensesApi` Java interface from all endpoints whose paths start with `/licenses/`, so your new methods will appear in the same interface that `LicenseApiImpl` already implements.
+
+### Step 4: Add the PQS Query
+
+Add a method to [`DamlRepository.java`](https://github.com/digital-asset/cn-quickstart/blob/main/quickstart/backend/src/main/java/com/digitalasset/quickstart/repository/DamlRepository.java) that finds comments by license number. This follows the same `activeWhere()` pattern used for filtering licenses:
+
+```java
+public CompletableFuture<List<Contract<LicenseComment>>> findCommentsByLicenseNum(int licenseNum) {
+    return pqs.activeWhere(
+        LicenseComment.class,
+        "payload->>'licenseNum' = ?",
+        String.valueOf(licenseNum)
+    );
+}
+```
+
+PQS stores all contract payloads as JSON, so `payload->>'licenseNum'` extracts the field as text. The `activeWhere()` method in [`Pqs.java`](https://github.com/digital-asset/cn-quickstart/blob/main/quickstart/backend/src/main/java/com/digitalasset/quickstart/pqs/Pqs.java) appends this `WHERE` clause to the `active()` table-valued function, returning only `LicenseComment` contracts whose `licenseNum` matches.
+
+### Step 5: Add the REST Endpoints
+
+Add two methods to [`LicenseApiImpl.java`](https://github.com/digital-asset/cn-quickstart/blob/main/quickstart/backend/src/main/java/com/digitalasset/quickstart/service/LicenseApiImpl.java). After the Gradle build regenerates `LicensesApi` from the updated OpenAPI spec, `LicenseApiImpl` won't compile until you implement the two new interface methods. Both follow the existing pattern: authenticate, look up data, execute, and return a response.
+
+**List comments** — authenticate the caller, look up the license to get its `licenseNum`, query PQS for matching comments:
+
+```java
+@Override
+@WithSpan
+public CompletableFuture<ResponseEntity<List<LicenseComment>>> listLicenseComments(
+        String contractId) {
+    var ctx = tracingCtx(logger, "listLicenseComments", "contractId", contractId);
+    return auth.asAuthenticatedParty(party -> traceServiceCallAsync(ctx, () ->
+            damlRepository.findLicenseById(contractId).thenCompose(optLicense -> {
+                var license = ensurePresent(optLicense,
+                    "License not found for contract %s", contractId);
+                return damlRepository.findCommentsByLicenseNum(
+                        license.payload.getLicenseNum.intValue())
+                    .thenApply(comments -> {
+                        var result = comments.stream()
+                            .map(LicenseApiImpl::toLicenseCommentApi)
+                            .toList();
+                        return ResponseEntity.ok(result);
+                    });
+            })
+    ));
+}
+```
+
+**Add a comment** — authenticate the caller, look up the license, create a `LicenseComment` contract on the ledger:
+
+```java
+@Override
+@WithSpan
+public CompletableFuture<ResponseEntity<Void>> addLicenseComment(
+        String contractId, String commandId, AddCommentRequest request) {
+    var ctx = tracingCtx(logger, "addLicenseComment",
+            "contractId", contractId, "commandId", commandId);
+    return auth.asAuthenticatedParty(party -> traceServiceCallAsync(ctx, () ->
+            damlRepository.findLicenseById(contractId).thenCompose(optLicense -> {
+                var license = ensurePresent(optLicense,
+                    "License not found for contract %s", contractId);
+                var now = Instant.now();
+                var comment = new quickstart_licensing.licensing
+                        .licensecomment.LicenseComment(
+                    license.payload.getProvider,
+                    license.payload.getUser,
+                    license.payload.getLicenseNum,
+                    new Party(party),
+                    request.getBody(),
+                    now
+                );
+                return ledger.create(comment, commandId)
+                    .thenApply(v -> ResponseEntity.status(HttpStatus.CREATED)
+                        .<Void>build());
+            })
+    ));
+}
+```
+
+Note the fully-qualified `quickstart_licensing.licensing.licensecomment.LicenseComment` type name — this is the Daml-generated class, distinct from the OpenAPI-generated `org.openapitools.model.LicenseComment` that the REST response uses. The field accessors (`license.payload.getProvider`, `license.payload.getLicenseNum`) are public final fields on the transcode-generated classes, not getter methods.
+
+You'll also need a converter method to map between the two `LicenseComment` types — from the Daml contract (read from PQS) to the API model (returned as JSON):
+
+```java
+private static LicenseComment toLicenseCommentApi(
+        Contract<quickstart_licensing.licensing.licensecomment.LicenseComment> contract) {
+    var p = contract.payload;
+    var api = new LicenseComment();
+    api.setContractId(contract.contractId.getContractId);
+    api.setProvider(p.getProvider.getParty);
+    api.setUser(p.getUser.getParty);
+    api.setLicenseNum(p.getLicenseNum.intValue());
+    api.setCommenter(p.getCommenter.getParty);
+    api.setBody(p.getBody);
+    api.setCreatedAt(toOffsetDateTime(p.getCreatedAt));
+    return api;
+}
+```
+
+This follows the same pattern as `toLicenseApi()` already in the file. The write path uses `ledger.create()` — the same method shown in the [Command Submission](#creating-a-contract) section above. The read path queries PQS through `DamlRepository`, keeping reads and writes separated.
+
+### Step 6: Test It
+
+Start LocalNet and use `curl` to verify both endpoints. First, add a comment:
+
+```bash
+curl -X POST http://localhost:8080/api/licenses/<CONTRACT_ID>/comments \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -d '{"body": "Renewed for another quarter"}' \
+  --url-query "commandId=$(uuidgen)"
+```
+
+Then retrieve comments for the same license:
+
+```bash
+curl http://localhost:8080/api/licenses/<CONTRACT_ID>/comments \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+Replace `<CONTRACT_ID>` with an active license contract ID from `GET /api/licenses`, and `<TOKEN>` with a valid bearer token from your Keycloak login.
+
 ## Next Steps
 
-- [Frontend Development](/docs-main/appdev/modules/m4-frontend-dev) -- Build a React UI that consumes this backend's REST API
+- [Frontend Development](/docs-main/appdev/modules/m4-frontend-dev) -- Build a React UI that consumes this backend's REST API, including a frontend exercise that adds comment UI on top of these backend endpoints
 - [Canton Coin and Traffic](/docs-main/appdev/modules/m4-canton-coin) -- Understand traffic costs and wallet integration for payments
 - [cn-quickstart repository](https://github.com/digital-asset/cn-quickstart) -- Full working backend implementation
