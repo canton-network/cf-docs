@@ -391,6 +391,14 @@ The GET endpoint takes only the contract ID (to look up the license's `licenseNu
 
 Use `tags: [Licenses]` so these endpoints are grouped with the existing license operations. The cn-quickstart OpenAPI generator produces a `LicensesApi` Java interface from all endpoints whose paths start with `/licenses/`, so your new methods will appear in the same interface that `LicenseApiImpl` already implements.
 
+After updating the spec, regenerate the Spring server stubs:
+
+```bash
+./gradlew openApiGenerate
+```
+
+This reads `common/openapi.yaml` and writes the generated interfaces and model classes to `backend/build/generated-spring/`. Your new `listLicenseComments` and `addLicenseComment` methods will appear in the `LicensesApi` interface, and the `LicenseComment` and `AddCommentRequest` model classes will be generated in `org.openapitools.model`.
+
 ### Step 4: Add the PQS Query
 
 Add a method to [`DamlRepository.java`](https://github.com/digital-asset/cn-quickstart/blob/main/quickstart/backend/src/main/java/com/digitalasset/quickstart/repository/DamlRepository.java) that finds comments by license number. This follows the same `activeWhere()` pattern used for filtering licenses:
@@ -491,24 +499,59 @@ This follows the same pattern as `toLicenseApi()` already in the file. The write
 
 ### Step 6: Test It
 
-Start LocalNet and use `curl` to verify both endpoints. First, add a comment:
+Since you changed the Daml model, you need a clean environment — the new DAR won't upload over an existing one. Stop and reset LocalNet, then rebuild and start fresh:
 
 ```bash
-curl -X POST http://localhost:8080/api/licenses/<CONTRACT_ID>/comments \
+make clean-docker
+make build
+make start
+```
+
+Wait for all services to come up. The onboarding containers will automatically register the app-user tenant and create an `AppInstallRequest`.
+
+**Create a license to test with.** The quickstart doesn't create licenses automatically — they're created by the app provider through the `AppInstall` workflow. Log in to the application frontend at `http://app-provider.localhost:3000` as `app-provider` (password: check your Keycloak realm config, or use the Keycloak admin console at `http://keycloak.localhost:8082` with `admin`/`admin`). From the UI, accept the pending app install request and create a license. Alternatively, use the backend API directly:
+
+1. Accept the app install: `POST /app-installs/{contractId}:accept`
+2. Create a license: `POST /app-installs/{contractId}/licenses`
+
+**Get an auth token.** The backend uses OAuth2 via Keycloak. The easiest way is to log in through the frontend at `http://app-provider.localhost:3000` and copy the bearer token from your browser's network inspector (look for the `Authorization` header on any `/licenses` request).
+
+Alternatively, obtain a token from the command line using the client credentials grant with the backend service account:
+
+```bash
+TOKEN=$(curl -s -X POST \
+  "http://keycloak.localhost:8082/realms/AppProvider/protocol/openid-connect/token" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "client_id=app-provider-backend" \
+  -d "client_secret=05dmL9DAUmDnIlfoZ5EQ7pKskWmhBlNz" \
+  -d "grant_type=client_credentials" \
+  -d "scope=openid" | jq -r .access_token)
+```
+
+These credentials are from `docker/backend-service/onboarding/env/oauth2.env` and are only valid for the local development environment.
+
+**Get a license contract ID.** List the active licenses:
+
+```bash
+curl -s http://localhost:8080/licenses \
+  -H "Authorization: Bearer $TOKEN" | jq .
+```
+
+Pick a `contractId` from the response. Now test the comment endpoints:
+
+```bash
+# Add a comment
+curl -X POST "http://localhost:8080/licenses/<CONTRACT_ID>/comments?commandId=$(uuidgen)" \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer <TOKEN>" \
-  -d '{"body": "Renewed for another quarter"}' \
-  --url-query "commandId=$(uuidgen)"
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"body": "Renewed for another quarter"}'
+
+# List comments
+curl -s "http://localhost:8080/licenses/<CONTRACT_ID>/comments" \
+  -H "Authorization: Bearer $TOKEN" | jq .
 ```
 
-Then retrieve comments for the same license:
-
-```bash
-curl http://localhost:8080/api/licenses/<CONTRACT_ID>/comments \
-  -H "Authorization: Bearer <TOKEN>"
-```
-
-Replace `<CONTRACT_ID>` with an active license contract ID from `GET /api/licenses`, and `<TOKEN>` with a valid bearer token from your Keycloak login.
+Replace `<CONTRACT_ID>` with the contract ID from the previous step.
 
 ## Next Steps
 
