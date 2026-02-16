@@ -29,30 +29,52 @@ The next subsections demonstrate how the following Coin and TransferProposal con
 Coin contract
 
 ```daml
--- Code from: ./daml/SimpleCoinTransfer.daml
--- [Include actual code example here]
+template Coin
+  with
+    owner: Party
+    issuer: Party
+    amount: Decimal
+  where
+    signatory issuer
+    signatory owner
+
+    ensure amount > 0.0
 ```
 
 ```daml
--- Code from: ./daml/SimpleCoinTransfer.daml
--- [Include actual code example here]
+    choice Transfer : ContractId TransferProposal
+      with
+        newOwner: Party
+      controller owner
+      do create TransferProposal
+            with coin=this; newOwner
 ```
 
 TransferProposal contract
 
 ```daml
--- Code from: ./daml/SimpleCoinTransfer.daml
--- [Include actual code example here]
+template TransferProposal
+  with
+    coin: Coin
+    newOwner: Party
+  where
+    signatory coin.owner
+    signatory coin.issuer
+    observer newOwner
 ```
 
 ```daml
--- Code from: ./daml/SimpleCoinTransfer.daml
--- [Include actual code example here]
+    choice AcceptTransfer : ContractId Coin
+      controller newOwner
+      do
+        create coin with owner = newOwner
 ```
 
 ```daml
--- Code from: ./daml/SimpleCoinTransfer.daml
--- [Include actual code example here]
+    choice WithdrawTransfer : ContractId Coin
+      controller coin.owner
+      do
+        create coin
 ```
 
 ```mermaid
@@ -87,8 +109,11 @@ TransferProposal contract
 In the TransferProposal contract, the body of the AcceptTransfer choice is modified to assert that the contract deadline is valid.
 
 ```daml
--- Code from: ./daml/LimitedTimeCoinTransfer.daml
--- [Include actual code example here]
+    choice AcceptTransfer : ContractId Coin
+      controller newOwner
+      do
+        assertWithinDeadline "time-limited-transfer" timeLimit
+        create coin with owner = newOwner
 ```
 
 As transfer proposals are created when a Transfer choice is executed, the time by which an AcceptTransfer can be executed needs to be passed in as a choice parameter.
@@ -97,8 +122,13 @@ Coin contract
 In the Coin contract, the Transfer choice has an additional deadline argument, so that TransferProposal contracts can be given a fixed lifetime.
 
 ```daml
--- Code from: ./daml/LimitedTimeCoinTransfer.daml
--- [Include actual code example here]
+    choice Transfer : ContractId TransferProposal
+      with
+        newOwner: Party
+        timeLimit: Time
+      controller owner
+      do create TransferProposal
+            with coin=this; newOwner; timeLimit
 ```
 
 ```mermaid
@@ -133,8 +163,11 @@ TransferProposal contract
 In the TransferProposal contract, the body of the AcceptTransfer choice is modified to assert that the contract deadline has been exceeded or passed.
 
 ```daml
--- Code from: ./daml/DelayedCoinTransfer.daml
--- [Include actual code example here]
+    choice AcceptTransfer : ContractId Coin
+      controller newOwner
+      do
+        assertDeadlineExceeded "delayed-transfer" delay
+        create coin with owner = newOwner
 ```
 
 As transfer proposals are created when a Transfer choice is executed, the delay time after which an AcceptTransfer can be executed needs to be passed in as a choice parameter.
@@ -143,8 +176,13 @@ Coin contract
 In the Coin contract, the Transfer choice has an additional deadline argument, so that TransferProposal contracts can be given a delay.
 
 ```daml
--- Code from: ./daml/DelayedCoinTransfer.daml
--- [Include actual code example here]
+    choice Transfer : ContractId TransferProposal
+      with
+        newOwner: Party
+        delay: Time
+      controller owner
+      do create TransferProposal
+            with coin=this; newOwner; delay
 ```
 
 ```mermaid
@@ -179,8 +217,17 @@ TransferProposal contract
 In the TransferProposal contract, the body of the AcceptTransfer choice is modified to assert that the contract deadline has been exceeded or passed.
 
 ```daml
--- Code from: ./daml/CoinWithTransferWindow.daml
--- [Include actual code example here]
+    choice AcceptTransfer : ContractId Coin
+      controller newOwner
+      do
+        withinWindow <- isLedgerTimeGE startTime && isLedgerTimeLT endTime
+        _ <- unless withinWindow $ failWithStatus $
+               FailureStatus
+                 "transfer-outside-time-window"
+                 InvalidGivenCurrentSystemStateOther
+                 ("Ledger time is outside permitted transfer time window [" <> show startTime <> ", " <> show endTime <> ")")
+                 (TextMap.fromList [("startTime", show startTime), ("endTime", show endTime)])
+        create coin with owner = newOwner
 ```
 
 As transfer proposals are created when a Transfer choice is executed, the interval start and end times, during which an AcceptTransfer can be executed need to be passed in as choice parameters.
@@ -189,8 +236,14 @@ Coin contract
 In the Coin contract, the Transfer choice has an additional deadline argument, so that TransferProposal contracts can be given a delay.
 
 ```daml
--- Code from: ./daml/CoinWithTransferWindow.daml
--- [Include actual code example here]
+    choice Transfer : ContractId TransferProposal
+      with
+        newOwner: Party
+        startTime: Time
+        duration: RelTime
+      controller owner
+      do create TransferProposal
+            with coin=this; newOwner; startTime; addRelTime startTime duration
 ```
 
 ```mermaid
@@ -227,8 +280,17 @@ TransferProposal contract
 In the TransferProposal contract, the body of the AcceptTransfer choice is modified to assert that the contract deadline is valid relative to the ledger time returned by calling getTime.
 
 ```daml
--- Code from: ./daml/GetTimeCoinTransfer.daml
--- [Include actual code example here]
+    choice AcceptTransfer : ContractId Coin
+      controller newOwner
+      do
+        t <- getTime
+        _ <- unless (t < timeLimit) $ failWithStatus $
+                       FailureStatus
+                         "deadline-exceeded"
+                         InvalidGivenCurrentSystemStateOther
+                         ("Ledger time is after deadline " <> show timeLimit)
+                         (TextMap.fromList [("timeLimit", show timeLimit)])
+        create coin with owner = newOwner
 ```
 
 As transfer proposals are created when a Transfer choice is executed, the time by which an AcceptTransfer can be executed needs to be passed in as a choice parameter.
@@ -237,8 +299,13 @@ Coin contract
 In the Coin contract, the Transfer choice has an additional deadline argument, so that TransferProposal contracts can be given a fixed lifetime.
 
 ```daml
--- Code from: ./daml/GetTimeCoinTransfer.daml
--- [Include actual code example here]
+    choice Transfer : ContractId TransferProposal
+      with
+        newOwner: Party
+        timeLimit: Time
+      controller owner
+      do create TransferProposal
+            with coin=this; newOwner; timeLimit
 ```
 
 

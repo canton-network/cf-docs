@@ -100,22 +100,21 @@ So if we have a function `f : a -> b -> c -> d` and a value `valA : a`, we get `
 Now `add` is clearly just an alias for `+`, but what is `+`? `+` is just a function. It's only special because it starts with a symbol. Functions that start with a symbol are *infix* by default which means they can be written between two arguments. That's why we can write `1 + 2` rather than `+ 1 2`. The rules for converting between normal and infix functions are simple. Wrap an infix function in parentheses to use it as a normal function (i.e. *prefix*), and wrap a normal function in backticks to make it infix:
 
 ```daml
--- Code from: daml/daml-intro-functional-101/daml/Main.daml
--- [Insert snippet here]
+three = 1 `add` 2
 ```
 
 With that knowledge, we could have defined `add` more succinctly as the alias that it is:
 
 ```daml
--- Code from: daml/daml-intro-functional-101/daml/Main.daml
--- [Insert snippet here]
+add2 : Additive a => a -> a -> a
+add2 = (+)
 ```
 
 If we want to partially apply an infix operation we can also do that as follows:
 
 ```daml
--- Code from: daml/daml-intro-functional-101/daml/Main.daml
--- [Insert snippet here]
+increment3 = (1 +)
+double = (* 2)
 ```
 
 #### Associativity and Precedence
@@ -150,22 +149,25 @@ exercise : (Template template, Choice template choice result) =>
 You met pattern matching earlier, using `case` expressions which is one way of pattern matching. However, it can also be convenient to do the pattern matching at the level of function arguments. Think about implementing the function `uncurry`:
 
 ```daml
--- Code from: daml/daml-intro-functional-101/daml/Main.daml
--- [Insert snippet here]
+uncurry : (a -> b -> c) -> (a, b) -> c
 ```
 
 `uncurry` takes a function with two arguments (or more, since `c` could be a function), and turns it into a function from a 2-tuple to `c`. Here are three ways of implementing it, using tuple accessors, `case` pattern matching, and function pattern matching:
 
 ```daml
--- Code from: daml/daml-intro-functional-101/daml/Main.daml
--- [Insert snippet here]
+uncurry1 f t = f t._1 t._2
+
+uncurry2 f t = case t of
+  (x, y) -> f x y
+
+uncurry f (x, y) = f x y
 ```
 
 Any pattern matching you can do in `case` you can also do at the function level, and the compiler helpfully warns you if you did not cover all cases, which is called "non-exhaustive".
 
 ```daml
--- Code from: daml/daml-intro-functional-101/daml/Main.daml
--- [Insert snippet here]
+fromSome : Optional a -> a
+fromSome (Some x) = x
 ```
 
 The above will give you a warning:
@@ -181,8 +183,15 @@ A function that does not cover all its cases, like `fromSome` here, is called a 
 We can use function level pattern matching together with a feature called *Record Wildcards* to write the function `issueAsset`:
 
 ```daml
--- Code from: daml/daml-intro-9/daml/Test/Intro/Asset/MultiTrade.daml
--- [Insert snippet here]
+issueAsset : Asset -> Script (ContractId Asset)
+issueAsset asset@(Asset with ..) = do
+  assetHolders <- queryFilter @AssetHolder issuer
+    (\ah -> (ah.issuer == issuer) && (ah.owner == owner))
+
+  case assetHolders of
+    (ahCid, _)::_ -> submit asset.issuer do
+      exerciseCmd ahCid Issue_Asset with ..
+    [] -> abort ("No AssetHolder found for " <> show asset)
 ```
 
 The `..` in the pattern match here means bind all fields from the given record to local variables, so we have local variables `issuer`, `owner`, etc.
@@ -200,15 +209,30 @@ because the notation `asset@(Asset with ..)` binds `asset` to the entire record,
 You have probably already guessed it: Anywhere you can put a value in Daml you can also put a function. Even inside data types:
 
 ```daml
--- Code from: daml/daml-intro-functional-101/daml/Main.daml
--- [Insert snippet here]
+data Predicate a = Predicate with
+  test : a -> Bool
 ```
 
 More often it makes sense to define functions locally, inside a `let` clause or similar. Good examples of this are the `validate` and `transfer` functions defined locally in the `Trade_Settle` choice of the model from `dependencies`:
 
 ```daml
--- Code from: daml/daml-intro-9/daml/Intro/Asset/MultiTrade.daml
--- [Insert snippet here]
+        let
+          validate (asset, assetCid) = do
+            fetchedAsset <- fetch assetCid
+            assertMsg
+              "Asset mismatch"
+              (asset == fetchedAsset with
+                observers = asset.observers)
+
+        mapA_ validate (zip baseAssets baseAssetCids)
+        mapA_ validate (zip quoteAssets quoteAssetCids)
+
+        let
+          transfer (assetCid, approvalCid) = do
+            exercise approvalCid TransferApproval_Transfer with assetCid
+
+        transferredBaseCids <- mapA transfer (zip baseAssetCids baseApprovalCids)
+        transferredQuoteCids <- mapA transfer (zip quoteAssetCids quoteApprovalCids)
 ```
 
 You can see that the function signature is inferred from the context here. If you look closely (or hover over the function in the IDE), you'll see that it has signature
@@ -240,8 +264,9 @@ Until `compose` the only real kind of control flow introduced has been `case`, w
 `constraints` also showed a seemingly self-explanatory `if ... else` expression, but didn't explain it further. Let's implement the function `boolToInt : Bool -> Int` which in typical fashion maps `True` to `1` and `False` to `0`. Here is an implementation using `case`:
 
 ```daml
--- Code from: daml/daml-intro-functional-101/daml/Main.daml
--- [Insert snippet here]
+boolToInt b = case b of
+  True -> 1
+  False -> 0
 ```
 
 If you write this function in the IDE, you'll get a warning from the linter:
@@ -259,8 +284,9 @@ if b then 1 else 0
 The linter knows the equivalence and suggests a better implementation:
 
 ```daml
--- Code from: daml/daml-intro-functional-101/daml/Main.daml
--- [Insert snippet here]
+boolToInt2 b = if b
+  then 1
+  else 0
 ```
 
 In short: `if ... else` expressions are equivalent to `case` expressions, but can be easier to read.
@@ -270,8 +296,10 @@ In short: `if ... else` expressions are equivalent to `case` expressions, but ca
 `case` and `if ... else` expressions really are control flow in the sense that they short-circuit:
 
 ```daml
--- Code from: daml/daml-intro-functional-101/daml/Main.daml
--- [Insert snippet here]
+doError t = case t of
+  "True" -> True
+  "False" -> False
+  _ -> error ("Not a Bool: " <> t)
 ```
 
 This function behaves as you would expect: the error only gets evaluated if an invalid text is passed in.
@@ -279,8 +307,8 @@ This function behaves as you would expect: the error only gets evaluated if an i
 This is different from functions, where all arguments are evaluated immediately:
 
 ```daml
--- Code from: daml/daml-intro-functional-101/daml/Main.daml
--- [Insert snippet here]
+ifelse b t e = if b then t else e
+boom = ifelse True 1 (error "Boom")
 ```
 
 In the above, `boom` is an error.
@@ -288,15 +316,18 @@ In the above, `boom` is an error.
 While providing proper control flow, `case` and `if ... else` expressions do result in a value when evaluated. You can actually see that in the function definitions above. Since each of the functions is defined just as a `case` or `if ... else` expression, the value of the evaluated function is just the value of the `case` or `if ... else` expression. Values have a type: the `if ... else` expression in `boolToInt2` has type `Int` as that is what the function returns; similarly, the `case` expression in `doError` has type `Bool`. To be able to give such expressions an unambiguous type, each branch needs to have the same type. The below function does not compile as one branch tries to return an `Int` and the other a `Text`:
 
 ```daml
--- Code from: daml/daml-intro-functional-101/daml/Main.daml
--- [Insert snippet here]
+typeError b = if b
+  then 1
+  else "a"
 ```
 
 If we need functions that can return two (or more) types of things we need to encode that in the return type. For two possibilities, it's common to use the `Either` type:
 
 ```daml
--- Code from: daml/daml-intro-functional-101/daml/Main.daml
--- [Insert snippet here]
+intOrText : Bool -> Either Int Text
+intOrText b = if b
+  then Left 1
+  else Right "a"
 ```
 
 When you have more than two possible types (and sometimes even just for two types), it can be clearer to define your own variant type to wrap all possibilities.
@@ -306,15 +337,25 @@ When you have more than two possible types (and sometimes even just for two type
 The most common case where this becomes important is inside `do` blocks. Say we want to create a contract of one type in one case, and of another type in another case. Let's say we have two template types and want to write a function that creates an `S` if a condition is met, and a `T` otherwise.
 
 ```daml
--- Code from: daml/daml-intro-functional-101/daml/Main.daml
--- [Insert snippet here]
+template T
+  with
+    p : Party
+  where
+    signatory p
+
+template S
+  with
+    p : Party
+  where
+    signatory p
 ```
 
 It would be tempting to write a simple `if ... else`, but it won't typecheck if each branch returns a different type:
 
 ```daml
--- Code from: daml/daml-intro-functional-101/daml/Main.daml
--- [Insert snippet here]
+typeError b p = if b
+  then create T with p
+  else create S with p
 ```
 
 We have two options:
@@ -323,43 +364,63 @@ We have two options:
 2.  Get rid of the return types.
 
 ```daml
--- Code from: daml/daml-intro-functional-101/daml/Main.daml
--- [Insert snippet here]
+ifThenSElseT1 b p = if b
+  then do
+    cid <- create S with p
+    return (Left cid)
+  else do
+    cid <- create T with p
+    return (Right cid)
+
+ifThenSElseT2 b p = if b
+  then do
+    create S with p
+    return ()
+  else do
+    create T with p
+    return ()
 ```
 
 The latter is so common that there is a utility function in `DA.Action` to get rid of the return type: `void : Functor f => f a -> f ()`.
 
 ```daml
--- Code from: daml/daml-intro-functional-101/daml/Main.daml
--- [Insert snippet here]
+ifThenSElseT3 b p = if b
+  then void (create S with p)
+  else void (create T with p)
 ```
 
 `void` also helps express control flow of the type "Create a `T` only if a condition is met.
 
 ```daml
--- Code from: daml/daml-intro-functional-101/daml/Main.daml
--- [Insert snippet here]
+conditionalS b p = if b
+  then void (create S with p)
+  else return ()
 ```
 
 Note that we still need the `else` clause of the same type `()`. This pattern is so common, it's encapsulated in the standard library function `DA.Action.when : (Applicative f) => Bool -> f () -> f ()`.
 
 ```daml
--- Code from: daml/daml-intro-functional-101/daml/Main.daml
--- [Insert snippet here]
+conditionalS2 b p = when b (void (create S with p))
 ```
 
 Despite `when` looking like a simple function, the compiler does some magic so that it short-circuits evaluation just like `if ... else` and `case`. The following `noop` function is a no-op (i.e. "does nothing"), not an error as one might otherwise expect:
 
 ```daml
--- Code from: daml/daml-intro-functional-101/daml/Main.daml
--- [Insert snippet here]
+noop : Update () = when False (error "Foo")
 ```
 
 With `case`, `if ... else`, `void` and `when`, you can express all branching. However, one additional feature you may want to learn is guards. They are not covered here, but can help avoid deeply nested `if ... else` blocks. Here's just one example. The Haskell sources at the beginning of the chapter cover this topic in more depth.
 
 ```daml
--- Code from: daml/daml-intro-functional-101/daml/Main.daml
--- [Insert snippet here]
+tellSize : Int -> Text
+tellSize d
+  | d < 0 = "Negative"
+  | d == 0 = "Zero"
+  | d == 1 = "Non-Zero"
+  | d < 10 = "Small"
+  | d < 100 = "Big"
+  | d < 1000 = "Huge"
+  | otherwise = "Enormous"
 ```
 
 ### Loops
@@ -401,8 +462,7 @@ foldl : (b -> a -> b) -> b -> [a] -> b
 Let's give the type parameters semantic names. `b` is the state, `a` is an item. `foldl`s first argument is a function which takes a state and an item, and returns a new state. That's the equivalent of the inner block of the `forEach`. It then takes a state, which is the initial state, and a list of items, which is the iterator. The result is again a state. The `sum` function above can be translated to Daml almost instantly with those correspondences in mind:
 
 ```daml
--- Code from: daml/daml-intro-functional-101/daml/Main.daml
--- [Insert snippet here]
+sum ints = foldl (+) 0 ints
 ```
 
 If we wanted to be more verbose, we could replace `(+)` with a lambda `(\result i -> result + i)` which makes the correspondence to `result += i` from the JavaScript clearer.
@@ -425,15 +485,17 @@ Translating the `for` into a `forEach` is easy if you can get your hands on an a
 Daml also has an operator `(!!) : [a] -> Int -> a` which returns an element in a list. You may now be tempted to write `sumArrs` like this:
 
 ```daml
--- Code from: daml/daml-intro-functional-101/daml/Main.daml
--- [Insert snippet here]
+sumArrs : [Int] -> [Int] -> [Int]
+sumArrs arr1 arr2 =
+  let l = min (length arr1) (length arr2)
+      sumAtI i = (arr1 !! i) + (arr2 !! i)
+   in foldl (\state i -> (sumAtI i) :: state) [] [1..(l-1)]
 ```
 
 Unfortunately, that's not a very good approach. Lists in Daml are linked lists, which makes access using `(!!)` too slow for this kind of iteration. A better approach in Daml is to get rid of the `i` altogether and instead merge the lists first using the `zip` function, and then iterate over the "zipped" up lists:
 
 ```daml
--- Code from: daml/daml-intro-functional-101/daml/Main.daml
--- [Insert snippet here]
+sumArrs2 arr1 arr2 = foldl (\state (x, y) -> (x + y) :: state) [] (zip arr1 arr2)
 ```
 
 `zip : [a] -> [b] -> [(a, b)]` takes two lists, and merges them into a single list where the first element is the 2-tuple containing the first element of the two input lists, and so on. It drops any left-over elements of the longer list, thus making the `min` logic unnecessary.
@@ -443,8 +505,7 @@ Unfortunately, that's not a very good approach. Lists in Daml are linked lists, 
 In effect, the lambda passed to `foldl` only "wants" to act on a single element of the (zipped-up) input list, but still has to manage the concatenation of the whole state. Acting on each element separately is a common-enough pattern that there is a specialized function for it: `map : (a -> b) -> [a] -> [b]`. Using it, we can rewrite `sumArr` to:
 
 ```daml
--- Code from: daml/daml-intro-functional-101/daml/Main.daml
--- [Insert snippet here]
+sumArrs3 arr1 arr2 = map (\(x, y) -> (x + y)) (zip arr1 arr2)
 ```
 
 As a rule, use `map` if the result has the same shape as the input and you don't need to carry state from one iteration to the next. Use folds if you need to accumulate state in any way.
@@ -454,8 +515,10 @@ As a rule, use `map` if the result has the same shape as the input and you don't
 If there is no explicit iterator, you can use recursion. Let's try to write a function that reverses a list, for example. We want to avoid `(!!)` so there is no sensible iterator here. Instead, we use recursion:
 
 ```daml
--- Code from: daml/daml-intro-functional-101/daml/Main.daml
--- [Insert snippet here]
+reverseWorker rev rem = case rem of
+  [] -> rev
+  x::xs -> reverseWorker (x::rev) xs
+reverse xs = reverseWorker [] xs
 ```
 
 You may be tempted to make `reverseWorker` a local definition inside `reverse`, but Daml only supports recursion for top-level functions so the recursive part `recurseWorker` has to be its own top-level function.
@@ -465,8 +528,13 @@ You may be tempted to make `reverseWorker` a local definition inside `reverse`, 
 The folds and `map` function above are pure in the sense introduced earlier: The functions used to map or process items have no side effects. If you have looked at the multi-package models, you'll have noticed `mapA`, `mapA_`, and `forA`, which seem to serve a similar role but within `Action`s . A good example is the `mapA` call in the `testMultiTrade` script:
 
 ```daml
--- Code from: daml/daml-intro-9/daml/Test/Intro/Asset/MultiTrade.daml
--- [Insert snippet here]
+  let rels =
+        [ Relationship chfbank alice
+        , Relationship chfbank bob
+        , Relationship gbpbank alice
+        , Relationship gbpbank bob
+        ]
+  [chfha, chfhb, gbpha, gbphb] <- mapA setupRelationship rels
 ```
 
 Here we have a list of relationships (type `[Relationship]`) and a function `setupRelationship : Relationship -> Script (ContractId AssetHolder)`. We want the `AssetHolder` contracts for those relationships, i.e. something of type `[ContractId AssetHolder]`. Using the map function almost gets us there, but `map setupRelationship rels` would have type `[Update (ContractId AssetHolder)]`. This is a list of `Update` actions, each resulting in a `ContractId AssetHolder`. What we need is an `Update` action resulting in a `[ContractId AssetHolder]`. The list and `Update` are nested the wrong way around for our purposes.
@@ -474,8 +542,7 @@ Here we have a list of relationships (type `[Relationship]`) and a function `set
 Intuitively, it's clear how to fix this: we want the compound action consisting of performing each of the actions in the list in turn. There's a function for that: `sequence : : Applicative m => [m a] -> m [a]`. It implements that intuition and allows us to "take the `Update` out of the list", so to speak. So we could write `sequence (map setupRelationship rels)`. This is so common that it's encapsulated in the `mapA` function, a possible implementation of which is
 
 ```daml
--- Code from: daml/daml-intro-functional-101/daml/Main.daml
--- [Insert snippet here]
+mapA f xs = sequence (map f xs)
 ```
 
 The `A` in `mapA` stands for "Action", and you'll find that many functions that have something to do with "looping" have an `A` equivalent. The most fundamental of all of these is `foldlA : Action m => (b -> a -> m b) -> b -> [a] -> m b`, a left fold with side effects. Here the inner function has a side-effect indicated by the `m` so the end result `m b` also has a side effect: the sum of all the side effects of the inner function.
@@ -483,15 +550,33 @@ The `A` in `mapA` stands for "Action", and you'll find that many functions that 
 To improve your familiarity with these concepts, try implementing `foldlA` in terms of `foldl`, as well as `sequence` and `mapA` in terms of `foldlA`. Here is one set of possible implementations:
 
 ```daml
--- Code from: daml/daml-intro-functional-101/daml/Main.daml
--- [Insert snippet here]
+foldlA2 fn init xs =
+  let
+    work accA x = do
+      acc <- accA
+      fn acc x
+   in foldl work (pure init) xs
+
+mapA2 fn [] = pure []
+mapA2 fn (x :: xs) = do
+  y <- fn x
+  ys <- mapA2 fn xs
+  return (y :: ys)
+
+sequence2 [] = pure []
+sequence2 (x :: xs) = do
+  y <- x
+  ys <- sequence2 xs
+  return (y :: ys)
 ```
 
 `forA` is just `mapA` with its arguments reversed. This is useful for readability if the list of items is already in a variable, but the function is a lengthy lambda.
 
 ```daml
--- Code from: daml/daml-intro-9/daml/Test/Intro/Asset/MultiTrade.daml
--- [Insert snippet here]
+  [usdCid, chfCid] <- forA [usdCid, chfCid] (\cid -> submit alice do
+    exerciseCmd cid SetObservers with
+      newObservers = [bob]
+    )
 ```
 
 Lastly, you'll have noticed that in some cases we used `mapA_`, not `mapA`. The underscore indicates that the result is not used, so `mapA_ fn xs fn == void (mapA fn xs)`. The Daml Linter will alert you if you could use `mapA_` instead of `mapA`, and similarly for `forA_`.

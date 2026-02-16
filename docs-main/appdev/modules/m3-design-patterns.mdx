@@ -36,8 +36,14 @@ You can start a new project with a skeleton structure using `dpm new project-nam
 > Take a look at the `daml.yaml` for the this chapter's project:
 
 ```yaml
--- Code from: daml/daml-intro-compose/daml.yaml.template
--- [Include actual code example here]
+sdk-version: __VERSION__
+name: __PROJECT_NAME__
+source: daml
+version: 1.0.0
+dependencies:
+  - daml-prim
+  - daml-stdlib
+  - daml-script
 ```
 
 You can generally set `name` and `version` freely to describe your project. `dependencies` does what the name suggests: it includes dependencies. You should always include `daml-prim` and `daml-stdlib`. The former contains internals of the compiler and the Daml Runtime, the latter gives access to the Daml standard library. `daml-script` contains the types and functions for Daml Script.
@@ -72,15 +78,13 @@ All but the last `.`-separated segment in module names correspond to paths relat
 Each file contains a module header. For example, `daml/Intro/Asset/Role.daml`:
 
 ```daml
--- Code from: daml/daml-intro-compose/daml/Intro/Asset/Role.daml
--- [Include actual code example here]
+module Intro.Asset.Role where
 ```
 
 You can import one module into another using the `import` keyword. The `LibraryModules` module imports all six modules:
 
 ```daml
--- Code from: daml/daml-intro-compose/daml/Intro/Asset/Role.daml
--- [Include actual code example here]
+import Intro.Asset
 ```
 
 Imports always have to appear just below the module declaration. You can optionally add a list of names after the import to import only the selected names:
@@ -115,8 +119,39 @@ This project showcases how you can put the `Update` and `Script` actions you lea
 - One create and one archive action in case of `Merge`
 
 ```daml
--- Code from: daml/daml-intro-compose/daml/Intro/Asset.daml
--- [Include actual code example here]
+    choice Split
+      : SplitResult
+      with
+        splitQuantity : Decimal
+      controller owner
+      do
+        splitAsset <- create this with
+          quantity = splitQuantity
+        remainder <- create this with
+          quantity = quantity - splitQuantity
+        return SplitResult with
+          splitAsset
+          remainder
+
+    choice Merge
+      : ContractId Asset
+      with
+        otherCid : ContractId Asset
+      controller owner
+      do
+        other <- fetch otherCid
+        assertMsg
+          "Merge failed: issuer does not match"
+          (issuer == other.issuer)
+        assertMsg
+          "Merge failed: owner does not match"
+          (owner == other.owner)
+        assertMsg
+          "Merge failed: symbol does not match"
+          (symbol == other.symbol)
+        archive otherCid
+        create this with
+          quantity = quantity + other.quantity
 ```
 
 The `return` function used in `Split` is available in any `Action` context. The result of `return x` is a no-op containing the value `x`. It has an alias `pure`, indicating that it's a pure value, as opposed to a value with side-effects. The `return` name makes sense when it's used as the last statement in a `do` block as its argument is indeed the "return"-value of the `do` block in that case.
@@ -124,8 +159,34 @@ The `return` function used in `Split` is available in any `Action` context. The 
 Taking transaction composition a step further, the `Trade_Settle` choice on `Trade` composes two `exercise` actions:
 
 ```daml
--- Code from: daml/daml-intro-compose/daml/Intro/Asset/Trade.daml
--- [Include actual code example here]
+    choice Trade_Settle
+      : (ContractId Asset, ContractId Asset)
+      with
+        quoteAssetCid : ContractId Asset
+        baseApprovalCid : ContractId TransferApproval
+      controller quoteAsset.owner
+      do
+        fetchedBaseAsset <- fetch baseAssetCid
+        assertMsg
+          "Base asset mismatch"
+          (baseAsset == fetchedBaseAsset with
+            observers = baseAsset.observers)
+
+        fetchedQuoteAsset <- fetch quoteAssetCid
+        assertMsg
+          "Quote asset mismatch"
+          (quoteAsset == fetchedQuoteAsset with
+            observers = quoteAsset.observers)
+
+        transferredBaseCid <- exercise
+          baseApprovalCid TransferApproval_Transfer with
+            assetCid = baseAssetCid
+
+        transferredQuoteCid <- exercise
+          quoteApprovalCid TransferApproval_Transfer with
+            assetCid = quoteAssetCid
+
+        return (transferredBaseCid, transferredQuoteCid)
 ```
 
 The resulting transaction, with its two nested levels of consequences, can be seen in the `test_trade` script in `Test.Intro.Asset.Trade`:
@@ -199,8 +260,25 @@ TX 14 1970-01-01T00:00:00Z (Test.Intro.Asset.Trade:79:23)
 Similar to choices, you can see how the scripts in this project are built up from each other:
 
 ```daml
--- Code from: daml/daml-intro-compose/daml/Test/Intro/Asset/Role.daml
--- [Include actual code example here]
+test_issuance = do
+  setupResult@(alice, bob, bank, aha, ahb) <- setupRoles
+
+  assetCid <- submit bank do
+    exerciseCmd aha Issue_Asset
+      with
+        symbol = "USD"
+        quantity = 100.0
+
+  Some asset <- queryContractId bank assetCid
+  assert (asset == Asset with
+      issuer = bank
+      owner = alice
+      symbol = "USD"
+      quantity = 100.0
+      observers = []
+        )
+
+  return (setupResult, assetCid)
 ```
 
 In the above, the `test_issuance` script in `Test.Intro.Asset.Role` uses the output of the `setupRoles` script in the same module.
@@ -256,15 +334,26 @@ That's also important in the context of `Trade`. In order to allow Bob to interp
 *Observers* are Daml's mechanism to disclose contracts to other parties. They are declared just like signatories, but using the `observer` keyword, as shown in the `Asset` template:
 
 ```daml
--- Code from: daml/daml-intro-compose/daml/Intro/Asset.daml
--- [Include actual code example here]
+template Asset
+  with
+    issuer : Party
+    owner : Party
+    symbol : Text
+    quantity : Decimal
+    observers : [Party]
+  where
+    signatory issuer, owner
+    ensure quantity > 0.0
+
+    observer observers
 ```
 
 The `Asset` template also gives the `owner` a choice to set the observers, and you can see how Alice uses it to show her `Asset` to Bob just before proposing the trade. You can try out what happens if she didn't do that by removing that transaction:
 
 ```daml
--- Code from: daml/daml-intro-compose/daml/Test/Intro/Asset/Trade.daml
--- [Include actual code example here]
+  usdCid <- submit alice do
+    exerciseCmd usdCid SetObservers with
+      newObservers = [bob]
 ```
 
 Observers have guarantees in Daml. In particular, they are guaranteed to see actions that create and archive the contract on which they are an observer.

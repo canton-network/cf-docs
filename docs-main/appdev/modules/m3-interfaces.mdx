@@ -28,8 +28,7 @@ An interface declaration is somewhat similar to a template declaration.
 ### Interface Name
 
 ```daml
--- Code from: code-snippets-dev/Interfaces.daml
--- [Include actual code example here]
+interface MyInterface where
 ```
 
 - This is the name of the interface.
@@ -48,8 +47,9 @@ An interface declaration is somewhat similar to a template declaration.
 ### Interface Methods
 
 ```daml
--- Code from: code-snippets-dev/Interfaces.daml
--- [Include actual code example here]
+  method1 : Party
+  method2 : Int
+  method3 : Bool -> Int -> Int -> Int
 ```
 
 - An interface may define any number of methods.
@@ -58,8 +58,14 @@ An interface declaration is somewhat similar to a template declaration.
   - If the interface is called `I`, the method is called `m`, and the method type is `M` (which might be a function type), this introduces the function `m : I -> M`:
 
     ```daml
--- Code from: code-snippets-dev/Interfaces.daml
--- [Include actual code example here]
+func1 : MyInterface -> Party
+func1 = method1
+
+func2 : MyInterface -> Int
+func2 = method2
+
+func3 : MyInterface -> Bool -> Int -> Int -> Int
+func3 = method3
 ```
 
   - The first argument's type `I` means that the function can only be applied to values of the interface type `I` itself. Methods cannot be applied to template values, even if there exists an `interface instance` of `I` for that template. To use an interface method on a template value, first convert it using the `toInterface` function.
@@ -70,13 +76,12 @@ An interface declaration is somewhat similar to a template declaration.
 ### Interface View Type
 
 ```daml
--- Code from: code-snippets-dev/Interfaces.daml
--- [Include actual code example here]
+data MyInterfaceViewType =
+  MyInterfaceViewType { name : Text, value : Int }
 ```
 
 ```daml
--- Code from: code-snippets-dev/Interfaces.daml
--- [Include actual code example here]
+  viewtype MyInterfaceViewType
 ```
 
 - All interface instances must implement a special `view` method which returns a value of the type declared by `viewtype`.
@@ -86,8 +91,20 @@ An interface declaration is somewhat similar to a template declaration.
 ### Interface Choices
 
 ```daml
--- Code from: code-snippets-dev/Interfaces.daml
--- [Include actual code example here]
+  choice MyChoice : (ContractId MyInterface, Int)
+    with
+      argument1 : Bool
+      argument2 : Int
+    controller method1 this
+    do
+      let n0 = method2 this
+      let n1 = method3 this argument1 argument2 n0
+      pure (self, n1)
+
+  nonconsuming choice MyNonConsumingChoice : Int
+    controller method1 this
+    do
+      pure $ method2 this
 ```
 
 - Interface choices work in a very similar way to template choices. Any contract of a template type for which an interface instance exists will grant the choice to the controlling party.
@@ -99,8 +116,10 @@ An interface declaration is somewhat similar to a template declaration.
 ### Empty Interfaces
 
 ```daml
--- Code from: code-snippets-dev/Interfaces.daml
--- [Include actual code example here]
+data EmptyInterfaceView = EmptyInterfaceView {}
+
+interface YourInterface where
+  viewtype EmptyInterfaceView
 ```
 
 - It is possible (though not necessarily useful) to define an interface without methods, precondition or choices. However, a view type must always be defined, though it can be set to unit.
@@ -110,15 +129,25 @@ An interface declaration is somewhat similar to a template declaration.
 For context, a simple template definition:
 
 ```daml
--- Code from: code-snippets-dev/Interfaces.daml
--- [Include actual code example here]
+template NameOfTemplate
+  with
+    field1 : Party
+    field2 : Int
+  where
+    signatory field1
 ```
 
 ### `interface instance` clause
 
 ```daml
--- Code from: code-snippets-dev/Interfaces.daml
--- [Include actual code example here]
+    interface instance MyInterface for NameOfTemplate where
+      view = MyInterfaceViewType "NameOfTemplate" 100
+      method1 = field1
+      method2 = field2
+      method3 False _ _ = 0
+      method3 True x y
+        | x > 0 = x + y
+        | otherwise = y
 ```
 
 - To make a template an instance of an existing interface, an `interface instance` clause must be defined in the template declaration.
@@ -134,8 +163,8 @@ For context, a simple template definition:
 - If the interface has no methods, the interface instance only needs to implement the `view` method:
 
 ```daml
--- Code from: code-snippets-dev/Interfaces.daml
--- [Include actual code example here]
+    interface instance YourInterface for NameOfTemplate where
+      view = EmptyInterfaceView
 ```
 
 ## Interface Functions
@@ -289,8 +318,8 @@ For context, a simple template definition:
 ## Required Interfaces
 
 ```daml
--- Code from: code-snippets-dev/Interfaces.daml
--- [Include actual code example here]
+interface OurInterface requires MyInterface, YourInterface where
+  viewtype EmptyInterfaceView
 ```
 
 - An interface can depend on other interfaces. These are specified with the `requires` keyword after the interface name but before the `where` keyword, separated by commas.
@@ -300,22 +329,26 @@ For context, a simple template definition:
   For example, given
 
   ```daml
--- Code from: code-snippets-dev/Interfaces.daml
--- [Include actual code example here]
+interface Shape where
+  viewtype EmptyInterfaceView
+
+interface Rectangle requires Shape where
+  viewtype EmptyInterfaceView
 ```
 
   This declaration for interface `Square` would cause a compiler error
 
   ```daml
--- Code from: code-snippets-dev/Interfaces.daml
--- [Include actual code example here]
+-- Compiler error! "Interface Square is missing requirement [Shape]"
+interface Square requires Rectangle where
+  viewtype EmptyInterfaceView
 ```
 
   Explicitly adding `Shape` to the required interfaces fixes the error
 
   ```daml
--- Code from: code-snippets-dev/Interfaces.daml
--- [Include actual code example here]
+interface Square requires Rectangle, Shape where
+  viewtype EmptyInterfaceView
 ```
 
 - For a template `T` to be a valid `interface instance` of an interface `I`, `T` must also be an `interface instance` of each of the interfaces required by `I`.
