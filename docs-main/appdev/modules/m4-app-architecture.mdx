@@ -31,7 +31,7 @@ In the [cn-quickstart](https://github.com/digital-asset/cn-quickstart) reference
 
 ### Frontend
 
-The frontend is a web application (typically React) that communicates with the backend over HTTP. It does not connect to the Ledger API directly. The backend exposes a REST API defined by an OpenAPI schema, and the frontend consumes it with generated TypeScript clients.
+The frontend is a web application (in this case it is React) that communicates with the backend over HTTP. It does not connect to the Ledger API directly. The backend exposes a REST API defined by an OpenAPI schema, and the frontend consumes it with generated TypeScript clients.
 
 This separation keeps ledger concerns out of the browser and centralizes authentication and access control in the backend.
 
@@ -43,14 +43,12 @@ The following diagram shows how the layers connect at runtime.
 flowchart LR
     FE[Frontend<br/>React / Web UI]
     BE[Backend<br/>Java / TypeScript]
-    LAPI[Ledger API<br/>gRPC]
-    PN[Validator<br/>Participant Node]
+    PN[Validator<br/>Participant Node<br/>Ledger API gRPC + JSON]
     PQS[(PQS<br/>PostgreSQL)]
     SYNC[Synchronizer]
 
     FE -- "HTTP/REST" --> BE
-    BE -- "Commands &<br/>Transactions" --> LAPI
-    LAPI --> PN
+    BE -- "Commands &<br/>Transactions" --> PN
     PN <-- "Consensus" --> SYNC
     PN -- "Projections" --> PQS
     BE -- "SQL Queries" --> PQS
@@ -58,12 +56,12 @@ flowchart LR
 
 - The **frontend** sends HTTP requests to the backend.
 - The **backend** submits commands and reads transactions through the Ledger API (gRPC).
-- The **validator** (participant node) processes commands, stores contract data for its hosted parties, and synchronizes with other validators through the synchronizer.
+- The **validator** (participant node) processes commands submitted via the LAPI, stores contract data for its hosted parties, and synchronizes with other validators through the synchronizer.
 - **PQS** maintains a PostgreSQL projection of ledger state that the backend can query with SQL.
 
 ## Where PQS Fits In
 
-The Ledger API is optimized for command submission and streaming transaction updates. For read-heavy workloads -- dashboards, reports, filtered queries, aggregations -- PQS is a better fit. PQS subscribes to the validator's transaction stream and writes contract data into PostgreSQL tables. Your backend queries these tables with standard SQL.
+The Ledger API is optimized for command submission and streaming transaction updates. For read-heavy workloads -- dashboards, reports, filtered queries, aggregations -- PQS is a better fit. PQS subscribes to the validator's transaction stream and writes contract data into PostgreSQL tables. Your backend queries these tables with standard SQL.  PQS can be used to create new projections of data by combining data using standard SQL joins.  PQS also stores historical data which can be used for audits.
 
 Using PQS means your read path does not compete with your write path for Ledger API resources, and you can use the full power of PostgreSQL (joins, indexes, full-text search) on your contract data.
 

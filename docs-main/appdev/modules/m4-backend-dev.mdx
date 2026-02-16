@@ -9,13 +9,13 @@ This page uses [cn-quickstart](https://github.com/digital-asset/cn-quickstart) a
 
 ## Backend Language
 
-cn-quickstart uses a Java backend built on Spring Boot. Java has first-class code generation support (`dpm codegen-java`) and is the most mature option for Canton backends.
+cn-quickstart uses a Java backend built on Spring Boot. Java has first-class code generation support (`dpm codegen-java`).
 
 TypeScript is also supported through `dpm codegen-js`. A TypeScript backend uses the same Ledger API (via gRPC-js or the JSON API) and can be a good choice if your team prefers a single language across frontend and backend.
 
 ## Connecting to the Ledger API
 
-The Ledger API is a gRPC service exposed by the validator's participant node. Your backend connects to it as an authenticated client, acting on behalf of one or more parties.
+The Ledger API is a service exposed by the validator's participant node. Your backend connects to it as an authenticated client, acting on behalf of one or more parties.
 
 In cn-quickstart, [`LedgerApi.java`](https://github.com/digital-asset/cn-quickstart/blob/main/quickstart/backend/src/main/java/com/digitalasset/quickstart/ledger/LedgerApi.java) manages this connection. The constructor builds a gRPC channel with an authentication interceptor that attaches a bearer token to every call:
 
@@ -171,7 +171,7 @@ WHERE license.payload->>'user' = ? OR license.payload->>'provider' = ?
 ORDER BY license.contract_id
 ```
 
-PQS stores contract payloads as JSON columns, so you use PostgreSQL's `->` and `->>` operators to filter and join on contract fields. You can create additional PostgreSQL indexes on frequently queried JSON paths for performance.
+PQS stores contract payloads as JSONB, so you use PostgreSQL's `->` and `->>` operators to filter and join on contract fields. You can create additional PostgreSQL indexes on frequently queried JSON paths for performance.
 
 ## Reading Transactions
 
@@ -231,7 +231,7 @@ try {
 For contention errors, a retry strategy often resolves the issue: re-read the current contract ID from PQS, then resubmit the command.
 
 <Note>
-Set a unique command ID on each submission. The Ledger API deduplicates commands by this ID, which prevents double-submission if your backend retries a command that actually succeeded but whose response was lost in transit.
+Set a unique command ID on each new submission. The Ledger API deduplicates commands by this ID, which prevents double-submission if your backend retries a command that actually succeeded but whose response was lost in transit.
 </Note>
 
 ## Backend Architecture in cn-quickstart
