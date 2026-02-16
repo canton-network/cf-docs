@@ -210,7 +210,7 @@ flowchart TB
 
     subgraph VA[Alice's View]
         A1[Alice pays Bob 100]
-        A2[??? encrypted ???]
+        A2[Hidden from Alice]
     end
 
     subgraph VB[Bob's View]
@@ -219,7 +219,7 @@ flowchart TB
     end
 
     subgraph VC[Charlie's View]
-        C1[??? encrypted ???]
+        C1[Hidden from Charlie]
         C2[Bob pays Charlie 50]
     end
 ```
@@ -232,7 +232,11 @@ flowchart TB
 
 ## Contract Keys
 
-Contracts can have **keys**—unique identifiers that allow lookup without knowing the contract ID.
+<Note>
+Contract keys are under development and planned for Canton 3.5.
+</Note>
+
+Contracts can have **keys**—identifiers that allow lookup without knowing the contract ID.
 
 ```daml
 template Account
@@ -245,10 +249,10 @@ template Account
     observer owner
 
     key (bank, accountNumber) : (Party, Text)
-    maintainer key._1  -- bank maintains uniqueness
+    maintainer key._1  -- bank maintains the key
 ```
 
-Keys guarantee **uniqueness** — only one active contract can exist per key value. They support **lookup** so you can find a contract by its key without knowing the contract ID. Every key has a **maintainer**, the party responsible for ensuring uniqueness.
+They support **lookup** so you can find a contract by its key without knowing the contract ID. Every key has a **maintainer**, the party responsible for the key.
 
 <Warning>
 Keys are global within a synchronizer. Design keys carefully to avoid leaking information about contract existence.
@@ -266,10 +270,11 @@ Canton uses **ledger time** for contract operations. Time is:
 choice ClaimAfterDeadline : ()
   controller beneficiary
   do
-    now <- getTime
-    assertMsg "Too early" (now > deadline)
+    assertDeadlineExceeded "claim-after-deadline" deadline
     -- ... claim logic
 ```
+
+See [Implementing Time Constraints](https://docs.digitalasset.com/build/3.4/sdlc-howtos/smart-contracts/develop/patterns/implementing-time-constraints.html) for the full set of time primitives available in Canton 3.x.
 
 ## Composability
 

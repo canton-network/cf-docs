@@ -3,7 +3,7 @@ title: "Two-Layer Consensus"
 description: "How Canton separates smart contract validation from transaction ordering to achieve both privacy and integrity"
 ---
 
-Canton uses a two-layer consensus architecture that separates **smart contract consensus** from **ordering consensus**. This separation is what allows Canton to achieve privacy while maintaining integrity.
+Canton uses a two-layer consensus architecture that separates **smart contract transaction consensus** from **ordering consensus**. This separation is what allows Canton to achieve privacy while maintaining integrity.
 
 ## Why Two Layers?
 
@@ -24,7 +24,7 @@ Smart contract consensus in Canton follows a **Proof of Stakeholder** model. Onl
 2. **View Distribution**: Each stakeholder receives only the transaction view they're entitled to see
 3. **Independent Validation**: Each stakeholder validates their view against Daml rules
 4. **Confirmation**: Stakeholders send confirmation or rejection to the mediator
-5. **Verdict**: Once sufficient confirmations are received, the transaction commits
+5. **Verdict**: Once sufficient confirmations are received, the transaction commits or aborts in entirety
 
 ```mermaid
 sequenceDiagram
@@ -47,18 +47,18 @@ sequenceDiagram
 
 Non-stakeholders never see the transaction at all. Only affected parties do validation work, and Daml authorization rules are enforced by the stakeholders themselves.
 
-The trust assumption here is straightforward: you trust that stakeholders will correctly validate their portion. Since stakeholders have a direct interest in the contract (they signed it or are observing it), they're incentivized to validate honestly.
+The trust assumption here is straightforward: you trust that signatories and controllers will correctly validate their portion. Since they have a direct interest in the contract (they signed it or are observing it), they're incentivized to validate honestly.
 
 ## Layer 2: Ordering Consensus (BFT Sequencing)
 
-The ordering layer establishes a **total order** for all transactions on a synchronizer. This ensures all participants see events in the same sequence, preventing double-spends and ensuring consistency.
+The ordering layer establishes a **total order** for all transactions on a synchronizer. This ensures all participants see events in the same sequence from the same synchronizer, preventing double-spends and ensuring consistency.
 
 ### How It Works
 
 The synchronizer's sequencer component:
 
 1. Receives encrypted transaction messages from participants
-2. Assigns a globally unique timestamp/sequence number
+2. Assigns a globally unique timestamp/sequence number for that synchronizer
 3. Distributes messages to all entitled recipients in order
 4. Ensures all recipients see the same ordering
 
@@ -102,31 +102,33 @@ The two layers work together in Canton's transaction protocol:
 
 ```mermaid
 flowchart TB
-    subgraph L2[Layer 2: Ordering]
-        SEQ[Sequencer]
-        MED[Mediator]
-    end
-
     subgraph L1[Layer 1: Smart Contract Consensus]
         V1[Validator 1]
         V2[Validator 2]
     end
 
+    subgraph L2[Layer 2: Ordering]
+        SEQ[Sequencer]
+        MED[Mediator]
+    end
+
     V1 -->|Submit encrypted views| SEQ
     SEQ -->|Order and distribute| MED
-    MED -->|Deliver to stakeholders| V1
-    MED -->|Deliver to stakeholders| V2
-    V1 -->|Validate and confirm| MED
-    V2 -->|Validate and confirm| MED
-    MED -->|Verdict| V1
-    MED -->|Verdict| V2
+    SEQ -->|Deliver to stakeholders| V1
+    SEQ -->|Deliver to stakeholders| V2
+    V1 -->|Validate and confirm| SEQ
+    V2 -->|Validate and confirm| SEQ
+    SEQ -->|Forward confirmations| MED
+    MED -->|Verdict via sequencer| SEQ
+    SEQ -->|Verdict| V1
+    SEQ -->|Verdict| V2
 ```
 
-The flow begins in the ordering layer: a validator submits an encrypted transaction, and the sequencer assigns it a position in the global order. The mediator then distributes the relevant views to stakeholders. At this point, smart contract consensus takes over — each stakeholder validates their view and sends a confirmation. Finally, the mediator aggregates confirmations and broadcasts the verdict back through the ordering layer.
+The flow begins in the ordering layer: a validator submits an encrypted transaction, and the sequencer assigns it a position in the global order.  The sequencer then distributes the relevant views to stakeholders.  The mediator is made aware how many confirmations it needs to reach a verdict.  At this point, smart contract consensus takes over — each stakeholder validates their view and sends a confirmation to the mediator. Finally, the mediator aggregates confirmations and broadcasts the verdict back through the sequencer's ordering layer.
 
 ## Benefits of Separation
 
-**Privacy without sacrificing integrity.** The ordering layer prevents double-spends (integrity), while the smart contract layer ensures only stakeholders see data (privacy). Neither layer alone could achieve both.
+**Privacy without sacrificing integrity.** The ordering layer prevents double-spends (integrity and consistency), while the smart contract layer ensures only stakeholders see data (privacy). Neither layer alone could achieve both.
 
 **Flexible trust models.** Different synchronizers can use different ordering trust models — a single-operator sequencer for private deployments, or a BFT sequencer for decentralized networks — while smart contract consensus stays the same regardless.
 
