@@ -100,7 +100,7 @@ These indicate internal errors, security issues, or unimplemented operations. Es
 | `CONTRACT_NOT_FOUND` | 11 | Contract does not exist or is not visible to the requesting party |
 | `TRANSACTION_NOT_FOUND` | 11 | Transaction does not exist or is not visible |
 | `CONTRACT_KEY_NOT_FOUND` | 11 | No active contract found for the given key |
-| `DUPLICATE_CONTRACT_KEY` | 10 | A contract with this key already exists |
+| `DUPLICATE_CONTRACT_KEY` | 10 | A contract with this key already exists (contract key semantics are changing in Canton 3.x; see note below) |
 | `INCONSISTENT_CONTRACTS` | 9 | Contracts referenced in the command have changed |
 
 ### Submission and processing
@@ -171,7 +171,46 @@ try {
 
 {/* COPIED_END */}
 
-For other languages, use the equivalent gRPC status and protobuf utilities to unpack `com.google.rpc.Status` details from the trailing metadata.
+The following Java example shows the equivalent extraction. Java has first-class codegen support in Canton, so this is the most common non-Scala pattern:
+
+```java
+import com.google.rpc.ErrorInfo;
+import com.google.rpc.RequestInfo;
+import com.google.rpc.RetryInfo;
+import io.grpc.StatusRuntimeException;
+import io.grpc.protobuf.StatusProto;
+
+try {
+    // your gRPC call here
+} catch (StatusRuntimeException e) {
+    com.google.rpc.Status status = StatusProto.fromThrowable(e);
+
+    // gRPC status code
+    int code = status.getCode();
+
+    // Full error description
+    String message = status.getMessage();
+
+    // Extract structured details
+    for (com.google.protobuf.Any detail : status.getDetailsList()) {
+        if (detail.is(ErrorInfo.class)) {
+            ErrorInfo info = detail.unpack(ErrorInfo.class);
+            String errorId = info.getReason();
+            String category = info.getMetadataMap().get("category");
+        }
+        if (detail.is(RequestInfo.class)) {
+            String requestId = detail.unpack(RequestInfo.class).getRequestId();
+        }
+        if (detail.is(RetryInfo.class)) {
+            RetryInfo retry = detail.unpack(RetryInfo.class);
+            long retryMs = retry.getRetryDelay().getSeconds() * 1000
+                + retry.getRetryDelay().getNanos() / 1_000_000;
+        }
+    }
+}
+```
+
+These error codes are also surfaced through the JSON API (HTTP Ledger API) with equivalent error detail structures. For other languages, use the equivalent gRPC status and protobuf utilities to unpack `com.google.rpc.Status` details from the trailing metadata.
 
 ## Further reading
 

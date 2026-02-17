@@ -3,15 +3,17 @@ title: "PQS SQL Reference"
 description: "Complete SQL API reference for the Participant Query Store (PQS), including table functions, offset management, maintenance operations, and JSONB indexing."
 ---
 
-The PQS SQL API is provisioned directly in the PostgreSQL database. Data consumers interact with it through SQL -- not through the PQS process itself. The API provides a stable interface of functions and views that should be the only database artifacts readers interact with.
+The PQS SQL API is provisioned directly in the PostgreSQL database. Data consumers interact with it through SQL -- not through the PQS process itself.
+
+PQS data can be joined across contract tables to build projections (for example, joining holdings with account templates). The temporal offset model and historical event functions (`creates`, `archives`, `exercises`) make PQS well-suited for audit trails and compliance queries.
 
 ## Offset model
 
-A Participant Node models time using an **offset**, a unique integer index into its local ledger. Offsets are ordered and represent the causal order of transactions. Due to privacy filtering, the sequence of offsets on a given Participant Node usually contains gaps.
+A validator models time using an **offset**, a unique integer index into its local ledger. Offsets are ordered and represent the causal order of transactions. Due to privacy filtering, the sequence of offsets on a given validator usually contains gaps.
 
-Offsets are specific to a single Participant Node and are not consistent across peers, even for common transactions. Each node allocates its own offsets based on its permissioned view.
+Offsets are specific to a single validator and are not consistent across peers, even for common transactions. Each node allocates its own offsets based on its permissioned view.
 
-In addition to offsets, PQS exposes **ledger time** (approximate wall-clock time preserving causal ordering) and **transaction IDs** (opaque identifiers common across all Participant Nodes). Use offsets for causal analysis, transaction IDs for cross-node correlation, and ledger time for temporal queries.
+In addition to offsets, PQS exposes **ledger time** (approximate wall-clock time preserving causal ordering) and **transaction IDs** (opaque identifiers common across all validators). Use offsets for causal analysis, transaction IDs for cross-node correlation, and ledger time for temporal queries.
 
 ## Offset management
 
@@ -268,5 +270,5 @@ select * from reset_to_offset('<offset>');
 ```
 
 <Warning>
-Resetting is destructive and permanent. Stop PQS and all consuming applications before resetting. Coordinate with your Participant Node operator, especially in disaster-recovery scenarios.
+Resetting is destructive and permanent. Stop PQS and all consuming applications before resetting. Coordinate with your validator operator, especially in disaster-recovery scenarios.
 </Warning>
