@@ -21,15 +21,15 @@ flowchart TB
     end
 
     subgraph PARTICIPANT["Canton Participant"]
+        LAPI[Ledger API &#40;gRPC&#41;]
+        AAPI[Admin API]
         ENGINE[Daml Engine]
         ACS[(Active Contract Store)]
         PROTO[Protocol Layer<br>preparation &#8226; validation &#8226; confirmation]
     end
 
-    subgraph APIS["APIs"]
-        LAPI[Ledger API &#40;gRPC&#41;]
+    subgraph APIS["External APIs"]
         JAPI[JSON API &#40;HTTP&#41;]
-        AAPI[Admin API]
         SCANP[Scan Proxy]
         VALAPI[Validator App API]
     end
@@ -40,7 +40,7 @@ flowchart TB
     end
 
     subgraph SYNC["Synchronizer Connections"]
-        GS[Global Synchronizer<br>sequencer &#8226; mediator]
+        GS[Global Synchronizer<br>via sequencer&#40;s&#41;]
         PS[Private Synchronizer&#40;s&#41;<br>optional]
     end
 
@@ -124,8 +124,8 @@ The protocol layer handles the multi-step Canton transaction protocol:
 - **Preparation**: the submitting participant constructs the confirmation request, embeds the transaction in a Merkle tree, and creates per-recipient encrypted envelopes
 - **Submission**: encrypted envelopes are sent to the sequencer for ordering and distribution
 - **Validation**: receiving participants validate their views against the Daml engine and local contract state
-- **Confirmation**: participants send approval or rejection responses to the mediator
-- **Result**: the mediator aggregates responses and declares commit or rollback; participants apply the outcome
+- **Confirmation**: participants send approval or rejection responses via the sequencer to the mediator
+- **Result**: the mediator aggregates responses and declares commit or rollback via the sequencer; participants apply the outcome
 
 For a full description of these steps, see [Transaction Lifecycle](/docs-main/overview/reference/transaction-lifecycle).
 
@@ -147,14 +147,14 @@ Applications authenticate to the Ledger API using JWT tokens verified against th
 
 ### JSON API
 
-The JSON API is an HTTP and WebSocket wrapper around the Ledger API. It translates JSON requests into gRPC calls and returns JSON responses. It is optional for validator deployments -- many applications use the gRPC Ledger API directly. The JSON API endpoint is typically exposed at `/api/json-api` when configured through ingress.
+The JSON API is an HTTP and WebSocket wrapper around the Ledger API. It translates JSON requests into gRPC calls and returns JSON responses. In Canton 3.x, the JSON API is integrated into the Canton participant process (not a separate sidecar as in 2.x). Many backend applications use the gRPC Ledger API directly -- gRPC is recommended for high-throughput backends. The JSON API endpoint is typically exposed at `/api/json-api` when configured through ingress.
 
 ### Admin API
 
 The Admin API provides node administration capabilities. Through it, operators can:
 
 - Manage synchronizer connections (connect, disconnect, reconnect)
-- Upload DAR packages
+- Upload DAR packages (also available via the Ledger API)
 - Allocate and manage parties
 - Query topology state and node identities
 - Configure pruning schedules
@@ -197,6 +197,8 @@ PQS is an optional read-side component that subscribes to the participant's Ledg
 PQS is useful when applications need:
 
 - SQL-based queries over contract payloads (the Ledger API does not index template fields)
+- SQL joins across contract data to build projections (for example, joining multiple template types)
+- Historical contract data retention for audit trails and compliance queries
 - Analytics or reporting workloads that would otherwise overload the participant
 - CQRS-style separation between command submission (Ledger API) and read queries (PQS database)
 
@@ -204,7 +206,7 @@ PQS does not write to the ledger -- it is a passive consumer of transaction data
 
 ## Synchronizer Connections
 
-A validator connects to one or more synchronizers. Each connection involves authenticated channels to the synchronizer's sequencer and mediator nodes.
+A validator connects to one or more synchronizers. Each connection involves authenticated channels to the synchronizer's sequencer nodes, through which the validator communicates with the broader synchronizer infrastructure (including mediators).
 
 ### Global Synchronizer
 

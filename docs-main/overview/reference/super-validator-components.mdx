@@ -31,10 +31,8 @@ flowchart TB
             VALAPP[Validator App]
             WALLET[Wallet UI]
             CNSUI[Canton Name Service UI]
-            PART[Canton Participant<br>with Splice DARs]
-            LAPI[Ledger API]
+            PART[Canton Participant<br>with Splice DARs<br>Ledger API &#8226; Admin API]
             JAPI[JSON API]
-            ADMINAPI[Admin API]
             SCANPROXY[Scan Proxy]
             DB[(PostgreSQL Databases)]
         end
@@ -46,15 +44,13 @@ flowchart TB
         SEQ --> DB
         MED --> DB
         BFT --> SEQ
-        LAPI --> PART
         JAPI --> PART
     end
 
-    ExtVal[External Validators] <-->|Sequencer & Mediator APIs| SEQ
-    ExtVal <-->|Sequencer & Mediator APIs| MED
+    ExtVal[External Validators] <-->|Sequencer API| SEQ
     OtherSV[Other SV Nodes] <-->|BFT P2P + Gossip| BFT
     OtherSV <-->|Scan Backfill| SCANAPP
-    Apps[Applications] --> LAPI
+    Apps[Applications] --> PART
     Apps --> JAPI
     Public[Public Clients] --> SCANAPP
 ```
@@ -153,7 +149,7 @@ An SV node has several distinct network connectivity requirements beyond what a 
 
 **BFT peer-to-peer connections**: Each SV's CometBFT node maintains TCP connections to every other SV's CometBFT node on dedicated P2P ports (e.g., port `26<MIGRATION_ID>56`). These connections carry the consensus gossip protocol.
 
-**Sequencer and mediator APIs**: The SV exposes its sequencer over HTTPS so that external validators (and other SVs' participants) can connect to it. Validators use BFT sequencer connections that read from and write to multiple SV sequencers simultaneously.
+**Sequencer API**: The SV exposes its sequencer over HTTPS so that external validators (and other SVs' participants) can connect to it. Validators use BFT sequencer connections that read from and write to multiple SV sequencers simultaneously.
 
 **Scan backfill**: Each SV's Scan App connects to the Scan APIs of all other SVs to backfill and cross-check transaction history in a BFT fashion.
 
