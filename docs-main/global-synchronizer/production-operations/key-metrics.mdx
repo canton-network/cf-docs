@@ -50,40 +50,41 @@ The dedicated Grafana dashboard **Splice Store Last Ingested Record Time** visua
 
 | Metric | What It Tells You |
 |--------|-------------------|
-| Sequencer connection status | Whether your participant can reach the Global Synchronizer |
-| Reconnection attempts | Frequency of connection drops (network instability indicator) |
-| Message processing latency | How quickly your node processes sequenced messages |
+| `daml.sequencer-client.sequencer-connection-pool.validated-connections` | Number of active, validated sequencer connections |
+| `daml.sequencer-client.sequencer-connection-pool.active-subscriptions` | Number of active event subscriptions in the connection pool |
+| `daml.sequencer-client.handler.delay` | Processing delay between sequencing time and local clock (milliseconds) |
 
-A sustained loss of sequencer connectivity means your node can't submit or confirm transactions.
+A sustained drop in `validated-connections` to zero means your node can't submit or confirm transactions.
 
 ### Transaction Processing
 
 | Metric | What It Tells You |
 |--------|-------------------|
-| Command submission rate | Volume of transactions your node is submitting |
-| Command completion latency | End-to-end time from submission to completion |
-| Rejection rate | Proportion of submitted commands that fail validation |
+| `daml.participant.api.commands.submissions` | End-to-end time to process a Daml command (validation, interpretation, synchronization) |
+| `daml.participant.api.commands.submissions_running` | Number of commands currently being handled |
+| `daml.participant.api.commands.failed_command_interpretations` | Commands that failed during interpretation |
 
-High rejection rates may indicate package vetting issues, incorrect party hosting, or application bugs. Monitor completion latency to detect synchronizer congestion or participant overload.
+A rising `failed_command_interpretations` rate may indicate package vetting issues, incorrect party hosting, or application bugs. Monitor `submissions` latency to detect synchronizer congestion or validator overload.
 
 ### Database Health
 
 | Metric | What It Tells You |
 |--------|-------------------|
-| Database connection pool utilization | Whether your pool is sized correctly |
-| Query latency (p50, p99) | Database performance under load |
-| Storage growth rate | How fast your database is growing |
+| `daml.db-storage.general.executor.load` | Ratio of running queries to available connections |
+| `daml.db-storage.general.executor.exectime` | Database task execution time |
+| `daml.db-storage.general.executor.queued` | Number of database tasks waiting in queue |
 
-Database performance directly affects transaction processing speed. If connection pool utilization is consistently above 80%, increase the pool size or scale your database.
+Database performance directly affects transaction processing speed. If `executor.load` is consistently above 0.8, increase the connection pool size or scale your database.
 
 ### Traffic and Canton Coin
 
 | Metric | What It Tells You |
 |--------|-------------------|
-| Traffic balance | Remaining traffic credit on the synchronizer |
-| Traffic consumption rate | How fast your node is consuming traffic |
+| `daml.sequencer-client.traffic-control.submitted-event-cost` | Cost of events submitted from this node |
+| `daml.sequencer-client.traffic-control.event-delivered-cost` | Cost of successfully delivered events |
+| `daml.sequencer-client.traffic-control.event-rejected` | Number of events rejected (often due to insufficient traffic balance) |
 
-A zero traffic balance prevents your node from submitting transactions. Monitor consumption rate to plan traffic purchases.
+If `event-rejected` is increasing, check your traffic balance. A zero balance prevents your node from submitting transactions.
 
 ## Alerting Recommendations
 
@@ -91,8 +92,8 @@ Set up alerts for these conditions:
 
 - **Node not ready** — `/readyz` returns non-200 for more than 5 minutes
 - **Ingestion stalled** — `splice_store_last_ingested_record_time_ms` hasn't advanced in 30 minutes
-- **Sequencer disconnected** — No active sequencer connection for more than 2 minutes
-- **Database connection pool exhausted** — Pool utilization above 95%
+- **Sequencer disconnected** — `daml.sequencer-client.sequencer-connection-pool.validated-connections` at 0 for more than 2 minutes
+- **Database connection pool exhausted** — `daml.db-storage.general.executor.load` above 0.95
 - **Traffic balance low** — Below the amount needed for 24 hours of normal operation
 - **Disk usage high** — Database storage above 80% capacity
 
