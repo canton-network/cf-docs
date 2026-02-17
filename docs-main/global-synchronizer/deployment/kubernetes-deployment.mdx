@@ -106,23 +106,65 @@ When first starting out, configure all three JWT token audiences to `https://can
 
 ## Configuring CometBFT
 
-The SV node includes a CometBFT node for BFT ordering. You need to generate CometBFT keys and configure peer connections.
+{/* COPIED_START source="splice:apps/app/src/pack/examples/sv-helm/cometbft-values.yaml" hash="cometbft-config" */}
 
-### Key Generation
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was adapted from existing reviewed documentation.
+**Source:** `splice/apps/app/src/pack/examples/sv-helm/cometbft-values.yaml`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
 
-Generate a CometBFT node key and validator key. These are separate from your SV identity keys and are specific to the CometBFT consensus layer.
+The SV node includes a CometBFT node for BFT ordering. Configure your CometBFT Helm values with your node identity and network connection details:
+
+```yaml
+nodeName: "YOUR_SV_NAME"
+
+node:
+  id: YOUR_COMETBFT_NODE_ID
+  identifier: "global-domain-MIGRATION_ID-cometbft"
+  externalAddress: "global-domain-MIGRATION_ID-cometbft.sv.YOUR_HOSTNAME:26MIGRATION_ID56"
+  keysSecret: "cometbft-keys"
+
+genesis:
+  chainId: "TARGET_CLUSTER-MIGRATION_ID"
+  chainIdSuffix: "0"
+```
+
+Replace `MIGRATION_ID` with the current migration ID of the Global Synchronizer (0 for initial deployment, incremented for each subsequent migration).
 
 ### State Sync
 
-For joining an existing network, configure CometBFT state sync to bootstrap your node from the current network state rather than replaying from genesis. This significantly reduces initial sync time.
+State sync bootstraps your node from the current network state instead of replaying from genesis. Enable it only when joining a chain that has already been running:
 
-### BFT Sequencer Connections
+```yaml
+stateSync:
+  enable: false  # Set to true only for initial join
+  rpcServers: "https://sv.sv-2.TARGET_HOSTNAME:443/api/sv/v0/admin/domain/cometbft/json-rpc,https://sv.sv-2.TARGET_HOSTNAME:443/api/sv/v0/admin/domain/cometbft/json-rpc"
+```
 
-Configure your node to connect to the BFT sequencer endpoints of other SVs. The sequencer connections enable your node to participate in the ordering protocol.
+<Warning>
+State sync introduces a dependency on the sponsoring node for fetching the state snapshot on startup. Disable it after initial synchronization is complete and after network resets.
+</Warning>
+
+{/* COPIED_END */}
 
 ## Installing PostgreSQL
 
-The SV node requires PostgreSQL databases for the participant, sequencer, mediator, and application components. You can deploy PostgreSQL in-cluster or use a managed cloud service (AWS RDS, GCP Cloud SQL, Azure Database for PostgreSQL).
+The SV node requires separate PostgreSQL databases for the participant, sequencer, mediator, and application components. You can deploy PostgreSQL in-cluster or use a managed cloud service (AWS RDS, GCP Cloud SQL, Azure Database for PostgreSQL).
+
+Each component's Helm values reference a Kubernetes secret for database credentials:
+
+```yaml
+# Example: participant database configuration
+persistence:
+  host: participant-pg
+  port: 5432
+  secretName: participant-pg-secret
+  databaseName: participant_MIGRATION_ID
+  schema: participant
+```
+
+Replace `MIGRATION_ID` with the current migration ID. The release artifacts bundle includes separate PostgreSQL value files for each component (`postgres-values-participant.yaml`, `postgres-values-sequencer.yaml`, `postgres-values-mediator.yaml`).
 
 For production deployments, a managed cloud service is recommended for automated backups, failover, and monitoring.
 

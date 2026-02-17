@@ -108,12 +108,37 @@ Bootstrapping a new Global Synchronizer deployment requires coordination among t
 
 ### Helm Values for Bootstrap
 
-The bootstrap deployment requires specific Helm values for each component:
+{/* COPIED_START source="splice:apps/app/src/pack/examples/sv-helm/sv-values.yaml" hash="sv-bootstrap-values" */}
 
-- **CometBFT Helm values** — Genesis validators, chain ID, block parameters
-- **Scan Helm values** — Initial Scan configuration for network observation
-- **SV Helm values** — SV identity, reward configuration, governance parameters
-- **Other Helm values** — Participant, sequencer, mediator, and infrastructure settings
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was adapted from existing reviewed documentation.
+**Source:** `splice/apps/app/src/pack/examples/sv-helm/sv-values.yaml`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+The release artifacts bundle includes example Helm values for each component. The SV values file configures the core SV identity and network connections:
+
+```yaml
+onboardingName: YOUR_SV_NAME
+nodeIdentifier: YOUR_SV_NAME
+decentralizedSynchronizerUrl: "https://sequencer-MIGRATION_ID.sv-2.TARGET_HOSTNAME"
+auth:
+  audience: "OIDC_AUTHORITY_SV_AUDIENCE"
+  jwksUrl: "https://OIDC_AUTHORITY_URL/.well-known/jwks.json"
+cometBFT:
+  enabled: true
+  connectionUri: "http://global-domain-MIGRATION_ID-cometbft-cometbft-rpc:26657"
+scan:
+  publicUrl: "https://scan.sv.YOUR_HOSTNAME"
+  internalUrl: "http://scan-app.sv:5012"
+domain:
+  sequencerAddress: "global-domain-MIGRATION_ID-sequencer"
+  mediatorAddress: "global-domain-MIGRATION_ID-mediator"
+```
+
+Separate Helm values files configure the CometBFT, participant, global domain (sequencer + mediator), Scan, and validator components. Refer to the release artifacts bundle for the full set of example values.
+
+{/* COPIED_END */}
 
 ### Infrastructure Considerations
 
@@ -124,9 +149,9 @@ The bootstrap deployment requires specific Helm values for each component:
 
 ## Running a Hard Domain Migration (HDM)
 
-In rare cases, the Global Synchronizer may need a hard domain migration — replacing the existing synchronizer with a new one while preserving the application state. This is a coordinated procedure that requires all SVs to participate.
+In rare cases, the Global Synchronizer may need a hard domain migration — replacing the existing synchronizer with a new one while preserving the application state. This corresponds to a Type 3 upgrade as described in [Deployment Progression](/docs-main/appdev/modules/m5-deployment-progression). HDMs are triggered by protocol-level changes that cannot be applied through standard upgrade procedures.
 
-HDMs are triggered by protocol-level changes that cannot be applied through standard upgrade procedures. The migration preserves the active contract set (ACS) while creating a new synchronizer with updated protocol parameters.
+The migration preserves the active contract set (ACS) while creating a new synchronizer with updated protocol parameters. HDMs require coordination among all SVs and increment the migration ID. See [Upgrade Procedures](/docs-main/global-synchronizer/production-operations/upgrade-procedures) for the operational steps.
 
 ## Next Steps
 
