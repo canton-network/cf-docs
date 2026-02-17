@@ -24,7 +24,7 @@ When a component fetches a contract created from an older version, the newly int
 When Daml code referencing an older version fetches a contract from a newer version, the fetch succeeds only if all unknown fields have the value `None`. If any unknown field contains a value other than `None`, the fetch fails. This prevents unintended data loss in workflows like archive-and-recreate.
 
 <Note>
-When adding `Optional` fields to choice return types, the return type must be a Daml record (not a scalar, tuple, list, set, or map). Design choices that may gain return fields in the future with Daml record return types from the start.
+When adding `Optional` fields to choice return types, the return type must be a Daml record (not a scalar, tuple, list, set, or map). It is to your advantage to design choices so that they are ready to gain return fields in the future, by using Daml-record return types right from the start of your design process.
 </Note>
 
 ### Adding new constructors to variants
@@ -33,11 +33,11 @@ New constructors can be added to variant types, including enums. Using a new con
 
 ### Adding new choices
 
-New choices in v2 become available on active v1 contracts once all stakeholders' validators have uploaded the v2 DAR files.
+For a new choice in v2 to be available on a given active v1 contract, all the validators of the stakeholders of that contract must have uploaded the v2 DAR files. The new choice must pass the mediator consensus layer, which requires all stakeholder validators to recognize the v2 package. Whether validators that are not stakeholders have uploaded the v2 DAR files has no influence on the availability of the new choice for that contract's stakeholders.
 
 ### Modifying existing choices
 
-Controllers, observers, and the choice body can be updated for bug fixes or to handle new arguments. Existing choices cannot be removed, but they can be made non-functional using the `abort` function.
+Controllers, observers, and the choice body can be updated for bug fixes or to handle new arguments. Existing choices cannot be removed because the ledger must continue to support in-flight transactions and historical audit trails that reference them. However, choices can be made non-functional using the `abort` function.
 
 ### Updating signatories, observers, and ensure clauses
 
@@ -107,6 +107,10 @@ Reviewers: Skip this section. Remove markers after final approval.
 Avoid package name conflicts, particularly between packages published by different app providers. Follow the Java ecosystem's convention of prefixing package names with the reverse DNS name of the app provider. For example, for the issuance workflows of the money market fund app provided by Acme Inc., the recommended `daml.yaml` configuration would be: `name: com-acme-money-market-fund-issuance`.
 
 {/* COPIED_END */}
+
+## Compiler Version Considerations
+
+The Daml compiler validates upgrade compatibility between v1 and v2 at build time. If the compiler version changes between when you built v1 and when you create v2, be aware that the compiler needs access to the compiled v1 DAR to perform its compatibility checks. The v2 package references v1 through the `upgrades` field in `daml.yaml`, which points to the v1 DAR file. As long as the v1 DAR is available, the newer compiler can validate the upgrade even if the v1 source code can no longer be compiled by the current compiler version.
 
 ## Next Steps
 
