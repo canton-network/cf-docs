@@ -69,7 +69,7 @@ cd backend && ./gradlew test
 kill $SANDBOX_PID
 ```
 
-For tests that need a full multi-validator setup, start [LocalNet](https://docs.sync.global/app_dev/testing/localnet.html) with Docker Compose instead of the sandbox. This is heavier but covers cross-validator scenarios.
+For tests that need a full multi-validator setup, start [LocalNet](/docs-main/appdev/modules/m5-localnet-development) with Docker Compose instead of the sandbox. This is heavier but covers cross-validator scenarios.
 
 ## Package Stage
 
@@ -97,18 +97,24 @@ If your backend and frontend are containerized, build and tag images in this sta
 
 ## Deploy Stage
 
-Deployment to each environment involves two parts: uploading the DAR to the participant node and deploying off-ledger services (backend, frontend, PQS).
+Deployment to each environment involves two parts: uploading the DAR to the validator and deploying off-ledger services (backend, frontend, PQS).
 
 ### DAR upload
 
-Upload your DAR to the target validator's participant node through the Ledger API or Admin API:
+Upload your DAR to the target validator through the participant's HTTP Ledger API:
 
 ```bash
-# Via the JSON API
-curl -X POST "https://${LEDGER_HOST}:${JSON_API_PORT}/v2/packages" \
+curl -X POST "https://${LEDGER_HOST}:${LEDGER_HTTP_PORT}/v2/packages" \
   -H "Authorization: Bearer ${AUTH_TOKEN}" \
   -H "Content-Type: application/octet-stream" \
   --data-binary @.daml/dist/your-project.dar
+```
+
+Verify the upload:
+
+```bash
+curl -s "https://${LEDGER_HOST}:${LEDGER_HTTP_PORT}/v2/packages" \
+  -H "Authorization: Bearer ${AUTH_TOKEN}"
 ```
 
 ### Environment promotion

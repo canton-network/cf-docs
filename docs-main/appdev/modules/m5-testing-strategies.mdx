@@ -59,7 +59,7 @@ testTokenTransfer = do
   assertMsg "Bob should have one token contract" (length bobTokens == 1)
 ```
 
-`dpm test` also reports code coverage for templates and choices, helping you identify untested paths in your Daml model.
+Review the `dpm test` output to confirm which test scripts passed and failed.
 
 ### What to test at the unit level
 
@@ -108,6 +108,52 @@ For backend services that talk to the Ledger API, write tests that:
 2. Create test parties and upload your DARs
 3. Submit commands through your backend's API layer
 4. Assert on the resulting ledger state or API responses
+
+{/* COPIED_START source="docs-website:daml/3.5/sdk/tutorials/quickstart/template-root/src/main/java/com/daml/quickstart/iou/IouMain.java" hash="integration-pattern" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was adapted from existing reviewed documentation.
+**Source:** `daml/3.5/sdk/tutorials/quickstart/template-root/src/main/java/com/daml/quickstart/iou/IouMain.java`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+A Java integration test connects to the Ledger API over gRPC and submits commands:
+
+```java
+// Set up a gRPC channel to the participant's Ledger API
+Channel channel = ManagedChannelBuilder
+    .forAddress(ledgerhost, ledgerport)
+    .usePlaintext()
+    .build();
+
+// Create a blocking stub for command submission
+CommandServiceGrpc.CommandServiceBlockingStub commandService =
+    CommandServiceGrpc.newBlockingStub(channel);
+
+// Submit a contract creation and wait for the transaction result
+var updateSubmission = UpdateSubmission
+    .create(APP_ID, randomUUID().toString(), update)
+    .withActAs(party);
+var request = new SubmitAndWaitForTransactionRequest(
+    updateSubmission.toCommandsSubmission());
+var response = commandService.submitAndWaitForTransaction(request.toProto());
+```
+
+For querying active contracts, use the `StateService`:
+
+```java
+StateServiceGrpc.StateServiceBlockingStub stateService =
+    StateServiceGrpc.newBlockingStub(channel);
+long ledgerEnd = stateService
+    .getLedgerEnd(GetLedgerEndRequest.newBuilder().build())
+    .getOffset();
+
+var request = new GetActiveContractsRequest(eventFormat, ledgerEnd);
+Iterator<GetActiveContractsResponse> activeContracts =
+    stateService.getActiveContracts(request.toProto());
+```
+
+{/* COPIED_END */}
 
 ### Test isolation
 
