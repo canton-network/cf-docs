@@ -88,7 +88,11 @@ template TradeRequest
 
     choice ConfirmTrade : ContractId TradeSettlement
       controller seller
-      do create TradeSettlement with ..
+      do create TradeSettlement with
+           buyer
+           seller
+           asset
+           price
 
 template TradeSettlement
   with
@@ -99,11 +103,9 @@ template TradeSettlement
   where
     signatory buyer, seller
 
-    choice Settle : (ContractId AssetTransfer, ContractId PaymentReceipt)
+    choice Settle : ()
       controller seller
-      do assetTransfer <- create AssetTransfer with ..
-         paymentReceipt <- create PaymentReceipt with ..
-         pure (assetTransfer, paymentReceipt)
+      do pure ()
 ```
 
 Each step in the workflow is a separate template. This makes the workflow state visible and auditable — you can query the ledger to see which step any given trade is at.
@@ -142,7 +144,7 @@ interface Transferable where
 Any template that implements `Transferable` gets the `TransferTo` choice. Your backend can work with the interface without knowing the specific template type, enabling generic transfer logic across different asset types.
 
 <Note>
-Place interface definitions in standalone packages that contain only interfaces and no templates. Interface definitions cannot be changed once deployed.
+Place interface definitions in standalone packages that contain only interfaces and no templates. An interface's structure (methods and view type) cannot be modified after deployment. If changes are needed, introduce a new interface version in a new package.
 </Note>
 
 ## Multi-Party Visibility Patterns

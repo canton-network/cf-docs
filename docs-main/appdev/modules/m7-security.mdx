@@ -31,10 +31,11 @@ template AuthorizedAgent
     signatory principal
     observer agent
 
-    choice ActOnBehalf : ContractId SomeResult
+    choice ActOnBehalf : ()
       controller agent
-      do -- agent acts with principal's authority
-         ...
+      do assertMsg "Action not in scope"
+           (scope == "transfer")
+         pure ()
 ```
 
 This keeps authorization explicit and auditable. The principal can revoke the delegation by archiving the `AuthorizedAgent` contract.
@@ -48,7 +49,7 @@ Canton validators protect the Ledger API with token-based authentication (JWT). 
 - Store tokens securely — never in client-side code, environment variables exposed to logs, or version control
 - Implement token refresh before expiry to avoid failed commands
 - Use separate service accounts for different application components (backend, automation, admin tools) to limit blast radius if a token is compromised
-- For the gRPC Ledger API, configure call credentials with the token. For the JSON API, use the `Authorization: Bearer <token>` header
+- For gRPC clients, configure call credentials with the token. For HTTP/JSON clients, use the `Authorization: Bearer <token>` header on the participant's integrated JSON API endpoint
 
 ### TLS configuration
 
@@ -63,7 +64,7 @@ ManagedChannel channel = NettyChannelBuilder
     .build();
 ```
 
-For LocalNet development, TLS is typically disabled or uses self-signed certificates. Do not carry this configuration into production.
+In LocalNet development, TLS is disabled by default. Do not carry this configuration into production.
 
 ## Key Management
 
@@ -73,14 +74,14 @@ Canton uses cryptographic keys for party identity, node identity, and transactio
 
 On LocalNet, keys are generated and stored locally — this is fine for development. In production:
 
-- Use Hardware Security Modules (HSM) or cloud Key Management Services (KMS) for private keys
+- Use [Hardware Security Modules (HSM) or cloud Key Management Services (KMS)](https://docs.digitalasset.com/canton/usermanual/kms) for private keys
 - Never store production keys on developer machines or in CI systems
 - Rotate keys according to your organization's security policy
 - Back up key material securely — losing keys means losing access to your party identity
 
 ### Validator key protection
 
-If you operate your own validator, the participant node's signing keys are the most critical secrets. Anyone with access to these keys can submit transactions as your parties. Ensure they are stored in an HSM or KMS and that access is restricted to the validator's runtime environment.
+If you operate your own validator, its signing keys are the most critical secrets. Anyone with access to these keys can submit transactions as your parties. Ensure they are stored in an HSM or KMS and that access is restricted to the validator's runtime environment.
 
 ## Secure Configuration
 
@@ -92,9 +93,9 @@ If you operate your own validator, the participant node's signing keys are the m
 
 ### Network isolation
 
-- Place your validator's participant node in a private network segment
-- Expose only the Ledger API port (gRPC or JSON API) to your application servers
-- Use firewall rules or security groups to restrict which systems can reach the participant node's Admin API
+- Place your validator in a private network segment
+- Expose only the Ledger API port to your application servers
+- Use firewall rules or security groups to restrict which systems can reach the validator's Admin API
 - The Admin API provides privileged operations (party management, package upload) and should not be exposed to application code
 
 ### Input validation at system boundaries
