@@ -1,0 +1,306 @@
+---
+title: "Working with Time"
+description: "Implement time-based logic in Daml contracts including expiration, deadlines, and time constraints"
+---
+
+{/* COPIED_START source="docs-website:docs/replicated/daml/3.4/sdk/sdlc-howtos/smart-contracts/develop/patterns/implementing-time-constraints.rst" hash="17e57ac2" */}
+
+# How To Implement Time Constraints
+
+Contract time constraints may be implemented using either:
+
+- ledger time primitives (i.e. isLedgerTimeLT, isLedgerTimeLE, isLedgerTimeGT and isLedgerTimeGE) or assertions (i.e. assertWithinDeadline and assertDeadlineExceeded)
+
+  > - the use of ledger time primitives and assertions do not constrain the time bound between transaction preparation and submission - e.g. they are suitable for workflows using external parties to sign transactions
+
+- or, by calling getTime
+
+  > - calls to getTime constrain transaction preparation and submission workflows to be (by default) within 1 minute.
+  > - the 1 minute value is the default value for the ledger time record time tolerance parameter (a dynamic synchronizer parameter).
+
+The next subsections demonstrate how the following Coin and TransferProposal contracts can be modified to use different types of ledger time constraints to control when parties are allowed to perform ledger writes.
+
+Coin contract
+
+```daml
+template Coin
+  with
+    owner: Party
+    issuer: Party
+    amount: Decimal
+  where
+    signatory issuer
+    signatory owner
+
+    ensure amount > 0.0
+```
+
+```daml
+    choice Transfer : ContractId TransferProposal
+      with
+        newOwner: Party
+      controller owner
+      do create TransferProposal
+            with coin=this; newOwner
+```
+
+TransferProposal contract
+
+```daml
+template TransferProposal
+  with
+    coin: Coin
+    newOwner: Party
+  where
+    signatory coin.owner
+    signatory coin.issuer
+    observer newOwner
+```
+
+```daml
+    choice AcceptTransfer : ContractId Coin
+      controller newOwner
+      do
+        create coin with owner = newOwner
+```
+
+```daml
+    choice WithdrawTransfer : ContractId Coin
+      controller coin.owner
+      do
+        create coin
+```
+
+```mermaid
+flowchart LR
+    subgraph Coin["Coin (active)"]
+        C1["owner: Alice<br/>issuer: Bank<br/>newOwner: Bob"]
+    end
+    Coin -->|"Transfer"| TP
+    subgraph TP["TransferProposal (active)"]
+        T1["newOwner: Bob<br/>coin: Coin"]
+    end
+    TP -->|"AcceptTransfer"| Coin2
+    subgraph Coin2["Coin (new owner)"]
+        C2["owner: Bob<br/>issuer: Bank"]
+    end
+```
+*Simple coin transfer with consent withdrawal*
+
+## How to check that a deadline is valid
+
+This design pattern demonstrates how to limit choices so that they must occur by a given deadline.
+
+### Motivation
+
+When parties need to perform ledger writes by a given deadline.
+
+### Implementation
+
+Transfer proposals can be accepted at any point in time. To restrict this behaviour so that acceptance must occur by a fixed time, a guard for AcceptTransfer choice execution can be added.
+
+TransferProposal contract
+In the TransferProposal contract, the body of the AcceptTransfer choice is modified to assert that the contract deadline is valid.
+
+```daml
+    choice AcceptTransfer : ContractId Coin
+      controller newOwner
+      do
+        assertWithinDeadline "time-limited-transfer" timeLimit
+        create coin with owner = newOwner
+```
+
+As transfer proposals are created when a Transfer choice is executed, the time by which an AcceptTransfer can be executed needs to be passed in as a choice parameter.
+
+Coin contract
+In the Coin contract, the Transfer choice has an additional deadline argument, so that TransferProposal contracts can be given a fixed lifetime.
+
+```daml
+    choice Transfer : ContractId TransferProposal
+      with
+        newOwner: Party
+        timeLimit: Time
+      controller owner
+      do create TransferProposal
+            with coin=this; newOwner; timeLimit
+```
+
+```mermaid
+flowchart LR
+    subgraph Coin["Coin (active)"]
+        C1["owner: Alice<br/>issuer: Bank"]
+    end
+    Coin -->|"Transfer(deadline)"| TP
+    subgraph TP["TransferProposal"]
+        T1["newOwner: Bob<br/>deadline: timestamp"]
+    end
+    TP -->|"AcceptTransfer<br/>assert now ≤ deadline"| Coin2
+    subgraph Coin2["Coin (new owner)"]
+        C2["owner: Bob<br/>issuer: Bank"]
+    end
+```
+*Time-limited coin ownership transfer*
+
+## How to check that a deadline has passed
+
+This design pattern demonstrates how to ensure choices only occur after a given deadline.
+
+### Motivation
+
+When parties need to perform ledger writes after a fixed time delay.
+
+### Implementation
+
+Transfer proposals can be accepted at any point in time. To restrict this behaviour so that acceptance can only occur after a fixed delay, a guard for AcceptTransfer choice execution can be added.
+
+TransferProposal contract
+In the TransferProposal contract, the body of the AcceptTransfer choice is modified to assert that the contract deadline has been exceeded or passed.
+
+```daml
+    choice AcceptTransfer : ContractId Coin
+      controller newOwner
+      do
+        assertDeadlineExceeded "delayed-transfer" delay
+        create coin with owner = newOwner
+```
+
+As transfer proposals are created when a Transfer choice is executed, the delay time after which an AcceptTransfer can be executed needs to be passed in as a choice parameter.
+
+Coin contract
+In the Coin contract, the Transfer choice has an additional deadline argument, so that TransferProposal contracts can be given a delay.
+
+```daml
+    choice Transfer : ContractId TransferProposal
+      with
+        newOwner: Party
+        delay: Time
+      controller owner
+      do create TransferProposal
+            with coin=this; newOwner; delay
+```
+
+```mermaid
+flowchart LR
+    subgraph Coin["Coin (active)"]
+        C1["owner: Alice<br/>issuer: Bank"]
+    end
+    Coin -->|"Transfer(delay)"| TP
+    subgraph TP["TransferProposal"]
+        T1["newOwner: Bob<br/>delay: duration"]
+    end
+    TP -->|"AcceptTransfer<br/>assert now > delay"| Coin2
+    subgraph Coin2["Coin (new owner)"]
+        C2["owner: Bob<br/>issuer: Bank"]
+    end
+```
+*Delayed coin ownership transfer*
+
+## Grant time-limited writes to parties
+
+This design pattern demonstrates how to grant time-limited writes to parties.
+
+### Motivation
+
+When parties need to be able to perform ledger writes, but writes need to only be granted for a specific time window.
+
+### Implementation
+
+Transfer proposals can be accepted at any point in time. To restrict this behaviour so that acceptance can only occur within a given time window, a guard for AcceptTransfer choice execution can be added.
+
+TransferProposal contract
+In the TransferProposal contract, the body of the AcceptTransfer choice is modified to assert that the contract deadline has been exceeded or passed.
+
+```daml
+    choice AcceptTransfer : ContractId Coin
+      controller newOwner
+      do
+        withinWindow <- isLedgerTimeGE startTime && isLedgerTimeLT endTime
+        _ <- unless withinWindow $ failWithStatus $
+               FailureStatus
+                 "transfer-outside-time-window"
+                 InvalidGivenCurrentSystemStateOther
+                 ("Ledger time is outside permitted transfer time window [" <> show startTime <> ", " <> show endTime <> ")")
+                 (TextMap.fromList [("startTime", show startTime), ("endTime", show endTime)])
+        create coin with owner = newOwner
+```
+
+As transfer proposals are created when a Transfer choice is executed, the interval start and end times, during which an AcceptTransfer can be executed need to be passed in as choice parameters.
+
+Coin contract
+In the Coin contract, the Transfer choice has an additional deadline argument, so that TransferProposal contracts can be given a delay.
+
+```daml
+    choice Transfer : ContractId TransferProposal
+      with
+        newOwner: Party
+        startTime: Time
+        duration: RelTime
+      controller owner
+      do create TransferProposal
+            with coin=this; newOwner; startTime; addRelTime startTime duration
+```
+
+```mermaid
+flowchart LR
+    subgraph Coin["Coin (active)"]
+        C1["owner: Alice<br/>issuer: Bank"]
+    end
+    Coin -->|"Transfer(start, end)"| TP
+    subgraph TP["TransferProposal"]
+        T1["newOwner: Bob<br/>startTime: timestamp<br/>endTime: timestamp"]
+    end
+    TP -->|"AcceptTransfer<br/>assert start ≤ now ≤ end"| Coin2
+    subgraph Coin2["Coin (new owner)"]
+        C2["owner: Bob<br/>issuer: Bank"]
+    end
+```
+*Coin ownership transfer within a time window*
+
+## Where to use getTime
+
+For workflows that prepare and submit transactions, care needs to be taken when using calls to getTime. This is because calls to getTime cause transactions to be bound to the ledger time, and in turn constrain how sequencers may re-order transactions. Global Synchronizers are configured such that the transaction prepare and submit time window is one minute, so any workflow using getTime must prepare and submit transactions within that one-minute time window.
+
+For workflows where this constraint can not be met (e.g. workflows that sign transactions using external parties), it is recommended that workflows are designed to use the ledger time primitives and assertions.
+
+### Motivation
+
+When parties need to perform ledger writes by a given deadline, but are able to prepare and submit a transaction within 1 minute.
+
+### Implementation
+
+Transfer proposals can be accepted at any point in time. To require acceptance by a fixed time, you can add a guard for AcceptTransfer choice execution. Here you determine the current ledger time by calling getTime.
+
+TransferProposal contract
+In the TransferProposal contract, the body of the AcceptTransfer choice is modified to assert that the contract deadline is valid relative to the ledger time returned by calling getTime.
+
+```daml
+    choice AcceptTransfer : ContractId Coin
+      controller newOwner
+      do
+        t <- getTime
+        _ <- unless (t < timeLimit) $ failWithStatus $
+                       FailureStatus
+                         "deadline-exceeded"
+                         InvalidGivenCurrentSystemStateOther
+                         ("Ledger time is after deadline " <> show timeLimit)
+                         (TextMap.fromList [("timeLimit", show timeLimit)])
+        create coin with owner = newOwner
+```
+
+As transfer proposals are created when a Transfer choice is executed, the time by which an AcceptTransfer can be executed needs to be passed in as a choice parameter.
+
+Coin contract
+In the Coin contract, the Transfer choice has an additional deadline argument, so that TransferProposal contracts can be given a fixed lifetime.
+
+```daml
+    choice Transfer : ContractId TransferProposal
+      with
+        newOwner: Party
+        timeLimit: Time
+      controller owner
+      do create TransferProposal
+            with coin=this; newOwner; timeLimit
+```
+
+
+{/* COPIED_END */}

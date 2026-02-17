@@ -1,0 +1,166 @@
+---
+title: "Trust Model Overview"
+description: "Understanding who you trust and what you trust them for in Canton Network"
+---
+
+Canton's trust model differs fundamentally from traditional blockchains. Rather than "trust everyone" or "trust no one," Canton enables **selective trust**—you choose who to trust for what purpose.
+
+## The Core Question
+
+In any distributed system, the key question is: **Who do you need to trust, and for what?**
+
+Canton breaks this into distinct trust domains, each with different participants and assumptions.
+
+## Six Trust Domains
+
+```mermaid
+flowchart TB
+    subgraph TD1[Your Validator]
+        V[Validator Node]
+    end
+
+    subgraph TD2[Contract Counterparties]
+        CP[Signatories & Observers]
+    end
+
+    subgraph TD3[Synchronizer Sequencer]
+        SEQ[Sequencer Nodes]
+    end
+
+    subgraph TD4[Synchronizer Mediator]
+        MED[Mediator Nodes]
+    end
+
+    subgraph TD5[Application Provider]
+        APP[dApp / Backend]
+    end
+
+    subgraph TD6[Network Governance]
+        GOV[Protocol Rules]
+    end
+```
+
+### 1. Your Validator
+
+**What you trust them for:**
+- Storing your contract data securely
+- Executing Daml code correctly
+- Keeping your private keys safe for a local party's transactions; external party's use external keys to sign transactions
+- Not revealing your data to unauthorized parties
+
+**Trust level:** High—they see all your data
+
+**Mitigations:**
+- Run your own validator
+- Choose a reputable validator operator
+- Use external party keys (you hold the keys)
+
+### 2. Contract Counterparties
+
+**What you trust them for:**
+- Honestly validating transactions they're stakeholders in
+- Not colluding to manipulate shared contracts (there must be one honest counterparty in a transaction)
+
+**Trust level:** Medium—they only see contracts they're party to
+
+**Mitigations:**
+- Daml authorization rules limit what parties can do
+- Multi-signature requirements for critical operations
+- Audit trails are cryptographically signed
+
+### 3. Synchronizer Sequencer
+
+**What you trust them for:**
+- Delivering messages in consistent order to all validators
+- Not censoring your transactions indefinitely
+- Maintaining availability
+
+**What you DON'T trust them for:**
+- They cannot read your transaction content (encrypted)
+- They cannot forge transactions (signatures required)
+- They cannot approve invalid transactions (stakeholders validate)
+
+**Trust level:** Low—they see only encrypted messages
+
+**Mitigations:**
+- BFT sequencer with multiple independent operators
+- Connect to multiple sequencers with threshold confirmation
+- Run your own synchronizer
+
+### 4. Synchronizer Mediator
+
+**What you trust them for:**
+- Correctly aggregating confirmation votes
+- Delivering accurate verdicts
+- Not leaking which parties confirmed
+
+**What you DON'T trust them for:**
+- They cannot read transaction content (encrypted)
+- They cannot force approval (need stakeholder confirmations)
+
+**Trust level:** Low—they see only encrypted confirmations
+
+**Mitigations:**
+- Multiple mediators with threshold agreement
+- Mediator responses are signed and verifiable
+
+### 5. Application Provider
+
+**What you trust them for:**
+- Submitting commands you authorize
+- Correctly implementing business logic off-ledger
+- Protecting your credentials/session
+
+**Trust level:** Varies—depends on application design
+
+**Mitigations:**
+- On-ledger authorization (Daml) vs off-ledger
+- External party signing (you approve each transaction)
+- Open source / audited applications
+- Use your own validator to prepare and submit transactions
+
+### 6. Network Governance
+
+**What you trust them for:**
+- Protocol upgrades don't break your applications and the corresponding contracts
+- Network parameters and traffic costs are set fairly
+- Dispute resolution processes
+
+**Trust level:** Low for technical, medium for economic
+
+**Mitigations:**
+- Transparent governance (CIPs for Canton Network)
+- Exit rights (move to different synchronizer)
+- Contract design anticipating upgrades
+
+## Trust at a Glance
+
+Your validator sees all your data and could block you — this is the highest-trust relationship. Counterparties see only contracts they're party to, and Daml rules constrain what they can do. The sequencer and mediator operate on encrypted data only; they could temporarily delay messages but cannot read or forge anything. Application providers and governance bodies vary in trust depending on how they're designed and structured.
+
+## Decentralization Options
+
+Canton supports decentralization at each layer.
+
+**At the validator level**, you can run a single validator (full trust in the operator), use multi-hosted parties (distributed across validators), or hold external party keys so you control signing directly.
+
+**At the synchronizer level**, a single-operator synchronizer requires trust in one entity. A BFT sequencer distributes trust so that fewer than 1/3 of nodes must be honest. Connecting to multiple synchronizers further reduces single-point-of-failure risk.
+
+**The Global Synchronizer** provides maximum decentralization: multiple independent Super Validators run sequencer and mediator nodes, BFT consensus tolerates Byzantine failures up to threshold, and a transparent CIP process governs protocol changes.
+
+## Practical Trust Decisions
+
+**End users** should choose their wallet or validator carefully — the operator holds your data. Prefer applications that enforce authorization on-ledger, since those guarantees are stronger than off-ledger checks. If you want maximum control, use external party keys, though this means managing your own key security.
+
+**Developers** face a core tradeoff: on-ledger logic (Daml) gives you enforceable guarantees, while off-ledger logic gives flexibility. For high-value operations, multi-signature authorization is worth the added complexity. Your synchronizer choice should match the trust requirements of each use case.
+
+**Validators** should evaluate synchronizer operators for reputation and decentralization before connecting. You are trusted with user data, so security practices matter — use HSMs or KMS for key management in production.
+
+## Canton vs Traditional Blockchains
+
+In a traditional blockchain, everyone sees every transaction and every node validates. You trust the majority to behave honestly. Canton inverts this model: only stakeholders see a transaction, only affected parties validate it, and you place trust primarily in your own validator. The synchronizer sees only encrypted data, and governance operates per-synchronizer as well as at the network level.
+
+## Related Topics
+
+- [Two-Layer Consensus](/docs-main/overview/learn/two-layer-consensus) — how the consensus layers interact
+- [Architecture Overview](/docs-main/overview/learn/architecture) — component responsibilities
+- [Privacy Model](/docs-main/overview/learn/privacy-model) — what each party can see
