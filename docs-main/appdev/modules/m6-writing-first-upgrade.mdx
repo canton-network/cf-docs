@@ -8,18 +8,18 @@ This tutorial walks you through creating a v2 version of a Daml package. You'll 
 ## Prerequisites
 
 - A working `dpm` installation with the Daml SDK
-- Familiarity with Daml templates and choices ([Module 3](/docs-main/appdev/modules/m3-daml))
+- Familiarity with Daml templates and choices ([Module 3](/docs-main/appdev/modules/m3-contract-templates))
 - A text editor or Daml Studio
 
 ## Step 1: Create the v1 Package
 
-Initialize a new project package, then replace its contents with a simple `License` template:
+Create the directory structure and populate it with a simple `License` template:
 
 ```bash
-dpm new daml/v1/
+mkdir -p daml/v1/daml
 ```
 
-Replace the contents of `daml/v1/daml.yaml`:
+Create `daml/v1/daml.yaml`:
 
 ```yaml
 # daml/v1/daml.yaml
@@ -32,7 +32,7 @@ dependencies:
   - daml-stdlib
 ```
 
-Replace the contents of `daml/v1/daml/Main.daml`:
+Create `daml/v1/daml/Main.daml`:
 
 ```haskell
 -- daml/v1/daml/Main.daml
@@ -81,7 +81,10 @@ source: daml
 dependencies:
   - daml-prim
   - daml-stdlib
+upgrades: ../v1/.daml/dist/com-example-licensing-1.0.0.dar
 ```
+
+The `upgrades` field points to the v1 DAR. This is what tells `dpm build` to validate that v2 is a compatible upgrade of v1.
 
 Now make backward-compatible changes. Add an `Optional` field to the record and a new choice to the template:
 
@@ -130,7 +133,7 @@ cd daml/v2
 dpm build
 ```
 
-If the build succeeds, the compiler has verified that v2 is a valid upgrade of v1 (assuming both packages are visible to the build). The compiler checks all the SCU rules: no removed fields, no type changes, new fields are `Optional`, etc.
+If the build succeeds, the compiler has verified that v2 is a valid upgrade of v1. The `upgrades` field in `daml.yaml` triggers this check — without it, `dpm build` compiles v2 in isolation and performs no cross-version validation. The compiler checks all the SCU rules: no removed fields, no type changes, new fields are `Optional`, etc.
 
 If you've introduced a breaking change, the compiler will report an error telling you what rule was violated.
 
@@ -148,6 +151,7 @@ dependencies:
   - daml-prim
   - daml-stdlib
   - daml-script
+upgrades: ../v1/.daml/dist/com-example-licensing-1.0.0.dar
 ```
 
 Then create a test script that simulates a v1 contract (with `expiryDate = None`) and exercises the new v2 `Renew` choice:
@@ -181,7 +185,8 @@ testUpgradePath = do
 
   -- Verify the renewed license has the expiry set
   Some renewed <- queryContractId holder newLicenseCid
-  assertMsg "Should have expiry" (renewed.info.expiryDate == Some (datetime 2026 Dec 31 0 0 0))
+  assertMsg "Should have expiry"
+    (renewed.info.expiryDate == Some (datetime 2026 Dec 31 0 0 0))
 ```
 
 Run the test from the v2 package directory:
@@ -201,7 +206,14 @@ In a real deployment, you upload both DAR files to your validator. The order mat
 
 ```bash
 # Upload v1 (if not already on the ledger)
+curl -X POST "http://localhost:7575/v2/packages" \
+  -H "Content-Type: application/octet-stream" \
+  --data-binary @daml/v1/.daml/dist/com-example-licensing-1.0.0.dar
+
 # Upload v2
+curl -X POST "http://localhost:7575/v2/packages" \
+  -H "Content-Type: application/octet-stream" \
+  --data-binary @daml/v2/.daml/dist/com-example-licensing-2.0.0.dar
 ```
 
 Once v2 is uploaded and vetted on all stakeholders' validators, the new choice becomes available on existing v1 contracts.

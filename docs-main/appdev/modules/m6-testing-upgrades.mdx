@@ -72,7 +72,7 @@ testV1ContractWithV2Code = do
         expiryDate = None  -- v2 field, set to None
 
   -- Fetch and verify v2 fields default correctly
-  Some (_, license) <- queryContractId issuer cid
+  Some license <- queryContractId issuer cid
   assertMsg "expiryDate should be None" (license.info.expiryDate == None)
 ```
 
@@ -97,33 +97,14 @@ testNewChoiceOnExistingContract = do
       newExpiry = datetime 2026 Dec 31 0 0 0
 
   -- Verify result
-  Some (_, renewed) <- queryContractId issuer newCid
+  Some renewed <- queryContractId issuer newCid
   assertMsg "Should have expiry set"
     (renewed.info.expiryDate == Some (datetime 2026 Dec 31 0 0 0))
 ```
 
-### Testing that incompatible downgrades fail
+### Testing incompatible downgrades
 
-If your v2 introduces data that v1 code can't handle, write negative tests confirming the expected failure:
-
-```haskell
-testDowngradeFails : Script ()
-testDowngradeFails = do
-  issuer <- allocateParty "Issuer"
-  holder <- allocateParty "Holder"
-
-  -- Create with v2 data (non-None optional field)
-  cid <- submit issuer do
-    createCmd License with
-      info = LicenseInfo with
-        holder; issuer
-        product = "Widget"
-        expiryDate = Some (datetime 2026 Dec 31 0 0 0)
-
-  -- Attempting to read this with v1 code should fail
-  -- (In a real test, you'd use a v1 import and assert failure)
-  pure ()
-```
+True cross-version downgrade testing requires uploading both v1 and v2 DARs to a sandbox and exercising contracts across version boundaries. This cannot be done in a single Daml Script test because Daml Script runs within a single package version. Use the workflow-level testing approach described above: upload both DARs to a sandbox, create contracts with v2 data (non-`None` optional fields), then verify that v1 code fails to fetch them as expected.
 
 ## Regression Testing
 
@@ -152,18 +133,21 @@ dpm test
 # Upgrade compatibility
 dpm sandbox &
 SANDBOX_PID=$!
+
+# Wait for sandbox to be ready (use a health check loop in production CI)
 sleep 30
 
 # Upload production v1 DAR
 curl -X POST "http://localhost:7575/v2/packages" \
+  -H "Content-Type: application/octet-stream" \
   --data-binary @artifacts/v1.dar
 
-# Upload v2 DAR
+# Upload v2 DAR — if this succeeds, type-level compatibility is confirmed
 curl -X POST "http://localhost:7575/v2/packages" \
+  -H "Content-Type: application/octet-stream" \
   --data-binary @artifacts/v2.dar
 
-# Run workflow tests
-cd backend && ./gradlew upgradeTest
+# Run your project's upgrade test suite here
 
 kill $SANDBOX_PID
 ```

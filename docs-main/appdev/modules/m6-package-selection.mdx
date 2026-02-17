@@ -55,15 +55,15 @@ A participant node must fully upgrade all its v1 contracts before unvetting v1 t
 
 {/* COPIED_END */}
 
-## Preference Ordering
+## Cross-Version Fetch Behavior
 
-When the ledger can resolve a template against multiple package versions, it prefers the newest version. This means:
+The runtime uses whatever package version your code references. There is no automatic "preference" for newer versions — the version used depends on which package your code was compiled against. The cross-version behavior follows these rules:
 
 - If you fetch a `License` using v2 code, and the contract was created with v1, the runtime applies v2 logic (filling new `Optional` fields with `None`)
 - If you fetch a `License` using v1 code, and the contract was created with v2 where new fields are `None`, the runtime applies v1 logic (ignoring unknown fields)
-- If you fetch a `License` using v1 code, and the contract was created with v2 where new fields have non-`None` values, the fetch fails
+- If you fetch a `License` using v1 code, and the contract was created with v2 where new fields have non-`None` values, the fetch fails to prevent data loss
 
-This preference ordering encourages forward progress — newer code is preferred when it's compatible, and the system fails safely when it isn't.
+The system fails safely when versions are incompatible rather than silently dropping data.
 
 ## Next Steps
 
