@@ -3,7 +3,7 @@ title: JSON API
 description: "HTTP/JSON interface to the Canton Ledger API"
 ---
 
-The JSON API provides an HTTP/REST interface to the Canton Ledger API. It runs as a sidecar process alongside a Canton participant and translates JSON HTTP requests into gRPC Ledger API calls.
+The JSON API provides an HTTP/REST interface to the Canton Ledger API. In Canton 3.x, it is integrated directly into the participant node and translates JSON HTTP requests into gRPC Ledger API calls.
 
 ## Quick Reference
 
@@ -39,21 +39,93 @@ curl http://localhost:7575/v2/version
 
 ### Command Submission
 
-Submit a command via HTTP POST with a JSON body specifying the command details, workflow ID, and party information.
+{/* COPIED_START source="docs-website:canton/3.5/sdk/tutorials/json-api/canton_and_the_json_ledger_api.rst" hash="json-api-command-submit" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was adapted from existing reviewed documentation.
+**Source:** `canton/3.5/sdk/tutorials/json-api/canton_and_the_json_ledger_api.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+```bash
+curl localhost:7575/v2/commands/submit-and-wait \
+  -H "Content-Type: application/json" \
+  -d '{
+    "commands": [
+      {
+        "CreateCommand": {
+          "createArguments": {
+            "issuer": "<partyId>",
+            "owner": "<partyId>",
+            "name": "Example Asset Name"
+          },
+          "templateId": "#json-tests:Main:Asset"
+        }
+      }
+    ],
+    "userId": "ledger-api-user",
+    "commandId": "example-app-create-1234",
+    "actAs": ["<partyId>"],
+    "readAs": ["<partyId>"]
+  }'
+```
+
+Other submission endpoints include `/v2/commands/submit-and-wait-for-transaction` (returns the full transaction) and `/v2/commands/async/submit` (returns immediately).
+
+{/* COPIED_END */}
 
 ### Active Contract Queries
 
-Query the active contract set for contracts matching specific templates and filter criteria.
+{/* COPIED_START source="docs-website:canton/3.5/sdk/tutorials/json-api/canton_and_the_json_ledger_api.rst" hash="json-api-acs-query" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was adapted from existing reviewed documentation.
+**Source:** `canton/3.5/sdk/tutorials/json-api/canton_and_the_json_ledger_api.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+```bash
+curl localhost:7575/v2/state/active-contracts \
+  -H "Content-Type: application/json" \
+  -d '{
+    "eventFormat": {
+      "filtersByParty": {},
+      "filtersForAnyParty": {
+        "cumulative": [
+          {
+            "identifierFilter": {
+              "WildcardFilter": {
+                "value": {
+                  "includeCreatedEventBlob": true
+                }
+              }
+            }
+          }
+        ]
+      },
+      "verbose": false
+    },
+    "verbose": false,
+    "activeAtOffset": 20
+  }'
+```
+
+{/* COPIED_END */}
 
 ### Transaction Streaming
 
-The JSON API supports WebSocket connections for streaming transaction updates, equivalent to the gRPC UpdateService.
+The JSON API supports both HTTP POST and WebSocket connections for streaming updates. Use `/v2/updates` or `/v2/updates/flats` for flat transaction streams, and `/v2/updates/trees` for transaction trees. WebSocket connections use the `daml.ws.auth` subprotocol.
 
 ## Configuration
 
-The JSON API connects to a participant's gRPC Ledger API port. In cn-quickstart LocalNet deployments, it is pre-configured and available at `http://localhost:7575`.
+The JSON API is configured via the `http-ledger-api` section of the participant node's configuration. In cn-quickstart LocalNet deployments, it is pre-configured and available at `http://localhost:7575`.
 
-For production deployments, the JSON API is typically deployed as a sidecar container in the same pod or service as the participant.
+The OpenAPI and AsyncAPI specifications are available at runtime:
+
+```bash
+curl http://localhost:7575/docs/openapi
+curl http://localhost:7575/docs/asyncapi
+```
 
 ## Authentication
 
