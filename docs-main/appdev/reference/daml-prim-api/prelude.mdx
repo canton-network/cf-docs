@@ -1,0 +1,901 @@
+<a id="module-prelude-72703"></a>
+
+# Prelude
+
+## Data Types
+
+<a id="type-da-types-either-56020"></a>
+
+### `data Either a b`
+
+The `Either` type represents values with two possibilities: a value of
+type `Either a b` is either `Left a` or `Right b`.
+
+The `Either` type is sometimes used to represent a value which is
+either correct or an error; by convention, the `Left` constructor is
+used to hold an error value and the `Right` constructor is used to
+hold a correct value (mnemonic: "right" also means "correct").
+
+Constructors:
+
+<a id="constr-da-types-left-53933"></a>
+- `Left a`
+<a id="constr-da-types-right-18483"></a>
+- `Right b`
+
+Instances:
+
+- `instance (Eq a, Eq b) => Eq (Either a b)`
+- `instance (Ord a, Ord b) => Ord (Either a b)`
+- `instance (Show a, Show b) => Show (Either a b)`
+
+<a id="type-ghc-show-shows-46771"></a>
+
+### `type ShowS = Text -> Text`
+
+`showS` should represent some text, and applying it to some argument
+should prepend the argument to the represented text.
+
+<a id="type-ghc-types-bool-66265"></a>
+
+### `data Bool`
+
+A type for Boolean values, ie `True` and `False`.
+
+Constructors:
+
+<a id="constr-ghc-types-false-77590"></a>
+- `False`
+<a id="constr-ghc-types-true-99264"></a>
+- `True`
+
+Instances:
+
+- `instance Eq Bool`
+- `instance Ord Bool`
+- `instance Bounded Bool`
+- `instance Enum Bool`
+- `instance Show Bool`
+
+<a id="type-ghc-types-decimal-18135"></a>
+
+### `type Decimal = Numeric 10`
+
+<a id="type-ghc-types-int-37261"></a>
+
+### `data Int`
+
+A type representing a 64-bit integer.
+
+Instances:
+
+- `instance Eq Int`
+- `instance Ord Int`
+- `instance Bounded Int`
+- `instance Enum Int`
+- `instance Additive Int`
+- `instance Divisible Int`
+- `instance Multiplicative Int`
+- `instance Number Int`
+- `instance Signed Int`
+- `instance Show Int`
+
+<a id="type-ghc-types-nat-55875"></a>
+
+### `data Nat`
+
+(Kind) This is the kind of type-level naturals.
+
+<a id="type-ghc-types-numeric-891"></a>
+
+### `data Numeric n`
+
+A type for fixed-point decimal numbers, with the scale
+being passed as part of the type.
+
+`Numeric n` represents a fixed-point decimal number with a
+fixed precision of 38 (i.e. 38 digits not including a leading zero)
+and a scale of `n`, i.e., `n` digits after the decimal point.
+
+`n` must be between 0 and 37 (bounds inclusive).
+
+Examples:
+```
+0.01 : Numeric 2
+0.0001 : Numeric 4
+```
+
+Instances:
+
+- `instance Eq (Numeric n)`
+- `instance Ord (Numeric n)`
+- `instance NumericScale n => Additive (Numeric n)`
+- `instance NumericScale n => Divisible (Numeric n)`
+- `instance NumericScale n => Fractional (Numeric n)`
+- `instance NumericScale n => Multiplicative (Numeric n)`
+- `instance NumericScale n => Number (Numeric n)`
+- `instance NumericScale n => Signed (Numeric n)`
+- `instance Show (Numeric n)`
+
+<a id="type-ghc-types-ordering-35353"></a>
+
+### `data Ordering`
+
+A type for giving information about ordering:
+being less than (`LT`), equal to (`EQ`), or greater than
+(`GT`) something.
+
+Constructors:
+
+<a id="constr-ghc-types-lt-57618"></a>
+- `LT`
+<a id="constr-ghc-types-eq-5100"></a>
+- `EQ`
+<a id="constr-ghc-types-gt-28015"></a>
+- `GT`
+
+Instances:
+
+- `instance Eq Ordering`
+- `instance Ord Ordering`
+- `instance Show Ordering`
+
+<a id="type-ghc-types-text-51952"></a>
+
+### `data Text`
+
+A type for text strings, that can represent any unicode code point.
+For example `"Hello, world"`.
+
+Instances:
+
+- `instance Eq Text`
+- `instance Ord Text`
+- `instance Show Text`
+
+<a id="type-ghc-types-x-2599"></a>
+
+### `data [] a`
+
+A type for lists, for example `[1,2,3]`.
+
+Constructors:
+
+<a id="constr-ghc-types-x-63478"></a>
+- `[]`
+<a id="constr-ghc-types-colon-97313"></a>
+- `: _ _`
+
+## Typeclasses
+
+<a id="class-ghc-base-functor-31205"></a>
+
+### `class Functor f`
+
+A `Functor` is a typeclass for things that can be mapped over (using
+its `fmap` function. Examples include `Optional`, `[]` and `Update`).
+
+Methods:
+
+- `fmap : (a -> b) -> f a -> f b`
+  `fmap` takes a function of type `a -> b`, and turns it into a
+  function of type `f a -> f b`, where `f` is the type which is an
+  instance of `Functor`.
+  
+  For example, `map` is an `fmap` that only works on lists.
+  It takes a function `a -> b` and a `[a]`, and returns a `[b]`.
+- `<$ : a -> f b -> f a`
+  Replace all locations in the input `f b` with the same value `a`.
+  The default definition is `fmap . const`, but you can override
+  this with a more efficient version.
+
+<a id="class-ghc-classes-eq-22713"></a>
+
+### `class Eq a`
+
+The `Eq` class defines equality (`==`) and inequality (`/=`).
+All the basic datatypes exported by the "Prelude" are instances of `Eq`,
+and `Eq` may be derived for any datatype whose constituents are also
+instances of `Eq`.
+
+Usually, `==` is expected to implement an equivalence relationship where two
+values comparing equal are indistinguishable by "public" functions, with
+a "public" function being one not allowing to see implementation details. For
+example, for a type representing non-normalised natural numbers modulo 100,
+a "public" function doesn't make the difference between 1 and 201. It is
+expected to have the following properties:
+
+**Reflexivity**: `x == x` = `True`
+
+**Symmetry**: `x == y` = `y == x`
+
+**Transitivity**: if `x == y && y == z` = `True`, then `x == z` = `True`
+
+**Substitutivity**: if `x == y` = `True` and `f` is a "public" function
+whose return type is an instance of `Eq`, then `f x == f y` = `True`
+
+**Negation**: `x /= y` = `not (x == y)`
+
+Minimal complete definition: either `==` or `/=`.
+
+Methods:
+
+- `== : a -> a -> Bool`
+- `/= : a -> a -> Bool`
+
+Instances:
+
+- `instance (Eq a, Eq b) => Eq (Either a b)`
+- `instance Eq Bool`
+- `instance Eq Int`
+- `instance Eq (Numeric n)`
+- `instance Eq Ordering`
+- `instance Eq Text`
+- `instance Eq a => Eq [a]`
+- `instance Eq ()`
+- `instance (Eq a, Eq b) => Eq (a, b)`
+- `instance (Eq a, Eq b, Eq c) => Eq (a, b, c)`
+- `instance (Eq a, Eq b, Eq c, Eq d) => Eq (a, b, c, d)`
+- `instance (Eq a, Eq b, Eq c, Eq d, Eq e) => Eq (a, b, c, d, e)`
+- `instance (Eq a, Eq b, Eq c, Eq d, Eq e, Eq f) => Eq (a, b, c, d, e, f)`
+- `instance (Eq a, Eq b, Eq c, Eq d, Eq e, Eq f, Eq g) => Eq (a, b, c, d, e, f, g)`
+- `instance (Eq a, Eq b, Eq c, Eq d, Eq e, Eq f, Eq g, Eq h) => Eq (a, b, c, d, e, f, g, h)`
+- `instance (Eq a, Eq b, Eq c, Eq d, Eq e, Eq f, Eq g, Eq h, Eq i) => Eq (a, b, c, d, e, f, g, h, i)`
+- `instance (Eq a, Eq b, Eq c, Eq d, Eq e, Eq f, Eq g, Eq h, Eq i, Eq j) => Eq (a, b, c, d, e, f, g, h, i, j)`
+- `instance (Eq a, Eq b, Eq c, Eq d, Eq e, Eq f, Eq g, Eq h, Eq i, Eq j, Eq k) => Eq (a, b, c, d, e, f, g, h, i, j, k)`
+- `instance (Eq a, Eq b, Eq c, Eq d, Eq e, Eq f, Eq g, Eq h, Eq i, Eq j, Eq k, Eq l) => Eq (a, b, c, d, e, f, g, h, i, j, k, l)`
+- `instance (Eq a, Eq b, Eq c, Eq d, Eq e, Eq f, Eq g, Eq h, Eq i, Eq j, Eq k, Eq l, Eq m) => Eq (a, b, c, d, e, f, g, h, i, j, k, l, m)`
+- `instance (Eq a, Eq b, Eq c, Eq d, Eq e, Eq f, Eq g, Eq h, Eq i, Eq j, Eq k, Eq l, Eq m, Eq n) => Eq (a, b, c, d, e, f, g, h, i, j, k, l, m, n)`
+- `instance (Eq a, Eq b, Eq c, Eq d, Eq e, Eq f, Eq g, Eq h, Eq i, Eq j, Eq k, Eq l, Eq m, Eq n, Eq o) => Eq (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o)`
+
+<a id="class-ghc-classes-ord-6395"></a>
+
+### `class Eq a => Ord a`
+
+The `Ord` class is used for totally ordered datatypes.
+
+Instances of `Ord` can be derived for any user-defined datatype whose
+constituent types are in `Ord`. The declared order of the constructors in
+the data declaration determines the ordering in derived `Ord` instances. The
+`Ordering` datatype allows a single comparison to determine the precise
+ordering of two objects.
+
+The Haskell Report defines no laws for `Ord`. However, `<=` is customarily
+expected to implement a non-strict partial order and have the following
+properties:
+
+**Transitivity**: if `x <= y && y <= z` = `True`, then `x <= z` = `True`
+
+**Reflexivity**: `x <= x` = `True`
+
+**Antisymmetry**: if `x <= y && y <= x` = `True`, then `x == y` = `True`
+
+Note that the following operator interactions are expected to hold:
+
+1. `x >= y` = `y <= x`
+2. `x < y` = `x <= y && x /= y`
+3. `x > y` = `y < x`
+4. `x < y` = `compare x y == LT`
+5. `x > y` = `compare x y == GT`
+6. `x == y` = `compare x y == EQ`
+7. `min x y == if x <= y then x else y` = 'True'
+8. `max x y == if x >= y then x else y` = 'True'
+
+Minimal complete definition: either `compare` or `<=`.
+Using `compare` can be more efficient for complex types.
+
+Methods:
+
+- `compare : a -> a -> Ordering`
+- `< : a -> a -> Bool`
+- `<= : a -> a -> Bool`
+- `> : a -> a -> Bool`
+- `>= : a -> a -> Bool`
+- `max : a -> a -> a`
+- `min : a -> a -> a`
+
+Instances:
+
+- `instance (Ord a, Ord b) => Ord (Either a b)`
+- `instance Ord Bool`
+- `instance Ord Int`
+- `instance Ord (Numeric n)`
+- `instance Ord Ordering`
+- `instance Ord Text`
+- `instance Ord a => Ord [a]`
+- `instance Ord ()`
+- `instance (Ord a, Ord b) => Ord (a, b)`
+- `instance (Ord a, Ord b, Ord c) => Ord (a, b, c)`
+- `instance (Ord a, Ord b, Ord c, Ord d) => Ord (a, b, c, d)`
+- `instance (Ord a, Ord b, Ord c, Ord d, Ord e) => Ord (a, b, c, d, e)`
+- `instance (Ord a, Ord b, Ord c, Ord d, Ord e, Ord f) => Ord (a, b, c, d, e, f)`
+- `instance (Ord a, Ord b, Ord c, Ord d, Ord e, Ord f, Ord g) => Ord (a, b, c, d, e, f, g)`
+- `instance (Ord a, Ord b, Ord c, Ord d, Ord e, Ord f, Ord g, Ord h) => Ord (a, b, c, d, e, f, g, h)`
+- `instance (Ord a, Ord b, Ord c, Ord d, Ord e, Ord f, Ord g, Ord h, Ord i) => Ord (a, b, c, d, e, f, g, h, i)`
+- `instance (Ord a, Ord b, Ord c, Ord d, Ord e, Ord f, Ord g, Ord h, Ord i, Ord j) => Ord (a, b, c, d, e, f, g, h, i, j)`
+- `instance (Ord a, Ord b, Ord c, Ord d, Ord e, Ord f, Ord g, Ord h, Ord i, Ord j, Ord k) => Ord (a, b, c, d, e, f, g, h, i, j, k)`
+- `instance (Ord a, Ord b, Ord c, Ord d, Ord e, Ord f, Ord g, Ord h, Ord i, Ord j, Ord k, Ord l) => Ord (a, b, c, d, e, f, g, h, i, j, k, l)`
+- `instance (Ord a, Ord b, Ord c, Ord d, Ord e, Ord f, Ord g, Ord h, Ord i, Ord j, Ord k, Ord l, Ord m) => Ord (a, b, c, d, e, f, g, h, i, j, k, l, m)`
+- `instance (Ord a, Ord b, Ord c, Ord d, Ord e, Ord f, Ord g, Ord h, Ord i, Ord j, Ord k, Ord l, Ord m, Ord n) => Ord (a, b, c, d, e, f, g, h, i, j, k, l, m, n)`
+- `instance (Ord a, Ord b, Ord c, Ord d, Ord e, Ord f, Ord g, Ord h, Ord i, Ord j, Ord k, Ord l, Ord m, Ord n, Ord o) => Ord (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o)`
+
+<a id="class-ghc-classes-numericscale-83720"></a>
+
+### `class NumericScale n`
+
+Is this a valid scale for the `Numeric` type?
+
+This typeclass is used to prevent the creation of Numeric values
+with too large a scale. The scale controls the number of digits available
+after the decimal point, and it must be between 0 and 37 inclusive.
+
+Thus the only available instances of this typeclass are `NumericScale 0`
+through `NumericScale 37`. This cannot be extended without additional
+compiler and runtime support. You cannot implement a custom instance
+of this typeclass.
+
+If you have an error message in your code of the form "No instance for
+`(NumericScale n)`", this is probably caused by having a numeric literal
+whose scale cannot be inferred by the compiler. You can usually fix this
+by adding a type signature to the definition, or annotating the numeric
+literal directly (for example, instead of writing `3.14159` you can write
+`(3.14159 : Numeric 5)`).
+
+Methods:
+
+- `numericScale : Int`
+  Get the scale of a `Numeric` as an integer. For example,
+  `numericScale (3.14159 : Numeric 5)` equals `5`.
+- `numericOne : Numeric n`
+  1 with scale n
+
+Instances:
+
+- `instance NumericScale 0`
+- `instance NumericScale 1`
+- `instance NumericScale 10`
+- `instance NumericScale 11`
+- `instance NumericScale 12`
+- `instance NumericScale 13`
+- `instance NumericScale 14`
+- `instance NumericScale 15`
+- `instance NumericScale 16`
+- `instance NumericScale 17`
+- `instance NumericScale 18`
+- `instance NumericScale 19`
+- `instance NumericScale 2`
+- `instance NumericScale 20`
+- `instance NumericScale 21`
+- `instance NumericScale 22`
+- `instance NumericScale 23`
+- `instance NumericScale 24`
+- `instance NumericScale 25`
+- `instance NumericScale 26`
+- `instance NumericScale 27`
+- `instance NumericScale 28`
+- `instance NumericScale 29`
+- `instance NumericScale 3`
+- `instance NumericScale 30`
+- `instance NumericScale 31`
+- `instance NumericScale 32`
+- `instance NumericScale 33`
+- `instance NumericScale 34`
+- `instance NumericScale 35`
+- `instance NumericScale 36`
+- `instance NumericScale 37`
+- `instance NumericScale 4`
+- `instance NumericScale 5`
+- `instance NumericScale 6`
+- `instance NumericScale 7`
+- `instance NumericScale 8`
+- `instance NumericScale 9`
+
+<a id="class-ghc-enum-bounded-34379"></a>
+
+### `class Bounded a`
+
+Use the `Bounded` class to name the upper and lower limits of a
+type.
+
+You can derive an instance of the `Bounded` class for any enumeration
+type. `minBound`  is the first constructor listed in the `data`
+declaration  and `maxBound` is the last.
+
+You can also derive an instance of `Bounded` for single-constructor data types whose
+constituent types are in `Bounded`.
+
+`Ord` is not a superclass of `Bounded` because types that are not
+totally ordered can still have upper and lower bounds.
+
+Methods:
+
+- `minBound : a`
+- `maxBound : a`
+
+Instances:
+
+- `instance Bounded Bool`
+- `instance Bounded Int`
+
+<a id="class-ghc-enum-enum-63048"></a>
+
+### `class Enum a`
+
+Use the `Enum` class to define operations on sequentially ordered
+types: that is, types that can be enumerated. `Enum` members have
+defined successors and predecessors, which you can get with the `succ`
+and `pred` functions.
+
+Types that are an instance of class `Bounded` as well as `Enum`
+should respect the following laws:
+
+* Both `succ maxBound` and `pred minBound` should result in
+  a runtime error.
+
+* `fromEnum` and `toEnum` should give a runtime error if the
+  result value is not representable in the result type.
+  For example, `toEnum 7 : Bool` is an error.
+
+* `enumFrom` and `enumFromThen` should be defined with an implicit bound,
+  like this:
+
+```
+enumFrom     x   = enumFromTo     x maxBound
+enumFromThen x y = enumFromThenTo x y bound
+    where
+        bound | fromEnum y >= fromEnum x = maxBound
+              | otherwise                = minBound
+```
+
+Methods:
+
+- `succ : a -> a`
+  Returns the successor of the given value. For example, for
+  numeric types, `succ` adds 1.
+  
+  If the type is also an instance of `Bounded`, `succ maxBound`
+  results in a runtime error.
+- `pred : a -> a`
+  Returns the predecessor of the given value. For example, for
+  numeric types, `pred` subtracts 1.
+  
+  If the type is also an instance of `Bounded`, `pred minBound`
+  results in a runtime error.
+- `toEnum : Int -> a`
+  Convert a value from an `Int` to an `Enum` value: ie,
+  `toEnum i` returns the item at the `i` th position of
+  (the instance of) `Enum`
+- `fromEnum : a -> Int`
+  Convert a value from an `Enum` value to an `Int`: ie, returns
+  the `Int` position of the element within the `Enum`.
+  
+  If `fromEnum` is applied to a value that's too large to
+  fit in an `Int`, what is returned is up to your implementation.
+- `enumFrom : a -> [a]`
+  Return a list of the `Enum` values starting at the `Int`
+  position. For example:
+  
+  * `enumFrom 6 : [Int] = [6,7,8,9,...,maxBound : Int]`
+- `enumFromThen : a -> a -> [a]`
+  Returns a list of the `Enum` values with the first value at
+  the first `Int` position, the second value at the second `Int`
+  position, and further values with the same distance between them.
+  
+  For example:
+  
+  * `enumFromThen 4 6 : [Int] = [4,6,8,10...]`
+  * `enumFromThen 6 2 : [Int] = [6,2,-2,-6,...,minBound :: Int]`
+- `enumFromTo : a -> a -> [a]`
+  Returns a list of the `Enum` values with the first value at
+  the first `Int` position, and the last value at the last `Int`
+  position.
+  
+  This is what's behind the language feature that lets you write
+  `[n,m..]`.
+  
+  For example:
+  
+  * `enumFromTo 6 10 : [Int] = [6,7,8,9,10]`
+- `enumFromThenTo : a -> a -> a -> [a]`
+  Returns a list of the `Enum` values with the first value at
+  the first `Int` position, the second value at the second `Int`
+  position, and further values with the same distance between them,
+  with the final value at the final `Int` position.
+  
+  This is what's behind the language feature that lets you write
+  `[n,n'..m]`.
+  
+  For example:
+  
+  * `enumFromThenTo 4 2 -6 : [Int] = [4,2,0,-2,-4,-6]`
+  * `enumFromThenTo 6 8 2 : [Int] = []`
+
+Instances:
+
+- `instance Enum Bool`
+- `instance Enum Int`
+
+<a id="class-ghc-num-additive-25881"></a>
+
+### `class Additive a`
+
+Use the `Additive` class for types that can be added.
+Instances have to respect the following laws:
+
+* `(+)` must be associative, ie: `(x + y) + z` = `x + (y + z)`
+* `(+)` must be commutative, ie: `x + y` = `y + x`
+* `x + aunit` = `x`
+* `negate` gives the additive inverse, ie: `x + negate x` = `aunit`
+
+Methods:
+
+- `+ : a -> a -> a`
+  Add the two arguments together.
+- `aunit : a`
+  The additive identity for the type. For example, for numbers, this is 0.
+- `- : a -> a -> a`
+  Subtract the second argument from the first argument, ie. `x - y` = `x + negate y`
+- `negate : a -> a`
+  Negate the argument: `x + negate x` = `aunit`
+
+Instances:
+
+- `instance Additive Int`
+- `instance NumericScale n => Additive (Numeric n)`
+
+<a id="class-ghc-num-multiplicative-10593"></a>
+
+### `class Multiplicative a`
+
+Use the `Multiplicative` class for types that can be multiplied.
+Instances have to respect the following laws:
+
+* `(*)` is associative, ie:`(x * y) * z` = `x * (y * z)`
+* `(*)` is commutative, ie: `x * y` = `y * x`
+* `x * munit` = `x`
+
+Methods:
+
+- `* : a -> a -> a`
+  Multipy the arguments together
+- `munit : a`
+  The multiplicative identity for the type. For example, for numbers, this is 1.
+- `^ : a -> Int -> a`
+  `x ^ n` raises `x` to the power of `n`.
+
+Instances:
+
+- `instance Multiplicative Int`
+- `instance NumericScale n => Multiplicative (Numeric n)`
+
+<a id="class-ghc-num-number-53664"></a>
+
+### `class (Additive a, Multiplicative a) => Number a`
+
+`Number` is a class for numerical types.
+As well as the rules for `Additive` and `Multiplicative`, instances
+also have to respect the following law:
+
+* `(*)` is distributive with respect to `(+)`. That is:
+    `a * (b + c)` = `(a * b) + (a * c)` and `(b + c) * a` = `(b * a) + (c * a)`
+
+Instances:
+
+- `instance Number Int`
+- `instance NumericScale n => Number (Numeric n)`
+
+<a id="class-ghc-num-signed-2671"></a>
+
+### `class Signed a`
+
+The `Signed` is for the sign of a number.
+
+Methods:
+
+- `signum : a -> a`
+  Sign of a number.
+  For real numbers, the 'signum' is either `-1` (negative), `0` (zero)
+  or `1` (positive).
+- `abs : a -> a`
+  The absolute value: that is, the value without the sign.
+
+Instances:
+
+- `instance Signed Int`
+- `instance NumericScale n => Signed (Numeric n)`
+
+<a id="class-ghc-num-divisible-86689"></a>
+
+### `class Multiplicative a => Divisible a`
+
+Use the `Divisible` class for types that can be divided.
+Instances should respect that division is the inverse of
+multiplication, i.e. `x * y / y` is equal to `x` whenever
+it is defined.
+
+Methods:
+
+- `/ : a -> a -> a`
+  `x / y` divides `x` by `y`
+
+Instances:
+
+- `instance Divisible Int`
+- `instance NumericScale n => Divisible (Numeric n)`
+
+<a id="class-ghc-num-fractional-79050"></a>
+
+### `class Divisible a => Fractional a`
+
+Use the `Fractional` class for types that can be divided
+and where the reciprocal is well defined. Instances
+have to respect the following laws:
+
+* When `recip x` is defined, it must be the inverse of
+`x` with respect to multiplication: `x * recip x = munit`
+
+* When `recip y` is defined, then `x / y = x * recip y`
+
+Methods:
+
+- `recip : a -> a`
+  Calculates the reciprocal: `recip x` is `1/x`.
+
+Instances:
+
+- `instance NumericScale n => Fractional (Numeric n)`
+
+<a id="class-ghc-show-show-65360"></a>
+
+### `class Show a`
+
+Use the `Show` class for values that can be converted to a
+readable `Text` value.
+
+Derived instances of `Show` have the following properties:
+
+* The result of `show` is a syntactically correct expression
+  that only contains constants (given the fixity declarations in
+  force at the point where the type is declared).
+  It only contains the constructor names defined in the data type,
+  parentheses, and spaces. When labelled constructor fields are
+  used, braces, commas, field names, and equal signs are also used.
+
+* If the constructor is defined to be an infix operator, then
+  `showsPrec` produces infix applications of the constructor.
+
+* If the  precedence of the top-level constructor in `x` is less than `d`
+  (associativity is ignored), the representation will be enclosed in
+  parentheses. For example, if `d` is `0` then the result
+  is never surrounded in parentheses; if `d` is `11` it is always
+  surrounded in parentheses, unless it is an atomic expression.
+
+* If the constructor is defined using record syntax, then `show`
+  will produce the record-syntax form, with the fields given in the
+  same order as the original declaration.
+
+Methods:
+
+- `showsPrec : Int -> a -> ShowS`
+  Convert a value to a readable `Text` value. Unlike `show`,
+  `showsPrec` should satisfy the rule
+  `showsPrec d x r ++ s == showsPrec d x (r ++ s)`
+- `show : a -> Text`
+  Convert a value to a readable `Text` value.
+- `showList : [a] -> ShowS`
+  Allows you to show lists of values.
+
+Instances:
+
+- `instance (Show a, Show b) => Show (Either a b)`
+- `instance Show Bool`
+- `instance Show Int`
+- `instance Show (Numeric n)`
+- `instance Show Ordering`
+- `instance Show Text`
+- `instance Show a => Show [a]`
+- `instance Show ()`
+- `instance (Show a, Show b) => Show (a, b)`
+- `instance (Show a, Show b, Show c) => Show (a, b, c)`
+- `instance (Show a, Show b, Show c, Show d) => Show (a, b, c, d)`
+- `instance (Show a, Show b, Show c, Show d, Show e) => Show (a, b, c, d, e)`
+
+## Functions
+
+<a id="function-ghc-base-otherwise-74255"></a>
+
+### `otherwise`
+
+```daml
+otherwise : Bool
+```
+
+Used as an alternative in conditions.
+
+<a id="function-ghc-base-map-90641"></a>
+
+### `map`
+
+```daml
+map : (a -> b) -> [a] -> [b]
+```
+
+`map f xs` applies the function `f` to all elements of the list `xs`
+and returns the list of results (in the same order as `xs`).
+
+<a id="function-ghc-base-foldr-98040"></a>
+
+### `foldr`
+
+```daml
+foldr : (a -> b -> b) -> b -> [a] -> b
+```
+
+This function is a right fold, which you can use to manipulate lists.
+`foldr f i xs` performs a right fold over the list `xs` using
+the function `f`, using the starting value `i`.
+
+Note that foldr works from right-to-left over the list elements.
+
+<a id="function-ghc-base-dot-65651"></a>
+
+### `.`
+
+```daml
+. : (b -> c) -> (a -> b) -> a -> c
+```
+
+Composes two functions, i.e., `(f . g) x = f (g x)`.
+
+<a id="function-ghc-base-const-63840"></a>
+
+### `const`
+
+```daml
+const : a -> b -> a
+```
+
+`const x` is a unary function which evaluates to `x` for all inputs.
+
+```
+>>> const 42 "hello"
+42
+```
+
+```
+>>> map (const 42) [0..3]
+[42,42,42,42]
+```
+
+<a id="function-ghc-base-dollar-9101"></a>
+
+### `$`
+
+```daml
+$ : (a -> b) -> a -> b
+```
+
+Take a function from `a` to `b` and a value of type `a`, and apply the
+function to the value of type `a`, returning a value of type `b`.
+This function has a very low precedence, which is why you might want to use
+it instead of regular function application.
+
+<a id="function-ghc-classes-ampamp-27924"></a>
+
+### `&&`
+
+```daml
+&& : Bool -> Bool -> Bool
+```
+
+Boolean \"and\".
+This function has short-circuiting semantics, i.e., when both arguments are
+present and the first arguments evaluates to 'False', the second argument
+is not evaluated at all.
+
+<a id="function-ghc-classes-pipepipe-13296"></a>
+
+### `||`
+
+```daml
+|| : Bool -> Bool -> Bool
+```
+
+Boolean \"or\".
+This function has short-circuiting semantics, i.e., when both arguments are
+present and the first arguments evaluates to 'True', the second argument
+is not evaluated at all.
+
+<a id="function-ghc-classes-not-45172"></a>
+
+### `not`
+
+```daml
+not : Bool -> Bool
+```
+
+Boolean \"not\"
+
+<a id="function-ghc-err-error-7998"></a>
+
+### `error`
+
+```daml
+error : Text -> a
+```
+
+Throws a `GeneralError` exception.
+
+<a id="function-ghc-num-subtract-88614"></a>
+
+### `subtract`
+
+```daml
+subtract : Additive a => a -> a -> a
+```
+
+`subtract x y` is equivalent to `y - x`.
+
+This is useful for partial application, e.g., in `subtract 1` since `(- 1)` is
+interpreted as the number `-1` and not a function that subtracts `1` from
+its argument.
+
+<a id="function-ghc-num-x-53920"></a>
+
+### `%`
+
+```daml
+% : Int -> Int -> Int
+```
+
+`x % y` calculates the remainder of `x` by `y`
+
+<a id="function-ghc-show-shows-71951"></a>
+
+### `shows`
+
+```daml
+shows : Show a => a -> ShowS
+```
+
+<a id="function-ghc-show-showparen-94620"></a>
+
+### `showParen`
+
+```daml
+showParen : Bool -> ShowS -> ShowS
+```
+
+Utility function that surrounds the inner show function with
+parentheses when the 'Bool' parameter is 'True'.
+
+<a id="function-ghc-show-showstring-40356"></a>
+
+### `showString`
+
+```daml
+showString : Text -> ShowS
+```
+
+Utility function converting a 'String' to a show function that
+simply prepends the string unchanged.
+
+<a id="function-ghc-show-showspace-56114"></a>
+
+### `showSpace`
+
+```daml
+showSpace : ShowS
+```
+
+Prepends a single space to the front of the string.
+
+<a id="function-ghc-show-showcommaspace-16566"></a>
+
+### `showCommaSpace`
+
+```daml
+showCommaSpace : ShowS
+```
+
+Prepends a comma and a single space to the front of the string.

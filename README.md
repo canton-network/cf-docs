@@ -31,6 +31,13 @@ The site will be available at http://localhost:3000.
 mintlify broken-links
 ```
 
+## Daml API generation
+
+This repo includes a converter for Daml docs JSON:
+- `scripts/daml_docs_json_to_mdx.py`
+
+Usage and test commands are documented in `scripts/README.md`.
+
 ### Troubleshooting
 
 **Node version error**: If you see "mint dev is not supported on node versions below 20.17", upgrade Node.js:
