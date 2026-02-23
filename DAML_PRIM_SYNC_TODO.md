@@ -27,5 +27,14 @@ This implementation stays entirely in `digital-asset/docs`:
 
 ## Remaining Gaps
 
-- GitHub Actions workflow has been added but not executed from this environment yet.
-- PR creation path in workflow is implemented but only validated by static review/local logic, not by a live run.
+- Workflow dispatch cannot be triggered by API until this workflow exists on default branch `main`.
+- PR creation path in workflow (`dry_run=false`) has not been run yet due current dry-run validation mode.
+
+## Validation Notes
+
+- Pull request dry-run workflow validated successfully on branch `daml-json-to-mdx-converter-clean`.
+- Latest successful run: https://github.com/digital-asset/docs/actions/runs/22293484830
+- The workflow now sets:
+  - `NIX_PATH` for `nix-shell` compatibility in GitHub Actions.
+  - `SKIP_NPM_INSTALL=1` to avoid unnecessary npm install in CI shell startup.
+  - `PYTHONDONTWRITEBYTECODE=1` to avoid `__pycache__` diffs in CI.
