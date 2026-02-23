@@ -51,7 +51,7 @@ pkgs.mkShell {
   shellHook = ''
     export PATH="$PWD/node_modules/.bin:$PATH"
 
-    if [ -f package.json ] && [ ! -d node_modules ]; then
+    if [ "''${SKIP_NPM_INSTALL:-0}" != "1" ] && [ -f package.json ] && [ ! -d node_modules ]; then
       echo "Installing npm dependencies..."
       if [ -f package-lock.json ]; then
         npm ci
