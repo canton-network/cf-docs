@@ -43,6 +43,10 @@ def escape_md_cell(text: str) -> str:
     return text.replace("|", r"\|").replace("\n", "<br/>")
 
 
+def escape_yaml_double_quoted(text: str) -> str:
+    return text.replace("\\", "\\\\").replace('"', '\\"')
+
+
 def render_doc_blocks(descr: Any) -> str:
     if not descr:
         return ""
@@ -243,13 +247,13 @@ def render_module(module_doc: dict[str, Any]) -> str:
     name = str(module_doc["md_name"])
     display_name = module_display_name(name)
     anchor = module_doc.get("md_anchor")
-    parts: list[str] = []
+    body_parts: list[str] = []
     if anchor:
-        parts.append(f'<a id="{anchor}"></a>')
-    parts.append(f"# {display_name}")
+        body_parts.append(f'<a id="{anchor}"></a>')
+    body_parts.append(f"# {display_name}")
     descr = render_doc_blocks(module_doc.get("md_descr"))
     if descr:
-        parts.append(descr)
+        body_parts.append(descr)
 
     sections: list[tuple[str, list[str]]] = []
     adts = module_doc.get("md_adts", [])
@@ -275,10 +279,12 @@ def render_module(module_doc: dict[str, Any]) -> str:
         )
 
     for section_name, bodies in sections:
-        parts.append(f"## {section_name}")
-        parts.append("\n\n".join(bodies))
+        body_parts.append(f"## {section_name}")
+        body_parts.append("\n\n".join(bodies))
 
-    return "\n\n".join(parts).rstrip() + "\n"
+    frontmatter = f'---\ntitle: "{escape_yaml_double_quoted(display_name)}"\n---\n\n'
+    body = "\n\n".join(body_parts).rstrip() + "\n"
+    return frontmatter + body
 
 
 def module_file_name(module_name: str) -> str:

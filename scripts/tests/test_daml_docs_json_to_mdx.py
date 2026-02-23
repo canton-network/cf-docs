@@ -35,7 +35,11 @@ class DamlDocsJsonToMdxTests(unittest.TestCase):
             self.assertIn("- [DA Stack](./da-stack)", index_content)
 
             stack_content = (out_dir / "da-stack.mdx").read_text(encoding="utf-8")
+            self.assertIn('title: "DA Stack"', stack_content)
             self.assertIn("# DA Stack", stack_content)
+
+            prelude_content = (out_dir / "prelude.mdx").read_text(encoding="utf-8")
+            self.assertIn('title: "Prelude"', prelude_content)
 
     def test_excludes_ghc_modules_from_generated_output(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
