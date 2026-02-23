@@ -290,26 +290,71 @@ def update_docs_json_navigation(
     docs_json_path: Path,
     nav_group_name: str,
     nav_pages: list[str],
+    create_nav_group_if_missing: bool = False,
+    nav_dropdown_name: str | None = None,
 ) -> int:
     with docs_json_path.open("r", encoding="utf-8") as f:
         docs_json = json.load(f)
 
     replacements = 0
 
-    def walk(node: Any) -> None:
-        nonlocal replacements
-        if isinstance(node, dict):
-            if node.get("group") == nav_group_name and isinstance(node.get("pages"), list):
-                node["pages"] = nav_pages
-                replacements += 1
-            for value in node.values():
-                walk(value)
-        elif isinstance(node, list):
-            for item in node:
-                walk(item)
+    if nav_dropdown_name:
+        def walk_dropdowns(node: Any) -> None:
+            nonlocal replacements
+            if isinstance(node, dict):
+                if node.get("dropdown") == nav_dropdown_name and isinstance(node.get("versions"), list):
+                    for version in node["versions"]:
+                        if not isinstance(version, dict):
+                            continue
+                        groups = version.get("groups")
+                        if not isinstance(groups, list):
+                            continue
+                        found = False
+                        for group in groups:
+                            if isinstance(group, dict) and group.get("group") == nav_group_name:
+                                group["pages"] = nav_pages
+                                replacements += 1
+                                found = True
+                                break
+                        if not found and create_nav_group_if_missing:
+                            insert_at = len(groups)
+                            for i, group in enumerate(groups):
+                                if isinstance(group, dict) and group.get("group") == "Help":
+                                    insert_at = i
+                                    break
+                            groups.insert(insert_at, {"group": nav_group_name, "pages": nav_pages})
+                            replacements += 1
+                for value in node.values():
+                    walk_dropdowns(value)
+            elif isinstance(node, list):
+                for item in node:
+                    walk_dropdowns(item)
 
-    walk(docs_json)
+        walk_dropdowns(docs_json)
+    else:
+        def walk(node: Any) -> None:
+            nonlocal replacements
+            if isinstance(node, dict):
+                if node.get("group") == nav_group_name and isinstance(node.get("pages"), list):
+                    node["pages"] = nav_pages
+                    replacements += 1
+                for value in node.values():
+                    walk(value)
+            elif isinstance(node, list):
+                for item in node:
+                    walk(item)
+
+        walk(docs_json)
+
     if replacements == 0:
+        if create_nav_group_if_missing and not nav_dropdown_name:
+            raise ValueError(
+                "create_nav_group_if_missing requires nav_dropdown_name to scope where new groups are inserted"
+            )
+        if nav_dropdown_name:
+            raise ValueError(
+                f"Did not update group '{nav_group_name}' under dropdown '{nav_dropdown_name}' in {docs_json_path}"
+            )
         raise ValueError(f"Did not find group '{nav_group_name}' in {docs_json_path}")
 
     with docs_json_path.open("w", encoding="utf-8") as f:
@@ -338,6 +383,15 @@ def parse_args() -> argparse.Namespace:
         "--nav-base",
         help="Page path prefix used in docs.json (defaults to output-dir relative to docs.json parent)",
     )
+    parser.add_argument(
+        "--create-nav-group-if-missing",
+        action="store_true",
+        help="Insert nav group when missing (requires --nav-dropdown-name)",
+    )
+    parser.add_argument(
+        "--nav-dropdown-name",
+        help="Limit docs.json updates to versions under this dropdown (for example: Application Development)",
+    )
     return parser.parse_args()
 
 
@@ -356,6 +410,8 @@ def main() -> int:
             docs_json_path=args.docs_json,
             nav_group_name=args.nav_group_name,
             nav_pages=nav_pages,
+            create_nav_group_if_missing=args.create_nav_group_if_missing,
+            nav_dropdown_name=args.nav_dropdown_name,
         )
 
     print(f"Wrote {len(module_targets) - 1} module files + {args.index_file} into {args.output_dir}")

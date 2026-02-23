@@ -1,0 +1,117 @@
+name: Sync Daml Prim API from dpm
+
+on:
+  workflow_dispatch:
+    inputs:
+      sdk_version:
+        description: "SDK version to use (or 'latest')"
+        required: false
+        default: "latest"
+      lf_target:
+        description: "LF target (for example 2.2). Leave empty to auto-detect."
+        required: false
+        default: ""
+      dry_run:
+        description: "Dry run only (no PR creation)"
+        required: false
+        default: true
+        type: boolean
+  schedule:
+    - cron: "17 6 * * *"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: sync-daml-prim-api
+  cancel-in-progress: false
+
+jobs:
+  sync-daml-prim-api:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v30
+
+      - name: Resolve Parameters
+        id: params
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            sdk_version="${{ inputs.sdk_version }}"
+            lf_target="${{ inputs.lf_target }}"
+            dry_run="${{ inputs.dry_run }}"
+          else
+            sdk_version="latest"
+            lf_target=""
+            dry_run="true"
+          fi
+          echo "sdk_version=$sdk_version" >> "$GITHUB_OUTPUT"
+          echo "lf_target=$lf_target" >> "$GITHUB_OUTPUT"
+          echo "dry_run=$dry_run" >> "$GITHUB_OUTPUT"
+
+      - name: Run Unit Tests
+        shell: bash
+        run: |
+          nix-shell --run 'python3 -m unittest -v scripts.tests.test_daml_docs_json_to_mdx'
+
+      - name: Show Tool Versions
+        shell: bash
+        run: |
+          nix-shell --run 'python3 --version && dpm --version && dpm version --active -o json'
+
+      - name: Generate and Convert Daml Prim Docs
+        shell: bash
+        run: |
+          cmd="./scripts/sync_daml_prim_api_from_dpm.sh --sdk-version '${{ steps.params.outputs.sdk_version }}'"
+          if [[ -n "${{ steps.params.outputs.lf_target }}" ]]; then
+            cmd="$cmd --lf-target '${{ steps.params.outputs.lf_target }}'"
+          fi
+          nix-shell --run "$cmd"
+
+      - name: Show Diff
+        shell: bash
+        run: |
+          git status --short
+          git diff --stat
+
+      - name: Detect Changes
+        id: changes
+        shell: bash
+        run: |
+          if [[ -n "$(git status --porcelain)" ]]; then
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create Draft PR
+        if: steps.params.outputs.dry_run == 'false' && steps.changes.outputs.has_changes == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "Automatic update (daml-prim-api): ${{ steps.params.outputs.sdk_version }}"
+          title: "Automatic update (daml-prim-api): ${{ steps.params.outputs.sdk_version }}"
+          body: |
+            Automated update of Daml Prim API docs generated from dpm artifacts.
+
+            - SDK version: `${{ steps.params.outputs.sdk_version }}`
+            - LF target: `${{ steps.params.outputs.lf_target || 'auto' }}`
+            - Trigger: `${{ github.event_name }}`
+          branch: "automation/daml-prim-api-${{ github.run_id }}"
+          base: "main"
+          draft: true
+          add-paths: |
+            docs-main/appdev/reference/daml-prim-api
+            docs.json
+
+      - name: Dry Run Summary
+        if: steps.params.outputs.dry_run == 'true'
+        shell: bash
+        run: |
+          echo "Dry run completed. No PR was created."

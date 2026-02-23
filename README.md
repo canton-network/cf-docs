@@ -33,10 +33,18 @@ mintlify broken-links
 
 ## Daml API generation
 
-This repo includes a converter for Daml docs JSON:
+This repo includes automation to generate and sync Daml Prim API docs from published `dpm` artifacts:
+- `scripts/generate_daml_prim_json_from_dpm.sh`
+- `scripts/sync_daml_prim_api_from_dpm.sh`
 - `scripts/daml_docs_json_to_mdx.py`
 
-Usage and test commands are documented in `scripts/README.md`.
+Quick local dry-run:
+
+```bash
+./scripts/sync_daml_prim_api_from_dpm.sh --sdk-version 3.4.10 --lf-target 2.2
+```
+
+Usage details and test commands are documented in `scripts/README.md`.
 
 ### Troubleshooting
 
