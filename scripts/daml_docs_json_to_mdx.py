@@ -17,8 +17,15 @@ EXCLUDED_MODULE_NAMES = frozenset(
     {
         "GHC.Show.Text",
         "GHC.Tuple.Check",
+        "Ghc.Show.Text",
+        "Ghc.Tuple.Check",
     }
 )
+ACRONYM_PARTS = {
+    "da": "DA",
+    "ghc": "GHC",
+    "lf": "LF",
+}
 
 
 def as_union(node: dict[str, Any]) -> tuple[str, Any]:
@@ -56,6 +63,10 @@ def module_display_name(module_name: str) -> str:
         return module_name
     normalized: list[str] = []
     for part in parts:
+        mapped = ACRONYM_PARTS.get(part.lower())
+        if mapped:
+            normalized.append(mapped)
+            continue
         if part.isupper():
             normalized.append(part)
         elif part.islower():

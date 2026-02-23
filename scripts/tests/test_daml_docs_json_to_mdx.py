@@ -42,9 +42,9 @@ class DamlDocsJsonToMdxTests(unittest.TestCase):
             out_dir = Path(tmpdir) / "docs-main" / "daml-reference" / "daml-prim-api" / "v3-4-10"
             modules = [
                 {"md_name": "Prelude", "md_descr": [["Prelude docs"]]},
-                {"md_name": "GHC.Show.Text", "md_descr": [["Hidden docs"]]},
-                {"md_name": "GHC.Tuple.Check", "md_descr": [["Hidden docs"]]},
-                {"md_name": "DA.Stack", "md_descr": [["Stack docs"]]},
+                {"md_name": "Ghc.Show.Text", "md_descr": [["Hidden docs"]]},
+                {"md_name": "Ghc.Tuple.Check", "md_descr": [["Hidden docs"]]},
+                {"md_name": "Da.Stack", "md_descr": [["Stack docs"]]},
             ]
             module_targets = write_modules(modules, out_dir)
 
@@ -70,6 +70,8 @@ class DamlDocsJsonToMdxTests(unittest.TestCase):
 
     def test_module_display_name_capitalizes_da(self) -> None:
         self.assertEqual(module_display_name("DA.Stack"), "DA Stack")
+        self.assertEqual(module_display_name("Da.Stack"), "DA Stack")
+        self.assertEqual(module_display_name("Da.Exception"), "DA Exception")
         self.assertEqual(module_display_name("Prelude"), "Prelude")
 
     def test_updates_all_matching_generated_api_groups(self) -> None:
