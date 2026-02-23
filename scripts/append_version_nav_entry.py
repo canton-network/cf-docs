@@ -10,6 +10,14 @@ import argparse
 import json
 from pathlib import Path
 
+EXCLUDED_NAV_TARGETS = frozenset(
+    {
+        "index",
+        "ghc-show-text",
+        "ghc-tuple-check",
+    }
+)
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -20,14 +28,19 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def collect_nav_targets(output_dir: Path) -> list[str]:
+    targets = sorted(path.stem for path in output_dir.glob("*.mdx"))
+    return [target for target in targets if target not in EXCLUDED_NAV_TARGETS]
+
+
 def main() -> int:
     args = parse_args()
-    targets = sorted(path.stem for path in args.output_dir.glob("*.mdx"))
-    if "index" not in targets:
-        raise SystemExit(f"Missing index.mdx in {args.output_dir}")
+    targets = collect_nav_targets(args.output_dir)
+    if not targets:
+        raise SystemExit(f"No navigable .mdx pages found in {args.output_dir}")
 
     nav_base = args.nav_base.rstrip("/")
-    pages = [f"{nav_base}/index"] + [f"{nav_base}/{target}" for target in targets if target != "index"]
+    pages = [f"{nav_base}/{target}" for target in targets]
     entry = {"version": args.version, "pages": pages}
 
     args.entries_jsonl.parent.mkdir(parents=True, exist_ok=True)

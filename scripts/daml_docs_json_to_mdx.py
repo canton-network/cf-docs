@@ -13,6 +13,13 @@ import re
 from pathlib import Path
 from typing import Any
 
+EXCLUDED_MODULE_NAMES = frozenset(
+    {
+        "GHC.Show.Text",
+        "GHC.Tuple.Check",
+    }
+)
+
 
 def as_union(node: dict[str, Any]) -> tuple[str, Any]:
     if len(node) != 1:
@@ -41,6 +48,21 @@ def render_doc_blocks(descr: Any) -> str:
         if raw:
             blocks.append(raw)
     return "\n\n".join(blocks)
+
+
+def module_display_name(module_name: str) -> str:
+    parts = [part for part in module_name.split(".") if part]
+    if not parts:
+        return module_name
+    normalized: list[str] = []
+    for part in parts:
+        if part.isupper():
+            normalized.append(part)
+        elif part.islower():
+            normalized.append(part.capitalize())
+        else:
+            normalized.append(part)
+    return " ".join(normalized)
 
 
 def render_type(ty: Any, prec: int = 0) -> str:
@@ -208,11 +230,12 @@ def render_adt(adt_union: dict[str, Any]) -> str:
 
 def render_module(module_doc: dict[str, Any]) -> str:
     name = str(module_doc["md_name"])
+    display_name = module_display_name(name)
     anchor = module_doc.get("md_anchor")
     parts: list[str] = []
     if anchor:
         parts.append(f'<a id="{anchor}"></a>')
-    parts.append(f"# {name}")
+    parts.append(f"# {display_name}")
     descr = render_doc_blocks(module_doc.get("md_descr"))
     if descr:
         parts.append(descr)
@@ -263,11 +286,16 @@ def load_modules(input_json: Path) -> list[dict[str, Any]]:
 
 def write_modules(modules: list[dict[str, Any]], out_dir: Path, index_file: str = "index.mdx") -> list[str]:
     out_dir.mkdir(parents=True, exist_ok=True)
+    for old_mdx in out_dir.glob("*.mdx"):
+        old_mdx.unlink()
+
     module_targets: list[str] = []
     module_names: list[str] = []
     for module in modules:
         name = str(module["md_name"])
-        module_names.append(name)
+        if name in EXCLUDED_MODULE_NAMES:
+            continue
+        module_names.append(module_display_name(name))
         target = module_file_name(name).removesuffix(".mdx")
         module_targets.append(target)
         text = render_module(module)

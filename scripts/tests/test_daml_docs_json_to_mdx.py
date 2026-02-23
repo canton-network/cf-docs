@@ -4,9 +4,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from scripts.append_version_nav_entry import collect_nav_targets
 from scripts.daml_docs_json_to_mdx import (
     build_nav_pages,
     load_modules,
+    module_display_name,
     update_daml_reference_docs_navigation,
     update_docs_json_navigation,
     write_modules,
@@ -30,7 +32,45 @@ class DamlDocsJsonToMdxTests(unittest.TestCase):
 
             index_content = (out_dir / "index.mdx").read_text(encoding="utf-8")
             self.assertIn("- [Prelude](./prelude)", index_content)
-            self.assertIn("- [DA.Stack](./da-stack)", index_content)
+            self.assertIn("- [DA Stack](./da-stack)", index_content)
+
+            stack_content = (out_dir / "da-stack.mdx").read_text(encoding="utf-8")
+            self.assertIn("# DA Stack", stack_content)
+
+    def test_excludes_ghc_modules_from_generated_output(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out_dir = Path(tmpdir) / "docs-main" / "daml-reference" / "daml-prim-api" / "v3-4-10"
+            modules = [
+                {"md_name": "Prelude", "md_descr": [["Prelude docs"]]},
+                {"md_name": "GHC.Show.Text", "md_descr": [["Hidden docs"]]},
+                {"md_name": "GHC.Tuple.Check", "md_descr": [["Hidden docs"]]},
+                {"md_name": "DA.Stack", "md_descr": [["Stack docs"]]},
+            ]
+            module_targets = write_modules(modules, out_dir)
+
+            self.assertEqual(module_targets, ["index", "prelude", "da-stack"])
+            self.assertTrue((out_dir / "prelude.mdx").exists())
+            self.assertTrue((out_dir / "da-stack.mdx").exists())
+            self.assertFalse((out_dir / "ghc-show-text.mdx").exists())
+            self.assertFalse((out_dir / "ghc-tuple-check.mdx").exists())
+
+    def test_collect_nav_targets_excludes_index_and_ghc_pages(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out_dir = Path(tmpdir) / "v3-4-10"
+            out_dir.mkdir(parents=True, exist_ok=True)
+            for page in [
+                "index.mdx",
+                "ghc-show-text.mdx",
+                "ghc-tuple-check.mdx",
+                "da-stack.mdx",
+                "prelude.mdx",
+            ]:
+                (out_dir / page).write_text("# test\n", encoding="utf-8")
+            self.assertEqual(collect_nav_targets(out_dir), ["da-stack", "prelude"])
+
+    def test_module_display_name_capitalizes_da(self) -> None:
+        self.assertEqual(module_display_name("DA.Stack"), "DA Stack")
+        self.assertEqual(module_display_name("Prelude"), "Prelude")
 
     def test_updates_all_matching_generated_api_groups(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
