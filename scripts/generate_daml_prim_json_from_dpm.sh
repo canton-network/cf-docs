@@ -49,32 +49,7 @@ latest_sdk_version() {
   curl -fsSL "https://get.digitalasset.com/install/latest"
 }
 
-pick_default_lf_target() {
-  local pkg_db_root="$1"
-  python3 - "$pkg_db_root" <<'PY'
-import os
-import re
-import sys
-
-root = sys.argv[1]
-entries = [
-    d
-    for d in os.listdir(root)
-    if os.path.isdir(os.path.join(root, d))
-]
-numeric = [d for d in entries if re.fullmatch(r"\d+\.\d+", d)]
-if numeric:
-    numeric.sort(key=lambda s: tuple(int(p) for p in s.split(".")))
-    print(numeric[-1])
-    raise SystemExit(0)
-
-if not entries:
-    raise SystemExit(1)
-
-entries.sort()
-print(entries[-1])
-PY
-}
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 
 OUTPUT_JSON=""
 SDK_VERSION="${DAML_DOCS_SDK_VERSION:-latest}"
@@ -142,7 +117,7 @@ if [[ ! -d "$PKG_DB_ROOT" ]]; then
 fi
 
 if [[ -z "$LF_TARGET" ]]; then
-  LF_TARGET="$(pick_default_lf_target "$PKG_DB_ROOT")"
+  LF_TARGET="$(python3 "$SCRIPT_DIR/select_latest_lf_target.py" "$PKG_DB_ROOT")"
 fi
 require_arg "--lf-target" "$LF_TARGET"
 

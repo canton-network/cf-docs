@@ -128,39 +128,13 @@ if [[ -n "$INPUT_JSON" && "$INPUT_JSON" != /* ]]; then
   INPUT_JSON="$REPO_ROOT/$INPUT_JSON"
 fi
 if [[ -z "$NAV_BASE" ]]; then
-  NAV_BASE="$(python3 -c "import os; print(os.path.relpath('$OUTPUT_DIR', '$REPO_ROOT').replace(os.sep, '/'))")"
+  NAV_BASE="$(python3 "$SCRIPT_DIR/relative_posix_path.py" "$OUTPUT_DIR" "$REPO_ROOT")"
 fi
 
 if [[ ! -f "$DOCS_JSON" ]]; then
   echo "docs.json not found: $DOCS_JSON" >&2
   exit 1
 fi
-
-resolve_latest_stable_versions() {
-  local count="$1"
-  python3 - "$count" <<'PY'
-import json
-import re
-import subprocess
-import sys
-
-n = int(sys.argv[1])
-raw = subprocess.check_output(["dpm", "version", "--all", "-o", "json"], text=True)
-entries = json.loads(raw)
-stable = {
-    e.get("version", "")
-    for e in entries
-    if isinstance(e, dict) and re.fullmatch(r"\d+\.\d+\.\d+", str(e.get("version", "")))
-}
-ordered = sorted(
-    stable,
-    key=lambda v: tuple(int(x) for x in v.split(".")),
-    reverse=True,
-)
-for v in ordered[:n]:
-    print(v)
-PY
-}
 
 TARGET_VERSIONS=()
 if [[ -n "$VERSIONS_CSV" ]]; then
@@ -174,7 +148,7 @@ if [[ -n "$VERSIONS_CSV" ]]; then
 elif [[ -n "$SDK_VERSION" && "$SDK_VERSION" != "latest" ]]; then
   TARGET_VERSIONS=("$SDK_VERSION")
 else
-  mapfile -t TARGET_VERSIONS < <(resolve_latest_stable_versions "$LATEST_N")
+  mapfile -t TARGET_VERSIONS < <(python3 "$SCRIPT_DIR/list_latest_stable_dpm_versions.py" "$LATEST_N")
 fi
 
 DEDUPED_TARGET_VERSIONS=()
@@ -217,9 +191,6 @@ for SDK_VER in "${TARGET_VERSIONS[@]}"; do
   VERSION_SLUG="v${SDK_VER//./-}"
   VERSION_OUTPUT_DIR="$OUTPUT_DIR/$VERSION_SLUG"
   VERSION_NAV_BASE="${NAV_BASE%/}/$VERSION_SLUG"
-  if [[ -z "$NAV_BASE" ]]; then
-    VERSION_NAV_BASE="$(python3 -c "import os; print(os.path.relpath('$VERSION_OUTPUT_DIR', '$REPO_ROOT').replace(os.sep, '/'))")"
-  fi
 
   JSON_PATH="$INPUT_JSON"
   if [[ -z "$JSON_PATH" ]]; then
@@ -242,56 +213,17 @@ for SDK_VER in "${TARGET_VERSIONS[@]}"; do
     --input-json "$JSON_PATH" \
     --output-dir "$VERSION_OUTPUT_DIR"
 
-  python3 - "$SDK_VER" "$VERSION_NAV_BASE" "$VERSION_OUTPUT_DIR" "$VERSIONS_ENTRIES_JSONL" <<'PY'
-import json
-import sys
-from pathlib import Path
-
-version, nav_base, output_dir, entries_jsonl = sys.argv[1:]
-targets = sorted(p.stem for p in Path(output_dir).glob("*.mdx"))
-if "index" not in targets:
-    raise SystemExit(f"Missing index.mdx in {output_dir}")
-pages = [f"{nav_base.rstrip('/')}/index"] + [
-    f"{nav_base.rstrip('/')}/{t}" for t in targets if t != "index"
-]
-with open(entries_jsonl, "a", encoding="utf-8") as f:
-    f.write(json.dumps({"version": version, "pages": pages}) + "\n")
-PY
+  python3 "$SCRIPT_DIR/append_version_nav_entry.py" \
+    --version "$SDK_VER" \
+    --nav-base "$VERSION_NAV_BASE" \
+    --output-dir "$VERSION_OUTPUT_DIR" \
+    --entries-jsonl "$VERSIONS_ENTRIES_JSONL"
 done
 
 log "Updating docs.json navigation"
-PYTHONPATH="$REPO_ROOT" python3 - "$DOCS_JSON" "$VERSIONS_ENTRIES_JSONL" <<'PY'
-import json
-import sys
-from pathlib import Path
-
-from scripts.daml_docs_json_to_mdx import update_daml_reference_docs_navigation
-
-docs_json_path = Path(sys.argv[1])
-entries_path = Path(sys.argv[2])
-
-version_entries = []
-with entries_path.open("r", encoding="utf-8") as f:
-    for line in f:
-        line = line.strip()
-        if line:
-            version_entries.append(json.loads(line))
-
-removed, updated_existing = update_daml_reference_docs_navigation(
-    docs_json_path=docs_json_path,
-    version_entries=version_entries,
-    dropdown_name="Daml Reference Docs",
-    group_name="Daml Prim API",
-    icon="book-open",
-    remove_legacy_dropdown_name="App Development",
-    remove_legacy_group_name="Generated API Reference",
-)
-action = "updated existing" if updated_existing else "created new"
-print(
-    f"Updated docs.json: {action} 'Daml Reference Docs' dropdown with {len(version_entries)} version(s); "
-    f"removed {removed} legacy App Development group(s)."
-)
-PY
+python3 "$SCRIPT_DIR/update_daml_reference_docs_from_entries.py" \
+  --docs-json "$DOCS_JSON" \
+  --entries-jsonl "$VERSIONS_ENTRIES_JSONL"
 
 if [[ "$KEEP_GENERATED_JSON" == true ]]; then
   log "Generated JSON kept under: $TMP_DIR"
