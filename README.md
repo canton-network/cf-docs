@@ -41,8 +41,11 @@ This repo includes automation to generate and sync Daml Prim API docs from publi
 Quick local dry-run:
 
 ```bash
-./scripts/sync_daml_prim_api_from_dpm.sh --sdk-version 3.4.10 --lf-target 2.2
+./scripts/sync_daml_prim_api_from_dpm.sh
 ```
+
+This syncs the latest 3 stable SDK versions by default and updates the
+`Daml Reference Docs` navigation section.
 
 Usage details and test commands are documented in `scripts/README.md`.
 

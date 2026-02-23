@@ -368,6 +368,113 @@ def build_nav_pages(nav_base: str, module_targets: list[str]) -> list[str]:
     return [f"{nav_base}/{target}" for target in module_targets]
 
 
+def get_navigation_dropdowns(docs_json: dict[str, Any], docs_json_path: Path) -> list[Any]:
+    navigation = docs_json.get("navigation")
+    if isinstance(navigation, list):
+        return navigation
+    if isinstance(navigation, dict):
+        dropdowns = navigation.get("dropdowns")
+        if isinstance(dropdowns, list):
+            return dropdowns
+    raise ValueError(
+        f"Expected docs.json 'navigation' to be a list or an object with 'dropdowns' list in {docs_json_path}"
+    )
+
+
+def update_daml_reference_docs_navigation(
+    docs_json_path: Path,
+    version_entries: list[dict[str, Any]],
+    dropdown_name: str = "Daml Reference Docs",
+    group_name: str = "Daml Prim API",
+    icon: str = "book-open",
+    remove_legacy_dropdown_name: str = "App Development",
+    remove_legacy_group_name: str = "Generated API Reference",
+) -> tuple[int, bool]:
+    with docs_json_path.open("r", encoding="utf-8") as f:
+        docs_json = json.load(f)
+
+    navigation = get_navigation_dropdowns(docs_json, docs_json_path)
+
+    normalized_versions: list[dict[str, Any]] = []
+    for entry in version_entries:
+        version = str(entry.get("version", "")).strip()
+        pages = entry.get("pages")
+        if not version:
+            raise ValueError("Each version entry must include a non-empty 'version'")
+        if not isinstance(pages, list) or not pages or not all(isinstance(p, str) for p in pages):
+            raise ValueError(f"Version '{version}' must define a non-empty string list in 'pages'")
+        normalized_versions.append(
+            {
+                "version": version,
+                "groups": [
+                    {
+                        "group": group_name,
+                        "pages": pages,
+                    }
+                ],
+            }
+        )
+
+    removed_legacy_groups = 0
+    for section in navigation:
+        if not isinstance(section, dict):
+            continue
+        if section.get("dropdown") != remove_legacy_dropdown_name:
+            continue
+        versions = section.get("versions")
+        if not isinstance(versions, list):
+            continue
+        for version in versions:
+            if not isinstance(version, dict):
+                continue
+            groups = version.get("groups")
+            if not isinstance(groups, list):
+                continue
+            before = len(groups)
+            version["groups"] = [
+                g
+                for g in groups
+                if not (isinstance(g, dict) and g.get("group") == remove_legacy_group_name)
+            ]
+            removed_legacy_groups += before - len(version["groups"])
+
+    dropdown_indices = [
+        i
+        for i, section in enumerate(navigation)
+        if isinstance(section, dict) and section.get("dropdown") == dropdown_name
+    ]
+    updated_existing = len(dropdown_indices) > 0
+
+    if updated_existing:
+        keep = dropdown_indices[0]
+        dropdown = navigation[keep]
+        if isinstance(dropdown, dict):
+            dropdown["icon"] = icon
+            dropdown["versions"] = normalized_versions
+        for idx in reversed(dropdown_indices[1:]):
+            del navigation[idx]
+    else:
+        insert_at = len(navigation)
+        for i, section in enumerate(navigation):
+            if isinstance(section, dict) and section.get("dropdown") == remove_legacy_dropdown_name:
+                insert_at = i + 1
+                break
+        navigation.insert(
+            insert_at,
+            {
+                "dropdown": dropdown_name,
+                "icon": icon,
+                "versions": normalized_versions,
+            },
+        )
+
+    with docs_json_path.open("w", encoding="utf-8") as f:
+        json.dump(docs_json, f, indent=2)
+        f.write("\n")
+
+    return removed_legacy_groups, updated_existing
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input-json", type=Path, required=True, help="Path to damlc docs JSON file")

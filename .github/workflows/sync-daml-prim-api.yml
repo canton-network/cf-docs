@@ -12,10 +12,14 @@ on:
       - "docs.json"
   workflow_dispatch:
     inputs:
-      sdk_version:
-        description: "SDK version to use (or 'latest')"
+      versions:
+        description: "Comma-separated SDK versions. Leave empty to use latest_n."
         required: false
-        default: "latest"
+        default: ""
+      latest_n:
+        description: "How many latest stable SDK versions to sync when versions is empty."
+        required: false
+        default: "3"
       lf_target:
         description: "LF target (for example 2.2). Leave empty to auto-detect."
         required: false
@@ -39,7 +43,7 @@ concurrency:
 jobs:
   sync-daml-prim-api:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 90
     env:
       NIX_PATH: nixpkgs=channel:nixos-24.11
       SKIP_NPM_INSTALL: "1"
@@ -56,19 +60,29 @@ jobs:
         shell: bash
         run: |
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            sdk_version="${{ inputs.sdk_version }}"
+            versions="${{ inputs.versions }}"
+            latest_n="${{ inputs.latest_n }}"
             lf_target="${{ inputs.lf_target }}"
             dry_run="${{ inputs.dry_run }}"
           elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            sdk_version="latest"
+            versions=""
+            latest_n="3"
             lf_target=""
             dry_run="true"
           else
-            sdk_version="latest"
+            versions=""
+            latest_n="3"
             lf_target=""
             dry_run="true"
           fi
-          echo "sdk_version=$sdk_version" >> "$GITHUB_OUTPUT"
+          if [[ -n "$versions" ]]; then
+            version_label="$versions"
+          else
+            version_label="latest-$latest_n"
+          fi
+          echo "versions=$versions" >> "$GITHUB_OUTPUT"
+          echo "latest_n=$latest_n" >> "$GITHUB_OUTPUT"
+          echo "version_label=$version_label" >> "$GITHUB_OUTPUT"
           echo "lf_target=$lf_target" >> "$GITHUB_OUTPUT"
           echo "dry_run=$dry_run" >> "$GITHUB_OUTPUT"
 
@@ -85,7 +99,10 @@ jobs:
       - name: Generate and Convert Daml Prim Docs
         shell: bash
         run: |
-          cmd="./scripts/sync_daml_prim_api_from_dpm.sh --sdk-version '${{ steps.params.outputs.sdk_version }}'"
+          cmd="./scripts/sync_daml_prim_api_from_dpm.sh --latest-n '${{ steps.params.outputs.latest_n }}'"
+          if [[ -n "${{ steps.params.outputs.versions }}" ]]; then
+            cmd="$cmd --versions '${{ steps.params.outputs.versions }}'"
+          fi
           if [[ -n "${{ steps.params.outputs.lf_target }}" ]]; then
             cmd="$cmd --lf-target '${{ steps.params.outputs.lf_target }}'"
           fi
@@ -112,19 +129,19 @@ jobs:
         uses: peter-evans/create-pull-request@v6
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: "Automatic update (daml-prim-api): ${{ steps.params.outputs.sdk_version }}"
-          title: "Automatic update (daml-prim-api): ${{ steps.params.outputs.sdk_version }}"
+          commit-message: "Automatic update (daml-prim-api): ${{ steps.params.outputs.version_label }}"
+          title: "Automatic update (daml-prim-api): ${{ steps.params.outputs.version_label }}"
           body: |
             Automated update of Daml Prim API docs generated from dpm artifacts.
 
-            - SDK version: `${{ steps.params.outputs.sdk_version }}`
+            - SDK versions: `${{ steps.params.outputs.versions || format('latest {0}', steps.params.outputs.latest_n) }}`
             - LF target: `${{ steps.params.outputs.lf_target || 'auto' }}`
             - Trigger: `${{ github.event_name }}`
           branch: "automation/daml-prim-api-${{ github.run_id }}"
           base: "main"
           draft: true
           add-paths: |
-            docs-main/appdev/reference/daml-prim-api
+            docs-main/daml-reference/daml-prim-api
             docs.json
 
       - name: Dry Run Summary

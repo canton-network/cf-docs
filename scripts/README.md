@@ -14,22 +14,26 @@ Use `scripts/daml_docs_json_to_mdx.py` to convert `damlc docs --format json` out
 ```bash
 python3 scripts/daml_docs_json_to_mdx.py \
   --input-json /path/to/daml-prim.json \
-  --output-dir docs-main/appdev/reference/daml-prim-api
+  --output-dir docs-main/daml-reference/daml-prim-api/v3-4-10
 ```
 
 ### Update docs navigation (`docs.json`)
 
+For this repo's Daml Prim docs flow, use `sync_daml_prim_api_from_dpm.sh` below.
+
+`daml_docs_json_to_mdx.py --docs-json` is a generic group-page replacement mode:
+
 ```bash
 python3 scripts/daml_docs_json_to_mdx.py \
   --input-json /path/to/daml-prim.json \
-  --output-dir docs-main/appdev/reference/daml-prim-api \
+  --output-dir docs-main/daml-reference/daml-prim-api/v3-4-10 \
   --docs-json docs.json \
-  --nav-group-name "Generated API Reference" \
-  --nav-dropdown-name "App Development" \
+  --nav-group-name "Existing Group Name" \
+  --nav-dropdown-name "Existing Dropdown Name" \
   --create-nav-group-if-missing
 ```
 
-The converter updates every navigation group named `Generated API Reference`.
+The converter updates every matching group under the selected dropdown.
 
 ### Common options
 
@@ -58,21 +62,35 @@ Notes:
 
 This script runs the full flow:
 1) generate JSON via `dpm damlc docs --format json`
-2) convert JSON to MDX
-3) update `docs.json` navigation
+2) convert JSON to MDX for one or more SDK versions
+3) update `docs.json` with a `Daml Reference Docs` dropdown and `Daml Prim API` version groups
+4) remove legacy `Generated API Reference` groups from `App Development`
 
 ```bash
-./scripts/sync_daml_prim_api_from_dpm.sh \
-  --sdk-version 3.4.10 \
-  --lf-target 2.2
+./scripts/sync_daml_prim_api_from_dpm.sh
+```
+
+By default this syncs the latest 3 stable SDK versions from `dpm version --all -o json`.
+
+Specify exact versions:
+
+```bash
+./scripts/sync_daml_prim_api_from_dpm.sh --versions 3.4.11,3.4.10,3.4.9
 ```
 
 Use an existing JSON file instead:
 
 ```bash
 ./scripts/sync_daml_prim_api_from_dpm.sh \
-  --input-json /tmp/daml-prim.json
+  --input-json /tmp/daml-prim.json \
+  --sdk-version 3.4.10
 ```
+
+Notes:
+- `--input-json` supports single-version mode only.
+- Output path defaults to `docs-main/daml-reference/daml-prim-api`.
+- Override latest count via `--latest-n N`.
+- `--lf-target` and `--skip-install` are forwarded to JSON generation.
 
 ### Test
 

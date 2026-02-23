@@ -49,6 +49,12 @@ pkgs.mkShell {
   ];
 
   shellHook = ''
+    # direnv `use nix` can capture transient nix-shell temp dirs; force stable tmp paths.
+    export TMPDIR=/tmp
+    export TMP=/tmp
+    export TEMP=/tmp
+    export TEMPDIR=/tmp
+
     export PATH="$PWD/node_modules/.bin:$PATH"
 
     if [ "''${SKIP_NPM_INSTALL:-0}" != "1" ] && [ -f package.json ] && [ ! -d node_modules ]; then

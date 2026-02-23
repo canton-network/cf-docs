@@ -6,9 +6,11 @@ This implementation stays entirely in `digital-asset/docs`:
 
 1. Use `dpm` + `damlc docs --format json` against the installed SDK artifact to generate `daml-prim.json` (no `daml` repo checkout).
 2. Convert JSON to MDX using `scripts/daml_docs_json_to_mdx.py`.
-3. Update navigation in `docs.json` so generated pages are visible in Mintlify.
-4. Run everything through scripts that can be called locally and from CI.
-5. Add a GitHub Actions workflow in this repo that runs the scripts in dry-run by default; PR creation is optional.
+3. Sync the latest 3 stable SDK versions (or explicit versions) into `docs-main/daml-reference/daml-prim-api/vX-Y-Z`.
+4. Update navigation in `docs.json` with `Daml Reference Docs` -> `Daml Prim API` version groups.
+5. Remove legacy `Generated API Reference` groups from `App Development`.
+6. Run everything through scripts that can be called locally and from CI.
+7. Add a GitHub Actions workflow in this repo that runs the scripts in dry-run by default; PR creation is optional.
 
 ## Checklist
 
@@ -24,6 +26,8 @@ This implementation stays entirely in `digital-asset/docs`:
 - [x] 10. Run local end-to-end dry-run test and capture exact command for you.
 - [x] 11. Run unit tests for converter and verify no regressions.
 - [x] 12. Update this checklist with final status and remaining gaps.
+- [x] 13. Align docs/workflow wording with latest-3 multi-version sync.
+- [x] 14. Validate navigation updater against real `docs.json` schema (`navigation.dropdowns`).
 
 ## Remaining Gaps
 
@@ -34,6 +38,9 @@ This implementation stays entirely in `digital-asset/docs`:
 
 - Pull request dry-run workflow validated successfully on branch `daml-json-to-mdx-converter-clean`.
 - Latest successful run: https://github.com/digital-asset/docs/actions/runs/22293484830
+- Local integration dry-run validated:
+  - `scripts/sync_daml_prim_api_from_dpm.sh --input-json scripts/tests/fixtures/sample_prim.json --sdk-version 3.4.10 --docs-json /tmp/docs-json.* --output-dir /tmp/daml-ref-out --skip-install`
+  - Verified legacy `Generated API Reference` groups were removed and `Daml Reference Docs` + `Daml Prim API` were created.
 - The workflow now sets:
   - `NIX_PATH` for `nix-shell` compatibility in GitHub Actions.
   - `SKIP_NPM_INSTALL=1` to avoid unnecessary npm install in CI shell startup.
