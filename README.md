@@ -38,6 +38,47 @@ This repo includes automation to generate and sync Daml Prim API docs from publi
 - `scripts/sync_daml_prim_api_from_dpm.sh`
 - `scripts/daml_docs_json_to_mdx.py`
 
+### Reviewer guide for this branch
+
+#### Why this exists
+
+We are centralizing generated-docs production in `digital-asset/docs` and enforcing a clear separation of concerns:
+- producer repos are responsible for publishing artifacts
+- the `docs` repo is responsible for turning those artifacts into generated docs pages and navigation
+
+For Daml Prim API specifically, this means `docs` consumes published SDK artifacts via `dpm` and performs generation/conversion in this repo, rather than coupling docs generation to source checkout/build logic in other repos.
+
+#### Scope in this branch
+
+- generate `damlc docs --format json` output from installed SDK artifacts
+- convert that JSON to MDX pages
+- version generated output under `docs-main/daml-reference/daml-prim-api/vX-Y-Z`
+- update `docs.json` navigation to:
+  - create/update `Daml Reference Docs`
+  - create `Daml Prim API` groups per version
+  - remove legacy `Generated API Reference` groups from `App Development`
+- support scheduled/manual sync through GitHub Actions
+
+#### Key behavior
+
+- default sync target is latest 3 stable SDK versions from `dpm version --all -o json`
+- explicit versions can be provided via `--versions`
+- `--input-json` is supported in single-version mode for local testing
+- shell scripts orchestrate; helper Python scripts handle parsing/transforms
+
+#### Main files to review
+
+- `scripts/generate_daml_prim_json_from_dpm.sh`
+- `scripts/sync_daml_prim_api_from_dpm.sh`
+- `scripts/daml_docs_json_to_mdx.py`
+- `scripts/select_latest_lf_target.py`
+- `scripts/list_latest_stable_dpm_versions.py`
+- `scripts/relative_posix_path.py`
+- `scripts/append_version_nav_entry.py`
+- `scripts/update_daml_reference_docs_from_entries.py`
+- `.github/workflows/sync-daml-prim-api.yml`
+- `scripts/tests/test_daml_docs_json_to_mdx.py`
+
 Quick local dry-run:
 
 ```bash
