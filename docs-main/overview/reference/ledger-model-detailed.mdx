@@ -101,9 +101,9 @@ The following diagram shows the hierarchical action structure of a delivery-vers
 graph TD
     TX["Transaction (DvP)"]
 
-    EX1["Exercise (consuming)<br/>DvP.Settle on DvP contract<br/>actors: Alice, Bob"]
-    EX2["Exercise (consuming)<br/>Bond.Transfer on Bond contract<br/>actors: Alice"]
-    EX3["Exercise (consuming)<br/>Cash.Transfer on Cash contract<br/>actors: Bob"]
+    EX1["Exercise (consuming)<br/><code>DvP.Settle</code> on DvP contract<br/>actors: Alice, Bob"]
+    EX2["Exercise (consuming)<br/><code>Bond.Transfer</code> on Bond contract<br/>actors: Alice"]
+    EX3["Exercise (consuming)<br/><code>Cash.Transfer</code> on Cash contract<br/>actors: Bob"]
     CR1["Create<br/>Bond contract<br/>(owner: Bob)"]
     CR2["Create<br/>Cash contract<br/>(owner: Alice)"]
 
@@ -177,14 +177,15 @@ A party that is an informee of a view receives the encrypted payload of that vie
 Different parties see different projections of the same transaction. Consider the DvP example above:
 
 - **Alice** sees the root Exercise (DvP.Settle), the Exercise on her Bond, and the Create of Bob's new Bond. She also sees the Create of her new Cash. She does *not* necessarily see the internal details of Bob's Cash contract if she is not a stakeholder of it (though in a DvP she would typically be an observer on the incoming cash).
-- **Bob** sees the root Exercise, the Exercise on his Cash, and the Create of Alice's new Cash. He also sees the Create of his new Bond.
+- **Bob** sees the root Exercise, the Exercise on his Cash, and the Create of Alice's new Cash. He also sees the Create of his new Bond. He does not necessarily see the internal details of Alice's Bond contract if he is not a stakeholder of it (though in a DvP he would typically be an observer on the incoming bond).
+- A Cash contract typically includes the issuer in the signatories. In this case, the issuer would see Alice's Cash being consumed and Bob's Cash being created. Same if the Bond contract has an issuer.
 - **The synchronizer** (sequencer and mediator) sees none of the plaintext. It handles encrypted view payloads, recipient lists, and confirmation results.
 
 The hierarchical structure enables this decomposition naturally. Each subtree of the action tree can be packaged as a view and encrypted to its informees. Parties who share a subtree see the same view; parties who do not share a subtree see different views — or no view at all.
 
 ### Witnesses and Disclosure
 
-A party is a **witness** of an action if it is an informee of that action's view. Witnesses are responsible for validating the portion of the transaction they can see and sending confirmation or rejection messages to the mediator via the sequencer.
+A party is a **witness** of an action if it is an informee of that action's view. Signatories (through their hosting participant nodes) are responsible for validating the portion of the transaction they can see and sending confirmation or rejection messages to the mediator, routed through the sequencer. Observer witnesses receive the view but are not required to confirm.
 
 Beyond direct informee status, a party may also learn about a contract through **divulgence**: if a contract is fetched (read) within an action where the party is an informee, the party learns the contract's contents even if it was not an original stakeholder. Divulgence is an implicit form of disclosure that arises from transaction composition.
 
