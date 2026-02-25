@@ -10,17 +10,27 @@ A validator on Canton Network is more than a Canton participant node. It bundles
 ```mermaid
 flowchart TB
     subgraph UI["Application Layer (Web UIs)"]
+        direction TB
         WUI[Wallet UI]
         CNSUI[Canton Name Service UI]
     end
 
+    subgraph APIS["External APIs"]
+        direction TB
+        VALAPI[Validator App API]
+        JAPI[JSON API &#40;HTTP&#41;]
+        SCANP[Scan Proxy]
+    end
+
     subgraph SPLICE["Splice Layer"]
+        direction TB
         VAPP[Validator App]
         SDARS[Splice DARs<br>Amulet &#8226; Wallet &#8226; Name Service]
         TSDARS[Token Standard DARs]
     end
 
     subgraph PARTICIPANT["Canton Participant"]
+        direction TB
         LAPI[Ledger API &#40;gRPC&#41;]
         AAPI[Admin API]
         ENGINE[Daml Engine]
@@ -28,38 +38,35 @@ flowchart TB
         PROTO[Protocol Layer<br>preparation &#8226; validation &#8226; confirmation]
     end
 
-    subgraph APIS["External APIs"]
-        JAPI[JSON API &#40;HTTP&#41;]
-        SCANP[Scan Proxy]
-        VALAPI[Validator App API]
-    end
-
     subgraph DATA["Data Layer"]
-        PG[(PostgreSQL)]
+        direction TB
         PQS[PQS<br>Participant Query Store]
+        PG[(PostgreSQL)]
     end
 
     subgraph SYNC["Synchronizer Connections"]
+        direction TB
         GS[Global Synchronizer<br>via sequencer&#40;s&#41;]
         PS[Private Synchronizer&#40;s&#41;<br>optional]
     end
 
     WUI --> VALAPI
     CNSUI --> VALAPI
+    VALAPI --> VAPP
     VAPP --> LAPI
     SDARS --> ENGINE
     TSDARS --> ENGINE
-    ENGINE --> ACS
-    ENGINE --> PROTO
-    PROTO <--> GS
-    PROTO <--> PS
     LAPI --> ENGINE
     JAPI --> LAPI
-    AAPI --> PARTICIPANT
-    SCANP --> GS
-    PARTICIPANT --> PG
     PQS --> LAPI
+    ENGINE --> ACS
+    ENGINE --> PROTO
+    AAPI --> PARTICIPANT
+    PARTICIPANT --> PG
     PQS --> PG
+    PROTO <--> GS
+    PROTO <--> PS
+    SCANP --> GS
 ```
 
 ## Application Layer
