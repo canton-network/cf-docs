@@ -1,5 +1,18 @@
 # Scripts
 
+## View Generated Docs (PR Review)
+
+Use this first when reviewing generated docs changes:
+
+```bash
+direnv allow
+mintlify dev
+```
+
+Then open:
+- `http://localhost:3000/docs-main/daml-reference/daml-prim-api/index`
+- `http://localhost:3000/docs-main/daml-reference/daml-prim-api/da-crypto`
+
 ## Daml JSON to MDX converter (`daml_docs_json_to_mdx.py`)
 
 Use `scripts/daml_docs_json_to_mdx.py` to convert `damlc docs --format json` output into Mintlify MDX pages.
