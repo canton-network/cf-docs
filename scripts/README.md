@@ -14,7 +14,7 @@ Use `scripts/daml_docs_json_to_mdx.py` to convert `damlc docs --format json` out
 ```bash
 python3 scripts/daml_docs_json_to_mdx.py \
   --input-json /path/to/daml-prim.json \
-  --output-dir docs-main/daml-reference/daml-prim-api/v3-4-10
+  --output-dir docs-main/daml-reference/daml-prim-api
 ```
 
 ### Update docs navigation (`docs.json`)
@@ -26,7 +26,7 @@ For this repo's Daml Prim docs flow, use `sync_daml_prim_api_from_dpm.sh` below.
 ```bash
 python3 scripts/daml_docs_json_to_mdx.py \
   --input-json /path/to/daml-prim.json \
-  --output-dir docs-main/daml-reference/daml-prim-api/v3-4-10 \
+  --output-dir docs-main/daml-reference/daml-prim-api \
   --docs-json docs.json \
   --nav-group-name "Existing Group Name" \
   --nav-dropdown-name "Existing Dropdown Name" \
@@ -51,13 +51,19 @@ This script generates Daml docs JSON directly from installed `dpm` SDK artifacts
   --output-json /tmp/daml-prim.json \
   --sdk-version 3.4.10 \
   --lf-target 2.2 \
-  --package-set prim
+  --package-set prim \
+  --sdk-source dpm
 ```
 
 Notes:
 - If `--sdk-version` is omitted, it defaults to `latest` from `https://get.digitalasset.com/install/latest`.
 - If `--lf-target` is omitted, it auto-picks the highest numeric LF target present in the installed package DB.
 - Use `--skip-install` if the SDK is already installed and you want a faster local iteration loop.
+- `--sdk-source` controls where SDK artifacts come from:
+  - `daml`: `~/.daml/sdk/<version>` + direct `damlc docs`
+  - `dpm`: `~/.dpm/cache/...` + `dpm damlc docs`
+  - `dpm` (default)
+  - `auto`: prefer `dpm`, then fallback to `daml`
 - `--package-set` controls source modules:
   - `prim`: `daml-prim` modules only.
   - `stdlib`: `daml-stdlib` modules only.
@@ -78,20 +84,26 @@ To match the docs pipeline module set:
 
 This script runs the full flow:
 1) generate JSON via `dpm damlc docs --format json`
-2) convert JSON to MDX for one or more SDK versions
-3) update `docs.json` with a `Daml Reference Docs` dropdown and `Daml Prim API` version groups
-4) remove legacy `Generated API Reference` groups from `App Development`
+2) analyze multiple SDK versions (latest 3 per family by default) for enrichment metadata
+3) publish exactly one docs tree (latest by default) to `docs-main/daml-reference/daml-prim-api`
+4) update `docs.json` under `App Development` group `Daml Standard Library`
+5) remove legacy `Generated API Reference` groups and remove `Daml Reference Docs` dropdown
 
 ```bash
 ./scripts/sync_daml_prim_api_from_dpm.sh
 ```
 
-By default this syncs the latest 3 stable SDK versions from `dpm version --all -o json`.
+By default this analyzes versions selected from GitHub releases (`digital-asset/daml`):
+- latest 3 from `3.4.x`
+- latest 3 from `3.3.x`
+- latest 3 from `3.2.x`
+
+and publishes the latest selected version.
 
 Specify exact versions:
 
 ```bash
-./scripts/sync_daml_prim_api_from_dpm.sh --versions 3.4.11,3.4.10,3.4.9
+./scripts/sync_daml_prim_api_from_dpm.sh --versions 3.4.11,3.4.10,3.4.9 --publish-sdk-version 3.4.11
 ```
 
 Use an existing JSON file instead:
@@ -105,8 +117,21 @@ Use an existing JSON file instead:
 Notes:
 - `--input-json` supports single-version mode only.
 - Output path defaults to `docs-main/daml-reference/daml-prim-api`.
-- Override latest count via `--latest-n N`.
+- Override analyze count per family via `--latest-n N`.
+- Override default families via `--minor-families CSV` (for example `3.4,3.3,3.2`).
+- Override SDK artifact source via `--sdk-source daml|dpm|auto` (default `dpm` in sync script).
 - `--lf-target` and `--skip-install` are forwarded to JSON generation.
+- `--publish-sdk-version` lets you publish a specific analyzed SDK version.
+
+## Navigation cleanup helper (`cleanup_daml_reference_docs_nav.py`)
+
+This helper removes legacy nav structures used by older generated-docs flows:
+- removes top-level dropdown `Daml Reference Docs`
+- removes `Generated API Reference` groups from `App Development` versions
+
+```bash
+python3 scripts/cleanup_daml_reference_docs_nav.py --docs-json docs.json
+```
 
 ## Diff two JSON outputs (`diff_daml_docs_json.py`)
 
@@ -142,6 +167,8 @@ python3 scripts/build_versioned_daml_prim_prelude.py \
 
 ```bash
 python3 -m unittest -v scripts.tests.test_daml_docs_json_to_mdx
+python3 -m unittest -v scripts.tests.test_list_latest_dpm_versions_by_family
+python3 -m unittest -v scripts.tests.test_cleanup_daml_reference_docs_nav
 python3 -m unittest -v scripts.tests.test_diff_daml_docs_json
 python3 -m unittest -v scripts.tests.test_build_versioned_daml_prim_prelude
 ```
