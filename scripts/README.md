@@ -100,6 +100,9 @@ By default this analyzes versions selected from GitHub releases (`digital-asset/
 
 and publishes the latest selected version.
 
+For each family, selection keeps recent versions and includes a historical sample so lifecycle
+changes (introduced/removed modules) are captured in the published output.
+
 Specify exact versions:
 
 ```bash
@@ -122,6 +125,7 @@ Notes:
 - Override SDK artifact source via `--sdk-source daml|dpm|auto` (default `dpm` in sync script).
 - `--lf-target` and `--skip-install` are forwarded to JSON generation.
 - `--publish-sdk-version` lets you publish a specific analyzed SDK version.
+- Removed modules are retained as historical pages and marked `removed in <version>` in the index.
 
 ## Navigation cleanup helper (`cleanup_daml_reference_docs_nav.py`)
 

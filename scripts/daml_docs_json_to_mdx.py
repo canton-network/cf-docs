@@ -50,10 +50,24 @@ def escape_yaml_double_quoted(text: str) -> str:
 def render_doc_blocks(descr: Any) -> str:
     if not descr:
         return ""
+    if isinstance(descr, str):
+        return descr.strip()
+
+    paragraphs: list[Any]
+    if isinstance(descr, list):
+        paragraphs = descr
+    else:
+        paragraphs = [descr]
+
     blocks: list[str] = []
-    for paragraph in descr:
+    for paragraph in paragraphs:
         if isinstance(paragraph, list):
-            lines = [str(x) for x in paragraph]
+            lines: list[str] = []
+            for line in paragraph:
+                if isinstance(line, list):
+                    lines.extend(str(x) for x in line)
+                else:
+                    lines.append(str(line))
             raw = "\n".join(lines).strip()
             # REPL/doctest snippets can contain `<-`, which MDX misparses as JSX.
             # Render them as fenced code blocks to keep content literal.
@@ -288,7 +302,11 @@ def render_adt(adt_union: dict[str, Any]) -> str:
     return "\n\n".join(parts)
 
 
-def render_module(module_doc: dict[str, Any], module_deprecation_introduced_in: str | None = None) -> str:
+def render_module(
+    module_doc: dict[str, Any],
+    module_deprecation_introduced_in: str | None = None,
+    module_lifecycle: dict[str, str | None] | None = None,
+) -> str:
     name = str(module_doc["md_name"])
     display_name = module_display_name(name)
     anchor = module_doc.get("md_anchor")
@@ -305,8 +323,24 @@ def render_module(module_doc: dict[str, Any], module_deprecation_introduced_in: 
     module_alpha_warning = next((msg for msg in module_warnings if "alpha" in msg.lower()), None)
     module_deprecation_warning = module_deprecations[0] if module_deprecations else None
 
+    module_status = "active"
+    introduced_in = "-"
+    removed_in = "-"
+    if module_lifecycle:
+        raw_status = str(module_lifecycle.get("status", "active")).strip().lower()
+        if raw_status:
+            module_status = raw_status
+        raw_introduced = module_lifecycle.get("introduced_in")
+        if isinstance(raw_introduced, str) and raw_introduced.strip():
+            introduced_in = raw_introduced.strip()
+        raw_removed = module_lifecycle.get("removed_in")
+        if isinstance(raw_removed, str) and raw_removed.strip():
+            removed_in = raw_removed.strip()
+
     lifecycle = "Stable."
-    if module_alpha_warning:
+    if module_status == "removed":
+        lifecycle = "Removed."
+    elif module_alpha_warning:
         lifecycle = "Alpha (experimental)."
     elif module_deprecation_warning:
         lifecycle = "Deprecated."
@@ -326,6 +360,9 @@ def render_module(module_doc: dict[str, Any], module_deprecation_introduced_in: 
                 lifecycle,
                 "</Card>",
                 '<Card title="Notices">',
+                f"Status: `{module_status}`",
+                f"Introduced in: `{introduced_in}`",
+                f"Removed in: `{removed_in}`",
                 f"Warnings: `{len(module_warnings)}`",
                 f"Deprecations: `{len(module_deprecations)}`",
                 deprecation_since_line,
@@ -334,7 +371,21 @@ def render_module(module_doc: dict[str, Any], module_deprecation_introduced_in: 
             ]
         )
     )
-    if module_alpha_warning:
+    if module_status == "removed":
+        body_parts.append(
+            "\n".join(
+                [
+                    "<Warning>",
+                    (
+                        f"This module was removed in `{removed_in}` and is shown here for historical reference."
+                        if removed_in != "-"
+                        else "This module is removed and is shown here for historical reference."
+                    ),
+                    "</Warning>",
+                ]
+            )
+        )
+    elif module_alpha_warning:
         body_parts.append("\n".join(["<Warning>", module_alpha_warning, "</Warning>"]))
     elif module_deprecation_warning:
         body_parts.append("\n".join(["<Warning>", module_deprecation_warning, "</Warning>"]))
@@ -403,6 +454,7 @@ def write_modules(
     out_dir: Path,
     index_file: str = "index.mdx",
     module_deprecation_first_seen: dict[str, str] | None = None,
+    module_lifecycle: dict[str, dict[str, str | None]] | None = None,
 ) -> list[str]:
     out_dir.mkdir(parents=True, exist_ok=True)
     for old_mdx in out_dir.glob("*.mdx"):
@@ -410,17 +462,29 @@ def write_modules(
 
     module_targets: list[str] = []
     module_names: list[str] = []
-    for module in modules:
+    module_source_names: list[str] = []
+    modules_sorted = sorted(
+        modules,
+        key=lambda module: module_display_name(str(module.get("md_name", ""))).lower(),
+    )
+
+    for module in modules_sorted:
         name = str(module["md_name"])
         if name in EXCLUDED_MODULE_NAMES:
             continue
         module_names.append(module_display_name(name))
+        module_source_names.append(name)
         target = module_file_name(name).removesuffix(".mdx")
         module_targets.append(target)
         deprecation_introduced_in = (
             module_deprecation_first_seen.get(name) if module_deprecation_first_seen else None
         )
-        text = render_module(module, module_deprecation_introduced_in=deprecation_introduced_in)
+        lifecycle = module_lifecycle.get(name) if module_lifecycle else None
+        text = render_module(
+            module,
+            module_deprecation_introduced_in=deprecation_introduced_in,
+            module_lifecycle=lifecycle,
+        )
         (out_dir / f"{target}.mdx").write_text(text, encoding="utf-8")
 
     index_target = Path(index_file).stem
@@ -435,8 +499,17 @@ def write_modules(
         "## Modules",
         "",
     ]
-    for name, target in zip(module_names, module_targets):
-        index_lines.append(f"- [{name}](./{target})")
+    for source_name, name, target in zip(module_source_names, module_names, module_targets):
+        status_suffix = ""
+        if module_lifecycle:
+            lifecycle = module_lifecycle.get(source_name, {})
+            if lifecycle.get("status") == "removed":
+                removed_in = lifecycle.get("removed_in")
+                if isinstance(removed_in, str) and removed_in.strip():
+                    status_suffix = f" - removed in `{removed_in}`"
+                else:
+                    status_suffix = " - removed"
+        index_lines.append(f"- [{name}](./{target}){status_suffix}")
     (out_dir / index_file).write_text("\n".join(index_lines).rstrip() + "\n", encoding="utf-8")
     return [index_target] + module_targets
 
@@ -659,6 +732,11 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         help="Optional JSON map: module name -> first version with DeprecatedData.",
     )
+    parser.add_argument(
+        "--module-lifecycle-json",
+        type=Path,
+        help="Optional JSON map: module name -> lifecycle metadata (introduced/removed/status).",
+    )
     return parser.parse_args()
 
 
@@ -677,11 +755,38 @@ def main() -> int:
             )
         module_deprecation_first_seen = payload
 
+    module_lifecycle: dict[str, dict[str, str | None]] | None = None
+    if args.module_lifecycle_json:
+        with args.module_lifecycle_json.open("r", encoding="utf-8") as f:
+            payload = json.load(f)
+        if not isinstance(payload, dict):
+            raise ValueError("--module-lifecycle-json must be a JSON object keyed by module name")
+        normalized_lifecycle: dict[str, dict[str, str | None]] = {}
+        for module_name, value in payload.items():
+            if not isinstance(module_name, str) or not isinstance(value, dict):
+                raise ValueError(
+                    "--module-lifecycle-json must map string module names to object values"
+                )
+            normalized_entry: dict[str, str | None] = {}
+            for key in ("introduced_in", "last_seen_in", "removed_in", "status"):
+                raw = value.get(key)
+                if raw is None:
+                    normalized_entry[key] = None
+                elif isinstance(raw, str):
+                    normalized_entry[key] = raw
+                else:
+                    raise ValueError(
+                        f"--module-lifecycle-json entry '{module_name}.{key}' must be string or null"
+                    )
+            normalized_lifecycle[module_name] = normalized_entry
+        module_lifecycle = normalized_lifecycle
+
     module_targets = write_modules(
         modules,
         args.output_dir,
         index_file=args.index_file,
         module_deprecation_first_seen=module_deprecation_first_seen,
+        module_lifecycle=module_lifecycle,
     )
 
     nav_updates = 0

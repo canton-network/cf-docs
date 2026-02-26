@@ -25,7 +25,7 @@ class DamlDocsJsonToMdxTests(unittest.TestCase):
             modules = load_modules(self.fixtures / "sample_prim.json")
             module_targets = write_modules(modules, out_dir)
 
-            self.assertEqual(module_targets, ["index", "prelude", "da-stack"])
+            self.assertEqual(module_targets, ["index", "da-stack", "prelude"])
             self.assertTrue((out_dir / "index.mdx").exists())
             self.assertTrue((out_dir / "prelude.mdx").exists())
             self.assertTrue((out_dir / "da-stack.mdx").exists())
@@ -42,6 +42,20 @@ class DamlDocsJsonToMdxTests(unittest.TestCase):
 
             prelude_content = (out_dir / "prelude.mdx").read_text(encoding="utf-8")
             self.assertIn('title: "Prelude"', prelude_content)
+
+    def test_renders_plain_string_module_description(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out_dir = Path(tmpdir) / "docs-main" / "daml-reference" / "daml-prim-api"
+            modules = [
+                {
+                    "md_name": "DA.Crypto",
+                    "md_descr": "Functions for working with Crypto builtins.",
+                }
+            ]
+            write_modules(modules, out_dir)
+            content = (out_dir / "da-crypto.mdx").read_text(encoding="utf-8")
+            self.assertIn("Functions for working with Crypto builtins.", content)
+            self.assertNotIn("\n\nu\n\n", content)
 
     def test_renders_alpha_module_snapshot(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -98,6 +112,42 @@ class DamlDocsJsonToMdxTests(unittest.TestCase):
             self.assertIn('<Accordion title="All deprecations (2)">', content)
             self.assertIn("Use -Wno-deprecated-exceptions to disable this warning.", content)
 
+    def test_renders_removed_module_snapshot_and_index_annotation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out_dir = Path(tmpdir) / "docs-main" / "daml-reference" / "daml-prim-api"
+            modules = [
+                {"md_name": "DA.Crypto.Text", "md_descr": [["Text crypto helpers."]]},
+                {"md_name": "DA.Crypto", "md_descr": [["Legacy crypto helpers."]]},
+            ]
+            write_modules(
+                modules,
+                out_dir,
+                module_lifecycle={
+                    "DA.Crypto": {
+                        "introduced_in": "3.3.0-snapshot.20250305.0",
+                        "last_seen_in": "3.3.0-snapshot.20250305.0",
+                        "removed_in": "3.3.0-snapshot.20250507.0",
+                        "status": "removed",
+                    },
+                    "DA.Crypto.Text": {
+                        "introduced_in": "3.3.0-snapshot.20250507.0",
+                        "last_seen_in": "3.4.11",
+                        "removed_in": None,
+                        "status": "active",
+                    },
+                },
+            )
+
+            removed_content = (out_dir / "da-crypto.mdx").read_text(encoding="utf-8")
+            self.assertIn("Removed.", removed_content)
+            self.assertIn("Status: `removed`", removed_content)
+            self.assertIn("Removed in: `3.3.0-snapshot.20250507.0`", removed_content)
+            self.assertIn("shown here for historical reference", removed_content)
+
+            index_content = (out_dir / "index.mdx").read_text(encoding="utf-8")
+            self.assertIn("- [DA.Crypto](./da-crypto) - removed in `3.3.0-snapshot.20250507.0`", index_content)
+            self.assertIn("- [DA.Crypto.Text](./da-crypto-text)", index_content)
+
     def test_excludes_ghc_modules_from_generated_output(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             out_dir = Path(tmpdir) / "docs-main" / "daml-reference" / "daml-prim-api" / "v3-4-10"
@@ -109,7 +159,7 @@ class DamlDocsJsonToMdxTests(unittest.TestCase):
             ]
             module_targets = write_modules(modules, out_dir)
 
-            self.assertEqual(module_targets, ["index", "prelude", "da-stack"])
+            self.assertEqual(module_targets, ["index", "da-stack", "prelude"])
             self.assertTrue((out_dir / "prelude.mdx").exists())
             self.assertTrue((out_dir / "da-stack.mdx").exists())
             self.assertFalse((out_dir / "ghc-show-text.mdx").exists())

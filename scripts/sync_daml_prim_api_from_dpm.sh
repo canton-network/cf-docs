@@ -313,6 +313,18 @@ if [[ -z "$PUBLISH_JSON_PATH" ]]; then
   exit 1
 fi
 
+MERGED_PUBLISH_JSON="$TMP_DIR/daml-prim-publish-$PUBLISH_SDK_VERSION.json"
+MODULE_LIFECYCLE_JSON="$TMP_DIR/module-lifecycle.json"
+if [[ "${#VERSION_JSON_ARGS[@]}" -gt 0 ]]; then
+  log "Building publish module set with removed-module history"
+  python3 "$SCRIPT_DIR/build_publish_module_set.py" \
+    "${VERSION_JSON_ARGS[@]}" \
+    --publish-version "$PUBLISH_SDK_VERSION" \
+    --output-json "$MERGED_PUBLISH_JSON" \
+    --output-lifecycle-json "$MODULE_LIFECYCLE_JSON"
+  PUBLISH_JSON_PATH="$MERGED_PUBLISH_JSON"
+fi
+
 log "Publishing SDK version: $PUBLISH_SDK_VERSION"
 log "Publish JSON: $PUBLISH_JSON_PATH"
 
@@ -323,6 +335,7 @@ python3 "$SCRIPT_DIR/daml_docs_json_to_mdx.py" \
   --input-json "$PUBLISH_JSON_PATH" \
   --output-dir "$OUTPUT_DIR" \
   --module-deprecation-first-seen-json "$DEPRECATION_FIRST_SEEN_JSON" \
+  --module-lifecycle-json "$MODULE_LIFECYCLE_JSON" \
   --docs-json "$DOCS_JSON" \
   --nav-group-name "Daml Standard Library" \
   --nav-dropdown-name "App Development" \

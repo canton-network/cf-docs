@@ -55,6 +55,44 @@ class ListLatestReleaseVersionsByFamilyTests(unittest.TestCase):
         self.assertIn("3.3.x", warnings[0])
         self.assertIn("3.2.x", warnings[1])
 
+    def test_includes_historical_sample_when_many_versions_exist(self) -> None:
+        versions = [
+            "3.3.0-snapshot.20250930.0",
+            "3.3.0-snapshot.20250603.0",
+            "3.3.0-snapshot.20250507.0",
+            "3.3.0-snapshot.20250417.0",
+            "3.3.0-snapshot.20250416.0",
+            "3.3.0-snapshot.20250410.0",
+            "3.3.0-snapshot.20250409.1",
+            "3.3.0-snapshot.20250402.0",
+            "3.3.0-snapshot.20250319.0",
+            "3.3.0-snapshot.20250312.0",
+            "3.3.0-snapshot.20250305.0",
+            "3.3.0-snapshot.20250226.0",
+            "3.3.0-snapshot.20250219.0",
+            "3.3.0-snapshot.20250212.0",
+            "3.3.0-snapshot.20250205.0",
+            "3.3.0-snapshot.20250129.0",
+            "3.3.0-snapshot.20250122.1",
+            "3.3.0-snapshot.20241211.0",
+            "3.3.0-snapshot.20241127.0",
+            "3.3.0-snapshot.20241120.0",
+        ]
+        selected, warnings = select_versions(
+            versions=versions,
+            families=[(3, 3)],
+            count_per_family=3,
+        )
+        self.assertEqual(
+            selected,
+            [
+                "3.3.0-snapshot.20250930.0",
+                "3.3.0-snapshot.20250603.0",
+                "3.3.0-snapshot.20250305.0",
+            ],
+        )
+        self.assertEqual(warnings, [])
+
 
 if __name__ == "__main__":
     unittest.main()

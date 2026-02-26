@@ -120,7 +120,25 @@ def select_versions(
     warnings: list[str] = []
     for major, minor in families:
         pool = by_family[(major, minor)]
-        picked = pool[:count_per_family]
+        if len(pool) <= count_per_family:
+            picked = pool[:count_per_family]
+        elif count_per_family >= 3:
+            # Keep the newest versions while forcing one historical sample to capture
+            # introduction/removal transitions that the newest-only window can miss.
+            picked = list(pool[: count_per_family - 1])
+            historical_idx = len(pool) // 2
+            historical = pool[historical_idx]
+            if historical not in picked:
+                picked.append(historical)
+            if len(picked) < count_per_family:
+                for candidate in pool:
+                    if candidate in picked:
+                        continue
+                    picked.append(candidate)
+                    if len(picked) == count_per_family:
+                        break
+        else:
+            picked = pool[:count_per_family]
         if len(picked) < count_per_family:
             warnings.append(
                 f"Requested {count_per_family} version(s) for {major}.{minor}.x but found {len(picked)}."
