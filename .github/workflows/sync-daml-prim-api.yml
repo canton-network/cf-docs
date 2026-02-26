@@ -13,13 +13,17 @@ on:
   workflow_dispatch:
     inputs:
       versions:
-        description: "Comma-separated SDK versions. Leave empty to use latest_n."
+        description: "Comma-separated SDK versions to analyze. Leave empty to use latest_n."
         required: false
         default: ""
       latest_n:
-        description: "How many latest stable SDK versions to sync when versions is empty."
+        description: "How many latest SDK versions to analyze per family when versions is empty."
         required: false
         default: "3"
+      minor_families:
+        description: "Comma-separated major.minor families to analyze when versions is empty."
+        required: false
+        default: "3.4,3.3,3.2"
       lf_target:
         description: "LF target (for example 2.2). Leave empty to auto-detect."
         required: false
@@ -55,6 +59,15 @@ jobs:
       - name: Install Nix
         uses: cachix/install-nix-action@v30
 
+      - name: Install Daml Assistant
+        shell: bash
+        run: |
+          if [[ ! -x "$HOME/.daml/bin/daml" ]]; then
+            curl -fsSL https://get.daml.com/ | sh -s -- 3.4.10
+          fi
+          echo "$HOME/.daml/bin" >> "$GITHUB_PATH"
+          "$HOME/.daml/bin/daml" version | sed -n '1,80p'
+
       - name: Resolve Parameters
         id: params
         shell: bash
@@ -62,26 +75,30 @@ jobs:
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             versions="${{ inputs.versions }}"
             latest_n="${{ inputs.latest_n }}"
+            minor_families="${{ inputs.minor_families }}"
             lf_target="${{ inputs.lf_target }}"
             dry_run="${{ inputs.dry_run }}"
           elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
             versions=""
             latest_n="3"
+            minor_families="3.4,3.3,3.2"
             lf_target=""
             dry_run="true"
           else
             versions=""
             latest_n="3"
+            minor_families="3.4,3.3,3.2"
             lf_target=""
             dry_run="true"
           fi
           if [[ -n "$versions" ]]; then
             version_label="$versions"
           else
-            version_label="latest-$latest_n"
+            version_label="latest-${latest_n}-per-${minor_families//,/+}"
           fi
           echo "versions=$versions" >> "$GITHUB_OUTPUT"
           echo "latest_n=$latest_n" >> "$GITHUB_OUTPUT"
+          echo "minor_families=$minor_families" >> "$GITHUB_OUTPUT"
           echo "version_label=$version_label" >> "$GITHUB_OUTPUT"
           echo "lf_target=$lf_target" >> "$GITHUB_OUTPUT"
           echo "dry_run=$dry_run" >> "$GITHUB_OUTPUT"
@@ -89,7 +106,11 @@ jobs:
       - name: Run Unit Tests
         shell: bash
         run: |
-          nix-shell --run 'python3 -m unittest -v scripts.tests.test_daml_docs_json_to_mdx'
+          nix-shell --run 'python3 -m unittest -v \
+            scripts.tests.test_list_latest_dpm_versions_by_family \
+            scripts.tests.test_daml_docs_json_to_mdx \
+            scripts.tests.test_cleanup_daml_reference_docs_nav \
+            scripts.tests.test_compute_module_deprecation_first_seen'
 
       - name: Show Tool Versions
         shell: bash
@@ -99,7 +120,7 @@ jobs:
       - name: Generate and Convert Daml Prim Docs
         shell: bash
         run: |
-          cmd="./scripts/sync_daml_prim_api_from_dpm.sh --latest-n '${{ steps.params.outputs.latest_n }}'"
+          cmd="./scripts/sync_daml_prim_api_from_dpm.sh --latest-n '${{ steps.params.outputs.latest_n }}' --minor-families '${{ steps.params.outputs.minor_families }}'"
           if [[ -n "${{ steps.params.outputs.versions }}" ]]; then
             cmd="$cmd --versions '${{ steps.params.outputs.versions }}'"
           fi
@@ -134,7 +155,8 @@ jobs:
           body: |
             Automated update of Daml Prim API docs generated from dpm artifacts.
 
-            - SDK versions: `${{ steps.params.outputs.versions || format('latest {0}', steps.params.outputs.latest_n) }}`
+            - SDK versions analyzed: `${{ steps.params.outputs.versions || format('latest {0} per family ({1})', steps.params.outputs.latest_n, steps.params.outputs.minor_families) }}`
+            - Published docs: `single latest tree at docs-main/daml-reference/daml-prim-api`
             - LF target: `${{ steps.params.outputs.lf_target || 'auto' }}`
             - Trigger: `${{ github.event_name }}`
           branch: "automation/daml-prim-api-${{ github.run_id }}"

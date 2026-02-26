@@ -2,6 +2,7 @@
 
 let
   dpmSdkVersion = "3.4.11";
+  damlSdkVersion = dpmSdkVersion;
   platform =
     if pkgs.stdenv.hostPlatform.system == "aarch64-darwin" then
       {
@@ -39,6 +40,52 @@ let
       chmod +x "$out/bin/dpm"
     '';
   };
+
+  damlPlatform =
+    if pkgs.stdenv.hostPlatform.system == "aarch64-darwin" then
+      {
+        artifact = "macos-x86_64";
+        hash = "sha256-48Pn9nffYLKlivqJtaFPBsVSwAt5Fd71cwkTbmyk2+U=";
+      }
+    else if pkgs.stdenv.hostPlatform.system == "x86_64-darwin" then
+      {
+        artifact = "macos-x86_64";
+        hash = "sha256-48Pn9nffYLKlivqJtaFPBsVSwAt5Fd71cwkTbmyk2+U=";
+      }
+    else if pkgs.stdenv.hostPlatform.system == "x86_64-linux" then
+      {
+        artifact = "linux-x86_64";
+        hash = "sha256-YHVio6ymJQG7JZWmKOVIZRZyGGCHOE9gy5+umZuhxi0=";
+      }
+    else if pkgs.stdenv.hostPlatform.system == "aarch64-linux" then
+      {
+        artifact = "linux-aarch64";
+        hash = "sha256-O9CdlwA6oma4XXL6GCXcPqD6gUvodVotPDNWmHkJzDA=";
+      }
+    else
+      throw "Unsupported platform for daml in shell.nix: ${pkgs.stdenv.hostPlatform.system}";
+
+  damlSdkTarball = pkgs.fetchurl {
+    url = "https://github.com/digital-asset/daml/releases/download/v${damlSdkVersion}/daml-sdk-${damlSdkVersion}-${damlPlatform.artifact}.tar.gz";
+    hash = damlPlatform.hash;
+  };
+
+  daml = pkgs.stdenvNoCC.mkDerivation {
+    pname = "daml";
+    version = damlSdkVersion;
+    src = damlSdkTarball;
+    dontConfigure = true;
+    dontBuild = true;
+    unpackPhase = ''
+      tar xzf "$src" --strip-components=1
+    '';
+    installPhase = ''
+      mkdir -p "$out/bin" "$out/opt/daml-sdk"
+      cp -R . "$out/opt/daml-sdk/"
+      ln -s "$out/opt/daml-sdk/daml/daml" "$out/bin/daml"
+      chmod +x "$out/opt/daml-sdk/daml/daml"
+    '';
+  };
 in
 pkgs.mkShell {
   packages = [
@@ -46,6 +93,7 @@ pkgs.mkShell {
     pkgs.nodejs_22
     pkgs.python3
     dpm
+    daml
   ];
 
   shellHook = ''
