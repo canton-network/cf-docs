@@ -44,19 +44,35 @@ The converter updates every matching group under the selected dropdown.
 
 ## Generate daml-prim JSON from dpm (`generate_daml_prim_json_from_dpm.sh`)
 
-This script generates `daml-prim.json` directly from installed `dpm` SDK artifacts.
+This script generates Daml docs JSON directly from installed `dpm` SDK artifacts.
 
 ```bash
 ./scripts/generate_daml_prim_json_from_dpm.sh \
   --output-json /tmp/daml-prim.json \
   --sdk-version 3.4.10 \
-  --lf-target 2.2
+  --lf-target 2.2 \
+  --package-set prim
 ```
 
 Notes:
 - If `--sdk-version` is omitted, it defaults to `latest` from `https://get.digitalasset.com/install/latest`.
 - If `--lf-target` is omitted, it auto-picks the highest numeric LF target present in the installed package DB.
 - Use `--skip-install` if the SDK is already installed and you want a faster local iteration loop.
+- `--package-set` controls source modules:
+  - `prim`: `daml-prim` modules only.
+  - `stdlib`: `daml-stdlib` modules only.
+  - `base`: `daml-stdlib + daml-prim` merged by module name (stdlib takes precedence), matching the docs pipeline composition.
+
+To match the docs pipeline module set:
+
+```bash
+./scripts/generate_daml_prim_json_from_dpm.sh \
+  --output-json /tmp/daml-base.json \
+  --sdk-version 3.4.11 \
+  --lf-target 2.2 \
+  --package-set base \
+  --skip-install
+```
 
 ## End-to-end sync from dpm (`sync_daml_prim_api_from_dpm.sh`)
 
@@ -92,8 +108,40 @@ Notes:
 - Override latest count via `--latest-n N`.
 - `--lf-target` and `--skip-install` are forwarded to JSON generation.
 
+## Diff two JSON outputs (`diff_daml_docs_json.py`)
+
+Use this when you want to compare two `damlc docs --format json` outputs.
+
+It reports:
+- byte-level/raw differences (size + sha256)
+- semantic API differences (modules, functions, ADTs, classes, class methods)
+- schema/format differences (JSON path type changes and object key-set changes)
+
+```bash
+python3 scripts/diff_daml_docs_json.py \
+  --old-json /tmp/prim-3.2.json \
+  --new-json /tmp/prim-3.4.json
+```
+
+## Build unified Prelude docs across versions (`build_versioned_daml_prim_prelude.py`)
+
+Use this to generate:
+- one enriched JSON data file with per-element version timelines
+- one unified MDX page for Prelude that includes interface-level change markers
+  (introduced/removed/signature changes/deprecation changes)
+
+```bash
+python3 scripts/build_versioned_daml_prim_prelude.py \
+  --version-json 3.2.0-snapshot=/tmp/prim-3.2.json \
+  --version-json 3.4.11=/tmp/prim-3.4.json \
+  --output-data docs-main/daml-reference/daml-prim-api/prelude-versioned.data.json \
+  --output-mdx docs-main/daml-reference/daml-prim-api/prelude-versioned.mdx
+```
+
 ### Test
 
 ```bash
 python3 -m unittest -v scripts.tests.test_daml_docs_json_to_mdx
+python3 -m unittest -v scripts.tests.test_diff_daml_docs_json
+python3 -m unittest -v scripts.tests.test_build_versioned_daml_prim_prelude
 ```

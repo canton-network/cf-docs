@@ -53,12 +53,57 @@ def render_doc_blocks(descr: Any) -> str:
     blocks: list[str] = []
     for paragraph in descr:
         if isinstance(paragraph, list):
-            raw = "\n".join(str(x) for x in paragraph).strip()
+            lines = [str(x) for x in paragraph]
+            raw = "\n".join(lines).strip()
+            # REPL/doctest snippets can contain `<-`, which MDX misparses as JSX.
+            # Render them as fenced code blocks to keep content literal.
+            has_doctest = any(line.lstrip().startswith(">>>") for line in lines)
+            has_fence = any(line.strip().startswith("```") for line in lines)
+            if has_doctest and not has_fence:
+                raw = f"```text\n{raw}\n```"
         else:
             raw = str(paragraph).strip()
         if raw:
             blocks.append(raw)
     return "\n\n".join(blocks)
+
+
+def extract_tagged_warning_messages(warns: Any, tag: str) -> list[str]:
+    values: list[Any]
+    if warns is None:
+        values = []
+    elif isinstance(warns, list):
+        values = warns
+    else:
+        values = [warns]
+
+    out: list[str] = []
+
+    def append_texts(node: Any) -> None:
+        if isinstance(node, list):
+            for item in node:
+                append_texts(item)
+            return
+        if node is None:
+            return
+        text = str(node).strip()
+        if text:
+            out.append(text)
+
+    for entry in values:
+        if not isinstance(entry, dict):
+            continue
+        if tag in entry:
+            append_texts(entry[tag])
+
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for item in out:
+        if item in seen:
+            continue
+        seen.add(item)
+        deduped.append(item)
+    return deduped
 
 
 def module_display_name(module_name: str) -> str:
@@ -77,7 +122,7 @@ def module_display_name(module_name: str) -> str:
             normalized.append(part.capitalize())
         else:
             normalized.append(part)
-    return " ".join(normalized)
+    return ".".join(normalized)
 
 
 def render_type(ty: Any, prec: int = 0) -> str:
@@ -243,7 +288,7 @@ def render_adt(adt_union: dict[str, Any]) -> str:
     return "\n\n".join(parts)
 
 
-def render_module(module_doc: dict[str, Any]) -> str:
+def render_module(module_doc: dict[str, Any], module_deprecation_introduced_in: str | None = None) -> str:
     name = str(module_doc["md_name"])
     display_name = module_display_name(name)
     anchor = module_doc.get("md_anchor")
@@ -254,6 +299,58 @@ def render_module(module_doc: dict[str, Any]) -> str:
     descr = render_doc_blocks(module_doc.get("md_descr"))
     if descr:
         body_parts.append(descr)
+
+    module_warnings = extract_tagged_warning_messages(module_doc.get("md_warn"), "WarnData")
+    module_deprecations = extract_tagged_warning_messages(module_doc.get("md_warn"), "DeprecatedData")
+    module_alpha_warning = next((msg for msg in module_warnings if "alpha" in msg.lower()), None)
+    module_deprecation_warning = module_deprecations[0] if module_deprecations else None
+
+    lifecycle = "Stable."
+    if module_alpha_warning:
+        lifecycle = "Alpha (experimental)."
+    elif module_deprecation_warning:
+        lifecycle = "Deprecated."
+    elif module_warnings:
+        lifecycle = "Warning."
+
+    deprecation_since_line = "Deprecated since: `-`"
+    if module_deprecations and module_deprecation_introduced_in:
+        deprecation_since_line = f"Deprecated since: `{module_deprecation_introduced_in}`"
+
+    body_parts.append("## Module Snapshot")
+    body_parts.append(
+        "\n".join(
+            [
+                "<CardGroup cols={2}>",
+                '<Card title="Lifecycle">',
+                lifecycle,
+                "</Card>",
+                '<Card title="Notices">',
+                f"Warnings: `{len(module_warnings)}`",
+                f"Deprecations: `{len(module_deprecations)}`",
+                deprecation_since_line,
+                "</Card>",
+                "</CardGroup>",
+            ]
+        )
+    )
+    if module_alpha_warning:
+        body_parts.append("\n".join(["<Warning>", module_alpha_warning, "</Warning>"]))
+    elif module_deprecation_warning:
+        body_parts.append("\n".join(["<Warning>", module_deprecation_warning, "</Warning>"]))
+    if module_warnings:
+        warning_lines = ["<AccordionGroup>", f'<Accordion title="All warnings ({len(module_warnings)})">']
+        warning_lines.extend(f"- {item}" for item in module_warnings)
+        warning_lines.extend(["</Accordion>", "</AccordionGroup>"])
+        body_parts.append("\n".join(warning_lines))
+    if module_deprecations:
+        deprecation_lines = [
+            "<AccordionGroup>",
+            f'<Accordion title="All deprecations ({len(module_deprecations)})">',
+        ]
+        deprecation_lines.extend(f"- {item}" for item in module_deprecations)
+        deprecation_lines.extend(["</Accordion>", "</AccordionGroup>"])
+        body_parts.append("\n".join(deprecation_lines))
 
     sections: list[tuple[str, list[str]]] = []
     adts = module_doc.get("md_adts", [])
@@ -301,7 +398,12 @@ def load_modules(input_json: Path) -> list[dict[str, Any]]:
     return modules
 
 
-def write_modules(modules: list[dict[str, Any]], out_dir: Path, index_file: str = "index.mdx") -> list[str]:
+def write_modules(
+    modules: list[dict[str, Any]],
+    out_dir: Path,
+    index_file: str = "index.mdx",
+    module_deprecation_first_seen: dict[str, str] | None = None,
+) -> list[str]:
     out_dir.mkdir(parents=True, exist_ok=True)
     for old_mdx in out_dir.glob("*.mdx"):
         old_mdx.unlink()
@@ -315,12 +417,20 @@ def write_modules(modules: list[dict[str, Any]], out_dir: Path, index_file: str 
         module_names.append(module_display_name(name))
         target = module_file_name(name).removesuffix(".mdx")
         module_targets.append(target)
-        text = render_module(module)
+        deprecation_introduced_in = (
+            module_deprecation_first_seen.get(name) if module_deprecation_first_seen else None
+        )
+        text = render_module(module, module_deprecation_introduced_in=deprecation_introduced_in)
         (out_dir / f"{target}.mdx").write_text(text, encoding="utf-8")
 
     index_target = Path(index_file).stem
     index_lines = [
-        "# Generated Daml API Reference",
+        "---",
+        'title: "Daml Standard Library"',
+        'description: "Reference documentation for Daml Standard Library modules."',
+        "---",
+        "",
+        "# Daml Standard Library",
         "",
         "## Modules",
         "",
@@ -430,7 +540,7 @@ def update_daml_reference_docs_navigation(
     docs_json_path: Path,
     version_entries: list[dict[str, Any]],
     dropdown_name: str = "Daml Reference Docs",
-    group_name: str = "Daml Prim API",
+    group_name: str = "Daml Standard Library",
     icon: str = "book-open",
     remove_legacy_dropdown_name: str = "App Development",
     remove_legacy_group_name: str = "Generated API Reference",
@@ -544,13 +654,35 @@ def parse_args() -> argparse.Namespace:
         "--nav-dropdown-name",
         help="Limit docs.json updates to versions under this dropdown (for example: Application Development)",
     )
+    parser.add_argument(
+        "--module-deprecation-first-seen-json",
+        type=Path,
+        help="Optional JSON map: module name -> first version with DeprecatedData.",
+    )
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
     modules = load_modules(args.input_json)
-    module_targets = write_modules(modules, args.output_dir, index_file=args.index_file)
+    module_deprecation_first_seen: dict[str, str] | None = None
+    if args.module_deprecation_first_seen_json:
+        with args.module_deprecation_first_seen_json.open("r", encoding="utf-8") as f:
+            payload = json.load(f)
+        if not isinstance(payload, dict) or not all(
+            isinstance(k, str) and isinstance(v, str) for k, v in payload.items()
+        ):
+            raise ValueError(
+                "--module-deprecation-first-seen-json must be a JSON object of string keys and values"
+            )
+        module_deprecation_first_seen = payload
+
+    module_targets = write_modules(
+        modules,
+        args.output_dir,
+        index_file=args.index_file,
+        module_deprecation_first_seen=module_deprecation_first_seen,
+    )
 
     nav_updates = 0
     if args.docs_json:

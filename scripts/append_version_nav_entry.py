@@ -12,7 +12,6 @@ from pathlib import Path
 
 EXCLUDED_NAV_TARGETS = frozenset(
     {
-        "index",
         "ghc-show-text",
         "ghc-tuple-check",
     }
@@ -30,7 +29,10 @@ def parse_args() -> argparse.Namespace:
 
 def collect_nav_targets(output_dir: Path) -> list[str]:
     targets = sorted(path.stem for path in output_dir.glob("*.mdx"))
-    return [target for target in targets if target not in EXCLUDED_NAV_TARGETS]
+    filtered = [target for target in targets if target not in EXCLUDED_NAV_TARGETS]
+    if "index" in filtered:
+        filtered = ["index"] + [target for target in filtered if target != "index"]
+    return filtered
 
 
 def main() -> int:

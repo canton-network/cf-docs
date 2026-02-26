@@ -32,14 +32,71 @@ class DamlDocsJsonToMdxTests(unittest.TestCase):
 
             index_content = (out_dir / "index.mdx").read_text(encoding="utf-8")
             self.assertIn("- [Prelude](./prelude)", index_content)
-            self.assertIn("- [DA Stack](./da-stack)", index_content)
+            self.assertIn("- [DA.Stack](./da-stack)", index_content)
 
             stack_content = (out_dir / "da-stack.mdx").read_text(encoding="utf-8")
-            self.assertIn('title: "DA Stack"', stack_content)
-            self.assertIn("# DA Stack", stack_content)
+            self.assertIn('title: "DA.Stack"', stack_content)
+            self.assertIn("# DA.Stack", stack_content)
+            self.assertIn("## Module Snapshot", stack_content)
+            self.assertIn("Stable.", stack_content)
 
             prelude_content = (out_dir / "prelude.mdx").read_text(encoding="utf-8")
             self.assertIn('title: "Prelude"', prelude_content)
+
+    def test_renders_alpha_module_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out_dir = Path(tmpdir) / "docs-main" / "daml-reference" / "daml-prim-api" / "v3-4-11"
+            modules = [
+                {
+                    "md_name": "DA.Crypto.Text",
+                    "md_descr": [["Functions for working with Crypto builtins."]],
+                    "md_warn": {
+                        "WarnData": [
+                            "DA.Crypto.Text is an alpha feature. It can change without notice.",
+                            "use -Wno-crypto-text-is-alpha in build-options to disable this warning",
+                        ]
+                    },
+                }
+            ]
+            write_modules(modules, out_dir)
+            content = (out_dir / "da-crypto-text.mdx").read_text(encoding="utf-8")
+            self.assertIn("## Module Snapshot", content)
+            self.assertIn("Alpha (experimental).", content)
+            self.assertIn("Warnings: `2`", content)
+            self.assertIn("<Warning>", content)
+            self.assertIn("DA.Crypto.Text is an alpha feature. It can change without notice.", content)
+            self.assertIn('<Accordion title="All warnings (2)">', content)
+            self.assertIn("use -Wno-crypto-text-is-alpha in build-options to disable this warning", content)
+
+    def test_renders_deprecated_module_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out_dir = Path(tmpdir) / "docs-main" / "daml-reference" / "daml-prim-api" / "v3-4-11"
+            modules = [
+                {
+                    "md_name": "DA.Exception",
+                    "md_descr": [["Exception helpers."]],
+                    "md_warn": {
+                        "DeprecatedData": [
+                            "Exceptions are deprecated, prefer failWithStatus.",
+                            "Use -Wno-deprecated-exceptions to disable this warning.",
+                        ]
+                    },
+                }
+            ]
+            write_modules(
+                modules,
+                out_dir,
+                module_deprecation_first_seen={"DA.Exception": "3.4.9"},
+            )
+            content = (out_dir / "da-exception.mdx").read_text(encoding="utf-8")
+            self.assertIn("## Module Snapshot", content)
+            self.assertIn("Deprecated.", content)
+            self.assertIn("Deprecations: `2`", content)
+            self.assertIn("Deprecated since: `3.4.9`", content)
+            self.assertIn("<Warning>", content)
+            self.assertIn("Exceptions are deprecated, prefer failWithStatus.", content)
+            self.assertIn('<Accordion title="All deprecations (2)">', content)
+            self.assertIn("Use -Wno-deprecated-exceptions to disable this warning.", content)
 
     def test_excludes_ghc_modules_from_generated_output(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -70,13 +127,48 @@ class DamlDocsJsonToMdxTests(unittest.TestCase):
                 "prelude.mdx",
             ]:
                 (out_dir / page).write_text("# test\n", encoding="utf-8")
-            self.assertEqual(collect_nav_targets(out_dir), ["da-stack", "prelude"])
+            self.assertEqual(collect_nav_targets(out_dir), ["index", "da-stack", "prelude"])
 
     def test_module_display_name_capitalizes_da(self) -> None:
-        self.assertEqual(module_display_name("DA.Stack"), "DA Stack")
-        self.assertEqual(module_display_name("Da.Stack"), "DA Stack")
-        self.assertEqual(module_display_name("Da.Exception"), "DA Exception")
+        self.assertEqual(module_display_name("DA.Stack"), "DA.Stack")
+        self.assertEqual(module_display_name("Da.Stack"), "DA.Stack")
+        self.assertEqual(module_display_name("Da.Exception"), "DA.Exception")
         self.assertEqual(module_display_name("Prelude"), "Prelude")
+
+    def test_doctest_paragraphs_render_as_fenced_code(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out_dir = Path(tmpdir) / "docs-main" / "daml-reference" / "daml-prim-api" / "v3-4-9"
+            modules = [
+                {
+                    "md_name": "DA.Action.State",
+                    "md_descr": [],
+                    "md_adts": [
+                        {
+                            "ADTDoc": {
+                                "ad_name": "State",
+                                "ad_args": ["s", "a"],
+                                "ad_descr": [
+                                    [
+                                        ">>> runState (do x <- get; modify (+1); pure x) 0",
+                                        "(0, 1)",
+                                    ]
+                                ],
+                                "ad_constrs": [],
+                                "ad_instances": [],
+                            }
+                        }
+                    ],
+                    "md_classes": [],
+                    "md_functions": [],
+                    "md_interfaces": [],
+                    "md_templates": [],
+                    "md_instances": [],
+                }
+            ]
+            write_modules(modules, out_dir)
+            content = (out_dir / "da-action-state.mdx").read_text(encoding="utf-8")
+            self.assertIn("```text", content)
+            self.assertIn("x <- get", content)
 
     def test_updates_all_matching_generated_api_groups(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -260,7 +352,7 @@ class DamlDocsJsonToMdxTests(unittest.TestCase):
             self.assertEqual(daml_ref["dropdown"], "Daml Reference Docs")
             self.assertEqual(daml_ref["icon"], "book-open")
             self.assertEqual([v["version"] for v in daml_ref["versions"]], ["3.4.11", "3.4.10"])
-            self.assertEqual(daml_ref["versions"][0]["groups"][0]["group"], "Daml Prim API")
+            self.assertEqual(daml_ref["versions"][0]["groups"][0]["group"], "Daml Standard Library")
 
     def test_replaces_existing_daml_reference_docs_dropdown(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

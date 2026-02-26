@@ -46,7 +46,7 @@ def main() -> int:
         docs_json_path=args.docs_json,
         version_entries=version_entries,
         dropdown_name="Daml Reference Docs",
-        group_name="Daml Prim API",
+        group_name="Daml Standard Library",
         icon="book-open",
         remove_legacy_dropdown_name="App Development",
         remove_legacy_group_name="Generated API Reference",

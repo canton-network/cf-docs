@@ -8,12 +8,12 @@ usage() {
   cat <<'USAGE'
 Usage: sync_daml_prim_api_from_dpm.sh [options]
 
-Generate Daml Prim API docs for multiple SDK versions and update docs.json.
+Generate Daml Standard Library docs for multiple SDK versions and update docs.json.
 
 Defaults:
 - Select latest 3 stable SDK versions from `dpm version --all -o json`
 - Write versioned MDX output under docs-main/daml-reference/daml-prim-api/vX-Y-Z
-- Update top-level docs.json dropdown "Daml Reference Docs" with group "Daml Prim API"
+- Update top-level docs.json dropdown "Daml Reference Docs" with group "Daml Standard Library"
 - Remove legacy "Generated API Reference" groups from "App Development"
 
 Options:
@@ -26,6 +26,8 @@ Options:
   --latest-n N                      Number of latest stable SDK versions. Default: 3
   --versions CSV                    Explicit SDK versions (comma-separated), highest priority.
   --sdk-version VER                 Single SDK version override (legacy option).
+  --package-set SET                 Forwarded to JSON generation. One of: prim, stdlib, base.
+                                   Default: base
   --lf-target VER                   Forwarded to JSON generation.
   --dpm-home PATH                   Forwarded to JSON generation.
   --skip-install                    Forwarded to JSON generation.
@@ -59,6 +61,7 @@ SDK_VERSION=""
 LF_TARGET=""
 DPM_HOME_OVERRIDE=""
 SKIP_INSTALL=false
+PACKAGE_SET="base"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -94,6 +97,10 @@ while [[ $# -gt 0 ]]; do
       LF_TARGET="$2"
       shift 2
       ;;
+    --package-set)
+      PACKAGE_SET="$2"
+      shift 2
+      ;;
     --dpm-home)
       DPM_HOME_OVERRIDE="$2"
       shift 2
@@ -117,6 +124,11 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+if [[ "$PACKAGE_SET" != "prim" && "$PACKAGE_SET" != "stdlib" && "$PACKAGE_SET" != "base" ]]; then
+  echo "Invalid --package-set '$PACKAGE_SET'. Expected one of: prim, stdlib, base." >&2
+  exit 1
+fi
 
 if [[ "$OUTPUT_DIR" != /* ]]; then
   OUTPUT_DIR="$REPO_ROOT/$OUTPUT_DIR"
@@ -179,12 +191,14 @@ fi
 
 TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/daml-prim-json.XXXXXX")"
 VERSIONS_ENTRIES_JSONL="$TMP_DIR/version-entries.jsonl"
+GENERATED_VERSIONS_TSV="$TMP_DIR/generated-versions.tsv"
 if [[ "$KEEP_GENERATED_JSON" == false ]]; then
   trap 'rm -rf "$TMP_DIR"' EXIT
 fi
 
 mkdir -p "$OUTPUT_DIR"
 touch "$VERSIONS_ENTRIES_JSONL"
+touch "$GENERATED_VERSIONS_TSV"
 
 log "Target SDK versions: ${TARGET_VERSIONS[*]}"
 for SDK_VER in "${TARGET_VERSIONS[@]}"; do
@@ -196,6 +210,7 @@ for SDK_VER in "${TARGET_VERSIONS[@]}"; do
   if [[ -z "$JSON_PATH" ]]; then
     JSON_PATH="$TMP_DIR/daml-prim-$SDK_VER.json"
     GEN_ARGS=(--output-json "$JSON_PATH" --sdk-version "$SDK_VER")
+    GEN_ARGS+=(--package-set "$PACKAGE_SET")
     if [[ -n "$LF_TARGET" ]]; then
       GEN_ARGS+=(--lf-target "$LF_TARGET")
     fi
@@ -208,17 +223,45 @@ for SDK_VER in "${TARGET_VERSIONS[@]}"; do
     "$SCRIPT_DIR/generate_daml_prim_json_from_dpm.sh" "${GEN_ARGS[@]}"
   fi
 
+  printf '%s\t%s\t%s\t%s\n' \
+    "$SDK_VER" \
+    "$JSON_PATH" \
+    "$VERSION_OUTPUT_DIR" \
+    "$VERSION_NAV_BASE" >>"$GENERATED_VERSIONS_TSV"
+done
+
+DEPRECATION_FIRST_SEEN_JSON="$TMP_DIR/module-deprecation-first-seen.json"
+VERSION_JSON_ARGS=()
+while IFS=$'\t' read -r SDK_VER JSON_PATH VERSION_OUTPUT_DIR VERSION_NAV_BASE; do
+  if [[ -z "$SDK_VER" || -z "$JSON_PATH" ]]; then
+    continue
+  fi
+  VERSION_JSON_ARGS+=(--version-json "$SDK_VER=$JSON_PATH")
+done <"$GENERATED_VERSIONS_TSV"
+
+if [[ "${#VERSION_JSON_ARGS[@]}" -gt 0 ]]; then
+  log "Computing module deprecation first-seen map"
+  python3 "$SCRIPT_DIR/compute_module_deprecation_first_seen.py" \
+    "${VERSION_JSON_ARGS[@]}" \
+    --output-json "$DEPRECATION_FIRST_SEEN_JSON"
+fi
+
+while IFS=$'\t' read -r SDK_VER JSON_PATH VERSION_OUTPUT_DIR VERSION_NAV_BASE; do
+  if [[ -z "$SDK_VER" || -z "$JSON_PATH" || -z "$VERSION_OUTPUT_DIR" || -z "$VERSION_NAV_BASE" ]]; then
+    continue
+  fi
   log "Converting JSON to MDX for SDK $SDK_VER"
   python3 "$SCRIPT_DIR/daml_docs_json_to_mdx.py" \
     --input-json "$JSON_PATH" \
-    --output-dir "$VERSION_OUTPUT_DIR"
+    --output-dir "$VERSION_OUTPUT_DIR" \
+    --module-deprecation-first-seen-json "$DEPRECATION_FIRST_SEEN_JSON"
 
   python3 "$SCRIPT_DIR/append_version_nav_entry.py" \
     --version "$SDK_VER" \
     --nav-base "$VERSION_NAV_BASE" \
     --output-dir "$VERSION_OUTPUT_DIR" \
     --entries-jsonl "$VERSIONS_ENTRIES_JSONL"
-done
+done <"$GENERATED_VERSIONS_TSV"
 
 log "Updating docs.json navigation"
 python3 "$SCRIPT_DIR/update_daml_reference_docs_from_entries.py" \
