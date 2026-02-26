@@ -6,19 +6,6 @@ docs
 
 This repo manages the contents of the docs.canton.network website.
 
-## Review This PR Quickly
-
-Use the repo toolchain via `direnv` and run Mintlify:
-
-```bash
-direnv allow
-mintlify dev
-```
-
-Then open:
-- `http://localhost:3000/docs-main/daml-reference/daml-prim-api/index`
-- `http://localhost:3000/docs-main/daml-reference/daml-prim-api/da-crypto`
-
 ## Local Development
 
 ### Prerequisites
