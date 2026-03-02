@@ -109,6 +109,25 @@ def summarize_changes(artifact: Dict[str, Any]) -> Dict[str, int]:
     }
 
 
+def format_lifecycle_value(value: Optional[str], state: str) -> str:
+    if not value:
+        return "-"
+    rendered = f"`{md_code(value)}`"
+    if state == "deprecated":
+        return f"⚠️ {rendered}"
+    if state == "removed":
+        return f"❌ {rendered}"
+    return rendered
+
+
+def lifecycle_title_prefix(has_deprecated: bool, has_removed: bool) -> str:
+    if has_removed:
+        return "❌ "
+    if has_deprecated:
+        return "⚠️ "
+    return ""
+
+
 def latest_doc_link(symbol: Dict[str, Any]) -> str:
     versions = symbol.get("versions_present", [])
     links = symbol.get("doc_links", {})
@@ -236,9 +255,9 @@ def render_changes_table(rows: List[Dict[str, Any]], limit: int) -> List[str]:
     for row in shown:
         symbol = f"`{md_code(row['symbol'])}`"
         kind = row.get("kind", "-")
-        introduced = row.get("introduced_version") or "-"
-        deprecated = row.get("deprecated_version") or "-"
-        removed = row.get("removed_version") or "-"
+        introduced = format_lifecycle_value(row.get("introduced_version"), "introduced")
+        deprecated = format_lifecycle_value(row.get("deprecated_version"), "deprecated")
+        removed = format_lifecycle_value(row.get("removed_version"), "removed")
         doc = latest_doc_link(row)
         doc_col = f"[Open]({doc})" if doc else "-"
         lines.append(f"| {doc_col} | {symbol} | `{kind}` | {introduced} | {deprecated} | {removed} |")
@@ -261,9 +280,11 @@ def write_type_page(
     members: List[Dict[str, Any]],
     artifact_route: str,
     max_members: int,
+    has_deprecated: bool,
+    has_removed: bool,
 ) -> None:
     lines: List[str] = []
-    title = type_symbol["symbol"]
+    title = f"{lifecycle_title_prefix(has_deprecated, has_removed)}{type_symbol['symbol']}"
     latest_version = artifact["versions"][-1]
     signature = type_meta.get("signature", "")
     summary = type_meta.get("summary", "")
@@ -282,9 +303,9 @@ def write_type_page(
             f"- Artifact: `{artifact['group']}:{artifact['artifact']}`",
             f"- Language: `{artifact['language']}`",
             f"- Latest rendered version: `{latest_version}`",
-            f"- Introduced: `{type_symbol.get('introduced_version') or '-'}`",
-            f"- Deprecated: `{type_symbol.get('deprecated_version') or '-'}`",
-            f"- Removed: `{type_symbol.get('removed_version') or '-'}`",
+            f"- Introduced: {format_lifecycle_value(type_symbol.get('introduced_version'), 'introduced')}",
+            f"- Deprecated: {format_lifecycle_value(type_symbol.get('deprecated_version'), 'deprecated')}",
+            f"- Removed: {format_lifecycle_value(type_symbol.get('removed_version'), 'removed')}",
             "",
         ]
     )
@@ -333,9 +354,9 @@ def write_type_page(
                 member_label = java_member_label(m["symbol"])
             else:
                 _, member_label = scala_member_owner_and_label(m["symbol_key"])
-            introduced = m.get("introduced_version") or "-"
-            deprecated = m.get("deprecated_version") or "-"
-            removed = m.get("removed_version") or "-"
+            introduced = format_lifecycle_value(m.get("introduced_version"), "introduced")
+            deprecated = format_lifecycle_value(m.get("deprecated_version"), "deprecated")
+            removed = format_lifecycle_value(m.get("removed_version"), "removed")
             link = latest_doc_link(m)
             link_col = f"[Open]({link})" if link else "-"
             lines.append(
@@ -366,12 +387,19 @@ def write_artifact_page(
     changes = changed_symbols(artifact)
     summary = summarize_changes(artifact)
     versions = artifact["versions"]
+    if artifact["artifact"] == "bindings-java":
+        title = "Bindings Lifecycle Overview"
+    else:
+        title = (
+            f"{lifecycle_title_prefix(summary['deprecated'] > 0, summary['removed'] > 0)}"
+            f"{artifact['artifact']} Lifecycle"
+        )
 
     lines: List[str] = []
     lines.extend(
         [
             "---",
-            f"title: \"{artifact['artifact']} Lifecycle\"",
+            f"title: \"{md_text(title)}\"",
             "description: \"Generated lifecycle timeline and reference index from published JavaDoc/ScalaDoc artifacts\"",
             "---",
             "",
@@ -402,9 +430,9 @@ def write_artifact_page(
     for row in shown_types:
         t = row["type"]
         summary_text = md_text(row.get("summary") or "")
-        introduced = t.get("introduced_version") or "-"
-        deprecated = t.get("deprecated_version") or "-"
-        removed = t.get("removed_version") or "-"
+        introduced = format_lifecycle_value(t.get("introduced_version"), "introduced")
+        deprecated = format_lifecycle_value(t.get("deprecated_version"), "deprecated")
+        removed = format_lifecycle_value(t.get("removed_version"), "removed")
         local = f"[Open]({row['local_route']})"
         upstream_link = latest_doc_link(t)
         upstream = f"[Open]({upstream_link})" if upstream_link else "-"
@@ -535,9 +563,44 @@ def build_type_reference_rows(
         if doc_file:
             doc_to_type_key[doc_file] = key
 
+    type_status: Dict[str, Dict[str, bool]] = {
+        key: {
+            "deprecated": t.get("deprecated_version") is not None,
+            "removed": t.get("removed_version") is not None,
+        }
+        for key, t in type_by_key.items()
+    }
+    type_name_to_key = {t["symbol"]: key for key, t in type_by_key.items()}
+
     members_by_type: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
     member_symbols = [s for s in symbols if s.get("kind") == "member"]
     for m in member_symbols:
+        # Capture lifecycle markers for titles based on ownership, regardless of
+        # whether the member is still present in latest docs.
+        if m.get("deprecated_version") is not None or m.get("removed_version") is not None:
+            if language == "java":
+                owner = m.get("symbol", "").split("#", 1)[0] if "#" in m.get("symbol", "") else ""
+                key = type_name_to_key.get(owner)
+                if key:
+                    if m.get("deprecated_version") is not None:
+                        type_status[key]["deprecated"] = True
+                    if m.get("removed_version") is not None:
+                        type_status[key]["removed"] = True
+            else:
+                owner, _ = scala_member_owner_and_label(m.get("symbol_key", ""))
+                best_key = ""
+                best_len = -1
+                for type_name, key in type_name_to_key.items():
+                    if owner == type_name or owner.startswith(type_name + "."):
+                        if len(type_name) > best_len:
+                            best_len = len(type_name)
+                            best_key = key
+                if best_key:
+                    if m.get("deprecated_version") is not None:
+                        type_status[best_key]["deprecated"] = True
+                    if m.get("removed_version") is not None:
+                        type_status[best_key]["removed"] = True
+
         doc_file = symbol_doc_file(m, artifact, latest_version)
         type_key = doc_to_type_key.get(doc_file)
         if not type_key:
@@ -583,6 +646,8 @@ def build_type_reference_rows(
             members=members,
             artifact_route=artifact_route,
             max_members=max_members,
+            has_deprecated=type_status[key]["deprecated"],
+            has_removed=type_status[key]["removed"],
         )
 
         rows.append(
