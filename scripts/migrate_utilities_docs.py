@@ -5,7 +5,7 @@ import re
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Iterable, List, Tuple
+from typing import Any, Iterable, List, Tuple
 
 
 ADMONITION_MAP = {
@@ -20,6 +20,8 @@ TITLE_OVERRIDES = {
     "how-tos": "How Tos",
     "daml-api-reference": "DAML API Reference",
 }
+
+CATEGORY_ORDER = ["Configuration", "Model", "Service", "Holding", "Rule", "Core", "Other"]
 
 
 def titleize_folder(name: str) -> str:
@@ -339,6 +341,40 @@ def collect_pages(section_root: Path, repo_root: Path, source_root: Path, dest_r
     return pages
 
 
+def page_category(page_ref: str) -> str:
+    name = page_ref.rsplit("/", 1)[-1]
+    for category in ("Configuration", "Model", "Service", "Holding", "Rule"):
+        if f"-{category}-" in name:
+            return category
+    if name.endswith("-Types") or name.endswith("-Util"):
+        return "Core"
+    return "Other"
+
+
+def grouped_pages(pages: List[str]) -> List[Any]:
+    if len(pages) < 4:
+        return pages
+
+    buckets: dict[str, List[str]] = {}
+    for page in pages:
+        buckets.setdefault(page_category(page), []).append(page)
+
+    non_other_categories = [c for c in buckets.keys() if c != "Other"]
+    if len(non_other_categories) < 2:
+        return pages
+
+    grouped: List[Any] = []
+    for category in CATEGORY_ORDER:
+        if category not in buckets:
+            continue
+        category_pages = buckets[category]
+        if category == "Other":
+            grouped.extend(category_pages)
+        else:
+            grouped.append({"group": category, "pages": category_pages})
+    return grouped
+
+
 def build_utilities_groups(dest_root: Path, repo_root: Path, source_root: Path) -> List[dict]:
     groups: List[dict] = []
 
@@ -353,12 +389,12 @@ def build_utilities_groups(dest_root: Path, repo_root: Path, source_root: Path) 
             for subdir in subdir_with_content:
                 pages = collect_pages(subdir, repo_root, source_root, dest_root)
                 if pages:
-                    groups.append({"group": titleize_folder(subdir.name), "pages": pages})
+                    groups.append({"group": titleize_folder(subdir.name), "pages": grouped_pages(pages)})
             continue
 
         pages = collect_pages(entry, repo_root, source_root, dest_root)
         if pages:
-            groups.append({"group": titleize_folder(entry.name), "pages": pages})
+            groups.append({"group": titleize_folder(entry.name), "pages": grouped_pages(pages)})
     return groups
 
 
@@ -367,12 +403,37 @@ def update_docs_json(docs_json_path: Path, groups: List[dict]) -> None:
     navigation = data.get("navigation", {})
     dropdowns = navigation.get("dropdowns", [])
 
+    def is_openapi_reference_group(group: Any) -> bool:
+        if not isinstance(group, dict) or group.get("group") != "Reference":
+            return False
+        pages = group.get("pages", [])
+        if any(isinstance(p, str) and p.endswith("/splice-apis") for p in pages):
+            return True
+        return any(isinstance(p, dict) and p.get("group") == "Splice OpenAPI Specs" for p in pages)
+
+    preserved_openapi_groups: List[dict] = []
+    for dropdown in dropdowns:
+        if dropdown.get("dropdown") != "Utilities":
+            continue
+        for group in dropdown.get("groups", []):
+            if is_openapi_reference_group(group):
+                preserved_openapi_groups.append(group)
+        for version in dropdown.get("versions", []):
+            for group in version.get("groups", []):
+                if is_openapi_reference_group(group):
+                    preserved_openapi_groups.append(group)
+
+    merged_groups = list(groups)
+    for openapi_group in preserved_openapi_groups:
+        if openapi_group not in merged_groups:
+            merged_groups.append(openapi_group)
+
     dropdowns = [d for d in dropdowns if d.get("dropdown") != "Utilities"]
     dropdowns.append(
         {
             "dropdown": "Utilities",
             "icon": "grid",
-            "groups": groups,
+            "groups": merged_groups,
         }
     )
     navigation["dropdowns"] = dropdowns
