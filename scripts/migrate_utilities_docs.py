@@ -29,6 +29,25 @@ def titleize_folder(name: str) -> str:
     return " ".join(p.capitalize() for p in parts if p)
 
 
+def title_from_numbered_stem(stem: str) -> str | None:
+    match = re.match(r"^\d+[-_](.+)$", stem)
+    if not match:
+        return None
+    parts = re.split(r"[-_]+", match.group(1).strip())
+    return " ".join(p.capitalize() for p in parts if p)
+
+
+def apply_generated_title(text: str, source_path: Path) -> str:
+    title = title_from_numbered_stem(source_path.stem)
+    if not title:
+        return text
+    if text.startswith("---\n"):
+        return text
+    safe_title = title.replace('"', '\\"')
+    body = text.lstrip("\n")
+    return f"---\ntitle: \"{safe_title}\"\n---\n\n{body}"
+
+
 def strip_local_link_ext(text: str) -> str:
     def repl(match: re.Match) -> str:
         url = match.group(1)
@@ -53,7 +72,7 @@ def convert_myst_blocks(lines: List[str]) -> List[str]:
     while i < len(lines):
         line = lines[i]
         stripped = line.strip()
-        if stripped.startswith("```{toctree}"):
+        if stripped.startswith("```{toctree}") or stripped.startswith("```{sectnum}"):
             i += 1
             while i < len(lines) and lines[i].strip() != "```":
                 i += 1
@@ -227,6 +246,7 @@ def copy_and_convert(source_root: Path, dest_root: Path, repo_root: Path, scope:
             dest_path.parent.mkdir(parents=True, exist_ok=True)
             content = src_path.read_text(encoding="utf-8")
             converted = convert_markdown(content, label_map)
+            converted = apply_generated_title(converted, src_path)
             dest_path.write_text(converted, encoding="utf-8")
         elif src_path.suffix.lower() == ".rst":
             dest_rel = rel.with_suffix(".mdx")
@@ -235,6 +255,7 @@ def copy_and_convert(source_root: Path, dest_root: Path, repo_root: Path, scope:
             content = src_path.read_text(encoding="utf-8")
             markdown = convert_rst_to_markdown(content, src_path)
             converted = convert_markdown(markdown, label_map)
+            converted = apply_generated_title(converted, src_path)
             dest_path.write_text(converted, encoding="utf-8")
         else:
             dest_path = dest_root / rel
