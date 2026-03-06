@@ -470,11 +470,53 @@ def update_docs_json(docs_json_path: Path, overview_path: Path, spec_paths: List
     if target is None:
         raise ValueError("Could not find `Global Synchronizer` dropdown in docs.json")
 
+    def is_generated_reference_group(group: Any) -> bool:
+        if not isinstance(group, dict):
+            return False
+        if group.get("group") != "Reference":
+            return False
+        pages = group.get("pages", [])
+        if overview_ref in pages:
+            return True
+        for page in pages:
+            if isinstance(page, dict) and page.get("group") == "Splice OpenAPI Specs":
+                sub_pages = page.get("pages", [])
+                if any(ref in sub_pages for ref in spec_refs):
+                    return True
+        return False
+
+    # Remove generated OpenAPI reference group from Global Synchronizer.
+    version_names: List[str] = []
     for version in target.get("versions", []):
-        groups = [g for g in version.get("groups", []) if g.get("group") != "Reference"]
+        if version.get("version"):
+            version_names.append(version["version"])
+        groups = [g for g in version.get("groups", []) if not is_generated_reference_group(g)]
+        version["groups"] = groups
+
+    # Add / update a dedicated Utilities dropdown for these generated pages.
+    utilities = None
+    for d in dropdowns:
+        if d.get("dropdown") == "Utilities":
+            utilities = d
+            break
+    if utilities is None:
+        utilities = {"dropdown": "Utilities", "versions": []}
+        gs_idx = next(
+            (i for i, d in enumerate(dropdowns) if d.get("dropdown") == "Global Synchronizer"),
+            len(dropdowns),
+        )
+        dropdowns.insert(gs_idx + 1, utilities)
+
+    utility_versions = {v.get("version"): v for v in utilities.get("versions", []) if v.get("version")}
+    updated_versions: List[Dict[str, Any]] = []
+    for version_name in version_names:
+        version = utility_versions.get(version_name, {"version": version_name, "groups": []})
+        groups = [g for g in version.get("groups", []) if not is_generated_reference_group(g)]
         help_idx = next((i for i, g in enumerate(groups) if g.get("group") == "Help"), len(groups))
         groups.insert(help_idx, reference_group)
         version["groups"] = groups
+        updated_versions.append(version)
+    utilities["versions"] = updated_versions
 
     docs_json_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
@@ -500,7 +542,7 @@ def main() -> int:
     parser.add_argument(
         "--update-docs-json",
         action="store_true",
-        help="Update docs.json navigation for Global Synchronizer -> Reference",
+        help="Update docs.json navigation for Utilities dropdown",
     )
     parser.add_argument(
         "--max-changed",
