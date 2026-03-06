@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+
+## =================================================================================================
+## Receiver accepts offer
+## Step 2c: Gets choice context and disclosure for the accept-transfer-offer command
+## Authorized by: anyone
+## Script: step-2c-receiver-accepts.sh
+## =================================================================================================
+
+DATAFILE="source.sh"
+source "$DATAFILE"
+
+DATE_FORMAT='+%Y-%m-%dT%H:%M:%SZ'
+NOW_ISO_TIMESTAMP=$(date -u "$DATE_FORMAT")
+ONEHOUR_ISO_TIMESTAMP=$(date -u -v +1H "$DATE_FORMAT")
+
+TRANSFEROFFER=$(cat "response-step-2b.json")
+TRANSFEROFFER_CID=$(echo $TRANSFEROFFER |jq '.[] | .contractEntry.JsActiveContract.createdEvent.contractId' | tr -d '"')
+
+RESULT=$(
+    curl -s \
+    --url "${BACKEND_API}/v0/registrars/${ADMIN_PARTY_ID}/registry/transfer-instruction/v1/${TRANSFEROFFER_CID}/choice-contexts/accept" \
+    --header "Content-Type: application/json" \
+    --request POST \
+    --data @- <<EOF
+{
+   "meta":{
+
+   },
+   "excludeDebugFields": true
+}
+EOF
+)
+
+echo "--- Endpoint response ---"
+echo $RESULT | jq
+
+OUTPUTFILE="response-step-2c.json"
+echo "$RESULT" > "$OUTPUTFILE"
