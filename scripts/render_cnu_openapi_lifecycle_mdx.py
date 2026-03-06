@@ -494,11 +494,14 @@ def update_docs_json(docs_json_path: Path, overview_path: Path, spec_paths: List
         version["groups"] = groups
 
     # Add / update a dedicated Utilities dropdown for these generated pages.
-    utilities = None
-    for d in dropdowns:
-        if d.get("dropdown") == "Utilities":
-            utilities = d
-            break
+    utility_dropdowns = [d for d in dropdowns if d.get("dropdown") == "Utilities"]
+    utilities = next(
+        (d for d in utility_dropdowns if isinstance(d.get("groups"), list) and d.get("groups")),
+        utility_dropdowns[0] if utility_dropdowns else None,
+    )
+    for extra in utility_dropdowns:
+        if extra is not utilities:
+            dropdowns.remove(extra)
     if utilities is None:
         utilities = {"dropdown": "Utilities", "versions": []}
         gs_idx = next(
@@ -507,16 +510,25 @@ def update_docs_json(docs_json_path: Path, overview_path: Path, spec_paths: List
         )
         dropdowns.insert(gs_idx + 1, utilities)
 
-    utility_versions = {v.get("version"): v for v in utilities.get("versions", []) if v.get("version")}
-    updated_versions: List[Dict[str, Any]] = []
-    for version_name in version_names:
-        version = utility_versions.get(version_name, {"version": version_name, "groups": []})
-        groups = [g for g in version.get("groups", []) if not is_generated_reference_group(g)]
+    # Support both docs.json shapes:
+    # - versioned dropdowns: { "versions": [...] }
+    # - non-versioned dropdowns: { "groups": [...] }
+    if isinstance(utilities.get("groups"), list) and not utilities.get("versions"):
+        groups = [g for g in utilities.get("groups", []) if not is_generated_reference_group(g)]
         help_idx = next((i for i, g in enumerate(groups) if g.get("group") == "Help"), len(groups))
         groups.insert(help_idx, reference_group)
-        version["groups"] = groups
-        updated_versions.append(version)
-    utilities["versions"] = updated_versions
+        utilities["groups"] = groups
+    else:
+        utility_versions = {v.get("version"): v for v in utilities.get("versions", []) if v.get("version")}
+        updated_versions: List[Dict[str, Any]] = []
+        for version_name in version_names:
+            version = utility_versions.get(version_name, {"version": version_name, "groups": []})
+            groups = [g for g in version.get("groups", []) if not is_generated_reference_group(g)]
+            help_idx = next((i for i, g in enumerate(groups) if g.get("group") == "Help"), len(groups))
+            groups.insert(help_idx, reference_group)
+            version["groups"] = groups
+            updated_versions.append(version)
+        utilities["versions"] = updated_versions
 
     docs_json_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
