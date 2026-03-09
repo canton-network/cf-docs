@@ -388,7 +388,7 @@ def write_overview_page(
     lines.extend(
         [
             "---",
-            "title: \"Splice APIs\"",
+            "title: \"Apps APIs\"",
             "description: \"Generated OpenAPI lifecycle reference for Canton Network Utilities\"",
             "---",
             "",
@@ -454,7 +454,7 @@ def update_docs_json(docs_json_path: Path, overview_path: Path, spec_paths: List
         "pages": [
             overview_ref,
             {
-                "group": "Splice OpenAPI Specs",
+                "group": "Apps OpenAPI Specs",
                 "pages": spec_refs,
             },
         ],
@@ -481,7 +481,10 @@ def update_docs_json(docs_json_path: Path, overview_path: Path, spec_paths: List
         if overview_ref in pages:
             return True
         for page in pages:
-            if isinstance(page, dict) and page.get("group") == "Splice OpenAPI Specs":
+            if (
+                isinstance(page, dict)
+                and str(page.get("group", "")).strip().lower().endswith("openapi specs")
+            ):
                 return True
         return False
 

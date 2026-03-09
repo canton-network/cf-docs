@@ -418,7 +418,10 @@ def update_docs_json(docs_json_path: Path, groups: List[dict]) -> None:
                     if key not in seen_openapi:
                         preserved_openapi_pages.append(page)
                         seen_openapi.add(key)
-                if isinstance(page, dict) and page.get("group") == "Splice OpenAPI Specs":
+                if (
+                    isinstance(page, dict)
+                    and str(page.get("group", "")).strip().lower().endswith("openapi specs")
+                ):
                     if key not in seen_openapi:
                         preserved_openapi_pages.append(page)
                         seen_openapi.add(key)
