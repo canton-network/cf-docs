@@ -446,7 +446,7 @@ def update_docs_json(docs_json_path: Path, groups: List[dict]) -> None:
 
     merged_groups = list(non_model_groups)
     if reference_pages:
-        merged_groups.append({"group": "Reference", "expanded": False, "pages": reference_pages})
+        merged_groups.append({"group": "Reference", "expanded": True, "pages": reference_pages})
 
     dropdowns = [d for d in dropdowns if d.get("dropdown") != "Utilities"]
     dropdowns.append(
