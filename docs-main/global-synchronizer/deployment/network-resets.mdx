@@ -1,0 +1,108 @@
+---
+title: "Network Resets"
+description: "Procedures for DevNet and TestNet network resets"
+---
+
+{/* COPIED_START source="splice:docs/src/sv_operator/sv_network_resets.rst" */}
+DevNet and TestNet get reset roughly every 3 months with the resets spread out such that they never happen at the same time on DevNet and TestNet. The exact time is announced in the `#supervalidator-operations` channel run by the [Global Synchronizer Foundation](https://sync.global/).
+{/* COPIED_END */}
+
+A reset requires a full redeployment of your node and loses all data on it. Your node will not be functional until you complete the reset. Wait for the bootstrapping SV-1 to announce that they have completed redeployment before attempting to redeploy your own node.
+
+## Pre-reset backup
+
+Before the reset, back up information that you will need to restore or verify afterward:
+
+- **DSO configuration** -- Save the current DSO state so you can verify that SV weights and package versions are preserved after the reset:
+
+```bash
+curl -sSL --fail-with-body https://YOUR_SCAN_URL/api/scan/v0/dso > backup.json
+```
+
+- **Amulet price** -- Note your desired amulet price from the SV UI.
+
+- **Ongoing votes** -- Record all ongoing votes in the SV UI. Votes are lost during the reset and must be recreated manually afterward.
+
+- **Featured apps** -- Save the list of featured apps:
+
+```bash
+curl -sSL --fail-with-body https://YOUR_SCAN_URL/api/scan/v0/featured-apps > featured.json
+```
+
+Featured app rights are lost during the reset and need to be recreated manually.
+
+## Decommission your old node
+
+1. Uninstall all Helm charts.
+2. Delete all PVCs, Docker volumes, and databases (including databases in Amazon AWS, GCP CloudSQL, or similar cloud services).
+
+## Deploy your new node
+
+1. Set the migration ID to `0` in all Helm chart values. The migration ID appears both as its own value and as part of various other values:
+
+```yaml
+migration:
+  id: "0"
+```
+
+And in URLs such as:
+
+```yaml
+sequencerPublicUrl: "https://sequencer-0.sv.YOUR_HOSTNAME"
+```
+
+2. Set `skipInitialization` to `false` in `sv-values.yaml`.
+3. Set `initialAmuletPrice` to your desired price in `sv-values.yaml` (from your pre-reset backup).
+4. Set `chainIdSuffix` to the new value in `cometbft-values.yaml` and `info-values.yaml`. This usually increments by 1 on a network reset, but confirm with the other SV operators.
+5. (Founding node only) Set all Helm chart values that affect network parameters such that the verification steps pass.
+6. Install all Helm charts.
+7. Wait until your SV node is sending status reports.
+
+## Post-reset verification
+
+After deployment, verify that network parameters were preserved:
+
+1. Fetch the current DSO state and compare against your backup:
+
+```bash
+curl -sSL --fail-with-body https://YOUR_SCAN_URL/api/scan/v0/dso > current_state.json
+```
+
+Verify that SV reward weights are unchanged:
+
+```bash
+jq '.dso_rules.contract.payload.svs.[] | [.[1].name, .[1].svRewardWeight]' backup.json > weights_backup.json
+jq '.dso_rules.contract.payload.svs.[] | [.[1].name, .[1].svRewardWeight]' current_state.json > weights_current.json
+diff -C2 weights_backup.json weights_current.json
+```
+
+Verify that amulet rules are preserved (the diff should only show changes to DSO and synchronizer namespaces):
+
+```bash
+jq '.amulet_rules.contract.payload' backup.json > amulet_backup.json
+jq '.amulet_rules.contract.payload' current_state.json > amulet_current.json
+diff amulet_backup.json amulet_current.json
+```
+
+2. Check your desired coin price in the SV UI and verify it matches the pre-reset value.
+3. Check the current round in the Scan UI. TestNet is usually kept one week (approximately 1,008 rounds) ahead of MainNet, while DevNet is typically reset to round 0.
+
+## Post-reset actions
+
+- **Back up node identities** -- Your identities change as part of the reset. Take a fresh backup immediately.
+- **Recreate ongoing votes** -- Re-create any governance votes that were active before the reset.
+- **Re-issue onboarding secrets** -- On TestNet, provide new secrets to validators you sponsor. On DevNet, validators can self-issue secrets.
+- **Recreate featured app votes** -- When validators request it, recreate votes for featured apps. Validators are expected to contact their sponsor, who then initiates the vote.
+- **Update auto-sweeping configuration** -- Party IDs change as part of the reset, so update any sweep targets accordingly.
+
+## Validator-specific reset steps
+
+{/* COPIED_START source="splice:docs/src/validator_operator/validator_network_resets.rst" */}
+For validators (non-SV nodes), the reset procedure is simpler:
+
+1. Uninstall all Helm charts.
+2. Delete all PVCs, Docker volumes, and databases (including databases in Amazon AWS, GCP CloudSQL, or similar).
+3. Acquire a fresh onboarding secret (on DevNet you can do this yourself via the respective endpoint; on TestNet, contact your SV sponsor).
+4. Redeploy your node with migration ID `0`. This requires changes to both the validator and participant Helm chart values.
+5. Take a backup of your node identities, as they change during the reset.
+{/* COPIED_END */}
