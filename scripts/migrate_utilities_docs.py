@@ -209,8 +209,6 @@ def build_label_index(source_root: Path, dest_root: Path, repo_root: Path, scope
     for src_path in iter_source_files(source_root, scope):
         if src_path.is_dir() or src_path.suffix.lower() not in (".md", ".rst"):
             continue
-        if src_path.name in ("index.md", "index.rst"):
-            continue
         rel = src_path.relative_to(source_root)
         dest_rel = rel.with_suffix(".mdx")
         page_path = (dest_root / dest_rel).relative_to(repo_root).with_suffix("")
@@ -238,7 +236,7 @@ def copy_and_convert(source_root: Path, dest_root: Path, repo_root: Path, scope:
         if src_path.is_dir():
             continue
         rel = src_path.relative_to(source_root)
-        if src_path.name in ("index.md", "index.rst", "_toc.yml"):
+        if src_path.name == "_toc.yml":
             continue
         if src_path.suffix.lower() == ".md":
             dest_rel = rel.with_suffix(".mdx")
@@ -318,14 +316,24 @@ def parse_toctree_entries_rst(index_path: Path) -> List[str]:
 
 def collect_pages(section_root: Path, repo_root: Path, source_root: Path, dest_root: Path) -> List[str]:
     pages: List[str] = []
+    seen: set[str] = set()
 
     def add_page(path: Path) -> None:
         rel = path.relative_to(repo_root).with_suffix("")
-        pages.append(str(rel))
+        ref = str(rel)
+        if ref in seen:
+            return
+        seen.add(ref)
+        pages.append(ref)
 
     def walk_dir(dir_path: Path) -> None:
         rel_dir = dir_path.relative_to(dest_root)
         source_dir = source_root / rel_dir
+
+        index_page = dir_path / "index.mdx"
+        if index_page.exists():
+            add_page(index_page)
+
         toctree_entries = parse_toctree_entries(source_dir / "index.md")
         if not toctree_entries:
             toctree_entries = parse_toctree_entries_rst(source_dir / "index.rst")

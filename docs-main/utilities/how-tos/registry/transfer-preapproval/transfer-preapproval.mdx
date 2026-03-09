@@ -1,0 +1,68 @@
+# Registry Utility - Transfer Preapproval API Example
+
+This example shows how to create a
+[TransferPreapproval](/docs-main/utilities/daml-api-reference/registry-app-model/Utility-Registry-App-V0-Model-TransferPreapproval#type-utility-registry-app-v0-model-transferpreapproval-transferpreapproval-39728)
+contract via the HTTP JSON API.
+
+## Preparation
+
+Prerequisites:
+
+- Access to a running Canton HTTP JSON API.
+- Local tools: `bash`, `curl`, `jq`, and `uuidgen`.
+
+Add all the required information to the `source.sh` file:
+
+```{literalinclude} ./scripts/source.sh
+:language: bash
+:linenos:
+```
+
+The required information is:
+
+```{list-table}
+:header-rows: 1
+
+* - Details of
+  - Description
+* - Receiver (authorizing user)
+  - `RECEIVER_TOKEN`, `RECEIVER_USER_ID`, `RECEIVER_PARTY_ID`
+* - Operator
+  - `OPERATOR_PARTY_ID`
+* - Instrument admin
+  - `INSTRUMENT_ADMIN_PARTY_ID`: party whose instruments are being preapproved
+* - Instrument IDs
+  - `INSTRUMENT_IDS`: JSON array of instrument IDs (strings). Use `[]` for a blanket preapproval.
+* - JSON API base URL
+  - `HTTP_JSON_API`: HTTP JSON API base URL
+```
+
+<Note>
+You can retrieve the `OPERATOR_PARTY_ID` via `http://&lt;your-host&gt;/api/utilities/v0/operator`, e.g.
+- Local: `http://localhost:8080/api/utilities/v0/operator`
+- DevNet: `https://api.utilities.digitalasset-dev.com/api/utilities/v0/operator`
+</Note>
+
+### Create Transfer Preapproval
+
+This step submits a single transaction containing a single `CreateCommand`.
+
+Run the following script:
+
+```{literalinclude} ./scripts/create-transfer-preapproval.sh
+:language: bash
+:linenos:
+```
+
+The result is the transaction response stored in `response/response.json`.
+
+Example response:
+
+```{literalinclude} ./response/response.json
+:language: json
+:linenos:
+```
+
+Once a transfer preapproval is established for a receiver and instrument, all incoming transfers
+become direct. If you are following the [../transfer/transfer](../transfer/transfer), you may skip the second step;
+the transfer is automatically effectuated immediately upon completion of the first step.
