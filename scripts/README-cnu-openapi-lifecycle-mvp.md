@@ -24,8 +24,8 @@ python3 scripts/cnu_openapi_lifecycle_mvp.py \
   --output .internal/generated/cnu-openapi-lifecycle-mvp.json
 python3 scripts/render_cnu_openapi_lifecycle_mdx.py \
   --input .internal/generated/cnu-openapi-lifecycle-mvp.json \
-  --overview docs-main/global-synchronizer/reference/splice-apis.mdx \
-  --specs-dir docs-main/global-synchronizer/reference/splice-api-specs \
+  --overview docs-main/utilities/reference/splice-apis.mdx \
+  --specs-dir docs-main/utilities/reference/splice-api-specs \
   --docs-json docs.json \
   --update-docs-json
 ```
@@ -39,8 +39,8 @@ python3 scripts/cnu_openapi_lifecycle_mvp.py \
   --exclude-spec '^cn-validator/|neuchatel'
 python3 scripts/render_cnu_openapi_lifecycle_mdx.py \
   --input .internal/generated/cnu-openapi-lifecycle-mvp.json \
-  --overview docs-main/global-synchronizer/reference/splice-apis.mdx \
-  --specs-dir docs-main/global-synchronizer/reference/splice-api-specs \
+  --overview docs-main/utilities/reference/splice-apis.mdx \
+  --specs-dir docs-main/utilities/reference/splice-api-specs \
   --docs-json docs.json \
   --exclude-spec '^cn-validator/|neuchatel' \
   --clean-specs-dir \

@@ -430,8 +430,8 @@ def write_overview_page(
             "  --output .internal/generated/cnu-openapi-lifecycle-mvp.json",
             "python3 scripts/render_cnu_openapi_lifecycle_mdx.py \\",
             "  --input .internal/generated/cnu-openapi-lifecycle-mvp.json \\",
-            "  --overview docs-main/global-synchronizer/reference/splice-apis.mdx \\",
-            "  --specs-dir docs-main/global-synchronizer/reference/splice-api-specs \\",
+            "  --overview docs-main/utilities/reference/splice-apis.mdx \\",
+            "  --specs-dir docs-main/utilities/reference/splice-api-specs \\",
             "  --docs-json docs.json \\",
             "  --update-docs-json",
             "```",
@@ -476,13 +476,13 @@ def update_docs_json(docs_json_path: Path, overview_path: Path, spec_paths: List
         if group.get("group") != "Reference":
             return False
         pages = group.get("pages", [])
+        if any(isinstance(page, str) and page.endswith("/splice-apis") for page in pages):
+            return True
         if overview_ref in pages:
             return True
         for page in pages:
             if isinstance(page, dict) and page.get("group") == "Splice OpenAPI Specs":
-                sub_pages = page.get("pages", [])
-                if any(ref in sub_pages for ref in spec_refs):
-                    return True
+                return True
         return False
 
     # Remove generated OpenAPI reference group from Global Synchronizer.
@@ -538,12 +538,12 @@ def main() -> int:
     parser.add_argument("--input", required=True, help="Input lifecycle JSON path")
     parser.add_argument(
         "--overview",
-        default="docs-main/global-synchronizer/reference/splice-apis.mdx",
+        default="docs-main/utilities/reference/splice-apis.mdx",
         help="Overview MDX path",
     )
     parser.add_argument(
         "--specs-dir",
-        default="docs-main/global-synchronizer/reference/splice-api-specs",
+        default="docs-main/utilities/reference/splice-api-specs",
         help="Directory for per-spec MDX pages",
     )
     parser.add_argument(
