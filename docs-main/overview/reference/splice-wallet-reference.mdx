@@ -1,6 +1,101 @@
 ---
 title: "Splice Wallet Reference"
-description: "Reference documentation for the Splice wallet"
+description: "Reference documentation for the Splice wallet architecture and APIs"
 ---
 
-Content coming soon.
+The Splice wallet is the reference wallet implementation for Canton Coin (CC) on the Global Synchronizer. It is implemented as a set of Daml packages and backend automation that run alongside a validator node. This page provides a technical reference for the wallet's architecture, packages, transfer mechanics, and integration points.
+
+## Package architecture
+
+The Splice wallet functionality is split across two main Daml packages:
+
+- **`splice-wallet`** -- implements the core wallet workflows: peer-to-peer CC transfers, delegation of automation for traffic top-ups, coin sweeping (merging small coins), and batched transfer execution. The wallet delegates these operations to the validator operator's automation.
+- **`splice-wallet-payments`** -- implements CC-specific payment workflows, including a pay-with-CC workflow and a CC subscription workflow. The subscription workflow is deprecated but still used for Canton Name Service (CNS) entry payments.
+
+Both packages depend on `splice-amulet`, which implements the CC token itself, and `splice-util` for shared utility functions.
+
+<Note>
+The CC-specific payment and transfer workflows in `splice-wallet` and `splice-wallet-payments` are being superseded by the asset-generic workflows from the [Canton Network token standard (CIP-0056)](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0056/cip-0056.md). The token standard workflows work for any asset (not just CC), provide easier upgrade paths through Daml interfaces, and interoperate across different wallet implementations.
+</Note>
+
+## Transfer types
+
+Canton Coin supports several transfer mechanisms, each suited to different use cases.
+
+### Legacy transfers (splice-wallet)
+
+The original peer-to-peer transfer flow in `splice-wallet` requires both the sender and receiver to be active participants in the transfer workflow. The sender creates a transfer offer, and the receiver explicitly accepts it. This flow is CC-specific and requires both parties to use the Splice wallet.
+
+### Token standard transfers (CIP-0056)
+
+The preferred transfer mechanism uses the Canton Network token standard defined in [CIP-0056](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0056/cip-0056.md). These transfers are asset-generic, work across wallet implementations, and use Daml interfaces for compatibility across package versions. The token standard reference CLI provides [examples of how to execute transfers](https://github.com/hyperledger-labs/splice/blob/main/token-standard/cli/src/commands/transfer.ts).
+
+### One-step transfers via TransferPreapproval
+
+For receivers who are willing to accept incoming CC from any sender, TransferPreapproval provides a simpler one-step flow. The receiver sets up a `TransferPreapproval` contract once, and any sender can then transfer CC without waiting for per-transfer acceptance.
+
+## TransferPreapproval mechanics
+
+Unlike tokens on most blockchain networks, Canton Coin requires the receiver to explicitly agree to hold CC. TransferPreapproval is the opt-in mechanism that relaxes this requirement.
+
+### Structure
+
+Each `TransferPreapproval` contract has two parties:
+
+- **`receiver`** -- the party that has preapproved incoming transfers
+- **`provider`** -- the party responsible for paying the creation fee and renewing the preapproval before expiry. The provider earns app rewards on all incoming transfers that use this preapproval.
+
+The provider and receiver are typically the same validator operator, but they can be different parties. The provider does not need to be hosted on the same node as the receiver.
+
+### Lifecycle
+
+- **Creation** -- a fee (controlled by the `transferPreapprovalFee` governance parameter, currently defaulting to $1/year) is burned proportional to the preapproval's lifetime. This prevents spam and ensures Super Validators do not have to store preapprovals for inactive parties.
+- **Expiry and renewal** -- preapprovals expire after a set period. For preapprovals where the validator operator is the provider, the validator app's automation renews them automatically when expiry is less than 30 days away, extending the preapproval by 90 days. If you use a different party as the provider, you must implement your own renewal automation that exercises `TransferPreapproval_Renew`.
+- **Cancellation** -- either the receiver or the provider can revoke a preapproval by exercising `TransferPreapproval_Cancel`.
+
+### Setting up preapprovals
+
+For standard (non-external-signing) parties, preapprovals can be created through the Splice wallet UI.
+
+For external signing parties, the typical setup involves:
+
+1. The validator operator creates an `ExternalPartySetupProposal` contract via the validator API endpoint `/v0/admin/external-party/setup-proposal`.
+2. The external party signs and submits acceptance through `/v0/admin/external-party/setup-proposal/prepare-accept` and `/v0/admin/external-party/setup-proposal/submit-accept`.
+3. This creates both a `ValidatorRight` contract (needed for validator reward minting) and a `TransferPreapproval` with the provider set to the validator operator.
+
+The validator APIs create preapprovals with a 90-day expiry.
+
+## Payment APIs
+
+### Splice wallet payments
+
+The `splice-wallet-payments` package provides:
+
+- **Pay-with-CC** -- a workflow for making payments in CC, where the payer burns CC and the payee receives a payment confirmation
+- **CC subscriptions** (deprecated) -- recurring payment authorization, still used internally for CNS entry payments
+
+### Validator API endpoints
+
+The validator node exposes REST endpoints for wallet operations involving external parties:
+
+- `/v0/admin/external-party/setup-proposal` -- create setup proposals for external parties
+- `/v0/admin/external-party/transfer-preapproval/prepare-send` -- prepare a CC transfer via preapproval for external signing
+- `/v0/admin/external-party/transfer-preapproval/submit-send` -- submit a signed transfer
+- `/v0/admin/transfer-preapprovals/by-party/{receiver-party}` -- cancel a preapproval (DELETE)
+
+For BFT reads of wallet-related data, use the scan-proxy endpoint (`/v0/scan-proxy/...`) rather than connecting directly to a single SV's Scan API. The scan proxy broadcasts queries to multiple SV scan services and returns a consensus result.
+
+## Integration with validator nodes
+
+The Splice wallet runs as part of the validator node stack. Its automation handles:
+
+- **Traffic top-ups** -- automatically purchasing synchronizer traffic with CC to keep the validator operational
+- **Coin sweeping** -- merging small CC holdings into larger coins to reduce future transaction costs
+- **Batched execution** -- grouping multiple CC operations into single transactions for efficiency
+- **Preapproval renewal** -- renewing `TransferPreapproval` contracts before they expire
+
+This automation is delegated to the validator operator's party. The wallet holder authorizes this delegation when setting up the wallet, and the validator's backend processes execute the operations on their behalf.
+
+## Daml API documentation
+
+The full Daml API documentation for all Splice packages, including `splice-wallet` and `splice-wallet-payments`, is available in the Splice repository. The package source code is at [github.com/hyperledger-labs/splice](https://github.com/hyperledger-labs/splice).
