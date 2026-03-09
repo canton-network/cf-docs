@@ -6,7 +6,7 @@
 ## =================================================================================================
 
 # Credential issuer details
-CREDENTIAL_ISSUER_TOKEN="eyJhbGciOiJIUzI1NiJ9.eyJzY29wZSI6ImRhbWxfbGVkZ2VyX2FwaSIsImlhdCI6MTc2OTAxMTAzNSwiYXVkIjoiaHR0cHM6Ly91dGlsaXR5LmNhbnRvbi5uZXR3b3JrIiwic3ViIjoicmVnaXN0cmFyIn0.mm8wFTWR7y3DRcLC9xU1t9CUcsGStwf6mpBtuSvbvQA"
+CREDENTIAL_ISSUER_TOKEN="<PASTE_JWT_TOKEN_HERE>"
 CREDENTIAL_ISSUER_PARTY_ID="registrar::12206746c7f1cdbde4c01cf2e83d45d1a25b34293e0ad07056547a5ce25074a7b30b"
 CREDENTIAL_ISSUER_USER_ID="registrar"
 

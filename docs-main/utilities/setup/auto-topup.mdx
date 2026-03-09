@@ -20,26 +20,23 @@ Deploy the application as either a native Kubernetes [cronjob](https://kubernete
 regular long-running container (`APP_EXECUTION_MODE_SCRIPT=false`), where it is triggered based on a configured node cronjob. Configure appropriately to suit your case:
 
 ```bash
-
 APP_EXECUTION_MODE_SCRIPT={true|false}
-
 ```
+
 When configured as a long-running service ( `APP_EXECUTION_MODE_SCRIPT=false`), the application runs as a node cronjob on a schedule defined in the environment variable:
 
 ```bash
-
 # This will run the job every day at midnight
 AUTO_TOPUP_CRON_SCHEDULE="0 0 * * *"
-
 ```
+
 Configure the deployments to target either CredentialBilling or CommercialAgreement contracts, or both:
 
 ```bash
-
 ENABLE_CREDENTIAL_BILLING_TOPUP={true|false}
 ENABLE_COMMERCIAL_AGREEMENT_TOPUP={true|false}
-
 ```
+
 The app works by querying all live CredentialBilling or CommercialAgreement contracts and inspecting the respective
 locked amulet fields to compute the existing locked amulet amounts. It compares these amounts with the configurable top-up minimums, and if they fall below these values, it queries
 existing unlocked amulets in anticipation of performing the top-up to the configured maximum amounts.
@@ -47,14 +44,13 @@ If sufficient amulet is available, the app locks the appropriate amount and upda
 the maximums in the environment file:
 
 ```bash
-
 CREDENTIAL_BILLING_TOPUP_MIN_AMULET_BALANCE=1000
 CREDENTIAL_BILLING_TOPUP_MAX_AMULET_BALANCE=10000
 
 COMMERCIAL_AGREEMENT_TOPUP_MIN_AMULET_BALANCE=1000
 COMMERCIAL_AGREEMENT_TOPUP_MAX_AMULET_BALANCE=10000
-
 ```
+
 The app produces a detailed console log as it proceeds with the top-up. When the top-up fails to complete, the log provides the reason for the failure.
 
 When topping up CommercialBilling contracts, the app interacts with the ledger as the `issuer` party and tops up the issuer's deposit. In the case

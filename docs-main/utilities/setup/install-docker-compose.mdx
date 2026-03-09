@@ -1,10 +1,9 @@
 # Install (Docker Compose)
 
 <Note>
-
 Make sure to complete the [utility-prerequisites](/docs-main/utilities/setup/prerequisites#utility-prerequisites) before proceeding.
-
 </Note>
+
 If you deploy your validator [using Docker Compose](https://docs.sync.global/validator_operator/validator_compose.html),
 then you can use this guide to add the DA Utilities to your setup.
 
@@ -14,17 +13,16 @@ You need to [set up auth](https://docs.sync.global/validator_operator/validator_
 for the utilities to work.
 
 Don't forget to use the `-a` flag when starting your node:
-```
 
+```bash
 ./start.sh -s "<SPONSOR_SV_URL>" -o "<ONBOARDING_SECRET>" -p "<party_hint>" -m "<MIGRATION_ID>" -w -a
-
 ```
+
 ### Additional Environment Variables for Utilities
 
 Add the following to your `splice-node/docker-compose/validator/.env`:
 
 ```bash
-
 # Utility
 AUTH_AUTHORITY=${AUTH_URL}
 OIDC_AUTHORITY_URL=${AUTH_URL}
@@ -34,21 +32,20 @@ VALIDATOR_CLIENT_SECRET=${VALIDATOR_AUTH_CLIENT_SECRET}
 VALIDATOR_CLIENT_ID=${VALIDATOR_AUTH_CLIENT_ID}
 CNS_UI_CLIENT_ID=${ANS_UI_CLIENT_ID}
 UTILITIES_IMAGE_REPO="europe-docker.pkg.dev/da-images/public/docker"
-UTILITIES_IMAGE_VERSION="0.11.0"
+UTILITIES_IMAGE_VERSION="0.11.4"
 AUTH_CLIENT_ID="<see below>"
 UTILITY_APP_UTILITY_BACKEND_URL="<see below>"
-
 ```
+
 - `AUTH_CLIENT_ID`: the one you [created for the Utility UI](/docs-main/utilities/setup/prerequisites#oidc_setup)
 
-- `UTILITY_APP_UTILITY_BACKEND_URL`: [depends on which network you're connecting to](#operator_backend_url)
+- `UTILITY_APP_UTILITY_BACKEND_URL`: [depends on which network you're connecting to](/docs-main/utilities/reference/operator-backend-api/index#operator_backend_url)
 
 ## Update compose.yaml
 
 ### Edit your participant deployment
 
 ```diff
-
 participant:
   image: "${IMAGE_REPO}canton-participant:${IMAGE_TAG}"
   environment:
@@ -59,7 +56,6 @@ participant:
 ### Add the Utilities
 
 ```yaml
-
 utility-ui:
   image: "${UTILITIES_IMAGE_REPO}/frontend:${UTILITIES_IMAGE_VERSION}"
   environment:
@@ -87,12 +83,11 @@ darsyncer:
     - validator
   networks:
     - ${DOCKER_NETWORK:-splice_validator}
-
 ```
+
 ### Make nginx depend on `utility-ui`
 
 ```diff
-
 nginx:
   image: "nginx:${NGINX_VERSION}"
   depends_on:
