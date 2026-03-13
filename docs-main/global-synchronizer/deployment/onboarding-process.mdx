@@ -1,6 +1,120 @@
 ---
 title: "Onboarding Process"
-description: "Steps to onboard as a validator on the Canton Network"
+description: "How to get onboarded as a validator on the Canton Network across DevNet, TestNet, and MainNet"
 ---
 
-Content coming soon.
+Joining the Canton Network as a validator requires onboarding through a Super Validator (SV) sponsor. The process differs by network environment, but the core steps remain the same: register your IP, receive an onboarding secret, and deploy your node.
+
+## Network environments
+
+Canton Network operates three shared environments, each with different onboarding requirements:
+
+- **DevNet** — Open to any operator. Resets every 3 months. Receives upgrades first, making it the right place to test new versions. Onboarding secrets are self-service via API and valid for 1 hour.
+- **TestNet** — Requires approval to join by the Tokenomics Committee. Resets every 3-6 months on a staggered schedule from DevNet. Provides an intermediate testing environment before production.
+- **MainNet** — The production network. Data is permanent (no resets). Requires full approval from the Tokenomics Committee and an SV sponsor.
+
+## Finding a Super Validator sponsor
+
+Every validator needs an SV sponsor to join the network. The sponsor provides your onboarding secret and submits your egress IP for allowlisting.
+
+To find a sponsor, consult the [list of Super Validators at canton.foundation](https://canton.foundation) or reach out on the `#validator-operations` Slack channel (accessible via the Global Synchronizer Foundation Slack Connect).
+
+On DevNet, you can generate your own onboarding secret through the self-service API without contacting a sponsor directly. TestNet and MainNet require your sponsor to manually provision the secret.
+
+## Step-by-step onboarding
+
+### 1. Determine your static egress IP
+
+All outbound traffic from your validator must originate from a single, static IP address. Each network environment (DevNet, TestNet, MainNet) requires its own dedicated IP.
+
+Verify your egress IP:
+
+```bash
+curl -sSL http://checkip.amazonaws.com
+```
+
+If you run behind a NAT gateway or cloud NAT, confirm that all validator traffic routes through the registered IP.
+
+### 2. Submit your IP for allowlisting
+
+Provide your egress IP to your sponsoring SV. The SV distributes it to other Super Validators, who add it to their firewall allowlists. This process typically takes 2-7 days.
+
+<Note>
+For accessing web UIs (like the Scan UI) from personal devices, you need VPN connectivity through an SV operator, since laptops typically do not have static IP addresses.
+</Note>
+
+### 3. Validate IP approval
+
+Before deploying, confirm your IP has been allowlisted. Query the sequencer health endpoint and Scan endpoints from your validator's network to verify connectivity:
+
+```bash
+# Check your egress IP
+curl -sSL http://checkip.amazonaws.com
+
+# Verify connectivity to the sequencer (URL depends on environment)
+curl -s https://sequencer.sync.global/api/health
+```
+
+If the requests fail or time out, your IP has not yet been added to all SV allowlists.
+
+### 4. Obtain your onboarding secret
+
+**DevNet (self-service):** Generate a secret by calling the SV onboarding API endpoint directly. Self-generated DevNet secrets are valid for 1 hour and are single-use.
+
+**TestNet and MainNet:** Request the secret from your SV sponsor. They generate it through their SV node and provide it to you out-of-band.
+
+<Warning>
+Onboarding secrets are valid for 48 hours and are single-use. If your secret expires before you complete deployment, request a new one from your sponsor. DevNet self-service secrets have a shorter 1-hour expiry.
+</Warning>
+
+### 5. Deploy your validator node
+
+With your IP allowlisted and onboarding secret in hand, deploy your validator using either Docker Compose or Kubernetes. Both paths require the following parameters:
+
+- **Sponsor SV URL** — The application URL of your sponsoring SV (provided by the sponsor)
+- **Onboarding secret** — The one-time secret from step 4
+- **Migration ID** — The current network migration identifier (published at sync.global/sv-network/)
+- **Party hint** — Your validator admin party identifier, formatted as `organization-function-enumerator` (for example, `acmeCorp-validator-1`)
+
+See the [Installation](/docs-main/global-synchronizer/deployment/installation) page for deployment instructions.
+
+### 6. Verify connectivity
+
+After your node starts, confirm it has successfully onboarded:
+
+- Check the validator logs for successful onboarding messages
+- Access the Wallet UI to verify your validator identity
+- Confirm the node appears in the Scan UI
+
+## TestNet and MainNet approval process
+
+For TestNet and MainNet, the onboarding process includes governance approval:
+
+1. **Contact an SV sponsor** and discuss your use case
+2. **SV sponsor submits a vote** to the Tokenomics Committee on your behalf
+3. **Committee reviews and approves** your onboarding request
+4. **SV sponsor provisions** your onboarding secret after approval
+5. **IP allowlisting proceeds** across all Super Validators (2-7 days)
+6. **Deploy within 48 hours** of receiving your onboarding secret
+
+## Staying connected
+
+Once onboarded, join these communication channels:
+
+- **Slack** — `#validator-operations` for operational discussions and peer support
+- **Mailing lists** — Subscribe at [lists.sync.global](https://lists.sync.global/) for announcements on governance, tokenomics, and validator operations
+- **Support** — Contact da-support@digitalasset.com for best-effort support, or support@digitalasset.com for SLA-based enterprise support
+
+## Next steps
+
+<CardGroup cols={2}>
+
+<Card title="Prerequisites" icon="list-check" href="/docs-main/global-synchronizer/deployment/prerequisites">
+  Review system requirements before deploying.
+</Card>
+
+<Card title="Installation" icon="download" href="/docs-main/global-synchronizer/deployment/installation">
+  Deploy your validator node.
+</Card>
+
+</CardGroup>

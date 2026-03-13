@@ -1,6 +1,243 @@
 ---
 title: "Installation"
-description: "Installation guide for Canton Network validator software"
+description: "Step-by-step installation of a Canton Network validator using Docker Compose or Kubernetes"
 ---
 
-Content coming soon.
+This page walks through deploying a validator node on the Canton Network. Choose the tab matching your deployment method.
+
+## Before you begin
+
+Confirm that you have completed the [onboarding process](/docs-main/global-synchronizer/deployment/onboarding-process) and have the following ready:
+
+- Your static egress IP is allowlisted
+- You have an onboarding secret from your SV sponsor (or self-generated for DevNet)
+- You know the sponsor SV URL
+- You have the current migration ID (published at [sync.global/sv-network/](https://sync.global/sv-network/))
+- You have chosen a party hint for your validator admin (format: `organization-function-enumerator`, for example `acmeCorp-validator-1`)
+
+## Download the Splice node bundle
+
+Both deployment methods start by downloading the release bundle from GitHub:
+
+```bash
+# Replace the version with the current release
+export SPLICE_VERSION=0.5.12
+
+curl -LO https://github.com/digital-asset/decentralized-canton-sync/releases/download/v${SPLICE_VERSION}/${SPLICE_VERSION}_splice-node.tar.gz
+
+tar xzvf ${SPLICE_VERSION}_splice-node.tar.gz
+```
+
+The extracted bundle contains Docker Compose files, sample Helm values, and configuration templates.
+
+<Tabs>
+
+<Tab title="Docker Compose">
+
+## Docker Compose installation
+
+### 1. Navigate to the validator directory
+
+```bash
+cd splice-node/docker-compose/validator
+```
+
+### 2. Set the image tag
+
+```bash
+export IMAGE_TAG=${SPLICE_VERSION}
+```
+
+### 3. Start the validator
+
+```bash
+./start.sh \
+  -s "<SPONSOR_SV_URL>" \
+  -o "<ONBOARDING_SECRET>" \
+  -p "<PARTY_HINT>" \
+  -m "<MIGRATION_ID>" \
+  -w
+```
+
+The `-w` flag enables the Wallet UI. Add `-a` to enable authentication (recommended for anything beyond local testing).
+
+On subsequent restarts, you can omit the `-o` flag since the onboarding secret is consumed on first use:
+
+```bash
+./start.sh \
+  -s "<SPONSOR_SV_URL>" \
+  -p "<PARTY_HINT>" \
+  -m "<MIGRATION_ID>" \
+  -w
+```
+
+### 4. Verify the deployment
+
+After startup completes, access the web UIs:
+
+| Service | URL |
+|---|---|
+| Wallet UI | http://wallet.localhost |
+| CNS UI | http://ans.localhost |
+| JSON Ledger API | http://json-ledger-api.localhost |
+| gRPC Ledger API | http://grpc-ledger-api.localhost |
+
+Check the logs for successful onboarding:
+
+```bash
+docker compose logs -f validator
+```
+
+Look for messages indicating the validator has connected to the synchronizer and completed onboarding.
+
+### 5. Stop the validator
+
+```bash
+./stop.sh
+```
+
+### Systemd integration
+
+For persistent deployments, create a systemd service. Set `RemainAfterExit=true` since `start.sh` runs Docker Compose in detached mode:
+
+```ini
+[Unit]
+Description=Canton Network Validator
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=true
+WorkingDirectory=/path/to/splice-node/docker-compose/validator
+ExecStart=/path/to/splice-node/docker-compose/validator/start.sh -s "<SV_URL>" -p "<PARTY_HINT>" -m "<MIGRATION_ID>" -w
+ExecStop=/path/to/splice-node/docker-compose/validator/stop.sh
+
+[Install]
+WantedBy=multi-user.target
+```
+
+</Tab>
+
+<Tab title="Kubernetes">
+
+## Kubernetes installation
+
+### 1. Create the namespace
+
+```bash
+kubectl create namespace validator
+```
+
+### 2. Create Kubernetes secrets
+
+**PostgreSQL password:**
+
+```bash
+kubectl create secret generic postgres-secrets \
+  --from-literal=postgresPassword="${POSTGRES_PASSWORD}" \
+  -n validator
+```
+
+**Onboarding secret:**
+
+```bash
+kubectl create secret generic splice-app-validator-onboarding-validator \
+  --from-literal=secret="${ONBOARDING_SECRET}" \
+  -n validator
+```
+
+**Ledger API auth (if using authentication):**
+
+```bash
+kubectl create secret generic splice-app-validator-ledger-api-auth \
+  --from-literal=ledger-api-user="${VALIDATOR_CLIENT_ID}@clients" \
+  -n validator
+```
+
+### 3. Configure Helm values
+
+The Splice node bundle includes sample Helm values files. Copy and customize them for your environment. Key parameters to set:
+
+```yaml
+# Example values excerpt (validator)
+migration:
+  id: <MIGRATION_ID>
+sponsor:
+  svUrl: "<SPONSOR_SV_URL>"
+onboarding:
+  secretFrom:
+    secretName: splice-app-validator-onboarding-validator
+    key: secret
+participant:
+  storage:
+    type: postgres
+    config:
+      url: "jdbc:postgresql://<DB_HOST>:5432/participant"
+      user: "canton"
+      password:
+        secretName: postgres-secrets
+        key: postgresPassword
+```
+
+Refer to the sample values in the bundle for the full set of configurable parameters.
+
+### 4. Install the Helm charts
+
+```bash
+helm install validator ./splice-node/helm/validator \
+  -n validator \
+  -f my-validator-values.yaml
+```
+
+### 5. Configure ingress
+
+Set up your ingress controller to route traffic to the validator services. The specific configuration depends on your ingress controller. At minimum, configure routes for:
+
+- Wallet UI
+- CNS UI
+- Ledger API endpoints (if exposed externally)
+
+### 6. Verify the deployment
+
+```bash
+# Check pod status
+kubectl get pods -n validator
+
+# Check validator logs
+kubectl logs -f deployment/validator -n validator
+```
+
+Confirm the validator has connected to the synchronizer and the Wallet UI is accessible through your ingress.
+
+</Tab>
+
+</Tabs>
+
+## First startup verification checklist
+
+After deploying with either method, verify:
+
+- Validator logs show successful connection to the Global Synchronizer sequencer
+- The onboarding process completed without errors
+- The Wallet UI loads and displays your validator identity
+- Your party hint appears correctly in the validator admin party
+- Traffic auto-top-up is functioning (if configured)
+
+<Warning>
+If startup fails with connection errors, verify that your egress IP is allowlisted and that outbound HTTPS (port 443) is permitted to `*.sync.global` endpoints.
+</Warning>
+
+## Next steps
+
+<CardGroup cols={2}>
+
+<Card title="Configuration" icon="gear" href="/docs-main/global-synchronizer/deployment/configuration">
+  Tune your validator's configuration.
+</Card>
+
+<Card title="Authorization Setup" icon="lock" href="/docs-main/global-synchronizer/deployment/authorization-setup">
+  Configure authentication for production use.
+</Card>
+
+</CardGroup>
