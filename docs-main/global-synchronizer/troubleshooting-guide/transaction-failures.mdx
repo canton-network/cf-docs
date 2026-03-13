@@ -1,6 +1,139 @@
 ---
 title: "Transaction Failures"
-description: "Troubleshooting Canton Network transaction failures"
+description: "Diagnosing authorization errors, package vetting failures, and transaction timeouts"
 ---
 
-Content coming soon.
+Transaction failures on the Global Synchronizer produce specific error codes that point to the root cause. This page covers the three most common categories: authorization errors, package vetting issues, and timeouts.
+
+## Authorization Errors
+
+Authorization failures appear when a party attempts an action it does not have rights to perform.
+
+### Missing Signatories
+
+```
+INVALID_ARGUMENT: DAML_AUTHORIZATION_ERROR: ... requires authorizers <party-id> but only <other-party-id> were given
+```
+
+This means the command is missing a required signatory. Check:
+
+- The template's signatory declaration in the Daml model
+- Whether the submitting party is listed as a signatory on the contract
+- If using multi-party submissions, that all required parties are included in the `actAs` list
+
+### Wrong Party
+
+If you see authorization errors right after onboarding, verify that your party ID matches what was registered:
+
+```scala
+// In Canton Console
+participant.parties.list()
+```
+
+Compare the output against the party ID in your application configuration. Party IDs are case-sensitive and include a fingerprint suffix (e.g., `validator::1220abcd...`).
+
+## Package Vetting Issues
+
+Package vetting ensures that all validators involved in a transaction agree on the Daml code being executed.
+
+### DAR Not Uploaded
+
+```
+PACKAGE_NOT_FOUND: Could not find package <package-id>
+```
+
+Upload the required DAR to your validator:
+
+```bash
+# Via REST API
+curl -X POST "http://localhost/api/validator/v0/admin/dars" \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "dar=@path/to/your-app.dar"
+```
+
+Or via Canton Console:
+
+```scala
+participant.dars.upload("path/to/your-app.dar")
+```
+
+### DAR Not Vetted on Counterparty
+
+Even if your validator has the package, the other party's validator must also have it uploaded and vetted. If you see:
+
+```
+PACKAGE_SELECTION_FAILED: No package found for module <module-name>
+```
+
+Contact the counterparty's validator operator to upload and vet the same DAR. Both sides of a transaction must have the package available.
+
+### Checking Vetting Status
+
+```scala
+// List all vetted packages
+participant.topology.vetted_packages.list()
+
+// Check if a specific package is vetted
+participant.packages.list().filter(_.packageId.contains("abc123"))
+```
+
+## Timeout Problems
+
+Timeouts indicate that a transaction did not complete within the allowed window. The mediator rejects the transaction when confirmations arrive too late.
+
+### Traffic Exhaustion
+
+```
+MEDIATOR_SAYS_TX_TIMED_OUT: Rejected transaction as the mediator did not receive
+sufficient confirmations within the expected timeframe
+```
+
+The most common cause of timeouts is exhausted traffic balance. Every transaction on the Global Synchronizer costs traffic, denominated in Canton Coin.
+
+**Check your traffic balance:**
+
+```scala
+// In Canton Console
+participant.traffic_control.traffic_state()
+```
+
+If the balance is zero or near-zero, transactions will fail because the sequencer will not accept messages from your validator.
+
+**Top up traffic:**
+
+```bash
+curl -X POST "http://localhost/api/validator/v0/admin/traffic/purchase" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+**Enable auto-top-up** to prevent this from recurring. In your `validator-values.yaml`:
+
+```yaml
+topup:
+  enabled: true
+  targetThroughput: 100000
+  minTopupInterval: 10m
+```
+
+### Slow Database Queries
+
+If your validator has sufficient traffic but transactions still time out, the database may be the bottleneck. Check for slow queries:
+
+```sql
+SELECT pid, now() - pg_stat_activity.query_start AS duration, query
+FROM pg_stat_activity
+WHERE state = 'active' AND (now() - pg_stat_activity.query_start) > interval '5 seconds';
+```
+
+Large un-pruned tables cause query latency to increase over time. Enable pruning if you have not already:
+
+```yaml
+participantPruningSchedule:
+  cron: "0 */10 * * * ?"
+  maxDuration: 30m
+  retention: 90d
+```
+
+### Unresponsive Counterparty
+
+The timeout error includes a `context` field listing `unresponsiveParties`. If the unresponsive party is not yours, the issue is on the counterparty's side -- their validator may be offline, under-funded for traffic, or experiencing its own problems. You cannot fix this directly; contact the counterparty's operator.
