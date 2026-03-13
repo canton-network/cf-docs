@@ -1,6 +1,214 @@
 ---
 title: "Backup and Recovery"
-description: "Backup and recovery procedures for Canton Network validators"
+description: "Backup procedures, restore operations, and disaster recovery for validators and SV nodes"
 ---
 
-Content coming soon.
+Regular backups are essential for Canton Network nodes. This page covers backup procedures for both validators and SV nodes, restore operations, and disaster recovery scenarios.
+
+## Validator Backups
+
+### Identity Backups
+
+{/* COPIED_START source="splice:validator_operator/validator_disaster_recovery.rst" hash="validator-identities-backup" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was adapted from existing reviewed documentation.
+**Source:** `validator_operator/validator_disaster_recovery.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+Back up your validator's node identities immediately after initial setup. The identities backup contains the participant's private keys and is required for disaster recovery.
+
+<Warning>
+Identity backups contain private keys. Store them in a secure location such as a secrets manager, separate from your cluster.
+</Warning>
+
+Without an identities backup or a database backup, it is not possible to recover your validator's assets in a disaster scenario. If your participant uses an external KMS, the KMS-stored keys can serve as a fallback, though recovery from KMS keys alone is more complex.
+
+{/* COPIED_END */}
+
+### Database Backups
+
+{/* COPIED_START source="splice:validator_operator/validator_disaster_recovery.rst" hash="validator-database-backup" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was adapted from existing reviewed documentation.
+**Source:** `validator_operator/validator_disaster_recovery.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+Back up all PostgreSQL databases used by your validator. You can use `pg_dump`, cloud provider snapshot tools, or persistent volume snapshots.
+
+Database backups must be less than 30 days old to be usable for restore. Due to sequencer pruning, a participant that is more than 30 days behind cannot catch up on the synchronizer.
+
+{/* COPIED_END */}
+
+## SV Node Backups
+
+{/* COPIED_START source="splice:sv_operator/sv_backup.rst" hash="sv-backups" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was adapted from existing reviewed documentation.
+**Source:** `sv_operator/sv_backup.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+### Identity Backups
+
+Once your SV node is onboarded, back up the node identities. **This information is highly sensitive and contains the private keys of your participant, sequencer, and mediator.** Store it in a secure location such as a secrets manager, outside the cluster.
+
+Fetch identities from the SV app:
+
+```bash
+curl "https://sv.sv.YOUR_HOSTNAME/api/sv/v0/admin/domain/identities-dump" \
+  -H "authorization: Bearer <token>"
+```
+
+Where `<token>` is an OAuth2 Bearer Token obtained from your OAuth provider.
+
+### PostgreSQL Backups
+
+There is one strict ordering requirement: the apps PostgreSQL backup must be taken at a point in time strictly earlier than the participant backup. Complete the apps backup before starting the participant backup.
+
+Back up using `pg_dump`, persistent volume snapshots, or cloud provider tools (RDS snapshots, Cloud SQL backups). Back up at least every 4 hours.
+
+### Historical Backups
+
+Historical backups preserve a gap-less history from genesis for audit purposes and proving synchronizer state correctness.
+
+For the sequencer (when pruning is enabled): keep backups with a time difference smaller than the configured `retentionPeriod`.
+
+Retain backups across major upgrades — both historical sequencer backups and backups of other components.
+
+### CometBFT Backups
+
+Back up CometBFT storage (persistent volume snapshots) at least every 4 hours. CometBFT does not use PostgreSQL.
+
+CometBFT has pruning enabled by default, targeting at least 30 days of retained blocks. Keep historical backups such that the block height difference between two backups is smaller than the configured retention count. We recommend taking and preserving backups every 2 weeks.
+
+{/* COPIED_END */}
+
+## Restoring a Validator
+
+{/* COPIED_START source="splice:validator_operator/validator_disaster_recovery.rst" hash="validator-restore" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was adapted from existing reviewed documentation.
+**Source:** `validator_operator/validator_disaster_recovery.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+### From Database Backups
+
+Restoring from database backups is possible when all of the following hold:
+
+- A database backup is available
+- The backup is less than 30 days old
+- If taken before a major upgrade, synchronizer nodes on the old migration ID are still available
+
+**Kubernetes:**
+
+1. Scale down all validator components to 0 replicas
+2. Restore all databases and storage from backups
+3. Scale components back to 1 replica
+
+Users onboarded after the backup was taken must be re-onboarded manually.
+
+**Docker Compose:**
+
+1. Stop the validator: `./stop.sh`
+2. Wipe the existing database volume: `docker volume rm compose_postgres-splice`
+3. Start only PostgreSQL: `docker compose up -d postgres-splice`
+4. Wait for readiness: `docker exec splice-validator-postgres-splice-1 pg_isready`
+5. Restore the validator database: `docker exec -i splice-validator-postgres-splice-1 psql -U cnadmin validator < $validator_dump_file`
+6. Restore the participant database: `docker exec -i splice-validator-postgres-splice-1 psql -U cnadmin participant-$migration_id < $participant_dump_file`
+7. Stop PostgreSQL: `docker compose down`
+8. Start your validator as usual
+
+### From Identity Backups (Re-onboarding)
+
+If a full database backup is unavailable but you have an identities backup, you can recover Canton Coin balances and CNS entries by deploying a new validator with the original namespace key.
+
+The new validator uses the identity backup to migrate parties from the original validator. SVs assist by providing contract information for the migrated parties.
+
+{/* COPIED_END */}
+
+## Restoring an SV Node
+
+{/* COPIED_START source="splice:sv_operator/sv_restore.rst" hash="sv-restore" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was adapted from existing reviewed documentation.
+**Source:** `sv_operator/sv_restore.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+There are three recovery paths depending on the failure scope:
+
+1. **Single node failure (network healthy)** — Restore from backup. Scale down all SV components, restore all databases and CometBFT storage, scale back up. Components catch up from peer SVs automatically.
+
+2. **No full backup but identities available** — Deploy a standalone validator using the SV's participant keys, recover assets, then onboard a fresh SV and transfer assets.
+
+3. **Network-wide failure (CometBFT layer lost)** — All SVs coordinate a disaster recovery procedure (see below).
+
+### Full Node Restore (Kubernetes)
+
+```bash
+# Scale down all components
+kubectl scale deployment --replicas=0 -n sv \
+  global-domain-0-cometbft \
+  global-domain-0-mediator \
+  global-domain-0-sequencer \
+  participant-0 \
+  scan-app \
+  sv-app \
+  validator-app
+
+# Restore all databases and storage from backups
+# (process depends on your storage and DB setup)
+
+# Scale back up
+kubectl scale deployment --replicas=1 -n sv \
+  global-domain-0-cometbft \
+  global-domain-0-mediator \
+  global-domain-0-sequencer \
+  participant-0 \
+  scan-app \
+  sv-app \
+  validator-app
+```
+
+Components will catch up their state from peer SVs once healthy.
+
+{/* COPIED_END */}
+
+## Network-Wide Disaster Recovery
+
+{/* COPIED_START source="splice:sv_operator/sv_restore.rst" hash="sv-network-dr" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was adapted from existing reviewed documentation.
+**Source:** `sv_operator/sv_restore.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+If the entire CometBFT layer is lost beyond repair, SVs follow a coordinated recovery process similar to the migration dump procedure used for major upgrades. The key difference is that the downtime is unscheduled and the recovery timestamp will likely be earlier than the incident, resulting in some data loss.
+
+**High-level steps:**
+
+1. All SVs agree on a recovery timestamp
+2. Each SV fetches a data dump from their SV app for that timestamp
+3. Each SV creates a migration dump by merging the data dump with their identity backups
+4. SVs deploy a new synchronizer
+5. Each SV copies the migration dump to their SV app's PVC and restarts to import it
+
+Validators follow a parallel process: they fetch their own data dump, copy it to the validator app's volume, and redeploy with migration configuration enabled.
+
+The recovery timestamp is chosen by inspecting participant logs for ACS commitment periods where most SVs have mutually committed. Going 15 minutes further back than the last agreed commitment is a good safety margin.
+
+{/* COPIED_END */}
+
+## Next Steps
+
+- [Security Operations](/docs-main/global-synchronizer/production-operations/security-operations) — Key management and security hardening
+- [Upgrade Procedures](/docs-main/global-synchronizer/production-operations/upgrade-procedures) — Major and minor upgrade processes
