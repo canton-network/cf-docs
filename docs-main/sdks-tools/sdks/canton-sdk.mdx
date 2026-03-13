@@ -1,6 +1,175 @@
 ---
 title: Canton SDK
-description: Overview and getting started with the Canton SDK.
+description: The Canton development toolchain for building and deploying Canton Network applications.
 ---
 
-Content coming soon.
+The Canton SDK (also called the dApp SDK) is the development toolchain you use to build, test, and deploy applications on Canton Network. It bundles the Daml compiler, code generation tools, a local sandbox environment, and the `dpm` package manager into a single installable distribution.
+
+## What's included
+
+The SDK ships as a versioned release managed through `dpm`. Each release includes:
+
+- **Daml compiler** (`dpm damlc`) -- compiles Daml smart contracts into DAR files (Daml Archives)
+- **dpm** -- the command-line package manager that replaces the deprecated `daml` assistant
+- **Code generation** -- produces type-safe bindings. Java codegen (`dpm codegen-java`) is first-class with full feature parity. TypeScript/JavaScript bindings (`dpm codegen-js`) are also available.
+- **Sandbox** (`dpm sandbox`) -- runs a full Canton node in a single process for local development
+- **Daml Script** (`dpm script`) -- executes scripts against the ledger for testing and automation
+- **Daml Studio** (`dpm studio`) -- launches the VS Code extension with syntax highlighting, type checking, and error diagnostics
+- **PQS** (`dpm pqs`) -- the Participant Query Store, which projects ledger data into SQL tables. Supports SQL joins for rich queries across contract types and retains historical data for audits.
+- **Daml Shell** (`dpm daml-shell`) -- interactive client for PQS
+
+Alpha-stage code generation for Scala (`dpm codegen-alpha-scala`) and a new TypeScript codegen (`dpm codegen-alpha-typescript`) are also available.
+
+## Prerequisites
+
+{/* COPIED_START: from docs-website/docs/replicated/dpm/3.5/dpm.rst */}
+`dpm` runs on Windows, macOS, and Linux. For full functionality, you need:
+
+1. [VS Code](https://code.visualstudio.com/download)
+2. JDK 17 or greater, installed and part of your `JAVA_HOME`. If you do not already have a JDK installed, try OpenJDK or [Eclipse Adoptium](https://adoptium.net/).
+{/* COPIED_END */}
+
+## Installation
+
+{/* COPIED_START: from docs-website/docs/replicated/dpm/3.5/dpm.rst */}
+You can set the `DPM_HOME` environment variable to change the install location. The default is `~/.dpm/` on Mac and Linux, and `%APPDATA%/.dpm/` on Windows.
+
+**Mac / Linux:**
+
+```bash
+curl https://get.digitalasset.com/install/install.sh | sh
+```
+
+**Windows:**
+
+Download and run the [Windows installer](https://get.digitalasset.com/install/latest-windows.html), which installs the SDK and sets up the PATH variable.
+{/* COPIED_END */}
+
+For manual installation steps, see the [DPM manual installation guide](https://docs.digitalasset.com/build/3.5/dpm/manual-install.html#dpm-manual-installation).
+
+## Key commands
+
+Once installed, `dpm` is your primary interface to the SDK. Here are the commands you'll use most often.
+
+**Project scaffolding and building:**
+
+```bash
+# Create a new Daml project
+dpm new
+
+# Compile Daml source into a DAR file
+dpm build
+
+# Run all test scripts in the project
+dpm test
+
+# Remove build artifacts
+dpm clean
+```
+
+**Code generation:**
+
+```bash
+# Generate TypeScript/JavaScript bindings from a DAR
+dpm codegen-js .dar -o generated
+
+# Generate Java bindings from a DAR
+dpm codegen-java .dar -o generated
+```
+
+**Local development:**
+
+```bash
+# Start a local Canton sandbox node
+dpm sandbox
+
+# Launch Daml Studio in VS Code
+dpm studio
+
+# Run a Daml Script against a ledger
+dpm script
+```
+
+**Other useful commands:**
+
+```bash
+# Inspect the contents of a DAR archive
+dpm inspect-dar
+
+# Validate a DAR archive
+dpm validate-dar
+
+# Generate documentation from Daml doc comments
+dpm docs
+```
+
+Run any command with `--help` to see its full options.
+
+## SDK version management
+
+{/* COPIED_START: from docs-website/docs/replicated/dpm/3.5/dpm.rst */}
+Your project's `daml.yaml` specifies which SDK version to use (in the `sdk-version` field). You can manage installed versions with `dpm install`.
+
+```bash
+# Install the SDK version specified in daml.yaml
+dpm install package
+
+# Install a specific version
+dpm install 3.4.9
+
+# Show the active SDK version
+dpm version --active
+
+# List all installed versions (* marks the active one)
+dpm version
+
+# List all available versions (installed and remote)
+dpm version --all
+```
+{/* COPIED_END */}
+
+To use unstable (pre-release) SDK versions, set the `DPM_REGISTRY` environment variable to `europe-docker.pkg.dev/da-images/public-unstable` before running `dpm install`.
+
+## Project configuration
+
+Each Daml project has a `daml.yaml` file that defines the package name, SDK version, source directory, and dependencies. A multi-package project uses an additional `multi-package.yaml` to list the directories of connected packages so that `dpm build` can resolve them in the correct order.
+
+Both config files support environment variable interpolation (`${MY_VAR}` syntax), which is useful for extracting common values like the SDK version or dependency paths into `.envrc` files or build systems.
+
+For full configuration details, see the [DPM configuration reference](https://docs.digitalasset.com/build/3.5/dpm/configuration.html).
+
+## Migrating from the `daml` assistant
+
+If you previously used the `daml` CLI, `dpm` is a drop-in replacement. The mapping is straightforward:
+
+- `daml build` becomes `dpm build`
+- `daml test` becomes `dpm test`
+- `daml codegen java` becomes `dpm codegen-java`
+- `daml codegen js` becomes `dpm codegen-js`
+- `daml sandbox` becomes `dpm sandbox`
+- `daml studio` becomes `dpm studio`
+- `daml new` becomes `dpm new`
+
+Commands that previously used `daml ledger` (such as `allocate-parties`, `upload-dar`, and `list-parties`) now use the Declarative API or the JSON/gRPC API directly.
+
+## Related pages
+
+<CardGroup cols={2}>
+
+<Card title="dpm Reference" icon="terminal" href="/docs-main/sdks-tools/cli-tools/dpm">
+  Full command reference for the dpm package manager.
+</Card>
+
+<Card title="Sandbox" icon="box" href="/docs-main/sdks-tools/development-tools/sandbox">
+  Running a local Canton node for development.
+</Card>
+
+<Card title="Development Stack" icon="layer-group" href="/docs-main/appdev/modules/m1-development-stack">
+  How the SDK fits into the overall Canton development workflow.
+</Card>
+
+<Card title="cn-quickstart" icon="rocket" href="/docs-main/sdks-tools/reference-projects/cn-quickstart">
+  A complete example application built with the Canton SDK.
+</Card>
+
+</CardGroup>

@@ -1,6 +1,135 @@
 ---
 title: Splice APIs
-description: Reference documentation for Splice-specific APIs.
+description: Reference documentation for the Scan, Validator, and SV REST APIs that run on Canton Network nodes.
 ---
 
-Content coming soon.
+Splice nodes expose REST APIs that are separate from the [Ledger API](/docs-main/sdks-tools/api-reference/ledger-api) and the [Admin API](/docs-main/sdks-tools/api-reference/admin-api). These APIs are served by the Splice application layer running on top of Canton and provide access to Canton Network-specific functionality: querying network state, managing wallets, operating validators, and governing the network as a super validator (SV).
+
+Three main APIs exist, each tied to a different Splice application component:
+
+- **Scan API** — public, read-only access to Global Synchronizer state, transaction history, and reference data
+- **Validator API** — wallet operations, user management, and validator node administration
+- **SV API** — super validator governance, onboarding, and domain management
+
+## Scan API
+
+{/* COPIED_START — source: splice/docs/src/app_dev/scan_api/index.rst */}
+
+The Scan App runs on each super validator node and ingests the transaction history and active contract set (ACS) as seen by the DSO (Decentralized Synchronizer Operations) party. It stores this data in a schema optimized for several querying scenarios and exposes it through the Scan API.
+
+{/* COPIED_END */}
+
+You can connect directly to a Scan API hosted by a single SV, or query multiple Scan APIs and compare results for Byzantine fault tolerance. Use [sync.global/sv-network](https://sync.global/sv-network/) to discover Scan API URLs for DevNet, TestNet, and MainNet.
+
+The base path for all Scan endpoints is `/api/scan`.
+
+The Scan API covers six functional areas:
+
+- **Bulk Data** — full update history and ACS snapshots (`POST /v2/updates`, `POST /v0/state/acs`)
+- **Global Synchronizer Connectivity** — list all SV Scans (`GET /v0/scans`) and sequencers (`GET /v0/dso-sequencers`)
+- **Global Synchronizer Operations** — validator liveness, DSO info, and governance state (`GET /v0/dso`)
+- **Canton Coin Reference Data** — DSO party ID (`GET /v0/dso-party-id`) and network configuration
+- **Current State** — open and issuing mining rounds, traffic status, and conversion rates
+- **Aggregates** — Canton Coin balance summaries (`POST /v0/holdings/summary`) and ANS entry lookups
+
+**Authentication:** The Scan API is publicly accessible and does not require authentication.
+
+**Backwards compatibility:** External endpoints carry backwards compatibility guarantees. See the [OpenAPI specification](https://github.com/hyperledger-labs/splice/blob/main/apps/scan/src/main/openapi/scan.yaml) for stability annotations on each endpoint.
+
+### Scan proxy
+
+{/* COPIED_START — source: splice/docs/src/app_dev/validator_api/index.rst */}
+
+Validator nodes include a Scan proxy that provides BFT reads to Scan APIs hosted by super validators. If the validator app is part of a regular validator node, each call is broadcast to multiple SV Scan services and the consensus result is returned. If the validator app is part of a super validator node, calls are forwarded to the local Scan service. Use the Scan proxy endpoints (under `/api/validator/v0/scan-proxy/`) to avoid trusting a single super validator.
+
+{/* COPIED_END */}
+
+**Reference:** See the [scan-proxy.yaml](https://raw.githubusercontent.com/hyperledger-labs/splice/refs/heads/main/apps/validator/src/main/openapi/scan-proxy.yaml) OpenAPI spec.
+
+## Validator API
+
+{/* COPIED_START — source: splice/docs/src/app_dev/validator_api/index.rst */}
+
+The Validator App runs on every validator and super validator node. It manages the Canton participant (synchronizer connections, DAR uploads, party management), automates core Canton Network Daml workflows (reward minting, recurring Canton Coin payments), and exposes a REST API for interacting with those workflows.
+
+{/* COPIED_END */}
+
+The base path is `/api/validator`. The Validator API is organized into the following sub-APIs:
+
+- **User Wallet API** — programmatic interaction with user wallets, including transfer offers and buying synchronizer traffic. External API with backwards compatibility guarantees.
+- **Internal User Wallet API** — used by the Splice Wallet frontend for balance queries, payment requests, and subscription management. Internal API, not intended for third-party use.
+- **External Signing API** — endpoints for setting up external parties and signing Canton Coin transactions with keys held outside the participant.
+- **User Management API** — onboarding and managing users hosted on the validator node (`POST /v0/register`, `GET /v0/admin/users`).
+- **ANS API** — creating and listing Amulet Name Service entries (`POST /v0/entry/create`, `GET /v0/entry/all`). External API with backwards compatibility guarantees.
+- **Validator Management API** — node administration endpoints for operators, such as retrieving participant identities and domain connection configuration.
+
+**Authentication:** All Validator API endpoints require a JWT token passed as an OAuth2 Bearer token in the `Authorization` header. The `sub` (subject) claim identifies the user whose context the request operates in. See the [Authentication](#authentication) section below.
+
+**Reference:** OpenAPI specs:
+- [wallet-external.yaml](https://raw.githubusercontent.com/hyperledger-labs/splice/refs/heads/main/apps/wallet/src/main/openapi/wallet-external.yaml) — User Wallet API
+- [wallet-internal.yaml](https://raw.githubusercontent.com/hyperledger-labs/splice/refs/heads/main/apps/wallet/src/main/openapi/wallet-internal.yaml) — Internal User Wallet API
+- [validator-internal.yaml](https://raw.githubusercontent.com/hyperledger-labs/splice/refs/heads/main/apps/validator/src/main/openapi/validator-internal.yaml) — External Signing, User Management, and Validator Management APIs
+- [ans-external.yaml](https://raw.githubusercontent.com/hyperledger-labs/splice/refs/heads/main/apps/validator/src/main/openapi/ans-external.yaml) — ANS API
+
+## SV API
+
+The SV API is an internal API exposed by the SV App on super validator nodes. It is used by SV operators for governance, domain management, and validator onboarding.
+
+The base path is `/api/sv`. Key endpoint groups include:
+
+- **Governance** — create and manage vote requests, cast votes, and query vote results (`POST /v0/admin/sv/voterequest/create`, `GET /v0/admin/sv/voterequests`, `POST /v0/admin/sv/votes`)
+- **Amulet Price** — vote on Canton Coin price adjustments (`POST /v0/admin/sv/amulet-price/vote`, `GET /v0/admin/sv/amulet-price/votes`)
+- **Domain Management** — pause/unpause the synchronizer, retrieve migration dumps and identity dumps, check CometBFT and sequencer status
+- **Validator Onboarding** — prepare onboarding secrets and onboard validators (`POST /v0/onboard/validator`, `GET /v0/admin/validator/onboarding/ongoing`)
+- **SV Onboarding** — start SV onboarding, check onboarding status, authorize party migrations
+- **DSO Info** — retrieve current DSO state, including rules, mining rounds, and SV node states (`GET /v0/dso`)
+
+**Authentication:** Requires a JWT token where the subject claim is the SV operator user. The audience must match the SV backend API audience configured during deployment.
+
+**Backwards compatibility:** The SV API is an internal API with no backwards compatibility guarantees.
+
+**Reference:** See the [sv-internal.yaml](https://raw.githubusercontent.com/hyperledger-labs/splice/refs/heads/main/apps/sv/src/main/openapi/sv-internal.yaml) OpenAPI spec.
+
+## Authentication
+
+{/* COPIED_START — source: splice/docs/src/app_dev/overview/splice_app_apis.rst */}
+
+Accessing Splice App APIs requires a JWT containing at minimum a `sub` (subject) and `aud` (audience) claim:
+
+```json
+{
+  "sub": "ledgerApiUserId",
+  "aud": "audience-of-app"
+}
+```
+
+The subject must be the ledger API user that requests should be submitted as. For example, if you want to operate as the validator operator, use the `ledger-api-user` configured in your validator config. The audience must match the value specified in the `auth` section of the app's configuration. The token must be signed with the algorithm and key material configured for that app (typically RS256 with JWKS).
+
+{/* COPIED_END */}
+
+Pass the token as an [OAuth2 Bearer token](https://datatracker.ietf.org/doc/html/rfc6750#section-2.1):
+
+```
+Authorization: Bearer <your-token>
+```
+
+The Scan API is the exception -- it is publicly accessible and does not require authentication.
+
+## OpenAPI Specifications
+
+You can download the full set of OpenAPI specifications for all Splice applications from the [Splice repository](https://github.com/hyperledger-labs/splice). The individual spec files are:
+
+- [scan.yaml](https://github.com/hyperledger-labs/splice/blob/main/apps/scan/src/main/openapi/scan.yaml) — Scan API
+- [wallet-external.yaml](https://github.com/hyperledger-labs/splice/blob/main/apps/wallet/src/main/openapi/wallet-external.yaml) — Wallet API (external)
+- [ans-external.yaml](https://github.com/hyperledger-labs/splice/blob/main/apps/validator/src/main/openapi/ans-external.yaml) — ANS API (external)
+- [validator-internal.yaml](https://github.com/hyperledger-labs/splice/blob/main/apps/validator/src/main/openapi/validator-internal.yaml) — Validator API (internal)
+- [sv-internal.yaml](https://github.com/hyperledger-labs/splice/blob/main/apps/sv/src/main/openapi/sv-internal.yaml) — SV API (internal)
+- [scan-proxy.yaml](https://github.com/hyperledger-labs/splice/blob/main/apps/validator/src/main/openapi/scan-proxy.yaml) — Scan Proxy API
+
+Endpoints in files named `*-external` carry backwards compatibility guarantees. Endpoints in `*-internal` files may change between releases without notice.
+
+## Related Pages
+
+- [Ledger API](/docs-main/sdks-tools/api-reference/ledger-api) — gRPC API for submitting commands and reading the transaction stream
+- [Admin API](/docs-main/sdks-tools/api-reference/admin-api) — Canton node administration
+- [JSON API](/docs-main/sdks-tools/api-reference/json-api) — HTTP/REST wrapper for the Ledger API
