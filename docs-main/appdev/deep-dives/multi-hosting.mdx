@@ -15,27 +15,32 @@ Common reasons to multi-host:
 - **Geographic redundancy** — Validators in different regions to survive regional outages
 - **Validator migration** — Gradually shifting a party from one validator to another without downtime
 - **Organizational resilience** — Separating operational risk across independently managed validators
+- **Protect against a malicious operator** — Using a threshold value higher than one prevents a single malicious operator from invalid activity
 
 ## How Multi-Hosting Works
 
 Multi-hosting is managed through Canton's topology system. A party-to-participant mapping declares which validators host a given party and what permission each validator has (Confirmation or Observation).
 
-When a party is hosted on multiple validators with Confirmation permission, any of those validators can submit transactions on behalf of the party. The synchronizer delivers transaction views to all hosting validators, so each one maintains a consistent view of the party's contracts.
+When a local party is hosted on multiple validators with Confirmation permission, any of those validators can submit transactions on behalf of the party (an external party can submit on any validator). The synchronizer delivers transaction views to all hosting validators, so each one maintains a consistent view of the party's contracts.
 
 ### Confirmation Thresholds
 
-You can configure a confirmation threshold that determines how many hosting validators must confirm a transaction before it proceeds. With a threshold of 1 (the default when not specified), any single hosting validator can confirm. With a higher threshold, multiple validators must independently validate and confirm, providing stronger integrity guarantees at the cost of additional latency.
+You can configure a confirmation threshold that determines how many hosting validators must confirm a transaction before it proceeds. With a threshold of 1 (the default when not specified), any single hosting validator can confirm. With a higher threshold, multiple validators must independently validate and confirm, providing stronger integrity guarantees at the cost of additional latency.  A threshold greater than 1 protects against a malicious validator.
 
 ### Permission Levels
 
 Each hosting validator is assigned a permission level:
 
-- **Confirmation** — The validator can submit and confirm transactions for the party. This is the standard permission for active hosting.
+- **Confirmation** — The validator can confirm transactions for the party. This is the standard permission for active hosting.
 - **Observation** — The validator receives transaction data for the party but cannot submit or confirm. Useful for read-only replicas, audit nodes, or pre-staging a migration target.
 
-## Setting Up Multi-Hosting
+## Setting Up Multi-Hosting for New Parties
 
-Multi-hosting requires a topology transaction that maps the party to multiple validators. Both validators must sign the mapping — it's a proposal that becomes active only when all parties agree.
+Multi-hosting requires a topology transaction that maps the party to multiple validators. All hosting validators must sign the mapping — it's a proposal that becomes active only when all parties agree.
+
+<Note>
+The instructions below apply to **new external parties**. Adding hosting nodes to existing parties is called [party replication](https://docs.digitalasset.com/operate/3.4/howtos/operate/parties/party_replication.html) and is a different, more involved workflow. For external parties, the external party must authorize (sign) the party to participant mapping with its own key. See the [external signing onboarding documentation](https://docs.digitalasset.com/build/3.5/tutorials/app-dev/external_signing_onboarding.html) for details.
+</Note>
 
 ### Via the Ledger API
 
@@ -139,14 +144,14 @@ Now both PQS and the application can manage their own schema versions independen
 Multi-hosting is one of several resilience approaches. Choose based on your requirements:
 
 - **Single validator with database backups** — Sufficient when some downtime is acceptable and you can restore from backup. Simplest to operate.
-- **Multi-hosting (two validators)** — Good for parties that need continuous availability. Both validators independently maintain state, so failover is immediate.
+- **Multi-hosting (two or more validators)** — Good for parties that need continuous availability and need to protect against a malicious validator. Both validators independently maintain state, so failover is immediate.
 - **Multi-hosting with observation nodes** — Add Observation-permission validators as read-only replicas for query scaling or audit purposes without increasing confirmation overhead.
 - **Multi-hosting across synchronizers** — For workflows that span multiple synchronizers, each hosting validator can connect to different synchronizers, providing both resilience and multi-synchronizer access.
 
 ## Operational Considerations
 
 - **Cost** — Each hosting validator with Confirmation permission independently processes and confirms transactions, which increases traffic consumption proportionally. The exact cost increase depends on the number of confirming validators and the confirmation threshold.
-- **Consistency** — All hosting validators see the same transactions (the synchronizer ensures this), but PQS query results may briefly differ if one validator processes updates faster.
+- **Consistency** — All hosting validators see the same transactions (the synchronizer ensures this), but PQS queries may need to take into account offsets being a little different.
 - **Key management** — Each hosting validator holds its own signing keys. Compromising one validator's keys doesn't compromise the others, but the party's security depends on the threshold configuration.
 - **Removing a host** — To stop hosting a party on a validator, submit a new topology transaction that removes that validator from the mapping. The party's contracts remain accessible on the other hosting validators.
 
