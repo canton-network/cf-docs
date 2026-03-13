@@ -1,6 +1,154 @@
 ---
 title: "Debugging Workflows"
-description: "Using the Canton console for debugging and diagnostics"
+description: "Step-by-step diagnostic procedures for common Canton issues using the console"
 ---
 
-Content coming soon.
+When transactions fail, nodes disconnect, or the system behaves unexpectedly, the Canton Console provides the tools to diagnose the problem. This page walks through common debugging scenarios with concrete console commands.
+
+## Debugging Stuck Transactions
+
+A transaction appears "stuck" when a command was submitted but no completion event arrives. Common causes: a stakeholder's participant is unreachable, a required package isn't vetted, or the synchronizer rejected the transaction.
+
+### Step 1: Check Node Health
+
+```scala
+participant.health.status
+// Look for: is_active = true, connected domains
+```
+
+If the participant isn't active or has no connected synchronizers, the transaction can't proceed.
+
+### Step 2: Verify Synchronizer Connectivity
+
+```scala
+participant.domains.list_connected
+// Confirm the expected synchronizer appears and shows as connected
+```
+
+If the synchronizer is disconnected, check network connectivity and try reconnecting:
+
+```scala
+participant.domains.reconnect(synchronizerId)
+```
+
+### Step 3: Check Package Vetting
+
+A transaction fails if a stakeholder's participant hasn't vetted the required packages.
+
+```scala
+// List vetted packages on this participant
+participant.topology.vetted_packages.list()
+
+// Check if a specific package is vetted
+participant.topology.vetted_packages.list()
+  .filter(_.item.packageIds.contains(targetPackageId))
+```
+
+If the package isn't vetted, upload and vet it:
+
+```scala
+participant.dars.upload("/path/to/missing-package.dar")
+```
+
+### Step 4: Check Party Hosting
+
+Verify that all parties involved in the transaction are properly hosted:
+
+```scala
+participant.topology.party_to_participant_mappings.list(synchronizerId)
+  .filter(_.item.partyId == targetPartyId)
+```
+
+If a party isn't mapped to any active participant, the synchronizer can't deliver transaction views to that party's stakeholder.
+
+## Connectivity Issues
+
+### Synchronizer Connection Failures
+
+When a participant can't connect to the synchronizer:
+
+```scala
+// Check current connection status
+participant.synchronizers.list_connected
+participant.synchronizers.list_registered
+
+// Try reconnecting
+participant.synchronizers.reconnect(synchronizerId)
+```
+
+Common causes:
+- Network firewall blocking sequencer ports
+- TLS certificate mismatch
+- Authentication token expired or invalid
+- Sequencer endpoint unreachable
+
+### Verifying Sequencer Connectivity (from Sequencer Console)
+
+```scala
+sequencer.health.status
+// Check for: is_active, connected members count
+```
+
+## Identity Problems
+
+### Party Not Found
+
+If a party ID returns no results:
+
+```scala
+// Search for the party across all known mappings
+participant.parties.list().filter(_.party.uid.id.startsWith("Alice"))
+```
+
+The party may be hosted on a different participant, or the party-to-participant mapping may not have propagated yet. Topology changes take a short time to distribute across the network.
+
+### Multi-Hosting Proposal Status
+
+If a multi-hosting setup isn't taking effect:
+
+```scala
+// Check for pending proposals
+participant.topology.party_to_participant_mappings
+  .list_hosting_proposals(synchronizerId, participant.id)
+```
+
+A pending proposal means the second participant hasn't signed yet. See [Multi-Hosting](/docs-main/appdev/deep-dives/multi-hosting) for the authorization procedure.
+
+## ACS Inspection
+
+When application behavior is unexpected, inspect the active contract set to verify on-ledger state:
+
+```scala
+// Count contracts by template
+val contracts = participant.testing.acs_search(
+  synchronizerId,
+  filterTemplate = "MyModule:MyTemplate"
+)
+println(s"Found ${contracts.size} active contracts")
+
+// Inspect a specific contract's payload
+contracts.headOption.foreach { c =>
+  println(c.contract.contractId)
+  println(c.contract.payload)
+}
+```
+
+### Comparing ACS Across Participants
+
+If two participants see different state for the same party, compare their ACS counts for specific templates. Discrepancies indicate a synchronization issue — check that both participants are connected to the same synchronizer and have the same packages vetted.
+
+## Diagnostic Checklist
+
+When investigating any issue, work through this sequence:
+
+1. **Health** — Is the node running? `participant.health.status`
+2. **Connectivity** — Is the synchronizer connected? `participant.domains.list_connected`
+3. **Packages** — Are required packages uploaded and vetted? `participant.topology.vetted_packages.list()`
+4. **Parties** — Are parties correctly hosted? `participant.parties.hosted()`
+5. **Topology** — Are party-to-participant mappings correct? `participant.topology.party_to_participant_mappings.list(syncId)`
+6. **ACS** — Does the on-ledger state match expectations? `participant.testing.acs_search(...)`
+
+## Next Steps
+
+- [Essential Commands](/docs-main/global-synchronizer/canton-console/essential-commands) — Quick reference for all key commands
+- [Console Overview](/docs-main/global-synchronizer/canton-console/console-overview) — How to access the console in different environments
