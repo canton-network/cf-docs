@@ -1,6 +1,79 @@
 ---
 title: Wallet Integration Guidance
-description: Best practices and guidance for wallet integration.
+description: "Signing Canton Coin transactions from third-party dApps using the Wallet SDK"
 ---
 
-Content coming soon.
+Third-party dApps on Canton Network often need users to sign transactions that the dApp prepares. The Wallet SDK provides the infrastructure for this signing flow, similar to how browser wallet extensions work on other blockchain networks.
+
+## Transaction Signing Flow
+
+{/* COPIED_START source="splice-wallet-kernel:signing-transactions-from-dapps/index.rst" hash="wallet-dapp-signing" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was adapted from existing reviewed documentation.
+**Source:** `splice-wallet-kernel:signing-transactions-from-dapps/index.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+A dApp can integrate with a user's wallet provider through:
+
+- **Embedded wallet** — The dApp embeds the wallet provider directly
+- **Browser extension** — The dApp connects to an external wallet provider via browser extension
+- **External connection** — Other connection mechanisms provided by the wallet provider
+
+The dApp uses the wallet provider's dApp API (defined as an [OpenRPC specification](https://github.com/hyperledger-labs/splice-wallet-kernel/blob/main/api-specs/openrpc-dapp-api.json)) to funnel transactions through to the wallet for signing.
+
+### Preparing Transactions
+
+A dApp typically calls the `prepareExecute` or `prepareExecuteAndWait` endpoint. The wallet provider then prepares, signs, and submits the transaction to the ledger.
+
+You can prepare incoming transactions using the Wallet SDK's transaction preparation functions.
+
+### Displaying Transactions for User Review
+
+Before applying a signature, show the user exactly what they are signing. Once signed, the transaction is considered valid and will be executed. Convert a prepared transaction to a JSON representation for display using the SDK's conversion utilities.
+
+{/* COPIED_END */}
+
+## Integration Patterns
+
+### Canton Coin Transfers
+
+The most common wallet integration is Canton Coin transfers using the Token Standard:
+
+1. **Query holdings** — Use the Token Standard APIs to list the user's Canton Coin holdings
+2. **Prepare transfer** — Build a transfer command that selects UTXOs, specifies the recipient, and calculates change
+3. **Sign and submit** — Present the transaction to the user for signing, then submit to the ledger
+4. **Confirm completion** — Monitor the update stream for the completion event
+
+### Transfer Preapprovals
+
+For automated or high-volume transfers, set up a `TransferPreapproval` contract. This allows senders to transfer Canton Coin to the recipient in a single step without requiring the recipient to accept each individual transfer.
+
+The validator API provides endpoints for managing transfer preapprovals:
+
+- `POST /v0/wallet/transfer-preapproval` — Create a transfer preapproval
+- `POST /v0/wallet/transfer-preapproval/send` — Send Canton Coin using a preapproval
+
+<Note>
+These endpoints are defined in the [wallet-internal.yaml](https://github.com/hyperledger-labs/splice-wallet-kernel/blob/main/api-specs/splice/0.5.8/wallet-internal.yaml) specification. Only endpoints tagged `external` in the [wallet-external.yaml](https://github.com/hyperledger-labs/splice-wallet-kernel/blob/main/api-specs/splice/0.5.8/wallet-external.yaml) specification are considered part of the publicly stable API surface.
+</Note>
+
+### Buying Synchronizer Traffic
+
+Users can purchase synchronizer traffic for any validator using Canton Coin:
+
+1. Create a `BuyTrafficRequest` via `POST /v0/wallet/buy-traffic-requests`
+2. The wallet automation burns the required Canton Coin and increases the validator's traffic budget
+
+## Security Considerations
+
+- Always display the full transaction details to users before they sign
+- Validate that the transaction matches what the dApp claims it will do
+- Use the Token Standard APIs rather than building raw Daml commands
+- Implement proper error handling for rejected or timed-out transactions
+
+## Next Steps
+
+- [Wallet SDK Download](/docs-main/integrations/wallet/sdk-download) — Install the Wallet SDK
+- [Wallet Configuration](/docs-main/integrations/wallet/configuration) — Configure for your environment

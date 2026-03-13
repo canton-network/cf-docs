@@ -1,6 +1,106 @@
 ---
 title: Exchange Integration Guidance
-description: Best practices and guidance for exchange integration.
+description: "Architecture, workflows, and operational guidance for exchange integrations with Canton Network"
 ---
 
-Content coming soon.
+This page covers the architecture, key workflows, and operational considerations for integrating an exchange with Canton Network. The integration enables trading of Canton Coin (CC) and other Canton Network tokens.
+
+## Architecture Overview
+
+{/* COPIED_START source="splice-wallet-kernel:exchange-integration/overview.rst" hash="exchange-architecture" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was adapted from existing reviewed documentation.
+**Source:** `splice-wallet-kernel:exchange-integration/overview.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+An exchange integration consists of:
+
+- **Exchange Validator Node** — A Canton Network validator that hosts the exchange's parties and connects to the Global Synchronizer
+- **Treasury Party** — The exchange's main party for holding Canton Coin and other CN tokens
+- **Canton Integration DB** — An off-ledger database that tracks deposits, withdrawals, balances, and transaction history
+- **Transaction History Ingestion** — A service that monitors the ledger update stream and writes parsed events to the integration DB
+- **Exchange Backend** — Your existing exchange infrastructure, extended with Canton-specific deposit/withdrawal logic
+
+{/* COPIED_END */}
+
+## Key Workflows
+
+### 1-Step Deposit (Canton Coin)
+
+{/* COPIED_START source="splice-wallet-kernel:exchange-integration/workflows.rst" hash="exchange-deposit" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was adapted from existing reviewed documentation.
+**Source:** `splice-wallet-kernel:exchange-integration/workflows.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+Prerequisites:
+
+- The exchange has set up a CC `TransferPreapproval` for its treasury party
+- The exchange has associated the customer's deposit account ID in the integration DB
+
+Flow:
+
+1. Customer retrieves the exchange's treasury party ID and their deposit account ID
+2. Customer initiates a Token Standard transfer of CC to the treasury party, with the deposit account ID in the transfer metadata
+3. The transfer creates a new CC Holding UTXO owned by the treasury party
+4. Transaction History Ingestion parses the update, extracts the deposit amount and account ID, and writes it to the integration DB
+5. The exchange credits the customer's account
+
+{/* COPIED_END */}
+
+### 1-Step Withdrawal (Canton Coin)
+
+The withdrawal flow is the reverse: the exchange's backend prepares a Token Standard transfer from the treasury party to the customer's party, using the customer's `TransferPreapproval`. The transaction is signed and submitted, and the integration DB records the withdrawal.
+
+### Multi-Step Transfers (All CN Tokens)
+
+For tokens beyond Canton Coin, or when transfer preapprovals are not set up, use multi-step transfers. These give the receiver the option to accept or reject the transfer and allow token admins to perform additional checks.
+
+## Operational Considerations
+
+### Transaction History Ingestion
+
+Build a reliable ingestion pipeline that:
+
+- Subscribes to the ledger update stream from your validator's participant
+- Uses the Wallet SDK's transaction history parser to extract structured events
+- Writes parsed events atomically to your integration DB
+- Tracks the last processed offset for crash recovery
+
+### Disaster Recovery
+
+Your exchange integration must handle:
+
+- **Validator node backup and restore** — Follow the standard [backup procedures](/docs-main/global-synchronizer/production-operations/backup-and-recovery)
+- **Hard synchronizer migration** — The Global Synchronizer may undergo major upgrades that create a new synchronizer instance. Your integration must handle the migration by following the [upgrade procedures](/docs-main/global-synchronizer/production-operations/upgrade-procedures).
+
+### Reading from Scan Services
+
+Use the Scan API to read Canton Coin registry data (TransferFactory contracts, reference data, etc.). For BFT reads, use the validator's scan proxy endpoint, which broadcasts requests to multiple SV scan services and returns a consensus result.
+
+## Deployment
+
+### Environment Progression
+
+1. **LocalNet** — Develop and test using cn-quickstart's LocalNet
+2. **DevNet** — Test against the live DevNet network with test Canton Coin
+3. **TestNet** — Pre-production testing with realistic conditions
+4. **MainNet** — Production deployment
+
+### Node Requirements
+
+The exchange validator node must:
+
+- Run a production-grade deployment (Kubernetes recommended)
+- Have sufficient traffic balance for transaction volume
+- Maintain database backups per the [backup procedures](/docs-main/global-synchronizer/production-operations/backup-and-recovery)
+- Use external KMS for key management in production
+
+## Next Steps
+
+- [Exchange SDK Download](/docs-main/integrations/exchanges/sdk-download) — Tools and sample code
+- [Wallet SDK Download](/docs-main/integrations/wallet/sdk-download) — Wallet SDK installation
