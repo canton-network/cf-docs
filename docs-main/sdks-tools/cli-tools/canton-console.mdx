@@ -1,6 +1,121 @@
 ---
-title: Canton Console
-description: The Canton Console for interacting with Canton nodes.
+title: "Canton Console"
+description: "Scala REPL for managing Canton nodes, topology, and debugging operational issues."
 ---
 
-Content coming soon.
+The Canton Console is an interactive Scala REPL that connects to Canton nodes for administration, debugging, and automation. It provides direct access to participant, sequencer, and mediator operations through a typed API.
+
+For full operational documentation, see the [Global Synchronizer section](/docs-main/global-synchronizer/understand/introduction), which covers node setup and management in detail. This page provides a brief orientation to the Console as a development and operations tool.
+
+## Overview
+
+The Console is bundled with the Canton distribution. When you start a Canton process, the Console is available as an interactive shell. You can also connect a remote Console to a running node.
+
+What you can do with the Console:
+
+- **Party management** -- Create parties, list hosted parties, manage party-to-participant mappings
+- **Package management** -- Upload DAR files, inspect deployed packages, check package dependencies
+- **Synchronizer connections** -- Connect participants to synchronizers, list connections, manage reconnection
+- **Topology management** -- View and modify the topology state (key rotations, namespace delegations, party allocations)
+- **Health monitoring** -- Check node status, view active connections, inspect processing queues
+- **Debugging** -- Inspect transaction trees, check conflict states, trace command processing
+
+## Quick Examples
+
+```scala
+// List all parties hosted on this participant
+participant.parties.list()
+
+// Upload a DAR package
+participant.dars.upload("/path/to/my-project.dar")
+
+// Check participant health
+participant.health.status
+
+// List connected synchronizers
+participant.domains.list_connected()
+
+// Allocate a new party
+participant.parties.enable("Alice")
+```
+
+## Node References
+
+The Console organizes operations by node type. Each node type exposes a different set of commands:
+
+**Participant node** -- The most commonly used reference. Handles party management, package uploads, ledger operations, and synchronizer connections.
+
+```scala
+participant.parties.list()
+participant.dars.upload(darPath)
+participant.domains.connect_local(synchronizer)
+```
+
+**Sequencer node** -- Manages message ordering for a synchronizer.
+
+```scala
+sequencer.health.status
+```
+
+**Mediator node** -- Handles transaction confirmation for a synchronizer.
+
+```scala
+mediator.health.status
+```
+
+## Running the Console
+
+### Embedded Console
+
+When you start Canton with a configuration file, the Console starts automatically:
+
+```bash
+canton --config my-config.conf
+```
+
+The Console prompt appears after the node finishes initializing. Node references (`participant`, `sequencer`, `mediator`) are pre-bound based on your configuration.
+
+### Remote Console
+
+You can connect a Console to a node running elsewhere:
+
+```bash
+canton remote-console --host localhost --port 2902
+```
+
+This is useful for managing nodes in staging or production environments without SSH access to the node machine.
+
+## Scripting
+
+The Console supports loading Scala scripts for repeatable operations:
+
+```scala
+// In the Console
+load("/path/to/my-script.sc")
+```
+
+Scripts have access to the same node references and APIs as the interactive Console. Common uses include:
+
+- Automated party setup for test environments
+- Topology configuration for multi-node deployments
+- Health check routines that run periodically
+- Data export scripts for auditing
+
+See [Scala bindings](/docs-main/sdks-tools/language-bindings/scala) for more on writing automation scripts.
+
+## Tab Completion
+
+The Console provides tab completion for discovering available commands. Type a node reference followed by a period, then press Tab:
+
+```
+participant.<TAB>
+  dars    domains    health    id    keys    parties    topology    ...
+```
+
+This is the fastest way to explore the API without referring to documentation.
+
+## Related Pages
+
+- [Global Synchronizer introduction](/docs-main/global-synchronizer/understand/introduction) -- Operational context for Console use
+- [Scala bindings](/docs-main/sdks-tools/language-bindings/scala) -- Writing Scala automation scripts for the Console
+- [Validator roles](/docs-main/global-synchronizer/understand/validator-roles) -- Understanding the nodes you manage through the Console
