@@ -1,0 +1,82 @@
+---
+title: "Featured App Activity Markers"
+description: "How to create FeaturedAppActivityMarker contracts to record app activity and earn rewards"
+---
+
+When your application runs on Canton Network, economically meaningful events can be recorded as **app activity**. The preferred mechanism for this is the `FeaturedAppActivityMarker` contract. SV (Super Validator) automation converts these markers into `AppRewardCoupon` contracts, which translate to Canton Coin (CC) rewards for your application.
+
+## What is a FeaturedAppActivityMarker?
+
+A `FeaturedAppActivityMarker` is a Daml contract that records a specific activity event in your application. It signals to the network that something economically relevant happened -- for example, a real-world asset was locked, a token was minted, or a license was renewed.
+
+SV automation running on the Global Synchronizer picks up these markers and converts them into `AppRewardCoupon` contracts. The coupons are then used to calculate and distribute CC rewards to the app provider.
+
+After [CIP-0078](https://github.com/global-synchronizer-foundation/CIPs), only **featured** apps receive rewards. Unfeatured apps can still create markers, but they will not generate reward coupons.
+
+## When to Create Markers
+
+Create a `FeaturedAppActivityMarker` for events that represent genuine economic activity in your application:
+
+- Locking or unlocking a real-world asset (RWA)
+- Transferring ownership of a tokenized asset
+- Minting or burning tokens
+- Settling a payment or trade
+- Renewing or issuing a license
+
+Do not create markers for routine housekeeping operations (cache refreshes, health checks, internal bookkeeping) that do not represent user-facing economic value.
+
+## How to Create Markers
+
+The `FeaturedAppActivityMarker` contract is specified in [CIP-0047](https://github.com/global-synchronizer-foundation/CIPs). Your Daml code creates the marker as part of the transaction that performs the economically meaningful action.
+
+A single transaction tree can contain **multiple markers**. This is useful for composed transactions where several distinct economic events happen atomically. For example, if a single choice transfers three different assets, you can create three separate markers -- one per asset transfer.
+
+The marker contract includes fields that identify your application, the type of activity, and metadata about the event. Refer to [CIP-0047](https://github.com/global-synchronizer-foundation/CIPs) for the exact contract interface and required fields.
+
+### Markers in cn-quickstart
+
+In [cn-quickstart](https://github.com/digital-asset/cn-quickstart), the license renewal flow creates a `FeaturedAppActivityMarker` when a license is renewed. The marker is created inside the Daml choice that performs the renewal, so it is part of the same transaction and recorded atomically.
+
+## Getting Your App Featured
+
+To receive rewards from your markers, your application must be **featured** on the network.
+
+### On DevNet
+
+You can self-feature your application on DevNet for testing purposes. This lets you verify that your markers are created correctly and that the SV automation converts them into reward coupons, without going through the formal review process.
+
+### On TestNet and MainNet
+
+For TestNet and MainNet, the process is:
+
+1. **Submit your application** via the GSF (Global Synchronizer Foundation) form. You provide details about your application, the types of activities you record, and why they represent genuine economic value.
+2. **Tokenomics committee review** -- The GSF tokenomics committee evaluates your submission. They assess whether the recorded activities reflect real economic value and whether the marker creation is appropriate.
+3. **Approval and featuring** -- If approved, your application is added to the featured apps list. From that point, your markers generate reward coupons.
+
+## Reward Mechanics
+
+The reward calculation depends on the number and type of activity markers your application creates, relative to other featured apps on the network. The exact formula is governed by the tokenomics rules defined by the GSF.
+
+Key points:
+
+- Rewards are paid in CC to the app provider party
+- More activity markers (representing genuine economic events) generally means more rewards
+- The reward pool is shared across all featured apps, so your share depends on your relative activity
+- Gaming the system (creating markers for non-economic events) risks losing featured status
+
+## Testing Markers Locally
+
+On LocalNet (via cn-quickstart), the SV automation that converts markers to coupons is part of the local Splice infrastructure. You can:
+
+1. Trigger an action in your application that creates a marker
+2. Query PQS for active `FeaturedAppActivityMarker` contracts to verify they were created
+3. Wait for the SV automation cycle, then query for `AppRewardCoupon` contracts to confirm conversion
+
+This local testing loop lets you validate your marker creation logic before deploying to DevNet.
+
+## Further Reading
+
+- [Canton Coin and Traffic](/docs-main/appdev/modules/m4-canton-coin) -- How CC rewards relate to traffic and transaction costs
+- [CIP-0047](https://github.com/global-synchronizer-foundation/CIPs) -- The specification for FeaturedAppActivityMarker
+- [CIP-0078](https://github.com/global-synchronizer-foundation/CIPs) -- The change restricting rewards to featured apps
+- [Deployment Progression](/docs-main/appdev/modules/m5-deployment-progression) -- Moving from LocalNet to DevNet to MainNet

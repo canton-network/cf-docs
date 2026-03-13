@@ -1,6 +1,91 @@
 ---
 title: "Upgrade Limitations"
-description: "Known limitations of Daml smart contract upgrades"
+description: "Known limitations and constraints of Daml smart contract upgrades"
 ---
 
-Content coming soon.
+Smart contract upgrades (SCU) in Daml are powerful but have firm boundaries. Understanding these limitations upfront prevents surprises during development and production rollouts.
+
+## Packages Cannot Be Removed
+
+Once you upload a DAR (Daml Archive) package to a validator, it stays there permanently. There is no mechanism to delete or unregister a package. This means:
+
+- Every version of your package that was ever uploaded remains available
+- The validator's package store grows over time
+- You cannot "undo" a package upload
+
+Plan your package uploads carefully, especially on MainNet where every uploaded package persists indefinitely.
+
+## Retroactive Interface Instances Are Not Supported
+
+You cannot add an interface instance to an existing template in a later package version. If template `Asset` in package version 1 does not implement interface `Transferable`, you cannot make it implement `Transferable` in version 2.
+
+Interface instances must be declared in the same package version where the template is first defined, or in the package where the interface is defined (if the template is in scope). You cannot retroactively bridge a template to a new interface.
+
+## Interface and Exception Definitions Are Not Upgradeable
+
+Once you define an interface in a package, that definition is fixed. You cannot:
+
+- Add new methods to an existing interface
+- Remove methods from an existing interface
+- Change method signatures
+
+If you need a different interface shape, define a new interface with a new name (e.g., `TransferableV2`).
+
+<Note>
+Daml exceptions are deprecated and being removed from the language. Do not design upgrade strategies around exception definitions. See the [Splice 0.4.0 / Canton 3.3 release notes](https://blog.digitalasset.com/developers/release-notes/splice-0.4.0-canton-3.3) for details.
+</Note>
+
+## Template Removal Is Not Possible
+
+You cannot remove a template from a package in a later version. If version 1 defines templates `Asset` and `LegacyAsset`, version 2 must still include both.
+
+### Deprecating a Template
+
+To effectively retire a template without removing it, add a precondition that always fails:
+
+```haskell
+template LegacyAsset
+  with
+    owner : Party
+    value : Decimal
+  where
+    signatory owner
+    ensure False  -- No new contracts can be created
+```
+
+Setting `ensure False` prevents any new `LegacyAsset` contracts from being created. Existing active contracts of this template remain valid and can still be exercised or archived, but no new ones can appear.
+
+## Removing Fields, Choices, or Variant Constructors Is Not Allowed
+
+SCU compatibility rules prohibit removing:
+
+- **Fields from a template** -- You can add optional fields (with defaults) but cannot remove existing ones
+- **Choices from a template** -- Once a choice exists, it must remain in all future versions
+- **Constructors from a variant type** -- Variant types can gain new constructors but not lose existing ones
+
+These rules ensure that contracts created under an older package version remain valid and exercisable under the new version. If a validator still holds contracts from version 1, those contracts must be interpretable by the version 2 package.
+
+## Changing Field Types Is Restricted
+
+You cannot change the type of an existing field. If `amount` is a `Decimal` in version 1, it must remain a `Decimal` in version 2. Type changes are breaking modifications that would make existing contracts unreadable.
+
+## What You Can Do
+
+For contrast, these modifications are allowed across package versions:
+
+- Add new templates
+- Add new optional fields to existing templates (with default values)
+- Add new choices to existing templates
+- Add new variant constructors
+- Add new interface implementations (on new templates only)
+- Change choice bodies (the implementation logic)
+
+## Planning Around Limitations
+
+When you encounter a limitation, the typical workaround is to create a new package with new template names for the breaking change, and provide a migration choice on the old template that archives it and creates the new one. This is explicit and requires active cooperation from contract stakeholders, which is a feature -- stakeholders always consent to changes that affect their contracts.
+
+## Further Reading
+
+- [Upgrade Compatibility](/docs-main/appdev/modules/m6-upgrade-compatibility) -- Full compatibility rules for SCU
+- [Package Naming](/docs-main/appdev/modules/m6-package-naming) -- Naming conventions that account for breaking changes
+- [Smart Contract Upgrades in Production](/docs-main/appdev/modules/m7-smart-contract-upgrades) -- Operational considerations for rollouts
