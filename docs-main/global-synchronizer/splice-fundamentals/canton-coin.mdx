@@ -1,6 +1,62 @@
 ---
-title: Canton Coin
-description: Understanding Amulet, Canton Coin, and conversion rates on the Global Synchronizer.
+title: "Canton Coin"
+description: "Understanding Amulet, Canton Coin, and conversion rates on the Global Synchronizer"
 ---
 
-Content coming soon.
+Canton Coin (CC) is the utility token of the Global Synchronizer. Validators, application providers, and Super Validators earn CC as rewards for activity on the network. CC is the currency you use to pay synchronizer fees (traffic) that keep your validator connected and operational.
+
+The underlying code and logic implementing Canton Coin is called **Amulet**. You will encounter this term in Daml package names (e.g., `splice-amulet`), API endpoints, and contract templates. "Amulet" and "Canton Coin" refer to the same thing -- Amulet is the code name, Canton Coin is the product name.
+
+## How CC works
+
+CC operates as a utility token with a few properties relevant to operators:
+
+- **Traffic purchase** -- You burn CC to buy traffic credits for your validator. Traffic credits are consumed whenever your validator sends messages to the Global Synchronizer (confirmation requests, topology transactions, ACS commitments, etc.). Without sufficient traffic, the sequencer will deny your submissions.
+- **Public transactions** -- All CC transactions are public to the DSO (the collective of Super Validators). The Super Validators have visibility into CC balances, transfers, and reward activity.
+- **Holding fees** -- Each CC coin contract (UTXO) accrues a fixed holding fee per unit of time, independent of the coin's amount. Holding fees incentivize merging small "dust" coins to reduce storage usage across Super Validator infrastructure.
+- **Round-based minting** -- CC is minted through a round-based cycle. Validators, application providers, and Super Validators earn CC by creating activity records during each round.
+
+## USD-to-CC conversion rate
+
+The price of CC in USD is determined by Super Validators through median-based voting. Each SV operator publishes their desired conversion rate on-ledger, and the system uses the median of these values. The current rate is recorded on `OpenMiningRound` contracts and is available through the Scan API or Scan UI.
+
+This conversion rate affects how much CC you burn when purchasing traffic. Traffic is priced in USD per megabyte, and the CC cost is calculated using the current conversion rate at the time of purchase.
+
+## Holding fees after CIP-0078
+
+{/* COPIED_START source="splice:docs/src/background/tokenomics/overview_tokenomics.rst" */}
+The holding fee is a fixed fee, per separate coin contract (UTXO) per unit of time, that is independent of the coin amount. It promotes merging of CC to reduce network storage use by incentivizing merging or removal of dust coins. Holding fees are not charged when transferring coins but only explicitly on expired coin contracts via the `Amulet_Expire` choice. A coin contract (UTXO) may be expired by the Super Validators once its accrued holding fees are greater than its coin value. This makes accounting for holding fees simple as the value of the coin contract is constant and independent of the holding fee.
+{/* COPIED_END */}
+
+[CIP-0078](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0078/cip-0078.md) eliminated almost all fees for CC transfers and locks. Unfeatured applications no longer receive any reward from transfers.
+
+## Buying traffic with CC
+
+{/* COPIED_START source="splice:docs/src/background/tokenomics/traffic_tokenomics.rst" */}
+A validator increases its traffic credit balance by burning CC at the current USD-to-Canton-Coin conversion rate (a USD/MB price). When needed, the operator of a validator (or a third-party service provider) burns CC in exchange for traffic credits.
+{/* COPIED_END */}
+
+Traffic credits are consumed for all submissions to the Global Synchronizer, based on the size of messages and their delivery cost. Only the sending validator is charged. Traffic is consumed even if a confirmation request fails due to contention on consuming contracts.
+
+To avoid running out of traffic, enable automatic traffic purchases (auto-top-up). Configuration instructions are available in the Kubernetes and Docker Compose deployment guides. Alternatively, application code can use `AmuletRules_BuyMemberTraffic` to increase the traffic balance programmatically.
+
+<Warning>
+Traffic accounting is per validator -- all parties hosted on the same validator share the same traffic balance. If your traffic balance drops to zero, the sequencer will deny all submissions from your validator until the balance is replenished.
+</Warning>
+
+## Key contracts
+
+Several on-ledger contracts are central to CC operations:
+
+- **AmuletRules** -- Stores fee schedules and configuration parameters, including traffic pricing and holding fees
+- **OpenMiningRound** -- Stores the CC price and fees as of the round's opening, used as the reference rate for transfers and traffic purchases during that round
+- **MemberTraffic** -- Tracks each validator's traffic state, updated atomically when CC is spent for traffic
+
+## Traffic parameters
+
+Super Validators set the synchronizer traffic parameters through on-ledger governance voting. The current values are recorded on the `AmuletRules` contract and can be queried through the Scan API. The key parameters are:
+
+- **baseRateTrafficLimits** -- Defines a free tier of traffic. Validators can use up to a burst amount within a time window without any CC cost. The free balance recovers after a period of inactivity.
+- **extraTrafficPrice** -- The price of traffic beyond the free tier, in USD per MB. Charged in CC at the current exchange rate.
+- **readVsWriteScalingFactor** -- Additional traffic charged (in basis points) for delivering messages to each recipient, beyond the base cost of ordering and persisting.
+- **minTopupAmount** -- The minimum traffic amount for each top-up purchase, ensuring Super Validators can amortize the processing cost of top-up operations.
