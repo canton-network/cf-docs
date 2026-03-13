@@ -1,6 +1,92 @@
 ---
-title: Sandbox
-description: Using the Daml Sandbox for local development.
+title: "Sandbox"
+description: "Run a local Canton node for rapid development and testing with dpm sandbox."
 ---
 
-Content coming soon.
+The Sandbox is a single-participant Canton node that runs locally on your machine. Start it with `dpm sandbox` for quick development cycles without the overhead of Docker or a full network.
+
+## Starting the Sandbox
+
+```bash
+dpm sandbox
+```
+
+This starts a Canton participant node with an in-memory ledger. The Ledger API becomes available at `localhost:6865` by default. The process runs in the foreground -- press Ctrl+C to stop it.
+
+The Sandbox uses the SDK version from your project's `daml.yaml`, so make sure you have run `dpm install` first.
+
+## What the Sandbox Provides
+
+- A single Canton participant node
+- Ledger API (gRPC) endpoint for command submission and transaction streaming
+- JSON API endpoint for HTTP-based access
+- Admin API for party allocation and DAR uploads
+- In-memory storage (state is lost when the Sandbox stops)
+
+The Sandbox does not include a synchronizer, wallet services, or Canton Coin. For those features, use [LocalNet](/docs-main/sdks-tools/development-tools/localnet).
+
+## Common Development Workflows
+
+### Upload and Test Contracts
+
+After compiling your Daml code, upload the DAR to the running Sandbox and interact with it:
+
+```bash
+# In terminal 1: start the sandbox
+dpm sandbox
+
+# In terminal 2: upload the compiled DAR
+# (using the gRPC Admin API or Canton Console)
+```
+
+### Connect a Backend
+
+Point your Java or TypeScript backend at the Sandbox's Ledger API endpoint. The Sandbox supports the same gRPC and JSON API interfaces as production validators, so your backend code does not need to change.
+
+```
+# Ledger API (gRPC): localhost:6865
+# JSON API: available on a separate port (check sandbox output)
+```
+
+### Allocate Parties
+
+Use the Admin API or Canton Console to create test parties:
+
+```bash
+# Via Canton Console (if using the interactive console)
+participant.parties.enable("Alice")
+participant.parties.enable("Bob")
+```
+
+## When to Use Sandbox vs LocalNet
+
+| Scenario | Sandbox | LocalNet |
+|----------|---------|----------|
+| Testing contract logic with Ledger API | Yes | Yes |
+| Testing codegen serialization | Yes | Yes |
+| Multi-validator workflows | No | Yes |
+| Canton Coin and payments | No | Yes |
+| Wallet integration | No | Yes |
+| Splice API interactions | No | Yes |
+| Quick iteration, no Docker | Yes | No |
+
+**General rule**: Use the Sandbox for fast feedback during contract development and single-participant integration testing. Switch to LocalNet when your tests need multiple validators, payments, or Splice services.
+
+## When to Use Sandbox vs Daml Script
+
+Daml Script (`dpm test`) and the Sandbox serve different testing needs:
+
+- **Daml Script** runs test scenarios in-process without a ledger. It is the fastest way to test contract logic, authorization rules, and multi-party workflows. Use it for unit testing your Daml model.
+
+- **The Sandbox** runs a real Canton node. Use it when you need to test your application's integration with the Ledger API -- verifying that codegen-generated types serialize correctly, that your backend connects and authenticates properly, and that JSON API requests produce expected results.
+
+## Stopping the Sandbox
+
+Press Ctrl+C in the terminal where the Sandbox is running. Since the Sandbox uses in-memory storage, all data is lost on shutdown. This is by design -- each test run starts with a clean ledger.
+
+## Related Pages
+
+- [dpm command reference](/docs-main/sdks-tools/cli-tools/dpm) -- `dpm sandbox` options
+- [LocalNet](/docs-main/sdks-tools/development-tools/localnet) -- Full multi-validator environment for integration testing
+- [Daml Script](/docs-main/sdks-tools/cli-tools/daml-script) -- In-process testing without a running node
+- [Testing Daml Contracts](/docs-main/appdev/modules/m3-testing) -- Complete testing guide

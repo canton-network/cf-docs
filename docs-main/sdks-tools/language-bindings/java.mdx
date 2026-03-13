@@ -1,6 +1,145 @@
 ---
-title: Java
-description: Java language bindings for Canton.
+title: "Java Bindings"
+description: "Generate and use type-safe Java classes from your Daml contracts for Canton backend development."
 ---
 
-Content coming soon.
+The Java bindings produce type-safe classes from your compiled Daml packages. These classes let you create contracts, exercise choices, and process ledger events in Java without manually constructing gRPC messages or JSON payloads.
+
+## Code Generation
+
+Generate Java bindings from a compiled DAR file:
+
+```bash
+dpm codegen-java .daml/dist/my-project.dar -o generated-java
+```
+
+This produces Java source files organized by Daml module. Each Daml template becomes a Java class, and each choice becomes a nested class with typed fields.
+
+## Generated Class Structure
+
+For a Daml template:
+
+```haskell
+template License
+  with
+    provider : Party
+    user : Party
+    description : Text
+    expiresAt : Time
+  where
+    signatory provider
+    observer user
+
+    choice Renew : ContractId License
+      with newExpiry : Time
+      controller user
+      do create this with expiresAt = newExpiry
+```
+
+The code generator produces:
+
+- **`License` class** -- Represents the template payload with fields `provider`, `user`, `description`, and `expiresAt`
+- **`License.ContractId` class** -- A typed contract identifier for `License` instances
+- **`License.Renew` class** -- Represents the `Renew` choice argument with a `newExpiry` field
+- **Serialization methods** -- `toValue()` and `fromValue()` for converting between Java objects and the Ledger API's value representation
+
+## gRPC Client Setup
+
+The generated classes work with the gRPC Ledger API client. Connect to a validator's participant node:
+
+```java
+ManagedChannel channel = ManagedChannelBuilder
+    .forAddress("localhost", 2901)
+    .usePlaintext()  // Use TLS in production
+    .build();
+
+CommandServiceGrpc.CommandServiceFutureStub commandService =
+    CommandServiceGrpc.newFutureStub(channel);
+```
+
+### Submitting Commands
+
+Create a contract using the generated class:
+
+```java
+License license = new License(
+    providerParty,
+    userParty,
+    "Premium License",
+    Instant.parse("2025-12-31T00:00:00Z")
+);
+
+// Submit as a create command via the Ledger API
+```
+
+Exercise a choice:
+
+```java
+License.Renew renewArg = new License.Renew(
+    Instant.parse("2026-12-31T00:00:00Z")
+);
+
+// Submit as an exercise command with the contract ID and choice argument
+```
+
+### Processing Events
+
+When reading transaction events from the Ledger API stream, use `fromValue()` to deserialize contract payloads:
+
+```java
+CreatedEvent event = ...;
+License license = License.fromValue(event.getArguments());
+```
+
+## Maven / Gradle Dependency
+
+Add the generated code to your build. In the [cn-quickstart](https://github.com/digital-asset/cn-quickstart) project, Gradle handles code generation and compilation as part of the build process.
+
+For a Gradle project, add the generated source directory:
+
+```kotlin
+sourceSets {
+    main {
+        java {
+            srcDir("generated-java")
+        }
+    }
+}
+```
+
+For Maven, add the generated directory as a source folder in your `pom.xml`:
+
+```xml
+<build>
+  <plugins>
+    <plugin>
+      <groupId>org.codehaus.mojo</groupId>
+      <artifactId>build-helper-maven-plugin</artifactId>
+      <executions>
+        <execution>
+          <id>add-source</id>
+          <phase>generate-sources</phase>
+          <goals><goal>add-source</goal></goals>
+          <configuration>
+            <sources>
+              <source>generated-java</source>
+            </sources>
+          </configuration>
+        </execution>
+      </executions>
+    </plugin>
+  </plugins>
+</build>
+```
+
+You will also need the Daml Java bindings library as a dependency. Check the [Canton 3.x documentation](https://docs.digitalasset.com) for the current Maven coordinates and version.
+
+## Reference Documentation
+
+The full Javadoc for the Daml Java bindings library is available in the [Canton 3.x SDK documentation](https://docs.digitalasset.com). The generated classes follow the same patterns documented there.
+
+## Related Pages
+
+- [dpm codegen-java reference](/docs-main/sdks-tools/cli-tools/dpm) -- Command options and flags
+- [TypeScript bindings](/docs-main/sdks-tools/language-bindings/typescript) -- Alternative bindings for TypeScript/JavaScript
+- [Backend development](/docs-main/appdev/modules/m4-backend-dev) -- Patterns for building Canton backends in Java
