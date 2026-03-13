@@ -3,7 +3,9 @@ title: "Upgrade Deployment"
 description: "Deploying Daml package upgrades across environments with coordination, rollback, and migration strategies"
 ---
 
-Deploying an upgrade means getting v2 DAR files onto all relevant validators and transitioning workflows from v1 to v2. The distributed nature of Canton means you can't just flip a switch — you need to coordinate across organizations while keeping existing workflows running.
+Deploying an upgrade means getting newer version packages onto all relevant validators and transitioning workflows from the current version to the new version. The distributed nature of Canton means you can't just flip a switch — you need to coordinate across organizations while keeping existing workflows running.
+
+In the following discussion, the current version is `v1` and the new version is `v2`.
 
 ## Deployment Sequence
 
@@ -13,11 +15,11 @@ The deployment follows the asynchronous rollout model described in the [Overview
 
 2. **Distribute v2 DAR to counterparties** — Share the v2 DAR file with app users and other organizations. They need to upload it to their validators before v2 workflows can span multiple parties.
 
-3. **Update backends to use v2** — Point your backend's Ledger API client at the v2 package. New contracts are now created with v2. Existing v1 contracts remain usable.
+3. **Update backends to use v2** — Point your backend's Ledger API client at the v2 package. New contracts are now created with v2. Existing v1 contracts remain usable.  Note that the backend may need to work with both the v1 and v2 packages to minimize any downtime.
 
 4. **Migrate existing contracts (if needed)** — For contracts that need v2 data, run migration automation that exercises upgrade choices to archive v1 contracts and create v2 replacements.
 
-5. **Set a switch-over date** — Publish a target date for all parties to complete the transition. After this date, v1 workflows may be decommissioned.
+5. **Set a switch-over date** — Publish a target date for all parties to complete the transition. After this date, v1 workflows may be decommissioned by unvetting the v1 packages.
 
 6. **Unvet v1 (optional)** — Once all v1 contracts have been archived or migrated, unvet the v1 package to finalize the upgrade.
 
@@ -33,7 +35,7 @@ Reviewers: Skip this section. Remove markers after final approval.
 
 Uncoordinated transitions to v2 workflows can cause command submission failures, resulting in workflows getting stuck. Common scenarios include:
 
-- **Daml model version mismatch** — A command referencing v2 workflows fails if a stakeholder's participant node lacks the required v2 Daml models.
+- **Daml model version mismatch** — A command referencing v2 workflows fails if a stakeholder's participant node lacks the required v2 Daml models.  In this situation, the v1 version will be used if it remains vetted.
 - **Explicit disclosure** — When a v2 contract is used in explicit disclosure, a command referencing it fails if the submitting party's participant node lacks the required v2 Daml models. This occurs even if all stakeholders of the disclosed contract have uploaded v2.
 
 {/* COPIED_END */}
@@ -66,7 +68,7 @@ The preferred approach is to handle versioning and upgrades directly in Daml rat
 
 {/* COPIED_END */}
 
-For backward-incompatible changes that require new templates:
+For backward-incompatible changes that require old v1 contracts to upgrade to v2 templates:
 
 1. Add a consuming `Upgrade` choice to the v1 template that archives the old contract and creates an instance of the new template
 2. Where necessary, provide reference data (such as default values) for the `Upgrade` choice via additional choice arguments
@@ -84,7 +86,7 @@ Reviewers: Skip this section. Remove markers after final approval.
 
 ### Rollback by unvetting
 
-For upgrades that do not modify the types of existing templates and choices, roll back by unvetting the v2 DAR package.
+For upgrades that do not modify the types of existing templates and choices, roll back by unvetting the v2 DAR package.  Use this approach if no contracts have been created with v2.
 
 ### Rollback by roll-forward
 
