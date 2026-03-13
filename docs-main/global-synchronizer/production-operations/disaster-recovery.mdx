@@ -66,7 +66,7 @@ In the case of a catastrophic failure of the SV node, the amulets owned by the S
 You need the backup of your SV node identities (see the backup procedures documentation). From that backup, extract the participant identities:
 
 ```bash
-jq '.identities.participant' backup.json > dump.json
+jq '.identities.participant' backup_state.json > dump_identities.json
 ```
 
 ### Recovery steps
@@ -75,7 +75,7 @@ jq '.identities.participant' backup.json > dump.json
 
 2. Deploy a standalone validator node following the standard validator installation steps. When doing so:
    - Set `validatorPartyHint` to the name you chose when creating the SV identity.
-   - Restore the validator with the identities from the backup, using the `dump.json` file prepared above.
+   - Restore the validator with the identities from the backup, using the `dump_identities.json` file prepared above.
 
 3. Log in to the wallet at `https://wallet.validator.YOUR_HOSTNAME` with the validator user account. Confirm that the wallet balance matches what the original SV owned.
 
@@ -137,14 +137,14 @@ Both the participant and sequencer must still be running for this call to succee
 Merge the identities dump with the data dump:
 
 ```bash
-id=$(cat identities.json)
-echo "$id" "$data" | jq -s add > dump.json
+id=$(cat dump_identities.json)
+echo "$id" "$data" | jq -s add > dump_identities.json
 ```
 
 Copy the merged dump to the SV app PVC:
 
 ```bash
-kubectl cp dump.json sv/<sv_app_pod_name>:/domain-upgrade-dump/domain_migration_dump.json
+kubectl cp dump_identities.json sv/<sv_app_pod_name>:/domain-upgrade-dump/domain_migration_dump.json
 ```
 
 ### Migrating the data

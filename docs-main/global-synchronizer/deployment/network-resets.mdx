@@ -16,7 +16,7 @@ Before the reset, back up information that you will need to restore or verify af
 - **DSO configuration** -- Save the current DSO state so you can verify that SV weights and package versions are preserved after the reset:
 
 ```bash
-curl -sSL --fail-with-body https://YOUR_SCAN_URL/api/scan/v0/dso > backup.json
+curl -sSL --fail-with-body https://YOUR_SCAN_URL/api/scan/v0/dso > backup_state.json
 ```
 
 - **Amulet price** -- Note your desired amulet price from the SV UI.
@@ -26,7 +26,7 @@ curl -sSL --fail-with-body https://YOUR_SCAN_URL/api/scan/v0/dso > backup.json
 - **Featured apps** -- Save the list of featured apps:
 
 ```bash
-curl -sSL --fail-with-body https://YOUR_SCAN_URL/api/scan/v0/featured-apps > featured.json
+curl -sSL --fail-with-body https://YOUR_SCAN_URL/api/scan/v0/featured-apps > backup_featured.json
 ```
 
 Featured app rights are lost during the reset and need to be recreated manually.
@@ -34,7 +34,7 @@ Featured app rights are lost during the reset and need to be recreated manually.
 ## Decommission your old node
 
 1. Uninstall all Helm charts.
-2. Delete all PVCs, Docker volumes, and databases (including databases in Amazon AWS, GCP CloudSQL, or similar cloud services).
+2. Delete all Persistent Volume Claims (PVCs), Docker volumes, and databases (including databases in Amazon AWS, GCP CloudSQL, or similar cloud services).
 
 ## Deploy your new node
 
@@ -52,7 +52,7 @@ sequencerPublicUrl: "https://sequencer-0.sv.YOUR_HOSTNAME"
 ```
 
 2. Set `skipInitialization` to `false` in `sv-values.yaml`.
-3. Set `initialAmuletPrice` to your desired price in `sv-values.yaml` (from your pre-reset backup).
+3. Set `initialAmuletPrice` to your desired price in `sv-values.yaml` (from your pre-reset `backup_state.json`).
 4. Set `chainIdSuffix` to the new value in `cometbft-values.yaml` and `info-values.yaml`. This usually increments by 1 on a network reset, but confirm with the other SV operators.
 5. (Founding node only) Set all Helm chart values that affect network parameters such that the verification steps pass.
 6. Install all Helm charts.
@@ -71,7 +71,7 @@ curl -sSL --fail-with-body https://YOUR_SCAN_URL/api/scan/v0/dso > current_state
 Verify that SV reward weights are unchanged:
 
 ```bash
-jq '.dso_rules.contract.payload.svs.[] | [.[1].name, .[1].svRewardWeight]' backup.json > weights_backup.json
+jq '.dso_rules.contract.payload.svs.[] | [.[1].name, .[1].svRewardWeight]' backup_state.json > weights_backup.json
 jq '.dso_rules.contract.payload.svs.[] | [.[1].name, .[1].svRewardWeight]' current_state.json > weights_current.json
 diff -C2 weights_backup.json weights_current.json
 ```
@@ -79,7 +79,7 @@ diff -C2 weights_backup.json weights_current.json
 Verify that amulet rules are preserved (the diff should only show changes to DSO and synchronizer namespaces):
 
 ```bash
-jq '.amulet_rules.contract.payload' backup.json > amulet_backup.json
+jq '.amulet_rules.contract.payload' backup_state.json > amulet_backup.json
 jq '.amulet_rules.contract.payload' current_state.json > amulet_current.json
 diff amulet_backup.json amulet_current.json
 ```
