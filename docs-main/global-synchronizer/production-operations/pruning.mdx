@@ -1,0 +1,54 @@
+---
+title: "Pruning"
+description: "Sequencer and CometBFT pruning configuration for Global Synchronizer nodes"
+---
+
+Pruning removes old data from the sequencer and CometBFT to keep storage usage within reasonable bounds. Without pruning, storage grows indefinitely and can degrade performance or cause disk exhaustion. Pruning also supports compliance requirements by limiting the retention window for operational data.
+
+Participant pruning can also be configured but is not currently recommended for Super Validator nodes.
+
+## Sequencer pruning
+
+{/* COPIED_START source="splice:docs/src/sv_operator/sv_pruning.rst" */}
+Sequencer pruning is enabled through the following Helm values:
+{/* COPIED_END */}
+
+```yaml
+domain:
+  sequencerPruningConfig:
+    # Enable or disable sequencer pruning
+    enabled: true
+    # The pruning interval is the time between two consecutive prunings.
+    pruningInterval: "1 hour"
+    # The retention period is the time for which the sequencer will retain the data.
+    retentionPeriod: "30 days"
+```
+
+{/* COPIED_START source="splice:docs/src/sv_operator/sv_pruning.rst" */}
+The recommended settings are a `pruningInterval` of `1 hour` and a `retentionPeriod` of `30 days`.
+{/* COPIED_END */}
+
+<Warning>
+A validator that falls more than 30 days behind (the default retention period) will be unable to catch up on the synchronizer, because the sequencer will have pruned the data it needs. Set the retention period with this constraint in mind.
+</Warning>
+
+When sequencer pruning is enabled, you must keep historical backups for each pruning window. The time difference between two historical backups must be smaller than the `retentionPeriod`. See the [Backup and Recovery](/docs-main/global-synchronizer/production-operations/backup-and-recovery) page for full backup requirements.
+
+## CometBFT pruning
+
+{/* COPIED_START source="splice:docs/src/sv_operator/sv_pruning.rst" */}
+CometBFT pruning is enabled by default. Pruning is defined as the number of blocks to keep. Older blocks are pruned.
+{/* COPIED_END */}
+
+The number of blocks to keep is configured under the `node` Helm values key for CometBFT:
+
+```yaml
+node:
+  # Number of blocks to keep, used for pruning. 0 -> keep all blocks.
+  # Number of blocks to keep for 30 days with an upper bound of 7k blocks/h.
+  retainBlocks: 5040000
+```
+
+The default value of `5040000` is calculated to retain approximately 30 days of data assuming an upper bound of 7,000 blocks per hour.
+
+As with the sequencer, CometBFT historical backups must be kept such that the difference between block heights at backup time is smaller than the configured `retainBlocks` value. A backup frequency of every 2 weeks is recommended.
