@@ -1,6 +1,274 @@
 ---
 title: "PQS SQL Reference"
-description: "SQL reference for the Participant Query Store"
+description: "Complete SQL API reference for the Participant Query Store (PQS), including table functions, offset management, maintenance operations, and JSONB indexing."
 ---
 
-Content coming soon.
+The PQS SQL API is provisioned directly in the PostgreSQL database. Data consumers interact with it through SQL -- not through the PQS process itself.
+
+PQS data can be joined across contract tables to build projections (for example, joining holdings with account templates). The temporal offset model and historical event functions (`creates`, `archives`, `exercises`) make PQS well-suited for audit trails and compliance queries.
+
+## Offset model
+
+A validator models time using an **offset**, a unique integer index into its local ledger. Offsets are ordered and represent the causal order of transactions. Due to privacy filtering, the sequence of offsets on a given validator usually contains gaps.
+
+Offsets are specific to a single validator and are not consistent across peers, even for common transactions. Each node allocates its own offsets based on its permissioned view.
+
+In addition to offsets, PQS exposes **ledger time** (approximate wall-clock time preserving causal ordering) and **transaction IDs** (opaque identifiers common across all validators). Use offsets for causal analysis, transaction IDs for cross-node correlation, and ledger time for temporal queries.
+
+## Offset management
+
+{/* COPIED_START - source: sql-api.rst */}
+
+These functions control the temporal perspective of the ledger:
+
+- `set_latest(offset)` -- nominates the offset of the latest data to include in observing the ledger. If `NULL` it uses the latest available. The actual offset to be used is returned. If the supplied offset is beyond what is available, an error occurs.
+- `validate_offset_exists(offset)` -- validates that the datastore has a complete history up to and including the offset provided. Returns an error if the nominated offset is not available (too old, or too new).
+- `set_oldest(offset)` -- nominates the offset of the oldest events to include in query scope. If `NULL` then it uses the oldest available. Function returns the actual offset used. If the supplied offset is beyond what is available, an error occurs.
+- `nearest_offset(time)` -- a helper function to determine the offset of a given time (or interval prior to now).
+
+{/* COPIED_END */}
+
+Call `set_oldest` and `set_latest` before running queries in a session to pin the temporal window, or pass offset arguments directly to table functions (see below).
+
+## Table functions for contracts and exercises
+
+{/* COPIED_START - source: sql-api.rst */}
+
+The following table functions allow access to the ledger and are used directly in queries. They are designed to be used in a similar manner to tables or views:
+
+- `active(name, [at_offset])` -- active instances of the target template/interface views that existed at the time of the latest offset
+- `creates(name, [from_offset], [to_offset])` -- create events of the target template/interface views that occurred between the oldest and latest offset
+- `archives(name, [from_offset], [to_offset])` -- archive events of the target template/interface views that occurred between the oldest and latest offset
+- `exercises(name, [from_offset], [to_offset])` -- exercise events of the target choice that occurred between the oldest and latest offset
+
+The `name` identifier can be used with or without the package specified:
+
+- Fully qualified: `<package>:<module>:<template|interface|choice>`
+- Partially qualified: `<module>:<template|interface|choice>` or `<template|interface|choice>` (if unambiguous)
+
+{/* COPIED_END */}
+
+<Warning>
+Partially qualified identifiers fail if the result is ambiguous.
+</Warning>
+
+These functions accept optional offset parameters as an alternative to calling `set_oldest`/`set_latest` beforehand. The following two approaches are equivalent:
+
+```sql
+-- Implicit: set scope first, then query
+select set_oldest('from_offset');
+select set_latest('to_offset');
+select * from creates('package:My.Module:Template');
+```
+
+```sql
+-- Explicit: inline the entire context in a single statement
+select *
+from creates('package:My.Module:Template', 'from_offset', 'to_offset');
+```
+
+## Lookup functions
+
+{/* COPIED_START - source: sql-api.rst */}
+
+- `lookup_contract(contract_id)` is a mechanism to retrieve contract data without needing to know its Daml qualified name. The function returns both contract and all associated interface view projections, distinguishable by the `payload_type` column.
+- `lookup_exercises(contract_id)` is a mechanism to retrieve choice exercise data without needing to know the Daml qualified name; knowing the contract ID is sufficient.
+
+{/* COPIED_END */}
+
+## Transactions view
+
+The `transactions` view provides transaction metadata not directly exposed by the table functions above.
+
+| Column | Type | Description |
+|---|---|---|
+| `ix` | `bigint` | Internal primary key of the ledger transaction |
+| `offset` | `bigint` | Ledger offset |
+| `transaction_id` | `text` | Transaction ID assigned by the ledger |
+| `effective_at` | `timestamp with time zone` | Ledger effective time |
+| `workflow_id` | `text` | Workflow ID used in command submission |
+| `trace_context` | `trace_context` | Ledger API trace context (user-defined type containing `trace_parent` and `trace_state`) |
+| `external_transaction_hash` | `bytea` | Hash of the transaction submitted by the external party |
+
+Join through the `*_at_ix` column to enrich contract or exercise data with transaction metadata:
+
+```sql
+select c.contract_id, t.transaction_id, (t.trace_context).trace_parent
+from creates('package:My.Module:Template') c
+inner join transactions t on c.created_at_ix = t.ix
+where c.create_event_id = (42::bigint, 0);
+```
+
+## Summary functions
+
+{/* COPIED_START - source: sql-api.rst */}
+
+Summary functions provide an overview of the ledger data available within the nominated offset range:
+
+- `summary_transients(from_offset, to_offset)` -- the number of transients per Daml fully qualified name within the offset range
+- `summary_updates(from_offset, to_offset)` -- summary of create and archive counts per Daml fully qualified name within the offset range
+
+The following functions retrieve event counts per `template_fqn`:
+
+- `summary_active(at_offset)`
+- `summary_creates(from_offset, to_offset)`
+- `summary_archives(from_offset, to_offset)`
+- `summary_exercises(from_offset, to_offset)`
+
+{/* COPIED_END */}
+
+## Contract columns
+
+{/* COPIED_START - source: sql-api.rst */}
+
+All functions returning contract data return the following columns:
+
+| Column | Type | Description |
+|---|---|---|
+| `template_fqn` | `text` | Fully-qualified name of the template or interface |
+| `payload_type` | `'template'` or `'interface'` | Type of contract payload |
+| `create_event_pk` | `bigint` | Reference to contract creation event primary key |
+| `create_event_id` | `(bigint, integer)` | Orderable addressing type `(offset, node ID)` of the creation event |
+| `created_at_ix` | `bigint` | Ordinal index of the transaction containing the creation event |
+| `created_at_offset` | `bigint` | Ledger offset of the transaction containing the creation event |
+| `created_effective_at` | `timestamp with time zone` | Ledger effective time of the transaction containing the creation event |
+| `archive_event_pk` | `bigint` | Reference to contract archival event primary key |
+| `archive_event_id` | `(bigint, integer)` | Orderable addressing type `(offset, node ID)` of the archival event |
+| `archived_at_ix` | `bigint` | Ordinal index of the transaction containing the archival event |
+| `archived_at_offset` | `bigint` | Ledger offset of the transaction containing the archival event |
+| `archived_effective_at` | `timestamp with time zone` | Ledger effective time of the transaction containing the archival event |
+| `life_ix` | `int8range` | Contract's lifespan expressed in ordinal indexes |
+| `contract_id` | `text` | Ledger-assigned contract ID |
+| `payload` | `jsonb` | JSONB representation of contract data |
+| `metadata` | `bytea` | Explicit contract disclosure metadata |
+| `package_name` | `text` | Daml package name |
+| `package_version` | `text` | Daml package version |
+| `package_id` | `text` | Daml package ID |
+| `redaction_id` | `text` | Redaction process reference |
+| `signatories` | `text[]` | Parties consenting to the creation of the contract |
+| `observers` | `text[]` | Additional stakeholders whom the contract is visible to |
+| `witnesses` | `text[]` | Parties that are notified of this event |
+| `divulged_only` | `boolean` | Whether the contract was only divulged (`true`) or properly disclosed (`false`) |
+
+{/* COPIED_END */}
+
+## Exercise columns
+
+{/* COPIED_START - source: sql-api.rst */}
+
+All functions returning exercise data return the following columns:
+
+| Column | Type | Description |
+|---|---|---|
+| `template_fqn` | `text` | Fully-qualified name of the template where choice is defined |
+| `choice_fqn` | `text` | Fully-qualified name of the choice |
+| `choice` | `text` | Choice name |
+| `consuming` | `boolean` | Whether the choice is consuming |
+| `exercise_event_pk` | `bigint` | Reference to choice exercise event primary key |
+| `exercise_event_id` | `(bigint, integer)` | Orderable addressing type `(offset, node ID)` of the exercise event |
+| `exercised_at_ix` | `bigint` | Ordinal index of the transaction containing the exercise event |
+| `exercised_at_offset` | `bigint` | Ledger offset of the transaction containing the exercise event |
+| `exercised_effective_at` | `timestamp with time zone` | Ledger effective time of the transaction containing the exercise event |
+| `contract_id` | `text` | Ledger-assigned contract ID |
+| `argument` | `jsonb` | JSONB representation of the choice argument type |
+| `result` | `jsonb` | JSONB representation of the choice return type |
+| `package_name` | `text` | Daml package name |
+| `package_version` | `text` | Daml package version |
+| `package_id` | `text` | Daml package ID |
+| `redaction_id` | `text` | Redaction process reference |
+| `signatories` | `text[]` | Parties that consented to the creation of the contract that choice was exercised on |
+| `observers` | `text[]` | Additional stakeholders made aware of the creation of the contract that choice was exercised on |
+| `controllers` | `text[]` | Parties that collectively exercised this choice |
+| `witnesses` | `text[]` | Parties that are notified of this event |
+| `last_descendant_node_id` | `integer` | Upper boundary of node IDs for events in the same transaction resulting from this exercise |
+
+{/* COPIED_END */}
+
+## JSONB indexing
+
+PQS metadata columns are indexed by default, but queries on `payload` contents (the JSONB column) need custom indexes for acceptable performance. Use the `create_index_for_contract` helper to create expression indexes on the internal contract tables:
+
+```sql
+call create_index_for_contract(
+  'token_quantity',         -- index name suffix
+  'Token',                  -- template name
+  '((payload->>''quantity'')::decimal)',  -- expression
+  'btree'                   -- index type (btree, hash, gin, gist)
+);
+```
+
+After creating the index, run `VACUUM ANALYZE` on the underlying table so PostgreSQL collects statistics:
+
+```sql
+-- Determine the internal table number for your template
+select __contract_tpe4name('Token');  -- returns e.g. 14
+
+-- Then analyze
+vacuum analyze __contracts_14;
+```
+
+For equality-only lookups on text fields, a `hash` index is more compact:
+
+```sql
+call create_index_for_contract(
+  'token_wallet_holder',
+  'Token',
+  '(payload->''wallet''->>''holder'')',
+  'hash'
+);
+```
+
+<Note>
+When two indexed fields have a statistical dependency (for example, `wallet.holder` determines `wallet.label`), PostgreSQL may severely underestimate result cardinality. Create [extended statistics](https://www.postgresql.org/docs/current/sql-createstatistics.html) on the dependent expressions to correct this.
+</Note>
+
+## Maintenance functions
+
+### Pruning
+
+`prune_to_offset(offset)` permanently removes all transactions up to and including the given offset. Active contracts are preserved under a new offset; all other transaction data (archived contracts, exercise events) is deleted.
+
+```sql
+select * from prune_to_offset('<offset>');
+```
+
+Combine with `nearest_offset()` to prune by timestamp or interval:
+
+```sql
+select * from prune_to_offset(nearest_offset('2024-01-30T00:00:00Z'::timestamptz));
+select * from prune_to_offset(nearest_offset(interval '30 days'));
+```
+
+<Warning>
+Pruning is irreversible. The target offset must be within the bounds of the contiguous history and cannot coincide with the latest consistent checkpoint.
+</Warning>
+
+### Redaction
+
+Redaction removes sensitive data from specific contracts or exercises while preserving the event metadata.
+
+- `redact_contract(contract_id, redaction_id)` -- nullifies `payload` and `contract_key` on an archived contract (and its interface views). Returns the number of affected entries.
+- `redact_exercise(event_id, redaction_id)` -- nullifies `argument` and `result` on an exercise event.
+
+```sql
+select redact_contract('<contract_id>', '<redaction_id>');
+select redact_exercise('<event_id>', '<redaction_id>');
+```
+
+You cannot redact an active contract, and a contract that has already been redacted cannot be redacted again. There are no such restrictions on exercise events. After redaction, the `redaction_id` column is populated in query results and the data columns return `NULL`.
+
+### Resetting
+
+`reset_to_offset(offset)` removes all transactions **after** the given offset, allowing PQS to resume processing from that point. A dry-run validation is available first:
+
+```sql
+-- Dry run: inspect scope of the proposed reset
+select * from validate_reset_offset('<offset>');
+
+-- Destructive: execute the reset
+select * from reset_to_offset('<offset>');
+```
+
+<Warning>
+Resetting is destructive and permanent. Stop PQS and all consuming applications before resetting. Coordinate with your validator operator, especially in disaster-recovery scenarios.
+</Warning>

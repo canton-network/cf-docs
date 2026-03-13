@@ -1,6 +1,312 @@
 ---
 title: "Configuration Reference"
-description: "Configuration reference for Canton applications"
+description: "Reference for Canton configuration files, DPM project settings, storage, command line arguments, and environment variables"
 ---
 
-Content coming soon.
+Canton uses [HOCON](https://github.com/lightbend/config/blob/master/HOCON.md) (Human-Optimized Config Object Notation) for its static configuration files. Static configuration covers settings that must be known at process startup, such as storage backends, API ports, and node identities. Dynamic settings like party registration and synchronizer connections are managed at runtime through the [console](/docs-main/global-synchronizer/reference/canton-console-reference) or administration APIs.
+
+## HOCON Format Basics
+
+{/* COPIED_START - source: conf_file.rst */}
+Canton configuration files are written in HOCON format with some extensions:
+
+- Durations use a `<length><unit>` format. Valid units are `ms`, `s`, `m`, `h`, `d` (milliseconds, seconds, minutes, hours, days). Durations must be non-negative.
+{/* COPIED_END */}
+
+HOCON supports JSON-like object syntax with relaxed quoting, nested key paths (`a.b.c = value`), and `//` or `#` comments. Repeated keys are merged, with the last definition winning.
+
+### File Includes
+
+{/* COPIED_START - source: conf_file.rst */}
+Configuration files can be nested and combined together using the `include required` directive:
+
+```hocon
+canton {
+    synchronizers {
+        include required(file("synchronizer1.conf"))
+    }
+}
+```
+
+The `required` keyword triggers an error if the included file does not exist; without it, missing files are silently ignored. The `file` keyword instructs the parser to interpret its argument as a file name rather than a URL or classpath resource.
+{/* COPIED_END */}
+
+### Environment Variable Substitution
+
+HOCON substitutes environment variables using `${VAR_NAME}` syntax. Two forms are available:
+
+- `${VAR_NAME}` -- required. The process fails to start if the variable is not set.
+- `${?VAR_NAME}` -- optional. The key is only set when the variable exists.
+
+```hocon
+properties = {
+    serverName = "localhost"
+    serverName = ${?POSTGRES_HOST}  # overrides only if POSTGRES_HOST is set
+    user = ${POSTGRES_USER}          # required, fails if unset
+    password = ${POSTGRES_PASSWORD}  # required, fails if unset
+}
+```
+
+<Warning>
+Never hardcode credentials in configuration files. Use environment variable substitution for passwords and other secrets.
+</Warning>
+
+## Canton Configuration Structure
+
+{/* COPIED_START - source: conf_file.rst */}
+Canton can run any number of nodes in the same process. The root configuration defines instances of sequencers, mediators, and participant nodes together with general process parameters.
+
+```hocon
+canton {
+  sequencers {
+    sequencer1 {
+      storage.type = memory
+      public-api.port = 5001
+      admin-api.port = 5002
+      sequencer.type = BFT
+    }
+  }
+
+  mediators {
+    mediator1 {
+      storage.type = memory
+      admin-api.port = 5202
+    }
+  }
+
+  participants {
+    participant1 {
+      storage.type = memory
+      admin-api.port = 5012
+      ledger-api.port = 5011
+      http-ledger-api.port = 5013
+    }
+    participant2 {
+      storage.type = memory
+      admin-api.port = 5022
+      ledger-api.port = 5021
+      http-ledger-api.port = 5023
+    }
+  }
+}
+```
+{/* COPIED_END */}
+
+CamelCase Scala names map to lowercase-with-dashes in config files (e.g., `synchronizerParameters` becomes `synchronizer-parameters`).
+
+### Init Configuration
+
+Some values apply only during the first initialization of a node and cannot be changed afterward. These live under the `init` section:
+
+```hocon
+participant1 {
+  init {
+    ledger-api.max-deduplication-duration = 1 minute
+    identity.node-identifier.type = random
+  }
+}
+```
+
+## Command Line Arguments
+
+{/* COPIED_START - source: command_line.rst */}
+Canton requires at least one configuration file. Provide configuration files with `-c` or `--config`:
+
+```bash
+bin/canton --config conf_filename -c conf_filename2
+```
+
+This merges `conf_filename2` into `conf_filename`. If several files assign values to the same key, the last value wins.
+
+You can also override individual parameters on the command line using `-C`:
+
+```bash
+bin/canton --config conf_filename -C canton.participants.participant1.storage.type=memory
+```
+{/* COPIED_END */}
+
+### Run Modes
+
+{/* COPIED_START - source: command_line.rst */}
+- **Interactive console** (default) -- starts a REPL for operating and inspecting the Canton process. Useful for development and expert use.
+- **Daemon** -- `bin/canton daemon --config ...` starts Canton without a console. For server deployments. Administer with a remote console.
+- **Sandbox** -- `bin/canton sandbox --dar Main.dar` runs a lightweight ledger for local development.
+- **Headless script** -- `bin/canton run <script-path> --config ...` executes a script then exits. Useful for testing and CI.
+{/* COPIED_END */}
+
+### JVM Arguments
+
+{/* COPIED_START - source: command_line.rst */}
+The `bin/canton` wrapper supports additional JVM options through the `JAVA_OPTS` environment variable or the `-D` flag:
+
+```bash
+JAVA_OPTS="-Xmx2G" ./bin/canton --config ...
+```
+{/* COPIED_END */}
+
+## Storage Configuration
+
+Canton supports three storage backends:
+
+- **Memory** -- for quick tests; data is lost on restart
+- **H2** -- embedded database, suitable for local development
+- **PostgreSQL** -- the only supported option for production
+
+### PostgreSQL Example
+
+{/* COPIED_START - source: postgres.rst */}
+```hocon
+canton {
+  participants.participant1.storage {
+    type = postgres
+    config {
+      dataSourceClassName = "org.postgresql.ds.PGSimpleDataSource"
+      properties = {
+        serverName = "localhost"
+        databaseName = "participant1_db"
+        portNumber = "5432"
+        user = "participant1"
+        password = "pgpass"
+      }
+    }
+  }
+}
+```
+{/* COPIED_END */}
+
+Each Canton node requires its own database. Create databases with UTF-8 encoding:
+
+```sql
+CREATE DATABASE participant1_db ENCODING = 'UTF8';
+CREATE USER participant1_user WITH PASSWORD 'change-me';
+GRANT ALL PRIVILEGES ON DATABASE participant1_db TO participant1_user;
+```
+
+Canton uses [HikariCP](https://github.com/brettwooldridge/HikariCP) for connection pooling. You can tune pool properties (`maximumPoolSize`, `connectionTimeout`, `idleTimeout`, etc.) under `storage.config`.
+
+### Configuration Mixin Pattern
+
+When running multiple nodes against the same database server, define shared storage settings in a mixin and reference them per node:
+
+{/* COPIED_START - source: conf_file.rst */}
+```hocon
+_shared {
+    storage {
+        type = postgres
+        config {
+            dataSourceClass = "org.postgresql.ds.PGSimpleDataSource"
+            properties = {
+                serverName = "localhost"
+                serverName = ${?POSTGRES_HOST}
+                portNumber = "5432"
+                portNumber = ${?POSTGRES_PORT}
+                user = ${POSTGRES_USER}
+                password = ${POSTGRES_PASSWORD}
+            }
+        }
+        parameters {
+            max-connections = ${?POSTGRES_NUM_CONNECTIONS}
+            migrate-and-start = false
+            fail-fast-on-startup = true
+        }
+    }
+}
+
+canton {
+    participants {
+        participant1 {
+            storage = ${_shared.storage}
+            storage.config.properties.databaseName = "participant1_db"
+        }
+    }
+}
+```
+{/* COPIED_END */}
+
+## Key Parameters
+
+### Fail-Fast Mode
+
+{/* COPIED_START - source: conf_file.rst */}
+By default, Canton fails to start if it cannot access an external dependency such as the database. This is preferable during development, but can cause problems in production when services start in parallel. To disable the fail-fast behavior for a node:
+
+```hocon
+canton.participants.participant1.storage.parameters.fail-fast-on-startup = "no"
+```
+{/* COPIED_END */}
+
+<Note>
+Use this with care -- disabling fail-fast can cause indefinite, noisy waits if the database is unreachable.
+</Note>
+
+### Protocol Version
+
+{/* COPIED_START - source: parameters.rst */}
+Set a minimum protocol version to prevent a participant from connecting to a synchronizer running a version lower than expected:
+
+```hocon
+canton.participants.participant1.parameters.minimum-protocol-version = 33
+```
+{/* COPIED_END */}
+
+### Early Access Protocol Versions
+
+Alpha and beta protocol versions are for non-production environments only. Enabling them requires setting `non-standard-config = yes` at the `canton.parameters` level and the corresponding version support flag on the participant:
+
+```hocon
+canton.parameters {
+  non-standard-config = yes
+  alpha-version-support = yes
+}
+
+canton.participants.participant1.parameters = {
+  alpha-version-support = yes
+}
+```
+
+## DPM Project Configuration
+
+DPM uses YAML files for project configuration, separate from Canton's HOCON node configuration.
+
+### daml.yaml (Single Package)
+
+Each Daml package has a `daml.yaml` specifying the SDK version, package name, source directory, and dependencies.
+
+### multi-package.yaml (Multi-Package Projects)
+
+{/* COPIED_START - source: configuration.rst */}
+The `multi-package.yaml` file informs Daml Build and the IDE of projects containing multiple connected Daml packages:
+
+```yaml
+packages:
+  - ./path/to/package/a
+  - ./path/to/package/b
+```
+{/* COPIED_END */}
+
+### DPM Environment Variables
+
+{/* COPIED_START - source: configuration.rst */}
+Both `daml.yaml` and `multi-package.yaml` support environment variable interpolation on all string fields using `${MY_ENVIRONMENT_VARIABLE}` syntax. Escape with a backslash: `\${NOT_INTERPOLATED}`.
+
+```yaml
+sdk-version: ${SDK_VERSION}
+name: ${PROJECT_NAME}_test
+source: daml
+version: ${PROJECT_VERSION}
+dependencies:
+  ${DEPENDENCY_DIRECTORY}/my-dependency-1.0.0.dar
+  ${DAML_FINANCE_DAR}
+```
+{/* COPIED_END */}
+
+### DPM Global Configuration
+
+DPM reads global settings from `${DPM_HOME}/dpm-config.yaml`. Environment variables take precedence over file values:
+
+- `DPM_REGISTRY` -- override the Docker registry for SDKs and components
+- `DPM_REGISTRY_AUTH` -- override the registry auth file
+- `DPM_INSECURE_REGISTRY` -- allow pulling from HTTP registries
+- `DPM_LOG_LEVEL` -- set log level (`debug`, `info`, `warn`, `error`)
+- `DPM_SDK_VERSION` -- override the SDK version globally across all projects
+- `DAML_PACKAGE` -- run `dpm` commands in a package context without changing directories
