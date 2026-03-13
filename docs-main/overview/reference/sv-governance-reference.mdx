@@ -1,116 +1,103 @@
 ---
 title: "SV Governance Reference"
-description: "Governance model, voting mechanics, and governance actions for the Decentralized Synchronizer Operator (DSO)"
+description: "Reference documentation for Super Validator governance mechanics"
 ---
 
-The Global Synchronizer is governed by its Super Validators (SVs) acting collectively as the Decentralized Synchronizer Operator (DSO). Governance decisions are made through on-chain voting using Daml contracts defined in the `splice-dso-governance` package.
+The Global Synchronizer is governed by its Super Validators (SVs) through on-chain mechanisms that tolerate Byzantine faults. This page provides technical detail on the DSO party, confirmation protocols, voting mechanics, and the Daml packages that implement governance.
 
-## DSO Governance Model
+## The DSO party
 
-The DSO is a decentralized party hosted across all SV nodes. It uses a Byzantine Fault Tolerant (BFT) confirmation model where actions require approval from a supermajority of SVs. The system tolerates up to `f` faulty or dishonest nodes, where `f = floor((n - 1) / 3)` and `n` is the total number of SVs.
+All governance actions on the Global Synchronizer are executed through a single decentralized Daml party called the **DSO party** (Decentralized Synchronizer Operations). The DSO party is:
 
-The required number of votes for any governance action is:
+- **Hosted on all SV nodes** -- every onboarded Super Validator's participant hosts the DSO party
+- **Configured with a 2/3 confirmation threshold** -- specifically, `t = ceiling(numSvNodes * 2.0 / 3.0)`
 
-```
-requiredNumVotes = ceiling((numSVs + f + 1) / 2)
-```
+This means the system tolerates up to `f` faulty or dishonest SV nodes, where `f = numSvNodes - t`. For a network with 16 Super Validators, the threshold `t` is 11, tolerating up to 5 Byzantine failures.
 
-This threshold ensures two properties: **integrity** (a dishonest minority cannot push through an action) and **availability** (up to `f` abstaining SVs cannot block progress).
+The DSO party acts as the "provider" for Canton Coin (CC), the Canton Name Service (CNS), and the governance application itself. All code outside the governance packages is written under the assumption that the DSO party behaves honestly -- the governance layer is where decentralization concerns are handled, so that application logic can be written without BFT complexity.
 
-## Governance Roles
+## On-ledger confirmations
 
-Any SV can propose a governance action by creating a `VoteRequest` on-chain. All other SVs can then cast votes (accept or reject) on that request. Once the vote threshold is met, the DSO delegate executes the action.
+For governance actions that depend on off-ledger input (such as conversion rate votes or configuration changes), the system requires **explicit on-ledger confirmations** from `t` SV nodes before the action takes effect. This prevents any single SV from unilaterally executing a governance action.
 
-There are two execution paths for actions that require confirmation:
+The confirmation flow works as follows:
 
-- **Voted actions** -- Any SV creates a vote request; other SVs respond with accept/reject votes. The action executes when `requiredNumVotes` accept votes are collected.
-- **Automated confirmations** -- For routine operational actions (like advancing mining rounds), each SV node automatically creates a confirmation when its preconditions are met. Once enough confirmations accumulate, execution proceeds without manual voting.
+1. An SV node's automation creates a confirmation contract representing its vote on the proposed action.
+2. Other SV nodes' automation independently creates their own confirmation contracts for the same action.
+3. Once `t` confirmations exist, the action is executed by the DSO party.
 
-## Voting Mechanics
+Three types of quorums operate at different levels:
 
-Vote requests are represented as `VoteRequest` Daml contracts on the DSO ledger. Each request specifies the proposed `ActionRequiringConfirmation`, a `voteBefore` deadline, and an optional `targetEffectiveAt` timestamp for scheduled actions.
+- **Daml transaction confirmation** -- more than 1/3 of onboarded SVs must confirm each Daml transaction submitted by the DSO party. This is the standard Canton confirmation protocol.
+- **Synchronizer topology administration** -- more than 2/3 of onboarded SVs must agree on topology changes made on behalf of the DSO party (once activated).
+- **Governance workflows** -- more than 2/3 of onboarded SVs must confirm governance actions such as configuration changes and membership decisions. On DevNet, this threshold is typically reduced to more than 1/2 for operational convenience.
 
-A vote resolves as:
+## Median-based voting
 
-- **Accepted** -- At least `requiredNumVotes` SVs vote to accept. The action executes on-chain.
-- **Rejected** -- At least `requiredNumVotes` SVs vote to reject. The request is archived.
-- **Expired** -- The `voteBefore` deadline passes without enough votes in either direction.
+Agreement on continuous parameters -- such as the USD-to-CC conversion rate, traffic pricing, and fee schedules -- uses a **median-based voting** mechanism rather than a simple majority vote.
 
-For vote requests with a `targetEffectiveAt` date, the action executes only after both the threshold is reached and the effective time has passed. This allows SVs to schedule changes in advance, such as parameter updates or upgrade activations.
+Each SV operator publishes their desired value for a parameter on-ledger. The DSO party's automation computes the median of all published values and uses that as the effective parameter. This approach has several properties:
 
-SV operators manage votes through the **Governance tab** in the SV web UI, where they can create new vote requests, review pending proposals, cast their votes, and track outcomes. The UI groups vote requests into categories such as "Action Needed", "In Progress", "Planned", "Executed", and "Rejected" for easier tracking.
+- No single SV can move the parameter by more than a small amount.
+- The effective value reflects the aggregate preferences of approximately 2/3 of the SV operators.
+- Outlier values (whether from misconfiguration or malicious intent) are naturally dampened.
 
-## Types of Governance Actions
+For example, when advancing open mining rounds, the `amuletPrice` parameter is set to the median of all SV operators' votes on the dollar-to-CC conversion rate.
 
-Governance actions fall into three categories based on the Daml data types that represent them: `ARC_DsoRules`, `ARC_AmuletRules`, and `ARC_AnsEntryContext`.
+## The splice-dso-governance package
 
-### DSO Rules Actions (`ARC_DsoRules`)
+The `splice-dso-governance` Daml package implements the governance logic. It contains:
 
-- **Add SV** (`SRARC_AddSv`) -- Onboard a new Super Validator to the DSO
-- **Offboard SV** (`SRARC_OffboardSv`) -- Remove a Super Validator from the DSO
-- **Grant featured app right** (`SRARC_GrantFeaturedAppRight`) -- Approve an application provider for featured app rewards
-- **Revoke featured app right** (`SRARC_RevokeFeaturedAppRight`) -- Remove featured app status from a provider
-- **Update SV reward weight** (`SRARC_UpdateSvRewardWeight`) -- Change the reward weight assigned to an SV
-- **Set DSO config** (`SRARC_SetConfig`) -- Modify the `DsoRulesConfig`, which controls network-level parameters
+- **DsoRules** -- the central governance contract that defines the rules for all DSO party actions. There is exactly one active `DsoRules` contract at any time.
+- **Confirmation contracts** -- templates for the on-ledger confirmation workflow described above.
+- **Vote request and vote templates** -- the mechanics for proposing and voting on governance actions through the SV web UI.
+- **Automation triggers** -- Daml choices that the SV backend automation exercises to maintain network operations (advancing rounds, expiring rewards, processing confirmations).
 
-### Amulet Rules Actions (`ARC_AmuletRules`)
+The package also implements decentralized CC and CNS automation -- the recurring operations that the DSO party must perform to keep the tokenomics and name service running.
 
-- **Set amulet config** (`CRARC_SetConfig`) -- Change the `AmuletConfig`, which governs Canton Coin economics including fee schedules, issuance curves, and traffic pricing
+## Decentralized automation
 
-### Canton Name Service Actions (`ARC_AnsEntryContext`)
+All SV nodes run identical automation code that attempts to exercise the governance choices required by the DSO party. This redundancy ensures that actions are taken in a timely fashion even if some SV nodes are offline.
 
-- **Collect initial entry payment** (`ANSRARC_CollectInitialEntryPayment`) -- Automated collection of payment for a new CNS entry
-- **Reject entry payment** (`ANSRARC_RejectEntryInitialPayment`) -- Automated rejection of an invalid CNS entry payment
+The automation covers:
 
-### Automated Actions
+- **Round advancement** -- advancing mining rounds on schedule, with the conversion rate set to the median of SV votes
+- **Reward issuance and expiry** -- creating SV reward coupons for open rounds and expiring unclaimed rewards
+- **Traffic parameter updates** -- applying changes to traffic pricing and read/write scaling factors
+- **Configuration schedule management** -- adding, removing, and updating future configuration entries based on governance votes
 
-Some actions do not require manual voting. SV nodes create confirmations automatically when preconditions are met:
+For choices that do not require off-ledger input, any SV's automation can execute them directly. For choices that require off-ledger input, the automation creates confirmation contracts that accumulate until the threshold is reached.
 
-- **Start issuing round** (`CRARC_MiningRound_StartIssuing`) -- Transition a mining round to issuing once reward summaries are computed
-- **Archive closed mining round** (`CRARC_MiningRound_Archive`) -- Clean up fully expired mining rounds
-- **Confirm SV onboarding** (`SRARC_ConfirmSvOnboarding`) -- Confirm that a party can become an SV after identity verification
+The automation exercises choices in a timely fashion so that the skew between the target time and actual execution time is bounded on average.
 
-## Parameter Governance
+## Governance transaction types
 
-SVs govern network parameters through voted config changes. Key configurable parameters include:
+The following governance actions are available through the SV web UI under the Governance tab:
 
-- **Traffic pricing** (`extraTrafficPrice`) -- The USD cost per MB of synchronizer traffic. Per [CIP-0042](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0042/cip-0042.md), this should be calibrated so a standard Canton Coin transfer costs 1 USD.
-- **Read vs. write scaling factor** (`readVsWriteScalingFactor`) -- The ratio of read traffic cost relative to write traffic cost, reflecting the lower infrastructure cost of message delivery compared to ordering and persistence.
-- **CC-USD conversion rate** -- Each SV publishes their desired dollar-to-CC rate on-chain. The DSO uses the **median** of all published values, making the rate resistant to manipulation by any single SV.
-- **Round duration** -- The length of mining rounds (default: 10 minutes), which determines how frequently rewards are calculated and issued.
-- **SV reward weights** -- Each SV has a configurable reward weight that determines their share of SV reward distributions. Changes require a governance vote and should also be reflected in the [GSF configs repository](https://github.com/global-synchronizer-foundation/configs).
+- **Update SV Reward Weight** -- change the reward weight for a specific Super Validator. The initiating SV selects the target SV and specifies the new weight.
+- **Add/Remove Future Amulet Config Schedule** -- schedule changes to CC configuration parameters (fee schedules, traffic pricing, tokenomics parameters) to take effect at a future time.
+- **Feature/Unfeature App Provider** -- grant or revoke featured status for an application provider party, which affects their reward eligibility.
+- **Withdraw Validator License** -- revoke a validator's license through governance vote.
+- **Onboard/Offboard SV** -- add or remove a Super Validator from the network.
 
-The median-based approach for the CC-USD rate means that every SV operator publishes their preferred value, and the system automatically selects the median. This produces predictable, aggregate-preference pricing that represents roughly two-thirds of SV operators' positions.
+Each of these actions follows the same pattern: one SV creates a vote request, other SVs review and cast their votes through their respective web UIs, and the action executes automatically once the required quorum is reached.
 
-Traffic parameters require periodic recalibration. Actual traffic costs change depending on factors like the number of SVs in the DSO and the Canton protocol version, so SVs are expected to measure current costs and adjust parameters through governance votes accordingly.
+## SV identity layers
 
-## CIP Process
+Each Super Validator has multiple identities operating at different layers of the stack. These identities are decoupled so that they can be rotated independently:
 
-Formal changes to Canton Network standards and protocols go through the Canton Improvement Proposal (CIP) process. CIPs cover technical specifications, governance procedures, and informational guidelines. SVs vote on CIP adoption through the same on-chain governance mechanism described above.
+- **SV identity** -- used for authentication during the onboarding process, before the SV is part of the network. Approved by a quorum of established SVs.
+- **Participant identity** -- determines the SV's `svPartyId`, used for governance flows and receiving rewards. Participant identities cannot generally be reused on the same Global Synchronizer. Loss of a participant namespace means loss of control over associated coin balances.
+- **CometBFT node identity** -- used within the CometBFT consensus network that operates the Global Synchronizer. CometBFT quorums (more than 2/3 of SVs) are required for advancing the blockchain and changing the validator set. Reusing CometBFT identities is not recommended due to potential transient network instability.
 
-For a full overview of the CIP lifecycle and how to participate, see [What Are CIPs?](/docs-main/overview/reference/what-are-cips). The CIP repository is maintained at [github.com/global-synchronizer-foundation/cips](https://github.com/global-synchronizer-foundation/cips).
+Compromise of any identity constitutes an SV failure and reduces the network's fault tolerance buffer until the issue is resolved (through key rotation, re-onboarding, or offboarding).
 
-## Global Synchronizer Foundation
+## DSO party requirements
 
-The [Global Synchronizer Foundation (GSF)](https://sync.global) is an independent, non-profit body under the Linux Foundation created to support the governance and growth of the Global Synchronizer. The GSF:
+The governance system is designed so that CC and CNS users who trust that no more than `f` SVs are dishonest can rely on three guarantees:
 
-- Operates its own SV node and participates in governance votes on behalf of its members
-- Provides transparency into Super Validator governance decisions and network operations
-- Coordinates upgrade schedules and maintenance across the SV operator group
-- Manages the Splice codebase governance and oversees featured application review
+- **Valid transactions** -- every transaction confirmed by the DSO party is valid according to the Daml ledger model
+- **Timely automation** -- actions the DSO party must take are executed promptly
+- **Predictable configuration** -- fees and parameters reflect the aggregate preferences of approximately 2/3 of SV operators
 
-The GSF does not have unilateral control over the network. Its SV node carries the same voting weight as any other SV, and all governance actions still require the standard BFT vote threshold to pass. The current list of Super Validators is maintained by the GSF.
-
-## On-Chain Governance Architecture
-
-All governance state lives on-chain as Daml contracts. The `DsoRules` contract holds the authoritative record of DSO membership (`svs` map), the DSO delegate, and the current configuration. The `AmuletRules` contract holds the Canton Coin configuration schedule. Vote requests, confirmations, and SV state contracts are all ledger-visible, making governance auditable by any party with access to the Scan app.
-
-The decentralized party model means that the DSO party itself has a confirmation threshold of `ceiling(numSVs * 2.0 / 3.0)`. Every transaction signed by the DSO party must be confirmed by at least that many SV participant nodes, enforcing BFT at the Canton protocol layer independent of the application-level voting logic.
-
-## BFT Guarantees
-
-The combination of on-chain voting and decentralized automation provides three guarantees for network participants who trust that no more than `f` SVs are dishonest:
-
-- **Valid transactions** -- Every DSO-confirmed transaction satisfies Daml's [ledger validity model](https://docs.daml.com/concepts/ledger-model/ledger-integrity.html#valid-ledgers)
-- **Timely automation** -- Routine operational actions (round advancement, reward issuance) execute without delay
-- **Predictable parameters** -- Fees and configuration values reflect the aggregate preferences of at least two-thirds of SV operators
+The full set of assumptions about DSO party behavior (such as which choices require on-ledger confirmations and which constraints apply to their arguments) is specified in the `splice-amulet` package source code and documented in the [Daml code architecture](/docs-main/overview/reference/sv-governance-reference#the-splice-dso-governance-package) section of the Splice documentation.

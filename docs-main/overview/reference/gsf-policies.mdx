@@ -1,92 +1,127 @@
 ---
 title: "GSF Policies"
-description: "Global Synchronizer Foundation policy areas, enforcement mechanisms, and the relationship between off-chain governance and on-chain execution"
+description: "Global Synchronizer Foundation policies and governance framework"
 ---
 
-The Global Synchronizer Foundation (GSF), now operating as the [Canton Foundation](https://canton.foundation), is a non-profit body under the Linux Foundation that governs and grows the Global Synchronizer. It provides organizational structure, processes, and oversight complementing the on-chain governance executed by Super Validators (SVs).
+The [Global Synchronizer Foundation](https://canton.foundation) (GSF) is an independent non-profit organization created in partnership with the Linux Foundation. It governs the Global Synchronizer, the decentralized interoperability and synchronization infrastructure of the Canton Network.
 
-## Role of the Foundation
+## Purpose and role
 
-The foundation serves three functions:
+The GSF provides transparent governance over the Global Synchronizer and works to grow the ecosystem around it. Its responsibilities include:
 
-- **Governance facilitation** -- It defines and maintains the rules and procedures under which the Global Synchronizer operates, from validator onboarding requirements to tokenomics parameters.
-- **Ecosystem growth** -- It manages outreach, membership programs, and working groups that bring new participants into the network. Premier members include major financial institutions and technology companies.
-- **Operational transparency** -- It publishes network status information, maintains public documentation across [DevNet](https://docs.dev.sync.global/), [TestNet](https://docs.test.sync.global/), and [MainNet](https://docs.sync.global/) environments, and hosts mailing lists for community discussion at [lists.sync.global](https://lists.sync.global).
+- Defining and maintaining the governance framework for the Global Synchronizer
+- Providing transparency into Super Validator operations and governance votes
+- Operating a Super Validator node and participating in governance on behalf of its members
+- Coordinating upgrade schedules and network policies across the Super Validator set
+- Supporting ecosystem development through outreach, developer programs, and a Protocol Development Fund
 
-The foundation also operates its own SV node and participates in governance votes on behalf of its members. That node carries the same voting weight as any other SV -- it has no special authority within the on-chain governance system.
+The GSF does not control the network unilaterally. Governance decisions require consensus among the Super Validators through on-chain voting mechanisms. The GSF participates in these votes as one Super Validator among many.
 
-## Policy Areas
+## Membership
 
-GSF policies cover the following areas:
+The GSF offers three membership tiers:
 
-- **Validator onboarding** -- Requirements and procedures for new validators joining the Global Synchronizer. Each validator must be sponsored by an existing SV, which generates a one-time onboarding secret (valid for 48 hours). The foundation sets the eligibility criteria and operational expectations for new validators.
-- **SV membership** -- Criteria for becoming a Super Validator, including identity verification, infrastructure requirements, and the governance vote needed for onboarding. Adding a new SV requires a supermajority vote. Offboarding an SV requires unanimous agreement from all current SVs.
-- **Network parameters** -- Policies governing synchronizer configuration such as traffic pricing (`extraTrafficPrice`), read-vs-write scaling factors, round duration, and reconciliation intervals. These values directly affect the cost and performance of the network.
-- **Tokenomics parameters** -- Policies around Canton Coin issuance curves, fee schedules, the CC-USD conversion rate, and reward weight distributions. The foundation's [tokenomics committee](https://lists.sync.global/g/tokenomics/topics) discusses proposed changes before they go to an SV vote.
-- **Featured applications** -- The process for granting or revoking featured app status, which determines whether an application provider earns enhanced minting rewards. The foundation reviews submissions and tracks them through the tokenomics committee.
-- **Software upgrades** -- Policies for coordinating Daml package upgrades and Splice releases across the SV operator group, including the governance votes required to activate new package configurations on the network.
+- **Premier** ($150,000/year) -- includes a seat on the Board of Directors, delegate positions on Board Committees, participation in Board strategy days, and premium placement in marketing materials
+- **General** ($5,000--$30,000/year, scaled by organization size) -- includes participation in Member Committees and blog posting access
+- **Associate** (no cost) -- restricted to government agencies, regulatory bodies, nonprofits, and academic institutions; requires Board approval
 
-## On-Chain Enforcement via the DSO Party
+Any member can join the GSF's Member Committees. You can apply for membership through the [GSF membership page](https://canton.foundation/membership).
 
-The technical backbone of GSF policy enforcement is the DSO party -- a decentralized Daml party hosted across all SV nodes. The DSO party operates with a Byzantine Fault Tolerant (BFT) confirmation threshold: actions require confirmation from `ceiling(numSVs * 2 / 3)` SVs. The system tolerates up to `f` faulty or dishonest nodes, where `f = floor((n - 1) / 3)` and `n` is the total number of SVs.
+## Member Committees
 
-Governance actions are executed through Daml contracts in the `splice-dso-governance` package, primarily through two contract types:
+The GSF organizes governance and operational work through six Member Committees:
 
-- **`DsoRules`** -- Governs SV onboarding and offboarding, reward weights, featured app rights, and network-level configuration parameters stored in `DsoRulesConfig`.
-- **`AmuletRules`** -- Governs Canton Coin economics: fee schedules, issuance curves, traffic pricing, and the CC-USD conversion rate.
+- **Tech and Operations** -- technical direction and operational standards
+- **Tokenomics** -- Canton Coin economics, fee calibration, and reward parameters
+- **Accountability** -- oversight and compliance
+- **Marketing** -- ecosystem outreach and communications
+- **Legal** -- legal framework and regulatory matters
+- **Audit and Finance** -- financial oversight
 
-When SVs vote on a parameter change or membership decision, the vote is recorded on-chain as a `VoteRequest` contract. Each request specifies the proposed action, a `voteBefore` deadline, and an optional `targetEffectiveAt` timestamp for scheduled changes. Once enough SVs accept the request (meeting the `requiredNumVotes` threshold), the action executes automatically.
+Premier members additionally have access to Board Committees and can appoint delegates to those committees.
 
-Some governance values use a median-based approach instead of explicit voting. For the CC-USD conversion rate, each SV operator publishes their preferred value on-chain, and the DSO automatically selects the median. This produces stable, aggregate-preference pricing that reflects the positions of roughly two-thirds of SV operators, making it resistant to manipulation by any single SV.
+## Governance framework
 
-The combination of on-chain voting and decentralized automation provides three guarantees for participants who trust that no more than `f` SVs are dishonest:
+The Global Synchronizer is operated by independently acting organizations called Super Validators. These organizations run the core infrastructure -- sequencers, mediators, and SV application nodes -- and participate in governance through an on-chain governance application.
 
-- **Valid transactions** -- Every DSO-confirmed transaction satisfies Daml's ledger validity model, so no invalid governance action can be pushed through.
-- **Timely automation** -- Routine operational actions like mining round advancement and reward issuance execute without delay, because each SV node runs automation that creates confirmations as soon as preconditions are met.
-- **Predictable parameters** -- Fees and configuration values reflect the aggregate preferences of at least two-thirds of SV operators, preventing any single actor from shifting parameters in their favor.
+Governance actions are executed through the DSO (Decentralized Synchronizer Operations) party, a decentralized Daml party with a confirmation threshold of approximately 2/3 of onboarded Super Validators. No single entity, including the GSF, can make unilateral changes. For a detailed breakdown of the DSO party, confirmation protocols, and voting mechanics, see [SV Governance Reference](/docs-main/overview/reference/sv-governance-reference).
 
-For full details on the voting mechanics and all governance action types, see the [SV Governance Reference](/docs-main/overview/reference/sv-governance-reference).
+The governance framework covers:
 
-## Off-Chain Enforcement
+- **Network configuration** -- parameters such as traffic pricing, fee schedules, and tokenomics configuration
+- **Super Validator membership** -- onboarding and offboarding of Super Validators
+- **Software upgrades** -- coordination of Canton and Splice version upgrades
+- **Daml package upgrades** -- managing upgrades to the on-chain governance and tokenomics packages
+- **Canton Improvement Proposals (CIPs)** -- a structured process for proposing and ratifying changes to network rules and standards
 
-Not everything can be encoded in Daml contracts. The foundation also enforces policies through its charter, membership agreements, and operational procedures. Off-chain governance covers:
+## Network policies
 
-- **Eligibility criteria** for new SVs and validators, including reputational and infrastructure requirements that go beyond what on-chain identity verification can capture.
-- **Dispute resolution** between network participants.
-- **Upgrade coordination** -- scheduling maintenance windows, communicating version requirements, and ensuring SVs upgrade in a synchronized manner.
-- **CIP review** -- evaluating proposals through committee discussion before they reach the on-chain voting stage.
+### Validator onboarding
 
-The foundation's mailing lists at [lists.sync.global](https://lists.sync.global) are where much of this off-chain discussion happens. The tokenomics committee list, in particular, is the venue for discussing parameter adjustments and featured app requests.
+Validators must be approved before joining TestNet or MainNet. The process works as follows:
 
-## Relationship to CIPs
+1. You submit a request through the [GSF validator request form](https://sync.global/validator-request/).
+2. The Tokenomics Committee reviews and approves your application.
+3. Your sponsoring Super Validator provides your egress IP to the allowlist maintained by the SV set. Only one IP per network is permitted, and it must be distinct across DevNet, TestNet, and MainNet.
+4. Once a majority of Super Validators have adopted the updated allowlist (typically 2--7 days), you receive a one-time onboarding secret from your sponsoring SV. This secret expires after 48 hours.
+5. You deploy your validator node using the onboarding secret.
 
-Canton Improvement Proposals (CIPs) are the formal mechanism for proposing changes to Canton Network standards, protocols, and governance procedures. The [CIP repository](https://github.com/global-synchronizer-foundation/cips) hosts all proposals.
+DevNet is open to any validator without Tokenomics Committee approval, though your IP must still be added to the allowlist.
 
-The relationship between CIPs and GSF policies works as follows:
+### Traffic and fee policies
 
-1. A CIP proposes a change -- for example, [CIP-0042](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0042/cip-0042.md) specifying that a standard CC transfer should cost 1 USD, or [CIP-0066](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0066/cip-0066.md) defining how unclaimed SV rewards can be minted from the unclaimed pool.
-2. The relevant GSF committee (such as the tokenomics committee) reviews and discusses the proposal.
-3. If the CIP is accepted, the foundation enacts corresponding policy. For technical changes, this means SVs submit a governance vote to update the on-chain configuration. For process changes, the foundation updates its operational procedures.
+Super Validators collectively set traffic pricing parameters through governance votes. The `extraTrafficPrice` parameter determines the cost of write traffic on the synchronizer, calibrated so that a standard Canton Coin transfer costs approximately 1 USD (per [CIP-0042](https://github.com/canton-foundation/cips/blob/main/cip-0042/cip-0042.pdf)). Super Validators are expected to periodically measure actual traffic costs and adjust parameters accordingly.
 
-Not all CIPs require on-chain votes. Informational and process CIPs may result in updated documentation or operational guidelines rather than contract parameter changes. See [CIPs Introduction](/docs-main/overview/understand/cips-introduction) for the full CIP lifecycle.
+Fee parameters are updated through an on-chain median-based voting mechanism: each SV publishes their preferred value, and the system uses the median. This ensures no single SV can move the parameter by more than a small amount.
 
-## SV Voting for Parameter Changes
+### Participation requirements
 
-Parameter changes follow a specific on-chain flow:
+Super Validators must meet operational requirements to participate in the network:
 
-1. An SV creates a `VoteRequest` specifying the proposed configuration update (for example, a new `extraTrafficPrice` value on `AmuletRules`).
-2. Other SVs review the proposal in the Governance tab of the SV web UI and cast accept or reject votes.
-3. If `requiredNumVotes` SVs accept, the change takes effect -- either immediately or at a scheduled `targetEffectiveAt` time.
-4. If `requiredNumVotes` SVs reject, the request is archived. If the `voteBefore` deadline passes without enough votes in either direction, the request expires.
+- Run the required infrastructure components (sequencer, mediator, SV application)
+- Maintain uptime and connectivity to support BFT consensus
+- Participate in governance votes and upgrade coordination
+- Comply with the CometBFT validator requirements for consensus participation
 
-SVs can change their votes on requests with a `targetEffectiveAt` date until the effective time arrives. This allows the group to reconsider scheduled changes as new information becomes available.
+The CometBFT consensus protocol used by the Global Synchronizer requires more than 2/3 of Super Validators to be operational for the network to advance. Each Super Validator failure reduces the fault tolerance buffer.
 
-Changes to SV reward weights must also be reflected in the [GSF configs repository](https://github.com/global-synchronizer-foundation/configs) so the correct values persist across onboarding and reonboarding events. Traffic parameters require periodic recalibration as actual costs change with the number of SVs and the Canton protocol version.
+### Reward policies
 
-## Resources
+Super Validators earn rewards for operating infrastructure, configured through reward weight parameters. Changes to reward weights follow a governance vote process:
 
-- [Canton Foundation website](https://canton.foundation) -- Membership information, network status, and SV directory
-- [CIP repository](https://github.com/global-synchronizer-foundation/cips) -- All Canton Improvement Proposals
-- [GSF configs repository](https://github.com/global-synchronizer-foundation/configs) -- Network configuration maintained by the foundation
-- [Mailing lists](https://lists.sync.global) -- Community discussion groups including the tokenomics committee
-- [SV Governance Reference](/docs-main/overview/reference/sv-governance-reference) -- Technical details on voting mechanics, action types, and BFT thresholds
+1. Super Validator owners agree on the updated weight.
+2. A governance vote is initiated through the SV web UI.
+3. The vote must be approved by a quorum of Super Validators.
+4. The updated weight is reflected in the [GSF configs repository](https://github.com/global-synchronizer-foundation/configs) to ensure consistency across onboarding events.
+
+## Upgrade coordination
+
+Network upgrades -- whether Canton versions, Splice versions, or Daml package upgrades -- require coordination across all Super Validators. The GSF facilitates this by:
+
+- Communicating upgrade timelines and requirements to all operators
+- Tracking readiness across the Super Validator set
+- Providing operational guidance for specific upgrade procedures (such as pausing triggers during Daml upgrades)
+
+Super Validators that do not upgrade in time can cause operational issues. For example, during Daml package upgrades, validators running outdated versions may block reward expiry automation. The GSF coordinates workarounds for these situations and sets deadlines for compliance.
+
+## CIP governance
+
+Changes to network rules, standards, and protocols are proposed through Canton Improvement Proposals (CIPs). The CIP process provides a structured way for anyone in the ecosystem to propose changes, with final ratification by Super Validator vote.
+
+For details on the CIP process, see [How to Propose a CIP](/docs-main/overview/reference/how-to-propose-cip). For background on what CIPs are and their role in the network, see [What Are CIPs?](/docs-main/overview/reference/what-are-cips). The full list of CIPs is maintained at [github.com/global-synchronizer-foundation/cips](https://github.com/global-synchronizer-foundation/cips).
+
+## Communication channels
+
+The GSF maintains several channels for validator operators and ecosystem participants:
+
+- **Slack** -- `#validator-operations` for operational coordination, `#gsf-global-synchronizer-appdev` for application development, `#gsf-outreach` for ecosystem discussions
+- **Mailing lists** at [lists.sync.global](https://lists.sync.global/) -- including `main` (general Canton Network announcements), `cip-announce` (new CIP notifications), `tokenomics-announce` (Tokenomics Committee decisions), and `validator-announce` (operator-targeted announcements)
+- **Support** -- `da-support@digitalasset.com` for best-effort support, `support@digitalasset.com` for SLA-backed support
+
+## Further resources
+
+- [GSF website](https://canton.foundation) -- foundation information and membership
+- [Canton Network](https://canton.network) -- network overview and entry point
+- [GSF configs repository](https://github.com/global-synchronizer-foundation/configs) -- network configuration parameters
+- [CIP repository](https://github.com/global-synchronizer-foundation/cips) -- Canton Improvement Proposals
+- [SV Governance Reference](/docs-main/overview/reference/sv-governance-reference) -- technical details on the DSO party and voting mechanics
