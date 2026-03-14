@@ -1,6 +1,151 @@
 ---
 title: "Performance Optimization"
-description: "Performance optimization for Canton Network validators"
+description: "Tuning database, JVM, and Canton configuration for validator and SV node performance"
 ---
 
-Content coming soon.
+Canton node performance depends on database throughput, JVM configuration, sequencer capacity, and pruning strategy. This page covers the key tuning areas for validator and SV node operators.
+
+## Database optimization
+
+PostgreSQL is the primary performance bottleneck in most Canton deployments.
+
+### Connection pools
+
+Canton uses HikariCP for database connection pooling. The default pool size works for light workloads, but high-throughput deployments benefit from tuning:
+
+```hocon
+canton.participants.participant.storage.config {
+  # Maximum number of connections in the pool
+  maxConnections = 30
+
+  # Connection timeout in milliseconds
+  connectionTimeout = 30000
+}
+```
+
+Set `maxConnections` based on your PostgreSQL `max_connections` setting and the number of Canton processes sharing the database server. A good starting point is `max_connections / number_of_canton_processes`, leaving headroom for monitoring and maintenance connections.
+
+### PostgreSQL tuning
+
+These PostgreSQL parameters have the most impact on Canton workloads:
+
+- **`shared_buffers`** — Set to 25% of available RAM. For a 64 GB database server, use `16GB`.
+- **`effective_cache_size`** — Set to 50-75% of available RAM. This tells the query planner how much memory is available for caching, including OS cache.
+- **`work_mem`** — Controls memory for sort operations and hash tables. Start with `64MB` and increase if you see disk-based sorts in query plans.
+- **`maintenance_work_mem`** — Memory for VACUUM and index operations. Set to `1GB` or higher for large databases.
+- **`max_wal_size`** — Controls checkpoint frequency. Increase to `4GB` or `8GB` to reduce checkpoint pressure under heavy write loads.
+- **`random_page_cost`** — Set to `1.1` if your database runs on SSD storage (default is `4.0`, which is tuned for spinning disks).
+
+Example `postgresql.conf` additions:
+
+```ini
+shared_buffers = 16GB
+effective_cache_size = 48GB
+work_mem = 64MB
+maintenance_work_mem = 1GB
+max_wal_size = 8GB
+random_page_cost = 1.1
+checkpoint_completion_target = 0.9
+wal_buffers = 64MB
+```
+
+### Indexing
+
+Canton creates the necessary indexes during schema migration. Do not modify or drop Canton-managed indexes. If you observe slow queries in your PostgreSQL logs, check that autovacuum is running properly — bloated tables and stale statistics are the most common cause of query plan degradation.
+
+```sql
+-- Check for tables that need vacuuming
+SELECT schemaname, relname, n_dead_tup, last_autovacuum
+FROM pg_stat_user_tables
+WHERE n_dead_tup > 10000
+ORDER BY n_dead_tup DESC;
+```
+
+## JVM tuning
+
+Canton runs on the JVM. The default JVM settings are conservative, and production deployments benefit from explicit configuration.
+
+### Heap size
+
+Set the heap size based on the node type and expected workload:
+
+- **Validator (participant)** — Start with `-Xmx4g`. Increase to 8-12 GB for high-throughput workloads or when hosting many parties.
+- **Sequencer** — Start with `-Xmx4g`. The sequencer's memory needs scale with message throughput.
+- **Mediator** — Start with `-Xmx2g`. The mediator has lighter memory requirements than the sequencer or participant.
+
+```yaml
+# Helm values for JVM settings
+participant:
+  jvmOptions: "-Xms4g -Xmx4g -XX:+UseG1GC -XX:MaxGCPauseMillis=200"
+```
+
+### Garbage collection
+
+G1GC is the recommended garbage collector for Canton. It provides good throughput with predictable pause times. Key settings:
+
+- **`-XX:+UseG1GC`** — Enable G1 garbage collector
+- **`-XX:MaxGCPauseMillis=200`** — Target maximum GC pause. Lower values reduce latency spikes but may reduce throughput.
+- **`-XX:G1HeapRegionSize=16m`** — For heaps above 8 GB, increasing the region size improves G1 efficiency
+
+Monitor GC activity with `-Xlog:gc*:file=/var/log/canton/gc.log:time,uptime,level,tags` and watch for frequent full GC pauses, which indicate the heap is too small.
+
+## Sequencer throughput
+
+The sequencer's throughput is determined by its ordering backend and database performance. For the centralized (PostgreSQL) ordering backend (currently in Alpha):
+
+- The single database is the serialization point for all message ordering
+- Vertical scaling of the database server (faster CPU, more IOPS) directly improves throughput
+- Network latency between the sequencer process and its database affects every message
+
+For the decentralized (BFT) ordering backend, throughput depends on consensus round time and the number of sequencer nodes. BFT consensus adds latency per message but provides fault tolerance.
+
+## Traffic management
+
+On the Global Synchronizer, every transaction consumes traffic, which is paid for with Canton Coin. To reduce traffic costs:
+
+- **Batch operations** — Submit multiple related commands together rather than individually. Canton processes batched commands more efficiently.
+- **Contract design** — Smaller contracts and fewer contract creates/archives per transaction reduce traffic consumption.
+- **Synchronizer assignment** — Move high-frequency bilateral workflows to a private synchronizer where no traffic fees apply.
+
+Monitor your traffic consumption through the validator's wallet or the Splice admin API to avoid running out of traffic balance during peak periods.
+
+## Pruning
+
+Canton stores a full history of transactions and ACS (Active Contract Set) snapshots. Over time, this data accumulates and can slow down queries. Pruning removes historical data that is no longer needed.
+
+### Impact on performance
+
+- Pruning reduces database size, which improves backup times and query performance
+- The pruning process itself is resource-intensive — schedule it during low-traffic periods
+- After pruning, run `VACUUM ANALYZE` on the affected tables to reclaim disk space and update query statistics
+
+### Configuration
+
+```hocon
+canton.participants.participant.pruning {
+  # Prune data older than this duration
+  max-pruning-batch-size = 1000
+}
+```
+
+<Warning>
+Pruned data cannot be recovered. Ensure you have backups before enabling aggressive pruning. Some regulatory contexts require retaining transaction history for a defined period.
+</Warning>
+
+## Batch sizes
+
+Canton processes commands in batches internally. The default batch sizes balance latency and throughput. For high-throughput workloads, you can increase batch sizes:
+
+```hocon
+canton.participants.participant.parameters {
+  batching {
+    max-burst-factor = 10
+  }
+}
+```
+
+Larger batches improve throughput at the cost of slightly higher per-command latency. Monitor sequencer and command completion latency metrics to find the right balance.
+
+## Monitoring performance
+
+Track these metrics to identify bottlenecks: `canton_participant_command_completion_latency` (end-to-end command time), `canton_sequencer_send_latency` (sequencer throughput), `canton_participant_db_query_latency` (database health), `hikaricp_connections_active` (connection pool saturation), and JVM heap/GC metrics. Set up dashboards and alert when values exceed your baseline — performance degradation is usually gradual, and early detection prevents outages.

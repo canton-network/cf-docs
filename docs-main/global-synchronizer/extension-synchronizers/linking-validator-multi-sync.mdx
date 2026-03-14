@@ -1,6 +1,142 @@
 ---
-title: "Linking Validator to Multiple Synchronizers"
-description: "Connecting a validator to multiple synchronizers"
+title: "Connecting a Validator to Multiple Synchronizers"
+description: "How to connect a single validator to the Global Synchronizer and private synchronizers simultaneously"
 ---
 
-Content coming soon.
+Canton validators can connect to multiple synchronizers at the same time. This is the foundation of hybrid deployments — your validator participates in the Global Synchronizer for network-wide interoperability while also connecting to one or more private synchronizers for specialized workflows.
+
+## How multi-synchronizer connections work
+
+Each synchronizer connection is independent. Your validator maintains a separate communication channel to each synchronizer's sequencer, and contracts are assigned to a specific synchronizer. When you create a contract, it is assigned to one synchronizer. You can later move it to another synchronizer using the unassignment/reassignment protocol.
+
+The validator tracks which synchronizer each contract belongs to and routes transactions accordingly. If a transaction involves contracts on different synchronizers, Canton synchronizes the transaction across both — though this adds latency compared to single-synchronizer transactions.
+
+## Adding a synchronizer connection
+
+### Via Canton Console
+
+If your validator is already running and connected to the Global Synchronizer, you can add a private synchronizer connection at runtime:
+
+```scala
+// Connect to a private synchronizer
+participant.synchronizers.connect(
+  alias = "private-sync",
+  connection = "https://sequencer.private-sync.example.com"
+)
+```
+
+The `alias` is a local name you choose to identify the synchronizer. It does not need to match any network-level name — it is only used in your local configuration and API calls.
+
+To verify the connection:
+
+```scala
+participant.synchronizers.list_connected()
+```
+
+This returns the list of all connected synchronizers with their status and synchronizer ID.
+
+### Via Admin API
+
+You can also register a new synchronizer connection through the Admin API's gRPC interface. The relevant service is `SynchronizerConnectivityService`, with the `ConnectSynchronizer` RPC:
+
+```protobuf
+message ConnectSynchronizerRequest {
+  string synchronizer_alias = 1;
+  SynchronizerConnectionConfig config = 2;
+}
+```
+
+The `SynchronizerConnectionConfig` includes the sequencer connection URL and any TLS settings.
+
+### Via Helm values
+
+For validators deployed with Helm, you can declare additional synchronizer connections in the values file so they are established on startup:
+
+```yaml
+participant:
+  additionalSynchronizerConnections:
+    - alias: "private-sync"
+      sequencerConnection: "https://sequencer.private-sync.example.com"
+    - alias: "consortium-sync"
+      sequencerConnection: "https://sequencer.consortium.example.com"
+```
+
+## Managing synchronizer connections
+
+### Listing connections
+
+```scala
+// List all connected synchronizers
+participant.synchronizers.list_connected()
+
+// List all registered synchronizers (including disconnected)
+participant.synchronizers.list_registered()
+```
+
+### Disconnecting from a synchronizer
+
+You can disconnect from a synchronizer without losing contract data:
+
+```scala
+participant.synchronizers.disconnect("private-sync")
+```
+
+Contracts assigned to that synchronizer remain in your local store but cannot be used in transactions until you reconnect. Disconnecting does not unassign contracts — they are still associated with that synchronizer.
+
+### Reconnecting
+
+```scala
+participant.synchronizers.reconnect("private-sync")
+```
+
+The validator resumes receiving updates from the synchronizer and can transact on contracts assigned to it.
+
+## Contract assignment and reassignment
+
+When a contract is created, it is assigned to the synchronizer where the creating transaction executes. You control this by submitting the command through the appropriate synchronizer connection.
+
+To move a contract to a different synchronizer:
+
+```scala
+// Unassign from current synchronizer
+val unassignId = participant.ledger_api.commands.reassignment.unassign(
+  contractId = contractId,
+  source = sourceSynchronizerId,
+  target = targetSynchronizerId
+)
+
+// Reassign to target synchronizer
+participant.ledger_api.commands.reassignment.assign(
+  unassignId = unassignId,
+  source = sourceSynchronizerId,
+  target = targetSynchronizerId
+)
+```
+
+The contract is briefly unavailable between unassignment and reassignment. Both the source and target synchronizer must be connected to your validator, and all stakeholders of the contract must have validators connected to the target synchronizer.
+
+## Choosing the right synchronizer for a contract
+
+Consider these factors when deciding where to assign a contract:
+
+- **Who needs to see it?** All validators hosting the contract's stakeholders must be connected to the contract's synchronizer. Use the Global Synchronizer for contracts involving external parties.
+- **Transaction frequency** — High-frequency bilateral workflows run more efficiently on a private synchronizer where you control capacity and avoid traffic fees.
+- **Settlement needs** — If a contract will eventually interact with Canton Coin or Global Synchronizer contracts, plan for a reassignment step.
+- **Privacy requirements** — Contracts on a private synchronizer are processed exclusively by infrastructure you control. On the Global Synchronizer, the sequencer and mediator are operated by super-validators.
+
+## Troubleshooting
+
+**Connection refused or timeout:**
+- Verify the sequencer URL is correct and reachable from your validator's network
+- Check that TLS certificates are valid and trusted
+- Confirm any firewall or network policy allows outbound connections to the sequencer port
+
+**Synchronizer not listed after connect:**
+- Check the validator logs for connection errors
+- Verify the synchronizer is initialized and the sequencer is healthy
+- Ensure the validator's identity is authorized on the target synchronizer
+
+**Contract reassignment fails:**
+- Confirm your validator is connected to both the source and target synchronizers
+- Verify all contract stakeholders have validators connected to the target synchronizer
+- Check that the contract is not currently being exercised in another transaction
