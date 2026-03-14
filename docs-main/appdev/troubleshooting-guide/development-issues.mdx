@@ -1,6 +1,168 @@
 ---
 title: "Development Issues"
-description: "Troubleshooting Canton development issues"
+description: "Troubleshooting Daml compilation errors, API connection problems, and transaction failures during development"
 ---
 
-Content coming soon.
+This page addresses problems you are likely to hit while writing Daml code, connecting to APIs, and submitting transactions during local development.
+
+## Daml Compilation Errors
+
+### Common type mismatches
+
+The Daml compiler enforces strict typing. A frequent mistake is passing a `ContractId` where the template type is expected, or vice versa.
+
+```
+error:
+  Couldn't match expected type 'Asset' with actual type 'ContractId Asset'
+```
+
+**Fix:** Use `fetch` to retrieve the contract payload from a `ContractId`:
+
+```daml
+asset <- fetch assetCid
+```
+
+Another common variant is confusing `Party` with `Text`:
+
+```
+Couldn't match expected type 'Party' with actual type 'Text'
+```
+
+Use `getParty` in Daml Script or pass the `Party` value directly rather than a string.
+
+### Missing imports
+
+If the compiler reports an unknown type or function, you likely need an import. Daml does not auto-import modules.
+
+```
+error: Not in scope: 'DA.Optional.fromSome'
+```
+
+**Fix:**
+
+```daml
+import DA.Optional (fromSome)
+```
+
+### SCU compatibility check failures
+
+When upgrading Daml packages, the Smart Contract Upgrade (SCU) compatibility checker may reject changes. Common violations include removing a field from a template or changing a field's type.
+
+```
+error: Upgrade check failed: field 'amount' has changed type from 'Int' to 'Decimal'
+```
+
+SCU requires that new package versions remain wire-compatible with previous versions. You can add optional fields (with defaults), but you cannot remove or change existing fields.
+
+<Warning>
+Daml exceptions are deprecated. If you see compiler warnings about exception usage, refactor to use `Either` or other error-handling patterns instead.
+</Warning>
+
+## API Connection Problems
+
+### Wrong port
+
+Each Canton component listens on a different port. If your application gets `Connection refused`, verify you are targeting the correct one:
+
+- **Ledger API (gRPC)** -- 5001
+- **JSON API** -- 7575
+- **Admin API** -- 5002
+- **Participant health** -- 5003
+
+Check which ports are actually in use:
+
+```bash
+docker ps --format "table {{.Names}}\t{{.Ports}}"
+```
+
+### Auth token issues
+
+If the Ledger API returns `UNAUTHENTICATED`, your token may be expired, have the wrong audience, or lack the required scope.
+
+```
+UNAUTHENTICATED: Could not verify JWT token: token is expired
+```
+
+**Checklist:**
+- Token has the `daml_ledger_api` scope
+- Token audience matches `LEDGER_API_AUTH_AUDIENCE` in your config
+- Token has not expired (check `exp` claim)
+
+Decode your token to inspect claims:
+
+```bash
+echo "$TOKEN" | cut -d'.' -f2 | base64 -d 2>/dev/null | jq .
+```
+
+### Sandbox not ready yet
+
+After running `dpm sandbox`, the sandbox takes a few seconds to initialize. If your application connects immediately, it may fail with:
+
+```
+UNAVAILABLE: io exception - Connection refused
+```
+
+Wait for the sandbox health endpoint to respond before sending requests:
+
+```bash
+until curl -s http://localhost:5003/health | grep -q "SERVING"; do
+  sleep 1
+done
+```
+
+## Transaction Failures in Development
+
+### Authorization errors
+
+The most common transaction rejection is an authorization failure. Canton rejects transactions when the submitting party is not authorized as a signatory or controller.
+
+```
+INVALID_ARGUMENT: Interpretation error:
+  ... requires authorizers Party('Alice'), but only Party('Bob') were given
+```
+
+**Fix:** Ensure the party submitting the command is listed as a `signatory` or `controller` for the relevant choice. If a different party must act, use a delegation pattern where the authorized party creates a contract granting exercise rights.
+
+### Contention on the same contract
+
+When two transactions try to exercise a consuming choice on the same contract simultaneously, one will be rejected:
+
+```
+ABORTED: Interpretation error: ... contract not active
+```
+
+This is expected behavior in Canton's UTXO-based model. The fix depends on your use case:
+
+- **Retry with backoff** if the operation is idempotent
+- **Redesign the workflow** to reduce single-contract bottlenecks (e.g., split a counter contract into shards)
+- **Sequence operations** on the client side when ordering matters
+
+### Package vetting: DAR not uploaded
+
+If your transaction references a package the validator does not know about, you get:
+
+```
+NOT_FOUND: PACKAGE_NOT_FOUND - Could not find package <package-id>
+```
+
+Upload your DAR file before submitting transactions:
+
+```bash
+# Using dpm
+dpm build
+dpm sandbox
+
+# Or upload manually via the Admin API
+curl -X POST http://localhost:5002/v2/packages \
+  -F "dar=@.build/your-package.dar"
+```
+
+Verify the package is known:
+
+```bash
+curl http://localhost:5002/v2/packages | jq '.package_ids | length'
+```
+
+<Note>
+For cn-quickstart, run `make setup` then `make build` before `make start`. The build step compiles Daml and uploads DARs to the local environment.
+</Note>
