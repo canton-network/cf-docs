@@ -1,6 +1,177 @@
 ---
-title: dpm
-description: The dpm command-line tool for Canton package management.
+title: "dpm (Daml Package Manager)"
+description: "Command reference and configuration for dpm, the primary CLI tool for Canton development."
 ---
 
-Content coming soon.
+`dpm` is the command-line interface for Canton development. It manages SDK installation, project scaffolding, compilation, testing, code generation, and local development environments. Most Canton development workflows start with a `dpm` command.
+
+## Installation
+
+Install `dpm` following the instructions in the [Canton 3.x documentation](https://docs.digitalasset.com). On most systems, this involves downloading a single binary and adding it to your `PATH`.
+
+Once installed, verify the installation:
+
+```bash
+dpm --version
+```
+
+## Command Reference
+
+### Project Management
+
+**`dpm init`** -- Initialize a new Daml project in the current directory. Creates a `daml.yaml` configuration file and a basic project structure.
+
+```bash
+dpm init
+```
+
+**`dpm new`** -- Create a new project from a template. Templates provide working examples that you can modify.
+
+```bash
+dpm new my-project --template daml-intro-contracts
+```
+
+**`dpm add`** -- Add a dependency to your project. Updates `daml.yaml` with the new package reference.
+
+```bash
+dpm add some-package
+```
+
+### Building and Testing
+
+**`dpm build`** -- Compile Daml source files into a DAR (Daml Archive) file. The output goes to `.daml/dist/`.
+
+```bash
+dpm build
+```
+
+For multi-package projects, build all sub-packages:
+
+```bash
+dpm build --all
+```
+
+**`dpm test`** -- Run all Daml Script tests in the current package. Produces a summary with pass/fail status and coverage report.
+
+```bash
+dpm test
+```
+
+**`dpm install`** -- Download and install the Daml SDK version specified in `daml.yaml`.
+
+```bash
+dpm install
+```
+
+### Code Generation
+
+**`dpm codegen-js`** -- Generate TypeScript/JavaScript bindings from a compiled DAR file.
+
+```bash
+dpm codegen-js .daml/dist/my-project.dar -o generated-ts
+```
+
+**`dpm codegen-java`** -- Generate Java bindings from a compiled DAR file.
+
+```bash
+dpm codegen-java .daml/dist/my-project.dar -o generated-java
+```
+
+### Development Environment
+
+**`dpm sandbox`** -- Start a local Canton sandbox node. This runs a single-participant Canton instance with an in-memory ledger for testing.
+
+```bash
+dpm sandbox
+```
+
+**`dpm studio`** -- Open Daml Studio (the VS Code extension) for the current project. This launches VS Code with the Daml extension activated.
+
+```bash
+dpm studio
+```
+
+### Exploration
+
+Use `--help` on any command to see available options:
+
+```bash
+dpm --help
+dpm build --help
+dpm codegen-java --help
+dpm inspect-dar --help
+```
+
+## Configuration Files
+
+### daml.yaml
+
+Every Daml project has a `daml.yaml` file at its root. It specifies the SDK version, project metadata, source directory, and dependencies.
+
+```yaml
+sdk-version: 3.4.0
+name: my-project
+source: daml
+version: 1.0.0
+dependencies:
+  - daml-prim
+  - daml-stdlib
+build-options:
+  - --target=3.4
+```
+
+Key fields:
+
+- `sdk-version` -- The Daml SDK version to use. `dpm install` downloads this version.
+- `name` -- The package name, used in the output DAR filename
+- `source` -- Directory containing Daml source files (typically `daml`)
+- `dependencies` -- List of Daml library dependencies
+- `build-options` -- Compiler flags (e.g., target LF version)
+
+### multi-package.yaml
+
+For projects with multiple Daml packages, a `multi-package.yaml` at the project root lists all sub-packages:
+
+```yaml
+packages:
+  - ./contracts
+  - ./tests
+  - ./scripts
+```
+
+Running `dpm build --all` from the root builds all listed packages in dependency order.
+
+### dpm-config.yaml
+
+The `dpm-config.yaml` file stores global `dpm` configuration such as SDK installation paths and registry settings. It is typically located in your home directory and rarely needs manual editing.
+
+## Typical Workflow
+
+A common development cycle with `dpm`:
+
+```bash
+# 1. Set up the project
+dpm new my-app --template daml-intro-contracts
+cd my-app
+dpm install
+
+# 2. Write Daml code, then compile
+dpm build
+
+# 3. Run tests
+dpm test
+
+# 4. Start a local sandbox for integration testing
+dpm sandbox
+
+# 5. Generate bindings for your backend
+dpm codegen-java .daml/dist/my-app.dar -o generated-java
+dpm codegen-js .daml/dist/my-app.dar -o generated-ts
+```
+
+## Related Pages
+
+- [Daml SDK](/docs-main/sdks-tools/sdks/daml-sdk) -- What the SDK includes and how versions work
+- [Sandbox](/docs-main/sdks-tools/development-tools/sandbox) -- Local testing environment started by `dpm sandbox`
+- [Daml Studio](/docs-main/sdks-tools/development-tools/daml-studio) -- VS Code extension launched by `dpm studio`
+- [Daml Script](/docs-main/sdks-tools/cli-tools/daml-script) -- Writing and running tests with `dpm test`

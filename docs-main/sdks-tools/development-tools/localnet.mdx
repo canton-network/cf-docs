@@ -1,6 +1,149 @@
 ---
-title: LocalNet
-description: Running a local Canton network for development and testing.
+title: "LocalNet"
+description: "Run a multi-validator Canton Network locally with Docker Compose for development and integration testing."
 ---
 
-Content coming soon.
+LocalNet is a Docker Compose environment that simulates a Canton Network on your machine. It runs multiple validators, a local synchronizer, Canton Coin services, and supporting infrastructure -- everything you need to test multi-party workflows, payments, and Splice API interactions without connecting to DevNet or TestNet.
+
+LocalNet is provided as part of the [cn-quickstart](https://github.com/digital-asset/cn-quickstart) repository.
+
+## What LocalNet Provides
+
+- Three validators: Super Validator (SV), App Provider, and App User
+- A local synchronizer with sequencer and mediator
+- Canton Coin wallet services for each validator
+- PQS (Participant Query Store) instances
+- JSON API endpoints
+- Keycloak for authentication (optional)
+- Observability stack: Grafana, Prometheus, Loki (optional)
+
+## Setup
+
+From the cn-quickstart repository:
+
+```bash
+git clone https://github.com/digital-asset/cn-quickstart
+cd cn-quickstart
+direnv allow
+cd quickstart
+make install-daml-sdk
+make setup
+make build
+make start
+```
+
+`make setup` prompts you to select a deployment profile and generates the appropriate `.env.local` configuration. `make build` compiles the Daml contracts, Java backend, and React frontend. `make start` launches the Docker Compose stack.
+
+Check the status of running containers:
+
+```bash
+make status
+```
+
+Stop the environment:
+
+```bash
+make stop
+```
+
+## Network Topology
+
+```mermaid
+flowchart TB
+    subgraph LocalNet
+        SV[Super Validator<br>Port prefix: 4xxx]
+        PROV[App Provider<br>Port prefix: 3xxx]
+        USER[App User<br>Port prefix: 2xxx]
+        SEQ[Sequencer]
+        MED[Mediator]
+    end
+
+    SV --> SEQ
+    PROV --> SEQ
+    USER --> SEQ
+    SEQ --> MED
+```
+
+Each validator runs a participant node, wallet services, and supporting infrastructure. The Super Validator also runs the synchronizer components (sequencer and mediator) and the Splice SV app.
+
+## Port Conventions
+
+LocalNet uses a prefix-suffix pattern for port numbers.
+
+**Prefixes by validator:**
+
+- `2xxx` -- App User
+- `3xxx` -- App Provider
+- `4xxx` -- Super Validator
+
+**Common suffixes:**
+
+- `x901` -- Ledger API (gRPC)
+- `x902` -- Admin API
+- `x903` -- Validator API
+- `x975` -- JSON API
+- `5432` -- PostgreSQL
+
+For example, the App User's Ledger API is at `localhost:2901`, and the App Provider's JSON API is at `localhost:3975`.
+
+<Warning>
+The Admin API and PostgreSQL ports are exposed for development convenience. Do not expose these ports in non-local deployments.
+</Warning>
+
+## Configuration Options
+
+### Deployment Profiles
+
+`make setup` offers deployment profiles that control which optional services are included:
+
+- **Minimal** -- Core validators and synchronizer only
+- **Standard** -- Adds PQS, JSON API, and authentication
+- **Full** -- Adds observability (Grafana, Prometheus, Loki)
+
+### Environment Variables
+
+The `.env` file in the `quickstart/` directory contains version numbers, feature flags, and service configuration. Create a `.env.local` file (not tracked by git) to override settings locally.
+
+### Docker Compose Modules
+
+LocalNet is built from modular Docker Compose layers in `docker/modules/`:
+
+- `localnet/` -- Base infrastructure (validators, synchronizer)
+- `auth/` -- Keycloak authentication
+- `observability/` -- Grafana, Prometheus, Loki
+- `pqs/` -- Participant Query Store instances
+- `app/` -- Application services (backend, frontend)
+
+## Health Checks
+
+Verify that validators are healthy:
+
+```bash
+curl -f http://localhost:2903/api/validator/readyz  # App User
+curl -f http://localhost:3903/api/validator/readyz  # App Provider
+curl -f http://localhost:4903/api/validator/readyz  # Super Validator
+```
+
+An empty response indicates a healthy service.
+
+## When to Use LocalNet vs Sandbox
+
+**Use LocalNet** when you need to test:
+
+- Multi-party workflows across separate validators
+- Canton Coin transfers and traffic purchases
+- Wallet integration
+- Splice API interactions (Scan, Validator APIs)
+- End-to-end flows with backend, frontend, and ledger
+
+**Use the [Sandbox](/docs-main/sdks-tools/development-tools/sandbox)** when you need:
+
+- Fast iteration on contract logic
+- Single-participant testing without Docker
+- A lightweight environment for `dpm test` and Ledger API integration
+
+## Related Pages
+
+- [cn-quickstart](/docs-main/sdks-tools/reference-projects/cn-quickstart) -- Repository overview and project structure
+- [Sandbox](/docs-main/sdks-tools/development-tools/sandbox) -- Lightweight single-node alternative
+- [QuickStart walkthrough](/docs-main/appdev/quickstart/running-the-demo) -- Step-by-step guide to running the demo application
