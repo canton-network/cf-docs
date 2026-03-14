@@ -3,7 +3,21 @@ title: "LocalNet"
 description: "Run a multi-validator Canton Network locally with Docker Compose for development and integration testing."
 ---
 
-LocalNet is a Docker Compose environment that simulates a Canton Network on your machine. It runs multiple validators, a local synchronizer, Canton Coin services, and supporting infrastructure -- everything you need to test multi-party workflows, payments, and Splice API interactions without connecting to DevNet or TestNet.
+{/* COPIED_START source="splice:docs/src/app_dev/testing/localnet.rst" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+**Source:** `splice:docs/src/app_dev/testing/localnet.rst`
+</Warning>
+
+LocalNet provides a topology comprising three participants, three validators, a PostgreSQL database, and several web applications (wallet, SV, scan) behind an NGINX gateway. Each validator plays a distinct role within the Splice ecosystem:
+
+- **app-provider** — For the user operating their application
+- **app-user** — For a user wanting to use the app from the App Provider
+- **sv** — Super Validator, for providing the Global Synchronizer and handling AMT
+
+LocalNet is designed for development and testing. It is not intended for production use.
+
+{/* COPIED_END */}
 
 LocalNet is provided as part of the [cn-quickstart](https://github.com/digital-asset/cn-quickstart) repository.
 
@@ -64,25 +78,47 @@ flowchart TB
     SEQ --> MED
 ```
 
-Each validator runs a participant node, wallet services, and supporting infrastructure. The Super Validator also runs the synchronizer components (sequencer and mediator) and the Splice SV app.
+Each validator runs a participant, wallet services, and supporting infrastructure. The Super Validator also runs the synchronizer components (sequencer and mediator) and the Splice SV app.
 
 ## Port Conventions
 
-LocalNet uses a prefix-suffix pattern for port numbers.
+{/* COPIED_START source="splice:docs/src/app_dev/testing/localnet.rst" */}
 
-**Prefixes by validator:**
+<Warning title="Pre-reviewed Content - Do Not Modify">
+**Source:** `splice:docs/src/app_dev/testing/localnet.rst`
+</Warning>
 
-- `2xxx` -- App User
-- `3xxx` -- App Provider
-- `4xxx` -- Super Validator
+Ports are generated using specific patterns based on the validator:
 
-**Common suffixes:**
+- For the Super Validator (sv), the port is specified as `4${PORT_SUFFIX}`
+- For the App Provider, the port is specified as `3${PORT_SUFFIX}`
+- For the App User, the port is specified as `2${PORT_SUFFIX}`
 
-- `x901` -- Ledger API (gRPC)
-- `x902` -- Admin API
-- `x903` -- Validator API
-- `x975` -- JSON API
-- `5432` -- PostgreSQL
+These patterns apply to the following port suffixes:
+
+- `901` -- Participant Ledger API
+- `902` -- Participant Admin API
+- `975` -- Participant JSON API
+- `903` -- Validator Admin API
+- `900` -- Canton HTTP health check
+- `961` -- Canton gRPC health check
+
+UI Ports:
+
+- App User UI: port 2000
+- App Provider UI: port 3000
+- SV UI: port 4000
+
+Application UIs:
+
+- App User Wallet UI: `http://wallet.localhost:2000`
+- App Provider Wallet UI: `http://wallet.localhost:3000`
+- Super Validator Web UI: `http://sv.localhost:4000`
+- Scan Web UI: `http://scan.localhost:4000`
+
+Default wallet users: app-user, app-provider, sv.
+
+{/* COPIED_END */}
 
 For example, the App User's Ledger API is at `localhost:2901`, and the App Provider's JSON API is at `localhost:3975`.
 
