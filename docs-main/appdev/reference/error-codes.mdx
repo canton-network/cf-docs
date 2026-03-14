@@ -7,28 +7,6 @@ Canton returns structured error information through gRPC responses. Every error 
 
 ## Error message format
 
-{/* COPIED_START - source: error_codes.rst */}
-
-Error descriptions follow this format:
-
-```
-ERROR_CODE_ID(CATEGORY_ID,CORRELATION_ID_PREFIX):HUMAN_READABLE_MESSAGE
-```
-
-- `ERROR_CODE_ID` -- a unique string of upper-case letters, underscores, or digits (max 63 characters). Identifies the error code.
-- `CATEGORY_ID` -- a small integer identifying the error category.
-- `CORRELATION_ID_PREFIX` -- the first 8 characters of the request's submission ID, or `0` if no correlation ID is available.
-- `:` -- separates the machine-readable prefix from the human-readable message.
-- `HUMAN_READABLE_MESSAGE` -- a description for human readers. Do not parse this in application code; the text may change between releases.
-
-For example:
-
-```
-TRANSACTION_NOT_FOUND(11,12345): Transaction not found, or not visible.
-```
-
-{/* COPIED_END */}
-
 ## Machine-readable error details
 
 Each gRPC error response includes structured details following the [rich gRPC error model](https://cloud.google.com/apis/design/errors#error_details):
@@ -43,29 +21,6 @@ Some errors are redacted for security. The API response omits sensitive details,
 </Warning>
 
 ## Error categories
-
-{/* COPIED_START - source: canton-error-categories-inventory.rst.inc */}
-
-Error categories group error codes by their expected handling strategy. Each category maps to exactly one [gRPC status code](https://grpc.github.io/grpc/core/md_doc_statuscodes.html). Handle errors at the category level when possible, and fall back to specific error code IDs only when category-level handling is too broad.
-
-| Category ID | Category name | gRPC status | Retry strategy |
-|---|---|---|---|
-| 1 | TransientServerFailure | UNAVAILABLE | Retry quickly, including in load balancer |
-| 2 | ContentionOnSharedResources | ABORTED | Retry with backoff; do not retry in load balancer |
-| 3 | DeadlineExceededRequestStateUnknown | DEADLINE_EXCEEDED | Limited retries with deduplication |
-| 4 | SystemInternalAssumptionViolated | INTERNAL | Contact operator; do not retry automatically |
-| 5 | SecurityAlert | INVALID_ARGUMENT | Non-retryable; contact operator |
-| 6 | AuthInterceptorInvalidAuthenticationCredentials | UNAUTHENTICATED | Fix credentials, then retry |
-| 7 | InsufficientPermission | PERMISSION_DENIED | Fix permissions, then retry |
-| 8 | InvalidIndependentOfSystemState | INVALID_ARGUMENT | Fix application code or configuration |
-| 9 | InvalidGivenCurrentSystemStateOther | FAILED_PRECONDITION | Application-specific; may resolve with state changes |
-| 10 | InvalidGivenCurrentSystemStateResourceExists | ALREADY_EXISTS | Inspect resource, resolve conflict |
-| 11 | InvalidGivenCurrentSystemStateResourceMissing | NOT_FOUND | Inspect resource, resolve absence |
-| 12 | InvalidGivenCurrentSystemStateSeekAfterEnd | OUT_OF_RANGE | Wait and retry; state may advance naturally |
-| 13 | BackgroundProcessDegradationWarning | N/A | Not an API error; operator-facing only |
-| 14 | InternalUnsupportedOperation | UNIMPLEMENTED | Non-retryable; requires operator intervention |
-
-{/* COPIED_END */}
 
 ## Retry strategy by category
 
@@ -115,61 +70,6 @@ These indicate internal errors, security issues, or unimplemented operations. Es
 ## Extracting error details from gRPC responses
 
 The following Scala example shows how to extract error components from a `StatusRuntimeException`:
-
-{/* COPIED_START - source: error_codes.rst */}
-
-```scala
-import com.google.rpc.{ErrorInfo, RequestInfo, RetryInfo, ResourceInfo}
-import io.grpc.StatusRuntimeException
-import scala.jdk.CollectionConverters._
-
-try {
-  // your gRPC call here
-} catch {
-  case e: StatusRuntimeException =>
-    val status = io.grpc.protobuf.StatusProto.fromThrowable(e)
-
-    // gRPC status code
-    val code = status.getCode
-
-    // Full error description: "ERROR_CODE_ID(CATEGORY,CORRELATION): message"
-    val message = status.getMessage
-
-    // Extract structured details
-    val details = status.getDetailsList.asScala.toSeq
-
-    // Error code ID and category
-    details.collectFirst {
-      case any if any.is(classOf[ErrorInfo]) =>
-        val info = any.unpack(classOf[ErrorInfo])
-        val errorId = info.getReason           // e.g. "CONTRACT_NOT_FOUND"
-        val category = info.getMetadataMap.get("category") // e.g. "11"
-    }
-
-    // Full correlation ID for log lookup
-    details.collectFirst {
-      case any if any.is(classOf[RequestInfo]) =>
-        val requestId = any.unpack(classOf[RequestInfo]).getRequestId
-    }
-
-    // Retry interval (if error is retryable)
-    details.collectFirst {
-      case any if any.is(classOf[RetryInfo]) =>
-        val delay = any.unpack(classOf[RetryInfo]).getRetryDelay
-        val retryMs = delay.getSeconds * 1000 + delay.getNanos / 1_000_000
-    }
-
-    // Resource that caused the failure (if applicable)
-    details.collectFirst {
-      case any if any.is(classOf[ResourceInfo]) =>
-        val resource = any.unpack(classOf[ResourceInfo])
-        val resType = resource.getResourceType  // e.g. "CONTRACT_ID"
-        val resName = resource.getResourceName  // e.g. the contract ID
-    }
-}
-```
-
-{/* COPIED_END */}
 
 The following Java example shows the equivalent extraction. Java has first-class codegen support in Canton, so this is the most common non-Scala pattern:
 

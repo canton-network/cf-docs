@@ -50,105 +50,208 @@ newtype Token = Token Int
 
 ## Built-in Functions
 
-{/* COPIED_START - source: working-with.rst */}
+{/* COPIED_START source="docs-website:replicated/daml/3.5/sdk/reference/daml/working-with.rst" hash="56b3d265" */}
 
-### Time
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was copied from existing reviewed documentation.
+**Source:** `replicated/daml/3.5/sdk/reference/daml/working-with.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
 
-- `datetime` -- creates a `Time` given year, month, day, hours, minutes, and seconds as argument.
-- `subTime` -- subtracts one time from another. Returns the `RelTime` difference between `time1` and `time2`.
-- `addRelTime` -- add times. Takes a `Time` and `RelTime` and adds the `RelTime` to the `Time`.
-- `days`, `hours`, `minutes`, `seconds` -- constructs a `RelTime` of the specified length.
-- `pass` -- (in Daml Script tests only) use `pass : RelTime -> Script Time` to advance the ledger time by the argument amount. Returns the new time.
+# Reference: Built-in Functions
 
-### Numbers
+This page gives reference information on built-in functions for working with a variety of common concepts.
 
-- `round` -- rounds a `Decimal` number to `Int`. `round d` is the nearest `Int` to `d`. Tie-breaks are resolved by rounding away from zero (`round 2.5 == 3`, `round (-2.5) == -3`).
-- `truncate` -- converts a `Decimal` number to `Int`, truncating the value towards zero (`truncate 2.2 == 2`, `truncate (-2.2) == -2`).
-- `intToDecimal` -- converts an `Int` to `Decimal`.
+## Work with Time
 
-The set of numbers expressed by `Decimal` is not closed under division, as the result may require more than 10 decimal places to represent. For example, `1.0 / 3.0 == 0.3333...` is a rational number but not a `Decimal`.
+Daml has these built-in functions for working with time:
 
-### Text
+- `datetime`: creates a `Time` given year, month, day, hours, minutes, and seconds as argument.
+- `subTime`: subtracts one time from another. Returns the `RelTime` difference between `time1` and `time2`.
+- `addRelTime`: add times. Takes a `Time` and `RelTime` and adds the `RelTime` to the `Time`.
+- `days`, `hours`, `minutes`, `seconds`: constructs a `RelTime` of the specified length.
+- `pass`: (in `Daml Script tests <test-using-scripts>` only) use `pass : RelTime -> Script Time` to advance the ledger time by the argument amount. Returns the new time.
 
-- `<>` operator -- concatenates two `Text` values.
-- `show` -- converts a value of primitive types (`Bool`, `Int`, `Decimal`, `Party`, `Time`, `RelTime`) to `Text`.
+## Work with Numbers
 
-Escape sequences in Daml strings: `\\` (backslash), `\"` (double quote), `\'` (single quote), `\n` (newline), `\t` (tab), `\r` (carriage return). Unicode escapes are also supported: decimal (`\33`), octal (`\o41`), hexadecimal (`\x21`).
+Daml has these built-in functions for working with numbers:
 
-### Lists and Fold
+- `round`: rounds a `Decimal` number to `Int`.
 
-- `foldl` -- processes list elements left-to-right. Takes a binary operator, an initial accumulator, and a list. The operator is applied to the accumulator and each successive element, producing a new accumulator each time.
-- `foldr` -- same as `foldl` but processes right-to-left.
+  `round d` is the *nearest* `Int` to `d`. Tie-breaks are resolved by rounding away from zero, for example:
+
+  ``` none
+  round 2.5 == 3    round (-2.5) == -3
+  round 3.4 == 3    round (-3.7) == -4
+  ```
+
+- `truncate`: converts a `Decimal` number to `Int`, truncating the value towards zero, for example:
+
+  ``` none
+  truncate 2.2 == 2    truncate (-2.2) == -2
+  truncate 4.9 == 4    v (-4.9) == -4
+  ```
+
+- `intToDecimal`: converts an `Int` to `Decimal`.
+
+The set of numbers expressed by `Decimal` is not closed under division as the result may require more than 10 decimal places to represent. For example, `1.0 / 3.0 == 0.3333...` is a rational number, but not a `Decimal`.
+
+## Work with Text
+
+Daml has these built-in functions for working with text:
+
+- `<>` operator: concatenates two `Text` values.
+- `show` converts a value of the primitive types (`Bool`, `Int`, `Decimal`, `Party`, `Time`, `RelTime`) to a `Text`.
+
+To escape text in Daml strings, use `\`:
+
+<table style="width:69%;">
+<colgroup>
+<col style="width: 27%" />
+<col style="width: 41%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th><blockquote>
+<p>Character</p>
+</blockquote></th>
+<th>How to escape it</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>\</code></td>
+<td><code>\\</code></td>
+</tr>
+<tr class="even">
+<td><code>"</code></td>
+<td><code>\"</code></td>
+</tr>
+<tr class="odd">
+<td><code>'</code></td>
+<td><code>\'</code></td>
+</tr>
+<tr class="even">
+<td>Newline</td>
+<td><code>\n</code></td>
+</tr>
+<tr class="odd">
+<td>Tab</td>
+<td><code>\t</code></td>
+</tr>
+<tr class="even">
+<td>Carriage return</td>
+<td><code>\r</code></td>
+</tr>
+<tr class="odd">
+<td>Unicode (using <code>!</code> as an example)</td>
+<td><ul>
+<li>Decimal code: <code>\33</code></li>
+<li>Octal code: <code>\o41</code></li>
+<li>Hexadecimal code: <code>\x21</code></li>
+</ul></td>
+</tr>
+</tbody>
+</table>
+
+## Work with Lists
+
+Daml has these built-in functions for working with lists:
+
+- `foldl` and `foldr`: see `daml-ref-folding` below.
+
+### Fold
+
+A *fold* takes:
+
+- a binary operator
+- a first *accumulator* value
+- a list of values
+
+The elements of the list are processed one-by-one (from the left in a `foldl`, or from the right in a `foldr`).
 
 <Note>
-Prefer `foldl` over `foldr` in most cases, since `foldr` must traverse the entire list before it can begin reducing.
+We'd usually recommend using `foldl`, as `foldr` is usually slower. This is because it needs to traverse the whole list before starting to discharge its elements.
 </Note>
 
-Example -- summing a list:
+Processing goes like this:
+
+1.  The binary operator is applied to the first accumulator value and the first element in the list. This produces a second accumulator value.
+2.  The binary operator is applied to the *second* accumulator value and the second element in the list. This produces a third accumulator value.
+3.  This continues until there are no more elements in the list. Then, the last accumulator value is returned.
+
+As an example, to sum up a list of integers in Daml:
 
 ```daml
-sumList : [Int] -> Int
-sumList xs = foldl (+) 0 xs
+-- Code from: code-snippets/Snippets.daml
+-- [Include actual code example here]
 ```
 
 {/* COPIED_END */}
 
 ## Operator Fixity and Precedence
 
-{/* COPIED_START - source: fixity.rst */}
-
-Infix operators in Daml have a declared *associativity* (left, right, or non-associative) and an integer *precedence* from 0 (lowest) to 9 (highest). Left-associative means `x - y - z` parses as `(x - y) - z`. Right-associative means `a -> b -> c` parses as `a -> (b -> (c))`. Non-associative operators (such as `==` and `>`) produce a parse error when chained ambiguously.
-
-You declare fixity with `infixl`, `infix`, or `infixr` followed by a precedence level and the operator name. For example, `infixl 6 +`.
-
-| Precedence | Left-associative | Non-associative | Right-associative |
-|:---:|---|---|---|
-| 9 | `` `!!` `` | | `.` |
-| 8 | | | `<#&&>`, `^`, `**` |
-| 7 | `*`, `/`, `%` | | |
-| 6 | `+`, `-` | | `<>` |
-| 5 | | | `` `++` ``, `::` |
-| 4 | `<$`, `<$>`, `$>`, `<*`, `<*>`, `*>` | `==`, `/=`, `<`, `<=`, `>==`, `>`, `===`, `=/=` | |
-| 3 | | | `&&`, `&&&` |
-| 2 | | | `\|\|`, `\|\|\|` |
-| 1 | `>>`, `>>=`, `<&>` | | `=<<`, `<=<`, `>=>` |
-| 0 | | | `$` |
-
-{/* COPIED_END */}
-
 ## Standard Library
 
-{/* COPIED_START - source: stdlib/index.rst */}
+{/* COPIED_START source="docs-website:replicated/daml/3.5/sdk/reference/daml/stdlib/index.rst" hash="33e68583" */}
 
-The Daml standard library ships with the SDK. The `Prelude` module is imported automatically in every Daml module. Other modules require an explicit import:
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was copied from existing reviewed documentation.
+**Source:** `replicated/daml/3.5/sdk/reference/daml/stdlib/index.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+# The Standard Library
+
+The Daml standard library is a collection of Daml modules that are bundled with the SDK, and can be used to implement Daml applications.
+
+The `Prelude <module-prelude-72703>` module is imported automatically in every Daml module. Other modules must be imported manually, just like your own project's modules. For example:
 
 ```daml
 import DA.Optional
 import DA.Time
 ```
 
-Key modules:
+Here is a complete list of modules in the standard library:
 
-- **Prelude** -- automatically imported; core types, type classes, and functions
-- **DA.List** / **DA.List.Total** -- list operations and total (non-partial) variants
-- **DA.Optional** -- `Optional` type utilities (`fromOptional`, `isSome`, `isNone`)
-- **DA.Map** / **DA.TextMap** -- map data structures keyed by ordered types or `Text`
-- **DA.Set** -- set data structure
-- **DA.Time** / **DA.Date** -- time and date utilities
-- **DA.Text** -- text manipulation functions
-- **DA.Math** / **DA.Numeric** -- math operations and numeric type conversions
-- **DA.Action** / **DA.Action.State** -- monadic utilities and stateful computations
-- **DA.Assert** -- assertion helpers for scripts and tests
-- **DA.Either** -- `Either` type utilities
-- **DA.Foldable** / **DA.Traversable** -- type class abstractions for folding and traversal
-- **DA.Exception** -- exception types
-- **DA.Logic** -- propositional logic combinators
-- **DA.Validation** -- applicative validation
-- **DA.NonEmpty** -- non-empty list type
-- **DA.Crypto.Text** -- cryptographic text utilities
-- **DA.Bifunctor** / **DA.Functor** -- functor abstractions
-- **DA.Monoid** / **DA.Semigroup** -- algebraic type classes
-- **DA.Record** / **DA.Tuple** -- record and tuple utilities
+- `Prelude <Prelude>`
+- `DA.Action <DA-Action>`
+- `DA.Action.State <DA-Action-State>`
+- `DA.Action.State.Class <DA-Action-State-Class>`
+- `DA.Assert <DA-Assert>`
+- `DA.Bifunctor <DA-Bifunctor>`
+- `DA.Crypto.Text <DA-Crypto-Text>`
+- `DA.Date <DA-Date>`
+- `DA.Either <DA-Either>`
+- `DA.Exception <DA-Exception>`
+- `DA.Fail <DA-Fail>`
+- `DA.Foldable <DA-Foldable>`
+- `DA.Functor <DA-Functor>`
+- `DA.Internal.Interface.AnyView <DA-Internal-Interface-AnyView>`
+- `DA.Internal.Interface.AnyView.Types <DA-Internal-Interface-AnyView-Types>`
+- `DA.List <DA-List>`
+- `DA.List.BuiltinOrder <DA-List-BuiltinOrder>`
+- `DA.List.Total <DA-List-Total>`
+- `DA.Logic <DA-Logic>`
+- `DA.Map <DA-Map>`
+- `DA.Math <DA-Math>`
+- `DA.Monoid <DA-Monoid>`
+- `DA.NonEmpty <DA-NonEmpty>`
+- `DA.NonEmpty.Types <DA-NonEmpty-Types>`
+- `DA.Numeric <DA-Numeric>`
+- `DA.Optional <DA-Optional>`
+- `DA.Record <DA-Record>`
+- `DA.Semigroup <DA-Semigroup>`
+- `DA.Set <DA-Set>`
+- `DA.Stack <DA-Stack>`
+- `DA.Text <DA-Text>`
+- `DA.TextMap <DA-TextMap>`
+- `DA.Time <DA-Time>`
+- `DA.Traversable <DA-Traversable>`
+- `DA.Tuple <DA-Tuple>`
+- `DA.Validation <DA-Validation>`
+- `GHC.Show.Text <GHC-Show-Text>`
+- `GHC.Tuple.Check <GHC-Tuple-Check>`
 
 {/* COPIED_END */}
 
