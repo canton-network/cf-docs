@@ -1,6 +1,204 @@
 ---
 title: "Troubleshooting Methodology"
-description: "Systematic approach to troubleshooting Canton Network issues"
+description: "A systematic approach to diagnosing and resolving Global Synchronizer issues"
 ---
 
-Content coming soon.
+When something goes wrong with your validator, a structured approach saves time. This page outlines a repeatable process for diagnosing issues and knowing when to escalate.
+
+## Step 1: Check Logs
+
+Logs are your primary diagnostic tool. Start here before anything else.
+
+**Capture logs from a Docker Compose deployment:**
+
+```bash
+make capture-logs
+```
+
+This creates a timestamped archive of all container logs in the `logs/` directory.
+
+**For Kubernetes deployments, pull logs from each pod:**
+
+```bash
+kubectl logs -n validator deployment/validator-app --tail=1000 > validator-app.log
+kubectl logs -n validator deployment/participant --tail=1000 > participant.log
+```
+
+**Analyze logs with `lnav`** (a terminal-based log viewer with filtering and search):
+
+```bash
+lnav logs/*.log
+```
+
+Inside `lnav`, press `/` to search, then filter by severity:
+
+- `:filter-in error` -- show only error-level entries
+- `:filter-in WARN` -- show warnings too
+- Press `TAB` to switch between log files
+
+Look for error codes like `PARTICIPANT_*`, `SEQUENCER_*`, or `MEDIATOR_*`. These codes directly point to the category of failure.
+
+## Step 2: Check Health Endpoints
+
+Every validator component exposes a health endpoint. Confirm that each is responding:
+
+```bash
+# Validator app
+curl -s http://localhost/api/validator/readyz
+
+# Participant
+curl -s http://localhost:5003/health
+
+# Scan (if running an SV node)
+curl -s http://localhost/api/scan/readyz
+```
+
+A healthy response returns HTTP 200. If a component returns 503 or fails to respond, focus your investigation there.
+
+## Step 3: Check Connectivity
+
+Verify that your validator can reach the synchronizer sequencer and that no network-level issue is blocking traffic.
+
+```bash
+# DNS resolution
+dig sequencer.sync.global
+
+# TCP connectivity to the sequencer
+nc -zv sequencer.sync.global 443
+
+# If on DevNet with VPN, confirm VPN is connected
+ping -c 3 sequencer.dev.sync.global
+```
+
+TLS issues often surface as connection hangs or handshake failures. See [Connectivity Issues](/docs-main/global-synchronizer/troubleshooting-guide/connectivity-issues) for details.
+
+## Step 4: Check the Database
+
+If health endpoints respond but transactions fail or performance degrades, the database is the next suspect.
+
+```bash
+# Check database connectivity
+psql -h $DB_HOST -U $DB_USER -d participant -c "SELECT 1;"
+
+# Check table sizes (large tables may need pruning)
+psql -h $DB_HOST -U $DB_USER -d participant -c "
+  SELECT relname, pg_size_pretty(pg_total_relation_size(relid))
+  FROM pg_catalog.pg_statio_user_tables
+  ORDER BY pg_total_relation_size(relid) DESC
+  LIMIT 10;
+"
+```
+
+If tables are large (tens of GB), enable pruning. See [Performance Issues](/docs-main/global-synchronizer/troubleshooting-guide/performance-issues).
+
+## Step 5: Check Canton Console
+
+If the validator is running, the Canton console provides direct insight into internal state:
+
+```scala
+// Overall health
+health.status
+
+// Connected synchronizers
+participant.synchronizers.list_connected()
+
+// Party registrations
+participant.parties.list()
+```
+
+## Debugging Web UI Issues
+
+{/* COPIED_START source="splice:docs/src/deployment/troubleshooting.rst" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+**Source:** `splice:docs/src/deployment/troubleshooting.rst`
+</Warning>
+
+When facing an issue related to connectivity problems in a Chrome or Firefox based browser:
+
+1. Go to the right of the address bar in your browser, go to settings and then **More tools → Developer tools** (or hit Ctrl + Shift + I). Your browser developer tools window opens.
+2. Click the **Network** tab.
+3. Enable the **Preserve or Persist log** check box.
+4. While the console remains open, **reproduce the issue you want to report**.
+5. Once you are done, right-click and select **Save all as HAR**.
+6. Name the file with the description of your issue and save it.
+
+Repeat steps 2-6 by clicking the **Console** tab instead of the Network tab.
+
+{/* COPIED_END */}
+
+## Collecting Configuration for Diagnosis
+
+{/* COPIED_START source="splice:docs/src/deployment/troubleshooting.rst" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+**Source:** `splice:docs/src/deployment/troubleshooting.rst`
+</Warning>
+
+To diagnose issues, collect all configurations:
+
+- The application configuration files when running locally
+- The Helm values when using Helm charts (`helm get values -n <namespace> <chartname>`)
+- The environment variables when using Docker containers without Helm charts
+
+Also check the version you are using and the network (DevNet/TestNet/MainNet) you are running against.
+
+{/* COPIED_END */}
+
+## Common Error Messages
+
+{/* COPIED_START source="splice:docs/src/deployment/troubleshooting.rst" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+**Source:** `splice:docs/src/deployment/troubleshooting.rst`
+</Warning>
+
+### Traffic balance below reserved amount
+
+A log message `ABORTED: Traffic balance below reserved traffic amount (0 < 200000)` indicates that your validator app has not been able to purchase any traffic. The validator blocks transactions not required to purchase more traffic once the purchased traffic balance falls below a given number. Check the logs for `TopupMemberTrafficTrigger` to find possible causes.
+
+If you only want to rely on free traffic and do not want to purchase any extra traffic, remove the validator top-up config.
+
+### Insufficient funds to buy configured traffic amount
+
+This indicates that your validator app attempted to purchase traffic but does not have enough in the wallet of the validator operator party. This is common on TestNet and MainNet for new nodes as they start out with a balance of 0 and only slowly accrue CC through validator liveness rewards. Often this just requires waiting until enough CC has accrued. Alternatively, an existing node with a CC balance can transfer CC to you.
+
+### Gave up getting app version
+
+A log like `Gave up getting 'app version of https://scan.../api/sv'` can indicate that you used a Scan URL in a place where an SV URL was expected or the other way around.
+
+In a Docker Compose setup, verify the URL passed to `-s` which should be an SV URL. For Helm deployments, check the `svSponsorAddress` value.
+
+### UNAUTHENTICATED errors in validator, SV, and Scan app
+
+This indicates an authentication error on the connection to the participant. Check the participant logs for more details on why the request was rejected.
+
+### Node has identity X, but identifier Y was expected
+
+This indicates that you tried to change the identifier used for your participant after it was already initialized. For validators, the node identifier defaults to your `validatorPartyHint`, so changing that also produces this error. If this is a new node, reset by dropping the respective databases. If not, change the values back.
+
+<Warning>
+Dropping databases deletes all data on your node. Only do this on fresh nodes that never successfully initialized.
+</Warning>
+
+### MemberDisabled error when connecting to sequencer
+
+This indicates that your participant has been down longer than the 30-day sequencer pruning window and the SVs have disabled it. You can recover your CC balance by spinning up a new node.
+
+{/* COPIED_END */}
+
+## Escalation Path
+
+If self-diagnosis does not resolve the issue, escalate in this order:
+
+- **Self-service documentation** -- search this troubleshooting guide and the [cheat sheet](/docs-main/global-synchronizer/troubleshooting)
+- **Community Slack channels** -- post in `#validator-operations` or `#gsf-global-synchronizer-appdev` with your error message, logs (redacted), and environment details
+- **Email support** -- contact [da-support@digitalasset.com](mailto:da-support@digitalasset.com) for best-effort discretionary support
+- **Paid support with SLAs** -- contact [support@digitalasset.com](mailto:support@digitalasset.com), which opens a tracked Jira ticket
+
+When escalating, always include:
+
+- Your validator ID and network (DevNet, TestNet, or MainNet)
+- The Splice / SDK version you are running
+- Relevant log excerpts (redact private keys, passwords, and JWT tokens)
+- A timeline of when the issue started and any recent changes
