@@ -10,60 +10,202 @@ command reference, see the [Canton documentation](https://docs.digitalasset.com/
 
 ## Starting the Console
 
-{/* COPIED_START - source: console.rst */}
+{/* COPIED_START source="splice:docs/src/deployment/console_access.rst" hash="bccf3653" */}
 
-### Local Console
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was copied from existing reviewed documentation.
+**Source:** `docs/src/deployment/console_access.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
 
-Start a Canton instance with an interactive console:
+# Getting console access to Canton nodes
 
-```bash
-./bin/canton -c <config-file>
+For more involved debugging and disaster recovery, direct access to the console of a Canton node (participant, sequencer, mediator) might be required. Steps to obtain such access:
+
+Requirements:
+
+- Direct access to the Canton node process
+- Canton binary
+
+Once you see the following banner for the console you have successfully gained access
+
+``` text
+_____            _
+/ ____|          | |
+| |     __ _ _ __ | |_ ___  _ __
+| |    / _` | '_ \| __/ _ \| '_ \
+| |___| (_| | | | | || (_) | | | |
+\_____\__,_|_| |_|\__\___/|_| |_|
+
+Welcome to Canton!
 ```
 
-Start in daemon mode (no interactive console):
+## Participant console
+
+1.  Obtain an authentication token as specified in [the Canton authentication docs](https://docs.digitalasset.com/operate/3.4/howtos/secure/apis/jwt.html)
+
+2.  Ensure you can access the participant's ports 5001 and 5002
+
+3.  Add the configuration to a local file <span class="title-ref">console.conf</span>
+    ```
+    canton {
+      remote-participants {
+        participant {
+          admin-api {
+            port = 5002
+            address = localhost
+          }
+          ledger-api {
+            port = 5001
+            address = localhost
+          }
+          token = "<auth token>"
+        }
+      }
+      features.enable-preview-commands = yes
+      features.enable-testing-commands = yes
+      features.enable-repair-commands = yes
+    }
+    ```
+
+4.  Run the docker command
+
+    > <div class="parsed-literal">
+    >
+    > docker run -it --rm --network host -v \$(pwd)/console.conf:/app/app.conf /canton: --console
+    >
+    > </div>
+    >
+    > <Warning>
+>
+    > <div class="title">
+    >
+    > Important
+    >
+    >
+</Warning>
+    >
+    > If you run the participant using the docker compose setup the docker command must be run with the docker network used by the participant. Adjust the configuration to connect to the participant container:
+    >
+    > ```
+    > canton {
+    >   remote-participants {
+    >     participant {
+    >       admin-api {
+    >         port = 5002
+    >         address = participant
+    >       }
+    >       ledger-api {
+    >         port = 5001
+    >         address = participant
+    >       }
+    >       token = "<auth token>"
+    >     }
+    >   }
+    >   features.enable-preview-commands = yes
+    >   features.enable-testing-commands = yes
+    >   features.enable-repair-commands = yes
+    > }
+    > ```
+    >
+    > Running docker with the default network (<span class="title-ref">splice-validator</span>):
+    >
+    > <div class="parsed-literal">
+    >
+    > </div>
+    >
+    > docker run -it --rm --network splice-validator -v \$(pwd)/console.conf:/app/app.conf /canton: --console
+    >
+    > </div>
+
+## Sequencer console
+
+1.  Ensure you can access the sequencer's ports 5008 and 5009
+
+2.  Add the configuration to a local file <span class="title-ref">console.conf</span>
+
+    > ```
+    > canton {
+    >   remote-sequencers {
+    >     sequencer {
+    >       public-api {
+    >         port = 5008
+    >         address = localhost
+    >       }
+    >       admin-api {
+    >         port = 5009
+    >         address = localhost
+    >       }
+    >     }
+    >   }
+    >   features.enable-preview-commands = yes
+    >   features.enable-testing-commands = yes
+    >   features.enable-repair-commands = yes
+    > }
+    > ```
+
+3.  Run the docker command
+
+    > <div class="parsed-literal">
+    >
+    > docker run -it --rm --network host -v \$(pwd)/console.conf:/app/app.conf /canton: --console
+    >
+    > </div>
+
+## Mediator console
+
+1.  Ensure you can access the mediator's port 5007
+
+2.  Add the configuration to a local file <span class="title-ref">console.conf</span>
+
+    > ```
+    > canton {
+    >   remote-mediators {
+    >     mediator {
+    >       admin-api {
+    >         port = 5007
+    >         address = localhost
+    >       }
+    >     }
+    >   }
+    >   features.enable-preview-commands = yes
+    >   features.enable-testing-commands = yes
+    >   features.enable-repair-commands = yes
+    > }
+    > ```
+
+3.  Run the docker command
+
+    > <div class="parsed-literal">
+    >
+    > docker run -it --rm --network host -v \$(pwd)/console.conf:/app/app.conf /canton: --console
+    >
+    > </div>
+
+## Access in a K8s cluster
+
+In a K8s cluster you can use a debug pod to access the console directly from the cluster.
+
+First you can create a pod running the right canton version using:
 
 ```bash
-./bin/canton daemon -c <config-file>
+kubectl debug "${POD_NAME}" --image "$(kubectl get pod "${POD_NAME}" -o json | jq -re '.spec.containers[0].image')" -i -t -- bash
 ```
 
-### Remote Console
+where <span class="title-ref">POD_NAME</span> is the name of the participant/sequencer/mediator pod.
+
+Once you are inside the running pod you can install a text editor and create the config file <span class="title-ref">console.conf</span> that is described above.
+
+```bash
+$ apt-get update
+$ apt-get install -y vim
+$ vim console.conf # paste in the config from above
+$ /app/bin/canton -v -c console.conf
+```
 
 {/* COPIED_END */}
 
 You can connect a console to a running Canton node over its Admin API and Ledger API ports. This is the standard approach for production validators, where nodes run as background services or containers.
-
-{/* COPIED_START - source: console_access.rst */}
-
-Create a remote configuration file (for example, `console.conf`):
-
-```
-canton {
-  remote-participants {
-    participant {
-      admin-api {
-        port = 5002
-        address = localhost
-      }
-      ledger-api {
-        port = 5001
-        address = localhost
-      }
-      token = "<auth-token>"
-    }
-  }
-  features.enable-preview-commands = yes
-  features.enable-testing-commands = yes
-  features.enable-repair-commands = yes
-}
-```
-
-Then start the console with that configuration:
-
-```bash
-./bin/canton -c console.conf
-```
-
-{/* COPIED_END */}
 
 To run a script against a remote node without entering the interactive REPL:
 
@@ -71,94 +213,11 @@ To run a script against a remote node without entering the interactive REPL:
 ./bin/canton run <script.canton> -c console.conf
 ```
 
-{/* COPIED_START - source: console_access.rst */}
-
-### Docker-Based Console Access
-
-If your validator runs in Docker, start a console container on the same network:
-
-```bash
-docker run -it --rm --network host \
-  -v $(pwd)/console.conf:/app/app.conf \
-  digitalasset/canton:<version> --console
-```
-
-When using Docker Compose, replace `--network host` with the network your validator container uses (for example, `--network splice-validator`) and set the `address` fields in your configuration to the container names instead of `localhost`.
-
-### Kubernetes Console Access
-
-In a Kubernetes cluster, create a debug pod from the same image as the target node:
-
-```bash
-kubectl debug "${POD_NAME}" \
-  --image "$(kubectl get pod "${POD_NAME}" -o json | jq -re '.spec.containers[0].image')" \
-  -i -t -- bash
-```
-
-Inside the pod, create your `console.conf` and start the console:
-
-```bash
-/app/bin/canton -v -c console.conf
-```
-
-{/* COPIED_END */}
-
 ### TLS and Authorization
-
-{/* COPIED_START - source: console.rst */}
-
-For production deployments where the Admin API is not bound to localhost, enable TLS with mutual authentication.
-
-The remote console supports installations that use authorization tokens. Pass the token through the configuration or on the command line:
-
-```bash
-./bin/canton daemon \
-  -c remote-participant.conf \
-  -C canton.remote-participants.<name>.token="<encoded-access-token>" \
-  --bootstrap <script>
-```
-
-The console extracts the user ID from the token and uses it for Ledger API command submissions and completion subscriptions.
-
-{/* COPIED_END */}
 
 ## Node References
 
-{/* COPIED_START - source: console.rst */}
-
-Each configured node is available as a named Scala variable matching its configuration identifier. For example, if your configuration defines a participant called `participant`, you access it as `participant` in the console.
-
-Generic references let you work with groups of nodes:
-
-```scala
-participants.local    // locally configured participants
-participants.remote   // remote participants
-participants.all      // both local and remote
-```
-
-The same pattern applies to `sequencers` and `mediators`. You can iterate over these:
-
-```scala
-participants.all.foreach(_.dars.upload("my.dar"))
-```
-
-{/* COPIED_END */}
-
 ## Help System
-
-{/* COPIED_START - source: console.rst */}
-
-The built-in help works at every level of the command hierarchy:
-
-```scala
-help                                     // top-level overview
-participant.help()                       // all commands on a participant
-participant.synchronizers.help()         // commands in the synchronizers group
-participant.parties.help("list")         // detailed help for a specific command
-help("list")                             // search all commands matching "list"
-```
-
-{/* COPIED_END */}
 
 ## Command Groups for Operators
 
@@ -282,42 +341,7 @@ connected.foreach { sync =>
 }
 ```
 
-{/* COPIED_START - source: console.rst */}
-
-### Timeouts
-
-Console command timeouts are configurable:
-
-```
-canton.parameters.timeouts.console = {
-  bounded = 2.minutes
-  unbounded = Inf
-  ledger-command = 2.minutes
-  ping = 30.seconds
-}
-```
-
-Individual commands accept explicit timeout arguments using Scala duration syntax:
-
-```scala
-participant.health.ping(participant, timeout = 10.seconds)
-```
-
-{/* COPIED_END */}
-
 ### Database Migrations
-
-{/* COPIED_START - source: console.rst */}
-
-Nodes with database persistence support `db.migrate` to apply schema migrations. Migrations run automatically on first startup, but new migrations from version upgrades must be run manually unless you enable automatic migrations:
-
-```
-canton.participants.participant.storage.parameters.migrate-and-start = yes
-```
-
-Data continuity is only guaranteed across minor and patch version updates.
-
-{/* COPIED_END */}
 
 ## Sequencer and Mediator Commands
 

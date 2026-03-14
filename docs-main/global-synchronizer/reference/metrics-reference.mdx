@@ -5,18 +5,6 @@ description: "Reference for monitoring metrics exposed by Canton Network validat
 
 Every Canton Network node exposes metrics on port `10013` at the `/metrics` path in Prometheus format. These metrics are built with OpenTelemetry and cover the participant, validator app, and (for super validators) the SV and scan apps.
 
-{/* COPIED_START: splice/docs/src/deployment/observability/metrics.rst - component list */}
-For a validator, the following components expose metrics:
-
-- The validator app
-- The participant
-
-For a super validator, you also get metrics from:
-
-- The SV app
-- The scan app
-{/* COPIED_END */}
-
 ## Enabling metrics
 
 ### Kubernetes (Helm)
@@ -25,15 +13,7 @@ Set `metrics.enable` to `true` in your Helm values. This creates a `ServiceMonit
 
 ### Docker Compose
 
-{/* COPIED_START: splice/docs/src/deployment/observability/metrics.rst - docker compose */}
-When using Docker Compose for deployment, metrics are enabled by default. You can access them at `http://validator.localhost/metrics` for the validator app and `http://participant.localhost/metrics` for the participant.
-{/* COPIED_END */}
-
 ### Histogram format
-
-{/* COPIED_START: splice/docs/src/deployment/observability/metrics.rst - histograms */}
-Histograms are exposed as [OpenTelemetry exponential histograms](https://opentelemetry.io/docs/specs/otel/metrics/data-model/#exponentialhistogram), which are converted to [Prometheus native histograms](https://prometheus.io/docs/specs/native_histograms/). You must enable native histogram support in Prometheus with the flag `--enable-feature=native-histograms`. This switches Prometheus to protobuf collection format.
-{/* COPIED_END */}
 
 To revert to regular histograms on a specific node, set the environment variable:
 
@@ -43,12 +23,45 @@ ADDITIONAL_CONFIG_DISABLE_NATIVE_HISTOGRAMS="canton.monitoring.metrics.histogram
 
 ## Health metrics
 
-{/* COPIED_START: docs-website canton 3.5 metrics.rst - health metrics */}
-All components expose a `daml_health_status` gauge.
+{/* COPIED_START source="splice:docs/src/deployment/observability/validator_health.rst" hash="08633c30" */}
 
-| Metric | Type | Description |
-|---|---|---|
-| `daml_health_status` | gauge | `1` if the component is healthy, `0` if not. The `component` label identifies which component is being reported. |
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was copied from existing reviewed documentation.
+**Source:** `docs/src/deployment/observability/validator_health.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+# Validator Health
+
+You can check your validator's health using the readiness endpoints. All CN applications provide the `/readyz` and `/livez` endpoints, which are used for readiness and liveness probes.
+
+- **Checking readiness**
+
+  - In Kubernetes: readiness and liveness probes are already configured.
+
+    You can also manually check validator readiness with the following command:
+
+    ```yaml
+    kubectl exec <pod-name> -n <namespace> -- curl -v https://localhost:5003/api/validator/readyz
+    ```
+
+  - In Docker: run for example this command to check validator liveness inside a container:
+
+    ```yaml
+    docker exec <container-name> -- curl -v https://localhost:5003/api/validator/livez
+    ```
+
+  You should expect in both case HTTP status code 200 if the validator is ready and live.
+
+- **Using metrics**
+
+  The `splice_store_last_ingested_record_time_ms` metric represents the last ingested record time in each validator store. It can be used to track general activity of the node:
+
+  - If this value continue to increase over time, your node is active and stays in sync with the network. Note that it only advances if your node actually ingests new transactions. For a validator collecting validator liveness rewards this happens every round so you should expect your lag to never go above 20min.
+  - If it remains static, further investigation may be required.
+
+  For more details and to visualize this metric on its dedicated dashboard <span class="title-ref">Splice Store Last Ingested Record Time</span>, refer to the documentation about `Metrics <metrics>`.
+
 {/* COPIED_END */}
 
 You can also check health through the readiness and liveness HTTP endpoints (`/readyz` and `/livez`) on port `5003`. In Kubernetes, these probes are preconfigured. For Docker, query them with:
@@ -61,22 +74,7 @@ An HTTP 200 response means the node is ready.
 
 ## Splice app metrics
 
-{/* COPIED_START: splice/docs/src/deployment/observability/validator_health.rst - store metric */}
-The `splice_store_last_ingested_record_time_ms` metric represents the last ingested record time in each validator store. Use it to track general node activity:
-
-- If this value continues to increase over time, your node is active and in sync with the network. For a validator collecting liveness rewards, this advances every round, so you should expect the lag to never go above 20 minutes.
-- If it remains static, investigate further.
-{/* COPIED_END */}
-
 ### Topology metrics (optional)
-
-{/* COPIED_START: splice/docs/src/deployment/observability/metrics.rst - topology metrics */}
-The validator app can run a trigger that polls topology state and exports metrics with the prefix `splice.synchronizer-topology`. This trigger is disabled by default. To enable it with a 5-minute polling interval, add the following environment variable:
-
-```bash
-ADDITIONAL_CONFIG_TOPOLOGY_METRICS_EXPORT="canton.validator-apps.validator_backend.automation.topology-metrics-polling-interval = 5m"
-```
-{/* COPIED_END */}
 
 ## Key participant metrics
 
@@ -156,22 +154,7 @@ These metrics are relevant if your node participates in traffic-based rate limit
 
 ## JVM metrics
 
-{/* COPIED_START: docs-website canton 3.5 metrics.rst - JVM metrics */}
-All Canton nodes expose standard JVM metrics when enabled:
-
-| Metric | Type | Description |
-|---|---|---|
-| `runtime_jvm_gc_time` | counter | Time spent in garbage collection (ms). Labeled by `gc` region (e.g., `G1 Old Generation`). |
-| `runtime_jvm_gc_count` | counter | Number of GC collections. Labeled by `gc` region. |
-| `runtime_jvm_memory_area` | gauge | Heap and non-heap memory statistics. Labeled by `area` (`heap`/`non_heap`) and `type` (`committed`/`used`/`max`). |
-| `runtime_jvm_memory_pool` | gauge | Per-pool memory statistics. Labeled by `pool` name and `type`. |
-{/* COPIED_END */}
-
 ## Grafana dashboards
-
-{/* COPIED_START: splice/docs/src/deployment/observability/metrics.rst - grafana dashboards */}
-The release bundle contains a set of Grafana dashboards built on the metrics described above. Import these dashboards into your Grafana instance from the `grafana-dashboards` folder in the release bundle. The dashboards assume a Kubernetes deployment and may need adjustment for other deployment types.
-{/* COPIED_END */}
 
 The dashboards use queries specific to Prometheus native histograms, so make sure native histogram support is enabled in your Prometheus instance.
 
