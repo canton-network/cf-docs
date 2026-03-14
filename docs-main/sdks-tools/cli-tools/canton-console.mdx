@@ -11,6 +11,73 @@ For full operational documentation, see the [Global Synchronizer section](/docs-
 
 The Console is bundled with the Canton distribution. When you start a Canton process, the Console is available as an interactive shell. You can also connect a remote Console to a running node.
 
+{/* COPIED_START source="splice:docs/src/deployment/console_access.rst" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+**Source:** `splice:docs/src/deployment/console_access.rst`
+</Warning>
+
+For more involved debugging and disaster recovery, direct access to the console of a Canton node (participant, sequencer, mediator) might be required.
+
+### Participant console
+
+1. Obtain an authentication token as specified in the [Canton authentication docs](https://docs.digitalasset.com/operate/3.4/howtos/secure/apis/jwt.html)
+2. Ensure you can access the participant's ports 5001 and 5002
+3. Add the configuration to a local file `console.conf`:
+
+```
+canton {
+  remote-participants {
+    participant {
+      admin-api {
+        port = 5002
+        address = localhost
+      }
+      ledger-api {
+        port = 5001
+        address = localhost
+      }
+      token = "<auth token>"
+    }
+  }
+  features.enable-preview-commands = yes
+  features.enable-testing-commands = yes
+  features.enable-repair-commands = yes
+}
+```
+
+4. Run the docker command:
+
+```bash
+docker run -it --rm --network host -v $(pwd)/console.conf:/app/app.conf <DOCKER_REPO_PREFIX>/canton:<VERSION> --console
+```
+
+### Sequencer console
+
+1. Ensure you can access the sequencer's ports 5008 and 5009
+2. Use the same approach with a `remote-sequencers` block instead of `remote-participants`
+
+### Mediator console
+
+1. Ensure you can access the mediator's port 5007
+2. Use the same approach with a `remote-mediators` block
+
+### Access in a Kubernetes cluster
+
+In a Kubernetes cluster, use a debug pod to access the console directly:
+
+```bash
+kubectl debug "${POD_NAME}" --image "$(kubectl get pod "${POD_NAME}" -o json | jq -re '.spec.containers[0].image')" -i -t -- bash
+```
+
+Once inside the pod, install a text editor, create the `console.conf` file, and run:
+
+```bash
+/app/bin/canton -v -c console.conf
+```
+
+{/* COPIED_END */}
+
 What you can do with the Console:
 
 - **Party management** -- Create parties, list hosted parties, manage party-to-participant mappings
