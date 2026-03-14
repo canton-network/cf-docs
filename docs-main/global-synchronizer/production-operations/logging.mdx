@@ -5,19 +5,32 @@ description: "Log configuration, formats, and aggregation for Canton and Splice 
 
 Canton and Splice nodes use [Logback](https://logback.qos.ch/) for logging. Proper log configuration helps you diagnose issues quickly, meet audit requirements, and feed data into your monitoring stack.
 
-{/* COPIED_START source="splice:docs/src/deployment/troubleshooting.rst" */}
+{/* COPIED_START source="splice:docs/src/deployment/troubleshooting.rst" hash="c98edbdf" */}
 
 <Warning title="Pre-reviewed Content - Do Not Modify">
-**Source:** `splice:docs/src/deployment/troubleshooting.rst`
+This section was copied from existing reviewed documentation.
+**Source:** `docs/src/deployment/troubleshooting.rst`
+Reviewers: Skip this section. Remove markers after final approval.
 </Warning>
+
+## Where to find logs
 
 **When launched locally**, splice-node will create a `log/` directory located at the root of the repository and log into `canton_network.log`. Canton logs into `canton.log`.
 
-**When the node is launched in a Kubernetes cluster**, set up a log collector to capture logs of at least the last day. Use `lnav` to read the logs.
+<Note>
+The default log level, initially set to Debug, can be changed using the `--log-level-canton` flag, for example: `splice-node --config "${OUTPUT_CONFIG}" --log-level-canton=DEBUG ...`
+</Note>
 
-In Kubernetes, you can access logs with:
-- `kubectl describe pod <pod-name>` to get a detailed status of the given pod
-- `kubectl logs <pod-name> -n <namespace-name>` to get logs for a given pod in a given namespace
+**When the node is launched in a kubernetes cluster**, we recommend to setup a log collector so that you can capture logs of at least the last day. For now, the default log level is set to Debug.
+
+We recommend to use `lnav` to read the logs. A guideline is provided in [this documentation](https://github.com/hyperledger-labs/splice/blob/main/TESTING.md#setting-up-lnav-to-inspect-canton-and-cometbft-logs).
+
+<Note>
+Logging in kubernetes (note that this only provides logs for a limited timeframe):
+
+- `kubectl describe pod <pod-name>` to get a detailed status of the given pod,
+- `kubectl logs <pod-name> -n <namespace-name>` or `kubectl logs -l app=<app-name> -n <namespace-name> --tail=-1` to get logs for a given pod in a given namespace.
+</Note>
 
 {/* COPIED_END */}
 
@@ -115,76 +128,101 @@ In Kubernetes deployments, the standard practice is to log to stdout and let the
 
 ## Metrics exposure
 
-{/* COPIED_START source="splice:docs/src/deployment/observability/metrics.rst" */}
+{/* COPIED_START source="splice:docs/src/deployment/observability/metrics.rst" hash="88d7cba8" */}
 
 <Warning title="Pre-reviewed Content - Do Not Modify">
-**Source:** `splice:docs/src/deployment/observability/metrics.rst`
+This section was copied from existing reviewed documentation.
+**Source:** `docs/src/deployment/observability/metrics.rst`
+Reviewers: Skip this section. Remove markers after final approval.
 </Warning>
 
-Every node exposes a set of metrics on port 10013 under the path `/metrics` in the Prometheus format. These metrics can be used to monitor the health of the node and to diagnose issues.
+Every node exposes a set of metrics on the port 10013 under the path <span class="title-ref">/metrics</span>. These metrics can be used to monitor the health of the node, and to diagnose issues.
 
-For a validator, the following components expose metrics:
+<Note>
+Apps expose metrics on the port 10013, under the path <span class="title-ref">/metrics</span> in the Prometheus format.
+</Note>
+
+For a validator the following components expose metrics:
 
 - The validator app
 - The participant
 
-For a Super Validator, in addition:
+For a Super Validator, in addition, we have the following components:
 
 - The SV app
 - The scan app
 
-OpenTelemetry is used to build the metrics and they are exposed in the Prometheus format. Histograms are exposed as exponential histograms which are converted to Prometheus native histograms.
+<div class="todo">
 
-<Note>
-Prometheus native histogram support must be enabled using the flag `-enable-feature=native-histograms`.
-</Note>
+link to network or component diagram to improve understanding
 
-To enable metrics in a Helm deployment, set the `metrics.enable` value to `true` (default `false`) in the Helm values. This creates a `ServiceMonitor` Kubernetes custom resource (requires the Prometheus operator).
+</div>
 
-When using Docker Compose, metrics are enabled by default. Access them at `http://validator.localhost/metrics` for the validator app and at `http://participant.localhost/metrics` for the participant.
+## Scraping the metrics
+
+We use OpenTelemetry to build the metrics and they are exposed in the Prometheus format, and can be scraped by a Prometheus server. For a reference of the existing metrics please check the `metrics reference <metrics-reference>`.
+
+#
 
 {/* COPIED_END */}
 
 ## Health endpoints
 
-{/* COPIED_START source="splice:docs/src/deployment/observability/validator_health.rst" */}
+{/* COPIED_START source="splice:docs/src/deployment/observability/validator_health.rst" hash="08633c30" */}
 
 <Warning title="Pre-reviewed Content - Do Not Modify">
-**Source:** `splice:docs/src/deployment/observability/validator_health.rst`
+This section was copied from existing reviewed documentation.
+**Source:** `docs/src/deployment/observability/validator_health.rst`
+Reviewers: Skip this section. Remove markers after final approval.
 </Warning>
 
-All CN applications provide the `/readyz` and `/livez` endpoints, which are used for readiness and liveness probes.
+You can check your validator's health using the readiness endpoints. All CN applications provide the `/readyz` and `/livez` endpoints, which are used for readiness and liveness probes.
 
-In Kubernetes, readiness and liveness probes are already configured. You can also manually check validator readiness:
+- **Checking readiness**
 
-```bash
-kubectl exec <pod-name> -n <namespace> -- curl -v https://localhost:5003/api/validator/readyz
-```
+  - In Kubernetes: readiness and liveness probes are already configured.
 
-In Docker:
+    You can also manually check validator readiness with the following command:
 
-```bash
-docker exec <container-name> -- curl -v https://localhost:5003/api/validator/livez
-```
+    ```yaml
+    kubectl exec <pod-name> -n <namespace> -- curl -v https://localhost:5003/api/validator/readyz
+    ```
 
-You should expect HTTP status code 200 if the validator is ready and live.
+  - In Docker: run for example this command to check validator liveness inside a container:
 
-The `splice_store_last_ingested_record_time_ms` metric represents the last ingested record time in each validator store. If this value continues to increase over time, your node is active and stays in sync with the network. If it remains static, further investigation may be required.
+    ```yaml
+    docker exec <container-name> -- curl -v https://localhost:5003/api/validator/livez
+    ```
+
+  You should expect in both case HTTP status code 200 if the validator is ready and live.
+
+- **Using metrics**
+
+  The `splice_store_last_ingested_record_time_ms` metric represents the last ingested record time in each validator store. It can be used to track general activity of the node:
+
+  - If this value continue to increase over time, your node is active and stays in sync with the network. Note that it only advances if your node actually ingests new transactions. For a validator collecting validator liveness rewards this happens every round so you should expect your lag to never go above 20min.
+  - If it remains static, further investigation may be required.
+
+  For more details and to visualize this metric on its dedicated dashboard <span class="title-ref">Splice Store Last Ingested Record Time</span>, refer to the documentation about `Metrics <metrics>`.
 
 {/* COPIED_END */}
 
 ## Grafana dashboards
 
-{/* COPIED_START source="splice:docs/src/deployment/observability/metrics.rst" */}
+{/* COPIED_START source="splice:docs/src/deployment/observability/metrics.rst" hash="88d7cba8" */}
 
 <Warning title="Pre-reviewed Content - Do Not Modify">
-**Source:** `splice:docs/src/deployment/observability/metrics.rst`
+This section was copied from existing reviewed documentation.
+**Source:** `docs/src/deployment/observability/metrics.rst`
+Reviewers: Skip this section. Remove markers after final approval.
 </Warning>
 
-The release bundle contains a set of Grafana dashboards built based on the metrics above. These dashboards can be imported into a Grafana instance. The dashboards are built assuming a Kubernetes deployment and may need to be modified for other deployment types. The dashboards can be found under the `grafana-dashboards` folder in the release bundle.
+## Grafana Dashboards
+
+The release bundle () contains a set of Grafana dashboards that are built based on the metrics above. These dashboards can be imported into a Grafana instance. The dashboards are built assuming a K8s deployment, and may need to be modified for other deployment types. The dashboards can be found under the <span class="title-ref">grafana-dashboards</span> folder in the release bundle.
 
 <Note>
-The dashboards are built using queries specific to Prometheus native histograms.
+The dashboards are built using queries specific for Prometheus native histograms.
 </Note>
 
 {/* COPIED_END */}
