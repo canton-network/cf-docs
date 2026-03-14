@@ -41,7 +41,20 @@ You cannot remove a template from a package in a later version. If version 1 def
 
 ### Deprecating a Template
 
-To effectively retire a template without removing it, add a precondition that always fails:
+{/* COPIED_START source="docs-website:manual/build/3.5/sdlc-howtos/applications/upgrade/arch-considerations-upgrading.rst" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+**Source:** `docs-website:manual/build/3.5/sdlc-howtos/applications/upgrade/arch-considerations-upgrading.rst`
+</Warning>
+
+New templates can be added. Existing templates cannot be removed but can be deprecated by:
+
+- Removing references to them from other Daml code.
+- Adding `ensure False` to make them non-operational. This prevents new contract creation using the template and choice exercises, including the implicit `Archive` choice, on existing contracts created using the template.
+
+Note that the latter approach may result in a large number of active contracts stored on the ledger without a way to archive them, unless another update is deployed to evaluate the `ensure` clause to `True`. To deprecate a template without leaving contracts on the ledger that cannot be archived, add `ensure False` to the template only after all active contracts created from it have been archived through automation or other means.
+
+{/* COPIED_END */}
 
 ```haskell
 template LegacyAsset
@@ -52,8 +65,6 @@ template LegacyAsset
     signatory owner
     ensure False  -- No new contracts can be created
 ```
-
-Setting `ensure False` prevents any new `LegacyAsset` contracts from being created. Existing active contracts of this template remain valid and can still be exercised or archived, but no new ones can appear.
 
 ## Removing Fields, Choices, or Variant Constructors Is Not Allowed
 
@@ -82,7 +93,21 @@ For contrast, these modifications are allowed across package versions:
 
 ## Planning Around Limitations
 
-When you encounter a limitation, the typical workaround is to create a new package with new template names for the breaking change, and provide a migration choice on the old template that archives it and creates the new one. This is explicit and requires active cooperation from contract stakeholders, which is a feature -- stakeholders always consent to changes that affect their contracts.
+{/* COPIED_START source="docs-website:manual/build/3.5/sdlc-howtos/applications/upgrade/arch-considerations-upgrading.rst" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+**Source:** `docs-website:manual/build/3.5/sdlc-howtos/applications/upgrade/arch-considerations-upgrading.rst`
+</Warning>
+
+Only backward-compatible changes are allowed for existing APIs, that is for the current Daml code. Introduce backward-incompatible changes by creating new APIs, such as new templates and choices for new workflows. To implement backwards-incompatible upgrades:
+
+- Introduce new templates and add a consuming `Upgrade` choice to existing templates. This choice archives the old contract and creates an instance of the new template, ensuring a backwards-compatible upgrade.
+- Where necessary, provide reference data, such as default values, for `Upgrade` choices via additional choice arguments.
+- Use backend automation to migrate old contracts to new ones. The process may incur downtime on workflows until the contracts are converted by the automation.
+
+{/* COPIED_END */}
+
+This approach is explicit and requires active cooperation from contract stakeholders, which is a feature -- stakeholders always consent to changes that affect their contracts.
 
 ## Further Reading
 
