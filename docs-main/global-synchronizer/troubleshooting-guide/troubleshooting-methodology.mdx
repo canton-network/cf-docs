@@ -106,6 +106,87 @@ participant.synchronizers.list_connected()
 participant.parties.list()
 ```
 
+## Debugging Web UI Issues
+
+{/* COPIED_START source="splice:docs/src/deployment/troubleshooting.rst" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+**Source:** `splice:docs/src/deployment/troubleshooting.rst`
+</Warning>
+
+When facing an issue related to connectivity problems in a Chrome or Firefox based browser:
+
+1. Go to the right of the address bar in your browser, go to settings and then **More tools → Developer tools** (or hit Ctrl + Shift + I). Your browser developer tools window opens.
+2. Click the **Network** tab.
+3. Enable the **Preserve or Persist log** check box.
+4. While the console remains open, **reproduce the issue you want to report**.
+5. Once you are done, right-click and select **Save all as HAR**.
+6. Name the file with the description of your issue and save it.
+
+Repeat steps 2-6 by clicking the **Console** tab instead of the Network tab.
+
+{/* COPIED_END */}
+
+## Collecting Configuration for Diagnosis
+
+{/* COPIED_START source="splice:docs/src/deployment/troubleshooting.rst" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+**Source:** `splice:docs/src/deployment/troubleshooting.rst`
+</Warning>
+
+To diagnose issues, collect all configurations:
+
+- The application configuration files when running locally
+- The Helm values when using Helm charts (`helm get values -n <namespace> <chartname>`)
+- The environment variables when using Docker containers without Helm charts
+
+Also check the version you are using and the network (DevNet/TestNet/MainNet) you are running against.
+
+{/* COPIED_END */}
+
+## Common Error Messages
+
+{/* COPIED_START source="splice:docs/src/deployment/troubleshooting.rst" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+**Source:** `splice:docs/src/deployment/troubleshooting.rst`
+</Warning>
+
+### Traffic balance below reserved amount
+
+A log message `ABORTED: Traffic balance below reserved traffic amount (0 < 200000)` indicates that your validator app has not been able to purchase any traffic. The validator blocks transactions not required to purchase more traffic once the purchased traffic balance falls below a given number. Check the logs for `TopupMemberTrafficTrigger` to find possible causes.
+
+If you only want to rely on free traffic and do not want to purchase any extra traffic, remove the validator top-up config.
+
+### Insufficient funds to buy configured traffic amount
+
+This indicates that your validator app attempted to purchase traffic but does not have enough in the wallet of the validator operator party. This is common on TestNet and MainNet for new nodes as they start out with a balance of 0 and only slowly accrue CC through validator liveness rewards. Often this just requires waiting until enough CC has accrued. Alternatively, an existing node with a CC balance can transfer CC to you.
+
+### Gave up getting app version
+
+A log like `Gave up getting 'app version of https://scan.../api/sv'` can indicate that you used a Scan URL in a place where an SV URL was expected or the other way around.
+
+In a Docker Compose setup, verify the URL passed to `-s` which should be an SV URL. For Helm deployments, check the `svSponsorAddress` value.
+
+### UNAUTHENTICATED errors in validator, SV, and Scan app
+
+This indicates an authentication error on the connection to the participant. Check the participant logs for more details on why the request was rejected.
+
+### Node has identity X, but identifier Y was expected
+
+This indicates that you tried to change the identifier used for your participant after it was already initialized. For validators, the node identifier defaults to your `validatorPartyHint`, so changing that also produces this error. If this is a new node, reset by dropping the respective databases. If not, change the values back.
+
+<Warning>
+Dropping databases deletes all data on your node. Only do this on fresh nodes that never successfully initialized.
+</Warning>
+
+### MemberDisabled error when connecting to sequencer
+
+This indicates that your participant has been down longer than the 30-day sequencer pruning window and the SVs have disabled it. You can recover your CC balance by spinning up a new node.
+
+{/* COPIED_END */}
+
 ## Escalation Path
 
 If self-diagnosis does not resolve the issue, escalate in this order:
