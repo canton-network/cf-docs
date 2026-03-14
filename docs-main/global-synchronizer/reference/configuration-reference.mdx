@@ -9,48 +9,11 @@ For application developer configuration (Canton + DPM), see the [AppDev Configur
 
 ## Configuration format
 
-{/* COPIED_START — source: splice/docs/src/deployment/configuration.rst */}
-All Splice apps accept configuration in [HOCON](https://github.com/lightbend/config/blob/main/HOCON.md) format. You pass extra configuration to any app through environment variables that start with `ADDITIONAL_CONFIG`. Every such variable is processed and applied when the app starts.
-
-```bash
-# Example: set an arbitrary configuration key
-ADDITIONAL_CONFIG_EXAMPLE="canton.example.key=value"
-```
-
-The full configuration schema for each app is defined in its Scala config class, with configuration keys in kebab-case (the Scala source uses camelCase):
-
-- [ValidatorAppConfig.scala](https://github.com/hyperledger-labs/splice/blob/main/apps/validator/src/main/scala/org/lfdecentralizedtrust/splice/validator/config/ValidatorAppConfig.scala#L141)
-- [SvAppConfig.scala](https://github.com/hyperledger-labs/splice/blob/main/apps/sv/src/main/scala/org/lfdecentralizedtrust/splice/sv/config/SvAppConfig.scala#L199)
-- [ScanAppConfig.scala](https://github.com/hyperledger-labs/splice/blob/main/apps/scan/src/main/scala/org/lfdecentralizedtrust/splice/scan/config/ScanAppConfig.scala#L28)
-
-Canton participant and synchronizer components can also be configured independently. See the [Canton static configuration docs](https://docs.digitalasset.com/canton/3.5/usermanual/static_conf) for those options.
-{/* COPIED_END */}
-
 ### Helm chart configuration
 
 When deploying with Helm, pass `ADDITIONAL_CONFIG` values through the `additionalEnvVars` field in your Helm values file:
 
-{/* COPIED_START — source: splice/docs/src/deployment/configuration.rst */}
-```yaml
-additionalEnvVars:
-    - name: ADDITIONAL_CONFIG_EXAMPLE
-      value: canton.example.key=value
-```
-{/* COPIED_END */}
-
 ### Custom bootstrap scripts
-
-{/* COPIED_START — source: splice/docs/src/deployment/configuration.rst */}
-Both Canton and Splice support bootstrap scripts during initialization. While this usually should not be needed (the validator app handles node initialization), some scenarios require custom logic. Set the `OVERRIDE_BOOTSTRAP_SCRIPT` environment variable to the content of your bootstrap script. The script must be wrapped in a `main` function:
-
-```scala
-def main() {
-  logger.info(s"Participant id from bootstrap script: ${participant.id}")
-}
-```
-
-This overwrites any bootstrap scripts baked into the container image. If you added custom functionality there, replicate it in the override.
-{/* COPIED_END */}
 
 ## Validator node configuration
 
@@ -315,10 +278,6 @@ See the Canton documentation on [pruning operations](https://docs.digitalasset.c
 ## Monitoring and observability
 
 ### Metrics endpoint
-
-{/* COPIED_START — source: splice/docs/src/deployment/observability/metrics.rst */}
-Every node exposes Prometheus-format metrics on port `10013` at the `/metrics` path. For a validator, both the validator app and the participant expose metrics. For Super Validators, the SV app and Scan app expose metrics as well.
-{/* COPIED_END */}
 
 **Helm deployments**: set `metrics.enable: true` in your Helm values to create a `ServiceMonitor` custom resource (requires the Prometheus Operator). Alternatively, add Prometheus scrape annotations targeting port 10013.
 
