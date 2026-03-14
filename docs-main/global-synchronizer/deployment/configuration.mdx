@@ -10,6 +10,44 @@ Validator configuration spans several layers: HOCON files for Canton components,
 - **Docker Compose** — Primary config through environment variables in `.env` and `compose.yaml`. Use `JAVA_TOOL_OPTIONS` for JVM/HOCON overrides.
 - **Kubernetes** — Primary config through Helm `values.yaml` files. Use ConfigMaps, Secrets, and Helm value overrides for environment-specific settings.
 
+{/* COPIED_START source="splice:docs/src/deployment/configuration.rst" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+**Source:** `splice:docs/src/deployment/configuration.rst`
+</Warning>
+
+All the apps have an extended set of configuration options in the [HOCON](https://github.com/lightbend/config/blob/main/HOCON.md) format.
+
+Every app accepts extra configuration through environment variables. All the environment variables passed to the apps that start with `ADDITIONAL_CONFIG` will be processed and the configuration will be applied when the app starts.
+
+<Note>
+Example: `ADDITIONAL_CONFIG_EXAMPLE="canton.example.key=value"`
+</Note>
+
+The full configuration for each app can be observed in the Scala code, with the configuration key being kebab-case compared to the camelCase in the Scala code:
+
+- [ValidatorAppConfig.scala](https://github.com/hyperledger-labs/splice/blob/main/apps/validator/src/main/scala/org/lfdecentralizedtrust/splice/validator/config/ValidatorAppConfig.scala#L141)
+- [SvAppConfig.scala](https://github.com/hyperledger-labs/splice/blob/main/apps/sv/src/main/scala/org/lfdecentralizedtrust/splice/sv/config/SvAppConfig.scala#L199)
+- [ScanAppConfig.scala](https://github.com/hyperledger-labs/splice/blob/main/apps/scan/src/main/scala/org/lfdecentralizedtrust/splice/scan/config/ScanAppConfig.scala#L28)
+
+Both Canton and Splice support bootstrap scripts during initialization. To do so, set the `OVERRIDE_BOOTSTRAP_SCRIPT` environment variable to the content of your bootstrap script. The script must be wrapped in a `main` function:
+
+```scala
+def main() {
+  logger.info(s"Participant id from bootstrap script: ${participant.id}")
+}
+```
+
+The Helm charts can be configured through the value `additionalEnvVars`, which passes the values as environment variables to the apps:
+
+```yaml
+additionalEnvVars:
+    - name: ADDITIONAL_CONFIG_EXAMPLE
+      value: canton.example.key=value
+```
+
+{/* COPIED_END */}
+
 ## Participant node configuration
 
 The participant node is the core component of your validator. Its configuration controls synchronizer connections, database settings, and API behavior.
