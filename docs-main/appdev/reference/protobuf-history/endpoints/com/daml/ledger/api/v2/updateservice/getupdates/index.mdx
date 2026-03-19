@@ -1,0 +1,105 @@
+---
+title: UpdateService.GetUpdates
+description: Descriptor-backed protobuf endpoint reference and history for com.daml.ledger.api.v2.UpdateService/GetUpdates.
+---
+
+# Endpoint `com.daml.ledger.api.v2.UpdateService/GetUpdates`
+
+[Back to Canton Protobuf History](/docs-main/appdev/reference/protobuf-history/index)
+
+## Overview
+
+- Status: current
+- Package: `com.daml.ledger.api.v2`
+- Service: `com.daml.ledger.api.v2.UpdateService`
+- Source: [community/ledger-api/src/main/protobuf/com/daml/ledger/api/v2/update_service.proto](https://github.com/DACH-NY/canton/blob/v3.4.11/community/ledger-api/src/main/protobuf/com/daml/ledger/api/v2/update_service.proto#L37)
+- Request: `com.daml.ledger.api.v2.GetUpdatesRequest`
+- Response: `com.daml.ledger.api.v2.GetUpdatesResponse`
+- Client streaming: no
+- Server streaming: yes
+- Introduced in: `v3.4.0`
+- Last changed in: `v3.4.0`
+
+## Signature
+
+```proto
+rpc UpdateService.GetUpdates(com.daml.ledger.api.v2.GetUpdatesRequest) returns (stream com.daml.ledger.api.v2.GetUpdatesResponse);
+```
+
+Read the ledger's filtered update stream for the specified contents and filters.
+ It returns the event types in accordance with the stream contents selected. Also the selection criteria
+ for individual events depends on the transaction shape chosen.
+
+ - ACS delta: a requesting party must be a stakeholder of an event for it to be included.
+ - ledger effects: a requesting party must be a witness of an en event for it to be included.
+
+## Release History
+
+| Release | Date | Event | Change Types | Compare |
+| :------ | :--- | :---- | :----------- | :------ |
+| `v3.4.0` | 2025-10-30 | added |  |  |
+
+## Request Type
+
+### Message `com.daml.ledger.api.v2.GetUpdatesRequest`
+
+- Source: [community/ledger-api/src/main/protobuf/com/daml/ledger/api/v2/update_service.proto](https://github.com/DACH-NY/canton/blob/v3.4.11/community/ledger-api/src/main/protobuf/com/daml/ledger/api/v2/update_service.proto#L48)
+- Fields: 3
+- Nested messages: 0
+- Nested enums: 0
+- Reserved ranges: `[{"start": 3, "end": 4}, {"start": 4, "end": 5}]`
+- Reserved names: `["filter", "verbose"]`
+
+_No description._
+
+| # | Field | Type | Label | Oneof | Description | Metadata |
+| -: | :---- | :--- | :---- | :---- | :---------- | :------- |
+| 1 | `begin_exclusive` | `int64` | optional |  | Beginning of the requested ledger section (non-negative integer).<br/> The response will only contain transactions whose offset is strictly greater than this.<br/> If zero, the stream will start from the beginning of the ledger.<br/> If positive, the streaming will start after this absolute offset.<br/> If the ledger has been pruned, this parameter must be specified and be greater than the pruning offset. |  |
+| 2 | `end_inclusive` | `int64` | optional |  | End of the requested ledger section.<br/> The response will only contain transactions whose offset is less than or equal to this.<br/> Optional, if empty, the stream will not terminate.<br/> If specified, the stream will terminate after this absolute offset (positive integer) is reached. |  |
+| 5 | `update_format` | `com.daml.ledger.api.v2.UpdateFormat` | optional |  | Must be unset for GetUpdateTrees request.<br/> Optional for backwards compatibility for GetUpdates request: defaults to an UpdateFormat where:<br/><br/> - include_transactions.event_format.filters_by_party = the filter.filters_by_party on this request<br/> - include_transactions.event_format.filters_for_any_party = the filter.filters_for_any_party on this request<br/> - include_transactions.event_format.verbose = the same flag specified on this request<br/> - include_transactions.transaction_shape = TRANSACTION_SHAPE_ACS_DELTA<br/> - include_reassignments.filter = the same filter specified on this request<br/> - include_reassignments.verbose = the same flag specified on this request<br/> - include_topology_events.include_participant_authorization_events.parties = all the parties specified in filter |  |
+
+## Response Type
+
+### Message `com.daml.ledger.api.v2.GetUpdatesResponse`
+
+- Source: [community/ledger-api/src/main/protobuf/com/daml/ledger/api/v2/update_service.proto](https://github.com/DACH-NY/canton/blob/v3.4.11/community/ledger-api/src/main/protobuf/com/daml/ledger/api/v2/update_service.proto#L81)
+- Fields: 4
+- Nested messages: 0
+- Nested enums: 0
+
+_No description._
+
+Oneofs:
+- `update` (4 fields)
+  The update that matches the filter in the request.
+
+| # | Field | Type | Label | Oneof | Description | Metadata |
+| -: | :---- | :--- | :---- | :---- | :---------- | :------- |
+| 1 | `transaction` | `com.daml.ledger.api.v2.Transaction` | optional | `update` |  |  |
+| 2 | `reassignment` | `com.daml.ledger.api.v2.Reassignment` | optional | `update` |  |  |
+| 3 | `offset_checkpoint` | `com.daml.ledger.api.v2.OffsetCheckpoint` | optional | `update` |  |  |
+| 4 | `topology_transaction` | `com.daml.ledger.api.v2.TopologyTransaction` | optional | `update` |  |  |
+
+## Service Context
+
+- Service: `com.daml.ledger.api.v2.UpdateService`
+- Source: [community/ledger-api/src/main/protobuf/com/daml/ledger/api/v2/update_service.proto](https://github.com/DACH-NY/canton/blob/v3.4.11/community/ledger-api/src/main/protobuf/com/daml/ledger/api/v2/update_service.proto#L30)
+- Endpoints in service: 3
+
+Allows clients to read updates (transactions, (un)assignments, topology events) from the ledger.
+
+ ``GetUpdates`` and ``GetUpdateTrees`` provide a comprehensive stream of updates/changes
+ which happened on the virtual shared ledger. These streams are indexed with ledger
+ offsets, which are strictly increasing.
+ The virtual shared ledger consist of changes happening on multiple synchronizers which are
+ connected to the serving participant. Each update belongs to one synchronizer, this is
+ provided in the result (the ``synchronizer_id`` field in ``Transaction``
+ for transactions, the ``source`` field in ``UnassignedEvent`` and the ``target`` field in ``AssignedEvent``).
+ Consumers can rely on strong causal guarantees on the virtual shared ledger for a single
+ synchronizer: updates which have greater offsets are happened after than updates with smaller
+ offsets for the same synchronizer. Across different synchronizers this is not guaranteed.
+
+Endpoints in this service:
+- [`GetUpdates`](/docs-main/appdev/reference/protobuf-history/endpoints/com/daml/ledger/api/v2/updateservice/getupdates/index)
+- [`GetUpdateByOffset`](/docs-main/appdev/reference/protobuf-history/endpoints/com/daml/ledger/api/v2/updateservice/getupdatebyoffset/index)
+- [`GetUpdateById`](/docs-main/appdev/reference/protobuf-history/endpoints/com/daml/ledger/api/v2/updateservice/getupdatebyid/index)

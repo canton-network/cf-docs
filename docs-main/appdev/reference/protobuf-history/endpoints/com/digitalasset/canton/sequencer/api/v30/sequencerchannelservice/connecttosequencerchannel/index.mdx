@@ -1,0 +1,112 @@
+---
+title: SequencerChannelService.ConnectToSequencerChannel
+description: Descriptor-backed protobuf endpoint reference and history for com.digitalasset.canton.sequencer.api.v30.SequencerChannelService/ConnectToSequencerChannel.
+---
+
+# Endpoint `com.digitalasset.canton.sequencer.api.v30.SequencerChannelService/ConnectToSequencerChannel`
+
+[Back to Canton Protobuf History](/docs-main/appdev/reference/protobuf-history/index)
+
+## Overview
+
+- Status: current
+- Package: `com.digitalasset.canton.sequencer.api.v30`
+- Service: `com.digitalasset.canton.sequencer.api.v30.SequencerChannelService`
+- Source: [community/base/src/main/protobuf/com/digitalasset/canton/sequencer/api/v30/sequencer_channel_service.proto](https://github.com/DACH-NY/canton/blob/v3.4.11/community/base/src/main/protobuf/com/digitalasset/canton/sequencer/api/v30/sequencer_channel_service.proto#L17)
+- Request: `com.digitalasset.canton.sequencer.api.v30.ConnectToSequencerChannelRequest`
+- Response: `com.digitalasset.canton.sequencer.api.v30.ConnectToSequencerChannelResponse`
+- Client streaming: yes
+- Server streaming: yes
+- Introduced in: `v3.4.0`
+- Last changed in: `v3.4.0`
+
+## Signature
+
+```proto
+rpc SequencerChannelService.ConnectToSequencerChannel(stream com.digitalasset.canton.sequencer.api.v30.ConnectToSequencerChannelRequest) returns (stream com.digitalasset.canton.sequencer.api.v30.ConnectToSequencerChannelResponse);
+```
+
+Request to connect to a channel and begin interacting with it via bidirectional streams mostly opaque to the
+ sequencer channel service (except for a handful of initialization messages).
+ The sequencer channel service forwards requests from one member as responses to another member.
+
+## Release History
+
+| Release | Date | Event | Change Types | Compare |
+| :------ | :--- | :---- | :----------- | :------ |
+| `v3.4.0` | 2025-10-30 | added |  |  |
+
+## Request Type
+
+### Message `com.digitalasset.canton.sequencer.api.v30.ConnectToSequencerChannelRequest`
+
+- Source: [community/base/src/main/protobuf/com/digitalasset/canton/sequencer/api/v30/sequencer_channel_service.proto](https://github.com/DACH-NY/canton/blob/v3.4.11/community/base/src/main/protobuf/com/digitalasset/canton/sequencer/api/v30/sequencer_channel_service.proto#L42)
+- Fields: 5
+- Nested messages: 0
+- Nested enums: 0
+
+The sequencer channel service protocol consists of several messages which are sent as a request or a response
+ (that is as a ConnectToSequencerChannelRequest or a ConnectToSequencerChannelResponse).
+
+ The protocol transitions through several stages.
+ - To bootstrap the channel, initialization messages between the sequencer channel client and service need to be
+   exchanged, that are SequencerChannelMetadata and SequencerChannelConnectedToAllEndpoints messages.
+ - To secure the channel, sequencer channel client member endpoints setup a session key with the
+   SequencerChannelSessionKey and SequencerChannelSessionKeyAck messages.
+ - To transfer data through the channel, members use opaque (encrypted) payload messages which the sequencer channel
+   service forwards between channel member endpoints.
+
+ Using payload messages channel client users can implement their own application protocol such as the
+ Online Party Replication.
+
+ Note that both, request and response need to implement SequencerChannelSessionKey and SequencerChannelSessionKeyAck
+ messages because of the bidirectional gRPC streams. For example, when the sequencer channel service receives a
+ SequencerChannelSessionKeyAck request message from a sequencer channel client, it needs to forward it as a
+ SequencerChannelSessionKeyAck response message to the destination sequencer channel client.
+
+Oneofs:
+- `request` (4 fields)
+  Required
+
+| # | Field | Type | Label | Oneof | Description | Metadata |
+| -: | :---- | :--- | :---- | :---- | :---------- | :------- |
+| 1 | `metadata` | `com.digitalasset.canton.sequencer.api.v30.SequencerChannelMetadata` | optional | `request` | Exactly the first message of the channel request stream must be SequencerChannelMetadata<br/> for use by the sequencer channel service to match channel endpoint members. |  |
+| 2 | `session_key` | `com.digitalasset.canton.sequencer.api.v30.SequencerChannelSessionKey` | optional | `request` | SequencerChannelSessionKey and SequencerChannelSessionKeyAck are used to send and acknowledge an asymmetrically<br/> encrypted session key between the sequencer channel client endpoints. The SequencerChannelSessionKey is opaque to<br/> sequencer channel service. |  |
+| 3 | `session_key_acknowledgement` | `com.digitalasset.canton.sequencer.api.v30.SequencerChannelSessionKeyAck` | optional | `request` |  |  |
+| 4 | `payload` | `bytes` | optional | `request` | Payload is opaque to the sequencer channel service and client. |  |
+| 5 | `trace_context` | `com.digitalasset.canton.v30.TraceContext` | optional |  | Canton trace context<br/> Required |  |
+
+## Response Type
+
+### Message `com.digitalasset.canton.sequencer.api.v30.ConnectToSequencerChannelResponse`
+
+- Source: [community/base/src/main/protobuf/com/digitalasset/canton/sequencer/api/v30/sequencer_channel_service.proto](https://github.com/DACH-NY/canton/blob/v3.4.11/community/base/src/main/protobuf/com/digitalasset/canton/sequencer/api/v30/sequencer_channel_service.proto#L64)
+- Fields: 5
+- Nested messages: 0
+- Nested enums: 0
+
+_No description._
+
+Oneofs:
+- `response` (4 fields)
+  Required
+
+| # | Field | Type | Label | Oneof | Description | Metadata |
+| -: | :---- | :--- | :---- | :---- | :---------- | :------- |
+| 1 | `connected` | `com.digitalasset.canton.sequencer.api.v30.SequencerChannelConnectedToAllEndpoints` | optional | `response` | Exactly the first message of the channel response stream must be SequencerChannelConnectedToAllEndpoints<br/> for use by the sequencer channel client to notify the request initiator that the channel is ready for use. |  |
+| 2 | `session_key` | `com.digitalasset.canton.sequencer.api.v30.SequencerChannelSessionKey` | optional | `response` | SequencerChannelSessionKey and SequencerChannelSessionKeyAck are used to send and acknowledge an asymmetrically<br/> encrypted session key between the sequencer channel client endpoints. The SequencerChannelSessionKey is opaque to<br/> sequencer channel service. |  |
+| 3 | `session_key_acknowledgement` | `com.digitalasset.canton.sequencer.api.v30.SequencerChannelSessionKeyAck` | optional | `response` |  |  |
+| 4 | `payload` | `bytes` | optional | `response` | Payload is opaque to the sequencer channel service and client. |  |
+| 5 | `trace_context` | `com.digitalasset.canton.v30.TraceContext` | optional |  | Canton trace context<br/> Required |  |
+
+## Service Context
+
+- Service: `com.digitalasset.canton.sequencer.api.v30.SequencerChannelService`
+- Source: [community/base/src/main/protobuf/com/digitalasset/canton/sequencer/api/v30/sequencer_channel_service.proto](https://github.com/DACH-NY/canton/blob/v3.4.11/community/base/src/main/protobuf/com/digitalasset/canton/sequencer/api/v30/sequencer_channel_service.proto#L13)
+- Endpoints in service: 2
+
+The service that a member can use to establish a bidirectional channel to another member via the sequencer
+
+Endpoints in this service:
+- [`ConnectToSequencerChannel`](/docs-main/appdev/reference/protobuf-history/endpoints/com/digitalasset/canton/sequencer/api/v30/sequencerchannelservice/connecttosequencerchannel/index)
+- [`Ping`](/docs-main/appdev/reference/protobuf-history/endpoints/com/digitalasset/canton/sequencer/api/v30/sequencerchannelservice/ping/index)

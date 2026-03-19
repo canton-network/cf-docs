@@ -1,0 +1,104 @@
+---
+title: PartyManagementService.ExportPartyAcs
+description: Descriptor-backed protobuf endpoint reference and history for com.digitalasset.canton.admin.participant.v30.PartyManagementService/ExportPartyAcs.
+---
+
+# Endpoint `com.digitalasset.canton.admin.participant.v30.PartyManagementService/ExportPartyAcs`
+
+[Back to Canton Protobuf History](/docs-main/appdev/reference/protobuf-history/index)
+
+## Overview
+
+- Status: current
+- Package: `com.digitalasset.canton.admin.participant.v30`
+- Service: `com.digitalasset.canton.admin.participant.v30.PartyManagementService`
+- Source: [community/admin-api/src/main/protobuf/com/digitalasset/canton/admin/participant/v30/party_management_service.proto](https://github.com/DACH-NY/canton/blob/v3.4.11/community/admin-api/src/main/protobuf/com/digitalasset/canton/admin/participant/v30/party_management_service.proto#L54)
+- Request: `com.digitalasset.canton.admin.participant.v30.ExportPartyAcsRequest`
+- Response: `com.digitalasset.canton.admin.participant.v30.ExportPartyAcsResponse`
+- Client streaming: no
+- Server streaming: yes
+- Introduced in: `v3.4.0`
+- Last changed in: `v3.4.0`
+
+## Signature
+
+```proto
+rpc PartyManagementService.ExportPartyAcs(com.digitalasset.canton.admin.participant.v30.ExportPartyAcsRequest) returns (stream com.digitalasset.canton.admin.participant.v30.ExportPartyAcsResponse);
+```
+
+Offline party replication focused ACS export.
+
+ Exports the ACS of a single party from a source participant, so that the party can be
+ replicated onto a target participant.
+
+ This endpoint works in conjunction with the ImportPartyAcs endpoint.
+
+## Release History
+
+| Release | Date | Event | Change Types | Compare |
+| :------ | :--- | :---- | :----------- | :------ |
+| `v3.4.0` | 2025-10-30 | added |  |  |
+
+## Request Type
+
+### Message `com.digitalasset.canton.admin.participant.v30.ExportPartyAcsRequest`
+
+- Source: [community/admin-api/src/main/protobuf/com/digitalasset/canton/admin/participant/v30/party_management_service.proto](https://github.com/DACH-NY/canton/blob/v3.4.11/community/admin-api/src/main/protobuf/com/digitalasset/canton/admin/participant/v30/party_management_service.proto#L234)
+- Fields: 5
+- Nested messages: 0
+- Nested enums: 0
+
+Exports the ACS for a given party to facilitate its replication from a source to a target participant.
+
+ This request uses the party's most recent activation on the target participant to determine the precise
+ historical state of the ACS to export from the source participant.
+
+ "Activation" on the target participant means the new hosting arrangement has been authorized by both
+ the party itself and the target participant via party-to-participant topology transactions.
+
+ This request will fail if the party has not yet been activated on the target participant.
+
+| # | Field | Type | Label | Oneof | Description | Metadata |
+| -: | :---- | :--- | :---- | :---- | :---------- | :------- |
+| 1 | `party_id` | `string` | optional |  | The identifier of the party being replicated. This party must already be active on the target participant<br/> for the ACS export to succeed.<br/> Required |  |
+| 2 | `synchronizer_id` | `string` | optional |  | The identifier of the synchronizer managing the contract to be exported. This scopes the ACS export to only<br/> contracts assigned to this synchronizer.<br/> Required |  |
+| 3 | `target_participant_uid` | `string` | optional |  | The unique identifier of the target participant where the party will be replicated.<br/> Required |  |
+| 4 | `begin_offset_exclusive` | `int64` | optional |  | The exclusive ledger offset used as starting point to find the party's most recent activation on the target<br/> participant.<br/> Required |  |
+| 5 | `wait_for_activation_timeout` | `google.protobuf.Duration` | optional |  | The maximum duration the service will wait to find the topology transaction that activates the party on<br/> the target participant.<br/> If not set, the service will use a default timeout.<br/> Optional |  |
+
+## Response Type
+
+### Message `com.digitalasset.canton.admin.participant.v30.ExportPartyAcsResponse`
+
+- Source: [community/admin-api/src/main/protobuf/com/digitalasset/canton/admin/participant/v30/party_management_service.proto](https://github.com/DACH-NY/canton/blob/v3.4.11/community/admin-api/src/main/protobuf/com/digitalasset/canton/admin/participant/v30/party_management_service.proto#L261)
+- Fields: 1
+- Nested messages: 0
+- Nested enums: 0
+
+_No description._
+
+| # | Field | Type | Label | Oneof | Description | Metadata |
+| -: | :---- | :--- | :---- | :---- | :---------- | :------- |
+| 1 | `chunk` | `bytes` | optional |  | A chunk of the ACS snapshot. This response is streamed, with each message containing a portion of the<br/> complete ACS data. The raw binary data within each chunk consists of Ledger API active contract messages,<br/> specifically wrapped in `v30.active_contract.ActiveContract` messages. However, a single chunk does not<br/> necessarily contain exactly one complete message.<br/> This field will be populated in each streamed response.<br/> Required |  |
+
+## Service Context
+
+- Service: `com.digitalasset.canton.admin.participant.v30.PartyManagementService`
+- Source: [community/admin-api/src/main/protobuf/com/digitalasset/canton/admin/participant/v30/party_management_service.proto](https://github.com/DACH-NY/canton/blob/v3.4.11/community/admin-api/src/main/protobuf/com/digitalasset/canton/admin/participant/v30/party_management_service.proto#L21)
+- Endpoints in service: 6
+
+*
+ The PartyManagementService allows modifying party hosting on participants.
+
+ Note that ACS refers to Active Contract Set.
+
+ Important: The online and offline party replication endpoints serve distinct workflows,
+ and must not be combined.
+
+Endpoints in this service:
+- [`AddPartyAsync`](/docs-main/appdev/reference/protobuf-history/endpoints/com/digitalasset/canton/admin/participant/v30/partymanagementservice/addpartyasync/index)
+- [`GetAddPartyStatus`](/docs-main/appdev/reference/protobuf-history/endpoints/com/digitalasset/canton/admin/participant/v30/partymanagementservice/getaddpartystatus/index)
+- [`ExportPartyAcs`](/docs-main/appdev/reference/protobuf-history/endpoints/com/digitalasset/canton/admin/participant/v30/partymanagementservice/exportpartyacs/index)
+- [`ImportPartyAcs`](/docs-main/appdev/reference/protobuf-history/endpoints/com/digitalasset/canton/admin/participant/v30/partymanagementservice/importpartyacs/index)
+- [`GetHighestOffsetByTimestamp`](/docs-main/appdev/reference/protobuf-history/endpoints/com/digitalasset/canton/admin/participant/v30/partymanagementservice/gethighestoffsetbytimestamp/index)
+- [`ClearPartyOnboardingFlag`](/docs-main/appdev/reference/protobuf-history/endpoints/com/digitalasset/canton/admin/participant/v30/partymanagementservice/clearpartyonboardingflag/index)

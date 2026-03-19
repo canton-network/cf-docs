@@ -1,0 +1,112 @@
+---
+title: UserManagementService.UpdateUser
+description: Descriptor-backed protobuf endpoint reference and history for com.daml.ledger.api.v2.admin.UserManagementService/UpdateUser.
+---
+
+# Endpoint `com.daml.ledger.api.v2.admin.UserManagementService/UpdateUser`
+
+[Back to Canton Protobuf History](/docs-main/appdev/reference/protobuf-history/index)
+
+## Overview
+
+- Status: current
+- Package: `com.daml.ledger.api.v2.admin`
+- Service: `com.daml.ledger.api.v2.admin.UserManagementService`
+- Source: [community/ledger-api/src/main/protobuf/com/daml/ledger/api/v2/admin/user_management_service.proto](https://github.com/DACH-NY/canton/blob/v3.4.11/community/ledger-api/src/main/protobuf/com/daml/ledger/api/v2/admin/user_management_service.proto#L51)
+- Request: `com.daml.ledger.api.v2.admin.UpdateUserRequest`
+- Response: `com.daml.ledger.api.v2.admin.UpdateUserResponse`
+- Client streaming: no
+- Server streaming: no
+- Introduced in: `v3.4.0`
+- Last changed in: `v3.4.0`
+
+## Signature
+
+```proto
+rpc UserManagementService.UpdateUser(com.daml.ledger.api.v2.admin.UpdateUserRequest) returns (com.daml.ledger.api.v2.admin.UpdateUserResponse);
+```
+
+Update selected modifiable attribute of a user resource described by the ``User`` message.
+
+## Release History
+
+| Release | Date | Event | Change Types | Compare |
+| :------ | :--- | :---- | :----------- | :------ |
+| `v3.4.0` | 2025-10-30 | added |  |  |
+
+## Request Type
+
+### Message `com.daml.ledger.api.v2.admin.UpdateUserRequest`
+
+- Source: [community/ledger-api/src/main/protobuf/com/daml/ledger/api/v2/admin/user_management_service.proto](https://github.com/DACH-NY/canton/blob/v3.4.11/community/ledger-api/src/main/protobuf/com/daml/ledger/api/v2/admin/user_management_service.proto#L207)
+- Fields: 2
+- Nested messages: 0
+- Nested enums: 0
+
+Required authorization: ``HasRight(ParticipantAdmin) OR IsAuthenticatedIdentityProviderAdmin(user.identity_provider_id)``
+
+| # | Field | Type | Label | Oneof | Description | Metadata |
+| -: | :---- | :--- | :---- | :---- | :---------- | :------- |
+| 1 | `user` | `com.daml.ledger.api.v2.admin.User` | optional |  | The user to update.<br/> Required,<br/> Modifiable |  |
+| 2 | `update_mask` | `google.protobuf.FieldMask` | optional |  | An update mask specifies how and which properties of the ``User`` message are to be updated.<br/> An update mask consists of a set of update paths.<br/> A valid update path points to a field or a subfield relative to the ``User`` message.<br/> A valid update mask must:<br/><br/> 1. contain at least one update path,<br/> 2. contain only valid update paths.<br/><br/> Fields that can be updated are marked as ``Modifiable``.<br/> An update path can also point to a non-``Modifiable`` fields such as 'id' and 'metadata.resource_version'<br/> because they are used:<br/><br/> 1. to identify the user resource subject to the update,<br/> 2. for concurrent change control.<br/><br/> Examples of valid update paths: 'primary_party', 'metadata', 'metadata.annotations'.<br/> For additional information see the documentation for standard protobuf3's ``google.protobuf.FieldMask``.<br/> For similar Ledger API see ``com.daml.ledger.api.v2.admin.UpdatePartyDetailsRequest``.<br/> Required |  |
+
+## Response Type
+
+### Message `com.daml.ledger.api.v2.admin.UpdateUserResponse`
+
+- Source: [community/ledger-api/src/main/protobuf/com/daml/ledger/api/v2/admin/user_management_service.proto](https://github.com/DACH-NY/canton/blob/v3.4.11/community/ledger-api/src/main/protobuf/com/daml/ledger/api/v2/admin/user_management_service.proto#L235)
+- Fields: 1
+- Nested messages: 0
+- Nested enums: 0
+
+_No description._
+
+| # | Field | Type | Label | Oneof | Description | Metadata |
+| -: | :---- | :--- | :---- | :---- | :---------- | :------- |
+| 1 | `user` | `com.daml.ledger.api.v2.admin.User` | optional |  | Updated user |  |
+
+## Service Context
+
+- Service: `com.daml.ledger.api.v2.admin.UserManagementService`
+- Source: [community/ledger-api/src/main/protobuf/com/daml/ledger/api/v2/admin/user_management_service.proto](https://github.com/DACH-NY/canton/blob/v3.4.11/community/ledger-api/src/main/protobuf/com/daml/ledger/api/v2/admin/user_management_service.proto#L43)
+- Endpoints in service: 9
+
+Service to manage users and their rights for interacting with the Ledger API
+ served by a participant node.
+
+ The authorization rules for its RPCs are specified on the ``&lt;RpcName&gt;Request``
+ messages as boolean expressions over these facts:
+
+ 1. ``HasRight(r)`` denoting whether the authenticated user has right ``r`` and
+ 2. ``IsAuthenticatedUser(uid)`` denoting whether ``uid`` is the empty string or equal to the id of the authenticated user.
+ 3. ``IsAuthenticatedIdentityProviderAdmin(idp)`` denoting whether ``idp`` is equal to the ``identity_provider_id``
+    of the authenticated user and the user has an IdentityProviderAdmin right.
+
+ If `user_id` is set to the empty string (the default), then the data for the authenticated user will be retrieved.
+ If `identity_provider_id` is set to an empty string, then it's effectively set to the value of access token's 'iss' field if that is provided.
+ If `identity_provider_id` remains an empty string, the default identity provider will be assumed.
+
+ The fields of request messages (and sub-messages) are marked either as ``Optional`` or ``Required``:
+
+ 1. ``Optional`` denoting the client may leave the field unset when sending a request.
+ 2. ``Required`` denoting the client must set the field to a non-default value when sending a request.
+
+ A user resource consists of:
+
+ 1. a set of properties represented by the ``User`` message,
+ 2. a set of user rights, where each right is represented by the ``Right`` message.
+
+ A user resource, once it has been created, can be modified.
+ In order to update the properties represented by the ``User`` message use the ``UpdateUser`` RPC. The only fields that can be modified are those marked as ``Modifiable``.
+ In order to grant or revoke user rights use ``GrantRights' and ``RevokeRights`` RPCs.
+
+Endpoints in this service:
+- [`CreateUser`](/docs-main/appdev/reference/protobuf-history/endpoints/com/daml/ledger/api/v2/admin/usermanagementservice/createuser/index)
+- [`GetUser`](/docs-main/appdev/reference/protobuf-history/endpoints/com/daml/ledger/api/v2/admin/usermanagementservice/getuser/index)
+- [`UpdateUser`](/docs-main/appdev/reference/protobuf-history/endpoints/com/daml/ledger/api/v2/admin/usermanagementservice/updateuser/index)
+- [`DeleteUser`](/docs-main/appdev/reference/protobuf-history/endpoints/com/daml/ledger/api/v2/admin/usermanagementservice/deleteuser/index)
+- [`ListUsers`](/docs-main/appdev/reference/protobuf-history/endpoints/com/daml/ledger/api/v2/admin/usermanagementservice/listusers/index)
+- [`GrantUserRights`](/docs-main/appdev/reference/protobuf-history/endpoints/com/daml/ledger/api/v2/admin/usermanagementservice/grantuserrights/index)
+- [`RevokeUserRights`](/docs-main/appdev/reference/protobuf-history/endpoints/com/daml/ledger/api/v2/admin/usermanagementservice/revokeuserrights/index)
+- [`ListUserRights`](/docs-main/appdev/reference/protobuf-history/endpoints/com/daml/ledger/api/v2/admin/usermanagementservice/listuserrights/index)
+- [`UpdateUserIdentityProviderId`](/docs-main/appdev/reference/protobuf-history/endpoints/com/daml/ledger/api/v2/admin/usermanagementservice/updateuseridentityproviderid/index)

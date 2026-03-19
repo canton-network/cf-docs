@@ -1,0 +1,100 @@
+---
+title: ParticipantInspectionService.LookupSentAcsCommitments
+description: Descriptor-backed protobuf endpoint reference and history for com.digitalasset.canton.admin.participant.v30.ParticipantInspectionService/LookupSentAcsCommitments.
+---
+
+# Endpoint `com.digitalasset.canton.admin.participant.v30.ParticipantInspectionService/LookupSentAcsCommitments`
+
+[Back to Canton Protobuf History](/docs-main/appdev/reference/protobuf-history/index)
+
+## Overview
+
+- Status: current
+- Package: `com.digitalasset.canton.admin.participant.v30`
+- Service: `com.digitalasset.canton.admin.participant.v30.ParticipantInspectionService`
+- Source: [community/admin-api/src/main/protobuf/com/digitalasset/canton/admin/participant/v30/participant_inspection_service.proto](https://github.com/DACH-NY/canton/blob/v3.4.11/community/admin-api/src/main/protobuf/com/digitalasset/canton/admin/participant/v30/participant_inspection_service.proto#L28)
+- Request: `com.digitalasset.canton.admin.participant.v30.LookupSentAcsCommitmentsRequest`
+- Response: `com.digitalasset.canton.admin.participant.v30.LookupSentAcsCommitmentsResponse`
+- Client streaming: no
+- Server streaming: no
+- Introduced in: `v3.4.0`
+- Last changed in: `v3.4.0`
+
+## Signature
+
+```proto
+rpc ParticipantInspectionService.LookupSentAcsCommitments(com.digitalasset.canton.admin.participant.v30.LookupSentAcsCommitmentsRequest) returns (com.digitalasset.canton.admin.participant.v30.LookupSentAcsCommitmentsResponse);
+```
+
+Look up the ACS commitments computed and sent by a participant
+
+## Release History
+
+| Release | Date | Event | Change Types | Compare |
+| :------ | :--- | :---- | :----------- | :------ |
+| `v3.4.0` | 2025-10-30 | added |  |  |
+
+## Request Type
+
+### Message `com.digitalasset.canton.admin.participant.v30.LookupSentAcsCommitmentsRequest`
+
+- Source: [community/admin-api/src/main/protobuf/com/digitalasset/canton/admin/participant/v30/participant_inspection_service.proto](https://github.com/DACH-NY/canton/blob/v3.4.11/community/admin-api/src/main/protobuf/com/digitalasset/canton/admin/participant/v30/participant_inspection_service.proto#L261)
+- Fields: 4
+- Nested messages: 0
+- Nested enums: 0
+
+list the commitments computed and sent to counter-participants
+ optional filtering by synchronizer, time ranges, counter participants, commitment state and verbosity
+
+| # | Field | Type | Label | Oneof | Description | Metadata |
+| -: | :---- | :--- | :---- | :---- | :---------- | :------- |
+| 1 | `time_ranges` | `com.digitalasset.canton.admin.participant.v30.SynchronizerTimeRange` | repeated |  | filter specific time ranges per synchronizer<br/> a synchronizer can appear multiple times with various time ranges, in which case we consider the union of the time ranges.<br/> return only the sent commitments with an interval overlapping any of the given time ranges per synchronizer<br/> defaults: if empty, all synchronizers known to the participant are considered |  |
+| 2 | `counter_participant_ids` | `string` | repeated |  | retrieve commitments sent to specific counter participants<br/> if a specified counter participant is not a counter-participant in some synchronizer, we do not return it in the response<br/> an empty set means we return commitments sent to all counter participants on the synchronizers matching the synchronizer filter. |  |
+| 3 | `commitment_state` | `com.digitalasset.canton.admin.participant.v30.SentCommitmentState` | repeated |  | filter by commitment state: only return commitments with the states below<br/> if no state is given, we return all commitments |  |
+| 4 | `verbose` | `bool` | optional |  | include the actual commitment in the response |  |
+
+## Response Type
+
+### Message `com.digitalasset.canton.admin.participant.v30.LookupSentAcsCommitmentsResponse`
+
+- Source: [community/admin-api/src/main/protobuf/com/digitalasset/canton/admin/participant/v30/participant_inspection_service.proto](https://github.com/DACH-NY/canton/blob/v3.4.11/community/admin-api/src/main/protobuf/com/digitalasset/canton/admin/participant/v30/participant_inspection_service.proto#L286)
+- Fields: 1
+- Nested messages: 0
+- Nested enums: 0
+
+Returns a sequence of commitments for each synchronizer.
+ Synchronizers should not repeat in the response, otherwise the caller considers the response invalid.
+ If all commitments sent on a synchronizer have been pruned, we return an error.
+ No streaming, because a response with verbose mode on contains around 1kb to 3kb of data (depending on whether
+ we ship the LtHash16 bytes directly or just a hash thereof).
+ Therefore, 1000 commitments fit into a couple of MBs, and we can expect the gRPC admin API to handle messages of
+ a couple of MBs.
+ It is the application developer's job to find suitable filter ranges.
+
+| # | Field | Type | Label | Oneof | Description | Metadata |
+| -: | :---- | :--- | :---- | :---- | :---------- | :------- |
+| 1 | `sent` | `com.digitalasset.canton.admin.participant.v30.SentAcsCommitmentPerSynchronizer` | repeated |  |  |  |
+
+## Service Context
+
+- Service: `com.digitalasset.canton.admin.participant.v30.ParticipantInspectionService`
+- Source: [community/admin-api/src/main/protobuf/com/digitalasset/canton/admin/participant/v30/participant_inspection_service.proto](https://github.com/DACH-NY/canton/blob/v3.4.11/community/admin-api/src/main/protobuf/com/digitalasset/canton/admin/participant/v30/participant_inspection_service.proto#L19)
+- Endpoints in service: 9
+
+*
+ Inspection Service
+
+ Supports inspecting the Participant for details about its ledger.
+ This contains only a subset of the ParticipantInspection commands that can run over the admin-api instead of requiring
+ direct access to the participant node instance.
+
+Endpoints in this service:
+- [`LookupOffsetByTime`](/docs-main/appdev/reference/protobuf-history/endpoints/com/digitalasset/canton/admin/participant/v30/participantinspectionservice/lookupoffsetbytime/index)
+- [`OpenCommitment`](/docs-main/appdev/reference/protobuf-history/endpoints/com/digitalasset/canton/admin/participant/v30/participantinspectionservice/opencommitment/index)
+- [`InspectCommitmentContracts`](/docs-main/appdev/reference/protobuf-history/endpoints/com/digitalasset/canton/admin/participant/v30/participantinspectionservice/inspectcommitmentcontracts/index)
+- [`LookupSentAcsCommitments`](/docs-main/appdev/reference/protobuf-history/endpoints/com/digitalasset/canton/admin/participant/v30/participantinspectionservice/lookupsentacscommitments/index)
+- [`LookupReceivedAcsCommitments`](/docs-main/appdev/reference/protobuf-history/endpoints/com/digitalasset/canton/admin/participant/v30/participantinspectionservice/lookupreceivedacscommitments/index)
+- [`SetConfigForSlowCounterParticipants`](/docs-main/appdev/reference/protobuf-history/endpoints/com/digitalasset/canton/admin/participant/v30/participantinspectionservice/setconfigforslowcounterparticipants/index)
+- [`GetConfigForSlowCounterParticipants`](/docs-main/appdev/reference/protobuf-history/endpoints/com/digitalasset/canton/admin/participant/v30/participantinspectionservice/getconfigforslowcounterparticipants/index)
+- [`GetIntervalsBehindForCounterParticipants`](/docs-main/appdev/reference/protobuf-history/endpoints/com/digitalasset/canton/admin/participant/v30/participantinspectionservice/getintervalsbehindforcounterparticipants/index)
+- [`CountInFlight`](/docs-main/appdev/reference/protobuf-history/endpoints/com/digitalasset/canton/admin/participant/v30/participantinspectionservice/countinflight/index)

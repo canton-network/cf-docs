@@ -1,0 +1,114 @@
+---
+title: PartyManagementService.ClearPartyOnboardingFlag
+description: Descriptor-backed protobuf endpoint reference and history for com.digitalasset.canton.admin.participant.v30.PartyManagementService/ClearPartyOnboardingFlag.
+---
+
+# Endpoint `com.digitalasset.canton.admin.participant.v30.PartyManagementService/ClearPartyOnboardingFlag`
+
+[Back to Canton Protobuf History](/docs-main/appdev/reference/protobuf-history/index)
+
+## Overview
+
+- Status: current
+- Package: `com.digitalasset.canton.admin.participant.v30`
+- Service: `com.digitalasset.canton.admin.participant.v30.PartyManagementService`
+- Source: [community/admin-api/src/main/protobuf/com/digitalasset/canton/admin/participant/v30/party_management_service.proto](https://github.com/DACH-NY/canton/blob/v3.4.11/community/admin-api/src/main/protobuf/com/digitalasset/canton/admin/participant/v30/party_management_service.proto#L86)
+- Request: `com.digitalasset.canton.admin.participant.v30.ClearPartyOnboardingFlagRequest`
+- Response: `com.digitalasset.canton.admin.participant.v30.ClearPartyOnboardingFlagResponse`
+- Client streaming: no
+- Server streaming: no
+- Introduced in: `v3.4.0`
+- Last changed in: `v3.4.0`
+
+## Signature
+
+```proto
+rpc PartyManagementService.ClearPartyOnboardingFlag(com.digitalasset.canton.admin.participant.v30.ClearPartyOnboardingFlagRequest) returns (com.digitalasset.canton.admin.participant.v30.ClearPartyOnboardingFlagResponse);
+```
+
+Offline party replication endpoint.
+
+ Instructs the target participant to unilaterally clear the 'onboarding' flag on the
+ party-to-participant topology mapping.
+
+ This operation is time-sensitive and will only be attempted after a specific safe
+ timestamp has passed.
+
+ Because the effect of the topology transaction is not instantaneous, this endpoint is
+ designed to be polled. Callers should invoke it repeatedly until the response confirms
+ the flag has been cleared.
+
+ Prerequisite: A prior party-to-participant mapping topology transaction must exist
+ that activates the party on the target participant with the onboarding flag set to
+ `true`.
+
+## Release History
+
+| Release | Date | Event | Change Types | Compare |
+| :------ | :--- | :---- | :----------- | :------ |
+| `v3.4.0` | 2025-10-30 | added |  |  |
+
+## Request Type
+
+### Message `com.digitalasset.canton.admin.participant.v30.ClearPartyOnboardingFlagRequest`
+
+- Source: [community/admin-api/src/main/protobuf/com/digitalasset/canton/admin/participant/v30/party_management_service.proto](https://github.com/DACH-NY/canton/blob/v3.4.11/community/admin-api/src/main/protobuf/com/digitalasset/canton/admin/participant/v30/party_management_service.proto#L328)
+- Fields: 4
+- Nested messages: 0
+- Nested enums: 0
+
+_No description._
+
+| # | Field | Type | Label | Oneof | Description | Metadata |
+| -: | :---- | :--- | :---- | :---- | :---------- | :------- |
+| 1 | `party_id` | `string` | optional |  | The identifier of the party whose onboarding flag is being cleared. This party must<br/> already be active on the target participant.<br/> Required |  |
+| 2 | `synchronizer_id` | `string` | optional |  | The identifier of the synchronizer.<br/> Required |  |
+| 3 | `begin_offset_exclusive` | `int64` | optional |  | The exclusive ledger offset used as a starting point to find the party's most<br/> recent activation on the target participant.<br/> Required |  |
+| 4 | `wait_for_activation_timeout` | `google.protobuf.Duration` | optional |  | The maximum duration the service will wait to find the topology transaction<br/> that activates the party.<br/> If not set, the service will use a default timeout.<br/> Optional |  |
+
+## Response Type
+
+### Message `com.digitalasset.canton.admin.participant.v30.ClearPartyOnboardingFlagResponse`
+
+- Source: [community/admin-api/src/main/protobuf/com/digitalasset/canton/admin/participant/v30/party_management_service.proto](https://github.com/DACH-NY/canton/blob/v3.4.11/community/admin-api/src/main/protobuf/com/digitalasset/canton/admin/participant/v30/party_management_service.proto#L360)
+- Fields: 2
+- Nested messages: 0
+- Nested enums: 0
+
+Responds with the current status:
+  - Cleared: (true, None) – The flag is successfully cleared.
+  - Pending: (false, Some(timestamp)) – The flag is still set. The timestamp indicates
+             the earliest safe time to clear the flag.
+             Calling the service (repeatedly) after that specific time will eventually confirm
+             that the onboarding flag has been cleared (that is `onboarded = true`).
+
+             The onboarding flag remains for two reasons:
+             1. The safe time to clear the flag has not yet been reached.
+             2. The clearing transaction was proposed, but it has not yet become effective.
+
+| # | Field | Type | Label | Oneof | Description | Metadata |
+| -: | :---- | :--- | :---- | :---- | :---------- | :------- |
+| 1 | `onboarded` | `bool` | optional |  | Indicates the current party onboarding status.<br/> Required |  |
+| 2 | `earliest_retry_timestamp` | `google.protobuf.Timestamp` | optional |  | The earliest time for the safe clearance of the onboarding flag.<br/><br/> This field is only present when `onboarded` is `false`. |  |
+
+## Service Context
+
+- Service: `com.digitalasset.canton.admin.participant.v30.PartyManagementService`
+- Source: [community/admin-api/src/main/protobuf/com/digitalasset/canton/admin/participant/v30/party_management_service.proto](https://github.com/DACH-NY/canton/blob/v3.4.11/community/admin-api/src/main/protobuf/com/digitalasset/canton/admin/participant/v30/party_management_service.proto#L21)
+- Endpoints in service: 6
+
+*
+ The PartyManagementService allows modifying party hosting on participants.
+
+ Note that ACS refers to Active Contract Set.
+
+ Important: The online and offline party replication endpoints serve distinct workflows,
+ and must not be combined.
+
+Endpoints in this service:
+- [`AddPartyAsync`](/docs-main/appdev/reference/protobuf-history/endpoints/com/digitalasset/canton/admin/participant/v30/partymanagementservice/addpartyasync/index)
+- [`GetAddPartyStatus`](/docs-main/appdev/reference/protobuf-history/endpoints/com/digitalasset/canton/admin/participant/v30/partymanagementservice/getaddpartystatus/index)
+- [`ExportPartyAcs`](/docs-main/appdev/reference/protobuf-history/endpoints/com/digitalasset/canton/admin/participant/v30/partymanagementservice/exportpartyacs/index)
+- [`ImportPartyAcs`](/docs-main/appdev/reference/protobuf-history/endpoints/com/digitalasset/canton/admin/participant/v30/partymanagementservice/importpartyacs/index)
+- [`GetHighestOffsetByTimestamp`](/docs-main/appdev/reference/protobuf-history/endpoints/com/digitalasset/canton/admin/participant/v30/partymanagementservice/gethighestoffsetbytimestamp/index)
+- [`ClearPartyOnboardingFlag`](/docs-main/appdev/reference/protobuf-history/endpoints/com/digitalasset/canton/admin/participant/v30/partymanagementservice/clearpartyonboardingflag/index)

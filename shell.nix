@@ -1,8 +1,15 @@
 { pkgs ? import <nixpkgs> {} }:
 
+let
+  pythonEnv = pkgs.python3.withPackages (ps: [
+    ps.protobuf
+  ]);
+in
 pkgs.mkShell {
   packages = [
     pkgs.nodejs_22
+    pythonEnv
+    pkgs.git
   ];
 
   shellHook = ''

@@ -1,0 +1,91 @@
+---
+title: SequencerService.Subscribe
+description: Descriptor-backed protobuf endpoint reference and history for com.digitalasset.canton.sequencer.api.v30.SequencerService/Subscribe.
+---
+
+# Endpoint `com.digitalasset.canton.sequencer.api.v30.SequencerService/Subscribe`
+
+[Back to Canton Protobuf History](/docs-main/appdev/reference/protobuf-history/index)
+
+## Overview
+
+- Status: current
+- Package: `com.digitalasset.canton.sequencer.api.v30`
+- Service: `com.digitalasset.canton.sequencer.api.v30.SequencerService`
+- Source: [community/base/src/main/protobuf/com/digitalasset/canton/sequencer/api/v30/sequencer_service.proto](https://github.com/DACH-NY/canton/blob/v3.4.11/community/base/src/main/protobuf/com/digitalasset/canton/sequencer/api/v30/sequencer_service.proto#L84)
+- Request: `com.digitalasset.canton.sequencer.api.v30.SubscriptionRequest`
+- Response: `com.digitalasset.canton.sequencer.api.v30.SubscriptionResponse`
+- Client streaming: no
+- Server streaming: yes
+- Introduced in: `v3.4.0`
+- Last changed in: `v3.4.0`
+
+## Signature
+
+```proto
+rpc SequencerService.Subscribe(com.digitalasset.canton.sequencer.api.v30.SubscriptionRequest) returns (stream com.digitalasset.canton.sequencer.api.v30.SubscriptionResponse);
+```
+
+Establishes a stream with the server to receive sequenced events from the synchronizer after the given
+ counter. The delivered events will have a reference to the previous event (its timestamp)
+ and a strictly monotonically increasing timestamp.
+
+ The call fails synchronously, if the request is invalid, i.e., some field violates a documented validity condition.
+ The call fails asynchronously, if the sequencer does not have a key to sign the event; this may occur if
+ event.topology_timestamp refers to a time before the sequencer has been onboarded.
+
+## Release History
+
+| Release | Date | Event | Change Types | Compare |
+| :------ | :--- | :---- | :----------- | :------ |
+| `v3.4.0` | 2025-10-30 | added |  |  |
+
+## Request Type
+
+### Message `com.digitalasset.canton.sequencer.api.v30.SubscriptionRequest`
+
+- Source: [community/base/src/main/protobuf/com/digitalasset/canton/sequencer/api/v30/sequencer_service.proto](https://github.com/DACH-NY/canton/blob/v3.4.11/community/base/src/main/protobuf/com/digitalasset/canton/sequencer/api/v30/sequencer_service.proto#L133)
+- Fields: 2
+- Nested messages: 0
+- Nested enums: 0
+
+_No description._
+
+| # | Field | Type | Label | Oneof | Description | Metadata |
+| -: | :---- | :--- | :---- | :---- | :---------- | :------- |
+| 1 | `member` | `string` | optional |  |  |  |
+| 2 | `timestamp` | `int64` | optional |  | Timestamp to start the subscription from (inclusive).<br/> Members can use the timestamp of the last event they have received to continue from there and compare the event,<br/> or can subscribe from previous event timestamp's immediate successor to get the next event.<br/> To subscribe from the beginning, set the optional to None.<br/> If it refers to an event that has already been acknowledged, the sequencer may reject the request.<br/> In microseconds of UTC time since Unix epoch |  |
+
+## Response Type
+
+### Message `com.digitalasset.canton.sequencer.api.v30.SubscriptionResponse`
+
+- Source: [community/base/src/main/protobuf/com/digitalasset/canton/sequencer/api/v30/sequencer_service.proto](https://github.com/DACH-NY/canton/blob/v3.4.11/community/base/src/main/protobuf/com/digitalasset/canton/sequencer/api/v30/sequencer_service.proto#L147)
+- Fields: 2
+- Nested messages: 0
+- Nested enums: 0
+
+_No description._
+
+| # | Field | Type | Label | Oneof | Description | Metadata |
+| -: | :---- | :--- | :---- | :---- | :---------- | :------- |
+| 1 | `signed_sequenced_event` | `bytes` | optional |  | Contains a versioned SignedContent which itself contains a versioned SequencedEvent<br/> Serialized SignedContent[SequencedEvent[ClosedEnvelope]] |  |
+| 2 | `trace_context` | `com.digitalasset.canton.v30.TraceContext` | optional |  | optional, canton trace context<br/><br/> DO NOT RENAME this field, as the ApiRequestLogger uses reflection to read this field.<br/><br/> We typically use a header to transfer this information however streamed items do<br/> not have per item/message headers, so we instead in this instance set it in the body. |  |
+
+## Service Context
+
+- Service: `com.digitalasset.canton.sequencer.api.v30.SequencerService`
+- Source: [community/base/src/main/protobuf/com/digitalasset/canton/sequencer/api/v30/sequencer_service.proto](https://github.com/DACH-NY/canton/blob/v3.4.11/community/base/src/main/protobuf/com/digitalasset/canton/sequencer/api/v30/sequencer_service.proto#L15)
+- Endpoints in service: 7
+
+The service that a member can use to send messages to the synchronizer and
+ receive events from the synchronizer
+
+Endpoints in this service:
+- [`SendAsync`](/docs-main/appdev/reference/protobuf-history/endpoints/com/digitalasset/canton/sequencer/api/v30/sequencerservice/sendasync/index)
+- [`Subscribe`](/docs-main/appdev/reference/protobuf-history/endpoints/com/digitalasset/canton/sequencer/api/v30/sequencerservice/subscribe/index)
+- [`AcknowledgeSigned`](/docs-main/appdev/reference/protobuf-history/endpoints/com/digitalasset/canton/sequencer/api/v30/sequencerservice/acknowledgesigned/index)
+- [`DownloadTopologyStateForInit`](/docs-main/appdev/reference/protobuf-history/endpoints/com/digitalasset/canton/sequencer/api/v30/sequencerservice/downloadtopologystateforinit/index)
+- [`DownloadTopologyStateForInitHash`](/docs-main/appdev/reference/protobuf-history/endpoints/com/digitalasset/canton/sequencer/api/v30/sequencerservice/downloadtopologystateforinithash/index)
+- [`GetTrafficStateForMember`](/docs-main/appdev/reference/protobuf-history/endpoints/com/digitalasset/canton/sequencer/api/v30/sequencerservice/gettrafficstateformember/index)
+- [`GetTime`](/docs-main/appdev/reference/protobuf-history/endpoints/com/digitalasset/canton/sequencer/api/v30/sequencerservice/gettime/index)

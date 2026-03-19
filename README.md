@@ -62,3 +62,10 @@ Then run:
 direnv allow
 mintlify dev
 ```
+
+The Nix shell also provides `python3`, `git`, and the `protobuf` runtime needed by local doc
+generation scripts such as:
+
+```bash
+python3 scripts/canton_protobuf_history.py
+```

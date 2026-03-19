@@ -1,0 +1,139 @@
+---
+title: SequencerService.SendAsync
+description: Descriptor-backed protobuf endpoint reference and history for com.digitalasset.canton.sequencer.api.v30.SequencerService/SendAsync.
+---
+
+# Endpoint `com.digitalasset.canton.sequencer.api.v30.SequencerService/SendAsync`
+
+[Back to Canton Protobuf History](/docs-main/appdev/reference/protobuf-history/index)
+
+## Overview
+
+- Status: current
+- Package: `com.digitalasset.canton.sequencer.api.v30`
+- Service: `com.digitalasset.canton.sequencer.api.v30.SequencerService`
+- Source: [community/base/src/main/protobuf/com/digitalasset/canton/sequencer/api/v30/sequencer_service.proto](https://github.com/DACH-NY/canton/blob/v3.4.11/community/base/src/main/protobuf/com/digitalasset/canton/sequencer/api/v30/sequencer_service.proto#L75)
+- Request: `com.digitalasset.canton.sequencer.api.v30.SendAsyncRequest`
+- Response: `com.digitalasset.canton.sequencer.api.v30.SendAsyncResponse`
+- Client streaming: no
+- Server streaming: no
+- Introduced in: `v3.4.0`
+- Last changed in: `v3.4.0`
+
+## Signature
+
+```proto
+rpc SequencerService.SendAsync(com.digitalasset.canton.sequencer.api.v30.SendAsyncRequest) returns (com.digitalasset.canton.sequencer.api.v30.SendAsyncResponse);
+```
+
+Submit a request to the sequencer.
+
+ A request contains a batch, which is a sequence of envelopes.
+ Every envelope consists of its content and a set of recipients, arranged in a forest.
+ A synchronizer member is intended to receive those envelopes of a batch that contain the member as a recipient.
+ A synchronizer member is supposed to learn about those recipients of an envelope that are
+ (1) specified at a node that also specifies the member or
+ (2) at a descendant thereof. (I.e., a node further down in the recipient forest.)
+
+ The sequencer may or may not accept a request.
+ If an incoming request is valid (i.e., it can be parsed and every field meets its documented validity conditions)
+ an honest sequencer will accept requests in a best effort manner, provided resource limits are met.
+
+ For every accepted request, the sequencer assigns a unique sequencing timestamp to the request.
+ All honest sequencers of the synchronizer will deliver an event to the sender and
+ to those synchronizer members that are intended to receive at least one envelope.
+
+ Honest sequencers may deliver to all sequencers of the synchronizer events that don't correspond to submitted requests.
+ Sequencer implementations may leverage this mechanism for internal purposes.
+
+ An event for a synchronizer member contains only those envelopes of the batch of the request
+ that the member is intended to receive and
+ the recipients of an envelope contains only those that the member is supposed to learn about.
+ A member will receive the envelopes of the same request within a single event.
+ A member will receive events ordered by sequencing timestamp.
+
+ If a request is accepted, the sender will receive a corresponding event, called "receipt";
+ so that the sender is informed that the sequencer has accepted the request.
+ If the sender is not a recipient of the request, the receipt has an empty batch.
+
+ If the request contains an aggregation rule, the sequencer will process requests in an aggregated fashion.
+ A set of requests belong to the same aggregation, if they have essentially the same contents (details specified at SubmissionRequest.aggregationId).
+ The sequencer validates and assigns sequencing timestamps to requests within an aggregation just as for requests without an aggregation rule.
+ The sequencer emits events and receipts for an accepted request within an aggregation as follows:
+ - As long as the number of accepted requests is strictly less than AggregationRule.threshold,
+   the sequencer only emits a receipt with an empty batch to the sender of the request.
+   It does not emit any other events.
+ - As soon as the number of accepted requests equals AggregationRule.threshold, the sequencer emits
+   events to the sender and the recipients of the request.
+   The sequencing timestamp of the events is the sequencing timestamp of the last accepted request.
+ - The sequencer will not accept more than AggregationRule.threshold requests.
+   The sequencer will reject any further request that could otherwise be accepted.
+   Consequently, events for the request are delivered only once even if the threshold is attained multiple times.
+
+ If the request does not contain an aggregation rule, even honest sequencers may deliver events for the request
+ more than once (with different sequencing timestamps), as malicious sequencers may replay a request internally.
+ Clients need to implement appropriate deduplication, if at-most-once delivery is needed.
+ Once request.max_sequencing_time has elapsed (i.e. an event with an equal or higher timestamp has been emitted),
+ an honest sequencer will not emit events corresponding to request anymore.
+
+ The sequencer may reject a request, e.g., because the request is invalid or the sequencer is overloaded.
+ The sequencer will indicate a rejection (independently of whether there is an aggregation rule)
+ in exactly one of the following ways:
+ (1) synchronously, by returning an error in the response of this method
+ (2) asynchronously, by emitting an error in the response to SubscribeVersioned to the sender and
+     possibly an empty batch to non-sender recipients
+ (3) by not emitting a receipt to the sender until request.max_sequencing_time
+ Note that only (2) and (3) can be trusted. A malicious sequencer may synchronously return an error and
+ still accept the request internally and therefore emit events later on.
+
+## Release History
+
+| Release | Date | Event | Change Types | Compare |
+| :------ | :--- | :---- | :----------- | :------ |
+| `v3.4.0` | 2025-10-30 | added |  |  |
+
+## Request Type
+
+### Message `com.digitalasset.canton.sequencer.api.v30.SendAsyncRequest`
+
+- Source: [community/base/src/main/protobuf/com/digitalasset/canton/sequencer/api/v30/sequencer_service.proto](https://github.com/DACH-NY/canton/blob/v3.4.11/community/base/src/main/protobuf/com/digitalasset/canton/sequencer/api/v30/sequencer_service.proto#L111)
+- Fields: 1
+- Nested messages: 0
+- Nested enums: 0
+
+_No description._
+
+| # | Field | Type | Label | Oneof | Description | Metadata |
+| -: | :---- | :--- | :---- | :---- | :---------- | :------- |
+| 1 | `signed_submission_request` | `bytes` | optional |  | Contains a versioned SignedContent which itself contains a versioned SubmissionRequest.<br/> TODO(i17383): Have exactly one signature instead of multiple signatures. |  |
+
+## Response Type
+
+### Message `com.digitalasset.canton.sequencer.api.v30.SendAsyncResponse`
+
+- Source: [community/base/src/main/protobuf/com/digitalasset/canton/sequencer/api/v30/sequencer_service.proto](https://github.com/DACH-NY/canton/blob/v3.4.11/community/base/src/main/protobuf/com/digitalasset/canton/sequencer/api/v30/sequencer_service.proto#L131)
+- Fields: 0
+- Nested messages: 0
+- Nested enums: 0
+
+_No description._
+
+No fields.
+
+## Service Context
+
+- Service: `com.digitalasset.canton.sequencer.api.v30.SequencerService`
+- Source: [community/base/src/main/protobuf/com/digitalasset/canton/sequencer/api/v30/sequencer_service.proto](https://github.com/DACH-NY/canton/blob/v3.4.11/community/base/src/main/protobuf/com/digitalasset/canton/sequencer/api/v30/sequencer_service.proto#L15)
+- Endpoints in service: 7
+
+The service that a member can use to send messages to the synchronizer and
+ receive events from the synchronizer
+
+Endpoints in this service:
+- [`SendAsync`](/docs-main/appdev/reference/protobuf-history/endpoints/com/digitalasset/canton/sequencer/api/v30/sequencerservice/sendasync/index)
+- [`Subscribe`](/docs-main/appdev/reference/protobuf-history/endpoints/com/digitalasset/canton/sequencer/api/v30/sequencerservice/subscribe/index)
+- [`AcknowledgeSigned`](/docs-main/appdev/reference/protobuf-history/endpoints/com/digitalasset/canton/sequencer/api/v30/sequencerservice/acknowledgesigned/index)
+- [`DownloadTopologyStateForInit`](/docs-main/appdev/reference/protobuf-history/endpoints/com/digitalasset/canton/sequencer/api/v30/sequencerservice/downloadtopologystateforinit/index)
+- [`DownloadTopologyStateForInitHash`](/docs-main/appdev/reference/protobuf-history/endpoints/com/digitalasset/canton/sequencer/api/v30/sequencerservice/downloadtopologystateforinithash/index)
+- [`GetTrafficStateForMember`](/docs-main/appdev/reference/protobuf-history/endpoints/com/digitalasset/canton/sequencer/api/v30/sequencerservice/gettrafficstateformember/index)
+- [`GetTime`](/docs-main/appdev/reference/protobuf-history/endpoints/com/digitalasset/canton/sequencer/api/v30/sequencerservice/gettime/index)

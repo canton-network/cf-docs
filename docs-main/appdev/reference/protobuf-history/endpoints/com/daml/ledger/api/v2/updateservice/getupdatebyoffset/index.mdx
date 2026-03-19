@@ -1,0 +1,97 @@
+---
+title: UpdateService.GetUpdateByOffset
+description: Descriptor-backed protobuf endpoint reference and history for com.daml.ledger.api.v2.UpdateService/GetUpdateByOffset.
+---
+
+# Endpoint `com.daml.ledger.api.v2.UpdateService/GetUpdateByOffset`
+
+[Back to Canton Protobuf History](/docs-main/appdev/reference/protobuf-history/index)
+
+## Overview
+
+- Status: current
+- Package: `com.daml.ledger.api.v2`
+- Service: `com.daml.ledger.api.v2.UpdateService`
+- Source: [community/ledger-api/src/main/protobuf/com/daml/ledger/api/v2/update_service.proto](https://github.com/DACH-NY/canton/blob/v3.4.11/community/ledger-api/src/main/protobuf/com/daml/ledger/api/v2/update_service.proto#L41)
+- Request: `com.daml.ledger.api.v2.GetUpdateByOffsetRequest`
+- Response: `com.daml.ledger.api.v2.GetUpdateResponse`
+- Client streaming: no
+- Server streaming: no
+- Introduced in: `v3.4.0`
+- Last changed in: `v3.4.0`
+
+## Signature
+
+```proto
+rpc UpdateService.GetUpdateByOffset(com.daml.ledger.api.v2.GetUpdateByOffsetRequest) returns (com.daml.ledger.api.v2.GetUpdateResponse);
+```
+
+Lookup an update by its offset.
+ If there is no update with this offset, or all the events are filtered, an UPDATE_NOT_FOUND error will be raised.
+
+## Release History
+
+| Release | Date | Event | Change Types | Compare |
+| :------ | :--- | :---- | :----------- | :------ |
+| `v3.4.0` | 2025-10-30 | added |  |  |
+
+## Request Type
+
+### Message `com.daml.ledger.api.v2.GetUpdateByOffsetRequest`
+
+- Source: [community/ledger-api/src/main/protobuf/com/daml/ledger/api/v2/update_service.proto](https://github.com/DACH-NY/canton/blob/v3.4.11/community/ledger-api/src/main/protobuf/com/daml/ledger/api/v2/update_service.proto#L91)
+- Fields: 2
+- Nested messages: 0
+- Nested enums: 0
+
+_No description._
+
+| # | Field | Type | Label | Oneof | Description | Metadata |
+| -: | :---- | :--- | :---- | :---- | :---------- | :------- |
+| 1 | `offset` | `int64` | optional |  | The offset of the update being looked up.<br/> Must be a valid absolute offset (positive integer).<br/> Required |  |
+| 2 | `update_format` | `com.daml.ledger.api.v2.UpdateFormat` | optional |  | The format for the update.<br/> Required |  |
+
+## Response Type
+
+### Message `com.daml.ledger.api.v2.GetUpdateResponse`
+
+- Source: [community/ledger-api/src/main/protobuf/com/daml/ledger/api/v2/update_service.proto](https://github.com/DACH-NY/canton/blob/v3.4.11/community/ledger-api/src/main/protobuf/com/daml/ledger/api/v2/update_service.proto#L113)
+- Fields: 3
+- Nested messages: 0
+- Nested enums: 0
+
+_No description._
+
+Oneofs:
+- `update` (3 fields)
+  The update that matches the filter in the request.
+
+| # | Field | Type | Label | Oneof | Description | Metadata |
+| -: | :---- | :--- | :---- | :---- | :---------- | :------- |
+| 1 | `transaction` | `com.daml.ledger.api.v2.Transaction` | optional | `update` |  |  |
+| 2 | `reassignment` | `com.daml.ledger.api.v2.Reassignment` | optional | `update` |  |  |
+| 3 | `topology_transaction` | `com.daml.ledger.api.v2.TopologyTransaction` | optional | `update` |  |  |
+
+## Service Context
+
+- Service: `com.daml.ledger.api.v2.UpdateService`
+- Source: [community/ledger-api/src/main/protobuf/com/daml/ledger/api/v2/update_service.proto](https://github.com/DACH-NY/canton/blob/v3.4.11/community/ledger-api/src/main/protobuf/com/daml/ledger/api/v2/update_service.proto#L30)
+- Endpoints in service: 3
+
+Allows clients to read updates (transactions, (un)assignments, topology events) from the ledger.
+
+ ``GetUpdates`` and ``GetUpdateTrees`` provide a comprehensive stream of updates/changes
+ which happened on the virtual shared ledger. These streams are indexed with ledger
+ offsets, which are strictly increasing.
+ The virtual shared ledger consist of changes happening on multiple synchronizers which are
+ connected to the serving participant. Each update belongs to one synchronizer, this is
+ provided in the result (the ``synchronizer_id`` field in ``Transaction``
+ for transactions, the ``source`` field in ``UnassignedEvent`` and the ``target`` field in ``AssignedEvent``).
+ Consumers can rely on strong causal guarantees on the virtual shared ledger for a single
+ synchronizer: updates which have greater offsets are happened after than updates with smaller
+ offsets for the same synchronizer. Across different synchronizers this is not guaranteed.
+
+Endpoints in this service:
+- [`GetUpdates`](/docs-main/appdev/reference/protobuf-history/endpoints/com/daml/ledger/api/v2/updateservice/getupdates/index)
+- [`GetUpdateByOffset`](/docs-main/appdev/reference/protobuf-history/endpoints/com/daml/ledger/api/v2/updateservice/getupdatebyoffset/index)
+- [`GetUpdateById`](/docs-main/appdev/reference/protobuf-history/endpoints/com/daml/ledger/api/v2/updateservice/getupdatebyid/index)

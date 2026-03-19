@@ -1,0 +1,106 @@
+---
+title: InteractiveSubmissionService.GetPreferredPackages
+description: Descriptor-backed protobuf endpoint reference and history for com.daml.ledger.api.v2.interactive.InteractiveSubmissionService/GetPreferredPackages.
+---
+
+# Endpoint `com.daml.ledger.api.v2.interactive.InteractiveSubmissionService/GetPreferredPackages`
+
+[Back to Canton Protobuf History](/docs-main/appdev/reference/protobuf-history/index)
+
+## Overview
+
+- Status: current
+- Package: `com.daml.ledger.api.v2.interactive`
+- Service: `com.daml.ledger.api.v2.interactive.InteractiveSubmissionService`
+- Source: [community/ledger-api/src/main/protobuf/com/daml/ledger/api/v2/interactive/interactive_submission_service.proto](https://github.com/DACH-NY/canton/blob/v3.4.11/community/ledger-api/src/main/protobuf/com/daml/ledger/api/v2/interactive/interactive_submission_service.proto#L76)
+- Request: `com.daml.ledger.api.v2.interactive.GetPreferredPackagesRequest`
+- Response: `com.daml.ledger.api.v2.interactive.GetPreferredPackagesResponse`
+- Client streaming: no
+- Server streaming: no
+- Introduced in: `v3.4.0`
+- Last changed in: `v3.4.0`
+
+## Signature
+
+```proto
+rpc InteractiveSubmissionService.GetPreferredPackages(com.daml.ledger.api.v2.interactive.GetPreferredPackagesRequest) returns (com.daml.ledger.api.v2.interactive.GetPreferredPackagesResponse);
+```
+
+Compute the preferred packages for the vetting requirements in the request.
+ A preferred package is the highest-versioned package for a provided package-name
+ that is vetted by all the participants hosting the provided parties.
+
+ Ledger API clients should use this endpoint for constructing command submissions
+ that are compatible with the provided preferred packages, by making informed decisions on:
+ - which are the compatible packages that can be used to create contracts
+ - which contract or exercise choice argument version can be used in the command
+ - which choices can be executed on a template or interface of a contract
+
+ If the package preferences could not be computed due to no selection satisfying the requirements,
+ a `FAILED_PRECONDITION` error will be returned.
+
+ Can be accessed by any Ledger API client with a valid token when Ledger API authorization is enabled.
+
+ Experimental API: this endpoint is not guaranteed to provide backwards compatibility in future releases
+
+## Release History
+
+| Release | Date | Event | Change Types | Compare |
+| :------ | :--- | :---- | :----------- | :------ |
+| `v3.4.0` | 2025-10-30 | added |  |  |
+
+## Request Type
+
+### Message `com.daml.ledger.api.v2.interactive.GetPreferredPackagesRequest`
+
+- Source: [community/ledger-api/src/main/protobuf/com/daml/ledger/api/v2/interactive/interactive_submission_service.proto](https://github.com/DACH-NY/canton/blob/v3.4.11/community/ledger-api/src/main/protobuf/com/daml/ledger/api/v2/interactive/interactive_submission_service.proto#L605)
+- Fields: 3
+- Nested messages: 0
+- Nested enums: 0
+
+_No description._
+
+| # | Field | Type | Label | Oneof | Description | Metadata |
+| -: | :---- | :--- | :---- | :---- | :---------- | :------- |
+| 1 | `package_vetting_requirements` | `com.daml.ledger.api.v2.interactive.PackageVettingRequirement` | repeated |  | The package-name vetting requirements for which the preferred packages should be resolved.<br/><br/> Generally it is enough to provide the requirements for the intended command's root package-names.<br/> Additional package-name requirements can be provided when additional Daml transaction informees need to use<br/> package dependencies of the command's root packages.<br/><br/> Required |  |
+| 2 | `synchronizer_id` | `string` | optional |  | The synchronizer whose vetting state should be used for resolving this query.<br/> If not specified, the vetting states of all synchronizers to which the participant is connected are used.<br/> Optional |  |
+| 3 | `vetting_valid_at` | `google.protobuf.Timestamp` | optional |  | The timestamp at which the package vetting validity should be computed<br/> on the latest topology snapshot as seen by the participant.<br/> If not provided, the participant's current clock time is used.<br/> Optional |  |
+
+## Response Type
+
+### Message `com.daml.ledger.api.v2.interactive.GetPreferredPackagesResponse`
+
+- Source: [community/ledger-api/src/main/protobuf/com/daml/ledger/api/v2/interactive/interactive_submission_service.proto](https://github.com/DACH-NY/canton/blob/v3.4.11/community/ledger-api/src/main/protobuf/com/daml/ledger/api/v2/interactive/interactive_submission_service.proto#L627)
+- Fields: 2
+- Nested messages: 0
+- Nested enums: 0
+
+_No description._
+
+| # | Field | Type | Label | Oneof | Description | Metadata |
+| -: | :---- | :--- | :---- | :---- | :---------- | :------- |
+| 1 | `package_references` | `com.daml.ledger.api.v2.PackageReference` | repeated |  | The package references of the preferred packages.<br/> Must contain one package reference for each requested package-name.<br/><br/> If you build command submissions whose content depends on the returned<br/> preferred packages, then we recommend submitting the preferred package-ids<br/> in the ``package_id_selection_preference`` of the command submission to<br/> avoid race conditions with concurrent changes of the on-ledger package vetting state.<br/><br/> Required |  |
+| 2 | `synchronizer_id` | `string` | optional |  | The synchronizer for which the package preferences are computed.<br/> If the synchronizer_id was specified in the request, then it matches the request synchronizer_id.<br/> Required |  |
+
+## Service Context
+
+- Service: `com.daml.ledger.api.v2.interactive.InteractiveSubmissionService`
+- Source: [community/ledger-api/src/main/protobuf/com/daml/ledger/api/v2/interactive/interactive_submission_service.proto](https://github.com/DACH-NY/canton/blob/v3.4.11/community/ledger-api/src/main/protobuf/com/daml/ledger/api/v2/interactive/interactive_submission_service.proto#L31)
+- Endpoints in service: 6
+
+Service allowing interactive construction of command submissions
+
+ The prepare and execute endpoints allow to submit commands in 2-steps:
+
+ 1. prepare transaction from commands,
+ 2. submit the prepared transaction
+
+ This gives callers the ability to sign the daml transaction with their own signing keys
+
+Endpoints in this service:
+- [`PrepareSubmission`](/docs-main/appdev/reference/protobuf-history/endpoints/com/daml/ledger/api/v2/interactive/interactivesubmissionservice/preparesubmission/index)
+- [`ExecuteSubmission`](/docs-main/appdev/reference/protobuf-history/endpoints/com/daml/ledger/api/v2/interactive/interactivesubmissionservice/executesubmission/index)
+- [`ExecuteSubmissionAndWait`](/docs-main/appdev/reference/protobuf-history/endpoints/com/daml/ledger/api/v2/interactive/interactivesubmissionservice/executesubmissionandwait/index)
+- [`ExecuteSubmissionAndWaitForTransaction`](/docs-main/appdev/reference/protobuf-history/endpoints/com/daml/ledger/api/v2/interactive/interactivesubmissionservice/executesubmissionandwaitfortransaction/index)
+- [`GetPreferredPackageVersion`](/docs-main/appdev/reference/protobuf-history/endpoints/com/daml/ledger/api/v2/interactive/interactivesubmissionservice/getpreferredpackageversion/index)
+- [`GetPreferredPackages`](/docs-main/appdev/reference/protobuf-history/endpoints/com/daml/ledger/api/v2/interactive/interactivesubmissionservice/getpreferredpackages/index)
