@@ -51,7 +51,7 @@ DEFAULT_DOCS_JSON = REPO_ROOT / "docs.json"
 DEFAULT_CANTON_REPO_DIR = DEFAULT_WORKDIR / "repos" / "canton"
 DEFAULT_CANTON_REPO_URL = "https://github.com/DACH-NY/canton.git"
 DESCRIPTOR_IMAGE_NAME = ".proto_snapshot_image.bin.gz"
-MIN_CANTON_MAJOR = 3
+MIN_CANTON_VERSION = (3, 2, 0)
 ENDPOINT_PAGE_SUBDIR = "endpoints"
 
 STABLE_TAG_RE = re.compile(r"^v(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)$")
@@ -204,6 +204,10 @@ def semver_key(tag: str) -> tuple[int, int, int]:
     )
 
 
+def format_semver(version: tuple[int, int, int]) -> str:
+    return ".".join(str(part) for part in version)
+
+
 def to_release_line(tag: str) -> str:
     major, minor, _patch = semver_key(tag)
     return f"{major}.{minor}"
@@ -306,12 +310,13 @@ def load_stable_tags(repo_dir: Path) -> list[dict[str, Any]]:
     tags_raw = git(["tag", "--list", "v*"], cwd=repo_dir, capture=True)
     selected: list[str] = []
     for line in tags_raw.splitlines():
-        match = STABLE_TAG_RE.fullmatch(line.strip())
+        tag = line.strip()
+        match = STABLE_TAG_RE.fullmatch(tag)
         if not match:
             continue
-        if int(match.group("major")) < MIN_CANTON_MAJOR:
+        if semver_key(tag) < MIN_CANTON_VERSION:
             continue
-        selected.append(line.strip())
+        selected.append(tag)
     selected.sort(key=semver_key)
 
     releases: list[dict[str, Any]] = []
@@ -1486,13 +1491,14 @@ def build_manifest(
     refresh_snapshots: bool,
     refresh_descriptors: bool,
 ) -> dict[str, Any]:
+    requested_min_version = f"v{format_semver(MIN_CANTON_VERSION)}"
     remote = git(["remote", "get-url", "origin"], cwd=repo_dir, capture=True)
     repo_web_url = normalize_remote_to_web_url(remote)
     head_ref = git(["rev-parse", "--abbrev-ref", "HEAD"], cwd=repo_dir, capture=True)
     head_commit = git(["rev-parse", "--short", "HEAD"], cwd=repo_dir, capture=True)
     releases = load_stable_tags(repo_dir)
     if not releases:
-        raise RuntimeError(f"No stable Canton tags found for major >= {MIN_CANTON_MAJOR}")
+        raise RuntimeError(f"No stable Canton tags found for version >= {requested_min_version}")
 
     metadata_overlay = load_metadata_overlay(metadata_file)
     snapshots_dir = workdir / "snapshots"
@@ -1518,7 +1524,7 @@ def build_manifest(
     latest_snapshot = latest_release["snapshot"]
 
     manifest = {
-        "schemaVersion": 4,
+        "schemaVersion": 5,
         "generatedAt": dt.datetime.now(dt.timezone.utc).isoformat(),
         "repo": {
             "path": str(repo_dir),
@@ -1529,7 +1535,10 @@ def build_manifest(
         },
         "selection": {
             "stableTagsOnly": True,
-            "minMajor": MIN_CANTON_MAJOR,
+            "requestedMinVersion": requested_min_version,
+            "discoveredFirstTag": releases[0]["tag"],
+            "discoveredLastTag": releases[-1]["tag"],
+            "releaseLines": sorted({release["releaseLine"] for release in releases}),
             "tagPattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$",
             "pathPattern": OWNED_PROTO_RE.pattern,
             "note": (
@@ -1915,6 +1924,59 @@ def render_release_timeline_table(releases: list[dict[str, Any]]) -> str:
     return "\n".join(rows)
 
 
+def render_add_remove_summary_table(releases: list[dict[str, Any]]) -> str:
+    if len(releases) <= 1:
+        return "No releases after the baseline are in scope."
+
+    category_labels = [
+        ("files", "file"),
+        ("services", "service"),
+        ("endpoints", "endpoint"),
+        ("messages", "message"),
+        ("enums", "enum"),
+    ]
+    rows = [
+        "| Release | Date | Added | Removed |",
+        "| :------ | :--- | :---- | :------ |",
+    ]
+
+    def summarize(counts: dict[str, Any], direction: str) -> str:
+        parts: list[str] = []
+        for key, label in category_labels:
+            count = counts[key][direction]
+            if count:
+                suffix = "" if count == 1 else "s"
+                parts.append(f"{count} {label}{suffix}")
+        return ", ".join(parts)
+
+    has_rows = False
+    for release in releases[1:]:
+        counts = release["changes"]["counts"]
+        added = summarize(counts, "added")
+        removed = summarize(counts, "removed")
+        if not added and not removed:
+            continue
+        has_rows = True
+        compare_url = release["schemaCompareUrl"] or release["compareUrl"]
+        release_label = md_link(release["tag"], compare_url) if compare_url else f"`{release['tag']}`"
+        rows.append(
+            "| "
+            + " | ".join(
+                [
+                    release_label,
+                    release["date"],
+                    added or "",
+                    removed or "",
+                ]
+            )
+            + " |"
+        )
+
+    if not has_rows:
+        return f"No additions or removals after `{releases[0]['tag']}`."
+    return "\n".join(rows)
+
+
 def render_endpoint_lifecycle_table(
     endpoint_lifecycle: list[dict[str, Any]],
     endpoint_pages: dict[str, dict[str, Any]],
@@ -2092,11 +2154,20 @@ def write_mdx(manifest: dict[str, Any], path: Path) -> None:
     endpoint_lifecycle = manifest["endpointLifecycle"]
     ctx = build_latest_context(latest)
     endpoint_pages = build_endpoint_page_map(manifest)
+    baseline_release = releases[0]["tag"] if releases else None
+    selection = manifest["selection"]
+    discovered_first = selection["discoveredFirstTag"]
+    discovered_last = selection["discoveredLastTag"]
+    if discovered_first == discovered_last:
+        discovered_range = f"`{discovered_first}`"
+    else:
+        discovered_range = f"`{discovered_first}` through `{discovered_last}`"
+    release_lines = ", ".join(f"`{line}`" for line in selection["releaseLines"])
 
     lines = [
         "---",
         "title: Canton Protobuf History",
-        "description: Descriptor-backed stable Canton protobuf inventory and history for v3+ releases.",
+        "description: Descriptor-backed stable Canton protobuf inventory and history for Canton releases from v3.2.0 onward.",
         "---",
         "",
         "# Canton Protobuf History",
@@ -2107,7 +2178,9 @@ def write_mdx(manifest: dict[str, Any], path: Path) -> None:
         "",
         "## Scope",
         "",
-        f"- Stable tags: `v{manifest['selection']['minMajor']}.x` and later",
+        f"- Requested stable tag floor: `{selection['requestedMinVersion']}`",
+        f"- Stable tags discovered in repo: {discovered_range}",
+        f"- Release lines in scope: {release_lines}",
         "- Included paths: `community/**/src/main/protobuf/**/*.proto`",
         "- Version axis: stable Canton release tags, not protobuf package suffixes",
         f"- Metadata overlay: `{manifest['artifacts']['metadataFile']}`",
@@ -2126,6 +2199,12 @@ def write_mdx(manifest: dict[str, Any], path: Path) -> None:
         f"- Messages: {latest['stats']['messages']}",
         f"- Fields: {latest['stats']['fields']}",
         f"- Enums: {latest['stats']['enums']}",
+        "",
+        f"## Additions And Removals Since `{baseline_release}`",
+        "",
+        "This summary excludes the baseline release and ignores pure modifications.",
+        "",
+        render_add_remove_summary_table(releases),
         "",
         "## Release Timeline",
         "",
