@@ -19,7 +19,7 @@ This repo manages the contents of the docs.canton.network website.
 npm i -g mintlify
 
 # Start local dev server
-mintlify dev
+cd docs-main && mintlify dev
 ```
 
 The site will be available at http://localhost:3000.
