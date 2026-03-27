@@ -12,7 +12,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_MANIFEST = REPO_ROOT / "config" / "x2mdx" / "ledger-api" / "manifest.json"
 DEFAULT_OUTPUT_FILE = REPO_ROOT / "docs-main" / "appdev" / "reference" / "json-api-reference.mdx"
 DEFAULT_DOCS_JSON = REPO_ROOT / "docs-main" / "docs.json"
-DEFAULT_VERSIONS = ["3.4", "3.5"]
+DEFAULT_SNAPSHOT_VERSIONS = ["3.4", "3.5"]
 
 
 def parse_args() -> argparse.Namespace:
@@ -57,7 +57,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--version",
         action="append",
-        help="Docs-site versions to include. Repeat to override the defaults.",
+        help="OpenAPI snapshot versions to include in the generated page. Repeat to override the defaults.",
     )
     parser.add_argument(
         "--source-name",
@@ -74,7 +74,7 @@ def parse_args() -> argparse.Namespace:
 
 def build_command(args: argparse.Namespace) -> list[str]:
     nav_groups = args.nav_group or []
-    versions = args.version or DEFAULT_VERSIONS
+    versions = args.version or DEFAULT_SNAPSHOT_VERSIONS
 
     command = [
         "x2mdx",
