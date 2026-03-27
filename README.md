@@ -82,3 +82,5 @@ By default this writes:
 
 - `docs-main/appdev/reference/json-api-reference.mdx`
 - `docs-main/docs.json`
+
+The generated page is placed under the top-level `Reference` dropdown in `docs-main/docs.json`.

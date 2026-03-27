@@ -46,7 +46,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--nav-dropdown",
-        default="App Development",
+        default="Reference",
         help="Top-level Mintlify dropdown to update.",
     )
     parser.add_argument(
@@ -73,7 +73,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def build_command(args: argparse.Namespace) -> list[str]:
-    nav_groups = args.nav_group or ["Reference"]
+    nav_groups = args.nav_group or []
     versions = args.version or DEFAULT_VERSIONS
 
     command = [
