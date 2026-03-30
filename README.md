@@ -108,4 +108,4 @@ By default this writes:
 - `docs-main/appdev/reference/ledger-bindings-api-lifecycle/`
 - `docs-main/docs.json`
 
-Only the overview page is added to the top-level `Reference` dropdown in `docs-main/docs.json`; the artifact and per-type pages stay unlisted and are linked from that overview page.
+The generated nav is added under the top-level `Reference` dropdown as `Ledger API JVM Bindings -> Scaladocs/Javadocs`, with each nested group populated directly from the generated type-reference pages.
