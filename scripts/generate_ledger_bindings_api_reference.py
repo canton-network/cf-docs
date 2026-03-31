@@ -58,7 +58,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--details-dir",
         default=str(DEFAULT_DETAILS_DIR),
-        help="Directory for generated artifact and type pages.",
+        help="Directory for generated artifact and package pages.",
     )
     parser.add_argument(
         "--docs-json",
@@ -202,9 +202,14 @@ def build_jvm_nav_group(
 
         artifact_page = details_dir / f"{slugify(artifact)}.mdx"
         if artifact_page.exists():
-            page_ref = docs_json_page_ref(artifact_page, docs_json_path)
-            language_pages[language].append((read_mdx_title(artifact_page), page_ref))
-            generated_refs.add(page_ref)
+            generated_refs.add(docs_json_page_ref(artifact_page, docs_json_path))
+
+        package_dir = details_dir / f"{slugify(artifact)}-packages"
+        if package_dir.exists():
+            for package_page in sorted(package_dir.glob("*.mdx")):
+                page_ref = docs_json_page_ref(package_page, docs_json_path)
+                language_pages[language].append((read_mdx_title(package_page), page_ref))
+                generated_refs.add(page_ref)
 
         type_dir = details_dir / f"{slugify(artifact)}-types"
         if not type_dir.exists():

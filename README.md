@@ -108,4 +108,4 @@ By default this writes:
 - `docs-main/appdev/reference/ledger-bindings-api-lifecycle/`
 - `docs-main/docs.json`
 
-The generated nav is added under the top-level `Reference` dropdown as `Ledger API JVM Bindings -> Scaladocs/Javadocs`, with each nested group populated directly from the generated type-reference pages.
+The generated nav is added under the top-level `Reference` dropdown as `Ledger API JVM Bindings -> Scaladocs/Javadocs`, with each nested group populated directly from the generated JVM package pages.
