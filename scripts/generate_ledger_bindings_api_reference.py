@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import shutil
 import subprocess
 import sys
 import urllib.error
@@ -18,9 +19,12 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SOURCE_CONFIG = REPO_ROOT / "config" / "x2mdx" / "ledger-bindings" / "source-artifacts.json"
 DEFAULT_CACHE_DIR = REPO_ROOT / ".internal" / "cache" / "x2mdx" / "ledger-bindings"
 DEFAULT_MANIFEST = REPO_ROOT / ".internal" / "generated" / "x2mdx" / "ledger-bindings" / "manifest.json"
-DEFAULT_OVERVIEW_FILE = REPO_ROOT / "docs-main" / "appdev" / "reference" / "ledger-bindings-api-lifecycle.mdx"
-DEFAULT_DETAILS_DIR = REPO_ROOT / "docs-main" / "appdev" / "reference" / "ledger-bindings-api-lifecycle"
+DEFAULT_RENDER_ROOT = REPO_ROOT / ".internal" / "generated" / "x2mdx" / "ledger-bindings" / "site"
+DEFAULT_OVERVIEW_FILE = REPO_ROOT / "docs-main" / "reference" / "ledger-api-jvm-bindings.mdx"
+DEFAULT_DETAILS_DIR = REPO_ROOT / "docs-main" / "reference"
 DEFAULT_DOCS_JSON = REPO_ROOT / "docs-main" / "docs.json"
+LEGACY_OVERVIEW_FILE = REPO_ROOT / "docs-main" / "appdev" / "reference" / "ledger-bindings-api-lifecycle.mdx"
+LEGACY_DETAILS_DIR = REPO_ROOT / "docs-main" / "appdev" / "reference" / "ledger-bindings-api-lifecycle"
 LANGUAGE_LABELS = {
     "scala": "Scaladocs",
     "java": "Javadocs",
@@ -28,6 +32,10 @@ LANGUAGE_LABELS = {
 LANGUAGE_ORDER = {
     "scala": 0,
     "java": 1,
+}
+LANGUAGE_DIRS = {
+    "scala": "scala",
+    "java": "java",
 }
 
 
@@ -53,12 +61,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--overview-file",
         default=str(DEFAULT_OVERVIEW_FILE),
-        help="Path to the generated overview MDX page.",
+        help="Path to the published hidden overview MDX page.",
     )
     parser.add_argument(
         "--details-dir",
         default=str(DEFAULT_DETAILS_DIR),
-        help="Directory for generated artifact and package pages.",
+        help="Directory for published per-language pages, such as reference/java/... and reference/scala/....",
     )
     parser.add_argument(
         "--docs-json",
@@ -182,41 +190,25 @@ def ensure_group_path(items: list[Any], group_path: list[str]) -> list[Any]:
 
 def build_jvm_nav_group(
     *,
-    source_config: dict[str, Any],
-    details_dir: Path,
+    publish_root: Path,
     docs_json_path: Path,
     group_label: str,
 ) -> tuple[dict[str, Any], set[str]]:
     language_pages: dict[str, list[tuple[str, str]]] = defaultdict(list)
     generated_refs: set[str] = set()
 
-    for artifact_entry in source_config.get("artifacts", []):
-        if not isinstance(artifact_entry, dict):
+    for language, directory_name in LANGUAGE_DIRS.items():
+        language_dir = publish_root / directory_name
+        if not language_dir.exists():
             continue
-        artifact = artifact_entry.get("artifact")
-        language = artifact_entry.get("language")
-        if not isinstance(artifact, str) or not artifact:
-            continue
-        if not isinstance(language, str) or not language:
-            continue
-
-        artifact_page = details_dir / f"{slugify(artifact)}.mdx"
-        if artifact_page.exists():
-            generated_refs.add(docs_json_page_ref(artifact_page, docs_json_path))
-
-        package_dir = details_dir / f"{slugify(artifact)}-packages"
-        if package_dir.exists():
-            for package_page in sorted(package_dir.glob("*.mdx")):
-                page_ref = docs_json_page_ref(package_page, docs_json_path)
-                language_pages[language].append((read_mdx_title(package_page), page_ref))
-                generated_refs.add(page_ref)
-
-        type_dir = details_dir / f"{slugify(artifact)}-types"
-        if not type_dir.exists():
-            continue
-
-        for type_page in sorted(type_dir.glob("*.mdx")):
-            page_ref = docs_json_page_ref(type_page, docs_json_path)
+        artifact_index = language_dir / "index.mdx"
+        if artifact_index.exists():
+            generated_refs.add(docs_json_page_ref(artifact_index, docs_json_path))
+        for package_page in sorted(language_dir.glob("*.mdx")):
+            if package_page.name == "index.mdx":
+                continue
+            page_ref = docs_json_page_ref(package_page, docs_json_path)
+            language_pages[language].append((read_mdx_title(package_page), page_ref))
             generated_refs.add(page_ref)
 
     language_groups: list[tuple[int, str, dict[str, Any]]] = []
@@ -252,9 +244,8 @@ def update_docs_navigation(
     dropdown_label: str,
     parent_groups: list[str],
     group_label: str,
-    source_config: dict[str, Any],
     overview_file: Path,
-    details_dir: Path,
+    publish_root: Path,
 ) -> Path:
     docs = load_json(docs_json_path)
     navigation = docs.get("navigation")
@@ -276,8 +267,7 @@ def update_docs_navigation(
         raise ValueError(f"Dropdown does not expose a pages list: {dropdown_label}")
 
     jvm_group, generated_refs = build_jvm_nav_group(
-        source_config=source_config,
-        details_dir=details_dir,
+        publish_root=publish_root,
         docs_json_path=docs_json_path,
         group_label=group_label,
     )
@@ -396,6 +386,8 @@ def build_manifest(
 
 
 def build_command(args: argparse.Namespace, manifest_path: Path) -> list[str]:
+    render_overview_file = DEFAULT_RENDER_ROOT / "ledger-api-jvm-bindings.mdx"
+    render_details_dir = DEFAULT_RENDER_ROOT / "details"
     command = [
         "x2mdx",
         "jvm-docs",
@@ -403,9 +395,9 @@ def build_command(args: argparse.Namespace, manifest_path: Path) -> list[str]:
         "--manifest",
         str(manifest_path.resolve()),
         "--overview-file",
-        str(Path(args.overview_file).resolve()),
+        str(render_overview_file.resolve()),
         "--details-dir",
-        str(Path(args.details_dir).resolve()),
+        str(render_details_dir.resolve()),
         "--overview-title",
         args.overview_title,
         "--source-name",
@@ -416,6 +408,85 @@ def build_command(args: argparse.Namespace, manifest_path: Path) -> list[str]:
     for version in args.version or []:
         command.extend(["--version", version])
     return command
+
+
+def render_output_paths() -> tuple[Path, Path]:
+    return DEFAULT_RENDER_ROOT / "ledger-api-jvm-bindings.mdx", DEFAULT_RENDER_ROOT / "details"
+
+
+def rewrite_markdown_links(text: str, replacements: list[tuple[str, str]]) -> str:
+    for old, new in replacements:
+        text = text.replace(old, new)
+    return text
+
+
+def copy_rewritten_page(source: Path, target: Path, replacements: list[tuple[str, str]]) -> None:
+    target.parent.mkdir(parents=True, exist_ok=True)
+    text = source.read_text(encoding="utf-8")
+    target.write_text(rewrite_markdown_links(text, replacements), encoding="utf-8")
+
+
+def publish_rendered_pages(
+    *,
+    source_config: dict[str, Any],
+    publish_overview_file: Path,
+    publish_root: Path,
+) -> tuple[Path, set[str]]:
+    render_overview_file, render_details_dir = render_output_paths()
+    publish_root.mkdir(parents=True, exist_ok=True)
+
+    for language_dir in LANGUAGE_DIRS.values():
+        shutil.rmtree(publish_root / language_dir, ignore_errors=True)
+    if publish_overview_file.exists():
+        publish_overview_file.unlink()
+    if LEGACY_OVERVIEW_FILE.exists():
+        LEGACY_OVERVIEW_FILE.unlink()
+    shutil.rmtree(LEGACY_DETAILS_DIR, ignore_errors=True)
+
+    artifact_entries = [
+        entry
+        for entry in source_config.get("artifacts", [])
+        if isinstance(entry, dict)
+        and isinstance(entry.get("artifact"), str)
+        and isinstance(entry.get("language"), str)
+        and entry.get("language") in LANGUAGE_DIRS
+    ]
+
+    overview_replacements: list[tuple[str, str]] = []
+    generated_refs: set[str] = set()
+
+    for artifact_entry in artifact_entries:
+        artifact = str(artifact_entry["artifact"])
+        language = str(artifact_entry["language"])
+        language_dir = publish_root / LANGUAGE_DIRS[language]
+        artifact_slug = slugify(artifact)
+        source_artifact_page = render_details_dir / f"{artifact_slug}.mdx"
+        source_package_dir = render_details_dir / f"{artifact_slug}-packages"
+        target_artifact_page = language_dir / "index.mdx"
+
+        overview_replacements.append((f"({render_details_dir.name}/{artifact_slug})", f"({LANGUAGE_DIRS[language]})"))
+        copy_rewritten_page(
+            source_artifact_page,
+            target_artifact_page,
+            replacements=[(f"({source_package_dir.name}/", "(")],
+        )
+        generated_refs.add(docs_json_page_ref(target_artifact_page, DEFAULT_DOCS_JSON))
+
+        if not source_package_dir.exists():
+            continue
+        language_dir.mkdir(parents=True, exist_ok=True)
+        for package_page in sorted(source_package_dir.glob("*.mdx")):
+            target_package_page = language_dir / package_page.name
+            copy_rewritten_page(
+                package_page,
+                target_package_page,
+                replacements=[(f"(../{artifact_slug})", "(index)")],
+            )
+            generated_refs.add(docs_json_page_ref(target_package_page, DEFAULT_DOCS_JSON))
+
+    copy_rewritten_page(render_overview_file, publish_overview_file, replacements=overview_replacements)
+    generated_refs.add(docs_json_page_ref(publish_overview_file, DEFAULT_DOCS_JSON))
+    return publish_overview_file, generated_refs
 
 
 def main() -> int:
@@ -436,14 +507,18 @@ def main() -> int:
     if completed.returncode != 0:
         return completed.returncode
 
+    publish_overview_file, _ = publish_rendered_pages(
+        source_config=source_config,
+        publish_overview_file=Path(args.overview_file).resolve(),
+        publish_root=Path(args.details_dir).resolve(),
+    )
     update_docs_navigation(
         docs_json_path=Path(args.docs_json).resolve(),
         dropdown_label=args.nav_dropdown,
         parent_groups=args.nav_group or [],
         group_label=args.overview_title,
-        source_config=source_config,
-        overview_file=Path(args.overview_file).resolve(),
-        details_dir=Path(args.details_dir).resolve(),
+        overview_file=publish_overview_file.resolve(),
+        publish_root=Path(args.details_dir).resolve(),
     )
     return 0
 

@@ -104,8 +104,9 @@ npm run generate:ledger-bindings-api-reference
 
 By default this writes:
 
-- `docs-main/appdev/reference/ledger-bindings-api-lifecycle.mdx`
-- `docs-main/appdev/reference/ledger-bindings-api-lifecycle/`
+- `docs-main/reference/ledger-api-jvm-bindings.mdx`
+- `docs-main/reference/java/`
+- `docs-main/reference/scala/`
 - `docs-main/docs.json`
 
 The generated nav is added under the top-level `Reference` dropdown as `Ledger API JVM Bindings -> Scaladocs/Javadocs`, with each nested group populated directly from the generated JVM package pages.
