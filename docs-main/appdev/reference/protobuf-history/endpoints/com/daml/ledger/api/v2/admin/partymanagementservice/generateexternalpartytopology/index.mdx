@@ -1,0 +1,74 @@
+---
+title: "PartyManagementService.GenerateExternalPartyTopology"
+description: "Descriptor-backed protobuf endpoint reference for com.daml.ledger.api.v2.admin.PartyManagementService/GenerateExternalPartyTopology."
+---
+
+# Endpoint `com.daml.ledger.api.v2.admin.PartyManagementService/GenerateExternalPartyTopology`
+
+[Back to Canton Protobuf History](../../../../../../../../../index)
+
+## Snapshot
+
+- Introduced in: `3.4.0`
+- Last changed in: `3.4.0`
+- Removed in: `-`
+- Status: `current`
+- Source: [community/ledger-api/src/main/protobuf/com/daml/ledger/api/v2/admin/party_management_service.proto](https://github.com/DACH-NY/canton/blob/v3.4.11/community/ledger-api/src/main/protobuf/com/daml/ledger/api/v2/admin/party_management_service.proto#L104)
+
+## Signature
+
+```protobuf
+rpc PartyManagementService.GenerateExternalPartyTopology(com.daml.ledger.api.v2.admin.GenerateExternalPartyTopologyRequest) returns (com.daml.ledger.api.v2.admin.GenerateExternalPartyTopologyResponse);
+```
+
+Alpha 3.3: Convenience endpoint to generate topology transactions for external signing
+
+ Expected to be stable in 3.5
+
+ You may use this endpoint to generate the common external topology transactions
+ which can be signed externally and uploaded as part of the allocate party process
+
+ Note that this request will create a normal namespace using the same key for the
+ identity as for signing. More elaborate schemes such as multi-signature
+ or decentralized parties require you to construct the topology transactions yourself.
+
+## History
+
+| Version | Kind | Details |
+| --- | --- | --- |
+| `3.4.0` | `introduced` |  |
+
+## Request Type
+
+### Message `com.daml.ledger.api.v2.admin.GenerateExternalPartyTopologyRequest`
+
+- Source: [community/ledger-api/src/main/protobuf/com/daml/ledger/api/v2/admin/party_management_service.proto](https://github.com/DACH-NY/canton/blob/v3.4.11/community/ledger-api/src/main/protobuf/com/daml/ledger/api/v2/admin/party_management_service.proto#L321)
+- Fields: 7
+
+_No description._
+
+| Field | Type | Label | Description |
+| --- | --- | --- | --- |
+| synchronizer | string | optional | TODO(#27670) support synchronizer aliases<br/> Required: synchronizer-id for which we are building this request. |
+| party_hint | string | optional | Required: the actual party id will be constructed from this hint and a fingerprint of the public key |
+| public_key | `com.daml.ledger.api.v2.SigningPublicKey` | optional | Required: public key |
+| local_participant_observation_only | bool | optional | Optional: if true, then the local participant will only be observing, not confirming. Default false. |
+| other_confirming_participant_uids | string | repeated | Optional: other participant ids which should be confirming for this party |
+| confirmation_threshold | uint32 | optional | Optional: Confirmation threshold &gt;= 1 for the party. Defaults to all available confirmers (or if set to 0). |
+| observing_participant_uids | string | repeated | Optional: other observing participant ids for this party |
+
+## Response Type
+
+### Message `com.daml.ledger.api.v2.admin.GenerateExternalPartyTopologyResponse`
+
+- Source: [community/ledger-api/src/main/protobuf/com/daml/ledger/api/v2/admin/party_management_service.proto](https://github.com/DACH-NY/canton/blob/v3.4.11/community/ledger-api/src/main/protobuf/com/daml/ledger/api/v2/admin/party_management_service.proto#L340)
+- Fields: 4
+
+Response message with topology transactions and the multi-hash to be signed.
+
+| Field | Type | Label | Description |
+| --- | --- | --- | --- |
+| party_id | string | optional | the generated party id |
+| public_key_fingerprint | string | optional | the fingerprint of the supplied public key |
+| topology_transactions | bytes | repeated | The serialized topology transactions which need to be signed and submitted as part of the allocate party process<br/> Note that the serialization includes the versioning information. Therefore, the transaction here is serialized<br/> as an `UntypedVersionedMessage` which in turn contains the serialized `TopologyTransaction` in the version<br/> supported by the synchronizer. |
+| multi_hash | bytes | optional | the multi-hash which may be signed instead of each individual transaction |

@@ -15,6 +15,7 @@ let
       wheel
     ];
     propagatedBuildInputs = with python.pkgs; [
+      protobuf
       pyyaml
     ];
     doCheck = false;
@@ -28,7 +29,7 @@ pkgs.mkShell {
   ];
 
   shellHook = ''
-    export PATH="$PWD/node_modules/.bin:$PATH"
+    export PATH="$HOME/.dpm/bin:$HOME/.daml/bin:$PWD/node_modules/.bin:$PATH"
 
     if [ -f package.json ] && [ ! -d node_modules ]; then
       echo "Installing npm dependencies..."

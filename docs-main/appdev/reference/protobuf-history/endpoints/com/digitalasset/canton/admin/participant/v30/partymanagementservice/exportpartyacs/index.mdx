@@ -1,0 +1,73 @@
+---
+title: "PartyManagementService.ExportPartyAcs"
+description: "Descriptor-backed protobuf endpoint reference for com.digitalasset.canton.admin.participant.v30.PartyManagementService/ExportPartyAcs."
+---
+
+# Endpoint `com.digitalasset.canton.admin.participant.v30.PartyManagementService/ExportPartyAcs`
+
+[Back to Canton Protobuf History](../../../../../../../../../index)
+
+## Snapshot
+
+- Introduced in: `3.4.0`
+- Last changed in: `3.4.0`
+- Removed in: `-`
+- Status: `current`
+- Source: [community/admin-api/src/main/protobuf/com/digitalasset/canton/admin/participant/v30/party_management_service.proto](https://github.com/DACH-NY/canton/blob/v3.4.11/community/admin-api/src/main/protobuf/com/digitalasset/canton/admin/participant/v30/party_management_service.proto#L54)
+
+## Signature
+
+```protobuf
+rpc PartyManagementService.ExportPartyAcs(com.digitalasset.canton.admin.participant.v30.ExportPartyAcsRequest) returns (stream com.digitalasset.canton.admin.participant.v30.ExportPartyAcsResponse);
+```
+
+Offline party replication focused ACS export.
+
+ Exports the ACS of a single party from a source participant, so that the party can be
+ replicated onto a target participant.
+
+ This endpoint works in conjunction with the ImportPartyAcs endpoint.
+
+## History
+
+| Version | Kind | Details |
+| --- | --- | --- |
+| `3.4.0` | `introduced` |  |
+
+## Request Type
+
+### Message `com.digitalasset.canton.admin.participant.v30.ExportPartyAcsRequest`
+
+- Source: [community/admin-api/src/main/protobuf/com/digitalasset/canton/admin/participant/v30/party_management_service.proto](https://github.com/DACH-NY/canton/blob/v3.4.11/community/admin-api/src/main/protobuf/com/digitalasset/canton/admin/participant/v30/party_management_service.proto#L234)
+- Fields: 5
+
+Exports the ACS for a given party to facilitate its replication from a source to a target participant.
+
+ This request uses the party's most recent activation on the target participant to determine the precise
+ historical state of the ACS to export from the source participant.
+
+ "Activation" on the target participant means the new hosting arrangement has been authorized by both
+ the party itself and the target participant via party-to-participant topology transactions.
+
+ This request will fail if the party has not yet been activated on the target participant.
+
+| Field | Type | Label | Description |
+| --- | --- | --- | --- |
+| party_id | string | optional | The identifier of the party being replicated. This party must already be active on the target participant<br/> for the ACS export to succeed.<br/> Required |
+| synchronizer_id | string | optional | The identifier of the synchronizer managing the contract to be exported. This scopes the ACS export to only<br/> contracts assigned to this synchronizer.<br/> Required |
+| target_participant_uid | string | optional | The unique identifier of the target participant where the party will be replicated.<br/> Required |
+| begin_offset_exclusive | int64 | optional | The exclusive ledger offset used as starting point to find the party's most recent activation on the target<br/> participant.<br/> Required |
+| wait_for_activation_timeout | `google.protobuf.Duration` | optional | The maximum duration the service will wait to find the topology transaction that activates the party on<br/> the target participant.<br/> If not set, the service will use a default timeout.<br/> Optional |
+
+## Response Type
+
+### Message `com.digitalasset.canton.admin.participant.v30.ExportPartyAcsResponse`
+
+- Source: [community/admin-api/src/main/protobuf/com/digitalasset/canton/admin/participant/v30/party_management_service.proto](https://github.com/DACH-NY/canton/blob/v3.4.11/community/admin-api/src/main/protobuf/com/digitalasset/canton/admin/participant/v30/party_management_service.proto#L261)
+- Fields: 1
+
+_No description._
+
+| Field | Type | Label | Description |
+| --- | --- | --- | --- |
+| chunk | bytes | optional | A chunk of the ACS snapshot. This response is streamed, with each message containing a portion of the<br/> complete ACS data. The raw binary data within each chunk consists of Ledger API active contract messages,<br/> specifically wrapped in `v30.active_contract.ActiveContract` messages. However, a single chunk does not<br/> necessarily contain exactly one complete message.<br/> This field will be populated in each streamed response.<br/> Required |

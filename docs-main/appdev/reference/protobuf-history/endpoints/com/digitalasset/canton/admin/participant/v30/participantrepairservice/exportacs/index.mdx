@@ -1,0 +1,60 @@
+---
+title: "ParticipantRepairService.ExportAcs"
+description: "Descriptor-backed protobuf endpoint reference for com.digitalasset.canton.admin.participant.v30.ParticipantRepairService/ExportAcs."
+---
+
+# Endpoint `com.digitalasset.canton.admin.participant.v30.ParticipantRepairService/ExportAcs`
+
+[Back to Canton Protobuf History](../../../../../../../../../index)
+
+## Snapshot
+
+- Introduced in: `3.4.0`
+- Last changed in: `3.4.0`
+- Removed in: `-`
+- Status: `current`
+- Source: [community/admin-api/src/main/protobuf/com/digitalasset/canton/admin/participant/v30/participant_repair_service.proto](https://github.com/DACH-NY/canton/blob/v3.4.11/community/admin-api/src/main/protobuf/com/digitalasset/canton/admin/participant/v30/participant_repair_service.proto#L33)
+
+## Signature
+
+```protobuf
+rpc ParticipantRepairService.ExportAcs(com.digitalasset.canton.admin.participant.v30.ExportAcsRequest) returns (stream com.digitalasset.canton.admin.participant.v30.ExportAcsResponse);
+```
+
+Export the ACS from the participant.
+
+## History
+
+| Version | Kind | Details |
+| --- | --- | --- |
+| `3.4.0` | `introduced` |  |
+
+## Request Type
+
+### Message `com.digitalasset.canton.admin.participant.v30.ExportAcsRequest`
+
+- Source: [community/admin-api/src/main/protobuf/com/digitalasset/canton/admin/participant/v30/participant_repair_service.proto](https://github.com/DACH-NY/canton/blob/v3.4.11/community/admin-api/src/main/protobuf/com/digitalasset/canton/admin/participant/v30/participant_repair_service.proto#L188)
+- Fields: 5
+
+_No description._
+
+| Field | Type | Label | Description |
+| --- | --- | --- | --- |
+| party_ids | string | repeated | The identifiers of the parties for which the Active Contract Set (ACS) will be exported.<br/> This field must contain at least one party ID.<br/> Required |
+| synchronizer_id | string | optional | The identifier of the synchronizer to filter contracts.<br/> Optional. If provided, only contracts assigned to a synchronizer with this exact ID will be included<br/> in the exported ACS. If not set (empty string), all contracts for the specified parties will be included. |
+| ledger_offset | int64 | optional | The ledger offset at which the ACS snapshot should be taken. This determines the point in the<br/> ledger history from which the active contracts will be retrieved.<br/> Required |
+| contract_synchronizer_renames | `com.digitalasset.canton.admin.participant.v30.ExportAcsRequest.ContractSynchronizerRenamesEntry` | repeated | A mapping to modify the synchronizer assignment of contracts in the exported ACS.<br/> Note: This mapping is not a proper contract reassignment. That is no actual reassignment happens, and thus<br/> the reassignment counter is not increased.<br/> Optional. If not provided (empty map), the contracts in the exported ACS will retain their<br/> original synchronizer assignments. |
+| excluded_stakeholder_ids | string | repeated | A list of party IDs to exclude from the export.<br/> Any contract that has one or more of these parties as a stakeholder will be omitted from the ACS snapshot.<br/> Optional |
+
+## Response Type
+
+### Message `com.digitalasset.canton.admin.participant.v30.ExportAcsResponse`
+
+- Source: [community/admin-api/src/main/protobuf/com/digitalasset/canton/admin/participant/v30/participant_repair_service.proto](https://github.com/DACH-NY/canton/blob/v3.4.11/community/admin-api/src/main/protobuf/com/digitalasset/canton/admin/participant/v30/participant_repair_service.proto#L217)
+- Fields: 1
+
+_No description._
+
+| Field | Type | Label | Description |
+| --- | --- | --- | --- |
+| chunk | bytes | optional | A chunk of the Active Contract Set (ACS) snapshot. This response is streamed, with each<br/> message containing a portion of the complete ACS data.<br/> The raw binary data within each chunk consists of Ledger API active contract messages, specifically wrapped<br/> in `v30.active_contract.ActiveContract` messages. However, a single chunk does not necessarily contain<br/> exactly one complete message.<br/> This field will be populated in each streamed response.<br/> Required |

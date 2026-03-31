@@ -1,0 +1,67 @@
+---
+title: "StateService.GetActiveContracts"
+description: "Descriptor-backed protobuf endpoint reference for com.daml.ledger.api.v2.StateService/GetActiveContracts."
+---
+
+# Endpoint `com.daml.ledger.api.v2.StateService/GetActiveContracts`
+
+[Back to Canton Protobuf History](../../../../../../../../index)
+
+## Snapshot
+
+- Introduced in: `3.4.0`
+- Last changed in: `3.4.0`
+- Removed in: `-`
+- Status: `current`
+- Source: [community/ledger-api/src/main/protobuf/com/daml/ledger/api/v2/state_service.proto](https://github.com/DACH-NY/canton/blob/v3.4.11/community/ledger-api/src/main/protobuf/com/daml/ledger/api/v2/state_service.proto#L23)
+
+## Signature
+
+```protobuf
+rpc StateService.GetActiveContracts(com.daml.ledger.api.v2.GetActiveContractsRequest) returns (stream com.daml.ledger.api.v2.GetActiveContractsResponse);
+```
+
+Returns a stream of the snapshot of the active contracts and incomplete (un)assignments at a ledger offset.
+ Once the stream of GetActiveContractsResponses completes,
+ the client SHOULD begin streaming updates from the update service,
+ starting at the GetActiveContractsRequest.active_at_offset specified in this request.
+ Clients SHOULD NOT assume that the set of active contracts they receive reflects the state at the ledger end.
+
+## History
+
+| Version | Kind | Details |
+| --- | --- | --- |
+| `3.4.0` | `introduced` |  |
+
+## Request Type
+
+### Message `com.daml.ledger.api.v2.GetActiveContractsRequest`
+
+- Source: [community/ledger-api/src/main/protobuf/com/daml/ledger/api/v2/state_service.proto](https://github.com/DACH-NY/canton/blob/v3.4.11/community/ledger-api/src/main/protobuf/com/daml/ledger/api/v2/state_service.proto#L40)
+- Fields: 2
+
+If the given offset is different than the ledger end, and there are (un)assignments in-flight at the given offset,
+ the snapshot may fail with "FAILED_PRECONDITION/PARTICIPANT_PRUNED_DATA_ACCESSED".
+ Note that it is ok to request acs snapshots for party migration with offsets other than ledger end, because party
+ migration is not concerned with incomplete (un)assignments.
+
+| Field | Type | Label | Description |
+| --- | --- | --- | --- |
+| active_at_offset | int64 | optional | The offset at which the snapshot of the active contracts will be computed.<br/> Must be no greater than the current ledger end offset.<br/> Must be greater than or equal to the last pruning offset.<br/> Required, must be a valid absolute offset (positive integer) or ledger begin offset (zero).<br/> If zero, the empty set will be returned. |
+| event_format | `com.daml.ledger.api.v2.EventFormat` | optional | Format of the contract_entries in the result. In case of CreatedEvent the presentation will be of<br/> TRANSACTION_SHAPE_ACS_DELTA.<br/> Optional for backwards compatibility, defaults to an EventFormat where:<br/><br/> - filters_by_party is the filter.filters_by_party from this request<br/> - filters_for_any_party is the filter.filters_for_any_party from this request<br/> - verbose is the verbose field from this request |
+
+## Response Type
+
+### Message `com.daml.ledger.api.v2.GetActiveContractsResponse`
+
+- Source: [community/ledger-api/src/main/protobuf/com/daml/ledger/api/v2/state_service.proto](https://github.com/DACH-NY/canton/blob/v3.4.11/community/ledger-api/src/main/protobuf/com/daml/ledger/api/v2/state_service.proto#L64)
+- Fields: 4
+
+_No description._
+
+| Field | Type | Label | Description |
+| --- | --- | --- | --- |
+| workflow_id | string | optional | The workflow ID used in command submission which corresponds to the contract_entry. Only set if<br/> the ``workflow_id`` for the command was set.<br/> Must be a valid LedgerString (as described in ``value.proto``).<br/> Optional |
+| active_contract | `com.daml.ledger.api.v2.ActiveContract` | optional | The contract is active on the assigned synchronizer, meaning: there was an activation event on the given synchronizer (<br/> created, assigned), which is not followed by a deactivation event (archived, unassigned) on the same<br/> synchronizer, until the active_at_offset.<br/> Since activeness is defined as a per synchronizer concept, it is possible, that a contract is active on one<br/> synchronizer, but already archived on another.<br/> There will be one such message for each synchronizer the contract is active on. |
+| incomplete_unassigned | `com.daml.ledger.api.v2.IncompleteUnassigned` | optional | Included iff the unassigned event was before or at the active_at_offset, but there was no corresponding<br/> assigned event before or at the active_at_offset. |
+| incomplete_assigned | `com.daml.ledger.api.v2.IncompleteAssigned` | optional | Important: this message is not indicating that the contract is active on the target synchronizer!<br/> Included iff the assigned event was before or at the active_at_offset, but there was no corresponding<br/> unassigned event before or at the active_at_offset. |
