@@ -202,16 +202,16 @@ def build_jvm_nav_group(
 
         artifact_page = details_dir / f"{slugify(artifact)}.mdx"
         if artifact_page.exists():
-            generated_refs.add(docs_json_page_ref(artifact_page, docs_json_path))
+            page_ref = docs_json_page_ref(artifact_page, docs_json_path)
+            language_pages[language].append((read_mdx_title(artifact_page), page_ref))
+            generated_refs.add(page_ref)
 
         type_dir = details_dir / f"{slugify(artifact)}-types"
         if not type_dir.exists():
             continue
 
         for type_page in sorted(type_dir.glob("*.mdx")):
-            title = read_mdx_title(type_page)
             page_ref = docs_json_page_ref(type_page, docs_json_path)
-            language_pages[language].append((title, page_ref))
             generated_refs.add(page_ref)
 
     language_groups: list[tuple[int, str, dict[str, Any]]] = []
