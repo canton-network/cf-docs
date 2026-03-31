@@ -84,3 +84,29 @@ By default this writes:
 - `docs-main/docs.json`
 
 The generated page is placed directly under the top-level `Reference` dropdown in `docs-main/docs.json`, outside the `MainNet`/`TestNet`/`DevNet` versioned navigation branches.
+
+### Generate the Ledger bindings API reference
+
+This repo also includes a checked-in source config for the published Java/Scala bindings Javadoc/Scaladoc jars at `config/x2mdx/ledger-bindings/source-artifacts.json`.
+The generator script downloads those jars into `.internal/cache/x2mdx/ledger-bindings/`, writes a local x2mdx manifest into `.internal/generated/x2mdx/ledger-bindings/manifest.json`, and then renders the MDX pages with the GitHub-pinned `x2mdx`.
+
+Run:
+
+```bash
+python3 scripts/generate_ledger_bindings_api_reference.py
+```
+
+or:
+
+```bash
+npm run generate:ledger-bindings-api-reference
+```
+
+By default this writes:
+
+- `docs-main/reference/ledger-api-jvm-bindings.mdx`
+- `docs-main/reference/java/`
+- `docs-main/reference/scala/`
+- `docs-main/docs.json`
+
+The generated nav is added under the top-level `Reference` dropdown as `Ledger API JVM Bindings -> Scaladocs/Javadocs`, with each nested group populated directly from the generated JVM package pages.
