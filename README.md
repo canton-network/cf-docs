@@ -62,3 +62,25 @@ Then run:
 direnv allow
 mintlify dev
 ```
+
+### Generate the JSON API reference
+
+This repo includes the checked-in Ledger API OpenAPI manifest and snapshots under `config/x2mdx/ledger-api/`.
+The Nix shell pins `x2mdx` from `github.com/danielporterda/x2mdx`, so once `direnv` has loaded you can regenerate the page and `docs.json` update with:
+
+```bash
+python3 scripts/generate_json_api_reference.py
+```
+
+or:
+
+```bash
+npm run generate:json-api-reference
+```
+
+By default this writes:
+
+- `docs-main/appdev/reference/json-api-reference.mdx`
+- `docs-main/docs.json`
+
+The generated page is placed directly under the top-level `Reference` dropdown in `docs-main/docs.json`, outside the `MainNet`/`TestNet`/`DevNet` versioned navigation branches.
