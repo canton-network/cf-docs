@@ -134,3 +134,24 @@ By default this writes:
 - `docs-main/docs.json`
 
 The generated nav is added under the top-level `Reference` dropdown as `Canton Protobuf History`, with only the overview page listed in nav. The per-endpoint pages are generated and linked from the overview page but left unlisted.
+
+### Generate the TypeScript bindings reference
+
+This repo also includes a checked-in source config for published `@daml/types` npm artifacts at `config/x2mdx/typescript-bindings/source-artifacts.json`.
+The generator script downloads the configured tarballs into `.internal/cache/x2mdx/typescript-bindings/`, installs local package dependencies, renders TypeDoc JSON into `.internal/generated/x2mdx/typescript-bindings/`, writes a local x2mdx manifest, and then rewrites the checked-in Mintlify page with the GitHub-pinned `x2mdx`.
+
+Run:
+
+```bash
+python3 scripts/generate_typescript_bindings_reference.py
+```
+
+or:
+
+```bash
+npm run generate:typescript-bindings-reference
+```
+
+By default this writes:
+
+- `docs-main/sdks-tools/language-bindings/typescript.mdx`
