@@ -17,6 +17,7 @@ DEFAULT_MANIFEST = REPO_ROOT / ".internal" / "generated" / "x2mdx" / "daml-stand
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "docs-main" / "appdev" / "reference" / "daml-standard-library"
 DEFAULT_DOCS_JSON = REPO_ROOT / "docs-main" / "docs.json"
 GROUP_LABEL = "Daml Standard Library"
+MODULES_GROUP_LABEL = "Modules"
 
 
 def parse_args() -> argparse.Namespace:
@@ -193,10 +194,17 @@ def update_docs_navigation(
 
     dropdown["pages"] = prune_nav_items(pages, page_refs=page_refs, group_labels={GROUP_LABEL})
     target_pages = ensure_group_path(dropdown["pages"], parent_groups)
+    overview_ref = next((page_ref for title, page_ref in page_entries if title == GROUP_LABEL), None)
+    module_refs = [page_ref for title, page_ref in page_entries if title != GROUP_LABEL]
+    group_pages: list[Any] = []
+    if overview_ref is not None:
+        group_pages.append(overview_ref)
+    if module_refs:
+        group_pages.append({"group": MODULES_GROUP_LABEL, "pages": module_refs})
     target_pages.append(
         {
             "group": GROUP_LABEL,
-            "pages": [page_ref for _title, page_ref in page_entries],
+            "pages": group_pages,
         }
     )
 

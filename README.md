@@ -133,7 +133,7 @@ By default this writes:
 - `docs-main/appdev/reference/daml-standard-library/`
 - `docs-main/docs.json`
 
-The generated nav is added under the top-level `Reference` dropdown as `Daml Standard Library`, with the overview page and generated module pages listed directly beneath it.
+The generated nav is added under the top-level `Reference` dropdown as `Daml Standard Library`, with the overview page listed first and the generated module pages grouped under a nested `Modules` foldout.
 
 ### Generate the Canton protobuf history reference
 
