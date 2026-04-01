@@ -155,3 +155,4 @@ npm run generate:typescript-bindings-reference
 By default this writes:
 
 - `docs-main/sdks-tools/language-bindings/typescript.mdx`
+- `docs-main/docs.json`

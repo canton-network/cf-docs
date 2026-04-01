@@ -18,6 +18,7 @@ DEFAULT_CACHE_DIR = REPO_ROOT / ".internal" / "cache" / "x2mdx" / "typescript-bi
 DEFAULT_MANIFEST = REPO_ROOT / ".internal" / "generated" / "x2mdx" / "typescript-bindings" / "manifest.json"
 DEFAULT_TYPEDOC_DIR = REPO_ROOT / ".internal" / "generated" / "x2mdx" / "typescript-bindings" / "typedoc"
 DEFAULT_OUTPUT_FILE = REPO_ROOT / "docs-main" / "sdks-tools" / "language-bindings" / "typescript.mdx"
+DEFAULT_DOCS_JSON = REPO_ROOT / "docs-main" / "docs.json"
 
 
 def parse_args() -> argparse.Namespace:
@@ -29,6 +30,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--typedoc-dir", default=str(DEFAULT_TYPEDOC_DIR))
     parser.add_argument("--manifest-out", default=str(DEFAULT_MANIFEST))
     parser.add_argument("--output-file", default=str(DEFAULT_OUTPUT_FILE))
+    parser.add_argument("--docs-json", default=str(DEFAULT_DOCS_JSON))
+    parser.add_argument("--nav-dropdown", default="Reference")
     parser.add_argument("--version", action="append", help="Version to include. Repeat to limit generation.")
     parser.add_argument("--publish-version", help="Version whose TypeScript surface should be published.")
     parser.add_argument("--force-regenerate", action="store_true")
@@ -60,6 +63,57 @@ def load_json(path: Path) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise ValueError(f"Expected JSON object in {path}")
     return payload
+
+
+def docs_json_page_ref(path: Path, docs_json_path: Path) -> str:
+    relative = path.resolve().relative_to(docs_json_path.resolve().parent)
+    if relative.suffix != ".mdx":
+        raise ValueError(f"Expected MDX file under docs root, got: {path}")
+    return relative.with_suffix("").as_posix()
+
+
+def prune_nav_items(items: list[Any], *, page_ref: str) -> list[Any]:
+    pruned: list[Any] = []
+    for item in items:
+        if isinstance(item, str):
+            if item != page_ref:
+                pruned.append(item)
+            continue
+        if isinstance(item, dict):
+            updated = dict(item)
+            pages = updated.get("pages")
+            if isinstance(pages, list):
+                updated["pages"] = prune_nav_items(pages, page_ref=page_ref)
+            pruned.append(updated)
+            continue
+        pruned.append(item)
+    return pruned
+
+
+def update_docs_navigation(
+    *,
+    docs_json_path: Path,
+    dropdown_label: str,
+    output_file: Path,
+) -> Path:
+    docs = load_json(docs_json_path)
+    dropdowns = docs.get("navigation", {}).get("dropdowns")
+    if not isinstance(dropdowns, list):
+        raise ValueError(f"docs.json navigation.dropdowns must be a list: {docs_json_path}")
+    dropdown = next((item for item in dropdowns if isinstance(item, dict) and item.get("dropdown") == dropdown_label), None)
+    if dropdown is None:
+        raise ValueError(f"Dropdown not found in docs.json: {dropdown_label}")
+    pages = dropdown.get("pages")
+    if not isinstance(pages, list):
+        raise ValueError(f"Dropdown does not expose a pages list: {dropdown_label}")
+
+    page_ref = docs_json_page_ref(output_file, docs_json_path)
+    dropdown["pages"] = prune_nav_items(pages, page_ref=page_ref)
+    dropdown["pages"].append(page_ref)
+
+    docs_json_path.write_text(json.dumps(docs, indent=2) + "\n", encoding="utf-8")
+    print(f"Updated docs navigation: {docs_json_path}")
+    return docs_json_path
 
 
 def run(command: list[str], *, cwd: Path, capture_output: bool = False) -> subprocess.CompletedProcess[str]:
@@ -251,7 +305,15 @@ def main() -> int:
         command.extend(["--version", version])
     print("Running:", " ".join(command))
     completed = subprocess.run(command, cwd=REPO_ROOT)
-    return completed.returncode
+    if completed.returncode != 0:
+        return completed.returncode
+
+    update_docs_navigation(
+        docs_json_path=Path(args.docs_json).resolve(),
+        dropdown_label=args.nav_dropdown,
+        output_file=Path(args.output_file).resolve(),
+    )
+    return 0
 
 
 if __name__ == "__main__":
