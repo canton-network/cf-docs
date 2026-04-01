@@ -19,6 +19,7 @@ DEFAULT_MANIFEST = REPO_ROOT / ".internal" / "generated" / "x2mdx" / "typescript
 DEFAULT_TYPEDOC_DIR = REPO_ROOT / ".internal" / "generated" / "x2mdx" / "typescript-bindings" / "typedoc"
 DEFAULT_OUTPUT_FILE = REPO_ROOT / "docs-main" / "sdks-tools" / "language-bindings" / "typescript.mdx"
 DEFAULT_DOCS_JSON = REPO_ROOT / "docs-main" / "docs.json"
+DEFAULT_NAV_GROUP = "Daml TypeScript Bindings"
 
 
 def parse_args() -> argparse.Namespace:
@@ -32,6 +33,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-file", default=str(DEFAULT_OUTPUT_FILE))
     parser.add_argument("--docs-json", default=str(DEFAULT_DOCS_JSON))
     parser.add_argument("--nav-dropdown", default="Reference")
+    parser.add_argument("--nav-group", default=DEFAULT_NAV_GROUP)
     parser.add_argument("--version", action="append", help="Version to include. Repeat to limit generation.")
     parser.add_argument("--publish-version", help="Version whose TypeScript surface should be published.")
     parser.add_argument("--force-regenerate", action="store_true")
@@ -72,7 +74,7 @@ def docs_json_page_ref(path: Path, docs_json_path: Path) -> str:
     return relative.with_suffix("").as_posix()
 
 
-def prune_nav_items(items: list[Any], *, page_ref: str) -> list[Any]:
+def prune_nav_items(items: list[Any], *, page_ref: str, group_label: str) -> list[Any]:
     pruned: list[Any] = []
     for item in items:
         if isinstance(item, str):
@@ -80,10 +82,12 @@ def prune_nav_items(items: list[Any], *, page_ref: str) -> list[Any]:
                 pruned.append(item)
             continue
         if isinstance(item, dict):
+            if item.get("group") == group_label:
+                continue
             updated = dict(item)
             pages = updated.get("pages")
             if isinstance(pages, list):
-                updated["pages"] = prune_nav_items(pages, page_ref=page_ref)
+                updated["pages"] = prune_nav_items(pages, page_ref=page_ref, group_label=group_label)
             pruned.append(updated)
             continue
         pruned.append(item)
@@ -95,6 +99,7 @@ def update_docs_navigation(
     docs_json_path: Path,
     dropdown_label: str,
     output_file: Path,
+    nav_group: str,
 ) -> Path:
     docs = load_json(docs_json_path)
     dropdowns = docs.get("navigation", {}).get("dropdowns")
@@ -108,8 +113,8 @@ def update_docs_navigation(
         raise ValueError(f"Dropdown does not expose a pages list: {dropdown_label}")
 
     page_ref = docs_json_page_ref(output_file, docs_json_path)
-    dropdown["pages"] = prune_nav_items(pages, page_ref=page_ref)
-    dropdown["pages"].append(page_ref)
+    dropdown["pages"] = prune_nav_items(pages, page_ref=page_ref, group_label=nav_group)
+    dropdown["pages"].append({"group": nav_group, "pages": [page_ref]})
 
     docs_json_path.write_text(json.dumps(docs, indent=2) + "\n", encoding="utf-8")
     print(f"Updated docs navigation: {docs_json_path}")
@@ -312,6 +317,7 @@ def main() -> int:
         docs_json_path=Path(args.docs_json).resolve(),
         dropdown_label=args.nav_dropdown,
         output_file=Path(args.output_file).resolve(),
+        nav_group=args.nav_group,
     )
     return 0
 
