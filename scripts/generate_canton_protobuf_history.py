@@ -22,6 +22,18 @@ GROUP_LABEL = "Canton Protobuf History"
 DESCRIPTOR_IMAGE_NAME = ".proto_snapshot_image.bin.gz"
 STABLE_TAG_RE = re.compile(r"^v(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)$")
 OWNED_PROTO_RE = re.compile(r"^community/.+/src/main/protobuf/.+\.proto$")
+PACKAGE_GROUP_ORDER = [
+    "Ledger API",
+    "Participant Administration",
+    "Sequencer",
+    "Mediator",
+    "Shared Administration",
+    "Other APIs",
+    "Schema Packages",
+]
+TITLE_RE = re.compile(r'^title: "(?P<title>.+)"$', re.MULTILINE)
+CURRENT_SERVICES_RE = re.compile(r"^- Current services: `(?P<count>\d+)`$", re.MULTILINE)
+CURRENT_ENDPOINTS_RE = re.compile(r"^- Current endpoints: `(?P<count>\d+)`$", re.MULTILINE)
 
 
 def parse_args() -> argparse.Namespace:
@@ -192,6 +204,81 @@ def docs_json_page_ref(path: Path, docs_json_path: Path) -> str:
     return relative.with_suffix("").as_posix()
 
 
+def page_title(path: Path) -> str:
+    match = TITLE_RE.search(path.read_text(encoding="utf-8"))
+    if match is None:
+        raise ValueError(f"Unable to find title frontmatter in {path}")
+    return match.group("title")
+
+
+def page_count(path: Path, pattern: re.Pattern[str], *, label: str) -> int:
+    match = pattern.search(path.read_text(encoding="utf-8"))
+    if match is None:
+        raise ValueError(f"Unable to find {label} count in {path}")
+    return int(match.group("count"))
+
+
+def package_group(package_name: str, *, has_services: bool) -> str:
+    if not has_services:
+        return "Schema Packages"
+    if package_name.startswith("com.daml.ledger.api.v2"):
+        return "Ledger API"
+    if ".participant." in package_name:
+        return "Participant Administration"
+    if "sequencer" in package_name:
+        return "Sequencer"
+    if "mediator" in package_name:
+        return "Mediator"
+    if package_name.startswith(
+        (
+            "com.digitalasset.canton.admin.health",
+            "com.digitalasset.canton.connection",
+            "com.digitalasset.canton.crypto",
+            "com.digitalasset.canton.time",
+            "com.digitalasset.canton.topology",
+        )
+    ):
+        return "Shared Administration"
+    return "Other APIs"
+
+
+def package_group_sort_key(package_name: str, *, has_services: bool) -> tuple[int, str]:
+    label = package_group(package_name, has_services=has_services)
+    return (PACKAGE_GROUP_ORDER.index(label), package_name)
+
+
+def grouped_package_nav_pages(*, docs_json_path: Path, package_dir: Path) -> list[dict[str, Any]]:
+    package_entries: list[dict[str, Any]] = []
+    for page_path in sorted(package_dir.glob("*.mdx")):
+        package_name = page_title(page_path)
+        service_count = page_count(page_path, CURRENT_SERVICES_RE, label="services")
+        endpoint_count = page_count(page_path, CURRENT_ENDPOINTS_RE, label="endpoints")
+        package_entries.append(
+            {
+                "package": package_name,
+                "page_ref": docs_json_page_ref(page_path, docs_json_path),
+                "has_services": bool(service_count or endpoint_count),
+            }
+        )
+
+    package_entries.sort(
+        key=lambda entry: package_group_sort_key(
+            entry["package"],
+            has_services=entry["has_services"],
+        )
+    )
+
+    grouped_pages: dict[str, list[str]] = {label: [] for label in PACKAGE_GROUP_ORDER}
+    for entry in package_entries:
+        grouped_pages[package_group(entry["package"], has_services=entry["has_services"])].append(entry["page_ref"])
+
+    return [
+        {"group": label, "pages": grouped_pages[label]}
+        for label in PACKAGE_GROUP_ORDER
+        if grouped_pages[label]
+    ]
+
+
 def prune_nav_items(items: list[Any], *, page_refs: set[str], group_labels: set[str]) -> list[Any]:
     pruned: list[Any] = []
     for item in items:
@@ -233,6 +320,7 @@ def update_docs_navigation(
     dropdown_label: str,
     parent_groups: list[str],
     overview_path: Path,
+    package_dir: Path,
 ) -> None:
     docs = load_json(docs_json_path)
     navigation = docs.get("navigation")
@@ -251,7 +339,15 @@ def update_docs_navigation(
     page_ref = docs_json_page_ref(overview_path, docs_json_path)
     dropdown["pages"] = prune_nav_items(pages, page_refs={page_ref}, group_labels={GROUP_LABEL})
     target_pages = ensure_group_path(dropdown["pages"], parent_groups)
-    target_pages.append({"group": GROUP_LABEL, "pages": [page_ref]})
+    target_pages.append(
+        {
+            "group": GROUP_LABEL,
+            "pages": [
+                page_ref,
+                *grouped_package_nav_pages(docs_json_path=docs_json_path, package_dir=package_dir),
+            ],
+        }
+    )
     docs_json_path.write_text(json.dumps(docs, indent=2) + "\n", encoding="utf-8")
     print(f"Updated docs navigation: {docs_json_path}")
 
@@ -368,6 +464,7 @@ def main() -> int:
         dropdown_label=args.nav_dropdown,
         parent_groups=args.nav_group or [],
         overview_path=Path(args.output_dir).resolve() / "index.mdx",
+        package_dir=Path(args.output_dir).resolve() / "packages",
     )
     return 0
 
