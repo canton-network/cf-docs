@@ -3,6 +3,14 @@ title: "Connecting a Validator to Multiple Synchronizers"
 description: "How to connect a single validator to the Global Synchronizer and private synchronizers simultaneously"
 ---
 
+import CantonGlobalSynchronizerExtensionSynchronizersLinkingValidatorMultiSyncL100 from "/snippets/canton-docs/global-synchronizer_extension-synchronizers_linking-validator-multi-sync_L100.mdx";
+import CantonGlobalSynchronizerExtensionSynchronizersLinkingValidatorMultiSyncL20 from "/snippets/canton-docs/global-synchronizer_extension-synchronizers_linking-validator-multi-sync_L20.mdx";
+import CantonGlobalSynchronizerExtensionSynchronizersLinkingValidatorMultiSyncL32 from "/snippets/canton-docs/global-synchronizer_extension-synchronizers_linking-validator-multi-sync_L32.mdx";
+import CantonGlobalSynchronizerExtensionSynchronizersLinkingValidatorMultiSyncL68 from "/snippets/canton-docs/global-synchronizer_extension-synchronizers_linking-validator-multi-sync_L68.mdx";
+import CantonGlobalSynchronizerExtensionSynchronizersLinkingValidatorMultiSyncL80 from "/snippets/canton-docs/global-synchronizer_extension-synchronizers_linking-validator-multi-sync_L80.mdx";
+import CantonGlobalSynchronizerExtensionSynchronizersLinkingValidatorMultiSyncL88 from "/snippets/canton-docs/global-synchronizer_extension-synchronizers_linking-validator-multi-sync_L88.mdx";
+
+
 Canton validators can connect to multiple synchronizers at the same time. This is the foundation of hybrid deployments — your validator participates in the Global Synchronizer for network-wide interoperability while also connecting to one or more private synchronizers for specialized workflows.
 
 ## How multi-synchronizer connections work
@@ -17,21 +25,13 @@ The validator tracks which synchronizer each contract belongs to and routes tran
 
 If your validator is already running and connected to the Global Synchronizer, you can add a private synchronizer connection at runtime:
 
-```scala
-// Connect to a private synchronizer
-participant.synchronizers.connect(
-  alias = "private-sync",
-  connection = "https://sequencer.private-sync.example.com"
-)
-```
+<CantonGlobalSynchronizerExtensionSynchronizersLinkingValidatorMultiSyncL20 />
 
 The `alias` is a local name you choose to identify the synchronizer. It does not need to match any network-level name — it is only used in your local configuration and API calls.
 
 To verify the connection:
 
-```scala
-participant.synchronizers.list_connected()
-```
+<CantonGlobalSynchronizerExtensionSynchronizersLinkingValidatorMultiSyncL32 />
 
 This returns the list of all connected synchronizers with their status and synchronizer ID.
 
@@ -65,29 +65,19 @@ participant:
 
 ### Listing connections
 
-```scala
-// List all connected synchronizers
-participant.synchronizers.list_connected()
-
-// List all registered synchronizers (including disconnected)
-participant.synchronizers.list_registered()
-```
+<CantonGlobalSynchronizerExtensionSynchronizersLinkingValidatorMultiSyncL68 />
 
 ### Disconnecting from a synchronizer
 
 You can disconnect from a synchronizer without losing contract data:
 
-```scala
-participant.synchronizers.disconnect("private-sync")
-```
+<CantonGlobalSynchronizerExtensionSynchronizersLinkingValidatorMultiSyncL80 />
 
 Contracts assigned to that synchronizer remain in your local store but cannot be used in transactions until you reconnect. Disconnecting does not unassign contracts — they are still associated with that synchronizer.
 
 ### Reconnecting
 
-```scala
-participant.synchronizers.reconnect("private-sync")
-```
+<CantonGlobalSynchronizerExtensionSynchronizersLinkingValidatorMultiSyncL88 />
 
 The validator resumes receiving updates from the synchronizer and can transact on contracts assigned to it.
 
@@ -97,21 +87,7 @@ When a contract is created, it is assigned to the synchronizer where the creatin
 
 To move a contract to a different synchronizer:
 
-```scala
-// Unassign from current synchronizer
-val unassignId = participant.ledger_api.commands.reassignment.unassign(
-  contractId = contractId,
-  source = sourceSynchronizerId,
-  target = targetSynchronizerId
-)
-
-// Reassign to target synchronizer
-participant.ledger_api.commands.reassignment.assign(
-  unassignId = unassignId,
-  source = sourceSynchronizerId,
-  target = targetSynchronizerId
-)
-```
+<CantonGlobalSynchronizerExtensionSynchronizersLinkingValidatorMultiSyncL100 />
 
 The contract is briefly unavailable between unassignment and reassignment. Both the source and target synchronizer must be connected to your validator, and all stakeholders of the contract must have validators connected to the target synchronizer.
 

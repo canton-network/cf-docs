@@ -9,9 +9,9 @@ The phases are:
 
 1. **Preparation** — the submitting participant interprets the command and constructs encrypted transaction views
 2. **Submission** — the participant sends a confirmation request batch to the sequencer
-3. **Sequencing and Distribution** — the sequencer timestamps and delivers messages to recipients
+3. **Sequencing and Distribution** — the sequencer orders and delivers messages to recipients
 4. **Validation and Confirmation** — each confirming participant validates its views and responds to the mediator
-5. **Aggregation and Commit** — the mediator collects responses, renders a verdict, and participants apply (or discard) the result
+5. **Aggregation and Commit** — the mediator collects responses, renders a verdict, and participants apply (or discard) the result based on the verdict
 
 ```mermaid
 sequenceDiagram
@@ -71,7 +71,7 @@ The lifecycle begins when the submitting participant node receives a command fro
 
 - **Interprets the command** by executing the Daml smart contract code locally in the Daml engine. The engine evaluates the command against the participant's current Active Contract Set (ACS) and produces a full transaction tree — a structure containing every action (creates, exercises, fetches), the consequences of each action, and all associated metadata.
 
-- **Determines informees** for each action node in the tree. Informees are the parties who are entitled to see a given action — signatories, observers, and actors, as defined by the Daml template. The informee set for each action governs who receives which parts of the transaction.
+- **Determines informees** for each action node in the tree. Informees are the parties who are entitled to see a given action — signatories, observers, and actors (executing the choice), as defined by the Daml template. The informee set for each action governs who receives which parts of the transaction.
 
 - **Decomposes the transaction into views.** Each action node in the transaction tree becomes a separate view. A view contains the action, its consequences, and enough context for validation — but nothing more. Each view is encrypted so that only its informees (and the participants hosting those informees) can decrypt it. Non-informees learn nothing about the action: not the payload, not the parties, not even that the action exists.
 

@@ -3,6 +3,24 @@ title: "Scripting"
 description: "Writing scripts for the Canton console using Scala"
 ---
 
+import CantonGlobalSynchronizerCantonConsoleScriptingL103 from "/snippets/canton-docs/global-synchronizer_canton-console_scripting_L103.mdx";
+import CantonGlobalSynchronizerCantonConsoleScriptingL115 from "/snippets/canton-docs/global-synchronizer_canton-console_scripting_L115.mdx";
+import CantonGlobalSynchronizerCantonConsoleScriptingL126 from "/snippets/canton-docs/global-synchronizer_canton-console_scripting_L126.mdx";
+import CantonGlobalSynchronizerCantonConsoleScriptingL135 from "/snippets/canton-docs/global-synchronizer_canton-console_scripting_L135.mdx";
+import CantonGlobalSynchronizerCantonConsoleScriptingL141 from "/snippets/canton-docs/global-synchronizer_canton-console_scripting_L141.mdx";
+import CantonGlobalSynchronizerCantonConsoleScriptingL16 from "/snippets/canton-docs/global-synchronizer_canton-console_scripting_L16.mdx";
+import CantonGlobalSynchronizerCantonConsoleScriptingL163 from "/snippets/canton-docs/global-synchronizer_canton-console_scripting_L163.mdx";
+import CantonGlobalSynchronizerCantonConsoleScriptingL171 from "/snippets/canton-docs/global-synchronizer_canton-console_scripting_L171.mdx";
+import CantonGlobalSynchronizerCantonConsoleScriptingL179 from "/snippets/canton-docs/global-synchronizer_canton-console_scripting_L179.mdx";
+import CantonGlobalSynchronizerCantonConsoleScriptingL191 from "/snippets/canton-docs/global-synchronizer_canton-console_scripting_L191.mdx";
+import CantonGlobalSynchronizerCantonConsoleScriptingL23 from "/snippets/canton-docs/global-synchronizer_canton-console_scripting_L23.mdx";
+import CantonGlobalSynchronizerCantonConsoleScriptingL30 from "/snippets/canton-docs/global-synchronizer_canton-console_scripting_L30.mdx";
+import CantonGlobalSynchronizerCantonConsoleScriptingL38 from "/snippets/canton-docs/global-synchronizer_canton-console_scripting_L38.mdx";
+import CantonGlobalSynchronizerCantonConsoleScriptingL63 from "/snippets/canton-docs/global-synchronizer_canton-console_scripting_L63.mdx";
+import CantonGlobalSynchronizerCantonConsoleScriptingL69 from "/snippets/canton-docs/global-synchronizer_canton-console_scripting_L69.mdx";
+import CantonGlobalSynchronizerCantonConsoleScriptingL91 from "/snippets/canton-docs/global-synchronizer_canton-console_scripting_L91.mdx";
+
+
 The Canton console is built on [Ammonite](http://ammonite.io), a Scala-based scripting and REPL framework. Every command you type is valid Scala, which means you can write loops, define functions, bind variables, and compose operations just as you would in any Scala program.
 
 This page covers the practical side of scripting: how to write `.canton` script files, how to run them, and common patterns for automating operator tasks.
@@ -13,34 +31,19 @@ The console accepts standard Scala syntax. A few patterns come up repeatedly in 
 
 **Variable binding**
 
-```scala
-val myParticipant = participant1
-val syncAlias = "mysynchronizer"
-```
+<CantonGlobalSynchronizerCantonConsoleScriptingL16 />
 
 **String interpolation**
 
-```scala
-val id = participant1.id
-println(s"Participant ID: $id")
-```
+<CantonGlobalSynchronizerCantonConsoleScriptingL23 />
 
 **Collections and iteration**
 
-```scala
-participants.all.foreach { p =>
-  println(s"${p.name}: ${p.health.status}")
-}
-```
+<CantonGlobalSynchronizerCantonConsoleScriptingL30 />
 
 **Pattern matching**
 
-```scala
-participant1.health.status match {
-  case status if status.isActive => println("Healthy")
-  case _ => println("Check this node")
-}
-```
+<CantonGlobalSynchronizerCantonConsoleScriptingL38 />
 
 The console also provides implicit type conversions for convenience. When a command expects a `SynchronizerAlias`, `Fingerprint`, or `Identifier`, you can pass a plain `String` and it will be converted automatically.
 
@@ -60,19 +63,11 @@ This starts the console, executes the script, and exits. It is the standard appr
 
 From an interactive session, load a script file with Ammonite's `interp.load` mechanism or the `utils` helper:
 
-```scala
-utils.run_script("path/to/myscript.canton")
-```
+<CantonGlobalSynchronizerCantonConsoleScriptingL63 />
 
 You can also load compiled JARs (for example, Daml codegen bindings) into the console:
 
-```scala
-interp.load.cp(os.Path("codegen.jar", base = os.pwd))
-
-@ // the @ triggers compilation so imports are available afterward
-
-import com.myorg.mypackage._
-```
+<CantonGlobalSynchronizerCantonConsoleScriptingL69 />
 
 **Bootstrap scripts**
 
@@ -88,21 +83,14 @@ Unlike `run`, the console stays open after the bootstrap script completes, which
 
 Console command timeouts are configured in the Canton configuration file:
 
-```hocon
-canton.parameters.timeouts.console {
-  bounded = 1.minute
-  unbounded = 10.minutes
-}
-```
+<CantonGlobalSynchronizerCantonConsoleScriptingL91 />
 
 - `bounded` applies to commands that are expected to complete within a known duration.
 - `unbounded` applies to long-running commands where completion time is unpredictable.
 
 You can also pass timeouts directly in script commands:
 
-```scala
-participant1.health.ping(participant1, timeout = 30.seconds)
-```
+<CantonGlobalSynchronizerCantonConsoleScriptingL103 />
 
 The console imports `scala.concurrent.duration._` by default, so expressions like `10.seconds` and `1.minute` work without additional imports.
 
@@ -112,38 +100,21 @@ The console imports `scala.concurrent.duration._` by default, so expressions lik
 
 A simple health check script that verifies all local nodes are running:
 
-```scala
-nodes.local.foreach { node =>
-  val status = node.health.status
-  if (!status.isActive) {
-    println(s"WARNING: ${node.name} is not active")
-  }
-}
-```
+<CantonGlobalSynchronizerCantonConsoleScriptingL115 />
 
 For a targeted ping test between two participants:
 
-```scala
-val roundTrip = participant1.health.ping(participant2, timeout = 30.seconds)
-println(s"Round trip: ${roundTrip}")
-```
+<CantonGlobalSynchronizerCantonConsoleScriptingL126 />
 
 ### Batch operations
 
 Upload a DAR to all local participants:
 
-```scala
-participants.local.dars.upload("path/to/my-model.dar")
-```
+<CantonGlobalSynchronizerCantonConsoleScriptingL135 />
 
 The generic node references (`participants.local`, `participants.remote`, `participants.all`) support batch operations directly. You can also iterate when you need more control:
 
-```scala
-participants.all.foreach { p =>
-  val result = p.dars.upload("path/to/my-model.dar")
-  println(s"Uploaded to ${p.name}: $result")
-}
-```
+<CantonGlobalSynchronizerCantonConsoleScriptingL141 />
 
 ### Scheduled tasks with external orchestration
 
@@ -160,42 +131,21 @@ This approach keeps automation logic in version-controlled `.canton` files while
 
 ### List connected synchronizers
 
-```scala
-participant1.synchronizers.list_connected().foreach { sync =>
-  println(s"Connected to: ${sync.synchronizerAlias}")
-}
-```
+<CantonGlobalSynchronizerCantonConsoleScriptingL163 />
 
 ### Check party hosting
 
-```scala
-participant1.parties.list().foreach { party =>
-  println(s"Party: ${party.party}, Participant: ${party.participant}")
-}
-```
+<CantonGlobalSynchronizerCantonConsoleScriptingL171 />
 
 ### Export and import DARs
 
-```scala
-// Export all DARs to a directory
-participant1.dars.download("backup/dars/")
-
-// Upload a DAR
-participant1.dars.upload("backup/dars/my-model.dar")
-```
+<CantonGlobalSynchronizerCantonConsoleScriptingL179 />
 
 ### Remote administration
 
 If your nodes run as daemons, you can script against them from a remote console. Configure a remote participant in your config:
 
-```hocon
-canton.remote-participants.myparticipant {
-  admin-api {
-    address = "participant-host"
-    port = 5012
-  }
-}
-```
+<CantonGlobalSynchronizerCantonConsoleScriptingL191 />
 
 Then run scripts against the remote node:
 

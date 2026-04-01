@@ -3,42 +3,22 @@ title: "Daml Script"
 description: "Write and run test scripts for Daml smart contracts using Daml Script and dpm test."
 ---
 
+import DamlSdksToolsCliToolsDamlScriptL102 from "/snippets/daml-docs/sdks-tools_cli-tools_daml-script_L102.mdx";
+import DamlSdksToolsCliToolsDamlScriptL112 from "/snippets/daml-docs/sdks-tools_cli-tools_daml-script_L112.mdx";
+import DamlSdksToolsCliToolsDamlScriptL12 from "/snippets/daml-docs/sdks-tools_cli-tools_daml-script_L12.mdx";
+import DamlSdksToolsCliToolsDamlScriptL121 from "/snippets/daml-docs/sdks-tools_cli-tools_daml-script_L121.mdx";
+import DamlSdksToolsCliToolsDamlScriptL72 from "/snippets/daml-docs/sdks-tools_cli-tools_daml-script_L72.mdx";
+import DamlSdksToolsCliToolsDamlScriptL83 from "/snippets/daml-docs/sdks-tools_cli-tools_daml-script_L83.mdx";
+import DamlSdksToolsCliToolsDamlScriptL95 from "/snippets/daml-docs/sdks-tools_cli-tools_daml-script_L95.mdx";
+
+
 Daml Script is the primary testing tool for Daml contracts. You write test scenarios as `Script ()` values in Daml source files, then run them with `dpm test`. Scripts execute on a fresh, empty ledger and can allocate parties, submit commands, query state, and assert expected outcomes.
 
 ## Writing a Test Script
 
 A Daml Script is a function that returns `Script ()`. Place your scripts in a test package that depends on your contract package (keep templates and tests in separate packages for clean deployment).
 
-```haskell
-module MyTests where
-
-import Daml.Script
-import Licensing.License
-
-testCreateAndTransfer : Script ()
-testCreateAndTransfer = do
-  -- Allocate test parties
-  alice <- allocateParty "Alice"
-  bob <- allocateParty "Bob"
-
-  -- Create a contract
-  licenseCid <- submit alice do
-    createCmd License with
-      owner = alice
-      issuer = alice
-      description = "Test License"
-
-  -- Exercise a choice
-  newLicenseCid <- submit alice do
-    exerciseCmd licenseCid Transfer with
-      newOwner = bob
-
-  -- Query and assert
-  Some license <- queryContractId bob newLicenseCid
-  assert (license.owner == bob)
-
-  pure ()
-```
+<DamlSdksToolsCliToolsDamlScriptL12 />
 
 ## Running Tests
 
@@ -69,10 +49,7 @@ If you have Daml Studio installed (`dpm studio`), a "Script results" lens appear
 
 ### Party Allocation
 
-```haskell
-alice <- allocateParty "Alice"
-bob <- allocateParty "Bob"
-```
+<DamlSdksToolsCliToolsDamlScriptL72 />
 
 Creates test parties that exist only for the duration of the script. Party names are for display only and do not need to match production party identifiers.
 
@@ -80,51 +57,25 @@ Creates test parties that exist only for the duration of the script. Party names
 
 Use `submit` to send commands as a specific party:
 
-```haskell
--- Create a contract
-cid <- submit alice do
-  createCmd MyTemplate with field1 = "value", field2 = alice
-
--- Exercise a choice
-result <- submit alice do
-  exerciseCmd cid MyChoice with choiceArg = 42
-```
+<DamlSdksToolsCliToolsDamlScriptL83 />
 
 Use `submitMustFail` to assert that a command should be rejected (e.g., unauthorized access):
 
-```haskell
-submitMustFail bob do
-  exerciseCmd cid MyChoice with choiceArg = 42
-```
+<DamlSdksToolsCliToolsDamlScriptL95 />
 
 ### Querying State
 
-```haskell
--- Query all active contracts of a type visible to a party
-contracts <- query @MyTemplate alice
-
--- Query a specific contract by ID
-optContract <- queryContractId alice cid
-```
+<DamlSdksToolsCliToolsDamlScriptL102 />
 
 ### Assertions
 
-```haskell
-assert (length contracts == 3)
-assertMsg "Owner should be Bob" (contract.owner == bob)
-```
+<DamlSdksToolsCliToolsDamlScriptL112 />
 
 ### Time Manipulation
 
 For contracts with time-dependent logic (expiration, vesting schedules):
 
-```haskell
--- Advance ledger time
-passTime (days 30)
-
--- Set a specific time
-setTime (time (date 2025 Jun 15) 0 0 0)
-```
+<DamlSdksToolsCliToolsDamlScriptL121 />
 
 `passTime` is essential for testing workflows that depend on elapsed time, such as license expiration or payment schedules.
 

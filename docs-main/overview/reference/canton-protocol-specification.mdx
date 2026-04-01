@@ -12,15 +12,15 @@ Canton's protocol separates two concerns that most blockchains conflate: **smart
 | Layer | Responsibility | Mechanism | Trust Boundary |
 |-------|---------------|-----------|----------------|
 | **Smart contract consensus** | Validate transaction correctness | Proof of Stakeholder (peer-to-peer) | Only affected parties |
-| **Ordering consensus** | Establish global ordering | BFT ordering via sequencers | Synchronizer operators |
+| **Ordering consensus** | Establish consistent synchronizer ordering | BFT ordering via sequencers | Synchronizer operators |
 
 The protocol operates across three node types:
 
-- **Participant nodes** host parties, maintain their Active Contract Set (ACS), and execute the smart contract consensus protocol on their behalf
-- **Sequencer nodes** provide authenticated, ordered multicast with sender privacy
-- **Mediator nodes** synchronize the two-phase commit protocol that binds validation results into final transaction decisions
+- **Participant nodes** host parties, maintain their Active Contract Set (ACS), execute the smart contract consensus protocol on their behalf, and make the LAPI available for use.
+- **Sequencer nodes** provide authenticated, event ordering multicast with sender privacy
+- **Mediator nodes** mediate the two-phase commit protocol that binds validation results into final transaction decisions
 
-Participants and mediators never communicate directly. All messages flow through sequencers, which assign timestamps that drive global ordering. Payloads are encrypted so that sequencers see only metadata — recipient lists and message sizes — not transaction content.
+Participants and mediators never communicate directly. All messages flow through sequencers, which global ordering. Payloads are encrypted so that sequencers see only metadata — recipient lists and message sizes — not transaction content.
 
 ## Reference Pages
 
@@ -47,8 +47,8 @@ Participants and mediators never communicate directly. All messages flow through
 Canton's protocol provides the following guarantees:
 
 - **Sub-transaction privacy**: Each party sees only the portions of a transaction relevant to them. Sequencers and mediators cannot read transaction payloads.
-- **Integrity**: A transaction commits only if all required stakeholders confirm it, and only if the smart contract logic passes validation on every confirming participant.
-- **Consistency**: The ordering layer prevents double-spends by ensuring a single global ordering of all state changes on a given synchronizer.
+- **Integrity**: A transaction commits only if all required stakeholders confirm it, and only if the smart contract logic passes validation for every signatory.
+- **Consistency**: The ordering layer helps to prevent double-spends by ensuring a single global ordering of all state changes on a given synchronizer.
 - **Finality**: Once a mediator issues a commit verdict and it is sequenced, the transaction result is final. There are no forks or reorganizations.
 - **Liveness**: Under the BFT fault tolerance threshold (fewer than one-third of ordering nodes faulty), the protocol makes progress.
 
@@ -57,7 +57,7 @@ Canton's protocol provides the following guarantees:
 A Daml transaction moves through both consensus layers during its lifecycle:
 
 1. The submitting participant prepares the transaction locally (smart contract layer)
-2. The participant sends encrypted views to the sequencer (ordering layer assigns a timestamp)
+2. The participant sends encrypted views to the sequencer (ordering layer)
 3. The sequencer distributes views to affected participants and an informee message to the mediator
 4. Each confirming participant validates its views and sends a confirmation or rejection to the mediator (smart contract layer, via ordering layer)
 5. The mediator aggregates confirmations and issues a verdict, within the required time window, which the sequencer distributes to all participants (ordering layer)

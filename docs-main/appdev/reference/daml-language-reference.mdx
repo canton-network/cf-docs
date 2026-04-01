@@ -17,7 +17,7 @@ For a printable overview, see the [Daml language cheat sheet](https://docs.daml.
 
 ### Templates
 
-A template defines a contract type. Every template has a `signatory`, and may declare `observer`, `ensure`, `key`, and `choice` blocks. Contract key uniqueness semantics are being reworked in Canton 3.x -- keys exist syntactically but their uniqueness guarantees differ from 2.x. Contract key support is under active development for Canton 3.5.
+A template defines a contract type. Every template has a `signatory`, and may declare `observer`, `ensure`, `key`, and `choice` blocks. 
 
 <DamlAppdevReferenceDamlLanguageReferenceL16 />
 
@@ -194,3 +194,1190 @@ Here is a complete list of modules in the standard library:
 {/* COPIED_END */}
 
 For full API documentation of each module, see the [standard library reference](https://docs.digitalasset.com/build/3.5/reference/daml/stdlib/index.html).
+
+{/* COPIED_START source="docs-website:docs/replicated/daml/3.4/sdk/reference/daml/templates.rst" hash="964a20f1" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was copied from existing reviewed documentation.
+**Source:** `docs/replicated/daml/3.4/sdk/reference/daml/templates.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+# Reference: Templates
+
+This page gives reference information on templates:
+
+For the structure of a template, see `structure`.
+
+## Template Name
+
+```daml
+-- Code from: code-snippets/Reference.daml
+-- [Include actual code example here]
+```
+
+- This is the name of the template. It's preceded by `template` keyword. Must begin with a capital letter.
+- This is the highest level of nesting.
+- The name is used when creating a contract of this template (usually, from within a choice).
+
+## Template Parameters
+
+```daml
+-- Code from: code-snippets/Reference.daml
+-- [Include actual code example here]
+```
+
+- `with` keyword. The parameters are in the form of a record type.
+- Passed in when creating a contract from this template. These are then in scope inside the template body.
+- A template parameter can't have the same name as any choice arguments inside the template.
+- For all parties involved in the contract (whether they're a `signatory`, `observer`, or `controller`) you must pass them in as parameters to the contract, whether individually or as a list (`[Party]`).
+
+## Implicit Record
+
+Whenever a template is defined, a record is implicitly defined with the same name and fields as that template. This record structure is used in Daml code to represent the data of a contract based on that template.
+
+Note that in the general case, the existence of a local binding `b` of type `T`, where `T` is a template (and thus also a record), does not necessarily imply the existence of a contract with the same data as `b` on the ledger. You can only assume the existence of such a contract if `b` is the result of a fetch from the ledger within the same transaction.
+
+You can create a new instance of a record of type `T` without any interaction with the ledger; in fact, this is how you construct a create command.
+
+## `this` and `self`
+
+Within the body of a template we implicitly define a local binding `this` to represent the data of the current contract. For a template `T`, this binding is of type `T`, i.e. the implicit record defined by the template.
+
+Within choices, you can additionally use the binding `self` to refer to the contract ID of the current contract (the one on which the choice is being executed). For a contract of template `T`, the `self` binding is of type `ContractId T`.
+
+## Template-local Definitions (Deprecated)
+
+Fix or remove this literal include
+
+- `let` keyword. Starts a block and is followed by any number of definitions, just like any other `let` block.
+- Template parameters as well as `this` are in scope, but `self` is not.
+- Definitions from the `let` block can be used anywhere else in the template's `where` block.
+
+<Warning>
+Since Daml 2.8.0, template-local definitions are deprecated and their presence will result in the following warning:
+
+``` text
+Template-local binding syntax ("template-let") is deprecated,
+it will be removed in a future version of Daml.
+Instead, use plain top level definitions, taking parameters
+for the contract fields or body ("this") if necessary.
+```
+
+The reason for this deprecation is that some uses of the `this` keyword in template-local definitions would create implicit circular dependencies, causing an infinite loop upon evaluation.
+</Warning>
+
+### Migration
+
+Users are strongly encouraged to adapt their code to avoid this feature. This involves replacing each template-local definition with a regular top-level definition. If the old definition made use of contract fields or the contract body ("this"), the new definition should take them as parameters. Correspondingly, the use sites of these definitions should supply the appropriate values as arguments.
+
+For example, consider the template `Person` below. It defines and uses a template-local binding `fullName`, which now triggers the deprecation warning.
+
+```daml
+template Person
+  with
+    owner : Party
+    first : Text
+    last : Text
+  where
+    signatory owner
+    let fullName = last <> ", " <> first
+    nonconsuming choice GetDescription : ()
+      controller owner
+      do
+        let desc = "An account owned by " <> fullName <> "."
+        debug desc
+```
+
+To ensure this code keeps working after the feature is removed, `fullName` should be defined as a top-level function, and its use site now passes `this` explicitly.
+
+```daml
+fullName : Person -> Text
+fullName Person {first, last} = last <> ", " <> first
+-- takes 'Person' as an explicit parameter and unpacks required fields
+
+template Person
+  with
+    owner : Party
+    first : Text
+    last : Text
+  where
+    signatory owner
+    nonconsuming choice GetDescriptionV3 : ()
+      controller owner
+      do
+        -- let bindings in choice bodies are unaffected
+        let desc = "An account owned by " <> fullName this <> "."
+                                             -- 'this' is passed explicitly
+        debug desc
+```
+
+### Turning off the warning
+
+This warning is controlled by the warning flag `template-let`, which means that it can be toggled independently of other warnings. This is especially useful for gradually migrating code that used this syntax.
+
+To turn off the warning within a Daml file, add the following line at the top of the file:
+
+```daml
+{-# OPTIONS_GHC -Wno-template-let #-}
+```
+
+To turn it off for an entire Daml project, add the following entry to the `build-options` field of the project's `daml.yaml` file
+
+```yaml
+build-options:
+- --ghc-option=-Wno-template-let
+```
+
+Within a project where the warning has been turned off via the `daml.yaml` file, it can be turned back on for individual Daml files by adding the following line at the top of each file:
+
+```daml
+{-# OPTIONS_GHC -Wtemplate-let #-}
+```
+
+## Signatory Parties
+
+```daml
+-- Code from: code-snippets/Reference.daml
+-- [Include actual code example here]
+```
+
+- `signatory` keyword. After `where`. Followed by at least one `Party`.
+
+- Signatories are the parties (see the `Party` type) who must consent to the creation of this contract. They are the parties who would be put into an *obligable position* when this contract is created.
+
+  Daml won't let you put someone into an obligable position without their consent. So if the contract will cause obligations for a party, they *must* be a signatory. **If they haven't authorized it, you won't be able to create the contract.** In this situation, you may see errors like:
+
+  `NameOfTemplate requires authorizers Party1,Party2,Party, but only Party1 were given.`
+
+- When a signatory consents to the contract creation, this means they also authorize the consequences of choices that can be exercised on this contract.
+
+- The contract is visible to all signatories (as well as the other stakeholders of the contract). That is, the compiler automatically adds signatories as observers.
+
+- Each template **must** have at least one signatory. A signatory declaration consists of the `signatory` keyword followed by a comma-separated list of one or more expressions, each expression denoting a `Party` or collection thereof.
+
+## Observers
+
+```daml
+-- Code from: code-snippets/Reference.daml
+-- [Include actual code example here]
+```
+
+- `observer` keyword. After `where`. Followed by at least one `Party`.
+- Observers are additional stakeholders, so the contract is visible to these parties (see the `Party` type).
+- Optional. You can have many, either as a comma-separated list or reusing the keyword. You could pass in a list (of type `[Party]`).
+- Use when a party needs visibility on a contract, or be informed or contract events, but is not a signatory or controller.
+- If you start your choice with `choice` rather than `controller` (see `daml-ref-choices` below), you must make sure to add any potential controller as an observer. Otherwise, they will not be able to exercise the choice, because they won't be able to see the contract.
+
+## Choices
+
+```daml
+-- Code from: code-snippets/Reference.daml
+-- [Include actual code example here]
+```
+
+- A right that the contract gives the controlling party. Can be *exercised*.
+- This is essentially where all the logic of the template goes.
+- By default, choices are *consuming*: that is, exercising the choice archives the contract, so no further choices can be exercised on it. You can make a choice non-consuming using the `nonconsuming` keyword.
+- See `choices` for full reference information.
+
+## Serializable Types
+
+Every parameter to a template, choice argument, and choice result must have a *serializable type*. This does not merely mean "convertible to bytes"; it has a specific meaning in Daml. The serializability rule serves three purposes:
+
+1.  Offer a stable means to store ledger values permanently.
+2.  Provide a sensible encoding of them over the `ledger-api`.
+3.  Provide sensible *types* that directly match their Daml counterparts in languages like Java for language codegen.
+
+For example, certain kinds of type parameters Daml offers are compatible with (1) and (2), but have no proper counterpart in (3), so they are disallowed. Similarly, function types have sensible Java counterparts, satisfying (3), but no reliable way to store or share them via the API, thus failing (1) and (2).
+
+The following types are *not serializable*, and thus may not be used in templates.
+
+- Function types.
+- Record types with any non-serializable field.
+- Variant types with any non-serializable value case.
+- Variant and enum types with no constructors.
+- References to a parameterized data type with any non-serializable type argument. This applies whether or not the data type definition uses the type parameter.
+- Defined data types with any type parameter of kind `Nat`, or any kind other than `*`. This means higher-kinded types, and types that take a parameter just to pass to `Numeric`, are not serializable.
+
+### Migration
+
+Users should remove any agreement declarations from their code, as this feature has been fully removed from the language.
+
+## Preconditions
+
+```daml
+-- Code from: code-snippets/Reference.daml
+-- [Include actual code example here]
+```
+
+- `ensure` keyword, followed by a boolean condition.
+- Used on contract creation. `ensure` limits the values on parameters that can be passed to the contract: the contract can only be created if the boolean condition is true.
+
+## Contract Keys and Maintainers<span id="daml-ref-contract-keys"></span>
+
+```daml
+-- Code from: code-snippets/Reference.daml
+-- [Include actual code example here]
+```
+
+- `key` and `maintainer` keywords.
+
+- This feature lets you specify a "key" that you can use to uniquely identify this contract as an instance of this template.
+
+- If you specify a `key`, you must also specify a `maintainer`. This is a `Party` that will ensure the uniqueness of all the keys it is aware of.
+
+  Because of this, the `key` must include the `maintainer` `Party` or parties (for example, as part of a tuple or record), and the `maintainer` must be a signatory.
+
+- For a full explanation, see `contractkeys`.
+
+## Interface Instances
+
+```daml
+-- Code from: code-snippets-dev/Interfaces.daml
+-- [Include actual code example here]
+```
+
+- Used to make a template an instance of an existing interface.
+- The clause must start with the keywords `interface instance`, followed by the name of the interface, then the keyword `for` and the name of the template (which must match the enclosing declaration), and finally the keyword `where`, which introduces a block where **all** the methods of the interface must be implemented.
+- See `interfaces` for full reference information on interfaces, or section `interface-instances` for interface instances specifically.
+
+{/* COPIED_END */}
+
+
+{/* COPIED_START source="docs-website:docs/replicated/daml/3.4/sdk/reference/daml/interfaces.rst" hash="fdeb13bb" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was copied from existing reviewed documentation.
+**Source:** `docs/replicated/daml/3.4/sdk/reference/daml/interfaces.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+# Reference: Interfaces
+
+In Daml, an interface defines an abstract type together with a behavior specified by its view type, method signatures, and choices. For a template to conform to this interface, there must be a corresponding `interface instance` definition where all the methods of the interface (including the special `view` method) are implemented. This allows decoupling such behavior from its implementation, so other developers can write applications in terms of the interface instead of the concrete template.
+
+## Configuration
+
+To use this feature your Daml project must target Daml-LF version `1.15` or higher, which is the current default.
+
+If using Canton, the protocol version of the sync domain should be `4` or higher, see Canton protocol version for more details.
+
+## Interface Declaration
+
+An interface declaration is somewhat similar to a template declaration.
+
+### Interface Name
+
+```daml
+-- Code from: code-snippets-dev/Interfaces.daml
+-- [Include actual code example here]
+```
+
+- This is the name of the interface.
+- It's preceded by the keyword `interface` and followed by the keyword `where`.
+- It must begin with a capital letter, like any other type name.
+
+### Implicit abstract type
+
+- Whenever an interface is defined, an abstract type is defined with the same name. "Abstract" here means:
+  - Values of this type cannot be created using a data constructor. Instead, they are constructed by applying the function `toInterface` to a template value.
+  - Values of this type cannot be inspected directly via case analysis. Instead, use functions such as `fromInterface`.
+  - See `daml-ref-interface-functions` for more information on these and other functions for interacting with interface values.
+- An interface value carries inside it the type and parameters of the template value from which it was constructed.
+- As for templates, the existence of a local binding `b` of type `I`, where `I` is an interface does not necessarily imply the existence on the ledger of a contract with the template type and parameters used to construct `b`. This can only be assumed if `b` the result of a fetch from the ledger within the same transaction.
+
+### Interface Methods
+
+```daml
+-- Code from: code-snippets-dev/Interfaces.daml
+-- [Include actual code example here]
+```
+
+- An interface may define any number of methods.
+- A method definition consists of the method name and the method type, separated by a single colon `:`. The name of the method must be a valid identifier beginning with a lowercase letter or an underscore.
+- A method definition introduces a top level function of the same name:
+  - If the interface is called `I`, the method is called `m`, and the method type is `M` (which might be a function type), this introduces the function `m : I -> M`:
+
+    ```daml
+-- Code from: code-snippets-dev/Interfaces.daml
+-- [Include actual code example here]
+```
+
+  - The first argument's type `I` means that the function can only be applied to values of the interface type `I` itself. Methods cannot be applied to template values, even if there exists an `interface instance` of `I` for that template. To use an interface method on a template value, first convert it using the `toInterface` function.
+
+  - Applying the function to such argument results in a value of type `M`, corresponding to the implementation of `m` in the interface instance of `I` for the underlying template type `t` (the type of the template value from which the interface value was constructed).
+- One special method, `view`, must be defined for the viewtype. (see `interface-viewtype` below).
+
+### Interface View Type
+
+```daml
+-- Code from: code-snippets-dev/Interfaces.daml
+-- [Include actual code example here]
+```
+
+```daml
+-- Code from: code-snippets-dev/Interfaces.daml
+-- [Include actual code example here]
+```
+
+- All interface instances must implement a special `view` method which returns a value of the type declared by `viewtype`.
+- The type must be a record.
+- This type is returned by subscriptions on interfaces.
+
+### Interface Choices
+
+```daml
+-- Code from: code-snippets-dev/Interfaces.daml
+-- [Include actual code example here]
+```
+
+- Interface choices work in a very similar way to template choices. Any contract of a template type for which an interface instance exists will grant the choice to the controlling party.
+- Interface choices can only be exercised on values of the corresponding interface type. To exercise an interface choice on a template value, first convert it using the `toInterface` function.
+- Interface methods can be used to define the controller of a choice (e.g. `method1`) as well as the actions that run when the choice is *exercised* (e.g. `method2` and `method3`).
+- As for template choices, the `choice` keyword can be optionally prefixed with the `nonconsuming` keyword to specify that the contract will not be consumed when the choice is exercised. If not specified, the choice will be `consuming`. Note that the `preconsuming` and `postconsuming` qualifiers are not supported on interface choices.
+- See `choices` for full reference information, but note that controller-first syntax is not supported for interface choices.
+
+### Empty Interfaces
+
+```daml
+-- Code from: code-snippets-dev/Interfaces.daml
+-- [Include actual code example here]
+```
+
+- It is possible (though not necessarily useful) to define an interface without methods, precondition or choices. However, a view type must always be defined, though it can be set to unit.
+
+## Interface Instances
+
+For context, a simple template definition:
+
+```daml
+-- Code from: code-snippets-dev/Interfaces.daml
+-- [Include actual code example here]
+```
+
+### `interface instance` clause
+
+```daml
+-- Code from: code-snippets-dev/Interfaces.daml
+-- [Include actual code example here]
+```
+
+- To make a template an instance of an existing interface, an `interface instance` clause must be defined in the template declaration.
+- The template of the clause must match the enclosing declaration. In other words, a template `T` declaration can only contain `interface instance` clauses where the template is `T`.
+- The clause must start with the keywords `interface instance`, followed by the name of the interface, then the keyword `for` and the name of the template, and finally the keyword `where`, which introduces a block where **all** the methods of the interface must be implemented.
+- Within the clause, there's an implicit local binding `this` referring to the contract on which the method is applied, which has the type of the template's data record. The template parameters of this contract are also in scope.
+- Method implementations can be defined using the same syntax as for top level functions, including pattern matches and guards (e.g. `method3`).
+- Each method implementation must return the same type as specified for that method in the interface declaration.
+- The implementation of the special `view` method must return the type specified as the `viewtype` in the interface declaration.
+
+### Empty `interface instance` clause
+
+- If the interface has no methods, the interface instance only needs to implement the `view` method:
+
+```daml
+-- Code from: code-snippets-dev/Interfaces.daml
+-- [Include actual code example here]
+```
+
+## Interface Functions
+
+### `interfaceTypeRep`
+
+<table>
+<tbody>
+<tr class="odd">
+<td>Type</td>
+<td><p><code>HasInterfaceTypeRep i =&gt;</code><br />
+<code>i -&gt; TemplateTypeRep</code></p></td>
+</tr>
+<tr class="even">
+<td>Instantiated Type</td>
+<td><code>MyInterface -&gt; TemplateTypeRep</code></td>
+</tr>
+<tr class="odd">
+<td>Notes</td>
+<td>The value of the resulting <code>TemplateTypeRep</code> indicates what template was used to construct the interface value.</td>
+</tr>
+</tbody>
+</table>
+
+### `toInterface`
+
+<table>
+<tbody>
+<tr class="odd">
+<td>Type</td>
+<td><p><code>forall i t.</code><br />
+<code>HasToInterface t i =&gt;</code><br />
+<code>t -&gt; i</code></p></td>
+</tr>
+<tr class="even">
+<td>Instantiated Type</td>
+<td><code>MyTemplate -&gt; MyInterface</code></td>
+</tr>
+<tr class="odd">
+<td>Notes</td>
+<td>Converts a template value into an interface value.</td>
+</tr>
+</tbody>
+</table>
+
+### `fromInterface`
+
+<table>
+<tbody>
+<tr class="odd">
+<td>Type</td>
+<td><p><code>HasFromInterface t i =&gt;</code><br />
+<code>i -&gt; Optional t</code></p></td>
+</tr>
+<tr class="even">
+<td>Instantiated Type</td>
+<td><code>MyInterface -&gt; Optional MyTemplate</code></td>
+</tr>
+<tr class="odd">
+<td>Notes</td>
+<td>Attempts to convert an interface value back into a template value. The result is <code>None</code> if the expected template type doesn't match the underlying template type used to construct the contract.</td>
+</tr>
+</tbody>
+</table>
+
+### `toInterfaceContractId`
+
+<table>
+<tbody>
+<tr class="odd">
+<td>Type</td>
+<td><p><code>forall i t.</code><br />
+<code>HasToInterface t i =&gt;</code><br />
+<code>ContractId t -&gt; ContractId i</code></p></td>
+</tr>
+<tr class="even">
+<td>Instantiated Type</td>
+<td><code>ContractId MyTemplate -&gt; ContractId MyInterface</code></td>
+</tr>
+<tr class="odd">
+<td>Notes</td>
+<td>Converts a template Contract ID into an Interface Contract ID.</td>
+</tr>
+</tbody>
+</table>
+
+### `fromInterfaceContractId`
+
+<table>
+<tbody>
+<tr class="odd">
+<td>Type</td>
+<td><p><code>forall t i.</code><br />
+<code>HasFromInterface t i =&gt;</code><br />
+<code>ContractId i -&gt; ContractId t</code></p></td>
+</tr>
+<tr class="even">
+<td>Instantiated Type</td>
+<td><code>ContractId MyInterface -&gt; ContractId MyTemplate</code></td>
+</tr>
+<tr class="odd">
+<td>Notes</td>
+<td>Converts an interface contract id into a template contract id. This function does not verify that the given contract id actually points to a contract of the resulting type; if that is not the case, a subsequent <code>fetch</code>, <code>exercise</code> or <code>archive</code> will fail. Therefore, this should only be used when the underlying contract is known to be of the resulting type, or when the result is immediately used by a <code>fetch</code>, <code>exercise</code> or <code>archive</code> action and a transaction failure is the desired behavior in case of mismatch. In all other cases, consider using <code>fetchFromInterface</code> instead.</td>
+</tr>
+</tbody>
+</table>
+
+### `coerceInterfaceContractId`
+
+<table>
+<tbody>
+<tr class="odd">
+<td>Type</td>
+<td><p><code>forall j i.</code><br />
+<code>(HasInterfaceTypeRep i, HasInterfaceTypeRep j) =&gt;</code><br />
+<code>ContractId i -&gt; ContractId j</code></p></td>
+</tr>
+<tr class="even">
+<td>Instantiated Type</td>
+<td><code>ContractId SourceInterface -&gt; ContractId TargetInterface</code></td>
+</tr>
+<tr class="odd">
+<td>Notes</td>
+<td>Converts an interface contract id into a contract id of a different interface. This function does not verify that the given contract id actually points to a contract of the resulting type; if that is not the case, a subsequent <code>fetch</code>, <code>exercise</code> or <code>archive</code> will fail. Therefore, this should only be used when the underlying contract is known to be of the resulting type, or when the result is immediately used by a <code>fetch</code>, <code>exercise</code> or <code>archive</code> action and a transaction failure is the desired behavior in case of mismatch.</td>
+</tr>
+</tbody>
+</table>
+
+### `fetchFromInterface`
+
+<table>
+<tbody>
+<tr class="odd">
+<td>Type</td>
+<td><p><code>forall t i.</code><br />
+<code>(HasFromInterface t i, HasFetch i) =&gt;</code><br />
+<code>ContractId i -&gt; Update (Optional (ContractId t, t))</code></p></td>
+</tr>
+<tr class="even">
+<td>Instantiated Type</td>
+<td><p><code>ContractId MyInterface -&gt;</code><br />
+<code>Update (Optional (ContractId MyTemplate, MyTemplate))</code></p></td>
+</tr>
+<tr class="odd">
+<td>Notes</td>
+<td>Attempts to fetch and convert an interface contract id into a template, returning both the converted contract and its contract id if the conversion is successful, or <code>None</code> otherwise.</td>
+</tr>
+</tbody>
+</table>
+
+## Required Interfaces
+
+```daml
+-- Code from: code-snippets-dev/Interfaces.daml
+-- [Include actual code example here]
+```
+
+- An interface can depend on other interfaces. These are specified with the `requires` keyword after the interface name but before the `where` keyword, separated by commas.
+
+- For an interface declaration to be valid, its list of required interfaces must be transitively closed. In other words, an interface `I` cannot require an interface `J` without also explicitly requiring all the interfaces required by `J`. The order, however, is irrelevant.
+
+  For example, given
+
+  ```daml
+-- Code from: code-snippets-dev/Interfaces.daml
+-- [Include actual code example here]
+```
+
+  This declaration for interface `Square` would cause a compiler error
+
+  ```daml
+-- Code from: code-snippets-dev/Interfaces.daml
+-- [Include actual code example here]
+```
+
+  Explicitly adding `Shape` to the required interfaces fixes the error
+
+  ```daml
+-- Code from: code-snippets-dev/Interfaces.daml
+-- [Include actual code example here]
+```
+
+- For a template `T` to be a valid `interface instance` of an interface `I`, `T` must also be an `interface instance` of each of the interfaces required by `I`.
+
+### Interface Functions
+
+| Function                  | Notes                                                                                                                              |
+|---------------------------|------------------------------------------------------------------------------------------------------------------------------------|
+| `toInterface`             | Can also be used to convert an interface value to one of its required interfaces.                                                  |
+| `fromInterface`           | Can also be used to convert a value of an interface type to one of its requiring interfaces.                                       |
+| `toInterfaceContractId`   | Can also be used to convert an interface contract id into a contract id of one of its required interfaces.                         |
+| `fromInterfaceContractId` | Can also be used to convert an interface contract id into a contract id of one of its requiring interfaces.                        |
+| `fetchFromInterface`      | Can also be used to fetch and convert an interface contract id into a contract and contract id of one of its requiring interfaces. |
+
+{/* COPIED_END */}
+
+
+{/* COPIED_START source="docs-website:docs/replicated/daml/3.4/sdk/reference/daml/expressions.rst" hash="ed2e9625" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was copied from existing reviewed documentation.
+**Source:** `docs/replicated/daml/3.4/sdk/reference/daml/expressions.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+# Reference: Expressions
+
+This page gives reference information for Daml expressions that are not updates.
+
+## Definitions
+
+Use assignment to bind values or functions at the top level of a Daml file or in a contract template body.
+
+### Values
+
+For example:
+
+```daml
+-- Code from: code-snippets/TubeSurfaceArea.daml
+-- [Include actual code example here]
+```
+
+The fact that `pi` has type `Decimal` is inferred from the value. To explicitly annotate the type, mention it after a colon following the variable name:
+
+```daml
+-- Code from: code-snippets/TubeSurfaceArea2.daml
+-- [Include actual code example here]
+```
+
+### Functions
+
+You can define functions. Here's an example: a function for computing the surface area of a tube:
+
+```daml
+-- Code from: code-snippets/TubeSurfaceArea.daml
+-- [Include actual code example here]
+```
+
+Here you see:
+
+- the name of the function
+
+- the function's type signature `Decimal -> Decimal -> Decimal`
+
+  This means it takes two Decimals and returns another Decimal.
+
+- the definition `= 2.0 * pi * r * h` (which uses the previously defined `pi`)
+
+## Arithmetic Operators
+
+| Operator                          | Works for                   |
+|-----------------------------------|-----------------------------|
+| `+`                               | `Int`, `Decimal`, `RelTime` |
+| `-`                               | `Int`, `Decimal`, `RelTime` |
+| `*`                               | `Int`, `Decimal`            |
+| `/` (integer division)            | `Int`                       |
+| `%` (integer remainder operation) | `Int`                       |
+| `^` (integer exponentiation)      | `Int`                       |
+
+The result of the modulo operation has the same sign as the dividend:
+
+- `7 / 3` and `(-7) / (-3)` evaluate to `2`
+- `(-7) / 3` and `7 / (-3)` evaluate to `-2`
+- `7 % 3` and `7 % (-3)` evaluate to `1`
+- `(-7) % 3` and `(-7) % (-3)` evaluate to `-1`
+
+To write infix expressions in prefix form, wrap the operators in parentheses. For example, `(+) 1 2` is another way of writing `1 + 2`.
+
+## Comparison Operators
+
+| Operator             | Works for                                                                                                                                                  |
+|----------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `<`, `<=`, `>`, `>=` | `Bool`, `Text`, `Int`, `Decimal`, `Party`, `Time`                                                                                                          |
+| `==`, `/=`           | `Bool`, `Text`, `Int`, `Decimal`, `Party`, `Time`, and identifiers of contracts stemming from the same contract template |
+
+## Logical Operators
+
+The logical operators in Daml are:
+
+- `not` for negation, e.g., `not True == False`
+- `&&` for conjunction, where `a && b == and a b`
+- `||` for disjunction, where `a || b == or a b`
+
+for `Bool` variables `a` and `b`.
+
+## If-then-else
+
+You can use conditional *if-then-else* expressions, for example:
+
+```daml
+if owner == scroogeMcDuck then "sell" else "buy"
+```
+
+## Let
+
+To bind values or functions to be in scope beneath the expression, use the block keyword `let`:
+
+```daml
+-- Code from: code-snippets/Snippets.daml
+-- [Include actual code example here]
+```
+
+You can also use `let` inside `do` blocks:
+
+```daml
+-- Code from: code-snippets/Snippets.daml
+-- [Include actual code example here]
+```
+
+{/* COPIED_END */}
+
+
+{/* COPIED_START source="docs-website:docs/replicated/daml/3.4/sdk/reference/daml/functions.rst" hash="2a0983ac" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was copied from existing reviewed documentation.
+**Source:** `docs/replicated/daml/3.4/sdk/reference/daml/functions.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+# Reference: Functions
+
+This page gives reference information on functions in Daml.
+
+Daml is a functional language. It lets you apply functions partially and also have functions that take other functions as arguments. This page discusses these *higher-order functions*.
+
+## Defining Functions
+
+In `expressions`, the `tubeSurfaceArea` function was defined as:
+
+```daml
+-- Code from: code-snippets/TubeSurfaceArea.daml
+-- [Include actual code example here]
+```
+
+You can define this function equivalently using lambdas, involving `\`, a sequence of parameters, and an arrow `->` as:
+
+```daml
+-- Code from: code-snippets/TubeSurfaceArea2.daml
+-- [Include actual code example here]
+```
+
+## Partial Application
+
+The type of the `tubeSurfaceArea` function described previously, is `Decimal -> Decimal -> Decimal`. An equivalent, but more instructive, way to read its type is: `Decimal -> (Decimal -> Decimal)`: saying that `tubeSurfaceArea` is a function that takes *one* argument and returns another function.
+
+So `tubeSurfaceArea` expects one argument of type `Decimal` and returns a function of type `Decimal -> Decimal`. In other words, this function returns another function. *Only the last application of an argument yields a non-function.*
+
+This is called *currying*: currying is the process of converting a function of multiple arguments to a function that takes just a single argument and returns another function. In Daml, all functions are curried.
+
+This doesn't affect things that much. If you use functions in the classical way (by applying them to all parameters) then there is no difference.
+
+If you only apply a few arguments to the function, this is called *partial application*. The result is a function with partially defined arguments. For example:
+
+```daml
+-- Code from: code-snippets/Functions.daml
+-- [Include actual code example here]
+```
+
+You could also define equivalent lambda functions:
+
+```daml
+-- Code from: code-snippets/Functions.daml
+-- [Include actual code example here]
+```
+
+## Functions are Values
+
+The function type can be explicitly added to the `tubeSurfaceArea` function (when it is written with the lambda notation):
+
+```daml
+-- Code from: code-snippets/TubeSurfaceArea2.daml
+-- [Include actual code example here]
+```
+
+Note that `tubeSurfaceArea : BinaryDecimalFunction = ...` follows the same pattern as when binding values, e.g., `pi : Decimal = 3.14159265359`.
+
+Functions have types, just like values. Which means they can be used just like normal variables. In fact, in Daml, functions are values.
+
+This means a function can take another function as an argument. For example, define a function `applyFilter: (Int -> Int -> Bool) -> Int -> Int -> Bool` which applies the first argument, a higher-order function, to the second and the third arguments to yield the result.
+
+```daml
+-- Code from: code-snippets/Functions.daml
+-- [Include actual code example here]
+```
+
+The `daml-ref-folding` section looks into two useful built-in functions, `foldl` and `foldr`, that also take a function as an argument.
+
+<Note>
+Daml does not allow functions as parameters of contract templates and contract choices. However, a follow up of a choice can use built-in functions, defined at the top level or in the contract template body.
+</Note>
+
+## Generic Functions
+
+A function is *parametrically polymorphic* if it behaves uniformly for all types, in at least one of its type parameters. For example, you can define function composition as follows:
+
+```daml
+-- Code from: code-snippets/Functions.daml
+-- [Include actual code example here]
+```
+
+where `a`, `b`, and `c` are any data types. Both `compose ((+) 4) ((*) 2) 3 == 10` and `compose not ((&&) True) False` evaluate to `True`. Note that `((+) 4)` has type `Int -> Int`, whereas `not` has type `Bool -> Bool`.
+
+You can find many other generic functions including this one in the Daml standard library.
+
+<Note>
+Daml currently does not support generic functions for a specific set of types, such as `Int` and `Decimal` numbers. For example, `sum (x: a) (y: a) = x + y` is undefined when `a` equals the type `Party`. *Bounded polymorphism* might be added to Daml in a later version.
+</Note>
+
+{/* COPIED_END */}
+
+
+{/* COPIED_START source="docs-website:docs/replicated/daml/3.4/sdk/reference/daml/packages.rst" hash="4011d059" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was copied from existing reviewed documentation.
+**Source:** `docs/replicated/daml/3.4/sdk/reference/daml/packages.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+# Reference: Daml Packages
+
+This page gives reference information on Daml package dependencies.
+
+## Building Daml Archives
+
+When a Daml project is compiled, the compiler produces a `Daml archive`. These are platform-independent packages of compiled Daml code that can be uploaded to a Daml ledger or imported in other Daml projects.
+
+Daml archives have a `.dar` file ending. By default, when you run `dpm build`, it will generate the `.dar` file in the `.daml/dist` folder in the project root folder. For example, running `dpm build` in project `foo` with project version `0.0.1` will result in a Daml archive `.daml/dist/foo-0.0.1.dar`.
+
+You can specify a different path for the Daml archive by using the `-o` flag:
+
+``` sh
+dpm build -o foo.dar
+
+The rest of this page will focus on how to import a Daml package in other Daml projects.
+```
+
+## Inspecting DARs
+
+Refer to the section on decoding DARs and DALF files.
+
+## Import Daml Packages
+
+There are two ways to import a Daml package in a project: via `dependencies`, and via `data-dependencies`. They each have certain advantages and disadvantages. To summarize:
+
+- `dependencies` allow you to import a Daml archive as a library. The definitions in the dependency will all be made available to the importing project. However, the dependency must be compiled with the same SDK version, so this method is only suitable for breaking up large projects into smaller projects that depend on each other, or to reuse existing libraries.
+- `data-dependencies` allow you to import a Daml archive (.dar) or a Daml-LF package (.dalf), including packages that have already been deployed to a ledger. These packages can be compiled with any previous SDK version. On the other hand, not all definitions can be carried over perfectly, since the Daml interface needs to be reconstructed from the binary.
+
+The following sections will cover these two approaches in more depth.
+
+### Import a Daml package via Dependencies
+
+A Daml project can declare a Daml archive as a dependency in the `dependencies` field of `daml.yaml`. This lets you import modules and reuse definitions from another Daml project. The main limitation of this method is that the dependency must be built for the same SDK version as the importing project.
+
+Let's go through an example. Suppose you have an existing Daml project `foo`, located at `/home/user/foo`, and you want to use it as a dependency in a project `bar`, located at `/home/user/bar`.
+
+To do so, you first need to generate the Daml archive of `foo`. Go into `/home/user/foo` and run `dpm build -o foo.dar`. This will create the Daml archive, `/home/user/foo/foo.dar`.
+
+Next, we will update the project config for `bar` to use the generated Daml archive as a dependency. Go into `/home/user/bar` and change the `dependencies` field in `daml.yaml` to point to the created \`Daml archive\`:
+
+```yaml
+dependencies:
+  - daml-prim
+  - daml-stdlib
+  - ../foo/foo.dar
+```
+
+The import path can also be absolute, for example, by changing the last line to:
+
+```yaml
+- /home/user/foo/foo.dar
+```
+
+When you run `dpm build` in the `bar` project, the compiler will make the definitions in `foo.dar` available for importing. For example, if `foo` exports the module `Foo`, you can import it in the usual way:
+
+```daml
+import Foo
+```
+
+By default, all modules of `foo` are made available when importing `foo` as a dependency. To limit which modules of `foo` get exported, you may add an `exposed-modules` field in the `daml.yaml` file for `foo`:
+
+```yaml
+exposed-modules:
+- Foo
+```
+
+### Import a Daml Archive via `data-dependencies`
+
+You can import a Daml archive (.dar) or Daml-LF package (.dalf) using `data-dependencies`. Unlike `dependencies`, this can be used when the SDK versions do not match.
+
+For example, you can import `foo.dar` as follows:
+
+```yaml
+dependencies:
+- daml-prim
+- daml-stdlib
+data-dependencies:
+- ../foo/foo.dar
+```
+
+When importing packages this way, the Daml compiler will try to reconstruct the original Daml interface from the compiled binaries. However, to allow `data-dependencies` to work across SDK versions, the compiler has to abstract over some details which are not compatible across SDK versions. This means that there are some Daml features that cannot be recovered when using `data-dependencies`. In particular:
+
+1.  Export lists cannot be recovered, so imports via `data-dependencies` can access definitions that were originally hidden. This means it is up to the importing module to respect the data abstraction of the original module. Note that this is the same for all code that runs on the ledger, since the ledger does not provide special support for data abstraction.
+2.  If you have a `dependency` that limits the modules that can be accessed via `exposed-modules`, you can get an error if you also have a `data-dependency` that references something from the hidden modules (even if it is only reexported). Since `exposed-modules` are not available on the ledger in general, we recommend to not make use of them and instead rely on naming conventions (e.g., suffix module names with `.Internal`) to make it clear which modules are part of the public API.
+3.  Prior to Daml-LF version 1.8, typeclasses could not be reconstructed. This means if you have a package that is compiled with an older version of Daml-LF, typeclasses and typeclass instances will not be carried over via data-dependencies, and you won't be able to call functions that rely on typeclass instances. This includes the template functions, such as `create`, `signatory`, and `exercise`, as these rely on typeclass instances.
+4.  Starting from Daml-LF version 1.8, when possible, typeclass instances will be reconstructed by re-using the typeclass definitions from dependencies, such as the typeclasses exported in `daml-stdlib`. However, if the typeclass signature has changed, you will get an instance for a reconstructed typeclass instead, which will not interoperate with code from dependencies.
+
+### Transitive dependency management
+
+The Daml compiler identifies each DAR dependency in the project by its `packageId` and fully qualified name (Daml project package name and version number).
+
+If you have a Daml project which contains multiple common transitive DAR dependencies, those common transitive dependencies must either:
+
+- Have identical contents if they have the same name and version specified in their Daml project's `daml.yaml` file, or
+- Have a different value for the `version` entry in their respective `daml.yaml` files.
+
+Otherwise, the Daml project cannot be built into a deployable DAR due to package identification conflicts.
+
+For example:
+
+- Daml project X (top-level) has dependencies `DarA` and `DarB`.
+- `DarA` and `DarB` both contain DAR dependency `DarC`
+
+When compiling Daml project X, you must ensure that the `DarC` dependency referenced by both `DarA` and `DarB` either has identical Daml contents or has a different version number if the contents differ. The version number is defined in the daml.yaml file of the Daml project producing `DarC`, under the `version` key.
+
+### Reference Daml Packages Already On the Ledger
+
+Daml packages that have been uploaded to a ledger can be imported as data dependencies, given you have the necessary permissions to download these packages. To import such a package, add the package name and version separated by a colon to the data-dependencies stanza as follows:
+
+```yaml
+ledger:
+  host: localhost
+  port: 6865
+dependencies:
+- daml-prim
+- daml-stdlib
+data-dependencies:
+- foo:1.0.0
+```
+
+If your ledger runs at the default host and port (`localhost:6865`), the ledger stanza can be omitted. This will fetch and install the package `foo-1.0.0`. A `daml.lock` file is created at the root of your project directory, pinning the resolved packages to their exact package ID:
+
+```yaml
+dependencies:
+- pkgId: 51255efad65a1751bcee749d962a135a65d12b87eb81ac961142196d8bbca535
+  name: foo
+  version: 1.0.0
+```
+
+The `daml.lock` file needs to be checked into version control of your project. This assures that package name/version tuples specified in your data dependencies are always resolved to the same package ID. To recreate or update your `daml.lock` file, delete it and run `dpm build` again.
+
+## Handling Module Name Collisions
+
+Sometimes you will have multiple packages with the same module name. In that case, a simple import will fail, since the compiler doesn't know which version of the module to load. Fortunately, there are a few tools you can use to approach this problem.
+
+The first is to use package qualified imports. Supposing you have packages with different names, `foo` and `bar`, which both expose a module `X`, you can select which one you want with a package qualified import.
+
+To get `X` from `foo`:
+
+```daml
+import "foo" X
+```
+
+To get `X` from `bar`:
+
+```daml
+import "bar" X
+```
+
+To get both, you need to rename the module as you perform the import:
+
+```daml
+import "foo" X as FooX
+import "bar" X as BarX
+```
+
+Sometimes, package qualified imports will not help, because you are importing two packages with the same name. For example, if you're loading different versions of the same package. To handle this case, you need the `--package` build option.
+
+Suppose you are importing packages `foo-1.0.0` and `foo-2.0.0`. Notice they have the same name `foo` but different versions. To get modules that are exposed in both packages, you will need to provide module aliases. You can do this by passing the `--package` build option. Open `daml.yaml` and add the following `build-options`:
+
+```yaml
+build-options:
+- '--package'
+- 'foo-1.0.0 with (X as Foo1.X)'
+- '--package'
+- 'foo-2.0.0 with (X as Foo2.X)'
+```
+
+This will alias the `X` in `foo-1.0.0` as `Foo1.X`, and alias the `X` in `foo-2.0.0` as `Foo2.X`. Now you will be able to import both `X` by using the new names:
+
+```daml
+import qualified Foo1.X
+import qualified Foo2.X
+```
+
+It is also possible to add a prefix to all modules in a package using the `module-prefixes` field in your `daml.yaml`. This is particularly useful for upgrades where you can map all modules of version `v` of your package under `V$v`. For the example above you can use the following:
+
+```yaml
+module-prefixes:
+  foo-1.0.0: Foo1
+  foo-2.0.0: Foo2
+```
+
+That will allow you to import module `X` from package `foo-1.0.0` as `Foo1.X` and `X` from package `foo-2.0.0` as `Foo2`.
+
+You can also use more complex module prefixes, e.g., `foo-1.0.0: Foo1.Bar` which will make module `X` available under `Foo1.Bar.X`.
+
+{/* COPIED_END */}
+
+
+{/* COPIED_START source="docs-website:docs/replicated/daml/3.4/sdk/reference/daml/working-with.rst" hash="56b3d265" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was copied from existing reviewed documentation.
+**Source:** `docs/replicated/daml/3.4/sdk/reference/daml/working-with.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+# Reference: Built-in Functions
+
+This page gives reference information on built-in functions for working with a variety of common concepts.
+
+## Work with Time
+
+Daml has these built-in functions for working with time:
+
+- `datetime`: creates a `Time` given year, month, day, hours, minutes, and seconds as argument.
+- `subTime`: subtracts one time from another. Returns the `RelTime` difference between `time1` and `time2`.
+- `addRelTime`: add times. Takes a `Time` and `RelTime` and adds the `RelTime` to the `Time`.
+- `days`, `hours`, `minutes`, `seconds`: constructs a `RelTime` of the specified length.
+- `pass`: (in Daml Script tests only) use `pass : RelTime -> Script Time` to advance the ledger time by the argument amount. Returns the new time.
+
+## Work with Numbers
+
+Daml has these built-in functions for working with numbers:
+
+- `round`: rounds a `Decimal` number to `Int`.
+
+  `round d` is the *nearest* `Int` to `d`. Tie-breaks are resolved by rounding away from zero, for example:
+
+  ``` none
+  round 2.5 == 3    round (-2.5) == -3
+  round 3.4 == 3    round (-3.7) == -4
+  ```
+
+- `truncate`: converts a `Decimal` number to `Int`, truncating the value towards zero, for example:
+
+  ``` none
+  truncate 2.2 == 2    truncate (-2.2) == -2
+  truncate 4.9 == 4    v (-4.9) == -4
+  ```
+
+- `intToDecimal`: converts an `Int` to `Decimal`.
+
+The set of numbers expressed by `Decimal` is not closed under division as the result may require more than 10 decimal places to represent. For example, `1.0 / 3.0 == 0.3333...` is a rational number, but not a `Decimal`.
+
+## Work with Text
+
+Daml has these built-in functions for working with text:
+
+- `<>` operator: concatenates two `Text` values.
+- `show` converts a value of the primitive types (`Bool`, `Int`, `Decimal`, `Party`, `Time`, `RelTime`) to a `Text`.
+
+To escape text in Daml strings, use `\`:
+
+<table style="width:69%;">
+<colgroup>
+<col style="width: 27%" />
+<col style="width: 41%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th><blockquote>
+<p>Character</p>
+</blockquote></th>
+<th>How to escape it</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>\</code></td>
+<td><code>\\</code></td>
+</tr>
+<tr class="even">
+<td><code>"</code></td>
+<td><code>\"</code></td>
+</tr>
+<tr class="odd">
+<td><code>'</code></td>
+<td><code>\'</code></td>
+</tr>
+<tr class="even">
+<td>Newline</td>
+<td><code>\n</code></td>
+</tr>
+<tr class="odd">
+<td>Tab</td>
+<td><code>\t</code></td>
+</tr>
+<tr class="even">
+<td>Carriage return</td>
+<td><code>\r</code></td>
+</tr>
+<tr class="odd">
+<td>Unicode (using <code>!</code> as an example)</td>
+<td><ul>
+<li>Decimal code: <code>\33</code></li>
+<li>Octal code: <code>\o41</code></li>
+<li>Hexadecimal code: <code>\x21</code></li>
+</ul></td>
+</tr>
+</tbody>
+</table>
+
+## Work with Lists
+
+Daml has these built-in functions for working with lists:
+
+- `foldl` and `foldr`: see `daml-ref-folding` below.
+
+### Fold
+
+A *fold* takes:
+
+- a binary operator
+- a first *accumulator* value
+- a list of values
+
+The elements of the list are processed one-by-one (from the left in a `foldl`, or from the right in a `foldr`).
+
+<Note>
+We'd usually recommend using `foldl`, as `foldr` is usually slower. This is because it needs to traverse the whole list before starting to discharge its elements.
+</Note>
+
+Processing goes like this:
+
+1.  The binary operator is applied to the first accumulator value and the first element in the list. This produces a second accumulator value.
+2.  The binary operator is applied to the *second* accumulator value and the second element in the list. This produces a third accumulator value.
+3.  This continues until there are no more elements in the list. Then, the last accumulator value is returned.
+
+As an example, to sum up a list of integers in Daml:
+
+```daml
+-- Code from: code-snippets/Snippets.daml
+-- [Include actual code example here]
+```
+
+{/* COPIED_END */}
+
+
+{/* COPIED_START source="docs-website:docs/replicated/daml/3.4/sdk/reference/fixity.rst" hash="a12a5d86" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was copied from existing reviewed documentation.
+**Source:** `docs/replicated/daml/3.4/sdk/reference/fixity.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+# Fixity, Associativity and Precedence
+
+With normal, *prefix* operators (e.g. functions), the semantics of `f g h` is clear: `f` is a function that takes `g` and `h` as parameters. If we want `f` to take the result of applying `g` to `h` we write `f (g h)`.
+
+In the case of *infix* operators (e.g. symbol operators such as `+` and `*`, or functions surrounded by backticks, for example `` `elem ```), it is less clear. What does ``x - y - z`` mean? Subtracting ``x`` from ``y`` first (i.e. ``(x - y) - z``) generally yields different results than subtracting ``z`` from ``y`` first (i.e. ``x - (y - z)``). In Daml, the subtraction operator ``-`` is defined as a \*left-assocative\* operator. That is, when we write ``x - y - z - ...`` the parser associates \*to the left\*, meaning the parser interprets this as ``((x - y) - z) - ...`\`.
+
+Some operators are *right-associative*. We have already encountered one: function application! A function signature of `a -> b -> c -> ...` is parsed as `(a -> (b -> (c -> ...)))`.
+
+Finally, some operators are non-associative. A good example are comparison operators such as `==` and `>`. This means any ambiguous usage of these operators (e.g. `a == b == c` or `a > b > c`) results in a **parse error**.
+
+<Note>
+Non-associative operators are not to be confused with operators that are both left- *and* right-associative, such as `+` (since `(x + y) + z = x + (y + z))`). To obtain a deterministic parser, such operators must be declared as one of either left-associative or right-associative. In Daml the `+` operator has been declared as left-associative
+</Note>
+
+The *precedence* of operators defines, when combining different operators, which operator is processed first. For example, in general (and in Daml), multiplication *takes precedence* over addition. That is, `x + y * z` is parsed as `x + (y * z)`. Operator precedence is expressed as a number, where a higher number indicates a higher precedence. Operators of same precedence are associated to the left (e.g. `x + y - z` is parsed as `(x + y) - z`.
+
+The fixity and precedence of an operator are declared using the `infixl`, `infix`, and `infixr` keywords (denoting left-, non-, and right-associativity, respectfully) that take an integer between 0 and 9 inclusive and an operator the fixity applies to. For example, `infixl 6 +` declares that `+` is a `left-associative` operator with precedence `6`. These keywords can be used for user-defined operators as well. The following table shows the fixity and precedence for operators that are built-in to the Daml language, such as `+` and `-`:
+
+<table>
+<thead>
+<tr class="header">
+<th>Precedence</th>
+<th>Left-associative</th>
+<th>Non-associative</th>
+<th>Right-associative</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><p>9 8 7 6 5 4 3 2 1 0</p></td>
+<td><p><code>`!!</code></p>
+<p><code>*</code>, <code>/</code>, <code>%</code> <code>+</code>, <code>-</code></p>
+<p><code>&lt;$</code>, <code>&lt;$&gt;</code>, <code>$&gt;</code>, <code>&lt;*</code>, <code>&lt;*&gt;</code>, <code>*&gt;</code></p>
+<p><code>&gt;&gt;</code>, <code>&gt;&gt;=</code>, <code>&lt;&amp;&gt;</code></p></td>
+<td><p><code>==</code>, <code>/=</code>, <code>&lt;</code>, <code>&lt;=</code>, <code>&gt;==</code>, <code>&gt;</code>, <code>===</code>, <code>=/=</code></p></td>
+<td><p><code>.</code> <code>&lt;#&amp;&amp;&gt;</code>, <code>^</code>, <code>**</code></p>
+<p><code>&lt;&gt;</code> <code>`++</code>, <code>::</code></p>
+<p><code>&amp;&amp;</code>, <code>&amp;&amp;&amp;</code> <code>||</code>, <code>|||</code> <code>=&lt;&lt;</code>, <code>&lt;=&lt;</code>, <code>&gt;=&gt;</code> <code>$</code></p></td>
+</tr>
+</tbody>
+</table>
+
+{/* COPIED_END */}
+

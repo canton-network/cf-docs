@@ -74,13 +74,21 @@ The validator app exposes wallet APIs under the `/v0/wallet/*` path. These fall 
 - `POST /v0/wallet/buy-traffic-requests` -- request a traffic purchase
 - `POST /v0/wallet/buy-traffic-requests/{tracking_id}/status` -- check traffic purchase status
 
-**Internal API** (`wallet-internal.yaml`) -- used by the wallet UI frontend. No backwards compatibility guarantees. Endpoints include balance queries (`GET /v0/wallet/balance`), UTXO listing (`GET /v0/wallet/amulets`), transaction history (`POST /v0/wallet/transactions`), transfer offer management (accept/reject/withdraw), subscription and payment request handling, transfer preapproval operations, and user status.
+**Internal API** (`wallet-internal.yaml`) -- used by the wallet UI frontend. No backwards compatibility guarantees. Endpoints include:
+
+- `GET /v0/wallet/balance` -- query wallet balance
+- `GET /v0/wallet/amulets` -- list UTXOs
+- `POST /v0/wallet/transactions` -- transaction history
+- `POST /v0/wallet/transfer-offers/accept` -- accept a transfer offer
+- `POST /v0/wallet/transfer-offers/reject` -- reject a transfer offer
+- `POST /v0/wallet/transfer-offers/withdraw` -- withdraw a transfer offer
+- `GET /v0/wallet/user-status` -- user onboarding and wallet status
 
 For the full OpenAPI specifications, see the [wallet-external.yaml](https://raw.githubusercontent.com/hyperledger-labs/splice/refs/heads/main/apps/wallet/src/main/openapi/wallet-external.yaml) and [wallet-internal.yaml](https://raw.githubusercontent.com/hyperledger-labs/splice/refs/heads/main/apps/wallet/src/main/openapi/wallet-internal.yaml) files.
 
 ## UTXO Management
 
-Canton uses a UTXO model for token holdings. Each active `Holding` contract represents a UTXO with a specific CC amount. Efficient UTXO management matters for two reasons: active Holding contracts consume storage and compute on the hosting validators, and each UTXO input to a transfer incurs extra traffic cost.
+The Splice wallet uses a UTXO model for Canton Coin holdings. Each active `Holding` contract on the ledger represents a single UTXO with a specific CC amount. UTXO management matters for wallet providers because active Holding contracts consume storage and compute on the hosting validators, and each UTXO input to a transfer incurs extra traffic cost.
 
 Canton Coin enforces a limit of 100 input contracts per transfer and expires dust UTXOs whose initial amount is smaller than the accrued holding fee. Wallet providers should aim for roughly 10 or fewer UTXOs per user on average.
 

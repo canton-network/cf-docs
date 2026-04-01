@@ -3,6 +3,10 @@ title: "Testing Upgrades"
 description: "Verifying upgrade compatibility, testing cross-version workflows, and regression testing strategies"
 ---
 
+import DamlAppdevModulesM6TestingUpgradesL60 from "/snippets/daml-docs/appdev_modules_m6-testing-upgrades_L60.mdx";
+import DamlAppdevModulesM6TestingUpgradesL81 from "/snippets/daml-docs/appdev_modules_m6-testing-upgrades_L81.mdx";
+
+
 Upgrading Daml packages across a distributed network leaves no room for guesswork. You need to verify both that the compiler accepts the upgrade and that workflows continue to function with mixed package versions.
 
 ## Type-Level Compatibility Tests
@@ -57,50 +61,11 @@ Write Daml Script tests that explicitly test cross-version scenarios. The key pa
 
 ### Creating v1 contracts, reading with v2
 
-```haskell
-testV1ContractWithV2Code : Script ()
-testV1ContractWithV2Code = do
-  issuer <- allocateParty "Issuer"
-  holder <- allocateParty "Holder"
-
-  -- Create with v1 fields only
-  cid <- submit issuer do
-    createCmd License with
-      info = LicenseInfo with
-        holder; issuer
-        product = "Widget"
-        expiryDate = None  -- v2 field, set to None
-
-  -- Fetch and verify v2 fields default correctly
-  Some license <- queryContractId issuer cid
-  assertMsg "expiryDate should be None" (license.info.expiryDate == None)
-```
+<DamlAppdevModulesM6TestingUpgradesL60 />
 
 ### Exercising v2 choices on existing contracts
 
-```haskell
-testNewChoiceOnExistingContract : Script ()
-testNewChoiceOnExistingContract = do
-  issuer <- allocateParty "Issuer"
-  holder <- allocateParty "Holder"
-
-  cid <- submit issuer do
-    createCmd License with
-      info = LicenseInfo with
-        holder; issuer
-        product = "Widget"
-        expiryDate = None
-
-  -- Exercise the new v2 choice
-  newCid <- submit issuer do
-    exerciseCmd cid Renew with
-      newExpiry = datetime 2026 Dec 31 0 0 0
-
-  -- Verify result
-  Some renewed <- queryContractId issuer newCid
-  assertMsg "Should have expiry set"
-    (renewed.info.expiryDate == Some (datetime 2026 Dec 31 0 0 0))
-```
+<DamlAppdevModulesM6TestingUpgradesL81 />
 
 ### Testing incompatible downgrades
 

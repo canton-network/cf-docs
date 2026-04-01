@@ -3,6 +3,19 @@ title: "Debugging Workflows"
 description: "Step-by-step diagnostic procedures for common Canton issues using the console"
 ---
 
+import CantonGlobalSynchronizerCantonConsoleDebuggingWorkflowsL109 from "/snippets/canton-docs/global-synchronizer_canton-console_debugging-workflows_L109.mdx";
+import CantonGlobalSynchronizerCantonConsoleDebuggingWorkflowsL121 from "/snippets/canton-docs/global-synchronizer_canton-console_debugging-workflows_L121.mdx";
+import CantonGlobalSynchronizerCantonConsoleDebuggingWorkflowsL14 from "/snippets/canton-docs/global-synchronizer_canton-console_debugging-workflows_L14.mdx";
+import CantonGlobalSynchronizerCantonConsoleDebuggingWorkflowsL23 from "/snippets/canton-docs/global-synchronizer_canton-console_debugging-workflows_L23.mdx";
+import CantonGlobalSynchronizerCantonConsoleDebuggingWorkflowsL30 from "/snippets/canton-docs/global-synchronizer_canton-console_debugging-workflows_L30.mdx";
+import CantonGlobalSynchronizerCantonConsoleDebuggingWorkflowsL38 from "/snippets/canton-docs/global-synchronizer_canton-console_debugging-workflows_L38.mdx";
+import CantonGlobalSynchronizerCantonConsoleDebuggingWorkflowsL49 from "/snippets/canton-docs/global-synchronizer_canton-console_debugging-workflows_L49.mdx";
+import CantonGlobalSynchronizerCantonConsoleDebuggingWorkflowsL57 from "/snippets/canton-docs/global-synchronizer_canton-console_debugging-workflows_L57.mdx";
+import CantonGlobalSynchronizerCantonConsoleDebuggingWorkflowsL70 from "/snippets/canton-docs/global-synchronizer_canton-console_debugging-workflows_L70.mdx";
+import CantonGlobalSynchronizerCantonConsoleDebuggingWorkflowsL87 from "/snippets/canton-docs/global-synchronizer_canton-console_debugging-workflows_L87.mdx";
+import CantonGlobalSynchronizerCantonConsoleDebuggingWorkflowsL98 from "/snippets/canton-docs/global-synchronizer_canton-console_debugging-workflows_L98.mdx";
+
+
 When transactions fail, nodes disconnect, or the system behaves unexpectedly, the Canton Console provides the tools to diagnose the problem. This page walks through common debugging scenarios with concrete console commands.
 
 ## Debugging Stuck Transactions
@@ -11,53 +24,33 @@ A transaction appears "stuck" when a command was submitted but no completion eve
 
 ### Step 1: Check Node Health
 
-```scala
-participant.health.status
-// Look for: is_active = true, connected domains
-```
+<CantonGlobalSynchronizerCantonConsoleDebuggingWorkflowsL14 />
 
 If the participant isn't active or has no connected synchronizers, the transaction can't proceed.
 
 ### Step 2: Verify Synchronizer Connectivity
 
-```scala
-participant.domains.list_connected
-// Confirm the expected synchronizer appears and shows as connected
-```
+<CantonGlobalSynchronizerCantonConsoleDebuggingWorkflowsL23 />
 
 If the synchronizer is disconnected, check network connectivity and try reconnecting:
 
-```scala
-participant.domains.reconnect(synchronizerId)
-```
+<CantonGlobalSynchronizerCantonConsoleDebuggingWorkflowsL30 />
 
 ### Step 3: Check Package Vetting
 
 A transaction fails if a stakeholder's participant hasn't vetted the required packages.
 
-```scala
-// List vetted packages on this participant
-participant.topology.vetted_packages.list()
-
-// Check if a specific package is vetted
-participant.topology.vetted_packages.list()
-  .filter(_.item.packageIds.contains(targetPackageId))
-```
+<CantonGlobalSynchronizerCantonConsoleDebuggingWorkflowsL38 />
 
 If the package isn't vetted, upload and vet it:
 
-```scala
-participant.dars.upload("/path/to/missing-package.dar")
-```
+<CantonGlobalSynchronizerCantonConsoleDebuggingWorkflowsL49 />
 
 ### Step 4: Check Party Hosting
 
 Verify that all parties involved in the transaction are properly hosted:
 
-```scala
-participant.topology.party_to_participant_mappings.list(synchronizerId)
-  .filter(_.item.partyId == targetPartyId)
-```
+<CantonGlobalSynchronizerCantonConsoleDebuggingWorkflowsL57 />
 
 If a party isn't mapped to any active participant, the synchronizer can't deliver transaction views to that party's stakeholder.
 
@@ -67,14 +60,7 @@ If a party isn't mapped to any active participant, the synchronizer can't delive
 
 When a participant can't connect to the synchronizer:
 
-```scala
-// Check current connection status
-participant.synchronizers.list_connected
-participant.synchronizers.list_registered
-
-// Try reconnecting
-participant.synchronizers.reconnect(synchronizerId)
-```
+<CantonGlobalSynchronizerCantonConsoleDebuggingWorkflowsL70 />
 
 Common causes:
 - Network firewall blocking sequencer ports
@@ -84,10 +70,7 @@ Common causes:
 
 ### Verifying Sequencer Connectivity (from Sequencer Console)
 
-```scala
-sequencer.health.status
-// Check for: is_active, connected members count
-```
+<CantonGlobalSynchronizerCantonConsoleDebuggingWorkflowsL87 />
 
 ## Identity Problems
 
@@ -95,10 +78,7 @@ sequencer.health.status
 
 If a party ID returns no results:
 
-```scala
-// Search for the party across all known mappings
-participant.parties.list().filter(_.party.uid.id.startsWith("Alice"))
-```
+<CantonGlobalSynchronizerCantonConsoleDebuggingWorkflowsL98 />
 
 The party may be hosted on a different participant, or the party-to-participant mapping may not have propagated yet. Topology changes take a short time to distribute across the network.
 
@@ -106,11 +86,7 @@ The party may be hosted on a different participant, or the party-to-participant 
 
 If a multi-hosting setup isn't taking effect:
 
-```scala
-// Check for pending proposals
-participant.topology.party_to_participant_mappings
-  .list_hosting_proposals(synchronizerId, participant.id)
-```
+<CantonGlobalSynchronizerCantonConsoleDebuggingWorkflowsL109 />
 
 A pending proposal means the second participant hasn't signed yet. See [Multi-Hosting](/docs-main/appdev/deep-dives/multi-hosting) for the authorization procedure.
 
@@ -118,20 +94,7 @@ A pending proposal means the second participant hasn't signed yet. See [Multi-Ho
 
 When application behavior is unexpected, inspect the active contract set to verify on-ledger state:
 
-```scala
-// Count contracts by template
-val contracts = participant.testing.acs_search(
-  synchronizerId,
-  filterTemplate = "MyModule:MyTemplate"
-)
-println(s"Found ${contracts.size} active contracts")
-
-// Inspect a specific contract's payload
-contracts.headOption.foreach { c =>
-  println(c.contract.contractId)
-  println(c.contract.payload)
-}
-```
+<CantonGlobalSynchronizerCantonConsoleDebuggingWorkflowsL121 />
 
 ### Comparing ACS Across Participants
 

@@ -13,9 +13,9 @@ A synchronizer consists of two node types: **sequencers** and **mediators**. Tog
 
 Sequencers provide authenticated, timestamped multicast. They are the message routing backbone of a synchronizer.
 
-- **Timestamping and total ordering.** Each batch of messages submitted to the sequencer receives a monotonically increasing timestamp. All recipients observe the same global ordering derived from these timestamps. This total ordering prevents double-spends by giving every state change on the synchronizer a deterministic position in the sequence.
+- **Total ordering for a synchronizer.** Each batch of messages submitted to the sequencer receives a monotonically increasing value that acts as a timestamp. All recipients observe the same global ordering derived from these timestamps. This total ordering prevents double-spends by giving every state change on the synchronizer a deterministic position in the sequence.
 - **Encrypted payload forwarding.** Sequencers forward opaque (encrypted) messages. They see metadata — recipient lists and message sizes — but not transaction content. Encryption keys are managed between participants; the sequencer never holds decryption keys.
-- **Sender privacy.** Recipients do not learn the identity of the sender. The sequencer strips sender information before delivering messages to other parties.
+- **Sender privacy.** Recipients do not learn the party ID of the sender. The sequencer strips sender information before delivering messages to other parties.
 - **Traffic management.** Sequencers enforce traffic limits to protect the synchronizer from abuse and denial-of-service attacks. Each authorized member accumulates a traffic balance; submission requests that exceed the member's available balance are rejected. Traffic costs scale with payload size, number of recipients, and a per-event base cost.
 
 Participants and mediators never communicate directly with each other. All protocol messages flow through sequencers.
@@ -56,7 +56,7 @@ The BFT orderer uses the standard Byzantine fault tolerance assumption:
 
 The BFT orderer draws on two published algorithms:
 
-**ISS (Insanely Scalable State-Machine Replication)** is a parallel leader-based BFT replication protocol. ISS inspires the core consensus subprotocol in the BFT orderer. It divides work into epochs of fixed block length, with multiple leaders proposing blocks in parallel across different segments of the epoch. This parallelism allows the orderer to maintain throughput even when some leaders are unavailable.
+**ISS (Insanely Scalable State-Machine Replication)** is a parallel leader-based BFT replication protocol. ISS inspires the core consensus subprotocol in the BFT orderer. It divides work into epochs of fixed block length, with multiple leaders proposing blocks in parallel across different segments of the epoch. This parallelism load balances the expensive costs associated with the leader role without incurring downtime when some leaders are unavailable.
 
 **Narwhal** separates data dissemination from data ordering. The BFT orderer applies this idea to its pre-consensus availability subprotocol: data is disseminated first, and consensus then orders references to already-available data rather than the data itself. This decoupling reduces the communication load on the consensus protocol, which tends to be the bottleneck in ordering services.
 
@@ -89,13 +89,13 @@ A block is considered ordered when a node receives a valid pre-prepare and more 
 
 ### Network Transport
 
-BFT orderer nodes communicate peer-to-peer. Each node establishes a unidirectional gRPC/HTTP2 stream to every other peer in the ordering service. These connections use TLS for point-to-point authentication and integrity. The peer-to-peer API is typically not exposed publicly; access is restricted to known BFT orderer peers.
+BFT orderer nodes communicate peer-to-peer. Each node establishes a gRPC/HTTP2 stream to every other peer in the ordering service. These connections use TLS for point-to-point authentication and integrity. The peer-to-peer API is typically not exposed publicly; access is restricted to known BFT orderer peers.
 
 ## Centralized vs. Decentralized Options
 
 Canton supports multiple sequencer backends. The choice of backend determines the trust model for the synchronizer.
 
-**Centralized (single database backend).** A single database provides the ordering. This is the simplest configuration: lowest latency, easiest to operate, but a single point of trust and failure. If the database or its operator is compromised, ordering integrity is lost. Suitable for private synchronizers where the synchronizer operator is trusted by all participants.
+**Centralized (single database backend).** A single database provides the ordering. This is the simplest configuration: lowest latency, easiest to operate, but a single point of trust and failure. If the database or its operator is compromised, ordering integrity is lost. Suitable for private synchronizers where the synchronizer operator is trusted by all participants. Note that the centralized orderer is in an Alpha state and not yet ready for production. This option will be removed in favor of running the Native BFT orderer even for single-sequencer deployments.
 
 **CometBFT driver.** An external BFT ordering service using [CometBFT](https://cometbft.com/). Canton includes a driver that integrates CometBFT as the sequencer backend. This provides Byzantine fault tolerance through an established consensus engine, but runs as a separate process outside the sequencer JVM.
 

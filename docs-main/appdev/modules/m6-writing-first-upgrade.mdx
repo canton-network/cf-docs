@@ -3,6 +3,11 @@ title: "Writing Your First Upgrade"
 description: "Step-by-step tutorial for creating a v2 Daml package with backward-compatible changes"
 ---
 
+import DamlAppdevModulesM6WritingFirstUpgradeL159 from "/snippets/daml-docs/appdev_modules_m6-writing-first-upgrade_L159.mdx";
+import DamlAppdevModulesM6WritingFirstUpgradeL37 from "/snippets/daml-docs/appdev_modules_m6-writing-first-upgrade_L37.mdx";
+import DamlAppdevModulesM6WritingFirstUpgradeL91 from "/snippets/daml-docs/appdev_modules_m6-writing-first-upgrade_L91.mdx";
+
+
 This tutorial walks you through creating a v2 version of a Daml package. You'll start with a simple template, add an optional field and a new choice, then verify that the upgrade compiles and that existing contracts work with the new code.
 
 ## Prerequisites
@@ -13,7 +18,13 @@ This tutorial walks you through creating a v2 version of a Daml package. You'll 
 
 ## Step 1: Create the v1 Package
 
-Create the directory structure and populate it with a simple `License` template:
+Start by scaffolding a new project. The `dpm new` command creates the directory structure and a `daml.yaml` file:
+
+```bash
+dpm new com-example-licensing
+```
+
+For this tutorial, set up the directory structure manually to keep things explicit:
 
 ```bash
 mkdir -p daml/v1/daml
@@ -34,28 +45,7 @@ dependencies:
 
 Create `daml/v1/daml/Main.daml`:
 
-```haskell
--- daml/v1/daml/Main.daml
-module Main where
-
-data LicenseInfo = LicenseInfo
-  with
-    holder : Party
-    issuer : Party
-    product : Text
-  deriving (Eq, Show)
-
-template License
-  with
-    info : LicenseInfo
-  where
-    signatory info.issuer
-    observer info.holder
-
-    choice Revoke : ()
-      controller info.issuer
-      do pure ()
-```
+<DamlAppdevModulesM6WritingFirstUpgradeL37 />
 
 Build and verify:
 
@@ -88,37 +78,7 @@ The `upgrades` field points to the v1 DAR. This is what tells `dpm build` to val
 
 Now make backward-compatible changes. Add an `Optional` field to the record and a new choice to the template:
 
-```haskell
--- daml/v2/daml/Main.daml
-module Main where
-
-data LicenseInfo = LicenseInfo
-  with
-    holder : Party
-    issuer : Party
-    product : Text
-    expiryDate : Optional Time  -- NEW: optional expiry date
-  deriving (Eq, Show)
-
-template License
-  with
-    info : LicenseInfo
-  where
-    signatory info.issuer
-    observer info.holder
-
-    choice Revoke : ()
-      controller info.issuer
-      do pure ()
-
-    -- NEW: choice to renew the license with an expiry date
-    choice Renew : ContractId License
-      with
-        newExpiry : Time
-      controller info.issuer
-      do create this with
-           info = info with expiryDate = Some newExpiry
-```
+<DamlAppdevModulesM6WritingFirstUpgradeL91 />
 
 The changes follow SCU compatibility rules:
 - `expiryDate` is an `Optional` field with implicit `None` default for v1 contracts
@@ -156,38 +116,7 @@ upgrades: ../v1/.daml/dist/com-example-licensing-1.0.0.dar
 
 Then create a test script that simulates a v1 contract (with `expiryDate = None`) and exercises the new v2 `Renew` choice:
 
-```haskell
--- daml/v2/daml/UpgradeTest.daml
-module UpgradeTest where
-
-import Main
-import Daml.Script
-import DA.Date (Month(..), datetime)
-
-testUpgradePath : Script ()
-testUpgradePath = do
-  issuer <- allocateParty "Issuer"
-  holder <- allocateParty "Holder"
-
-  -- Create a contract with no expiryDate (simulating a v1 contract)
-  licenseCid <- submit issuer do
-    createCmd License with
-      info = LicenseInfo with
-        holder
-        issuer
-        product = "Widget Pro"
-        expiryDate = None
-
-  -- Exercise the new v2 Renew choice
-  newLicenseCid <- submit issuer do
-    exerciseCmd licenseCid Renew with
-      newExpiry = datetime 2026 Dec 31 0 0 0
-
-  -- Verify the renewed license has the expiry set
-  Some renewed <- queryContractId holder newLicenseCid
-  assertMsg "Should have expiry"
-    (renewed.info.expiryDate == Some (datetime 2026 Dec 31 0 0 0))
-```
+<DamlAppdevModulesM6WritingFirstUpgradeL159 />
 
 Run the test from the v2 package directory:
 

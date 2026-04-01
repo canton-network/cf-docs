@@ -3,6 +3,11 @@ title: "Multi-Hosting and Resilience"
 description: "Distributing parties across multiple validators for high availability, failover, and data resilience"
 ---
 
+import CantonAppdevDeepDivesMultiHostingL76 from "/snippets/canton-docs/appdev_deep-dives_multi-hosting_L76.mdx";
+import CantonAppdevDeepDivesMultiHostingL88 from "/snippets/canton-docs/appdev_deep-dives_multi-hosting_L88.mdx";
+import CantonAppdevDeepDivesMultiHostingL98 from "/snippets/canton-docs/appdev_deep-dives_multi-hosting_L98.mdx";
+
+
 Multi-hosting lets a single party be hosted on multiple validators simultaneously. If one validator goes down, the party's operations continue on the others — without changing any Daml logic. This deep dive covers how multi-hosting works, when to use it, and how to set it up.
 
 ## Why Multi-Host?
@@ -19,9 +24,9 @@ Common reasons to multi-host:
 
 ## How Multi-Hosting Works
 
-Multi-hosting is managed through Canton's topology system. A party-to-participant mapping declares which validators host a given party and what permission each validator has (Confirmation or Observation).
+Multi-hosting is managed through Canton's topology system. A party-to-participant mapping declares which validators host a given party and what permission each validator has (Submission, Confirmation, or Observation).
 
-When a local party is hosted on multiple validators with Confirmation permission, any of those validators can submit transactions on behalf of the party (an external party can submit on any validator). The synchronizer delivers transaction views to all hosting validators, so each one maintains a consistent view of the party's contracts.
+When a local party is hosted on multiple validators with Submission permission, any of those validators can submit commands on behalf of the party. For external parties, submission happens on any validator where the party is hosted with Confirmation permission. The synchronizer delivers transaction views to all hosting validators, so each one maintains a consistent view of the party's contracts.
 
 ### Confirmation Thresholds
 
@@ -29,8 +34,9 @@ You can configure a confirmation threshold that determines how many hosting vali
 
 ### Permission Levels
 
-Each hosting validator is assigned a permission level:
+Each hosting validator is assigned one of three permission levels:
 
+- **Submission** — The validator can submit commands on behalf of the party. This permission is only available for local parties (parties whose keys are managed by the validator).
 - **Confirmation** — The validator can confirm transactions for the party. This is the standard permission for active hosting.
 - **Observation** — The validator receives transaction data for the party but cannot submit or confirm. Useful for read-only replicas, audit nodes, or pre-staging a migration target.
 
@@ -73,32 +79,15 @@ You can also set up multi-hosting directly through the Canton Console. This appr
 
 Create a hosting proposal on the first validator:
 
-```scala
-participant1.topology.party_to_participant_mappings.propose(
-  partyId,
-  newParticipants = Seq(
-    (participant1.id, ParticipantPermission.Confirmation),
-    (participant2.id, ParticipantPermission.Confirmation),
-  ),
-)
-```
+<CantonAppdevDeepDivesMultiHostingL76 />
 
 On the second validator, list pending proposals and authorize:
 
-```scala
-val proposals = participant2.topology.party_to_participant_mappings
-  .list_hosting_proposals(synchronizerId, participant2.id)
-
-val txHash = proposals.head.txHash
-participant2.topology.transactions.authorize(synchronizerId, txHash)
-```
+<CantonAppdevDeepDivesMultiHostingL88 />
 
 Once both validators have signed, the party appears as hosted on both nodes. You can verify with:
 
-```scala
-participant1.parties.hosted("Alice")
-// Shows both participant1 and participant2 as hosting validators
-```
+<CantonAppdevDeepDivesMultiHostingL98 />
 
 ## Data Resilience Patterns
 
