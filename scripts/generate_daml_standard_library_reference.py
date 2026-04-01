@@ -61,6 +61,11 @@ def docs_json_page_ref(path: Path, docs_json_path: Path) -> str:
     return relative.with_suffix("").as_posix()
 
 
+def docs_route_prefix(path: Path, docs_json_path: Path) -> str:
+    relative = path.resolve().relative_to(docs_json_path.resolve().parent)
+    return "/" + relative.as_posix().strip("/")
+
+
 def read_mdx_title(path: Path) -> str:
     in_frontmatter = False
     for line in path.read_text(encoding="utf-8").splitlines():
@@ -259,6 +264,8 @@ def main() -> int:
         args.source_name,
         "--version-filter",
         args.version_filter,
+        "--link-prefix",
+        docs_route_prefix(Path(args.output_dir).resolve(), Path(args.docs_json).resolve()),
     ]
     for version in args.version or []:
         command.extend(["--version", version])
