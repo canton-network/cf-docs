@@ -134,3 +134,27 @@ By default this writes:
 - `docs-main/docs.json`
 
 The generated nav is added under the top-level `Reference` dropdown as `Canton Protobuf History`, with only the overview page listed in nav. The per-endpoint pages are generated and linked from the overview page but left unlisted.
+
+### Generate the Wallet Gateway JSON-RPC reference
+
+This repo also includes a checked-in source config for versioned Wallet Gateway OpenRPC specs from `hyperledger-labs/splice-wallet-kernel` at `config/x2mdx/wallet-gateway-openrpc/source-artifacts.json`.
+The generator script clones or fetches a cached bare repo under `.internal/cache/x2mdx/wallet-gateway-openrpc/`, materializes local versioned OpenRPC JSON files, writes a local x2mdx manifest into `.internal/generated/x2mdx/wallet-gateway-openrpc/manifest.json`, and then renders MDX pages with the GitHub-pinned `x2mdx`.
+
+Run:
+
+```bash
+python3 scripts/generate_wallet_gateway_openrpc_reference.py
+```
+
+or:
+
+```bash
+npm run generate:wallet-gateway-openrpc-reference
+```
+
+By default this writes:
+
+- `docs-main/reference/wallet-gateway-json-rpc/`
+- `docs-main/docs.json`
+
+The generated nav is added under the top-level `Reference` dropdown as `Wallet Gateway JSON-RPC`, with the overview page plus one page per published OpenRPC surface.
