@@ -1,0 +1,274 @@
+---
+title: "DA.Logic"
+description: "Reference documentation for Daml module DA.Logic."
+---
+
+<a id="module-da-logic-59184"></a>
+
+# DA.Logic
+
+Logic -  Propositional calculus.
+
+## Module Snapshot
+
+<CardGroup cols={2}>
+<Card title="Lifecycle">
+Stable.
+</Card>
+<Card title="Notices">
+Status: `active`
+Introduced in: `3.4.9`
+Removed in: `-`
+Warnings: `0`
+Deprecations: `0`
+Deprecated since: `-`
+</Card>
+</CardGroup>
+
+## Data Types
+
+<a id="type-da-logic-types-formula-34794"></a>
+
+### `data Formula t`
+
+A `Formula t` is a formula in propositional calculus with
+propositions of type t.
+
+Constructors:
+
+<a id="constr-da-logic-types-proposition-6173"></a>
+- `Proposition t`
+`Proposition p` is the formula p
+<a id="constr-da-logic-types-negation-48969"></a>
+- `Negation (Formula t)`
+For a formula f, `Negation f` is ¬f
+<a id="constr-da-logic-types-conjunction-51637"></a>
+- `Conjunction [Formula t]`
+For formulas f1, ..., fn, `Conjunction [f1, ..., fn]` is f1 ∧ ... ∧ fn
+<a id="constr-da-logic-types-disjunction-65549"></a>
+- `Disjunction [Formula t]`
+For formulas f1, ..., fn, `Disjunction [f1, ..., fn]` is f1 ∨ ... ∨ fn
+
+Instances:
+
+- `instance Action Formula`
+- `instance Applicative Formula`
+- `instance Functor Formula`
+- `instance Eq t => Eq (Formula t)`
+- `instance Ord t => Ord (Formula t)`
+- `instance Show t => Show (Formula t)`
+
+## Functions
+
+<a id="function-da-logic-ampampamp-55265"></a>
+
+### `&&&`
+
+```daml
+&&& : Formula t -> Formula t -> Formula t
+```
+
+`&&&` is the ∧ operation of the boolean algebra of formulas, to
+be read as "and"
+
+<a id="function-da-logic-pipepipepipe-30747"></a>
+
+### `|||`
+
+```daml
+||| : Formula t -> Formula t -> Formula t
+```
+
+`|||` is the ∨ operation of the boolean algebra of formulas, to
+be read as "or"
+
+<a id="function-da-logic-true-31438"></a>
+
+### `true`
+
+```daml
+true : Formula t
+```
+
+`true` is the 1 element of the boolean algebra of formulas,
+represented as an empty conjunction.
+
+<a id="function-da-logic-false-99028"></a>
+
+### `false`
+
+```daml
+false : Formula t
+```
+
+`false` is the 0 element of the boolean algebra of formulas,
+represented as an empty disjunction.
+
+<a id="function-da-logic-neg-1597"></a>
+
+### `neg`
+
+```daml
+neg : Formula t -> Formula t
+```
+
+`neg` is the ¬ (negation) operation of the boolean algebra of
+formulas.
+
+<a id="function-da-logic-conj-82504"></a>
+
+### `conj`
+
+```daml
+conj : [Formula t] -> Formula t
+```
+
+`conj` is a list version of `&&&`, enabled by the associativity
+of ∧.
+
+<a id="function-da-logic-disj-92448"></a>
+
+### `disj`
+
+```daml
+disj : [Formula t] -> Formula t
+```
+
+`disj` is a list version of `|||`, enabled by the associativity
+of ∨.
+
+<a id="function-da-logic-frombool-36630"></a>
+
+### `fromBool`
+
+```daml
+fromBool : Bool -> Formula t
+```
+
+`fromBool` converts `True` to `true` and `False` to `false`.
+
+<a id="function-da-logic-tonnf-87354"></a>
+
+### `toNNF`
+
+```daml
+toNNF : Formula t -> Formula t
+```
+
+`toNNF` transforms a formula to negation normal form
+(see https://en.wikipedia.org/wiki/Negation_normal_form).
+
+<a id="function-da-logic-todnf-90852"></a>
+
+### `toDNF`
+
+```daml
+toDNF : Formula t -> Formula t
+```
+
+`toDNF` turns a formula into disjunctive normal form.
+(see https://en.wikipedia.org/wiki/Disjunctive_normal_form).
+
+<a id="function-da-logic-traverse-17816"></a>
+
+### `traverse`
+
+```daml
+traverse : Applicative f => (t -> f s) -> Formula t -> f (Formula s)
+```
+
+An implementation of `traverse` in the usual sense.
+
+<a id="function-da-logic-zipformulas-28999"></a>
+
+### `zipFormulas`
+
+```daml
+zipFormulas : Formula t -> Formula s -> Formula (t, s)
+```
+
+`zipFormulas` takes to formulas of same shape, meaning only
+propositions are different and zips them up.
+
+<a id="function-da-logic-substitute-65872"></a>
+
+### `substitute`
+
+```daml
+substitute : (t -> Optional Bool) -> Formula t -> Formula t
+```
+
+`substitute` takes a truth assignment and substitutes `True` or
+`False` into the respective places in a formula.
+
+<a id="function-da-logic-reduce-40218"></a>
+
+### `reduce`
+
+```daml
+reduce : Formula t -> Formula t
+```
+
+`reduce` reduces a formula as far as possible by:
+1. Removing any occurrences of `true` and `false`;
+2. Removing directly nested Conjunctions and Disjunctions;
+3. Going to negation normal form.
+
+<a id="function-da-logic-isbool-80820"></a>
+
+### `isBool`
+
+```daml
+isBool : Formula t -> Optional Bool
+```
+
+`isBool` attempts to convert a formula to a bool. It satisfies
+`isBool true == Some True` and `isBool false == Some False`.
+Otherwise, it returns `None`.
+
+<a id="function-da-logic-interpret-88386"></a>
+
+### `interpret`
+
+```daml
+interpret : (t -> Optional Bool) -> Formula t -> Either (Formula t) Bool
+```
+
+`interpret` is a version of `toBool` that first substitutes using
+a truth function and then reduces as far as possible.
+
+<a id="function-da-logic-substitutea-61566"></a>
+
+### `substituteA`
+
+```daml
+substituteA : Applicative f => (t -> f (Optional Bool)) -> Formula t -> f (Formula t)
+```
+
+`substituteA` is a version of `substitute` that allows for truth
+values to be obtained from an action.
+
+<a id="function-da-logic-interpreta-14928"></a>
+
+### `interpretA`
+
+```daml
+interpretA : Applicative f => (t -> f (Optional Bool)) -> Formula t -> f (Either (Formula t) Bool)
+```
+
+`interpretA` is a version of `interpret` that allows for truth
+values to be obtained form an action.
+
+## Orphan Typeclass Instances
+
+- `instance Eq t => Eq (Formula t)`
+
+- `instance Ord t => Ord (Formula t)`
+
+- `instance Show t => Show (Formula t)`
+
+- `instance Functor Formula`
+
+- `instance Applicative Formula`
+
+- `instance Action Formula`
