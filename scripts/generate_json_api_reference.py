@@ -13,6 +13,7 @@ DEFAULT_MANIFEST = REPO_ROOT / "config" / "x2mdx" / "ledger-api" / "manifest.jso
 DEFAULT_OUTPUT_FILE = REPO_ROOT / "docs-main" / "appdev" / "reference" / "json-api-reference.mdx"
 DEFAULT_DOCS_JSON = REPO_ROOT / "docs-main" / "docs.json"
 DEFAULT_SNAPSHOT_VERSIONS = ["3.4", "3.5"]
+DEFAULT_NAV_GROUP = "Ledger API Endpoints"
 
 
 def parse_args() -> argparse.Namespace:
@@ -52,7 +53,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--nav-group",
         action="append",
-        help="Mintlify group path to update. Repeat for nested groups.",
+        help="Mintlify group path to update. Repeat for nested groups. Defaults to 'Ledger API Endpoints'.",
     )
     parser.add_argument(
         "--version",
@@ -73,7 +74,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def build_command(args: argparse.Namespace) -> list[str]:
-    nav_groups = args.nav_group or []
+    nav_groups = args.nav_group if args.nav_group is not None else [DEFAULT_NAV_GROUP]
     versions = args.version or DEFAULT_SNAPSHOT_VERSIONS
 
     command = [

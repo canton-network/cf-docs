@@ -20,6 +20,7 @@ DEFAULT_CACHE_DIR = REPO_ROOT / ".internal" / "cache" / "x2mdx" / "ledger-api-as
 DEFAULT_MANIFEST = REPO_ROOT / ".internal" / "generated" / "x2mdx" / "ledger-api-asyncapi" / "manifest.json"
 DEFAULT_OUTPUT_FILE = REPO_ROOT / "docs-main" / "appdev" / "reference" / "json-api-asyncapi-reference.mdx"
 DEFAULT_DOCS_JSON = REPO_ROOT / "docs-main" / "docs.json"
+DEFAULT_NAV_GROUP = "Ledger API Endpoints"
 
 
 def parse_args() -> argparse.Namespace:
@@ -32,6 +33,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-file", default=str(DEFAULT_OUTPUT_FILE))
     parser.add_argument("--docs-json", default=str(DEFAULT_DOCS_JSON))
     parser.add_argument("--nav-dropdown", default="Reference")
+    parser.add_argument(
+        "--nav-group",
+        action="append",
+        help="Mintlify group path to update. Repeat for nested groups. Defaults to 'Ledger API Endpoints'.",
+    )
     parser.add_argument("--version", action="append", help="Explicit version to include. Repeat to limit generation.")
     parser.add_argument("--publish-version", help="Version whose websocket surface should be published.")
     parser.add_argument(
@@ -128,6 +134,7 @@ def write_manifest(
 
 
 def build_command(args: argparse.Namespace, manifest_path: Path, publish_version: str, versions: list[str]) -> list[str]:
+    nav_groups = args.nav_group if args.nav_group is not None else [DEFAULT_NAV_GROUP]
     command = [
         "x2mdx",
         "asyncapi",
@@ -153,6 +160,8 @@ def build_command(args: argparse.Namespace, manifest_path: Path, publish_version
         "--page-description",
         args.page_description,
     ]
+    for nav_group in nav_groups:
+        command.extend(["--nav-group", nav_group])
     for version in versions:
         command.extend(["--version", version])
     return command
