@@ -1,6 +1,135 @@
 ---
-title: PQS
-description: The Participant Query Store for efficient ledger queries.
+title: "PQS (Participant Query Store)"
+description: "Query ledger data with SQL using PQS, a PostgreSQL-based projection of Canton contract state."
 ---
 
-Content coming soon.
+PQS (Participant Query Store) subscribes to a validator's transaction stream and projects contract data into a PostgreSQL database. Your backend queries this database with standard SQL, enabling filtered queries, aggregations, joins, and full-text search that would be impractical through the Ledger API alone.
+
+## How PQS Works
+
+PQS runs as a sidecar service alongside a validator. It connects to the validator's transaction stream and maintains PostgreSQL tables that reflect the current ledger state.
+
+```mermaid
+flowchart LR
+    PART[Validator] -->|Transaction stream| PQS[PQS Service]
+    PQS -->|Writes| PG[(PostgreSQL)]
+    BACKEND[Your Backend] -->|SQL queries| PG
+```
+
+As contracts are created on the ledger, PQS inserts corresponding rows. When contracts are archived, PQS updates or removes the rows. Your SQL queries always reflect current ledger state, with a small propagation delay (typically milliseconds).
+
+## When to Use PQS
+
+PQS is the right choice when you need:
+
+- **Filtered queries across many contracts** -- "All licenses expiring this month" or "all assets owned by this party"
+- **Aggregations and reporting** -- Sums, counts, averages across contract data
+- **Complex joins** -- Combining data from multiple template types
+- **Full-text search** -- Searching contract fields by keyword
+- **A read path that does not load the Ledger API** -- PQS queries hit PostgreSQL, not the participant
+
+For simple queries ("get this specific contract by ID"), the Ledger API's active contract set query works fine without PQS.
+
+## Setup
+
+PQS requires a PostgreSQL database and a connection to a participant node's transaction stream.
+
+### In LocalNet
+
+The [cn-quickstart](https://github.com/digital-asset/cn-quickstart) LocalNet configuration includes PQS instances pre-configured for each validator. When you run `make start`, PQS starts automatically and begins projecting data.
+
+### Standalone Setup
+
+For a standalone deployment:
+
+1. Provision a PostgreSQL database (version 14 or later recommended)
+2. Configure PQS with the participant node's Ledger API address and authentication credentials
+3. Start the PQS service, which creates its schema on first run and begins streaming
+
+PQS configuration includes:
+
+- **Participant connection** -- Host, port, and authentication token for the Ledger API
+- **Database connection** -- PostgreSQL connection string
+- **Party filter** -- Which parties' contract data to project (reduces storage and processing)
+- **Template filter** -- Which templates to include (optional, projects all by default)
+
+## SQL Query Examples
+
+### Active Contracts
+
+Query all active contracts for a specific template:
+
+```sql
+SELECT *
+FROM active_contracts
+WHERE template_id = 'Licensing:License'
+  AND payload->>'owner' = 'Alice::1234...';
+```
+
+### Transaction History
+
+View recent transactions for a party:
+
+```sql
+SELECT event_id, template_id, event_type, effective_at
+FROM events
+WHERE witness_parties @> ARRAY['Alice::1234...']
+ORDER BY effective_at DESC
+LIMIT 50;
+```
+
+### Aggregations
+
+Count active contracts by template:
+
+```sql
+SELECT template_id, COUNT(*) as contract_count
+FROM active_contracts
+GROUP BY template_id
+ORDER BY contract_count DESC;
+```
+
+### Party Filtering
+
+Find all contracts visible to a specific party:
+
+```sql
+SELECT contract_id, template_id, payload
+FROM active_contracts
+WHERE stakeholders @> ARRAY['Alice::1234...'];
+```
+
+## Performance Optimization
+
+### Indexes
+
+Add indexes on columns you query frequently. PQS creates basic indexes on startup, but your application may benefit from additional ones:
+
+```sql
+-- Index on a payload field you filter by often
+CREATE INDEX idx_license_owner
+ON active_contracts ((payload->>'owner'))
+WHERE template_id = 'Licensing:License';
+```
+
+### Connection Pooling
+
+Use a connection pool (like HikariCP for Java or `pg-pool` for Node.js) between your backend and the PQS database. PQS itself maintains a separate connection to PostgreSQL for writes.
+
+### Query Patterns
+
+- Avoid `SELECT *` on large tables; specify the columns you need
+- Use `template_id` filters to narrow the dataset before applying payload filters
+- For time-range queries, add indexes on `effective_at` or `created_at` columns
+
+## PQS in cn-quickstart
+
+The cn-quickstart backend demonstrates PQS usage in the `repository/` and `pqs/` modules. The `Pqs` class generates SQL queries, and `DamlRepository` provides domain-specific methods that combine PQS reads with Ledger API writes.
+
+See [Backend Development](/docs-main/appdev/modules/m4-backend-dev) for detailed code examples.
+
+## Related Pages
+
+- [Backend development](/docs-main/appdev/modules/m4-backend-dev) -- Using PQS in a Java backend
+- [Ledger API](/docs-main/sdks-tools/api-reference/ledger-api) -- The underlying transaction stream that PQS consumes
+- [LocalNet](/docs-main/sdks-tools/development-tools/localnet) -- Pre-configured PQS instances for local development

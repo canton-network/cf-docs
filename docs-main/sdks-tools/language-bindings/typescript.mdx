@@ -1,6 +1,397 @@
 ---
-title: TypeScript/JavaScript
-description: TypeScript and JavaScript language bindings for Canton.
+title: "TypeScript/JavaScript Bindings"
+description: "Generate and use type-safe TypeScript bindings from your Daml contracts for Canton applications."
 ---
 
-Content coming soon.
+import DamlSdksToolsLanguageBindingsTypescriptL22 from "/snippets/daml-docs/sdks-tools_language-bindings_typescript_L22.mdx";
+
+
+The TypeScript/JavaScript bindings give you type-safe access to your Daml contracts from Node.js backends and browser-based frontends. You generate them from compiled DAR files using `dpm codegen-js`.
+
+## Code Generation
+
+Run code generation against your compiled DAR:
+
+```bash
+dpm codegen-js .daml/dist/my-project.dar -o generated-ts
+```
+
+This produces a directory of TypeScript files with types and helper functions that mirror your Daml templates, choices, and data types.
+
+## Generated Type Structure
+
+For a Daml template like this:
+
+<DamlSdksToolsLanguageBindingsTypescriptL22 />
+
+The code generator produces TypeScript interfaces and types:
+
+- **Template type** -- An interface matching the template's fields (`provider`, `user`, `description`, `expiresAt`)
+- **Choice types** -- Interfaces for each choice's parameters (e.g., `Renew` with a `newExpiry` field)
+- **Contract ID type** -- A typed wrapper around the contract identifier
+- **Companion objects** -- Metadata objects that encode template IDs, field names, and serialization logic
+
+## Usage Patterns
+
+### Creating Contracts
+
+Use the generated types when submitting `create` commands through the Ledger API:
+
+```typescript
+import { License } from "./generated-ts/Licensing/License";
+
+const createCommand = {
+  templateId: License.templateId,
+  payload: {
+    provider: providerParty,
+    user: userParty,
+    description: "Premium License",
+    expiresAt: "2025-12-31T00:00:00Z",
+  },
+};
+```
+
+### Exercising Choices
+
+Submit choice exercises with type-safe parameters:
+
+```typescript
+import { License } from "./generated-ts/Licensing/License";
+
+const exerciseCommand = {
+  templateId: License.templateId,
+  contractId: licenseContractId,
+  choice: "Renew",
+  argument: {
+    newExpiry: "2026-12-31T00:00:00Z",
+  },
+};
+```
+
+### Querying Active Contracts
+
+When reading from the Ledger API's active contract set, cast the returned payloads to your generated types for type safety:
+
+```typescript
+import { License } from "./generated-ts/Licensing/License";
+
+// After fetching active contracts from the Ledger API
+const licenses = activeContracts
+  .filter((c) => c.templateId === License.templateId)
+  .map((c) => c.payload as License);
+```
+
+## npm Package Setup
+
+The generated code is a standard TypeScript package. Add it to your project's dependencies:
+
+```json
+{
+  "dependencies": {
+    "@my-org/daml-types": "file:./generated-ts"
+  }
+}
+```
+
+Then import from it like any other package:
+
+```typescript
+import { License } from "@my-org/daml-types/Licensing/License";
+```
+
+If you are building a monorepo, you can configure your workspace to reference the generated directory directly.
+
+## JSON API vs gRPC
+
+The TypeScript bindings work with both the JSON API (HTTP) and gRPC API:
+
+- **JSON API** -- Simpler to use from TypeScript. Send HTTP requests with JSON payloads matching the generated types. Good for prototyping and lower-throughput use cases.
+- **gRPC** -- Use the `@grpc/grpc-js` package for higher throughput. Requires Protobuf serialization but provides streaming and bidirectional communication.
+
+In the [cn-quickstart](https://github.com/digital-asset/cn-quickstart) project, the backend mediates all ledger access, so the React frontend does not use these bindings directly. If your architecture has the frontend submitting commands to the Ledger API, the TypeScript bindings become essential.
+
+## Reference Documentation
+
+For the full API surface of the generated types, consult the TypeDoc output produced during code generation, or refer to the [Canton 3.x SDK documentation](https://docs.digitalasset.com).
+
+## Related Pages
+
+- [dpm codegen-js reference](/docs-main/sdks-tools/cli-tools/dpm) -- Command options and flags
+- [Java bindings](/docs-main/sdks-tools/language-bindings/java) -- Alternative bindings for JVM backends
+- [Frontend development](/docs-main/appdev/modules/m4-frontend-dev) -- Building frontends for Canton applications
+
+{/* COPIED_START source="docs-website:docs/replicated/daml/3.4/sdk/component-howtos/application-development/daml-codegen-javascript.rst" hash="64480016" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was copied from existing reviewed documentation.
+**Source:** `docs-website:docs/replicated/daml/3.4/sdk/component-howtos/application-development/daml-codegen-javascript.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+# Daml Codegen for JavaScript
+
+Use the Daml Codegen for JavaScript (`dpm codegen-js`) to generate JavaScript/TypeScript code representing all Daml data types defined in a Daml Archive (.dar) file.
+
+The generated code makes it easier to construct types and work with JSON when using the JSON Ledger API.
+
+See Get started with Canton and the JSON Ledger API for details on how to use the generated code to interact with JSON Ledger API. See the sections below for guidance on setting up and invoking the codegen.
+
+## Install
+
+Install the Daml Codegen for JavaScript by installing DPM.
+
+## Configure
+
+To configure the Daml Codegen, choose one of the two following methods:
+
+- **Command line configuration**: Specify all settings directly in the command line.
+- **Project file configuration**: Define all settings in the `daml.yaml` file.
+
+### Command line configuration
+
+To view all available command line configuration options for Daml Codegen for JavaScript, run `dpm codegen-js --help` in your terminal:
+
+``` none
+DAR-FILES                DAR files to generate TypeScript bindings for
+-o DIR                   Output directory for the generated packages
+-s SCOPE                 The NPM scope name for the generated packages;
+                         defaults to daml.js
+-h,--help                Show this help text
+```
+
+### Project file configuration
+
+Specify the above settings in the `codegen` element of the Daml project file `daml.yaml`.
+
+Here is an example:
+
+    sdk-version: 3.4.9
+    name: quickstart
+    source: daml
+    init-script: Main:initialize
+    parties:
+      - Alice
+      - Bob
+      - USD_Bank
+      - EUR_Bank
+    version: 0.0.1
+    exposed-modules:
+      - Main
+    dependencies:
+      - daml-prim
+      - daml-stdlib
+    codegen:
+      js:
+        output-directory: ui/daml.js
+        npm-scope: daml.js
+
+## Operate
+
+Run the Daml Codegen using project file configuration with:
+
+    $ dpm codegen-js
+
+or using command line configuration with:
+
+    $ dpm codegen-js ./.daml/dist/quickstart-0.0.1.dar -o ui/daml.js -s daml.js
+
+## References
+
+### Generated JavaScript/TypeScript code
+
+#### Daml primitives to TypeScript
+
+Daml built-in types are translated to the following equivalent types in TypeScript. The TypeScript equivalents of the primitive Daml types are provided by the [@daml/types](/typedocs/3.3/daml-types/index.html).
+
+**Interfaces**:
+
+- interface Template
+- interface Choice
+
+**Types**:
+
+| Daml           | TypeScript       | TypeScript definition                                     |
+|----------------|------------------|-----------------------------------------------------------|
+| `()`           | `Unit`           | `{}`                                                      |
+| `Bool`         | `Bool`           | `boolean`                                                 |
+| `Int`          | `Int`            | `string`                                                  |
+| `Decimal`      | `Decimal`        | `string`                                                  |
+| `Numeric ν`    | `Numeric`        | `string`                                                  |
+| `Text`         | `Text`           | `string`                                                  |
+| `Time`         | `Time`           | `string`                                                  |
+| `Party`        | `Party`          | `string`                                                  |
+| `[τ]`          | `List<τ>`        | `τ[]`                                                     |
+| `Date`         | `Date`           | `string`                                                  |
+| `ContractId τ` | `ContractId<τ>`  | `string`                                                  |
+| `Optional τ`   | `Optional<τ>`    | `null \| (null extends τ ? [] \| [Exclude<τ, null>] : τ)` |
+| `TextMap τ`    | `TextMap<τ>`     | `{ [key: string]: τ }`                                    |
+| `(τ₁, τ₂)`     | `Tuple₂<τ₁, τ₂>` | `{_1: τ₁; _2: τ₂}`                                        |
+
+<Note>
+The types given in the **TypeScript** column are defined in @daml/types.
+</Note>
+
+<Note>
+For *n*-tuples where *n ≥ 3*, representation is analogous with the pair case (the last line of the table).
+</Note>
+
+<Note>
+The TypeScript types `Time`, `Decimal`, `Numeric` and `Int` all alias to `string`. These choices relate to the avoidance of precision loss under serialization over the JSON Ledger API.
+</Note>
+
+<Note>
+The TypeScript definition of type Optional in the above table might look complicated. It accounts for differences in the encoding of optional values when nested versus when they are not (i.e. "top-level"). For example, `null` and `"foo"` are two possible values of Optional whereas, `[]` and `["foo"]` are two possible values of type `Optional<Optional<Text>>` (`null` is another possible value, `[null]` is **not**).
+</Note>
+
+#### Generated TypeScript mappings
+
+The mappings from user-defined data types in Daml to TypeScript are best explained by example.
+
+##### Records (a.k.a. product types)
+
+In Daml, we might model a person like this.
+
+```daml
+data Person =
+  Person with
+    name: Text
+    party: Party
+    age: Int
+```
+
+Given the above definition, the generated TypeScript code will be as follows.
+
+``` typescript
+type Person = {
+  name: string;
+  party: damlTypes.Party;
+  age: damlTypes.Int;
+}
+```
+
+##### Variants (a.k.a. sum types)
+
+This is a Daml type for a language of additive expressions.
+
+```daml
+data Expr a =
+    Lit a
+  | Var Text
+  | Add (Expr a, Expr a)
+```
+
+In TypeScript, it is represented as a [discriminated union](https://www.typescriptlang.org/docs/handbook/typescript-in-5-minutes-func.html#discriminated-unions).
+
+``` typescript
+type Expr<a> =
+  |  { tag: 'Lit'; value: a }
+  |  { tag: 'Var'; value: string }
+  |  { tag: 'Add'; value: Tuple2<Expr<a>, Expr<a>> }
+```
+
+##### Sum of products
+
+Let's slightly modify the `Expr a` type of the last section into the following.
+
+```daml
+data Expr a =
+    Lit a
+  | Var Text
+  | Add {lhs: Expr a, rhs: Expr a}
+```
+
+Compared to the earlier definition, the `Add` case is now in terms of a record with fields `lhs` and `rhs`. This renders in TypeScript like so.
+
+``` typescript
+type Expr<a> =
+  |  { tag: 'Lit'; value: a }
+  |  { tag: 'Var'; value: string }
+  |  { tag: 'Add'; value: Expr.Add<a> }
+
+namespace Expr {
+  type Add<a> = {
+    lhs: Expr<a>;
+    rhs: Expr<a>;
+  }
+}
+```
+
+Note how the definition of the `Add` case has given rise to a record type definition `Expr.Add`.
+
+##### Enums
+
+Given a Daml enumeration like this,
+
+```daml
+data Color = Red | Blue | Yellow
+```
+
+the generated TypeScript will consist of a type declaration and the definition of an associated companion object.
+
+``` typescript
+type Color = 'Red' | 'Blue' | 'Yellow'
+
+const Color:
+  damlTypes.Serializable<Color> & {
+  }
+& { readonly keys: Color[] } & { readonly [e in Color]: e };
+```
+
+##### Templates and Choices
+
+Here is a Daml template of a basic 'IOU' contract.
+
+```daml
+template Iou
+  with
+    issuer: Party
+    owner: Party
+    currency: Text
+    amount: Decimal
+  where
+    signatory issuer
+    choice Transfer: ContractId Iou
+      with
+        newOwner: Party
+      controller owner
+      do
+        create this with owner = newOwner
+```
+
+The `dpm codegen-js` command generates types for each of the choices defined on the template as well as the template itself.
+
+``` typescript
+type Transfer = {
+  newOwner: damlTypes.Party;
+}
+
+type Iou = {
+  issuer: damlTypes.Party;
+  owner: damlTypes.Party;
+  currency: string;
+  amount: damlTypes.Numeric;
+}
+```
+
+Each template results in the generation of an interface and a companion object. Here, is a schematic of the one generated from the `Iou` template[^1],[^2].
+
+``` typescript
+interface IouInterface {
+  Archive: damlTypes.Choice<Iou, DA.Internal.Template.Archive, {}, undefined> & damlTypes.ChoiceFrom<damlTypes.Template<Iou, undefined>>;
+  Transfer: damlTypes.Choice<Iou, Transfer, damlTypes.ContractId<Iou>, undefined> & damlTypes.ChoiceFrom<damlTypes.Template<Iou, undefined>>;
+}
+
+const Iou:
+  damlTypes.Template<Iou, undefined, '<template_id>'> &
+  damlTypes.ToInterface<Iou, never> &
+  IouInterface;
+```
+
+See the Use contracts and transactions in JavaScript for details on how to use generated code to interact with the JSON Ledger API.
+
+[^1]: The `undefined` type parameter captures the fact that `Iou` has no contract key.
+
+[^2]: The `never` type parameter captures the fact that `Iou` does not implement directly any interface.
+
+{/* COPIED_END */}
+
