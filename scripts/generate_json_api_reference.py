@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -10,7 +11,8 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_MANIFEST = REPO_ROOT / "config" / "x2mdx" / "ledger-api" / "manifest.json"
-DEFAULT_OUTPUT_FILE = REPO_ROOT / "docs-main" / "appdev" / "reference" / "json-api-reference.mdx"
+DEFAULT_OUTPUT_FILE = REPO_ROOT / "docs-main" / "reference" / "json-api-reference.mdx"
+LEGACY_OUTPUT_FILE = REPO_ROOT / "docs-main" / "appdev" / "reference" / "json-api-reference.mdx"
 DEFAULT_DOCS_JSON = REPO_ROOT / "docs-main" / "docs.json"
 DEFAULT_SNAPSHOT_VERSIONS = ["3.4", "3.5"]
 DEFAULT_NAV_GROUP = "Ledger API Endpoints"
@@ -108,11 +110,64 @@ def build_command(args: argparse.Namespace) -> list[str]:
     return command
 
 
+def load_json(path: Path) -> dict[str, object]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError(f"Expected JSON object in {path}")
+    return payload
+
+
+def docs_json_page_ref(path: Path, docs_json_path: Path) -> str:
+    relative = path.resolve().relative_to(docs_json_path.resolve().parent)
+    if relative.suffix != ".mdx":
+        raise ValueError(f"Expected MDX file under docs root, got: {path}")
+    return relative.with_suffix("").as_posix()
+
+
+def prune_page_ref(node: object, page_ref: str) -> object | None:
+    if isinstance(node, list):
+        items: list[object] = []
+        for item in node:
+            pruned = prune_page_ref(item, page_ref)
+            if pruned is not None:
+                items.append(pruned)
+        return items
+    if isinstance(node, dict):
+        updated = {key: prune_page_ref(value, page_ref) for key, value in node.items()}
+        if updated.get("group") and not updated.get("pages") and not updated.get("groups"):
+            return None
+        return updated
+    if isinstance(node, str) and node == page_ref:
+        return None
+    return node
+
+
+def cleanup_legacy_docs_ref(*, docs_json_path: Path) -> None:
+    legacy_ref = docs_json_page_ref(LEGACY_OUTPUT_FILE.resolve(), docs_json_path)
+    payload = load_json(docs_json_path)
+    cleaned = prune_page_ref(payload, legacy_ref)
+    if not isinstance(cleaned, dict):
+        raise ValueError(f"Expected cleaned docs.json object for {docs_json_path}")
+    docs_json_path.write_text(json.dumps(cleaned, indent=2) + "\n", encoding="utf-8")
+
+
+def remove_legacy_output(*, output_file: Path) -> None:
+    legacy_output = LEGACY_OUTPUT_FILE.resolve()
+    if output_file == legacy_output:
+        return
+    if legacy_output.exists():
+        legacy_output.unlink()
+        print(f"Removed legacy output: {legacy_output}")
+
+
 def main() -> int:
     args = parse_args()
     command = build_command(args)
     print("Running:", " ".join(command))
     completed = subprocess.run(command, cwd=REPO_ROOT)
+    if completed.returncode == 0:
+        cleanup_legacy_docs_ref(docs_json_path=Path(args.docs_json).resolve())
+        remove_legacy_output(output_file=Path(args.output_file).resolve())
     return completed.returncode
 
 
