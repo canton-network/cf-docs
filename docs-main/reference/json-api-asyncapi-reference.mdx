@@ -1,0 +1,332 @@
+---
+title: "JSON API AsyncAPI Reference"
+description: "JSON Ledger API WebSocket AsyncAPI reference and version history."
+---
+
+Generated from AsyncAPI snapshots for `JSON Ledger API WebSocket endpoints`.
+
+- Publish version: `3.5`
+- Versions compared: `3.4`, `3.5`
+- Source: `docs.digitalasset.com JSON Ledger API AsyncAPI fixtures`
+- Version filter: `published docs major versions`
+- Latest source path: `published/json-ledger-api/asyncapi.yaml`
+- AsyncAPI version: `2.6.0`
+
+This specification version fixes the API inconsistencies where certain fields marked as required in the spec are in fact optional.
+If you use code generation tool based on this file, you might need to adjust the existing application code to handle those fields as optional.
+If you do not want to change your client code, continue using the OpenAPI specification for the latest Canton 3.4 patch release.
+MINIMUM_CANTON_VERSION=3.5.0
+
+## Version Change Timeline
+
+| Version | Active Channels | Added | Changed | Removed |
+| --- | --- | --- | --- | --- |
+| `3.4` | 5 | 0 | 0 | 0 |
+| `3.5` | 5 | 0 | 5 | 0 |
+
+## Channel Diff Summary
+
+| Channel | Actions | Introduced | Changes | Removed |
+| --- | --- | --- | --- | --- |
+| [`/v2/commands/completions`](#channel-v2-commands-completions) | `publish`, `subscribe` | `3.4` | `3.5`: channel description updated; publish description updated; subscribe description updated | - |
+| [`/v2/state/active-contracts`](#channel-v2-state-active-contracts) | `publish`, `subscribe` | `3.4` | `3.5`: channel description updated; publish description updated; publish required fields removed: `eventFormat`; subscribe description updated | - |
+| [`/v2/updates`](#channel-v2-updates) | `publish`, `subscribe` | `3.4` | `3.5`: channel description updated; publish description updated; publish required fields added: `beginExclusive`; publish required fields removed: `updateFormat`; subscribe description updated | - |
+| [`/v2/updates/flats`](#channel-v2-updates-flats) | `publish`, `subscribe` | `3.4` | `3.5`: publish description updated; publish required fields added: `beginExclusive`; publish required fields removed: `updateFormat`; subscribe description updated | - |
+| [`/v2/updates/trees`](#channel-v2-updates-trees) | `publish`, `subscribe` | `3.4` | `3.5`: publish description updated; publish required fields added: `beginExclusive`; publish required fields removed: `updateFormat`; subscribe description updated | - |
+
+## Channels
+
+<a id="channel-v2-commands-completions"></a>
+
+### /v2/commands/completions
+
+- Actions: `publish`, `subscribe`
+- Introduced: `3.4`
+- Changed in: `3.5`
+
+Subscribe to command completion events.
+
+**Version Changes**
+
+| Version | Changes |
+| --- | --- |
+| `3.5` | channel description updated; publish description updated; subscribe description updated |
+
+**Publish**
+
+- Operation ID: `sendV2CommandsCompletions`
+- Message: `CompletionStreamRequest`
+- Content type: `application/json`
+
+| Payload Schema | Required Fields |
+| --- | --- |
+| `object` | `parties` |
+
+**Message Example**
+
+```json
+{
+  "parties": [
+    "<string>"
+  ]
+}
+```
+
+**Subscribe**
+
+- Operation ID: `onV2CommandsCompletions`
+- Message: `Either_JsCantonError_CompletionStreamResponse`
+- Content type: `application/json`
+
+| Payload Schema | Required Fields |
+| --- | --- |
+| `oneOf` | - |
+
+**Message Example**
+
+```json
+{
+  "completionResponse": {
+    "Completion": {
+      "value": {
+        "commandId": "<string>",
+        "userId": "<string>",
+        "actAs": [
+          "<string>"
+        ],
+        "offset": "<integer>",
+        "synchronizerTime": "<object>"
+      }
+    }
+  }
+}
+```
+
+<a id="channel-v2-state-active-contracts"></a>
+
+### /v2/state/active-contracts
+
+- Actions: `publish`, `subscribe`
+- Introduced: `3.4`
+- Changed in: `3.5`
+
+Returns a stream of the snapshot of the active contracts and incomplete (un)assignments at a ledger offset.
+Once the stream of GetActiveContractsResponses completes,
+the client SHOULD begin streaming updates from the update service,
+starting at the GetActiveContractsRequest.active_at_offset specified in this request.
+Clients SHOULD NOT assume that the set of active contracts they receive reflects the state at the ledger end.
+
+**Version Changes**
+
+| Version | Changes |
+| --- | --- |
+| `3.5` | channel description updated; publish description updated; publish required fields removed: `eventFormat`; subscribe description updated |
+
+**Publish**
+
+- Operation ID: `sendV2StateActive-contracts`
+- Message: `GetActiveContractsRequest`
+- Content type: `application/json`
+
+| Payload Schema | Required Fields |
+| --- | --- |
+| `object` | `activeAtOffset` |
+
+**Message Example**
+
+```json
+{
+  "activeAtOffset": "<integer>"
+}
+```
+
+**Subscribe**
+
+- Operation ID: `onV2StateActive-contracts`
+- Message: `Either_JsCantonError_JsGetActiveContractsResponse`
+- Content type: `application/json`
+
+| Payload Schema | Required Fields |
+| --- | --- |
+| `oneOf` | - |
+
+**Message Example**
+
+```json
+{
+  "code": "<string>",
+  "cause": "<string>",
+  "context": {},
+  "errorCategory": "<integer>"
+}
+```
+
+<a id="channel-v2-updates"></a>
+
+### /v2/updates
+
+- Actions: `publish`, `subscribe`
+- Introduced: `3.4`
+- Changed in: `3.5`
+
+Read the ledger's filtered update stream for the specified contents and filters.
+It returns the event types in accordance with the stream contents selected. Also the selection criteria
+for individual events depends on the transaction shape chosen.
+
+- ACS delta: a requesting party must be a stakeholder of an event for it to be included.
+- ledger effects: a requesting party must be a witness of an event for it to be included.
+
+**Version Changes**
+
+| Version | Changes |
+| --- | --- |
+| `3.5` | channel description updated; publish description updated; publish required fields added: `beginExclusive`; publish required fields removed: `updateFormat`; subscribe description updated |
+
+**Publish**
+
+- Operation ID: `sendV2Updates`
+- Message: `GetUpdatesRequest`
+- Content type: `application/json`
+
+| Payload Schema | Required Fields |
+| --- | --- |
+| `object` | `beginExclusive` |
+
+**Message Example**
+
+```json
+{
+  "beginExclusive": "<integer>"
+}
+```
+
+**Subscribe**
+
+- Operation ID: `onV2Updates`
+- Message: `Either_JsCantonError_JsGetUpdatesResponse`
+- Content type: `application/json`
+
+| Payload Schema | Required Fields |
+| --- | --- |
+| `oneOf` | - |
+
+**Message Example**
+
+```json
+{
+  "code": "<string>",
+  "cause": "<string>",
+  "context": {},
+  "errorCategory": "<integer>"
+}
+```
+
+<a id="channel-v2-updates-flats"></a>
+
+### /v2/updates/flats
+
+- Actions: `publish`, `subscribe`
+- Introduced: `3.4`
+- Changed in: `3.5`
+
+Get flat transactions update stream. Provided for backwards compatibility, it will be removed in the Canton version 3.5.0, use v2/updates instead.
+
+**Version Changes**
+
+| Version | Changes |
+| --- | --- |
+| `3.5` | publish description updated; publish required fields added: `beginExclusive`; publish required fields removed: `updateFormat`; subscribe description updated |
+
+**Publish**
+
+- Operation ID: `sendV2UpdatesFlats`
+- Message: `GetUpdatesRequest`
+- Content type: `application/json`
+
+| Payload Schema | Required Fields |
+| --- | --- |
+| `object` | `beginExclusive` |
+
+**Message Example**
+
+```json
+{
+  "beginExclusive": "<integer>"
+}
+```
+
+**Subscribe**
+
+- Operation ID: `onV2UpdatesFlats`
+- Message: `Either_JsCantonError_JsGetUpdatesResponse`
+- Content type: `application/json`
+
+| Payload Schema | Required Fields |
+| --- | --- |
+| `oneOf` | - |
+
+**Message Example**
+
+```json
+{
+  "code": "<string>",
+  "cause": "<string>",
+  "context": {},
+  "errorCategory": "<integer>"
+}
+```
+
+<a id="channel-v2-updates-trees"></a>
+
+### /v2/updates/trees
+
+- Actions: `publish`, `subscribe`
+- Introduced: `3.4`
+- Changed in: `3.5`
+
+Get update transactions tree stream. Provided for backwards compatibility, it will be removed in the Canton version 3.5.0, use v2/updates instead.
+
+**Version Changes**
+
+| Version | Changes |
+| --- | --- |
+| `3.5` | publish description updated; publish required fields added: `beginExclusive`; publish required fields removed: `updateFormat`; subscribe description updated |
+
+**Publish**
+
+- Operation ID: `sendV2UpdatesTrees`
+- Message: `GetUpdatesRequest`
+- Content type: `application/json`
+
+| Payload Schema | Required Fields |
+| --- | --- |
+| `object` | `beginExclusive` |
+
+**Message Example**
+
+```json
+{
+  "beginExclusive": "<integer>"
+}
+```
+
+**Subscribe**
+
+- Operation ID: `onV2UpdatesTrees`
+- Message: `Either_JsCantonError_JsGetUpdateTreesResponse`
+- Content type: `application/json`
+
+| Payload Schema | Required Fields |
+| --- | --- |
+| `oneOf` | - |
+
+**Message Example**
+
+```json
+{
+  "code": "<string>",
+  "cause": "<string>",
+  "context": {},
+  "errorCategory": "<integer>"
+}
+```
