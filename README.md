@@ -80,7 +80,7 @@ npm run generate:json-api-reference
 
 By default this writes:
 
-- `docs-main/appdev/reference/json-api-reference.mdx`
+- `docs-main/reference/json-api-reference.mdx`
 - `docs-main/docs.json`
 
 The generated page is placed directly under the top-level `Reference` dropdown in `docs-main/docs.json`, outside the `MainNet`/`TestNet`/`DevNet` versioned navigation branches.
