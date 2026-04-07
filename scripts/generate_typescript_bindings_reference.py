@@ -17,7 +17,8 @@ DEFAULT_SOURCE_CONFIG = REPO_ROOT / "config" / "x2mdx" / "typescript-bindings" /
 DEFAULT_CACHE_DIR = REPO_ROOT / ".internal" / "cache" / "x2mdx" / "typescript-bindings"
 DEFAULT_MANIFEST = REPO_ROOT / ".internal" / "generated" / "x2mdx" / "typescript-bindings" / "manifest.json"
 DEFAULT_TYPEDOC_DIR = REPO_ROOT / ".internal" / "generated" / "x2mdx" / "typescript-bindings" / "typedoc"
-DEFAULT_OUTPUT_FILE = REPO_ROOT / "docs-main" / "sdks-tools" / "language-bindings" / "typescript.mdx"
+DEFAULT_OUTPUT_FILE = REPO_ROOT / "docs-main" / "reference" / "typescript.mdx"
+LEGACY_OUTPUT_FILE = REPO_ROOT / "docs-main" / "sdks-tools" / "language-bindings" / "typescript.mdx"
 DEFAULT_DOCS_JSON = REPO_ROOT / "docs-main" / "docs.json"
 DEFAULT_NAV_GROUP = "Daml TypeScript Bindings"
 
@@ -119,6 +120,15 @@ def update_docs_navigation(
     docs_json_path.write_text(json.dumps(docs, indent=2) + "\n", encoding="utf-8")
     print(f"Updated docs navigation: {docs_json_path}")
     return docs_json_path
+
+
+def remove_legacy_output(*, output_file: Path) -> None:
+    legacy_output = LEGACY_OUTPUT_FILE.resolve()
+    if output_file == legacy_output:
+        return
+    if legacy_output.exists():
+        legacy_output.unlink()
+        print(f"Removed legacy output: {legacy_output}")
 
 
 def run(command: list[str], *, cwd: Path, capture_output: bool = False) -> subprocess.CompletedProcess[str]:
@@ -313,6 +323,7 @@ def main() -> int:
     if completed.returncode != 0:
         return completed.returncode
 
+    remove_legacy_output(output_file=Path(args.output_file).resolve())
     update_docs_navigation(
         docs_json_path=Path(args.docs_json).resolve(),
         dropdown_label=args.nav_dropdown,

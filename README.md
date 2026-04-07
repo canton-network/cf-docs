@@ -154,7 +154,7 @@ npm run generate:typescript-bindings-reference
 
 By default this writes:
 
-- `docs-main/sdks-tools/language-bindings/typescript.mdx`
+- `docs-main/reference/typescript.mdx`
 - `docs-main/docs.json`
 
 The generator also adds that page under the top-level `Reference` dropdown as `Daml TypeScript Bindings -> TypeScript`.
