@@ -1,6 +1,73 @@
 ---
 title: "Initial Validation"
-description: "Performing initial validation after deploying a validator"
+description: "Validating your Global Synchronizer node after deployment"
 ---
 
-Content coming soon.
+After deploying your validator or Super Validator node, run through the following checks to confirm that the node is operational and correctly connected to the Global Synchronizer.
+
+## Check node health
+
+Verify that all pods are running and healthy:
+
+```bash
+kubectl get pods -n <your-namespace>
+```
+
+All deployments should show `1/1` ready containers with a `Running` status. If any pods are in `CrashLoopBackOff` or `Error` state, inspect the logs for that pod before proceeding.
+
+## Verify synchronizer connectivity
+
+Confirm that the participant has connected to the global synchronizer. Check the participant logs for a successful connection message:
+
+```bash
+kubectl logs -n <your-namespace> <participant-pod> | grep -i "connected to synchronizer"
+```
+
+If the participant cannot connect, verify your network configuration, firewall rules, and that the sequencer URL is correctly set in your Helm values.
+
+## Confirm party hosting
+
+Verify that your validator party is correctly hosted on the participant. You can check this through the validator app logs, which should show a successful initialization and party hosting confirmation.
+
+For SV nodes, confirm that the `svPartyId` is registered and visible in the DSO info tab of the SV web UI.
+
+## Verify wallet UI access
+
+Open the wallet UI at your configured hostname (e.g., `https://wallet.validator.YOUR_HOSTNAME`) and log in with your validator user account. Confirm that:
+
+- The wallet loads without errors
+- The CC balance is visible (it will be zero for a freshly deployed node)
+- The wallet can display transaction history
+
+For SV nodes, also verify access to the SV web UI and confirm that the Governance and Validator Onboarding tabs are accessible.
+
+## Check metrics endpoints
+
+If you have monitoring configured, verify that metrics are being exported:
+
+```bash
+curl -s http://<participant-pod-ip>:10013/metrics | head -20
+```
+
+The response should contain Prometheus-format metrics. Confirm that your monitoring stack (Prometheus, Grafana, or equivalent) is receiving and displaying these metrics.
+
+## Test basic operations
+
+For a validator node, confirm that you can purchase traffic using CC. If auto-top-up is configured, verify that the traffic balance is increasing as expected.
+
+For an SV node, confirm that:
+
+- Status reports are being sent (check the SV app logs)
+- The node appears in the DSO info tab of the Scan UI
+- The node is participating in CometBFT consensus (check CometBFT logs for block signing activity)
+
+## Back up node identities
+
+Once your node is operational, immediately back up your node identities. For SV nodes:
+
+```bash
+curl "https://sv.sv.YOUR_HOSTNAME/api/sv/v0/admin/domain/identities-dump" \
+  -H "authorization: Bearer <token>"
+```
+
+Store the identities backup in a secure location such as a secret manager. This backup contains private keys and is required for disaster recovery.
