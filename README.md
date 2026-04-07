@@ -85,6 +85,30 @@ By default this writes:
 
 The generated page is placed directly under the top-level `Reference` dropdown in `docs-main/docs.json`, outside the `MainNet`/`TestNet`/`DevNet` versioned navigation branches.
 
+### Generate the JSON API AsyncAPI reference
+
+This repo also includes a checked-in source config for the published JSON Ledger API AsyncAPI docs pages under `config/x2mdx/ledger-api-asyncapi/source-artifacts.json`.
+The generator script fetches the published `3.4` and `3.5` AsyncAPI HTML pages from `docs.digitalasset.com`, extracts the embedded YAML into `.internal/cache/x2mdx/ledger-api-asyncapi/`, writes a local x2mdx manifest into `.internal/generated/x2mdx/ledger-api-asyncapi/manifest.json`, and then renders the MDX page with the GitHub-pinned `x2mdx`.
+
+Run:
+
+```bash
+python3 scripts/generate_json_api_asyncapi_reference.py
+```
+
+or:
+
+```bash
+npm run generate:json-api-asyncapi-reference
+```
+
+By default this writes:
+
+- `docs-main/reference/json-api-asyncapi-reference.mdx`
+- `docs-main/docs.json`
+
+The generated page is placed directly under the top-level `Reference` dropdown in `docs-main/docs.json`.
+
 ### Generate the Ledger bindings API reference
 
 This repo also includes a checked-in source config for the published Java/Scala bindings Javadoc/Scaladoc jars at `config/x2mdx/ledger-bindings/source-artifacts.json`.
