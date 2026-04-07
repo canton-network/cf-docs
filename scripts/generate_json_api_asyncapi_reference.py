@@ -175,6 +175,46 @@ def cleanup_legacy_docs_ref(*, docs_json_path: Path) -> None:
     docs_json_path.write_text(json.dumps(cleaned, indent=2) + "\n", encoding="utf-8")
 
 
+def normalize_reference_dropdown(*, docs_json_path: Path) -> None:
+    payload = load_json(docs_json_path)
+    navigation = payload.get("navigation")
+    if not isinstance(navigation, dict):
+        raise ValueError(f"Expected docs.json navigation object in {docs_json_path}")
+    dropdowns = navigation.get("dropdowns")
+    if not isinstance(dropdowns, list):
+        raise ValueError(f"Expected docs.json navigation.dropdowns list in {docs_json_path}")
+
+    reference_dropdown = next(
+        (item for item in dropdowns if isinstance(item, dict) and item.get("dropdown") == "Reference"),
+        None,
+    )
+    if reference_dropdown is None:
+        raise ValueError(f"Reference dropdown not found in {docs_json_path}")
+
+    pages = reference_dropdown.get("pages")
+    if not isinstance(pages, list):
+        pages = []
+        reference_dropdown["pages"] = pages
+
+    groups = reference_dropdown.get("groups")
+    if isinstance(groups, list):
+        endpoint_group = next(
+            (item for item in groups if isinstance(item, dict) and item.get("group") == DEFAULT_NAV_GROUP),
+            None,
+        )
+        if endpoint_group is not None:
+            groups = [item for item in groups if item is not endpoint_group]
+            pages = [item for item in pages if not (isinstance(item, dict) and item.get("group") == DEFAULT_NAV_GROUP)]
+            pages.insert(0, endpoint_group)
+            reference_dropdown["pages"] = pages
+            if groups:
+                reference_dropdown["groups"] = groups
+            else:
+                reference_dropdown.pop("groups", None)
+
+    docs_json_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
 def build_command(args: argparse.Namespace, manifest_path: Path, publish_version: str, versions: list[str]) -> list[str]:
     nav_groups = args.nav_group if args.nav_group is not None else [DEFAULT_NAV_GROUP]
     command = [
@@ -273,6 +313,7 @@ def main() -> int:
     completed = subprocess.run(command, cwd=REPO_ROOT)
     if completed.returncode == 0:
         cleanup_legacy_docs_ref(docs_json_path=Path(args.docs_json).resolve())
+        normalize_reference_dropdown(docs_json_path=Path(args.docs_json).resolve())
         remove_legacy_output(output_file=Path(args.output_file).resolve())
     return completed.returncode
 
