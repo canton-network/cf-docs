@@ -4,17 +4,18 @@ let
   python = pkgs.python311;
   x2mdx = python.pkgs.buildPythonApplication rec {
     pname = "x2mdx";
-    version = "0.1.0+git-739a570";
+    version = "0.1.0+git-6db616f";
     pyproject = true;
     src = builtins.fetchGit {
       url = "https://github.com/danielporterda/x2mdx.git";
-      rev = "739a5701b09fcba64670a0f147e8f56589fbc474";
+      rev = "6db616fcc48fdf1e2a15ad0972a07553a1dea7c4";
     };
     nativeBuildInputs = with python.pkgs; [
       setuptools
       wheel
     ];
     propagatedBuildInputs = with python.pkgs; [
+      jinja2
       protobuf
       pyyaml
     ];
