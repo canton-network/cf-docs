@@ -85,6 +85,30 @@ By default this writes:
 
 The generated page is placed directly under the top-level `Reference` dropdown in `docs-main/docs.json`, outside the `MainNet`/`TestNet`/`DevNet` versioned navigation branches.
 
+### Generate the JSON API AsyncAPI reference
+
+This repo also includes a checked-in source config for the published JSON Ledger API AsyncAPI docs pages under `config/x2mdx/ledger-api-asyncapi/source-artifacts.json`.
+The generator script fetches the published `3.4` and `3.5` AsyncAPI HTML pages from `docs.digitalasset.com`, extracts the embedded YAML into `.internal/cache/x2mdx/ledger-api-asyncapi/`, writes a local x2mdx manifest into `.internal/generated/x2mdx/ledger-api-asyncapi/manifest.json`, and then renders the MDX page with the GitHub-pinned `x2mdx`.
+
+Run:
+
+```bash
+python3 scripts/generate_json_api_asyncapi_reference.py
+```
+
+or:
+
+```bash
+npm run generate:json-api-asyncapi-reference
+```
+
+By default this writes:
+
+- `docs-main/reference/json-api-asyncapi-reference.mdx`
+- `docs-main/docs.json`
+
+The generated page is placed directly under the top-level `Reference` dropdown in `docs-main/docs.json`.
+
 ### Generate the Ledger bindings API reference
 
 This repo also includes a checked-in source config for the published Java/Scala bindings Javadoc/Scaladoc jars at `config/x2mdx/ledger-bindings/source-artifacts.json`.
@@ -158,3 +182,27 @@ By default this writes:
 - `docs-main/docs.json`
 
 The generated nav is added under the top-level `Reference` dropdown as `Canton Protobuf History`, with only the overview page listed in nav. The per-endpoint pages are generated and linked from the overview page but left unlisted.
+
+### Generate the Wallet Gateway JSON-RPC reference
+
+This repo also includes a checked-in source config for versioned Wallet Gateway OpenRPC specs from `hyperledger-labs/splice-wallet-kernel` at `config/x2mdx/wallet-gateway-openrpc/source-artifacts.json`.
+The generator script clones or fetches a cached bare repo under `.internal/cache/x2mdx/wallet-gateway-openrpc/`, materializes local versioned OpenRPC JSON files, writes a local x2mdx manifest into `.internal/generated/x2mdx/wallet-gateway-openrpc/manifest.json`, and then renders MDX pages with the GitHub-pinned `x2mdx`.
+
+Run:
+
+```bash
+python3 scripts/generate_wallet_gateway_openrpc_reference.py
+```
+
+or:
+
+```bash
+npm run generate:wallet-gateway-openrpc-reference
+```
+
+By default this writes:
+
+- `docs-main/reference/wallet-gateway-json-rpc/`
+- `docs-main/docs.json`
+
+The generated nav is added under the top-level `Reference` dropdown as `Wallet Gateway JSON-RPC`, with the overview page plus one page per published OpenRPC surface.
