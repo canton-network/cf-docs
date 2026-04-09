@@ -135,6 +135,30 @@ By default this writes:
 
 The generated nav is added under the top-level `Reference` dropdown as `Ledger API JVM Bindings -> Scaladocs/Javadocs`, with each nested group populated directly from the generated JVM package pages.
 
+### Generate the Daml Standard Library reference
+
+This repo also includes a checked-in source config for versioned Daml Standard Library docs JSON generation at `config/x2mdx/daml-standard-library/source-artifacts.json`.
+The generator script uses local SDK artifacts via `dpm` or `daml` to build cached docs JSON snapshots under `.internal/cache/x2mdx/daml-standard-library/`, writes a local x2mdx manifest into `.internal/generated/x2mdx/daml-standard-library/manifest.json`, and then renders MDX pages with the GitHub-pinned `x2mdx`.
+
+Run:
+
+```bash
+python3 scripts/generate_daml_standard_library_reference.py
+```
+
+or:
+
+```bash
+npm run generate:daml-standard-library-reference
+```
+
+By default this writes:
+
+- `docs-main/appdev/reference/daml-standard-library/`
+- `docs-main/docs.json`
+
+The generated nav is added under the top-level `Reference` dropdown as `Daml Standard Library`, with the overview page listed first and the generated module pages grouped under a nested `Modules` foldout.
+
 ### Generate the Canton protobuf history reference
 
 This repo also includes a checked-in source config for versioned Canton protobuf descriptor discovery at `config/x2mdx/protobuf-history/source-artifacts.json`.
