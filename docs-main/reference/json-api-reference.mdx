@@ -1,0 +1,2658 @@
+---
+title: "JSON Ledger API HTTP endpoints"
+description: "Generated API reference from versioned OpenAPI artifacts"
+---
+
+Generated from supplied versioned OpenAPI artifacts.
+
+## Table of Contents
+
+| Name | Summary | Introduced | Changed | Deprecated | Removed |
+| --- | --- | --- | --- | --- | --- |
+| [`GET /livez`](#endpoint-get-livez) | Checks if the service is alive | `3.5` | - | - | - |
+| [`GET /readyz`](#endpoint-get-readyz) | Checks if the service is ready to serve requests | `3.5` | - | - | - |
+| [`GET /v2/authenticated-user`](#endpoint-get-v2-authenticated-user) | Get the user data of the current authenticated user. | `3.4` | 3.5: description updated; response `400` description updated | - | - |
+| [`POST /v2/commands/async/submit`](#endpoint-post-v2-commands-async-submit) | Submit a single composite command. | `3.4` | 3.5: description updated; response `400` description updated | - | - |
+| [`POST /v2/commands/async/submit-reassignment`](#endpoint-post-v2-commands-async-submit-reassignment) | Submit a single reassignment. | `3.4` | 3.5: description updated; response `400` description updated | - | - |
+| [`POST /v2/commands/completions`](#endpoint-post-v2-commands-completions) | Query completions list (blocking call)  Subscribe to command completion events. Notice: This endpoint should be used for small results set. When number of results exceeded node configuration limit (`http-list-max-elements-limit`) there will be an error (`413 Content Too Large`) returned. Increasing this limit may lead to performance issues and high memory consumption. Consider using websockets (asyncapi) for better efficiency with larger results. | `3.4` | 3.5: description updated; response `400` description updated | - | - |
+| [`POST /v2/commands/submit-and-wait`](#endpoint-post-v2-commands-submit-and-wait) | Submits a single composite command and waits for its result. Propagates the gRPC error of failed submissions including Daml interpretation errors. | `3.4` | 3.5: description updated; response `400` description updated | - | - |
+| [`POST /v2/commands/submit-and-wait-for-reassignment`](#endpoint-post-v2-commands-submit-and-wait-for-reassignment) | Submits a single composite reassignment command, waits for its result, and returns the reassignment. Propagates the gRPC error of failed submission. | `3.4` | 3.5: description updated; response `400` description updated | - | - |
+| [`POST /v2/commands/submit-and-wait-for-transaction`](#endpoint-post-v2-commands-submit-and-wait-for-transaction) | Submits a single composite command, waits for its result, and returns the transaction. Propagates the gRPC error of failed submissions including Daml interpretation errors. | `3.4` | 3.5: description updated; response `400` description updated | - | - |
+| [`POST /v2/commands/submit-and-wait-for-transaction-tree`](#endpoint-post-v2-commands-submit-and-wait-for-transaction-tree) | Submit a batch of commands and wait for the transaction trees response. Provided for backwards compatibility, it will be removed in the Canton version 3.5.0, use submit-and-wait-for-transaction instead. | `3.4` | 3.5: response `400` description updated | - | - |
+| [`POST /v2/contracts/contract-by-id`](#endpoint-post-v2-contracts-contract-by-id) | Looking up contract data by contract ID. This endpoint is experimental / alpha, therefore no backwards compatibility is guaranteed. This endpoint must not be used to look up contracts which entered the participant via party replication or repair service. | `3.4` | 3.5: description updated; response `400` description updated | - | - |
+| [`POST /v2/dars`](#endpoint-post-v2-dars) | Upload a DAR to the participant node | `3.4` | 3.5: response `400` description updated | - | - |
+| [`POST /v2/dars/validate`](#endpoint-post-v2-dars-validate) | Validates the DAR and checks the upgrade compatibility of the DAR's packages with the set of the already vetted packages on the target vetting synchronizer. See ValidateDarFileRequest for details regarding the target vetting synchronizer.  The operation has no effect on the state of the participant or the Canton ledger: the DAR payload and its packages are not persisted neither are the packages vetted. | `3.4` | 3.5: description updated; response `400` description updated | - | - |
+| [`POST /v2/events/events-by-contract-id`](#endpoint-post-v2-events-events-by-contract-id) | Get the create and the consuming exercise event for the contract with the provided ID. No events will be returned for contracts that have been pruned because they have already been archived before the latest pruning offset. If the contract cannot be found for the request, or all the contract-events are filtered, a CONTRACT_EVENTS_NOT_FOUND error will be raised. | `3.4` | 3.5: description updated; response `400` description updated | - | - |
+| [`GET /v2/idps`](#endpoint-get-v2-idps) | List all existing identity provider configurations. | `3.4` | 3.5: description updated; response `400` description updated | - | - |
+| [`POST /v2/idps`](#endpoint-post-v2-idps) | Create a new identity provider configuration. The request will fail if the maximum allowed number of separate configurations is reached. | `3.4` | 3.5: description updated; response `400` description updated | - | - |
+| [`DELETE /v2/idps/{idp-id}`](#endpoint-delete-v2-idps-idp-id) | Delete an existing identity provider configuration. | `3.4` | 3.5: description updated; response `400` description updated | - | - |
+| [`GET /v2/idps/{idp-id}`](#endpoint-get-v2-idps-idp-id) | Get the identity provider configuration data by id. | `3.4` | 3.5: description updated; response `400` description updated | - | - |
+| [`PATCH /v2/idps/{idp-id}`](#endpoint-patch-v2-idps-idp-id) | Update selected modifiable attribute of an identity provider config resource described by the ``IdentityProviderConfig`` message. | `3.4` | 3.5: description updated; response `400` description updated | - | - |
+| [`POST /v2/interactive-submission/execute`](#endpoint-post-v2-interactive-submission-execute) | Execute a prepared submission _asynchronously_ on the ledger. Requires a signature of the transaction from the submitting external party. | `3.4` | 3.5: description updated; response `400` description updated | - | - |
+| [`POST /v2/interactive-submission/executeAndWait`](#endpoint-post-v2-interactive-submission-executeandwait) | Similar to ExecuteSubmission but _synchronously_ wait for the completion of the transaction IMPORTANT: Relying on the response from this endpoint requires trusting the Participant Node to be honest. A malicious node could make a successfully committed request appeared failed and vice versa | `3.4` | 3.5: description updated; response `400` description updated | - | - |
+| [`POST /v2/interactive-submission/executeAndWaitForTransaction`](#endpoint-post-v2-interactive-submission-executeandwaitfortransaction) | Similar to ExecuteSubmissionAndWait but additionally returns the transaction IMPORTANT: Relying on the response from this endpoint requires trusting the Participant Node to be honest. A malicious node could make a successfully committed request appear as failed and vice versa | `3.4` | 3.5: description updated; response `400` description updated | - | - |
+| [`GET /v2/interactive-submission/preferred-package-version`](#endpoint-get-v2-interactive-submission-preferred-package-version) | A preferred package is the highest-versioned package for a provided package-name that is vetted by all the participants hosting the provided parties.  Ledger API clients should use this endpoint for constructing command submissions that are compatible with the provided preferred package, by making informed decisions on: - which are the compatible packages that can be used to create contracts - which contract or exercise choice argument version can be used in the command - which choices can be executed on a template or interface of a contract  Can be accessed by any Ledger API client with a valid token when Ledger API authorization is enabled.  Provided for backwards compatibility, it will be removed in the Canton version 3.4.0 | `3.4` | 3.5: description updated; response `400` description updated | - | - |
+| [`POST /v2/interactive-submission/preferred-packages`](#endpoint-post-v2-interactive-submission-preferred-packages) | Compute the preferred packages for the vetting requirements in the request. A preferred package is the highest-versioned package for a provided package-name that is vetted by all the participants hosting the provided parties.  Ledger API clients should use this endpoint for constructing command submissions that are compatible with the provided preferred packages, by making informed decisions on: - which are the compatible packages that can be used to create contracts - which contract or exercise choice argument version can be used in the command - which choices can be executed on a template or interface of a contract  If the package preferences could not be computed due to no selection satisfying the requirements, a `FAILED_PRECONDITION` error will be returned.  Can be accessed by any Ledger API client with a valid token when Ledger API authorization is enabled.  Experimental API: this endpoint is not guaranteed to provide backwards compatibility in future releases | `3.4` | 3.5: description updated; response `400` description updated | - | - |
+| [`POST /v2/interactive-submission/prepare`](#endpoint-post-v2-interactive-submission-prepare) | Requires `readAs` scope for the submitting party when LAPI User authorization is enabled | `3.4` | 3.5: description updated; response `400` description updated | - | - |
+| [`GET /v2/package-vetting`](#endpoint-get-v2-package-vetting) | Lists which participant node vetted what packages on which synchronizer. Can be called by any authenticated user. | `3.4` | 3.5: description updated; response `400` description updated | - | - |
+| [`POST /v2/package-vetting`](#endpoint-post-v2-package-vetting) | Update the vetted packages of this participant | `3.4` | 3.5: description updated; response `400` description updated | - | - |
+| [`GET /v2/packages`](#endpoint-get-v2-packages) | Returns the identifiers of all supported packages. | `3.4` | 3.5: description updated; response `400` description updated | - | - |
+| [`POST /v2/packages`](#endpoint-post-v2-packages) | Behaves the same as /dars. This endpoint will be deprecated and removed in a future release. Upload a DAR file to the participant.  If vetting is enabled in the request, the DAR is checked for upgrade compatibility with the set of the already vetted packages on the target vetting synchronizer See UploadDarFileRequest for details regarding vetting and the target vetting synchronizer. | `3.4` | 3.5: description updated; response `400` description updated | - | - |
+| [`GET /v2/packages/{package-id}`](#endpoint-get-v2-packages-package-id) | Returns the contents of a single package. | `3.4` | 3.5: description updated; response `400` description updated | - | - |
+| [`GET /v2/packages/{package-id}/status`](#endpoint-get-v2-packages-package-id-status) | Returns the status of a single package. | `3.4` | 3.5: description updated; response `400` description updated | - | - |
+| [`GET /v2/parties`](#endpoint-get-v2-parties) | List the parties known by the participant. The list returned contains parties whose ledger access is facilitated by the participant and the ones maintained elsewhere. | `3.4` | 3.5: description updated; response `400` description updated | - | - |
+| [`POST /v2/parties`](#endpoint-post-v2-parties) | Allocates a new party on a ledger and adds it to the set managed by the participant. Caller specifies a party identifier suggestion, the actual identifier allocated might be different and is implementation specific. Caller can specify party metadata that is stored locally on the participant. This call may:  - Succeed, in which case the actual allocated identifier is visible in   the response. - Respond with a gRPC error  daml-on-kv-ledger: suggestion's uniqueness is checked by the validators in the consensus layer and call rejected if the identifier is already present. canton: completely different globally unique identifier is allocated. Behind the scenes calls to an internal protocol are made. As that protocol is richer than the surface protocol, the arguments take implicit values The party identifier suggestion must be a valid party name. Party names are required to be non-empty US-ASCII strings built from letters, digits, space, colon, minus and underscore limited to 255 chars | `3.4` | 3.5: description updated; response `400` description updated | - | - |
+| [`POST /v2/parties/external/allocate`](#endpoint-post-v2-parties-external-allocate) | Alpha 3.3: Endpoint to allocate a new external party on a synchronizer  Expected to be stable in 3.5  The external party must be hosted (at least) on this node with either confirmation or observation permissions It can optionally be hosted on other nodes (then called a multi-hosted party). If hosted on additional nodes, explicit authorization of the hosting relationship must be performed on those nodes before the party can be used. Decentralized namespaces are supported but must be provided fully authorized by their owners. The individual owner namespace transactions can be submitted in the same call (fully authorized as well). In the simple case of a non-multi hosted, non-decentralized party, the RPC will return once the party is effectively allocated and ready to use, similarly to the AllocateParty behavior. For more complex scenarios applications may need to query the party status explicitly (only through the admin API as of now). | `3.4` | 3.5: description updated; response `400` description updated | - | - |
+| [`POST /v2/parties/external/generate-topology`](#endpoint-post-v2-parties-external-generate-topology) | Alpha 3.3: Convenience endpoint to generate topology transactions for external signing  Expected to be stable in 3.5  You may use this endpoint to generate the common external topology transactions which can be signed externally and uploaded as part of the allocate party process  Note that this request will create a normal namespace using the same key for the identity as for signing. More elaborate schemes such as multi-signature or decentralized parties require you to construct the topology transactions yourself. | `3.4` | 3.5: description updated; response `400` description updated | - | - |
+| [`GET /v2/parties/participant-id`](#endpoint-get-v2-parties-participant-id) | Return the identifier of the participant. All horizontally scaled replicas should return the same id. daml-on-kv-ledger: returns an identifier supplied on command line at launch time canton: returns globally unique identifier of the participant | `3.4` | 3.5: description updated; response `400` description updated | - | - |
+| [`GET /v2/parties/{party}`](#endpoint-get-v2-parties-party) | Get the party details of the given parties. Only known parties will be returned in the list. | `3.4` | 3.5: description updated; response `400` description updated | - | - |
+| [`PATCH /v2/parties/{party}`](#endpoint-patch-v2-parties-party) | Update selected modifiable participant-local attributes of a party details resource. Can update the participant's local information for local parties. | `3.4` | 3.5: description updated; response `400` description updated | - | - |
+| [`POST /v2/state/active-contracts`](#endpoint-post-v2-state-active-contracts) | Query active contracts list (blocking call). Querying active contracts is an expensive operation and if possible should not be repeated often. Consider querying active contracts initially (for a given offset) and then repeatedly call one of `/v2/updates/...`endpoints  to get subsequent modifications. You can also use websockets to get updates with better performance.  Returns a stream of the snapshot of the active contracts and incomplete (un)assignments at a ledger offset. Once the stream of GetActiveContractsResponses completes, the client SHOULD begin streaming updates from the update service, starting at the GetActiveContractsRequest.active_at_offset specified in this request. Clients SHOULD NOT assume that the set of active contracts they receive reflects the state at the ledger end.  Notice: This endpoint should be used for small results set. When number of results exceeded node configuration limit (`http-list-max-elements-limit`) there will be an error (`413 Content Too Large`) returned. Increasing this limit may lead to performance issues and high memory consumption. Consider using websockets (asyncapi) for better efficiency with larger results. | `3.4` | 3.5: description updated; response `400` description updated | - | - |
+| [`GET /v2/state/connected-synchronizers`](#endpoint-get-v2-state-connected-synchronizers) | Get the list of connected synchronizers at the time of the query. | `3.4` | 3.5: description updated; response `400` description updated | - | - |
+| [`GET /v2/state/latest-pruned-offsets`](#endpoint-get-v2-state-latest-pruned-offsets) | Get the latest successfully pruned ledger offsets | `3.4` | 3.5: description updated; response `400` description updated | - | - |
+| [`GET /v2/state/ledger-end`](#endpoint-get-v2-state-ledger-end) | Get the current ledger end. Subscriptions started with the returned offset will serve events after this RPC was called. | `3.4` | 3.5: description updated; response `400` description updated | - | - |
+| [`POST /v2/updates`](#endpoint-post-v2-updates) | Read the ledger's filtered update stream for the specified contents and filters. It returns the event types in accordance with the stream contents selected. Also the selection criteria for individual events depends on the transaction shape chosen.  - ACS delta: a requesting party must be a stakeholder of an event for it to be included. - ledger effects: a requesting party must be a witness of an event for it to be included. Notice: This endpoint should be used for small results set. When number of results exceeded node configuration limit (`http-list-max-elements-limit`) there will be an error (`413 Content Too Large`) returned. Increasing this limit may lead to performance issues and high memory consumption. Consider using websockets (asyncapi) for better efficiency with larger results. | `3.4` | 3.5: description updated; response `400` description updated | - | - |
+| [`POST /v2/updates/flats`](#endpoint-post-v2-updates-flats) | Query flat transactions update list (blocking call). Provided for backwards compatibility, it will be removed in the Canton version 3.5.0, use v2/updates instead. Notice: This endpoint should be used for small results set. When number of results exceeded node configuration limit (`http-list-max-elements-limit`) there will be an error (`413 Content Too Large`) returned. Increasing this limit may lead to performance issues and high memory consumption. Consider using websockets (asyncapi) for better efficiency with larger results. | `3.4` | 3.5: response `400` description updated | - | - |
+| [`POST /v2/updates/transaction-by-id`](#endpoint-post-v2-updates-transaction-by-id) | Get transaction by id. Provided for backwards compatibility, it will be removed in the Canton version 3.5.0, use v2/updates/update-by-id instead. | `3.4` | 3.5: response `400` description updated | - | - |
+| [`POST /v2/updates/transaction-by-offset`](#endpoint-post-v2-updates-transaction-by-offset) | Get transaction by offset. Provided for backwards compatibility, it will be removed in the Canton version 3.5.0, use v2/updates/update-by-offset instead. | `3.4` | 3.5: response `400` description updated | - | - |
+| [`GET /v2/updates/transaction-tree-by-id/{update-id}`](#endpoint-get-v2-updates-transaction-tree-by-id-update-id) | Get transaction tree by id. Provided for backwards compatibility, it will be removed in the Canton version 3.5.0, use v2/updates/update-by-id instead. | `3.4` | 3.5: response `400` description updated | - | - |
+| [`GET /v2/updates/transaction-tree-by-offset/{offset}`](#endpoint-get-v2-updates-transaction-tree-by-offset-offset) | Get transaction tree by offset. Provided for backwards compatibility, it will be removed in the Canton version 3.5.0, use v2/updates/update-by-offset instead. | `3.4` | 3.5: response `400` description updated | - | - |
+| [`POST /v2/updates/trees`](#endpoint-post-v2-updates-trees) | Query update transactions tree list (blocking call). Provided for backwards compatibility, it will be removed in the Canton version 3.5.0, use v2/updates instead. Notice: This endpoint should be used for small results set. When number of results exceeded node configuration limit (`http-list-max-elements-limit`) there will be an error (`413 Content Too Large`) returned. Increasing this limit may lead to performance issues and high memory consumption. Consider using websockets (asyncapi) for better efficiency with larger results. | `3.4` | 3.5: response `400` description updated | - | - |
+| [`POST /v2/updates/update-by-id`](#endpoint-post-v2-updates-update-by-id) | Lookup an update by its ID. If there is no update with this ID, or all the events are filtered, an UPDATE_NOT_FOUND error will be raised. | `3.4` | 3.5: description updated; response `400` description updated | - | - |
+| [`POST /v2/updates/update-by-offset`](#endpoint-post-v2-updates-update-by-offset) | Lookup an update by its offset. If there is no update with this offset, or all the events are filtered, an UPDATE_NOT_FOUND error will be raised. | `3.4` | 3.5: description updated; response `400` description updated | - | - |
+| [`GET /v2/users`](#endpoint-get-v2-users) | List all existing users. | `3.4` | 3.5: description updated; response `400` description updated | - | - |
+| [`POST /v2/users`](#endpoint-post-v2-users) | Create a new user. | `3.4` | 3.5: description updated; response `400` description updated | - | - |
+| [`DELETE /v2/users/{user-id}`](#endpoint-delete-v2-users-user-id) | Delete an existing user and all its rights. | `3.4` | 3.5: description updated; response `400` description updated | - | - |
+| [`GET /v2/users/{user-id}`](#endpoint-get-v2-users-user-id) | Get the user data of a specific user or the authenticated user. | `3.4` | 3.5: description updated; response `400` description updated | - | - |
+| [`PATCH /v2/users/{user-id}`](#endpoint-patch-v2-users-user-id) | Update selected modifiable attribute of a user resource described by the ``User`` message. | `3.4` | 3.5: description updated; response `400` description updated | - | - |
+| [`PATCH /v2/users/{user-id}/identity-provider-id`](#endpoint-patch-v2-users-user-id-identity-provider-id) | Update the assignment of a user from one IDP to another. | `3.4` | 3.5: description updated; response `400` description updated | - | - |
+| [`GET /v2/users/{user-id}/rights`](#endpoint-get-v2-users-user-id-rights) | List the set of all rights granted to a user. | `3.4` | 3.5: description updated; response `400` description updated | - | - |
+| [`PATCH /v2/users/{user-id}/rights`](#endpoint-patch-v2-users-user-id-rights) | Revoke rights from a user. Revoking rights does not affect the resource version of the corresponding user. | `3.4` | 3.5: description updated; response `400` description updated | - | - |
+| [`POST /v2/users/{user-id}/rights`](#endpoint-post-v2-users-user-id-rights) | Grant rights to a user. Granting rights does not affect the resource version of the corresponding user. | `3.4` | 3.5: description updated; response `400` description updated | - | - |
+| [`GET /v2/version`](#endpoint-get-v2-version) | Read the Ledger API version | `3.4` | 3.5: description updated; response `400` description updated | - | - |
+
+## Endpoint Reference (Latest)
+
+
+<a id="endpoint-get-livez"></a>
+
+### `GET /livez`
+
+- Operation ID: `getLivez`
+- Description: Checks if the service is alive
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | OK: service is alive | `-` | `-` |
+| `400` | Invalid value | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-get-readyz"></a>
+
+### `GET /readyz`
+
+- Operation ID: `getReadyz`
+- Description: Checks if the service is ready to serve requests
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | OK: readiness message | `text/plain` | `text/plain:string` |
+| `400` | Invalid value | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-get-v2-authenticated-user"></a>
+
+### `GET /v2/authenticated-user`
+
+- Operation ID: `getV2Authenticated-user`
+- Description: Get the user data of the current authenticated user.
+
+**Parameters**
+
+| Name | In | Required | Schema | Description |
+| --- | --- | --- | --- | --- |
+| `identity-provider-id` | `query` | `no` | `string` | - |
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `application/json` | `application/json:object` |
+| `400` | Invalid value, Invalid value for: query parameter identity-provider-id | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-post-v2-commands-async-submit"></a>
+
+### `POST /v2/commands/async/submit`
+
+- Operation ID: `postV2CommandsAsyncSubmit`
+- Description: Submit a single composite command.
+
+**Request Body**
+
+- Required: `yes`
+
+| Content Type | Schema | Required Fields |
+| --- | --- | --- |
+| `application/json` | `object` | `actAs`, `commandId`, `commands` |
+
+**Request Example: `application/json`**
+
+```json
+{
+  "commands": [
+    {
+      "CreateAndExerciseCommand": {
+        "templateId": "<string>",
+        "createArguments": "<value>",
+        "choice": "<string>",
+        "choiceArgument": "<value>"
+      }
+    }
+  ],
+  "commandId": "<string>",
+  "actAs": [
+    "<string>"
+  ]
+}
+```
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `application/json` | `application/json:object` |
+| `400` | Invalid value, Invalid value for: body | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-post-v2-commands-async-submit-reassignment"></a>
+
+### `POST /v2/commands/async/submit-reassignment`
+
+- Operation ID: `postV2CommandsAsyncSubmit-reassignment`
+- Description: Submit a single reassignment.
+
+**Request Body**
+
+- Required: `yes`
+
+| Content Type | Schema | Required Fields |
+| --- | --- | --- |
+| `application/json` | `object` | `reassignmentCommands` |
+
+**Request Example: `application/json`**
+
+```json
+{
+  "reassignmentCommands": {
+    "commandId": "<string>",
+    "submitter": "<string>",
+    "commands": [
+      {
+        "command": "<object>"
+      }
+    ]
+  }
+}
+```
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `application/json` | `application/json:object` |
+| `400` | Invalid value, Invalid value for: body | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-post-v2-commands-completions"></a>
+
+### `POST /v2/commands/completions`
+
+- Operation ID: `postV2CommandsCompletions`
+- Description: Query completions list (blocking call)  Subscribe to command completion events. Notice: This endpoint should be used for small results set. When number of results exceeded node configuration limit (`http-list-max-elements-limit`) there will be an error (`413 Content Too Large`) returned. Increasing this limit may lead to performance issues and high memory consumption. Consider using websockets (asyncapi) for better efficiency with larger results.
+
+**Parameters**
+
+| Name | In | Required | Schema | Description |
+| --- | --- | --- | --- | --- |
+| `limit` | `query` | `no` | `integer` | maximum number of elements to return, this param is ignored if is bigger than server setting |
+| `stream_idle_timeout_ms` | `query` | `no` | `integer` | timeout to complete and send result if no new elements are received (for open ended streams) |
+
+**Request Body**
+
+- Required: `yes`
+
+| Content Type | Schema | Required Fields |
+| --- | --- | --- |
+| `application/json` | `object` | `parties` |
+
+**Request Example: `application/json`**
+
+```json
+{
+  "parties": [
+    "<string>"
+  ]
+}
+```
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `application/json` | `application/json:array[object]` |
+| `400` | Invalid value, Invalid value for: body, Invalid value for: query parameter limit, Invalid value for: query parameter stream_idle_timeout_ms | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-post-v2-commands-submit-and-wait"></a>
+
+### `POST /v2/commands/submit-and-wait`
+
+- Operation ID: `postV2CommandsSubmit-and-wait`
+- Description: Submits a single composite command and waits for its result. Propagates the gRPC error of failed submissions including Daml interpretation errors.
+
+**Request Body**
+
+- Required: `yes`
+
+| Content Type | Schema | Required Fields |
+| --- | --- | --- |
+| `application/json` | `object` | `actAs`, `commandId`, `commands` |
+
+**Request Example: `application/json`**
+
+```json
+{
+  "commands": [
+    {
+      "CreateAndExerciseCommand": {
+        "templateId": "<string>",
+        "createArguments": "<value>",
+        "choice": "<string>",
+        "choiceArgument": "<value>"
+      }
+    }
+  ],
+  "commandId": "<string>",
+  "actAs": [
+    "<string>"
+  ]
+}
+```
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `application/json` | `application/json:object` |
+| `400` | Invalid value, Invalid value for: body | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-post-v2-commands-submit-and-wait-for-reassignment"></a>
+
+### `POST /v2/commands/submit-and-wait-for-reassignment`
+
+- Operation ID: `postV2CommandsSubmit-and-wait-for-reassignment`
+- Description: Submits a single composite reassignment command, waits for its result, and returns the reassignment. Propagates the gRPC error of failed submission.
+
+**Request Body**
+
+- Required: `yes`
+
+| Content Type | Schema | Required Fields |
+| --- | --- | --- |
+| `application/json` | `object` | `reassignmentCommands` |
+
+**Request Example: `application/json`**
+
+```json
+{
+  "reassignmentCommands": {
+    "commandId": "<string>",
+    "submitter": "<string>",
+    "commands": [
+      {
+        "command": "<object>"
+      }
+    ]
+  }
+}
+```
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `application/json` | `application/json:object` |
+| `400` | Invalid value, Invalid value for: body | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-post-v2-commands-submit-and-wait-for-transaction"></a>
+
+### `POST /v2/commands/submit-and-wait-for-transaction`
+
+- Operation ID: `postV2CommandsSubmit-and-wait-for-transaction`
+- Description: Submits a single composite command, waits for its result, and returns the transaction. Propagates the gRPC error of failed submissions including Daml interpretation errors.
+
+**Request Body**
+
+- Required: `yes`
+
+| Content Type | Schema | Required Fields |
+| --- | --- | --- |
+| `application/json` | `object` | `commands` |
+
+**Request Example: `application/json`**
+
+```json
+{
+  "commands": {
+    "commands": [
+      {
+        "CreateAndExerciseCommand": "<object>"
+      }
+    ],
+    "commandId": "<string>",
+    "actAs": [
+      "<string>"
+    ]
+  }
+}
+```
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `application/json` | `application/json:object` |
+| `400` | Invalid value, Invalid value for: body | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-post-v2-commands-submit-and-wait-for-transaction-tree"></a>
+
+### `POST /v2/commands/submit-and-wait-for-transaction-tree`
+
+- Operation ID: `postV2CommandsSubmit-and-wait-for-transaction-tree`
+- Description: Submit a batch of commands and wait for the transaction trees response. Provided for backwards compatibility, it will be removed in the Canton version 3.5.0, use submit-and-wait-for-transaction instead.
+
+**Request Body**
+
+- Required: `yes`
+
+| Content Type | Schema | Required Fields |
+| --- | --- | --- |
+| `application/json` | `object` | `actAs`, `commandId`, `commands` |
+
+**Request Example: `application/json`**
+
+```json
+{
+  "commands": [
+    {
+      "CreateAndExerciseCommand": {
+        "templateId": "<string>",
+        "createArguments": "<value>",
+        "choice": "<string>",
+        "choiceArgument": "<value>"
+      }
+    }
+  ],
+  "commandId": "<string>",
+  "actAs": [
+    "<string>"
+  ]
+}
+```
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `application/json` | `application/json:object` |
+| `400` | Invalid value, Invalid value for: body | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-post-v2-contracts-contract-by-id"></a>
+
+### `POST /v2/contracts/contract-by-id`
+
+- Operation ID: `postV2ContractsContract-by-id`
+- Description: Looking up contract data by contract ID. This endpoint is experimental / alpha, therefore no backwards compatibility is guaranteed. This endpoint must not be used to look up contracts which entered the participant via party replication or repair service.
+
+**Request Body**
+
+- Required: `yes`
+
+| Content Type | Schema | Required Fields |
+| --- | --- | --- |
+| `application/json` | `object` | `contractId` |
+
+**Request Example: `application/json`**
+
+```json
+{
+  "contractId": "<string>"
+}
+```
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `application/json` | `application/json:object` |
+| `400` | Invalid value, Invalid value for: body | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-post-v2-dars"></a>
+
+### `POST /v2/dars`
+
+- Operation ID: `postV2Dars`
+- Description: Upload a DAR to the participant node
+
+**Parameters**
+
+| Name | In | Required | Schema | Description |
+| --- | --- | --- | --- | --- |
+| `vetAllPackages` | `query` | `no` | `boolean` | - |
+| `synchronizerId` | `query` | `no` | `string` | - |
+
+**Request Body**
+
+- Required: `yes`
+
+| Content Type | Schema | Required Fields |
+| --- | --- | --- |
+| `application/octet-stream` | `string` | - |
+
+**Request Example: `application/octet-stream`**
+
+```json
+"<string>"
+```
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `application/json` | `application/json:object` |
+| `400` | Invalid value, Invalid value for: body, Invalid value for: query parameter vetAllPackages, Invalid value for: query parameter synchronizerId | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-post-v2-dars-validate"></a>
+
+### `POST /v2/dars/validate`
+
+- Operation ID: `postV2DarsValidate`
+- Description: Validates the DAR and checks the upgrade compatibility of the DAR's packages with the set of the already vetted packages on the target vetting synchronizer. See ValidateDarFileRequest for details regarding the target vetting synchronizer.  The operation has no effect on the state of the participant or the Canton ledger: the DAR payload and its packages are not persisted neither are the packages vetted.
+
+**Parameters**
+
+| Name | In | Required | Schema | Description |
+| --- | --- | --- | --- | --- |
+| `synchronizerId` | `query` | `no` | `string` | - |
+
+**Request Body**
+
+- Required: `yes`
+
+| Content Type | Schema | Required Fields |
+| --- | --- | --- |
+| `application/octet-stream` | `string` | - |
+
+**Request Example: `application/octet-stream`**
+
+```json
+"<string>"
+```
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `-` | `-` |
+| `400` | Invalid value, Invalid value for: body, Invalid value for: query parameter synchronizerId | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-post-v2-events-events-by-contract-id"></a>
+
+### `POST /v2/events/events-by-contract-id`
+
+- Operation ID: `postV2EventsEvents-by-contract-id`
+- Description: Get the create and the consuming exercise event for the contract with the provided ID. No events will be returned for contracts that have been pruned because they have already been archived before the latest pruning offset. If the contract cannot be found for the request, or all the contract-events are filtered, a CONTRACT_EVENTS_NOT_FOUND error will be raised.
+
+**Request Body**
+
+- Required: `yes`
+
+| Content Type | Schema | Required Fields |
+| --- | --- | --- |
+| `application/json` | `object` | `contractId`, `eventFormat` |
+
+**Request Example: `application/json`**
+
+```json
+{
+  "contractId": "<string>",
+  "eventFormat": {
+    "filtersByParty": {},
+    "filtersForAnyParty": {
+      "cumulative": [
+        "<object>"
+      ]
+    },
+    "verbose": "<boolean>"
+  }
+}
+```
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `application/json` | `application/json:object` |
+| `400` | Invalid value, Invalid value for: body | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-get-v2-idps"></a>
+
+### `GET /v2/idps`
+
+- Operation ID: `getV2Idps`
+- Description: List all existing identity provider configurations.
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `application/json` | `application/json:object` |
+| `400` | Invalid value | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-post-v2-idps"></a>
+
+### `POST /v2/idps`
+
+- Operation ID: `postV2Idps`
+- Description: Create a new identity provider configuration. The request will fail if the maximum allowed number of separate configurations is reached.
+
+**Request Body**
+
+- Required: `yes`
+
+| Content Type | Schema | Required Fields |
+| --- | --- | --- |
+| `application/json` | `object` | `identityProviderConfig` |
+
+**Request Example: `application/json`**
+
+```json
+{
+  "identityProviderConfig": {
+    "identityProviderId": "<string>",
+    "issuer": "<string>",
+    "jwksUrl": "<string>"
+  }
+}
+```
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `application/json` | `application/json:object` |
+| `400` | Invalid value, Invalid value for: body | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-delete-v2-idps-idp-id"></a>
+
+### `DELETE /v2/idps/{idp-id}`
+
+- Operation ID: `deleteV2IdpsIdp-id`
+- Description: Delete an existing identity provider configuration.
+
+**Parameters**
+
+| Name | In | Required | Schema | Description |
+| --- | --- | --- | --- | --- |
+| `idp-id` | `path` | `yes` | `string` | - |
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `application/json` | `application/json:object` |
+| `400` | Invalid value | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-get-v2-idps-idp-id"></a>
+
+### `GET /v2/idps/{idp-id}`
+
+- Operation ID: `getV2IdpsIdp-id`
+- Description: Get the identity provider configuration data by id.
+
+**Parameters**
+
+| Name | In | Required | Schema | Description |
+| --- | --- | --- | --- | --- |
+| `idp-id` | `path` | `yes` | `string` | - |
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `application/json` | `application/json:object` |
+| `400` | Invalid value | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-patch-v2-idps-idp-id"></a>
+
+### `PATCH /v2/idps/{idp-id}`
+
+- Operation ID: `patchV2IdpsIdp-id`
+- Description: Update selected modifiable attribute of an identity provider config resource described by the ``IdentityProviderConfig`` message.
+
+**Parameters**
+
+| Name | In | Required | Schema | Description |
+| --- | --- | --- | --- | --- |
+| `idp-id` | `path` | `yes` | `string` | - |
+
+**Request Body**
+
+- Required: `yes`
+
+| Content Type | Schema | Required Fields |
+| --- | --- | --- |
+| `application/json` | `object` | `identityProviderConfig`, `updateMask` |
+
+**Request Example: `application/json`**
+
+```json
+{
+  "identityProviderConfig": {
+    "identityProviderId": "<string>",
+    "issuer": "<string>",
+    "jwksUrl": "<string>"
+  },
+  "updateMask": {
+    "unknownFields": {
+      "fields": {}
+    }
+  }
+}
+```
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `application/json` | `application/json:object` |
+| `400` | Invalid value, Invalid value for: body | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-post-v2-interactive-submission-execute"></a>
+
+### `POST /v2/interactive-submission/execute`
+
+- Operation ID: `postV2Interactive-submissionExecute`
+- Description: Execute a prepared submission _asynchronously_ on the ledger. Requires a signature of the transaction from the submitting external party.
+
+**Request Body**
+
+- Required: `yes`
+
+| Content Type | Schema | Required Fields |
+| --- | --- | --- |
+| `application/json` | `object` | `hashingSchemeVersion`, `partySignatures`, `preparedTransaction`, `submissionId` |
+
+**Request Example: `application/json`**
+
+```json
+{
+  "preparedTransaction": "<string>",
+  "partySignatures": {
+    "signatures": [
+      {
+        "party": "<string>",
+        "signatures": [
+          "<object>"
+        ]
+      }
+    ]
+  },
+  "submissionId": "<string>",
+  "hashingSchemeVersion": "<string>"
+}
+```
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `application/json` | `application/json:object` |
+| `400` | Invalid value, Invalid value for: body | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-post-v2-interactive-submission-executeandwait"></a>
+
+### `POST /v2/interactive-submission/executeAndWait`
+
+- Operation ID: `postV2Interactive-submissionExecuteandwait`
+- Description: Similar to ExecuteSubmission but _synchronously_ wait for the completion of the transaction IMPORTANT: Relying on the response from this endpoint requires trusting the Participant Node to be honest. A malicious node could make a successfully committed request appeared failed and vice versa
+
+**Request Body**
+
+- Required: `yes`
+
+| Content Type | Schema | Required Fields |
+| --- | --- | --- |
+| `application/json` | `object` | `hashingSchemeVersion`, `partySignatures`, `preparedTransaction`, `submissionId` |
+
+**Request Example: `application/json`**
+
+```json
+{
+  "preparedTransaction": "<string>",
+  "partySignatures": {
+    "signatures": [
+      {
+        "party": "<string>",
+        "signatures": [
+          "<object>"
+        ]
+      }
+    ]
+  },
+  "submissionId": "<string>",
+  "hashingSchemeVersion": "<string>"
+}
+```
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `application/json` | `application/json:object` |
+| `400` | Invalid value, Invalid value for: body | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-post-v2-interactive-submission-executeandwaitfortransaction"></a>
+
+### `POST /v2/interactive-submission/executeAndWaitForTransaction`
+
+- Operation ID: `postV2Interactive-submissionExecuteandwaitfortransaction`
+- Description: Similar to ExecuteSubmissionAndWait but additionally returns the transaction IMPORTANT: Relying on the response from this endpoint requires trusting the Participant Node to be honest. A malicious node could make a successfully committed request appear as failed and vice versa
+
+**Request Body**
+
+- Required: `yes`
+
+| Content Type | Schema | Required Fields |
+| --- | --- | --- |
+| `application/json` | `object` | `hashingSchemeVersion`, `partySignatures`, `preparedTransaction`, `submissionId` |
+
+**Request Example: `application/json`**
+
+```json
+{
+  "preparedTransaction": "<string>",
+  "partySignatures": {
+    "signatures": [
+      {
+        "party": "<string>",
+        "signatures": [
+          "<object>"
+        ]
+      }
+    ]
+  },
+  "submissionId": "<string>",
+  "hashingSchemeVersion": "<string>"
+}
+```
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `application/json` | `application/json:object` |
+| `400` | Invalid value, Invalid value for: body | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-get-v2-interactive-submission-preferred-package-version"></a>
+
+### `GET /v2/interactive-submission/preferred-package-version`
+
+- Operation ID: `getV2Interactive-submissionPreferred-package-version`
+- Description: A preferred package is the highest-versioned package for a provided package-name that is vetted by all the participants hosting the provided parties.  Ledger API clients should use this endpoint for constructing command submissions that are compatible with the provided preferred package, by making informed decisions on: - which are the compatible packages that can be used to create contracts - which contract or exercise choice argument version can be used in the command - which choices can be executed on a template or interface of a contract  Can be accessed by any Ledger API client with a valid token when Ledger API authorization is enabled.  Provided for backwards compatibility, it will be removed in the Canton version 3.4.0
+
+**Parameters**
+
+| Name | In | Required | Schema | Description |
+| --- | --- | --- | --- | --- |
+| `parties` | `query` | `no` | `array[string]` | - |
+| `package-name` | `query` | `yes` | `string` | - |
+| `vetting_valid_at` | `query` | `no` | `string` | - |
+| `synchronizer-id` | `query` | `no` | `string` | - |
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `application/json` | `application/json:object` |
+| `400` | Invalid value, Invalid value for: query parameter parties, Invalid value for: query parameter package-name, Invalid value for: query parameter vetting_valid_at, Invalid value for: query parameter synchronizer-id | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-post-v2-interactive-submission-preferred-packages"></a>
+
+### `POST /v2/interactive-submission/preferred-packages`
+
+- Operation ID: `postV2Interactive-submissionPreferred-packages`
+- Description: Compute the preferred packages for the vetting requirements in the request. A preferred package is the highest-versioned package for a provided package-name that is vetted by all the participants hosting the provided parties.  Ledger API clients should use this endpoint for constructing command submissions that are compatible with the provided preferred packages, by making informed decisions on: - which are the compatible packages that can be used to create contracts - which contract or exercise choice argument version can be used in the command - which choices can be executed on a template or interface of a contract  If the package preferences could not be computed due to no selection satisfying the requirements, a `FAILED_PRECONDITION` error will be returned.  Can be accessed by any Ledger API client with a valid token when Ledger API authorization is enabled.  Experimental API: this endpoint is not guaranteed to provide backwards compatibility in future releases
+
+**Request Body**
+
+- Required: `yes`
+
+| Content Type | Schema | Required Fields |
+| --- | --- | --- |
+| `application/json` | `object` | `packageVettingRequirements` |
+
+**Request Example: `application/json`**
+
+```json
+{
+  "packageVettingRequirements": [
+    {
+      "parties": [
+        "<string>"
+      ],
+      "packageName": "<string>"
+    }
+  ]
+}
+```
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `application/json` | `application/json:object` |
+| `400` | Invalid value, Invalid value for: body | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-post-v2-interactive-submission-prepare"></a>
+
+### `POST /v2/interactive-submission/prepare`
+
+- Operation ID: `postV2Interactive-submissionPrepare`
+- Description: Requires `readAs` scope for the submitting party when LAPI User authorization is enabled
+
+**Request Body**
+
+- Required: `yes`
+
+| Content Type | Schema | Required Fields |
+| --- | --- | --- |
+| `application/json` | `object` | `actAs`, `commandId`, `commands` |
+
+**Request Example: `application/json`**
+
+```json
+{
+  "commandId": "<string>",
+  "commands": [
+    {
+      "CreateAndExerciseCommand": {
+        "templateId": "<string>",
+        "createArguments": "<value>",
+        "choice": "<string>",
+        "choiceArgument": "<value>"
+      }
+    }
+  ],
+  "actAs": [
+    "<string>"
+  ]
+}
+```
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `application/json` | `application/json:object` |
+| `400` | Invalid value, Invalid value for: body | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-get-v2-package-vetting"></a>
+
+### `GET /v2/package-vetting`
+
+- Operation ID: `getV2Package-vetting`
+- Description: Lists which participant node vetted what packages on which synchronizer. Can be called by any authenticated user.
+
+**Request Body**
+
+- Required: `yes`
+
+| Content Type | Schema | Required Fields |
+| --- | --- | --- |
+| `application/json` | `object` | - |
+
+**Request Example: `application/json`**
+
+```json
+{
+  "packageMetadataFilter": {
+    "packageIds": [
+      "<string>"
+    ],
+    "packageNamePrefixes": [
+      "<string>"
+    ]
+  },
+  "topologyStateFilter": {
+    "participantIds": [
+      "<string>"
+    ],
+    "synchronizerIds": [
+      "<string>"
+    ]
+  },
+  "pageToken": "<string>",
+  "pageSize": "<integer>"
+}
+```
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `application/json` | `application/json:object` |
+| `400` | Invalid value, Invalid value for: body | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-post-v2-package-vetting"></a>
+
+### `POST /v2/package-vetting`
+
+- Operation ID: `postV2Package-vetting`
+- Description: Update the vetted packages of this participant
+
+**Request Body**
+
+- Required: `yes`
+
+| Content Type | Schema | Required Fields |
+| --- | --- | --- |
+| `application/json` | `object` | `changes` |
+
+**Request Example: `application/json`**
+
+```json
+{
+  "changes": [
+    {
+      "operation": {
+        "Empty": "<object>"
+      }
+    }
+  ]
+}
+```
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `application/json` | `application/json:object` |
+| `400` | Invalid value, Invalid value for: body | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-get-v2-packages"></a>
+
+### `GET /v2/packages`
+
+- Operation ID: `getV2Packages`
+- Description: Returns the identifiers of all supported packages.
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `application/json` | `application/json:object` |
+| `400` | Invalid value | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-post-v2-packages"></a>
+
+### `POST /v2/packages`
+
+- Operation ID: `postV2Packages`
+- Description: Behaves the same as /dars. This endpoint will be deprecated and removed in a future release. Upload a DAR file to the participant.  If vetting is enabled in the request, the DAR is checked for upgrade compatibility with the set of the already vetted packages on the target vetting synchronizer See UploadDarFileRequest for details regarding vetting and the target vetting synchronizer.
+
+**Parameters**
+
+| Name | In | Required | Schema | Description |
+| --- | --- | --- | --- | --- |
+| `vetAllPackages` | `query` | `no` | `boolean` | - |
+| `synchronizerId` | `query` | `no` | `string` | - |
+
+**Request Body**
+
+- Required: `yes`
+
+| Content Type | Schema | Required Fields |
+| --- | --- | --- |
+| `application/octet-stream` | `string` | - |
+
+**Request Example: `application/octet-stream`**
+
+```json
+"<string>"
+```
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `application/json` | `application/json:object` |
+| `400` | Invalid value, Invalid value for: body, Invalid value for: query parameter vetAllPackages, Invalid value for: query parameter synchronizerId | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-get-v2-packages-package-id"></a>
+
+### `GET /v2/packages/{package-id}`
+
+- Operation ID: `getV2PackagesPackage-id`
+- Description: Returns the contents of a single package.
+
+**Parameters**
+
+| Name | In | Required | Schema | Description |
+| --- | --- | --- | --- | --- |
+| `package-id` | `path` | `yes` | `string` | - |
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `application/octet-stream` | `application/octet-stream:string` |
+| `400` | Invalid value | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-get-v2-packages-package-id-status"></a>
+
+### `GET /v2/packages/{package-id}/status`
+
+- Operation ID: `getV2PackagesPackage-idStatus`
+- Description: Returns the status of a single package.
+
+**Parameters**
+
+| Name | In | Required | Schema | Description |
+| --- | --- | --- | --- | --- |
+| `package-id` | `path` | `yes` | `string` | - |
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `application/json` | `application/json:object` |
+| `400` | Invalid value | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-get-v2-parties"></a>
+
+### `GET /v2/parties`
+
+- Operation ID: `getV2Parties`
+- Description: List the parties known by the participant. The list returned contains parties whose ledger access is facilitated by the participant and the ones maintained elsewhere.
+
+**Parameters**
+
+| Name | In | Required | Schema | Description |
+| --- | --- | --- | --- | --- |
+| `identity-provider-id` | `query` | `no` | `string` | - |
+| `filter-party` | `query` | `no` | `string` | - |
+| `pageSize` | `query` | `no` | `integer` | maximum number of elements in a returned page |
+| `pageToken` | `query` | `no` | `string` | token - to continue results from a given page, leave empty to start from the beginning of the list, obtain token from the result of previous page |
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `application/json` | `application/json:object` |
+| `400` | Invalid value, Invalid value for: query parameter identity-provider-id, Invalid value for: query parameter filter-party, Invalid value for: query parameter pageSize, Invalid value for: query parameter pageToken | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-post-v2-parties"></a>
+
+### `POST /v2/parties`
+
+- Operation ID: `postV2Parties`
+- Description: Allocates a new party on a ledger and adds it to the set managed by the participant. Caller specifies a party identifier suggestion, the actual identifier allocated might be different and is implementation specific. Caller can specify party metadata that is stored locally on the participant. This call may:  - Succeed, in which case the actual allocated identifier is visible in   the response. - Respond with a gRPC error  daml-on-kv-ledger: suggestion's uniqueness is checked by the validators in the consensus layer and call rejected if the identifier is already present. canton: completely different globally unique identifier is allocated. Behind the scenes calls to an internal protocol are made. As that protocol is richer than the surface protocol, the arguments take implicit values The party identifier suggestion must be a valid party name. Party names are required to be non-empty US-ASCII strings built from letters, digits, space, colon, minus and underscore limited to 255 chars
+
+**Request Body**
+
+- Required: `yes`
+
+| Content Type | Schema | Required Fields |
+| --- | --- | --- |
+| `application/json` | `object` | - |
+
+**Request Example: `application/json`**
+
+```json
+{
+  "partyIdHint": "<string>",
+  "localMetadata": {
+    "resourceVersion": "<string>",
+    "annotations": {}
+  },
+  "identityProviderId": "<string>",
+  "synchronizerId": "<string>",
+  "userId": "<string>"
+}
+```
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `application/json` | `application/json:object` |
+| `400` | Invalid value, Invalid value for: body | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-post-v2-parties-external-allocate"></a>
+
+### `POST /v2/parties/external/allocate`
+
+- Operation ID: `postV2PartiesExternalAllocate`
+- Description: Alpha 3.3: Endpoint to allocate a new external party on a synchronizer  Expected to be stable in 3.5  The external party must be hosted (at least) on this node with either confirmation or observation permissions It can optionally be hosted on other nodes (then called a multi-hosted party). If hosted on additional nodes, explicit authorization of the hosting relationship must be performed on those nodes before the party can be used. Decentralized namespaces are supported but must be provided fully authorized by their owners. The individual owner namespace transactions can be submitted in the same call (fully authorized as well). In the simple case of a non-multi hosted, non-decentralized party, the RPC will return once the party is effectively allocated and ready to use, similarly to the AllocateParty behavior. For more complex scenarios applications may need to query the party status explicitly (only through the admin API as of now).
+
+**Request Body**
+
+- Required: `yes`
+
+| Content Type | Schema | Required Fields |
+| --- | --- | --- |
+| `application/json` | `object` | `onboardingTransactions`, `synchronizer` |
+
+**Request Example: `application/json`**
+
+```json
+{
+  "synchronizer": "<string>",
+  "onboardingTransactions": [
+    {
+      "transaction": "<string>"
+    }
+  ]
+}
+```
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `application/json` | `application/json:object` |
+| `400` | Invalid value, Invalid value for: body | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-post-v2-parties-external-generate-topology"></a>
+
+### `POST /v2/parties/external/generate-topology`
+
+- Operation ID: `postV2PartiesExternalGenerate-topology`
+- Description: Alpha 3.3: Convenience endpoint to generate topology transactions for external signing  Expected to be stable in 3.5  You may use this endpoint to generate the common external topology transactions which can be signed externally and uploaded as part of the allocate party process  Note that this request will create a normal namespace using the same key for the identity as for signing. More elaborate schemes such as multi-signature or decentralized parties require you to construct the topology transactions yourself.
+
+**Request Body**
+
+- Required: `yes`
+
+| Content Type | Schema | Required Fields |
+| --- | --- | --- |
+| `application/json` | `object` | `partyHint`, `publicKey`, `synchronizer` |
+
+**Request Example: `application/json`**
+
+```json
+{
+  "synchronizer": "<string>",
+  "partyHint": "<string>",
+  "publicKey": {
+    "format": "<string>",
+    "keyData": "<string>",
+    "keySpec": "<string>"
+  }
+}
+```
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `application/json` | `application/json:object` |
+| `400` | Invalid value, Invalid value for: body | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-get-v2-parties-participant-id"></a>
+
+### `GET /v2/parties/participant-id`
+
+- Operation ID: `getV2PartiesParticipant-id`
+- Description: Return the identifier of the participant. All horizontally scaled replicas should return the same id. daml-on-kv-ledger: returns an identifier supplied on command line at launch time canton: returns globally unique identifier of the participant
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `application/json` | `application/json:object` |
+| `400` | Invalid value | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-get-v2-parties-party"></a>
+
+### `GET /v2/parties/{party}`
+
+- Operation ID: `getV2PartiesParty`
+- Description: Get the party details of the given parties. Only known parties will be returned in the list.
+
+**Parameters**
+
+| Name | In | Required | Schema | Description |
+| --- | --- | --- | --- | --- |
+| `party` | `path` | `yes` | `string` | - |
+| `identity-provider-id` | `query` | `no` | `string` | - |
+| `parties` | `query` | `no` | `array[string]` | - |
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `application/json` | `application/json:object` |
+| `400` | Invalid value, Invalid value for: query parameter identity-provider-id, Invalid value for: query parameter parties | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-patch-v2-parties-party"></a>
+
+### `PATCH /v2/parties/{party}`
+
+- Operation ID: `patchV2PartiesParty`
+- Description: Update selected modifiable participant-local attributes of a party details resource. Can update the participant's local information for local parties.
+
+**Parameters**
+
+| Name | In | Required | Schema | Description |
+| --- | --- | --- | --- | --- |
+| `party` | `path` | `yes` | `string` | - |
+
+**Request Body**
+
+- Required: `yes`
+
+| Content Type | Schema | Required Fields |
+| --- | --- | --- |
+| `application/json` | `object` | `partyDetails`, `updateMask` |
+
+**Request Example: `application/json`**
+
+```json
+{
+  "partyDetails": {
+    "party": "<string>"
+  },
+  "updateMask": {
+    "unknownFields": {
+      "fields": {}
+    }
+  }
+}
+```
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `application/json` | `application/json:object` |
+| `400` | Invalid value, Invalid value for: body | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-post-v2-state-active-contracts"></a>
+
+### `POST /v2/state/active-contracts`
+
+- Operation ID: `postV2StateActive-contracts`
+- Description: Query active contracts list (blocking call). Querying active contracts is an expensive operation and if possible should not be repeated often. Consider querying active contracts initially (for a given offset) and then repeatedly call one of `/v2/updates/...`endpoints  to get subsequent modifications. You can also use websockets to get updates with better performance.  Returns a stream of the snapshot of the active contracts and incomplete (un)assignments at a ledger offset. Once the stream of GetActiveContractsResponses completes, the client SHOULD begin streaming updates from the update service, starting at the GetActiveContractsRequest.active_at_offset specified in this request. Clients SHOULD NOT assume that the set of active contracts they receive reflects the state at the ledger end.  Notice: This endpoint should be used for small results set. When number of results exceeded node configuration limit (`http-list-max-elements-limit`) there will be an error (`413 Content Too Large`) returned. Increasing this limit may lead to performance issues and high memory consumption. Consider using websockets (asyncapi) for better efficiency with larger results.
+
+**Parameters**
+
+| Name | In | Required | Schema | Description |
+| --- | --- | --- | --- | --- |
+| `limit` | `query` | `no` | `integer` | maximum number of elements to return, this param is ignored if is bigger than server setting |
+| `stream_idle_timeout_ms` | `query` | `no` | `integer` | timeout to complete and send result if no new elements are received (for open ended streams) |
+
+**Request Body**
+
+- Required: `yes`
+
+| Content Type | Schema | Required Fields |
+| --- | --- | --- |
+| `application/json` | `object` | `activeAtOffset` |
+
+**Request Example: `application/json`**
+
+```json
+{
+  "activeAtOffset": "<integer>"
+}
+```
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `application/json` | `application/json:array[object]` |
+| `400` | Invalid value, Invalid value for: body, Invalid value for: query parameter limit, Invalid value for: query parameter stream_idle_timeout_ms | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-get-v2-state-connected-synchronizers"></a>
+
+### `GET /v2/state/connected-synchronizers`
+
+- Operation ID: `getV2StateConnected-synchronizers`
+- Description: Get the list of connected synchronizers at the time of the query.
+
+**Parameters**
+
+| Name | In | Required | Schema | Description |
+| --- | --- | --- | --- | --- |
+| `party` | `query` | `no` | `string` | - |
+| `participantId` | `query` | `no` | `string` | - |
+| `identityProviderId` | `query` | `no` | `string` | - |
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `application/json` | `application/json:object` |
+| `400` | Invalid value, Invalid value for: query parameter party, Invalid value for: query parameter participantId, Invalid value for: query parameter identityProviderId | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-get-v2-state-latest-pruned-offsets"></a>
+
+### `GET /v2/state/latest-pruned-offsets`
+
+- Operation ID: `getV2StateLatest-pruned-offsets`
+- Description: Get the latest successfully pruned ledger offsets
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `application/json` | `application/json:object` |
+| `400` | Invalid value | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-get-v2-state-ledger-end"></a>
+
+### `GET /v2/state/ledger-end`
+
+- Operation ID: `getV2StateLedger-end`
+- Description: Get the current ledger end. Subscriptions started with the returned offset will serve events after this RPC was called.
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `application/json` | `application/json:object` |
+| `400` | Invalid value | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-post-v2-updates"></a>
+
+### `POST /v2/updates`
+
+- Operation ID: `postV2Updates`
+- Description: Read the ledger's filtered update stream for the specified contents and filters. It returns the event types in accordance with the stream contents selected. Also the selection criteria for individual events depends on the transaction shape chosen.  - ACS delta: a requesting party must be a stakeholder of an event for it to be included. - ledger effects: a requesting party must be a witness of an event for it to be included. Notice: This endpoint should be used for small results set. When number of results exceeded node configuration limit (`http-list-max-elements-limit`) there will be an error (`413 Content Too Large`) returned. Increasing this limit may lead to performance issues and high memory consumption. Consider using websockets (asyncapi) for better efficiency with larger results.
+
+**Parameters**
+
+| Name | In | Required | Schema | Description |
+| --- | --- | --- | --- | --- |
+| `limit` | `query` | `no` | `integer` | maximum number of elements to return, this param is ignored if is bigger than server setting |
+| `stream_idle_timeout_ms` | `query` | `no` | `integer` | timeout to complete and send result if no new elements are received (for open ended streams) |
+
+**Request Body**
+
+- Required: `yes`
+
+| Content Type | Schema | Required Fields |
+| --- | --- | --- |
+| `application/json` | `object` | - |
+
+**Request Example: `application/json`**
+
+```json
+{
+  "beginExclusive": "<integer>",
+  "endInclusive": "<integer>",
+  "filter": {
+    "filtersByParty": {},
+    "filtersForAnyParty": {
+      "cumulative": [
+        "<object>"
+      ]
+    }
+  },
+  "verbose": "<boolean>",
+  "updateFormat": {
+    "includeTransactions": {
+      "eventFormat": {
+        "filtersByParty": "<object>",
+        "filtersForAnyParty": "<object>",
+        "verbose": "<boolean>"
+      },
+      "transactionShape": "<string>"
+    },
+    "includeReassignments": {
+      "filtersByParty": {},
+      "filtersForAnyParty": {
+        "cumulative": [
+          "<object>"
+        ]
+      },
+      "verbose": "<boolean>"
+    },
+    "includeTopologyEvents": {
+      "includeParticipantAuthorizationEvents": {
+        "parties": [
+          "<string>"
+        ]
+      }
+    }
+  }
+}
+```
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `application/json` | `application/json:array[object]` |
+| `400` | Invalid value, Invalid value for: body, Invalid value for: query parameter limit, Invalid value for: query parameter stream_idle_timeout_ms | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-post-v2-updates-flats"></a>
+
+### `POST /v2/updates/flats`
+
+- Operation ID: `postV2UpdatesFlats`
+- Description: Query flat transactions update list (blocking call). Provided for backwards compatibility, it will be removed in the Canton version 3.5.0, use v2/updates instead. Notice: This endpoint should be used for small results set. When number of results exceeded node configuration limit (`http-list-max-elements-limit`) there will be an error (`413 Content Too Large`) returned. Increasing this limit may lead to performance issues and high memory consumption. Consider using websockets (asyncapi) for better efficiency with larger results.
+
+**Parameters**
+
+| Name | In | Required | Schema | Description |
+| --- | --- | --- | --- | --- |
+| `limit` | `query` | `no` | `integer` | maximum number of elements to return, this param is ignored if is bigger than server setting |
+| `stream_idle_timeout_ms` | `query` | `no` | `integer` | timeout to complete and send result if no new elements are received (for open ended streams) |
+
+**Request Body**
+
+- Required: `yes`
+
+| Content Type | Schema | Required Fields |
+| --- | --- | --- |
+| `application/json` | `object` | - |
+
+**Request Example: `application/json`**
+
+```json
+{
+  "beginExclusive": "<integer>",
+  "endInclusive": "<integer>",
+  "filter": {
+    "filtersByParty": {},
+    "filtersForAnyParty": {
+      "cumulative": [
+        "<object>"
+      ]
+    }
+  },
+  "verbose": "<boolean>",
+  "updateFormat": {
+    "includeTransactions": {
+      "eventFormat": {
+        "filtersByParty": "<object>",
+        "filtersForAnyParty": "<object>",
+        "verbose": "<boolean>"
+      },
+      "transactionShape": "<string>"
+    },
+    "includeReassignments": {
+      "filtersByParty": {},
+      "filtersForAnyParty": {
+        "cumulative": [
+          "<object>"
+        ]
+      },
+      "verbose": "<boolean>"
+    },
+    "includeTopologyEvents": {
+      "includeParticipantAuthorizationEvents": {
+        "parties": [
+          "<string>"
+        ]
+      }
+    }
+  }
+}
+```
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `application/json` | `application/json:array[object]` |
+| `400` | Invalid value, Invalid value for: body, Invalid value for: query parameter limit, Invalid value for: query parameter stream_idle_timeout_ms | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-post-v2-updates-transaction-by-id"></a>
+
+### `POST /v2/updates/transaction-by-id`
+
+- Operation ID: `postV2UpdatesTransaction-by-id`
+- Description: Get transaction by id. Provided for backwards compatibility, it will be removed in the Canton version 3.5.0, use v2/updates/update-by-id instead.
+
+**Request Body**
+
+- Required: `yes`
+
+| Content Type | Schema | Required Fields |
+| --- | --- | --- |
+| `application/json` | `object` | `updateId` |
+
+**Request Example: `application/json`**
+
+```json
+{
+  "updateId": "<string>"
+}
+```
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `application/json` | `application/json:object` |
+| `400` | Invalid value, Invalid value for: body | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-post-v2-updates-transaction-by-offset"></a>
+
+### `POST /v2/updates/transaction-by-offset`
+
+- Operation ID: `postV2UpdatesTransaction-by-offset`
+- Description: Get transaction by offset. Provided for backwards compatibility, it will be removed in the Canton version 3.5.0, use v2/updates/update-by-offset instead.
+
+**Request Body**
+
+- Required: `yes`
+
+| Content Type | Schema | Required Fields |
+| --- | --- | --- |
+| `application/json` | `object` | `offset` |
+
+**Request Example: `application/json`**
+
+```json
+{
+  "offset": "<integer>"
+}
+```
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `application/json` | `application/json:object` |
+| `400` | Invalid value, Invalid value for: body | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-get-v2-updates-transaction-tree-by-id-update-id"></a>
+
+### `GET /v2/updates/transaction-tree-by-id/{update-id}`
+
+- Operation ID: `getV2UpdatesTransaction-tree-by-idUpdate-id`
+- Description: Get transaction tree by id. Provided for backwards compatibility, it will be removed in the Canton version 3.5.0, use v2/updates/update-by-id instead.
+
+**Parameters**
+
+| Name | In | Required | Schema | Description |
+| --- | --- | --- | --- | --- |
+| `update-id` | `path` | `yes` | `string` | - |
+| `parties` | `query` | `no` | `array[string]` | - |
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `application/json` | `application/json:object` |
+| `400` | Invalid value, Invalid value for: query parameter parties | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-get-v2-updates-transaction-tree-by-offset-offset"></a>
+
+### `GET /v2/updates/transaction-tree-by-offset/{offset}`
+
+- Operation ID: `getV2UpdatesTransaction-tree-by-offsetOffset`
+- Description: Get transaction tree by offset. Provided for backwards compatibility, it will be removed in the Canton version 3.5.0, use v2/updates/update-by-offset instead.
+
+**Parameters**
+
+| Name | In | Required | Schema | Description |
+| --- | --- | --- | --- | --- |
+| `offset` | `path` | `yes` | `integer` | - |
+| `parties` | `query` | `no` | `array[string]` | - |
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `application/json` | `application/json:object` |
+| `400` | Invalid value, Invalid value for: path parameter offset, Invalid value for: query parameter parties | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-post-v2-updates-trees"></a>
+
+### `POST /v2/updates/trees`
+
+- Operation ID: `postV2UpdatesTrees`
+- Description: Query update transactions tree list (blocking call). Provided for backwards compatibility, it will be removed in the Canton version 3.5.0, use v2/updates instead. Notice: This endpoint should be used for small results set. When number of results exceeded node configuration limit (`http-list-max-elements-limit`) there will be an error (`413 Content Too Large`) returned. Increasing this limit may lead to performance issues and high memory consumption. Consider using websockets (asyncapi) for better efficiency with larger results.
+
+**Parameters**
+
+| Name | In | Required | Schema | Description |
+| --- | --- | --- | --- | --- |
+| `limit` | `query` | `no` | `integer` | maximum number of elements to return, this param is ignored if is bigger than server setting |
+| `stream_idle_timeout_ms` | `query` | `no` | `integer` | timeout to complete and send result if no new elements are received (for open ended streams) |
+
+**Request Body**
+
+- Required: `yes`
+
+| Content Type | Schema | Required Fields |
+| --- | --- | --- |
+| `application/json` | `object` | - |
+
+**Request Example: `application/json`**
+
+```json
+{
+  "beginExclusive": "<integer>",
+  "endInclusive": "<integer>",
+  "filter": {
+    "filtersByParty": {},
+    "filtersForAnyParty": {
+      "cumulative": [
+        "<object>"
+      ]
+    }
+  },
+  "verbose": "<boolean>",
+  "updateFormat": {
+    "includeTransactions": {
+      "eventFormat": {
+        "filtersByParty": "<object>",
+        "filtersForAnyParty": "<object>",
+        "verbose": "<boolean>"
+      },
+      "transactionShape": "<string>"
+    },
+    "includeReassignments": {
+      "filtersByParty": {},
+      "filtersForAnyParty": {
+        "cumulative": [
+          "<object>"
+        ]
+      },
+      "verbose": "<boolean>"
+    },
+    "includeTopologyEvents": {
+      "includeParticipantAuthorizationEvents": {
+        "parties": [
+          "<string>"
+        ]
+      }
+    }
+  }
+}
+```
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `application/json` | `application/json:array[object]` |
+| `400` | Invalid value, Invalid value for: body, Invalid value for: query parameter limit, Invalid value for: query parameter stream_idle_timeout_ms | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-post-v2-updates-update-by-id"></a>
+
+### `POST /v2/updates/update-by-id`
+
+- Operation ID: `postV2UpdatesUpdate-by-id`
+- Description: Lookup an update by its ID. If there is no update with this ID, or all the events are filtered, an UPDATE_NOT_FOUND error will be raised.
+
+**Request Body**
+
+- Required: `yes`
+
+| Content Type | Schema | Required Fields |
+| --- | --- | --- |
+| `application/json` | `object` | `updateFormat`, `updateId` |
+
+**Request Example: `application/json`**
+
+```json
+{
+  "updateId": "<string>",
+  "updateFormat": {
+    "includeTransactions": {
+      "eventFormat": {
+        "filtersByParty": "<object>",
+        "filtersForAnyParty": "<object>",
+        "verbose": "<boolean>"
+      },
+      "transactionShape": "<string>"
+    },
+    "includeReassignments": {
+      "filtersByParty": {},
+      "filtersForAnyParty": {
+        "cumulative": [
+          "<object>"
+        ]
+      },
+      "verbose": "<boolean>"
+    },
+    "includeTopologyEvents": {
+      "includeParticipantAuthorizationEvents": {
+        "parties": [
+          "<string>"
+        ]
+      }
+    }
+  }
+}
+```
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `application/json` | `application/json:object` |
+| `400` | Invalid value, Invalid value for: body | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-post-v2-updates-update-by-offset"></a>
+
+### `POST /v2/updates/update-by-offset`
+
+- Operation ID: `postV2UpdatesUpdate-by-offset`
+- Description: Lookup an update by its offset. If there is no update with this offset, or all the events are filtered, an UPDATE_NOT_FOUND error will be raised.
+
+**Request Body**
+
+- Required: `yes`
+
+| Content Type | Schema | Required Fields |
+| --- | --- | --- |
+| `application/json` | `object` | `offset`, `updateFormat` |
+
+**Request Example: `application/json`**
+
+```json
+{
+  "offset": "<integer>",
+  "updateFormat": {
+    "includeTransactions": {
+      "eventFormat": {
+        "filtersByParty": "<object>",
+        "filtersForAnyParty": "<object>",
+        "verbose": "<boolean>"
+      },
+      "transactionShape": "<string>"
+    },
+    "includeReassignments": {
+      "filtersByParty": {},
+      "filtersForAnyParty": {
+        "cumulative": [
+          "<object>"
+        ]
+      },
+      "verbose": "<boolean>"
+    },
+    "includeTopologyEvents": {
+      "includeParticipantAuthorizationEvents": {
+        "parties": [
+          "<string>"
+        ]
+      }
+    }
+  }
+}
+```
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `application/json` | `application/json:object` |
+| `400` | Invalid value, Invalid value for: body | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-get-v2-users"></a>
+
+### `GET /v2/users`
+
+- Operation ID: `getV2Users`
+- Description: List all existing users.
+
+**Parameters**
+
+| Name | In | Required | Schema | Description |
+| --- | --- | --- | --- | --- |
+| `pageSize` | `query` | `no` | `integer` | maximum number of elements in a returned page |
+| `pageToken` | `query` | `no` | `string` | token - to continue results from a given page, leave empty to start from the beginning of the list, obtain token from the result of previous page |
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `application/json` | `application/json:object` |
+| `400` | Invalid value, Invalid value for: query parameter pageSize, Invalid value for: query parameter pageToken | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-post-v2-users"></a>
+
+### `POST /v2/users`
+
+- Operation ID: `postV2Users`
+- Description: Create a new user.
+
+**Request Body**
+
+- Required: `yes`
+
+| Content Type | Schema | Required Fields |
+| --- | --- | --- |
+| `application/json` | `object` | `user` |
+
+**Request Example: `application/json`**
+
+```json
+{
+  "user": {
+    "id": "<string>"
+  }
+}
+```
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `application/json` | `application/json:object` |
+| `400` | Invalid value, Invalid value for: body | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-delete-v2-users-user-id"></a>
+
+### `DELETE /v2/users/{user-id}`
+
+- Operation ID: `deleteV2UsersUser-id`
+- Description: Delete an existing user and all its rights.
+
+**Parameters**
+
+| Name | In | Required | Schema | Description |
+| --- | --- | --- | --- | --- |
+| `user-id` | `path` | `yes` | `string` | - |
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `application/json` | `application/json:object` |
+| `400` | Invalid value | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-get-v2-users-user-id"></a>
+
+### `GET /v2/users/{user-id}`
+
+- Operation ID: `getV2UsersUser-id`
+- Description: Get the user data of a specific user or the authenticated user.
+
+**Parameters**
+
+| Name | In | Required | Schema | Description |
+| --- | --- | --- | --- | --- |
+| `user-id` | `path` | `yes` | `string` | - |
+| `identity-provider-id` | `query` | `no` | `string` | - |
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `application/json` | `application/json:object` |
+| `400` | Invalid value, Invalid value for: query parameter identity-provider-id | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-patch-v2-users-user-id"></a>
+
+### `PATCH /v2/users/{user-id}`
+
+- Operation ID: `patchV2UsersUser-id`
+- Description: Update selected modifiable attribute of a user resource described by the ``User`` message.
+
+**Parameters**
+
+| Name | In | Required | Schema | Description |
+| --- | --- | --- | --- | --- |
+| `user-id` | `path` | `yes` | `string` | - |
+
+**Request Body**
+
+- Required: `yes`
+
+| Content Type | Schema | Required Fields |
+| --- | --- | --- |
+| `application/json` | `object` | `updateMask`, `user` |
+
+**Request Example: `application/json`**
+
+```json
+{
+  "user": {
+    "id": "<string>"
+  },
+  "updateMask": {
+    "unknownFields": {
+      "fields": {}
+    }
+  }
+}
+```
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `application/json` | `application/json:object` |
+| `400` | Invalid value, Invalid value for: body | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-patch-v2-users-user-id-identity-provider-id"></a>
+
+### `PATCH /v2/users/{user-id}/identity-provider-id`
+
+- Operation ID: `patchV2UsersUser-idIdentity-provider-id`
+- Description: Update the assignment of a user from one IDP to another.
+
+**Parameters**
+
+| Name | In | Required | Schema | Description |
+| --- | --- | --- | --- | --- |
+| `user-id` | `path` | `yes` | `string` | - |
+
+**Request Body**
+
+- Required: `yes`
+
+| Content Type | Schema | Required Fields |
+| --- | --- | --- |
+| `application/json` | `object` | `userId` |
+
+**Request Example: `application/json`**
+
+```json
+{
+  "userId": "<string>"
+}
+```
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `application/json` | `application/json:object` |
+| `400` | Invalid value, Invalid value for: body | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-get-v2-users-user-id-rights"></a>
+
+### `GET /v2/users/{user-id}/rights`
+
+- Operation ID: `getV2UsersUser-idRights`
+- Description: List the set of all rights granted to a user.
+
+**Parameters**
+
+| Name | In | Required | Schema | Description |
+| --- | --- | --- | --- | --- |
+| `user-id` | `path` | `yes` | `string` | - |
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `application/json` | `application/json:object` |
+| `400` | Invalid value | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-patch-v2-users-user-id-rights"></a>
+
+### `PATCH /v2/users/{user-id}/rights`
+
+- Operation ID: `patchV2UsersUser-idRights`
+- Description: Revoke rights from a user. Revoking rights does not affect the resource version of the corresponding user.
+
+**Parameters**
+
+| Name | In | Required | Schema | Description |
+| --- | --- | --- | --- | --- |
+| `user-id` | `path` | `yes` | `string` | - |
+
+**Request Body**
+
+- Required: `yes`
+
+| Content Type | Schema | Required Fields |
+| --- | --- | --- |
+| `application/json` | `object` | `userId` |
+
+**Request Example: `application/json`**
+
+```json
+{
+  "userId": "<string>"
+}
+```
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `application/json` | `application/json:object` |
+| `400` | Invalid value, Invalid value for: body | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-post-v2-users-user-id-rights"></a>
+
+### `POST /v2/users/{user-id}/rights`
+
+- Operation ID: `postV2UsersUser-idRights`
+- Description: Grant rights to a user. Granting rights does not affect the resource version of the corresponding user.
+
+**Parameters**
+
+| Name | In | Required | Schema | Description |
+| --- | --- | --- | --- | --- |
+| `user-id` | `path` | `yes` | `string` | - |
+
+**Request Body**
+
+- Required: `yes`
+
+| Content Type | Schema | Required Fields |
+| --- | --- | --- |
+| `application/json` | `object` | `userId` |
+
+**Request Example: `application/json`**
+
+```json
+{
+  "userId": "<string>"
+}
+```
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `application/json` | `application/json:object` |
+| `400` | Invalid value, Invalid value for: body | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-get-v2-version"></a>
+
+### `GET /v2/version`
+
+- Operation ID: `getV2Version`
+- Description: Read the Ledger API version
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `application/json` | `application/json:object` |
+| `400` | Invalid value | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+## Version Change Timeline
+
+| Version | Added | Changed | Removed |
+| --- | --- | --- | --- |
+| `3.4` | `357` | `0` | `0` |
+| `3.5` | `6` | `147` | `1` |
+
+## Changed Entities
+
+| Entity | Type | Introduced | Changed In | Removed |
+| --- | --- | --- | --- | --- |
+| `schemas.AllocateExternalPartyRequest` | `component` | `3.4` | `3.5` | - |
+| `schemas.AllocatePartyRequest` | `component` | `3.4` | `3.5` | - |
+| `schemas.ArchivedEvent` | `component` | `3.4` | `3.5` | - |
+| `schemas.CanActAs1` | `component` | `3.4` | `3.5` | - |
+| `schemas.CanExecuteAs1` | `component` | `3.4` | `3.5` | - |
+| `schemas.CanExecuteAsAnyParty` | `component` | `3.4` | `3.5` | - |
+| `schemas.CanExecuteAsAnyParty1` | `component` | `3.4` | `3.5` | - |
+| `schemas.CanReadAs1` | `component` | `3.4` | `3.5` | - |
+| `schemas.CanReadAsAnyParty` | `component` | `3.4` | `3.5` | - |
+| `schemas.CanReadAsAnyParty1` | `component` | `3.4` | `3.5` | - |
+| `schemas.Completion1` | `component` | `3.4` | `3.5` | - |
+| `schemas.ConnectedSynchronizer` | `component` | `3.4` | `3.5` | - |
+| `schemas.CreatedEvent` | `component` | `3.4` | `3.5` | - |
+| `schemas.ExercisedEvent` | `component` | `3.4` | `3.5` | - |
+| `schemas.GetActiveContractsRequest` | `component` | `3.4` | `3.5` | - |
+| `schemas.GetPartiesResponse` | `component` | `3.4` | `3.5` | - |
+| `schemas.GetPreferredPackagesRequest` | `component` | `3.4` | `3.5` | - |
+| `schemas.GetUpdatesRequest` | `component` | `3.4` | `3.5` | - |
+| `schemas.Identifier` | `component` | `3.4` | - | ❌ `3.5` |
+| `schemas.IdentifierFilter` | `component` | `3.4` | `3.5` | - |
+| `schemas.IdentityProviderAdmin` | `component` | `3.4` | `3.5` | - |
+| `schemas.IdentityProviderAdmin1` | `component` | `3.4` | `3.5` | - |
+| `schemas.JsExecuteSubmissionAndWaitForTransactionRequest` | `component` | `3.4` | `3.5` | - |
+| `schemas.JsExecuteSubmissionAndWaitRequest` | `component` | `3.4` | `3.5` | - |
+| `schemas.JsExecuteSubmissionRequest` | `component` | `3.4` | `3.5` | - |
+| `schemas.JsGetActiveContractsResponse` | `component` | `3.4` | `3.5` | - |
+| `schemas.JsInterfaceView` | `component` | `3.4` | `3.5` | - |
+| `schemas.JsPrepareSubmissionRequest` | `component` | `3.4` | `3.5` | - |
+| `schemas.JsPrepareSubmissionResponse` | `component` | `3.4` | `3.5` | - |
+| `schemas.JsReassignment` | `component` | `3.4` | `3.5` | - |
+| `schemas.JsTransaction` | `component` | `3.4` | `3.5` | - |
+| `schemas.ParticipantAdmin` | `component` | `3.4` | `3.5` | - |
+| `schemas.ParticipantAdmin1` | `component` | `3.4` | `3.5` | - |
+| `schemas.ParticipantAuthorizationOnboarding` | `component` | `3.5` | - | - |
+| `schemas.ParticipantAuthorizationOnboarding1` | `component` | `3.5` | - | - |
+| `schemas.PrefetchContractKey` | `component` | `3.4` | `3.5` | - |
+| `schemas.ReassignmentCommands` | `component` | `3.4` | `3.5` | - |
+| `schemas.SignedTransaction` | `component` | `3.4` | `3.5` | - |
+| `schemas.TopologyEventEvent` | `component` | `3.4` | `3.5` | - |
+| `schemas.TraceContext` | `component` | `3.4` | `3.5` | - |
+| `schemas.Unvet` | `component` | `3.4` | `3.5` | - |
+| `schemas.Unvet1` | `component` | `3.4` | `3.5` | - |
+| `schemas.Vet` | `component` | `3.4` | `3.5` | - |
+| `schemas.Vet1` | `component` | `3.4` | `3.5` | - |
+| `DELETE /v2/idps/{idp-id}` | `operation` | `3.4` | `3.5` | - |
+| `DELETE /v2/users/{user-id}` | `operation` | `3.4` | `3.5` | - |
+| `GET /livez` | `operation` | `3.5` | - | - |
+| `GET /readyz` | `operation` | `3.5` | - | - |
+| `GET /v2/authenticated-user` | `operation` | `3.4` | `3.5` | - |
+| `GET /v2/idps` | `operation` | `3.4` | `3.5` | - |
+| `GET /v2/idps/{idp-id}` | `operation` | `3.4` | `3.5` | - |
+| `GET /v2/interactive-submission/preferred-package-version` | `operation` | `3.4` | `3.5` | - |
+| `GET /v2/package-vetting` | `operation` | `3.4` | `3.5` | - |
+| `GET /v2/packages` | `operation` | `3.4` | `3.5` | - |
+| `GET /v2/packages/{package-id}` | `operation` | `3.4` | `3.5` | - |
+| `GET /v2/packages/{package-id}/status` | `operation` | `3.4` | `3.5` | - |
+| `GET /v2/parties` | `operation` | `3.4` | `3.5` | - |
+| `GET /v2/parties/participant-id` | `operation` | `3.4` | `3.5` | - |
+| `GET /v2/parties/{party}` | `operation` | `3.4` | `3.5` | - |
+| `GET /v2/state/connected-synchronizers` | `operation` | `3.4` | `3.5` | - |
+| `GET /v2/state/latest-pruned-offsets` | `operation` | `3.4` | `3.5` | - |
+| `GET /v2/state/ledger-end` | `operation` | `3.4` | `3.5` | - |
+| `GET /v2/updates/transaction-tree-by-id/{update-id}` | `operation` | `3.4` | `3.5` | - |
+| `GET /v2/updates/transaction-tree-by-offset/{offset}` | `operation` | `3.4` | `3.5` | - |
+| `GET /v2/users` | `operation` | `3.4` | `3.5` | - |
+| `GET /v2/users/{user-id}` | `operation` | `3.4` | `3.5` | - |
+| `GET /v2/users/{user-id}/rights` | `operation` | `3.4` | `3.5` | - |
+| `GET /v2/version` | `operation` | `3.4` | `3.5` | - |
+| `PATCH /v2/idps/{idp-id}` | `operation` | `3.4` | `3.5` | - |
+| `PATCH /v2/parties/{party}` | `operation` | `3.4` | `3.5` | - |
+| `PATCH /v2/users/{user-id}` | `operation` | `3.4` | `3.5` | - |
+| `PATCH /v2/users/{user-id}/identity-provider-id` | `operation` | `3.4` | `3.5` | - |
+| `PATCH /v2/users/{user-id}/rights` | `operation` | `3.4` | `3.5` | - |
+| `POST /v2/commands/async/submit` | `operation` | `3.4` | `3.5` | - |
+| `POST /v2/commands/async/submit-reassignment` | `operation` | `3.4` | `3.5` | - |
+| `POST /v2/commands/completions` | `operation` | `3.4` | `3.5` | - |
+| `POST /v2/commands/submit-and-wait` | `operation` | `3.4` | `3.5` | - |
+| `POST /v2/commands/submit-and-wait-for-reassignment` | `operation` | `3.4` | `3.5` | - |
+| `POST /v2/commands/submit-and-wait-for-transaction` | `operation` | `3.4` | `3.5` | - |
+| `POST /v2/commands/submit-and-wait-for-transaction-tree` | `operation` | `3.4` | `3.5` | - |
+| `POST /v2/contracts/contract-by-id` | `operation` | `3.4` | `3.5` | - |
+| `POST /v2/dars` | `operation` | `3.4` | `3.5` | - |
+| `POST /v2/dars/validate` | `operation` | `3.4` | `3.5` | - |
+| `POST /v2/events/events-by-contract-id` | `operation` | `3.4` | `3.5` | - |
+| `POST /v2/idps` | `operation` | `3.4` | `3.5` | - |
+| `POST /v2/interactive-submission/execute` | `operation` | `3.4` | `3.5` | - |
+| `POST /v2/interactive-submission/executeAndWait` | `operation` | `3.4` | `3.5` | - |
+| `POST /v2/interactive-submission/executeAndWaitForTransaction` | `operation` | `3.4` | `3.5` | - |
+| `POST /v2/interactive-submission/preferred-packages` | `operation` | `3.4` | `3.5` | - |
+| `POST /v2/interactive-submission/prepare` | `operation` | `3.4` | `3.5` | - |
+| `POST /v2/package-vetting` | `operation` | `3.4` | `3.5` | - |
+| `POST /v2/packages` | `operation` | `3.4` | `3.5` | - |
+| `POST /v2/parties` | `operation` | `3.4` | `3.5` | - |
+| `POST /v2/parties/external/allocate` | `operation` | `3.4` | `3.5` | - |
+| `POST /v2/parties/external/generate-topology` | `operation` | `3.4` | `3.5` | - |
+| `POST /v2/state/active-contracts` | `operation` | `3.4` | `3.5` | - |
+| `POST /v2/updates` | `operation` | `3.4` | `3.5` | - |
+| `POST /v2/updates/flats` | `operation` | `3.4` | `3.5` | - |
+| `POST /v2/updates/transaction-by-id` | `operation` | `3.4` | `3.5` | - |
+| `POST /v2/updates/transaction-by-offset` | `operation` | `3.4` | `3.5` | - |
+| `POST /v2/updates/trees` | `operation` | `3.4` | `3.5` | - |
+| `POST /v2/updates/update-by-id` | `operation` | `3.4` | `3.5` | - |
+| `POST /v2/updates/update-by-offset` | `operation` | `3.4` | `3.5` | - |
+| `POST /v2/users` | `operation` | `3.4` | `3.5` | - |
+| `POST /v2/users/{user-id}/rights` | `operation` | `3.4` | `3.5` | - |
+| `/livez` | `path` | `3.5` | - | - |
+| `/readyz` | `path` | `3.5` | - | - |
+| `/v2/authenticated-user` | `path` | `3.4` | `3.5` | - |
+| `/v2/commands/async/submit` | `path` | `3.4` | `3.5` | - |
+| `/v2/commands/async/submit-reassignment` | `path` | `3.4` | `3.5` | - |
+| `/v2/commands/completions` | `path` | `3.4` | `3.5` | - |
+| `/v2/commands/submit-and-wait` | `path` | `3.4` | `3.5` | - |
+| `/v2/commands/submit-and-wait-for-reassignment` | `path` | `3.4` | `3.5` | - |
+| `/v2/commands/submit-and-wait-for-transaction` | `path` | `3.4` | `3.5` | - |
+| `/v2/commands/submit-and-wait-for-transaction-tree` | `path` | `3.4` | `3.5` | - |
+| `/v2/contracts/contract-by-id` | `path` | `3.4` | `3.5` | - |
+| `/v2/dars` | `path` | `3.4` | `3.5` | - |
+| `/v2/dars/validate` | `path` | `3.4` | `3.5` | - |
+| `/v2/events/events-by-contract-id` | `path` | `3.4` | `3.5` | - |
+| `/v2/idps` | `path` | `3.4` | `3.5` | - |
+| `/v2/idps/{idp-id}` | `path` | `3.4` | `3.5` | - |
+| `/v2/interactive-submission/execute` | `path` | `3.4` | `3.5` | - |
+| `/v2/interactive-submission/executeAndWait` | `path` | `3.4` | `3.5` | - |
+| `/v2/interactive-submission/executeAndWaitForTransaction` | `path` | `3.4` | `3.5` | - |
+| `/v2/interactive-submission/preferred-package-version` | `path` | `3.4` | `3.5` | - |
+| `/v2/interactive-submission/preferred-packages` | `path` | `3.4` | `3.5` | - |
+| `/v2/interactive-submission/prepare` | `path` | `3.4` | `3.5` | - |
+| `/v2/package-vetting` | `path` | `3.4` | `3.5` | - |
+| `/v2/packages` | `path` | `3.4` | `3.5` | - |
+| `/v2/packages/{package-id}` | `path` | `3.4` | `3.5` | - |
+| `/v2/packages/{package-id}/status` | `path` | `3.4` | `3.5` | - |
+| `/v2/parties` | `path` | `3.4` | `3.5` | - |
+| `/v2/parties/external/allocate` | `path` | `3.4` | `3.5` | - |
+| `/v2/parties/external/generate-topology` | `path` | `3.4` | `3.5` | - |
+| `/v2/parties/participant-id` | `path` | `3.4` | `3.5` | - |
+| `/v2/parties/{party}` | `path` | `3.4` | `3.5` | - |
+| `/v2/state/active-contracts` | `path` | `3.4` | `3.5` | - |
+| `/v2/state/connected-synchronizers` | `path` | `3.4` | `3.5` | - |
+| `/v2/state/latest-pruned-offsets` | `path` | `3.4` | `3.5` | - |
+| `/v2/state/ledger-end` | `path` | `3.4` | `3.5` | - |
+| `/v2/updates` | `path` | `3.4` | `3.5` | - |
+| `/v2/updates/flats` | `path` | `3.4` | `3.5` | - |
+| `/v2/updates/transaction-by-id` | `path` | `3.4` | `3.5` | - |
+| `/v2/updates/transaction-by-offset` | `path` | `3.4` | `3.5` | - |
+| `/v2/updates/transaction-tree-by-id/{update-id}` | `path` | `3.4` | `3.5` | - |
+| `/v2/updates/transaction-tree-by-offset/{offset}` | `path` | `3.4` | `3.5` | - |
+| `/v2/updates/trees` | `path` | `3.4` | `3.5` | - |
+| `/v2/updates/update-by-id` | `path` | `3.4` | `3.5` | - |
+| `/v2/updates/update-by-offset` | `path` | `3.4` | `3.5` | - |
+| `/v2/users` | `path` | `3.4` | `3.5` | - |
+| `/v2/users/{user-id}` | `path` | `3.4` | `3.5` | - |
+| `/v2/users/{user-id}/identity-provider-id` | `path` | `3.4` | `3.5` | - |
+| `/v2/users/{user-id}/rights` | `path` | `3.4` | `3.5` | - |
+| `/v2/version` | `path` | `3.4` | `3.5` | - |
+
+## Latest Operations
+
+| Operation | Introduced | Changed In | Removed |
+| --- | --- | --- | --- |
+| `DELETE /v2/idps/{idp-id}` | `3.4` | `3.5` | - |
+| `DELETE /v2/users/{user-id}` | `3.4` | `3.5` | - |
+| `GET /livez` | `3.5` | - | - |
+| `GET /readyz` | `3.5` | - | - |
+| `GET /v2/authenticated-user` | `3.4` | `3.5` | - |
+| `GET /v2/idps` | `3.4` | `3.5` | - |
+| `GET /v2/idps/{idp-id}` | `3.4` | `3.5` | - |
+| `GET /v2/interactive-submission/preferred-package-version` | `3.4` | `3.5` | - |
+| `GET /v2/package-vetting` | `3.4` | `3.5` | - |
+| `GET /v2/packages` | `3.4` | `3.5` | - |
+| `GET /v2/packages/{package-id}` | `3.4` | `3.5` | - |
+| `GET /v2/packages/{package-id}/status` | `3.4` | `3.5` | - |
+| `GET /v2/parties` | `3.4` | `3.5` | - |
+| `GET /v2/parties/participant-id` | `3.4` | `3.5` | - |
+| `GET /v2/parties/{party}` | `3.4` | `3.5` | - |
+| `GET /v2/state/connected-synchronizers` | `3.4` | `3.5` | - |
+| `GET /v2/state/latest-pruned-offsets` | `3.4` | `3.5` | - |
+| `GET /v2/state/ledger-end` | `3.4` | `3.5` | - |
+| `GET /v2/updates/transaction-tree-by-id/{update-id}` | `3.4` | `3.5` | - |
+| `GET /v2/updates/transaction-tree-by-offset/{offset}` | `3.4` | `3.5` | - |
+| `GET /v2/users` | `3.4` | `3.5` | - |
+| `GET /v2/users/{user-id}` | `3.4` | `3.5` | - |
+| `GET /v2/users/{user-id}/rights` | `3.4` | `3.5` | - |
+| `GET /v2/version` | `3.4` | `3.5` | - |
+| `PATCH /v2/idps/{idp-id}` | `3.4` | `3.5` | - |
+| `PATCH /v2/parties/{party}` | `3.4` | `3.5` | - |
+| `PATCH /v2/users/{user-id}` | `3.4` | `3.5` | - |
+| `PATCH /v2/users/{user-id}/identity-provider-id` | `3.4` | `3.5` | - |
+| `PATCH /v2/users/{user-id}/rights` | `3.4` | `3.5` | - |
+| `POST /v2/commands/async/submit` | `3.4` | `3.5` | - |
+| `POST /v2/commands/async/submit-reassignment` | `3.4` | `3.5` | - |
+| `POST /v2/commands/completions` | `3.4` | `3.5` | - |
+| `POST /v2/commands/submit-and-wait` | `3.4` | `3.5` | - |
+| `POST /v2/commands/submit-and-wait-for-reassignment` | `3.4` | `3.5` | - |
+| `POST /v2/commands/submit-and-wait-for-transaction` | `3.4` | `3.5` | - |
+| `POST /v2/commands/submit-and-wait-for-transaction-tree` | `3.4` | `3.5` | - |
+| `POST /v2/contracts/contract-by-id` | `3.4` | `3.5` | - |
+| `POST /v2/dars` | `3.4` | `3.5` | - |
+| `POST /v2/dars/validate` | `3.4` | `3.5` | - |
+| `POST /v2/events/events-by-contract-id` | `3.4` | `3.5` | - |
+| `POST /v2/idps` | `3.4` | `3.5` | - |
+| `POST /v2/interactive-submission/execute` | `3.4` | `3.5` | - |
+| `POST /v2/interactive-submission/executeAndWait` | `3.4` | `3.5` | - |
+| `POST /v2/interactive-submission/executeAndWaitForTransaction` | `3.4` | `3.5` | - |
+| `POST /v2/interactive-submission/preferred-packages` | `3.4` | `3.5` | - |
+| `POST /v2/interactive-submission/prepare` | `3.4` | `3.5` | - |
+| `POST /v2/package-vetting` | `3.4` | `3.5` | - |
+| `POST /v2/packages` | `3.4` | `3.5` | - |
+| `POST /v2/parties` | `3.4` | `3.5` | - |
+| `POST /v2/parties/external/allocate` | `3.4` | `3.5` | - |
+| `POST /v2/parties/external/generate-topology` | `3.4` | `3.5` | - |
+| `POST /v2/state/active-contracts` | `3.4` | `3.5` | - |
+| `POST /v2/updates` | `3.4` | `3.5` | - |
+| `POST /v2/updates/flats` | `3.4` | `3.5` | - |
+| `POST /v2/updates/transaction-by-id` | `3.4` | `3.5` | - |
+| `POST /v2/updates/transaction-by-offset` | `3.4` | `3.5` | - |
+| `POST /v2/updates/trees` | `3.4` | `3.5` | - |
+| `POST /v2/updates/update-by-id` | `3.4` | `3.5` | - |
+| `POST /v2/updates/update-by-offset` | `3.4` | `3.5` | - |
+| `POST /v2/users` | `3.4` | `3.5` | - |
+| `POST /v2/users/{user-id}/rights` | `3.4` | `3.5` | - |
+
+## Latest Components
+
+| Component | Introduced | Changed In | Removed |
+| --- | --- | --- | --- |
+| `schemas.AllocateExternalPartyRequest` | `3.4` | `3.5` | - |
+| `schemas.AllocateExternalPartyResponse` | `3.4` | - | - |
+| `schemas.AllocatePartyRequest` | `3.4` | `3.5` | - |
+| `schemas.AllocatePartyResponse` | `3.4` | - | - |
+| `schemas.ArchivedEvent` | `3.4` | `3.5` | - |
+| `schemas.AssignCommand` | `3.4` | - | - |
+| `schemas.AssignCommand1` | `3.4` | - | - |
+| `schemas.CanActAs` | `3.4` | - | - |
+| `schemas.CanActAs1` | `3.4` | `3.5` | - |
+| `schemas.CanExecuteAs` | `3.4` | - | - |
+| `schemas.CanExecuteAs1` | `3.4` | `3.5` | - |
+| `schemas.CanExecuteAsAnyParty` | `3.4` | `3.5` | - |
+| `schemas.CanExecuteAsAnyParty1` | `3.4` | `3.5` | - |
+| `schemas.CanReadAs` | `3.4` | - | - |
+| `schemas.CanReadAs1` | `3.4` | `3.5` | - |
+| `schemas.CanReadAsAnyParty` | `3.4` | `3.5` | - |
+| `schemas.CanReadAsAnyParty1` | `3.4` | `3.5` | - |
+| `schemas.Command` | `3.4` | - | - |
+| `schemas.Command1` | `3.4` | - | - |
+| `schemas.Completion` | `3.4` | - | - |
+| `schemas.Completion1` | `3.4` | `3.5` | - |
+| `schemas.CompletionResponse` | `3.4` | - | - |
+| `schemas.CompletionStreamRequest` | `3.4` | - | - |
+| `schemas.CompletionStreamResponse` | `3.4` | - | - |
+| `schemas.ConnectedSynchronizer` | `3.4` | `3.5` | - |
+| `schemas.CostEstimation` | `3.4` | - | - |
+| `schemas.CostEstimationHints` | `3.4` | - | - |
+| `schemas.CreateAndExerciseCommand` | `3.4` | - | - |
+| `schemas.CreateCommand` | `3.4` | - | - |
+| `schemas.CreateIdentityProviderConfigRequest` | `3.4` | - | - |
+| `schemas.CreateIdentityProviderConfigResponse` | `3.4` | - | - |
+| `schemas.CreateUserRequest` | `3.4` | - | - |
+| `schemas.CreateUserResponse` | `3.4` | - | - |
+| `schemas.CreatedEvent` | `3.4` | `3.5` | - |
+| `schemas.CreatedTreeEvent` | `3.4` | - | - |
+| `schemas.CumulativeFilter` | `3.4` | - | - |
+| `schemas.DeduplicationDuration` | `3.4` | - | - |
+| `schemas.DeduplicationDuration1` | `3.4` | - | - |
+| `schemas.DeduplicationDuration2` | `3.4` | - | - |
+| `schemas.DeduplicationOffset` | `3.4` | - | - |
+| `schemas.DeduplicationOffset1` | `3.4` | - | - |
+| `schemas.DeduplicationOffset2` | `3.4` | - | - |
+| `schemas.DeduplicationPeriod` | `3.4` | - | - |
+| `schemas.DeduplicationPeriod1` | `3.4` | - | - |
+| `schemas.DeduplicationPeriod2` | `3.4` | - | - |
+| `schemas.DeleteIdentityProviderConfigResponse` | `3.4` | - | - |
+| `schemas.DisclosedContract` | `3.4` | - | - |
+| `schemas.Duration` | `3.4` | - | - |
+| `schemas.Empty` | `3.4` | - | - |
+| `schemas.Empty1` | `3.4` | - | - |
+| `schemas.Empty10` | `3.4` | - | - |
+| `schemas.Empty2` | `3.4` | - | - |
+| `schemas.Empty3` | `3.4` | - | - |
+| `schemas.Empty4` | `3.4` | - | - |
+| `schemas.Empty5` | `3.4` | - | - |
+| `schemas.Empty6` | `3.4` | - | - |
+| `schemas.Empty7` | `3.4` | - | - |
+| `schemas.Empty8` | `3.4` | - | - |
+| `schemas.Empty9` | `3.4` | - | - |
+| `schemas.Event` | `3.4` | - | - |
+| `schemas.EventFormat` | `3.4` | - | - |
+| `schemas.ExecuteSubmissionAndWaitResponse` | `3.4` | - | - |
+| `schemas.ExecuteSubmissionResponse` | `3.4` | - | - |
+| `schemas.ExerciseByKeyCommand` | `3.4` | - | - |
+| `schemas.ExerciseCommand` | `3.4` | - | - |
+| `schemas.ExercisedEvent` | `3.4` | `3.5` | - |
+| `schemas.ExercisedTreeEvent` | `3.4` | - | - |
+| `schemas.ExperimentalCommandInspectionService` | `3.4` | - | - |
+| `schemas.ExperimentalFeatures` | `3.4` | - | - |
+| `schemas.ExperimentalStaticTime` | `3.4` | - | - |
+| `schemas.FeaturesDescriptor` | `3.4` | - | - |
+| `schemas.Field` | `3.4` | - | - |
+| `schemas.FieldMask` | `3.4` | - | - |
+| `schemas.Filters` | `3.4` | - | - |
+| `schemas.GenerateExternalPartyTopologyRequest` | `3.4` | - | - |
+| `schemas.GenerateExternalPartyTopologyResponse` | `3.4` | - | - |
+| `schemas.GetActiveContractsRequest` | `3.4` | `3.5` | - |
+| `schemas.GetConnectedSynchronizersResponse` | `3.4` | - | - |
+| `schemas.GetContractRequest` | `3.4` | - | - |
+| `schemas.GetContractResponse` | `3.4` | - | - |
+| `schemas.GetEventsByContractIdRequest` | `3.4` | - | - |
+| `schemas.GetIdentityProviderConfigResponse` | `3.4` | - | - |
+| `schemas.GetLatestPrunedOffsetsResponse` | `3.4` | - | - |
+| `schemas.GetLedgerApiVersionResponse` | `3.4` | - | - |
+| `schemas.GetLedgerEndResponse` | `3.4` | - | - |
+| `schemas.GetPackageStatusResponse` | `3.4` | - | - |
+| `schemas.GetParticipantIdResponse` | `3.4` | - | - |
+| `schemas.GetPartiesResponse` | `3.4` | `3.5` | - |
+| `schemas.GetPreferredPackageVersionResponse` | `3.4` | - | - |
+| `schemas.GetPreferredPackagesRequest` | `3.4` | `3.5` | - |
+| `schemas.GetPreferredPackagesResponse` | `3.4` | - | - |
+| `schemas.GetTransactionByIdRequest` | `3.4` | - | - |
+| `schemas.GetTransactionByOffsetRequest` | `3.4` | - | - |
+| `schemas.GetUpdateByIdRequest` | `3.4` | - | - |
+| `schemas.GetUpdateByOffsetRequest` | `3.4` | - | - |
+| `schemas.GetUpdatesRequest` | `3.4` | `3.5` | - |
+| `schemas.GetUserResponse` | `3.4` | - | - |
+| `schemas.GrantUserRightsRequest` | `3.4` | - | - |
+| `schemas.GrantUserRightsResponse` | `3.4` | - | - |
+| `schemas.IdentifierFilter` | `3.4` | `3.5` | - |
+| `schemas.IdentityProviderAdmin` | `3.4` | `3.5` | - |
+| `schemas.IdentityProviderAdmin1` | `3.4` | `3.5` | - |
+| `schemas.IdentityProviderConfig` | `3.4` | - | - |
+| `schemas.InterfaceFilter` | `3.4` | - | - |
+| `schemas.InterfaceFilter1` | `3.4` | - | - |
+| `schemas.JsActiveContract` | `3.4` | - | - |
+| `schemas.JsArchived` | `3.4` | - | - |
+| `schemas.JsAssignedEvent` | `3.4` | - | - |
+| `schemas.JsAssignmentEvent` | `3.4` | - | - |
+| `schemas.JsCantonError` | `3.4` | - | - |
+| `schemas.JsCommands` | `3.4` | - | - |
+| `schemas.JsContractEntry` | `3.4` | - | - |
+| `schemas.JsCreated` | `3.4` | - | - |
+| `schemas.JsEmpty` | `3.4` | - | - |
+| `schemas.JsExecuteSubmissionAndWaitForTransactionRequest` | `3.4` | `3.5` | - |
+| `schemas.JsExecuteSubmissionAndWaitForTransactionResponse` | `3.4` | - | - |
+| `schemas.JsExecuteSubmissionAndWaitRequest` | `3.4` | `3.5` | - |
+| `schemas.JsExecuteSubmissionRequest` | `3.4` | `3.5` | - |
+| `schemas.JsGetActiveContractsResponse` | `3.4` | `3.5` | - |
+| `schemas.JsGetEventsByContractIdResponse` | `3.4` | - | - |
+| `schemas.JsGetTransactionResponse` | `3.4` | - | - |
+| `schemas.JsGetTransactionTreeResponse` | `3.4` | - | - |
+| `schemas.JsGetUpdateResponse` | `3.4` | - | - |
+| `schemas.JsGetUpdateTreesResponse` | `3.4` | - | - |
+| `schemas.JsGetUpdatesResponse` | `3.4` | - | - |
+| `schemas.JsIncompleteAssigned` | `3.4` | - | - |
+| `schemas.JsIncompleteUnassigned` | `3.4` | - | - |
+| `schemas.JsInterfaceView` | `3.4` | `3.5` | - |
+| `schemas.JsPrepareSubmissionRequest` | `3.4` | `3.5` | - |
+| `schemas.JsPrepareSubmissionResponse` | `3.4` | `3.5` | - |
+| `schemas.JsReassignment` | `3.4` | `3.5` | - |
+| `schemas.JsReassignmentEvent` | `3.4` | - | - |
+| `schemas.JsStatus` | `3.4` | - | - |
+| `schemas.JsSubmitAndWaitForReassignmentResponse` | `3.4` | - | - |
+| `schemas.JsSubmitAndWaitForTransactionRequest` | `3.4` | - | - |
+| `schemas.JsSubmitAndWaitForTransactionResponse` | `3.4` | - | - |
+| `schemas.JsSubmitAndWaitForTransactionTreeResponse` | `3.4` | - | - |
+| `schemas.JsTopologyTransaction` | `3.4` | - | - |
+| `schemas.JsTransaction` | `3.4` | `3.5` | - |
+| `schemas.JsTransactionTree` | `3.4` | - | - |
+| `schemas.JsUnassignedEvent` | `3.4` | - | - |
+| `schemas.Kind` | `3.4` | - | - |
+| `schemas.ListIdentityProviderConfigsResponse` | `3.4` | - | - |
+| `schemas.ListKnownPartiesResponse` | `3.4` | - | - |
+| `schemas.ListPackagesResponse` | `3.4` | - | - |
+| `schemas.ListUserRightsResponse` | `3.4` | - | - |
+| `schemas.ListUsersResponse` | `3.4` | - | - |
+| `schemas.ListVettedPackagesRequest` | `3.4` | - | - |
+| `schemas.ListVettedPackagesResponse` | `3.4` | - | - |
+| `schemas.Map_Filters` | `3.4` | - | - |
+| `schemas.Map_Int_Field` | `3.4` | - | - |
+| `schemas.Map_Int_TreeEvent` | `3.4` | - | - |
+| `schemas.Map_String` | `3.4` | - | - |
+| `schemas.MinLedgerTime` | `3.4` | - | - |
+| `schemas.MinLedgerTimeAbs` | `3.4` | - | - |
+| `schemas.MinLedgerTimeRel` | `3.4` | - | - |
+| `schemas.NoPrior` | `3.4` | - | - |
+| `schemas.ObjectMeta` | `3.4` | - | - |
+| `schemas.OffsetCheckpoint` | `3.4` | - | - |
+| `schemas.OffsetCheckpoint1` | `3.4` | - | - |
+| `schemas.OffsetCheckpoint2` | `3.4` | - | - |
+| `schemas.OffsetCheckpoint3` | `3.4` | - | - |
+| `schemas.OffsetCheckpointFeature` | `3.4` | - | - |
+| `schemas.Operation` | `3.4` | - | - |
+| `schemas.PackageFeature` | `3.4` | - | - |
+| `schemas.PackageMetadataFilter` | `3.4` | - | - |
+| `schemas.PackagePreference` | `3.4` | - | - |
+| `schemas.PackageReference` | `3.4` | - | - |
+| `schemas.PackageVettingRequirement` | `3.4` | - | - |
+| `schemas.ParticipantAdmin` | `3.4` | `3.5` | - |
+| `schemas.ParticipantAdmin1` | `3.4` | `3.5` | - |
+| `schemas.ParticipantAuthorizationAdded` | `3.4` | - | - |
+| `schemas.ParticipantAuthorizationAdded1` | `3.4` | - | - |
+| `schemas.ParticipantAuthorizationChanged` | `3.4` | - | - |
+| `schemas.ParticipantAuthorizationChanged1` | `3.4` | - | - |
+| `schemas.ParticipantAuthorizationOnboarding` | `3.5` | - | - |
+| `schemas.ParticipantAuthorizationOnboarding1` | `3.5` | - | - |
+| `schemas.ParticipantAuthorizationRevoked` | `3.4` | - | - |
+| `schemas.ParticipantAuthorizationRevoked1` | `3.4` | - | - |
+| `schemas.ParticipantAuthorizationTopologyFormat` | `3.4` | - | - |
+| `schemas.PartyDetails` | `3.4` | - | - |
+| `schemas.PartyManagementFeature` | `3.4` | - | - |
+| `schemas.PartySignatures` | `3.4` | - | - |
+| `schemas.PrefetchContractKey` | `3.4` | `3.5` | - |
+| `schemas.Prior` | `3.4` | - | - |
+| `schemas.PriorTopologySerial` | `3.4` | - | - |
+| `schemas.ProtoAny` | `3.4` | - | - |
+| `schemas.Reassignment` | `3.4` | - | - |
+| `schemas.Reassignment1` | `3.4` | - | - |
+| `schemas.ReassignmentCommand` | `3.4` | - | - |
+| `schemas.ReassignmentCommands` | `3.4` | `3.5` | - |
+| `schemas.RevokeUserRightsRequest` | `3.4` | - | - |
+| `schemas.RevokeUserRightsResponse` | `3.4` | - | - |
+| `schemas.Right` | `3.4` | - | - |
+| `schemas.Serial` | `3.4` | - | - |
+| `schemas.Signature` | `3.4` | - | - |
+| `schemas.SignedTransaction` | `3.4` | `3.5` | - |
+| `schemas.SigningPublicKey` | `3.4` | - | - |
+| `schemas.SinglePartySignatures` | `3.4` | - | - |
+| `schemas.SubmitAndWaitForReassignmentRequest` | `3.4` | - | - |
+| `schemas.SubmitAndWaitResponse` | `3.4` | - | - |
+| `schemas.SubmitReassignmentRequest` | `3.4` | - | - |
+| `schemas.SubmitReassignmentResponse` | `3.4` | - | - |
+| `schemas.SubmitResponse` | `3.4` | - | - |
+| `schemas.SynchronizerTime` | `3.4` | - | - |
+| `schemas.TemplateFilter` | `3.4` | - | - |
+| `schemas.TemplateFilter1` | `3.4` | - | - |
+| `schemas.Time` | `3.4` | - | - |
+| `schemas.TopologyEvent` | `3.4` | - | - |
+| `schemas.TopologyEventEvent` | `3.4` | `3.5` | - |
+| `schemas.TopologyFormat` | `3.4` | - | - |
+| `schemas.TopologyStateFilter` | `3.4` | - | - |
+| `schemas.TopologyTransaction` | `3.4` | - | - |
+| `schemas.TraceContext` | `3.4` | `3.5` | - |
+| `schemas.Transaction` | `3.4` | - | - |
+| `schemas.TransactionFilter` | `3.4` | - | - |
+| `schemas.TransactionFormat` | `3.4` | - | - |
+| `schemas.TransactionTree` | `3.4` | - | - |
+| `schemas.TreeEvent` | `3.4` | - | - |
+| `schemas.Tuple2_String_String` | `3.4` | - | - |
+| `schemas.UnassignCommand` | `3.4` | - | - |
+| `schemas.UnassignCommand1` | `3.4` | - | - |
+| `schemas.UnassignedEvent` | `3.4` | - | - |
+| `schemas.UnknownFieldSet` | `3.4` | - | - |
+| `schemas.Unvet` | `3.4` | `3.5` | - |
+| `schemas.Unvet1` | `3.4` | `3.5` | - |
+| `schemas.Update` | `3.4` | - | - |
+| `schemas.Update1` | `3.4` | - | - |
+| `schemas.UpdateFormat` | `3.4` | - | - |
+| `schemas.UpdateIdentityProviderConfigRequest` | `3.4` | - | - |
+| `schemas.UpdateIdentityProviderConfigResponse` | `3.4` | - | - |
+| `schemas.UpdatePartyDetailsRequest` | `3.4` | - | - |
+| `schemas.UpdatePartyDetailsResponse` | `3.4` | - | - |
+| `schemas.UpdateUserIdentityProviderIdRequest` | `3.4` | - | - |
+| `schemas.UpdateUserIdentityProviderIdResponse` | `3.4` | - | - |
+| `schemas.UpdateUserRequest` | `3.4` | - | - |
+| `schemas.UpdateUserResponse` | `3.4` | - | - |
+| `schemas.UpdateVettedPackagesRequest` | `3.4` | - | - |
+| `schemas.UpdateVettedPackagesResponse` | `3.4` | - | - |
+| `schemas.UploadDarFileResponse` | `3.4` | - | - |
+| `schemas.User` | `3.4` | - | - |
+| `schemas.UserManagementFeature` | `3.4` | - | - |
+| `schemas.Vet` | `3.4` | `3.5` | - |
+| `schemas.Vet1` | `3.4` | `3.5` | - |
+| `schemas.VettedPackage` | `3.4` | - | - |
+| `schemas.VettedPackages` | `3.4` | - | - |
+| `schemas.VettedPackagesChange` | `3.4` | - | - |
+| `schemas.VettedPackagesRef` | `3.4` | - | - |
+| `schemas.WildcardFilter` | `3.4` | - | - |
+| `schemas.WildcardFilter1` | `3.4` | - | - |
+| `securitySchemes.apiKeyAuth` | `3.4` | - | - |
+| `securitySchemes.httpAuth` | `3.4` | - | - |
+
+## Spec Metadata
+
+- Canonical spec id: `json-ledger-api/openapi.yaml`
+- Latest source path: `published/json-ledger-api/openapi.yaml`
+- OpenAPI version (latest): `3.0.3`
+- Introduced: `3.4`
+- Changed in versions: `3.5`
+- Removed: -
+
+## Entity Summary
+
+- Total entities tracked: `363`
+- Entities introduced after spec introduction: `6`
+- Entities changed at least once: `147`
+- Entities removed: `1`
+- Latest operations: `61`
+- Latest paths: `49`
+- Latest components: `252`
+- Latest tags: `0`

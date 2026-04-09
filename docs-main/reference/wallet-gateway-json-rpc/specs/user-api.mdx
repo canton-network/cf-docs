@@ -1,0 +1,951 @@
+---
+title: "User API"
+description: "Splice Wallet JSON-RPC User API"
+---
+
+# User API
+
+[Back to overview](/reference/wallet-gateway-json-rpc)
+
+An OpenRPC specification for the user to interact with the Wallet Gateway.
+
+- Latest source path: `api-specs/openrpc-user-api.json`
+- Publish version: `0.24.0`
+- OpenRPC version: `1.2.6`
+- Spec info.version: `0.1.0`
+
+## Version Change Timeline
+
+| Version | Active Methods | Added | Changed | Removed |
+| --- | --- | --- | --- | --- |
+| `0.20.0` | 21 | 0 | 0 | 0 |
+| `0.21.0` | 22 | 1 | 2 | 0 |
+| `0.22.0` | 22 | 0 | 1 | 0 |
+| `0.23.0` | 22 | 0 | 2 | 0 |
+| `0.23.1` | 22 | 0 | 0 | 0 |
+| `0.24.0` | 22 | 0 | 0 | 0 |
+
+## Method Diff Summary
+
+| Method | Introduced | Changes | Removed |
+| --- | --- | --- | --- |
+| [`addIdp`](#method-addidp) | `0.20.0` | - | - |
+| [`addNetwork`](#method-addnetwork) | `0.20.0` | - | - |
+| [`addSession`](#method-addsession) | `0.20.0` | `0.23.0`: result updated (required fields) | - |
+| [`allocatePartyForWallet`](#method-allocatepartyforwallet) | `0.21.0` | - | - |
+| [`createWallet`](#method-createwallet) | `0.20.0` | `0.21.0`: description updated | - |
+| [`deleteTransaction`](#method-deletetransaction) | `0.20.0` | - | - |
+| [`execute`](#method-execute) | `0.20.0` | - | - |
+| [`getTransaction`](#method-gettransaction) | `0.20.0` | - | - |
+| [`getUser`](#method-getuser) | `0.20.0` | - | - |
+| [`isWalletSyncNeeded`](#method-iswalletsyncneeded) | `0.20.0` | - | - |
+| [`listIdps`](#method-listidps) | `0.20.0` | - | - |
+| [`listNetworks`](#method-listnetworks) | `0.20.0` | - | - |
+| [`listSessions`](#method-listsessions) | `0.20.0` | `0.23.0`: details updated | - |
+| [`listTransactions`](#method-listtransactions) | `0.20.0` | - | - |
+| [`listWallets`](#method-listwallets) | `0.20.0` | - | - |
+| [`removeIdp`](#method-removeidp) | `0.20.0` | - | - |
+| [`removeNetwork`](#method-removenetwork) | `0.20.0` | - | - |
+| [`removeSession`](#method-removesession) | `0.20.0` | - | - |
+| [`removeWallet`](#method-removewallet) | `0.20.0` | - | - |
+| [`setPrimaryWallet`](#method-setprimarywallet) | `0.20.0` | - | - |
+| [`sign`](#method-sign) | `0.20.0` | `0.22.0`: result updated (schema, required fields) | - |
+| [`syncWallets`](#method-syncwallets) | `0.20.0` | `0.21.0`: result updated (required fields) | - |
+
+## Methods
+
+<a id="method-addidp"></a>
+### `addIdp`
+
+- Introduced: `0.20.0`
+
+Adds a new identity provider.
+
+**Parameters**
+
+| Parameter | Schema | Required Fields | Description |
+| --- | --- | --- | --- |
+| `params` | `object` | `idp` | - |
+
+**Result**
+
+| Schema | Required Fields | Description |
+| --- | --- | --- |
+| `null` | - | - |
+
+**Params Example**
+
+```json
+{
+  "params": {
+    "idp": {
+      "id": "<string>",
+      "type": "<value>",
+      "issuer": "<string>"
+    }
+  }
+}
+```
+
+**Result Example**
+
+```json
+"<value>"
+```
+
+<a id="method-addnetwork"></a>
+### `addNetwork`
+
+- Introduced: `0.20.0`
+
+Adds a new network configuration (similar to EIP-3085).
+
+**Parameters**
+
+| Parameter | Schema | Required Fields | Description |
+| --- | --- | --- | --- |
+| `params` | `object` | `network` | - |
+
+**Result**
+
+| Schema | Required Fields | Description |
+| --- | --- | --- |
+| `null` | - | - |
+
+**Params Example**
+
+```json
+{
+  "params": {
+    "network": {
+      "id": "<string>",
+      "name": "<string>",
+      "description": "<string>",
+      "identityProviderId": "<string>",
+      "auth": {
+        "method": "<string>",
+        "scope": "<string>",
+        "clientId": "<string>",
+        "audience": "<string>"
+      },
+      "ledgerApi": "<string>"
+    }
+  }
+}
+```
+
+**Result Example**
+
+```json
+"<value>"
+```
+
+<a id="method-addsession"></a>
+### `addSession`
+
+- Introduced: `0.20.0`
+Changed in: `0.23.0`
+
+Adds a network session.
+
+**Version Changes**
+
+| Version | Changes |
+| --- | --- |
+| `0.23.0` | result updated (required fields) |
+
+**Parameters**
+
+| Parameter | Schema | Required Fields | Description |
+| --- | --- | --- | --- |
+| `params` | `object` | `networkId` | - |
+
+**Result**
+
+| Schema | Required Fields | Description |
+| --- | --- | --- |
+| `object` | `accessToken`, `id`, `idp`, `network`, `rights`, `status` | - |
+
+**Params Example**
+
+```json
+{
+  "params": {
+    "networkId": "<string>"
+  }
+}
+```
+
+**Result Example**
+
+```json
+{
+  "id": "<string>",
+  "network": {
+    "id": "<string>",
+    "name": "<string>",
+    "description": "<string>",
+    "identityProviderId": "<string>",
+    "auth": {
+      "method": "<string>",
+      "scope": "<string>",
+      "clientId": "<string>",
+      "audience": "<string>"
+    },
+    "ledgerApi": "<string>"
+  },
+  "idp": {
+    "id": "<string>",
+    "type": "<value>",
+    "issuer": "<string>"
+  },
+  "accessToken": "<string>",
+  "status": "<string>",
+  "rights": [
+    "<value>"
+  ]
+}
+```
+
+<a id="method-allocatepartyforwallet"></a>
+### `allocatePartyForWallet`
+
+- Introduced: `0.21.0`
+
+Allocates a party for an already initialized wallet if external signing is complete.
+
+**Parameters**
+
+| Parameter | Schema | Required Fields | Description |
+| --- | --- | --- | --- |
+| `params` | `object` | `partyId` | - |
+
+**Result**
+
+| Schema | Required Fields | Description |
+| --- | --- | --- |
+| `object` | `wallet` | - |
+
+**Params Example**
+
+```json
+{
+  "params": {
+    "partyId": "<string>"
+  }
+}
+```
+
+**Result Example**
+
+```json
+{
+  "wallet": {
+    "primary": "<boolean>",
+    "partyId": "<string>",
+    "status": "<string>",
+    "hint": "<string>",
+    "publicKey": "<string>",
+    "namespace": "<string>",
+    "networkId": "<string>",
+    "signingProviderId": "<string>"
+  }
+}
+```
+
+<a id="method-createwallet"></a>
+### `createWallet`
+
+- Introduced: `0.20.0`
+Changed in: `0.21.0`
+
+Creates a new wallet and party with the given hint.
+
+**Version Changes**
+
+| Version | Changes |
+| --- | --- |
+| `0.21.0` | description updated |
+
+**Parameters**
+
+| Parameter | Schema | Required Fields | Description |
+| --- | --- | --- | --- |
+| `params` | `object` | `partyHint`, `signingProviderId`, `networkId` | - |
+
+**Result**
+
+| Schema | Required Fields | Description |
+| --- | --- | --- |
+| `object` | `wallet` | - |
+
+**Params Example**
+
+```json
+{
+  "params": {
+    "partyHint": "<string>",
+    "signingProviderId": "<string>"
+  }
+}
+```
+
+**Result Example**
+
+```json
+{
+  "wallet": {
+    "primary": "<boolean>",
+    "partyId": "<string>",
+    "status": "<string>",
+    "hint": "<string>",
+    "publicKey": "<string>",
+    "namespace": "<string>",
+    "networkId": "<string>",
+    "signingProviderId": "<string>"
+  }
+}
+```
+
+<a id="method-deletetransaction"></a>
+### `deleteTransaction`
+
+- Introduced: `0.20.0`
+
+Deletes a pending transaction. Only transactions with status 'pending' can be deleted.
+
+**Parameters**
+
+| Parameter | Schema | Required Fields | Description |
+| --- | --- | --- | --- |
+| `params` | `object` | `commandId` | - |
+
+**Result**
+
+| Schema | Required Fields | Description |
+| --- | --- | --- |
+| `null` | - | - |
+
+**Params Example**
+
+```json
+{
+  "params": {
+    "commandId": "<string>"
+  }
+}
+```
+
+**Result Example**
+
+```json
+"<value>"
+```
+
+<a id="method-execute"></a>
+### `execute`
+
+- Introduced: `0.20.0`
+
+Executes a signed transaction.
+
+**Parameters**
+
+| Parameter | Schema | Required Fields | Description |
+| --- | --- | --- | --- |
+| `params` | `object` | `commandId`, `partyId`, `signature`, `signedBy` | - |
+
+**Result**
+
+| Schema | Required Fields | Description |
+| --- | --- | --- |
+| `object` | - | - |
+
+**Params Example**
+
+```json
+{
+  "params": {
+    "signature": "<string>",
+    "partyId": "<string>",
+    "commandId": "<string>",
+    "signedBy": "<string>"
+  }
+}
+```
+
+**Result Example**
+
+```json
+{}
+```
+
+<a id="method-gettransaction"></a>
+### `getTransaction`
+
+- Introduced: `0.20.0`
+
+**Parameters**
+
+| Parameter | Schema | Required Fields | Description |
+| --- | --- | --- | --- |
+| `params` | `object` | `commandId` | - |
+
+**Result**
+
+| Schema | Required Fields | Description |
+| --- | --- | --- |
+| `object` | `commandId`, `preparedTransaction`, `preparedTransactionHash`, `status` | - |
+
+**Params Example**
+
+```json
+{
+  "params": {
+    "commandId": "<string>"
+  }
+}
+```
+
+**Result Example**
+
+```json
+{
+  "commandId": "<string>",
+  "status": "<string>",
+  "preparedTransaction": "<string>",
+  "preparedTransactionHash": "<string>"
+}
+```
+
+<a id="method-getuser"></a>
+### `getUser`
+
+- Introduced: `0.20.0`
+
+Returns information about the current user, including whether they are an admin.
+
+**Parameters**
+
+_No parameters._
+
+**Result**
+
+| Schema | Required Fields | Description |
+| --- | --- | --- |
+| `object` | `isAdmin`, `userId` | - |
+
+**Result Example**
+
+```json
+{
+  "userId": "<string>",
+  "isAdmin": "<boolean>"
+}
+```
+
+<a id="method-iswalletsyncneeded"></a>
+### `isWalletSyncNeeded`
+
+- Introduced: `0.20.0`
+
+Checks if wallet sync is needed (disabled wallets or new parties on ledger).
+
+**Parameters**
+
+_No parameters._
+
+**Result**
+
+| Schema | Required Fields | Description |
+| --- | --- | --- |
+| `object` | `walletSyncNeeded` | - |
+
+**Result Example**
+
+```json
+{
+  "walletSyncNeeded": "<boolean>"
+}
+```
+
+<a id="method-listidps"></a>
+### `listIdps`
+
+- Introduced: `0.20.0`
+
+**Parameters**
+
+_No parameters._
+
+**Result**
+
+| Schema | Required Fields | Description |
+| --- | --- | --- |
+| `object` | `idps` | - |
+
+**Result Example**
+
+```json
+{
+  "idps": [
+    {
+      "id": "<string>",
+      "type": "<value>",
+      "issuer": "<string>"
+    }
+  ]
+}
+```
+
+<a id="method-listnetworks"></a>
+### `listNetworks`
+
+- Introduced: `0.20.0`
+
+**Parameters**
+
+_No parameters._
+
+**Result**
+
+| Schema | Required Fields | Description |
+| --- | --- | --- |
+| `object` | `networks` | - |
+
+**Result Example**
+
+```json
+{
+  "networks": [
+    {
+      "id": "<string>",
+      "name": "<string>",
+      "description": "<string>",
+      "identityProviderId": "<string>",
+      "auth": {
+        "method": "<string>",
+        "scope": "<string>",
+        "clientId": "<string>",
+        "audience": "<string>"
+      },
+      "ledgerApi": "<string>"
+    }
+  ]
+}
+```
+
+<a id="method-listsessions"></a>
+### `listSessions`
+
+- Introduced: `0.20.0`
+Changed in: `0.23.0`
+
+**Version Changes**
+
+| Version | Changes |
+| --- | --- |
+| `0.23.0` | details updated |
+
+**Parameters**
+
+_No parameters._
+
+**Result**
+
+| Schema | Required Fields | Description |
+| --- | --- | --- |
+| `object` | `sessions` | - |
+
+**Result Example**
+
+```json
+{
+  "sessions": [
+    {
+      "id": "<string>",
+      "network": {
+        "id": "<string>",
+        "name": "<string>",
+        "description": "<string>",
+        "identityProviderId": "<string>",
+        "auth": "<object>",
+        "ledgerApi": "<string>"
+      },
+      "idp": {
+        "id": "<string>",
+        "type": "<value>",
+        "issuer": "<string>"
+      },
+      "accessToken": "<string>",
+      "status": "<string>",
+      "rights": [
+        "<value>"
+      ]
+    }
+  ]
+}
+```
+
+<a id="method-listtransactions"></a>
+### `listTransactions`
+
+- Introduced: `0.20.0`
+
+**Parameters**
+
+_No parameters._
+
+**Result**
+
+| Schema | Required Fields | Description |
+| --- | --- | --- |
+| `object` | `transactions` | - |
+
+**Result Example**
+
+```json
+{
+  "transactions": [
+    {
+      "commandId": "<string>",
+      "status": "<string>",
+      "preparedTransaction": "<string>",
+      "preparedTransactionHash": "<string>"
+    }
+  ]
+}
+```
+
+<a id="method-listwallets"></a>
+### `listWallets`
+
+- Introduced: `0.20.0`
+
+Lists wallets.
+
+**Parameters**
+
+| Parameter | Schema | Required Fields | Description |
+| --- | --- | --- | --- |
+| `params` | `object` | - | - |
+
+**Result**
+
+| Schema | Required Fields | Description |
+| --- | --- | --- |
+| `array[object]` | - | - |
+
+**Params Example**
+
+```json
+{
+  "params": {
+    "filter": {
+      "networkIds": [
+        "<string>"
+      ],
+      "signingProviderIds": [
+        "<string>"
+      ]
+    }
+  }
+}
+```
+
+**Result Example**
+
+```json
+[
+  {
+    "primary": "<boolean>",
+    "partyId": "<string>",
+    "status": "<string>",
+    "hint": "<string>",
+    "publicKey": "<string>",
+    "namespace": "<string>",
+    "networkId": "<string>",
+    "signingProviderId": "<string>"
+  }
+]
+```
+
+<a id="method-removeidp"></a>
+### `removeIdp`
+
+- Introduced: `0.20.0`
+
+Removes an identity provider. Fails if an existing network is using the identity provider.
+
+**Parameters**
+
+| Parameter | Schema | Required Fields | Description |
+| --- | --- | --- | --- |
+| `params` | `object` | `identityProviderId` | - |
+
+**Result**
+
+| Schema | Required Fields | Description |
+| --- | --- | --- |
+| `null` | - | - |
+
+**Params Example**
+
+```json
+{
+  "params": {
+    "identityProviderId": "<string>"
+  }
+}
+```
+
+**Result Example**
+
+```json
+"<value>"
+```
+
+<a id="method-removenetwork"></a>
+### `removeNetwork`
+
+- Introduced: `0.20.0`
+
+Removes a new network configuration (similar to EIP-3085).
+
+**Parameters**
+
+| Parameter | Schema | Required Fields | Description |
+| --- | --- | --- | --- |
+| `params` | `object` | `networkName` | - |
+
+**Result**
+
+| Schema | Required Fields | Description |
+| --- | --- | --- |
+| `null` | - | - |
+
+**Params Example**
+
+```json
+{
+  "params": {
+    "networkName": "<string>"
+  }
+}
+```
+
+**Result Example**
+
+```json
+"<value>"
+```
+
+<a id="method-removesession"></a>
+### `removeSession`
+
+- Introduced: `0.20.0`
+
+Removes the current network session.
+
+**Parameters**
+
+_No parameters._
+
+**Result**
+
+| Schema | Required Fields | Description |
+| --- | --- | --- |
+| `null` | - | - |
+
+**Result Example**
+
+```json
+"<value>"
+```
+
+<a id="method-removewallet"></a>
+### `removeWallet`
+
+- Introduced: `0.20.0`
+
+Removes a party with the given hint.
+
+**Parameters**
+
+| Parameter | Schema | Required Fields | Description |
+| --- | --- | --- | --- |
+| `params` | `object` | `partyId` | - |
+
+**Result**
+
+| Schema | Required Fields | Description |
+| --- | --- | --- |
+| `object` | - | - |
+
+**Params Example**
+
+```json
+{
+  "params": {
+    "partyId": "<string>"
+  }
+}
+```
+
+**Result Example**
+
+```json
+{}
+```
+
+<a id="method-setprimarywallet"></a>
+### `setPrimaryWallet`
+
+- Introduced: `0.20.0`
+
+Sets the specified wallet as the primary wallet for dApp usage.
+
+**Parameters**
+
+| Parameter | Schema | Required Fields | Description |
+| --- | --- | --- | --- |
+| `params` | `object` | `partyId` | - |
+
+**Result**
+
+| Schema | Required Fields | Description |
+| --- | --- | --- |
+| `null` | - | - |
+
+**Params Example**
+
+```json
+{
+  "params": {
+    "partyId": "<string>"
+  }
+}
+```
+
+**Result Example**
+
+```json
+"<value>"
+```
+
+<a id="method-sign"></a>
+### `sign`
+
+- Introduced: `0.20.0`
+Changed in: `0.22.0`
+
+Signs the provided data with the private key of the specified or active party.
+
+**Version Changes**
+
+| Version | Changes |
+| --- | --- |
+| `0.22.0` | result updated (schema, required fields) |
+
+**Parameters**
+
+| Parameter | Schema | Required Fields | Description |
+| --- | --- | --- | --- |
+| `params` | `object` | `commandId`, `partyId`, `preparedTransaction`, `preparedTransactionHash` | - |
+
+**Result**
+
+| Schema | Required Fields | Description |
+| --- | --- | --- |
+| `oneOf` | - | - |
+
+**Params Example**
+
+```json
+{
+  "params": {
+    "preparedTransaction": "<string>",
+    "preparedTransactionHash": "<string>",
+    "commandId": "<string>",
+    "partyId": "<string>"
+  }
+}
+```
+
+**Result Example**
+
+```json
+{
+  "status": "<string>",
+  "signature": "<string>",
+  "signedBy": "<string>",
+  "partyId": "<string>"
+}
+```
+
+<a id="method-syncwallets"></a>
+### `syncWallets`
+
+- Introduced: `0.20.0`
+Changed in: `0.21.0`
+
+Synchronizes wallets with the connected network.
+
+**Version Changes**
+
+| Version | Changes |
+| --- | --- |
+| `0.21.0` | result updated (required fields) |
+
+**Parameters**
+
+_No parameters._
+
+**Result**
+
+| Schema | Required Fields | Description |
+| --- | --- | --- |
+| `object` | `added`, `disabled`, `updated` | - |
+
+**Result Example**
+
+```json
+{
+  "added": [
+    {
+      "primary": "<boolean>",
+      "partyId": "<string>",
+      "status": "<string>",
+      "hint": "<string>",
+      "publicKey": "<string>",
+      "namespace": "<string>",
+      "networkId": "<string>",
+      "signingProviderId": "<string>"
+    }
+  ],
+  "updated": [
+    {
+      "primary": "<boolean>",
+      "partyId": "<string>",
+      "status": "<string>",
+      "hint": "<string>",
+      "publicKey": "<string>",
+      "namespace": "<string>",
+      "networkId": "<string>",
+      "signingProviderId": "<string>"
+    }
+  ],
+  "disabled": [
+    {
+      "primary": "<boolean>",
+      "partyId": "<string>",
+      "status": "<string>",
+      "hint": "<string>",
+      "publicKey": "<string>",
+      "namespace": "<string>",
+      "networkId": "<string>",
+      "signingProviderId": "<string>"
+    }
+  ]
+}
+```
