@@ -436,6 +436,18 @@ select redact_exercise('<event_id>', '<redaction_id>');
 
 You cannot redact an active contract, and a contract that has already been redacted cannot be redacted again. There are no such restrictions on exercise events. After redaction, the `redaction_id` column is populated in query results and the data columns return `NULL`.
 
+### History Slicing
+
+PQS supports history slicing through the `--pipeline-ledger-start` and `--pipeline-ledger-stop` command-line options, which let you request a specific range of ledger history. This is useful when you need a PQS instance that covers only a particular time window — for example, populating a reporting database with a specific quarter's data, or creating a lightweight instance that skips old history after a participant has been pruned.
+
+There are constraints on the start and stop offsets. PQS fails fast if:
+
+- The requested offset range falls outside the participant's available ledger history
+- The start offset refers to a pruned region or genesis on a pruned ledger
+- The requested range would create a gap in the PQS datastore's existing history (you cannot skip over offsets that the datastore has not yet seen)
+
+If you are working with a pruned participant, set `--pipeline-ledger-start` to an offset at or after the participant's pruning point.
+
 ### Resetting
 
 `reset_to_offset(offset)` removes all transactions **after** the given offset, allowing PQS to resume processing from that point. A dry-run validation is available first:

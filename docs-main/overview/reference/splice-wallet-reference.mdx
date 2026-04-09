@@ -60,8 +60,6 @@ CC transfers between parties follow one of three patterns.
 
 **One-step preapproved transfer.** If the receiver has set up a `TransferPreapproval` contract, the sender can transfer CC in a single step without the receiver needing to accept. The receiver's validator operator acts as the `provider` party on the preapproval and handles its periodic renewal. If the provider is a featured application provider, the transfer generates an `AppRewardCoupon`.
 
-**Legacy transfer offers (deprecated).** The older `Splice.Wallet.TransferOffer` workflow creates a transfer offer that the receiver accepts. This is deprecated in favor of the token standard two-step workflow above.
-
 ## Wallet API Endpoints
 
 The validator app exposes wallet APIs under the `/v0/wallet/*` path. These fall into two categories.
@@ -88,7 +86,7 @@ For the full OpenAPI specifications, see the [wallet-external.yaml](https://raw.
 
 ## UTXO Management
 
-The Splice wallet uses a UTXO model for Canton Coin holdings. Each active `Holding` contract on the ledger represents a single UTXO with a specific CC amount. UTXO management matters for wallet providers because active Holding contracts consume storage and compute on the hosting validators, and each UTXO input to a transfer incurs extra traffic cost.
+Canton Coin uses a UTXO model inherited from the underlying Amulet contract structure in Splice. Each active `Holding` contract on the ledger represents a single UTXO with a specific CC amount. Unlike account-balance models, a party's total balance is the sum of all their individual Holding UTXOs. UTXO management matters for wallet providers because active Holding contracts consume storage and compute on the hosting validators, and each UTXO input to a transfer incurs extra traffic cost.
 
 Canton Coin enforces a limit of 100 input contracts per transfer and expires dust UTXOs whose initial amount is smaller than the accrued holding fee. Wallet providers should aim for roughly 10 or fewer UTXOs per user on average.
 
@@ -113,24 +111,4 @@ The high-level flow for an external party:
 
 For each transfer, the caller must prepare the transaction (obtaining a hash), sign the hash with the external party's private key, and submit the signed transaction back to the participant. See the [validator-internal.yaml](https://raw.githubusercontent.com/hyperledger-labs/splice/refs/heads/main/apps/validator/src/main/openapi/validator-internal.yaml) OpenAPI spec for the full endpoint list.
 
-## Wallet SDK
-
-The [splice-wallet-kernel](https://github.com/hyperledger-labs/splice-wallet-kernel) repository provides a TypeScript Wallet SDK for building custom wallet integrations. Install it from NPM:
-
-```bash
-npm install @canton-network/wallet-sdk
-```
-
-A smaller `@canton-network/dapp-sdk` package is available for browser-based dApp development. Both SDKs share the same underlying core packages.
-
-The Wallet SDK wraps the token standard operations (transfers, holdings queries, transaction history) and external signing workflow into a higher-level API. Key capabilities include:
-
-- Listing Holding UTXOs (with or without locked holdings filtered out)
-- Creating one-step and two-step transfers
-- Accepting, rejecting, and withdrawing transfer instructions
-- Setting up and renewing transfer preapprovals
-- Monitoring transaction history via `listHoldingTransactions`
-- Preparing and executing externally signed transactions
-- Configuring authentication controllers for different environments
-
-The SDK uses the JSON Ledger API and the token standard registry. For environment-specific configuration (LocalNet, DevNet, TestNet, MainNet), custom controller factories can be provided. See the [Wallet Integration Guide](https://docs.digitalasset.com/integrate/devnet/index.html) for detailed examples and configuration reference.
+For building custom wallet integrations using the TypeScript Wallet SDK, see the [Wallet SDK documentation](/docs-main/integrations/wallet/sdk-download).
