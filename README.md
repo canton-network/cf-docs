@@ -210,7 +210,7 @@ The generator also adds that page under the top-level `Reference` dropdown as `D
 ### Generate the Wallet Gateway JSON-RPC reference
 
 This repo also includes a checked-in source config for versioned Wallet Gateway OpenRPC specs from `hyperledger-labs/splice-wallet-kernel` at `config/x2mdx/wallet-gateway-openrpc/source-artifacts.json`.
-The generator script clones or fetches a cached bare repo under `.internal/cache/x2mdx/wallet-gateway-openrpc/`, materializes local versioned OpenRPC JSON files, writes a local x2mdx manifest into `.internal/generated/x2mdx/wallet-gateway-openrpc/manifest.json`, and then renders MDX pages with the GitHub-pinned `x2mdx`.
+The generator script discovers versions from GitHub releases filtered to the `@canton-network/wallet-gateway-remote@` release stream, clones or fetches a cached bare repo under `.internal/cache/x2mdx/wallet-gateway-openrpc/`, materializes local versioned OpenRPC JSON files from the matching tag snapshots, writes a local x2mdx manifest into `.internal/generated/x2mdx/wallet-gateway-openrpc/manifest.json`, and then renders MDX pages with the GitHub-pinned `x2mdx`.
 
 Run:
 
