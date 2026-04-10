@@ -8,8 +8,10 @@ import re
 import shutil
 import subprocess
 import sys
+import tarfile
 import urllib.error
 import urllib.request
+import zipfile
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
@@ -41,7 +43,7 @@ LANGUAGE_DIRS = {
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Download configured JavaDoc/ScalaDoc jars, write a local x2mdx manifest, and generate the Ledger bindings reference pages."
+        description="Download configured JVM doc sources, write a local x2mdx manifest, and generate the Ledger bindings reference pages."
     )
     parser.add_argument(
         "--source-config",
@@ -51,7 +53,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--cache-dir",
         default=str(DEFAULT_CACHE_DIR),
-        help="Directory used to cache downloaded Javadoc/Scaladoc jars.",
+        help="Directory used to cache downloaded JVM doc artifacts and generated jars.",
     )
     parser.add_argument(
         "--manifest-out",
@@ -95,11 +97,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--force-download",
         action="store_true",
-        help="Re-download jars even if they already exist in the local cache.",
+        help="Re-download source artifacts even if they already exist in the local cache.",
     )
     parser.add_argument(
         "--source-name",
-        default="Published DAML Java/Scala bindings Javadoc/Scaladoc jars",
+        default="Published JVM docs snapshots",
         help="Source label embedded in generated content.",
     )
     parser.add_argument(
@@ -294,7 +296,7 @@ def maven_javadoc_url(repo_base: str, group: str, artifact: str, version: str) -
 def download_file(url: str, target: Path, *, force: bool) -> None:
     target.parent.mkdir(parents=True, exist_ok=True)
     if target.exists() and not force:
-        print(f"Using cached jar: {target}")
+        print(f"Using cached artifact: {target}")
         return
 
     print(f"Downloading: {url}")
@@ -306,6 +308,70 @@ def download_file(url: str, target: Path, *, force: bool) -> None:
         raise RuntimeError(f"HTTP {exc.code} while downloading {url}") from exc
     except urllib.error.URLError as exc:
         raise RuntimeError(f"Network error while downloading {url}: {exc}") from exc
+
+
+def normalize_archive_member_name(name: str) -> str:
+    parts = [part for part in Path(name).parts if part not in {"", "."}]
+    return Path(*parts).as_posix() if parts else ""
+
+
+def repackage_tarball_as_jar(source_tarball: Path, target_jar: Path) -> None:
+    target_jar.parent.mkdir(parents=True, exist_ok=True)
+    with tarfile.open(source_tarball, "r:gz") as tar, zipfile.ZipFile(
+        target_jar,
+        "w",
+        compression=zipfile.ZIP_DEFLATED,
+    ) as archive:
+        for member in tar.getmembers():
+            if not member.isfile():
+                continue
+            arcname = normalize_archive_member_name(member.name)
+            if not arcname:
+                continue
+            extracted = tar.extractfile(member)
+            if extracted is None:
+                continue
+            with extracted:
+                archive.writestr(arcname, extracted.read())
+
+
+def resolve_cached_jar(
+    *,
+    repo_base: str,
+    cache_dir: Path,
+    group: str,
+    artifact: str,
+    version: str,
+    source_kind: str,
+    url_template: str | None,
+    force_download: bool,
+) -> Path:
+    if source_kind == "maven-javadoc-jar":
+        jar_target = cache_dir / "jars" / group / artifact / version / f"{artifact}-{version}-javadoc.jar"
+        download_file(
+            maven_javadoc_url(repo_base, group, artifact, version),
+            jar_target,
+            force=force_download,
+        )
+        return jar_target
+
+    if source_kind == "canton-scaladoc-tarball":
+        if not isinstance(url_template, str) or "{version}" not in url_template:
+            raise ValueError(
+                f"Artifact {group}:{artifact} uses source_kind={source_kind!r} but does not provide a valid url_template"
+            )
+        archive_url = url_template.format(version=version)
+        archive_target = cache_dir / "archives" / artifact / version / Path(archive_url).name
+        jar_target = cache_dir / "jars" / group / artifact / version / f"{artifact}-{version}-scaladoc.jar"
+        download_file(archive_url, archive_target, force=force_download)
+        if force_download or not jar_target.exists():
+            print(f"Packaging scaladoc archive as jar: {jar_target}")
+            repackage_tarball_as_jar(archive_target, jar_target)
+        else:
+            print(f"Using cached jar: {jar_target}")
+        return jar_target
+
+    raise ValueError(f"Unsupported source_kind for {group}:{artifact}: {source_kind}")
 
 
 def build_manifest(
@@ -332,6 +398,8 @@ def build_manifest(
         language = artifact_entry.get("language")
         versions = artifact_entry.get("versions")
         include_prefixes = artifact_entry.get("include_prefixes") or []
+        source_kind = artifact_entry.get("source_kind") or "maven-javadoc-jar"
+        url_template = artifact_entry.get("url_template")
         if not isinstance(group, str) or not group:
             continue
         if not isinstance(artifact, str) or not artifact:
@@ -348,11 +416,15 @@ def build_manifest(
             if include_versions is not None and version not in include_versions:
                 continue
 
-            jar_target = cache_dir / "jars" / group / artifact / version / f"{artifact}-{version}-javadoc.jar"
-            download_file(
-                maven_javadoc_url(repo_base, group, artifact, version),
-                jar_target,
-                force=force_download,
+            jar_target = resolve_cached_jar(
+                repo_base=repo_base,
+                cache_dir=cache_dir,
+                group=group,
+                artifact=artifact,
+                version=version,
+                source_kind=str(source_kind),
+                url_template=str(url_template) if isinstance(url_template, str) else None,
+                force_download=force_download,
             )
             version_entries.append(
                 {
@@ -420,10 +492,47 @@ def rewrite_markdown_links(text: str, replacements: list[tuple[str, str]]) -> st
     return text
 
 
-def copy_rewritten_page(source: Path, target: Path, replacements: list[tuple[str, str]]) -> None:
+def major_minor_version(version: str) -> str:
+    parts = version.split(".")
+    if len(parts) < 2:
+        raise ValueError(f"Expected semantic version with major.minor components, got: {version}")
+    return ".".join(parts[:2])
+
+
+def rewrite_upstream_docs_links(text: str, artifact_entry: dict[str, Any]) -> str:
+    template = artifact_entry.get("upstream_docs_base_url_template")
+    group = artifact_entry.get("group")
+    artifact = artifact_entry.get("artifact")
+    versions = artifact_entry.get("versions")
+    if not isinstance(template, str) or not template:
+        return text
+    if not isinstance(group, str) or not isinstance(artifact, str):
+        return text
+    if not isinstance(versions, list):
+        return text
+
+    for version in versions:
+        if not isinstance(version, str) or not version:
+            continue
+        old_prefix = f"https://javadoc.io/doc/{group}/{artifact}/{version}/"
+        new_prefix = template.format(version=version, major_minor=major_minor_version(version)).rstrip("/") + "/"
+        text = text.replace(old_prefix, new_prefix)
+    return text
+
+
+def copy_rewritten_page(
+    source: Path,
+    target: Path,
+    replacements: list[tuple[str, str]],
+    *,
+    artifact_entry: dict[str, Any] | None = None,
+) -> None:
     target.parent.mkdir(parents=True, exist_ok=True)
     text = source.read_text(encoding="utf-8")
-    target.write_text(rewrite_markdown_links(text, replacements), encoding="utf-8")
+    text = rewrite_markdown_links(text, replacements)
+    if artifact_entry is not None:
+        text = rewrite_upstream_docs_links(text, artifact_entry)
+    target.write_text(text, encoding="utf-8")
 
 
 def publish_rendered_pages(
@@ -435,14 +544,6 @@ def publish_rendered_pages(
     render_overview_file, render_details_dir = render_output_paths()
     publish_root.mkdir(parents=True, exist_ok=True)
 
-    for language_dir in LANGUAGE_DIRS.values():
-        shutil.rmtree(publish_root / language_dir, ignore_errors=True)
-    if publish_overview_file.exists():
-        publish_overview_file.unlink()
-    if LEGACY_OVERVIEW_FILE.exists():
-        LEGACY_OVERVIEW_FILE.unlink()
-    shutil.rmtree(LEGACY_DETAILS_DIR, ignore_errors=True)
-
     artifact_entries = [
         entry
         for entry in source_config.get("artifacts", [])
@@ -452,12 +553,28 @@ def publish_rendered_pages(
         and entry.get("language") in LANGUAGE_DIRS
     ]
 
+    preserved_language_dirs = {
+        LANGUAGE_DIRS[str(entry["language"])]
+        for entry in artifact_entries
+        if bool(entry.get("preserve_existing_output"))
+    }
+    for language_dir in LANGUAGE_DIRS.values():
+        if language_dir in preserved_language_dirs:
+            continue
+        shutil.rmtree(publish_root / language_dir, ignore_errors=True)
+    if publish_overview_file.exists():
+        publish_overview_file.unlink()
+    if LEGACY_OVERVIEW_FILE.exists():
+        LEGACY_OVERVIEW_FILE.unlink()
+    shutil.rmtree(LEGACY_DETAILS_DIR, ignore_errors=True)
+
     overview_replacements: list[tuple[str, str]] = []
     generated_refs: set[str] = set()
 
     for artifact_entry in artifact_entries:
         artifact = str(artifact_entry["artifact"])
         language = str(artifact_entry["language"])
+        preserve_existing_output = bool(artifact_entry.get("preserve_existing_output"))
         language_dir = publish_root / LANGUAGE_DIRS[language]
         artifact_slug = slugify(artifact)
         source_artifact_page = render_details_dir / f"{artifact_slug}.mdx"
@@ -465,10 +582,13 @@ def publish_rendered_pages(
         target_artifact_page = language_dir / "index.mdx"
 
         overview_replacements.append((f"({render_details_dir.name}/{artifact_slug})", f"({LANGUAGE_DIRS[language]})"))
+        if preserve_existing_output:
+            continue
         copy_rewritten_page(
             source_artifact_page,
             target_artifact_page,
             replacements=[(f"({source_package_dir.name}/", "(")],
+            artifact_entry=artifact_entry,
         )
         generated_refs.add(docs_json_page_ref(target_artifact_page, DEFAULT_DOCS_JSON))
 
@@ -481,6 +601,7 @@ def publish_rendered_pages(
                 package_page,
                 target_package_page,
                 replacements=[(f"(../{artifact_slug})", "(index)")],
+                artifact_entry=artifact_entry,
             )
             generated_refs.add(docs_json_page_ref(target_package_page, DEFAULT_DOCS_JSON))
 
