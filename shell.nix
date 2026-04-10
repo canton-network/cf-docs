@@ -1,8 +1,11 @@
 { pkgs ? import <nixpkgs> {} }:
 
 let
-  python = pkgs.python311;
-  x2mdx = python.pkgs.buildPythonApplication rec {
+  pythonBase = pkgs.python311;
+  python = pythonBase.withPackages (ps: [
+    ps.grpcio-tools
+  ]);
+  x2mdx = pythonBase.pkgs.buildPythonApplication rec {
     pname = "x2mdx";
     version = "0.1.0+git-d4f3764";
     pyproject = true;
@@ -10,11 +13,11 @@ let
       url = "https://github.com/danielporterda/x2mdx.git";
       rev = "d4f3764be8cbe9c48bf672bd36f451cc4a350dac";
     };
-    nativeBuildInputs = with python.pkgs; [
+    nativeBuildInputs = with pythonBase.pkgs; [
       setuptools
       wheel
     ];
-    propagatedBuildInputs = with python.pkgs; [
+    propagatedBuildInputs = with pythonBase.pkgs; [
       jinja2
       protobuf
       pyyaml
@@ -24,6 +27,7 @@ let
 in
 pkgs.mkShell {
   packages = [
+    pkgs.gh
     pkgs.nodejs_22
     python
     x2mdx
