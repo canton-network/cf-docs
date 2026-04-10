@@ -22,6 +22,10 @@ DEFAULT_OUTPUT_FILE = REPO_ROOT / "docs-main" / "reference" / "json-api-asyncapi
 LEGACY_OUTPUT_FILE = REPO_ROOT / "docs-main" / "appdev" / "reference" / "json-api-asyncapi-reference.mdx"
 DEFAULT_DOCS_JSON = REPO_ROOT / "docs-main" / "docs.json"
 DEFAULT_NAV_GROUP = "Ledger API Endpoints"
+DEFAULT_NAV_PAGE_ORDER = [
+    "reference/json-api-reference",
+    "reference/json-api-asyncapi-reference",
+]
 
 
 def parse_args() -> argparse.Namespace:
@@ -175,6 +179,107 @@ def cleanup_legacy_docs_ref(*, docs_json_path: Path) -> None:
     docs_json_path.write_text(json.dumps(cleaned, indent=2) + "\n", encoding="utf-8")
 
 
+def _find_group(items: list[object], label: str) -> dict[str, object] | None:
+    for item in items:
+        if isinstance(item, dict) and item.get("group") == label:
+            return item
+    return None
+
+
+def _merge_group_entries(target: dict[str, object], source: dict[str, object]) -> None:
+    target_pages = target.setdefault("pages", [])
+    if not isinstance(target_pages, list):
+        target_pages = []
+        target["pages"] = target_pages
+
+    for item in source.get("pages", []):
+        if isinstance(item, str):
+            if item not in target_pages:
+                target_pages.append(item)
+            continue
+        if isinstance(item, dict) and item.get("group"):
+            existing = _find_group(target_pages, str(item["group"]))
+            if existing is None:
+                target_pages.append(item)
+            else:
+                _merge_group_entries(existing, item)
+
+    source_groups = source.get("groups", [])
+    if isinstance(source_groups, list):
+        target_groups = target.setdefault("groups", [])
+        if not isinstance(target_groups, list):
+            target_groups = []
+            target["groups"] = target_groups
+        for group in source_groups:
+            if not isinstance(group, dict) or not group.get("group"):
+                continue
+            existing = _find_group(target_groups, str(group["group"]))
+            if existing is None:
+                target_groups.append(group)
+            else:
+                _merge_group_entries(existing, group)
+
+
+def normalize_nav_group_into_pages(*, docs_json_path: Path, dropdown_label: str, group_label: str) -> None:
+    payload = load_json(docs_json_path)
+    navigation = payload.get("navigation")
+    if not isinstance(navigation, dict):
+        raise ValueError(f"docs.json missing navigation object: {docs_json_path}")
+
+    dropdowns = navigation.get("dropdowns")
+    if not isinstance(dropdowns, list):
+        raise ValueError(f"docs.json navigation.dropdowns must be a list: {docs_json_path}")
+
+    dropdown = next(
+        (item for item in dropdowns if isinstance(item, dict) and item.get("dropdown") == dropdown_label),
+        None,
+    )
+    if dropdown is None:
+        raise ValueError(f"Dropdown not found in docs.json: {dropdown_label}")
+
+    raw_groups = dropdown.get("groups", [])
+    if not isinstance(raw_groups, list):
+        return
+
+    moved_groups: list[dict[str, object]] = []
+    remaining_groups: list[object] = []
+    for item in raw_groups:
+        if isinstance(item, dict) and item.get("group") == group_label:
+            moved_groups.append(item)
+        else:
+            remaining_groups.append(item)
+
+    if not moved_groups:
+        return
+
+    if remaining_groups:
+        dropdown["groups"] = remaining_groups
+    else:
+        dropdown.pop("groups", None)
+
+    pages = dropdown.setdefault("pages", [])
+    if not isinstance(pages, list):
+        raise ValueError(f"docs.json dropdown.pages must be a list: {docs_json_path}")
+
+    existing = _find_group(pages, group_label)
+    if existing is None:
+        existing = {"group": group_label, "pages": []}
+        pages.append(existing)
+
+    for group in moved_groups:
+        _merge_group_entries(existing, group)
+
+    existing_pages = existing.get("pages")
+    if isinstance(existing_pages, list):
+        reordered = [page for page in DEFAULT_NAV_PAGE_ORDER if page in existing_pages]
+        reordered.extend(page for page in existing_pages if page not in reordered)
+        existing["pages"] = reordered
+    if existing.get("groups") == []:
+        existing.pop("groups", None)
+
+    docs_json_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
 def build_command(args: argparse.Namespace, manifest_path: Path, publish_version: str, versions: list[str]) -> list[str]:
     nav_groups = args.nav_group if args.nav_group is not None else [DEFAULT_NAV_GROUP]
     command = [
@@ -272,7 +377,15 @@ def main() -> int:
     print("Running:", " ".join(command))
     completed = subprocess.run(command, cwd=REPO_ROOT)
     if completed.returncode == 0:
-        cleanup_legacy_docs_ref(docs_json_path=Path(args.docs_json).resolve())
+        docs_json_path = Path(args.docs_json).resolve()
+        nav_groups = args.nav_group if args.nav_group is not None else [DEFAULT_NAV_GROUP]
+        cleanup_legacy_docs_ref(docs_json_path=docs_json_path)
+        if nav_groups:
+            normalize_nav_group_into_pages(
+                docs_json_path=docs_json_path,
+                dropdown_label=args.nav_dropdown,
+                group_label=nav_groups[0],
+            )
         remove_legacy_output(output_file=Path(args.output_file).resolve())
     return completed.returncode
 
