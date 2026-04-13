@@ -8,7 +8,7 @@ let
     pyproject = true;
     src = builtins.fetchGit {
       url = "https://github.com/danielporterda/x2mdx.git";
-      rev = "d4f3764be8cbe9c48bf672bd36f451cc4a350dac";
+      rev = "d4f37646f0c216ed4b66b67be629c1ea9d939a46";
     };
     nativeBuildInputs = with python.pkgs; [
       setuptools
