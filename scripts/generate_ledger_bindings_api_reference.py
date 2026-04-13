@@ -195,8 +195,10 @@ def build_jvm_nav_group(
     publish_root: Path,
     docs_json_path: Path,
     group_label: str,
+    overview_file: Path,
 ) -> tuple[dict[str, Any], set[str]]:
     language_pages: dict[str, list[tuple[str, str]]] = defaultdict(list)
+    language_index_refs: dict[str, str] = {}
     generated_refs: set[str] = set()
 
     for language, directory_name in LANGUAGE_DIRS.items():
@@ -205,7 +207,9 @@ def build_jvm_nav_group(
             continue
         artifact_index = language_dir / "index.mdx"
         if artifact_index.exists():
-            generated_refs.add(docs_json_page_ref(artifact_index, docs_json_path))
+            index_ref = docs_json_page_ref(artifact_index, docs_json_path)
+            language_index_refs[language] = index_ref
+            generated_refs.add(index_ref)
         for package_page in sorted(language_dir.glob("*.mdx")):
             if package_page.name == "index.mdx":
                 continue
@@ -219,22 +223,29 @@ def build_jvm_nav_group(
             continue
         page_entries.sort(key=lambda item: (item[0].lower(), item[0]))
         label = LANGUAGE_LABELS.get(language, language.title())
+        pages: list[Any] = []
+        language_index_ref = language_index_refs.get(language)
+        if language_index_ref is not None:
+            pages.append(language_index_ref)
+        pages.extend(page_ref for _, page_ref in page_entries)
         language_groups.append(
             (
                 LANGUAGE_ORDER.get(language, 99),
                 label,
                 {
                     "group": label,
-                    "pages": [page_ref for _, page_ref in page_entries],
+                    "pages": pages,
                 },
             )
         )
 
     language_groups.sort(key=lambda item: (item[0], item[1]))
+    group_pages: list[Any] = [docs_json_page_ref(overview_file, docs_json_path)]
+    group_pages.extend(group for _, _, group in language_groups)
     return (
         {
             "group": group_label,
-            "pages": [group for _, _, group in language_groups],
+            "pages": group_pages,
         },
         generated_refs,
     )
@@ -272,6 +283,7 @@ def update_docs_navigation(
         publish_root=publish_root,
         docs_json_path=docs_json_path,
         group_label=group_label,
+        overview_file=overview_file,
     )
     generated_refs.add(docs_json_page_ref(overview_file, docs_json_path))
     dropdown["pages"] = prune_nav_items(
