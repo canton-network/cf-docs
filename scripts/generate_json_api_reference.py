@@ -8,8 +8,18 @@ import subprocess
 import sys
 from pathlib import Path
 
+from ledger_api_release_bundles import (
+    bundle_url,
+    load_json,
+    manifest_source_path,
+    materialize_bundle_spec,
+    selected_versions,
+)
+
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_SOURCE_CONFIG = REPO_ROOT / "config" / "x2mdx" / "ledger-api" / "source-artifacts.json"
+DEFAULT_CACHE_DIR = REPO_ROOT / ".internal" / "cache" / "x2mdx" / "ledger-api-bundles"
 DEFAULT_MANIFEST = REPO_ROOT / "config" / "x2mdx" / "ledger-api" / "manifest.json"
 DEFAULT_OUTPUT_FILE = REPO_ROOT / "docs-main" / "reference" / "json-api-reference.mdx"
 LEGACY_OUTPUT_FILE = REPO_ROOT / "docs-main" / "appdev" / "reference" / "json-api-reference.mdx"
@@ -24,7 +34,17 @@ DEFAULT_NAV_PAGE_ORDER = [
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Generate the Mintlify JSON API reference page from checked-in OpenAPI snapshots."
+        description="Generate the Mintlify JSON API reference page from Canton release-bundle OpenAPI snapshots."
+    )
+    parser.add_argument(
+        "--source-config",
+        default=str(DEFAULT_SOURCE_CONFIG),
+        help="Path to the Ledger API bundle source config.",
+    )
+    parser.add_argument(
+        "--cache-dir",
+        default=str(DEFAULT_CACHE_DIR),
+        help="Directory used to cache downloaded Canton release bundles.",
     )
     parser.add_argument(
         "--manifest",
@@ -43,7 +63,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--root",
-        default="published",
+        default="canton-release-bundle",
         help="Root prefix used in manifest source paths.",
     )
     parser.add_argument(
@@ -68,13 +88,18 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--source-name",
-        default="docs.digitalasset.com JSON Ledger API OpenAPI fixtures",
+        default="Canton release bundle JSON Ledger API OpenAPI fixtures",
         help="Source label embedded in generated content.",
     )
     parser.add_argument(
         "--version-filter",
-        default="published docs major versions",
+        default="configured docs major versions from Canton release bundles",
         help="Version-filter label embedded in generated content.",
+    )
+    parser.add_argument(
+        "--force-refresh",
+        action="store_true",
+        help="Refresh cached Canton release bundles and local OpenAPI snapshots before rendering.",
     )
     return parser.parse_args()
 
@@ -112,13 +137,6 @@ def build_command(args: argparse.Namespace) -> list[str]:
         command.extend(["--nav-group", nav_group])
 
     return command
-
-
-def load_json(path: Path) -> dict[str, object]:
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(payload, dict):
-        raise ValueError(f"Expected JSON object in {path}")
-    return payload
 
 
 def docs_json_page_ref(path: Path, docs_json_path: Path) -> str:
@@ -265,8 +283,56 @@ def remove_legacy_output(*, output_file: Path) -> None:
         print(f"Removed legacy output: {legacy_output}")
 
 
+def write_manifest(
+    *,
+    source_config: dict[str, object],
+    manifest_path: Path,
+    versions: list[dict[str, str]],
+) -> Path:
+    source_path = manifest_source_path(source_config, "openapi.yaml")
+    payload = {
+        "source": source_config.get("source") or "Canton release bundle JSON Ledger API OpenAPI fixtures",
+        "versions": [
+            {
+                "version": entry["version"],
+                "url": bundle_url(source_config, entry),
+                "source_path": source_path,
+                "fixture_path": f"{entry['version']}/openapi.yaml",
+            }
+            for entry in versions
+        ],
+    }
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    print(f"Wrote manifest: {manifest_path}")
+    return manifest_path
+
+
 def main() -> int:
     args = parse_args()
+    source_config = load_json(Path(args.source_config).resolve())
+    include_versions = set(args.version) if args.version else None
+    versions = selected_versions(source_config, include_versions)
+    cache_dir = Path(args.cache_dir).resolve()
+    fixtures_root = Path(args.manifest).resolve().parent
+
+    for entry in versions:
+        fixture_path = fixtures_root / entry["version"] / "openapi.yaml"
+        materialize_bundle_spec(
+            source_config=source_config,
+            cache_dir=cache_dir,
+            version_entry=entry,
+            spec_filename="openapi.yaml",
+            output_path=fixture_path,
+            force_refresh=args.force_refresh,
+        )
+
+    write_manifest(
+        source_config=source_config,
+        manifest_path=Path(args.manifest).resolve(),
+        versions=versions,
+    )
+
     command = build_command(args)
     print("Running:", " ".join(command))
     completed = subprocess.run(command, cwd=REPO_ROOT)
