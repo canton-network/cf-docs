@@ -4,11 +4,11 @@ let
   python = pkgs.python311;
   x2mdx = python.pkgs.buildPythonApplication rec {
     pname = "x2mdx";
-    version = "0.1.0+git-6db616f";
+    version = "0.1.0+git-d4f3764";
     pyproject = true;
     src = builtins.fetchGit {
       url = "https://github.com/danielporterda/x2mdx.git";
-      rev = "6db616fcc48fdf1e2a15ad0972a07553a1dea7c4";
+      rev = "d4f3764be8cbe9c48bf672bd36f451cc4a350dac";
     };
     nativeBuildInputs = with python.pkgs; [
       setuptools
