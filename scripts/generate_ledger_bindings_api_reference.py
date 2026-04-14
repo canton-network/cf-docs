@@ -39,6 +39,10 @@ LANGUAGE_DIRS = {
     "scala": "scala",
     "java": "java",
 }
+ARTIFACT_PAGE_DESCRIPTIONS = {
+    "scala": "Generated package reference and version summary from local Scaladoc snapshots",
+    "java": "Generated package reference and version summary from local Javadoc snapshots",
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -504,6 +508,105 @@ def rewrite_markdown_links(text: str, replacements: list[tuple[str, str]]) -> st
     return text
 
 
+def split_frontmatter(text: str) -> tuple[list[str], str]:
+    lines = text.splitlines()
+    if len(lines) >= 3 and lines[0] == "---":
+        try:
+            closing_index = lines[1:].index("---") + 1
+        except ValueError as exc:
+            raise ValueError("Unterminated frontmatter in generated page") from exc
+        return lines[1:closing_index], "\n".join(lines[closing_index + 1 :]).lstrip("\n")
+    return [], text
+
+
+def extract_markdown_sections(text: str) -> tuple[list[str], dict[str, list[str]]]:
+    intro: list[str] = []
+    sections: dict[str, list[str]] = {}
+    current_heading: str | None = None
+
+    for line in text.splitlines():
+        if line.startswith("## "):
+            current_heading = line[3:].strip()
+            sections[current_heading] = []
+            continue
+        if current_heading is None:
+            intro.append(line)
+            continue
+        sections[current_heading].append(line)
+    return intro, sections
+
+
+def trim_blank_lines(lines: list[str]) -> list[str]:
+    start = 0
+    end = len(lines)
+    while start < end and not lines[start].strip():
+        start += 1
+    while end > start and not lines[end - 1].strip():
+        end -= 1
+    return lines[start:end]
+
+
+def rewrite_artifact_page_layout(text: str, *, language: str) -> str:
+    _, body = split_frontmatter(text)
+    intro_lines, sections = extract_markdown_sections(body)
+
+    toc_lines = trim_blank_lines(sections.get("Package Reference", []))
+    artifact_lines = trim_blank_lines(sections.get("Artifact", []))
+    lifecycle_lines = trim_blank_lines(sections.get("Lifecycle Summary", []))
+    changed_lines = trim_blank_lines(sections.get("Changed Symbols", []))
+    deprecation_lines = trim_blank_lines(sections.get("Deprecation Notes", []))
+    failure_lines = trim_blank_lines(sections.get("Input Failures", []))
+
+    title = LANGUAGE_LABELS.get(language, language.title())
+    description = ARTIFACT_PAGE_DESCRIPTIONS.get(
+        language,
+        "Generated package reference and version summary from local JVM docs snapshots",
+    )
+
+    output_lines = [
+        "---",
+        f'title: "{title}"',
+        f'description: "{description}"',
+        "---",
+        "",
+    ]
+
+    intro_lines = trim_blank_lines(intro_lines)
+    if intro_lines:
+        output_lines.extend(intro_lines)
+    else:
+        output_lines.append("Back to [overview](../ledger-api-jvm-bindings).")
+    output_lines.extend(["", "## Table of Contents", ""])
+
+    if toc_lines:
+        output_lines.extend(toc_lines)
+    else:
+        output_lines.append("No package-level symbols were found for this artifact.")
+
+    version_summary_lines = artifact_lines + lifecycle_lines
+    output_lines.extend(["", "## Version Change Summary", ""])
+    if version_summary_lines:
+        output_lines.extend(version_summary_lines)
+    else:
+        output_lines.append("No lifecycle metadata was generated for this artifact.")
+
+    output_lines.extend(["", "## Reference", "", "### Changed Symbols", ""])
+    if changed_lines:
+        output_lines.extend(changed_lines)
+    else:
+        output_lines.append("No lifecycle changes were detected in the configured version range.")
+
+    if deprecation_lines:
+        output_lines.extend(["", "### Deprecation Notes", ""])
+        output_lines.extend(deprecation_lines)
+
+    if failure_lines:
+        output_lines.extend(["", "### Input Failures", ""])
+        output_lines.extend(failure_lines)
+
+    return "\n".join(output_lines).rstrip() + "\n"
+
+
 def major_minor_version(version: str) -> str:
     parts = version.split(".")
     if len(parts) < 2:
@@ -538,12 +641,17 @@ def copy_rewritten_page(
     replacements: list[tuple[str, str]],
     *,
     artifact_entry: dict[str, Any] | None = None,
+    rewrite_artifact_layout: bool = False,
 ) -> None:
     target.parent.mkdir(parents=True, exist_ok=True)
     text = source.read_text(encoding="utf-8")
     text = rewrite_markdown_links(text, replacements)
     if artifact_entry is not None:
         text = rewrite_upstream_docs_links(text, artifact_entry)
+        if rewrite_artifact_layout:
+            language = artifact_entry.get("language")
+            if isinstance(language, str):
+                text = rewrite_artifact_page_layout(text, language=language)
     target.write_text(text, encoding="utf-8")
 
 
@@ -594,15 +702,17 @@ def publish_rendered_pages(
         target_artifact_page = language_dir / "index.mdx"
 
         overview_replacements.append((f"({render_details_dir.name}/{artifact_slug})", f"({LANGUAGE_DIRS[language]})"))
-        if preserve_existing_output:
-            continue
         copy_rewritten_page(
             source_artifact_page,
             target_artifact_page,
             replacements=[(f"({source_package_dir.name}/", "(")],
             artifact_entry=artifact_entry,
+            rewrite_artifact_layout=True,
         )
         generated_refs.add(docs_json_page_ref(target_artifact_page, DEFAULT_DOCS_JSON))
+
+        if preserve_existing_output:
+            continue
 
         if not source_package_dir.exists():
             continue
