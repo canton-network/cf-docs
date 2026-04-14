@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -19,11 +20,12 @@ DEFAULT_DOCS_JSON = REPO_ROOT / "docs-main" / "docs.json"
 DEFAULT_REPO_DIR = DEFAULT_CACHE_DIR / "repos" / "splice-wallet-kernel"
 GROUP_LABEL = "Wallet Gateway JSON-RPC"
 SPEC_DIR_NAME = "specs"
+DEFAULT_RELEASE_REPO = "hyperledger-labs/splice-wallet-kernel"
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Fetch splice-wallet-kernel OpenRPC specs from release tags, write an x2mdx manifest, and render Mintlify pages."
+        description="Fetch Wallet Gateway OpenRPC specs from wallet-gateway-remote releases, write an x2mdx manifest, and render Mintlify pages."
     )
     parser.add_argument("--source-config", default=str(DEFAULT_SOURCE_CONFIG))
     parser.add_argument("--cache-dir", default=str(DEFAULT_CACHE_DIR))
@@ -34,10 +36,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--nav-dropdown", default="Reference")
     parser.add_argument("--version", action="append", help="Explicit version to include. Repeat to limit generation.")
     parser.add_argument("--publish-version", help="Version whose spec surface should be published.")
-    parser.add_argument("--skip-fetch", action="store_true", help="Skip fetching tags from origin before generation.")
+    parser.add_argument("--min-version", help="Minimum wallet-gateway-remote release version to include.")
+    parser.add_argument("--skip-fetch", action="store_true", help="Skip fetching tags from origin before reading selected tag snapshots.")
     parser.add_argument(
         "--source-name",
-        default="splice-wallet-kernel Wallet Gateway OpenRPC release-tag snapshots",
+        default="splice-wallet-kernel Wallet Gateway OpenRPC specs from wallet-gateway-remote releases",
         help="Source label embedded in generated content.",
     )
     parser.add_argument(
@@ -76,6 +79,10 @@ def git(args: list[str], *, cwd: Path, capture: bool = False) -> str:
     return run(["git", *args], cwd=cwd, capture=capture)
 
 
+def gh(args: list[str], *, capture: bool = False) -> str:
+    return run(["gh", *args], capture=capture)
+
+
 def git_try_show(repo_dir: Path, tag: str, source_path: str) -> str | None:
     completed = subprocess.run(
         ["git", "show", f"{tag}:{source_path}"],
@@ -101,6 +108,42 @@ def ensure_repo(repo_dir: Path, *, remote: str, fetch: bool) -> Path:
 
 def version_key(version: str) -> tuple[int, ...]:
     return tuple(int(part) for part in version.split("."))
+
+
+def stable_release_versions(
+    *,
+    release_repo: str,
+    tag_prefix: str,
+    min_version: str,
+    include_versions: set[str] | None,
+) -> list[str]:
+    releases_raw = gh(
+        ["release", "list", "-R", release_repo, "--json", "tagName", "--limit", "200"],
+        capture=True,
+    )
+    payload = json.loads(releases_raw)
+    if not isinstance(payload, list):
+        raise ValueError(f"Expected release list from gh for {release_repo}")
+    semver_re = re.compile(rf"^{re.escape(tag_prefix)}(?P<version>\d+\.\d+\.\d+)$")
+    selected: list[str] = []
+    minimum = version_key(min_version)
+    for entry in payload:
+        if not isinstance(entry, dict):
+            continue
+        tag_name = entry.get("tagName")
+        if not isinstance(tag_name, str):
+            continue
+        match = semver_re.fullmatch(tag_name)
+        if not match:
+            continue
+        version = match.group("version")
+        if version_key(version) < minimum:
+            continue
+        if include_versions is not None and version not in include_versions:
+            continue
+        selected.append(version)
+    selected.sort(key=version_key)
+    return selected
 
 
 def docs_json_page_ref(path: Path, docs_json_path: Path) -> str:
@@ -239,25 +282,29 @@ def write_manifest(
 def main() -> int:
     args = parse_args()
     source_config = load_json(Path(args.source_config).resolve())
-    configured_versions = source_config.get("versions")
-    if not isinstance(configured_versions, list) or not all(isinstance(item, str) for item in configured_versions):
-        raise ValueError("Source config must define a string list under `versions`")
-    selected_versions = [version for version in configured_versions if not args.version or version in set(args.version)]
+    include_versions = set(args.version) if args.version else None
+    remote = str(source_config.get("remote") or "")
+    release_repo = str(source_config.get("release_repo") or DEFAULT_RELEASE_REPO)
+    tag_prefix = str(source_config.get("tag_prefix") or "")
+    min_version = str(args.min_version or source_config.get("min_version") or "0.0.0")
+    spec_entries = source_config.get("specs")
+    if not remote or not tag_prefix or not release_repo:
+        raise ValueError("Source config must define `remote`, `release_repo`, and `tag_prefix`")
+    if not isinstance(spec_entries, list) or not all(isinstance(item, dict) for item in spec_entries):
+        raise ValueError("Source config must define a `specs` list of objects")
+
+    selected_versions = stable_release_versions(
+        release_repo=release_repo,
+        tag_prefix=tag_prefix,
+        min_version=min_version,
+        include_versions=include_versions,
+    )
     if not selected_versions:
-        raise ValueError("No OpenRPC versions selected")
-    selected_versions = sorted(selected_versions, key=version_key)
+        raise ValueError("No wallet-gateway-remote OpenRPC releases selected")
 
     publish_version = args.publish_version or str(source_config.get("publish_version") or selected_versions[-1])
     if publish_version not in selected_versions:
         raise ValueError(f"Publish version '{publish_version}' is not selected")
-
-    remote = str(source_config.get("remote") or "")
-    tag_prefix = str(source_config.get("tag_prefix") or "")
-    spec_entries = source_config.get("specs")
-    if not remote or not tag_prefix:
-        raise ValueError("Source config must define `remote` and `tag_prefix`")
-    if not isinstance(spec_entries, list) or not all(isinstance(item, dict) for item in spec_entries):
-        raise ValueError("Source config must define a `specs` list of objects")
 
     cache_dir = Path(args.cache_dir).resolve()
     repo_dir = Path(args.repo_dir).resolve()
@@ -304,7 +351,7 @@ def main() -> int:
         "--source-name",
         args.source_name,
         "--version-filter",
-        args.version_filter or f"{tag_prefix} release tags",
+        args.version_filter or f"{tag_prefix} GitHub releases",
     ]
     for version in args.version or []:
         command.extend(["--version", version])

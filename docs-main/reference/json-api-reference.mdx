@@ -30,7 +30,9 @@ title: "JSON Ledger API HTTP Endpoints"
 | [`/v2/interactive-submission/preferred-package-version`](#endpoint-path-v2-interactive-submission-preferred-package-version) | 🟢 `v3.4` 🔵 `v3.5` | A preferred package is the highest-versioned package for a provided package-name that is vetted by all the participants hosting the provided parties.  Ledger API clients should use this endpoint for constructing command submissions that are compatible with the provided preferred package, by making informed decisions on: - which are the compatible packages that can be used to create contracts - which contract or exercise choice argument version can be used in the command - which choices can be executed on a template or interface of a contract  Can be accessed by any Ledger API client with a valid token when Ledger API authorization is enabled.  Provided for backwards compatibility, it will be removed in the Canton version 3.4.0 |
 | [`/v2/interactive-submission/preferred-packages`](#endpoint-path-v2-interactive-submission-preferred-packages) | 🟢 `v3.4` 🔵 `v3.5` | Compute the preferred packages for the vetting requirements in the request. A preferred package is the highest-versioned package for a provided package-name that is vetted by all the participants hosting the provided parties.  Ledger API clients should use this endpoint for constructing command submissions that are compatible with the provided preferred packages, by making informed decisions on: - which are the compatible packages that can be used to create contracts - which contract or exercise choice argument version can be used in the command - which choices can be executed on a template or interface of a contract  If the package preferences could not be computed due to no selection satisfying the requirements, a `FAILED_PRECONDITION` error will be returned.  Can be accessed by any Ledger API client with a valid token when Ledger API authorization is enabled.  Experimental API: this endpoint is not guaranteed to provide backwards compatibility in future releases |
 | [`/v2/interactive-submission/prepare`](#endpoint-path-v2-interactive-submission-prepare) | 🟢 `v3.4` 🔵 `v3.5` | Requires `readAs` scope for the submitting party when LAPI User authorization is enabled |
-| [`/v2/package-vetting`](#endpoint-path-v2-package-vetting) | 🟢 `v3.4` 🔵 `v3.5` | GET: Lists which participant node vetted what packages on which synchronizer. Can be called by any authenticated user.; POST: Update the vetted packages of this participant |
+| [`/v2/package-vetting`](#endpoint-path-v2-package-vetting) | 🟢 `v3.4` 🔵 `v3.5` | GET: Lists which participant node vetted what packages on which synchronizer. This endpoint (GET /package-vetting) is deprecated and will be removed in a future release. Please use POST /package-vetting/list instead.; POST: Update the vetted packages of this participant This endpoint (POST /package-vetting) is deprecated and will be removed in a future release. Please use POST /package-vetting/update instead. |
+| [`/v2/package-vetting/list`](#endpoint-path-v2-package-vetting-list) | 🟢 `v3.4` 🔵 `v3.5` | Lists which participant node vetted what packages on which synchronizer. Can be called by any authenticated user. |
+| [`/v2/package-vetting/update`](#endpoint-path-v2-package-vetting-update) | 🟢 `v3.4` 🔵 `v3.5` | Update the vetted packages of this participant |
 | [`/v2/packages`](#endpoint-path-v2-packages) | 🟢 `v3.4` 🔵 `v3.5` | GET: Returns the identifiers of all supported packages.; POST: Behaves the same as /dars. This endpoint will be deprecated and removed in a future release. Upload a DAR file to the participant.  If vetting is enabled in the request, the DAR is checked for upgrade compatibility with the set of the already vetted packages on the target vetting synchronizer See UploadDarFileRequest for details regarding vetting and the target vetting synchronizer. |
 | [`/v2/packages/{package-id}`](#endpoint-path-v2-packages-package-id) | 🟢 `v3.4` 🔵 `v3.5` | Returns the contents of a single package. |
 | [`/v2/packages/{package-id}/status`](#endpoint-path-v2-packages-package-id-status) | 🟢 `v3.4` 🔵 `v3.5` | Returns the status of a single package. |
@@ -1019,7 +1021,7 @@ title: "JSON Ledger API HTTP Endpoints"
 **GET**
 
 - Operation ID: `getV2Package-vetting`
-- Description: Lists which participant node vetted what packages on which synchronizer. Can be called by any authenticated user.
+- Description: Lists which participant node vetted what packages on which synchronizer. This endpoint (GET /package-vetting) is deprecated and will be removed in a future release. Please use POST /package-vetting/list instead.
 
 **Request Body**
 
@@ -1067,6 +1069,99 @@ title: "JSON Ledger API HTTP Endpoints"
 **POST**
 
 - Operation ID: `postV2Package-vetting`
+- Description: Update the vetted packages of this participant This endpoint (POST /package-vetting) is deprecated and will be removed in a future release. Please use POST /package-vetting/update instead.
+
+**Request Body**
+
+- Required: `yes`
+
+| Content Type | Schema | Required Fields |
+| --- | --- | --- |
+| `application/json` | `object` | `changes` |
+
+**Request Example: `application/json`**
+
+```json
+{
+  "changes": [
+    {
+      "operation": {
+        "Empty": "<object>"
+      }
+    }
+  ]
+}
+```
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `application/json` | `application/json:object` |
+| `400` | Invalid value, Invalid value for: body | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-path-v2-package-vetting-list"></a>
+
+### `/v2/package-vetting/list`
+
+<a id="endpoint-post-v2-package-vetting-list"></a>
+
+- Method: `POST`
+
+- Operation ID: `postV2Package-vettingList`
+- Description: Lists which participant node vetted what packages on which synchronizer. Can be called by any authenticated user.
+
+**Request Body**
+
+- Required: `yes`
+
+| Content Type | Schema | Required Fields |
+| --- | --- | --- |
+| `application/json` | `object` | - |
+
+**Request Example: `application/json`**
+
+```json
+{
+  "packageMetadataFilter": {
+    "packageIds": [
+      "<string>"
+    ],
+    "packageNamePrefixes": [
+      "<string>"
+    ]
+  },
+  "topologyStateFilter": {
+    "participantIds": [
+      "<string>"
+    ],
+    "synchronizerIds": [
+      "<string>"
+    ]
+  },
+  "pageToken": "<string>",
+  "pageSize": "<integer>"
+}
+```
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | - | `application/json` | `application/json:object` |
+| `400` | Invalid value, Invalid value for: body | `text/plain` | `text/plain:string` |
+| `default` | - | `application/json` | `application/json:object` |
+
+<a id="endpoint-path-v2-package-vetting-update"></a>
+
+### `/v2/package-vetting/update`
+
+<a id="endpoint-post-v2-package-vetting-update"></a>
+
+- Method: `POST`
+
+- Operation ID: `postV2Package-vettingUpdate`
 - Description: Update the vetted packages of this participant
 
 **Request Body**
@@ -1578,49 +1673,13 @@ title: "JSON Ledger API HTTP Endpoints"
 
 | Content Type | Schema | Required Fields |
 | --- | --- | --- |
-| `application/json` | `object` | - |
+| `application/json` | `object` | `beginExclusive` |
 
 **Request Example: `application/json`**
 
 ```json
 {
-  "beginExclusive": "<integer>",
-  "endInclusive": "<integer>",
-  "filter": {
-    "filtersByParty": {},
-    "filtersForAnyParty": {
-      "cumulative": [
-        "<object>"
-      ]
-    }
-  },
-  "verbose": "<boolean>",
-  "updateFormat": {
-    "includeTransactions": {
-      "eventFormat": {
-        "filtersByParty": "<object>",
-        "filtersForAnyParty": "<object>",
-        "verbose": "<boolean>"
-      },
-      "transactionShape": "<string>"
-    },
-    "includeReassignments": {
-      "filtersByParty": {},
-      "filtersForAnyParty": {
-        "cumulative": [
-          "<object>"
-        ]
-      },
-      "verbose": "<boolean>"
-    },
-    "includeTopologyEvents": {
-      "includeParticipantAuthorizationEvents": {
-        "parties": [
-          "<string>"
-        ]
-      }
-    }
-  }
+  "beginExclusive": "<integer>"
 }
 ```
 
@@ -1656,49 +1715,13 @@ title: "JSON Ledger API HTTP Endpoints"
 
 | Content Type | Schema | Required Fields |
 | --- | --- | --- |
-| `application/json` | `object` | - |
+| `application/json` | `object` | `beginExclusive` |
 
 **Request Example: `application/json`**
 
 ```json
 {
-  "beginExclusive": "<integer>",
-  "endInclusive": "<integer>",
-  "filter": {
-    "filtersByParty": {},
-    "filtersForAnyParty": {
-      "cumulative": [
-        "<object>"
-      ]
-    }
-  },
-  "verbose": "<boolean>",
-  "updateFormat": {
-    "includeTransactions": {
-      "eventFormat": {
-        "filtersByParty": "<object>",
-        "filtersForAnyParty": "<object>",
-        "verbose": "<boolean>"
-      },
-      "transactionShape": "<string>"
-    },
-    "includeReassignments": {
-      "filtersByParty": {},
-      "filtersForAnyParty": {
-        "cumulative": [
-          "<object>"
-        ]
-      },
-      "verbose": "<boolean>"
-    },
-    "includeTopologyEvents": {
-      "includeParticipantAuthorizationEvents": {
-        "parties": [
-          "<string>"
-        ]
-      }
-    }
-  }
+  "beginExclusive": "<integer>"
 }
 ```
 
@@ -1856,49 +1879,13 @@ title: "JSON Ledger API HTTP Endpoints"
 
 | Content Type | Schema | Required Fields |
 | --- | --- | --- |
-| `application/json` | `object` | - |
+| `application/json` | `object` | `beginExclusive` |
 
 **Request Example: `application/json`**
 
 ```json
 {
-  "beginExclusive": "<integer>",
-  "endInclusive": "<integer>",
-  "filter": {
-    "filtersByParty": {},
-    "filtersForAnyParty": {
-      "cumulative": [
-        "<object>"
-      ]
-    }
-  },
-  "verbose": "<boolean>",
-  "updateFormat": {
-    "includeTransactions": {
-      "eventFormat": {
-        "filtersByParty": "<object>",
-        "filtersForAnyParty": "<object>",
-        "verbose": "<boolean>"
-      },
-      "transactionShape": "<string>"
-    },
-    "includeReassignments": {
-      "filtersByParty": {},
-      "filtersForAnyParty": {
-        "cumulative": [
-          "<object>"
-        ]
-      },
-      "verbose": "<boolean>"
-    },
-    "includeTopologyEvents": {
-      "includeParticipantAuthorizationEvents": {
-        "parties": [
-          "<string>"
-        ]
-      }
-    }
-  }
+  "beginExclusive": "<integer>"
 }
 ```
 
@@ -2351,8 +2338,8 @@ title: "JSON Ledger API HTTP Endpoints"
 
 | Version | Added | Changed | Removed |
 | --- | --- | --- | --- |
-| `3.4` | `357` | `0` | `0` |
-| `3.5` | `6` | `147` | `1` |
+| `3.4` | `361` | `0` | `0` |
+| `3.5` | `6` | `152` | `1` |
 
 ## Changed Entities
 
@@ -2370,6 +2357,7 @@ title: "JSON Ledger API HTTP Endpoints"
 | `schemas.CanReadAsAnyParty1` | `component` | `3.4` | `3.5` | - | - |
 | `schemas.Completion1` | `component` | `3.4` | `3.5` | - | - |
 | `schemas.ConnectedSynchronizer` | `component` | `3.4` | `3.5` | - | - |
+| `schemas.CostEstimationHints` | `component` | `3.4` | `3.5` | - | - |
 | `schemas.CreatedEvent` | `component` | `3.4` | `3.5` | - | - |
 | `schemas.ExercisedEvent` | `component` | `3.4` | `3.5` | - | - |
 | `schemas.GetActiveContractsRequest` | `component` | `3.4` | `3.5` | - | - |
@@ -2449,6 +2437,8 @@ title: "JSON Ledger API HTTP Endpoints"
 | `POST /v2/interactive-submission/preferred-packages` | `operation` | `3.4` | `3.5` | 3.5: description updated; response `400` description updated | - |
 | `POST /v2/interactive-submission/prepare` | `operation` | `3.4` | `3.5` | 3.5: description updated; response `400` description updated | - |
 | `POST /v2/package-vetting` | `operation` | `3.4` | `3.5` | 3.5: description updated; response `400` description updated | - |
+| `POST /v2/package-vetting/list` | `operation` | `3.4` | `3.5` | 3.5: description updated; response `400` description updated | - |
+| `POST /v2/package-vetting/update` | `operation` | `3.4` | `3.5` | 3.5: description updated; response `400` description updated | - |
 | `POST /v2/packages` | `operation` | `3.4` | `3.5` | 3.5: description updated; response `400` description updated | - |
 | `POST /v2/parties` | `operation` | `3.4` | `3.5` | 3.5: description updated; response `400` description updated | - |
 | `POST /v2/parties/external/allocate` | `operation` | `3.4` | `3.5` | 3.5: description updated; response `400` description updated | - |
@@ -2486,6 +2476,8 @@ title: "JSON Ledger API HTTP Endpoints"
 | `/v2/interactive-submission/preferred-packages` | `path` | `3.4` | `3.5` | - | - |
 | `/v2/interactive-submission/prepare` | `path` | `3.4` | `3.5` | - | - |
 | `/v2/package-vetting` | `path` | `3.4` | `3.5` | - | - |
+| `/v2/package-vetting/list` | `path` | `3.4` | `3.5` | - | - |
+| `/v2/package-vetting/update` | `path` | `3.4` | `3.5` | - | - |
 | `/v2/packages` | `path` | `3.4` | `3.5` | - | - |
 | `/v2/packages/{package-id}` | `path` | `3.4` | `3.5` | - | - |
 | `/v2/packages/{package-id}/status` | `path` | `3.4` | `3.5` | - | - |
@@ -2564,6 +2556,8 @@ title: "JSON Ledger API HTTP Endpoints"
 | `POST /v2/interactive-submission/preferred-packages` | `3.4` | `3.5` | - |
 | `POST /v2/interactive-submission/prepare` | `3.4` | `3.5` | - |
 | `POST /v2/package-vetting` | `3.4` | `3.5` | - |
+| `POST /v2/package-vetting/list` | `3.4` | `3.5` | - |
+| `POST /v2/package-vetting/update` | `3.4` | `3.5` | - |
 | `POST /v2/packages` | `3.4` | `3.5` | - |
 | `POST /v2/parties` | `3.4` | `3.5` | - |
 | `POST /v2/parties/external/allocate` | `3.4` | `3.5` | - |
@@ -2609,7 +2603,7 @@ title: "JSON Ledger API HTTP Endpoints"
 | `schemas.CompletionStreamResponse` | `3.4` | - | - |
 | `schemas.ConnectedSynchronizer` | `3.4` | `3.5` | - |
 | `schemas.CostEstimation` | `3.4` | - | - |
-| `schemas.CostEstimationHints` | `3.4` | - | - |
+| `schemas.CostEstimationHints` | `3.4` | `3.5` | - |
 | `schemas.CreateAndExerciseCommand` | `3.4` | - | - |
 | `schemas.CreateCommand` | `3.4` | - | - |
 | `schemas.CreateIdentityProviderConfigRequest` | `3.4` | - | - |
@@ -2839,7 +2833,7 @@ title: "JSON Ledger API HTTP Endpoints"
 ## Spec Metadata
 
 - Canonical spec id: `json-ledger-api/openapi.yaml`
-- Latest source path: `published/json-ledger-api/openapi.yaml`
+- Latest source path: `canton-release-bundle/json-ledger-api/openapi.yaml`
 - OpenAPI version (latest): `3.0.3`
 - Introduced: `3.4`
 - Changed in versions: `3.5`
@@ -2847,11 +2841,11 @@ title: "JSON Ledger API HTTP Endpoints"
 
 ## Entity Summary
 
-- Total entities tracked: `363`
+- Total entities tracked: `367`
 - Entities introduced after spec introduction: `6`
-- Entities changed at least once: `147`
+- Entities changed at least once: `152`
 - Entities removed: `1`
-- Latest operations: `61`
-- Latest paths: `49`
+- Latest operations: `63`
+- Latest paths: `51`
 - Latest components: `252`
 - Latest tags: `0`
