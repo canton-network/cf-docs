@@ -3,21 +3,21 @@
 ## Target repository (this repo) configuration
 
 On the target repository, the following repository environment **secrets** must be configured:
-* EXTERNAL_REPO_TOKEN - token used to access the artifact of the external repository
-* DOCS_PR_TOKEN - token used to create the Pull Request on this repository
+* `EXTERNAL_REPO_TOKEN` - token used to access the artifact of the external repository
+* `DOCS_PR_TOKEN - token used to create the Pull Request on this repository
 
 
 ## Source repository configuration
 
 On the source repository, the following secret must be configured:
-* MAIN_DOCS_REPO_TOKEN
+* `MAIN_DOCS_REPO_TOKEN`
 
 additionally, the following environment variables must be set:
-* MAIN_REPO_ORG - 
-* MAIN_REPO_NAME
-* SOURCE_REPO_NAME
-* SOURCE_REPO_ORG
-* SOURCE_REPO_VERSION
+* `MAIN_REPO_ORG` - `digital-asset`
+* `MAIN_REPO_NAME` - `docs`
+* `SOURCE_REPO_NAME` - `{SOURCE_REPOSITORY_NAME}`
+* `SOURCE_REPO_ORG` - `{SOURCE_REPOSITORY_ORG}`
+* `SOURCE_REPO_VERSION` - `main`
 
 ### Token permissions
 
