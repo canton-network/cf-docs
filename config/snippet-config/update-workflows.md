@@ -86,7 +86,7 @@ sequenceDiagram
 
 On the target repository, the following repository environment **secrets** must be configured:
 * `EXTERNAL_REPO_TOKEN` - token used to access the artifact of the external repository
-* `DOCS_PR_TOKEN - token used to create the Pull Request on this repository
+* `DOCS_PR_TOKEN` - token used to create the Pull Request on this repository
 
 
 ## Source repository configuration
@@ -106,26 +106,33 @@ additionally, the following environment variables must be set:
 The following token permission must be configured on these tokens:
 
 **EXTERNAL_REPO_TOKEN**
-repository scope: External repositories
-* `hyperledger-labs/splice-wallet-kernel/`
-* `DACH-NY/canton`
-* `digital-asset/daml`
-* `hyperledger-labs/splice`
-* TODO: finalize list
 
-permission scope:
-* Actions: Read
+* repository scope: External repositories
+  * `hyperledger-labs/splice-wallet-kernel/`
+  * `DACH-NY/canton`
+  * `digital-asset/daml`
+  * `hyperledger-labs/splice`
+  * TODO: finalize list
+
+* permission scope:
+  * Actions: Read
 
 **DOCS_PR_TOKEN**
-repository scope: This repository (`digital-asset/docs`)
-permission scope:
-* Contents: Read and write
-* Pull requests: Read and write
+
+* repository scope: This repository
+  * `digital-asset/docs`
+
+* permission scope:
+  * Contents: Read and write
+  * Pull requests: Read and write
 
 **MAIN_DOCS_REPO_TOKEN**
-repository scope: This repository (`digital-asset/docs`)
-permission scope:
-* Contents: Read and write
+
+* repository scope: This repository
+  * `digital-asset/docs`
+
+* permission scope:
+  * Contents: Read and write
 
 Note: The `DOCS_PR_TOKEN` can also be used as `MAIN_DOCS_REPO_TOKEN`
 
