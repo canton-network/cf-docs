@@ -546,7 +546,110 @@ def trim_blank_lines(lines: list[str]) -> list[str]:
     return lines[start:end]
 
 
-def rewrite_artifact_page_layout(text: str, *, language: str) -> str:
+def strip_inline_code(text: str) -> str:
+    stripped = text.strip()
+    if len(stripped) >= 2 and stripped.startswith("`") and stripped.endswith("`"):
+        return stripped[1:-1]
+    return stripped
+
+
+def parse_markdown_table(lines: list[str]) -> tuple[list[str], list[list[str]]]:
+    table_lines = [line.strip() for line in lines if line.strip().startswith("|")]
+    if len(table_lines) < 2:
+        return [], []
+
+    def split_row(line: str) -> list[str]:
+        return [cell.strip() for cell in line.strip().strip("|").split("|")]
+
+    headers = split_row(table_lines[0])
+    rows = [split_row(line) for line in table_lines[2:]]
+    rows = [row for row in rows if len(row) == len(headers)]
+    return headers, rows
+
+
+def markdown_link_target(cell: str) -> str | None:
+    match = re.search(r"\(([^)]+)\)", cell)
+    if not match:
+        return None
+    return match.group(1).strip()
+
+
+def parse_int_cell(cell: str) -> int:
+    stripped = strip_inline_code(cell)
+    if not stripped or stripped == "-":
+        return 0
+    return int(stripped)
+
+
+def build_package_status_cell(*, versions: list[str], introduced: int, deprecated: int, removed: int) -> str:
+    if not versions:
+        return "-"
+    parts = [f"🟢 `{versions[0]}`"]
+    if introduced or deprecated or removed:
+        change_version = versions[-1]
+        if change_version:
+            parts.append(f"🔵 `{change_version}`")
+    return " ".join(parts)
+
+
+def build_package_summary(*, type_count: int, introduced: int, deprecated: int, removed: int) -> str:
+    type_label = "type" if type_count == 1 else "types"
+    changes: list[str] = []
+    if introduced:
+        changes.append(f"{introduced} introduced")
+    if deprecated:
+        changes.append(f"{deprecated} deprecated")
+    if removed:
+        changes.append(f"{removed} removed")
+    if changes:
+        return f"{type_count} {type_label}. Changes in range: {', '.join(changes)}."
+    return f"{type_count} {type_label}. No lifecycle changes in selected range."
+
+
+def extract_versions_from_artifact_lines(lines: list[str]) -> list[str]:
+    for line in lines:
+        match = re.match(r"^- Versions:\s+`([^`]+)`\s*$", line.strip())
+        if not match:
+            continue
+        return [part.strip() for part in match.group(1).split(",") if part.strip()]
+    return []
+
+
+def render_artifact_toc_rows(package_reference_lines: list[str], *, versions: list[str]) -> list[str]:
+    _, rows = parse_markdown_table(package_reference_lines)
+    output_rows: list[str] = []
+    for row in rows:
+        if len(row) != 6:
+            continue
+        link_cell, package_cell, types_cell, introduced_cell, deprecated_cell, removed_cell = row
+        link_target = markdown_link_target(link_cell)
+        package_name = strip_inline_code(package_cell)
+        type_count = parse_int_cell(types_cell)
+        introduced = parse_int_cell(introduced_cell)
+        deprecated = parse_int_cell(deprecated_cell)
+        removed = parse_int_cell(removed_cell)
+
+        if link_target:
+            name_cell = f"[`{package_name}`]({link_target})"
+        else:
+            name_cell = f"`{package_name}`"
+        status_cell = build_package_status_cell(
+            versions=versions,
+            introduced=introduced,
+            deprecated=deprecated,
+            removed=removed,
+        )
+        summary_cell = build_package_summary(
+            type_count=type_count,
+            introduced=introduced,
+            deprecated=deprecated,
+            removed=removed,
+        )
+        output_rows.append(f"| {name_cell} | {status_cell} | {summary_cell} |")
+    return output_rows
+
+
+def rewrite_artifact_page_layout(text: str, *, artifact_entry: dict[str, Any]) -> str:
     _, body = split_frontmatter(text)
     intro_lines, sections = extract_markdown_sections(body)
 
@@ -557,6 +660,7 @@ def rewrite_artifact_page_layout(text: str, *, language: str) -> str:
     deprecation_lines = trim_blank_lines(sections.get("Deprecation Notes", []))
     failure_lines = trim_blank_lines(sections.get("Input Failures", []))
 
+    language = str(artifact_entry.get("language", ""))
     title = LANGUAGE_LABELS.get(language, language.title())
     description = ARTIFACT_PAGE_DESCRIPTIONS.get(
         language,
@@ -578,8 +682,17 @@ def rewrite_artifact_page_layout(text: str, *, language: str) -> str:
         output_lines.append("Back to [overview](../ledger-api-jvm-bindings).")
     output_lines.extend(["", "## Table of Contents", ""])
 
+    toc_versions = extract_versions_from_artifact_lines(artifact_lines)
     if toc_lines:
-        output_lines.extend(toc_lines)
+        output_lines.append("🟢 Active Since  🔵 Changed  🔴 Removed")
+        output_lines.extend(
+            [
+                "",
+                "| NAME | STATUS | SUMMARY |",
+                "| --- | --- | --- |",
+                *render_artifact_toc_rows(toc_lines, versions=toc_versions),
+            ]
+        )
     else:
         output_lines.append("No package-level symbols were found for this artifact.")
 
@@ -649,9 +762,7 @@ def copy_rewritten_page(
     if artifact_entry is not None:
         text = rewrite_upstream_docs_links(text, artifact_entry)
         if rewrite_artifact_layout:
-            language = artifact_entry.get("language")
-            if isinstance(language, str):
-                text = rewrite_artifact_page_layout(text, language=language)
+            text = rewrite_artifact_page_layout(text, artifact_entry=artifact_entry)
     target.write_text(text, encoding="utf-8")
 
 
