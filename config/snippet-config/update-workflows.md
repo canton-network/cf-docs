@@ -41,7 +41,7 @@ The content of this folder (full extract) is then stored into the [GitHub artifa
 
 ## Pulling snippet files
 
-In this repository, the [pull-external-snippets](/.github/workflows/pull-external-snippets) workflow (dispatch name: `update_snippets`) is triggered with the following parameters:
+In this repository, the [pull-external-snippets](/.github/workflows/pull-external-snippets.yml) workflow (dispatch name: `update_snippets`) is triggered with the following parameters:
 * artifact-id: External Artifact Id
 * run-id: Github Action Run Id
 * repo-name: External repo name
