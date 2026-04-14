@@ -161,8 +161,8 @@ The generated nav is added under the top-level `Reference` dropdown as `Daml Sta
 
 ### Generate the Canton protobuf history reference
 
-This repo also includes a checked-in source config for published Canton protobuf release bundles at `config/x2mdx/protobuf-history/source-artifacts.json`.
-The generator script downloads versioned protobuf release assets from `DACH-NY/canton`, extracts the published `.proto` tree under `.internal/cache/x2mdx/protobuf-history/`, compiles local descriptor images with `grpc_tools.protoc`, writes a local x2mdx manifest into `.internal/generated/x2mdx/protobuf-history/manifest.json`, and then renders MDX pages with the GitHub-pinned `x2mdx`.
+This repo also includes a checked-in source config for Canton release-bundle protobuf inputs at `config/x2mdx/protobuf-history/source-artifacts.json`.
+The generator script discovers stable Canton versions from the source repo tags, downloads the matching `canton-open-source-<version>.tar.gz` bundles from `canton.io/releases`, extracts the published `protobuf/` tree under `.internal/cache/x2mdx/protobuf-history/`, compiles local descriptor images with `grpc_tools.protoc`, writes a local x2mdx manifest into `.internal/generated/x2mdx/protobuf-history/manifest.json`, and then renders MDX pages with the GitHub-pinned `x2mdx`.
 
 Run:
 

@@ -6,13 +6,14 @@ import argparse
 import gzip
 import importlib.util
 import json
+import os
 import re
 import shutil
 import subprocess
 import sys
 import tarfile
 import tempfile
-import zipfile
+import urllib.request
 from pathlib import Path
 from typing import Any
 
@@ -23,10 +24,10 @@ DEFAULT_CACHE_DIR = REPO_ROOT / ".internal" / "cache" / "x2mdx" / "protobuf-hist
 DEFAULT_MANIFEST = REPO_ROOT / ".internal" / "generated" / "x2mdx" / "protobuf-history" / "manifest.json"
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "docs-main" / "appdev" / "reference" / "protobuf-history"
 DEFAULT_DOCS_JSON = REPO_ROOT / "docs-main" / "docs.json"
+DEFAULT_REPO_DIR = DEFAULT_CACHE_DIR / "repos" / "canton"
 GROUP_LABEL = "Canton Protobuf History"
 DESCRIPTOR_IMAGE_NAME = ".proto_snapshot_image.bin.gz"
 STABLE_TAG_RE = re.compile(r"^v(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)$")
-RELEASE_REPO_DEFAULT = "DACH-NY/canton"
 SECTION_TO_REPO_PREFIX = {
     "admin-api": "community/admin-api/src/main/protobuf",
     "community": "community/base/src/main/protobuf",
@@ -35,11 +36,12 @@ SECTION_TO_REPO_PREFIX = {
     "synchronizer": "community/synchronizer/src/main/protobuf",
 }
 SUPPORT_SECTION_NAMES = {"lib"}
+USER_AGENT = "digital-asset-docs-x2mdx/1.0"
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Fetch published Canton protobuf bundles, write an x2mdx manifest, and render protobuf history MDX."
+        description="Fetch Canton release-bundle protobuf inputs, write an x2mdx manifest, and render protobuf history MDX."
     )
     parser.add_argument("--source-config", default=str(DEFAULT_SOURCE_CONFIG))
     parser.add_argument("--cache-dir", default=str(DEFAULT_CACHE_DIR))
@@ -48,17 +50,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--docs-json", default=str(DEFAULT_DOCS_JSON))
     parser.add_argument("--nav-dropdown", default="Reference")
     parser.add_argument("--nav-group", action="append")
+    parser.add_argument("--repo-dir", default=str(DEFAULT_REPO_DIR))
     parser.add_argument("--version", action="append", help="Explicit version to include. Repeat to limit generation.")
-    parser.add_argument("--min-version", help="Minimum stable version to include when auto-discovering releases.")
-    parser.add_argument(
-        "--skip-fetch",
-        action="store_true",
-        help="Ignored; retained for compatibility with the old repo-tag flow.",
-    )
+    parser.add_argument("--min-version", help="Minimum stable version to include when auto-discovering tags.")
+    parser.add_argument("--skip-fetch", action="store_true", help="Skip fetching tags from origin before generation.")
     parser.add_argument("--force-refresh", action="store_true", help="Refresh cached protobuf bundles and descriptor images.")
     parser.add_argument(
         "--source-name",
-        default="Published Canton protobuf release bundles",
+        default="Canton protobuf trees from published release bundles",
         help="Source label embedded in generated content.",
     )
     parser.add_argument(
@@ -88,8 +87,17 @@ def run(args: list[str], *, cwd: Path | None = None, capture: bool = False) -> s
     return completed.stdout.strip() if capture else ""
 
 
-def gh(args: list[str], *, capture: bool = False) -> str:
-    return run(["gh", *args], capture=capture)
+def git(args: list[str], *, cwd: Path, capture: bool = False) -> str:
+    return run(["git", *args], cwd=cwd, capture=capture)
+
+
+def ensure_repo(repo_dir: Path, *, remote: str, fetch: bool) -> Path:
+    repo_dir.parent.mkdir(parents=True, exist_ok=True)
+    if not repo_dir.exists():
+        run(["git", "clone", "--bare", remote, str(repo_dir)])
+    if fetch:
+        git(["fetch", "origin", "--tags", "--prune"], cwd=repo_dir)
+    return repo_dir
 
 
 def semver_key(version: str) -> tuple[int, int, int]:
@@ -103,64 +111,47 @@ def semver_key(version: str) -> tuple[int, int, int]:
     )
 
 
-def stable_releases(release_repo: str, *, min_version: str, include_versions: set[str] | None) -> list[dict[str, str | None]]:
-    releases_raw = gh(
-        ["release", "list", "-R", release_repo, "--json", "tagName,publishedAt", "--limit", "200"],
-        capture=True,
-    )
-    releases_payload = json.loads(releases_raw)
-    if not isinstance(releases_payload, list):
-        raise ValueError(f"Expected release list from gh for {release_repo}")
-
-    selected: list[dict[str, str | None]] = []
+def stable_tags(repo_dir: Path, *, min_version: str, include_versions: set[str] | None) -> list[tuple[str, str]]:
+    tags_raw = git(["tag", "--list", "v*"], cwd=repo_dir, capture=True)
+    selected: list[tuple[str, str]] = []
     min_key = semver_key(min_version)
-    for entry in releases_payload:
-        if not isinstance(entry, dict):
-            continue
-        tag = entry.get("tagName")
-        if not isinstance(tag, str):
-            continue
-        if not STABLE_TAG_RE.fullmatch(tag):
+    for line in tags_raw.splitlines():
+        tag = line.strip()
+        match = STABLE_TAG_RE.fullmatch(tag)
+        if not match:
             continue
         version = tag.removeprefix("v")
         if semver_key(version) < min_key:
             continue
         if include_versions is not None and version not in include_versions:
             continue
-        published_at = entry.get("publishedAt")
-        selected.append(
-            {
-                "version": version,
-                "tag": tag,
-                "date": published_at[:10] if isinstance(published_at, str) and published_at else None,
-            }
-        )
-    selected.sort(key=lambda item: semver_key(str(item["version"])))
+        selected.append((version, tag))
+    selected.sort(key=lambda item: semver_key(item[0]))
     return selected
 
 
-def release_details(release_repo: str, tag: str) -> dict[str, Any]:
-    details_raw = gh(
-        ["release", "view", tag, "-R", release_repo, "--json", "assets,tagName,url,name,publishedAt"],
+def release_date(repo_dir: Path, tag: str) -> str | None:
+    date = git(
+        ["for-each-ref", "--format=%(creatordate:short)", f"refs/tags/{tag}"],
+        cwd=repo_dir,
         capture=True,
     )
-    details = json.loads(details_raw)
-    if not isinstance(details, dict):
-        raise ValueError(f"Expected release details from gh for {release_repo} {tag}")
-    return details
+    return date or None
 
 
-def select_asset_name(assets: list[Any], *, version: str, patterns: list[str]) -> str | None:
-    asset_names = {asset.get("name") for asset in assets if isinstance(asset, dict) and isinstance(asset.get("name"), str)}
-    for pattern in patterns:
-        candidate = pattern.format(version=version)
-        if candidate in asset_names:
-            return candidate
-    return None
+def bundle_url(source_config: dict[str, Any], *, version: str) -> str:
+    template = source_config.get("release_url_template")
+    if not isinstance(template, str) or not template:
+        raise ValueError("Source config must define `release_url_template`")
+    return template.format(version=version)
 
 
-def asset_archive_path(cache_dir: Path, version: str, asset_name: str) -> Path:
-    return cache_dir / "release-assets" / version / asset_name
+def bundle_archive_name(version: str) -> str:
+    return f"canton-open-source-{version}.tar.gz"
+
+
+def bundle_archive_path(cache_dir: Path, version: str) -> Path:
+    return cache_dir / "release-bundles" / version / bundle_archive_name(version)
 
 
 def bundle_extract_root(cache_dir: Path, version: str) -> Path:
@@ -171,53 +162,35 @@ def descriptor_image_path(cache_dir: Path, version: str) -> Path:
     return cache_dir / "descriptor-images" / version / DESCRIPTOR_IMAGE_NAME
 
 
-def ensure_release_asset(
-    release_repo: str,
+def ensure_bundle_archive(
     *,
-    tag: str,
-    asset_name: str,
+    source_config: dict[str, Any],
+    version: str,
     output_path: Path,
     force_refresh: bool,
 ) -> Path:
     if output_path.exists() and not force_refresh:
         return output_path
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    gh(
-        [
-            "release",
-            "download",
-            tag,
-            "-R",
-            release_repo,
-            "-p",
-            asset_name,
-            "-D",
-            str(output_path.parent),
-            "--clobber",
-        ]
-    )
-    if not output_path.exists():
-        raise FileNotFoundError(f"Expected downloaded asset at {output_path}")
+    temp_path = output_path.with_name(f"{output_path.name}.{os.getpid()}.tmp")
+    request = urllib.request.Request(bundle_url(source_config, version=version), headers={"User-Agent": USER_AGENT})
+    with urllib.request.urlopen(request, timeout=180) as response, temp_path.open("wb") as handle:
+        shutil.copyfileobj(response, handle)
+    temp_path.replace(output_path)
     return output_path
 
 
-def extract_archive(archive_path: Path, *, extract_root: Path, force_refresh: bool) -> Path:
+def extract_archive(archive_path: Path, *, extract_root: Path, bundle_proto_dir: str, force_refresh: bool) -> Path:
     if extract_root.exists() and force_refresh:
         shutil.rmtree(extract_root)
     if not extract_root.exists():
         extract_root.mkdir(parents=True, exist_ok=True)
-        if archive_path.name.endswith(".tar.gz"):
-            with tarfile.open(archive_path, "r:gz") as handle:
-                handle.extractall(extract_root, filter="data")
-        elif archive_path.suffix == ".zip":
-            with zipfile.ZipFile(archive_path) as handle:
-                handle.extractall(extract_root)
-        else:
-            raise ValueError(f"Unsupported protobuf archive format: {archive_path.name}")
+        with tarfile.open(archive_path, "r:gz") as handle:
+            handle.extractall(extract_root, filter="data")
 
-    candidates = sorted(path for path in extract_root.rglob("protobuf") if path.is_dir())
+    candidates = sorted(path for path in extract_root.rglob(bundle_proto_dir) if path.is_dir())
     if not candidates:
-        raise FileNotFoundError(f"Could not locate extracted protobuf directory under {extract_root}")
+        raise FileNotFoundError(f"Could not locate extracted '{bundle_proto_dir}' directory under {extract_root}")
     return candidates[0]
 
 
@@ -364,7 +337,7 @@ def write_manifest(
         metadata_ref = str(resolved)
 
     manifest = {
-        "source": source_config.get("source") or "Published Canton protobuf release bundles",
+        "source": source_config.get("source") or "Canton protobuf trees from published release bundles",
         "repo": source_config.get("repo") if isinstance(source_config.get("repo"), dict) else {},
         "metadata_path": metadata_ref,
         "versions": releases,
@@ -378,43 +351,36 @@ def write_manifest(
 def main() -> int:
     args = parse_args()
     source_config = load_json(Path(args.source_config).resolve())
-    release_repo = source_config.get("release_repo") or RELEASE_REPO_DEFAULT
-    if not isinstance(release_repo, str) or not release_repo:
-        raise ValueError("Source config must define release_repo")
-    asset_patterns = source_config.get("asset_patterns")
-    if not isinstance(asset_patterns, list) or not all(isinstance(item, str) for item in asset_patterns):
-        raise ValueError("Source config must define asset_patterns as a list of strings")
+    repo_config = source_config.get("repo") if isinstance(source_config.get("repo"), dict) else {}
+    remote = repo_config.get("remote")
+    if not isinstance(remote, str) or not remote:
+        raise ValueError("Source config must define repo.remote")
+    bundle_proto_dir = source_config.get("bundle_proto_dir") or "protobuf"
+    if not isinstance(bundle_proto_dir, str) or not bundle_proto_dir:
+        raise ValueError("Source config must define bundle_proto_dir")
 
     include_versions = set(args.version) if args.version else None
     min_version = args.min_version or source_config.get("min_version") or "0.0.0"
     if not isinstance(min_version, str):
         raise ValueError("min_version must be a string")
 
-    selected_releases = stable_releases(release_repo, min_version=min_version, include_versions=include_versions)
-    if not selected_releases:
-        raise ValueError("No stable Canton releases selected")
-
+    repo_dir = ensure_repo(Path(args.repo_dir).resolve(), remote=remote, fetch=not args.skip_fetch)
+    selected_tags = stable_tags(repo_dir, min_version=min_version, include_versions=include_versions)
+    if not selected_tags:
+        raise ValueError("No stable Canton tags selected")
     cache_dir = Path(args.cache_dir).resolve()
     releases: list[dict[str, Any]] = []
-    for selected in selected_releases:
-        version = str(selected["version"])
-        tag = str(selected["tag"])
-        details = release_details(release_repo, tag)
-        assets = details.get("assets") if isinstance(details.get("assets"), list) else []
-        asset_name = select_asset_name(assets, version=version, patterns=list(asset_patterns))
-        if asset_name is None:
-            print(f"Skipping {tag}: no matching published protobuf asset")
-            continue
-        archive_path = ensure_release_asset(
-            release_repo,
-            tag=tag,
-            asset_name=asset_name,
-            output_path=asset_archive_path(cache_dir, version, asset_name),
+    for version, tag in selected_tags:
+        archive_path = ensure_bundle_archive(
+            source_config=source_config,
+            version=version,
+            output_path=bundle_archive_path(cache_dir, version),
             force_refresh=args.force_refresh,
         )
         protobuf_root = extract_archive(
             archive_path,
             extract_root=bundle_extract_root(cache_dir, version),
+            bundle_proto_dir=bundle_proto_dir,
             force_refresh=args.force_refresh,
         )
         import_to_repo_path = import_to_repo_path_from_bundle(protobuf_root)
@@ -428,7 +394,7 @@ def main() -> int:
             {
                 "version": version,
                 "tag": tag,
-                "date": selected["date"],
+                "date": release_date(repo_dir, tag),
                 "descriptor_image_path": str(image_path.resolve()),
                 "import_to_repo_path": import_to_repo_path,
             }
@@ -446,9 +412,9 @@ def main() -> int:
     version_filter = args.version_filter
     if not version_filter:
         if include_versions:
-            version_filter = "selected published Canton releases"
+            version_filter = "selected Canton release bundles"
         else:
-            version_filter = f"published stable Canton releases >= {min_version}"
+            version_filter = f"stable Canton release bundles >= {min_version}"
 
     command = [
         "x2mdx",
