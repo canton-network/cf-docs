@@ -3,6 +3,17 @@ title: "Installation Issues"
 description: "Resolving Docker, Kubernetes, and network problems during validator installation"
 ---
 
+import CantonDocsGlobalSynchronizerTroubleshootingGuideInstallationIssuesL28 from "/snippets/canton-docs/global-synchronizer_troubleshooting-guide_installation-issues_L28.mdx";
+import CantonDocsGlobalSynchronizerTroubleshootingGuideInstallationIssuesL41 from "/snippets/canton-docs/global-synchronizer_troubleshooting-guide_installation-issues_L41.mdx";
+import CantonDocsGlobalSynchronizerTroubleshootingGuideInstallationIssuesL56 from "/snippets/canton-docs/global-synchronizer_troubleshooting-guide_installation-issues_L56.mdx";
+import CantonDocsGlobalSynchronizerTroubleshootingGuideInstallationIssuesL69 from "/snippets/canton-docs/global-synchronizer_troubleshooting-guide_installation-issues_L69.mdx";
+import CantonDocsGlobalSynchronizerTroubleshootingGuideInstallationIssuesL78 from "/snippets/canton-docs/global-synchronizer_troubleshooting-guide_installation-issues_L78.mdx";
+import CantonDocsGlobalSynchronizerTroubleshootingGuideInstallationIssuesL92 from "/snippets/canton-docs/global-synchronizer_troubleshooting-guide_installation-issues_L92.mdx";
+import CantonDocsGlobalSynchronizerTroubleshootingGuideInstallationIssuesL102 from "/snippets/canton-docs/global-synchronizer_troubleshooting-guide_installation-issues_L102.mdx";
+import CantonDocsGlobalSynchronizerTroubleshootingGuideInstallationIssuesL118 from "/snippets/canton-docs/global-synchronizer_troubleshooting-guide_installation-issues_L118.mdx";
+import CantonDocsGlobalSynchronizerTroubleshootingGuideInstallationIssuesL135 from "/snippets/canton-docs/global-synchronizer_troubleshooting-guide_installation-issues_L135.mdx";
+
+
 Installation failures typically fall into three categories: container runtime issues, Kubernetes provisioning problems, or network-level blocks that prevent your validator from reaching the synchronizer.
 
 ## Docker Issues
@@ -25,10 +36,7 @@ Possible causes:
 
 Containers that crash immediately or show `OOMKilled` status need more memory.
 
-```bash
-# Check if any container was OOM-killed
-docker inspect --format='{{.State.OOMKilled}}' <container_name>
-```
+<CantonDocsGlobalSynchronizerTroubleshootingGuideInstallationIssuesL28 />
 
 Minimum resource requirements for a validator:
 
@@ -38,10 +46,7 @@ Minimum resource requirements for a validator:
 
 For Colima users on macOS:
 
-```bash
-colima stop
-colima start --memory 8 --cpu 4 --disk 100
-```
+<CantonDocsGlobalSynchronizerTroubleshootingGuideInstallationIssuesL41 />
 
 ### Volume Permission Errors
 
@@ -53,9 +58,7 @@ java.io.IOException: Permission denied: /data/canton
 
 The container user (typically UID 1000) must have write access to the host directory. Fix this with:
 
-```bash
-sudo chown -R 1000:1000 ./data
-```
+<CantonDocsGlobalSynchronizerTroubleshootingGuideInstallationIssuesL56 />
 
 ## Kubernetes Issues
 
@@ -66,18 +69,13 @@ Common Helm failures during `helm install` or `helm upgrade`:
 - **`Error: INSTALLATION FAILED: cannot re-use a name that is still in use`** -- A previous release exists. Use `helm upgrade` instead, or uninstall first with `helm uninstall validator -n validator`.
 - **`Error: template: splice-validator/templates/...: ... not defined`** -- Your values file references a variable that does not exist in this chart version. Compare your `validator-values.yaml` against the chart's `values.yaml` for the target version.
 
-```bash
-# Inspect the chart's default values
-helm show values splice-validator/splice-validator --version 0.5.4
-```
+<CantonDocsGlobalSynchronizerTroubleshootingGuideInstallationIssuesL69 />
 
 ### PVC Provisioning Failures
 
 If pods remain in `Pending` state, check PersistentVolumeClaim (PVC) events:
 
-```bash
-kubectl describe pvc -n validator
-```
+<CantonDocsGlobalSynchronizerTroubleshootingGuideInstallationIssuesL78 />
 
 Common causes:
 
@@ -89,9 +87,7 @@ Common causes:
 
 If the main container never starts, an init container may be failing:
 
-```bash
-kubectl logs -n validator <pod-name> -c init-db --previous
-```
+<CantonDocsGlobalSynchronizerTroubleshootingGuideInstallationIssuesL92 />
 
 Init containers commonly fail due to database connectivity issues -- the PostgreSQL instance is unreachable or the credentials are wrong.
 
@@ -99,13 +95,7 @@ Init containers commonly fail due to database connectivity issues -- the Postgre
 
 Kubernetes needs explicit credentials to pull from private registries:
 
-```bash
-kubectl create secret docker-registry jfrog-creds \
-  --docker-server=digitalasset-docker.jfrog.io \
-  --docker-username=$JFROG_USER \
-  --docker-password=$JFROG_TOKEN \
-  -n validator
-```
+<CantonDocsGlobalSynchronizerTroubleshootingGuideInstallationIssuesL102 />
 
 Then reference `jfrog-creds` in your `validator-values.yaml` under `imagePullSecrets`.
 
@@ -115,10 +105,7 @@ Then reference `jfrog-creds` in your `validator-values.yaml` under `imagePullSec
 
 If your validator cannot resolve synchronizer hostnames:
 
-```bash
-# From inside a Kubernetes pod
-kubectl exec -n validator deployment/validator-app -- nslookup sequencer.sync.global
-```
+<CantonDocsGlobalSynchronizerTroubleshootingGuideInstallationIssuesL118 />
 
 If DNS fails, check your cluster's CoreDNS pods and any custom DNS configuration.
 
@@ -132,9 +119,6 @@ Your validator needs outbound access on the following ports:
 
 Test connectivity:
 
-```bash
-nc -zv sequencer.sync.global 443
-nc -zv sequencer.test.sync.global 443
-```
+<CantonDocsGlobalSynchronizerTroubleshootingGuideInstallationIssuesL135 />
 
 If connections time out, work with your network team to open the required egress rules. For DevNet, you also need VPN connectivity to the DevNet sequencer.

@@ -3,6 +3,10 @@ title: "Security Hardening"
 description: "Security best practices for validator and Super Validator nodes"
 ---
 
+import CantonDocsGlobalSynchronizerProductionOperationsSecurityHardeningL93 from "/snippets/canton-docs/global-synchronizer_production-operations_security-hardening_L93.mdx";
+import CantonDocsGlobalSynchronizerProductionOperationsSecurityHardeningL112 from "/snippets/canton-docs/global-synchronizer_production-operations_security-hardening_L112.mdx";
+
+
 ## Third-party Daml apps
 
 {/* COPIED_START source="splice:docs/src/common/sv_extra_dars_notice.rst" */}
@@ -90,30 +94,11 @@ When using an external KMS for participant keys, you must also manage the CometB
 
 Generate a CometBFT governance key:
 
-```bash
-# Generate the private key
-openssl genpkey -algorithm ed25519 -out cometbft-governance-keys.pem
-
-# Extract and encode the keys
-public_key_base64=$(openssl pkey -in cometbft-governance-keys.pem -pubout -outform DER | tail -c 32 | base64 | tr -d "\n")
-private_key_base64=$(openssl pkey -in cometbft-governance-keys.pem -outform DER | tail -c 32 | base64 | tr -d "\n")
-
-echo "{"
-echo "  \"publicKey\": \"$public_key_base64\","
-echo "  \"privateKey\": \"$private_key_base64\""
-echo "}"
-
-# Clean up
-rm cometbft-governance-keys.pem
-```
+<CantonDocsGlobalSynchronizerProductionOperationsSecurityHardeningL93 />
 
 Save the output to a file (e.g., `cometbft-governance-keys.json`) and create a Kubernetes secret:
 
-```bash
-kubectl create secret --namespace sv generic splice-app-sv-cometbft-governance-key \
-  --from-literal=publicKey="$(jq -r .public cometbft-governance-keys.json)" \
-  --from-literal=privateKey="$(jq -r .private cometbft-governance-keys.json)"
-```
+<CantonDocsGlobalSynchronizerProductionOperationsSecurityHardeningL112 />
 
 Then set `cometBFT.externalGovernanceKey` to `true` in the `splice-sv-node` Helm chart.
 

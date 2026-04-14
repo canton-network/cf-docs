@@ -3,6 +3,9 @@ title: "Error Codes"
 description: "Reference for Canton error codes, categories, gRPC status mappings, and retry strategies"
 ---
 
+import DamlDocsAppdevReferenceErrorCodesL76 from "/snippets/daml-docs/appdev_reference_error-codes_L76.mdx";
+
+
 Canton returns structured error information through gRPC responses. Every error carries a machine-readable code, a category that determines the gRPC status code, and a human-readable description. You can use these components to build automated error handling in your application.
 
 ## Error message format
@@ -73,42 +76,7 @@ The following Scala example shows how to extract error components from a `Status
 
 The following Java example shows the equivalent extraction. Java has first-class codegen support in Canton, so this is the most common non-Scala pattern:
 
-```java
-import com.google.rpc.ErrorInfo;
-import com.google.rpc.RequestInfo;
-import com.google.rpc.RetryInfo;
-import io.grpc.StatusRuntimeException;
-import io.grpc.protobuf.StatusProto;
-
-try {
-    // your gRPC call here
-} catch (StatusRuntimeException e) {
-    com.google.rpc.Status status = StatusProto.fromThrowable(e);
-
-    // gRPC status code
-    int code = status.getCode();
-
-    // Full error description
-    String message = status.getMessage();
-
-    // Extract structured details
-    for (com.google.protobuf.Any detail : status.getDetailsList()) {
-        if (detail.is(ErrorInfo.class)) {
-            ErrorInfo info = detail.unpack(ErrorInfo.class);
-            String errorId = info.getReason();
-            String category = info.getMetadataMap().get("category");
-        }
-        if (detail.is(RequestInfo.class)) {
-            String requestId = detail.unpack(RequestInfo.class).getRequestId();
-        }
-        if (detail.is(RetryInfo.class)) {
-            RetryInfo retry = detail.unpack(RetryInfo.class);
-            long retryMs = retry.getRetryDelay().getSeconds() * 1000
-                + retry.getRetryDelay().getNanos() / 1_000_000;
-        }
-    }
-}
-```
+<DamlDocsAppdevReferenceErrorCodesL76 />
 
 These error codes are also surfaced through the JSON API (HTTP Ledger API) with equivalent error detail structures. For other languages, use the equivalent gRPC status and protobuf utilities to unpack `com.google.rpc.Status` details from the trailing metadata.
 

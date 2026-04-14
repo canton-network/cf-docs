@@ -3,6 +3,23 @@ title: "Installation"
 description: "Step-by-step installation of a Canton Network validator using Docker Compose or Kubernetes"
 ---
 
+import CantonDocsGlobalSynchronizerDeploymentInstallationL22 from "/snippets/canton-docs/global-synchronizer_deployment_installation_L22.mdx";
+import CantonDocsGlobalSynchronizerDeploymentInstallationL41 from "/snippets/canton-docs/global-synchronizer_deployment_installation_L41.mdx";
+import CantonDocsGlobalSynchronizerDeploymentInstallationL47 from "/snippets/canton-docs/global-synchronizer_deployment_installation_L47.mdx";
+import CantonDocsGlobalSynchronizerDeploymentInstallationL53 from "/snippets/canton-docs/global-synchronizer_deployment_installation_L53.mdx";
+import CantonDocsGlobalSynchronizerDeploymentInstallationL66 from "/snippets/canton-docs/global-synchronizer_deployment_installation_L66.mdx";
+import CantonDocsGlobalSynchronizerDeploymentInstallationL87 from "/snippets/canton-docs/global-synchronizer_deployment_installation_L87.mdx";
+import CantonDocsGlobalSynchronizerDeploymentInstallationL95 from "/snippets/canton-docs/global-synchronizer_deployment_installation_L95.mdx";
+import CantonDocsGlobalSynchronizerDeploymentInstallationL103 from "/snippets/canton-docs/global-synchronizer_deployment_installation_L103.mdx";
+import CantonDocsGlobalSynchronizerDeploymentInstallationL128 from "/snippets/canton-docs/global-synchronizer_deployment_installation_L128.mdx";
+import CantonDocsGlobalSynchronizerDeploymentInstallationL136 from "/snippets/canton-docs/global-synchronizer_deployment_installation_L136.mdx";
+import CantonDocsGlobalSynchronizerDeploymentInstallationL144 from "/snippets/canton-docs/global-synchronizer_deployment_installation_L144.mdx";
+import CantonDocsGlobalSynchronizerDeploymentInstallationL152 from "/snippets/canton-docs/global-synchronizer_deployment_installation_L152.mdx";
+import CantonDocsGlobalSynchronizerDeploymentInstallationL162 from "/snippets/canton-docs/global-synchronizer_deployment_installation_L162.mdx";
+import CantonDocsGlobalSynchronizerDeploymentInstallationL187 from "/snippets/canton-docs/global-synchronizer_deployment_installation_L187.mdx";
+import CantonDocsGlobalSynchronizerDeploymentInstallationL203 from "/snippets/canton-docs/global-synchronizer_deployment_installation_L203.mdx";
+
+
 This page walks through deploying a validator node on the Canton Network. Choose the tab matching your deployment method.
 
 ## Before you begin
@@ -19,14 +36,7 @@ Confirm that you have completed the [onboarding process](/docs-main/global-synch
 
 Both deployment methods start by downloading the release bundle from GitHub:
 
-```bash
-# Replace the version with the current release
-export SPLICE_VERSION=0.5.12
-
-curl -LO https://github.com/digital-asset/decentralized-canton-sync/releases/download/v${SPLICE_VERSION}/${SPLICE_VERSION}_splice-node.tar.gz
-
-tar xzvf ${SPLICE_VERSION}_splice-node.tar.gz
-```
+<CantonDocsGlobalSynchronizerDeploymentInstallationL22 />
 
 The extracted bundle contains Docker Compose files, sample Helm values, and configuration templates.
 
@@ -38,38 +48,21 @@ The extracted bundle contains Docker Compose files, sample Helm values, and conf
 
 ### 1. Navigate to the validator directory
 
-```bash
-cd splice-node/docker-compose/validator
-```
+<CantonDocsGlobalSynchronizerDeploymentInstallationL41 />
 
 ### 2. Set the image tag
 
-```bash
-export IMAGE_TAG=${SPLICE_VERSION}
-```
+<CantonDocsGlobalSynchronizerDeploymentInstallationL47 />
 
 ### 3. Start the validator
 
-```bash
-./start.sh \
-  -s "<SPONSOR_SV_URL>" \
-  -o "<ONBOARDING_SECRET>" \
-  -p "<PARTY_HINT>" \
-  -m "<MIGRATION_ID>" \
-  -w
-```
+<CantonDocsGlobalSynchronizerDeploymentInstallationL53 />
 
 The `-w` flag enables the Wallet UI. Add `-a` to enable authentication (recommended for anything beyond local testing).
 
 On subsequent restarts, you can omit the `-o` flag since the onboarding secret is consumed on first use:
 
-```bash
-./start.sh \
-  -s "<SPONSOR_SV_URL>" \
-  -p "<PARTY_HINT>" \
-  -m "<MIGRATION_ID>" \
-  -w
-```
+<CantonDocsGlobalSynchronizerDeploymentInstallationL66 />
 
 ### 4. Verify the deployment
 
@@ -84,38 +77,19 @@ After startup completes, access the web UIs:
 
 Check the logs for successful onboarding:
 
-```bash
-docker compose logs -f validator
-```
+<CantonDocsGlobalSynchronizerDeploymentInstallationL87 />
 
 Look for messages indicating the validator has connected to the synchronizer and completed onboarding.
 
 ### 5. Stop the validator
 
-```bash
-./stop.sh
-```
+<CantonDocsGlobalSynchronizerDeploymentInstallationL95 />
 
 ### Systemd integration
 
 For persistent deployments, create a systemd service. Set `RemainAfterExit=true` since `start.sh` runs Docker Compose in detached mode:
 
-```ini
-[Unit]
-Description=Canton Network Validator
-After=docker.service
-Requires=docker.service
-
-[Service]
-Type=oneshot
-RemainAfterExit=true
-WorkingDirectory=/path/to/splice-node/docker-compose/validator
-ExecStart=/path/to/splice-node/docker-compose/validator/start.sh -s "<SV_URL>" -p "<PARTY_HINT>" -m "<MIGRATION_ID>" -w
-ExecStop=/path/to/splice-node/docker-compose/validator/stop.sh
-
-[Install]
-WantedBy=multi-user.target
-```
+<CantonDocsGlobalSynchronizerDeploymentInstallationL103 />
 
 </Tab>
 
@@ -125,70 +99,33 @@ WantedBy=multi-user.target
 
 ### 1. Create the namespace
 
-```bash
-kubectl create namespace validator
-```
+<CantonDocsGlobalSynchronizerDeploymentInstallationL128 />
 
 ### 2. Create Kubernetes secrets
 
 **PostgreSQL password:**
 
-```bash
-kubectl create secret generic postgres-secrets \
-  --from-literal=postgresPassword="${POSTGRES_PASSWORD}" \
-  -n validator
-```
+<CantonDocsGlobalSynchronizerDeploymentInstallationL136 />
 
 **Onboarding secret:**
 
-```bash
-kubectl create secret generic splice-app-validator-onboarding-validator \
-  --from-literal=secret="${ONBOARDING_SECRET}" \
-  -n validator
-```
+<CantonDocsGlobalSynchronizerDeploymentInstallationL144 />
 
 **Ledger API auth (if using authentication):**
 
-```bash
-kubectl create secret generic splice-app-validator-ledger-api-auth \
-  --from-literal=ledger-api-user="${VALIDATOR_CLIENT_ID}@clients" \
-  -n validator
-```
+<CantonDocsGlobalSynchronizerDeploymentInstallationL152 />
 
 ### 3. Configure Helm values
 
 The Splice node bundle includes sample Helm values files. Copy and customize them for your environment. Key parameters to set:
 
-```yaml
-# Example values excerpt (validator)
-migration:
-  id: <MIGRATION_ID>
-sponsor:
-  svUrl: "<SPONSOR_SV_URL>"
-onboarding:
-  secretFrom:
-    secretName: splice-app-validator-onboarding-validator
-    key: secret
-participant:
-  storage:
-    type: postgres
-    config:
-      url: "jdbc:postgresql://<DB_HOST>:5432/participant"
-      user: "canton"
-      password:
-        secretName: postgres-secrets
-        key: postgresPassword
-```
+<CantonDocsGlobalSynchronizerDeploymentInstallationL162 />
 
 Refer to the sample values in the bundle for the full set of configurable parameters.
 
 ### 4. Install the Helm charts
 
-```bash
-helm install validator ./splice-node/helm/validator \
-  -n validator \
-  -f my-validator-values.yaml
-```
+<CantonDocsGlobalSynchronizerDeploymentInstallationL187 />
 
 ### 5. Configure ingress
 
@@ -200,13 +137,7 @@ Set up your ingress controller to route traffic to the validator services. The s
 
 ### 6. Verify the deployment
 
-```bash
-# Check pod status
-kubectl get pods -n validator
-
-# Check validator logs
-kubectl logs -f deployment/validator -n validator
-```
+<CantonDocsGlobalSynchronizerDeploymentInstallationL203 />
 
 Confirm the validator has connected to the synchronizer and the Wallet UI is accessible through your ingress.
 

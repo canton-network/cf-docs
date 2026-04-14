@@ -3,6 +3,15 @@ title: Wallet SDK
 description: Reference for the Splice Wallet SDK, a TypeScript library for programmatic wallet operations on Canton Network.
 ---
 
+import DamlDocsSdksToolsSdksWalletSdkL69 from "/snippets/daml-docs/sdks-tools_sdks_wallet-sdk_L69.mdx";
+import DamlDocsSdksToolsSdksWalletSdkL93 from "/snippets/daml-docs/sdks-tools_sdks_wallet-sdk_L93.mdx";
+import DamlDocsSdksToolsSdksWalletSdkL129 from "/snippets/daml-docs/sdks-tools_sdks_wallet-sdk_L129.mdx";
+import DamlDocsSdksToolsSdksWalletSdkL144 from "/snippets/daml-docs/sdks-tools_sdks_wallet-sdk_L144.mdx";
+import DamlDocsSdksToolsSdksWalletSdkL161 from "/snippets/daml-docs/sdks-tools_sdks_wallet-sdk_L161.mdx";
+import DamlDocsSdksToolsSdksWalletSdkL205 from "/snippets/daml-docs/sdks-tools_sdks_wallet-sdk_L205.mdx";
+import DamlDocsSdksToolsSdksWalletSdkL214 from "/snippets/daml-docs/sdks-tools_sdks_wallet-sdk_L214.mdx";
+
+
 The [Splice Wallet SDK](https://github.com/hyperledger-labs/splice-wallet-kernel/tree/main/sdk/wallet-sdk) is a TypeScript library that enables programmatic wallet operations on Canton Network. It provides APIs for party management, token transfers, UTXO queries, transaction signing, and integration with third-party dApps.
 
 The SDK is designed for wallet providers, exchanges, and application developers who need to interact with Canton Network tokens and manage external party wallets.
@@ -66,23 +75,7 @@ Both SDKs share the same underlying core packages. Where only partial functional
 
 The SDK requires configuration for authentication, ledger access, and token standard connectivity. For local development against a Splice LocalNet, you can use the built-in defaults:
 
-```typescript
-import {
-    WalletSDKImpl,
-    localNetAuthDefault,
-    localNetLedgerDefault,
-    localNetTokenStandardDefault,
-    localValidatorDefault,
-} from '@canton-network/wallet-sdk'
-
-const sdk = new WalletSDKImpl().configure({
-    logger: console,
-    authFactory: localNetAuthDefault,
-    ledgerFactory: localNetLedgerDefault,
-    tokenStandardFactory: localNetTokenStandardDefault,
-    validatorFactory: localValidatorDefault,
-})
-```
+<DamlDocsSdksToolsSdksWalletSdkL69 />
 
 When moving to a production or non-LocalNet environment, you need custom factory functions that point to your specific endpoints. See the [Wallet SDK Configuration](#authentication) section below.
 
@@ -90,31 +83,7 @@ When moving to a production or non-LocalNet environment, you need custom factory
 
 Before performing any operations, you need to create a key pair and allocate an external party on your validator.
 
-```typescript
-import {
-    WalletSDKImpl,
-    createKeyPair,
-    localNetAuthDefault,
-    localNetLedgerDefault,
-    localNetStaticConfig,
-} from '@canton-network/wallet-sdk'
-
-const sdk = new WalletSDKImpl().configure({
-    logger: console,
-    authFactory: localNetAuthDefault,
-    ledgerFactory: localNetLedgerDefault,
-})
-await sdk.connect()
-await sdk.connectTopology(localNetStaticConfig.LOCALNET_SCAN_PROXY_API_URL)
-
-const key = createKeyPair()
-const partyHint = 'my-wallet-1'
-
-const party = await sdk.userLedger?.signAndAllocateExternalParty(
-    key.privateKey,
-    partyHint
-)
-```
+<DamlDocsSdksToolsSdksWalletSdkL93 />
 
 The SDK generates Ed25519 key pairs by default. BIP-0039 mnemonic-based key generation is also supported for deterministic key recovery. For details on the key pair and party creation process, including topology transactions and multi-hosting, see the full [Wallet Integration Guide](https://docs.digitalasset.com/integrate/devnet/index.html).
 
@@ -126,31 +95,13 @@ The SDK exposes token standard operations through `sdk.tokenStandard`. These fol
 
 Canton uses a UTXO model where active contracts represent unspent holdings. You can list all holdings for a party:
 
-```typescript
-await sdk.connect()
-await sdk.tokenStandard!.setTransferFactoryRegistryUrl(
-    localNetStaticConfig.LOCALNET_REGISTRY_API_URL
-)
-await sdk.setPartyId(myParty)
-
-// Pass false to exclude locked holdings (those in pending 2-step transfers)
-const utxos = await sdk.tokenStandard?.listHoldingUtxos(false)
-```
+<DamlDocsSdksToolsSdksWalletSdkL129 />
 
 ### Monitoring transactions
 
 To stream transaction events as they occur on ledger, use `listHoldingTransactions`. It accepts a start offset and a step size, and returns a `nextOffset` for pagination so that you never receive the same transaction twice:
 
-```typescript
-let startLedger = 0
-let step = 10
-
-const holdings = await sdk.tokenStandard!.listHoldingTransactions(
-    startLedger,
-    step
-)
-// Use holdings.nextOffset for subsequent calls
-```
+<DamlDocsSdksToolsSdksWalletSdkL144 />
 
 Each returned transaction contains events typed as `TransferIn`, `TransferOut`, `MergeSplit`, or `Mint`, with full details about holdings changes and memo tags.
 
@@ -158,41 +109,7 @@ Each returned transaction contains events typed as `TransferIn`, `TransferOut`, 
 
 Token transfers follow a prepare-sign-submit flow. The SDK handles command construction, but transaction preparation happens on your validator node (unlike chains where you construct transactions fully offline).
 
-```typescript
-import { v4 } from 'uuid'
-
-// 1. Create the transfer command
-const [transferCommand, disclosedContracts] =
-    await sdk.tokenStandard!.createTransfer(
-        sender,
-        receiver,
-        '100',
-        { instrumentId: 'Amulet', instrumentAdmin: instrumentAdminPartyId },
-        [],
-        'memo-ref'
-    )
-
-// 2. Prepare the transaction on the validator
-const transaction = await sdk.userLedger?.prepareSubmission(
-    transferCommand,
-    v4(),
-    disclosedContracts
-)
-
-// 3. Sign the transaction hash
-const signature = signTransactionHash(
-    transaction.preparedTransactionHash,
-    keys.privateKey
-)
-
-// 4. Execute the signed transaction
-await sdk.userLedger!.executeSubmission(
-    transaction,
-    signature,
-    keys.publicKey,
-    v4()
-)
-```
+<DamlDocsSdksToolsSdksWalletSdkL161 />
 
 Transaction finality typically takes 3-10 seconds. Signed transactions are idempotent, so you can safely retry if the result does not appear on your ledger.
 
@@ -202,19 +119,11 @@ By default, all token transfers follow a two-step process: the sender initiates 
 
 To enable one-step transfers (similar to other blockchains), the receiving party can set up a **transfer pre-approval**, which auto-accepts all incoming transfers:
 
-```typescript
-await sdk.tokenStandard!.createTransferPreapproval(
-    receiverParty,
-    providerParty
-)
-```
+<DamlDocsSdksToolsSdksWalletSdkL205 />
 
 If no pre-approval exists, the receiver must fetch and act on pending transfer instructions:
 
-```typescript
-const pending = await sdk.tokenStandard!.listPendingTransferInstructions()
-// Then exercise accept or reject on each instruction
-```
+<DamlDocsSdksToolsSdksWalletSdkL214 />
 
 ## Authentication
 

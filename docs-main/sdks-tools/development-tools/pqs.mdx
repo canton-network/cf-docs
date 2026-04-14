@@ -3,6 +3,13 @@ title: "PQS (Participant Query Store)"
 description: "Query ledger data with SQL using PQS, a PostgreSQL-based projection of Canton contract state."
 ---
 
+import DamlDocsSdksToolsDevelopmentToolsPqsL62 from "/snippets/daml-docs/sdks-tools_development-tools_pqs_L62.mdx";
+import DamlDocsSdksToolsDevelopmentToolsPqsL73 from "/snippets/daml-docs/sdks-tools_development-tools_pqs_L73.mdx";
+import DamlDocsSdksToolsDevelopmentToolsPqsL85 from "/snippets/daml-docs/sdks-tools_development-tools_pqs_L85.mdx";
+import DamlDocsSdksToolsDevelopmentToolsPqsL96 from "/snippets/daml-docs/sdks-tools_development-tools_pqs_L96.mdx";
+import DamlDocsSdksToolsDevelopmentToolsPqsL108 from "/snippets/daml-docs/sdks-tools_development-tools_pqs_L108.mdx";
+
+
 PQS (Participant Query Store) subscribes to a validator's transaction stream and projects contract data into a PostgreSQL database. Your backend queries this database with standard SQL, enabling filtered queries, aggregations, joins, and full-text search that would be impractical through the Ledger API alone.
 
 ## How PQS Works
@@ -59,45 +66,25 @@ PQS configuration includes:
 
 Query all active contracts for a specific template:
 
-```sql
-SELECT *
-FROM active_contracts
-WHERE template_id = 'Licensing:License'
-  AND payload->>'owner' = 'Alice::1234...';
-```
+<DamlDocsSdksToolsDevelopmentToolsPqsL62 />
 
 ### Transaction History
 
 View recent transactions for a party:
 
-```sql
-SELECT event_id, template_id, event_type, effective_at
-FROM events
-WHERE witness_parties @> ARRAY['Alice::1234...']
-ORDER BY effective_at DESC
-LIMIT 50;
-```
+<DamlDocsSdksToolsDevelopmentToolsPqsL73 />
 
 ### Aggregations
 
 Count active contracts by template:
 
-```sql
-SELECT template_id, COUNT(*) as contract_count
-FROM active_contracts
-GROUP BY template_id
-ORDER BY contract_count DESC;
-```
+<DamlDocsSdksToolsDevelopmentToolsPqsL85 />
 
 ### Party Filtering
 
 Find all contracts visible to a specific party:
 
-```sql
-SELECT contract_id, template_id, payload
-FROM active_contracts
-WHERE stakeholders @> ARRAY['Alice::1234...'];
-```
+<DamlDocsSdksToolsDevelopmentToolsPqsL96 />
 
 ## Performance Optimization
 
@@ -105,12 +92,7 @@ WHERE stakeholders @> ARRAY['Alice::1234...'];
 
 Add indexes on columns you query frequently. PQS creates basic indexes on startup, but your application may benefit from additional ones:
 
-```sql
--- Index on a payload field you filter by often
-CREATE INDEX idx_license_owner
-ON active_contracts ((payload->>'owner'))
-WHERE template_id = 'Licensing:License';
-```
+<DamlDocsSdksToolsDevelopmentToolsPqsL108 />
 
 ### Connection Pooling
 

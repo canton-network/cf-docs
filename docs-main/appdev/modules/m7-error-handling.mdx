@@ -3,6 +3,10 @@ title: "Error Handling"
 description: "Error handling and recovery patterns for Canton applications"
 ---
 
+import DamlDocsAppdevModulesM7ErrorHandlingL46 from "/snippets/daml-docs/appdev_modules_m7-error-handling_L46.mdx";
+import DamlDocsAppdevModulesM7ErrorHandlingL88 from "/snippets/daml-docs/appdev_modules_m7-error-handling_L88.mdx";
+
+
 Canton applications deal with a distributed, multi-party ledger. Errors fall into distinct categories, and each category calls for a different recovery strategy. This page covers the error types you will encounter and how to handle them in your backend.
 
 ## Error Categories
@@ -43,27 +47,7 @@ Contention on consuming contracts is the most common error pattern in Canton app
 2. **Re-read the contract** -- Query PQS for the current state. The contract you targeted may have been archived, and a new contract (from the competing transaction) may now be active.
 3. **Resubmit with a new command ID** -- Build a new command targeting the current contract and submit it with a fresh command ID
 
-```java
-int maxRetries = 3;
-for (int attempt = 0; attempt < maxRetries; attempt++) {
-    try {
-        var contract = damlRepository.findActiveAsset(assetId).join();
-        if (contract.isEmpty()) {
-            throw new NotFoundException("Asset no longer active");
-        }
-        ledger.exerciseAndGetResult(
-            contract.get().contractId, choice, UUID.randomUUID().toString()
-        ).join();
-        return; // success
-    } catch (CompletionException e) {
-        if (isContention(e) && attempt < maxRetries - 1) {
-            Thread.sleep((long) Math.pow(2, attempt) * 100); // exponential backoff
-            continue;
-        }
-        throw e;
-    }
-}
-```
+<DamlDocsAppdevModulesM7ErrorHandlingL46 />
 
 Use exponential backoff between retries. Without backoff, competing commands will keep colliding.
 
@@ -85,11 +69,7 @@ Use this to make your backend idempotent:
 - If a network failure prevents you from receiving the response, resubmit with the same command ID
 - The Ledger API returns the original result instead of executing the command twice
 
-```java
-String commandId = "renew-license-" + licenseNum + "-" + requestNonce;
-ledger.exerciseAndGetResult(contractId, renewChoice, commandId).join();
-// Safe to retry with the same commandId if the response is lost
-```
+<DamlDocsAppdevModulesM7ErrorHandlingL88 />
 
 The deduplication window is configurable. The default is sufficient for most applications, but if your operations span long time periods, verify the window covers your retry horizon.
 

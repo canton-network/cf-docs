@@ -3,6 +3,12 @@ title: "SV Operations"
 description: "Operational procedures for Super Validator node operators"
 ---
 
+import CantonDocsGlobalSynchronizerDeploymentSvOperationsL130 from "/snippets/canton-docs/global-synchronizer_deployment_sv-operations_L130.mdx";
+import CantonDocsGlobalSynchronizerDeploymentSvOperationsL141 from "/snippets/canton-docs/global-synchronizer_deployment_sv-operations_L141.mdx";
+import CantonDocsGlobalSynchronizerDeploymentSvOperationsL161 from "/snippets/canton-docs/global-synchronizer_deployment_sv-operations_L161.mdx";
+import CantonDocsGlobalSynchronizerDeploymentSvOperationsL169 from "/snippets/canton-docs/global-synchronizer_deployment_sv-operations_L169.mdx";
+
+
 This page covers day-to-day operational procedures for Super Validator (SV) node operators, including generating onboarding secrets, understanding SV identities, adjusting reward weights, and configuring traffic parameters.
 
 ## Security notice
@@ -127,25 +133,13 @@ The expiry automation will fail to expire rewards linked to parties hosted on an
 
 1. Shortly before the Daml upgrade becomes effective, pause the trigger by adding to `.additionalEnvVars` in `sv-values.yaml`:
 
-```yaml
-additionalEnvVars:
-  - name: ADDITIONAL_CONFIG_PAUSED_EXPIRY_TRIGGER
-    value: |
-      canton.sv-apps.sv.automation.paused-triggers += "org.lfdecentralizedtrust.splice.sv.automation.delegatebased.ExpireRewardCouponsTrigger"
-```
+<CantonDocsGlobalSynchronizerDeploymentSvOperationsL130 />
 
 2. Shortly after the Daml upgrade becomes effective, one SV operator constructs a party exclusion config, confirms its correctness, and shares it with all operators.
 
 3. Each SV operator adopts the party exclusion config and resumes the trigger by reverting the change from step 1 and adding:
 
-```yaml
-additionalEnvVars:
-  - name: ADDITIONAL_CONFIG_IGNORED_EXPIRY_PARTY_IDS
-    value: |
-      canton.sv-apps.sv {
-        automation.ignored-expired-rewards-party-ids = [ "party1::12345", "party2::57890" ]
-      }
-```
+<CantonDocsGlobalSynchronizerDeploymentSvOperationsL141 />
 
 ### Determining parties to ignore
 
@@ -158,20 +152,10 @@ This process is advanced and likely involves some trial and error. A single oper
 
 You can wait for the trigger to fail and investigate which parties caused the failure, or query the SV app database directly:
 
-```sql
-select distinct(reward_party) from dso_acs_store where reward_round < UPGRADE_ROUND;
-```
+<CantonDocsGlobalSynchronizerDeploymentSvOperationsL161 />
 
 This query overapproximates the set of parties to ignore, so you may need to remove some later. Once you are confident in the list, remove the `delegatelessAutomationExpiredRewardCouponBatchSize` override and confirm that the trigger has a 100% success rate.
 
 If outdated validators eventually upgrade, their parties should be removed from the ignore list. The following query shows expired rewards generated *after* the Daml upgrade, indicating the hosting validator has upgraded:
 
-```sql
-select m.template_id_qualified_name, m.reward_party, min(m.reward_round) from (
-  select c.reward_party, c.reward_round, c.template_id_qualified_name from dso_acs_store c
-  join dso_acs_store r
-  on r.mining_round = c.reward_round
-  and r.mining_round > UPGRADE_ROUND
-  and r.template_id_qualified_name = 'Splice.Round:ClosedMiningRound'
-) as m group by (template_id_qualified_name, reward_party);
-```
+<CantonDocsGlobalSynchronizerDeploymentSvOperationsL169 />

@@ -3,6 +3,14 @@ title: "Super Validator Setup"
 description: "Kubernetes-based deployment of a Super Validator node on the Canton Network"
 ---
 
+import CantonDocsGlobalSynchronizerDeploymentSuperValidatorSetupL58 from "/snippets/canton-docs/global-synchronizer_deployment_super-validator-setup_L58.mdx";
+import CantonDocsGlobalSynchronizerDeploymentSuperValidatorSetupL102 from "/snippets/canton-docs/global-synchronizer_deployment_super-validator-setup_L102.mdx";
+import CantonDocsGlobalSynchronizerDeploymentSuperValidatorSetupL148 from "/snippets/canton-docs/global-synchronizer_deployment_super-validator-setup_L148.mdx";
+import CantonDocsGlobalSynchronizerDeploymentSuperValidatorSetupL156 from "/snippets/canton-docs/global-synchronizer_deployment_super-validator-setup_L156.mdx";
+import CantonDocsGlobalSynchronizerDeploymentSuperValidatorSetupL189 from "/snippets/canton-docs/global-synchronizer_deployment_super-validator-setup_L189.mdx";
+import CantonDocsGlobalSynchronizerDeploymentSuperValidatorSetupL208 from "/snippets/canton-docs/global-synchronizer_deployment_super-validator-setup_L208.mdx";
+
+
 Super Validators (SVs) operate the core infrastructure of the Global Synchronizer: sequencer nodes, mediator nodes, and BFT consensus through CometBFT. This guide covers the Kubernetes-based deployment of an SV node.
 
 SV deployment is significantly more involved than a standard validator. If you are setting up a regular validator, see the [Installation](/docs-main/global-synchronizer/deployment/installation) page instead.
@@ -55,9 +63,7 @@ The identity generation procedure is coordinated with existing Super Validators,
 
 Create the Kubernetes namespace and base resources:
 
-```bash
-kubectl create namespace sv
-```
+<CantonDocsGlobalSynchronizerDeploymentSuperValidatorSetupL58 />
 
 Ensure your cluster has:
 
@@ -99,14 +105,7 @@ SV nodes require multiple PostgreSQL databases. Create them in your managed data
 
 ### Create Kubernetes secrets for database credentials
 
-```bash
-kubectl create secret generic postgres-secrets \
-  --from-literal=participantPassword="${PARTICIPANT_DB_PASSWORD}" \
-  --from-literal=validatorPassword="${VALIDATOR_DB_PASSWORD}" \
-  --from-literal=svPassword="${SV_DB_PASSWORD}" \
-  --from-literal=scanPassword="${SCAN_DB_PASSWORD}" \
-  -n sv
-```
+<CantonDocsGlobalSynchronizerDeploymentSuperValidatorSetupL102 />
 
 For cloud-hosted PostgreSQL, configure network connectivity between your Kubernetes cluster and the managed database service (VPC peering, private endpoints, or authorized networks).
 
@@ -145,17 +144,11 @@ Configure the Helm values for your environment. Key sections include:
 
 Install the charts:
 
-```bash
-helm install sv ./splice-node/helm/sv \
-  -n sv \
-  -f my-sv-values.yaml
-```
+<CantonDocsGlobalSynchronizerDeploymentSuperValidatorSetupL148 />
 
 Monitor the rollout:
 
-```bash
-kubectl get pods -n sv -w
-```
+<CantonDocsGlobalSynchronizerDeploymentSuperValidatorSetupL156 />
 
 ## Step 8: Configure cluster networking
 
@@ -186,9 +179,7 @@ Once all pods are running, verify your SV is operational:
 
 ### Check pod status
 
-```bash
-kubectl get pods -n sv
-```
+<CantonDocsGlobalSynchronizerDeploymentSuperValidatorSetupL189 />
 
 All pods should be in `Running` state.
 
@@ -205,9 +196,7 @@ Log into each web UI through your configured ingress:
 
 Check that your CometBFT node is connected to peers and participating in consensus:
 
-```bash
-kubectl logs -f deployment/cometbft -n sv
-```
+<CantonDocsGlobalSynchronizerDeploymentSuperValidatorSetupL208 />
 
 Look for messages indicating peer connections and block production.
 

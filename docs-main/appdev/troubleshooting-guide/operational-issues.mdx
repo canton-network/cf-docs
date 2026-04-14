@@ -3,6 +3,12 @@ title: "Operational Issues"
 description: "Troubleshooting traffic exhaustion, upgrade problems, and PQS failures on DevNet, TestNet, and MainNet"
 ---
 
+import DamlDocsAppdevTroubleshootingGuideOperationalIssuesL24 from "/snippets/daml-docs/appdev_troubleshooting-guide_operational-issues_L24.mdx";
+import DamlDocsAppdevTroubleshootingGuideOperationalIssuesL34 from "/snippets/daml-docs/appdev_troubleshooting-guide_operational-issues_L34.mdx";
+import DamlDocsAppdevTroubleshootingGuideOperationalIssuesL66 from "/snippets/daml-docs/appdev_troubleshooting-guide_operational-issues_L66.mdx";
+import DamlDocsAppdevTroubleshootingGuideOperationalIssuesL103 from "/snippets/daml-docs/appdev_troubleshooting-guide_operational-issues_L103.mdx";
+
+
 This page covers problems that arise when your application runs against a live network: DevNet, TestNet, or MainNet. Local development issues are covered in [Development Issues](/docs-main/appdev/troubleshooting-guide/development-issues).
 
 ## Traffic Exhaustion
@@ -21,9 +27,7 @@ Or transactions time out with `MEDIATOR_SAYS_TX_TIMED_OUT` and the `unresponsive
 
 Query your validator's traffic state through the Admin API:
 
-```bash
-curl http://localhost/api/validator/readyz
-```
+<DamlDocsAppdevTroubleshootingGuideOperationalIssuesL24 />
 
 You can also check the wallet UI if your validator has one configured.
 
@@ -31,11 +35,7 @@ You can also check the wallet UI if your validator has one configured.
 
 Configure automatic traffic purchases so your validator buys more traffic before it runs out:
 
-```yaml
-# In .env or validator-values.yaml
-TARGET_TRAFFIC_THROUGHPUT=20000
-MIN_TRAFFIC_TOPUP_INTERVAL=1m
-```
+<DamlDocsAppdevTroubleshootingGuideOperationalIssuesL34 />
 
 ### Tap on DevNet
 
@@ -63,10 +63,7 @@ If your application's backend expects a newer Daml package version than what is 
 
 After uploading a new DAR, verify it is vetted:
 
-```bash
-# Check uploaded packages
-curl http://localhost:5002/v2/packages | jq '.package_ids'
-```
+<DamlDocsAppdevTroubleshootingGuideOperationalIssuesL66 />
 
 ### Splice version mismatches
 
@@ -100,14 +97,7 @@ UNAVAILABLE: io exception - Connection refused to localhost:5001
 
 PQS maintains a streaming connection to the Ledger API. If this connection drops, PQS may fall behind. Check the PQS offset against the ledger end:
 
-```bash
-# PQS latest offset (query PQS database)
-psql -h localhost -U pqs -d pqs -c "SELECT max(offset) FROM _pqs_offsets;"
-
-# Ledger end offset
-grpcurl -plaintext localhost:5001 \
-  com.daml.ledger.api.v2.StateService/GetLedgerEnd
-```
+<DamlDocsAppdevTroubleshootingGuideOperationalIssuesL103 />
 
 If PQS is significantly behind, restart it. PQS will resume from its last committed offset.
 

@@ -3,6 +3,20 @@ title: "Installation Issues"
 description: "Troubleshooting Nix, Docker, and memory problems when setting up Canton Network development"
 ---
 
+import DamlDocsAppdevTroubleshootingGuideInstallationIssuesL14 from "/snippets/daml-docs/appdev_troubleshooting-guide_installation-issues_L14.mdx";
+import DamlDocsAppdevTroubleshootingGuideInstallationIssuesL24 from "/snippets/daml-docs/appdev_troubleshooting-guide_installation-issues_L24.mdx";
+import DamlDocsAppdevTroubleshootingGuideInstallationIssuesL34 from "/snippets/daml-docs/appdev_troubleshooting-guide_installation-issues_L34.mdx";
+import DamlDocsAppdevTroubleshootingGuideInstallationIssuesL40 from "/snippets/daml-docs/appdev_troubleshooting-guide_installation-issues_L40.mdx";
+import DamlDocsAppdevTroubleshootingGuideInstallationIssuesL51 from "/snippets/daml-docs/appdev_troubleshooting-guide_installation-issues_L51.mdx";
+import DamlDocsAppdevTroubleshootingGuideInstallationIssuesL73 from "/snippets/daml-docs/appdev_troubleshooting-guide_installation-issues_L73.mdx";
+import DamlDocsAppdevTroubleshootingGuideInstallationIssuesL82 from "/snippets/daml-docs/appdev_troubleshooting-guide_installation-issues_L82.mdx";
+import DamlDocsAppdevTroubleshootingGuideInstallationIssuesL88 from "/snippets/daml-docs/appdev_troubleshooting-guide_installation-issues_L88.mdx";
+import DamlDocsAppdevTroubleshootingGuideInstallationIssuesL102 from "/snippets/daml-docs/appdev_troubleshooting-guide_installation-issues_L102.mdx";
+import DamlDocsAppdevTroubleshootingGuideInstallationIssuesL117 from "/snippets/daml-docs/appdev_troubleshooting-guide_installation-issues_L117.mdx";
+import DamlDocsAppdevTroubleshootingGuideInstallationIssuesL126 from "/snippets/daml-docs/appdev_troubleshooting-guide_installation-issues_L126.mdx";
+import DamlDocsAppdevTroubleshootingGuideInstallationIssuesL132 from "/snippets/daml-docs/appdev_troubleshooting-guide_installation-issues_L132.mdx";
+
+
 This page covers common installation problems you may encounter when setting up a Canton Network development environment, including Nix shell failures, Docker configuration, and memory allocation.
 
 ## Nix Problems
@@ -11,19 +25,11 @@ This page covers common installation problems you may encounter when setting up 
 
 If `nix-shell` exits with a hash mismatch or download error, your local Nix cache may be stale.
 
-```bash
-# Clear the Nix store cache for the affected derivation
-nix-collect-garbage -d
-
-# Retry
-nix-shell
-```
+<DamlDocsAppdevTroubleshootingGuideInstallationIssuesL14 />
 
 When `nix-shell` hangs during evaluation, check that your `NIX_PATH` is set correctly and that no conflicting Nix channels exist:
 
-```bash
-nix-channel --list
-```
+<DamlDocsAppdevTroubleshootingGuideInstallationIssuesL24 />
 
 Remove any unexpected channels and re-run `nix-shell`.
 
@@ -31,27 +37,17 @@ Remove any unexpected channels and re-run `nix-shell`.
 
 Your shell profile may not source the Nix environment. Add the following to your `~/.bashrc` or `~/.zshrc`:
 
-```bash
-source ~/.nix-profile/etc/profile.d/nix.sh
-```
+<DamlDocsAppdevTroubleshootingGuideInstallationIssuesL34 />
 
 Alternatively, restart your terminal session entirely. On macOS, after a system update Nix sometimes needs reinstallation:
 
-```bash
-# Uninstall first
-/nix/nix-installer uninstall
-
-# Reinstall from https://nixos.org/download
-```
+<DamlDocsAppdevTroubleshootingGuideInstallationIssuesL40 />
 
 ### PATH conflicts between Nix and system packages
 
 If a system-installed tool (e.g., a different Java version) takes precedence over the Nix-provided one, verify your PATH ordering:
 
-```bash
-which java
-# Should point to /nix/store/... if using nix-shell
-```
+<DamlDocsAppdevTroubleshootingGuideInstallationIssuesL51 />
 
 Inside `nix-shell`, Nix prepends its paths to `$PATH`. If you still see system binaries, check whether your shell profile appends paths after Nix or overrides them.
 
@@ -70,24 +66,17 @@ LocalNet runs a full Canton topology locally and needs significant resources. If
 
 **Colima (macOS):**
 
-```bash
-colima stop
-colima start --memory 16 --cpu 4
-```
+<DamlDocsAppdevTroubleshootingGuideInstallationIssuesL73 />
 
 ### Volume mount permission errors
 
 On Linux, Docker containers may fail to write to mounted volumes if your user ID does not match the container's expected UID. Fix this by ensuring the host directory has appropriate permissions:
 
-```bash
-chmod -R 777 .data/
-```
+<DamlDocsAppdevTroubleshootingGuideInstallationIssuesL82 />
 
 Or run Docker with the `--user` flag matching your host UID:
 
-```bash
-docker compose run --user "$(id -u):$(id -g)" <service>
-```
+<DamlDocsAppdevTroubleshootingGuideInstallationIssuesL88 />
 
 ### Docker Compose version mismatch
 
@@ -99,14 +88,7 @@ Canton Quickstart requires Docker Compose 2.26.0 or higher. If you see:
 
 Upgrade Docker Compose:
 
-```bash
-docker compose version  # Check current version
-
-# macOS with Homebrew
-brew install docker-compose
-
-# Or update Docker Desktop to the latest version
-```
+<DamlDocsAppdevTroubleshootingGuideInstallationIssuesL102 />
 
 ## Memory Allocation
 
@@ -114,24 +96,17 @@ brew install docker-compose
 
 The Daml sandbox runs on the JVM and defaults to conservative heap settings. If you encounter `java.lang.OutOfMemoryError: Java heap space`, increase the heap:
 
-```bash
-export JAVA_OPTS="-Xmx4g -Xms2g"
-dpm sandbox
-```
+<DamlDocsAppdevTroubleshootingGuideInstallationIssuesL117 />
 
 ### OOM kills on LocalNet
 
 When Docker kills containers silently, check for OOM events:
 
-```bash
-docker inspect <container_name> --format='{{.State.OOMKilled}}'
-```
+<DamlDocsAppdevTroubleshootingGuideInstallationIssuesL126 />
 
 If this returns `true`, you need to increase Docker's memory allocation (see the Docker section above). You can also check system-level OOM events:
 
-```bash
-dmesg | grep -i "out of memory"
-```
+<DamlDocsAppdevTroubleshootingGuideInstallationIssuesL132 />
 
 ### Resource limits summary
 

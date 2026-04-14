@@ -3,6 +3,14 @@ title: "Disaster Recovery"
 description: "Recovery procedures for data corruption, SV re-onboarding, and CometBFT layer loss"
 ---
 
+import CantonDocsGlobalSynchronizerProductionOperationsDisasterRecoveryL30 from "/snippets/canton-docs/global-synchronizer_production-operations_disaster-recovery_L30.mdx";
+import CantonDocsGlobalSynchronizerProductionOperationsDisasterRecoveryL45 from "/snippets/canton-docs/global-synchronizer_production-operations_disaster-recovery_L45.mdx";
+import CantonDocsGlobalSynchronizerProductionOperationsDisasterRecoveryL68 from "/snippets/canton-docs/global-synchronizer_production-operations_disaster-recovery_L68.mdx";
+import CantonDocsGlobalSynchronizerProductionOperationsDisasterRecoveryL126 from "/snippets/canton-docs/global-synchronizer_production-operations_disaster-recovery_L126.mdx";
+import CantonDocsGlobalSynchronizerProductionOperationsDisasterRecoveryL139 from "/snippets/canton-docs/global-synchronizer_production-operations_disaster-recovery_L139.mdx";
+import CantonDocsGlobalSynchronizerProductionOperationsDisasterRecoveryL146 from "/snippets/canton-docs/global-synchronizer_production-operations_disaster-recovery_L146.mdx";
+
+
 There are three ways to recover from disasters, depending on the scope and severity of the failure:
 
 - **Single node affected, network healthy** -- Restore the node from backup.
@@ -27,31 +35,13 @@ Given a consistent set of backups, follow these steps:
 
 1. Scale down all components in the SV node to 0 replicas (replace `-0` with the correct migration ID if a migration has already been performed):
 
-```bash
-kubectl scale deployment --replicas=0 -n sv \
-  global-domain-0-cometbft \
-  global-domain-0-mediator \
-  global-domain-0-sequencer \
-  participant-0 \
-  scan-app \
-  sv-app \
-  validator-app
-```
+<CantonDocsGlobalSynchronizerProductionOperationsDisasterRecoveryL30 />
 
 2. Restore the storage and databases of all components from the backups. The exact process depends on your storage and database setup.
 
 3. Scale up all components back to 1 replica:
 
-```bash
-kubectl scale deployment --replicas=1 -n sv \
-  global-domain-0-cometbft \
-  global-domain-0-mediator \
-  global-domain-0-sequencer \
-  participant-0 \
-  scan-app \
-  sv-app \
-  validator-app
-```
+<CantonDocsGlobalSynchronizerProductionOperationsDisasterRecoveryL45 />
 
 Once all components are healthy, they will start catching up their state from peer SVs and eventually become fully functional again.
 
@@ -65,9 +55,7 @@ In the case of a catastrophic failure of the SV node, the amulets owned by the S
 
 You need the backup of your SV node identities (see the backup procedures documentation). From that backup, extract the participant identities:
 
-```bash
-jq '.identities.participant' backup_state.json > dump_identities.json
-```
+<CantonDocsGlobalSynchronizerProductionOperationsDisasterRecoveryL68 />
 
 ### Recovery steps
 
@@ -123,12 +111,7 @@ It is better to go a bit further back in time than the last agreed-upon ACS comm
 
 Fetch the data dump from the SV app:
 
-```bash
-data=$(curl -sSLf \
-  "https://sv.sv.YOUR_HOSTNAME/api/sv/v0/admin/domain/data-snapshot?timestamp=<timestamp>" \
-  -H "authorization: Bearer <token>" \
-  -X GET -H "Content-Type: application/json")
-```
+<CantonDocsGlobalSynchronizerProductionOperationsDisasterRecoveryL126 />
 
 Replace `<token>` with an OAuth2 Bearer Token and `<timestamp>` with the agreed-upon timestamp in ISO format (e.g., `2024-04-17T19:12:02Z`).
 
@@ -136,16 +119,11 @@ Both the participant and sequencer must still be running for this call to succee
 
 Merge the identities dump with the data dump:
 
-```bash
-id=$(cat dump_identities.json)
-echo "$id" "$data" | jq -s add > dump_identities.json
-```
+<CantonDocsGlobalSynchronizerProductionOperationsDisasterRecoveryL139 />
 
 Copy the merged dump to the SV app PVC:
 
-```bash
-kubectl cp dump_identities.json sv/<sv_app_pod_name>:/domain-upgrade-dump/domain_migration_dump.json
-```
+<CantonDocsGlobalSynchronizerProductionOperationsDisasterRecoveryL146 />
 
 ### Migrating the data
 

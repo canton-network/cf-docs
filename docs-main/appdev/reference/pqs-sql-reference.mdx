@@ -3,6 +3,18 @@ title: "PQS SQL Reference"
 description: "Complete SQL API reference for the Participant Query Store (PQS), including table functions, offset management, maintenance operations, and JSONB indexing."
 ---
 
+import DamlDocsAppdevReferencePqsSqlReferenceL316 from "/snippets/daml-docs/appdev_reference_pqs-sql-reference_L316.mdx";
+import DamlDocsAppdevReferencePqsSqlReferenceL323 from "/snippets/daml-docs/appdev_reference_pqs-sql-reference_L323.mdx";
+import DamlDocsAppdevReferencePqsSqlReferenceL347 from "/snippets/daml-docs/appdev_reference_pqs-sql-reference_L347.mdx";
+import DamlDocsAppdevReferencePqsSqlReferenceL370 from "/snippets/daml-docs/appdev_reference_pqs-sql-reference_L370.mdx";
+import DamlDocsAppdevReferencePqsSqlReferenceL381 from "/snippets/daml-docs/appdev_reference_pqs-sql-reference_L381.mdx";
+import DamlDocsAppdevReferencePqsSqlReferenceL391 from "/snippets/daml-docs/appdev_reference_pqs-sql-reference_L391.mdx";
+import DamlDocsAppdevReferencePqsSqlReferenceL410 from "/snippets/daml-docs/appdev_reference_pqs-sql-reference_L410.mdx";
+import DamlDocsAppdevReferencePqsSqlReferenceL416 from "/snippets/daml-docs/appdev_reference_pqs-sql-reference_L416.mdx";
+import DamlDocsAppdevReferencePqsSqlReferenceL432 from "/snippets/daml-docs/appdev_reference_pqs-sql-reference_L432.mdx";
+import DamlDocsAppdevReferencePqsSqlReferenceL455 from "/snippets/daml-docs/appdev_reference_pqs-sql-reference_L455.mdx";
+
+
 The PQS SQL API is provisioned directly in the PostgreSQL database. Data consumers interact with it through SQL -- not through the PQS process itself.
 
 PQS data can be joined across contract tables to build projections (for example, joining holdings with account templates). The temporal offset model and historical event functions (`creates`, `archives`, `exercises`) make PQS well-suited for audit trails and compliance queries.
@@ -313,18 +325,9 @@ Partially qualified identifiers fail if the result is ambiguous.
 
 These functions accept optional offset parameters as an alternative to calling `set_oldest`/`set_latest` beforehand. The following two approaches are equivalent:
 
-```sql
--- Implicit: set scope first, then query
-select set_oldest('from_offset');
-select set_latest('to_offset');
-select * from creates('package:My.Module:Template');
-```
+<DamlDocsAppdevReferencePqsSqlReferenceL316 />
 
-```sql
--- Explicit: inline the entire context in a single statement
-select *
-from creates('package:My.Module:Template', 'from_offset', 'to_offset');
-```
+<DamlDocsAppdevReferencePqsSqlReferenceL323 />
 
 ## Lookup functions
 
@@ -344,12 +347,7 @@ The `transactions` view provides transaction metadata not directly exposed by th
 
 Join through the `*_at_ix` column to enrich contract or exercise data with transaction metadata:
 
-```sql
-select c.contract_id, t.transaction_id, (t.trace_context).trace_parent
-from creates('package:My.Module:Template') c
-inner join transactions t on c.created_at_ix = t.ix
-where c.create_event_id = (42::bigint, 0);
-```
+<DamlDocsAppdevReferencePqsSqlReferenceL347 />
 
 ## Summary functions
 
@@ -367,35 +365,15 @@ This section will be expanded in a future update. Exercise columns are available
 
 PQS metadata columns are indexed by default, but queries on `payload` contents (the JSONB column) need custom indexes for acceptable performance. Use the `create_index_for_contract` helper to create expression indexes on the internal contract tables:
 
-```sql
-call create_index_for_contract(
-  'token_quantity',         -- index name suffix
-  'Token',                  -- template name
-  '((payload->>''quantity'')::decimal)',  -- expression
-  'btree'                   -- index type (btree, hash, gin, gist)
-);
-```
+<DamlDocsAppdevReferencePqsSqlReferenceL370 />
 
 After creating the index, run `VACUUM ANALYZE` on the underlying table so PostgreSQL collects statistics:
 
-```sql
--- Determine the internal table number for your template
-select __contract_tpe4name('Token');  -- returns e.g. 14
-
--- Then analyze
-vacuum analyze __contracts_14;
-```
+<DamlDocsAppdevReferencePqsSqlReferenceL381 />
 
 For equality-only lookups on text fields, a `hash` index is more compact:
 
-```sql
-call create_index_for_contract(
-  'token_wallet_holder',
-  'Token',
-  '(payload->''wallet''->>''holder'')',
-  'hash'
-);
-```
+<DamlDocsAppdevReferencePqsSqlReferenceL391 />
 
 <Note>
 When two indexed fields have a statistical dependency (for example, `wallet.holder` determines `wallet.label`), PostgreSQL may severely underestimate result cardinality. Create [extended statistics](https://www.postgresql.org/docs/current/sql-createstatistics.html) on the dependent expressions to correct this.
@@ -407,16 +385,11 @@ When two indexed fields have a statistical dependency (for example, `wallet.hold
 
 `prune_to_offset(offset)` permanently removes all transactions up to and including the given offset. Active contracts are preserved under a new offset; all other transaction data (archived contracts, exercise events) is deleted.
 
-```sql
-select * from prune_to_offset('<offset>');
-```
+<DamlDocsAppdevReferencePqsSqlReferenceL410 />
 
 Combine with `nearest_offset()` to prune by timestamp or interval:
 
-```sql
-select * from prune_to_offset(nearest_offset('2024-01-30T00:00:00Z'::timestamptz));
-select * from prune_to_offset(nearest_offset(interval '30 days'));
-```
+<DamlDocsAppdevReferencePqsSqlReferenceL416 />
 
 <Warning>
 Pruning is irreversible. The target offset must be within the bounds of the contiguous history and cannot coincide with the latest consistent checkpoint.
@@ -429,10 +402,7 @@ Redaction removes sensitive data from specific contracts or exercises while pres
 - `redact_contract(contract_id, redaction_id)` -- nullifies `payload` and `contract_key` on an archived contract (and its interface views). Returns the number of affected entries.
 - `redact_exercise(event_id, redaction_id)` -- nullifies `argument` and `result` on an exercise event.
 
-```sql
-select redact_contract('<contract_id>', '<redaction_id>');
-select redact_exercise('<event_id>', '<redaction_id>');
-```
+<DamlDocsAppdevReferencePqsSqlReferenceL432 />
 
 You cannot redact an active contract, and a contract that has already been redacted cannot be redacted again. There are no such restrictions on exercise events. After redaction, the `redaction_id` column is populated in query results and the data columns return `NULL`.
 
@@ -452,13 +422,7 @@ If you are working with a pruned participant, set `--pipeline-ledger-start` to a
 
 `reset_to_offset(offset)` removes all transactions **after** the given offset, allowing PQS to resume processing from that point. A dry-run validation is available first:
 
-```sql
--- Dry run: inspect scope of the proposed reset
-select * from validate_reset_offset('<offset>');
-
--- Destructive: execute the reset
-select * from reset_to_offset('<offset>');
-```
+<DamlDocsAppdevReferencePqsSqlReferenceL455 />
 
 <Warning>
 Resetting is destructive and permanent. Stop PQS and all consuming applications before resetting. Coordinate with your validator operator, especially in disaster-recovery scenarios.

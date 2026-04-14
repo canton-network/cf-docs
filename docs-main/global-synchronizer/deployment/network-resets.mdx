@@ -3,6 +3,15 @@ title: "Network Resets"
 description: "Procedures for DevNet and TestNet network resets"
 ---
 
+import CantonDocsGlobalSynchronizerDeploymentNetworkResetsL18 from "/snippets/canton-docs/global-synchronizer_deployment_network-resets_L18.mdx";
+import CantonDocsGlobalSynchronizerDeploymentNetworkResetsL28 from "/snippets/canton-docs/global-synchronizer_deployment_network-resets_L28.mdx";
+import CantonDocsGlobalSynchronizerDeploymentNetworkResetsL43 from "/snippets/canton-docs/global-synchronizer_deployment_network-resets_L43.mdx";
+import CantonDocsGlobalSynchronizerDeploymentNetworkResetsL50 from "/snippets/canton-docs/global-synchronizer_deployment_network-resets_L50.mdx";
+import CantonDocsGlobalSynchronizerDeploymentNetworkResetsL67 from "/snippets/canton-docs/global-synchronizer_deployment_network-resets_L67.mdx";
+import CantonDocsGlobalSynchronizerDeploymentNetworkResetsL73 from "/snippets/canton-docs/global-synchronizer_deployment_network-resets_L73.mdx";
+import CantonDocsGlobalSynchronizerDeploymentNetworkResetsL81 from "/snippets/canton-docs/global-synchronizer_deployment_network-resets_L81.mdx";
+
+
 {/* COPIED_START source="splice:docs/src/sv_operator/sv_network_resets.rst" */}
 DevNet and TestNet get reset roughly every 3 months with the resets spread out such that they never happen at the same time on DevNet and TestNet. The exact time is announced in the `#supervalidator-operations` channel run by the [Global Synchronizer Foundation](https://sync.global/).
 {/* COPIED_END */}
@@ -15,9 +24,7 @@ Before the reset, back up information that you will need to restore or verify af
 
 - **DSO configuration** -- Save the current DSO state so you can verify that SV weights and package versions are preserved after the reset:
 
-```bash
-curl -sSL --fail-with-body https://YOUR_SCAN_URL/api/scan/v0/dso > backup_state.json
-```
+<CantonDocsGlobalSynchronizerDeploymentNetworkResetsL18 />
 
 - **Amulet price** -- Note your desired amulet price from the SV UI.
 
@@ -25,9 +32,7 @@ curl -sSL --fail-with-body https://YOUR_SCAN_URL/api/scan/v0/dso > backup_state.
 
 - **Featured apps** -- Save the list of featured apps:
 
-```bash
-curl -sSL --fail-with-body https://YOUR_SCAN_URL/api/scan/v0/featured-apps > backup_featured.json
-```
+<CantonDocsGlobalSynchronizerDeploymentNetworkResetsL28 />
 
 Featured app rights are lost during the reset and need to be recreated manually.
 
@@ -40,16 +45,11 @@ Featured app rights are lost during the reset and need to be recreated manually.
 
 1. Set the migration ID to `0` in all Helm chart values. The migration ID appears both as its own value and as part of various other values:
 
-```yaml
-migration:
-  id: "0"
-```
+<CantonDocsGlobalSynchronizerDeploymentNetworkResetsL43 />
 
 And in URLs such as:
 
-```yaml
-sequencerPublicUrl: "https://sequencer-0.sv.YOUR_HOSTNAME"
-```
+<CantonDocsGlobalSynchronizerDeploymentNetworkResetsL50 />
 
 2. Set `skipInitialization` to `false` in `sv-values.yaml`.
 3. Set `initialAmuletPrice` to your desired price in `sv-values.yaml` (from your pre-reset `backup_state.json`).
@@ -64,25 +64,15 @@ After deployment, verify that network parameters were preserved:
 
 1. Fetch the current DSO state and compare against your backup:
 
-```bash
-curl -sSL --fail-with-body https://YOUR_SCAN_URL/api/scan/v0/dso > current_state.json
-```
+<CantonDocsGlobalSynchronizerDeploymentNetworkResetsL67 />
 
 Verify that SV reward weights are unchanged:
 
-```bash
-jq '.dso_rules.contract.payload.svs.[] | [.[1].name, .[1].svRewardWeight]' backup_state.json > weights_backup.json
-jq '.dso_rules.contract.payload.svs.[] | [.[1].name, .[1].svRewardWeight]' current_state.json > weights_current.json
-diff -C2 weights_backup.json weights_current.json
-```
+<CantonDocsGlobalSynchronizerDeploymentNetworkResetsL73 />
 
 Verify that amulet rules are preserved (the diff should only show changes to DSO and synchronizer namespaces):
 
-```bash
-jq '.amulet_rules.contract.payload' backup_state.json > amulet_backup.json
-jq '.amulet_rules.contract.payload' current_state.json > amulet_current.json
-diff amulet_backup.json amulet_current.json
-```
+<CantonDocsGlobalSynchronizerDeploymentNetworkResetsL81 />
 
 2. Check your desired coin price in the SV UI and verify it matches the pre-reset value.
 3. Check the current round in the Scan UI. TestNet is usually kept one week (approximately 1,008 rounds) ahead of MainNet, while DevNet is typically reset to round 0.
