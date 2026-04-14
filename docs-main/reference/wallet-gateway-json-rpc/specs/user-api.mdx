@@ -3,6 +3,28 @@ title: "User API"
 description: "Splice Wallet JSON-RPC User API"
 ---
 
+# User API
+
+[Back to overview](/reference/wallet-gateway-json-rpc)
+
+An OpenRPC specification for the user to interact with the Wallet Gateway.
+
+- Latest source path: `api-specs/openrpc-user-api.json`
+- Publish version: `0.24.0`
+- OpenRPC version: `1.2.6`
+- Spec info.version: `0.1.0`
+
+## Version Change Timeline
+
+| Version | Active Methods | Added | Changed | Removed |
+| --- | --- | --- | --- | --- |
+| `0.20.0` | 21 | 0 | 0 | 0 |
+| `0.21.0` | 22 | 1 | 2 | 0 |
+| `0.22.0` | 22 | 0 | 1 | 0 |
+| `0.23.0` | 22 | 0 | 2 | 0 |
+| `0.23.1` | 22 | 0 | 0 | 0 |
+| `0.24.0` | 22 | 0 | 0 | 0 |
+
 ## Table of Contents
 
 🟢 Active Since  🔵 Changed  🔴 Removed
@@ -11,7 +33,7 @@ description: "Splice Wallet JSON-RPC User API"
 | --- | --- | --- |
 | [`addIdp`](#method-addidp) | 🟢 `v0.20` | Adds a new identity provider. |
 | [`addNetwork`](#method-addnetwork) | 🟢 `v0.20` | Adds a new network configuration (similar to EIP-3085). |
-| [`addSession`](#method-addsession) | 🟢 `v0.20` | Adds a network session. |
+| [`addSession`](#method-addsession) | 🟢 `v0.20` 🔵 `v0.23` | Adds a network session. |
 | [`allocatePartyForWallet`](#method-allocatepartyforwallet) | 🟢 `v0.21` | Allocates a party for an already initialized wallet if external signing is complete. |
 | [`createWallet`](#method-createwallet) | 🟢 `v0.20` 🔵 `v0.21` | Creates a new wallet and party with the given hint. |
 | [`deleteTransaction`](#method-deletetransaction) | 🟢 `v0.20` | Deletes a pending transaction. Only transactions with status 'pending' can be deleted. |
@@ -21,7 +43,7 @@ description: "Splice Wallet JSON-RPC User API"
 | [`isWalletSyncNeeded`](#method-iswalletsyncneeded) | 🟢 `v0.20` | Checks if wallet sync is needed (disabled wallets or new parties on ledger). |
 | [`listIdps`](#method-listidps) | 🟢 `v0.20` | - |
 | [`listNetworks`](#method-listnetworks) | 🟢 `v0.20` | - |
-| [`listSessions`](#method-listsessions) | 🟢 `v0.20` | - |
+| [`listSessions`](#method-listsessions) | 🟢 `v0.20` 🔵 `v0.23` | - |
 | [`listTransactions`](#method-listtransactions) | 🟢 `v0.20` | - |
 | [`listWallets`](#method-listwallets) | 🟢 `v0.20` | Lists wallets. |
 | [`removeIdp`](#method-removeidp) | 🟢 `v0.20` | Removes an identity provider. Fails if an existing network is using the identity provider. |
@@ -29,7 +51,7 @@ description: "Splice Wallet JSON-RPC User API"
 | [`removeSession`](#method-removesession) | 🟢 `v0.20` | Removes the current network session. |
 | [`removeWallet`](#method-removewallet) | 🟢 `v0.20` | Removes a party with the given hint. |
 | [`setPrimaryWallet`](#method-setprimarywallet) | 🟢 `v0.20` | Sets the specified wallet as the primary wallet for dApp usage. |
-| [`sign`](#method-sign) | 🟢 `v0.20` | Signs the provided data with the private key of the specified or active party. |
+| [`sign`](#method-sign) | 🟢 `v0.20` 🔵 `v0.22` | Signs the provided data with the private key of the specified or active party. |
 | [`syncWallets`](#method-syncwallets) | 🟢 `v0.20` 🔵 `v0.21` | Synchronizes wallets with the connected network. |
 
 ## Methods
@@ -124,8 +146,15 @@ Adds a new network configuration (similar to EIP-3085).
 ### `addSession`
 
 - Introduced: `0.20.0`
+Changed in: `0.23.0`
 
 Adds a network session.
+
+**Version Changes**
+
+| Version | Changes |
+| --- | --- |
+| `0.23.0` | result updated (required fields) |
 
 **Parameters**
 
@@ -137,7 +166,7 @@ Adds a network session.
 
 | Schema | Required Fields | Description |
 | --- | --- | --- |
-| `object` | `accessToken`, `id`, `idp`, `network`, `status` | - |
+| `object` | `accessToken`, `id`, `idp`, `network`, `rights`, `status` | - |
 
 **Params Example**
 
@@ -173,7 +202,10 @@ Adds a network session.
     "issuer": "<string>"
   },
   "accessToken": "<string>",
-  "status": "<string>"
+  "status": "<string>",
+  "rights": [
+    "<value>"
+  ]
 }
 ```
 
@@ -509,6 +541,13 @@ _No parameters._
 ### `listSessions`
 
 - Introduced: `0.20.0`
+Changed in: `0.23.0`
+
+**Version Changes**
+
+| Version | Changes |
+| --- | --- |
+| `0.23.0` | details updated |
 
 **Parameters**
 
@@ -541,7 +580,10 @@ _No parameters._
         "issuer": "<string>"
       },
       "accessToken": "<string>",
-      "status": "<string>"
+      "status": "<string>",
+      "rights": [
+        "<value>"
+      ]
     }
   ]
 }
@@ -797,8 +839,15 @@ Sets the specified wallet as the primary wallet for dApp usage.
 ### `sign`
 
 - Introduced: `0.20.0`
+Changed in: `0.22.0`
 
 Signs the provided data with the private key of the specified or active party.
+
+**Version Changes**
+
+| Version | Changes |
+| --- | --- |
+| `0.22.0` | result updated (schema, required fields) |
 
 **Parameters**
 
@@ -810,7 +859,7 @@ Signs the provided data with the private key of the specified or active party.
 
 | Schema | Required Fields | Description |
 | --- | --- | --- |
-| `object` | `partyId`, `signature`, `signedBy` | - |
+| `oneOf` | - | - |
 
 **Params Example**
 
@@ -829,9 +878,10 @@ Signs the provided data with the private key of the specified or active party.
 
 ```json
 {
+  "status": "<string>",
   "signature": "<string>",
-  "partyId": "<string>",
-  "signedBy": "<string>"
+  "signedBy": "<string>",
+  "partyId": "<string>"
 }
 ```
 
