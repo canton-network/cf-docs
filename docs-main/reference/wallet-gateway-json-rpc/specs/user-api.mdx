@@ -3,41 +3,56 @@ title: "User API"
 description: "Splice Wallet JSON-RPC User API"
 ---
 
+# User API
+
+[Back to overview](/reference/wallet-gateway-json-rpc)
+
+An OpenRPC specification for the user to interact with the Wallet Gateway.
+
 ## Table of Contents
 
-🟢 Active Since  🔵 Changed  🔴 Removed
+| Name | Kind | Summary | Introduced | Changed | Deprecated | Removed |
+| --- | --- | --- | --- | --- | --- | --- |
+| [`addIdp`](#method-addidp) | `Method` | Adds a new identity provider. | `0.21.0` | - | - | - |
+| [`addNetwork`](#method-addnetwork) | `Method` | Adds a new network configuration (similar to EIP-3085). | `0.21.0` | - | - | - |
+| [`addSession`](#method-addsession) | `Method` | Adds a network session. | `0.21.0` | `0.23.0`: result updated (required fields) | - | - |
+| [`allocatePartyForWallet`](#method-allocatepartyforwallet) | `Method` | Allocates a party for an already initialized wallet if external signing is complete. | `0.21.0` | - | - | - |
+| [`createWallet`](#method-createwallet) | `Method` | Creates a new wallet and party with the given hint. | `0.21.0` | - | - | - |
+| [`deleteTransaction`](#method-deletetransaction) | `Method` | Deletes a pending transaction. Only transactions with status 'pending' can be deleted. | `0.21.0` | - | - | - |
+| [`execute`](#method-execute) | `Method` | Executes a signed transaction. | `0.21.0` | - | - | - |
+| [`getTransaction`](#method-gettransaction) | `Method` | - | `0.21.0` | - | - | - |
+| [`getUser`](#method-getuser) | `Method` | Returns information about the current user, including whether they are an admin. | `0.21.0` | - | - | - |
+| [`isWalletSyncNeeded`](#method-iswalletsyncneeded) | `Method` | Checks if wallet sync is needed (disabled wallets or new parties on ledger). | `0.21.0` | - | - | - |
+| [`listIdps`](#method-listidps) | `Method` | - | `0.21.0` | - | - | - |
+| [`listNetworks`](#method-listnetworks) | `Method` | - | `0.21.0` | - | - | - |
+| [`listSessions`](#method-listsessions) | `Method` | - | `0.21.0` | `0.23.0`: details updated | - | - |
+| [`listTransactions`](#method-listtransactions) | `Method` | - | `0.21.0` | - | - | - |
+| [`listWallets`](#method-listwallets) | `Method` | Lists wallets. | `0.21.0` | - | - | - |
+| [`removeIdp`](#method-removeidp) | `Method` | Removes an identity provider. Fails if an existing network is using the identity provider. | `0.21.0` | - | - | - |
+| [`removeNetwork`](#method-removenetwork) | `Method` | Removes a new network configuration (similar to EIP-3085). | `0.21.0` | - | - | - |
+| [`removeSession`](#method-removesession) | `Method` | Removes the current network session. | `0.21.0` | - | - | - |
+| [`removeWallet`](#method-removewallet) | `Method` | Removes a party with the given hint. | `0.21.0` | - | - | - |
+| [`setPrimaryWallet`](#method-setprimarywallet) | `Method` | Sets the specified wallet as the primary wallet for dApp usage. | `0.21.0` | - | - | - |
+| [`sign`](#method-sign) | `Method` | Signs the provided data with the private key of the specified or active party. | `0.21.0` | `0.22.0`: result updated (schema, required fields) | - | - |
+| [`syncWallets`](#method-syncwallets) | `Method` | Synchronizes wallets with the connected network. | `0.21.0` | - | - | - |
 
-| NAME | STATUS | SUMMARY |
-| --- | --- | --- |
-| [`addIdp`](#method-addidp) | 🟢 `v0.20` | Adds a new identity provider. |
-| [`addNetwork`](#method-addnetwork) | 🟢 `v0.20` | Adds a new network configuration (similar to EIP-3085). |
-| [`addSession`](#method-addsession) | 🟢 `v0.20` | Adds a network session. |
-| [`allocatePartyForWallet`](#method-allocatepartyforwallet) | 🟢 `v0.21` | Allocates a party for an already initialized wallet if external signing is complete. |
-| [`createWallet`](#method-createwallet) | 🟢 `v0.20` 🔵 `v0.21` | Creates a new wallet and party with the given hint. |
-| [`deleteTransaction`](#method-deletetransaction) | 🟢 `v0.20` | Deletes a pending transaction. Only transactions with status 'pending' can be deleted. |
-| [`execute`](#method-execute) | 🟢 `v0.20` | Executes a signed transaction. |
-| [`getTransaction`](#method-gettransaction) | 🟢 `v0.20` | - |
-| [`getUser`](#method-getuser) | 🟢 `v0.20` | Returns information about the current user, including whether they are an admin. |
-| [`isWalletSyncNeeded`](#method-iswalletsyncneeded) | 🟢 `v0.20` | Checks if wallet sync is needed (disabled wallets or new parties on ledger). |
-| [`listIdps`](#method-listidps) | 🟢 `v0.20` | - |
-| [`listNetworks`](#method-listnetworks) | 🟢 `v0.20` | - |
-| [`listSessions`](#method-listsessions) | 🟢 `v0.20` | - |
-| [`listTransactions`](#method-listtransactions) | 🟢 `v0.20` | - |
-| [`listWallets`](#method-listwallets) | 🟢 `v0.20` | Lists wallets. |
-| [`removeIdp`](#method-removeidp) | 🟢 `v0.20` | Removes an identity provider. Fails if an existing network is using the identity provider. |
-| [`removeNetwork`](#method-removenetwork) | 🟢 `v0.20` | Removes a new network configuration (similar to EIP-3085). |
-| [`removeSession`](#method-removesession) | 🟢 `v0.20` | Removes the current network session. |
-| [`removeWallet`](#method-removewallet) | 🟢 `v0.20` | Removes a party with the given hint. |
-| [`setPrimaryWallet`](#method-setprimarywallet) | 🟢 `v0.20` | Sets the specified wallet as the primary wallet for dApp usage. |
-| [`sign`](#method-sign) | 🟢 `v0.20` | Signs the provided data with the private key of the specified or active party. |
-| [`syncWallets`](#method-syncwallets) | 🟢 `v0.20` 🔵 `v0.21` | Synchronizes wallets with the connected network. |
+## Version Change Summary
 
-## Methods
+| Version | Added | Changed | Removed |
+| --- | --- | --- | --- |
+| `0.21.0` | 0 | 0 | 0 |
+| `0.22.0` | 0 | 1 | 0 |
+| `0.23.0` | 0 | 2 | 0 |
+| `0.23.1` | 0 | 0 | 0 |
+| `0.24.0` | 0 | 0 | 0 |
+| `0.25.0` | 0 | 0 | 0 |
+
+## Reference
 
 <a id="method-addidp"></a>
 ### `addIdp`
 
-- Introduced: `0.20.0`
+- Introduced: `0.21.0`
 
 Adds a new identity provider.
 
@@ -76,7 +91,7 @@ Adds a new identity provider.
 <a id="method-addnetwork"></a>
 ### `addNetwork`
 
-- Introduced: `0.20.0`
+- Introduced: `0.21.0`
 
 Adds a new network configuration (similar to EIP-3085).
 
@@ -123,9 +138,16 @@ Adds a new network configuration (similar to EIP-3085).
 <a id="method-addsession"></a>
 ### `addSession`
 
-- Introduced: `0.20.0`
+- Introduced: `0.21.0`
+Changed in: `0.23.0`
 
 Adds a network session.
+
+**Version Changes**
+
+| Version | Changes |
+| --- | --- |
+| `0.23.0` | result updated (required fields) |
 
 **Parameters**
 
@@ -137,7 +159,7 @@ Adds a network session.
 
 | Schema | Required Fields | Description |
 | --- | --- | --- |
-| `object` | `accessToken`, `id`, `idp`, `network`, `status` | - |
+| `object` | `accessToken`, `id`, `idp`, `network`, `rights`, `status` | - |
 
 **Params Example**
 
@@ -173,7 +195,10 @@ Adds a network session.
     "issuer": "<string>"
   },
   "accessToken": "<string>",
-  "status": "<string>"
+  "status": "<string>",
+  "rights": [
+    "<value>"
+  ]
 }
 ```
 
@@ -226,16 +251,9 @@ Allocates a party for an already initialized wallet if external signing is compl
 <a id="method-createwallet"></a>
 ### `createWallet`
 
-- Introduced: `0.20.0`
-Changed in: `0.21.0`
+- Introduced: `0.21.0`
 
 Creates a new wallet and party with the given hint.
-
-**Version Changes**
-
-| Version | Changes |
-| --- | --- |
-| `0.21.0` | description updated |
 
 **Parameters**
 
@@ -280,7 +298,7 @@ Creates a new wallet and party with the given hint.
 <a id="method-deletetransaction"></a>
 ### `deleteTransaction`
 
-- Introduced: `0.20.0`
+- Introduced: `0.21.0`
 
 Deletes a pending transaction. Only transactions with status 'pending' can be deleted.
 
@@ -315,7 +333,7 @@ Deletes a pending transaction. Only transactions with status 'pending' can be de
 <a id="method-execute"></a>
 ### `execute`
 
-- Introduced: `0.20.0`
+- Introduced: `0.21.0`
 
 Executes a signed transaction.
 
@@ -353,7 +371,7 @@ Executes a signed transaction.
 <a id="method-gettransaction"></a>
 ### `getTransaction`
 
-- Introduced: `0.20.0`
+- Introduced: `0.21.0`
 
 **Parameters**
 
@@ -391,7 +409,7 @@ Executes a signed transaction.
 <a id="method-getuser"></a>
 ### `getUser`
 
-- Introduced: `0.20.0`
+- Introduced: `0.21.0`
 
 Returns information about the current user, including whether they are an admin.
 
@@ -417,7 +435,7 @@ _No parameters._
 <a id="method-iswalletsyncneeded"></a>
 ### `isWalletSyncNeeded`
 
-- Introduced: `0.20.0`
+- Introduced: `0.21.0`
 
 Checks if wallet sync is needed (disabled wallets or new parties on ledger).
 
@@ -442,7 +460,7 @@ _No parameters._
 <a id="method-listidps"></a>
 ### `listIdps`
 
-- Introduced: `0.20.0`
+- Introduced: `0.21.0`
 
 **Parameters**
 
@@ -471,7 +489,7 @@ _No parameters._
 <a id="method-listnetworks"></a>
 ### `listNetworks`
 
-- Introduced: `0.20.0`
+- Introduced: `0.21.0`
 
 **Parameters**
 
@@ -508,7 +526,14 @@ _No parameters._
 <a id="method-listsessions"></a>
 ### `listSessions`
 
-- Introduced: `0.20.0`
+- Introduced: `0.21.0`
+Changed in: `0.23.0`
+
+**Version Changes**
+
+| Version | Changes |
+| --- | --- |
+| `0.23.0` | details updated |
 
 **Parameters**
 
@@ -541,7 +566,10 @@ _No parameters._
         "issuer": "<string>"
       },
       "accessToken": "<string>",
-      "status": "<string>"
+      "status": "<string>",
+      "rights": [
+        "<value>"
+      ]
     }
   ]
 }
@@ -550,7 +578,7 @@ _No parameters._
 <a id="method-listtransactions"></a>
 ### `listTransactions`
 
-- Introduced: `0.20.0`
+- Introduced: `0.21.0`
 
 **Parameters**
 
@@ -580,7 +608,7 @@ _No parameters._
 <a id="method-listwallets"></a>
 ### `listWallets`
 
-- Introduced: `0.20.0`
+- Introduced: `0.21.0`
 
 Lists wallets.
 
@@ -633,7 +661,7 @@ Lists wallets.
 <a id="method-removeidp"></a>
 ### `removeIdp`
 
-- Introduced: `0.20.0`
+- Introduced: `0.21.0`
 
 Removes an identity provider. Fails if an existing network is using the identity provider.
 
@@ -668,7 +696,7 @@ Removes an identity provider. Fails if an existing network is using the identity
 <a id="method-removenetwork"></a>
 ### `removeNetwork`
 
-- Introduced: `0.20.0`
+- Introduced: `0.21.0`
 
 Removes a new network configuration (similar to EIP-3085).
 
@@ -703,7 +731,7 @@ Removes a new network configuration (similar to EIP-3085).
 <a id="method-removesession"></a>
 ### `removeSession`
 
-- Introduced: `0.20.0`
+- Introduced: `0.21.0`
 
 Removes the current network session.
 
@@ -726,7 +754,7 @@ _No parameters._
 <a id="method-removewallet"></a>
 ### `removeWallet`
 
-- Introduced: `0.20.0`
+- Introduced: `0.21.0`
 
 Removes a party with the given hint.
 
@@ -761,7 +789,7 @@ Removes a party with the given hint.
 <a id="method-setprimarywallet"></a>
 ### `setPrimaryWallet`
 
-- Introduced: `0.20.0`
+- Introduced: `0.21.0`
 
 Sets the specified wallet as the primary wallet for dApp usage.
 
@@ -796,9 +824,16 @@ Sets the specified wallet as the primary wallet for dApp usage.
 <a id="method-sign"></a>
 ### `sign`
 
-- Introduced: `0.20.0`
+- Introduced: `0.21.0`
+Changed in: `0.22.0`
 
 Signs the provided data with the private key of the specified or active party.
+
+**Version Changes**
+
+| Version | Changes |
+| --- | --- |
+| `0.22.0` | result updated (schema, required fields) |
 
 **Parameters**
 
@@ -810,7 +845,7 @@ Signs the provided data with the private key of the specified or active party.
 
 | Schema | Required Fields | Description |
 | --- | --- | --- |
-| `object` | `partyId`, `signature`, `signedBy` | - |
+| `oneOf` | - | - |
 
 **Params Example**
 
@@ -829,25 +864,19 @@ Signs the provided data with the private key of the specified or active party.
 
 ```json
 {
+  "status": "<string>",
   "signature": "<string>",
-  "partyId": "<string>",
-  "signedBy": "<string>"
+  "signedBy": "<string>",
+  "partyId": "<string>"
 }
 ```
 
 <a id="method-syncwallets"></a>
 ### `syncWallets`
 
-- Introduced: `0.20.0`
-Changed in: `0.21.0`
+- Introduced: `0.21.0`
 
 Synchronizes wallets with the connected network.
-
-**Version Changes**
-
-| Version | Changes |
-| --- | --- |
-| `0.21.0` | result updated (required fields) |
 
 **Parameters**
 
