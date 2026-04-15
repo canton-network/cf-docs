@@ -1,0 +1,407 @@
+---
+title: "Ledger JSON API Websocket Endpoints"
+---
+
+## Table of Contents
+
+🟢 Active Since  🔵 Changed  🔴 Removed
+
+| NAME | STATUS | SUMMARY |
+| --- | --- | --- |
+| [`/v2/commands/completions`](#channel-v2-commands-completions) | 🟢 `v3.4` 🔵 `v3.4` | Get completions stream |
+| [`/v2/state/active-contracts`](#channel-v2-state-active-contracts) | 🟢 `v3.4` 🔵 `v3.4` | Get active contracts stream |
+| [`/v2/updates`](#channel-v2-updates) | 🟢 `v3.4` 🔵 `v3.4` | Get updates stream |
+| [`/v2/updates/flats`](#channel-v2-updates-flats) | 🟢 `v3.4` 🔵 `v3.4` | Get flat transactions update stream. Provided for backwards compatibility, it will be removed in the Canton version 3.5.0, use v2/updates instead. |
+| [`/v2/updates/trees`](#channel-v2-updates-trees) | 🟢 `v3.4` 🔵 `v3.4` | Get update transactions tree stream. Provided for backwards compatibility, it will be removed in the Canton version 3.5.0, use v2/updates instead. |
+
+## Channels
+
+<a id="channel-v2-commands-completions"></a>
+
+### /v2/commands/completions
+
+- Actions: `publish`, `subscribe`
+- Introduced: `3.4.11`
+- Changed in: `3.4.12`
+
+Get completions stream
+
+**Version Changes**
+
+| Version | Changes |
+| --- | --- |
+| `3.4.12` | publish required fields added: `parties`; publish required fields removed: `beginExclusive`, `userId` |
+
+**Publish**
+
+- Operation ID: `sendV2CommandsCompletions`
+- Message: `CompletionStreamRequest`
+- Content type: `application/json`
+
+Get completions stream
+
+| Payload Schema | Required Fields |
+| --- | --- |
+| `object` | `parties` |
+
+**Message Example**
+
+```json
+{
+  "parties": [
+    "<string>"
+  ]
+}
+```
+
+**Subscribe**
+
+- Operation ID: `onV2CommandsCompletions`
+- Message: `Either_JsCantonError_CompletionStreamResponse`
+- Content type: `application/json`
+
+Get completions stream
+
+| Payload Schema | Required Fields |
+| --- | --- |
+| `oneOf` | - |
+
+**Message Example**
+
+```json
+{
+  "completionResponse": {
+    "Completion": {
+      "value": {
+        "commandId": "<string>",
+        "userId": "<string>",
+        "actAs": [
+          "<string>"
+        ],
+        "offset": "<integer>",
+        "synchronizerTime": "<object>"
+      }
+    }
+  }
+}
+```
+
+<a id="channel-v2-state-active-contracts"></a>
+
+### /v2/state/active-contracts
+
+- Actions: `publish`, `subscribe`
+- Introduced: `3.4.11`
+- Changed in: `3.4.12`
+
+Get active contracts stream
+
+**Version Changes**
+
+| Version | Changes |
+| --- | --- |
+| `3.4.12` | publish required fields added: `eventFormat`; publish required fields removed: `verbose` |
+
+**Publish**
+
+- Operation ID: `sendV2StateActive-contracts`
+- Message: `GetActiveContractsRequest`
+- Content type: `application/json`
+
+Get active contracts stream
+
+| Payload Schema | Required Fields |
+| --- | --- |
+| `object` | `activeAtOffset`, `eventFormat` |
+
+**Message Example**
+
+```json
+{
+  "activeAtOffset": "<integer>",
+  "eventFormat": {
+    "filtersByParty": {},
+    "filtersForAnyParty": {
+      "cumulative": [
+        "<object>"
+      ]
+    },
+    "verbose": "<boolean>"
+  }
+}
+```
+
+**Subscribe**
+
+- Operation ID: `onV2StateActive-contracts`
+- Message: `Either_JsCantonError_JsGetActiveContractsResponse`
+- Content type: `application/json`
+
+Get active contracts stream
+
+| Payload Schema | Required Fields |
+| --- | --- |
+| `oneOf` | - |
+
+**Message Example**
+
+```json
+{
+  "code": "<string>",
+  "cause": "<string>",
+  "context": {},
+  "errorCategory": "<integer>"
+}
+```
+
+<a id="channel-v2-updates"></a>
+
+### /v2/updates
+
+- Actions: `publish`, `subscribe`
+- Introduced: `3.4.11`
+- Changed in: `3.4.12`
+
+Get updates stream
+
+**Version Changes**
+
+| Version | Changes |
+| --- | --- |
+| `3.4.12` | publish required fields added: `updateFormat`; publish required fields removed: `beginExclusive`, `verbose` |
+
+**Publish**
+
+- Operation ID: `sendV2Updates`
+- Message: `GetUpdatesRequest`
+- Content type: `application/json`
+
+Get updates stream
+
+| Payload Schema | Required Fields |
+| --- | --- |
+| `object` | `updateFormat` |
+
+**Message Example**
+
+```json
+{
+  "updateFormat": {
+    "includeTransactions": {
+      "eventFormat": {
+        "filtersByParty": "<object>",
+        "filtersForAnyParty": "<object>",
+        "verbose": "<boolean>"
+      },
+      "transactionShape": "<string>"
+    },
+    "includeReassignments": {
+      "filtersByParty": {},
+      "filtersForAnyParty": {
+        "cumulative": [
+          "<object>"
+        ]
+      },
+      "verbose": "<boolean>"
+    },
+    "includeTopologyEvents": {
+      "includeParticipantAuthorizationEvents": {
+        "parties": [
+          "<string>"
+        ]
+      }
+    }
+  }
+}
+```
+
+**Subscribe**
+
+- Operation ID: `onV2Updates`
+- Message: `Either_JsCantonError_JsGetUpdatesResponse`
+- Content type: `application/json`
+
+Get updates stream
+
+| Payload Schema | Required Fields |
+| --- | --- |
+| `oneOf` | - |
+
+**Message Example**
+
+```json
+{
+  "code": "<string>",
+  "cause": "<string>",
+  "context": {},
+  "errorCategory": "<integer>"
+}
+```
+
+<a id="channel-v2-updates-flats"></a>
+
+### /v2/updates/flats
+
+- Actions: `publish`, `subscribe`
+- Introduced: `3.4.11`
+- Changed in: `3.4.12`
+
+Get flat transactions update stream. Provided for backwards compatibility, it will be removed in the Canton version 3.5.0, use v2/updates instead.
+
+**Version Changes**
+
+| Version | Changes |
+| --- | --- |
+| `3.4.12` | publish required fields added: `updateFormat`; publish required fields removed: `beginExclusive`, `verbose` |
+
+**Publish**
+
+- Operation ID: `sendV2UpdatesFlats`
+- Message: `GetUpdatesRequest`
+- Content type: `application/json`
+
+Get flat transactions update stream. Provided for backwards compatibility, it will be removed in the Canton version 3.5.0, use v2/updates instead.
+
+| Payload Schema | Required Fields |
+| --- | --- |
+| `object` | `updateFormat` |
+
+**Message Example**
+
+```json
+{
+  "updateFormat": {
+    "includeTransactions": {
+      "eventFormat": {
+        "filtersByParty": "<object>",
+        "filtersForAnyParty": "<object>",
+        "verbose": "<boolean>"
+      },
+      "transactionShape": "<string>"
+    },
+    "includeReassignments": {
+      "filtersByParty": {},
+      "filtersForAnyParty": {
+        "cumulative": [
+          "<object>"
+        ]
+      },
+      "verbose": "<boolean>"
+    },
+    "includeTopologyEvents": {
+      "includeParticipantAuthorizationEvents": {
+        "parties": [
+          "<string>"
+        ]
+      }
+    }
+  }
+}
+```
+
+**Subscribe**
+
+- Operation ID: `onV2UpdatesFlats`
+- Message: `Either_JsCantonError_JsGetUpdatesResponse`
+- Content type: `application/json`
+
+Get flat transactions update stream. Provided for backwards compatibility, it will be removed in the Canton version 3.5.0, use v2/updates instead.
+
+| Payload Schema | Required Fields |
+| --- | --- |
+| `oneOf` | - |
+
+**Message Example**
+
+```json
+{
+  "code": "<string>",
+  "cause": "<string>",
+  "context": {},
+  "errorCategory": "<integer>"
+}
+```
+
+<a id="channel-v2-updates-trees"></a>
+
+### /v2/updates/trees
+
+- Actions: `publish`, `subscribe`
+- Introduced: `3.4.11`
+- Changed in: `3.4.12`
+
+Get update transactions tree stream. Provided for backwards compatibility, it will be removed in the Canton version 3.5.0, use v2/updates instead.
+
+**Version Changes**
+
+| Version | Changes |
+| --- | --- |
+| `3.4.12` | publish required fields added: `updateFormat`; publish required fields removed: `beginExclusive`, `verbose` |
+
+**Publish**
+
+- Operation ID: `sendV2UpdatesTrees`
+- Message: `GetUpdatesRequest`
+- Content type: `application/json`
+
+Get update transactions tree stream. Provided for backwards compatibility, it will be removed in the Canton version 3.5.0, use v2/updates instead.
+
+| Payload Schema | Required Fields |
+| --- | --- |
+| `object` | `updateFormat` |
+
+**Message Example**
+
+```json
+{
+  "updateFormat": {
+    "includeTransactions": {
+      "eventFormat": {
+        "filtersByParty": "<object>",
+        "filtersForAnyParty": "<object>",
+        "verbose": "<boolean>"
+      },
+      "transactionShape": "<string>"
+    },
+    "includeReassignments": {
+      "filtersByParty": {},
+      "filtersForAnyParty": {
+        "cumulative": [
+          "<object>"
+        ]
+      },
+      "verbose": "<boolean>"
+    },
+    "includeTopologyEvents": {
+      "includeParticipantAuthorizationEvents": {
+        "parties": [
+          "<string>"
+        ]
+      }
+    }
+  }
+}
+```
+
+**Subscribe**
+
+- Operation ID: `onV2UpdatesTrees`
+- Message: `Either_JsCantonError_JsGetUpdateTreesResponse`
+- Content type: `application/json`
+
+Get update transactions tree stream. Provided for backwards compatibility, it will be removed in the Canton version 3.5.0, use v2/updates instead.
+
+| Payload Schema | Required Fields |
+| --- | --- |
+| `oneOf` | - |
+
+**Message Example**
+
+```json
+{
+  "code": "<string>",
+  "cause": "<string>",
+  "context": {},
+  "errorCategory": "<integer>"
+}
+```

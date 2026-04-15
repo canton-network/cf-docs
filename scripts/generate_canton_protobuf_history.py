@@ -3,10 +3,17 @@
 from __future__ import annotations
 
 import argparse
+import gzip
+import importlib.util
 import json
+import os
 import re
+import shutil
 import subprocess
 import sys
+import tarfile
+import tempfile
+import urllib.request
 from pathlib import Path
 from typing import Any
 
@@ -21,12 +28,20 @@ DEFAULT_REPO_DIR = DEFAULT_CACHE_DIR / "repos" / "canton"
 GROUP_LABEL = "Canton Protobuf History"
 DESCRIPTOR_IMAGE_NAME = ".proto_snapshot_image.bin.gz"
 STABLE_TAG_RE = re.compile(r"^v(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)$")
-OWNED_PROTO_RE = re.compile(r"^community/.+/src/main/protobuf/.+\.proto$")
+SECTION_TO_REPO_PREFIX = {
+    "admin-api": "community/admin-api/src/main/protobuf",
+    "community": "community/base/src/main/protobuf",
+    "ledger-api": "community/ledger-api/src/main/protobuf",
+    "participant": "community/participant/src/main/protobuf",
+    "synchronizer": "community/synchronizer/src/main/protobuf",
+}
+SUPPORT_SECTION_NAMES = {"lib"}
+USER_AGENT = "digital-asset-docs-x2mdx/1.0"
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Fetch Canton release-tag protobuf inputs, write an x2mdx manifest, and render protobuf history MDX."
+        description="Fetch Canton release-bundle protobuf inputs, write an x2mdx manifest, and render protobuf history MDX."
     )
     parser.add_argument("--source-config", default=str(DEFAULT_SOURCE_CONFIG))
     parser.add_argument("--cache-dir", default=str(DEFAULT_CACHE_DIR))
@@ -39,10 +54,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--version", action="append", help="Explicit version to include. Repeat to limit generation.")
     parser.add_argument("--min-version", help="Minimum stable version to include when auto-discovering tags.")
     parser.add_argument("--skip-fetch", action="store_true", help="Skip fetching tags from origin before generation.")
-    parser.add_argument("--force-refresh", action="store_true", help="Refresh cached descriptor images even if present.")
+    parser.add_argument("--force-refresh", action="store_true", help="Refresh cached protobuf bundles and descriptor images.")
     parser.add_argument(
         "--source-name",
-        default="Canton protobuf descriptor snapshots from release tags",
+        default="Canton protobuf trees from published release bundles",
         help="Source label embedded in generated content.",
     )
     parser.add_argument(
@@ -74,30 +89,6 @@ def run(args: list[str], *, cwd: Path | None = None, capture: bool = False) -> s
 
 def git(args: list[str], *, cwd: Path, capture: bool = False) -> str:
     return run(["git", *args], cwd=cwd, capture=capture)
-
-
-def git_bytes(args: list[str], *, cwd: Path) -> bytes:
-    completed = subprocess.run(
-        ["git", *args],
-        cwd=str(cwd),
-        check=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-    return completed.stdout
-
-
-def git_try_bytes(args: list[str], *, cwd: Path) -> bytes | None:
-    completed = subprocess.run(
-        ["git", *args],
-        cwd=str(cwd),
-        check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-    if completed.returncode != 0:
-        return None
-    return completed.stdout
 
 
 def ensure_repo(repo_dir: Path, *, remote: str, fetch: bool) -> Path:
@@ -148,41 +139,116 @@ def release_date(repo_dir: Path, tag: str) -> str | None:
     return date or None
 
 
-def list_owned_proto_paths(repo_dir: Path, tag: str) -> list[str]:
-    tree = git(["ls-tree", "-r", "--name-only", tag, "community"], cwd=repo_dir, capture=True)
-    return sorted(
-        line.strip()
-        for line in tree.splitlines()
-        if OWNED_PROTO_RE.fullmatch(line.strip()) and "/target/" not in line
-    )
+def bundle_url(source_config: dict[str, Any], *, version: str) -> str:
+    template = source_config.get("release_url_template")
+    if not isinstance(template, str) or not template:
+        raise ValueError("Source config must define `release_url_template`")
+    return template.format(version=version)
 
 
-def repo_path_to_import_path(repo_path: str) -> str:
-    marker = "/src/main/protobuf/"
-    if marker not in repo_path:
-        raise ValueError(f"Unable to derive import path from '{repo_path}'")
-    return repo_path.split(marker, 1)[1]
+def bundle_archive_name(version: str) -> str:
+    return f"canton-open-source-{version}.tar.gz"
+
+
+def bundle_archive_path(cache_dir: Path, version: str) -> Path:
+    return cache_dir / "release-bundles" / version / bundle_archive_name(version)
+
+
+def bundle_extract_root(cache_dir: Path, version: str) -> Path:
+    return cache_dir / "bundles" / version
 
 
 def descriptor_image_path(cache_dir: Path, version: str) -> Path:
     return cache_dir / "descriptor-images" / version / DESCRIPTOR_IMAGE_NAME
 
 
-def materialize_descriptor_image(
-    repo_dir: Path,
+def ensure_bundle_archive(
     *,
-    tag: str,
+    source_config: dict[str, Any],
+    version: str,
     output_path: Path,
     force_refresh: bool,
-) -> bool:
+) -> Path:
     if output_path.exists() and not force_refresh:
-        return True
-    image_bytes = git_try_bytes(["show", f"{tag}:{DESCRIPTOR_IMAGE_NAME}"], cwd=repo_dir)
-    if image_bytes is None:
-        return False
+        return output_path
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_bytes(image_bytes)
-    return True
+    temp_path = output_path.with_name(f"{output_path.name}.{os.getpid()}.tmp")
+    request = urllib.request.Request(bundle_url(source_config, version=version), headers={"User-Agent": USER_AGENT})
+    with urllib.request.urlopen(request, timeout=180) as response, temp_path.open("wb") as handle:
+        shutil.copyfileobj(response, handle)
+    temp_path.replace(output_path)
+    return output_path
+
+
+def extract_archive(archive_path: Path, *, extract_root: Path, bundle_proto_dir: str, force_refresh: bool) -> Path:
+    if extract_root.exists() and force_refresh:
+        shutil.rmtree(extract_root)
+    if not extract_root.exists():
+        extract_root.mkdir(parents=True, exist_ok=True)
+        with tarfile.open(archive_path, "r:gz") as handle:
+            handle.extractall(extract_root, filter="data")
+
+    candidates = sorted(path for path in extract_root.rglob(bundle_proto_dir) if path.is_dir())
+    if not candidates:
+        raise FileNotFoundError(f"Could not locate extracted '{bundle_proto_dir}' directory under {extract_root}")
+    return candidates[0]
+
+
+def ensure_grpc_tools_available() -> None:
+    if importlib.util.find_spec("grpc_tools.protoc") is None:
+        raise RuntimeError(
+            "Missing grpc_tools.protoc. Use the repo's nix shell or install grpcio-tools in the active Python environment."
+        )
+
+
+def compile_descriptor_image(protobuf_root: Path, *, output_path: Path) -> None:
+    ensure_grpc_tools_available()
+    include_roots: list[Path] = []
+    for section_name in [*SECTION_TO_REPO_PREFIX, *SUPPORT_SECTION_NAMES]:
+        section_root = protobuf_root / section_name
+        if section_root.is_dir():
+            include_roots.append(section_root)
+    if not include_roots:
+        raise ValueError(f"No protobuf source roots found under {protobuf_root}")
+
+    rel_files: list[str] = []
+    seen: set[str] = set()
+    for include_root in include_roots:
+        for proto_path in sorted(include_root.rglob("*.proto")):
+            rel = proto_path.relative_to(include_root).as_posix()
+            if rel in seen:
+                continue
+            seen.add(rel)
+            rel_files.append(rel)
+    if not rel_files:
+        raise ValueError(f"No .proto files found under {protobuf_root}")
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory() as temp_dir_raw:
+        temp_dir = Path(temp_dir_raw)
+        raw_descriptor = temp_dir / "descriptor.pb"
+        command = [sys.executable, "-m", "grpc_tools.protoc"]
+        for include_root in include_roots:
+            command.extend(["-I", str(include_root)])
+        command.extend(["--descriptor_set_out", str(raw_descriptor), "--include_imports", *rel_files])
+        run(command, cwd=protobuf_root)
+        output_path.write_bytes(gzip.compress(raw_descriptor.read_bytes()))
+
+
+def import_to_repo_path_from_bundle(protobuf_root: Path) -> dict[str, str]:
+    mapping: dict[str, str] = {}
+    for section_name, repo_prefix in SECTION_TO_REPO_PREFIX.items():
+        section_root = protobuf_root / section_name
+        if not section_root.is_dir():
+            continue
+        for proto_path in sorted(section_root.rglob("*.proto")):
+            import_path = proto_path.relative_to(section_root).as_posix()
+            repo_path = f"{repo_prefix}/{import_path}"
+            existing = mapping.get(import_path)
+            if existing and existing != repo_path:
+                raise ValueError(f"Duplicate protobuf import path '{import_path}' in published bundle")
+            mapping[import_path] = repo_path
+    return mapping
 
 
 def docs_json_page_ref(path: Path, docs_json_path: Path) -> str:
@@ -271,7 +337,7 @@ def write_manifest(
         metadata_ref = str(resolved)
 
     manifest = {
-        "source": source_config.get("source") or "Canton protobuf descriptor snapshots from local git tags",
+        "source": source_config.get("source") or "Canton protobuf trees from published release bundles",
         "repo": source_config.get("repo") if isinstance(source_config.get("repo"), dict) else {},
         "metadata_path": metadata_ref,
         "versions": releases,
@@ -289,6 +355,9 @@ def main() -> int:
     remote = repo_config.get("remote")
     if not isinstance(remote, str) or not remote:
         raise ValueError("Source config must define repo.remote")
+    bundle_proto_dir = source_config.get("bundle_proto_dir") or "protobuf"
+    if not isinstance(bundle_proto_dir, str) or not bundle_proto_dir:
+        raise ValueError("Source config must define bundle_proto_dir")
 
     include_versions = set(args.version) if args.version else None
     min_version = args.min_version or source_config.get("min_version") or "0.0.0"
@@ -299,33 +368,35 @@ def main() -> int:
     selected_tags = stable_tags(repo_dir, min_version=min_version, include_versions=include_versions)
     if not selected_tags:
         raise ValueError("No stable Canton tags selected")
-
     cache_dir = Path(args.cache_dir).resolve()
     releases: list[dict[str, Any]] = []
     for version, tag in selected_tags:
-        proto_paths = list_owned_proto_paths(repo_dir, tag)
-        if not proto_paths:
-            print(f"Skipping {tag}: no owned protobuf files found")
+        archive_path = ensure_bundle_archive(
+            source_config=source_config,
+            version=version,
+            output_path=bundle_archive_path(cache_dir, version),
+            force_refresh=args.force_refresh,
+        )
+        protobuf_root = extract_archive(
+            archive_path,
+            extract_root=bundle_extract_root(cache_dir, version),
+            bundle_proto_dir=bundle_proto_dir,
+            force_refresh=args.force_refresh,
+        )
+        import_to_repo_path = import_to_repo_path_from_bundle(protobuf_root)
+        if not import_to_repo_path:
+            print(f"Skipping {tag}: no published owned protobuf files found")
             continue
         image_path = descriptor_image_path(cache_dir, version)
-        if not materialize_descriptor_image(
-            repo_dir,
-            tag=tag,
-            output_path=image_path,
-            force_refresh=args.force_refresh,
-        ):
-            print(f"Skipping {tag}: missing {DESCRIPTOR_IMAGE_NAME}")
-            continue
+        if not image_path.exists() or args.force_refresh:
+            compile_descriptor_image(protobuf_root, output_path=image_path)
         releases.append(
             {
                 "version": version,
                 "tag": tag,
                 "date": release_date(repo_dir, tag),
                 "descriptor_image_path": str(image_path.resolve()),
-                "import_to_repo_path": {
-                    repo_path_to_import_path(repo_path): repo_path
-                    for repo_path in proto_paths
-                },
+                "import_to_repo_path": import_to_repo_path,
             }
         )
 
@@ -341,9 +412,9 @@ def main() -> int:
     version_filter = args.version_filter
     if not version_filter:
         if include_versions:
-            version_filter = "selected stable Canton release tags"
+            version_filter = "selected Canton release bundles"
         else:
-            version_filter = f"stable Canton release tags >= {min_version}"
+            version_filter = f"stable Canton release bundles >= {min_version}"
 
     command = [
         "x2mdx",

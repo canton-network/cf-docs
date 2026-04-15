@@ -1,20 +1,24 @@
 { pkgs ? import <nixpkgs> {} }:
 
 let
-  python = pkgs.python311;
-  x2mdx = python.pkgs.buildPythonApplication rec {
+  pythonBase = pkgs.python311;
+  python = pythonBase.withPackages (ps: [
+    ps.grpcio-tools
+  ]);
+  x2mdx = pythonBase.pkgs.buildPythonApplication rec {
     pname = "x2mdx";
-    version = "0.1.0+git-df446df";
+    version = "0.1.0+git-4de8e6c";
     pyproject = true;
     src = builtins.fetchGit {
       url = "https://github.com/danielporterda/x2mdx.git";
-      rev = "df446df4e3ca89af5c557787d34628b13ffc7e12";
+      rev = "4de8e6ce4bbd9f203839a3722e79d1ab9feb35e0";
     };
-    nativeBuildInputs = with python.pkgs; [
+    nativeBuildInputs = with pythonBase.pkgs; [
       setuptools
       wheel
     ];
-    propagatedBuildInputs = with python.pkgs; [
+    propagatedBuildInputs = with pythonBase.pkgs; [
+      jinja2
       protobuf
       pyyaml
     ];
@@ -23,6 +27,7 @@ let
 in
 pkgs.mkShell {
   packages = [
+    pkgs.gh
     pkgs.nodejs_22
     python
     x2mdx
