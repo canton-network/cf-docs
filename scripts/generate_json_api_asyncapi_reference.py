@@ -3,19 +3,23 @@
 from __future__ import annotations
 
 import argparse
-import html
 import json
-import re
 import subprocess
 import sys
-import urllib.error
-import urllib.request
 from pathlib import Path
-from typing import Any
+
+from ledger_api_release_bundles import (
+    bundle_url,
+    load_json,
+    manifest_source_path,
+    materialize_bundle_spec,
+    selected_versions,
+)
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SOURCE_CONFIG = REPO_ROOT / "config" / "x2mdx" / "ledger-api-asyncapi" / "source-artifacts.json"
+DEFAULT_BUNDLE_CACHE_DIR = REPO_ROOT / ".internal" / "cache" / "x2mdx" / "ledger-api-bundles"
 DEFAULT_CACHE_DIR = REPO_ROOT / ".internal" / "cache" / "x2mdx" / "ledger-api-asyncapi"
 DEFAULT_MANIFEST = REPO_ROOT / ".internal" / "generated" / "x2mdx" / "ledger-api-asyncapi" / "manifest.json"
 DEFAULT_OUTPUT_FILE = REPO_ROOT / "docs-main" / "reference" / "json-api-asyncapi-reference.mdx"
@@ -30,9 +34,10 @@ DEFAULT_NAV_PAGE_ORDER = [
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Fetch published JSON Ledger API AsyncAPI pages, write an x2mdx manifest, and render the Mintlify page."
+        description="Fetch JSON Ledger API AsyncAPI snapshots from Canton release bundles, write an x2mdx manifest, and render the Mintlify page."
     )
     parser.add_argument("--source-config", default=str(DEFAULT_SOURCE_CONFIG))
+    parser.add_argument("--bundle-cache-dir", default=str(DEFAULT_BUNDLE_CACHE_DIR))
     parser.add_argument("--cache-dir", default=str(DEFAULT_CACHE_DIR))
     parser.add_argument("--manifest-out", default=str(DEFAULT_MANIFEST))
     parser.add_argument("--output-file", default=str(DEFAULT_OUTPUT_FILE))
@@ -47,12 +52,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--publish-version", help="Version whose websocket surface should be published.")
     parser.add_argument(
         "--source-name",
-        default="docs.digitalasset.com JSON Ledger API AsyncAPI fixtures",
+        default="Canton release bundle JSON Ledger API AsyncAPI fixtures",
         help="Source label embedded in generated content.",
     )
     parser.add_argument(
         "--version-filter",
-        default="published docs major versions",
+        default="configured docs major versions from Canton release bundles",
         help="Version-filter label embedded in generated content.",
     )
     parser.add_argument(
@@ -65,53 +70,24 @@ def parse_args() -> argparse.Namespace:
         default="JSON Ledger API WebSocket AsyncAPI reference and version history.",
         help="Description to use for the generated page.",
     )
+    parser.add_argument(
+        "--force-refresh",
+        action="store_true",
+        help="Refresh cached Canton release bundles and local AsyncAPI snapshots before rendering.",
+    )
     return parser.parse_args()
-
-
-def load_json(path: Path) -> dict[str, Any]:
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(payload, dict):
-        raise ValueError(f"Expected JSON object in {path}")
-    return payload
-
-
-def fetch_text(url: str) -> tuple[str | None, int | None]:
-    request = urllib.request.Request(url, headers={"User-Agent": "digital-asset-docs-x2mdx/1.0"})
-    try:
-        with urllib.request.urlopen(request, timeout=60) as response:
-            return response.read().decode("utf-8"), response.status
-    except urllib.error.HTTPError as exc:
-        return exc.read().decode("utf-8", errors="replace"), exc.code
-
-
-def extract_yaml(html_text: str) -> str:
-    blocks = re.findall(r"<pre[^>]*>(.*?)</pre>", html_text, re.S)
-    rendered_blocks: list[str] = []
-    for block in blocks:
-        text = re.sub(r"<[^>]+>", "", block)
-        text = html.unescape(text).strip("\n")
-        if not text or "asyncapi:" not in text:
-            continue
-        if text not in rendered_blocks:
-            rendered_blocks.append(text)
-    if not rendered_blocks:
-        raise RuntimeError("No embedded AsyncAPI YAML block found in the source page")
-    return rendered_blocks[0] + "\n"
-
-
-def version_key(version: str) -> tuple[int, ...]:
-    return tuple(int(part) for part in version.split("."))
 
 
 def write_manifest(
     *,
-    source_config: dict[str, Any],
+    source_config: dict[str, object],
     manifest_path: Path,
     cache_dir: Path,
     repo_root: Path,
     versions: list[dict[str, str]],
     publish_version: str,
 ) -> Path:
+    source_path = manifest_source_path(source_config, "asyncapi.yaml")
     manifest_versions: list[dict[str, str]] = []
     for version_entry in versions:
         version = version_entry["version"]
@@ -121,14 +97,14 @@ def write_manifest(
         manifest_versions.append(
             {
                 "version": version,
-                "url": version_entry["url"],
-                "source_path": version_entry["source_path"],
+                "url": bundle_url(source_config, version_entry),
+                "source_path": source_path,
                 "fixture_path": str(fixture_path.resolve().relative_to(repo_root.resolve())),
             }
         )
 
     manifest = {
-        "source": source_config.get("source") or "docs.digitalasset.com published JSON Ledger API AsyncAPI pages",
+        "source": source_config.get("source") or "Canton release bundle JSON Ledger API AsyncAPI fixtures",
         "publish_version": publish_version,
         "versions": manifest_versions,
     }
@@ -136,13 +112,6 @@ def write_manifest(
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     print(f"Wrote manifest: {manifest_path}")
     return manifest_path
-
-
-def load_json(path: Path) -> dict[str, object]:
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(payload, dict):
-        raise ValueError(f"Expected JSON object in {path}")
-    return payload
 
 
 def docs_json_page_ref(path: Path, docs_json_path: Path) -> str:
@@ -326,45 +295,33 @@ def remove_legacy_output(*, output_file: Path) -> None:
 def main() -> int:
     args = parse_args()
     source_config = load_json(Path(args.source_config).resolve())
-    configured_versions = source_config.get("versions")
-    if not isinstance(configured_versions, list) or not all(isinstance(item, dict) for item in configured_versions):
-        raise ValueError("Source config must define a `versions` list of objects")
+    selected_version_entries = selected_versions(source_config, set(args.version) if args.version else None)
 
-    selected_versions = [
-        {
-            "version": str(entry["version"]),
-            "url": str(entry["url"]),
-            "source_path": str(entry["source_path"]),
-        }
-        for entry in configured_versions
-        if (not args.version or str(entry.get("version")) in set(args.version))
-    ]
-    if not selected_versions:
-        raise ValueError("No AsyncAPI versions selected")
-    selected_versions.sort(key=lambda entry: version_key(entry["version"]))
-
-    publish_version = args.publish_version or str(source_config.get("publish_version") or selected_versions[-1]["version"])
-    if publish_version not in {entry["version"] for entry in selected_versions}:
+    publish_version = args.publish_version or str(source_config.get("publish_version") or selected_version_entries[-1]["version"])
+    if publish_version not in {entry["version"] for entry in selected_version_entries}:
         raise ValueError(f"Publish version '{publish_version}' is not selected")
 
     cache_dir = Path(args.cache_dir).resolve()
     cache_dir.mkdir(parents=True, exist_ok=True)
+    bundle_cache_dir = Path(args.bundle_cache_dir).resolve()
 
-    for entry in selected_versions:
-        html_text, status = fetch_text(entry["url"])
-        if status != 200 or html_text is None:
-            raise RuntimeError(f"Failed to fetch AsyncAPI source page for {entry['version']}: {entry['url']} (status {status})")
-        yaml_text = extract_yaml(html_text)
+    for entry in selected_version_entries:
         output_path = cache_dir / entry["version"] / "asyncapi.yaml"
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(yaml_text, encoding="utf-8")
+        materialize_bundle_spec(
+            source_config=source_config,
+            cache_dir=bundle_cache_dir,
+            version_entry=entry,
+            spec_filename="asyncapi.yaml",
+            output_path=output_path,
+            force_refresh=args.force_refresh,
+        )
 
     manifest_path = write_manifest(
         source_config=source_config,
         manifest_path=Path(args.manifest_out).resolve(),
         cache_dir=cache_dir,
         repo_root=REPO_ROOT,
-        versions=selected_versions,
+        versions=selected_version_entries,
         publish_version=publish_version,
     )
 
@@ -372,7 +329,7 @@ def main() -> int:
         args,
         manifest_path=manifest_path,
         publish_version=publish_version,
-        versions=[entry["version"] for entry in selected_versions],
+        versions=[entry["version"] for entry in selected_version_entries],
     )
     print("Running:", " ".join(command))
     completed = subprocess.run(command, cwd=REPO_ROOT)
