@@ -3,6 +3,14 @@ title: "Troubleshooting Cheat Sheet"
 description: "Quick-reference solutions for common Canton Network issues"
 ---
 
+import CantonGlobalSynchronizerTroubleshootingL230 from "/snippets/canton-docs/global-synchronizer_troubleshooting_L230.mdx";
+import CantonGlobalSynchronizerTroubleshootingL337 from "/snippets/canton-docs/global-synchronizer_troubleshooting_L337.mdx";
+import CantonGlobalSynchronizerTroubleshootingL378 from "/snippets/canton-docs/global-synchronizer_troubleshooting_L378.mdx";
+import CantonGlobalSynchronizerTroubleshootingL429 from "/snippets/canton-docs/global-synchronizer_troubleshooting_L429.mdx";
+import CantonGlobalSynchronizerTroubleshootingL503 from "/snippets/canton-docs/global-synchronizer_troubleshooting_L503.mdx";
+import CantonGlobalSynchronizerTroubleshootingL754 from "/snippets/canton-docs/global-synchronizer_troubleshooting_L754.mdx";
+
+
 Quick-reference guide for resolving common Canton Network issues. Each entry provides immediate diagnostic steps and solutions derived from production support cases.
 
 ---
@@ -227,9 +235,7 @@ Request: ListKnownParties()
 3. Ensure the token audience matches `LEDGER_API_AUTH_AUDIENCE`
 
 To enable a party without the ledger API check:
-```scala
-participant.parties.enable("PartyName", synchronize = None)
-```
+<CantonGlobalSynchronizerTroubleshootingL230 />
 </Accordion>
 
 <Accordion title="Wallet shows 'Onboard Yourself' button after upgrade">
@@ -334,11 +340,7 @@ openssl s_client -connect your-domain:443 -servername your-domain -showcerts
 **Solution:**
 Upload and vet the required DAR file:
 
-```scala
-// In Canton Console
-dars.upload("path/to/file.dar")
-dars.vetting.enable(packageId)
-```
+<CantonGlobalSynchronizerTroubleshootingL337 />
 
 Or via API:
 ```bash
@@ -375,13 +377,7 @@ If the issue persists, check validator logs for the specific vetting failure.
 
 **Example Fix:**
 Ensure the party is properly authorized:
-```scala
-// Check party authorization
-participant.parties.list().filter(_.party.contains("yourParty"))
-
-// Verify signatory status on contract
-ledger.contracts.filter(c => c.signatories.contains(yourParty))
-```
+<CantonGlobalSynchronizerTroubleshootingL378 />
 </Accordion>
 
 </AccordionGroup>
@@ -426,12 +422,7 @@ synchronizer outbox flusher failed Did not observe transactions in target synchr
 **Solution:**
 1. Check network connectivity to the synchronizer
 2. If persistent, consider enabling topology batching:
-   ```hocon
-   canton.participants.participant.parameters.topology-batching {
-     enabled = true
-     batch-timeout = 10s
-   }
-   ```
+   <CantonGlobalSynchronizerTroubleshootingL429 />
 3. Check if the issue is transient (TestNet may have periods of slower response)
 </Accordion>
 
@@ -500,9 +491,7 @@ queued tasks = 2000  # ← Queue is full!
    ```
 
 3. Monitor pruning progress via Canton Console:
-   ```scala
-   participant.pruning.status()
-   ```
+   <CantonGlobalSynchronizerTroubleshootingL503 />
 
 See [Monitor Pruning Progress](https://docs.daml.com/canton/usermanual/pruning.html#monitor-pruning-progress) in the documentation.
 </Accordion>
@@ -751,22 +740,7 @@ grep "ACCESS_TOKEN\|UNAUTHENTICATED\|JWT" validator.log
 
 ### Canton Console Diagnostics
 
-```scala
-// Check node health
-health.status
-
-// List connected synchronizers
-participant.synchronizers.list_connected()
-
-// Check party status
-participant.parties.list()
-
-// View active contracts count
-participant.ledger_api.state.acs.of_all().size
-
-// Check pruning status
-participant.pruning.status()
-```
+<CantonGlobalSynchronizerTroubleshootingL754 />
 
 ---
 

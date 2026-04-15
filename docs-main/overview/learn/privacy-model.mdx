@@ -3,6 +3,16 @@ title: "Privacy Model Explained"
 description: "Deep understanding of Canton's unique sub-transaction privacy capabilities"
 ---
 
+import DamlOverviewLearnPrivacyModelL138 from "/snippets/daml-docs/overview_learn_privacy-model_L138.mdx";
+import DamlOverviewLearnPrivacyModelL157 from "/snippets/daml-docs/overview_learn_privacy-model_L157.mdx";
+import DamlOverviewLearnPrivacyModelL184 from "/snippets/daml-docs/overview_learn_privacy-model_L184.mdx";
+import DamlOverviewLearnPrivacyModelL217 from "/snippets/daml-docs/overview_learn_privacy-model_L217.mdx";
+import DamlOverviewLearnPrivacyModelL231 from "/snippets/daml-docs/overview_learn_privacy-model_L231.mdx";
+import DamlOverviewLearnPrivacyModelL263 from "/snippets/daml-docs/overview_learn_privacy-model_L263.mdx";
+import DamlOverviewLearnPrivacyModelL281 from "/snippets/daml-docs/overview_learn_privacy-model_L281.mdx";
+import DamlOverviewLearnPrivacyModelL90 from "/snippets/daml-docs/overview_learn_privacy-model_L90.mdx";
+
+
 Canton's privacy model is its defining feature. This section explains how sub-transaction privacy works, what guarantees it provides, and common patterns for privacy-aware development.
 
 ## The Privacy Problem in Blockchain
@@ -87,21 +97,7 @@ If you see an action, you see the creates/archives it produces. This enables ind
 
 ### Visibility Example
 
-```haskell
-template Payment
-  with
-    sender : Party
-    receiver : Party
-    amount : Decimal
-  where
-    signatory sender
-    observer receiver
-    
-    choice Accept : ContractId Receipt
-      controller receiver
-      do
-        create Receipt with payer = sender, payee = receiver, amount
-```
+<DamlOverviewLearnPrivacyModelL90 />
 
 | Party | Contract Visibility | Choice Visibility |
 |-------|--------------------|--------------------|
@@ -135,16 +131,7 @@ template Payment
 
 Only the two signatories see the contract. Maximum privacy for two-party agreements.
 
-```haskell
-template BilateralContract
-  with
-    partyA : Party
-    partyB : Party
-    terms : Text
-  where
-    signatory partyA, partyB
-    -- No observers: only signatories see this contract
-```
+<DamlOverviewLearnPrivacyModelL138 />
 
 **Use when**: Two parties need a private agreement with no third-party visibility.
 
@@ -154,24 +141,7 @@ template BilateralContract
 
 Add specific parties as observers when they need visibility but not control.
 
-```haskell
-template RegulatedAsset
-  with
-    owner : Party
-    issuer : Party
-    regulator : Party
-    value : Decimal
-  where
-    signatory issuer
-    observer owner, regulator
-
-    choice Transfer : ContractId RegulatedAsset
-      with
-        newOwner : Party
-      controller owner  -- owner can transfer unilaterally
-      do
-        create this with owner = newOwner
-```
+<DamlOverviewLearnPrivacyModelL157 />
 
 **Use when**: Third parties need visibility for compliance, audit, or information purposes.
 
@@ -181,28 +151,7 @@ template RegulatedAsset
 
 When contracts are used in transactions, parties to that transaction may learn about them. This "divulgence" is automatic.
 
-```haskell
--- Contract held by Alice
-template Asset with owner : Party where
-  signatory owner
-
--- Alice uses her Asset in a transaction with Bob
-template Trade
-  with
-    seller : Party  -- Alice
-    buyer : Party   -- Bob
-    assetId : ContractId Asset
-  where
-    signatory seller, buyer
-    
-    choice Execute : ()
-      controller buyer
-      do
-        -- Bob sees the Asset contract through divulgence
-        asset <- fetch assetId
-        archive assetId
-        -- ... transfer logic
-```
+<DamlOverviewLearnPrivacyModelL184 />
 
 **What happens**: When `Execute` runs, Bob (as a party to the Trade) sees the Asset contract that Alice owns, even though he wasn't originally an observer.
 
@@ -214,38 +163,11 @@ Canton enables privacy without sacrificing auditability. Common patterns:
 
 ### Auditor as Observer
 
-```haskell
-template AuditableTransaction
-  with
-    partyA : Party
-    partyB : Party
-    auditor : Party
-    details : TransactionDetails
-  where
-    signatory partyA, partyB
-    observer auditor  -- Auditor sees everything but cannot act
-```
+<DamlOverviewLearnPrivacyModelL217 />
 
 ### Selective Audit Rights
 
-```haskell
-template SelectivelyAuditable
-  with
-    owner : Party
-    data : SensitiveData
-    auditor : Party
-  where
-    signatory owner
-    
-    -- Non-consuming choice: reveals data without changing state
-    nonconsuming choice Audit : AuditReport
-      controller auditor
-      do
-        -- Auditor can request audit, seeing only what's returned
-        return AuditReport with 
-          timestamp = now
-          summary = summarize data  -- Controlled disclosure
-```
+<DamlOverviewLearnPrivacyModelL231 />
 
 ### Best Practices for Auditability
 
@@ -260,17 +182,7 @@ template SelectivelyAuditable
 
 ### Mistake 1: Over-Sharing via Observers
 
-```haskell
--- BAD: Adding unnecessary observers
-template OverShared
-  with
-    owner : Party
-    counterparty : Party
-    allUsers : [Party]  -- Why do all users need to see this?
-  where
-    signatory owner
-    observer counterparty, allUsers  -- Privacy leak!
-```
+<DamlOverviewLearnPrivacyModelL263 />
 
 **Problem**: Every party in `allUsers` sees this contract, even if they don't need to.
 
@@ -278,15 +190,7 @@ template OverShared
 
 ### Mistake 2: Ignoring Divulgence
 
-```haskell
--- Transaction reveals more than intended
-choice RevealingChoice : ()
-  controller buyer
-  do
-    -- Fetching this contract divulges it to all transaction stakeholders
-    sensitiveAsset <- fetch sensitiveAssetId
-    -- buyer now knows about sensitiveAsset, even if not originally an observer
-```
+<DamlOverviewLearnPrivacyModelL281 />
 
 **Problem**: Composing contracts in transactions can reveal information to parties who weren't original stakeholders.
 

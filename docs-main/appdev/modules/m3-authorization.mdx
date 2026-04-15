@@ -3,6 +3,22 @@ title: "Authorization Model"
 description: "Understand Daml's authorization model - signatories, observers, and controllers"
 ---
 
+import DamlAppdevModulesM3AuthorizationL122 from "/snippets/daml-docs/appdev_modules_m3-authorization_L122.mdx";
+import DamlAppdevModulesM3AuthorizationL139 from "/snippets/daml-docs/appdev_modules_m3-authorization_L139.mdx";
+import DamlAppdevModulesM3AuthorizationL159 from "/snippets/daml-docs/appdev_modules_m3-authorization_L159.mdx";
+import DamlAppdevModulesM3AuthorizationL194 from "/snippets/daml-docs/appdev_modules_m3-authorization_L194.mdx";
+import DamlAppdevModulesM3AuthorizationL209 from "/snippets/daml-docs/appdev_modules_m3-authorization_L209.mdx";
+import DamlAppdevModulesM3AuthorizationL243 from "/snippets/daml-docs/appdev_modules_m3-authorization_L243.mdx";
+import DamlAppdevModulesM3AuthorizationL258 from "/snippets/daml-docs/appdev_modules_m3-authorization_L258.mdx";
+import DamlAppdevModulesM3AuthorizationL26 from "/snippets/daml-docs/appdev_modules_m3-authorization_L26.mdx";
+import DamlAppdevModulesM3AuthorizationL284 from "/snippets/daml-docs/appdev_modules_m3-authorization_L284.mdx";
+import DamlAppdevModulesM3AuthorizationL36 from "/snippets/daml-docs/appdev_modules_m3-authorization_L36.mdx";
+import DamlAppdevModulesM3AuthorizationL373 from "/snippets/daml-docs/appdev_modules_m3-authorization_L373.mdx";
+import DamlAppdevModulesM3AuthorizationL399 from "/snippets/daml-docs/appdev_modules_m3-authorization_L399.mdx";
+import DamlAppdevModulesM3AuthorizationL62 from "/snippets/daml-docs/appdev_modules_m3-authorization_L62.mdx";
+import DamlAppdevModulesM3AuthorizationL84 from "/snippets/daml-docs/appdev_modules_m3-authorization_L84.mdx";
+
+
 {/* COPIED_START source="docs-website:docs/replicated/daml/3.4/sdk/tutorials/smart-contracts/parties.rst" hash="5d3e37a1" */}
 
 # Parties and authority
@@ -23,93 +39,17 @@ Remember that you can load all the code for this section into a folder called `i
 
 The `SimpleIou` contract from `choices` and `constraints` has one major problem: The contract is only signed by the `issuer`. The signatories are the parties with the power to create and archive contracts. If Alice gave Bob a `SimpleIou` for \$100 in exchange for some goods, she could just archive it after receiving the goods. Bob would have a record of such actions, but would have to resort to off-ledger means to get his money back:
 
-```daml
-template SimpleIou
-  with
-    issuer : Party
-    owner : Party
-    cash : Cash
-  where
-    signatory issuer
-```
+<DamlAppdevModulesM3AuthorizationL26 />
 
-```daml
-simple_iou_test = do
-  alice <- allocateParty "Alice"
-  bob <- allocateParty "Bob"
-
-  -- Alice and Bob enter into a trade.
-  -- Alice transfers the payment as a SimpleIou.
-  iou <- submit alice do
-    createCmd SimpleIou with
-      issuer = alice
-      owner = bob
-      cash = Cash with
-        amount = 100.0
-        currency = "USD"
-
-  passTime (days 1)
-  -- Bob delivers the goods.
-
-  passTime (minutes 10)
-  -- Alice just deletes the payment.
-  submit alice do
-    archiveCmd iou
-```
+<DamlAppdevModulesM3AuthorizationL36 />
 
 For a party to have any guarantees that only those transformations specified in the choices are actually followed, they either need to be a signatory themselves, or trust one of the signatories to not agree to transactions that archive and re-create contracts in unexpected ways. To make the `SimpleIou` safe for Bob, you need to add him as a signatory:
 
-```daml
-template Iou
-  with
-    issuer : Party
-    owner : Party
-    cash : Cash
-  where
-    signatory issuer, owner
-
-    choice Transfer
-      : ContractId Iou
-      with
-        newOwner : Party
-      controller owner
-      do
-        assertMsg "newOwner cannot be equal to owner." (owner /= newOwner)
-        create this with
-          owner = newOwner
-```
+<DamlAppdevModulesM3AuthorizationL62 />
 
 There's a new problem here: There is no way for Alice to issue or transfer this `Iou` to Bob. To get an `Iou` with Bob's signature as `owner` onto the ledger, his authority is needed:
 
-```daml
-iou_test = do
-  alice <- allocateParty "Alice"
-  bob <- allocateParty "Bob"
-
-  -- Alice and Bob enter into a trade.
-  -- Alice wants to give Bob an Iou, but she can't without Bob's authority.
-  submitMustFail alice do
-    createCmd Iou with
-      issuer = alice
-      owner = bob
-      cash = Cash with
-        amount = 100.0
-        currency = "USD"
-
-  -- She can issue herself an Iou.
-  iou <- submit alice do
-    createCmd Iou with
-      issuer = alice
-      owner = alice
-      cash = Cash with
-        amount = 100.0
-        currency = "USD"
-
-  -- However, she can't transfer it to Bob.
-  submitMustFail alice do
-    exerciseCmd iou Transfer with
-      newOwner = bob
-```
+<DamlAppdevModulesM3AuthorizationL84 />
 
 This may seem awkward, but notice that the `ensure` clause is gone from the `Iou` again. The above `Iou` can contain negative values so Bob should be glad that `Alice` cannot put his signature on any `Iou`.
 
@@ -119,36 +59,11 @@ You'll now learn a couple of common ways of building issuance and transfer workf
 
 If there is no standing relationship between Alice and Bob, Alice can propose the issuance of an Iou to Bob, giving him the choice to accept. You can do so by introducing a proposal contract `IouProposal`:
 
-```daml
-template IouProposal
-  with
-    iou : Iou
-  where
-    signatory iou.issuer
-    observer iou.owner
-
-    choice IouProposal_Accept
-        : ContractId Iou
-        controller iou.owner
-        do
-          create iou
-```
+<DamlAppdevModulesM3AuthorizationL122 />
 
 Note how we have used the fact that templates are records here to store the `Iou` in a single field:
 
-```daml
-  iouProposal <- submit alice do
-    createCmd IouProposal with
-      iou = Iou with
-        issuer = alice
-        owner = bob
-        cash = Cash with
-          amount = 100.0
-          currency = "USD"
-
-  submit bob do
-    exerciseCmd iouProposal IouProposal_Accept
-```
+<DamlAppdevModulesM3AuthorizationL139 />
 
 The `IouProposal` contract carries the authority of `iou.issuer` by virtue of them being a signatory. By exercising the `IouProposal_Accept` choice, Bob adds his authority to that of Alice, which is why an `Iou` with both signatories can be created in the context of that choice.
 
@@ -156,34 +71,7 @@ The choice is called `IouProposal_Accept`, not `Accept`, because propose-accept 
 
 The above solves issuance, but not transfers. You can solve transfers exactly the same way, though, by creating a `TransferProposal`:
 
-```daml
-template IouTransferProposal
-  with
-    iou : Iou
-    newOwner : Party
-  where
-    signatory (signatory iou)
-    observer (observer iou), newOwner
-
-    choice IouTransferProposal_Cancel
-      : ContractId Iou
-      controller iou.owner
-      do
-        create iou
-
-    choice IouTransferProposal_Reject
-      : ContractId Iou
-      controller newOwner
-      do
-        create iou
-
-    choice IouTransferProposal_Accept
-      : ContractId Iou
-      controller newOwner
-      do
-        create iou with
-          owner = newOwner
-```
+<DamlAppdevModulesM3AuthorizationL159 />
 
 In addition to defining the signatories of a contract, `signatory` can also be used to extract the signatories from another contract. Instead of writing `signatory (signatory iou)`, you could write `signatory iou.issuer, iou.owner`.
 
@@ -191,48 +79,11 @@ The `IouProposal` had a single signatory so it could be cancelled easily by arch
 
 To allow an `iou.owner` to create such a proposal, you need to give them the choice to propose a transfer on the `Iou` contract. The choice looks just like the above `Transfer` choice, except that a `IouTransferProposal` is created instead of an `Iou`:
 
-```daml
-    choice ProposeTransfer
-      : ContractId IouTransferProposal
-      with
-        newOwner : Party
-      controller owner
-      do
-        assertMsg "newOwner cannot be equal to owner." (owner /= newOwner)
-        create IouTransferProposal with
-          iou = this
-          newOwner
-```
+<DamlAppdevModulesM3AuthorizationL194 />
 
 Bob can now transfer his `Iou`. The transfer workflow can even be used for issuance:
 
-```daml
-  charlie <- allocateParty "Charlie"
-
-  -- Alice issues an Iou using a transfer proposal.
-  tpab <- submit alice do
-    createCmd IouTransferProposal with
-      newOwner = bob
-      iou = Iou with
-        issuer = alice
-        owner = alice
-        cash = Cash with
-          amount = 100.0
-          currency = "USD"
-
-  -- Bob accepts the transfer from Alice.
-  iou2 <- submit bob do
-    exerciseCmd tpab IouTransferProposal_Accept
-
-  -- Bob offers Charlie a transfer.
-  tpbc <- submit bob do
-    exerciseCmd iou2 ProposeTransfer with
-      newOwner = charlie
-
-  -- Charlie accepts the transfer from Bob.
-  submit charlie do
-    exerciseCmd tpbc IouTransferProposal_Accept
-```
+<DamlAppdevModulesM3AuthorizationL209 />
 
 ## Use role contracts for ongoing authorization
 
@@ -240,70 +91,19 @@ Many actions, like the issuance of assets or their transfer, can be pre-agreed. 
 
 Jointly, an `owner` and `newOwner` can transfer an asset, as demonstrated in the script above. In `compose`, you will see how to compose the `ProposeTransfer` and `IouTransferProposal_Accept` choices into a single new choice, but for now, here is a different way. You can give them the joint right to transfer an IOU:
 
-```daml
-    choice Mutual_Transfer
-      : ContractId Iou
-      with
-        newOwner : Party
-      controller owner, newOwner
-      do
-        create this with
-          owner = newOwner
-```
+<DamlAppdevModulesM3AuthorizationL243 />
 
 Up to now, the controllers of choices were known from the current contract. Here, the `newOwner` variable is part of the choice arguments, not the `Iou`.
 
 This is also the first time we have shown a choice with more than one controller. If multiple controllers are specified, the authority of *all* the controllers is needed. Here, neither `owner`, nor `newOwner` can execute a transfer unilaterally, hence the name `Mutual_Transfer`.
 
-```daml
-template IouSender
-  with
-    sender : Party
-    receiver : Party
-  where
-    signatory receiver
-    observer sender
-
-    nonconsuming choice Send_Iou
-      : ContractId Iou
-      with
-        iouCid : ContractId Iou
-      controller sender
-      do
-        iou <- fetch iouCid
-        assert (iou.cash.amount > 0.0)
-        assert (sender == iou.owner)
-        exercise iouCid Mutual_Transfer with
-          newOwner = receiver
-```
+<DamlAppdevModulesM3AuthorizationL258 />
 
 The above `IouSender` contract now gives one party, the `sender` the right to send `Iou` contracts with positive amounts to a `receiver`. The `nonconsuming` keyword on the choice `Send_Iou` changes the behaviour of the choice so that the contract it's exercised on does not get archived when the choice is exercised. That way the `sender` can use the contract to send multiple Ious.
 
 Here it is in action:
 
-```daml
-  -- Bob allows Alice to send him Ious.
-  sab <- submit bob do
-    createCmd IouSender with
-      sender = alice
-      receiver = bob
-
-  -- Charlie allows Bob to send him Ious.
-  sbc <- submit charlie do
-    createCmd IouSender with
-      sender = bob
-      receiver = charlie
-
-  -- Alice can now send the Iou she issued herself earlier.
-  iou4 <- submit alice do
-    exerciseCmd sab Send_Iou with
-      iouCid = iou
-
-  -- Bob sends it on to Charlie.
-  submit bob do
-    exerciseCmd sbc Send_Iou with
-      iouCid = iou4
-```
+<DamlAppdevModulesM3AuthorizationL284 />
 
 ## Daml's authorization model
 
@@ -370,46 +170,9 @@ TX 12 1970-01-01T00:00:00Z (Parties:276:3)
 
 Note that authority is not automatically transferred transitively.
 
-```daml
-template NonTransitive
-  with
-    partyA : Party
-    partyB : Party
-  where
-    signatory partyA
-    observer partyB
+<DamlAppdevModulesM3AuthorizationL373 />
 
-    choice TryA
-      : ContractId NonTransitive
-      controller partyA
-      do
-        create NonTransitive with
-          partyA = partyB
-          partyB = partyA
-
-    choice TryB
-      : ContractId NonTransitive
-        with
-          other : ContractId NonTransitive
-      controller partyB
-      do
-        exercise other TryA
-```
-
-```daml
-  nt1 <- submit alice do
-    createCmd NonTransitive with
-      partyA = alice
-      partyB = bob
-  nt2 <- submit alice do
-    createCmd NonTransitive with
-      partyA = alice
-      partyB = bob
-
-  submitMustFail bob do
-    exerciseCmd nt1 TryB with
-      other = nt2
-```
+<DamlAppdevModulesM3AuthorizationL399 />
 
 The consequences of `TryB` are authorized by both Alice and Bob, but the action `TryA` only has Alice as an actor and Alice is the only signatory on the contract.
 

@@ -3,6 +3,14 @@ title: "Smart Contract Paradigm Shift"
 description: "Understanding the fundamental differences between Solidity and Daml programming models"
 ---
 
+import DamlAppdevModulesM2SmartContractParadigmL120 from "/snippets/daml-docs/appdev_modules_m2-smart-contract-paradigm_L120.mdx";
+import DamlAppdevModulesM2SmartContractParadigmL152 from "/snippets/daml-docs/appdev_modules_m2-smart-contract-paradigm_L152.mdx";
+import DamlAppdevModulesM2SmartContractParadigmL187 from "/snippets/daml-docs/appdev_modules_m2-smart-contract-paradigm_L187.mdx";
+import DamlAppdevModulesM2SmartContractParadigmL233 from "/snippets/daml-docs/appdev_modules_m2-smart-contract-paradigm_L233.mdx";
+import DamlAppdevModulesM2SmartContractParadigmL46 from "/snippets/daml-docs/appdev_modules_m2-smart-contract-paradigm_L46.mdx";
+import DamlAppdevModulesM2SmartContractParadigmL86 from "/snippets/daml-docs/appdev_modules_m2-smart-contract-paradigm_L86.mdx";
+
+
 Moving from Solidity to Daml requires a significant mental shift. This page explains the paradigm differences and how to adapt your thinking.
 
 ## Programming Model Comparison
@@ -43,27 +51,7 @@ contract Token {
 
 In Daml, contracts are immutable data. State changes create new contracts or archive existing contracts:
 
-```haskell
-template Token
-  with
-    owner : Party
-    issuer : Party
-    amount : Decimal
-  where
-    signatory issuer
-    observer owner
-
-    choice Transfer : ContractId Token
-      with
-        newOwner : Party
-        transferAmount : Decimal
-      controller owner
-      do
-        -- This contract will be archived
-        -- Create new contracts for the split
-        create Token with owner = newOwner, issuer, amount = transferAmount
-        create this with amount = amount - transferAmount
-```
+<DamlAppdevModulesM2SmartContractParadigmL46 />
 
 **Mental model:** Contracts are facts. Exercise archives the fact and creates new facts.
 
@@ -83,14 +71,7 @@ template Token
 - Balance is sum of owned contracts
 - Better parallelism, explicit data flow
 
-```haskell
--- Canton: Holdings are individual contracts
--- Alice's total balance = sum of all Token contracts where owner = Alice
-
--- Query: Find all my tokens
-myTokens <- queryContractKey @Token myParty
-totalBalance <- pure $ sum [amount | Token{amount} <- myTokens]
-```
+<DamlAppdevModulesM2SmartContractParadigmL86 />
 
 ## Language Comparison
 
@@ -117,22 +98,7 @@ enum State { Pending, Active, Completed }
 
 ### Daml Types
 
-```haskell
--- Record type (like struct)
-data Asset = Asset with
-  owner : Party
-  value : Decimal
-  isLocked : Bool
-
--- Sum type (algebraic data type)
-data AssetState
-  = Pending
-  | Active with activatedAt : Time
-  | Completed with result : Text
-
--- Optional (explicit null handling)
-data MaybeApprover = Some Party | None
-```
+<DamlAppdevModulesM2SmartContractParadigmL120 />
 
 ### Solidity Control Flow
 
@@ -149,13 +115,7 @@ function process(uint256[] memory items) public {
 
 ### Daml Control Flow
 
-```haskell
-process : [Decimal] -> Update [Decimal]
-process items = do
-  forA items \item -> do
-    assertMsg "Over threshold" (item <= threshold)
-    pure (item * 2.0)
-```
+<DamlAppdevModulesM2SmartContractParadigmL152 />
 
 ## Authorization Model
 
@@ -184,20 +144,7 @@ contract Ownable {
 
 ### Daml: Declarative Authorization
 
-```haskell
-template OwnedAsset
-  with
-    owner : Party
-    data : Text
-  where
-    signatory owner  -- owner must authorize creation
-
-    choice SensitiveAction : ()
-      controller owner  -- only owner can exercise
-      do
-        -- Protocol enforces: only owner can reach here
-        pure ()
-```
+<DamlAppdevModulesM2SmartContractParadigmL187 />
 
 **Benefits:**
 - Authorization declared, not coded
@@ -230,32 +177,7 @@ contract MultiSig {
 
 ### Daml: Native Multi-Party
 
-```haskell
-template Agreement
-  with
-    partyA : Party
-    partyB : Party
-    terms : Text
-  where
-    signatory partyA, partyB  -- Both must sign to create
-
--- Proposal pattern for gathering signatures
-template AgreementProposal
-  with
-    proposer : Party
-    counterparty : Party
-    terms : Text
-  where
-    signatory proposer
-    observer counterparty
-
-    choice Accept : ContractId Agreement
-      controller counterparty
-      do create Agreement with
-           partyA = proposer
-           partyB = counterparty
-           terms
-```
+<DamlAppdevModulesM2SmartContractParadigmL233 />
 
 ## Common Patterns Translated
 
