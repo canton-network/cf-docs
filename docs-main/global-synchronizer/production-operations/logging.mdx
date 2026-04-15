@@ -1,6 +1,273 @@
 ---
 title: "Logging"
-description: "Logging configuration and best practices for validators"
+description: "Log configuration, formats, and aggregation for Canton and Splice validator nodes"
 ---
 
-Content coming soon.
+import CantonGlobalSynchronizerProductionOperationsLoggingL77 from "/snippets/canton-docs/global-synchronizer_production-operations_logging_L77.mdx";
+
+
+Canton and Splice nodes use [Logback](https://logback.qos.ch/) for logging. Proper log configuration helps you diagnose issues quickly, meet audit requirements, and feed data into your monitoring stack.
+
+{/* COPIED_START source="splice:docs/src/deployment/troubleshooting.rst" hash="c98edbdf" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was copied from existing reviewed documentation.
+**Source:** `docs/src/deployment/troubleshooting.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+## Where to find logs
+
+**When launched locally**, splice-node will create a `log/` directory located at the root of the repository and log into `canton_network.log`. Canton logs into `canton.log`.
+
+<Note>
+The default log level, initially set to Debug, can be changed using the `--log-level-canton` flag, for example: `splice-node --config "${OUTPUT_CONFIG}" --log-level-canton=DEBUG ...`
+</Note>
+
+**When the node is launched in a kubernetes cluster**, we recommend to setup a log collector so that you can capture logs of at least the last day. For now, the default log level is set to Debug.
+
+We recommend to use `lnav` to read the logs. A guideline is provided in [this documentation](https://github.com/hyperledger-labs/splice/blob/main/TESTING.md#setting-up-lnav-to-inspect-canton-and-cometbft-logs).
+
+<Note>
+Logging in kubernetes (note that this only provides logs for a limited timeframe):
+
+- `kubectl describe pod <pod-name>` to get a detailed status of the given pod,
+- `kubectl logs <pod-name> -n <namespace-name>` or `kubectl logs -l app=<app-name> -n <namespace-name> --tail=-1` to get logs for a given pod in a given namespace.
+</Note>
+
+{/* COPIED_END */}
+
+## Log levels
+
+Canton uses standard Logback levels. The most relevant for operations:
+
+- **ERROR** — Something failed and likely needs immediate attention. Transaction failures, database connectivity issues, synchronizer disconnections.
+- **WARN** — Conditions that are unusual but not necessarily broken. Slow queries, retried operations, configuration deprecations.
+- **INFO** — Normal operational events. Node startup, synchronizer connections established, health check results. This is the recommended default level for production.
+- **DEBUG** — Detailed internal state for troubleshooting. Produces high volume; enable selectively and temporarily.
+- **TRACE** — Extremely detailed protocol-level logging. Only useful for deep debugging with guidance from support.
+
+## Configuring log levels
+
+### Logback XML configuration
+
+Canton nodes load their logging configuration from a Logback XML file. You can mount a custom configuration into your container:
+
+```xml
+<!-- logback.xml -->
+<configuration>
+  <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder>
+      <pattern>%date{ISO8601} %-5level %logger{36} - %msg%n</pattern>
+    </encoder>
+  </appender>
+
+  <!-- Default level -->
+  <root level="INFO">
+    <appender-ref ref="STDOUT" />
+  </root>
+
+  <!-- Increase level for specific packages -->
+  <logger name="com.digitalasset.canton.participant" level="DEBUG" />
+  <logger name="com.digitalasset.canton.sequencing" level="DEBUG" />
+</configuration>
+```
+
+### Runtime log level changes
+
+You can adjust log levels at runtime through the Canton Console without restarting the node:
+
+<CantonGlobalSynchronizerProductionOperationsLoggingL77 />
+
+This is useful for temporary troubleshooting without affecting other log output.
+
+## Structured logging (JSON format)
+
+For log aggregation systems, JSON-formatted logs are easier to parse and index. Configure a JSON encoder in your Logback configuration:
+
+```xml
+<configuration>
+  <appender name="JSON" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+      <includeMdcKeyName>trace-id</includeMdcKeyName>
+      <includeMdcKeyName>canton-node</includeMdcKeyName>
+    </encoder>
+  </appender>
+
+  <root level="INFO">
+    <appender-ref ref="JSON" />
+  </root>
+</configuration>
+```
+
+JSON-structured logs include the full MDC (Mapped Diagnostic Context) with fields like `trace-id` for correlating log entries across a single transaction flow.
+
+## Log rotation
+
+If you write logs to files (rather than stdout captured by Kubernetes), configure rotation to avoid filling the disk:
+
+```xml
+<appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+  <file>/var/log/canton/canton.log</file>
+  <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+    <fileNamePattern>/var/log/canton/canton-%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+    <maxFileSize>100MB</maxFileSize>
+    <maxHistory>30</maxHistory>
+    <totalSizeCap>5GB</totalSizeCap>
+  </rollingPolicy>
+  <encoder>
+    <pattern>%date{ISO8601} %-5level %logger{36} - %msg%n</pattern>
+  </encoder>
+</appender>
+```
+
+In Kubernetes deployments, the standard practice is to log to stdout and let the cluster's log collection agent (Fluentd, Fluent Bit, Promtail) handle rotation and shipping.
+
+## Metrics exposure
+
+{/* COPIED_START source="splice:docs/src/deployment/observability/metrics.rst" hash="88d7cba8" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was copied from existing reviewed documentation.
+**Source:** `docs/src/deployment/observability/metrics.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+Every node exposes a set of metrics on the port 10013 under the path <span class="title-ref">/metrics</span>. These metrics can be used to monitor the health of the node, and to diagnose issues.
+
+<Note>
+Apps expose metrics on the port 10013, under the path <span class="title-ref">/metrics</span> in the Prometheus format.
+</Note>
+
+For a validator the following components expose metrics:
+
+- The validator app
+- The participant
+
+For a Super Validator, in addition, we have the following components:
+
+- The SV app
+- The scan app
+
+<div class="todo">
+
+link to network or component diagram to improve understanding
+
+</div>
+
+## Scraping the metrics
+
+We use OpenTelemetry to build the metrics and they are exposed in the Prometheus format, and can be scraped by a Prometheus server. For a reference of the existing metrics please check the `metrics reference <metrics-reference>`.
+
+#
+
+{/* COPIED_END */}
+
+## Health endpoints
+
+{/* COPIED_START source="splice:docs/src/deployment/observability/validator_health.rst" hash="08633c30" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was copied from existing reviewed documentation.
+**Source:** `docs/src/deployment/observability/validator_health.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+You can check your validator's health using the readiness endpoints. All CN applications provide the `/readyz` and `/livez` endpoints, which are used for readiness and liveness probes.
+
+- **Checking readiness**
+
+  - In Kubernetes: readiness and liveness probes are already configured.
+
+    You can also manually check validator readiness with the following command:
+
+    ```yaml
+    kubectl exec <pod-name> -n <namespace> -- curl -v https://localhost:5003/api/validator/readyz
+    ```
+
+  - In Docker: run for example this command to check validator liveness inside a container:
+
+    ```yaml
+    docker exec <container-name> -- curl -v https://localhost:5003/api/validator/livez
+    ```
+
+  You should expect in both case HTTP status code 200 if the validator is ready and live.
+
+- **Using metrics**
+
+  The `splice_store_last_ingested_record_time_ms` metric represents the last ingested record time in each validator store. It can be used to track general activity of the node:
+
+  - If this value continue to increase over time, your node is active and stays in sync with the network. Note that it only advances if your node actually ingests new transactions. For a validator collecting validator liveness rewards this happens every round so you should expect your lag to never go above 20min.
+  - If it remains static, further investigation may be required.
+
+  For more details and to visualize this metric on its dedicated dashboard <span class="title-ref">Splice Store Last Ingested Record Time</span>, refer to the documentation about `Metrics <metrics>`.
+
+{/* COPIED_END */}
+
+## Grafana dashboards
+
+{/* COPIED_START source="splice:docs/src/deployment/observability/metrics.rst" hash="88d7cba8" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was copied from existing reviewed documentation.
+**Source:** `docs/src/deployment/observability/metrics.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+## Grafana Dashboards
+
+The release bundle () contains a set of Grafana dashboards that are built based on the metrics above. These dashboards can be imported into a Grafana instance. The dashboards are built assuming a K8s deployment, and may need to be modified for other deployment types. The dashboards can be found under the <span class="title-ref">grafana-dashboards</span> folder in the release bundle.
+
+<Note>
+The dashboards are built using queries specific for Prometheus native histograms.
+</Note>
+
+{/* COPIED_END */}
+
+## Log aggregation
+
+### ELK Stack (Elasticsearch, Logstash, Kibana)
+
+With JSON-formatted logs, ship them to Elasticsearch using Filebeat or Fluentd. Key configuration points:
+
+- Index logs by node type (participant, sequencer, mediator) for easier filtering
+- Parse the `trace-id` field to correlate entries across nodes involved in the same transaction
+- Set up index lifecycle management to handle log retention
+
+### Grafana Loki
+
+If you use Grafana for monitoring, Loki provides a lighter-weight alternative to Elasticsearch. Deploy Promtail as a DaemonSet to ship container logs to Loki, and query them alongside your metrics in Grafana dashboards.
+
+## Key log messages to watch for
+
+Certain log messages indicate conditions that warrant investigation or alerting:
+
+- **`ACS_COMMITMENT_MISMATCH`** — The Active Contract Set commitment between your validator and the synchronizer does not match. This can indicate data corruption, a missed transaction, or a bug. Investigate immediately.
+- **`SEQUENCER_SUBSCRIPTION_LOST`** — Your validator lost its connection to the sequencer. It will attempt to reconnect, but prolonged disconnection means you are not processing transactions.
+- **`MEDIATOR_REJECTION`** — A transaction was rejected by the mediator. Check the rejection reason — it could be a legitimate conflict or an operational issue.
+- **`DB_STORAGE_DEGRADATION`** — Database response times are exceeding thresholds. Check your PostgreSQL performance.
+- **`TRAFFIC_BALANCE_LOW`** — Your traffic balance is running low. Purchase more traffic using Canton Coin to continue submitting transactions.
+
+Set up alerts in your monitoring system for ERROR-level entries and for these specific log patterns at WARN level.
+
+## Helm configuration for logging
+
+If you deploy with Helm, you can mount a custom Logback configuration:
+
+```yaml
+participant:
+  logging:
+    config: |
+      <configuration>
+        <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+          <encoder class="net.logstash.logback.encoder.LogstashEncoder" />
+        </appender>
+        <root level="INFO">
+          <appender-ref ref="STDOUT" />
+        </root>
+      </configuration>
+```
+
+## Troubleshooting with logs
+
+When investigating an issue, find the `trace-id` from the error or transaction submission and search for it across all node logs to reconstruct the full flow. Check timestamps for gaps — Canton protocol messages follow a defined sequence, and delays often point to the bottleneck. For intermittent issues, temporarily increase the log level for the relevant package, reproduce, then reset.

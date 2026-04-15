@@ -1,9 +1,13 @@
 ---
 title: "Use Cases"
-description: "Real-world applications where Canton's privacy model enables solutions impossible on traditional blockchains"
+description: "Real-world applications where Canton's privacy model enables solutions not feasible on traditional blockchains"
 ---
 
-Canton's architecture enables use cases that are fundamentally impossible on transparent blockchains. This page explores key patterns and concrete examples.
+import DamlOverviewUnderstandUseCasesL202 from "/snippets/daml-docs/overview_understand_use-cases_L202.mdx";
+import DamlOverviewUnderstandUseCasesL77 from "/snippets/daml-docs/overview_understand_use-cases_L77.mdx";
+
+
+Canton's architecture enables use cases that are not feasible on public blockchains. This page explores key patterns and concrete examples.
 
 ## Delivery vs. Payment (DvP)
 
@@ -74,27 +78,7 @@ Issue and trade securities with regulatory compliance built in.
 
 ### Canton Design
 
-```haskell
-template Security
-  with
-    issuer : Party
-    holder : Party
-    regulator : Party
-    cusip : Text
-    quantity : Decimal
-    approvedHolders : [Party]  -- Issuer maintains list of eligible holders
-  where
-    signatory issuer
-    observer holder, regulator  -- Regulator sees all holdings
-
-    choice Transfer : ContractId Security
-      with
-        newHolder : Party
-      controller holder, issuer  -- Issuer approval required for compliance
-      do
-        assert (newHolder `elem` approvedHolders)
-        create this with holder = newHolder
-```
+<DamlOverviewUnderstandUseCasesL77 />
 
 The regulator observes all holdings (for compliance) without that data being public. The issuer must approve all transfers, ensuring only eligible parties can hold the security. Trades remain private between counterparties while still being auditable.
 
@@ -148,7 +132,7 @@ In syndicated loans:
 - The agent bank coordinates payments
 - Borrower interacts with the group as a whole
 
-On transparent systems, all participants would see all positions, defeating confidentiality.
+On public systems, all participants would see all positions, defeating confidentiality.
 
 ### Canton Solution
 
@@ -199,33 +183,7 @@ A manufacturer ships to a distributor, who ships to a retailer. Financing is pro
 
 Canton's privacy works at the contract level—observers see entire contracts, not individual fields. To give different parties access to different information, you design separate contracts for each audience:
 
-```haskell
--- Shipping details: visible to logistics provider
-template ShipmentTracking
-  with
-    shipper : Party
-    receiver : Party
-    logisticsProvider : Party
-    goods : GoodsDescription
-    trackingId : Text
-  where
-    signatory shipper, receiver
-    observer logisticsProvider
-    -- Logistics provider sees goods and routing, not financial terms
-
--- Financing terms: visible to financier
-template ShipmentFinancing
-  with
-    shipper : Party
-    receiver : Party
-    financier : Party
-    terms : FinancingTerms
-    shipmentRef : Text  -- Reference to link related contracts
-  where
-    signatory shipper, receiver
-    observer financier
-    -- Financier sees payment terms, not goods details or other legs' pricing
-```
+<DamlOverviewUnderstandUseCasesL202 />
 
 A single atomic transaction can create both contracts. The logistics provider and financier each see only their relevant contract, while the shipper and receiver (as signatories on both) see everything. Downstream participants in the supply chain never see upstream pricing, because those contracts have different stakeholders.
 

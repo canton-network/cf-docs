@@ -1,6 +1,193 @@
 ---
 title: "Upgrades"
-description: "Upgrading Canton Network validator software"
+description: "How to upgrade validator and Super Validator nodes on the Canton Network"
 ---
 
-Content coming soon.
+import CantonDocsGlobalSynchronizerDeploymentUpgradesL53 from "/snippets/canton-docs/global-synchronizer_deployment_upgrades_L53.mdx";
+import CantonDocsGlobalSynchronizerDeploymentUpgradesL62 from "/snippets/canton-docs/global-synchronizer_deployment_upgrades_L62.mdx";
+import CantonDocsGlobalSynchronizerDeploymentUpgradesL68 from "/snippets/canton-docs/global-synchronizer_deployment_upgrades_L68.mdx";
+import CantonDocsGlobalSynchronizerDeploymentUpgradesL90 from "/snippets/canton-docs/global-synchronizer_deployment_upgrades_L90.mdx";
+import CantonDocsGlobalSynchronizerDeploymentUpgradesL103 from "/snippets/canton-docs/global-synchronizer_deployment_upgrades_L103.mdx";
+import CantonDocsGlobalSynchronizerDeploymentUpgradesL148 from "/snippets/canton-docs/global-synchronizer_deployment_upgrades_L148.mdx";
+import CantonDocsGlobalSynchronizerDeploymentUpgradesL156 from "/snippets/canton-docs/global-synchronizer_deployment_upgrades_L156.mdx";
+import CantonDocsGlobalSynchronizerDeploymentUpgradesL164 from "/snippets/canton-docs/global-synchronizer_deployment_upgrades_L164.mdx";
+import CantonDocsGlobalSynchronizerDeploymentUpgradesL170 from "/snippets/canton-docs/global-synchronizer_deployment_upgrades_L170.mdx";
+import CantonDocsGlobalSynchronizerDeploymentUpgradesL180 from "/snippets/canton-docs/global-synchronizer_deployment_upgrades_L180.mdx";
+import CantonDocsGlobalSynchronizerDeploymentUpgradesL194 from "/snippets/canton-docs/global-synchronizer_deployment_upgrades_L194.mdx";
+
+
+The Global Synchronizer upgrades frequently. Validators must keep pace with network versions to remain connected. This page describes the upgrade types, procedures, and verification steps.
+
+## Upgrade types
+
+Canton Network upgrades fall into three categories based on their scope and impact.
+
+### Type 1: Backward-compatible updates
+
+These are routine releases that do not change the synchronizer protocol or Daml models. They typically include bug fixes, performance improvements, and minor feature additions.
+
+- **Frequency:** Weekly to monthly
+- **Downtime:** None required. Perform a rolling upgrade.
+- **Procedure:** Update the container image version and restart. For Kubernetes, run `helm upgrade` with the new chart version. For Docker Compose, update `IMAGE_TAG` and restart.
+- **Deadline:** Apply within 2 weeks of release.
+
+### Type 2: Daml model changes
+
+These releases include updated Daml models (Splice Daml packages). The participant needs to load new packages, but the synchronizer protocol itself does not change.
+
+- **Frequency:** Quarterly or as needed
+- **Downtime:** Brief restart required. No network-wide coordination.
+- **Procedure:** Same as Type 1, but verify that new Daml packages are loaded after upgrade by checking participant logs.
+- **Deadline:** Before the date announced in release notes.
+
+### Type 3: Synchronizer protocol changes (with downtime)
+
+These are major upgrades that change the synchronizer protocol itself. The entire network coordinates a migration window where Super Validators pause the synchronizer, generate migration dumps, and bring up a new synchronizer instance.
+
+- **Frequency:** Infrequent (announced well in advance)
+- **Downtime:** Network-wide coordinated downtime
+- **Procedure:** Follow the migration procedure described below
+- **Deadline:** Must complete during the announced migration window
+
+## Type 1 and Type 2 upgrade procedure
+
+<Tabs>
+
+<Tab title="Kubernetes">
+
+### Pre-upgrade checklist
+
+- Review the release notes for breaking changes or new configuration parameters
+- Back up your PostgreSQL database
+- Confirm the new chart version is available
+
+### Upgrade
+
+<CantonDocsGlobalSynchronizerDeploymentUpgradesL53 />
+
+Helm performs a rolling restart. Monitor pod status during the rollout:
+
+<CantonDocsGlobalSynchronizerDeploymentUpgradesL62 />
+
+### Post-upgrade verification
+
+<CantonDocsGlobalSynchronizerDeploymentUpgradesL68 />
+
+Verify the Wallet UI is accessible and your validator is connected to the synchronizer.
+
+</Tab>
+
+<Tab title="Docker Compose">
+
+### Pre-upgrade checklist
+
+- Review the release notes
+- Back up your PostgreSQL database
+- Download the new Splice node bundle
+
+### Upgrade
+
+<CantonDocsGlobalSynchronizerDeploymentUpgradesL90 />
+
+### Post-upgrade verification
+
+<CantonDocsGlobalSynchronizerDeploymentUpgradesL103 />
+
+Confirm the validator reconnects to the synchronizer and the Wallet UI loads.
+
+</Tab>
+
+</Tabs>
+
+## Type 3 upgrade procedure (synchronizer migration)
+
+Type 3 upgrades require coordinated action across the entire network. Super Validators announce the migration window in advance through Slack and mailing lists.
+
+### How the migration works
+
+1. Super Validators pause the Global Synchronizer, halting all transaction processing
+2. Each validator's node generates a migration dump — a snapshot of the active contract set
+3. Super Validators bring up the new synchronizer instance
+4. Validators deploy the new software version, pointing to the new synchronizer
+5. The new synchronizer imports the migration dump and resumes transaction processing
+
+### Key technical details
+
+- **Identities are preserved.** All party IDs, participant identities, and validator identities carry over to the new synchronizer.
+- **Active contracts transfer.** The migration dump contains the full active contract set.
+- **Transaction history does not transfer.** The new participant database starts fresh. If you need historical data, archive it before the migration.
+- **Traffic balances reset to zero.** All traffic purchases on the old synchronizer are lost. If auto-top-up is configured, the validator will automatically purchase traffic on the new synchronizer after migration completes. Purchase traffic incrementally to minimize losses during future migrations.
+- **Migration ID increments.** Each Type 3 upgrade increments the migration ID by 1.
+
+### Pre-migration checklist
+
+- Back up your entire PostgreSQL database
+- Confirm your validator has caught up with the paused synchronizer — check logs for `"Ingested transaction"` messages. If the most recent message is more than 10 minutes old, catch-up is likely complete.
+- Verify the migration dump was created — search logs for `"Wrote domain migration dump"`
+- Download the new Splice node bundle
+
+### Migration procedure
+
+<Tabs>
+
+<Tab title="Kubernetes">
+
+Update your Helm values to enable migration mode:
+
+<CantonDocsGlobalSynchronizerDeploymentUpgradesL148 />
+
+Deploy:
+
+<CantonDocsGlobalSynchronizerDeploymentUpgradesL156 />
+
+After the validator successfully ingests the migration dump and connects to the new synchronizer, disable migration mode:
+
+<CantonDocsGlobalSynchronizerDeploymentUpgradesL164 />
+
+<CantonDocsGlobalSynchronizerDeploymentUpgradesL170 />
+
+</Tab>
+
+<Tab title="Docker Compose">
+
+<CantonDocsGlobalSynchronizerDeploymentUpgradesL180 />
+
+The `-M` flag enables migration mode. After the validator successfully ingests the migration dump, restart without the `-M` flag:
+
+<CantonDocsGlobalSynchronizerDeploymentUpgradesL194 />
+
+</Tab>
+
+</Tabs>
+
+### Post-migration verification
+
+- Validator logs show successful ingestion of the migration dump
+- The Wallet UI loads and displays your validator identity
+- The new migration ID is active
+- Traffic purchase works on the new synchronizer
+- Applications can submit transactions through the Ledger API
+
+## Staying informed about upgrades
+
+- **Slack:** `#validator-operations` for real-time coordination during upgrades
+- **Mailing lists:** [lists.sync.global](https://lists.sync.global/) for advance notice of upcoming upgrades
+- **Release notes:** Published with each new version on the [Splice GitHub releases page](https://github.com/digital-asset/decentralized-canton-sync/releases)
+
+<Warning>
+Validators running outdated software versions risk disconnection from the network. Monitor announcements and plan upgrade windows proactively.
+</Warning>
+
+## Next steps
+
+<CardGroup cols={2}>
+
+<Card title="Configuration" icon="gear" href="/docs-main/global-synchronizer/deployment/configuration">
+  Review configuration options for your upgraded node.
+</Card>
+
+<Card title="Super Validator Setup" icon="server" href="/docs-main/global-synchronizer/deployment/super-validator-setup">
+  SV-specific upgrade considerations.
+</Card>
+
+</CardGroup>

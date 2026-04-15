@@ -1,0 +1,343 @@
+---
+title: "Release Notes"
+description: "Release notes and version history for Global Synchronizer software"
+---
+
+
+The current production release of the Global Synchronizer software is **Splice 0.5.9** running on **Canton 3.4.7**.
+
+## Splice 0.5.9
+
+{/* COPIED_START source="splice:docs/src/release_notes.rst" */}
+
+### Scan
+
+- Added `canton.scan-apps.scan-app.acs-store-descriptor-user-version` and `canton.scan-apps.scan-app.tx-log-store-descriptor-user-version` configuration settings to set a `user-version` for the ACS and TxLog stores respectively. Modifying the `user-version` wipes the respective store and triggers re-ingestion.
+- Added a new external endpoint `GET /v0/unclaimed-development-fund-coupons` to retrieve all active unclaimed development fund coupon contracts.
+
+### Daml
+
+- Implemented minting delegation as described in [CIP-0073 — Weighted Validator Liveness Rewards for SV-Chosen Parties](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0073/cip-0073.md). New templates added in the `splice-wallet` package:
+  - **MintingDelegationProposal** — a proposal from the beneficiary to the delegate to create a `MintingDelegation`
+  - **MintingDelegation** — an active delegation granting the delegate authority to mint rewards on behalf of the beneficiary
+
+Enabling this feature on all validators requires SVs to vote on wallet Daml version 0.1.16.
+
+### Wallet
+
+- Added endpoint `POST /v0/wallet/development-fund-coupons/allocate` to allocate a development fund coupon for a given beneficiary, amount, expiration time, and reason.
+- Added endpoint `GET /v0/wallet/development-fund-coupons` to retrieve all active DevelopmentFundCoupon contracts, sorted by expiration date.
+- Added endpoint `POST /v0/wallet/development-fund-coupons/{contract_id}/withdraw` to withdraw a development fund coupon when the wallet user party is the development fund manager.
+- Minting delegation management added to the wallet UI.
+- Enhanced rewards collection automation to support collecting development fund coupons.
+
+### Validator
+
+- Automation added to perform minting for hosted external parties if they have an active `MintingDelegation` contract with an internal party.
+
+{/* COPIED_END */}
+
+## Canton 3.4.7
+
+{/* COPIED_START source="splice:canton/release-notes/3.4.7.md" */}
+This is a maintenance release that fixes an issue when replaying too many ACS changes during connection to a synchronizer.
+{/* COPIED_END */}
+
+### Compatibility
+
+| Dependency | Version |
+|---|---|
+| Canton protocol versions | 34 |
+| Java Runtime | OpenJDK 21 |
+| PostgreSQL | Recommended: 17.6. Also tested: 14.19, 15.14, 16.10 |
+
+## Upgrade notes
+
+If you are upgrading from 0.5.7 or earlier, skip 0.5.7 and go directly to at least 0.5.8. Version 0.5.7 introduced a performance regression related to topology transaction processing that was fixed in 0.5.8.
+
+<Warning>
+Version 0.5.8 breaks backwards compatibility with migration dumps taken on 0.4.x versions. Deploy with `migrating: false` (Helm) or without `-M` (Docker Compose).
+</Warning>
+
+For the full upgrade procedure, see [Upgrade Procedures](/docs-main/global-synchronizer/production-operations/upgrade-procedures).
+
+
+This page covers the minor releases in the current Splice 0.5.x series. Each release corresponds to a Canton 3.4.x version. For the current release, see [Current Release](/docs-main/global-synchronizer/release-notes/current-release).
+
+## Splice 0.5.8
+
+<Note>
+Version 0.5.7 introduced a performance regression in topology transaction processing. Skip 0.5.7 and upgrade directly to 0.5.8 or later.
+</Note>
+
+{/* COPIED_START source="splice:docs/src/release_notes.rst" */}
+
+### Canton
+
+- Fixed the performance regression related to topology transaction processing.
+- Improved performance of some queries used in participant pruning. The database migration can take up to 2 minutes.
+
+### Scan
+
+- Deprecated `/v0/total-amulet-balance` and `/v0/wallet-balance` endpoints have been removed. Use the Token Standard metadata endpoint and `/v0/holdings/summary` instead.
+
+### Deployments
+
+- Default logger switched to asynchronous appender for better performance. Set `LOG_IMMEDIATE_FLUSH=true` to revert to synchronous logging.
+- This version breaks backwards compatibility with migration dumps taken on 0.4.x versions. Deploy with `migrating: false`.
+
+{/* COPIED_END */}
+
+## Splice 0.5.7
+
+{/* COPIED_START source="splice:docs/src/release_notes.rst" */}
+
+<Warning>
+App developers whose Daml code statically depends on `splice-amulet < 0.1.15` should recompile against `splice-amulet >= 0.1.15` to be ready for the new fields introduced in `AmuletConfig` (`optDevelopmentFundManager`) and `IssuanceConfig` (`optDevelopmentFundPercentage`).
+</Warning>
+
+### Sequencer Connections
+
+- Fixed an issue that caused participants to randomly crash and restart.
+
+### Daml
+
+- Implemented Daml changes for [CIP-0082 — Establish a 5% Development Fund](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0082/cip-0082.md):
+  - **UnclaimedDevelopmentFundCoupon** — represents unallocated Development Fund entitlements created per issuance round
+  - **DevelopmentFundCoupon** — represents an allocated portion of the Development Fund for a specific beneficiary
+  - `IssuanceConfig` extended with optional `optDevelopmentFundPercentage` (default 0.05)
+  - `AmuletConfig` extended with optional `optDevelopmentFundManager`
+  - Modified `AmuletRules_Transfer` to accept `DevelopmentFundCoupon` as valid input
+
+These Daml changes require upgrading to the following versions before voting to set transfer fees to zero:
+
+| Package | Version |
+|---|---|
+| amulet | 0.1.15 |
+| amuletNameService | 0.1.16 |
+| dsoGovernance | 0.1.21 |
+| splitwell | 0.1.15 |
+| validatorLifecycle | 0.1.6 |
+| wallet | 0.1.15 |
+| walletPayments | 0.1.15 |
+
+### SV App
+
+- New `MergeUnclaimedDevelopmentFundCouponsTrigger` that merges small unclaimed coupons when their count exceeds a configurable threshold (default: 10).
+- New config field `unclaimedDevelopmentFundCouponsThreshold` in `SvOnboardingConfig`.
+
+### Deployments
+
+- Default logger switched to asynchronous appender for Docker Compose deployments.
+
+### Validator
+
+- Exposed `/v0/holdings/summary` endpoint from scan proxy.
+
+{/* COPIED_END */}
+
+## Splice 0.5.6
+
+{/* COPIED_START source="splice:docs/src/release_notes.rst" */}
+
+### Sequencer
+
+- Performance improvements to improve stability under higher load.
+
+{/* COPIED_END */}
+
+## Splice 0.5.5
+
+{/* COPIED_START source="splice:docs/src/release_notes.rst" */}
+
+### API Security
+
+- Tightened authorization checks for all non-public API endpoints. All non-public endpoints now properly respect user rights defined in the participant user management service. Revoking user rights revokes access to corresponding API endpoints.
+- Administrative SV app endpoints (`/v0/admin/domain/pause`, `unpause`, `migration-dump`, `identities-dump`, `data-snapshot`) now require participant admin rights.
+
+### Validator
+
+- Added support for custom party names when onboarding users via the `/v0/admin/users` API.
+- Added optional `excludeDebugFields` boolean to Token Standard allocation and transfer endpoints.
+
+{/* COPIED_END */}
+
+## Splice 0.5.4
+
+{/* COPIED_START source="splice:docs/src/release_notes.rst" */}
+
+### Participant
+
+- Fixed a bug (introduced in 0.5.0/0.5.1) that could cause participant pruning to prune active data. The bug only manifests in a rare edge case involving manual ACS import on a participant that was already running.
+- Fixed a performance regression causing event processing to pause for multiple minutes at random times due to a bad database query plan.
+
+### Scan
+
+- Removed non-existent `command_id` field from the OpenAPI spec. No impact on API behavior.
+
+{/* COPIED_END */}
+
+## Splice 0.5.3
+
+<Note>
+Version 0.5.2 mistakenly introduced default pruning for Canton participants and should be skipped. Participants do not prune data by default.
+</Note>
+
+{/* COPIED_START source="splice:docs/src/release_notes.rst" */}
+
+### Sequencer Connections
+
+- Improved retries for sequencer submissions when a sequencer returns an overloaded error code — now retries immediately on another node.
+- Network timeout lowered to 15 seconds for faster failure detection.
+
+### Validator
+
+- Fixed a bug causing validators to fail on restoring participant users without rights during a synchronizer migration.
+
+### Scan
+
+- Round-based balance aggregates set to zero to avoid consensus problems when new SVs join. The `/v0/total-amulet-balance` and `/v0/wallet-balance` endpoints are marked for removal.
+
+### Daml
+
+- Fixed a bug in `WalletUserProxy_TransferInstruction_Withdraw` where the controller was required to be the `receiver` instead of the `sender`. Upgrade to `splice-util-featured-app-proxies` version 1.2.1 or newer.
+
+### SV App
+
+- The SV app no longer stores update history. All updates involving the DSO party are stored and returned by Scan.
+- Helm values under `scan` (`publicUrl` and `internalUrl`) are now mandatory.
+
+{/* COPIED_END */}
+
+## Splice 0.5.0
+
+{/* COPIED_START source="splice:docs/src/release_notes.rst" */}
+
+<Warning>
+This upgrade requires a synchronizer migration with downtime and cannot be applied through a regular upgrade. See [CIP-0089](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0089/cip-0089.md) for details.
+</Warning>
+
+### Deployment
+
+- Docker Compose deployments of LocalNet, validator, and SV now expose only to 127.0.0.1 by default. Use `-E` to expose externally. For LocalNet, set `export HOST_BIND_IP=0.0.0.0`.
+
+### Validator
+
+- Offboarding a user now also deletes the Ledger API user in the participant node.
+- HTTP proxy support via `https.proxyHost` and `https.proxyPort` Java system properties.
+
+### Scan
+
+- Added `record_time_match` property to `/v0/state/acs`, `/v0/holdings/state`, and `/v0/holdings/summary` requests. Set to `exact` (default) or `at-or-before`.
+
+### Mediator
+
+- Mediators now prune data to retain only the last 30 days, matching the sequencer pruning interval.
+
+{/* COPIED_END */}
+
+For the complete release history including the 0.4.x series, see [Release History](/docs-main/global-synchronizer/release-notes/release-history).
+
+
+The Global Synchronizer software follows a release cadence that includes periodic patch releases addressing bug fixes, performance improvements, and security updates. These releases use semantic versioning within the current 0.5.x series.
+
+## Release process
+
+Patch releases (e.g., 0.5.8 → 0.5.9) are published as needed when bug fixes or security improvements warrant an update. Each patch release includes:
+
+- A release bundle published to the [Splice releases page on GitHub](https://github.com/digital-asset/decentralized-canton-sync/releases)
+- Updated Docker images for all components (SV app, validator app, scan, wallet, sequencer, mediator, CometBFT)
+- Updated Helm charts for Kubernetes deployments
+- A corresponding Canton release (e.g., Canton 3.4.7 ships alongside Splice 0.5.9)
+
+## How to stay informed
+
+Release notifications are communicated through:
+
+- The `#validator-operations` Slack channel for operational updates
+- The `#validator-operations-onboarding` Slack channel for new validators
+- Release notes published on the [Splice documentation site](https://docs.dev.sync.global/)
+
+## Applying patch releases
+
+Patch releases within the same minor version (0.5.x) are designed to be applied without synchronizer migration. The general upgrade process:
+
+1. Review the release notes for any breaking changes or prerequisites.
+2. Update your Helm chart version or Docker image tags.
+3. Roll the deployment — components can typically be upgraded one at a time.
+4. Verify health through the node's health endpoint and monitoring dashboards.
+
+<Warning>
+Some patch releases include important caveats. For example, 0.5.7 introduced a performance regression and should be skipped in favor of 0.5.8. Always read the release notes before upgrading.
+</Warning>
+
+For the full upgrade procedure, see [Upgrade Procedures](/docs-main/global-synchronizer/production-operations/upgrade-procedures).
+
+## Version skipping
+
+You can skip intermediate patch versions when upgrading. For example, upgrading from 0.5.3 directly to 0.5.9 is supported. However, review the release notes for all intermediate versions to identify any required Daml package upgrades or configuration changes that may apply.
+
+## Relationship to Canton releases
+
+Each Splice release is built against a specific Canton version. The Canton release notes document fixes and improvements at the protocol and infrastructure level, while Splice release notes cover application-level changes (Scan, Wallet, Validator, SV app, Daml packages).
+
+| Splice version | Canton version |
+|---|---|
+| 0.5.9 | 3.4.7 |
+| 0.5.0 – 0.5.8 | 3.4.x |
+| 0.4.x | 3.3.x |
+
+For details on individual releases, see [Current Release](/docs-main/global-synchronizer/release-notes/current-release) and [Minor Releases](/docs-main/global-synchronizer/release-notes/minor-releases).
+
+
+This page provides a high-level overview of all Global Synchronizer software releases. For detailed notes on recent releases, see [Current Release](/docs-main/global-synchronizer/release-notes/current-release) and [Minor Releases](/docs-main/global-synchronizer/release-notes/minor-releases).
+
+## Splice 0.5.x (Canton 3.4.x)
+
+The 0.5.x series runs on Canton protocol version 34 and was introduced through [CIP-0089](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0089/cip-0089.md), which required a synchronizer migration with downtime.
+
+| Version | Key changes |
+|---|---|
+| 0.5.9 | Minting delegation (CIP-0073), development fund coupon management |
+| 0.5.8 | Fix topology transaction performance regression from 0.5.7 |
+| 0.5.7 | Development Fund (CIP-0082) Daml changes, async logging. **Skip this version** — performance regression |
+| 0.5.6 | Sequencer performance improvements |
+| 0.5.5 | API authorization tightening, custom party names for user onboarding |
+| 0.5.4 | Fix pruning bug, fix event processing performance regression |
+| 0.5.3 | Sequencer retry improvements, scan aggregate fixes. **Skip 0.5.2** — accidental default pruning |
+| 0.5.1 | Fix participant startup issue under high traffic |
+| 0.5.0 | Canton 3.4 upgrade (synchronizer migration required), mediator pruning, HTTP proxy support |
+
+## Splice 0.4.x (Canton 3.3.x)
+
+The 0.4.x series runs on Canton protocol version 33. It introduced the Token Standard ([CIP-0056](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0056/cip-0056.md)), holding UTXO management, and the featured app activity markers API.
+
+| Version | Key changes |
+|---|---|
+| 0.4.25 | Fix participant startup issue (same as 0.5.1). **Skip 0.4.24** |
+| 0.4.23 | Token standard wallet utilities (`splice-util-token-standard-wallet.dar`), holding UTXO management |
+| 0.4.22 and earlier | Various fixes and features leading up to Token Standard launch |
+
+<Note>
+Migration dumps from 0.4.x are not compatible with 0.5.8 and later. If you are still on 0.4.x, plan your upgrade path carefully and deploy without migration mode enabled.
+</Note>
+
+## Canton version history
+
+Canton releases follow their own versioning. Each Splice series is built against a specific Canton minor version.
+
+| Canton series | Protocol version | Splice series |
+|---|---|---|
+| 3.4.x | 34 | 0.5.x |
+| 3.3.x | 33 | 0.4.x |
+
+Individual Canton release notes are available in the [Canton release notes directory](https://github.com/digital-asset/canton/tree/main/release-notes).
+
+## Download links
+
+Release bundles are published on the [Splice GitHub releases page](https://github.com/digital-asset/decentralized-canton-sync/releases). Each release includes:
+
+- `{version}_splice-node.tar.gz` — the Splice node bundle containing all components
+- Docker images published to the container registry
+- Helm charts for Kubernetes deployments
+

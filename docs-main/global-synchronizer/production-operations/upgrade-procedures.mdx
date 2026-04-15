@@ -1,6 +1,195 @@
 ---
 title: "Upgrade Procedures"
-description: "Step-by-step upgrade procedures for Canton Network validators"
+description: "Minor and major upgrade procedures for Canton Network validators and SV nodes"
 ---
 
-Content coming soon.
+Canton Network upgrades fall into two categories: minor upgrades that each node handles independently, and major upgrades that require network-wide coordination and downtime.
+
+## Minor Upgrades
+
+{/* COPIED_START source="splice:sv_operator/sv_upgrades.rst" hash="sv-minor-upgrades" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was adapted from existing reviewed documentation.
+**Source:** `sv_operator/sv_upgrades.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+Minor upgrades (e.g., `0.5.8` to `0.5.9`) can be performed independently by each node operator. They require only a `helm upgrade` with the new chart version.
+
+Always read the [release notes](/docs-main/global-synchronizer/release-notes/current-release) before upgrading to learn about required configuration changes.
+
+{/* COPIED_END */}
+
+## Major Upgrades (Synchronizer Upgrades with Downtime)
+
+Major upgrades involve non-backwards-compatible changes to the Canton software and require a coordinated synchronizer migration. The existing synchronizer is paused, state is exported, and a new synchronizer is deployed with updated components.
+
+### Overview for Validators
+
+{/* COPIED_START source="splice:validator_operator/validator_major_upgrades.rst" hash="validator-upgrades" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was adapted from existing reviewed documentation.
+**Source:** `validator_operator/validator_major_upgrades.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+1. New Canton and Splice releases become available
+2. SVs vote on and confirm a specific downtime window. Validators are informed.
+3. At the start of the window, SVs automatically pause traffic on the existing synchronizer
+4. Shortly after pausing, the validator software automatically exports migration dumps to attached volumes
+5. Verify your node has caught up to the paused synchronizer
+6. Create full backups of your node
+7. Wait until SVs signal that the migration is successful
+8. Upgrade your deployment with the new migration ID
+9. The validator app automatically consumes the migration dump and initializes the new participant
+
+<Note>
+This process creates a new synchronizer instance. Traffic balances are per-synchronizer, so your balance resets to zero on the new instance. Purchase traffic on a pay-as-you-go basis in small increments to minimize losses from migration.
+</Note>
+
+{/* COPIED_END */}
+
+### Overview for SV Operators
+
+{/* COPIED_START source="splice:sv_operator/sv_major_upgrade.rst" hash="sv-upgrades" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was adapted from existing reviewed documentation.
+**Source:** `sv_operator/sv_major_upgrade.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+The SV upgrade process is more involved:
+
+1. New releases become available
+2. SVs vote on a downtime window via on-ledger governance
+3. Deploy new Canton components and CometBFT node alongside the existing ones (can be done before downtime)
+4. At the downtime start, SV apps automatically pause the synchronizer
+5. Migration dumps are automatically exported
+6. Verify all SV components have caught up
+7. Create full backups
+8. Upgrade SV, scan, and validator apps with the new migration ID
+9. Apps consume the migration dump and initialize new components
+10. Once 2/3+ of SVs complete, the new synchronizer becomes operational automatically
+11. Keep old components running until validators have had time to catch up
+
+{/* COPIED_END */}
+
+### Migration IDs
+
+Each synchronizer migration increments the migration ID (starting from 0). The migration ID:
+
+- Determines which PostgreSQL database the participant uses (a fresh database per migration)
+- Is tracked by the SV/validator apps for internal consistency
+- Forms part of the CometBFT chain ID
+- Must be correctly set in all Helm values during upgrade
+
+### State Preserved Across Migrations
+
+- All identities (party IDs, participant IDs, node identities)
+- Active ledger state (via migration dump)
+- Historical app state in SV, scan, and validator databases (via database reuse)
+
+### State Not Preserved
+
+- Transaction history on the participant (only serves history going forward)
+- CometBFT blockchain state (fresh chain on new synchronizer)
+- Traffic balances (reset to zero on new synchronizer instance)
+
+### Catching Up Before Migration
+
+Before proceeding with the upgrade deployment, verify your node is fully caught up:
+
+- Check for `Wrote domain migration dump` messages in the validator-app (or sv-app) logs
+- Check for `Ingested transaction` messages in app logs — if the latest message is 10+ minutes old, the app has likely caught up
+
+<Warning>
+SVs keep old sequencers available for a limited time after migration. If your node doesn't catch up and migrate within that window, you won't be able to catch up later.
+</Warning>
+
+### Deploying the Upgrade (Validators)
+
+{/* COPIED_START source="splice:validator_operator/validator_major_upgrades.rst" hash="validator-upgrade-deploy" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was adapted from existing reviewed documentation.
+**Source:** `validator_operator/validator_major_upgrades.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+**Kubernetes:**
+
+1. Confirm migration dump exists in logs
+2. Re-run the Helm install steps with the incremented `MIGRATION_ID`
+3. Set `migration.migrating` to `true` in validator Helm values
+4. Use `helm upgrade` (not `helm install`) for the validator chart
+5. After successful migration: set `migration.migrating` back to `false`, keep the incremented `MIGRATION_ID`
+6. The old participant database can be pruned after at least one week
+
+**Docker Compose:**
+
+1. Confirm migration dump: `docker compose logs validator | grep "Wrote domain migration dump"`
+2. Stop the validator: `./stop.sh`
+3. Update the bundle and `IMAGE_TAG` if needed
+4. Restart with incremented migration ID (`-m <new_id>`) and the `-M` flag to trigger migration
+5. After successful migration: restart without `-M`, keep the new migration ID
+
+{/* COPIED_END */}
+
+### Troubleshooting Failed Upgrades
+
+{/* COPIED_START source="splice:validator_operator/validator_major_upgrades.rst" hash="validator-upgrade-troubleshoot" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was adapted from existing reviewed documentation.
+**Source:** `validator_operator/validator_major_upgrades.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+If the upgrade fails, check:
+
+- Correct versions deployed both before and after migration
+- Migration dump file exists on the volume. If missing, remove any stale dump and restart the app on the old version to trigger a fresh dump.
+- The participant uses a fresh (empty) database for the new migration ID
+- The correct incremented `MIGRATION_ID` is set
+- The `migrating: true` flag (Helm) or `-M` argument (Docker Compose) is present
+
+If the validator app database contains data from a failed migration, check for ingested data:
+
+```sql
+SELECT * FROM update_history_last_ingested_offsets
+WHERE history_id = (SELECT DISTINCT history_id FROM update_history_last_ingested_offsets)
+  AND migration_id = <failed_migration_id>;
+```
+
+If rows are returned, restore the app database from the pre-upgrade backup and drop the failed migration's participant database.
+
+{/* COPIED_END */}
+
+### Recovering from a Failed SV Upgrade
+
+{/* COPIED_START source="splice:sv_operator/sv_major_upgrade.rst" hash="sv-upgrade-recovery" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was adapted from existing reviewed documentation.
+**Source:** `sv_operator/sv_major_upgrade.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+If a major upgrade fails at the network level, each SV must submit a topology transaction to resume the old synchronizer:
+
+```bash
+curl -X POST "https://sv.sv.YOUR_HOSTNAME/api/sv/v0/admin/domain/unpause" \
+  -H "authorization: Bearer <token>"
+```
+
+The command completes once enough SVs have executed it. The old synchronizer then resumes operation.
+
+{/* COPIED_END */}
+
+## Next Steps
+
+- [Backup and Recovery](/docs-main/global-synchronizer/production-operations/backup-and-recovery) — Backup procedures before upgrades
+- [Release Notes](/docs-main/global-synchronizer/release-notes/current-release) — Current release changes and requirements
