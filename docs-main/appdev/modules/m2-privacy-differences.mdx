@@ -3,6 +3,10 @@ title: "Privacy Model Differences"
 description: "Understanding how Canton's privacy model differs fundamentally from Ethereum"
 ---
 
+import DamlAppdevModulesM2PrivacyDifferencesL277 from "/snippets/daml-docs/appdev_modules_m2-privacy-differences_L277.mdx";
+import DamlAppdevModulesM2PrivacyDifferencesL62 from "/snippets/daml-docs/appdev_modules_m2-privacy-differences_L62.mdx";
+
+
 Privacy is the most significant architectural difference between Canton and Ethereum. This page explains the differences in depth and provides guidance for adapting your thinking.
 
 ## The Fundamental Difference
@@ -59,16 +63,7 @@ On Canton, data is visible only to entitled parties:
 4. **Contract data** is visible only to signatories and observers
 5. **Third parties** see nothing unless explicitly declared
 
-```haskell
--- Daml: Visibility is explicit
-template TrulyPrivate
-  with
-    owner : Party
-    secretValue : Decimal
-  where
-    signatory owner
-    -- No observers: only owner sees this contract
-```
+<DamlAppdevModulesM2PrivacyDifferencesL62 />
 
 ## Sub-Transaction Privacy
 
@@ -274,23 +269,7 @@ When designing contracts, explicitly consider:
 3. **Who can exercise choices?** Controllers for each choice.
 4. **What gets divulged?** Fetching contracts in transactions reveals them.
 
-```haskell
-template DesignedForPrivacy
-  with
-    primaryParty : Party
-    counterparty : Party
-    auditor : Party  -- Only if audit is required
-    details : SensitiveData
-  where
-    signatory primaryParty
-    observer counterparty  -- Needs to see, but not auditor
-
-    -- Add auditor only when they need to see
-    choice AddAuditObserver : ContractId DesignedForPrivacy
-      with newAuditor : Party
-      controller primaryParty
-      do create this with auditor = newAuditor
-```
+<DamlAppdevModulesM2PrivacyDifferencesL277 />
 
 ### Privacy Checklist
 

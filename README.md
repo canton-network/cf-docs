@@ -65,8 +65,8 @@ mintlify dev
 
 ### Generate the JSON API reference
 
-This repo includes the checked-in Ledger API OpenAPI manifest and snapshots under `config/x2mdx/ledger-api/`.
-The Nix shell pins `x2mdx` from `github.com/danielporterda/x2mdx`, so once `direnv` has loaded you can regenerate the page and `docs.json` update with:
+This repo includes a checked-in source config plus regenerated local Ledger API OpenAPI snapshots under `config/x2mdx/ledger-api/`.
+The generator script refreshes those local `openapi.yaml` snapshots from configured Canton release bundles, rewrites the local manifest, and then regenerates the page and `docs.json` update with the GitHub-pinned `x2mdx`:
 
 ```bash
 python3 scripts/generate_json_api_reference.py
@@ -80,15 +80,15 @@ npm run generate:json-api-reference
 
 By default this writes:
 
-- `docs-main/appdev/reference/json-api-reference.mdx`
+- `docs-main/reference/json-api-reference.mdx`
 - `docs-main/docs.json`
 
 The generated page is placed directly under the top-level `Reference` dropdown in `docs-main/docs.json`, outside the `MainNet`/`TestNet`/`DevNet` versioned navigation branches.
 
 ### Generate the JSON API AsyncAPI reference
 
-This repo also includes a checked-in source config for the published JSON Ledger API AsyncAPI docs pages under `config/x2mdx/ledger-api-asyncapi/source-artifacts.json`.
-The generator script fetches the published `3.4` and `3.5` AsyncAPI HTML pages from `docs.digitalasset.com`, extracts the embedded YAML into `.internal/cache/x2mdx/ledger-api-asyncapi/`, writes a local x2mdx manifest into `.internal/generated/x2mdx/ledger-api-asyncapi/manifest.json`, and then renders the MDX page with the GitHub-pinned `x2mdx`.
+This repo also includes a checked-in source config for the Ledger API AsyncAPI bundle inputs under `config/x2mdx/ledger-api-asyncapi/source-artifacts.json`.
+The generator script downloads the configured Canton release bundles, extracts `asyncapi.yaml` into `.internal/cache/x2mdx/ledger-api-asyncapi/`, writes a local x2mdx manifest into `.internal/generated/x2mdx/ledger-api-asyncapi/manifest.json`, and then renders the MDX page with the GitHub-pinned `x2mdx`.
 
 Run:
 
@@ -161,8 +161,8 @@ The generated nav is added under the top-level `Reference` dropdown as `Daml Sta
 
 ### Generate the Canton protobuf history reference
 
-This repo also includes a checked-in source config for versioned Canton protobuf descriptor discovery at `config/x2mdx/protobuf-history/source-artifacts.json`.
-The generator script clones or fetches a cached bare Canton repo under `.internal/cache/x2mdx/protobuf-history/`, materializes local descriptor images for stable release tags, writes a local x2mdx manifest into `.internal/generated/x2mdx/protobuf-history/manifest.json`, and then renders MDX pages with the GitHub-pinned `x2mdx`.
+This repo also includes a checked-in source config for Canton release-bundle protobuf inputs at `config/x2mdx/protobuf-history/source-artifacts.json`.
+The generator script discovers stable Canton versions from the source repo tags, downloads the matching `canton-open-source-<version>.tar.gz` bundles from `canton.io/releases`, extracts the published `protobuf/` tree under `.internal/cache/x2mdx/protobuf-history/`, compiles local descriptor images with `grpc_tools.protoc`, writes a local x2mdx manifest into `.internal/generated/x2mdx/protobuf-history/manifest.json`, and then renders MDX pages with the GitHub-pinned `x2mdx`.
 
 Run:
 
@@ -210,7 +210,7 @@ The generator also adds that page under the top-level `Reference` dropdown as `D
 ### Generate the Wallet Gateway JSON-RPC reference
 
 This repo also includes a checked-in source config for versioned Wallet Gateway OpenRPC specs from `hyperledger-labs/splice-wallet-kernel` at `config/x2mdx/wallet-gateway-openrpc/source-artifacts.json`.
-The generator script clones or fetches a cached bare repo under `.internal/cache/x2mdx/wallet-gateway-openrpc/`, materializes local versioned OpenRPC JSON files, writes a local x2mdx manifest into `.internal/generated/x2mdx/wallet-gateway-openrpc/manifest.json`, and then renders MDX pages with the GitHub-pinned `x2mdx`.
+The generator script discovers versions from GitHub releases filtered to the `@canton-network/wallet-gateway-remote@` release stream, clones or fetches a cached bare repo under `.internal/cache/x2mdx/wallet-gateway-openrpc/`, materializes local versioned OpenRPC JSON files from the matching tag snapshots, writes a local x2mdx manifest into `.internal/generated/x2mdx/wallet-gateway-openrpc/manifest.json`, and then renders MDX pages with the GitHub-pinned `x2mdx`.
 
 Run:
 

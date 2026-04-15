@@ -1,6 +1,1074 @@
 ---
 title: Wallet Integration Guidance
-description: Best practices and guidance for wallet integration.
+description: "Signing Canton Coin transactions from third-party dApps using the Wallet SDK"
 ---
 
-Content coming soon.
+Third-party dApps on Canton Network often need users to sign transactions that the dApp prepares. The Wallet SDK provides the infrastructure for this signing flow, similar to how browser wallet extensions work on other blockchain networks.
+
+## Transaction Signing Flow
+
+{/* COPIED_START source="splice-wallet-kernel:signing-transactions-from-dapps/index.rst" hash="wallet-dapp-signing" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was adapted from existing reviewed documentation.
+**Source:** `splice-wallet-kernel:signing-transactions-from-dapps/index.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+A dApp can integrate with a user's wallet provider through:
+
+- **Embedded wallet** — The dApp embeds the wallet provider directly
+- **Browser extension** — The dApp connects to an external wallet provider via browser extension
+- **External connection** — Other connection mechanisms provided by the wallet provider
+
+The dApp uses the wallet provider's dApp API (defined as an [OpenRPC specification](https://github.com/hyperledger-labs/splice-wallet-kernel/blob/main/api-specs/openrpc-dapp-api.json)) to funnel transactions through to the wallet for signing.
+
+### Preparing Transactions
+
+A dApp typically calls the `prepareExecute` or `prepareExecuteAndWait` endpoint. The wallet provider then prepares, signs, and submits the transaction to the ledger.
+
+You can prepare incoming transactions using the Wallet SDK's transaction preparation functions.
+
+### Displaying Transactions for User Review
+
+Before applying a signature, show the user exactly what they are signing. Once signed, the transaction is considered valid and will be executed. Convert a prepared transaction to a JSON representation for display using the SDK's conversion utilities.
+
+{/* COPIED_END */}
+
+The dApp API follows the vendor-neutral standard defined in [CIP-0103 (dApp Standard for Canton Network)](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0103/cip-0103.md), which decouples network connectivity and key management from application logic. CIP-0103 supports both synchronous and asynchronous operation models, allowing any dApp to work with any wallet implementation that conforms to the standard.
+
+## Integration Patterns
+
+### Canton Coin Transfers
+
+The most common wallet integration is Canton Coin transfers using the Token Standard:
+
+1. **Query holdings** — Use the Token Standard APIs to list the user's Canton Coin holdings
+2. **Prepare transfer** — Build a transfer command that selects UTXOs, specifies the recipient, and calculates change
+3. **Sign and submit** — Present the transaction to the user for signing, then submit to the ledger
+4. **Confirm completion** — Monitor the update stream for the completion event
+
+### Transfer Preapprovals
+
+For automated or high-volume transfers, set up a `TransferPreapproval` contract. This allows senders to transfer Canton Coin to the recipient in a single step without requiring the recipient to accept each individual transfer.
+
+The validator API provides endpoints for managing transfer preapprovals:
+
+- `POST /v0/wallet/transfer-preapproval` — Create a transfer preapproval
+- `POST /v0/wallet/transfer-preapproval/send` — Send Canton Coin using a preapproval
+
+<Note>
+These endpoints are defined in the [wallet-internal.yaml](https://github.com/hyperledger-labs/splice-wallet-kernel/blob/main/api-specs/splice/0.5.8/wallet-internal.yaml) specification. Only endpoints tagged `external` in the [wallet-external.yaml](https://github.com/hyperledger-labs/splice-wallet-kernel/blob/main/api-specs/splice/0.5.8/wallet-external.yaml) specification are considered part of the publicly stable API surface.
+</Note>
+
+### Buying Synchronizer Traffic
+
+Users can purchase synchronizer traffic for any validator using Canton Coin:
+
+1. Create a `BuyTrafficRequest` via `POST /v0/wallet/buy-traffic-requests`
+2. The wallet automation burns the required Canton Coin and increases the validator's traffic budget
+
+## Security Considerations
+
+- Always display the full transaction details to users before they sign
+- Validate that the transaction matches what the dApp claims it will do
+- Use the Token Standard APIs rather than building raw Daml commands
+- Implement proper error handling for rejected or timed-out transactions
+
+## Next Steps
+
+- [Wallet SDK Download](/docs-main/integrations/wallet/sdk-download) — Install the Wallet SDK
+- [Wallet Configuration](/docs-main/integrations/wallet/configuration) — Configure for your environment
+
+{/* COPIED_START source="splice-wallet-kernel:docs/wallet-integration-guide/src/signing-transactions-from-dapps/index.rst" hash="4b0292af" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was copied from existing reviewed documentation.
+**Source:** `splice-wallet-kernel:docs/wallet-integration-guide/src/signing-transactions-from-dapps/index.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+# Signing Transactions from third party dApps
+
+A normal flow on blockchain applications is to have dApps that interact with the blockchain on the clients behalf, these flows usually require the user to sign transactions that the dApp prepares and submit it. To faciliate this in Canton it is required that the prepared transaction is sent to the wallet for signing. An easy way of supporting this is to expose a dApp API (OpenRPC spec can be found here: `https://github.com/hyperledger-labs/splice-wallet-kernel/blob/main/api-specs/openrpc-dapp-api.json`).
+
+*The specs are in OpenRPC to conform with traditional standards like for ethereum.*
+
+A client can provide access to a Wallet Providers dApp API by either embedding a wallet provider in the dApp or by connecting to an external wallet provider via a browser extension or other means. Then the dApp is able to funnel transactions through to the wallet provider for signing.
+
+## Receiving a Transaction
+
+A dApp would usually call the `prepareExecute` endpoint or the `prepareExecuteAndWait` endpoint. In both cases the Wallet Provider would prepare, sign and submit the transaction to the ledger.
+
+You can prepare the incoming transaction using the Wallet SDK:
+
+```typescript
+-- Code from: ../../examples/snippets/prepare-incoming-command.ts
+-- [Include actual code example here]
+```
+
+## Reading and Visualising the Transaction
+
+It is important when integrating with third party dApps to showcase the User exactly what is being signed. Once the signature is applied the transaction can be considered valid (and executed). The easiest would be to create a visualizer that takes a JSON representation of the transaction. The Json for a prepared transaction (before signature is applied) can be obtained using the Wallet SDK:
+
+```typescript
+-- Code from: ../../examples/snippets/convert-transaction-to-json.ts
+-- [Include actual code example here]
+```
+
+{/* COPIED_END */}
+
+
+{/* COPIED_START source="splice-wallet-kernel:docs/wallet-integration-guide/src/canton-network-overview/index.rst" hash="cdfe654c" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was copied from existing reviewed documentation.
+**Source:** `splice-wallet-kernel:docs/wallet-integration-guide/src/canton-network-overview/index.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+# Canton Network Overview
+
+## High-level Overview
+
+Canton Network is a public layer 1 blockchain network with privacy. It is designed for financial institutions and DeFi alike to facilitate secure, interoperable, and privacy-preserving transactions and drive the confluence of TradFi and DeFi.
+
+Key Features:
+
+- It uniquely balances the decentralization of public blockchains with the privacy and controls required for financial markets.
+- It enables real-time, secure synchronization and settlement across multiple asset classes on a shared, interoperable infrastructure.
+- It allows assets and data to move across applications with real-time synchronization and guaranteed privacy.
+
+**Technology:** The Canton Network is designed as a "network of networks," where each participating institution maintains its own sub-ledger while connecting with others via a shared synchronization layer. **Governance:** The Global Synchronizer Foundation (GSF), an independent, non-profit body under the Linux Foundation, governs the global synchronizer. **Participants:** Canton Network was launched in May 2023 by a group of major institutions, and continues to be backed by the world's largest financial and crypto institutions alike. Participants include Goldman Sachs, HSBC and BNP Paribas, market infrastructure providers like DTCC and Deutsche Börse, and (crypto) trading firms like DRW and QCP.
+
+## Canton's High-level architecture
+
+### Nodes and Consensus
+
+The Canton network is composed of nodes known as **validators** that achieve consensus through **synchronizers**. Validator nodes are responsible for storing contract data and executing smart contract code. The synchronizers, in turn, distribute encrypted messages and facilitate transaction coordination. Transaction data is only distributed on a **need-to-know basis** to maintain confidentiality. This is the key delta to other chains:
+
+- In most other chains, all state and transactions get replicated to all nodes/validators.
+- In Canton, state and transactions get distributed only to nodes/validators that are specified in the smart contracts.
+
+### Parties
+
+In Canton, **parties** are the core on-ledger identities, and are the wallet addresses, similar to an address or Externally Owned Account (EOA) on other blockchains. They are central to how **permissions** and **privacy** are managed within the network.
+
+**Party Permissions and Roles**
+
+Smart contracts specify permissions for different parties, dictating what they can and can't do. Depending on their role, parties:
+
+- **Validate** specific transactions, such as a transfer of assets.
+- **Control** certain actions, like initiating transfers.
+- **See** specific state and transactions, such as a record of their holdings.
+
+Privacy is maintained at the party level, meaning transaction and state data is only shared with the parties who need to see it, ensuring a high degree of confidentiality.
+
+**Local parties vs External parties**
+
+Parties come in two forms, internal and external. An internal party is created on the validator node, it gives a validator node submission rights and therefore holds its key on the validator node. Transactions are signed using the Validators own internal keys for signing (and thereby the validator operator has full control of everything that happens on the party).
+
+External parties are similar to how node interactions happens on other networks and therefore Externally Owned Accounts. In this case the signing key can be held externally and a signature is required alongside the transaction to authorize the action. For external parties the base flow follows three steps: Prepare a transaction, sign the transaction and submit the transaction. In this guide, when a party is referenced, it is referring to an external party unless otherwise specified.
+
+To read more about the differences between internal and external parties, see the [Local and external parties documentation section here](https://docs.digitalasset.com/overview/3.3/explanations/canton/external-party.html#overview-canton-external-parties/).
+
+**Onboarding and Format**
+
+Parties are formatted as `name::fingerprint`. The party name or hint is freely chosen at time of creation - there's a maximum limit of 185 characters from \[a-zA-Z0-9:-\_ \], it must not use two consecutive colons, and must be unique in the namespace. The **fingerprint** is a unique identifier and a sha256 hash of the public key prefixed with '12' (as indicated by the [hash purpose](https://github.com/digital-asset/canton/blob/8ee65155e7f866e1f420703c376c867336b75088/community/base/src/main/scala/com/digitalasset/canton/crypto/HashPurpose.scala#L63)).
+
+If you want to be able to derive your Party IDs from the public key, you can either use a static Party Name, and therefore derive the key from the fingerprint, or derive Party Name from the public key, too.
+
+To use a party, you must **onboard** it by submitting a topology transaction that authorizes a node to host it. The designated node must then submit a matching transaction to officially accept the hosting request. Instructions on how to do that can be found here.
+
+**Party Hosting**
+
+Since not every user wants to host a node, parties are associated with validator nodes. These validators "host" parties by: \* Storing the party's private data and making it available through an RPC (Remote Procedure Call) interface. \* Participating in consensus on the party's behalf.
+
+Crucially, even though a validator hosts a party, the party retains ultimate control by holding its own independent **signing keys** externally to the participant.
+
+To participate in the network, a party must designate one or more validator nodes to host their data. This relationship, known as **Party Hosting**, is established through a **topology transaction**.
+
+**Advice on using Parties for wallet providers**
+
+Unlike Ethereum or Bitcoin addresses, creating parties has a cost associated to them and they create state on the validator node which means that they're not as ephemeral as on other chains. Therefore, it's suggested to avoid using parties for use cases such as “deposit addresses”.
+
+- For wallets, it's suggested to aim for one Party per key pair to represent the wallet.
+- For custodians, it's suggested aiming for one Party per account/wallet.
+- For exchanges, it's suggested aiming for one, or few parties for the exchange vault and using memo tags for tracking deposits. See here for more information.
+
+### Consequences & Implications
+
+**Reading Data and Validator State**
+
+A key implication of Canton's architecture for providing privacy, is how you read data. Unlike other blockchains where nodes are often ephemeral and interchangeable, in Canton, **validators have state**. This means that to access a party's or user's data, you must specifically connect to the **validator that hosts that party**. There is no single, all-encompassing blockchain RPC endpoint you can call to retrieve all data. Instead, you'll need to use your node's RPC for private data ("Ledger API") and potentially an app provider's API for their data (e.g., a "Scan API").
+
+**Advantages and Consequences**
+
+The design of the Canton Network leads to several significant advantages:
+
+- **Privacy:** It enables true confidentiality at the smart contract level, as data is only distributed to the parties who have a legitimate need to see it.
+- **Light Node Footprint:** Nodes only process their own transactions, not the entire network's, which keeps them lightweight and efficient.
+- **Scalability:** The network can be scaled by simply adding more nodes.
+
+However, this architecture has the consequence of decentralized data access, as previously mentioned.
+
+**Implications for Wallet Providers**
+
+To offer services on the Canton Network, you will need a **validator node to host your parties and your customers' parties**. You have two options for this: you can **self-host** a node or use a [node-as-a-service provider](https://sync.global/current-validators-offering-nodes/).
+
+For **wallets and custodians**, this means your role extends beyond just safekeeping assets; you are also responsible for **safekeeping your customers' data** and preserving their privacy.
+
+The Canton Network is designed to be agile and undergoes frequent upgrades. Node operators are asked to run nodes in three different environments: **DevNet, TestNet, and MainNet** to ensure that applications and integrations can be tested with new network upgrades. If you choose to self-host, be prepared to spin up and maintain nodes for all three environments. To stay informed and get support, it's highly recommended that self-hosting node operators join the validator node operator community on Slack.
+
+{/* COPIED_END */}
+
+
+{/* COPIED_START source="splice-wallet-kernel:docs/wallet-integration-guide/src/party-management/index.rst" hash="6b3d9715" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was copied from existing reviewed documentation.
+**Source:** `splice-wallet-kernel:docs/wallet-integration-guide/src/party-management/index.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+# Create an External Party (Wallet)
+
+## Overview
+
+Parties represent acting entities in the network and all transaction happens between one or more parties. To understand more about parties see the Parties in the Overview.
+
+A detailed tutorial of the steps below can be seen in the External Signing Tutorial [here](https://docs.digitalasset.com/build/3.3/tutorials/app-dev/external_signing_onboarding.html) using python example scripts.
+
+*This document focuses on the steps required to create an external party using the Wallet SDK.*
+
+## How do I quickly allocate a party?
+
+Using the wallet SDK you can quickly allocate a party using the following code snippet:
+
+Comprehensive using Splice LocalNet
+
+```typescript
+-- Code from: ../../examples/scripts/02-auth-localnet.ts
+-- [Include actual code example here]
+```
+
+Quick using Splice LocalNet
+
+```typescript
+-- Code from: ../../examples/snippets/allocate-party.ts
+-- [Include actual code example here]
+```
+
+Comprehensive using OAuth
+
+```typescript
+-- Code from: ../../examples/scripts/01-auth.ts
+-- [Include actual code example here]
+```
+
+## Create a key pair
+
+The process for creating a key using standard encryption practices is similar that in other blockchains. The full details of supported cryptographic algorithms can be found [Here](https://docs.daml.com/canton/usermanual/security.html#common-node-keys). By default an **Ed25519** encryption is used. There exists many libraries that can be used to generate such a key pair, you can do it simply with the WalletSDK using:
+
+```typescript
+-- Code from: ../../examples/snippets/create-key-pair.ts
+-- [Include actual code example here]
+```
+
+### Generating Keys from a Mnemonic Phrase (BIP-0039)
+
+The Canton Network supports the generation of cryptographic keys using a mnemonic code or mnemonic sentence, following the [BIP-0039 standard](https://github.com/bitcoin/bips/blob/master/bip-0039.mediawiki).
+
+Using a mnemonic phrase allows for deterministic key generation, which simplifies the backup and recovery process. Instead of managing individual private key files, you can recreate your keys across different environments using a human-readable sequence of words.
+
+A typescript example of generating an Ed25519 key pair with a BIP-0039 mnemonic phrase using the libraries bip39 and ed25519 as dependencies is shown below:
+
+```typescript
+-- Code from: ../../examples/snippets/create-key-from-mnenomic-phrase.ts
+-- [Include actual code example here]
+```
+
+## Choosing a party hint
+
+The unique party id is defined as **\${partyHint}::\${fingerprint}**. The partyHint is a user friendly name and can be anything that is unique for the fingerprint, e.g. "alice", "bob" or "my-wallet-1".
+
+If you want to be to derive your party IDs from the public key, you can use a static party hint for all parties with different fingerprints, or also derive party hint from the public key, too.
+
+## Generate the fingerprint
+
+The wallet SDK has a built in function to generate the fingerprint:
+
+```typescript
+-- Code from: ../../examples/snippets/generate-fingerprint.ts
+-- [Include actual code example here]
+```
+
+this can be used to determine the unique party id beforehand or recompute the fingerprint based on the public key.
+
+## Generating the topology transactions
+
+When onboarding using external signing, multiple topology transactions are required to be generated and signed. This is because both the keyHolder (the party) and the node (the validator) need to agree on the hosting relationship. The three transactions that needs to be generated are:
+
+- \`PartyToParticipant\`: This transaction indicates that the party agrees to be hosted by the participant (validator).
+- \`ParticipantToParty\`: This transaction indicates that the participant (validator) agrees to host the party.
+- \`KeyToParty\`: This transaction indicates that the key (public key) is associated with the party.
+
+Once all the transactions are built they can be combined into a single hash and submitted as part of a single signature. The wallet SDK has helper functions to generate these transactions:
+
+```typescript
+-- Code from: ../../examples/snippets/create-topology-transactions.ts
+-- [Include actual code example here]
+```
+
+## Decoding the topology transactions
+
+Sometimes converting the topology transactions to human readable json might be needed, for this you can use the decodeTopologyTx function:
+
+```typescript
+-- Code from: ../../examples/snippets/decode-topology-tx.ts
+-- [Include actual code example here]
+```
+
+## Sign multi-hash
+
+Since the topology transactions need to be submitted together the combined hash needs to be signed. The wallet SDK has a helper function to sign the combined hash:
+
+```typescript
+-- Code from: ../../examples/snippets/sign-party-transaction-hash.ts
+-- [Include actual code example here]
+```
+
+## Submit the topology transactions
+
+Once the signature is generated, the topology transactions can be submitted to the validator. The wallet SDK has a helper function to submit the transactions:
+
+```typescript
+-- Code from: ../../examples/snippets/submit-signed-topology-transaction.ts
+-- [Include actual code example here]
+```
+
+## Multi-hosting a party
+
+Since only relevant data is shared between validator nodes, and nodes don't contain all data, backup and recovery are important. Another important aspect is to prevent having a validator being a single source of failure, this can be handled on a party basis by doing multi hosting. Multi hosting of a party means replication of all the information related to that party onto multiple validators, this can either be multiple validators run by the same entity (most common case for wallets) or even validators run by different entities in case of malicious actors.
+
+To facilitate multi-hosting we simply need to extend `partyToParticipant` and `ParticipantToParty` to include new validators. This requires sourcing signed transaction from the validators the client is interested in being hosted on.
+
+The below script allows you (by using the SDK) to host a single party on both `app-user` and `app-provider` validators.
+
+```typescript
+-- Code from: ../../examples/scripts/06-multi-hosted-party.ts
+-- [Include actual code example here]
+```
+
+Using the `userLedgerControllers` party allocation we only need to specify other validators the party is hosted on. The default is `app-user`, however if you do the onboarding using the `topologyController` legacy variant, then you would also need to supply configurations for the `app-user`.
+
+{/* COPIED_END */}
+
+
+{/* COPIED_START source="splice-wallet-kernel:docs/wallet-integration-guide/src/finding-and-reading-data/index.rst" hash="22f63846" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was copied from existing reviewed documentation.
+**Source:** `splice-wallet-kernel:docs/wallet-integration-guide/src/finding-and-reading-data/index.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+# Finding and Reading Data
+
+The wallet SDK primarily focus on an on-party basis interaction, therefore it is almost always required to define the party you are using. You can however create a party without defining a party, otherwise you have to set the party as done below:
+
+```typescript
+-- Code from: ../../examples/snippets/change-party-and-synchronizer.ts
+-- [Include actual code example here]
+```
+
+## Reading Available Parties
+
+Reading all available parties to you can easily be done using the wallet SDK as shown in the example below, and the result is paginated. It's worth noting that the call to read all available parties doesn't use the the party and synchronizer fields therefore changing them has no effect on the result.
+
+```typescript
+-- Code from: ../../examples/snippets/list-wallets.ts
+-- [Include actual code example here]
+```
+
+## Reading Ledger End
+
+A lot of different requests will take a ledger offset to ensure the requested time correlates with ledger time. A Validator does not have a block height since there is no total state replication. There are two values that correlate:
+
+- ledger time - this is the time the ledger chooses when computing a transaction prior to commit.
+- record time - this is the time assigned by the sequencer when registering the confirmation request.
+
+Ledger time should be used for all operations in your local environment (that does not affect partners). When doing reconciliation for transactions with partners or other members of a synchronizer it is better to use record time.
+
+Ledger end can easily be derived from with the wallet SDK:
+
+```typescript
+-- Code from: ../../examples/snippets/read-ledger-end.ts
+-- [Include actual code example here]
+```
+
+## Reading Active Contracts
+
+Using the above ledger time we can figure out what the current state of all active contracts are. Contracts can be in two states - active and archived - which correlates to the UTXO mode of unspent and spent. Active contracts are contracts that are unspent and thereby can be used in new transactions or to exercise choices.
+
+```typescript
+-- Code from: ../../examples/snippets/read-active-contracts.ts
+-- [Include actual code example here]
+```
+
+## Visualizing a Transaction
+
+The Wallet SDK uses a transaction parsing transform a fully fledged transaction tree into human recognizable transaction view. The full code for the transaction parsing can be found at [parser typescript class](https://github.com/hyperledger-labs/splice-wallet-kernel/blob/main/core/ledger-client/src/txparse/parser.ts).
+
+The Wallet SDK uses this parser to transform all transaction tree interacted with into PrettyTransactions.
+
+for instance on the `getTransactionById` or `listHoldingTransactions` (Detailed here).
+
+The Transactions will have format:
+
+``` javascript
+export interface Transaction {
+    updateId: string // unique updateId
+    offset: number // the ledger offset (local validator)
+    recordTime: string // time recorded on the synchronizer (use this if needed to compare with another ledger)
+    synchronizerId: string // the synchronizer the transaction happened on
+    events: TokenStandardEvent[] // event representing all the changes caused by the transaction
+}
+```
+
+A single transaction can contain multiple events (deposits and withdrawals are considered events). In order to figure out the on chain transaction it is required to iterate over all the events. The events have the format:
+
+``` javascript
+export interface TokenStandardEvent {
+    label: Label // used to identify the type of transaction
+    lockedHoldingsChange: HoldingsChange // all the changes to locked holdings
+    lockedHoldingsChangeSummary: HoldingsChangeSummary // summary of above changes
+    unlockedHoldingsChange: HoldingsChange // all the changes to unlocked holdings
+    unlockedHoldingsChangeSummary: HoldingsChangeSummary // summary of above changes
+    transferInstruction: TransferInstructionView | null // any pending transfer instructions
+}
+```
+
+below you can have a look at different event types and how to potentially visualize the transaction for a client
+
+Tap operation
+
+Here is an example on how a "tap" event looks like (Performing tap):
+
+```json
+-- Code from: ../../examples/snippets/tap-event.json
+-- [Include actual code example here]
+```
+
+The tap gives a nice and simple view some key values to look at. Using the `label` we can quickly gage what is happening:
+
+```json
+"label": {
+    "burnAmount": "0", // how much was burned
+    "mintAmount": "2000000", // how much was minted
+    "type": "Mint", // event type
+    "tokenStandardChoice": null, // no token standard choice
+    "reason": "tapped faucet", // reason
+    "meta": {
+        "values": {} // any other meta data value
+    }
+}
+```
+
+For a "tap" event we don't have any locked holding changes, however we do have an unlocked create event:
+
+```json
+"unlockedHoldingsChange": {
+    // we have one create event
+    // if utxos what spend this would be an archive instead
+    "creates": [
+        {
+            // amount on the utxo
+            "amount": "2000000.0000000000",
+            // instrument information
+            "instrumentId": {
+                "admin": "DSO::1220294d264ccf205000d72d9f0106e3a0e8ce8d34982d7f134c42d42d18750ccd36",
+                "id": "Amulet"
+            },
+            // the contract id of the new utxo
+            "contractId": "00cee8d2659d5966962fbda321aae358092eafbb162d46f2639a8da0688ef3ee8aca11122096aeb27e0fa9c03a3209fda9db88e4e67a2ba1509f094bdd82a38d844ca65305",
+            // owner of the utxo
+            "owner": "alice::12201acb807c49aceaeb68b1d89bb3bea95fe740b4b0a6cca428e6a351c2450540f4",
+            // any meta data
+            "meta": {
+                "values": {
+                    "amulet.splice.lfdecentralizedtrust.org/created-in-round": "32",
+                    "amulet.splice.lfdecentralizedtrust.org/rate-per-round": "0.00380518"
+                }
+            },
+            // lock if applicable
+            "lock": null
+        }
+    ]
+}
+```
+
+Merge Split
+
+A Merge or split is usually done by performing a transfer to yourself, by selecting several input utxos they can be consolidated into one and likewise a transfer to yourself of one big utxo can be used to split it into two. Below is the usual merge split that you would see if you use an utxo that is bigger than the transferred amount when performing a 2-step transfer:
+
+```json
+-- Code from: ../../examples/snippets/merge-split-event.json
+-- [Include actual code example here]
+```
+
+The label gives us the quick information
+
+```json
+"label": {
+        "burnAmount": "0",  // how much was burned
+        "mintAmount": "0",  // how much was minted
+        "type": "MergeSplit", // event type
+        "tokenStandardChoice": { // the entire token standard choice
+
+        },
+        "reason": "memo-ref", // memo tag
+        "meta": { // any other relevant meta data
+          "values": {}
+        }
+      }
+```
+
+The locked holding change shows one new utxo equivalent to the amount send to Bob. Once Bob accepts the transfer this locked utxo would be archived.information.
+
+```json
+"lockedHoldingsChange": {
+       // we have 1 new locked holding of the transfer amount (100)
+       "creates": [
+         {
+           "amount": "100.0000000000",
+           "instrumentId": {
+             "admin": "DSO::1220294d264ccf205000d72d9f0106e3a0e8ce8d34982d7f134c42d42d18750ccd36",
+             "id": "Amulet"
+           },
+           "contractId": "00b0af2ac89701b35d60b52fa239a66a993b383f963a9230f3f04e6510290dbe95ca1112200df1866e4ed7b50d6f9ac02b348a47a47b70c4d74f8d9575a1453ee9fe175f1b",
+           // alice is still the owner since this a locked utxo, until bob accepts
+           "owner": "alice::12201acb807c49aceaeb68b1d89bb3bea95fe740b4b0a6cca428e6a351c2450540f4",
+           "meta": {
+             "values": {
+               "amulet.splice.lfdecentralizedtrust.org/created-in-round": "32",
+               "amulet.splice.lfdecentralizedtrust.org/rate-per-round": "0.00380518"
+             }
+           },
+           "lock": {
+           // the DSO (instrument Admin) is holder of the lock
+             "holders": [
+               "DSO::1220294d264ccf205000d72d9f0106e3a0e8ce8d34982d7f134c42d42d18750ccd36"
+             ],
+             "expiresAt": "2025-10-15T02:11:47.406Z",
+             "expiresAfter": null,
+             "context": "transfer to 'bob::1220447e99360f4e11caf7be818b96ead2a23c593eb927f792ae5f0a0bc15b264783'"
+           }
+         }
+       ]
+     },
+     //overview of how holdings have changed
+     "lockedHoldingsChangeSummary": {
+       "numOutputs": 1,
+       "outputAmount": "100",
+       "amountChange": "100"
+     },
+```
+
+There is also an unlocked holding change, consist of one create and one archive. Since alice had one transaction of 2000000.0000000000, and only send 100, then she gets the remaining 1999900.0000000000 back:
+
+```json
+"unlockedHoldingsChange": {
+        // creates the new utxo for alice with the unspent amount
+        "creates": [
+          {
+            "amount": "1999900.0000000000",
+            "instrumentId": {
+              "admin": "DSO::1220294d264ccf205000d72d9f0106e3a0e8ce8d34982d7f134c42d42d18750ccd36",
+              "id": "Amulet"
+            },
+            "contractId": "00ba31e046f04908e6bf6fe5eeb725f0e2054f37353e85c7ef99a0924df8c1b891ca11122046dee24aeae91d4a5fc0570458cad8ccc94002645b6a6e2c82cc5f07ca897fe9",
+            "owner": "alice::12201acb807c49aceaeb68b1d89bb3bea95fe740b4b0a6cca428e6a351c2450540f4",
+            "meta": {
+              "values": {
+                "amulet.splice.lfdecentralizedtrust.org/created-in-round": "32",
+                "amulet.splice.lfdecentralizedtrust.org/rate-per-round": "0.00380518"
+              }
+            },
+            "lock": null
+          }
+        ],
+        // archives the old spend utxo
+        "archives": [
+          {
+            "amount": "2000000.0000000000",
+            "instrumentId": {
+              "admin": "DSO::1220294d264ccf205000d72d9f0106e3a0e8ce8d34982d7f134c42d42d18750ccd36",
+              "id": "Amulet"
+            },
+            "contractId": "00cee8d2659d5966962fbda321aae358092eafbb162d46f2639a8da0688ef3ee8aca11122096aeb27e0fa9c03a3209fda9db88e4e67a2ba1509f094bdd82a38d844ca65305",
+            "owner": "alice::12201acb807c49aceaeb68b1d89bb3bea95fe740b4b0a6cca428e6a351c2450540f4",
+            "meta": {
+              "values": {
+                "amulet.splice.lfdecentralizedtrust.org/created-in-round": "32",
+                "amulet.splice.lfdecentralizedtrust.org/rate-per-round": "0.00380518"
+              }
+            },
+            "lock": null
+          }
+        ]
+      },
+      // overview of how this has changed alices utxos
+      "unlockedHoldingsChangeSummary": {
+        "numInputs": 1,
+        "inputAmount": "2000000",
+        "numOutputs": 1,
+        "outputAmount": "1999900",
+        "amountChange": "-100"
+      }
+```
+
+Transfer Out
+
+When Bob accepts the transfer we see the actual transfer out event. This is seen from Alice point of view
+
+```json
+-- Code from: ../../examples/snippets/transfer-out-event.json
+-- [Include actual code example here]
+```
+
+The label gives us the quick information.
+
+```json
+"label": {
+        "burnAmount": "0", // how much was burned
+        "mintAmount": "0",  // how much was minted
+        "type": "TransferOut", // event type
+        "receiverAmounts": [ // the list of receivers and how much
+          {
+            "receiver": "bob::1220447e99360f4e11caf7be818b96ead2a23c593eb927f792ae5f0a0bc15b264783",
+            "amount": "100"
+          }
+        ],
+        "tokenStandardChoice": { // the entire token standard choice
+
+        },
+        "reason": "memo-ref", // memo tag
+        "meta": { // any other meta data
+          "values": {}
+        }
+      }
+```
+
+We can see that the locked 100 transfer is now archived, on Bobs side he will see a Transfer In that creates an unlocked holding of 100.
+
+```json
+"lockedHoldingsChange": {
+        // The locked utxo is archived
+        "archives": [
+          {
+            "amount": "100.0000000000",
+            "instrumentId": {
+              "admin": "DSO::1220294d264ccf205000d72d9f0106e3a0e8ce8d34982d7f134c42d42d18750ccd36",
+              "id": "Amulet"
+            },
+            "contractId": "00b0af2ac89701b35d60b52fa239a66a993b383f963a9230f3f04e6510290dbe95ca1112200df1866e4ed7b50d6f9ac02b348a47a47b70c4d74f8d9575a1453ee9fe175f1b",
+            "owner": "alice::12201acb807c49aceaeb68b1d89bb3bea95fe740b4b0a6cca428e6a351c2450540f4",
+            "meta": {
+              "values": {
+                "amulet.splice.lfdecentralizedtrust.org/created-in-round": "32",
+                "amulet.splice.lfdecentralizedtrust.org/rate-per-round": "0.00380518"
+              }
+            },
+            "lock": {
+              "holders": [
+                "DSO::1220294d264ccf205000d72d9f0106e3a0e8ce8d34982d7f134c42d42d18750ccd36"
+              ],
+              "expiresAt": "2025-10-15T02:11:47.406Z",
+              "expiresAfter": null,
+              "context": "transfer to 'bob::1220447e99360f4e11caf7be818b96ead2a23c593eb927f792ae5f0a0bc15b264783'"
+            }
+          }
+        ]
+      }
+```
+
+Transfer In
+
+Bob will see a transfer in once he has accepted the transferInstruction from Alice. If Bob had set up transfer pre-approval, then he would only see the below transfer:
+
+```json
+-- Code from: ../../examples/snippets/transfer-in-event.json
+-- [Include actual code example here]
+```
+
+The label gives us the quick information.
+
+```json
+"label": {
+        "type": "TransferIn", // event type
+        "burnAmount": "0",  // how much was burned
+        "mintAmount": "0", // how much was minted
+        // the original sender of the amount
+        "sender": "alice::12201acb807c49aceaeb68b1d89bb3bea95fe740b4b0a6cca428e6a351c2450540f4",
+        "tokenStandardChoice": {
+
+        },
+        "reason": "memo-ref", // memo tag
+        "meta": { // any other meta fields
+          "values": {}
+        }
+      }
+```
+
+Bob then also sees one new unlocked utxo for the 100.
+
+```json
+"unlockedHoldingsChange": {
+        // the new money available for Bob
+        "creates": [
+          {
+            "amount": "100.0000000000",
+            "instrumentId": {
+              "admin": "DSO::1220294d264ccf205000d72d9f0106e3a0e8ce8d34982d7f134c42d42d18750ccd36",
+              "id": "Amulet"
+            },
+            "contractId": "002e360f78cf28a40c742839572bbf7a683ba59c3db906757b284a2edf433700edca1112209685da5d5a5c531b51504601c175cbbeaba8956e7a7fc2926fa8909d8b81a95a",
+            "owner": "bob::1220447e99360f4e11caf7be818b96ead2a23c593eb927f792ae5f0a0bc15b264783",
+            "meta": {
+              "values": {
+                "amulet.splice.lfdecentralizedtrust.org/created-in-round": "32",
+                "amulet.splice.lfdecentralizedtrust.org/rate-per-round": "0.00380518"
+              }
+            },
+            "lock": null
+          }
+        ]
+      }
+```
+
+{/* COPIED_END */}
+
+
+{/* COPIED_START source="splice-wallet-kernel:docs/wallet-integration-guide/src/token-standard/index.rst" hash="c3641fc0" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was copied from existing reviewed documentation.
+**Source:** `splice-wallet-kernel:docs/wallet-integration-guide/src/token-standard/index.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+# Token Standard
+
+The Wallet SDK support performing basic token standard operations, these are exposed through the `sdk.tokenStandard` a complete overview of the underlying integration can be found here \ and the CIP is defined here \.
+
+## How do i quickly perform a transfer between two parties?
+
+The below performs a 2-step transfer between Alice and Bob and expose their holdings:
+
+```typescript
+-- Code from: ../../examples/scripts/04-token-standard-localnet.ts
+-- [Include actual code example here]
+```
+
+## Listing holdings (UTXO's)
+
+Canton uses created and archived events to determine the state of the ledger. This correlates to how UTXO's are handled on other blockchains like Bitcoin. This means that at any point in time you can retrieve all your active contracts with the interface 'Holding' to see all assets you posses across different instruments.
+
+```typescript
+-- Code from: ../../examples/snippets/list-holdings.ts
+-- [Include actual code example here]
+```
+
+the above script can safely be used to determine used in a transfer, if you provide no boolean value or true then you need to filter out the locked ones manually.
+
+## Listing holding transactions
+
+In order to stream transaction events as they happen on ledger the `listHoldingTransactions` endpoint can be used. This takes two ledger offset and gives an overview of all token standard transactions that have happened between. It also returns a `nextOffset` that can be used when calling the endpoint again. This will allow you to easily ensure you do not receive any transaction twice and you are only querying the transactions that have happened after.
+
+```typescript
+-- Code from: ../../examples/snippets/monitor-transaction-holdings.ts
+-- [Include actual code example here]
+```
+
+to quickly convert the stream into deposit and withdrawal you can use this function:
+
+``` javascript
+function convertToTransaction(pt: Transaction, associatedParty: string): object[] {
+    return pt.events.flatMap((event) => {
+        if (event.label.type === 'TransferIn') {
+            return [{
+                updateId: pt.updateId,
+                recordTime: pt.recordTime,
+                from: event.label.sender,
+                to: associatedParty,
+                amount: Number(event.unlockedHoldingsChangeSummary.amountChange),
+                instrumentId: 'Amulet', //hardcoded instrumentId from local net
+                fee: Number(event.label.burnAmount),
+                memo: event.label.reason,
+            }];
+        } else if (event.label.type === 'TransferOut') {
+            const label = event.label
+            return event.label.receiverAmounts.map((receiverAmount: any) => ({
+                updateId: pt.updateId,
+                recordTime: pt.recordTime,
+                from: associatedParty,
+                to: receiverAmount.receiver,
+                amount: Number(receiverAmount.amount),
+                instrumentId: 'Amulet', //hardcoded instrumentId from local net
+                fee: Number(label.burnAmount),
+                memo: label.meta.reason,
+            }));
+        } else {
+            return [];
+        }
+    });
+}
+```
+
+## Performing a Tap on DevNet or LocalNet
+
+When writing scripts and setup it is important to have funds present, this can be very tedious on blockchains. Therefor most blockchains support some form of a faucet (that allows to receive a small amount of funds to play with). On canton we allow the `tap` method that is only present on DevNet (or LocalNet), by using this you can stock funds to easily attempt some of the CC transfer flows:
+
+```typescript
+-- Code from: ../../examples/snippets/tap-coins.ts
+-- [Include actual code example here]
+```
+
+this is an important pre-requisite for the creating of transfer in your script.
+
+## Creating a transfer
+
+In order to create a simple transfer you can use the `createTransfer` on the token standard. Then like any other operation you can use the `prepareSubmission` endpoint, sign the returned hash and finally `executeSubmission`.
+
+```typescript
+-- Code from: ../../examples/snippets/create-transfer-command.ts
+-- [Include actual code example here]
+```
+
+## UTXO management and locked funds
+
+The default script for creating a transfer above uses automated utxo selection, the automatic being to simply select all utxo's. In a more professional way, you would want to carefully pick which utxo's you would like to use as input for your transfers, alongside you might also want to define a custom expiration time for when the transaction should automatically expire.
+
+```typescript
+-- Code from: ../../examples/snippets/create-transfer-command-full.ts
+-- [Include actual code example here]
+```
+
+if we call `sdk.tokenStandard?.listHoldingUtxos(false)` then it will show 1 utxo of 50 (then one we excluded).
+
+if we call `sdk.tokenStandard?.listHoldingUtxos(true)` then it will show all 3 utxos (100 and 25 both will have a lock).
+
+## 2-step transfer vs 1-step transfer
+
+The default behavior for all tokens are a 2-step transfer, this matches how funds are usually transferred in TradFi, however this is counter-intuitive in the blockchain world. Canton Coin supports setting up a "Transfer Pre-approval", this allows a party to designate that he wants to auto-accept all incoming transfer, giving a similar behavior of the blockchain world.
+
+```typescript
+-- Code from: ../../examples/snippets/create-transfer-preapproval.ts
+-- [Include actual code example here]
+```
+
+## Accepting or rejecting a 2-step transfer
+
+If no Transfer pre-approval have been set up, then it is required to fetch incoming transfer instructions and consume either the `Accept` or `Reject` choice, this can be done easily using the Wallet SDK.
+
+```typescript
+-- Code from: ../../examples/snippets/read-pending-transfer-instructions.ts
+-- [Include actual code example here]
+```
+
+the above give a list of pending transfer instructions, you can then exercise the accept or reject choice on them:
+
+```typescript
+-- Code from: ../../examples/snippets/accept-or-reject-transfer.ts
+-- [Include actual code example here]
+```
+
+## Withdrawing a 2-step transfer before it gets accepted
+
+Apart from accepting or rejecting a transfer instruction, it is also possible for the sender to `withdraw` the offer, thereby retrieving the locked funds.
+
+```typescript
+-- Code from: ../../examples/snippets/withdraw-transfer-instruction.ts
+-- [Include actual code example here]
+```
+
+## How do i quickly setup transfer preapproval?
+
+It is worth nothing that using the validator operator party as the providing party causes the transfer pre-approval to auto-renew. The below script setup transfer preapproval for Bob and performs a 1-step transfer from Alice to Bob:
+
+```typescript
+-- Code from: ../../examples/scripts/05-token-standard-transfer-autoaccept.ts
+-- [Include actual code example here]
+```
+
+## How to renew or cancel a transfer preapproval
+
+If you have used the validator operator party as the provider, then it will automatically renew the transfer preapproval approximately 20 days before expiry, however there are cases where you would like to perform the preapproval renewal manually:
+
+```typescript
+-- Code from: ../../examples/snippets/renew-preapproval.ts
+-- [Include actual code example here]
+```
+
+You can also deploy a secondary transfer preapproval, however this means that there are simply two preapprovals instead of it replacing the existing.
+
+If you have accidentally created a transfer preapproval that you dont want to keep you can perform a cancel instead:
+
+```typescript
+-- Code from: ../../examples/snippets/cancel-preapproval.ts
+-- [Include actual code example here]
+```
+
+{/* COPIED_END */}
+
+
+{/* COPIED_START source="splice-wallet-kernel:docs/wallet-integration-guide/src/wallet-sdk-configuration/index.rst" hash="c5b36cba" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was copied from existing reviewed documentation.
+**Source:** `splice-wallet-kernel:docs/wallet-integration-guide/src/wallet-sdk-configuration/index.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+# Wallet SDK Configuration
+
+If you have already played around with the wallet SDK you might have come across snippets like:
+
+```typescript
+-- Code from: ../../examples/snippets/default-config.ts
+-- [Include actual code example here]
+```
+
+This is the default config that can be used in combination with a non-altered [Localnet](https://docs.global.canton.network.sync.global/app_dev/testing/localnet.html) running instance.
+
+However as soon as you need to migrate your script, code and deployment to a different environment these default configurations are no longer viable to use. In those cases creating custom factories for each controller is needed. Here is a template that you can use when setting up your own custom connectivity configuration:
+
+```typescript
+-- Code from: ../../examples/snippets/config-template.ts
+-- [Include actual code example here]
+```
+
+## How do I validate my configurations?
+
+Knowing if you are using the correct url and port can be daunting, here is a few curl and gcurl commands you can use to validate against an expected output
+
+**my-json-ledger-api** can be identified with `curl http://${my-json-ledger-api}/v2/version` it should produce a json that looks like
+
+```json
+{
+   "version":"3.3.0-SNAPSHOT",
+   "features":{
+      "experimental":{
+         "staticTime":{
+            "supported":false
+         },
+         "commandInspectionService":{
+            "supported":true
+         }
+      },
+      "userManagement":{
+         "supported":true,
+         "maxRightsPerUser":1000,
+         "maxUsersPageSize":1000
+      },
+      "partyManagement":{
+         "maxPartiesPageSize":10000
+      },
+      "offsetCheckpoint":{
+         "maxOffsetCheckpointEmissionDelay":{
+            "seconds":75,
+            "nanos":0,
+            "unknownFields":{
+               "fields":{
+
+               }
+            }
+         }
+      }
+   }
+}
+```
+
+the fields may vary based on your configuration.
+
+> the topology controller is deprecated so the below section for **my-grpc-admin-api** is not needed anymore.
+
+**my-grpc-admin-api** can be identified with `grpcurl -plaintext ${my-grpc-admin-api} list` it should produce an output like
+
+``` text
+com.digitalasset.canton.admin.health.v30.StatusService
+com.digitalasset.canton.admin.participant.v30.EnterpriseParticipantReplicationService
+com.digitalasset.canton.admin.participant.v30.PackageService
+com.digitalasset.canton.admin.participant.v30.ParticipantInspectionService
+com.digitalasset.canton.admin.participant.v30.ParticipantRepairService
+com.digitalasset.canton.admin.participant.v30.ParticipantStatusService
+com.digitalasset.canton.admin.participant.v30.PartyManagementService
+com.digitalasset.canton.admin.participant.v30.PingService
+com.digitalasset.canton.admin.participant.v30.PruningService
+com.digitalasset.canton.admin.participant.v30.ResourceManagementService
+com.digitalasset.canton.admin.participant.v30.SynchronizerConnectivityService
+com.digitalasset.canton.admin.participant.v30.TrafficControlService
+com.digitalasset.canton.connection.v30.ApiInfoService
+com.digitalasset.canton.crypto.admin.v30.VaultService
+com.digitalasset.canton.time.admin.v30.SynchronizerTimeService
+com.digitalasset.canton.topology.admin.v30.IdentityInitializationService
+com.digitalasset.canton.topology.admin.v30.TopologyAggregationService
+com.digitalasset.canton.topology.admin.v30.TopologyManagerReadService
+com.digitalasset.canton.topology.admin.v30.TopologyManagerWriteService
+grpc.reflection.v1alpha.ServerReflection
+```
+
+the list might differed based on you canton configuration, the most important part is `TopologyManagerReadService` & `TopologyManagerWriteService`
+
+**my-validator-app-api** can be identified with `curl ${api}/version` it should produce an output like
+
+```json
+{"version":"0.4.15","commit_ts":"2025-09-05T11:38:13Z"}
+```
+
+**my-scan-proxy-api** is a api inside the validator api and can be defined as `${my-validator-app-api}/v0/scan-proxy`.
+
+**my-registry-api** is the registry for the token you want to use, for Canton Coin you can use **my-scan-proxy-api**, however for any other token standard token it is required to source the api from a reputable source.
+
+## Configuring Auth Controller
+
+By default the `localNetAuthDefault` uses these defined values:
+
+``` text
+userId = 'ledger-api-user'
+adminId = 'ledger-api-user'
+audience = 'https://canton.network.global'
+unsafeSecret = 'unsafe'
+```
+
+this produces a self-signed HMAC auth token using "unsafe" for signing.
+
+<Warning>
+The value for some of the audiences in localnet would have to be adjusted to match "<https://canton.network.global>". This is specifically the `LEDGER_API_AUTH_AUDIENCE` & `VALIDATOR_AUTH_AUDIENCE`.
+</Warning>
+
+When upgrading your setup from a localnet setup to a production or client facing environment then it might make more sense to add proper authentication to the ledger api and other services. The community contributions include okta and keycloak [OIDC](https://docs.dev.sync.global/community/oidc-config-okta-keycloak.html). These can easily be configured for the SDK using a custom `clientCredentialOAuthController`
+
+```typescript
+-- Code from: ../../examples/snippets/oauth-controller.ts
+-- [Include actual code example here]
+```
+
+However since it follows a simple interface, you can build your own implementation of it if you have unique requirements:
+
+``` javascript
+export interface AuthController {
+    /** gets an auth context correlating to the non-admin user provided.
+     */
+    getUserToken(): Promise<AuthContext>
+
+    /** gets an auth context correlating to the admin user provided.
+     */
+    getAdminToken(): Promise<AuthContext>
+    userId: string | undefined
+}
+```
+
+{/* COPIED_END */}
+

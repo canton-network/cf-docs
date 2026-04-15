@@ -3,6 +3,13 @@ title: "Choices"
 description: "Learn how to add behavior to Daml contracts using choices - the methods that transform contract state"
 ---
 
+import DamlAppdevModulesM3ChoicesL104 from "/snippets/daml-docs/appdev_modules_m3-choices_L104.mdx";
+import DamlAppdevModulesM3ChoicesL115 from "/snippets/daml-docs/appdev_modules_m3-choices_L115.mdx";
+import DamlAppdevModulesM3ChoicesL201 from "/snippets/daml-docs/appdev_modules_m3-choices_L201.mdx";
+import DamlAppdevModulesM3ChoicesL24 from "/snippets/daml-docs/appdev_modules_m3-choices_L24.mdx";
+import DamlAppdevModulesM3ChoicesL69 from "/snippets/daml-docs/appdev_modules_m3-choices_L69.mdx";
+
+
 {/* COPIED_START source="docs-website:docs/replicated/daml/3.4/sdk/tutorials/smart-contracts/choices.rst" hash="9b87bfb6" */}
 
 ## Introduction
@@ -21,26 +28,7 @@ If you think of templates as classes and contracts as objects, where are the met
 
 Take as an example a `Contact` contract on which the contact owner wants to be able to change the telephone number. Rather than requiring them to manually look up the contract, archive the old one, and create a new one as you saw in [Contract Templates](/docs-main/appdev/modules/m3-contract-templates), you can provide them a convenience method on `Contact`:
 
-```daml
-template Contact
-  with
-    owner : Party
-    party : Party
-    address : Text
-    telephone : Text
-  where
-    signatory owner
-    observer party
-
-    choice UpdateTelephone
-      : ContractId Contact
-      with
-        newTelephone : Text
-      controller owner
-      do
-        create this with
-          telephone = newTelephone
-```
+<DamlAppdevModulesM3ChoicesL24 />
 
 The above defines a *choice* called `UpdateTelephone`. Choices are part of a contract template. They're permissioned functions that result in an `Update`. Using choices, authority can be passed around, allowing the construction of complex transactions.
 
@@ -66,28 +54,7 @@ As mentioned in `data`, within a choice we use `create` instead of `createCmd`. 
 
 Now to exercise the new choice in a script:
 
-```daml
-choice_test = do
-  owner <- allocateParty "Alice"
-  party <- allocateParty "Bob"
-
-  contactCid <- submit owner do
-     createCmd Contact with
-      owner
-      party
-      address = "1 Bobstreet"
-      telephone = "012 345 6789"
-
-  -- Bob can't change his own telephone number as Alice controls
-  -- that choice.
-  submitMustFail party do
-    exerciseCmd contactCid UpdateTelephone with
-      newTelephone = "098 7654 321"
-
-  newContactCid <- submit owner do
-    exerciseCmd contactCid UpdateTelephone with
-      newTelephone = "098 7654 321"
-```
+<DamlAppdevModulesM3ChoicesL69 />
 
 You exercise choices using the `exercise` function, which takes a `ContractId a`, and a value of type `c`, where `c` is a choice on template `a`. Since `c` is just a record, you can also just fill in the choice parameters using the `with` syntax you are already familiar with.
 
@@ -101,26 +68,9 @@ Up to this point all the contracts only involved one party. `party` may have bee
 
 The below demonstrates this using an `UpdateAddress` choice and corresponding extension of the script:
 
-```daml
-    choice UpdateAddress
-      : ContractId Contact
-      with
-        newAddress : Text
-      controller party
-      do
-        create this with
-          address = newAddress
-```
+<DamlAppdevModulesM3ChoicesL104 />
 
-```daml
-  newContactCid <- submit party do
-    exerciseCmd newContactCid UpdateAddress with
-      newAddress = "1-10 Bobstreet"
-
-  Some newContact <- queryContractId owner newContactCid
-
-  assert (newContact.address == "1-10 Bobstreet")
-```
+<DamlAppdevModulesM3ChoicesL115 />
 
 If you open the script view in the IDE, you will notice that Bob sees the `Contact`. This is because `party` is specified as an `observer` in the template, and in this case Bob is the `party`. More on *observers* later, but in short, they get to see any changes to the contract.
 
@@ -198,29 +148,7 @@ You may have noticed that there is no archive action. That's because `archive ci
 
 With the power of choices, you can build your first interesting model: issuance of cash IOUs (I owe you). The model presented here is simpler than the one in [Language Fundamentals](/docs-main/appdev/modules/m3-language-fundamentals) as it's not concerned with the location of the physical cash, but merely with liabilities:
 
-```daml
-data Cash = Cash with
-  currency : Text
-  amount : Decimal
-    deriving (Eq, Show)
-
-template SimpleIou
-  with
-    issuer : Party
-    owner : Party
-    cash : Cash
-  where
-    signatory issuer
-    observer owner
-
-    choice Transfer
-      : ContractId SimpleIou
-      with
-        newOwner : Party
-      controller owner
-      do
-        create this with owner = newOwner
-```
+<DamlAppdevModulesM3ChoicesL201 />
 
 The above model is fine as long as everyone trusts Dora. Dora could revoke the `SimpleIou` at any point by archiving it. However, the provenance of all transactions would be on the ledger so the owner could *prove* that Dora was dishonest and cancelled her debt.
 

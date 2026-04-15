@@ -3,6 +3,11 @@ title: "Core Concepts"
 description: "Essential building blocks of Canton Network: parties, validators, synchronizers, and smart contracts"
 ---
 
+import DamlOverviewUnderstandCoreConceptsL183 from "/snippets/daml-docs/overview_understand_core-concepts_L183.mdx";
+import DamlOverviewUnderstandCoreConceptsL223 from "/snippets/daml-docs/overview_understand_core-concepts_L223.mdx";
+import DamlOverviewUnderstandCoreConceptsL44 from "/snippets/daml-docs/overview_understand_core-concepts_L44.mdx";
+
+
 Understanding Canton requires grasping four fundamental concepts: **parties**, **validator** node, **synchronizers**, and **templates** (smart contracts). This page introduces each and explains how they work together.
 
 ## Parties
@@ -41,21 +46,7 @@ Unlike Ethereum addresses, parties create state on validators and have costs ass
 
 Parties interact with contracts in three roles:
 
-```haskell
-template Asset
-  with
-    issuer : Party   -- Will be signatory
-    owner : Party    -- Will be observer and controller
-    auditor : Party  -- Will be observer
-  where
-    signatory issuer        -- Must authorize creation; always sees contract
-    observer owner, auditor -- Can see contract
-
-    choice Transfer : ContractId Asset
-      with newOwner : Party
-      controller owner      -- Only owner can exercise this choice
-      do create this with owner = newOwner
-```
+<DamlOverviewUnderstandCoreConceptsL44 />
 
 | Role | Can Create | Can See | Can Act |
 |------|------------|---------|---------|
@@ -180,26 +171,7 @@ Smart contracts in Canton are defined using **Daml**, a purpose-built language f
 
 ### Template Structure
 
-```haskell
-template Token
-  with
-    -- Data fields
-    owner : Party
-    issuer : Party
-    amount : Decimal
-  where
-    -- Authorization
-    signatory issuer
-    observer owner
-
-    -- Actions
-    choice Transfer : ContractId Token
-      with
-        newOwner : Party
-      controller owner
-      do
-        create this with owner = newOwner
-```
+<DamlOverviewUnderstandCoreConceptsL183 />
 
 ### Contracts Are Immutable
 
@@ -220,17 +192,7 @@ This immutability is key to Canton's privacy and integrity guarantees.
 | **Consuming** | Archives the contract | State transitions, transfers |
 | **Non-consuming** | Contract remains active | Queries, read operations, events for listening clients |
 
-```haskell
--- Consuming: archives the contract
-choice Transfer : ContractId Token
-  controller owner
-  do create this with owner = newOwner
-
--- Non-consuming: contract stays active
-nonconsuming choice GetBalance : Decimal
-  controller owner
-  do return amount
-```
+<DamlOverviewUnderstandCoreConceptsL223 />
 
 ## How Components Work Together
 
