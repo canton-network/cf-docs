@@ -3,6 +3,15 @@ title: "The Ledger Model"
 description: "Understanding Canton's UTXO-based ledger model with contracts, stakeholders, and transactions"
 ---
 
+import DamlOverviewLearnLedgerModelL101 from "/snippets/daml-docs/overview_learn_ledger-model_L101.mdx";
+import DamlOverviewLearnLedgerModelL122 from "/snippets/daml-docs/overview_learn_ledger-model_L122.mdx";
+import DamlOverviewLearnLedgerModelL180 from "/snippets/daml-docs/overview_learn_ledger-model_L180.mdx";
+import DamlOverviewLearnLedgerModelL241 from "/snippets/daml-docs/overview_learn_ledger-model_L241.mdx";
+import DamlOverviewLearnLedgerModelL269 from "/snippets/daml-docs/overview_learn_ledger-model_L269.mdx";
+import DamlOverviewLearnLedgerModelL283 from "/snippets/daml-docs/overview_learn_ledger-model_L283.mdx";
+import DamlOverviewLearnLedgerModelL81 from "/snippets/daml-docs/overview_learn_ledger-model_L81.mdx";
+
+
 Canton uses an **extended UTXO (eUTXO)** ledger model where contracts are discrete objects that are created and archived, rather than mutable account balances. This model is fundamental to how Canton achieves privacy and composability.
 
 ## Contracts as UTXOs
@@ -78,14 +87,7 @@ Signatories are the primary authorities on a contract.
 - Always see the contract and all actions on it
 - Defined in the template with `signatory` keyword
 
-```daml
-template Asset
-  with
-    issuer : Party
-    owner : Party
-  where
-    signatory issuer, owner  -- Both must agree to create/archive
-```
+<DamlOverviewLearnLedgerModelL81 />
 
 **When to use:** When a party's agreement is essential to the contract's existence.
 
@@ -98,15 +100,7 @@ Observers can see the contract but cannot act on it unilaterally.
 - Cannot archive or exercise choices (unless also a controller)
 - Defined with `observer` keyword
 
-```daml
-template RegulatedAsset
-  with
-    owner : Party
-    regulator : Party
-  where
-    signatory owner
-    observer regulator  -- Regulator can see but not act
-```
+<DamlOverviewLearnLedgerModelL101 />
 
 **When to use:** When a party needs visibility for compliance, audit, or information.
 
@@ -119,20 +113,7 @@ Controllers can exercise specific choices on a contract.
 - See the choice and its consequences
 - Defined per-choice with `controller` keyword
 
-```daml
-template Proposal
-  with
-    proposer : Party
-    accepter : Party
-  where
-    signatory proposer
-    observer accepter
-
-    choice Accept : ContractId Agreement
-      controller accepter  -- Only accepter can exercise
-      do
-        create Agreement with party1 = proposer, party2 = accepter
-```
+<DamlOverviewLearnLedgerModelL122 />
 
 **When to use:** When a party should be able to trigger specific actions.
 
@@ -177,19 +158,7 @@ flowchart TB
 
 A **consuming** choice (the default) archives the contract when exercised. Use these for state transitions and transfers. A **non-consuming** choice leaves the contract active, which is useful for queries, notifications, and reads.
 
-```daml
--- Consuming: archives the contract
-choice Transfer : ContractId Asset
-  controller owner
-  do
-    create this with owner = newOwner
-
--- Non-consuming: contract remains
-nonconsuming choice GetBalance : Decimal
-  controller owner
-  do
-    return balance
-```
+<DamlOverviewLearnLedgerModelL180 />
 
 ## Views
 
@@ -238,19 +207,7 @@ Contract keys are under development and planned for Canton 3.5.
 
 Contracts can have **keys**—identifiers that allow lookup without knowing the contract ID.
 
-```daml
-template Account
-  with
-    bank : Party
-    owner : Party
-    accountNumber : Text
-  where
-    signatory bank
-    observer owner
-
-    key (bank, accountNumber) : (Party, Text)
-    maintainer key._1  -- bank maintains the key
-```
+<DamlOverviewLearnLedgerModelL241 />
 
 They support **lookup** so you can find a contract by its key without knowing the contract ID. Every key has a **maintainer**, the party responsible for the key.
 
@@ -266,13 +223,7 @@ Canton uses **ledger time** for contract operations. Time is:
 - Monotonically increasing per synchronizer
 - Used for time-based contract logic
 
-```daml
-choice ClaimAfterDeadline : ()
-  controller beneficiary
-  do
-    assertDeadlineExceeded "claim-after-deadline" deadline
-    -- ... claim logic
-```
+<DamlOverviewLearnLedgerModelL269 />
 
 See [Working with Time](/docs-main/appdev/modules/m3-working-with-time) for the full set of time primitives available in Canton 3.x.
 
@@ -280,14 +231,7 @@ See [Working with Time](/docs-main/appdev/modules/m3-working-with-time) for the 
 
 The UTXO model enables **atomic composition**—multiple contracts can be affected in a single transaction, all-or-nothing.
 
-```daml
--- Atomic swap: both transfers happen or neither does
-choice ExecuteSwap : ()
-  controller buyer
-  do
-    exercise assetId Transfer with newOwner = buyer
-    exercise paymentId Transfer with newOwner = seller
-```
+<DamlOverviewLearnLedgerModelL283 />
 
 The ledger enforces this atomicity — either the entire swap commits or none of it does.
 

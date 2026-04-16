@@ -3,6 +3,13 @@ title: "Migration Checklist"
 description: "Practical checklist for Ethereum developers migrating to Canton"
 ---
 
+import DamlAppdevModulesM2MigrationChecklistL117 from "/snippets/daml-docs/appdev_modules_m2-migration-checklist_L117.mdx";
+import DamlAppdevModulesM2MigrationChecklistL144 from "/snippets/daml-docs/appdev_modules_m2-migration-checklist_L144.mdx";
+import DamlAppdevModulesM2MigrationChecklistL166 from "/snippets/daml-docs/appdev_modules_m2-migration-checklist_L166.mdx";
+import DamlAppdevModulesM2MigrationChecklistL220 from "/snippets/daml-docs/appdev_modules_m2-migration-checklist_L220.mdx";
+import DamlAppdevModulesM2MigrationChecklistL99 from "/snippets/daml-docs/appdev_modules_m2-migration-checklist_L99.mdx";
+
+
 Use this checklist when planning and executing a migration from Ethereum to Canton. Each section covers a key area with specific action items.
 
 ## Before You Start
@@ -96,14 +103,7 @@ struct Asset {
 }
 ```
 
-```haskell
--- Daml
-data Asset = Asset with
-  owner : Party
-  value : Decimal
-  locked : Bool
-  deriving (Eq, Show)
-```
+<DamlAppdevModulesM2MigrationChecklistL99 />
 
 </Accordion>
 
@@ -114,17 +114,7 @@ data Asset = Asset with
 mapping(address => uint256) public balances;
 ```
 
-```haskell
--- Daml: Individual contracts per holding
-template TokenHolding
-  with
-    owner : Party
-    issuer : Party
-    amount : Decimal
-  where
-    signatory issuer
-    observer owner
-```
+<DamlAppdevModulesM2MigrationChecklistL117 />
 
 The key insight: Instead of one contract with a mapping, you have many contracts—one per holding.
 
@@ -141,15 +131,7 @@ function transfer(address to, uint256 amount) public {
 }
 ```
 
-```haskell
--- Daml
-choice Transfer : ContractId TokenHolding
-  with
-    newOwner : Party
-  controller owner
-  do
-    create this with owner = newOwner
-```
+<DamlAppdevModulesM2MigrationChecklistL144 />
 
 </Accordion>
 
@@ -163,14 +145,7 @@ modifier onlyOwner() {
 }
 ```
 
-```haskell
--- Daml: No modifier needed
-choice AdminAction : ()
-  controller admin  -- Only admin can exercise
-  do
-    -- Protocol enforces this
-    pure ()
-```
+<DamlAppdevModulesM2MigrationChecklistL166 />
 
 </Accordion>
 
@@ -217,24 +192,7 @@ Since there's no global state query:
 - [ ] Test authorization rules (who can exercise what)
 - [ ] Test multi-party workflows (propose-accept patterns)
 
-```haskell
--- Daml Script test
-testTransfer = script do
-  alice <- allocateParty "Alice"
-  bob <- allocateParty "Bob"
-
-  -- Alice creates a token
-  tokenId <- submit alice do
-    createCmd Token with owner = alice, issuer = alice, amount = 100.0
-
-  -- Alice transfers to Bob
-  newTokenId <- submit alice do
-    exerciseCmd tokenId Transfer with newOwner = bob
-
-  -- Verify Bob owns it
-  Some token <- queryContractId bob newTokenId
-  assert (token.owner == bob)
-```
+<DamlAppdevModulesM2MigrationChecklistL220 />
 
 ### Integration Tests
 
