@@ -72,12 +72,6 @@ direnv allow
 python3 scripts/generate_all_reference_docs.py
 ```
 
-or:
-
-```bash
-npm run generate:all-reference-docs
-```
-
 Use `--dry-run` to print the exact per-step commands without executing them.
 
 ### Generate the JSON API reference
