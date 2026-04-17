@@ -13,6 +13,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT_PATHS = [
     REPO_ROOT / "scripts" / "generate_json_api_reference.py",
     REPO_ROOT / "scripts" / "generate_json_api_asyncapi_reference.py",
+    REPO_ROOT / "scripts" / "generate_grpc_ledger_api_reference.py",
     REPO_ROOT / "scripts" / "generate_ledger_bindings_api_reference.py",
     REPO_ROOT / "scripts" / "generate_daml_standard_library_reference.py",
     REPO_ROOT / "scripts" / "generate_canton_protobuf_history.py",
