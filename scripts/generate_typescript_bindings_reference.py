@@ -33,7 +33,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--manifest-out", default=str(DEFAULT_MANIFEST))
     parser.add_argument("--output-file", default=str(DEFAULT_OUTPUT_FILE))
     parser.add_argument("--docs-json", default=str(DEFAULT_DOCS_JSON))
-    parser.add_argument("--nav-dropdown", default="Reference")
+    parser.add_argument("--nav-dropdown", default="API Reference")
     parser.add_argument("--nav-group", default=DEFAULT_NAV_GROUP)
     parser.add_argument("--version", action="append", help="Version to include. Repeat to limit generation.")
     parser.add_argument("--publish-version", help="Version whose TypeScript surface should be published.")
