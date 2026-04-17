@@ -18,7 +18,8 @@ DEFAULT_MANIFEST = REPO_ROOT / ".internal" / "generated" / "x2mdx" / "protobuf-h
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "docs-main" / "appdev" / "reference" / "protobuf-history"
 DEFAULT_DOCS_JSON = REPO_ROOT / "docs-main" / "docs.json"
 DEFAULT_REPO_DIR = DEFAULT_CACHE_DIR / "repos" / "canton"
-GROUP_LABEL = "Canton Protobuf History"
+X2MDX_REPO = REPO_ROOT.parent / "x2mdx"
+DEFAULT_OVERVIEW_TITLE = "Canton Protobuf History"
 DESCRIPTOR_IMAGE_NAME = ".proto_snapshot_image.bin.gz"
 STABLE_TAG_RE = re.compile(r"^v(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)$")
 OWNED_PROTO_RE = re.compile(r"^community/.+/src/main/protobuf/.+\.proto$")
@@ -49,6 +50,10 @@ def parse_args() -> argparse.Namespace:
         "--version-filter",
         help="Version-filter label embedded in generated content.",
     )
+    parser.add_argument(
+        "--overview-title",
+        help="Title to use for the generated overview page.",
+    )
     return parser.parse_args()
 
 
@@ -57,6 +62,15 @@ def load_json(path: Path) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise ValueError(f"Expected JSON object in {path}")
     return payload
+
+
+def resolve_overview_title(*, source_config: dict[str, Any], cli_value: str | None) -> str:
+    if cli_value:
+        return cli_value
+    configured = source_config.get("overview_title")
+    if isinstance(configured, str) and configured.strip():
+        return configured.strip()
+    return DEFAULT_OVERVIEW_TITLE
 
 
 def run(args: list[str], *, cwd: Path | None = None, capture: bool = False) -> str:
@@ -233,6 +247,8 @@ def update_docs_navigation(
     dropdown_label: str,
     parent_groups: list[str],
     overview_path: Path,
+    group_label: str,
+    group_labels: set[str],
 ) -> None:
     docs = load_json(docs_json_path)
     navigation = docs.get("navigation")
@@ -249,9 +265,9 @@ def update_docs_navigation(
         raise ValueError(f"Dropdown does not expose a pages list: {dropdown_label}")
 
     page_ref = docs_json_page_ref(overview_path, docs_json_path)
-    dropdown["pages"] = prune_nav_items(pages, page_refs={page_ref}, group_labels={GROUP_LABEL})
+    dropdown["pages"] = prune_nav_items(pages, page_refs={page_ref}, group_labels=group_labels)
     target_pages = ensure_group_path(dropdown["pages"], parent_groups)
-    target_pages.append({"group": GROUP_LABEL, "pages": [page_ref]})
+    target_pages.append({"group": group_label, "pages": [page_ref]})
     docs_json_path.write_text(json.dumps(docs, indent=2) + "\n", encoding="utf-8")
     print(f"Updated docs navigation: {docs_json_path}")
 
@@ -261,6 +277,7 @@ def write_manifest(
     source_config: dict[str, Any],
     releases: list[dict[str, Any]],
     manifest_path: Path,
+    overview_title: str,
 ) -> Path:
     metadata_path = source_config.get("metadata_path")
     metadata_ref: str | None = None
@@ -272,6 +289,7 @@ def write_manifest(
 
     manifest = {
         "source": source_config.get("source") or "Canton protobuf descriptor snapshots from local git tags",
+        "overview_title": overview_title,
         "repo": source_config.get("repo") if isinstance(source_config.get("repo"), dict) else {},
         "metadata_path": metadata_ref,
         "versions": releases,
@@ -285,6 +303,7 @@ def write_manifest(
 def main() -> int:
     args = parse_args()
     source_config = load_json(Path(args.source_config).resolve())
+    overview_title = resolve_overview_title(source_config=source_config, cli_value=args.overview_title)
     repo_config = source_config.get("repo") if isinstance(source_config.get("repo"), dict) else {}
     remote = repo_config.get("remote")
     if not isinstance(remote, str) or not remote:
@@ -336,6 +355,7 @@ def main() -> int:
         source_config=source_config,
         releases=releases,
         manifest_path=Path(args.manifest_out).resolve(),
+        overview_title=overview_title,
     )
 
     version_filter = args.version_filter
@@ -346,6 +366,9 @@ def main() -> int:
             version_filter = f"stable Canton release tags >= {min_version}"
 
     command = [
+        "direnv",
+        "exec",
+        str(X2MDX_REPO),
         "x2mdx",
         "protobuf",
         "build-api-pages-from-manifest",
@@ -368,6 +391,8 @@ def main() -> int:
         dropdown_label=args.nav_dropdown,
         parent_groups=args.nav_group or [],
         overview_path=Path(args.output_dir).resolve() / "index.mdx",
+        group_label=overview_title,
+        group_labels={DEFAULT_OVERVIEW_TITLE, overview_title},
     )
     return 0
 

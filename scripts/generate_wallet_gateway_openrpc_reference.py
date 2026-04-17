@@ -17,7 +17,8 @@ DEFAULT_MANIFEST = REPO_ROOT / ".internal" / "generated" / "x2mdx" / "wallet-gat
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "docs-main" / "reference" / "wallet-gateway-json-rpc"
 DEFAULT_DOCS_JSON = REPO_ROOT / "docs-main" / "docs.json"
 DEFAULT_REPO_DIR = DEFAULT_CACHE_DIR / "repos" / "splice-wallet-kernel"
-GROUP_LABEL = "Wallet Gateway JSON-RPC"
+X2MDX_REPO = REPO_ROOT.parent / "x2mdx"
+DEFAULT_OVERVIEW_TITLE = "Wallet Gateway JSON-RPC"
 SPEC_DIR_NAME = "specs"
 
 
@@ -46,7 +47,6 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--overview-title",
-        default=GROUP_LABEL,
         help="Title to use for the generated overview page.",
     )
     return parser.parse_args()
@@ -57,6 +57,15 @@ def load_json(path: Path) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise ValueError(f"Expected JSON object in {path}")
     return payload
+
+
+def resolve_overview_title(*, source_config: dict[str, Any], cli_value: str | None) -> str:
+    if cli_value:
+        return cli_value
+    configured = source_config.get("overview_title")
+    if isinstance(configured, str) and configured.strip():
+        return configured.strip()
+    return DEFAULT_OVERVIEW_TITLE
 
 
 def run(args: list[str], *, cwd: Path | None = None, capture: bool = False) -> str:
@@ -160,6 +169,8 @@ def update_docs_navigation(
     dropdown_label: str,
     output_dir: Path,
     spec_entries: list[dict[str, Any]],
+    group_label: str,
+    group_labels: set[str],
 ) -> None:
     docs = load_json(docs_json_path)
     navigation = docs.get("navigation")
@@ -177,10 +188,10 @@ def update_docs_navigation(
 
     refs = {overview_page_ref(output_dir, docs_json_path)}
     refs.update(spec_page_ref(output_dir, docs_json_path, spec["spec_id"]) for spec in spec_entries)
-    dropdown["pages"] = prune_nav_items(pages, page_refs=refs, group_labels={GROUP_LABEL})
+    dropdown["pages"] = prune_nav_items(pages, page_refs=refs, group_labels=group_labels)
     dropdown["pages"].append(
         {
-            "group": GROUP_LABEL,
+            "group": group_label,
             "pages": [
                 overview_page_ref(output_dir, docs_json_path),
                 *[spec_page_ref(output_dir, docs_json_path, spec["spec_id"]) for spec in spec_entries],
@@ -200,6 +211,7 @@ def write_manifest(
     versions: list[str],
     publish_version: str,
     spec_entries: list[dict[str, Any]],
+    overview_title: str,
 ) -> Path:
     specs_payload: list[dict[str, Any]] = []
     for spec in spec_entries:
@@ -227,6 +239,7 @@ def write_manifest(
 
     manifest = {
         "source": source_config.get("source") or "splice-wallet-kernel OpenRPC snapshots",
+        "overview_title": overview_title,
         "publish_version": publish_version,
         "specs": specs_payload,
     }
@@ -239,6 +252,7 @@ def write_manifest(
 def main() -> int:
     args = parse_args()
     source_config = load_json(Path(args.source_config).resolve())
+    overview_title = resolve_overview_title(source_config=source_config, cli_value=args.overview_title)
     configured_versions = source_config.get("versions")
     if not isinstance(configured_versions, list) or not all(isinstance(item, str) for item in configured_versions):
         raise ValueError("Source config must define a string list under `versions`")
@@ -282,10 +296,14 @@ def main() -> int:
         versions=selected_versions,
         publish_version=publish_version,
         spec_entries=spec_entries,
+        overview_title=overview_title,
     )
 
     fixture_root = REPO_ROOT
     command = [
+        "direnv",
+        "exec",
+        str(X2MDX_REPO),
         "x2mdx",
         "openrpc",
         "build-api-pages-from-manifest",
@@ -297,8 +315,6 @@ def main() -> int:
         str(Path(args.output_dir).resolve()),
         "--publish-version",
         publish_version,
-        "--overview-title",
-        args.overview_title,
         "--link-prefix",
         overview_route_prefix(Path(args.output_dir).resolve(), Path(args.docs_json).resolve()),
         "--source-name",
@@ -318,6 +334,8 @@ def main() -> int:
         dropdown_label=args.nav_dropdown,
         output_dir=Path(args.output_dir).resolve(),
         spec_entries=spec_entries,
+        group_label=overview_title,
+        group_labels={DEFAULT_OVERVIEW_TITLE, overview_title},
     )
     return 0
 
