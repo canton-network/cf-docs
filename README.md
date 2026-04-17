@@ -194,6 +194,30 @@ By default this writes:
 
 The generated nav is added under the top-level `API Reference` dropdown as `Canton Protobuf History`, with only the overview page listed in nav. The per-endpoint pages are generated and linked from the overview page but left unlisted.
 
+### Generate the gRPC Ledger API reference
+
+This repo also includes a checked-in source config for the Ledger API gRPC protobuf surface at `config/x2mdx/grpc-ledger-api-reference/source-artifacts.json`.
+The generator script reuses the published Canton release-bundle protobuf acquisition flow, filters the resulting protobuf report to `com.daml.ledger.api.v2*`, and writes a dedicated Ledger API-only MDX surface without modifying `x2mdx`.
+
+Run:
+
+```bash
+python3 scripts/generate_grpc_ledger_api_reference.py
+```
+
+or:
+
+```bash
+npm run generate:grpc-ledger-api-reference
+```
+
+By default this writes:
+
+- `docs-main/reference/grpc-ledger-api-reference/`
+- `docs-main/docs.json`
+
+The generated nav is added under the top-level `Reference` dropdown as `gRPC Ledger API Reference`, with the overview page first and the generated package pages grouped under a nested `Packages` foldout.
+
 ### Generate the TypeScript bindings reference
 
 This repo also includes a checked-in source config for published `@daml/types` npm artifacts at `config/x2mdx/typescript-bindings/source-artifacts.json`.
