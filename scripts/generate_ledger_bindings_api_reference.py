@@ -23,8 +23,10 @@ DEFAULT_RENDER_ROOT = REPO_ROOT / ".internal" / "generated" / "x2mdx" / "ledger-
 DEFAULT_OVERVIEW_FILE = REPO_ROOT / "docs-main" / "reference" / "ledger-api-jvm-bindings.mdx"
 DEFAULT_DETAILS_DIR = REPO_ROOT / "docs-main" / "reference"
 DEFAULT_DOCS_JSON = REPO_ROOT / "docs-main" / "docs.json"
+X2MDX_REPO = REPO_ROOT.parent / "x2mdx"
 LEGACY_OVERVIEW_FILE = REPO_ROOT / "docs-main" / "appdev" / "reference" / "ledger-bindings-api-lifecycle.mdx"
 LEGACY_DETAILS_DIR = REPO_ROOT / "docs-main" / "appdev" / "reference" / "ledger-bindings-api-lifecycle"
+DEFAULT_OVERVIEW_TITLE = "Ledger API JVM Bindings"
 LANGUAGE_LABELS = {
     "scala": "Scaladocs",
     "java": "Javadocs",
@@ -104,7 +106,6 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--overview-title",
-        default="Ledger API JVM Bindings",
         help="Title to use for the generated overview page and parent Mintlify nav group.",
     )
     parser.add_argument(
@@ -120,6 +121,15 @@ def load_json(path: Path) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise ValueError(f"Expected JSON object in {path}")
     return data
+
+
+def resolve_overview_title(*, source_config: dict[str, Any], cli_value: str | None) -> str:
+    if cli_value:
+        return cli_value
+    configured = source_config.get("overview_title")
+    if isinstance(configured, str) and configured.strip():
+        return configured.strip()
+    return DEFAULT_OVERVIEW_TITLE
 
 
 def slugify(value: str) -> str:
@@ -244,6 +254,7 @@ def update_docs_navigation(
     dropdown_label: str,
     parent_groups: list[str],
     group_label: str,
+    group_labels: set[str],
     overview_file: Path,
     publish_root: Path,
 ) -> Path:
@@ -275,7 +286,7 @@ def update_docs_navigation(
     dropdown["pages"] = prune_nav_items(
         pages,
         page_refs=generated_refs,
-        group_labels={group_label},
+        group_labels=group_labels,
     )
     target_pages = ensure_group_path(dropdown["pages"], parent_groups)
     target_pages.append(jvm_group)
@@ -316,6 +327,7 @@ def build_manifest(
     include_versions: set[str] | None,
     repo_base_override: str | None,
     force_download: bool,
+    overview_title: str,
 ) -> Path:
     repo_base = repo_base_override or str(source_config.get("repo_base") or "https://repo1.maven.org/maven2")
     artifacts_payload: list[dict[str, Any]] = []
@@ -377,6 +389,7 @@ def build_manifest(
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     manifest = {
         "source": source_config.get("source") or "digital-asset/docs local JVM docs cache",
+        "overview_title": overview_title,
         "repo_base": repo_base,
         "artifacts": artifacts_payload,
     }
@@ -389,6 +402,9 @@ def build_command(args: argparse.Namespace, manifest_path: Path) -> list[str]:
     render_overview_file = DEFAULT_RENDER_ROOT / "ledger-api-jvm-bindings.mdx"
     render_details_dir = DEFAULT_RENDER_ROOT / "details"
     command = [
+        "direnv",
+        "exec",
+        str(X2MDX_REPO),
         "x2mdx",
         "jvm-docs",
         "build-api-pages-from-manifest",
@@ -398,8 +414,6 @@ def build_command(args: argparse.Namespace, manifest_path: Path) -> list[str]:
         str(render_overview_file.resolve()),
         "--details-dir",
         str(render_details_dir.resolve()),
-        "--overview-title",
-        args.overview_title,
         "--source-name",
         args.source_name,
         "--version-filter",
@@ -492,6 +506,7 @@ def publish_rendered_pages(
 def main() -> int:
     args = parse_args()
     source_config = load_json(Path(args.source_config).resolve())
+    overview_title = resolve_overview_title(source_config=source_config, cli_value=args.overview_title)
     include_versions = set(args.version) if args.version else None
     manifest_path = build_manifest(
         source_config=source_config,
@@ -500,6 +515,7 @@ def main() -> int:
         include_versions=include_versions,
         repo_base_override=args.repo_base,
         force_download=args.force_download,
+        overview_title=overview_title,
     )
     command = build_command(args, manifest_path)
     print("Running:", " ".join(command))
@@ -516,7 +532,8 @@ def main() -> int:
         docs_json_path=Path(args.docs_json).resolve(),
         dropdown_label=args.nav_dropdown,
         parent_groups=args.nav_group or [],
-        group_label=args.overview_title,
+        group_label=overview_title,
+        group_labels={DEFAULT_OVERVIEW_TITLE, overview_title},
         overview_file=publish_overview_file.resolve(),
         publish_root=Path(args.details_dir).resolve(),
     )
