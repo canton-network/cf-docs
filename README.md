@@ -63,6 +63,17 @@ direnv allow
 mintlify dev
 ```
 
+### Run all generated reference docs
+
+Load the repo's `direnv` / `nix` shell first, then rerun all generated reference-doc wrappers in one command:
+
+```bash
+direnv allow
+python3 scripts/generate_all_reference_docs.py
+```
+
+Use `--dry-run` to print the exact per-step commands without executing them.
+
 ### Generate the JSON API reference
 
 This repo includes a checked-in source config plus regenerated local Ledger API OpenAPI snapshots under `config/x2mdx/ledger-api/`.
