@@ -73,7 +73,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--nav-dropdown",
-        default="Reference",
+        default="API Reference",
         help="Top-level Mintlify dropdown to update.",
     )
     parser.add_argument(
