@@ -15,6 +15,7 @@ from ledger_api_release_bundles import (
     materialize_bundle_spec,
     selected_versions,
 )
+import reference_nav
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -346,6 +347,10 @@ def main() -> int:
                 dropdown_label=args.nav_dropdown,
                 group_label=nav_groups[0],
             )
+        reference_nav.regroup_ledger_api_nav(
+            docs_json_path=docs_json_path,
+            dropdown_label=args.nav_dropdown,
+        )
         remove_legacy_output(output_file=Path(args.output_file).resolve())
     return completed.returncode
 
