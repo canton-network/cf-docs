@@ -9,12 +9,14 @@ import shutil
 import subprocess
 import sys
 import tarfile
+import tempfile
 import urllib.error
 import urllib.request
 import zipfile
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
+import xml.etree.ElementTree as ET
 
 import reference_nav
 
@@ -306,8 +308,27 @@ def update_docs_navigation(
 
 
 def maven_javadoc_url(repo_base: str, group: str, artifact: str, version: str) -> str:
+    return maven_artifact_url(
+        repo_base=repo_base,
+        group=group,
+        artifact=artifact,
+        version=version,
+        classifier="javadoc",
+    )
+
+
+def maven_artifact_url(
+    *,
+    repo_base: str,
+    group: str,
+    artifact: str,
+    version: str,
+    classifier: str | None = None,
+    extension: str = "jar",
+) -> str:
     group_path = group.replace(".", "/")
-    file_name = f"{artifact}-{version}-javadoc.jar"
+    classifier_suffix = f"-{classifier}" if classifier else ""
+    file_name = f"{artifact}-{version}{classifier_suffix}.{extension}"
     return f"{repo_base.rstrip('/')}/{group_path}/{artifact}/{version}/{file_name}"
 
 
@@ -326,6 +347,32 @@ def download_file(url: str, target: Path, *, force: bool) -> None:
         raise RuntimeError(f"HTTP {exc.code} while downloading {url}") from exc
     except urllib.error.URLError as exc:
         raise RuntimeError(f"Network error while downloading {url}: {exc}") from exc
+
+
+def xml_child_text(element: ET.Element, child_name: str) -> str | None:
+    child = element.find(f"{{*}}{child_name}")
+    if child is None or child.text is None:
+        return None
+    return child.text.strip()
+
+
+def parse_pom_dependencies(pom_path: Path) -> list[tuple[str, str, str]]:
+    root = ET.fromstring(pom_path.read_text(encoding="utf-8"))
+    dependencies: list[tuple[str, str, str]] = []
+    for dependency in root.findall(".//{*}dependencies/{*}dependency"):
+        group = xml_child_text(dependency, "groupId")
+        artifact = xml_child_text(dependency, "artifactId")
+        version = xml_child_text(dependency, "version")
+        scope = xml_child_text(dependency, "scope")
+        optional = xml_child_text(dependency, "optional")
+        if scope in {"test", "system"}:
+            continue
+        if optional == "true":
+            continue
+        if not group or not artifact or not version:
+            continue
+        dependencies.append((group, artifact, version))
+    return dependencies
 
 
 def normalize_archive_member_name(name: str) -> str:
@@ -353,6 +400,115 @@ def repackage_tarball_as_jar(source_tarball: Path, target_jar: Path) -> None:
                 archive.writestr(arcname, extracted.read())
 
 
+def extract_zip_archive(source_zip: Path, target_dir: Path) -> None:
+    target_dir.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(source_zip) as archive:
+        archive.extractall(target_dir)
+
+
+def package_directory_as_jar(source_dir: Path, target_jar: Path) -> None:
+    target_jar.parent.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(target_jar, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for file_path in sorted(source_dir.rglob("*")):
+            if not file_path.is_file():
+                continue
+            archive.write(file_path, file_path.relative_to(source_dir).as_posix())
+
+
+def build_generated_javadoc_from_sources(
+    *,
+    repo_base: str,
+    cache_dir: Path,
+    group: str,
+    artifact: str,
+    version: str,
+    include_prefixes: list[str],
+    force_download: bool,
+) -> Path:
+    archive_dir = cache_dir / "archives" / group / artifact / version
+    pom_dir = cache_dir / "poms" / group / artifact / version
+    dependency_dir = cache_dir / "dependencies"
+    temp_root = cache_dir / "tmp"
+    source_archive = archive_dir / f"{artifact}-{version}-sources.jar"
+    pom_path = pom_dir / f"{artifact}-{version}.pom"
+    target_jar = cache_dir / "jars" / group / artifact / version / f"{artifact}-{version}-generated-javadoc.jar"
+
+    download_file(
+        maven_artifact_url(
+            repo_base=repo_base,
+            group=group,
+            artifact=artifact,
+            version=version,
+            classifier="sources",
+        ),
+        source_archive,
+        force=force_download,
+    )
+    download_file(
+        maven_artifact_url(
+            repo_base=repo_base,
+            group=group,
+            artifact=artifact,
+            version=version,
+            extension="pom",
+        ),
+        pom_path,
+        force=force_download,
+    )
+    if target_jar.exists() and not force_download:
+        print(f"Using cached generated javadoc jar: {target_jar}")
+        return target_jar
+
+    dependency_jars: list[Path] = []
+    for dependency_group, dependency_artifact, dependency_version in parse_pom_dependencies(pom_path):
+        dependency_target = (
+            dependency_dir
+            / dependency_group
+            / dependency_artifact
+            / dependency_version
+            / f"{dependency_artifact}-{dependency_version}.jar"
+        )
+        download_file(
+            maven_artifact_url(
+                repo_base=repo_base,
+                group=dependency_group,
+                artifact=dependency_artifact,
+                version=dependency_version,
+            ),
+            dependency_target,
+            force=force_download,
+        )
+        dependency_jars.append(dependency_target)
+
+    temp_root.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="generated-javadoc-", dir=temp_root) as temp_dir:
+        temp_path = Path(temp_dir)
+        source_dir = temp_path / "src"
+        output_dir = temp_path / "out"
+        extract_zip_archive(source_archive, source_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        classpath = ":".join(str(path) for path in dependency_jars)
+        command = [
+            "javadoc",
+            "-quiet",
+            "-Xdoclint:none",
+            "-classpath",
+            classpath,
+            "-sourcepath",
+            str(source_dir),
+            "-subpackages",
+            ":".join(prefix for prefix in include_prefixes if prefix),
+            "-d",
+            str(output_dir),
+        ]
+        print("Running:", " ".join(command))
+        subprocess.run(command, check=True, cwd=REPO_ROOT)
+        package_directory_as_jar(output_dir, target_jar)
+    print(f"Generated local javadoc jar: {target_jar}")
+    return target_jar
+
+
 def resolve_cached_jar(
     *,
     repo_base: str,
@@ -360,6 +516,7 @@ def resolve_cached_jar(
     group: str,
     artifact: str,
     version: str,
+    include_prefixes: list[str],
     source_kind: str,
     url_template: str | None,
     force_download: bool,
@@ -388,6 +545,17 @@ def resolve_cached_jar(
         else:
             print(f"Using cached jar: {jar_target}")
         return jar_target
+
+    if source_kind == "maven-source-jar-generated-javadoc":
+        return build_generated_javadoc_from_sources(
+            repo_base=repo_base,
+            cache_dir=cache_dir,
+            group=group,
+            artifact=artifact,
+            version=version,
+            include_prefixes=include_prefixes,
+            force_download=force_download,
+        )
 
     raise ValueError(f"Unsupported source_kind for {group}:{artifact}: {source_kind}")
 
@@ -440,6 +608,7 @@ def build_manifest(
                 group=group,
                 artifact=artifact,
                 version=version,
+                include_prefixes=[prefix for prefix in include_prefixes if isinstance(prefix, str)],
                 source_kind=str(source_kind),
                 url_template=str(url_template) if isinstance(url_template, str) else None,
                 force_download=force_download,
@@ -651,16 +820,67 @@ def render_artifact_toc_rows(package_reference_lines: list[str], *, versions: li
     return output_rows
 
 
-def rewrite_artifact_page_layout(text: str, *, artifact_entry: dict[str, Any]) -> str:
+def extract_level_three_sections(lines: list[str]) -> dict[str, list[str]]:
+    sections: dict[str, list[str]] = {}
+    current_heading: str | None = None
+    for line in lines:
+        if line.startswith("### "):
+            current_heading = line[4:].strip()
+            sections[current_heading] = []
+            continue
+        if current_heading is None:
+            continue
+        sections[current_heading].append(line)
+    return sections
+
+
+def normalize_artifact_page_content(text: str) -> dict[str, list[str]]:
     _, body = split_frontmatter(text)
     intro_lines, sections = extract_markdown_sections(body)
+    reference_lines = trim_blank_lines(sections.get("Reference", []))
+    reference_subsections = extract_level_three_sections(reference_lines)
 
-    toc_lines = trim_blank_lines(sections.get("Package Reference", []))
-    artifact_lines = trim_blank_lines(sections.get("Artifact", []))
-    lifecycle_lines = trim_blank_lines(sections.get("Lifecycle Summary", []))
-    changed_lines = trim_blank_lines(sections.get("Changed Symbols", []))
-    deprecation_lines = trim_blank_lines(sections.get("Deprecation Notes", []))
-    failure_lines = trim_blank_lines(sections.get("Input Failures", []))
+    toc_lines = trim_blank_lines(sections.get("Table of Contents", []))
+    if not toc_lines:
+        toc_lines = trim_blank_lines(sections.get("Package Reference", []))
+
+    version_summary_lines = trim_blank_lines(sections.get("Version Change Summary", []))
+    if not version_summary_lines:
+        version_summary_lines = trim_blank_lines(sections.get("Artifact", [])) + trim_blank_lines(
+            sections.get("Lifecycle Summary", [])
+        )
+
+    changed_lines = trim_blank_lines(reference_subsections.get("Changed Symbols", []))
+    if not changed_lines:
+        changed_lines = trim_blank_lines(sections.get("Changed Symbols", []))
+
+    deprecation_lines = trim_blank_lines(reference_subsections.get("Deprecation Notes", []))
+    if not deprecation_lines:
+        deprecation_lines = trim_blank_lines(sections.get("Deprecation Notes", []))
+
+    failure_lines = trim_blank_lines(reference_subsections.get("Input Failures", []))
+    if not failure_lines:
+        failure_lines = trim_blank_lines(sections.get("Input Failures", []))
+
+    return {
+        "intro_lines": trim_blank_lines(intro_lines),
+        "toc_lines": toc_lines,
+        "version_summary_lines": version_summary_lines,
+        "changed_lines": changed_lines,
+        "deprecation_lines": deprecation_lines,
+        "failure_lines": failure_lines,
+    }
+
+
+def render_current_toc_rows(toc_lines: list[str], *, versions: list[str]) -> list[str]:
+    headers, rows = parse_markdown_table(toc_lines)
+    if len(headers) == 3 and [header.upper() for header in headers] == ["NAME", "STATUS", "SUMMARY"]:
+        return [f"| {row[0]} | {row[1]} | {row[2]} |" for row in rows]
+    return render_artifact_toc_rows(toc_lines, versions=versions)
+
+
+def rewrite_artifact_page_layout(text: str, *, artifact_entry: dict[str, Any]) -> str:
+    content = normalize_artifact_page_content(text)
 
     language = str(artifact_entry.get("language", ""))
     title = LANGUAGE_LABELS.get(language, language.title())
@@ -677,48 +897,138 @@ def rewrite_artifact_page_layout(text: str, *, artifact_entry: dict[str, Any]) -
         "",
     ]
 
-    intro_lines = trim_blank_lines(intro_lines)
+    intro_lines = content["intro_lines"]
     if intro_lines:
         output_lines.extend(intro_lines)
     else:
         output_lines.append("Back to [overview](../ledger-api-jvm-bindings).")
     output_lines.extend(["", "## Table of Contents", ""])
 
-    toc_versions = extract_versions_from_artifact_lines(artifact_lines)
-    if toc_lines:
+    toc_versions = extract_versions_from_artifact_lines(content["version_summary_lines"])
+    toc_rows = render_current_toc_rows(content["toc_lines"], versions=toc_versions)
+    if toc_rows:
         output_lines.append("🟢 Active Since  🔵 Changed  🔴 Removed")
         output_lines.extend(
             [
                 "",
                 "| NAME | STATUS | SUMMARY |",
                 "| --- | --- | --- |",
-                *render_artifact_toc_rows(toc_lines, versions=toc_versions),
+                *toc_rows,
             ]
         )
     else:
         output_lines.append("No package-level symbols were found for this artifact.")
 
-    version_summary_lines = artifact_lines + lifecycle_lines
     output_lines.extend(["", "## Version Change Summary", ""])
-    if version_summary_lines:
-        output_lines.extend(version_summary_lines)
+    if content["version_summary_lines"]:
+        output_lines.extend(content["version_summary_lines"])
     else:
         output_lines.append("No lifecycle metadata was generated for this artifact.")
 
     output_lines.extend(["", "## Reference", "", "### Changed Symbols", ""])
-    if changed_lines:
-        output_lines.extend(changed_lines)
+    if content["changed_lines"]:
+        output_lines.extend(content["changed_lines"])
     else:
         output_lines.append("No lifecycle changes were detected in the configured version range.")
 
-    if deprecation_lines:
+    if content["deprecation_lines"]:
         output_lines.extend(["", "### Deprecation Notes", ""])
-        output_lines.extend(deprecation_lines)
+        output_lines.extend(content["deprecation_lines"])
 
-    if failure_lines:
+    if content["failure_lines"]:
         output_lines.extend(["", "### Input Failures", ""])
-        output_lines.extend(failure_lines)
+        output_lines.extend(content["failure_lines"])
 
+    return "\n".join(output_lines).rstrip() + "\n"
+
+
+def collect_artifact_page_sections(source: Path, *, artifact_entry: dict[str, Any]) -> dict[str, Any]:
+    artifact_slug = slugify(str(artifact_entry["artifact"]))
+    text = source.read_text(encoding="utf-8")
+    text = rewrite_markdown_links(text, [(f"({artifact_slug}-packages/", "(")])
+    text = rewrite_upstream_docs_links(text, artifact_entry)
+    content = normalize_artifact_page_content(text)
+    return {
+        "artifact": str(artifact_entry["artifact"]),
+        "intro_lines": content["intro_lines"],
+        "toc_lines": content["toc_lines"],
+        "version_summary_lines": content["version_summary_lines"],
+        "changed_lines": content["changed_lines"],
+        "deprecation_lines": content["deprecation_lines"],
+        "failure_lines": content["failure_lines"],
+    }
+
+
+def package_name_from_toc_row(row: str) -> str:
+    match = re.search(r"`([^`]+)`", row)
+    if match:
+        return match.group(1)
+    return row
+
+
+def render_combined_language_index(language: str, artifact_pages: list[dict[str, Any]]) -> str:
+    title = LANGUAGE_LABELS.get(language, language.title())
+    description = ARTIFACT_PAGE_DESCRIPTIONS.get(
+        language,
+        "Generated package reference and version summary from local JVM docs snapshots",
+    )
+    output_lines = [
+        "---",
+        f'title: "{title}"',
+        f'description: "{description}"',
+        "---",
+        "",
+        "Back to [overview](../ledger-api-jvm-bindings).",
+        "",
+        "## Table of Contents",
+        "",
+    ]
+
+    toc_rows: list[str] = []
+    for artifact_page in artifact_pages:
+        versions = extract_versions_from_artifact_lines(artifact_page["version_summary_lines"])
+        toc_rows.extend(render_current_toc_rows(artifact_page["toc_lines"], versions=versions))
+    if toc_rows:
+        toc_rows.sort(key=lambda row: package_name_from_toc_row(row).lower())
+        output_lines.extend(
+            [
+                "🟢 Active Since  🔵 Changed  🔴 Removed",
+                "",
+                "| NAME | STATUS | SUMMARY |",
+                "| --- | --- | --- |",
+                *toc_rows,
+            ]
+        )
+    else:
+        output_lines.append("No package-level symbols were found for these artifacts.")
+
+    output_lines.extend(["", "## Version Change Summary", ""])
+    for index, artifact_page in enumerate(artifact_pages):
+        if index:
+            output_lines.append("")
+        output_lines.append(f"### `{artifact_page['artifact']}`")
+        output_lines.append("")
+        if artifact_page["version_summary_lines"]:
+            output_lines.extend(artifact_page["version_summary_lines"])
+        else:
+            output_lines.append("No lifecycle metadata was generated for this artifact.")
+
+    output_lines.extend(["", "## Reference", ""])
+    for index, artifact_page in enumerate(artifact_pages):
+        if index:
+            output_lines.append("")
+        output_lines.append(f"### `{artifact_page['artifact']}`")
+        output_lines.extend(["", "#### Changed Symbols", ""])
+        if artifact_page["changed_lines"]:
+            output_lines.extend(artifact_page["changed_lines"])
+        else:
+            output_lines.append("No lifecycle changes were detected in the configured version range.")
+        if artifact_page["deprecation_lines"]:
+            output_lines.extend(["", "#### Deprecation Notes", ""])
+            output_lines.extend(artifact_page["deprecation_lines"])
+        if artifact_page["failure_lines"]:
+            output_lines.extend(["", "#### Input Failures", ""])
+            output_lines.extend(artifact_page["failure_lines"])
     return "\n".join(output_lines).rstrip() + "\n"
 
 
@@ -803,6 +1113,7 @@ def publish_rendered_pages(
 
     overview_replacements: list[tuple[str, str]] = []
     generated_refs: set[str] = set()
+    language_artifact_pages: dict[str, list[dict[str, Any]]] = defaultdict(list)
 
     for artifact_entry in artifact_entries:
         artifact = str(artifact_entry["artifact"])
@@ -812,17 +1123,11 @@ def publish_rendered_pages(
         artifact_slug = slugify(artifact)
         source_artifact_page = render_details_dir / f"{artifact_slug}.mdx"
         source_package_dir = render_details_dir / f"{artifact_slug}-packages"
-        target_artifact_page = language_dir / "index.mdx"
 
         overview_replacements.append((f"({render_details_dir.name}/{artifact_slug})", f"({LANGUAGE_DIRS[language]})"))
-        copy_rewritten_page(
-            source_artifact_page,
-            target_artifact_page,
-            replacements=[(f"({source_package_dir.name}/", "(")],
-            artifact_entry=artifact_entry,
-            rewrite_artifact_layout=True,
+        language_artifact_pages[language].append(
+            collect_artifact_page_sections(source_artifact_page, artifact_entry=artifact_entry)
         )
-        generated_refs.add(docs_json_page_ref(target_artifact_page, DEFAULT_DOCS_JSON))
 
         if preserve_existing_output:
             continue
@@ -839,6 +1144,30 @@ def publish_rendered_pages(
                 artifact_entry=artifact_entry,
             )
             generated_refs.add(docs_json_page_ref(target_package_page, DEFAULT_DOCS_JSON))
+
+    for language, artifact_pages in language_artifact_pages.items():
+        language_dir = publish_root / LANGUAGE_DIRS[language]
+        language_dir.mkdir(parents=True, exist_ok=True)
+        target_artifact_page = language_dir / "index.mdx"
+        if len(artifact_pages) == 1:
+            artifact_entry = next(entry for entry in artifact_entries if str(entry["language"]) == language)
+            artifact = str(artifact_entry["artifact"])
+            artifact_slug = slugify(artifact)
+            source_artifact_page = render_details_dir / f"{artifact_slug}.mdx"
+            source_package_dir = render_details_dir / f"{artifact_slug}-packages"
+            copy_rewritten_page(
+                source_artifact_page,
+                target_artifact_page,
+                replacements=[(f"({source_package_dir.name}/", "(")],
+                artifact_entry=artifact_entry,
+                rewrite_artifact_layout=True,
+            )
+        else:
+            target_artifact_page.write_text(
+                render_combined_language_index(language, artifact_pages),
+                encoding="utf-8",
+            )
+        generated_refs.add(docs_json_page_ref(target_artifact_page, DEFAULT_DOCS_JSON))
 
     copy_rewritten_page(render_overview_file, publish_overview_file, replacements=overview_replacements)
     generated_refs.add(docs_json_page_ref(publish_overview_file, DEFAULT_DOCS_JSON))
