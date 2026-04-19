@@ -259,6 +259,30 @@ or:
 npm run generate:wallet-gateway-openrpc-reference
 ```
 
+### Generate the Splice Scan OpenAPI reference
+
+This repo also includes a checked-in source config for the published decentralized-canton-sync OpenAPI bundle at `config/x2mdx/splice-scan-openapi/source-artifacts.json`.
+The generator script discovers matching stable releases through the GitHub releases API, downloads `*_openapi.tar.gz` bundle assets into `.internal/cache/x2mdx/splice-openapi/`, materializes all bundled YAML files into local versioned fixtures for `$ref` resolution, writes a local x2mdx manifest into `.internal/generated/x2mdx/splice-scan-openapi/manifest.json`, and then renders the checked-in Mintlify pages with the GitHub-pinned `x2mdx`.
+
+Run:
+
+```bash
+python3 scripts/generate_splice_scan_openapi_reference.py
+```
+
+or:
+
+```bash
+npm run generate:splice-scan-openapi-reference
+```
+
+By default this writes:
+
+- `docs-main/reference/splice-scan-openapi/`
+- `docs-main/docs.json`
+
+The generated nav is added under the top-level `API Reference` dropdown as `Splice APIs -> Scan APIs`, with the overview page listed first followed by the generated Scan spec pages.
+
 By default this writes:
 
 - `docs-main/reference/wallet-gateway-json-rpc/`
