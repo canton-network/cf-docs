@@ -307,6 +307,30 @@ By default this writes:
 
 The generated nav is added under the top-level `API Reference` dropdown as `Splice APIs -> Validator APIs`, with the overview page listed first followed by the generated validator-family spec pages.
 
+### Generate the Splice token-standard OpenAPI reference
+
+This repo also includes a checked-in source config for the published decentralized-canton-sync token-standard OpenAPI bundle surface at `config/x2mdx/splice-token-standard-openapi/source-artifacts.json`.
+The generator script reuses the docs-side Splice OpenAPI release-bundle helper, materializes the token-standard YAML fixtures from `*_openapi.tar.gz`, writes a local x2mdx manifest into `.internal/generated/x2mdx/splice-token-standard-openapi/manifest.json`, and then renders the checked-in Mintlify pages with the GitHub-pinned `x2mdx`.
+
+Run:
+
+```bash
+python3 scripts/generate_splice_token_standard_openapi_reference.py
+```
+
+or:
+
+```bash
+npm run generate:splice-token-standard-openapi-reference
+```
+
+By default this writes:
+
+- `docs-main/reference/splice-token-standard-openapi/`
+- `docs-main/docs.json`
+
+The generated nav is added under the top-level `API Reference` dropdown as `Splice APIs -> Token Standard APIs`, with the overview page listed first followed by the generated token-standard spec pages.
+
 By default this writes:
 
 - `docs-main/reference/wallet-gateway-json-rpc/`
