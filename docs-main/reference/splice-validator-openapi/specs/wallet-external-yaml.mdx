@@ -1,0 +1,245 @@
+---
+title: "Wallet API"
+description: "Generated lifecycle view for an OpenAPI specification"
+---
+
+Generated from supplied versioned OpenAPI artifacts.
+
+## Table of Contents
+
+| Name | Kind | Summary | Introduced | Changed | Deprecated | Removed |
+| --- | --- | --- | --- | --- | --- | --- |
+| [`/v0/wallet/buy-traffic-requests`](#endpoint-path-v0-wallet-buy-traffic-requests) | - | Create a request to buy traffic. Note that this only creates the request to do so. Refer to the status endpoint to check if the request succeeded. | `0.5.10` | - | - | - |
+| [`/v0/wallet/buy-traffic-requests/{tracking_id}/status`](#endpoint-path-v0-wallet-buy-traffic-requests-tracking-id-status) | - | Check the status of a buy traffic request with a given tracking id. | `0.5.10` | - | - | - |
+| [`/v0/wallet/transfer-offers`](#endpoint-path-v0-wallet-transfer-offers) | `GET, POST` | GET: List all open transfer offers where the user is either sender or receiver.; POST: Create an offer to directly transfer a given amount of Amulet to another party. Direct transfers are a three-step process: 1. The sender creates a transfer offer 2. The receiver accepts the offer 3. The sender's wallet automation consumes the accepted offer and transfers the amount.    Amulets are not locked for direct transfers.    If the sender's wallet does not have enough Amulet to fulfill the offer at this point,    the transfer will fail. | `0.5.10` | - | - | - |
+| [`/v0/wallet/transfer-offers/{tracking_id}/status`](#endpoint-path-v0-wallet-transfer-offers-tracking-id-status) | - | Check the status of a transfer offer with a given tracking id. | `0.5.10` | - | - | - |
+
+## Version Change Summary
+
+| Version | Added | Changed | Removed |
+| --- | --- | --- | --- |
+| `0.5.10` | `31` | `0` | `0` |
+| `0.5.11` | `0` | `0` | `0` |
+| `0.5.12` | `0` | `0` | `0` |
+| `0.5.13` | `0` | `0` | `0` |
+| `0.5.14` | `0` | `0` | `0` |
+| `0.5.15` | `0` | `0` | `0` |
+| `0.5.16` | `0` | `0` | `0` |
+| `0.5.17` | `0` | `0` | `0` |
+| `0.5.18` | `0` | `0` | `0` |
+
+## Reference
+
+
+<a id="endpoint-path-v0-wallet-buy-traffic-requests"></a>
+
+### `/v0/wallet/buy-traffic-requests`
+
+<a id="endpoint-post-v0-wallet-buy-traffic-requests"></a>
+
+- Method: `POST`
+
+- Operation ID: `createBuyTrafficRequest`
+- Description: Create a request to buy traffic. Note that this only creates the request to do so. Refer to the status endpoint to check if the request succeeded.
+- Tags: `wallet`
+
+**Request Body**
+
+- Required: `yes`
+
+| Content Type | Schema | Required Fields |
+| --- | --- | --- |
+| `application/json` | `object` | `domain_id`, `expires_at`, `receiving_validator_party_id`, `tracking_id`, `traffic_amount` |
+
+**Request Example: `application/json`**
+
+```json
+{
+  "receiving_validator_party_id": "<string>",
+  "domain_id": "<string>",
+  "traffic_amount": "<integer>",
+  "tracking_id": "<string>",
+  "expires_at": "<integer>"
+}
+```
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | Request to buy traffic got created | `application/json` | `application/json:object` |
+| `400` | Request was invalid, adjust parameters | `application/json` | `application/json:object` |
+| `409` | A request to buy traffic with the same tracking id has been created. Check the status endpoint for the current status. | `application/json` | `application/json:object` |
+| `429` | A request to buy traffic with the same tracking id is currently being processed. Check the status endpoint and resubmit if it returns 404. | `application/json` | `application/json:object` |
+| `500` | Internal server error that requires operator investigation. Retrying for a small number of times with exponential back-off MAY work. | `application/json` | `application/json:object` |
+
+<a id="endpoint-path-v0-wallet-buy-traffic-requests-tracking-id-status"></a>
+
+### `/v0/wallet/buy-traffic-requests/{tracking_id}/status`
+
+<a id="endpoint-post-v0-wallet-buy-traffic-requests-tracking-id-status"></a>
+
+- Method: `POST`
+
+- Operation ID: `getBuyTrafficRequestStatus`
+- Description: Check the status of a buy traffic request with a given tracking id.
+- Tags: `wallet`
+
+**Parameters**
+
+| Name | In | Required | Schema | Description |
+| --- | --- | --- | --- | --- |
+| `tracking_id` | `path` | `yes` | `string` | - |
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | A request to buy traffic with this tracking id has been submitted before, check the response for details. | `application/json` | `application/json:oneOf` |
+| `404` | No request with this tracking id was found. | `application/json` | `application/json:object` |
+
+<a id="endpoint-path-v0-wallet-transfer-offers"></a>
+
+### `/v0/wallet/transfer-offers`
+
+- Methods: `GET`, `POST`
+
+<a id="endpoint-get-v0-wallet-transfer-offers"></a>
+
+**`GET`**
+
+- Operation ID: `listTransferOffers`
+- Description: List all open transfer offers where the user is either sender or receiver.
+- Tags: `wallet`
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | ok | `application/json` | `application/json:object` |
+| `404` | not found | `application/json` | `application/json:object` |
+| `500` | internal server error | `application/json` | `application/json:object` |
+
+<a id="endpoint-post-v0-wallet-transfer-offers"></a>
+
+**`POST`**
+
+- Operation ID: `createTransferOffer`
+- Description: Create an offer to directly transfer a given amount of Amulet to another party. Direct transfers are a three-step process: 1. The sender creates a transfer offer 2. The receiver accepts the offer 3. The sender's wallet automation consumes the accepted offer and transfers the amount.    Amulets are not locked for direct transfers.    If the sender's wallet does not have enough Amulet to fulfill the offer at this point,    the transfer will fail.
+- Tags: `wallet`
+
+**Request Body**
+
+- Required: `yes`
+
+| Content Type | Schema | Required Fields |
+| --- | --- | --- |
+| `application/json` | `object` | `amount`, `description`, `expires_at`, `receiver_party_id`, `tracking_id` |
+
+**Request Example: `application/json`**
+
+```json
+{
+  "receiver_party_id": "<string>",
+  "amount": "<string>",
+  "description": "<string>",
+  "expires_at": "<integer>",
+  "tracking_id": "<string>"
+}
+```
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | The transfer offer has been created. | `application/json` | `application/json:object` |
+| `400` | Invalid request, check the error response for details. | `application/json` | `application/json:object` |
+| `404` | The submitter’s wallet could not be found. | `application/json` | `application/json:object` |
+| `409` | A transfer offer with the same tracking id has been created. Check the status endpoint for the current status. | `application/json` | `application/json:object` |
+| `429` | A transfer offer with the same tracking id is currently being processed, which may or may not succeed. Retry submitting the request with exponential back-off. | `application/json` | `application/json:object` |
+| `500` | internal server error | `application/json` | `application/json:object` |
+
+<a id="endpoint-path-v0-wallet-transfer-offers-tracking-id-status"></a>
+
+### `/v0/wallet/transfer-offers/{tracking_id}/status`
+
+<a id="endpoint-post-v0-wallet-transfer-offers-tracking-id-status"></a>
+
+- Method: `POST`
+
+- Operation ID: `getTransferOfferStatus`
+- Description: Check the status of a transfer offer with a given tracking id.
+- Tags: `wallet`
+
+**Parameters**
+
+| Name | In | Required | Schema | Description |
+| --- | --- | --- | --- | --- |
+| `tracking_id` | `path` | `yes` | `string` | - |
+
+**Responses**
+
+| Code | Description | Content Types | Schemas |
+| --- | --- | --- | --- |
+| `200` | An offer with this tracking id is known. Check the response for its status. | `application/json` | `application/json:oneOf` |
+| `404` | No offer with this tracking id is known. Perhaps it has not yet been submitted or processed; or it has been submitted in the past before the current beginning of the wallet transaction log. | `application/json` | `application/json:object` |
+
+## Changed Entities
+
+No entity-level lifecycle changes in the selected version range.
+
+## Latest Operations
+
+| Operation | Introduced | Changed In | Removed |
+| --- | --- | --- | --- |
+| `GET /v0/wallet/transfer-offers` | `0.5.10` | - | - |
+| `POST /v0/wallet/buy-traffic-requests` | `0.5.10` | - | - |
+| `POST /v0/wallet/buy-traffic-requests/{tracking_id}/status` | `0.5.10` | - | - |
+| `POST /v0/wallet/transfer-offers` | `0.5.10` | - | - |
+| `POST /v0/wallet/transfer-offers/{tracking_id}/status` | `0.5.10` | - | - |
+
+## Latest Components
+
+| Component | Introduced | Changed In | Removed |
+| --- | --- | --- | --- |
+| `responses.404` | `0.5.10` | - | - |
+| `responses.500` | `0.5.10` | - | - |
+| `schemas.BaseGetBuyTrafficRequestStatusResponse` | `0.5.10` | - | - |
+| `schemas.BaseGetTransferOfferStatusResponse` | `0.5.10` | - | - |
+| `schemas.BuyTrafficRequestCompletedResponse` | `0.5.10` | - | - |
+| `schemas.BuyTrafficRequestCreatedResponse` | `0.5.10` | - | - |
+| `schemas.BuyTrafficRequestFailedResponse` | `0.5.10` | - | - |
+| `schemas.Contract` | `0.5.10` | - | - |
+| `schemas.CreateBuyTrafficRequest` | `0.5.10` | - | - |
+| `schemas.CreateBuyTrafficRequestResponse` | `0.5.10` | - | - |
+| `schemas.CreateTransferOfferRequest` | `0.5.10` | - | - |
+| `schemas.CreateTransferOfferResponse` | `0.5.10` | - | - |
+| `schemas.ErrorResponse` | `0.5.10` | - | - |
+| `schemas.GetBuyTrafficRequestStatusResponse` | `0.5.10` | - | - |
+| `schemas.GetTransferOfferStatusResponse` | `0.5.10` | - | - |
+| `schemas.ListTransferOffersResponse` | `0.5.10` | - | - |
+| `schemas.TransferOfferAcceptedResponse` | `0.5.10` | - | - |
+| `schemas.TransferOfferCompletedResponse` | `0.5.10` | - | - |
+| `schemas.TransferOfferCreatedResponse` | `0.5.10` | - | - |
+| `schemas.TransferOfferFailedResponse` | `0.5.10` | - | - |
+| `securitySchemes.walletUserAuth` | `0.5.10` | - | - |
+
+## Spec Metadata
+
+- Canonical spec id: `wallet-external.yaml`
+- Latest source path: `openapi/wallet-external.yaml`
+- OpenAPI version (latest): `3.0.0`
+- Introduced: `0.5.10`
+- Changed in versions: -
+- Removed: -
+
+## Entity Summary
+
+- Total entities tracked: `31`
+- Entities introduced after spec introduction: `0`
+- Entities changed at least once: `0`
+- Entities removed: `0`
+- Latest operations: `5`
+- Latest paths: `4`
+- Latest components: `21`
+- Latest tags: `1`
