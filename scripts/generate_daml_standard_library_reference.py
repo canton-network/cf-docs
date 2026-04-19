@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -218,6 +217,45 @@ def update_docs_navigation(
     return docs_json_path
 
 
+def render_daml_pages(
+    *,
+    manifest_path: Path,
+    output_dir: Path,
+    publish_version: str,
+    source_name: str,
+    version_filter: str,
+    link_prefix: str,
+) -> None:
+    from x2mdx.daml_json.lifecycle import build_daml_doc_report_from_sources
+    from x2mdx.daml_json.snapshots import load_daml_doc_sources
+    from x2mdx.daml_json import render as daml_render
+    from x2mdx.render import write_pages
+
+    sources = load_daml_doc_sources(manifest_path)
+    report = build_daml_doc_report_from_sources(
+        sources,
+        source_name=source_name,
+        version_filter=version_filter,
+        publish_version=publish_version,
+    )
+
+    # The shared renderer excludes these two small helper modules by default.
+    # Keep the override local to the stdlib wrapper so the docs surface can match
+    # the live published standard-library inventory without changing x2mdx itself.
+    original_exclusions = daml_render.EXCLUDED_MODULE_NAMES
+    daml_render.EXCLUDED_MODULE_NAMES = frozenset()
+    try:
+        output_root, pages = daml_render.build_pages(
+            report,
+            output_dir=output_dir,
+            overview_title=GROUP_LABEL,
+            link_prefix=link_prefix,
+        )
+    finally:
+        daml_render.EXCLUDED_MODULE_NAMES = original_exclusions
+    write_pages(pages, output_root)
+
+
 def main() -> int:
     args = parse_args()
     source_config = load_json(Path(args.source_config).resolve())
@@ -250,29 +288,14 @@ def main() -> int:
         manifest_path=Path(args.manifest_out).resolve(),
         versions=selected_versions,
     )
-    command = [
-        "x2mdx",
-        "daml-json",
-        "build-api-pages-from-manifest",
-        "--manifest",
-        str(manifest_path),
-        "--output-dir",
-        str(Path(args.output_dir).resolve()),
-        "--publish-version",
-        str(publish_version),
-        "--source-name",
-        args.source_name,
-        "--version-filter",
-        args.version_filter,
-        "--link-prefix",
-        docs_route_prefix(Path(args.output_dir).resolve(), Path(args.docs_json).resolve()),
-    ]
-    for version in args.version or []:
-        command.extend(["--version", version])
-    print("Running:", " ".join(command))
-    completed = subprocess.run(command, cwd=REPO_ROOT)
-    if completed.returncode != 0:
-        return completed.returncode
+    render_daml_pages(
+        manifest_path=manifest_path,
+        output_dir=Path(args.output_dir).resolve(),
+        publish_version=str(publish_version),
+        source_name=args.source_name,
+        version_filter=args.version_filter,
+        link_prefix=docs_route_prefix(Path(args.output_dir).resolve(), Path(args.docs_json).resolve()),
+    )
 
     update_docs_navigation(
         docs_json_path=Path(args.docs_json).resolve(),

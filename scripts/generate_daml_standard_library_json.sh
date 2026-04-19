@@ -285,6 +285,12 @@ if [[ ! -d "$TARGET_ROOT" ]]; then
   exit 1
 fi
 
+TMP_BASE="${TMPDIR:-/tmp}"
+if [[ ! -d "$TMP_BASE" ]]; then
+  TMP_BASE="/tmp"
+fi
+export TMPDIR="$TMP_BASE"
+
 resolve_stdlib_src_root() {
   local candidate
   candidate="$TARGET_ROOT/daml-stdlib-$SDK_VERSION"
@@ -360,7 +366,7 @@ case "$PACKAGE_SET" in
     ;;
   base)
     STDLIB_SRC_ROOT="$(resolve_stdlib_src_root)"
-    TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/daml-base-json.XXXXXX")"
+    TMP_DIR="$(mktemp -d "$TMP_BASE/daml-base-json.XXXXXX")"
     trap 'rm -rf "$TMP_DIR"' EXIT
     PRIM_JSON="$TMP_DIR/daml-prim.json"
     STDLIB_JSON="$TMP_DIR/daml-stdlib.json"
