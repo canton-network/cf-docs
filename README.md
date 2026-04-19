@@ -331,6 +331,30 @@ By default this writes:
 
 The generated nav is added under the top-level `API Reference` dropdown as `Splice APIs -> Token Standard APIs`, with the overview page listed first followed by the generated token-standard spec pages.
 
+### Generate the Splice Daml API reference
+
+This repo also includes a checked-in source config for the published decentralized-canton-sync Splice Daml API surface at `config/x2mdx/splice-daml-api/source-artifacts.json`.
+The generator script discovers matching stable releases through the GitHub releases API, downloads the `*_splice-node.tar.gz` bundle assets into `.internal/cache/x2mdx/splice-daml-api/`, validates that the configured family list still matches the live `docs.sync.global/app_dev/api/` surface embedded in the published bundle docs, extracts the corresponding DARs, runs `daml damlc docs --format json` on the extracted `.daml` sources, writes per-family x2mdx manifests into `.internal/generated/x2mdx/splice-daml-api/`, and then renders the checked-in Mintlify pages with the GitHub-pinned `x2mdx`.
+
+Run:
+
+```bash
+python3 scripts/generate_splice_daml_api_reference.py
+```
+
+or:
+
+```bash
+npm run generate:splice-daml-api-reference
+```
+
+By default this writes:
+
+- `docs-main/reference/splice-daml-api/`
+- `docs-main/docs.json`
+
+The generated nav is added under the top-level `API Reference` dropdown as `Splice APIs -> Daml APIs`. The overview page records the one currently-blocked live family, `splice-token-standard-test`, whose live docs exist but whose release bundle does not currently ship a matching DAR.
+
 By default this writes:
 
 - `docs-main/reference/wallet-gateway-json-rpc/`

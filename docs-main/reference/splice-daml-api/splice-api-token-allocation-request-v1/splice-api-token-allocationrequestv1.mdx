@@ -1,0 +1,152 @@
+---
+title: "Splice.Api.Token.AllocationRequestV1"
+description: "Reference documentation for Daml module Splice.Api.Token.AllocationRequestV1."
+---
+
+<a id="module-splice-api-token-allocationrequestv1-2106"></a>
+
+# Splice.Api.Token.AllocationRequestV1
+
+This module defines the interface for an `AllocationRequest`, which is an interface that can
+
+be implemented by an app to request specific allocations from their users
+
+for the purpose of settling a DvP or a payment as part of an app's workflow.
+
+## Module Snapshot
+
+<CardGroup cols={2}>
+<Card title="Lifecycle">
+Stable.
+</Card>
+<Card title="Notices">
+Status: `active`
+Introduced in: `0.5.18`
+Removed in: `-`
+Warnings: `0`
+Deprecations: `0`
+Deprecated since: `-`
+</Card>
+</CardGroup>
+
+## Data Types
+
+<a id="type-splice-api-token-allocationrequestv1-allocationrequestview-51417"></a>
+
+### `data AllocationRequestView`
+
+View of `AllocationRequest`.
+
+Implementations SHOULD make sure that at least all senders of the transfer legs
+are observers of the implementing contract, so that their wallet can show
+the request to them.
+
+Constructors:
+
+<a id="constr-splice-api-token-allocationrequestv1-allocationrequestview-59188"></a>
+- `AllocationRequestView`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| settlement | SettlementInfo | Settlement for which the assets are requested to be allocated. |
+| transferLegs | TextMap TransferLeg | Transfer legs that are requested to be allocated for the execution of the settlement<br/><br/>keyed by their identifier.<br/><br/>This may or may not be a complete list of transfer legs that are part of the settlement,<br/><br/>depending on the confidentiality requirements of the app. |
+| meta | Metadata | Additional metadata specific to the allocation request, used for extensibility. |
+
+Instances:
+
+- `instance Eq AllocationRequestView`
+- `instance Show AllocationRequestView`
+- `instance HasFromAnyView AllocationRequest AllocationRequestView`
+- `instance HasInterfaceView AllocationRequest AllocationRequestView`
+- `instance GetField meta AllocationRequestView Metadata`
+- `instance GetField settlement AllocationRequestView SettlementInfo`
+- `instance GetField transferLegs AllocationRequestView (TextMap TransferLeg)`
+- `instance SetField meta AllocationRequestView Metadata`
+- `instance SetField settlement AllocationRequestView SettlementInfo`
+- `instance SetField transferLegs AllocationRequestView (TextMap TransferLeg)`
+
+## Functions
+
+<a id="function-splice-api-token-allocationrequestv1-allocationrequestrejectimpl-48931"></a>
+
+### `allocationRequest_RejectImpl`
+
+```daml
+allocationRequest_RejectImpl : AllocationRequest -> ContractId AllocationRequest -> AllocationRequest_Reject -> Update ChoiceExecutionMetadata
+```
+
+<a id="function-splice-api-token-allocationrequestv1-allocationrequestwithdrawimpl-31866"></a>
+
+### `allocationRequest_WithdrawImpl`
+
+```daml
+allocationRequest_WithdrawImpl : AllocationRequest -> ContractId AllocationRequest -> AllocationRequest_Withdraw -> Update ChoiceExecutionMetadata
+```
+
+## Interfaces
+
+<a id="type-splice-api-token-allocationrequestv1-allocationrequest-90278"></a>
+
+### Interface `AllocationRequest`
+
+A request by an app for allocations to be created to enable the execution of a settlement.
+
+Apps are free to use a single request spanning all senders or one request per sender.
+
+View Type: `AllocationRequestView`
+
+Choices:
+
+<a id="type-splice-api-token-allocationrequestv1-allocationrequestreject-89381"></a>
+
+#### Choice `AllocationRequest_Reject`
+
+Reject an allocation request.
+
+Implementations SHOULD allow any sender of a transfer leg to reject the allocation request,
+and thereby signal that they are definitely not going to create a matching allocation for the settlement.
+
+Controllers: `actor`
+
+Returns: `ChoiceExecutionMetadata`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| actor | Party | The party rejecting the allocation request. |
+| extraArgs | ExtraArgs | Additional context required in order to exercise the choice. |
+
+<a id="type-splice-api-token-allocationrequestv1-allocationrequestwithdraw-15628"></a>
+
+#### Choice `AllocationRequest_Withdraw`
+
+Withdraw an allocation request as the executor.
+
+Used by executors to withdraw the allocation request if they are unable to execute it;
+e.g., because a trade has been cancelled.
+
+Controllers: `(DA.Internal.Record.getField @"executor" (DA.Internal.Record.getField @"settlement" (view this)))`
+
+Returns: `ChoiceExecutionMetadata`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| extraArgs | ExtraArgs | Additional context required in order to exercise the choice. |
+
+#### Choice `Archive`
+
+Controllers: `Signatories of implementing template`
+
+Returns: `()`
+
+Methods:
+
+#### Method `allocationRequest_RejectImpl`
+
+Type: `ContractId AllocationRequest -> AllocationRequest_Reject -> Update ChoiceExecutionMetadata`
+
+#### Method `allocationRequest_WithdrawImpl`
+
+Type: `ContractId AllocationRequest -> AllocationRequest_Withdraw -> Update ChoiceExecutionMetadata`

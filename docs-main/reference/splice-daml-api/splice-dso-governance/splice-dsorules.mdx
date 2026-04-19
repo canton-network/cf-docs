@@ -1,0 +1,2966 @@
+---
+title: "Splice.DsoRules"
+description: "Reference documentation for Daml module Splice.DsoRules."
+---
+
+<a id="module-splice-dsorules-86281"></a>
+
+# Splice.DsoRules
+
+## Module Snapshot
+
+<CardGroup cols={2}>
+<Card title="Lifecycle">
+Stable.
+</Card>
+<Card title="Notices">
+Status: `active`
+Introduced in: `0.5.18`
+Removed in: `-`
+Warnings: `0`
+Deprecations: `0`
+Deprecated since: `-`
+</Card>
+</CardGroup>
+
+## Data Types
+
+<a id="type-splice-dsorules-actionrequiringconfirmation-45397"></a>
+
+### `data ActionRequiringConfirmation`
+
+Actions that require confirmation from SV nodes before they can be executed.
+
+There are two processes for executing such actions:
+1. Any SV can request a vote to execute such an action upon which the other SV's
+   can respond with their votes for whether they accept the execution or not.
+   This process requires votes from 2/3 of all SVs* for the action to be considered definitive
+   and it can be used for all actions that require confirmation.
+2. Some of the actions that require confirmations should be executed automatically
+   once the ledger and the wall-clocks of the SV nodes are in a particular state.
+   These actions are confirmed by each SV node automatically once the action's precondition is met.
+   Once 2/3 of all SV's confirmations* are visible to the DSO delegate it executes them.
+
+* Simplified for clarity; see `requiredNumVotes` for exact formula.
+
+Process 2 is an optimization of Process 1 for the case where no disagreement to the
+action is expected.
+
+We expect honest SV nodes to only create confirmations for actions
+whose preconditions are met. We also rely on the execution of these actions to be
+idempotent, as more than the required number of confirmations can be created.
+
+Note also that having these two processes also aids in distinguishing between manually initiated
+ad-hoc votes and the regular confirmations that need to happen during standard DSO.
+
+Constructors:
+
+<a id="constr-splice-dsorules-arcdsorules-25826"></a>
+- `ARC_DsoRules`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| dsoAction | DsoRules_ActionRequiringConfirmation |  |
+<a id="constr-splice-dsorules-arcamuletrules-45909"></a>
+- `ARC_AmuletRules`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| amuletRulesAction | AmuletRules_ActionRequiringConfirmation |  |
+<a id="constr-splice-dsorules-arcansentrycontext-51355"></a>
+- `ARC_AnsEntryContext`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| ansEntryContextCid | ContractId AnsEntryContext |  |
+| ansEntryContextAction | AnsEntryContext_ActionRequiringConfirmation |  |
+<a id="constr-splice-dsorules-extactionrequiringconformation-24220"></a>
+- `ExtActionRequiringConformation`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| dummyUnitField | () | Extension constructor (and field) to work around the current lack of upgrading for variants in Daml 3.0<br/><br/>This on takes care of providing extensibility for the specific variants below. |
+
+Instances:
+
+- `instance Eq ActionRequiringConfirmation`
+- `instance Show ActionRequiringConfirmation`
+- `instance GetField action Confirmation ActionRequiringConfirmation`
+- `instance GetField action DsoRules_ConfirmAction ActionRequiringConfirmation`
+- `instance GetField action DsoRules_ExecuteConfirmedAction ActionRequiringConfirmation`
+- `instance GetField action DsoRules_RequestVote ActionRequiringConfirmation`
+- `instance GetField action VoteRequest ActionRequiringConfirmation`
+- `instance GetField amuletRulesAction ActionRequiringConfirmation AmuletRules_ActionRequiringConfirmation`
+- `instance GetField ansEntryContextAction ActionRequiringConfirmation AnsEntryContext_ActionRequiringConfirmation`
+- `instance GetField ansEntryContextCid ActionRequiringConfirmation (ContractId AnsEntryContext)`
+- `instance GetField dsoAction ActionRequiringConfirmation DsoRules_ActionRequiringConfirmation`
+- `instance GetField dummyUnitField ActionRequiringConfirmation ()`
+- `instance SetField action Confirmation ActionRequiringConfirmation`
+- `instance SetField action DsoRules_ConfirmAction ActionRequiringConfirmation`
+- `instance SetField action DsoRules_ExecuteConfirmedAction ActionRequiringConfirmation`
+- `instance SetField action DsoRules_RequestVote ActionRequiringConfirmation`
+- `instance SetField action VoteRequest ActionRequiringConfirmation`
+- `instance SetField amuletRulesAction ActionRequiringConfirmation AmuletRules_ActionRequiringConfirmation`
+- `instance SetField ansEntryContextAction ActionRequiringConfirmation AnsEntryContext_ActionRequiringConfirmation`
+- `instance SetField ansEntryContextCid ActionRequiringConfirmation (ContractId AnsEntryContext)`
+- `instance SetField dsoAction ActionRequiringConfirmation DsoRules_ActionRequiringConfirmation`
+- `instance SetField dummyUnitField ActionRequiringConfirmation ()`
+
+<a id="type-splice-dsorules-amuletrulesactionrequiringconfirmation-62783"></a>
+
+### `data AmuletRules_ActionRequiringConfirmation`
+
+Constructors:
+
+<a id="constr-splice-dsorules-crarcminingroundstartissuing-47375"></a>
+- `CRARC_MiningRound_StartIssuing AmuletRules_MiningRound_StartIssuing`
+Automated action to start an issuing round once the summary of the reward coupons have been computed.
+<a id="constr-splice-dsorules-crarcminingroundarchive-10786"></a>
+- `CRARC_MiningRound_Archive AmuletRules_MiningRound_Archive`
+Automated action to archive a closed mining round once no expired reward coupons are left.
+<a id="constr-splice-dsorules-crarcaddfutureamuletconfigschedule-50004"></a>
+- `CRARC_AddFutureAmuletConfigSchedule AmuletRules_AddFutureAmuletConfigSchedule`
+**Deprecated, use CRARC_SetConfig instead**: Voted action to add a config schedule to the `AmuletRules`.
+<a id="constr-splice-dsorules-crarcremovefutureamuletconfigschedule-28322"></a>
+- `CRARC_RemoveFutureAmuletConfigSchedule AmuletRules_RemoveFutureAmuletConfigSchedule`
+**Deprecated, use CRARC_SetConfig instead**: Voted action to remove a config schedule from the `AmuletRules`.
+<a id="constr-splice-dsorules-crarcupdatefutureamuletconfigschedule-3041"></a>
+- `CRARC_UpdateFutureAmuletConfigSchedule AmuletRules_UpdateFutureAmuletConfigSchedule`
+**Deprecated, use CRARC_SetConfig instead**: Voted action to update a config schedule in the `AmuletRules`.
+<a id="constr-splice-dsorules-crarcsetconfig-80537"></a>
+- `CRARC_SetConfig AmuletRules_SetConfig`
+Voted action to change the `AmuletConfig`. Not idempotent.
+
+Instances:
+
+- `instance Eq AmuletRules_ActionRequiringConfirmation`
+- `instance Show AmuletRules_ActionRequiringConfirmation`
+- `instance GetField amuletRulesAction ActionRequiringConfirmation AmuletRules_ActionRequiringConfirmation`
+- `instance SetField amuletRulesAction ActionRequiringConfirmation AmuletRules_ActionRequiringConfirmation`
+
+<a id="type-splice-dsorules-ansentrycontextactionrequiringconfirmation-11149"></a>
+
+### `data AnsEntryContext_ActionRequiringConfirmation`
+
+Constructors:
+
+<a id="constr-splice-dsorules-ansrarccollectinitialentrypayment-99049"></a>
+- `ANSRARC_CollectInitialEntryPayment AnsEntryContext_CollectInitialEntryPayment`
+Automated action to collect initial payment of an ans entry.
+<a id="constr-splice-dsorules-ansrarcrejectentryinitialpayment-1047"></a>
+- `ANSRARC_RejectEntryInitialPayment AnsEntryContext_RejectEntryInitialPayment`
+Automated action to reject initial payment of an ans entry.
+
+Instances:
+
+- `instance Eq AnsEntryContext_ActionRequiringConfirmation`
+- `instance Show AnsEntryContext_ActionRequiringConfirmation`
+- `instance GetField ansEntryContextAction ActionRequiringConfirmation AnsEntryContext_ActionRequiringConfirmation`
+- `instance SetField ansEntryContextAction ActionRequiringConfirmation AnsEntryContext_ActionRequiringConfirmation`
+
+<a id="type-splice-dsorules-confirmationexpireresult-10666"></a>
+
+### `data Confirmation_ExpireResult`
+
+Choice return types
+
+Constructors:
+
+<a id="constr-splice-dsorules-confirmationexpireresult-43205"></a>
+- `Confirmation_ExpireResult`
+
+Instances:
+
+- `instance HasExercise Confirmation Confirmation_Expire Confirmation_ExpireResult`
+- `instance HasFromAnyChoice Confirmation Confirmation_Expire Confirmation_ExpireResult`
+- `instance HasToAnyChoice Confirmation Confirmation_Expire Confirmation_ExpireResult`
+
+<a id="type-splice-dsorules-dsorulesconfig-6376"></a>
+
+### `data DsoRulesConfig`
+
+Constructors:
+
+<a id="constr-splice-dsorules-dsorulesconfig-32625"></a>
+- `DsoRulesConfig`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| numUnclaimedRewardsThreshold | Int | The minimum number of unclaimed rewards required for merging |
+| numMemberTrafficContractsThreshold | Int | The minimum number of member traffic contracts required for merging |
+| actionConfirmationTimeout | RelTime | The TTL for contracts representing a confirmation |
+| svOnboardingRequestTimeout | RelTime | The TTL for contracts representing an incomplete onboarding |
+| svOnboardingConfirmedTimeout | RelTime | The TTL for contracts representing an SV confirmation |
+| voteRequestTimeout | RelTime | The TTL for a `VoteRequest` and its associated `Vote` s |
+| dsoDelegateInactiveTimeout | RelTime | The amount of time given to the DSO delegate to complete an action it should take care of<br/><br/>^ __Deprecated__ in favor of delegateless automation. |
+| synchronizerNodeConfigLimits | SynchronizerNodeConfigLimits | Limits to enforce on the svs' `SynchronizerNodeConfig` |
+| maxTextLength | Int | Generic upper limit on text fields in choices and contracts. |
+| decentralizedSynchronizer | DsoDecentralizedSynchronizerConfig |  |
+| nextScheduledSynchronizerUpgrade | Optional SynchronizerUpgradeSchedule |  |
+| voteCooldownTime | Optional RelTime | The minimum time between two votes by the same SV. |
+
+Instances:
+
+- `instance Patchable DsoRulesConfig`
+- `instance Eq DsoRulesConfig`
+- `instance Show DsoRulesConfig`
+- `instance GetField actionConfirmationTimeout DsoRulesConfig RelTime`
+- `instance GetField baseConfig DsoRules_SetConfig (Optional DsoRulesConfig)`
+- `instance GetField config DsoBootstrap DsoRulesConfig`
+- `instance GetField config DsoRules DsoRulesConfig`
+- `instance GetField decentralizedSynchronizer DsoRulesConfig DsoDecentralizedSynchronizerConfig`
+- `instance GetField dsoDelegateInactiveTimeout DsoRulesConfig RelTime`
+- `instance GetField maxTextLength DsoRulesConfig Int`
+- `instance GetField newConfig DsoRules_SetConfig DsoRulesConfig`
+- `instance GetField nextScheduledSynchronizerUpgrade DsoRulesConfig (Optional SynchronizerUpgradeSchedule)`
+- `instance GetField numMemberTrafficContractsThreshold DsoRulesConfig Int`
+- `instance GetField numUnclaimedRewardsThreshold DsoRulesConfig Int`
+- `instance GetField svOnboardingConfirmedTimeout DsoRulesConfig RelTime`
+- `instance GetField svOnboardingRequestTimeout DsoRulesConfig RelTime`
+- `instance GetField synchronizerNodeConfigLimits DsoRulesConfig SynchronizerNodeConfigLimits`
+- `instance GetField voteCooldownTime DsoRulesConfig (Optional RelTime)`
+- `instance GetField voteRequestTimeout DsoRulesConfig RelTime`
+- `instance SetField actionConfirmationTimeout DsoRulesConfig RelTime`
+- `instance SetField baseConfig DsoRules_SetConfig (Optional DsoRulesConfig)`
+- `instance SetField config DsoBootstrap DsoRulesConfig`
+- `instance SetField config DsoRules DsoRulesConfig`
+- `instance SetField decentralizedSynchronizer DsoRulesConfig DsoDecentralizedSynchronizerConfig`
+- `instance SetField dsoDelegateInactiveTimeout DsoRulesConfig RelTime`
+- `instance SetField maxTextLength DsoRulesConfig Int`
+- `instance SetField newConfig DsoRules_SetConfig DsoRulesConfig`
+- `instance SetField nextScheduledSynchronizerUpgrade DsoRulesConfig (Optional SynchronizerUpgradeSchedule)`
+- `instance SetField numMemberTrafficContractsThreshold DsoRulesConfig Int`
+- `instance SetField numUnclaimedRewardsThreshold DsoRulesConfig Int`
+- `instance SetField svOnboardingConfirmedTimeout DsoRulesConfig RelTime`
+- `instance SetField svOnboardingRequestTimeout DsoRulesConfig RelTime`
+- `instance SetField synchronizerNodeConfigLimits DsoRulesConfig SynchronizerNodeConfigLimits`
+- `instance SetField voteCooldownTime DsoRulesConfig (Optional RelTime)`
+- `instance SetField voteRequestTimeout DsoRulesConfig RelTime`
+
+<a id="type-splice-dsorules-dsorulesactionrequiringconfirmation-12600"></a>
+
+### `data DsoRules_ActionRequiringConfirmation`
+
+Constructors:
+
+<a id="constr-splice-dsorules-srarcaddsv-12841"></a>
+- `SRARC_AddSv DsoRules_AddSv`
+Voted action to directly add an SV
+<a id="constr-splice-dsorules-srarcoffboardsv-63692"></a>
+- `SRARC_OffboardSv DsoRules_OffboardSv`
+Voted action to remove an SV
+<a id="constr-splice-dsorules-srarcconfirmsvonboarding-51509"></a>
+- `SRARC_ConfirmSvOnboarding DsoRules_ConfirmSvOnboarding`
+Automated action to confirm that a party can become an SV.
+<a id="constr-splice-dsorules-srarcgrantfeaturedappright-84890"></a>
+- `SRARC_GrantFeaturedAppRight DsoRules_GrantFeaturedAppRight`
+Voted action to grant a featured app right. Not idempotent.
+<a id="constr-splice-dsorules-srarcrevokefeaturedappright-73851"></a>
+- `SRARC_RevokeFeaturedAppRight DsoRules_RevokeFeaturedAppRight`
+Revoke a specific featured app right.
+<a id="constr-splice-dsorules-srarcsetconfig-39305"></a>
+- `SRARC_SetConfig DsoRules_SetConfig`
+Voted action to change the `DsoRulesConfig`. Not idempotent.
+<a id="constr-splice-dsorules-srarcupdatesvrewardweight-81705"></a>
+- `SRARC_UpdateSvRewardWeight DsoRules_UpdateSvRewardWeight`
+Voted action to update the reward weight of an SV.
+<a id="constr-splice-dsorules-srarccreateexternalpartyamuletrules-49124"></a>
+- `SRARC_CreateExternalPartyAmuletRules DsoRules_CreateExternalPartyAmuletRules`
+Create ExternalPartyAmuletRules contract if it has not been created as part of network bootstrapping.
+<a id="constr-splice-dsorules-srarccreatetransfercommandcounter-88632"></a>
+- `SRARC_CreateTransferCommandCounter DsoRules_CreateTransferCommandCounter`
+Create TransferCommandCounter contract for the given sender if it does not already exist
+<a id="constr-splice-dsorules-srarccreateunallocatedunclaimedactivityrecord-97784"></a>
+- `SRARC_CreateUnallocatedUnclaimedActivityRecord DsoRules_CreateUnallocatedUnclaimedActivityRecord`
+Voted action to create an UnallocatedUnclaimedActivityRecord contract.
+<a id="constr-splice-dsorules-srarccreatebootstrapexternalpartyconfigstateinstruction-49456"></a>
+- `SRARC_CreateBootstrapExternalPartyConfigStateInstruction DsoRules_CreateBootstrapExternalPartyConfigStateInstruction`
+Create BootstrapExternalPartyConfigStateInstruction
+
+Instances:
+
+- `instance Eq DsoRules_ActionRequiringConfirmation`
+- `instance Show DsoRules_ActionRequiringConfirmation`
+- `instance GetField dsoAction ActionRequiringConfirmation DsoRules_ActionRequiringConfirmation`
+- `instance SetField dsoAction ActionRequiringConfirmation DsoRules_ActionRequiringConfirmation`
+
+<a id="type-splice-dsorules-dsorulesaddconfirmedsvresult-53040"></a>
+
+### `data DsoRules_AddConfirmedSvResult`
+
+Constructors:
+
+<a id="constr-splice-dsorules-dsorulesaddconfirmedsvresult-81391"></a>
+- `DsoRules_AddConfirmedSvResult`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| newDsoRules | ContractId DsoRules |  |
+
+Instances:
+
+- `instance GetField newDsoRules DsoRules_AddConfirmedSvResult (ContractId DsoRules)`
+- `instance SetField newDsoRules DsoRules_AddConfirmedSvResult (ContractId DsoRules)`
+- `instance HasExercise DsoRules DsoRules_AddConfirmedSv DsoRules_AddConfirmedSvResult`
+- `instance HasFromAnyChoice DsoRules DsoRules_AddConfirmedSv DsoRules_AddConfirmedSvResult`
+- `instance HasToAnyChoice DsoRules DsoRules_AddConfirmedSv DsoRules_AddConfirmedSvResult`
+
+<a id="type-splice-dsorules-dsorulesaddsvresult-53972"></a>
+
+### `data DsoRules_AddSvResult`
+
+Constructors:
+
+<a id="constr-splice-dsorules-dsorulesaddsvresult-63557"></a>
+- `DsoRules_AddSvResult`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| newDsoRules | ContractId DsoRules |  |
+
+Instances:
+
+- `instance GetField newDsoRules DsoRules_AddSvResult (ContractId DsoRules)`
+- `instance SetField newDsoRules DsoRules_AddSvResult (ContractId DsoRules)`
+- `instance HasExercise DsoRules DsoRules_AddSv DsoRules_AddSvResult`
+- `instance HasFromAnyChoice DsoRules DsoRules_AddSv DsoRules_AddSvResult`
+- `instance HasToAnyChoice DsoRules DsoRules_AddSv DsoRules_AddSvResult`
+
+<a id="type-splice-dsorules-dsorulesadvanceopenminingroundsresult-57405"></a>
+
+### `data DsoRules_AdvanceOpenMiningRoundsResult`
+
+Constructors:
+
+<a id="constr-splice-dsorules-dsorulesadvanceopenminingroundsresult-30524"></a>
+- `DsoRules_AdvanceOpenMiningRoundsResult`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| summarizingRound | ContractId SummarizingMiningRound |  |
+| openRound | ContractId OpenMiningRound |  |
+
+Instances:
+
+- `instance GetField openRound DsoRules_AdvanceOpenMiningRoundsResult (ContractId OpenMiningRound)`
+- `instance GetField summarizingRound DsoRules_AdvanceOpenMiningRoundsResult (ContractId SummarizingMiningRound)`
+- `instance SetField openRound DsoRules_AdvanceOpenMiningRoundsResult (ContractId OpenMiningRound)`
+- `instance SetField summarizingRound DsoRules_AdvanceOpenMiningRoundsResult (ContractId SummarizingMiningRound)`
+- `instance HasExercise DsoRules DsoRules_AdvanceOpenMiningRounds DsoRules_AdvanceOpenMiningRoundsResult`
+- `instance HasFromAnyChoice DsoRules DsoRules_AdvanceOpenMiningRounds DsoRules_AdvanceOpenMiningRoundsResult`
+- `instance HasToAnyChoice DsoRules DsoRules_AdvanceOpenMiningRounds DsoRules_AdvanceOpenMiningRoundsResult`
+
+<a id="type-splice-dsorules-dsorulesallocateunallocatedunclaimedactivityrecordresult-87254"></a>
+
+### `data DsoRules_AllocateUnallocatedUnclaimedActivityRecordResult`
+
+Constructors:
+
+<a id="constr-splice-dsorules-dsorulesallocateunallocatedunclaimedactivityrecordresult-24573"></a>
+- `DsoRules_AllocateUnallocatedUnclaimedActivityRecordResult`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| unclaimedActivityRecordCid | ContractId UnclaimedActivityRecord |  |
+| optUnclaimedRewardCid | Optional (ContractId UnclaimedReward) |  |
+
+Instances:
+
+- `instance GetField optUnclaimedRewardCid DsoRules_AllocateUnallocatedUnclaimedActivityRecordResult (Optional (ContractId UnclaimedReward))`
+- `instance GetField unclaimedActivityRecordCid DsoRules_AllocateUnallocatedUnclaimedActivityRecordResult (ContractId UnclaimedActivityRecord)`
+- `instance SetField optUnclaimedRewardCid DsoRules_AllocateUnallocatedUnclaimedActivityRecordResult (Optional (ContractId UnclaimedReward))`
+- `instance SetField unclaimedActivityRecordCid DsoRules_AllocateUnallocatedUnclaimedActivityRecordResult (ContractId UnclaimedActivityRecord)`
+- `instance HasExercise DsoRules DsoRules_AllocateUnallocatedUnclaimedActivityRecord DsoRules_AllocateUnallocatedUnclaimedActivityRecordResult`
+- `instance HasFromAnyChoice DsoRules DsoRules_AllocateUnallocatedUnclaimedActivityRecord DsoRules_AllocateUnallocatedUnclaimedActivityRecordResult`
+- `instance HasToAnyChoice DsoRules DsoRules_AllocateUnallocatedUnclaimedActivityRecord DsoRules_AllocateUnallocatedUnclaimedActivityRecordResult`
+
+<a id="type-splice-dsorules-dsorulesamuletrulesconvertfeaturedappactivitymarkersresult-72068"></a>
+
+### `data DsoRules_AmuletRules_ConvertFeaturedAppActivityMarkersResult`
+
+Constructors:
+
+<a id="constr-splice-dsorules-dsorulesamuletrulesconvertfeaturedappactivitymarkersresult-81577"></a>
+- `DsoRules_AmuletRules_ConvertFeaturedAppActivityMarkersResult`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| result | AmuletRules_ConvertFeaturedAppActivityMarkersResult |  |
+
+Instances:
+
+- `instance GetField result DsoRules_AmuletRules_ConvertFeaturedAppActivityMarkersResult AmuletRules_ConvertFeaturedAppActivityMarkersResult`
+- `instance SetField result DsoRules_AmuletRules_ConvertFeaturedAppActivityMarkersResult AmuletRules_ConvertFeaturedAppActivityMarkersResult`
+- `instance HasExercise DsoRules DsoRules_AmuletRules_ConvertFeaturedAppActivityMarkers DsoRules_AmuletRules_ConvertFeaturedAppActivityMarkersResult`
+- `instance HasFromAnyChoice DsoRules DsoRules_AmuletRules_ConvertFeaturedAppActivityMarkers DsoRules_AmuletRules_ConvertFeaturedAppActivityMarkersResult`
+- `instance HasToAnyChoice DsoRules DsoRules_AmuletRules_ConvertFeaturedAppActivityMarkers DsoRules_AmuletRules_ConvertFeaturedAppActivityMarkersResult`
+
+<a id="type-splice-dsorules-dsorulesamuletexpireresult-67290"></a>
+
+### `data DsoRules_Amulet_ExpireResult`
+
+Constructors:
+
+<a id="constr-splice-dsorules-dsorulesamuletexpireresult-61799"></a>
+- `DsoRules_Amulet_ExpireResult`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| expireSum | AmuletExpireSummary |  |
+
+Instances:
+
+- `instance GetField expireSum DsoRules_Amulet_ExpireResult AmuletExpireSummary`
+- `instance SetField expireSum DsoRules_Amulet_ExpireResult AmuletExpireSummary`
+- `instance HasExercise DsoRules DsoRules_Amulet_Expire DsoRules_Amulet_ExpireResult`
+- `instance HasFromAnyChoice DsoRules DsoRules_Amulet_Expire DsoRules_Amulet_ExpireResult`
+- `instance HasToAnyChoice DsoRules DsoRules_Amulet_Expire DsoRules_Amulet_ExpireResult`
+
+<a id="type-splice-dsorules-dsorulesamuletexpiretransferinstructionsresult-29864"></a>
+
+### `data DsoRules_Amulet_ExpireTransferInstructionsResult`
+
+Constructors:
+
+<a id="constr-splice-dsorules-dsorulesamuletexpiretransferinstructionsresult-36781"></a>
+- `DsoRules_Amulet_ExpireTransferInstructionsResult`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| result | AmuletRules_Amulet_ExpireTransferInstructionsResult |  |
+
+Instances:
+
+- `instance Eq DsoRules_Amulet_ExpireTransferInstructionsResult`
+- `instance Show DsoRules_Amulet_ExpireTransferInstructionsResult`
+- `instance GetField result DsoRules_Amulet_ExpireTransferInstructionsResult AmuletRules_Amulet_ExpireTransferInstructionsResult`
+- `instance SetField result DsoRules_Amulet_ExpireTransferInstructionsResult AmuletRules_Amulet_ExpireTransferInstructionsResult`
+- `instance HasExercise DsoRules DsoRules_Amulet_ExpireTransferInstructions DsoRules_Amulet_ExpireTransferInstructionsResult`
+- `instance HasFromAnyChoice DsoRules DsoRules_Amulet_ExpireTransferInstructions DsoRules_Amulet_ExpireTransferInstructionsResult`
+- `instance HasToAnyChoice DsoRules DsoRules_Amulet_ExpireTransferInstructions DsoRules_Amulet_ExpireTransferInstructionsResult`
+
+<a id="type-splice-dsorules-dsorulesamuletexpirev2result-94072"></a>
+
+### `data DsoRules_Amulet_ExpireV2Result`
+
+Constructors:
+
+<a id="constr-splice-dsorules-dsorulesamuletexpirev2result-84829"></a>
+- `DsoRules_Amulet_ExpireV2Result`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| expireSum | AmuletExpireV2Summary |  |
+
+Instances:
+
+- `instance GetField expireSum DsoRules_Amulet_ExpireV2Result AmuletExpireV2Summary`
+- `instance SetField expireSum DsoRules_Amulet_ExpireV2Result AmuletExpireV2Summary`
+- `instance HasExercise DsoRules DsoRules_Amulet_ExpireV2 DsoRules_Amulet_ExpireV2Result`
+- `instance HasFromAnyChoice DsoRules DsoRules_Amulet_ExpireV2 DsoRules_Amulet_ExpireV2Result`
+- `instance HasToAnyChoice DsoRules DsoRules_Amulet_ExpireV2 DsoRules_Amulet_ExpireV2Result`
+
+<a id="type-splice-dsorules-dsorulesarchiveoutdatedelectionrequestresult-78881"></a>
+
+### `data DsoRules_ArchiveOutdatedElectionRequestResult`
+
+Constructors:
+
+<a id="constr-splice-dsorules-dsorulesarchiveoutdatedelectionrequestresult-72534"></a>
+- `DsoRules_ArchiveOutdatedElectionRequestResult`
+
+Instances:
+
+- `instance HasExercise DsoRules DsoRules_ArchiveOutdatedElectionRequest DsoRules_ArchiveOutdatedElectionRequestResult`
+- `instance HasFromAnyChoice DsoRules DsoRules_ArchiveOutdatedElectionRequest DsoRules_ArchiveOutdatedElectionRequestResult`
+- `instance HasToAnyChoice DsoRules DsoRules_ArchiveOutdatedElectionRequest DsoRules_ArchiveOutdatedElectionRequestResult`
+
+<a id="type-splice-dsorules-dsorulesarchivesvonboardingrequestresult-76462"></a>
+
+### `data DsoRules_ArchiveSvOnboardingRequestResult`
+
+Constructors:
+
+<a id="constr-splice-dsorules-dsorulesarchivesvonboardingrequestresult-86253"></a>
+- `DsoRules_ArchiveSvOnboardingRequestResult`
+
+Instances:
+
+- `instance HasExercise DsoRules DsoRules_ArchiveSvOnboardingRequest DsoRules_ArchiveSvOnboardingRequestResult`
+- `instance HasFromAnyChoice DsoRules DsoRules_ArchiveSvOnboardingRequest DsoRules_ArchiveSvOnboardingRequestResult`
+- `instance HasToAnyChoice DsoRules DsoRules_ArchiveSvOnboardingRequest DsoRules_ArchiveSvOnboardingRequestResult`
+
+<a id="type-splice-dsorules-dsorulesbootstrapexternalpartyconfigstateresult-77872"></a>
+
+### `data DsoRules_BootstrapExternalPartyConfigStateResult`
+
+Constructors:
+
+<a id="constr-splice-dsorules-dsorulesbootstrapexternalpartyconfigstateresult-70741"></a>
+- `DsoRules_BootstrapExternalPartyConfigStateResult`
+
+Instances:
+
+- `instance HasExercise DsoRules DsoRules_BootstrapExternalPartyConfigState DsoRules_BootstrapExternalPartyConfigStateResult`
+- `instance HasFromAnyChoice DsoRules DsoRules_BootstrapExternalPartyConfigState DsoRules_BootstrapExternalPartyConfigStateResult`
+- `instance HasToAnyChoice DsoRules DsoRules_BootstrapExternalPartyConfigState DsoRules_BootstrapExternalPartyConfigStateResult`
+
+<a id="type-splice-dsorules-dsorulescastvoteresult-84724"></a>
+
+### `data DsoRules_CastVoteResult`
+
+Constructors:
+
+<a id="constr-splice-dsorules-dsorulescastvoteresult-18147"></a>
+- `DsoRules_CastVoteResult`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| voteRequest | ContractId VoteRequest |  |
+
+Instances:
+
+- `instance GetField voteRequest DsoRules_CastVoteResult (ContractId VoteRequest)`
+- `instance SetField voteRequest DsoRules_CastVoteResult (ContractId VoteRequest)`
+- `instance HasExercise DsoRules DsoRules_CastVote DsoRules_CastVoteResult`
+- `instance HasFromAnyChoice DsoRules DsoRules_CastVote DsoRules_CastVoteResult`
+- `instance HasToAnyChoice DsoRules DsoRules_CastVote DsoRules_CastVoteResult`
+
+<a id="type-splice-dsorules-dsorulesclaimexpiredrewardsresult-70369"></a>
+
+### `data DsoRules_ClaimExpiredRewardsResult`
+
+Constructors:
+
+<a id="constr-splice-dsorules-dsorulesclaimexpiredrewardsresult-56160"></a>
+- `DsoRules_ClaimExpiredRewardsResult`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| unclaimedReward | Optional (ContractId UnclaimedReward) |  |
+
+Instances:
+
+- `instance GetField unclaimedReward DsoRules_ClaimExpiredRewardsResult (Optional (ContractId UnclaimedReward))`
+- `instance SetField unclaimedReward DsoRules_ClaimExpiredRewardsResult (Optional (ContractId UnclaimedReward))`
+- `instance HasExercise DsoRules DsoRules_ClaimExpiredRewards DsoRules_ClaimExpiredRewardsResult`
+- `instance HasFromAnyChoice DsoRules DsoRules_ClaimExpiredRewards DsoRules_ClaimExpiredRewardsResult`
+- `instance HasToAnyChoice DsoRules DsoRules_ClaimExpiredRewards DsoRules_ClaimExpiredRewardsResult`
+
+<a id="type-splice-dsorules-dsorulesclosevoterequestresult-49382"></a>
+
+### `data DsoRules_CloseVoteRequestResult`
+
+Constructors:
+
+<a id="constr-splice-dsorules-dsorulesclosevoterequestresult-14349"></a>
+- `DsoRules_CloseVoteRequestResult`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| request | VoteRequest | The original vote request. |
+| completedAt | Time | When the vote request was completed. |
+| offboardedVoters | [Text] | SVs that voted but were offboarded before the vote completed. |
+| abstainingSvs | [Text] | SVs that did not vote. |
+| outcome | VoteRequestOutcome | The final result of the vote. |
+
+Instances:
+
+- `instance Eq DsoRules_CloseVoteRequestResult`
+- `instance Show DsoRules_CloseVoteRequestResult`
+- `instance GetField abstainingSvs DsoRules_CloseVoteRequestResult [Text]`
+- `instance GetField completedAt DsoRules_CloseVoteRequestResult Time`
+- `instance GetField offboardedVoters DsoRules_CloseVoteRequestResult [Text]`
+- `instance GetField outcome DsoRules_CloseVoteRequestResult VoteRequestOutcome`
+- `instance GetField request DsoRules_CloseVoteRequestResult VoteRequest`
+- `instance SetField abstainingSvs DsoRules_CloseVoteRequestResult [Text]`
+- `instance SetField completedAt DsoRules_CloseVoteRequestResult Time`
+- `instance SetField offboardedVoters DsoRules_CloseVoteRequestResult [Text]`
+- `instance SetField outcome DsoRules_CloseVoteRequestResult VoteRequestOutcome`
+- `instance SetField request DsoRules_CloseVoteRequestResult VoteRequest`
+- `instance HasExercise DsoRules DsoRules_CloseVoteRequest DsoRules_CloseVoteRequestResult`
+- `instance HasFromAnyChoice DsoRules DsoRules_CloseVoteRequest DsoRules_CloseVoteRequestResult`
+- `instance HasToAnyChoice DsoRules DsoRules_CloseVoteRequest DsoRules_CloseVoteRequestResult`
+
+<a id="type-splice-dsorules-dsorulescollectentryrenewalpaymentresult-57091"></a>
+
+### `data DsoRules_CollectEntryRenewalPaymentResult`
+
+Constructors:
+
+<a id="constr-splice-dsorules-dsorulescollectentryrenewalpaymentresult-87832"></a>
+- `DsoRules_CollectEntryRenewalPaymentResult`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| ansEntry | ContractId AnsEntry |  |
+| subscriptionState | ContractId SubscriptionIdleState |  |
+
+Instances:
+
+- `instance GetField ansEntry DsoRules_CollectEntryRenewalPaymentResult (ContractId AnsEntry)`
+- `instance GetField subscriptionState DsoRules_CollectEntryRenewalPaymentResult (ContractId SubscriptionIdleState)`
+- `instance SetField ansEntry DsoRules_CollectEntryRenewalPaymentResult (ContractId AnsEntry)`
+- `instance SetField subscriptionState DsoRules_CollectEntryRenewalPaymentResult (ContractId SubscriptionIdleState)`
+- `instance HasExercise DsoRules DsoRules_CollectEntryRenewalPayment DsoRules_CollectEntryRenewalPaymentResult`
+- `instance HasFromAnyChoice DsoRules DsoRules_CollectEntryRenewalPayment DsoRules_CollectEntryRenewalPaymentResult`
+- `instance HasToAnyChoice DsoRules DsoRules_CollectEntryRenewalPayment DsoRules_CollectEntryRenewalPaymentResult`
+
+<a id="type-splice-dsorules-dsorulesconfirmactionresult-28024"></a>
+
+### `data DsoRules_ConfirmActionResult`
+
+Constructors:
+
+<a id="constr-splice-dsorules-dsorulesconfirmactionresult-48341"></a>
+- `DsoRules_ConfirmActionResult`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| confirmation | ContractId Confirmation |  |
+
+Instances:
+
+- `instance GetField confirmation DsoRules_ConfirmActionResult (ContractId Confirmation)`
+- `instance SetField confirmation DsoRules_ConfirmActionResult (ContractId Confirmation)`
+- `instance HasExercise DsoRules DsoRules_ConfirmAction DsoRules_ConfirmActionResult`
+- `instance HasFromAnyChoice DsoRules DsoRules_ConfirmAction DsoRules_ConfirmActionResult`
+- `instance HasToAnyChoice DsoRules DsoRules_ConfirmAction DsoRules_ConfirmActionResult`
+
+<a id="type-splice-dsorules-dsorulesconfirmsvonboardingresult-99416"></a>
+
+### `data DsoRules_ConfirmSvOnboardingResult`
+
+Constructors:
+
+<a id="constr-splice-dsorules-dsorulesconfirmsvonboardingresult-46665"></a>
+- `DsoRules_ConfirmSvOnboardingResult`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| onboardingConfirmed | ContractId SvOnboardingConfirmed |  |
+
+Instances:
+
+- `instance GetField onboardingConfirmed DsoRules_ConfirmSvOnboardingResult (ContractId SvOnboardingConfirmed)`
+- `instance SetField onboardingConfirmed DsoRules_ConfirmSvOnboardingResult (ContractId SvOnboardingConfirmed)`
+- `instance HasExercise DsoRules DsoRules_ConfirmSvOnboarding DsoRules_ConfirmSvOnboardingResult`
+- `instance HasFromAnyChoice DsoRules DsoRules_ConfirmSvOnboarding DsoRules_ConfirmSvOnboardingResult`
+- `instance HasToAnyChoice DsoRules DsoRules_ConfirmSvOnboarding DsoRules_ConfirmSvOnboardingResult`
+
+<a id="type-splice-dsorules-dsorulescreatebootstrapexternalpartyconfigstateinstructionresult-32985"></a>
+
+### `data DsoRules_CreateBootstrapExternalPartyConfigStateInstructionResult`
+
+Constructors:
+
+<a id="constr-splice-dsorules-dsorulescreatebootstrapexternalpartyconfigstateinstructionresult-84146"></a>
+- `DsoRules_CreateBootstrapExternalPartyConfigStateInstructionResult`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| instructionCid | ContractId BootstrapExternalPartyConfigStateInstruction |  |
+
+Instances:
+
+- `instance Eq DsoRules_CreateBootstrapExternalPartyConfigStateInstructionResult`
+- `instance Show DsoRules_CreateBootstrapExternalPartyConfigStateInstructionResult`
+- `instance GetField instructionCid DsoRules_CreateBootstrapExternalPartyConfigStateInstructionResult (ContractId BootstrapExternalPartyConfigStateInstruction)`
+- `instance SetField instructionCid DsoRules_CreateBootstrapExternalPartyConfigStateInstructionResult (ContractId BootstrapExternalPartyConfigStateInstruction)`
+- `instance HasExercise DsoRules DsoRules_CreateBootstrapExternalPartyConfigStateInstruction DsoRules_CreateBootstrapExternalPartyConfigStateInstructionResult`
+- `instance HasFromAnyChoice DsoRules DsoRules_CreateBootstrapExternalPartyConfigStateInstruction DsoRules_CreateBootstrapExternalPartyConfigStateInstructionResult`
+- `instance HasToAnyChoice DsoRules DsoRules_CreateBootstrapExternalPartyConfigStateInstruction DsoRules_CreateBootstrapExternalPartyConfigStateInstructionResult`
+
+<a id="type-splice-dsorules-dsorulescreateexternalpartyamuletrulesresult-12409"></a>
+
+### `data DsoRules_CreateExternalPartyAmuletRulesResult`
+
+Constructors:
+
+<a id="constr-splice-dsorules-dsorulescreateexternalpartyamuletrulesresult-52650"></a>
+- `DsoRules_CreateExternalPartyAmuletRulesResult`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| externalPartyAmuletRulesCid | ContractId ExternalPartyAmuletRules |  |
+
+Instances:
+
+- `instance Eq DsoRules_CreateExternalPartyAmuletRulesResult`
+- `instance Show DsoRules_CreateExternalPartyAmuletRulesResult`
+- `instance GetField externalPartyAmuletRulesCid DsoRules_CreateExternalPartyAmuletRulesResult (ContractId ExternalPartyAmuletRules)`
+- `instance SetField externalPartyAmuletRulesCid DsoRules_CreateExternalPartyAmuletRulesResult (ContractId ExternalPartyAmuletRules)`
+- `instance HasExercise DsoRules DsoRules_CreateExternalPartyAmuletRules DsoRules_CreateExternalPartyAmuletRulesResult`
+- `instance HasFromAnyChoice DsoRules DsoRules_CreateExternalPartyAmuletRules DsoRules_CreateExternalPartyAmuletRulesResult`
+- `instance HasToAnyChoice DsoRules DsoRules_CreateExternalPartyAmuletRules DsoRules_CreateExternalPartyAmuletRulesResult`
+
+<a id="type-splice-dsorules-dsorulescreatetransfercommandcounterresult-97297"></a>
+
+### `data DsoRules_CreateTransferCommandCounterResult`
+
+Constructors:
+
+<a id="constr-splice-dsorules-dsorulescreatetransfercommandcounterresult-46310"></a>
+- `DsoRules_CreateTransferCommandCounterResult`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| transferCommandCounterCid | ContractId TransferCommandCounter |  |
+
+Instances:
+
+- `instance Eq DsoRules_CreateTransferCommandCounterResult`
+- `instance Show DsoRules_CreateTransferCommandCounterResult`
+- `instance GetField transferCommandCounterCid DsoRules_CreateTransferCommandCounterResult (ContractId TransferCommandCounter)`
+- `instance SetField transferCommandCounterCid DsoRules_CreateTransferCommandCounterResult (ContractId TransferCommandCounter)`
+- `instance HasExercise DsoRules DsoRules_CreateTransferCommandCounter DsoRules_CreateTransferCommandCounterResult`
+- `instance HasFromAnyChoice DsoRules DsoRules_CreateTransferCommandCounter DsoRules_CreateTransferCommandCounterResult`
+- `instance HasToAnyChoice DsoRules DsoRules_CreateTransferCommandCounter DsoRules_CreateTransferCommandCounterResult`
+
+<a id="type-splice-dsorules-dsorulescreateunallocatedunclaimedactivityrecordresult-76541"></a>
+
+### `data DsoRules_CreateUnallocatedUnclaimedActivityRecordResult`
+
+Constructors:
+
+<a id="constr-splice-dsorules-dsorulescreateunallocatedunclaimedactivityrecordresult-18490"></a>
+- `DsoRules_CreateUnallocatedUnclaimedActivityRecordResult`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| unallocatedUnclaimedActivityRecordCid | ContractId UnallocatedUnclaimedActivityRecord |  |
+
+Instances:
+
+- `instance GetField unallocatedUnclaimedActivityRecordCid DsoRules_CreateUnallocatedUnclaimedActivityRecordResult (ContractId UnallocatedUnclaimedActivityRecord)`
+- `instance SetField unallocatedUnclaimedActivityRecordCid DsoRules_CreateUnallocatedUnclaimedActivityRecordResult (ContractId UnallocatedUnclaimedActivityRecord)`
+- `instance HasExercise DsoRules DsoRules_CreateUnallocatedUnclaimedActivityRecord DsoRules_CreateUnallocatedUnclaimedActivityRecordResult`
+- `instance HasFromAnyChoice DsoRules DsoRules_CreateUnallocatedUnclaimedActivityRecord DsoRules_CreateUnallocatedUnclaimedActivityRecordResult`
+- `instance HasToAnyChoice DsoRules DsoRules_CreateUnallocatedUnclaimedActivityRecord DsoRules_CreateUnallocatedUnclaimedActivityRecordResult`
+
+<a id="type-splice-dsorules-dsoruleselectdsodelegateresult-99561"></a>
+
+### `data DsoRules_ElectDsoDelegateResult`
+
+Constructors:
+
+<a id="constr-splice-dsorules-dsoruleselectdsodelegateresult-71514"></a>
+- `DsoRules_ElectDsoDelegateResult`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| newDsoRules | ContractId DsoRules |  |
+
+Instances:
+
+- `instance GetField newDsoRules DsoRules_ElectDsoDelegateResult (ContractId DsoRules)`
+- `instance SetField newDsoRules DsoRules_ElectDsoDelegateResult (ContractId DsoRules)`
+- `instance HasExercise DsoRules DsoRules_ElectDsoDelegate DsoRules_ElectDsoDelegateResult`
+- `instance HasFromAnyChoice DsoRules DsoRules_ElectDsoDelegate DsoRules_ElectDsoDelegateResult`
+- `instance HasToAnyChoice DsoRules DsoRules_ElectDsoDelegate DsoRules_ElectDsoDelegateResult`
+
+<a id="type-splice-dsorules-dsorulesexecuteconfirmedactionresult-43893"></a>
+
+### `data DsoRules_ExecuteConfirmedActionResult`
+
+Constructors:
+
+<a id="constr-splice-dsorules-dsorulesexecuteconfirmedactionresult-89578"></a>
+- `DsoRules_ExecuteConfirmedActionResult`
+
+Instances:
+
+- `instance HasExercise DsoRules DsoRules_ExecuteConfirmedAction DsoRules_ExecuteConfirmedActionResult`
+- `instance HasFromAnyChoice DsoRules DsoRules_ExecuteConfirmedAction DsoRules_ExecuteConfirmedActionResult`
+- `instance HasToAnyChoice DsoRules DsoRules_ExecuteConfirmedAction DsoRules_ExecuteConfirmedActionResult`
+
+<a id="type-splice-dsorules-dsorulesexpireamuletallocationsresult-27100"></a>
+
+### `data DsoRules_ExpireAmuletAllocationsResult`
+
+Constructors:
+
+<a id="constr-splice-dsorules-dsorulesexpireamuletallocationsresult-29457"></a>
+- `DsoRules_ExpireAmuletAllocationsResult`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| result | ExternalPartyAmuletRules_ExpireAmuletAllocationsResult |  |
+
+Instances:
+
+- `instance Eq DsoRules_ExpireAmuletAllocationsResult`
+- `instance Show DsoRules_ExpireAmuletAllocationsResult`
+- `instance GetField result DsoRules_ExpireAmuletAllocationsResult ExternalPartyAmuletRules_ExpireAmuletAllocationsResult`
+- `instance SetField result DsoRules_ExpireAmuletAllocationsResult ExternalPartyAmuletRules_ExpireAmuletAllocationsResult`
+- `instance HasExercise DsoRules DsoRules_ExpireAmuletAllocations DsoRules_ExpireAmuletAllocationsResult`
+- `instance HasFromAnyChoice DsoRules DsoRules_ExpireAmuletAllocations DsoRules_ExpireAmuletAllocationsResult`
+- `instance HasToAnyChoice DsoRules DsoRules_ExpireAmuletAllocations DsoRules_ExpireAmuletAllocationsResult`
+
+<a id="type-splice-dsorules-dsorulesexpireansentryresult-16762"></a>
+
+### `data DsoRules_ExpireAnsEntryResult`
+
+Constructors:
+
+<a id="constr-splice-dsorules-dsorulesexpireansentryresult-6565"></a>
+- `DsoRules_ExpireAnsEntryResult`
+
+Instances:
+
+- `instance HasExercise DsoRules DsoRules_ExpireAnsEntry DsoRules_ExpireAnsEntryResult`
+- `instance HasFromAnyChoice DsoRules DsoRules_ExpireAnsEntry DsoRules_ExpireAnsEntryResult`
+- `instance HasToAnyChoice DsoRules DsoRules_ExpireAnsEntry DsoRules_ExpireAnsEntryResult`
+
+<a id="type-splice-dsorules-dsorulesexpiredevelopmentfundcouponresult-36543"></a>
+
+### `data DsoRules_ExpireDevelopmentFundCouponResult`
+
+Constructors:
+
+<a id="constr-splice-dsorules-dsorulesexpiredevelopmentfundcouponresult-44574"></a>
+- `DsoRules_ExpireDevelopmentFundCouponResult`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| result | DevelopmentFundCoupon_DsoExpireResult |  |
+
+Instances:
+
+- `instance GetField result DsoRules_ExpireDevelopmentFundCouponResult DevelopmentFundCoupon_DsoExpireResult`
+- `instance SetField result DsoRules_ExpireDevelopmentFundCouponResult DevelopmentFundCoupon_DsoExpireResult`
+- `instance HasExercise DsoRules DsoRules_ExpireDevelopmentFundCoupon DsoRules_ExpireDevelopmentFundCouponResult`
+- `instance HasFromAnyChoice DsoRules DsoRules_ExpireDevelopmentFundCoupon DsoRules_ExpireDevelopmentFundCouponResult`
+- `instance HasToAnyChoice DsoRules DsoRules_ExpireDevelopmentFundCoupon DsoRules_ExpireDevelopmentFundCouponResult`
+
+<a id="type-splice-dsorules-dsorulesexpirestaleconfirmationresult-27719"></a>
+
+### `data DsoRules_ExpireStaleConfirmationResult`
+
+Constructors:
+
+<a id="constr-splice-dsorules-dsorulesexpirestaleconfirmationresult-33614"></a>
+- `DsoRules_ExpireStaleConfirmationResult`
+
+Instances:
+
+- `instance HasExercise DsoRules DsoRules_ExpireStaleConfirmation DsoRules_ExpireStaleConfirmationResult`
+- `instance HasFromAnyChoice DsoRules DsoRules_ExpireStaleConfirmation DsoRules_ExpireStaleConfirmationResult`
+- `instance HasToAnyChoice DsoRules DsoRules_ExpireStaleConfirmation DsoRules_ExpireStaleConfirmationResult`
+
+<a id="type-splice-dsorules-dsorulesexpiresubscriptionresult-45469"></a>
+
+### `data DsoRules_ExpireSubscriptionResult`
+
+Constructors:
+
+<a id="constr-splice-dsorules-dsorulesexpiresubscriptionresult-70870"></a>
+- `DsoRules_ExpireSubscriptionResult`
+
+Instances:
+
+- `instance HasExercise DsoRules DsoRules_ExpireSubscription DsoRules_ExpireSubscriptionResult`
+- `instance HasFromAnyChoice DsoRules DsoRules_ExpireSubscription DsoRules_ExpireSubscriptionResult`
+- `instance HasToAnyChoice DsoRules DsoRules_ExpireSubscription DsoRules_ExpireSubscriptionResult`
+
+<a id="type-splice-dsorules-dsorulesexpiresvonboardingconfirmedresult-38796"></a>
+
+### `data DsoRules_ExpireSvOnboardingConfirmedResult`
+
+Constructors:
+
+<a id="constr-splice-dsorules-dsorulesexpiresvonboardingconfirmedresult-53333"></a>
+- `DsoRules_ExpireSvOnboardingConfirmedResult`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| newDsoRules | ContractId DsoRules |  |
+
+Instances:
+
+- `instance GetField newDsoRules DsoRules_ExpireSvOnboardingConfirmedResult (ContractId DsoRules)`
+- `instance SetField newDsoRules DsoRules_ExpireSvOnboardingConfirmedResult (ContractId DsoRules)`
+- `instance HasExercise DsoRules DsoRules_ExpireSvOnboardingConfirmed DsoRules_ExpireSvOnboardingConfirmedResult`
+- `instance HasFromAnyChoice DsoRules DsoRules_ExpireSvOnboardingConfirmed DsoRules_ExpireSvOnboardingConfirmedResult`
+- `instance HasToAnyChoice DsoRules DsoRules_ExpireSvOnboardingConfirmed DsoRules_ExpireSvOnboardingConfirmedResult`
+
+<a id="type-splice-dsorules-dsorulesexpiresvonboardingrequestresult-2670"></a>
+
+### `data DsoRules_ExpireSvOnboardingRequestResult`
+
+Constructors:
+
+<a id="constr-splice-dsorules-dsorulesexpiresvonboardingrequestresult-9407"></a>
+- `DsoRules_ExpireSvOnboardingRequestResult`
+
+Instances:
+
+- `instance HasExercise DsoRules DsoRules_ExpireSvOnboardingRequest DsoRules_ExpireSvOnboardingRequestResult`
+- `instance HasFromAnyChoice DsoRules DsoRules_ExpireSvOnboardingRequest DsoRules_ExpireSvOnboardingRequestResult`
+- `instance HasToAnyChoice DsoRules DsoRules_ExpireSvOnboardingRequest DsoRules_ExpireSvOnboardingRequestResult`
+
+<a id="type-splice-dsorules-dsorulesexpiretransferpreapprovalresult-76064"></a>
+
+### `data DsoRules_ExpireTransferPreapprovalResult`
+
+Constructors:
+
+<a id="constr-splice-dsorules-dsorulesexpiretransferpreapprovalresult-84197"></a>
+- `DsoRules_ExpireTransferPreapprovalResult`
+
+Instances:
+
+- `instance Eq DsoRules_ExpireTransferPreapprovalResult`
+- `instance Show DsoRules_ExpireTransferPreapprovalResult`
+- `instance HasExercise DsoRules DsoRules_ExpireTransferPreapproval DsoRules_ExpireTransferPreapprovalResult`
+- `instance HasFromAnyChoice DsoRules DsoRules_ExpireTransferPreapproval DsoRules_ExpireTransferPreapprovalResult`
+- `instance HasToAnyChoice DsoRules DsoRules_ExpireTransferPreapproval DsoRules_ExpireTransferPreapprovalResult`
+
+<a id="type-splice-dsorules-dsorulesexpireunallocatedunclaimedactivityrecordresult-30228"></a>
+
+### `data DsoRules_ExpireUnallocatedUnclaimedActivityRecordResult`
+
+Constructors:
+
+<a id="constr-splice-dsorules-dsorulesexpireunallocatedunclaimedactivityrecordresult-25947"></a>
+- `DsoRules_ExpireUnallocatedUnclaimedActivityRecordResult`
+
+Instances:
+
+- `instance HasExercise DsoRules DsoRules_ExpireUnallocatedUnclaimedActivityRecord DsoRules_ExpireUnallocatedUnclaimedActivityRecordResult`
+- `instance HasFromAnyChoice DsoRules DsoRules_ExpireUnallocatedUnclaimedActivityRecord DsoRules_ExpireUnallocatedUnclaimedActivityRecordResult`
+- `instance HasToAnyChoice DsoRules DsoRules_ExpireUnallocatedUnclaimedActivityRecord DsoRules_ExpireUnallocatedUnclaimedActivityRecordResult`
+
+<a id="type-splice-dsorules-dsorulesexpireunclaimedactivityrecordresult-92345"></a>
+
+### `data DsoRules_ExpireUnclaimedActivityRecordResult`
+
+Constructors:
+
+<a id="constr-splice-dsorules-dsorulesexpireunclaimedactivityrecordresult-78492"></a>
+- `DsoRules_ExpireUnclaimedActivityRecordResult`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| unclaimedRewardCid | ContractId UnclaimedReward |  |
+
+Instances:
+
+- `instance GetField unclaimedRewardCid DsoRules_ExpireUnclaimedActivityRecordResult (ContractId UnclaimedReward)`
+- `instance SetField unclaimedRewardCid DsoRules_ExpireUnclaimedActivityRecordResult (ContractId UnclaimedReward)`
+- `instance HasExercise DsoRules DsoRules_ExpireUnclaimedActivityRecord DsoRules_ExpireUnclaimedActivityRecordResult`
+- `instance HasFromAnyChoice DsoRules DsoRules_ExpireUnclaimedActivityRecord DsoRules_ExpireUnclaimedActivityRecordResult`
+- `instance HasToAnyChoice DsoRules DsoRules_ExpireUnclaimedActivityRecord DsoRules_ExpireUnclaimedActivityRecordResult`
+
+<a id="type-splice-dsorules-dsorulesgarbagecollectamuletpricevotesresult-20154"></a>
+
+### `data DsoRules_GarbageCollectAmuletPriceVotesResult`
+
+Constructors:
+
+<a id="constr-splice-dsorules-dsorulesgarbagecollectamuletpricevotesresult-33073"></a>
+- `DsoRules_GarbageCollectAmuletPriceVotesResult`
+
+Instances:
+
+- `instance HasExercise DsoRules DsoRules_GarbageCollectAmuletPriceVotes DsoRules_GarbageCollectAmuletPriceVotesResult`
+- `instance HasFromAnyChoice DsoRules DsoRules_GarbageCollectAmuletPriceVotes DsoRules_GarbageCollectAmuletPriceVotesResult`
+- `instance HasToAnyChoice DsoRules DsoRules_GarbageCollectAmuletPriceVotes DsoRules_GarbageCollectAmuletPriceVotesResult`
+
+<a id="type-splice-dsorules-dsorulesgrantfeaturedapprightresult-6067"></a>
+
+### `data DsoRules_GrantFeaturedAppRightResult`
+
+Constructors:
+
+<a id="constr-splice-dsorules-dsorulesgrantfeaturedapprightresult-3282"></a>
+- `DsoRules_GrantFeaturedAppRightResult`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| featuredAppRight | ContractId FeaturedAppRight |  |
+
+Instances:
+
+- `instance GetField featuredAppRight DsoRules_GrantFeaturedAppRightResult (ContractId FeaturedAppRight)`
+- `instance SetField featuredAppRight DsoRules_GrantFeaturedAppRightResult (ContractId FeaturedAppRight)`
+- `instance HasExercise DsoRules DsoRules_GrantFeaturedAppRight DsoRules_GrantFeaturedAppRightResult`
+- `instance HasFromAnyChoice DsoRules DsoRules_GrantFeaturedAppRight DsoRules_GrantFeaturedAppRightResult`
+- `instance HasToAnyChoice DsoRules DsoRules_GrantFeaturedAppRight DsoRules_GrantFeaturedAppRightResult`
+
+<a id="type-splice-dsorules-dsoruleslockedamuletexpireamuletresult-11398"></a>
+
+### `data DsoRules_LockedAmulet_ExpireAmuletResult`
+
+Constructors:
+
+<a id="constr-splice-dsorules-dsoruleslockedamuletexpireamuletresult-46735"></a>
+- `DsoRules_LockedAmulet_ExpireAmuletResult`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| expireSum | AmuletExpireSummary |  |
+
+Instances:
+
+- `instance GetField expireSum DsoRules_LockedAmulet_ExpireAmuletResult AmuletExpireSummary`
+- `instance SetField expireSum DsoRules_LockedAmulet_ExpireAmuletResult AmuletExpireSummary`
+- `instance HasExercise DsoRules DsoRules_LockedAmulet_ExpireAmulet DsoRules_LockedAmulet_ExpireAmuletResult`
+- `instance HasFromAnyChoice DsoRules DsoRules_LockedAmulet_ExpireAmulet DsoRules_LockedAmulet_ExpireAmuletResult`
+- `instance HasToAnyChoice DsoRules DsoRules_LockedAmulet_ExpireAmulet DsoRules_LockedAmulet_ExpireAmuletResult`
+
+<a id="type-splice-dsorules-dsoruleslockedamuletexpireamuletv2result-75516"></a>
+
+### `data DsoRules_LockedAmulet_ExpireAmuletV2Result`
+
+Constructors:
+
+<a id="constr-splice-dsorules-dsoruleslockedamuletexpireamuletv2result-22605"></a>
+- `DsoRules_LockedAmulet_ExpireAmuletV2Result`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| expireSum | AmuletExpireV2Summary |  |
+
+Instances:
+
+- `instance GetField expireSum DsoRules_LockedAmulet_ExpireAmuletV2Result AmuletExpireV2Summary`
+- `instance SetField expireSum DsoRules_LockedAmulet_ExpireAmuletV2Result AmuletExpireV2Summary`
+- `instance HasExercise DsoRules DsoRules_LockedAmulet_ExpireAmuletV2 DsoRules_LockedAmulet_ExpireAmuletV2Result`
+- `instance HasFromAnyChoice DsoRules DsoRules_LockedAmulet_ExpireAmuletV2 DsoRules_LockedAmulet_ExpireAmuletV2Result`
+- `instance HasToAnyChoice DsoRules DsoRules_LockedAmulet_ExpireAmuletV2 DsoRules_LockedAmulet_ExpireAmuletV2Result`
+
+<a id="type-splice-dsorules-dsorulesmergemembertrafficcontractsresult-1402"></a>
+
+### `data DsoRules_MergeMemberTrafficContractsResult`
+
+Constructors:
+
+<a id="constr-splice-dsorules-dsorulesmergemembertrafficcontractsresult-22987"></a>
+- `DsoRules_MergeMemberTrafficContractsResult`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| memberTraffic | ContractId MemberTraffic |  |
+
+Instances:
+
+- `instance GetField memberTraffic DsoRules_MergeMemberTrafficContractsResult (ContractId MemberTraffic)`
+- `instance SetField memberTraffic DsoRules_MergeMemberTrafficContractsResult (ContractId MemberTraffic)`
+- `instance HasExercise DsoRules DsoRules_MergeMemberTrafficContracts DsoRules_MergeMemberTrafficContractsResult`
+- `instance HasFromAnyChoice DsoRules DsoRules_MergeMemberTrafficContracts DsoRules_MergeMemberTrafficContractsResult`
+- `instance HasToAnyChoice DsoRules DsoRules_MergeMemberTrafficContracts DsoRules_MergeMemberTrafficContractsResult`
+
+<a id="type-splice-dsorules-dsorulesmergesvrewardstateresult-26494"></a>
+
+### `data DsoRules_MergeSvRewardStateResult`
+
+Constructors:
+
+<a id="constr-splice-dsorules-dsorulesmergesvrewardstateresult-58441"></a>
+- `DsoRules_MergeSvRewardStateResult`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| svRewardState | ContractId SvRewardState |  |
+
+Instances:
+
+- `instance GetField svRewardState DsoRules_MergeSvRewardStateResult (ContractId SvRewardState)`
+- `instance SetField svRewardState DsoRules_MergeSvRewardStateResult (ContractId SvRewardState)`
+- `instance HasExercise DsoRules DsoRules_MergeSvRewardState DsoRules_MergeSvRewardStateResult`
+- `instance HasFromAnyChoice DsoRules DsoRules_MergeSvRewardState DsoRules_MergeSvRewardStateResult`
+- `instance HasToAnyChoice DsoRules DsoRules_MergeSvRewardState DsoRules_MergeSvRewardStateResult`
+
+<a id="type-splice-dsorules-dsorulesmergeunclaimeddevelopmentfundcouponsresult-91402"></a>
+
+### `data DsoRules_MergeUnclaimedDevelopmentFundCouponsResult`
+
+Constructors:
+
+<a id="constr-splice-dsorules-dsorulesmergeunclaimeddevelopmentfundcouponsresult-95789"></a>
+- `DsoRules_MergeUnclaimedDevelopmentFundCouponsResult`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| result | AmuletRules_MergeUnclaimedDevelopmentFundCouponsResult |  |
+
+Instances:
+
+- `instance GetField result DsoRules_MergeUnclaimedDevelopmentFundCouponsResult AmuletRules_MergeUnclaimedDevelopmentFundCouponsResult`
+- `instance SetField result DsoRules_MergeUnclaimedDevelopmentFundCouponsResult AmuletRules_MergeUnclaimedDevelopmentFundCouponsResult`
+- `instance HasExercise DsoRules DsoRules_MergeUnclaimedDevelopmentFundCoupons DsoRules_MergeUnclaimedDevelopmentFundCouponsResult`
+- `instance HasFromAnyChoice DsoRules DsoRules_MergeUnclaimedDevelopmentFundCoupons DsoRules_MergeUnclaimedDevelopmentFundCouponsResult`
+- `instance HasToAnyChoice DsoRules DsoRules_MergeUnclaimedDevelopmentFundCoupons DsoRules_MergeUnclaimedDevelopmentFundCouponsResult`
+
+<a id="type-splice-dsorules-dsorulesmergeunclaimedrewardsresult-75266"></a>
+
+### `data DsoRules_MergeUnclaimedRewardsResult`
+
+Constructors:
+
+<a id="constr-splice-dsorules-dsorulesmergeunclaimedrewardsresult-90979"></a>
+- `DsoRules_MergeUnclaimedRewardsResult`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| unclaimedReward | ContractId UnclaimedReward |  |
+
+Instances:
+
+- `instance GetField unclaimedReward DsoRules_MergeUnclaimedRewardsResult (ContractId UnclaimedReward)`
+- `instance SetField unclaimedReward DsoRules_MergeUnclaimedRewardsResult (ContractId UnclaimedReward)`
+- `instance HasExercise DsoRules DsoRules_MergeUnclaimedRewards DsoRules_MergeUnclaimedRewardsResult`
+- `instance HasFromAnyChoice DsoRules DsoRules_MergeUnclaimedRewards DsoRules_MergeUnclaimedRewardsResult`
+- `instance HasToAnyChoice DsoRules DsoRules_MergeUnclaimedRewards DsoRules_MergeUnclaimedRewardsResult`
+
+<a id="type-splice-dsorules-dsorulesmergevalidatorlicenseresult-11621"></a>
+
+### `data DsoRules_MergeValidatorLicenseResult`
+
+Constructors:
+
+<a id="constr-splice-dsorules-dsorulesmergevalidatorlicenseresult-87256"></a>
+- `DsoRules_MergeValidatorLicenseResult`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| validatorLicense | ContractId ValidatorLicense |  |
+
+Instances:
+
+- `instance GetField validatorLicense DsoRules_MergeValidatorLicenseResult (ContractId ValidatorLicense)`
+- `instance SetField validatorLicense DsoRules_MergeValidatorLicenseResult (ContractId ValidatorLicense)`
+- `instance HasExercise DsoRules DsoRules_MergeValidatorLicense DsoRules_MergeValidatorLicenseResult`
+- `instance HasFromAnyChoice DsoRules DsoRules_MergeValidatorLicense DsoRules_MergeValidatorLicenseResult`
+- `instance HasToAnyChoice DsoRules DsoRules_MergeValidatorLicense DsoRules_MergeValidatorLicenseResult`
+
+<a id="type-splice-dsorules-dsorulesminingroundcloseresult-29143"></a>
+
+### `data DsoRules_MiningRound_CloseResult`
+
+Constructors:
+
+<a id="constr-splice-dsorules-dsorulesminingroundcloseresult-49506"></a>
+- `DsoRules_MiningRound_CloseResult`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| closedRound | ContractId ClosedMiningRound |  |
+
+Instances:
+
+- `instance GetField closedRound DsoRules_MiningRound_CloseResult (ContractId ClosedMiningRound)`
+- `instance SetField closedRound DsoRules_MiningRound_CloseResult (ContractId ClosedMiningRound)`
+- `instance HasExercise DsoRules DsoRules_MiningRound_Close DsoRules_MiningRound_CloseResult`
+- `instance HasFromAnyChoice DsoRules DsoRules_MiningRound_Close DsoRules_MiningRound_CloseResult`
+- `instance HasToAnyChoice DsoRules DsoRules_MiningRound_Close DsoRules_MiningRound_CloseResult`
+
+<a id="type-splice-dsorules-dsorulesoffboardsvresult-15733"></a>
+
+### `data DsoRules_OffboardSvResult`
+
+Constructors:
+
+<a id="constr-splice-dsorules-dsorulesoffboardsvresult-15494"></a>
+- `DsoRules_OffboardSvResult`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| newDsoRules | ContractId DsoRules |  |
+
+Instances:
+
+- `instance GetField newDsoRules DsoRules_OffboardSvResult (ContractId DsoRules)`
+- `instance SetField newDsoRules DsoRules_OffboardSvResult (ContractId DsoRules)`
+- `instance HasExercise DsoRules DsoRules_OffboardSv DsoRules_OffboardSvResult`
+- `instance HasFromAnyChoice DsoRules DsoRules_OffboardSv DsoRules_OffboardSvResult`
+- `instance HasToAnyChoice DsoRules DsoRules_OffboardSv DsoRules_OffboardSvResult`
+
+<a id="type-splice-dsorules-dsorulesonboardvalidatorresult-97208"></a>
+
+### `data DsoRules_OnboardValidatorResult`
+
+Constructors:
+
+<a id="constr-splice-dsorules-dsorulesonboardvalidatorresult-75375"></a>
+- `DsoRules_OnboardValidatorResult`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| validatorLicense | ContractId ValidatorLicense |  |
+
+Instances:
+
+- `instance GetField validatorLicense DsoRules_OnboardValidatorResult (ContractId ValidatorLicense)`
+- `instance SetField validatorLicense DsoRules_OnboardValidatorResult (ContractId ValidatorLicense)`
+- `instance HasExercise DsoRules DsoRules_OnboardValidator DsoRules_OnboardValidatorResult`
+- `instance HasFromAnyChoice DsoRules DsoRules_OnboardValidator DsoRules_OnboardValidatorResult`
+- `instance HasToAnyChoice DsoRules DsoRules_OnboardValidator DsoRules_OnboardValidatorResult`
+
+<a id="type-splice-dsorules-dsorulespruneamuletconfigscheduleresult-66013"></a>
+
+### `data DsoRules_PruneAmuletConfigScheduleResult`
+
+Constructors:
+
+<a id="constr-splice-dsorules-dsorulespruneamuletconfigscheduleresult-2640"></a>
+- `DsoRules_PruneAmuletConfigScheduleResult`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| amuletRulesCid | ContractId AmuletRules |  |
+
+Instances:
+
+- `instance GetField amuletRulesCid DsoRules_PruneAmuletConfigScheduleResult (ContractId AmuletRules)`
+- `instance SetField amuletRulesCid DsoRules_PruneAmuletConfigScheduleResult (ContractId AmuletRules)`
+- `instance HasExercise DsoRules DsoRules_PruneAmuletConfigSchedule DsoRules_PruneAmuletConfigScheduleResult`
+- `instance HasFromAnyChoice DsoRules DsoRules_PruneAmuletConfigSchedule DsoRules_PruneAmuletConfigScheduleResult`
+- `instance HasToAnyChoice DsoRules DsoRules_PruneAmuletConfigSchedule DsoRules_PruneAmuletConfigScheduleResult`
+
+<a id="type-splice-dsorules-dsorulesreceivesvrewardcouponresult-91325"></a>
+
+### `data DsoRules_ReceiveSvRewardCouponResult`
+
+Constructors:
+
+<a id="constr-splice-dsorules-dsorulesreceivesvrewardcouponresult-74804"></a>
+- `DsoRules_ReceiveSvRewardCouponResult`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| svRewardState | ContractId SvRewardState |  |
+| svRewardCoupons | [ContractId SvRewardCoupon] |  |
+
+Instances:
+
+- `instance GetField svRewardCoupons DsoRules_ReceiveSvRewardCouponResult [ContractId SvRewardCoupon]`
+- `instance GetField svRewardState DsoRules_ReceiveSvRewardCouponResult (ContractId SvRewardState)`
+- `instance SetField svRewardCoupons DsoRules_ReceiveSvRewardCouponResult [ContractId SvRewardCoupon]`
+- `instance SetField svRewardState DsoRules_ReceiveSvRewardCouponResult (ContractId SvRewardState)`
+- `instance HasExercise DsoRules DsoRules_ReceiveSvRewardCoupon DsoRules_ReceiveSvRewardCouponResult`
+- `instance HasFromAnyChoice DsoRules DsoRules_ReceiveSvRewardCoupon DsoRules_ReceiveSvRewardCouponResult`
+- `instance HasToAnyChoice DsoRules DsoRules_ReceiveSvRewardCoupon DsoRules_ReceiveSvRewardCouponResult`
+
+<a id="type-splice-dsorules-dsorulesrequestelectionresult-48590"></a>
+
+### `data DsoRules_RequestElectionResult`
+
+Constructors:
+
+<a id="constr-splice-dsorules-dsorulesrequestelectionresult-48843"></a>
+- `DsoRules_RequestElectionResult`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| electionRequestCid | ContractId ElectionRequest |  |
+
+Instances:
+
+- `instance GetField electionRequestCid DsoRules_RequestElectionResult (ContractId ElectionRequest)`
+- `instance SetField electionRequestCid DsoRules_RequestElectionResult (ContractId ElectionRequest)`
+- `instance HasExercise DsoRules DsoRules_RequestElection DsoRules_RequestElectionResult`
+- `instance HasFromAnyChoice DsoRules DsoRules_RequestElection DsoRules_RequestElectionResult`
+- `instance HasToAnyChoice DsoRules DsoRules_RequestElection DsoRules_RequestElectionResult`
+
+<a id="type-splice-dsorules-dsorulesrequestvoteresult-78559"></a>
+
+### `data DsoRules_RequestVoteResult`
+
+Constructors:
+
+<a id="constr-splice-dsorules-dsorulesrequestvoteresult-22502"></a>
+- `DsoRules_RequestVoteResult`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| voteRequest | ContractId VoteRequest |  |
+
+Instances:
+
+- `instance GetField voteRequest DsoRules_RequestVoteResult (ContractId VoteRequest)`
+- `instance SetField voteRequest DsoRules_RequestVoteResult (ContractId VoteRequest)`
+- `instance HasExercise DsoRules DsoRules_RequestVote DsoRules_RequestVoteResult`
+- `instance HasFromAnyChoice DsoRules DsoRules_RequestVote DsoRules_RequestVoteResult`
+- `instance HasToAnyChoice DsoRules DsoRules_RequestVote DsoRules_RequestVoteResult`
+
+<a id="type-splice-dsorules-dsorulesrevokefeaturedapprightresult-31874"></a>
+
+### `data DsoRules_RevokeFeaturedAppRightResult`
+
+Constructors:
+
+<a id="constr-splice-dsorules-dsorulesrevokefeaturedapprightresult-56949"></a>
+- `DsoRules_RevokeFeaturedAppRightResult`
+
+Instances:
+
+- `instance HasExercise DsoRules DsoRules_RevokeFeaturedAppRight DsoRules_RevokeFeaturedAppRightResult`
+- `instance HasFromAnyChoice DsoRules DsoRules_RevokeFeaturedAppRight DsoRules_RevokeFeaturedAppRightResult`
+- `instance HasToAnyChoice DsoRules DsoRules_RevokeFeaturedAppRight DsoRules_RevokeFeaturedAppRightResult`
+
+<a id="type-splice-dsorules-dsorulessetconfigresult-20888"></a>
+
+### `data DsoRules_SetConfigResult`
+
+Constructors:
+
+<a id="constr-splice-dsorules-dsorulessetconfigresult-7861"></a>
+- `DsoRules_SetConfigResult`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| newDsoRules | ContractId DsoRules |  |
+
+Instances:
+
+- `instance GetField newDsoRules DsoRules_SetConfigResult (ContractId DsoRules)`
+- `instance SetField newDsoRules DsoRules_SetConfigResult (ContractId DsoRules)`
+- `instance HasExercise DsoRules DsoRules_SetConfig DsoRules_SetConfigResult`
+- `instance HasFromAnyChoice DsoRules DsoRules_SetConfig DsoRules_SetConfigResult`
+- `instance HasToAnyChoice DsoRules DsoRules_SetConfig DsoRules_SetConfigResult`
+
+<a id="type-splice-dsorules-dsorulessetsynchronizernodeconfigresult-80120"></a>
+
+### `data DsoRules_SetSynchronizerNodeConfigResult`
+
+Constructors:
+
+<a id="constr-splice-dsorules-dsorulessetsynchronizernodeconfigresult-93925"></a>
+- `DsoRules_SetSynchronizerNodeConfigResult`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| svNodeState | ContractId SvNodeState |  |
+
+Instances:
+
+- `instance GetField svNodeState DsoRules_SetSynchronizerNodeConfigResult (ContractId SvNodeState)`
+- `instance SetField svNodeState DsoRules_SetSynchronizerNodeConfigResult (ContractId SvNodeState)`
+- `instance HasExercise DsoRules DsoRules_SetSynchronizerNodeConfig DsoRules_SetSynchronizerNodeConfigResult`
+- `instance HasFromAnyChoice DsoRules DsoRules_SetSynchronizerNodeConfig DsoRules_SetSynchronizerNodeConfigResult`
+- `instance HasToAnyChoice DsoRules DsoRules_SetSynchronizerNodeConfig DsoRules_SetSynchronizerNodeConfigResult`
+
+<a id="type-splice-dsorules-dsorulesstartsvonboardingresult-18158"></a>
+
+### `data DsoRules_StartSvOnboardingResult`
+
+Constructors:
+
+<a id="constr-splice-dsorules-dsorulesstartsvonboardingresult-27583"></a>
+- `DsoRules_StartSvOnboardingResult`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| onboardingRequest | ContractId SvOnboardingRequest |  |
+
+Instances:
+
+- `instance GetField onboardingRequest DsoRules_StartSvOnboardingResult (ContractId SvOnboardingRequest)`
+- `instance SetField onboardingRequest DsoRules_StartSvOnboardingResult (ContractId SvOnboardingRequest)`
+- `instance HasExercise DsoRules DsoRules_StartSvOnboarding DsoRules_StartSvOnboardingResult`
+- `instance HasFromAnyChoice DsoRules DsoRules_StartSvOnboarding DsoRules_StartSvOnboardingResult`
+- `instance HasToAnyChoice DsoRules DsoRules_StartSvOnboarding DsoRules_StartSvOnboardingResult`
+
+<a id="type-splice-dsorules-dsorulessubmitstatusreportresult-52083"></a>
+
+### `data DsoRules_SubmitStatusReportResult`
+
+Constructors:
+
+<a id="constr-splice-dsorules-dsorulessubmitstatusreportresult-24832"></a>
+- `DsoRules_SubmitStatusReportResult`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| newReport | ContractId SvStatusReport |  |
+
+Instances:
+
+- `instance GetField newReport DsoRules_SubmitStatusReportResult (ContractId SvStatusReport)`
+- `instance SetField newReport DsoRules_SubmitStatusReportResult (ContractId SvStatusReport)`
+- `instance HasExercise DsoRules DsoRules_SubmitStatusReport DsoRules_SubmitStatusReportResult`
+- `instance HasFromAnyChoice DsoRules DsoRules_SubmitStatusReport DsoRules_SubmitStatusReportResult`
+- `instance HasToAnyChoice DsoRules DsoRules_SubmitStatusReport DsoRules_SubmitStatusReportResult`
+
+<a id="type-splice-dsorules-dsorulesterminatesubscriptionresult-840"></a>
+
+### `data DsoRules_TerminateSubscriptionResult`
+
+Constructors:
+
+<a id="constr-splice-dsorules-dsorulesterminatesubscriptionresult-26229"></a>
+- `DsoRules_TerminateSubscriptionResult`
+
+Instances:
+
+- `instance HasExercise DsoRules DsoRules_TerminateSubscription DsoRules_TerminateSubscriptionResult`
+- `instance HasFromAnyChoice DsoRules DsoRules_TerminateSubscription DsoRules_TerminateSubscriptionResult`
+- `instance HasToAnyChoice DsoRules DsoRules_TerminateSubscription DsoRules_TerminateSubscriptionResult`
+
+<a id="type-splice-dsorules-dsorulesupdateamuletpricevoteresult-31774"></a>
+
+### `data DsoRules_UpdateAmuletPriceVoteResult`
+
+Constructors:
+
+<a id="constr-splice-dsorules-dsorulesupdateamuletpricevoteresult-27803"></a>
+- `DsoRules_UpdateAmuletPriceVoteResult`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| amuletPriceVote | ContractId AmuletPriceVote |  |
+
+Instances:
+
+- `instance GetField amuletPriceVote DsoRules_UpdateAmuletPriceVoteResult (ContractId AmuletPriceVote)`
+- `instance SetField amuletPriceVote DsoRules_UpdateAmuletPriceVoteResult (ContractId AmuletPriceVote)`
+- `instance HasExercise DsoRules DsoRules_UpdateAmuletPriceVote DsoRules_UpdateAmuletPriceVoteResult`
+- `instance HasFromAnyChoice DsoRules DsoRules_UpdateAmuletPriceVote DsoRules_UpdateAmuletPriceVoteResult`
+- `instance HasToAnyChoice DsoRules DsoRules_UpdateAmuletPriceVote DsoRules_UpdateAmuletPriceVoteResult`
+
+<a id="type-splice-dsorules-dsorulesupdateexternalpartyconfigstatesresult-26858"></a>
+
+### `data DsoRules_UpdateExternalPartyConfigStatesResult`
+
+Constructors:
+
+<a id="constr-splice-dsorules-dsorulesupdateexternalpartyconfigstatesresult-3139"></a>
+- `DsoRules_UpdateExternalPartyConfigStatesResult`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| newExternalPartyConfigStateCid | ContractId ExternalPartyConfigState |  |
+
+Instances:
+
+- `instance Eq DsoRules_UpdateExternalPartyConfigStatesResult`
+- `instance Show DsoRules_UpdateExternalPartyConfigStatesResult`
+- `instance GetField newExternalPartyConfigStateCid DsoRules_UpdateExternalPartyConfigStatesResult (ContractId ExternalPartyConfigState)`
+- `instance SetField newExternalPartyConfigStateCid DsoRules_UpdateExternalPartyConfigStatesResult (ContractId ExternalPartyConfigState)`
+- `instance HasExercise DsoRules DsoRules_UpdateExternalPartyConfigStates DsoRules_UpdateExternalPartyConfigStatesResult`
+- `instance HasFromAnyChoice DsoRules DsoRules_UpdateExternalPartyConfigStates DsoRules_UpdateExternalPartyConfigStatesResult`
+- `instance HasToAnyChoice DsoRules DsoRules_UpdateExternalPartyConfigStates DsoRules_UpdateExternalPartyConfigStatesResult`
+
+<a id="type-splice-dsorules-dsorulesupdatesvrewardweightresult-38140"></a>
+
+### `data DsoRules_UpdateSvRewardWeightResult`
+
+Constructors:
+
+<a id="constr-splice-dsorules-dsorulesupdatesvrewardweightresult-2499"></a>
+- `DsoRules_UpdateSvRewardWeightResult`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| newDsoRules | ContractId DsoRules |  |
+
+Instances:
+
+- `instance GetField newDsoRules DsoRules_UpdateSvRewardWeightResult (ContractId DsoRules)`
+- `instance SetField newDsoRules DsoRules_UpdateSvRewardWeightResult (ContractId DsoRules)`
+- `instance HasExercise DsoRules DsoRules_UpdateSvRewardWeight DsoRules_UpdateSvRewardWeightResult`
+- `instance HasFromAnyChoice DsoRules DsoRules_UpdateSvRewardWeight DsoRules_UpdateSvRewardWeightResult`
+- `instance HasToAnyChoice DsoRules DsoRules_UpdateSvRewardWeight DsoRules_UpdateSvRewardWeightResult`
+
+<a id="type-splice-dsorules-dsosummary-18963"></a>
+
+### `data DsoSummary`
+
+Constructors:
+
+<a id="constr-splice-dsorules-dsosummary-70086"></a>
+- `DsoSummary`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| dsoDelegate | Party | __Deprecated__ in favor of delegateless automation. |
+| numSvs | Int |  |
+| requiredNumVotes | Int | The number of votes required for considering a confirmation, or a request for a vote |
+
+Instances:
+
+- `instance Eq DsoSummary`
+- `instance Show DsoSummary`
+- `instance GetField dsoDelegate DsoSummary Party`
+- `instance GetField numSvs DsoSummary Int`
+- `instance GetField requiredNumVotes DsoSummary Int`
+- `instance SetField dsoDelegate DsoSummary Party`
+- `instance SetField numSvs DsoSummary Int`
+- `instance SetField requiredNumVotes DsoSummary Int`
+
+<a id="type-splice-dsorules-electionrequestreason-11906"></a>
+
+### `data ElectionRequestReason`
+
+__Deprecated__ in favor of delegateless automation.
+
+Constructors:
+
+<a id="constr-splice-dsorules-errdsodelegateunavailable-67703"></a>
+- `ERR_DsoDelegateUnavailable`
+<a id="constr-splice-dsorules-errotherreason-56585"></a>
+- `ERR_OtherReason Text`
+<a id="constr-splice-dsorules-extelectionrequestreason-65169"></a>
+- `ExtElectionRequestReason`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| dummyUnitField | () | Extension constructor (and field) to work around the current lack of upgrading for variants in Daml 3.0 |
+
+Instances:
+
+- `instance Eq ElectionRequestReason`
+- `instance Ord ElectionRequestReason`
+- `instance Show ElectionRequestReason`
+- `instance GetField dummyUnitField ElectionRequestReason ()`
+- `instance GetField reason DsoRules_RequestElection ElectionRequestReason`
+- `instance GetField reason ElectionRequest ElectionRequestReason`
+- `instance SetField dummyUnitField ElectionRequestReason ()`
+- `instance SetField reason DsoRules_RequestElection ElectionRequestReason`
+- `instance SetField reason ElectionRequest ElectionRequestReason`
+
+<a id="type-splice-dsorules-offboardedsvinfo-61414"></a>
+
+### `data OffboardedSvInfo`
+
+Information about offboarded svs
+
+Constructors:
+
+<a id="constr-splice-dsorules-offboardedsvinfo-34519"></a>
+- `OffboardedSvInfo`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| name | Text | Human-readable name; must be unique. |
+| participantId | Text | Participant ID of the offboarded SV. |
+
+Instances:
+
+- `instance Eq OffboardedSvInfo`
+- `instance Show OffboardedSvInfo`
+- `instance GetField name OffboardedSvInfo Text`
+- `instance GetField offboardedSvs DsoRules (Map Party OffboardedSvInfo)`
+- `instance GetField participantId OffboardedSvInfo Text`
+- `instance SetField name OffboardedSvInfo Text`
+- `instance SetField offboardedSvs DsoRules (Map Party OffboardedSvInfo)`
+- `instance SetField participantId OffboardedSvInfo Text`
+
+<a id="type-splice-dsorules-reason-36941"></a>
+
+### `data Reason`
+
+Constructors:
+
+<a id="constr-splice-dsorules-reason-51132"></a>
+- `Reason`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| url | Text | Url pointing to additional background on the reason, e.g., using a https://w3c-ccg.github.io/hashlink/ |
+| body | Text | Freeform text intended for human consumption. |
+
+Instances:
+
+- `instance Eq Reason`
+- `instance Show Reason`
+- `instance GetField body Reason Text`
+- `instance GetField reason DsoRules_RequestVote Reason`
+- `instance GetField reason Vote Reason`
+- `instance GetField reason VoteRequest Reason`
+- `instance GetField url Reason Text`
+- `instance SetField body Reason Text`
+- `instance SetField reason DsoRules_RequestVote Reason`
+- `instance SetField reason Vote Reason`
+- `instance SetField reason VoteRequest Reason`
+- `instance SetField url Reason Text`
+
+<a id="type-splice-dsorules-svinfo-76274"></a>
+
+### `data SvInfo`
+
+Information about SVs relevant to DSO governance.
+
+Constructors:
+
+<a id="constr-splice-dsorules-svinfo-69131"></a>
+- `SvInfo`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| name | Text | Human-readable name; must be unique. |
+| joinedAsOfRound | Round | Round in which the SV joined |
+| svRewardWeight | Int | Weight of the SV in the SV reward distribution. |
+| participantId | Text | Participant ID of the SV, stored here as PartyToParticipant mappings are tracked via state on the DsoRules + SvOnboardingConfirmed contracts. |
+
+Instances:
+
+- `instance Eq SvInfo`
+- `instance Show SvInfo`
+- `instance GetField joinedAsOfRound SvInfo Round`
+- `instance GetField name SvInfo Text`
+- `instance GetField participantId SvInfo Text`
+- `instance GetField svRewardWeight SvInfo Int`
+- `instance GetField svs DsoRules (Map Party SvInfo)`
+- `instance SetField joinedAsOfRound SvInfo Round`
+- `instance SetField name SvInfo Text`
+- `instance SetField participantId SvInfo Text`
+- `instance SetField svRewardWeight SvInfo Int`
+- `instance SetField svs DsoRules (Map Party SvInfo)`
+
+<a id="type-splice-dsorules-synchronizerupgradeschedule-64447"></a>
+
+### `data SynchronizerUpgradeSchedule`
+
+Constructors:
+
+<a id="constr-splice-dsorules-synchronizerupgradeschedule-53308"></a>
+- `SynchronizerUpgradeSchedule`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| time | Time | The time at which the migration is scheduled to start. |
+| migrationId | Int | The incremental integer ID of the migration. |
+
+Instances:
+
+- `instance Patchable SynchronizerUpgradeSchedule`
+- `instance Eq SynchronizerUpgradeSchedule`
+- `instance Show SynchronizerUpgradeSchedule`
+- `instance GetField migrationId SynchronizerUpgradeSchedule Int`
+- `instance GetField nextScheduledSynchronizerUpgrade DsoRulesConfig (Optional SynchronizerUpgradeSchedule)`
+- `instance GetField time SynchronizerUpgradeSchedule Time`
+- `instance SetField migrationId SynchronizerUpgradeSchedule Int`
+- `instance SetField nextScheduledSynchronizerUpgrade DsoRulesConfig (Optional SynchronizerUpgradeSchedule)`
+- `instance SetField time SynchronizerUpgradeSchedule Time`
+
+<a id="type-splice-dsorules-trafficstate-38069"></a>
+
+### `data TrafficState`
+
+Constructors:
+
+<a id="constr-splice-dsorules-trafficstate-23304"></a>
+- `TrafficState`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| consumedTraffic | Int | Bytes of extra traffic consumed before the decentralized synchronizer was bootstrapped. |
+
+Instances:
+
+- `instance Eq TrafficState`
+- `instance Show TrafficState`
+- `instance GetField consumedTraffic TrafficState Int`
+- `instance GetField initialTrafficState DsoBootstrap (Map Text TrafficState)`
+- `instance GetField initialTrafficState DsoRules (Map Text TrafficState)`
+- `instance SetField consumedTraffic TrafficState Int`
+- `instance SetField initialTrafficState DsoBootstrap (Map Text TrafficState)`
+- `instance SetField initialTrafficState DsoRules (Map Text TrafficState)`
+
+<a id="type-splice-dsorules-vote-50851"></a>
+
+### `data Vote`
+
+A vote cast by an SV.
+
+Constructors:
+
+<a id="constr-splice-dsorules-vote-51690"></a>
+- `Vote`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| sv | Party | The SV party used to submit the vote. |
+| accept | Bool | Whether the responder accepted the request to execute the action or not. |
+| reason | Reason | The reason for voting this way. |
+| optCastAt | Optional Time | The time when the vote was cast. Used to rate-limit the casting of votes. |
+
+Instances:
+
+- `instance Eq Vote`
+- `instance Show Vote`
+- `instance GetField accept Vote Bool`
+- `instance GetField optCastAt Vote (Optional Time)`
+- `instance GetField reason Vote Reason`
+- `instance GetField sv Vote Party`
+- `instance GetField vote DsoRules_CastVote Vote`
+- `instance GetField votes VoteRequest (Map Text Vote)`
+- `instance SetField accept Vote Bool`
+- `instance SetField optCastAt Vote (Optional Time)`
+- `instance SetField reason Vote Reason`
+- `instance SetField sv Vote Party`
+- `instance SetField vote DsoRules_CastVote Vote`
+- `instance SetField votes VoteRequest (Map Text Vote)`
+
+<a id="type-splice-dsorules-voterequestoutcome-63724"></a>
+
+### `data VoteRequestOutcome`
+
+Constructors:
+
+<a id="constr-splice-dsorules-vroacceptedbutactionfailed-51100"></a>
+- `VRO_AcceptedButActionFailed`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| description | Text | Description of the failure. |
+<a id="constr-splice-dsorules-vroaccepted-67803"></a>
+- `VRO_Accepted`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| effectiveAt | Time | Time when the action will be effective. |
+<a id="constr-splice-dsorules-vrorejected-43182"></a>
+- `VRO_Rejected`
+<a id="constr-splice-dsorules-vroexpired-35522"></a>
+- `VRO_Expired`
+<a id="constr-splice-dsorules-extvoterequestoutcome-76073"></a>
+- `ExtVoteRequestOutcome`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| dummyUnitField | () |  |
+
+Instances:
+
+- `instance Eq VoteRequestOutcome`
+- `instance Show VoteRequestOutcome`
+- `instance GetField description VoteRequestOutcome Text`
+- `instance GetField dummyUnitField VoteRequestOutcome ()`
+- `instance GetField effectiveAt VoteRequestOutcome Time`
+- `instance GetField outcome DsoRules_CloseVoteRequestResult VoteRequestOutcome`
+- `instance SetField description VoteRequestOutcome Text`
+- `instance SetField dummyUnitField VoteRequestOutcome ()`
+- `instance SetField effectiveAt VoteRequestOutcome Time`
+- `instance SetField outcome DsoRules_CloseVoteRequestResult VoteRequestOutcome`
+
+<a id="type-splice-dsorules-votingstate-60200"></a>
+
+### `data VotingState a`
+
+__Deprecated__ in favor of delegateless automation.
+Functions implementing instant-runoff voting
+
+Constructors:
+
+<a id="constr-splice-dsorules-votingstate-26047"></a>
+- `VotingState`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| rankings | Map a [[a]] | Candidate and the remaining rankings in case that candidate is eliminated. |
+| loosers | Set a | Loosers are tracked explicitly and removed lazily to avoid the cubic runtime<br/><br/>that would result from filtering the remaining rankings eagerly. |
+
+Instances:
+
+- `instance Ord a => Eq (VotingState a)`
+- `instance (Show a, Ord a) => Show (VotingState a)`
+- `instance GetField loosers (VotingState a) (Set a)`
+- `instance GetField rankings (VotingState a) (Map a [[a]])`
+- `instance SetField loosers (VotingState a) (Set a)`
+- `instance SetField rankings (VotingState a) (Map a [[a]])`
+
+## Functions
+
+<a id="function-splice-dsorules-getvotecooldowntime-44916"></a>
+
+### `getVoteCooldownTime`
+
+```daml
+getVoteCooldownTime : DsoRulesConfig -> RelTime
+```
+
+Read the `voteCooldownTime` from the `DsoRulesConfig` with a default value of 1 minute.
+
+<a id="function-splice-dsorules-pruneatleastone-36934"></a>
+
+### `pruneAtLeastOne`
+
+```daml
+pruneAtLeastOne : Ord t => t -> Schedule t a -> Optional (Schedule t a)
+```
+
+<a id="function-splice-dsorules-summarizedso-49860"></a>
+
+### `summarizeDso`
+
+```daml
+summarizeDso : DsoRules -> DsoSummary
+```
+
+<a id="function-splice-dsorules-executeactionrequiringconfirmation-87907"></a>
+
+### `executeActionRequiringConfirmation`
+
+```daml
+executeActionRequiringConfirmation : Party -> ContractId DsoRules -> Optional (ContractId AmuletRules) -> ActionRequiringConfirmation -> Update ()
+```
+
+Execute an action which requires certain number of confirmations from SVs.
+Each confirmed action can at most be executed once.
+
+<a id="function-splice-dsorules-requirewellformedreason-26428"></a>
+
+### `requireWellformedReason`
+
+```daml
+requireWellformedReason : DsoRulesConfig -> Reason -> Update ()
+```
+
+<a id="function-splice-dsorules-requirewellformedvote-94014"></a>
+
+### `requireWellformedVote`
+
+```daml
+requireWellformedVote : DsoRulesConfig -> Vote -> Update ()
+```
+
+<a id="function-splice-dsorules-ensurenotexpired-58839"></a>
+
+### `ensureNotExpired`
+
+```daml
+ensureNotExpired : Time -> Update ()
+```
+
+<a id="function-splice-dsorules-actionrequiringconfirmationeffectiveat-38122"></a>
+
+### `actionRequiringConfirmationEffectiveAt`
+
+```daml
+actionRequiringConfirmationEffectiveAt : ActionRequiringConfirmation -> Optional Time
+```
+
+Get the future-dated effectiveAt of an action requiring confirmation.
+
+<a id="function-splice-dsorules-getsvinfo-85569"></a>
+
+### `getSvInfo`
+
+```daml
+getSvInfo : Party -> DsoRules -> Update SvInfo
+```
+
+<a id="function-splice-dsorules-lookupsvinfobyname-29850"></a>
+
+### `lookupSvInfoByName`
+
+```daml
+lookupSvInfoByName : Text -> DsoRules -> Optional (Party, SvInfo)
+```
+
+<a id="function-splice-dsorules-svhasbeenonboardedbefore-57101"></a>
+
+### `svHasBeenOnboardedBefore`
+
+```daml
+svHasBeenOnboardedBefore : Text -> DsoRules -> Bool
+```
+
+Returns True if an SV with that name is either currently onboarded
+or an SV with that name has been onboarded before and is now in offboardedSvs.
+
+<a id="function-splice-dsorules-ensureneveroperatednode-60956"></a>
+
+### `ensureNeverOperatedNode`
+
+```daml
+ensureNeverOperatedNode : Party -> DsoRules -> Update ()
+```
+
+<a id="function-splice-dsorules-dsorulesaddsv-73633"></a>
+
+### `dsoRules_addSv`
+
+```daml
+dsoRules_addSv : DsoRules -> DsoRules_AddSv -> Update (ContractId DsoRules)
+```
+
+<a id="function-splice-dsorules-createpersvcontracts-25068"></a>
+
+### `createPerSvContracts`
+
+```daml
+createPerSvContracts : DsoRules -> DsoRules_AddSv -> Update ()
+```
+
+<a id="function-splice-dsorules-createpersvpartycontracts-3309"></a>
+
+### `createPerSvPartyContracts`
+
+```daml
+createPerSvPartyContracts : Party -> Party -> Text -> SynchronizerNodeConfigMap -> Optional Decimal -> RelTime -> Update ()
+```
+
+<a id="function-splice-dsorules-getandvalidatesvparty-72916"></a>
+
+### `getAndValidateSvParty`
+
+```daml
+getAndValidateSvParty : DsoRules -> Optional Party -> Update Party
+```
+
+<a id="function-splice-dsorules-enforcecooldown-11925"></a>
+
+### `enforceCooldown`
+
+```daml
+enforceCooldown : Text -> RelTime -> Optional Time -> Update ()
+```
+
+Enforce that an action is not performed again before a cooldown period has passed.
+
+## Templates
+
+<a id="type-splice-dsorules-bootstrapexternalpartyconfigstateinstruction-72557"></a>
+
+### Template `BootstrapExternalPartyConfigStateInstruction`
+
+Instruction to bootstrap the external party config state.
+This exists so that the `ActionRequiringConfirmation` for this is independent of the
+current rounds which we need so that we can do deduplication by action hash
+in our automation.
+
+Signatories: `dso`
+
+Payload:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| dso | Party |  |
+
+Choices:
+
+#### Choice `Archive`
+
+Controllers: `dso`
+
+Returns: `()`
+
+<a id="type-splice-dsorules-confirmation-62984"></a>
+
+### Template `Confirmation`
+
+A confirmation for the SVs to take action as part of standard DSO.
+Used for executing automated actions in a shortened process.
+See the comments on `ActionRequiringConfirmation` for details.
+
+Signatories: `dso`
+
+Payload:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| dso | Party |  |
+| confirmer | Party |  |
+| action | ActionRequiringConfirmation |  |
+| expiresAt | Time |  |
+
+Choices:
+
+#### Choice `Archive`
+
+Controllers: `dso`
+
+Returns: `()`
+
+<a id="type-splice-dsorules-confirmationexpire-84183"></a>
+
+#### Choice `Confirmation_Expire`
+
+Controllers: `dso`
+
+Returns: `Confirmation_ExpireResult`
+
+<a id="type-splice-dsorules-dsorules-35440"></a>
+
+### Template `DsoRules`
+
+Signatories: `dso`
+
+Payload:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| dso | Party |  |
+| epoch | Int |  |
+| svs | Map Party SvInfo |  |
+| offboardedSvs | Map Party OffboardedSvInfo |  |
+| dsoDelegate | Party | __Deprecated__ in favor of delegateless automation. |
+| config | DsoRulesConfig |  |
+| initialTrafficState | Map Text TrafficState | Map from participant/mediator ID to its traffic state at the time of synchronizer bootstrapping. Used for testing, empty in prod. |
+| isDevNet | Bool |  |
+
+Choices:
+
+#### Choice `Archive`
+
+Controllers: `dso`
+
+Returns: `()`
+
+<a id="type-splice-dsorules-dsorulesaddconfirmedsv-22105"></a>
+
+#### Choice `DsoRules_AddConfirmedSv`
+
+Controllers: `sv`
+
+Returns: `DsoRules_AddConfirmedSvResult`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| sv | Party |  |
+| svOnboardingConfirmedCid | ContractId SvOnboardingConfirmed |  |
+| earliestRoundCid | ContractId OpenMiningRound |  |
+| middleRoundCid | ContractId OpenMiningRound |  |
+| latestRoundCid | ContractId OpenMiningRound |  |
+| amuletRulesCid | ContractId AmuletRules |  |
+
+<a id="type-splice-dsorules-dsorulesaddsv-44293"></a>
+
+#### Choice `DsoRules_AddSv`
+
+Controllers: `dso`
+
+Returns: `DsoRules_AddSvResult`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| newSvParty | Party |  |
+| newSvName | Text |  |
+| newSvRewardWeight | Int |  |
+| newSvParticipantId | Text |  |
+| joinedAsOfRound | Round |  |
+
+<a id="type-splice-dsorules-dsorulesadvanceopenminingrounds-34192"></a>
+
+#### Choice `DsoRules_AdvanceOpenMiningRounds`
+
+Controllers: `sv`
+
+Returns: `DsoRules_AdvanceOpenMiningRoundsResult`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| amuletRulesCid | ContractId AmuletRules |  |
+| roundToArchiveCid | ContractId OpenMiningRound |  |
+| middleRoundCid | ContractId OpenMiningRound |  |
+| latestRoundCid | ContractId OpenMiningRound |  |
+| amuletPriceVoteCids | [ContractId AmuletPriceVote] |  |
+| sv | Optional Party |  |
+
+<a id="type-splice-dsorules-dsorulesallocateunallocatedunclaimedactivityrecord-56787"></a>
+
+#### Choice `DsoRules_AllocateUnallocatedUnclaimedActivityRecord`
+
+Controllers: `sv`
+
+Returns: `DsoRules_AllocateUnallocatedUnclaimedActivityRecordResult`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| unallocatedUnclaimedActivityRecordCid | ContractId UnallocatedUnclaimedActivityRecord |  |
+| amuletRulesCid | ContractId AmuletRules |  |
+| unclaimedRewardsToBurnCids | [ContractId UnclaimedReward] | A sufficient list of `UnclaimedReward` to be archived.<br/><br/>It must cover at least the requested amount. |
+| sv | Party |  |
+
+<a id="type-splice-dsorules-dsorulesamuletrulesconvertfeaturedappactivitymarkers-52437"></a>
+
+#### Choice `DsoRules_AmuletRules_ConvertFeaturedAppActivityMarkers`
+
+Controllers: `sv`
+
+Returns: `DsoRules_AmuletRules_ConvertFeaturedAppActivityMarkersResult`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| amuletRulesCid | ContractId AmuletRules |  |
+| argument | AmuletRules_ConvertFeaturedAppActivityMarkers |  |
+| sv | Optional Party |  |
+
+<a id="type-splice-dsorules-dsorulesamuletexpire-71495"></a>
+
+#### Choice `DsoRules_Amulet_Expire`
+
+Controllers: `sv`
+
+Returns: `DsoRules_Amulet_ExpireResult`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| cid | ContractId Amulet |  |
+| choiceArg | Amulet_Expire |  |
+| sv | Optional Party |  |
+
+<a id="type-splice-dsorules-dsorulesamuletexpiretransferinstructions-57305"></a>
+
+#### Choice `DsoRules_Amulet_ExpireTransferInstructions`
+
+Controllers: `sv`
+
+Returns: `DsoRules_Amulet_ExpireTransferInstructionsResult`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| amuletRulesCid | ContractId AmuletRules |  |
+| transferInsts | AmuletRules_Amulet_ExpireTransferInstructions |  |
+| sv | Party |  |
+
+<a id="type-splice-dsorules-dsorulesamuletexpirev2-61973"></a>
+
+#### Choice `DsoRules_Amulet_ExpireV2`
+
+Controllers: `sv`
+
+Returns: `DsoRules_Amulet_ExpireV2Result`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| cid | ContractId Amulet |  |
+| choiceArg | Amulet_ExpireV2 |  |
+| sv | Optional Party |  |
+
+<a id="type-splice-dsorules-dsorulesarchiveoutdatedelectionrequest-55064"></a>
+
+#### Choice `DsoRules_ArchiveOutdatedElectionRequest`
+
+Controllers: `sv`
+
+Returns: `DsoRules_ArchiveOutdatedElectionRequestResult`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| requestCid | ContractId ElectionRequest |  |
+| sv | Optional Party |  |
+
+<a id="type-splice-dsorules-dsorulesarchivesvonboardingrequest-72075"></a>
+
+#### Choice `DsoRules_ArchiveSvOnboardingRequest`
+
+Controllers: `sv`
+
+Returns: `DsoRules_ArchiveSvOnboardingRequestResult`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| svOnboardingRequestCid | ContractId SvOnboardingRequest |  |
+| sv | Optional Party |  |
+
+<a id="type-splice-dsorules-dsorulesbootstrapexternalpartyconfigstate-94209"></a>
+
+#### Choice `DsoRules_BootstrapExternalPartyConfigState`
+
+Controllers: `sv`
+
+Returns: `DsoRules_BootstrapExternalPartyConfigStateResult`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| amuletRulesCid | ContractId AmuletRules |  |
+| instructionCid | ContractId BootstrapExternalPartyConfigStateInstruction |  |
+| openMiningRoundTriple | OpenMiningRoundTriple |  |
+| sv | Party |  |
+
+<a id="type-splice-dsorules-dsorulescastvote-63161"></a>
+
+#### Choice `DsoRules_CastVote`
+
+Controllers: `(DA.Internal.Record.getField @"sv" vote)`
+
+Returns: `DsoRules_CastVoteResult`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| requestCid | ContractId VoteRequest |  |
+| vote | Vote |  |
+
+<a id="type-splice-dsorules-dsorulesclaimexpiredrewards-16372"></a>
+
+#### Choice `DsoRules_ClaimExpiredRewards`
+
+Controllers: `sv`
+
+Returns: `DsoRules_ClaimExpiredRewardsResult`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| amuletRulesCid | ContractId AmuletRules |  |
+| choiceArg | AmuletRules_ClaimExpiredRewards |  |
+| sv | Optional Party |  |
+
+<a id="type-splice-dsorules-dsorulesclosevoterequest-87527"></a>
+
+#### Choice `DsoRules_CloseVoteRequest`
+
+Controllers: `sv`
+
+Returns: `DsoRules_CloseVoteRequestResult`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| requestCid | ContractId VoteRequest |  |
+| amuletRulesCid | Optional (ContractId AmuletRules) |  |
+| sv | Optional Party |  |
+
+<a id="type-splice-dsorules-dsorulescollectentryrenewalpayment-93166"></a>
+
+#### Choice `DsoRules_CollectEntryRenewalPayment`
+
+Controllers: `sv`
+
+Returns: `DsoRules_CollectEntryRenewalPaymentResult`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| ansEntryContextCid | ContractId AnsEntryContext |  |
+| choiceArg | AnsEntryContext_CollectEntryRenewalPayment |  |
+| sv | Optional Party |  |
+
+<a id="type-splice-dsorules-dsorulesconfirmaction-67097"></a>
+
+#### Choice `DsoRules_ConfirmAction`
+
+Controllers: `confirmer`
+
+Returns: `DsoRules_ConfirmActionResult`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| confirmer | Party |  |
+| action | ActionRequiringConfirmation |  |
+
+<a id="type-splice-dsorules-dsorulesconfirmsvonboarding-94029"></a>
+
+#### Choice `DsoRules_ConfirmSvOnboarding`
+
+Controllers: `dso`
+
+Returns: `DsoRules_ConfirmSvOnboardingResult`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| newSvParty | Party |  |
+| newSvName | Text |  |
+| newParticipantId | Text |  |
+| newSvRewardWeight | Int |  |
+| reason | Text |  |
+
+<a id="type-splice-dsorules-dsorulescreatebootstrapexternalpartyconfigstateinstruction-1552"></a>
+
+#### Choice `DsoRules_CreateBootstrapExternalPartyConfigStateInstruction`
+
+Controllers: `dso`
+
+Returns: `DsoRules_CreateBootstrapExternalPartyConfigStateInstructionResult`
+
+<a id="type-splice-dsorules-dsorulescreateexternalpartyamuletrules-62448"></a>
+
+#### Choice `DsoRules_CreateExternalPartyAmuletRules`
+
+Controllers: `dso`
+
+Returns: `DsoRules_CreateExternalPartyAmuletRulesResult`
+
+<a id="type-splice-dsorules-dsorulescreatetransfercommandcounter-44220"></a>
+
+#### Choice `DsoRules_CreateTransferCommandCounter`
+
+Controllers: `dso`
+
+Returns: `DsoRules_CreateTransferCommandCounterResult`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| sender | Party |  |
+
+<a id="type-splice-dsorules-dsorulescreateunallocatedunclaimedactivityrecord-78616"></a>
+
+#### Choice `DsoRules_CreateUnallocatedUnclaimedActivityRecord`
+
+Controllers: `dso`
+
+Returns: `DsoRules_CreateUnallocatedUnclaimedActivityRecordResult`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| beneficiary | Party |  |
+| amount | Decimal |  |
+| reason | Text |  |
+| expiresAt | Time |  |
+
+<a id="type-splice-dsorules-dsoruleselectdsodelegate-82924"></a>
+
+#### Choice `DsoRules_ElectDsoDelegate`
+
+Controllers: `actor`
+
+Returns: `DsoRules_ElectDsoDelegateResult`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| actor | Party |  |
+| requestCids | [ContractId ElectionRequest] |  |
+
+<a id="type-splice-dsorules-dsorulesexecuteconfirmedaction-18028"></a>
+
+#### Choice `DsoRules_ExecuteConfirmedAction`
+
+Controllers: `sv`
+
+Returns: `DsoRules_ExecuteConfirmedActionResult`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| action | ActionRequiringConfirmation |  |
+| amuletRulesCid | Optional (ContractId AmuletRules) |  |
+| confirmationCids | [ContractId Confirmation] |  |
+| sv | Optional Party |  |
+
+<a id="type-splice-dsorules-dsorulesexpireamuletallocations-76865"></a>
+
+#### Choice `DsoRules_ExpireAmuletAllocations`
+
+Controllers: `sv`
+
+Returns: `DsoRules_ExpireAmuletAllocationsResult`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| extAmuletRulesCid | ContractId ExternalPartyAmuletRules |  |
+| expireAllocations | ExternalPartyAmuletRules_ExpireAmuletAllocations |  |
+| sv | Party |  |
+
+<a id="type-splice-dsorules-dsorulesexpireansentry-58167"></a>
+
+#### Choice `DsoRules_ExpireAnsEntry`
+
+Controllers: `sv`
+
+Returns: `DsoRules_ExpireAnsEntryResult`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| ansEntryCid | ContractId AnsEntry |  |
+| choiceArg | AnsEntry_Expire |  |
+| sv | Optional Party |  |
+
+<a id="type-splice-dsorules-dsorulesexpiredevelopmentfundcoupon-65446"></a>
+
+#### Choice `DsoRules_ExpireDevelopmentFundCoupon`
+
+Expires a DevelopmentFundCoupon and produces an UnclaimedDevelopmentFundCoupon with the same amount.
+
+Controllers: `sv`
+
+Returns: `DsoRules_ExpireDevelopmentFundCouponResult`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| developmentFundCouponCid | ContractId DevelopmentFundCoupon |  |
+| sv | Party |  |
+
+<a id="type-splice-dsorules-dsorulesexpirestaleconfirmation-23846"></a>
+
+#### Choice `DsoRules_ExpireStaleConfirmation`
+
+Controllers: `sv`
+
+Returns: `DsoRules_ExpireStaleConfirmationResult`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| staleConfirmationCid | ContractId Confirmation |  |
+| sv | Optional Party |  |
+
+<a id="type-splice-dsorules-dsorulesexpiresubscription-15972"></a>
+
+#### Choice `DsoRules_ExpireSubscription`
+
+Controllers: `sv`
+
+Returns: `DsoRules_ExpireSubscriptionResult`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| ansEntryContextCid | ContractId AnsEntryContext |  |
+| subscriptionIdleStateCid | ContractId SubscriptionIdleState |  |
+| choiceArg | SubscriptionIdleState_ExpireSubscription |  |
+| sv | Optional Party |  |
+
+<a id="type-splice-dsorules-dsorulesexpiresvonboardingconfirmed-60809"></a>
+
+#### Choice `DsoRules_ExpireSvOnboardingConfirmed`
+
+Controllers: `sv`
+
+Returns: `DsoRules_ExpireSvOnboardingConfirmedResult`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| cid | ContractId SvOnboardingConfirmed |  |
+| sv | Optional Party |  |
+
+<a id="type-splice-dsorules-dsorulesexpiresvonboardingrequest-63611"></a>
+
+#### Choice `DsoRules_ExpireSvOnboardingRequest`
+
+Controllers: `sv`
+
+Returns: `DsoRules_ExpireSvOnboardingRequestResult`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| cid | ContractId SvOnboardingRequest |  |
+| sv | Optional Party |  |
+
+<a id="type-splice-dsorules-dsorulesexpiretransferpreapproval-91729"></a>
+
+#### Choice `DsoRules_ExpireTransferPreapproval`
+
+Controllers: `sv`
+
+Returns: `DsoRules_ExpireTransferPreapprovalResult`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| transferPreapprovalCid | ContractId TransferPreapproval |  |
+| sv | Optional Party |  |
+
+<a id="type-splice-dsorules-dsorulesexpireunallocatedunclaimedactivityrecord-90041"></a>
+
+#### Choice `DsoRules_ExpireUnallocatedUnclaimedActivityRecord`
+
+Controllers: `sv`
+
+Returns: `DsoRules_ExpireUnallocatedUnclaimedActivityRecordResult`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| unallocatedUnclaimedActivityRecordCid | ContractId UnallocatedUnclaimedActivityRecord |  |
+| sv | Party |  |
+
+<a id="type-splice-dsorules-dsorulesexpireunclaimedactivityrecord-57856"></a>
+
+#### Choice `DsoRules_ExpireUnclaimedActivityRecord`
+
+Controllers: `sv`
+
+Returns: `DsoRules_ExpireUnclaimedActivityRecordResult`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| unclaimedActivityRecordCid | ContractId UnclaimedActivityRecord |  |
+| sv | Party |  |
+
+<a id="type-splice-dsorules-dsorulesgarbagecollectamuletpricevotes-77719"></a>
+
+#### Choice `DsoRules_GarbageCollectAmuletPriceVotes`
+
+Garbage-collect AmuletPriceVotes from removed svs and duplicate ones that might
+happen due to a too quick removal and re-addition of a sv.
+We expect this to be run as an OnAssignedContractTrigger for the DsoRules contract.
+
+Note: we do not archive the AmuletPriceVote of an SV on its removal,
+as that would allow that SV to block the removal via updating its AmuletPriceVote at the right time.
+
+TODO(#10063): drop this code in favor of just keeping AmuletPriceVotes around.
+
+Controllers: `sv`
+
+Returns: `DsoRules_GarbageCollectAmuletPriceVotesResult`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| nonSvVoteCids | [ContractId AmuletPriceVote] |  |
+| duplicateVoteCids | [[ContractId AmuletPriceVote]] |  |
+| sv | Optional Party |  |
+
+<a id="type-splice-dsorules-dsorulesgrantfeaturedappright-79910"></a>
+
+#### Choice `DsoRules_GrantFeaturedAppRight`
+
+Controllers: `dso`
+
+Returns: `DsoRules_GrantFeaturedAppRightResult`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| provider | Party |  |
+
+<a id="type-splice-dsorules-dsoruleslockedamuletexpireamulet-28275"></a>
+
+#### Choice `DsoRules_LockedAmulet_ExpireAmulet`
+
+Controllers: `sv`
+
+Returns: `DsoRules_LockedAmulet_ExpireAmuletResult`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| cid | ContractId LockedAmulet |  |
+| choiceArg | LockedAmulet_ExpireAmulet |  |
+| sv | Optional Party |  |
+
+<a id="type-splice-dsorules-dsoruleslockedamuletexpireamuletv2-91833"></a>
+
+#### Choice `DsoRules_LockedAmulet_ExpireAmuletV2`
+
+Controllers: `sv`
+
+Returns: `DsoRules_LockedAmulet_ExpireAmuletV2Result`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| cid | ContractId LockedAmulet |  |
+| choiceArg | LockedAmulet_ExpireAmuletV2 |  |
+| sv | Optional Party |  |
+
+<a id="type-splice-dsorules-dsorulesmergemembertrafficcontracts-34275"></a>
+
+#### Choice `DsoRules_MergeMemberTrafficContracts`
+
+Controllers: `sv`
+
+Returns: `DsoRules_MergeMemberTrafficContractsResult`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| amuletRulesCid | ContractId AmuletRules |  |
+| trafficCids | [ContractId MemberTraffic] |  |
+| sv | Optional Party |  |
+
+<a id="type-splice-dsorules-dsorulesmergesvrewardstate-39851"></a>
+
+#### Choice `DsoRules_MergeSvRewardState`
+
+Note this choice only exists to clean up duplicate contracts caused by the bug in #12495.
+There should never be duplicates going forward.
+
+Controllers: `sv`
+
+Returns: `DsoRules_MergeSvRewardStateResult`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| svName | Text |  |
+| rewardStateCids | [ContractId SvRewardState] |  |
+| sv | Optional Party |  |
+
+<a id="type-splice-dsorules-dsorulesmergeunclaimeddevelopmentfundcoupons-23755"></a>
+
+#### Choice `DsoRules_MergeUnclaimedDevelopmentFundCoupons`
+
+Batch merge of of development fund coupons.
+
+Controllers: `sv`
+
+Returns: `DsoRules_MergeUnclaimedDevelopmentFundCouponsResult`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| amuletRulesCid | ContractId AmuletRules |  |
+| choiceArg | AmuletRules_MergeUnclaimedDevelopmentFundCoupons |  |
+| sv | Party |  |
+
+<a id="type-splice-dsorules-dsorulesmergeunclaimedrewards-12383"></a>
+
+#### Choice `DsoRules_MergeUnclaimedRewards`
+
+Controllers: `sv`
+
+Returns: `DsoRules_MergeUnclaimedRewardsResult`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| amuletRulesCid | ContractId AmuletRules |  |
+| unclaimedRewardCids | [ContractId UnclaimedReward] |  |
+| sv | Optional Party |  |
+
+<a id="type-splice-dsorules-dsorulesmergevalidatorlicense-65804"></a>
+
+#### Choice `DsoRules_MergeValidatorLicense`
+
+Note: removes the old duplicated licenses and creates a new one with the highest lastReceivedFor round
+There should never be duplicates going forward.
+
+Controllers: `sv`
+
+Returns: `DsoRules_MergeValidatorLicenseResult`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| validatorLicenseCids | [ContractId ValidatorLicense] |  |
+| sv | Optional Party |  |
+
+<a id="type-splice-dsorules-dsorulesminingroundclose-28010"></a>
+
+#### Choice `DsoRules_MiningRound_Close`
+
+Controllers: `sv`
+
+Returns: `DsoRules_MiningRound_CloseResult`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| amuletRulesCid | ContractId AmuletRules |  |
+| issuingRoundCid | ContractId IssuingMiningRound |  |
+| sv | Optional Party |  |
+
+<a id="type-splice-dsorules-dsorulesoffboardsv-78636"></a>
+
+#### Choice `DsoRules_OffboardSv`
+
+Controllers: `dso`
+
+Returns: `DsoRules_OffboardSvResult`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| sv | Party |  |
+
+<a id="type-splice-dsorules-dsorulesonboardvalidator-23909"></a>
+
+#### Choice `DsoRules_OnboardValidator`
+
+Controllers: `sponsor`
+
+Returns: `DsoRules_OnboardValidatorResult`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| sponsor | Party |  |
+| validator | Party |  |
+| version | Optional Text |  |
+| contactPoint | Optional Text |  |
+
+<a id="type-splice-dsorules-dsorulespruneamuletconfigschedule-70948"></a>
+
+#### Choice `DsoRules_PruneAmuletConfigSchedule`
+
+Controllers: `sv`
+
+Returns: `DsoRules_PruneAmuletConfigScheduleResult`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| amuletRulesCid | ContractId AmuletRules |  |
+| sv | Optional Party |  |
+
+<a id="type-splice-dsorules-dsorulesreceivesvrewardcoupon-83972"></a>
+
+#### Choice `DsoRules_ReceiveSvRewardCoupon`
+
+Controllers: `sv`
+
+Returns: `DsoRules_ReceiveSvRewardCouponResult`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| sv | Party |  |
+| openRoundCid | ContractId OpenMiningRound |  |
+| rewardStateCid | ContractId SvRewardState |  |
+| beneficiaries | [(Party, Int)] |  |
+
+<a id="type-splice-dsorules-dsorulesrequestelection-327"></a>
+
+#### Choice `DsoRules_RequestElection`
+
+Controllers: `requester`
+
+Returns: `DsoRules_RequestElectionResult`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| requester | Party |  |
+| reason | ElectionRequestReason |  |
+| ranking | [Party] |  |
+
+<a id="type-splice-dsorules-dsorulesrequestvote-27270"></a>
+
+#### Choice `DsoRules_RequestVote`
+
+Controllers: `requester`
+
+Returns: `DsoRules_RequestVoteResult`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| requester | Party |  |
+| action | ActionRequiringConfirmation |  |
+| reason | Reason |  |
+| voteRequestTimeout | Optional RelTime |  |
+| targetEffectiveAt | Optional Time |  |
+
+<a id="type-splice-dsorules-dsorulesrevokefeaturedappright-46223"></a>
+
+#### Choice `DsoRules_RevokeFeaturedAppRight`
+
+Controllers: `dso`
+
+Returns: `DsoRules_RevokeFeaturedAppRightResult`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| rightCid | ContractId FeaturedAppRight |  |
+
+<a id="type-splice-dsorules-dsorulessetconfig-76713"></a>
+
+#### Choice `DsoRules_SetConfig`
+
+Controllers: `dso`
+
+Returns: `DsoRules_SetConfigResult`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| newConfig | DsoRulesConfig |  |
+| baseConfig | Optional DsoRulesConfig |  |
+
+<a id="type-splice-dsorules-dsorulessetsynchronizernodeconfig-79561"></a>
+
+#### Choice `DsoRules_SetSynchronizerNodeConfig`
+
+Controllers: `sv`
+
+Returns: `DsoRules_SetSynchronizerNodeConfigResult`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| sv | Party |  |
+| synchronizerId | Text |  |
+| newNodeConfig | SynchronizerNodeConfig |  |
+| nodeStateCid | ContractId SvNodeState |  |
+
+<a id="type-splice-dsorules-dsorulesstartsvonboarding-74859"></a>
+
+#### Choice `DsoRules_StartSvOnboarding`
+
+Controllers: `sponsor`
+
+Returns: `DsoRules_StartSvOnboardingResult`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| candidateName | Text |  |
+| candidateParty | Party |  |
+| candidateParticipantId | Text |  |
+| token | Text |  |
+| sponsor | Party |  |
+
+<a id="type-splice-dsorules-dsorulessubmitstatusreport-89950"></a>
+
+#### Choice `DsoRules_SubmitStatusReport`
+
+Controllers: `sv`
+
+Returns: `DsoRules_SubmitStatusReportResult`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| sv | Party |  |
+| previousReportCid | ContractId SvStatusReport |  |
+| status | SvStatus |  |
+
+<a id="type-splice-dsorules-dsorulesterminatesubscription-67561"></a>
+
+#### Choice `DsoRules_TerminateSubscription`
+
+Controllers: `sv`
+
+Returns: `DsoRules_TerminateSubscriptionResult`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| ansEntryContextCid | ContractId AnsEntryContext |  |
+| terminatedSubscriptionCid | ContractId TerminatedSubscription |  |
+| sv | Optional Party |  |
+
+<a id="type-splice-dsorules-dsorulesupdateamuletpricevote-33547"></a>
+
+#### Choice `DsoRules_UpdateAmuletPriceVote`
+
+Controllers: `sv`
+
+Returns: `DsoRules_UpdateAmuletPriceVoteResult`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| sv | Party |  |
+| voteCid | ContractId AmuletPriceVote |  |
+| amuletPrice | Decimal |  |
+
+<a id="type-splice-dsorules-dsorulesupdateexternalpartyconfigstates-33819"></a>
+
+#### Choice `DsoRules_UpdateExternalPartyConfigStates`
+
+Controllers: `sv`
+
+Returns: `DsoRules_UpdateExternalPartyConfigStatesResult`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| amuletRulesCid | ContractId AmuletRules |  |
+| externalPartyConfigStateCid0 | ContractId ExternalPartyConfigState |  |
+| externalPartyConfigStateCid1 | ContractId ExternalPartyConfigState |  |
+| openMiningRoundTriple | OpenMiningRoundTriple |  |
+| sv | Party |  |
+
+<a id="type-splice-dsorules-dsorulesupdatesvrewardweight-33689"></a>
+
+#### Choice `DsoRules_UpdateSvRewardWeight`
+
+Controllers: `dso`
+
+Returns: `DsoRules_UpdateSvRewardWeightResult`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| svParty | Party |  |
+| newRewardWeight | Int |  |
+
+<a id="type-splice-dsorules-electionrequest-92680"></a>
+
+### Template `ElectionRequest`
+
+__Deprecated__ in favor of delegateless automation.
+
+A request to elect a new DSO delegate.
+
+Signatories: `dso`
+
+Payload:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| dso | Party |  |
+| requester | Party |  |
+| epoch | Int |  |
+| reason | ElectionRequestReason |  |
+| ranking | [Party] |  |
+
+Choices:
+
+#### Choice `Archive`
+
+Controllers: `dso`
+
+Returns: `()`
+
+<a id="type-splice-dsorules-unallocatedunclaimedactivityrecord-15769"></a>
+
+### Template `UnallocatedUnclaimedActivityRecord`
+
+A governance-approved record representing intent to reward a beneficiary.
+Once sufficient `UnclaimedReward` contracts are allocated and archived,
+this contract results in the creation of a mintable `UnclaimedActivityRecord`.
+
+Signatories: `dso`
+
+Payload:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| dso | Party |  |
+| beneficiary | Party | The owner of the `Amulet` to be minted |
+| amount | Decimal | The amount of `Amulet` to be minted |
+| reason | Text | A reason to mint the `Amulet` |
+| expiresAt | Time | Selected timestamp defining the lifetime of the UnclaimedActivityRecord contract. |
+
+Choices:
+
+#### Choice `Archive`
+
+Controllers: `dso`
+
+Returns: `()`
+
+<a id="type-splice-dsorules-voterequest-12683"></a>
+
+### Template `VoteRequest`
+
+A request for the other svs to vote on the execution of an action requiring confirmation.
+We use this for implementing on-ledger governance actions triggered by SV operators in a uniform way.
+
+See the comments on `ActionRequiringConfirmation` for details.
+
+Version 3, which introduces effectivity in vote request.
+
+Signatories: `dso`
+
+Payload:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| dso | Party |  |
+| requester | Text | The SV that requested to execute the action. |
+| action | ActionRequiringConfirmation | The action whose confirmation is required. |
+| reason | Reason | The reason for requesting the execution of the action. Typically a reference to some off-ledger justification. |
+| voteBefore | Time | The time before which votes are accepted, and SHOULD be submitted. |
+| votes | Map Text Vote | The votes cast by current or previous SVs. These may be previous SVs in case<br/><br/>there was an SV change after the vote was requested. |
+| trackingCid | Optional (ContractId VoteRequest) | An optional tracking ContractId to be used for tracking the vote request through its updates.<br/><br/>This is always set to the first ContractId of the original vote request (None on creation). |
+| targetEffectiveAt | Optional Time | The time when the action is targeted to be made effective. If None, the action is immediately effective upon 2/3 votes in favor. |
+
+Choices:
+
+#### Choice `Archive`
+
+Controllers: `dso`
+
+Returns: `()`
+
+## Orphan Typeclass Instances
+
+- `instance HasCheckedFetch FeaturedAppRight ForDso`

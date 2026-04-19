@@ -1,0 +1,247 @@
+---
+title: "Splice.Util"
+description: "Reference documentation for Daml module Splice.Util."
+---
+
+<a id="module-splice-util-50740"></a>
+
+# Splice.Util
+
+Utility functions shared across all splice apps.
+
+## Module Snapshot
+
+<CardGroup cols={2}>
+<Card title="Lifecycle">
+Stable.
+</Card>
+<Card title="Notices">
+Status: `active`
+Introduced in: `0.5.18`
+Removed in: `-`
+Warnings: `0`
+Deprecations: `0`
+Deprecated since: `-`
+</Card>
+</CardGroup>
+
+## Typeclasses
+
+<a id="class-splice-util-hascheckedfetch-36555"></a>
+
+### `class (Show t, Eq cgid, Show cgid) => HasCheckedFetch t cgid`
+
+Contracts typically come in groups. For example, all contracts managed by a specific DSO party.
+
+We aim to always fetch with a specific contract group identifier to ensure that we do not mixup
+contracts from different groups.
+
+Note that we are not requiring `HasFetch` here, so that we can use this typeclass also for
+contract groups that are not templates, e.g., interface views.
+
+Methods:
+
+- `contractGroupId : t -> cgid`
+
+<a id="class-splice-util-patchable-41062"></a>
+
+### `class Patchable a`
+
+A type class for patching values. Used in particular for changing only a subset of
+fields in a config value.
+
+Methods:
+
+- `patch : a -> a -> a -> a`
+  For records, `patch new base current` should set all fields in `current` to their value in `new` iff their value was changed
+  in `new` compared to `base`. For other kinds of values that have field-like values
+  (e.g. Maps with keys) the implementation should match the one for records
+  by analogy.
+
+Instances:
+
+- `instance Patchable Decimal`
+- `instance Patchable Int`
+- `instance Patchable Text`
+- `instance (Ord k, Patchable v) => Patchable (Map k v)`
+- `instance Patchable Party`
+- `instance Patchable Time`
+- `instance Patchable a => Patchable (Optional a)`
+- `instance (Patchable a, Ord a) => Patchable (Set a)`
+- `instance Patchable RelTime`
+
+## Functions
+
+<a id="function-splice-util-requirematchingcontract-54053"></a>
+
+### `requireMatchingContract`
+
+```daml
+requireMatchingContract : (Eq t, Show t, HasFetch t) => ContractId t -> t -> Update ()
+```
+
+Require that a contract-id refers to a specific contract.
+
+<a id="function-splice-util-require-11486"></a>
+
+### `require`
+
+```daml
+require : CanAssert m => Text -> Bool -> m ()
+```
+
+Check whether a required condition is true. If it's not, abort the
+transaction with a message saying that the requirement was not met.
+
+<a id="function-splice-util-fetchchecked-58913"></a>
+
+### `fetchChecked`
+
+```daml
+fetchChecked : (HasFetch t, HasCheckedFetch t cgid) => cgid -> ContractId t -> Update t
+```
+
+Fetch a contract that is part of a specific contract group.
+
+The group is typically chosen by the caller to match its own group, or a more specific group.
+
+<a id="function-splice-util-fetchcheckedinterface-8937"></a>
+
+### `fetchCheckedInterface`
+
+```daml
+fetchCheckedInterface : (HasFetch i, HasInterfaceView i v, HasCheckedFetch v cgid) => cgid -> ContractId i -> Update i
+```
+
+Fetch a contract that is part of a specific contract group defined by its interface view.
+
+The group is typically chosen by the caller to match its own group, or a more specific group.
+
+<a id="function-splice-util-fetchandarchive-96960"></a>
+
+### `fetchAndArchive`
+
+```daml
+fetchAndArchive : (HasFetch t, HasCheckedFetch t cgid, HasArchive t) => cgid -> ContractId t -> Update t
+```
+
+Fetch and archive a contract in one go.
+
+Use this when implementing choices that mutate another contract by
+fetching, archiving, and then creating the updated contract.
+
+<a id="function-splice-util-fetchreferencedata-72475"></a>
+
+### `fetchReferenceData`
+
+```daml
+fetchReferenceData : (HasFetch t, HasCheckedFetch t cgid) => cgid -> ContractId t -> Update t
+```
+
+Fetch a contract that serves as reference data.
+
+Use this whenever you need to fetch a contract that you do not intend to mutate.
+
+<a id="function-splice-util-fetchbutarchivelater-86159"></a>
+
+### `fetchButArchiveLater`
+
+```daml
+fetchButArchiveLater : (HasFetch t, HasCheckedFetch t cgid) => cgid -> ContractId t -> Update t
+```
+
+Fetch a contract that is not reference data, and should be archived later in some cases.
+
+Prefer `fetchAndArchive` over this function, as it avoids forgetting to archive the contract.
+
+<a id="function-splice-util-fetchpublicreferencedata-76996"></a>
+
+### `fetchPublicReferenceData`
+
+```daml
+fetchPublicReferenceData : (HasCheckedFetch t cgid, HasExercise t ch t) => cgid -> ContractId t -> ch -> Update t
+```
+
+Fetch a contract that offers a choice anybody to be read as reference data.
+
+<a id="function-splice-util-fetchuncheckedandarchive-65397"></a>
+
+### `fetchUncheckedAndArchive`
+
+```daml
+fetchUncheckedAndArchive : (HasFetch b, HasArchive b) => ContractId b -> Update b
+```
+
+Fetch and archive a contract in one go.
+
+Use this when implementing choices that mutate another contract by
+fetching, archiving, and then creating the updated contract.
+
+<a id="function-splice-util-fetchuncheckedreferencedata-5520"></a>
+
+### `fetchUncheckedReferenceData`
+
+```daml
+fetchUncheckedReferenceData : HasFetch t => ContractId t -> Update t
+```
+
+Fetch a contract that serves as reference data.
+
+Use this whenever you need to fetch a contract that you do not intend to mutate.
+
+<a id="function-splice-util-fetchuncheckedbutarchivelater-82900"></a>
+
+### `fetchUncheckedButArchiveLater`
+
+```daml
+fetchUncheckedButArchiveLater : HasFetch t => ContractId t -> Update t
+```
+
+Fetch a contract that is not reference data, and should be archived later in some cases.
+
+Prefer `fetchAndArchive` over this function, as it avoids forgetting to archive the contract.
+
+<a id="function-splice-util-potentiallyunsafearchive-47027"></a>
+
+### `potentiallyUnsafeArchive`
+
+```daml
+potentiallyUnsafeArchive : HasArchive t => ContractId t -> Update ()
+```
+
+A more appropriately named version of `archive`.
+
+Please justify all its uses, and where possible prefer `fetchAndArchive`
+so that the contract group identifier is surely performed.
+
+<a id="function-splice-util-patchscalar-11117"></a>
+
+### `patchScalar`
+
+```daml
+patchScalar : Eq a => a -> a -> a -> a
+```
+
+<a id="function-splice-util-patchlistasscalar-47719"></a>
+
+### `patchListAsScalar`
+
+```daml
+patchListAsScalar : Eq a => [a] -> [a] -> [a] -> [a]
+```
+
+<a id="function-splice-util-patchlistasset-9274"></a>
+
+### `patchListAsSet`
+
+```daml
+patchListAsSet : (Patchable a, Ord a) => [a] -> [a] -> [a] -> [a]
+```
+
+<a id="function-splice-util-deprecatedchoice-19928"></a>
+
+### `deprecatedChoice`
+
+```daml
+deprecatedChoice : Text -> Text -> Text -> Update a
+```

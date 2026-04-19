@@ -1,0 +1,140 @@
+---
+title: "Splice.ValidatorOnboarding"
+description: "Reference documentation for Daml module Splice.ValidatorOnboarding."
+---
+
+<a id="module-splice-validatoronboarding-49132"></a>
+
+# Splice.ValidatorOnboarding
+
+## Module Snapshot
+
+<CardGroup cols={2}>
+<Card title="Lifecycle">
+Stable.
+</Card>
+<Card title="Notices">
+Status: `active`
+Introduced in: `0.5.18`
+Removed in: `-`
+Warnings: `0`
+Deprecations: `0`
+Deprecated since: `-`
+</Card>
+</CardGroup>
+
+## Data Types
+
+<a id="type-splice-validatoronboarding-validatoronboardingexpireresult-28676"></a>
+
+### `data ValidatorOnboarding_ExpireResult`
+
+Constructors:
+
+<a id="constr-splice-validatoronboarding-validatoronboardingexpireresult-66123"></a>
+- `ValidatorOnboarding_ExpireResult`
+
+Instances:
+
+- `instance HasExercise ValidatorOnboarding ValidatorOnboarding_Expire ValidatorOnboarding_ExpireResult`
+- `instance HasFromAnyChoice ValidatorOnboarding ValidatorOnboarding_Expire ValidatorOnboarding_ExpireResult`
+- `instance HasToAnyChoice ValidatorOnboarding ValidatorOnboarding_Expire ValidatorOnboarding_ExpireResult`
+
+<a id="type-splice-validatoronboarding-validatoronboardingmatchresult-68567"></a>
+
+### `data ValidatorOnboarding_MatchResult`
+
+Constructors:
+
+<a id="constr-splice-validatoronboarding-validatoronboardingmatchresult-91618"></a>
+- `ValidatorOnboarding_MatchResult`
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| usedSecret | ContractId UsedSecret |  |
+
+Instances:
+
+- `instance GetField usedSecret ValidatorOnboarding_MatchResult (ContractId UsedSecret)`
+- `instance SetField usedSecret ValidatorOnboarding_MatchResult (ContractId UsedSecret)`
+- `instance HasExercise ValidatorOnboarding ValidatorOnboarding_Match ValidatorOnboarding_MatchResult`
+- `instance HasFromAnyChoice ValidatorOnboarding ValidatorOnboarding_Match ValidatorOnboarding_MatchResult`
+- `instance HasToAnyChoice ValidatorOnboarding ValidatorOnboarding_Match ValidatorOnboarding_MatchResult`
+
+## Templates
+
+<a id="type-splice-validatoronboarding-usedsecret-49603"></a>
+
+### Template `UsedSecret`
+
+Template used by a sponsoring SV node for enforcing that an onboarding secret is used only once.
+
+Signatories: `sv`
+
+Payload:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| sv | Party | The SV node that sponsored the onboarding. |
+| secret | Text | An onboarding secret. |
+| validator | Party | The validator that onboarded using the secret. |
+
+Choices:
+
+#### Choice `Archive`
+
+Controllers: `sv`
+
+Returns: `()`
+
+<a id="type-splice-validatoronboarding-validatoronboarding-92198"></a>
+
+### Template `ValidatorOnboarding`
+
+Template used by a sponsoring SV node to keep track of the onboarding of a validator candidate.
+We use a secret for authenticating the candidate once he has set up his participant.
+The secret should be unique, contain at least 256-bits of entropy,
+and be communicated to the candidate via a secure off-ledger channel.
+Once the candidate has set up his participants, he contacts the SV node via an API call
+and presents his secret, which triggers the SV node to add him as a validator
+(as a separate on-ledger action for reducing coupling with the DSO governance contracts).
+
+Signatories: `sv`
+
+Payload:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| sv | Party | The SV node sponsoring this onboarding. |
+| candidateSecret | Text | The unique secret given to the candidate. |
+| expiresAt | Time | Can be used by the SV for time-bounding the offer. |
+
+Choices:
+
+#### Choice `Archive`
+
+Controllers: `sv`
+
+Returns: `()`
+
+<a id="type-splice-validatoronboarding-validatoronboardingexpire-7877"></a>
+
+#### Choice `ValidatorOnboarding_Expire`
+
+Controllers: `sv`
+
+Returns: `ValidatorOnboarding_ExpireResult`
+
+<a id="type-splice-validatoronboarding-validatoronboardingmatch-2118"></a>
+
+#### Choice `ValidatorOnboarding_Match`
+
+Controllers: `sv`
+
+Returns: `ValidatorOnboarding_MatchResult`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| providedSecret | Text |  |
+| validator | Party |  |

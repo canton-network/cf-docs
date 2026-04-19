@@ -1,0 +1,205 @@
+---
+title: "Splice.Testing.Apps.TradingApp"
+description: "Reference documentation for Daml module Splice.Testing.Apps.TradingApp."
+---
+
+<a id="module-splice-testing-apps-tradingapp-19891"></a>
+
+# Splice.Testing.Apps.TradingApp
+
+An example of how to build an OTC trading app for multi-leg standard token trades.
+
+Used as part of the testing infrastructure to test the DvP workflows based on the token standard.
+
+## Module Snapshot
+
+<CardGroup cols={2}>
+<Card title="Lifecycle">
+Stable.
+</Card>
+<Card title="Notices">
+Status: `active`
+Introduced in: `0.5.18`
+Removed in: `-`
+Warnings: `0`
+Deprecations: `0`
+Deprecated since: `-`
+</Card>
+</CardGroup>
+
+## Functions
+
+<a id="function-splice-testing-apps-tradingapp-tradeallocations-16894"></a>
+
+### `tradeAllocations`
+
+```daml
+tradeAllocations : SettlementInfo -> TextMap TransferLeg -> TextMap AllocationSpecification
+```
+
+<a id="function-splice-testing-apps-tradingapp-tradingparties-11886"></a>
+
+### `tradingParties`
+
+```daml
+tradingParties : TextMap TransferLeg -> Set Party
+```
+
+<a id="function-splice-testing-apps-tradingapp-require-88127"></a>
+
+### `require`
+
+```daml
+require : CanAssert m => Text -> Bool -> m ()
+```
+
+Check whether a required condition is true. If it's not, abort the
+transaction with a message saying that the requirement was not met.
+
+<a id="function-splice-testing-apps-tradingapp-maketraderef-67526"></a>
+
+### `makeTradeRef`
+
+```daml
+makeTradeRef : ContractId OTCTradeProposal -> Reference
+```
+
+<a id="function-splice-testing-apps-tradingapp-ziptextmaps-57279"></a>
+
+### `zipTextMaps`
+
+```daml
+zipTextMaps : TextMap a -> TextMap b -> TextMap (Optional a, Optional b)
+```
+
+<a id="function-splice-testing-apps-tradingapp-fortextmapwithkey-78275"></a>
+
+### `forTextMapWithKey`
+
+```daml
+forTextMapWithKey : Applicative f => TextMap a -> (Text -> a -> f b) -> f (TextMap b)
+```
+
+## Templates
+
+<a id="type-splice-testing-apps-tradingapp-otctrade-80775"></a>
+
+### Template `OTCTrade`
+
+Signatories: `venue`, `tradingParties transferLegs`
+
+Payload:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| venue | Party |  |
+| transferLegs | TextMap TransferLeg |  |
+| tradeCid | ContractId OTCTradeProposal |  |
+| createdAt | Time |  |
+| prepareUntil | Time |  |
+| settleBefore | Time |  |
+
+Interface Instances:
+- `AllocationRequest` for `OTCTrade`
+
+Choices:
+
+#### Choice `Archive`
+
+Controllers: `venue`, `tradingParties transferLegs`
+
+Returns: `()`
+
+<a id="type-splice-testing-apps-tradingapp-otctradecancel-34465"></a>
+
+#### Choice `OTCTrade_Cancel`
+
+Controllers: `venue`
+
+Returns: `TextMap (Optional Allocation_CancelResult)`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| allocationsWithContext | TextMap (ContractId Allocation, ExtraArgs) |  |
+
+<a id="type-splice-testing-apps-tradingapp-otctradesettle-9210"></a>
+
+#### Choice `OTCTrade_Settle`
+
+Controllers: `venue`
+
+Returns: `TextMap Allocation_ExecuteTransferResult`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| allocationsWithContext | TextMap (ContractId Allocation, ExtraArgs) |  |
+
+<a id="type-splice-testing-apps-tradingapp-otctradeproposal-78093"></a>
+
+### Template `OTCTradeProposal`
+
+Signatories: `approvers`
+
+Payload:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| venue | Party |  |
+| tradeCid | Optional (ContractId OTCTradeProposal) |  |
+| transferLegs | TextMap TransferLeg |  |
+| approvers | [Party] | Parties that have approved the proposal |
+
+Choices:
+
+#### Choice `Archive`
+
+Controllers: `approvers`
+
+Returns: `()`
+
+<a id="type-splice-testing-apps-tradingapp-otctradeproposalaccept-97549"></a>
+
+#### Choice `OTCTradeProposal_Accept`
+
+Controllers: `approver`
+
+Returns: `ContractId OTCTradeProposal`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| approver | Party |  |
+
+<a id="type-splice-testing-apps-tradingapp-otctradeproposalinitiatesettlement-54617"></a>
+
+#### Choice `OTCTradeProposal_InitiateSettlement`
+
+Controllers: `venue`
+
+Returns: `ContractId OTCTrade`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| prepareUntil | Time |  |
+| settleBefore | Time |  |
+
+<a id="type-splice-testing-apps-tradingapp-otctradeproposalreject-13148"></a>
+
+#### Choice `OTCTradeProposal_Reject`
+
+Controllers: `trader`
+
+Returns: `()`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| trader | Party |  |

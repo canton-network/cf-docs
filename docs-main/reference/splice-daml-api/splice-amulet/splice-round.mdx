@@ -1,0 +1,181 @@
+---
+title: "Splice.Round"
+description: "Reference documentation for Daml module Splice.Round."
+---
+
+<a id="module-splice-round-72925"></a>
+
+# Splice.Round
+
+## Module Snapshot
+
+<CardGroup cols={2}>
+<Card title="Lifecycle">
+Stable.
+</Card>
+<Card title="Notices">
+Status: `active`
+Introduced in: `0.5.18`
+Removed in: `-`
+Warnings: `0`
+Deprecations: `0`
+Deprecated since: `-`
+</Card>
+</CardGroup>
+
+## Functions
+
+<a id="function-splice-round-getissuingminingroundissuancepervalidatorfaucetcoupon-99508"></a>
+
+### `getIssuingMiningRoundIssuancePerValidatorFaucetCoupon`
+
+```daml
+getIssuingMiningRoundIssuancePerValidatorFaucetCoupon : IssuingMiningRound -> Decimal
+```
+
+Accessor with defaulting for the optional issuancePerValidatorFaucetCoupon field
+
+<a id="function-splice-round-getclosedminingroundissuancepervalidatorfaucetcoupon-25673"></a>
+
+### `getClosedMiningRoundIssuancePerValidatorFaucetCoupon`
+
+```daml
+getClosedMiningRoundIssuancePerValidatorFaucetCoupon : ClosedMiningRound -> Decimal
+```
+
+Accessor with defaulting for the optional issuancePerValidatorFaucetCoupon field
+
+## Templates
+
+<a id="type-splice-round-closedmininground-12506"></a>
+
+### Template `ClosedMiningRound`
+
+A record that a specific mining round has been closed, which can
+be used to archive expired rewards.
+
+Signatories: `dso`
+
+Payload:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| dso | Party |  |
+| round | Round |  |
+| issuancePerValidatorRewardCoupon | Decimal |  |
+| issuancePerFeaturedAppRewardCoupon | Decimal |  |
+| issuancePerUnfeaturedAppRewardCoupon | Decimal |  |
+| issuancePerSvRewardCoupon | Decimal |  |
+| optIssuancePerValidatorFaucetCoupon | Optional Decimal | Introduced in CIP-3 |
+
+Choices:
+
+#### Choice `Archive`
+
+Controllers: `dso`
+
+Returns: `()`
+
+<a id="type-splice-round-issuingmininground-98097"></a>
+
+### Template `IssuingMiningRound`
+
+A mining round for whose rewards amulets are being issued.
+
+Signatories: `dso`
+
+Payload:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| dso | Party |  |
+| round | Round |  |
+| issuancePerValidatorRewardCoupon | Decimal |  |
+| issuancePerFeaturedAppRewardCoupon | Decimal |  |
+| issuancePerUnfeaturedAppRewardCoupon | Decimal |  |
+| issuancePerSvRewardCoupon | Decimal |  |
+| opensAt | Time | Time after which rewards from this mining round can be collected |
+| targetClosesAt | Time | Time when this round is expected to close during standard DSO. The round SHOULD NOT be archived before this time. |
+| optIssuancePerValidatorFaucetCoupon | Optional Decimal | Introduced in CIP-3 |
+
+Choices:
+
+#### Choice `Archive`
+
+Controllers: `dso`
+
+Returns: `()`
+
+<a id="type-splice-round-openmininground-90060"></a>
+
+### Template `OpenMiningRound`
+
+A mining round for which new rewards can be registered.
+Note that multiple mining rounds can be open at the same time to give some
+time for propagating a new open round, while still registering rewards
+against the previous open round.
+
+Signatories: `dso`
+
+Payload:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| dso | Party |  |
+| round | Round |  |
+| amuletPrice | Decimal |  |
+| opensAt | Time | Time after which transfers can use this mining round |
+| targetClosesAt | Time | Time when this round is expected to be closed as part of standard DSO. The round SHOULD NOT be archived before this time. |
+| issuingFor | RelTime | Timepoint on the issuance curve that was used to determing the issuance configuration for this round. |
+| transferConfigUsd | TransferConfig USD | Configuration determining the fees and limits in USD for Amulet transfers |
+| issuanceConfig | IssuanceConfig | Configuration for issuance of this round. |
+| tickDuration | RelTime | Duration of a tick, which is the duration of half a round. |
+
+Choices:
+
+#### Choice `Archive`
+
+Controllers: `dso`
+
+Returns: `()`
+
+<a id="type-splice-round-openminingroundfetch-48019"></a>
+
+#### Choice `OpenMiningRound_Fetch`
+
+Controllers: `p`
+
+Returns: `OpenMiningRound`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| p | Party |  |
+
+<a id="type-splice-round-summarizingmininground-36579"></a>
+
+### Template `SummarizingMiningRound`
+
+A mining round for which the total sum of registered rewards
+is being computed. Rewards can no longer be registered aginst such a round.
+
+Signatories: `dso`
+
+Payload:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| dso | Party |  |
+| round | Round |  |
+| amuletPrice | Decimal |  |
+| issuanceConfig | IssuanceConfig |  |
+| tickDuration | RelTime |  |
+
+Choices:
+
+#### Choice `Archive`
+
+Controllers: `dso`
+
+Returns: `()`

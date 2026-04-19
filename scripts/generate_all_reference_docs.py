@@ -21,6 +21,7 @@ SCRIPT_PATHS = [
     REPO_ROOT / "scripts" / "generate_splice_scan_openapi_reference.py",
     REPO_ROOT / "scripts" / "generate_splice_validator_openapi_reference.py",
     REPO_ROOT / "scripts" / "generate_splice_token_standard_openapi_reference.py",
+    REPO_ROOT / "scripts" / "generate_splice_daml_api_reference.py",
     REPO_ROOT / "scripts" / "generate_typescript_bindings_reference.py",
 ]
 
