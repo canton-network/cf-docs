@@ -652,9 +652,36 @@ def render_artifact_toc_rows(package_reference_lines: list[str], *, versions: li
 
 
 def rewrite_artifact_page_layout(text: str, *, artifact_entry: dict[str, Any]) -> str:
+    language = str(artifact_entry.get("language", ""))
+    title = LANGUAGE_LABELS.get(language, language.title())
+    description = ARTIFACT_PAGE_DESCRIPTIONS.get(
+        language,
+        "Generated package reference and version summary from local JVM docs snapshots",
+    )
     _, body = split_frontmatter(text)
-    intro_lines, sections = extract_markdown_sections(body)
+    normalized_frontmatter = "\n".join(
+        [
+            "---",
+            f'title: "{title}"',
+            f'description: "{description}"',
+            "---",
+            "",
+        ]
+    )
+    normalized_body = body.lstrip("\n")
+    intro_lines, sections = extract_markdown_sections(normalized_body)
 
+    # Current x2mdx JVM artifact pages already have the desired section layout.
+    # Keep that body intact and only normalize the published title/description.
+    if {
+        "Table of Contents",
+        "Version Change Summary",
+        "Reference",
+    }.issubset(sections.keys()):
+        return normalized_frontmatter + normalized_body.rstrip() + "\n"
+
+    # Older x2mdx revisions emitted different section names. Preserve compatibility
+    # with those raw pages by reshaping them into the current published layout.
     toc_lines = trim_blank_lines(sections.get("Package Reference", []))
     artifact_lines = trim_blank_lines(sections.get("Artifact", []))
     lifecycle_lines = trim_blank_lines(sections.get("Lifecycle Summary", []))
@@ -662,19 +689,8 @@ def rewrite_artifact_page_layout(text: str, *, artifact_entry: dict[str, Any]) -
     deprecation_lines = trim_blank_lines(sections.get("Deprecation Notes", []))
     failure_lines = trim_blank_lines(sections.get("Input Failures", []))
 
-    language = str(artifact_entry.get("language", ""))
-    title = LANGUAGE_LABELS.get(language, language.title())
-    description = ARTIFACT_PAGE_DESCRIPTIONS.get(
-        language,
-        "Generated package reference and version summary from local JVM docs snapshots",
-    )
-
     output_lines = [
-        "---",
-        f'title: "{title}"',
-        f'description: "{description}"',
-        "---",
-        "",
+        normalized_frontmatter.rstrip(),
     ]
 
     intro_lines = trim_blank_lines(intro_lines)
