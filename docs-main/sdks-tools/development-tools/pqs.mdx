@@ -10,11 +10,11 @@ import DamlDocsSdksToolsDevelopmentToolsPqsL96 from "/snippets/daml-docs/sdks-to
 import DamlDocsSdksToolsDevelopmentToolsPqsL108 from "/snippets/daml-docs/sdks-tools_development-tools_pqs_L108.mdx";
 
 
-PQS (Participant Query Store) subscribes to a validator's transaction stream and projects contract data into a PostgreSQL database. Your backend queries this database with standard SQL, enabling filtered queries, aggregations, joins, and full-text search that would be impractical through the Ledger API alone.
+PQS (Participant Query Store) subscribes to a validator's transaction stream and projects contract data into a PostgreSQL database. Your backend queries this database with standard SQL, enabling: filtered queries, aggregations, joins, and full-text search that would be impractical through the Ledger API alone.
 
 ## How PQS Works
 
-PQS runs as a sidecar service alongside a validator. It connects to the validator's transaction stream and maintains PostgreSQL tables that reflect the current ledger state.
+PQS runs as a sidecar service alongside a validator. It connects to the validator's transaction stream and maintains a PostgreSQL database that reflect the current ledger state and historical data.
 
 ```mermaid
 flowchart LR
@@ -23,19 +23,19 @@ flowchart LR
     BACKEND[Your Backend] -->|SQL queries| PG
 ```
 
-As contracts are created on the ledger, PQS inserts corresponding rows. When contracts are archived, PQS updates or removes the rows. Your SQL queries always reflect current ledger state, with a small propagation delay (typically milliseconds).
+As the validator emits update events, PQS inserts corresponding entries in the database. This is for both contract create and archive events, along with exercise actions. Your SQL queries always reflect current ledger state, with a small propagation delay (typically milliseconds).
 
 ## When to Use PQS
 
 PQS is the right choice when you need:
 
-- **Filtered queries across many contracts** -- "All licenses expiring this month" or "all assets owned by this party"
+- **Filtered queries across one or more contracts** -- "All licenses expiring this month" or "all assets owned by this party"
 - **Aggregations and reporting** -- Sums, counts, averages across contract data
 - **Complex joins** -- Combining data from multiple template types
 - **Full-text search** -- Searching contract fields by keyword
 - **A read path that does not load the Ledger API** -- PQS queries hit PostgreSQL, not the participant
 
-For simple queries ("get this specific contract by ID"), the Ledger API's active contract set query works fine without PQS.
+For simple queries that are specific ("get this specific contract by ID"), the Ledger API's active contract set query works fine without PQS.
 
 ## Setup
 
@@ -51,7 +51,7 @@ For a standalone deployment:
 
 1. Provision a PostgreSQL database (version 14 or later recommended)
 2. Configure PQS with the participant node's Ledger API address and authentication credentials
-3. Start the PQS service, which creates its schema on first run and begins streaming
+3. Start the PQS service, which downloads packages from the validator that it uses to create its schema. This is automatically done when PQS starts and when it detects a new template.
 
 PQS configuration includes:
 
