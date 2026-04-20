@@ -8,11 +8,15 @@ import re
 import shutil
 import subprocess
 import sys
+import tarfile
 import urllib.error
 import urllib.request
+import zipfile
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
+
+import reference_nav
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -37,11 +41,15 @@ LANGUAGE_DIRS = {
     "scala": "scala",
     "java": "java",
 }
+ARTIFACT_PAGE_DESCRIPTIONS = {
+    "scala": "Generated package reference and version summary from local Scaladoc snapshots",
+    "java": "Generated package reference and version summary from local Javadoc snapshots",
+}
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Download configured JavaDoc/ScalaDoc jars, write a local x2mdx manifest, and generate the Ledger bindings reference pages."
+        description="Download configured JVM doc sources, write a local x2mdx manifest, and generate the Ledger bindings reference pages."
     )
     parser.add_argument(
         "--source-config",
@@ -51,7 +59,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--cache-dir",
         default=str(DEFAULT_CACHE_DIR),
-        help="Directory used to cache downloaded Javadoc/Scaladoc jars.",
+        help="Directory used to cache downloaded JVM doc artifacts and generated jars.",
     )
     parser.add_argument(
         "--manifest-out",
@@ -75,7 +83,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--nav-dropdown",
-        default="Reference",
+        default="API Reference",
         help="Top-level Mintlify dropdown to update with the generated JVM bindings section.",
     )
     parser.add_argument(
@@ -95,11 +103,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--force-download",
         action="store_true",
-        help="Re-download jars even if they already exist in the local cache.",
+        help="Re-download source artifacts even if they already exist in the local cache.",
     )
     parser.add_argument(
         "--source-name",
-        default="Published DAML Java/Scala bindings Javadoc/Scaladoc jars",
+        default="Published JVM docs snapshots",
         help="Source label embedded in generated content.",
     )
     parser.add_argument(
@@ -193,8 +201,10 @@ def build_jvm_nav_group(
     publish_root: Path,
     docs_json_path: Path,
     group_label: str,
+    overview_file: Path,
 ) -> tuple[dict[str, Any], set[str]]:
     language_pages: dict[str, list[tuple[str, str]]] = defaultdict(list)
+    language_index_refs: dict[str, str] = {}
     generated_refs: set[str] = set()
 
     for language, directory_name in LANGUAGE_DIRS.items():
@@ -203,7 +213,9 @@ def build_jvm_nav_group(
             continue
         artifact_index = language_dir / "index.mdx"
         if artifact_index.exists():
-            generated_refs.add(docs_json_page_ref(artifact_index, docs_json_path))
+            index_ref = docs_json_page_ref(artifact_index, docs_json_path)
+            language_index_refs[language] = index_ref
+            generated_refs.add(index_ref)
         for package_page in sorted(language_dir.glob("*.mdx")):
             if package_page.name == "index.mdx":
                 continue
@@ -217,22 +229,29 @@ def build_jvm_nav_group(
             continue
         page_entries.sort(key=lambda item: (item[0].lower(), item[0]))
         label = LANGUAGE_LABELS.get(language, language.title())
+        pages: list[Any] = []
+        language_index_ref = language_index_refs.get(language)
+        if language_index_ref is not None:
+            pages.append(language_index_ref)
+        pages.extend(page_ref for _, page_ref in page_entries)
         language_groups.append(
             (
                 LANGUAGE_ORDER.get(language, 99),
                 label,
                 {
                     "group": label,
-                    "pages": [page_ref for _, page_ref in page_entries],
+                    "pages": pages,
                 },
             )
         )
 
     language_groups.sort(key=lambda item: (item[0], item[1]))
+    group_pages: list[Any] = [docs_json_page_ref(overview_file, docs_json_path)]
+    group_pages.extend(group for _, _, group in language_groups)
     return (
         {
             "group": group_label,
-            "pages": [group for _, _, group in language_groups],
+            "pages": group_pages,
         },
         generated_refs,
     )
@@ -270,6 +289,7 @@ def update_docs_navigation(
         publish_root=publish_root,
         docs_json_path=docs_json_path,
         group_label=group_label,
+        overview_file=overview_file,
     )
     generated_refs.add(docs_json_page_ref(overview_file, docs_json_path))
     dropdown["pages"] = prune_nav_items(
@@ -294,7 +314,7 @@ def maven_javadoc_url(repo_base: str, group: str, artifact: str, version: str) -
 def download_file(url: str, target: Path, *, force: bool) -> None:
     target.parent.mkdir(parents=True, exist_ok=True)
     if target.exists() and not force:
-        print(f"Using cached jar: {target}")
+        print(f"Using cached artifact: {target}")
         return
 
     print(f"Downloading: {url}")
@@ -306,6 +326,70 @@ def download_file(url: str, target: Path, *, force: bool) -> None:
         raise RuntimeError(f"HTTP {exc.code} while downloading {url}") from exc
     except urllib.error.URLError as exc:
         raise RuntimeError(f"Network error while downloading {url}: {exc}") from exc
+
+
+def normalize_archive_member_name(name: str) -> str:
+    parts = [part for part in Path(name).parts if part not in {"", "."}]
+    return Path(*parts).as_posix() if parts else ""
+
+
+def repackage_tarball_as_jar(source_tarball: Path, target_jar: Path) -> None:
+    target_jar.parent.mkdir(parents=True, exist_ok=True)
+    with tarfile.open(source_tarball, "r:gz") as tar, zipfile.ZipFile(
+        target_jar,
+        "w",
+        compression=zipfile.ZIP_DEFLATED,
+    ) as archive:
+        for member in tar.getmembers():
+            if not member.isfile():
+                continue
+            arcname = normalize_archive_member_name(member.name)
+            if not arcname:
+                continue
+            extracted = tar.extractfile(member)
+            if extracted is None:
+                continue
+            with extracted:
+                archive.writestr(arcname, extracted.read())
+
+
+def resolve_cached_jar(
+    *,
+    repo_base: str,
+    cache_dir: Path,
+    group: str,
+    artifact: str,
+    version: str,
+    source_kind: str,
+    url_template: str | None,
+    force_download: bool,
+) -> Path:
+    if source_kind == "maven-javadoc-jar":
+        jar_target = cache_dir / "jars" / group / artifact / version / f"{artifact}-{version}-javadoc.jar"
+        download_file(
+            maven_javadoc_url(repo_base, group, artifact, version),
+            jar_target,
+            force=force_download,
+        )
+        return jar_target
+
+    if source_kind == "canton-scaladoc-tarball":
+        if not isinstance(url_template, str) or "{version}" not in url_template:
+            raise ValueError(
+                f"Artifact {group}:{artifact} uses source_kind={source_kind!r} but does not provide a valid url_template"
+            )
+        archive_url = url_template.format(version=version)
+        archive_target = cache_dir / "archives" / artifact / version / Path(archive_url).name
+        jar_target = cache_dir / "jars" / group / artifact / version / f"{artifact}-{version}-scaladoc.jar"
+        download_file(archive_url, archive_target, force=force_download)
+        if force_download or not jar_target.exists():
+            print(f"Packaging scaladoc archive as jar: {jar_target}")
+            repackage_tarball_as_jar(archive_target, jar_target)
+        else:
+            print(f"Using cached jar: {jar_target}")
+        return jar_target
+
+    raise ValueError(f"Unsupported source_kind for {group}:{artifact}: {source_kind}")
 
 
 def build_manifest(
@@ -332,6 +416,8 @@ def build_manifest(
         language = artifact_entry.get("language")
         versions = artifact_entry.get("versions")
         include_prefixes = artifact_entry.get("include_prefixes") or []
+        source_kind = artifact_entry.get("source_kind") or "maven-javadoc-jar"
+        url_template = artifact_entry.get("url_template")
         if not isinstance(group, str) or not group:
             continue
         if not isinstance(artifact, str) or not artifact:
@@ -348,11 +434,15 @@ def build_manifest(
             if include_versions is not None and version not in include_versions:
                 continue
 
-            jar_target = cache_dir / "jars" / group / artifact / version / f"{artifact}-{version}-javadoc.jar"
-            download_file(
-                maven_javadoc_url(repo_base, group, artifact, version),
-                jar_target,
-                force=force_download,
+            jar_target = resolve_cached_jar(
+                repo_base=repo_base,
+                cache_dir=cache_dir,
+                group=group,
+                artifact=artifact,
+                version=version,
+                source_kind=str(source_kind),
+                url_template=str(url_template) if isinstance(url_template, str) else None,
+                force_download=force_download,
             )
             version_entries.append(
                 {
@@ -420,10 +510,278 @@ def rewrite_markdown_links(text: str, replacements: list[tuple[str, str]]) -> st
     return text
 
 
-def copy_rewritten_page(source: Path, target: Path, replacements: list[tuple[str, str]]) -> None:
+def split_frontmatter(text: str) -> tuple[list[str], str]:
+    lines = text.splitlines()
+    if len(lines) >= 3 and lines[0] == "---":
+        try:
+            closing_index = lines[1:].index("---") + 1
+        except ValueError as exc:
+            raise ValueError("Unterminated frontmatter in generated page") from exc
+        return lines[1:closing_index], "\n".join(lines[closing_index + 1 :]).lstrip("\n")
+    return [], text
+
+
+def extract_markdown_sections(text: str) -> tuple[list[str], dict[str, list[str]]]:
+    intro: list[str] = []
+    sections: dict[str, list[str]] = {}
+    current_heading: str | None = None
+
+    for line in text.splitlines():
+        if line.startswith("## "):
+            current_heading = line[3:].strip()
+            sections[current_heading] = []
+            continue
+        if current_heading is None:
+            intro.append(line)
+            continue
+        sections[current_heading].append(line)
+    return intro, sections
+
+
+def trim_blank_lines(lines: list[str]) -> list[str]:
+    start = 0
+    end = len(lines)
+    while start < end and not lines[start].strip():
+        start += 1
+    while end > start and not lines[end - 1].strip():
+        end -= 1
+    return lines[start:end]
+
+
+def strip_inline_code(text: str) -> str:
+    stripped = text.strip()
+    if len(stripped) >= 2 and stripped.startswith("`") and stripped.endswith("`"):
+        return stripped[1:-1]
+    return stripped
+
+
+def parse_markdown_table(lines: list[str]) -> tuple[list[str], list[list[str]]]:
+    table_lines = [line.strip() for line in lines if line.strip().startswith("|")]
+    if len(table_lines) < 2:
+        return [], []
+
+    def split_row(line: str) -> list[str]:
+        return [cell.strip() for cell in line.strip().strip("|").split("|")]
+
+    headers = split_row(table_lines[0])
+    rows = [split_row(line) for line in table_lines[2:]]
+    rows = [row for row in rows if len(row) == len(headers)]
+    return headers, rows
+
+
+def markdown_link_target(cell: str) -> str | None:
+    match = re.search(r"\(([^)]+)\)", cell)
+    if not match:
+        return None
+    return match.group(1).strip()
+
+
+def parse_int_cell(cell: str) -> int:
+    stripped = strip_inline_code(cell)
+    if not stripped or stripped == "-":
+        return 0
+    return int(stripped)
+
+
+def build_package_status_cell(*, versions: list[str], introduced: int, deprecated: int, removed: int) -> str:
+    if not versions:
+        return "-"
+    parts = [f"🟢 `{versions[0]}`"]
+    if introduced or deprecated or removed:
+        change_version = versions[-1]
+        if change_version:
+            parts.append(f"🔵 `{change_version}`")
+    return " ".join(parts)
+
+
+def build_package_summary(*, type_count: int, introduced: int, deprecated: int, removed: int) -> str:
+    type_label = "type" if type_count == 1 else "types"
+    changes: list[str] = []
+    if introduced:
+        changes.append(f"{introduced} introduced")
+    if deprecated:
+        changes.append(f"{deprecated} deprecated")
+    if removed:
+        changes.append(f"{removed} removed")
+    if changes:
+        return f"{type_count} {type_label}. Changes in range: {', '.join(changes)}."
+    return f"{type_count} {type_label}. No lifecycle changes in selected range."
+
+
+def extract_versions_from_artifact_lines(lines: list[str]) -> list[str]:
+    for line in lines:
+        match = re.match(r"^- Versions:\s+`([^`]+)`\s*$", line.strip())
+        if not match:
+            continue
+        return [part.strip() for part in match.group(1).split(",") if part.strip()]
+    return []
+
+
+def render_artifact_toc_rows(package_reference_lines: list[str], *, versions: list[str]) -> list[str]:
+    _, rows = parse_markdown_table(package_reference_lines)
+    output_rows: list[str] = []
+    for row in rows:
+        if len(row) != 6:
+            continue
+        link_cell, package_cell, types_cell, introduced_cell, deprecated_cell, removed_cell = row
+        link_target = markdown_link_target(link_cell)
+        package_name = strip_inline_code(package_cell)
+        type_count = parse_int_cell(types_cell)
+        introduced = parse_int_cell(introduced_cell)
+        deprecated = parse_int_cell(deprecated_cell)
+        removed = parse_int_cell(removed_cell)
+
+        if link_target:
+            name_cell = f"[`{package_name}`]({link_target})"
+        else:
+            name_cell = f"`{package_name}`"
+        status_cell = build_package_status_cell(
+            versions=versions,
+            introduced=introduced,
+            deprecated=deprecated,
+            removed=removed,
+        )
+        summary_cell = build_package_summary(
+            type_count=type_count,
+            introduced=introduced,
+            deprecated=deprecated,
+            removed=removed,
+        )
+        output_rows.append(f"| {name_cell} | {status_cell} | {summary_cell} |")
+    return output_rows
+
+
+def rewrite_artifact_page_layout(text: str, *, artifact_entry: dict[str, Any]) -> str:
+    language = str(artifact_entry.get("language", ""))
+    title = LANGUAGE_LABELS.get(language, language.title())
+    description = ARTIFACT_PAGE_DESCRIPTIONS.get(
+        language,
+        "Generated package reference and version summary from local JVM docs snapshots",
+    )
+    _, body = split_frontmatter(text)
+    normalized_frontmatter = "\n".join(
+        [
+            "---",
+            f'title: "{title}"',
+            f'description: "{description}"',
+            "---",
+            "",
+        ]
+    )
+    normalized_body = body.lstrip("\n")
+    intro_lines, sections = extract_markdown_sections(normalized_body)
+
+    # Current x2mdx JVM artifact pages already have the desired section layout.
+    # Keep that body intact and only normalize the published title/description.
+    if {
+        "Table of Contents",
+        "Version Change Summary",
+        "Reference",
+    }.issubset(sections.keys()):
+        return normalized_frontmatter + normalized_body.rstrip() + "\n"
+
+    # Older x2mdx revisions emitted different section names. Preserve compatibility
+    # with those raw pages by reshaping them into the current published layout.
+    toc_lines = trim_blank_lines(sections.get("Package Reference", []))
+    artifact_lines = trim_blank_lines(sections.get("Artifact", []))
+    lifecycle_lines = trim_blank_lines(sections.get("Lifecycle Summary", []))
+    changed_lines = trim_blank_lines(sections.get("Changed Symbols", []))
+    deprecation_lines = trim_blank_lines(sections.get("Deprecation Notes", []))
+    failure_lines = trim_blank_lines(sections.get("Input Failures", []))
+
+    output_lines = [
+        normalized_frontmatter.rstrip(),
+    ]
+
+    intro_lines = trim_blank_lines(intro_lines)
+    if intro_lines:
+        output_lines.extend(intro_lines)
+    else:
+        output_lines.append("Back to [overview](../ledger-api-jvm-bindings).")
+    output_lines.extend(["", "## Table of Contents", ""])
+
+    toc_versions = extract_versions_from_artifact_lines(artifact_lines)
+    if toc_lines:
+        output_lines.append("🟢 Active Since  🔵 Changed  🔴 Removed")
+        output_lines.extend(
+            [
+                "",
+                "| NAME | STATUS | SUMMARY |",
+                "| --- | --- | --- |",
+                *render_artifact_toc_rows(toc_lines, versions=toc_versions),
+            ]
+        )
+    else:
+        output_lines.append("No package-level symbols were found for this artifact.")
+
+    version_summary_lines = artifact_lines + lifecycle_lines
+    output_lines.extend(["", "## Version Change Summary", ""])
+    if version_summary_lines:
+        output_lines.extend(version_summary_lines)
+    else:
+        output_lines.append("No lifecycle metadata was generated for this artifact.")
+
+    output_lines.extend(["", "## Reference", "", "### Changed Symbols", ""])
+    if changed_lines:
+        output_lines.extend(changed_lines)
+    else:
+        output_lines.append("No lifecycle changes were detected in the configured version range.")
+
+    if deprecation_lines:
+        output_lines.extend(["", "### Deprecation Notes", ""])
+        output_lines.extend(deprecation_lines)
+
+    if failure_lines:
+        output_lines.extend(["", "### Input Failures", ""])
+        output_lines.extend(failure_lines)
+
+    return "\n".join(output_lines).rstrip() + "\n"
+
+
+def major_minor_version(version: str) -> str:
+    parts = version.split(".")
+    if len(parts) < 2:
+        raise ValueError(f"Expected semantic version with major.minor components, got: {version}")
+    return ".".join(parts[:2])
+
+
+def rewrite_upstream_docs_links(text: str, artifact_entry: dict[str, Any]) -> str:
+    template = artifact_entry.get("upstream_docs_base_url_template")
+    group = artifact_entry.get("group")
+    artifact = artifact_entry.get("artifact")
+    versions = artifact_entry.get("versions")
+    if not isinstance(template, str) or not template:
+        return text
+    if not isinstance(group, str) or not isinstance(artifact, str):
+        return text
+    if not isinstance(versions, list):
+        return text
+
+    for version in versions:
+        if not isinstance(version, str) or not version:
+            continue
+        old_prefix = f"https://javadoc.io/doc/{group}/{artifact}/{version}/"
+        new_prefix = template.format(version=version, major_minor=major_minor_version(version)).rstrip("/") + "/"
+        text = text.replace(old_prefix, new_prefix)
+    return text
+
+
+def copy_rewritten_page(
+    source: Path,
+    target: Path,
+    replacements: list[tuple[str, str]],
+    *,
+    artifact_entry: dict[str, Any] | None = None,
+    rewrite_artifact_layout: bool = False,
+) -> None:
     target.parent.mkdir(parents=True, exist_ok=True)
     text = source.read_text(encoding="utf-8")
-    target.write_text(rewrite_markdown_links(text, replacements), encoding="utf-8")
+    text = rewrite_markdown_links(text, replacements)
+    if artifact_entry is not None:
+        text = rewrite_upstream_docs_links(text, artifact_entry)
+        if rewrite_artifact_layout:
+            text = rewrite_artifact_page_layout(text, artifact_entry=artifact_entry)
+    target.write_text(text, encoding="utf-8")
 
 
 def publish_rendered_pages(
@@ -435,14 +793,6 @@ def publish_rendered_pages(
     render_overview_file, render_details_dir = render_output_paths()
     publish_root.mkdir(parents=True, exist_ok=True)
 
-    for language_dir in LANGUAGE_DIRS.values():
-        shutil.rmtree(publish_root / language_dir, ignore_errors=True)
-    if publish_overview_file.exists():
-        publish_overview_file.unlink()
-    if LEGACY_OVERVIEW_FILE.exists():
-        LEGACY_OVERVIEW_FILE.unlink()
-    shutil.rmtree(LEGACY_DETAILS_DIR, ignore_errors=True)
-
     artifact_entries = [
         entry
         for entry in source_config.get("artifacts", [])
@@ -452,12 +802,28 @@ def publish_rendered_pages(
         and entry.get("language") in LANGUAGE_DIRS
     ]
 
+    preserved_language_dirs = {
+        LANGUAGE_DIRS[str(entry["language"])]
+        for entry in artifact_entries
+        if bool(entry.get("preserve_existing_output"))
+    }
+    for language_dir in LANGUAGE_DIRS.values():
+        if language_dir in preserved_language_dirs:
+            continue
+        shutil.rmtree(publish_root / language_dir, ignore_errors=True)
+    if publish_overview_file.exists():
+        publish_overview_file.unlink()
+    if LEGACY_OVERVIEW_FILE.exists():
+        LEGACY_OVERVIEW_FILE.unlink()
+    shutil.rmtree(LEGACY_DETAILS_DIR, ignore_errors=True)
+
     overview_replacements: list[tuple[str, str]] = []
     generated_refs: set[str] = set()
 
     for artifact_entry in artifact_entries:
         artifact = str(artifact_entry["artifact"])
         language = str(artifact_entry["language"])
+        preserve_existing_output = bool(artifact_entry.get("preserve_existing_output"))
         language_dir = publish_root / LANGUAGE_DIRS[language]
         artifact_slug = slugify(artifact)
         source_artifact_page = render_details_dir / f"{artifact_slug}.mdx"
@@ -469,8 +835,13 @@ def publish_rendered_pages(
             source_artifact_page,
             target_artifact_page,
             replacements=[(f"({source_package_dir.name}/", "(")],
+            artifact_entry=artifact_entry,
+            rewrite_artifact_layout=True,
         )
         generated_refs.add(docs_json_page_ref(target_artifact_page, DEFAULT_DOCS_JSON))
+
+        if preserve_existing_output:
+            continue
 
         if not source_package_dir.exists():
             continue
@@ -481,6 +852,7 @@ def publish_rendered_pages(
                 package_page,
                 target_package_page,
                 replacements=[(f"(../{artifact_slug})", "(index)")],
+                artifact_entry=artifact_entry,
             )
             generated_refs.add(docs_json_page_ref(target_package_page, DEFAULT_DOCS_JSON))
 
@@ -519,6 +891,10 @@ def main() -> int:
         group_label=args.overview_title,
         overview_file=publish_overview_file.resolve(),
         publish_root=Path(args.details_dir).resolve(),
+    )
+    reference_nav.regroup_ledger_api_nav(
+        docs_json_path=Path(args.docs_json).resolve(),
+        dropdown_label=args.nav_dropdown,
     )
     return 0
 
