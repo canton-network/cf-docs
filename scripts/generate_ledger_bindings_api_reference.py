@@ -16,6 +16,8 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
+import reference_nav
+
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SOURCE_CONFIG = REPO_ROOT / "config" / "x2mdx" / "ledger-bindings" / "source-artifacts.json"
@@ -873,6 +875,10 @@ def main() -> int:
         group_label=args.overview_title,
         overview_file=publish_overview_file.resolve(),
         publish_root=Path(args.details_dir).resolve(),
+    )
+    reference_nav.regroup_ledger_api_nav(
+        docs_json_path=Path(args.docs_json).resolve(),
+        dropdown_label=args.nav_dropdown,
     )
     return 0
 

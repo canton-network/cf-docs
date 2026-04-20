@@ -16,6 +16,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from scripts import generate_canton_protobuf_history as canton_protobuf_history
+import reference_nav
 from x2mdx.protobuf.lifecycle import (
     build_endpoint_lifecycle,
     build_protobuf_history_report_from_sources,
@@ -47,7 +48,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--manifest-out", default=str(DEFAULT_MANIFEST))
     parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
     parser.add_argument("--docs-json", default=str(DEFAULT_DOCS_JSON))
-    parser.add_argument("--nav-dropdown", default="Reference")
+    parser.add_argument("--nav-dropdown", default="API Reference")
     parser.add_argument("--nav-group", action="append")
     parser.add_argument("--insert-after-group", default=DEFAULT_INSERT_AFTER_GROUP)
     parser.add_argument("--repo-dir", default=str(DEFAULT_REPO_DIR))
@@ -407,6 +408,10 @@ def main() -> int:
         insert_after_group=args.insert_after_group,
         overview_path=overview_path,
         package_paths=package_paths,
+    )
+    reference_nav.regroup_ledger_api_nav(
+        docs_json_path=Path(args.docs_json).resolve(),
+        dropdown_label=args.nav_dropdown,
     )
     print(f"Wrote {len(written_paths)} generated pages under {output_dir}")
     return 0
