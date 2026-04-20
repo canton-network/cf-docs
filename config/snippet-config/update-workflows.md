@@ -100,6 +100,7 @@ additionally, the following environment variables must be set:
 * `SOURCE_REPO_NAME` - `{SOURCE_REPOSITORY_NAME}`
 * `SOURCE_REPO_ORG` - `{SOURCE_REPOSITORY_ORG}`
 * `SOURCE_REPO_VERSION` - `main`
+* `ENABLE_SYNC_PROCESS` - `true`
 
 ## Token permissions
 
