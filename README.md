@@ -63,6 +63,17 @@ direnv allow
 mintlify dev
 ```
 
+### Run all generated reference docs
+
+Load the repo's `direnv` / `nix` shell first, then rerun all generated reference-doc wrappers in one command:
+
+```bash
+direnv allow
+python3 scripts/generate_all_reference_docs.py
+```
+
+Use `--dry-run` to print the exact per-step commands without executing them.
+
 ### Generate the JSON API reference
 
 This repo includes a checked-in source config plus regenerated local Ledger API OpenAPI snapshots under `config/x2mdx/ledger-api/`.
@@ -83,7 +94,7 @@ By default this writes:
 - `docs-main/reference/json-api-reference.mdx`
 - `docs-main/docs.json`
 
-The generated page is placed directly under the top-level `Reference` dropdown in `docs-main/docs.json`, outside the `MainNet`/`TestNet`/`DevNet` versioned navigation branches.
+The generated page is placed directly under the top-level `API Reference` dropdown in `docs-main/docs.json`, outside the `MainNet`/`TestNet`/`DevNet` versioned navigation branches.
 
 ### Generate the JSON API AsyncAPI reference
 
@@ -107,7 +118,7 @@ By default this writes:
 - `docs-main/reference/json-api-asyncapi-reference.mdx`
 - `docs-main/docs.json`
 
-The generated page is placed directly under the top-level `Reference` dropdown in `docs-main/docs.json`.
+The generated page is placed directly under the top-level `API Reference` dropdown in `docs-main/docs.json`.
 
 ### Generate the Ledger bindings API reference
 
@@ -133,7 +144,7 @@ By default this writes:
 - `docs-main/reference/scala/`
 - `docs-main/docs.json`
 
-The generated nav is added under the top-level `Reference` dropdown as `Ledger API JVM Bindings -> Scaladocs/Javadocs`, with each nested group populated directly from the generated JVM package pages.
+The generated nav is added under the top-level `API Reference` dropdown as `Ledger API JVM Bindings -> Scaladocs/Javadocs`, with each nested group populated directly from the generated JVM package pages.
 
 ### Generate the Daml Standard Library reference
 
@@ -157,7 +168,7 @@ By default this writes:
 - `docs-main/appdev/reference/daml-standard-library/`
 - `docs-main/docs.json`
 
-The generated nav is added under the top-level `Reference` dropdown as `Daml Standard Library`, with the overview page listed first and the generated module pages grouped under a nested `Modules` foldout.
+The generated nav is added under the top-level `API Reference` dropdown as `Daml Standard Library`, with the overview page listed first and the generated module pages grouped under a nested `Modules` foldout.
 
 ### Generate the Canton protobuf history reference
 
@@ -181,7 +192,31 @@ By default this writes:
 - `docs-main/appdev/reference/protobuf-history/`
 - `docs-main/docs.json`
 
-The generated nav is added under the top-level `Reference` dropdown as `Canton Protobuf History`, with only the overview page listed in nav. The per-endpoint pages are generated and linked from the overview page but left unlisted.
+The generated nav is added under the top-level `API Reference` dropdown as `Canton Protobuf History`, with only the overview page listed in nav. The per-endpoint pages are generated and linked from the overview page but left unlisted.
+
+### Generate the gRPC Ledger API reference
+
+This repo also includes a checked-in source config for the Ledger API gRPC protobuf surface at `config/x2mdx/grpc-ledger-api-reference/source-artifacts.json`.
+The generator script reuses the published Canton release-bundle protobuf acquisition flow, filters the resulting protobuf report to `com.daml.ledger.api.v2*`, and writes a dedicated Ledger API-only MDX surface without modifying `x2mdx`.
+
+Run:
+
+```bash
+python3 scripts/generate_grpc_ledger_api_reference.py
+```
+
+or:
+
+```bash
+npm run generate:grpc-ledger-api-reference
+```
+
+By default this writes:
+
+- `docs-main/reference/grpc-ledger-api-reference/`
+- `docs-main/docs.json`
+
+The generated nav is added under the top-level `Reference` dropdown as `gRPC Ledger API Reference`, with the overview page first and the generated package pages grouped under a nested `Packages` foldout.
 
 ### Generate the TypeScript bindings reference
 
@@ -205,7 +240,7 @@ By default this writes:
 - `docs-main/reference/typescript.mdx`
 - `docs-main/docs.json`
 
-The generator also adds that page under the top-level `Reference` dropdown as `Daml TypeScript Bindings -> TypeScript`.
+The generator also adds that page under the top-level `API Reference` dropdown as `Daml TypeScript Bindings -> TypeScript`.
 
 ### Generate the Wallet Gateway JSON-RPC reference
 
@@ -229,4 +264,4 @@ By default this writes:
 - `docs-main/reference/wallet-gateway-json-rpc/`
 - `docs-main/docs.json`
 
-The generated nav is added under the top-level `Reference` dropdown as `Wallet Gateway JSON-RPC`, with the overview page plus one page per published OpenRPC surface.
+The generated nav is added under the top-level `API Reference` dropdown as `Wallet Gateway JSON-RPC`, with the overview page plus one page per published OpenRPC surface.

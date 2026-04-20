@@ -3,6 +3,14 @@ title: "Multi-Party Workflows"
 description: "How Canton handles multi-party workflows differently than Ethereum"
 ---
 
+import DamlAppdevModulesM2MultiPartyWorkflowsL106 from "/snippets/daml-docs/appdev_modules_m2-multi-party-workflows_L106.mdx";
+import DamlAppdevModulesM2MultiPartyWorkflowsL131 from "/snippets/daml-docs/appdev_modules_m2-multi-party-workflows_L131.mdx";
+import DamlAppdevModulesM2MultiPartyWorkflowsL174 from "/snippets/daml-docs/appdev_modules_m2-multi-party-workflows_L174.mdx";
+import DamlAppdevModulesM2MultiPartyWorkflowsL208 from "/snippets/daml-docs/appdev_modules_m2-multi-party-workflows_L208.mdx";
+import DamlAppdevModulesM2MultiPartyWorkflowsL260 from "/snippets/daml-docs/appdev_modules_m2-multi-party-workflows_L260.mdx";
+import DamlAppdevModulesM2MultiPartyWorkflowsL37 from "/snippets/daml-docs/appdev_modules_m2-multi-party-workflows_L37.mdx";
+
+
 Multi-party workflows are where Canton's architecture shines compared to Ethereum. This page covers the key patterns and how to think about them differently.
 
 ## The Core Difference
@@ -34,41 +42,7 @@ sequenceDiagram
 
 ### In Daml
 
-```haskell
--- Step 1: Alice creates a proposal
-template TradeProposal
-  with
-    proposer : Party
-    counterparty : Party
-    asset : Text
-    price : Decimal
-  where
-    signatory proposer
-    observer counterparty  -- Counterparty can see the proposal
-
-    choice Accept : ContractId Trade
-      controller counterparty  -- Only counterparty can accept
-      do
-        create Trade with
-          buyer = counterparty
-          seller = proposer
-          asset
-          price
-
-    choice Withdraw : ()
-      controller proposer  -- Proposer can cancel
-      do pure ()
-
--- Step 2: Acceptance creates the multi-party contract
-template Trade
-  with
-    buyer : Party
-    seller : Party
-    asset : Text
-    price : Decimal
-  where
-    signatory buyer, seller  -- Both must have agreed
-```
+<DamlAppdevModulesM2MultiPartyWorkflowsL37 />
 
 ### Compare to Ethereum
 
@@ -103,50 +77,11 @@ Canton supports sophisticated delegation where one party grants another the abil
 
 ### Controller Delegation
 
-```haskell
-template Asset
-  with
-    owner : Party
-    delegate : Optional Party  -- Optional delegate
-  where
-    signatory owner
-
-    choice Transfer : ContractId Asset
-      with newOwner : Party
-      controller case delegate of
-        Some d -> d        -- Delegate can act if set
-        None -> owner      -- Otherwise owner acts
-      do
-        create this with owner = newOwner
-
-    choice SetDelegate : ContractId Asset
-      with newDelegate : Party
-      controller owner
-      do
-        create this with delegate = Some newDelegate
-```
+<DamlAppdevModulesM2MultiPartyWorkflowsL106 />
 
 ### Delegation via Separate Contract
 
-```haskell
--- Delegation authority as a separate contract
-template DelegationAuthority
-  with
-    principal : Party    -- Who grants authority
-    agent : Party        -- Who receives authority
-    scope : [Text]       -- What actions are allowed
-  where
-    signatory principal
-    observer agent
-
-    nonconsuming choice ActOnBehalf : ()
-      with action : Text
-      controller agent
-      do
-        assertMsg "Action not in scope" (action `elem` scope)
-        -- Perform delegated action...
-        pure ()
-```
+<DamlAppdevModulesM2MultiPartyWorkflowsL131 />
 
 ## Multi-Step Workflows
 
@@ -171,51 +106,13 @@ flowchart LR
 
 ### Workflow State Machine
 
-```haskell
-data WorkflowState
-  = Proposed
-  | Approved
-  | Settled
-
-template Workflow
-  with
-    initiator : Party
-    approver : Party
-    settler : Party
-    state : WorkflowState
-    payload : Text
-  where
-    signatory initiator
-    observer approver, settler
-
-    choice Approve : ContractId Workflow
-      controller approver
-      do
-        assertMsg "Must be in Proposed state" (state == Proposed)
-        create this with state = Approved
-
-    choice Settle : ContractId Workflow
-      controller settler
-      do
-        assertMsg "Must be in Approved state" (state == Approved)
-        create this with state = Settled
-```
+<DamlAppdevModulesM2MultiPartyWorkflowsL174 />
 
 ## Atomic Multi-Contract Operations
 
 Canton can atomically update multiple contracts in a single transaction:
 
-```haskell
-choice ExecuteSwap : ()
-  with
-    assetA : ContractId Asset
-    assetB : ContractId Asset
-  controller buyer, seller
-  do
-    -- Both happen atomically or neither does
-    exercise assetA Transfer with newOwner = buyer
-    exercise assetB Transfer with newOwner = seller
-```
+<DamlAppdevModulesM2MultiPartyWorkflowsL208 />
 
 ### Why This Matters
 
@@ -257,35 +154,7 @@ flowchart TB
 
 ### Voting Example
 
-```haskell
-template Vote
-  with
-    proposal : Text
-    voters : [Party]
-    votes : [(Party, Bool)]
-    threshold : Int
-  where
-    signatory (map fst votes)
-    observer voters
-
-    choice CastVote : ContractId Vote
-      with
-        voter : Party
-        approve : Bool
-      controller voter
-      do
-        assertMsg "Not a voter" (voter `elem` voters)
-        assertMsg "Already voted" (voter `notElem` map fst votes)
-        create this with votes = (voter, approve) :: votes
-
-    choice TallyAndExecute : ()
-      controller voters
-      do
-        let approvals = length [v | (_, v) <- votes, v]
-        assertMsg "Threshold not met" (approvals >= threshold)
-        -- Execute the proposal...
-        pure ()
-```
+<DamlAppdevModulesM2MultiPartyWorkflowsL260 />
 
 ## Related Topics
 

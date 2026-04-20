@@ -17,6 +17,8 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+import reference_nav
+
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SOURCE_CONFIG = REPO_ROOT / "config" / "x2mdx" / "protobuf-history" / "source-artifacts.json"
@@ -48,7 +50,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--manifest-out", default=str(DEFAULT_MANIFEST))
     parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
     parser.add_argument("--docs-json", default=str(DEFAULT_DOCS_JSON))
-    parser.add_argument("--nav-dropdown", default="Reference")
+    parser.add_argument("--nav-dropdown", default="API Reference")
     parser.add_argument("--nav-group", action="append")
     parser.add_argument("--repo-dir", default=str(DEFAULT_REPO_DIR))
     parser.add_argument("--version", action="append", help="Explicit version to include. Repeat to limit generation.")
@@ -439,6 +441,10 @@ def main() -> int:
         dropdown_label=args.nav_dropdown,
         parent_groups=args.nav_group or [],
         overview_path=Path(args.output_dir).resolve() / "index.mdx",
+    )
+    reference_nav.regroup_ledger_api_nav(
+        docs_json_path=Path(args.docs_json).resolve(),
+        dropdown_label=args.nav_dropdown,
     )
     return 0
 
