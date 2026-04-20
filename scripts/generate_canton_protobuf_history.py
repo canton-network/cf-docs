@@ -361,13 +361,17 @@ def main() -> int:
     if not isinstance(bundle_proto_dir, str) or not bundle_proto_dir:
         raise ValueError("Source config must define bundle_proto_dir")
 
-    include_versions = set(args.version) if args.version else None
+    include_versions = {version.lstrip("v") for version in args.version} if args.version else None
+    excluded_versions = {str(version).lstrip("v") for version in source_config.get("excluded_versions", [])}
+    if include_versions is not None:
+        include_versions -= excluded_versions
     min_version = args.min_version or source_config.get("min_version") or "0.0.0"
     if not isinstance(min_version, str):
         raise ValueError("min_version must be a string")
 
     repo_dir = ensure_repo(Path(args.repo_dir).resolve(), remote=remote, fetch=not args.skip_fetch)
     selected_tags = stable_tags(repo_dir, min_version=min_version, include_versions=include_versions)
+    selected_tags = [(version, tag) for version, tag in selected_tags if version not in excluded_versions]
     if not selected_tags:
         raise ValueError("No stable Canton tags selected")
     cache_dir = Path(args.cache_dir).resolve()
