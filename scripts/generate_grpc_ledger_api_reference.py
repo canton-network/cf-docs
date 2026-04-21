@@ -184,7 +184,6 @@ def build_filtered_report(
     ]
     latest_snapshot = releases[-1]["snapshot"]
     return {
-        "generatedAt": report["generatedAt"],
         "sourceName": source_name,
         "versionFilter": version_filter,
         "repo": copy.deepcopy(report["repo"]),
