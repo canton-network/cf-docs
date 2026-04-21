@@ -283,4 +283,26 @@ By default this writes:
 
 The generated nav is added under the top-level `API Reference` dropdown as `Splice APIs -> Scan APIs`, with one generated page per OpenAPI spec in the published bundle family.
 
-The generated nav is added under the top-level `API Reference` dropdown as `Wallet Gateway JSON-RPC`, with the overview page plus one page per published OpenRPC surface.
+### Generate the Splice Validator OpenAPI reference
+
+This repo also includes a checked-in source config for the published decentralized-canton-sync validator-family OpenAPI bundle surface at `config/x2mdx/splice-validator-openapi/source-artifacts.json`.
+The generator script reuses the docs-side Splice OpenAPI release-bundle helper, materializes the validator-family YAML fixtures from `*_openapi.tar.gz`, writes a local x2mdx manifest into `.internal/generated/x2mdx/splice-validator-openapi/manifest.json`, and then renders the checked-in Mintlify pages with the GitHub-pinned `x2mdx`.
+
+Run:
+
+```bash
+python3 scripts/generate_splice_validator_openapi_reference.py
+```
+
+or:
+
+```bash
+npm run generate:splice-validator-openapi-reference
+```
+
+By default this writes:
+
+- `docs-main/reference/splice-validator-openapi/`
+- `docs-main/docs.json`
+
+The generated nav is added under the top-level `API Reference` dropdown as `Splice APIs -> Validator APIs`, with one generated page per validator-family OpenAPI spec in the published bundle family.
