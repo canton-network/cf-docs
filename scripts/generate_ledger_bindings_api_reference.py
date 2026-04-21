@@ -161,6 +161,14 @@ def read_mdx_title(path: Path) -> str:
     raise ValueError(f"Missing title frontmatter in {path}")
 
 
+def read_package_label(path: Path) -> str:
+    for line in path.read_text(encoding="utf-8").splitlines():
+        match = re.match(r"## Package `(.*)`$", line)
+        if match:
+            return match.group(1)
+    raise ValueError(f"Missing package heading in {path}")
+
+
 def prune_nav_items(items: list[Any], *, page_refs: set[str], group_labels: set[str]) -> list[Any]:
     pruned: list[Any] = []
     for item in items:
@@ -206,8 +214,7 @@ def build_jvm_nav_group(
     group_label: str,
     overview_file: Path,
 ) -> tuple[dict[str, Any], set[str]]:
-    language_pages: dict[str, list[tuple[str, str]]] = defaultdict(list)
-    language_index_refs: dict[str, str] = {}
+    language_pages: dict[str, list[tuple[str, dict[str, Any]]]] = defaultdict(list)
     generated_refs: set[str] = set()
 
     for language, directory_name in LANGUAGE_DIRS.items():
@@ -216,15 +223,30 @@ def build_jvm_nav_group(
             continue
         artifact_index = language_dir / "index.mdx"
         if artifact_index.exists():
-            index_ref = docs_json_page_ref(artifact_index, docs_json_path)
-            language_index_refs[language] = index_ref
-            generated_refs.add(index_ref)
-        for package_page in sorted(language_dir.glob("*.mdx")):
-            if package_page.name == "index.mdx":
+            generated_refs.add(docs_json_page_ref(artifact_index, docs_json_path))
+        for package_dir in sorted(path for path in language_dir.iterdir() if path.is_dir()):
+            package_index = package_dir / "index.mdx"
+            if not package_index.exists():
                 continue
-            page_ref = docs_json_page_ref(package_page, docs_json_path)
-            language_pages[language].append((read_mdx_title(package_page), page_ref))
-            generated_refs.add(page_ref)
+            package_label = read_package_label(package_index)
+            package_pages: list[tuple[str, str]] = [("Overview", docs_json_page_ref(package_index, docs_json_path))]
+            generated_refs.add(package_pages[0][1])
+            for object_page in sorted(package_dir.glob("*.mdx")):
+                if object_page.name == "index.mdx":
+                    continue
+                page_ref = docs_json_page_ref(object_page, docs_json_path)
+                package_pages.append((read_mdx_title(object_page), page_ref))
+                generated_refs.add(page_ref)
+            package_pages.sort(key=lambda item: (item[0] != "Overview", item[0].lower(), item[0]))
+            language_pages[language].append(
+                (
+                    package_label,
+                    {
+                        "group": package_label,
+                        "pages": [page_ref for _, page_ref in package_pages],
+                    },
+                )
+            )
 
     language_groups: list[tuple[int, str, dict[str, Any]]] = []
     for language, page_entries in language_pages.items():
@@ -232,18 +254,13 @@ def build_jvm_nav_group(
             continue
         page_entries.sort(key=lambda item: (item[0].lower(), item[0]))
         label = LANGUAGE_LABELS.get(language, language.title())
-        pages: list[Any] = []
-        language_index_ref = language_index_refs.get(language)
-        if language_index_ref is not None:
-            pages.append(language_index_ref)
-        pages.extend(page_ref for _, page_ref in page_entries)
         language_groups.append(
             (
                 LANGUAGE_ORDER.get(language, 99),
                 label,
                 {
                     "group": label,
-                    "pages": pages,
+                    "pages": [group for _, group in page_entries],
                 },
             )
         )
@@ -398,6 +415,7 @@ def resolve_cached_jar(
 def build_manifest(
     *,
     source_config: dict[str, Any],
+    source_config_path: Path,
     cache_dir: Path,
     manifest_path: Path,
     include_versions: set[str] | None,
@@ -421,6 +439,7 @@ def build_manifest(
         include_prefixes = artifact_entry.get("include_prefixes") or []
         source_kind = artifact_entry.get("source_kind") or "maven-javadoc-jar"
         url_template = artifact_entry.get("url_template")
+        status_manifest = artifact_entry.get("status_manifest")
         if not isinstance(group, str) or not group:
             continue
         if not isinstance(artifact, str) or not artifact:
@@ -463,6 +482,11 @@ def build_manifest(
                 "artifact": artifact,
                 "language": language,
                 "include_prefixes": [prefix for prefix in include_prefixes if isinstance(prefix, str)],
+                **(
+                    {"status_manifest": str((source_config_path.parent / status_manifest).resolve())}
+                    if isinstance(status_manifest, str) and status_manifest
+                    else {}
+                ),
                 "versions": version_entries,
             }
         )
@@ -850,15 +874,30 @@ def publish_rendered_pages(
         if not source_package_dir.exists():
             continue
         language_dir.mkdir(parents=True, exist_ok=True)
-        for package_page in sorted(source_package_dir.glob("*.mdx")):
-            target_package_page = language_dir / package_page.name
+        for package_dir in sorted(path for path in source_package_dir.iterdir() if path.is_dir()):
+            source_package_page = package_dir / "index.mdx"
+            if not source_package_page.exists():
+                continue
+            target_package_dir = language_dir / package_dir.name
+            target_package_page = target_package_dir / "index.mdx"
             copy_rewritten_page(
-                package_page,
+                source_package_page,
                 target_package_page,
                 replacements=[(f"(../{artifact_slug})", "(index)")],
                 artifact_entry=artifact_entry,
             )
             generated_refs.add(docs_json_page_ref(target_package_page, DEFAULT_DOCS_JSON))
+            for object_page in sorted(package_dir.glob("*.mdx")):
+                if object_page.name == "index.mdx":
+                    continue
+                target_object_page = target_package_dir / object_page.name
+                copy_rewritten_page(
+                    object_page,
+                    target_object_page,
+                    replacements=[],
+                    artifact_entry=artifact_entry,
+                )
+                generated_refs.add(docs_json_page_ref(target_object_page, DEFAULT_DOCS_JSON))
 
     copy_rewritten_page(render_overview_file, publish_overview_file, replacements=overview_replacements)
     generated_refs.add(docs_json_page_ref(publish_overview_file, DEFAULT_DOCS_JSON))
@@ -868,10 +907,12 @@ def publish_rendered_pages(
 def main() -> int:
     ensure_repo_direnv(repo_root=REPO_ROOT, script_path=Path(__file__).resolve(), argv=sys.argv[1:])
     args = parse_args()
-    source_config = load_json(Path(args.source_config).resolve())
+    source_config_path = Path(args.source_config).resolve()
+    source_config = load_json(source_config_path)
     include_versions = set(args.version) if args.version else None
     manifest_path = build_manifest(
         source_config=source_config,
+        source_config_path=source_config_path,
         cache_dir=Path(args.cache_dir).resolve(),
         manifest_path=Path(args.manifest_out).resolve(),
         include_versions=include_versions,
