@@ -3,6 +3,13 @@ title: "Ledger Model (Detailed)"
 description: "Formal specification of Canton's ledger model: structure, validity, integrity, privacy, and multi-synchronizer interoperability."
 ---
 
+import LedgerModelSimpleDvPSCRIPT from '/snippets/daml-docs/ledger-model_SimpleDvP_SCRIPT.mdx';
+import LedgerModelSimpleDvPACCEPTANDSETTLE from '/snippets/daml-docs/ledger-model_SimpleDvP_ACCEPT_AND_SETTLE.mdx';
+import LedgerModelSimpleDvPACCEPTTHENSETTLE from '/snippets/daml-docs/ledger-model_SimpleDvP_ACCEPT_THEN_SETTLE.mdx';
+import LedgerModelSimpleDvPREVERTPROPOSAL from '/snippets/daml-docs/ledger-model_SimpleDvP_REVERT-PROPOSAL.mdx';
+
+
+
 {/* COPIED_START source="docs-website:docs/replicated/daml/3.4/overview/explanations/ledger-model/ledger-structure.rst" hash="52f080a2" */}
 
 <Warning title="Pre-reviewed Content - Do Not Modify">
@@ -19,44 +26,15 @@ This section looks at the structure of a ledger that records the interactions be
 
 Most of the examples in this section look at the following Daml Script scenarios based on the templates from the running example. Two banks first each issue one asset to either Alice or Bob and then Alice proposes a DvP to Bob. Bob accepts the proposal and settles the DvP.
 
-```daml
-let eurAsset = SimpleAsset with
-      issuer = bank1
-      owner = alice
-      asset = "1 EUR"
-eur <- submit bank1 do createCmd eurAsset
-
-let usdAsset = SimpleAsset with
-      issuer = bank2
-      owner = bob
-      asset = "1 USD"
-usd <- submit bank2 do createCmd usdAsset
-
-proposeDvP <- submit alice $ do
-  createCmd ProposeSimpleDvP with
-      proposer = alice
-      counterparty = bob
-      allocated = eur
-      expected = usdAsset
-disclosedEur <- fromSome <$> queryDisclosure alice eur
-```
+<LedgerModelSimpleDvPSCRIPT />
 
 Acceptance and settlement can happen either in a single step via the `AcceptAndSettle` choice.
 
-```daml
-(newUsd, newEur) <- submitWithDisclosures bob [disclosedEur] do
-    exerciseCmd proposeDvP $ AcceptAndSettle with toBeAllocated = usd
-```
+<LedgerModelSimpleDvPACCEPTANDSETTLE />
 
 Or in two separate steps with `Accept` followed by `Settle`:
 
-```daml
-dvp <- submit bob $
-  do exerciseCmd proposeDvp $ Accept with toBeAllocated = usd
-
-(newUsd, newEur) <- submitWithDisclosures bob [disclosedEur] do
-    exerciseCmd dvp $ Settle with actor = bob
-```
+<LedgerModelSimpleDvPACCEPTTHENSETTLE />
 
 ## Actions
 
@@ -215,32 +193,8 @@ Visually, a ledger can be represented as a sequence growing from left to right a
 
 For example, the following Daml Script encodes the whole workflow of the running DvP example.
 
-```daml
-let eurAsset = SimpleAsset with
-      issuer = bank1
-      owner = alice
-      asset = "1 EUR"
-eur <- submit bank1 do createCmd eurAsset
-
-let usdAsset = SimpleAsset with
-      issuer = bank2
-      owner = bob
-      asset = "1 USD"
-usd <- submit bank2 do createCmd usdAsset
-
-proposeDvP <- submit alice $ do
-  createCmd ProposeSimpleDvP with
-      proposer = alice
-      counterparty = bob
-      allocated = eur
-      expected = usdAsset
-disclosedEur <- fromSome <$> queryDisclosure alice eur
-```
-
-```daml
-(newUsd, newEur) <- submitWithDisclosures bob [disclosedEur] do
-    exerciseCmd proposeDvP $ AcceptAndSettle with toBeAllocated = usd
-```
+<LedgerModelSimpleDvPSCRIPT />
+<LedgerModelSimpleDvPACCEPTANDSETTLE />
 
 This workflow gives rise to the ledger shown below with four commits:
 
@@ -624,6 +578,8 @@ Finally, validity conditions ensure three important properties of the Daml ledge
 {/* COPIED_END */}
 
 
+
+
 {/* COPIED_START source="docs-website:docs/replicated/daml/3.4/overview/explanations/ledger-model/ledger-privacy.rst" hash="b3c9457c" */}
 
 <Warning title="Pre-reviewed Content - Do Not Modify">
@@ -784,14 +740,7 @@ Recall from the running example that Bob uses `submitWithDisclosures` for the ex
 
 It is a design decision that immediate divulgence does not entail disclosure for subsequent transactions. For example, after the DvP has been settled, Alice creates another DvP proposal for Bob to swap the two assets again:
 
-```daml
-proposeDvP2 <- submit alice $ do
-  createCmd ProposeSimpleDvP with
-      proposer = alice
-      counterparty = bob
-      allocated = newUsd
-      expected = eurAsset
-```
+<LedgerModelSimpleDvPREVERTPROPOSAL />
 
 Then, Bob's command submission must include the disclosure of Alice's `SimpleAsset` even though Bob is a witness of the creation of Alice's `SimpleAsset`. A plain `submit` without disclosure does not work.
 
