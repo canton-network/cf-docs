@@ -20,22 +20,42 @@ This section looks at the structure of a ledger that records the interactions be
 Most of the examples in this section look at the following Daml Script scenarios based on the templates from the running example. Two banks first each issue one asset to either Alice or Bob and then Alice proposes a DvP to Bob. Bob accepts the proposal and settles the DvP.
 
 ```daml
--- Code from: ./daml/SimpleDvP.daml
--- [Include actual code example here]
+let eurAsset = SimpleAsset with
+      issuer = bank1
+      owner = alice
+      asset = "1 EUR"
+eur <- submit bank1 do createCmd eurAsset
+
+let usdAsset = SimpleAsset with
+      issuer = bank2
+      owner = bob
+      asset = "1 USD"
+usd <- submit bank2 do createCmd usdAsset
+
+proposeDvP <- submit alice $ do
+  createCmd ProposeSimpleDvP with
+      proposer = alice
+      counterparty = bob
+      allocated = eur
+      expected = usdAsset
+disclosedEur <- fromSome <$> queryDisclosure alice eur
 ```
 
 Acceptance and settlement can happen either in a single step via the `AcceptAndSettle` choice.
 
 ```daml
--- Code from: ./daml/SimpleDvP.daml
--- [Include actual code example here]
+(newUsd, newEur) <- submitWithDisclosures bob [disclosedEur] do
+    exerciseCmd proposeDvP $ AcceptAndSettle with toBeAllocated = usd
 ```
 
 Or in two separate steps with `Accept` followed by `Settle`:
 
 ```daml
--- Code from: ./daml/SimpleDvP.daml
--- [Include actual code example here]
+dvp <- submit bob $
+  do exerciseCmd proposeDvp $ Accept with toBeAllocated = usd
+
+(newUsd, newEur) <- submitWithDisclosures bob [disclosedEur] do
+    exerciseCmd dvp $ Settle with actor = bob
 ```
 
 ## Actions
@@ -149,7 +169,7 @@ The privacy model uses the concept of subtransactions to define the visibility r
 
 ## Inputs and outputs
 
-The Ledger Model falls into the category of [(extended) UTxO-style ledgers](https://en.wikipedia.org/wiki/Unspent_transaction_output) where the set of unspent transaction outputs (UTxOs) constitutes the current state of a ledger. Here, the **transaction outputs** are the contract IDs of the contracts created in a transaction. When a contract is consumed, its contract ID is spent and thus removed from the UTxO set. The data associated with each UTxO is immutable; modifications happen by consuming a contract ID and recreating a new contract with a different contract ID.
+The Ledger Model falls into the category of (extended) UTxO-style ledgers where the set of unspent transaction outputs (UTxOs) constitutes the current state of a ledger. Here, the **transaction outputs** are the contract IDs of the contracts created in a transaction. When a contract is consumed, its contract ID is spent and thus removed from the UTxO set. The data associated with each UTxO is immutable; modifications happen by consuming a contract ID and recreating a new contract with a different contract ID.
 
 This Ledger Model extends the UTxO model in two aspects:
 
@@ -196,13 +216,30 @@ Visually, a ledger can be represented as a sequence growing from left to right a
 For example, the following Daml Script encodes the whole workflow of the running DvP example.
 
 ```daml
--- Code from: ./daml/SimpleDvP.daml
--- [Include actual code example here]
+let eurAsset = SimpleAsset with
+      issuer = bank1
+      owner = alice
+      asset = "1 EUR"
+eur <- submit bank1 do createCmd eurAsset
+
+let usdAsset = SimpleAsset with
+      issuer = bank2
+      owner = bob
+      asset = "1 USD"
+usd <- submit bank2 do createCmd usdAsset
+
+proposeDvP <- submit alice $ do
+  createCmd ProposeSimpleDvP with
+      proposer = alice
+      counterparty = bob
+      allocated = eur
+      expected = usdAsset
+disclosedEur <- fromSome <$> queryDisclosure alice eur
 ```
 
 ```daml
--- Code from: ./daml/SimpleDvP.daml
--- [Include actual code example here]
+(newUsd, newEur) <- submitWithDisclosures bob [disclosedEur] do
+    exerciseCmd proposeDvP $ AcceptAndSettle with toBeAllocated = usd
 ```
 
 This workflow gives rise to the ledger shown below with four commits:
@@ -748,8 +785,12 @@ Recall from the running example that Bob uses `submitWithDisclosures` for the ex
 It is a design decision that immediate divulgence does not entail disclosure for subsequent transactions. For example, after the DvP has been settled, Alice creates another DvP proposal for Bob to swap the two assets again:
 
 ```daml
--- Code from: ./daml/SimpleDvP.daml
--- [Include actual code example here]
+proposeDvP2 <- submit alice $ do
+  createCmd ProposeSimpleDvP with
+      proposer = alice
+      counterparty = bob
+      allocated = newUsd
+      expected = eurAsset
 ```
 
 Then, Bob's command submission must include the disclosure of Alice's `SimpleAsset` even though Bob is a witness of the creation of Alice's `SimpleAsset`. A plain `submit` without disclosure does not work.
