@@ -1,115 +1,41 @@
 ---
-title: Exchange Integration Guidance
-description: "Architecture, workflows, and operational guidance for exchange integrations with Canton Network"
+title: "Exchange Integration Guide"
+description: "Integrate an exchange with the Canton Network: architecture, workflows, transaction ingestion, fault tolerance, node operations, backup, testing, and extensions."
 ---
 
-This page covers the architecture, key workflows, and operational considerations for integrating an exchange with Canton Network. The integration enables trading of Canton Coin (CC) and other Canton Network tokens.
+import ExchangeIntegration1StepTransferFull from '/snippets/daml-docs/exchange-integration_1-step-transfer_full.mdx';
+import ExchangeIntegrationTransferInstructionCreateFull from '/snippets/daml-docs/exchange-integration_transfer-instruction-create_full.mdx';
+import ExchangeIntegrationTransferInstructionAcceptFull from '/snippets/daml-docs/exchange-integration_transfer-instruction-accept_full.mdx';
 
-## Architecture Overview
-
-{/* COPIED_START source="splice-wallet-kernel:exchange-integration/overview.rst" hash="exchange-architecture" */}
+{/* COPIED_START source="splice-wallet-kernel:docs/wallet-integration-guide/src/exchange-integration/index.rst" hash="07f260be" */}
 
 <Warning title="Pre-reviewed Content - Do Not Modify">
-This section was adapted from existing reviewed documentation.
-**Source:** `splice-wallet-kernel:exchange-integration/overview.rst`
+This section was copied from existing reviewed documentation.
+**Source:** `docs/wallet-integration-guide/src/exchange-integration/index.rst`
 Reviewers: Skip this section. Remove markers after final approval.
 </Warning>
 
-An exchange integration consists of:
+# Exchange Integration Guide
 
-- **Exchange Validator Node** — A Canton Network validator that hosts the exchange's parties and connects to the Global Synchronizer
-- **Treasury Party** — The exchange's main party for holding Canton Coin and other CN tokens
-- **Canton Integration DB** — An off-ledger database that tracks deposits, withdrawals, balances, and transaction history
-- **Transaction History Ingestion** — A service that monitors the ledger update stream and writes parsed events to the integration DB
-- **Exchange Backend** — Your existing exchange infrastructure, extended with Canton-specific deposit/withdrawal logic
+The pages below guide you how to integrate an exchange with Canton for the purpose of trading Canton Network Token Standard compliant tokens like Canton Coin.
 
-{/* COPIED_END */}
+The core of such an integration is automating the deposits and withdrawals of tokens to and from the exchange. The guide can thus also be used for services other than exchanges that want to support deposits and withdrawals of Canton Network tokens.
 
-## Key Workflows
+<div className="toctree" maxdepth="3">
 
-### 1-Step Deposit (Canton Coin)
+overview architecture workflows txingestion non-functionals node-operations disaster-recovery testing extensions
 
-{/* COPIED_START source="splice-wallet-kernel:exchange-integration/workflows.rst" hash="exchange-deposit" */}
+</div>
 
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was adapted from existing reviewed documentation.
-**Source:** `splice-wallet-kernel:exchange-integration/workflows.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
-
-Prerequisites:
-
-- The exchange has set up a CC `TransferPreapproval` for its treasury party
-- The exchange has associated the customer's deposit account ID in the integration DB
-
-Flow:
-
-1. Customer retrieves the exchange's treasury party ID and their deposit account ID
-2. Customer initiates a Token Standard transfer of CC to the treasury party, with the deposit account ID in the transfer metadata
-3. The transfer creates a new CC Holding UTXO owned by the treasury party
-4. Transaction History Ingestion parses the update, extracts the deposit amount and account ID, and writes it to the integration DB
-5. The exchange credits the customer's account
 
 {/* COPIED_END */}
 
-### 1-Step Withdrawal (Canton Coin)
-
-The withdrawal flow is the reverse: the exchange's backend prepares a Token Standard transfer from the treasury party to the customer's party, using the customer's `TransferPreapproval`. The transaction is signed and submitted, and the integration DB records the withdrawal.
-
-### Multi-Step Transfers (All CN Tokens)
-
-For tokens beyond Canton Coin, or when transfer preapprovals are not set up, use multi-step transfers. These give the receiver the option to accept or reject the transfer and allow token admins to perform additional checks.
-
-## Operational Considerations
-
-### Transaction History Ingestion
-
-Build a reliable ingestion pipeline that:
-
-- Subscribes to the ledger update stream from your validator's participant
-- Uses the Wallet SDK's transaction history parser to extract structured events
-- Writes parsed events atomically to your integration DB
-- Tracks the last processed offset for crash recovery
-
-### Disaster Recovery
-
-Your exchange integration must handle:
-
-- **Validator node backup and restore** — Follow the standard [backup procedures](/docs-main/global-synchronizer/production-operations/backup-and-recovery)
-- **Hard synchronizer migration** — The Global Synchronizer may undergo major upgrades that create a new synchronizer instance. Your integration must handle the migration by following the [upgrade procedures](/docs-main/global-synchronizer/production-operations/upgrade-procedures).
-
-### Reading from Scan Services
-
-Use the Scan API to read Canton Coin registry data (TransferFactory contracts, reference data, etc.). For BFT reads, use the validator's scan proxy endpoint, which broadcasts requests to multiple SV scan services and returns a consensus result.
-
-## Deployment
-
-### Environment Progression
-
-1. **LocalNet** — Develop and test using cn-quickstart's LocalNet
-2. **DevNet** — Test against the live DevNet network with test Canton Coin
-3. **TestNet** — Pre-production testing with realistic conditions
-4. **MainNet** — Production deployment
-
-### Node Requirements
-
-The exchange validator node must:
-
-- Run a production-grade deployment (Kubernetes recommended)
-- Have sufficient traffic balance for transaction volume
-- Maintain database backups per the [backup procedures](/docs-main/global-synchronizer/production-operations/backup-and-recovery)
-- Use external KMS for key management in production
-
-## Next Steps
-
-- [Exchange SDK Download](/docs-main/integrations/exchanges/sdk-download) — Tools and sample code
-- [Wallet SDK Download](/docs-main/integrations/wallet/sdk-download) — Wallet SDK installation
 
 {/* COPIED_START source="splice-wallet-kernel:docs/wallet-integration-guide/src/exchange-integration/overview.rst" hash="d02c931e" */}
 
 <Warning title="Pre-reviewed Content - Do Not Modify">
 This section was copied from existing reviewed documentation.
-**Source:** `splice-wallet-kernel:docs/wallet-integration-guide/src/exchange-integration/overview.rst`
+**Source:** `docs/wallet-integration-guide/src/exchange-integration/overview.rst`
 Reviewers: Skip this section. Remove markers after final approval.
 </Warning>
 
@@ -129,9 +55,9 @@ The guide is intentionally structured such that you can use a learning-by-doing 
 
 The following dependency diagrams shows the work items for each milestone.
 
-![milestone and delivery dependency diagram](images/delivery_dependencies.png)
+![milestone and delivery dependency diagram](/images/splice_wallet_kernel/delivery_dependencies.png)
 
-**CC with 1-step withdrawal only**: this milestone allows you to support deposits and withdrawals of CC. It includes earning app rewards for all CC deposits. The workflows build on the [Canton Network Token Standard](https://docs.dev.sync.global/app_dev/token_standard/index.html) which is the foundation for supporting all CN tokens in the next milestone. We consider it an intermediate milestone, as it does not support:
+**CC with 1-step withdrawal only**: this milestone allows you to support deposits and withdrawals of CC. It includes earning app rewards for all CC deposits. The workflows build on the Canton Network Token [Standard]() which is the foundation for supporting all CN tokens in the next milestone. We consider it an intermediate milestone, as it does not support:
 
 - all CN tokens
 - CC users that prefer to control the receipt of transfers, and thus do not want to setup preapprovals
@@ -166,6 +92,7 @@ Use the following support code to simplify your integration development for:
 > - **Java/JVM**: use the sample code from the <https://github.com/digital-asset/ex-java-json-api-bindings> repository as a starting point.
 > - **Other languages**: use the code from the Wallet SDK or the Java sample code as a blueprint.
 
+
 {/* COPIED_END */}
 
 
@@ -173,7 +100,7 @@ Use the following support code to simplify your integration development for:
 
 <Warning title="Pre-reviewed Content - Do Not Modify">
 This section was copied from existing reviewed documentation.
-**Source:** `splice-wallet-kernel:docs/wallet-integration-guide/src/exchange-integration/architecture.rst`
+**Source:** `docs/wallet-integration-guide/src/exchange-integration/architecture.rst`
 Reviewers: Skip this section. Remove markers after final approval.
 </Warning>
 
@@ -181,7 +108,11 @@ Reviewers: Skip this section. Remove markers after final approval.
 
 ## High-Level Overview
 
+<div className="todo">
+
 merge, link, align this brief summary with the overview in the wallet integration guide
+
+</div>
 
 If you have integrated your exchange with other BTC and other UTXO-based chains, the architecture presented here will be familiar and you will be able to reuse existing components and patterns. Before jumping into the discussion, it is important to map your preexisting concepts using the following mapping:
 
@@ -194,7 +125,7 @@ If you have integrated your exchange with other BTC and other UTXO-based chains,
 - Canton is designed as a network-of-networks where each network is a separate synchronizer that is distinct and separate from other synchronizers. For example, the Global Synchronizer is a synchronizer that connects validators in its network.
 - Validator nodes can be connected to multiple synchronizers. Validator nodes merge the data streams from all connected synchronizers into a single logical stream, which is why they assign a local Ledger API **offset** to every transaction. These offsets are not comparable across validator nodes, but update-ids and record times are.
 - Transactions in Canton have a hierarchical structure that reflects the nested execution and visibility of Daml choices. This hierarchical structure guarantees privacy between parties in the same transaction. Different validator nodes may see different sub-trees of the same transaction depending on which parties they host.
-- **Memos** are stored in the transfer metadata using the `splice.lfdecentralizedtrust.org/reason` key. The [Canton Network Token Standard](https://docs.dev.sync.global/app_dev/token_standard/index.html) defines this key and a way to parse these memo tags and other transfer information from transactions.
+- **Memos** are stored in the transfer metadata using the `splice.lfdecentralizedtrust.org/reason` key. The Canton Network Token [Standard]() defines this key and a way to parse these memo tags and other transfer information from transactions.
 
 This guide provides a sample architecture and workflows for integrating an exchange with Canton. The expectation is that the integration components are reasonably thin wrappers over the functionality provided by the wallet SDK. The guide expects you to provide these components since they are mostly concerned integrating with your exchange's internal systems and its requirements.
 
@@ -202,7 +133,7 @@ This guide provides a sample architecture and workflows for integrating an excha
 
 The following diagram shows the components to integrate an exchange's internal systems with Canton Network. We explain the components in the subsections below.
 
-![Integration architecture component overview](images/component_diagram.png)
+![Integration architecture component overview](/images/splice_wallet_kernel/component_diagram.png)
 
 ### Exchange Components
 
@@ -214,9 +145,9 @@ The guide's assumptions might not perfectly match your exchange's actual archite
 
 There are five Canton integration components:
 
-- The **Exchange Validator Node** is a Splice validator node that hosts your `treasuryParty`, which is the party you setup to control funds, receive deposits, and execute transfers for withdrawals. See `exchange-parties-setup` for details on how to setup the `treasuryParty`. You can [deploy and operate a validator yourself](https://docs.dev.sync.global/validator_operator/index.html#validators) or use a node-as-a-service provider to operate it for you.
+- The **Exchange Validator Node** is a Splice validator node that hosts your `treasuryParty`, which is the party you setup to control funds, receive deposits, and execute transfers for withdrawals. See `exchange-parties-setup` for details on how to setup the `treasuryParty`. You can deploy and operate a validator [yourself]() or use a node-as-a-service provider to operate it for you.
 - The **Canton Integration DB** is used to keep track of the state of withdrawals and the customer-attribution of the funds held by the `treasuryParty`. It is shown as a separate component in the diagram, but it could be part of an existing databases.
-- The **Tx History Ingestion** service uses the [JSON Ledger API](https://docs.digitalasset.com/build/3.3/reference/json-api/json-api.html) exposed by the Exchange Validator Node to read Daml transactions affecting the `treasuryParty`. It parses these transactions and updates the Canton Integration DB with the effect of these transactions (e.g. a successful deposit to a customer account).
+- The **Tx History Ingestion** service uses the JSON Ledger [API]() exposed by the Exchange Validator Node to read Daml transactions affecting the `treasuryParty`. It parses these transactions and updates the Canton Integration DB with the effect of these transactions (e.g. a successful deposit to a customer account).
 - The **Withdrawal Automation** service is responsible for executing withdrawals requested by the Exchange Internal Systems via the Canton Integration DB.
 - The **Multi-Step Deposit Automation** service is responsible for accepting or rejecting transfers from customers to their exchange accounts for CN tokens that do not support direct transfers. It is not necessary for an integration with Canton Coin, which does support direct, 1-step transfers.
 
@@ -230,17 +161,17 @@ The purpose of the third-party components in the diagram above (in gray) is:
 - The **Customer Validator Node** is the validator node that hosts the `customerParty` which is used by the Customer to hold and transfer their funds.
 - The **Customer Wallet** is the wallet used by the customer to manage their funds and make transactions.
 - The **Admin Validator Node** is the validator node used by the token administrator to track the ownership records of the token and validate changes to them. We use the `adminParty` to refer to the party that represents them on ledger. Note that the `adminParty` for a decentralized token is hosted on multiple validator nodes. For example the `adminParty` for Canton Coin is hosted on every SV node.
-- The **Registry API Server** provides access to extra context to execute token transfers. This context is often only known to the token administrator, which is why access is provided to it off-ledger. The OpenAPI specification of the Registry API is maintained as part the [Canton Network Token Standard definitions](https://github.com/hyperledger-labs/splice/tree/main/token-standard) in the Splice repository.
+- The **Registry API Server** provides access to extra context to execute token transfers. This context is often only known to the token administrator, which is why access is provided to it off-ledger. The OpenAPI specification of the Registry API is maintained as part the Canton Network Token Standard [definitions]() in the Splice repository.
 
 ## Information Flows
 
 The following diagram shows the information flows between the components. The main information flows of the Canton integration are highlighted using bold arrows. We explain them below.
 
-![Information flow diagram](images/information_flow_diagram.png)
+![Information flow diagram](/images/splice_wallet_kernel/information_flow_diagram.png)
 
 There are three main information flows:
 
-1.  **Tx History Ingestion**: ingests the transactions (tx) affecting the `treasuryParty` from the Exchange Validator Node into the Canton Integration DB. Arrow 1.a represents the transaction data being read using the `/v2/updates/flats` Ledger API endpoint using either [plain HTTP](https://github.com/digital-asset/canton/blob/92339b6f98faaecbe3adbfb71293ed9cbfb30204/community/ledger/ledger-json-api/src/test/resources/json-api-docs/openapi.yaml#L786) or [websockets](https://github.com/digital-asset/canton/blob/92339b6f98faaecbe3adbfb71293ed9cbfb30204/community/ledger/ledger-json-api/src/test/resources/json-api-docs/asyncapi.yaml#L36). It is parsed by the Tx History Ingestion service to update the status of funds, deposits, and withdrawals in the Canton Integration DB (Arrow 1.b).
+1.  **Tx History Ingestion**: ingests the transactions (tx) affecting the `treasuryParty` from the Exchange Validator Node into the Canton Integration DB. Arrow 1.a represents the transaction data being read using the `/v2/updates/flats` Ledger API endpoint using either plain [HTTP]() or [websockets](). It is parsed by the Tx History Ingestion service to update the status of funds, deposits, and withdrawals in the Canton Integration DB (Arrow 1.b).
 
     This data is queried by Exchange Internal Systems (Arrow 1.c), for example to serve the Exchange UI. For brevity, the diagram shows direct access to the Canton Integration DB by the Exchange Internal Systems. However using a micro-services architecture, the Exchange Internal Systems would typically access the Canton Integration DB through a dedicated API layer. Choose whatever architecture best fits your exchange's needs.
 
@@ -258,6 +189,7 @@ There are three main information flows:
 
 The other information flows interact with the main flows as part of a deposit or withdrawal. We explain them in the `integration-workflows` section.
 
+
 {/* COPIED_END */}
 
 
@@ -265,7 +197,7 @@ The other information flows interact with the main flows as part of a deposit or
 
 <Warning title="Pre-reviewed Content - Do Not Modify">
 This section was copied from existing reviewed documentation.
-**Source:** `splice-wallet-kernel:docs/wallet-integration-guide/src/exchange-integration/workflows.rst`
+**Source:** `docs/wallet-integration-guide/src/exchange-integration/workflows.rst`
 Reviewers: Skip this section. Remove markers after final approval.
 </Warning>
 
@@ -280,10 +212,11 @@ The workflows below are grouped into two milestones.
 
 Further extensions of these two MVPs to address Day-2 requirements are explored in `integration-extensions`.
 
-> >
+> <div className="todo">
+>
 > add these functions. potentially using sphinx-tabs to allow switching between SDK function view and higher-level description
 >
-> 
+> </div>
 
 ## MVP for Canton Coin
 
@@ -291,12 +224,12 @@ Further extensions of these two MVPs to address Day-2 requirements are explored 
 The diagrams in the sections below adapt the diagram from the `information-flows` section to the Canton Coin workflow. The adaptations are:
 
 - The role of the `adminParty` is assumed by the `dsoParty`, which is the token admin party for CC. The `dsoParty` is a decentralized party that is hosted on the validator nodes run by Super Validator (SV) operators. A confirmation threshold of 2/3 is used to achieve Byzantine fault-tolerance for its transaction validation.
-- The role of the Registry API Server is taken over by the Canton Coin [Scan services](https://docs.dev.sync.global/app_dev/scan_api/toc_proxy.html) that every SV operator runs. They serve the Registry API for CC. See `reading-from-canton-coin-scan` for more information about how to reliably read from multiple Canton Coin Scan instances.
+- The role of the Registry API Server is taken over by the Canton Coin Scan [services]() that every SV operator runs. They serve the Registry API for CC. See `reading-from-canton-coin-scan` for more information about how to reliably read from multiple Canton Coin Scan instances.
 </Note>
 
 ### 1-Step Deposit Workflow
 
-![1-Step Deposit Workflow Diagram](images/1-step_deposit.png)
+![1-Step Deposit Workflow Diagram](/images/splice_wallet_kernel/1-step_deposit.png)
 
 Assumptions:
 
@@ -329,7 +262,7 @@ Example flow:
 
 ### 1-Step Withdrawal Workflow<span id="one-step-transfer-parsing"></span>
 
-![1-Step Withdrawal Workflow Diagram](images/1-step_withdrawal.png)
+![1-Step Withdrawal Workflow Diagram](/images/splice_wallet_kernel/1-step_withdrawal.png)
 
 Assumptions:
 
@@ -376,7 +309,7 @@ Example flow:
 
 Executing a withdrawal requires selecting `Holding` UTXOs to fund the withdrawal, as described for example in `one-step-withdrawal-workflow`. You likely already have a UTXO management strategy in place for your existing UTXO-chain integrations. Here some considerations to take into account when adapting your strategy to work with Canton:
 
-- Canton Coin charges a small holding fee of about \$1 per year for each `Holding` UTXO to allow archiving [dust coins](https://www.investopedia.com/terms/b/bitcoin-dust.asp) once their holding fee surpasses their value.
+- Canton Coin charges a small holding fee of about \$1 per year for each `Holding` UTXO to allow archiving dust [coins]() once their holding fee surpasses their value.
 - Canton Coin limits the number of UTXOs for a single transfer to 100 `Holding` UTXOs to avoid large transactions that are expensive to process.
 - Canton Coin transactions also merge all input `Holding` UTXOs and return the change to the sender as a single `Holding` UTXO to allow batching the merging of `Holding` UTXOs with transfers.
 - Other tokens are likely to follow similar strategies for the same rationale.
@@ -393,7 +326,7 @@ We therefore recommend the following approach:
 
 The MVP for supporting all Canton Network tokens builds on the MVP for Canton Coin. The key changes required are:
 
-- Change Tx History Ingestion to also ingest the `TransferInstruction` UTXOs, which are used by the Canton Network Token Standard to represent in-progress transfers (see [docs](https://docs.dev.sync.global/app_dev/token_standard/index.html#transfer-instruction), [code](https://github.com/hyperledger-labs/splice/blob/2997dd9e55e5d7901e3f475bc10c3dc6ce95ab0c/token-standard/splice-api-token-transfer-instruction-v1/daml/Splice/Api/Token/TransferInstructionV1.daml#L93-L105)).
+- Change Tx History Ingestion to also ingest the `TransferInstruction` UTXOs, which are used by the Canton Network Token Standard to represent in-progress transfers (see [docs](), [code]()).
 - Adjust the Exchange UI to show the status of in-progress transfers.
 - Adjust the user funds tracking done as part of Tx History Ingestion to credit funds back to the user if they reject a withdrawal transfer. Consider deducting a fee for the failed withdrawal.
 - Implement the Multi-Step Deposit Automation service to auto-accept incoming transfers that are pending receiver acceptance. Ensure that the deposit address is known before accepting the transfer.
@@ -406,7 +339,7 @@ The sections below provide worked examples for the resulting multi-step deposit 
 
 ### Multi-Step Deposit Workflow
 
-![Multi-Step Deposit Workflow Diagram](images/multi-step_deposit.png)
+![Multi-Step Deposit Workflow Diagram](/images/splice_wallet_kernel/multi-step_deposit.png)
 
 #### Example flow: deposit offer and acceptance
 
@@ -469,7 +402,7 @@ Ingesting deposit offers with unknown deposit accounts is still valuable to allo
 
 ### Multi-Step Withdrawal Workflow
 
-![Multi-Step Withdrawal Workflow](images/multi-step_withdrawal.png)
+![Multi-Step Withdrawal Workflow](/images/splice_wallet_kernel/multi-step_withdrawal.png)
 
 #### Example flow: withdrawal offer and acceptance
 
@@ -539,7 +472,7 @@ Steps 8 - 10 are largely the same as for the successful acceptance with the diff
 And the user will ultimately see in both the Exchange UI and the Customer Wallet that the transfer was offered, but rejected by them.
 
 <Note>
-In most cases a `TransferInstruction` will be completed in a single extra step: the receiver either accepts or rejects the transfer, or the sender withdraws it. Each of these steps will manifest as one of the choices on the `TransferInstruction` interface ([code](https://github.com/hyperledger-labs/splice/blob/3fb1eb1c3bcde53e157be13cd497fdb439835d38/token-standard/splice-api-token-transfer-instruction-v1/daml/Splice/Api/Token/TransferInstructionV1.daml#L108-L168)) and its `TransferInstructionResult.output` value clearly tells whether the instruction completed with a successful transfer, failed, or is still pending an action by one of the stakeholders.
+In most cases a `TransferInstruction` will be completed in a single extra step: the receiver either accepts or rejects the transfer, or the sender withdraws it. Each of these steps will manifest as one of the choices on the `TransferInstruction` interface ([code]()) and its `TransferInstructionResult.output` value clearly tells whether the instruction completed with a successful transfer, failed, or is still pending an action by one of the stakeholders.
 </Note>
 
 ### Canton Network Token Onboarding
@@ -556,19 +489,22 @@ Make sure that you only upload .dar files from trusted token admins to avoid unw
 
 Many token admin's run a test instance of their token on TestNet. Consider using these test instances as part of your testing strategy.
 
-For example, Canton Coin also exist on TestNet and DevNet with different `dsoParty` ids. You can retrieve the `dsoParty` id for each network using the [CC Scan API](https://docs.dev.sync.global/app_dev/scan_api/index.html#app-dev-scan-api) served from the [SV nodes of that network](https://sync.global/sv-network/):
+For example, Canton Coin also exist on TestNet and DevNet with different `dsoParty` ids. You can retrieve the `dsoParty` id for each network using the CC Scan [API]() served from the SV nodes of that [network]():
 
-- Use [/v0/dso](https://docs.dev.sync.global/app_dev/scan_api/scan_openapi.html#get--v0-dso) to query the `dsoParty` for the network you are connected to.
-- Use [/v0/splice-instance-names](https://docs.dev.sync.global/app_dev/scan_api/scan_openapi.html#get--v0-splice-instance-names) to query the network name (DevNet, TestNet, or MainNet).
+- Use /v0/[dso]() to query the `dsoParty` for the network you are connected to.
+- Use /v0/[splice-instance-names]() to query the network name (DevNet, TestNet, or MainNet).
+
 
 {/* COPIED_END */}
+
+
 
 
 {/* COPIED_START source="splice-wallet-kernel:docs/wallet-integration-guide/src/exchange-integration/txingestion.rst" hash="72f69ac3" */}
 
 <Warning title="Pre-reviewed Content - Do Not Modify">
 This section was copied from existing reviewed documentation.
-**Source:** `splice-wallet-kernel:docs/wallet-integration-guide/src/exchange-integration/txingestion.rst`
+**Source:** `docs/wallet-integration-guide/src/exchange-integration/txingestion.rst`
 Reviewers: Skip this section. Remove markers after final approval.
 </Warning>
 
@@ -576,10 +512,9 @@ Reviewers: Skip this section. Remove markers after final approval.
 
 ## Offset Checkpoints
 
-When consuming transactions through the update service at `/v2/updates` you will not just receive transactions but you will also receive [offset checkpoints](https://docs.digitalasset.com/build/3.3/reference/lapi-proto-docs.html#com-daml-ledger-api-v2-offsetcheckpoint). Each offset checkpoint contains an offset and the most recent observed record time for each synchronizer. Your Tx History Ingestion should use that to update the last processed offset and record time (in addition to updating those after each transaction) so that it will resume processing transactions from that point on after a crash or restart.
+When consuming transactions through the update service at `/v2/updates` you will not just receive transactions but you will also receive offset checkpoints. Each offset checkpoint contains an offset and the most recent observed record time for each synchronizer. Your Tx History Ingestion should use that to update the last processed offset and record time (in addition to updating those after each transaction) so that it will resume processing transactions from that point on after a crash or restart.
 
-Offset checkpoints are in particular required around Major
-Splice Upgrades where there is no Daml transaction for an extended period of time, but you want to ensure that your Tx History Ingestion advances beyond a particular record time.
+Offset checkpoints are in particular required around Major Splice Upgrades where there is no Daml transaction for an extended period of time, but you want to ensure that your Tx History Ingestion advances beyond a particular record time.
 
 ## Transaction Parsing
 
@@ -589,14 +524,14 @@ As part of the `integration-workflows`, Tx History Ingestion is expected to extr
 The following code is available to help you implement your own parsing logic:
 
 - **JavaScript/TypeScript**: use the token standard history parser provided in the wallet SDK.
-- **Java/JVM**: use the the Java [TransactionParser](https://github.com/digital-asset/ex-java-json-api-bindings/blob/main/JsonLedgerApiSample/src/main/java/com/example/store/TransactionParser.java) from the <https://github.com/digital-asset/ex-java-json-api-bindings> repository as a blueprint.
-- **Other languages**: use the Java [TransactionParser](https://github.com/digital-asset/ex-java-json-api-bindings/blob/main/JsonLedgerApiSample/src/main/java/com/example/store/TransactionParser.java) referenced above as a blueprint.
+- **Java/JVM**: use the the Java [TransactionParser]() from the <https://github.com/digital-asset/ex-java-json-api-bindings> repository as a blueprint.
+- **Other languages**: use the Java [TransactionParser]() referenced above as a blueprint.
 </Note>
 
 ### 1-Step Transfers
 
 To understand the structure of a 1-step transfer, let's look at an example deposit
-as seen through the [JSON Ledger API](https://docs.digitalasset.com/build/3.3/tutorials/json-api/canton_and_the_json_ledger_api.html).
+as seen through the JSON Ledger API.
 
 In this case, we query a single transaction. The format is identical to the transaction you will get when streaming transactions through `/v2/updates/flats` and you can also use the same filter. Note that you need to adjust the `auth-token`, `update-id` and `treasury-party` placeholders to match your setup.
 
@@ -626,12 +561,9 @@ curl -sSL --fail-with-body http://json-api-url/v2/updates/update-by-id \
           }'
 ```
 
-```json
--- Code from: 1-step-transfer.json
--- [Include actual code example here]
-```
+<ExchangeIntegration1StepTransferFull />
 
-You can parse such transactions using the [token standard history parser](https://github.com/hyperledger-labs/splice-wallet-kernel/blob/main/core/ledger-client/src/txparse/parser.ts) provided in the wallet SDK to extract the deposit amount, account and holding contract ids. Note that one-step deposits are more complex to parse than two-step transfers as the token standard does not provide an interface choice visible to the receiver. If you prefer implementing your own implementation, you can parse this as follows:
+You can parse such transactions using the token standard history parser provided in the wallet SDK to extract the deposit amount, account and holding contract ids. Note that one-step deposits are more complex to parse than two-step transfers as the token standard does not provide an interface choice visible to the receiver. If you prefer implementing your own implementation, you can parse this as follows:
 
 1.  Go over the list of events ordered by `nodeId` that you see in the transaction.
 
@@ -671,11 +603,11 @@ You can parse such transactions using the [token standard history parser](https:
 
 The example we discussed above, shows a deposit. A withdrawal is essentially the same transaction but sender and receiver are swapped. For a withdrawal, the sender, i.e. the treasury party for an exchange, will also see the `TransferFactory_Transfer` choice as a parent and you can extract the amount and reason from that instead of looking for the `meta` field in exercise results.
 
-Note however, that for Canton Coin the `amount` in the `TransferFactory_Transfer` argument will be higher than the difference of holdings archived and created for the treasury party due to Canton Coin usage fees. Once the [CIP for CC fee removal](https://lists.sync.global/g/cip-discuss/message/304?p=%2C%2C%2C20%2C0%2C0%2C0%3A%3Arecentpostdate%2Fsticky%2C%2Cfee%2C20%2C1%2C0%2C115127097) is implemented, this distinction goes away. Currently Canton Coin is the only token on Canton Network charging such fees.
+Note however, that for Canton Coin the `amount` in the `TransferFactory_Transfer` argument will be higher than the difference of holdings archived and created for the treasury party due to Canton Coin usage fees. Once the CIP for CC fee removal is implemented, this distinction goes away. Currently Canton Coin is the only token on Canton Network charging such fees.
 
 ### Multi-Step Transfers
 
-To understand the transaction structure of a multi-step transfer, let's look at an example transaction of a Multi-Step Deposit as seen through the [JSON Ledger API](https://docs.digitalasset.com/build/3.3/tutorials/json-api/canton_and_the_json_ledger_api.html).
+To understand the transaction structure of a multi-step transfer, let's look at an example transaction of a Multi-Step Deposit as seen through the JSON Ledger API.
 
 In this case, we query a single transaction. The format is identical to the transaction you will get when streaming transactions through `/v2/updates/flats` and you can also use the same filter. Note that you need to adjust the `auth-token`, `update-id` and `treasury-party` placeholders to match your setup.
 
@@ -705,22 +637,16 @@ curl -sSL --fail-with-body http://json-api-url/v2/updates/update-by-id \
           }'
 ```
 
-```json
--- Code from: transfer-instruction-create.json
--- [Include actual code example here]
-```
+<ExchangeIntegrationTransferInstructionCreateFull />
 
-You can parse such transactions using the [token standard history parser](https://github.com/hyperledger-labs/splice-wallet-kernel/blob/main/core/ledger-client/src/txparse/parser.ts) provided in the wallet SDK to extract the deposit amount, account and holding contract ids. If you prefer implementing your own implementation, you can parse this as follows:
+You can parse such transactions using the token standard history parser provided in the wallet SDK to extract the deposit amount, account and holding contract ids. If you prefer implementing your own implementation, you can parse this as follows:
 
 1.  Go over the list of events ordered by `nodeId` that you see in the transaction.
 2.  Look for all `CreatedEvents` of the `TransferInstruction` interface with `"receiver": "<treasury-party>"`. Each of these represents a deposit offer that can be accepted or rejected. In the example this is only one event with node id `0`. Extract the `instrument`, the `amount` and the `splice.lfdecentralizedtrust.org/reason` field from the `interfaceView` and the contract id of the `TransferInstruction`. Note that one transaction can contain multiple deposits including mixing 1 and 2-step deposits in the same transaction.
 
 After accepting the deposit offer through your automation, Tx History Ingestion can then observe and process acceptance. An example of such a transaction can be seen below.
 
-```json
--- Code from: transfer-instruction-accept.json
--- [Include actual code example here]
-```
+<ExchangeIntegrationTransferInstructionAcceptFull />
 
 To parse this proceed as follows:
 
@@ -752,7 +678,93 @@ To parse this proceed as follows:
 
 Analogously to 1-step transfers, the sender that creates the withdrawal offer, i.e., the treasury party sees a `TransferFactory_Transfer` exercise node and can extract amount and reason from that.
 
-For Canton Coin, both the creation of the `TransferInstruction` as well as the acceptance currently charge fees so the amount specified in the transfer is smaller than the holdings change of the treasury party. Once the [CIP for CC fee removal](https://lists.sync.global/g/cip-discuss/message/304?p=%2C%2C%2C20%2C0%2C0%2C0%3A%3Arecentpostdate%2Fsticky%2C%2Cfee%2C20%2C1%2C0%2C115127097) is implemented, this distinction goes away. Currently Canton Coin is the only token on Canton Network charging such fees.
+For Canton Coin, both the creation of the `TransferInstruction` as well as the acceptance currently charge fees so the amount specified in the transfer is smaller than the holdings change of the treasury party. Once the CIP for CC fee removal is implemented, this distinction goes away. Currently Canton Coin is the only token on Canton Network charging such fees.
+
+
+{/* COPIED_END */}
+
+
+{/* COPIED_START source="splice-wallet-kernel:docs/wallet-integration-guide/src/exchange-integration/non-functionals.rst" hash="d3042647" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was copied from existing reviewed documentation.
+**Source:** `docs/wallet-integration-guide/src/exchange-integration/non-functionals.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+# Fault Tolerance
+
+Recall the architecture diagram from the `integration-architecture` section:
+
+![Integration architecture component overview](/images/splice_wallet_kernel/component_diagram.png)
+
+Below you learn how to handle crashes of the integration components, how to handle RPC errors, and how to perform disaster recovery for the Exchange Validator Node.
+
+## Handling Crashes
+
+Validator nodes are crash-fault tolerant and do not lose data shared on the Ledger API in case of a crash. Thus a restart is sufficient to recover from crashes. Likewise, we assume that the Canton Integration DB is backed by a crash-fault tolerant database (e.g., PostgreSQL or MySQL).
+
+For the integration components that you build, we recommend the following strategy to handle crashes and restarts:
+
+- **Tx History Ingestion**: keep track of the last ingested offset in the Canton Integration DB. On restart, continue from that offset. If none is set, then that means it never ingested any transaction. In that case, start from the beginning of the transaction history, i.e., start from offset `0`.
+
+  For this to work, it is important that you store the ingested offset in the same transaction as you store the ingested data. See the individual `integration-workflows` descriptions for details.
+
+- **Withdrawal Automation**: make it stateless, so that it can just restart. This is in line with how we recommend to implement both the `one-step-withdrawal-workflow` and the `multi-step-withdrawal-workflow`.
+
+- **Multi-Step Deposit Automation**: make it stateless, so that it can just restart. This is in line with how we recommend to implement the `multi-step-deposit-workflow`.
+
+## Handling RPC Errors
+
+Below we explain our recommendation for handling RPC errors in the integration components you are building. We focus on handling errors from interacting with the Ledger API and the Registry API Servers of the token admins. We do not cover handling errors from accessing DBs or other internal systems, as we assume you have strategies in place for those.
+
+- **Tx History Ingestion**: only reads from the Ledger API. We recommend to retry these reads a bounded number of times on `retryable-errors`. Wait at least a few seconds between retries and consider using exponential [backoff]() to avoid overloading the Validator Node. Consider crashing the ingestion component if the bounded number of retries is exceeded to recover from bugs in the in-memory state of the ingestion component.
+
+<div id="withdrawal-automation">
+
+- **Withdrawal Automation**: recall from `one-step-withdrawal-workflow` that the Withdrawal Automation first retrieves extra context from the Registry API Server of the token admin and then prepares, signs, and executes the transaction to submit the transfer for the withdrawal using the `/v2/interactive-submission/execute` endpoint of the Ledger API.
+
+  The endpoint is asynchronous and observing its response only means that the transaction has been accepted for processing. You can retrieve the status of the execution via the `/v2/commands/completions` endpoint of the Ledger API; or alternatively, by observing the effect of the execution via the Tx History Ingestion component. The latter option is more robust, as it ensures that you observe the effect of the execution in a persistent manner.
+
+  We recommend that you retry the steps from the start when not observing the successful completion of the withdrawal within the expected time or when encountering a retryable error on the execution itself. You thereby ensure that you prepare the withdrawal transaction using the latest state of the Validator Node and the latest extra context from the Registry API Server. Use a bounded number of retries with at least a few seconds between retries and consider using exponential backoff.
+
+  Retrying all steps is safe from a consistency perspective because the withdrawal transaction is idempotent, as it archives the UTXOs used to fund the transfer once the transfer is submitted. You nevertheless want to avoid retrying too often, as executing a transaction costs traffic.
+
+  Stop retrying once the withdrawal has been marked as definitely failed in the Canton Integration DB by the Tx History Ingestion component. A withdrawal is considered definitely failed once its target record time `trecTgt` is below the last ingested record time.
+
+- **Multi-Step Deposit Automation**: the approach is analogous to the one for Withdrawal Automation.
+
+  Recall from `multi-step-deposit-workflow` that the Multi-Step Deposit Automation discovers a pending deposit by reading from the Canton Integration DB, then retrieves extra context from the Registry API Server of the token admin and finally prepares, signs, and executes the transaction to accept the transfer offer using the `/v2/interactive-submission/execute` endpoint of the Ledger API.
+
+  The endpoint is asynchronous and observing its response only means that the transaction has been accepted for processing. You can retrieve the status of the execution via the `/v2/commands/completions` endpoint of the Ledger API; or alternatively, by observing the effect of the execution via the Tx History Ingestion component. The latter option is more robust, as it ensures that you observe the effect of the execution in a persistent manner.
+
+  We recommend that you retry the steps from the start when not observing the successful completion of the transfer offer acceptance within the expected time or when encountering a retryable error on the execution itself. You thereby ensure that you prepare the transaction to accept the transfer offer using the latest state of the Validator Node and the latest extra context from the Registry API Server. Use a bounded number of retries with at least a few seconds between retries and consider using exponential backoff.
+
+  Retrying all steps is safe from a consistency perspective because the accept transaction is idempotent, as it archives the transfer offer once it is accepted. You nevertheless want to avoid retrying too often, as executing a transaction costs traffic.
+
+  You can stop retrying after a bounded number of retries. The sender can reclaim their funds at any point by withdrawing the offer. The Multi-Step Deposit Automation will learn about the withdrawal of the offer via the Tx History Ingestion component, which will mark the transfer offer as withdrawn in the Canton Integration DB.
+
+</div>
+
+### Retryable errors
+
+For increased robustness and fault tolerance, we recommend to retry by default on all errors and manage an exclude list of non-retryable errors. As a starting opint, we suggest to exclude the following HTTP error codes from retries:
+
+- 401 Unauthorized
+- 403 Forbidden
+- 500 Internal Server Error
+- 501 Not Implemented
+
+### Reading from Canton Coin Scan
+
+As explained in `mvp-for-cc`, the Registry API Server of the token admin for Canton Coin is provided by the Canton Coin Scan [services](). They are run as part of every SV node.
+
+For convenience, every Validator Node provides a Scan proxy [service]() to read from the Scan instances run by SVs with Byzantine fault tolerance. The Scan proxy service also implements the Token Standard Registry API for Canton Coin.
+
+We recommend to use Scan proxy service of the Exchange Validator Node to retrieve the extra context for Canton Coin transfers.
+
+If that is not possible, then you can read from a random Canton Coin Scan instance for the purpose of retrieving extra context for Canton Coin transfers. The on-ledger validation of the transfers ensures that you do not need to trust the Scan instance for correctness. Ensure that you read from a different Scan instance on every retry to avoid being affected by a faulty Scan instance for too long.
+
 
 {/* COPIED_END */}
 
@@ -761,7 +773,7 @@ For Canton Coin, both the creation of the `TransferInstruction` as well as the a
 
 <Warning title="Pre-reviewed Content - Do Not Modify">
 This section was copied from existing reviewed documentation.
-**Source:** `splice-wallet-kernel:docs/wallet-integration-guide/src/exchange-integration/node-operations.rst`
+**Source:** `docs/wallet-integration-guide/src/exchange-integration/node-operations.rst`
 Reviewers: Skip this section. Remove markers after final approval.
 </Warning>
 
@@ -771,28 +783,28 @@ Reviewers: Skip this section. Remove markers after final approval.
 
 As explained in `tokenomics-and-rewards`, your validator node will need traffic to submit the transactions to execute withdrawals or accept multi-step deposits. As also explained in that section, the network provides rewards that can be used to fund traffic.
 
-Note also that every validator node has an associated **validator operator party** that represents that validator node's administrator ([docs](https://docs.dev.sync.global/validator_operator/validator_compose.html#deployment)). The validator node automatically mints rewards for that party. It can further be configured to [automatically purchase traffic](https://docs.dev.sync.global/validator_operator/validator_helm.html#configuring-automatic-traffic-purchases) using that party's CC balance, which includes the minted rewards.
+Note also that every validator node has an associated **validator operator party** that represents that validator node's administrator ([docs]()). The validator node automatically mints rewards for that party. It can further be configured to automatically purchase [traffic]() using that party's CC balance, which includes the minted rewards.
 
 We thus recommend the following setup as a starting point to mint rewards and automatically fund traffic:
 
 1.  Use the validator operator party as your featured `exchangeParty`. Follow `exchange-party-setup` to get it featured.
 2.  `treasury-party-setup` to create a `treasuryParty` with a transfer preapproval managed by your `exchangeParty`.
-3.  Setup [automatic traffic purchases in the validator app](https://docs.dev.sync.global/validator_operator/validator_helm.html#configuring-automatic-traffic-purchases).
-4.  Optional: setup [auto-sweep](https://docs.dev.sync.global/validator_operator/validator_helm.html#configuring-sweeps-and-auto-accepts-of-transfer-offers) from the `exchangParty` to your `treasuryParty` to limit the funds managed directly by the validator node.
+3.  Setup automatic traffic purchases in the validator [app]().
+4.  Optional: setup [auto-sweep]() from the `exchangParty` to your `treasuryParty` to limit the funds managed directly by the validator node.
 
-As a starting point for the automatic traffic purchase configuration, set `targetThroughput` to 2kB/s and `minTopupInterval` to 1 minute, which should be sufficient to execute about one withdrawal or deposit acceptance every 10 seconds. Please test this with your expected traffic pattern and adjust as needed. See this [FAQ to measure the traffic spent on an individual transaction](https://docs.dev.sync.global/faq.html#term-How-do-I-determine-the-traffic-used-for-a-specific-transaction).
+As a starting point for the automatic traffic purchase configuration, set `targetThroughput` to 2kB/s and `minTopupInterval` to 1 minute, which should be sufficient to execute about one withdrawal or deposit acceptance every 10 seconds. Please test this with your expected traffic pattern and adjust as needed. See this FAQ to measure the traffic spent on an individual [transaction]().
 
 ## Setup Exchange Parties
 
 ### Setup the featured exchange party
 
-As explained above in `reward-minting-and-traffic-funding`, we recommend to use the validator operator party as your featured `exchangeParty`. This party is automatically created when you [deploy your validator node](https://docs.dev.sync.global/validator_operator/validator_compose.html#deployment). Thus the only setup step is to get it featured by the SVs:
+As explained above in `reward-minting-and-traffic-funding`, we recommend to use the validator operator party as your featured `exchangeParty`. This party is automatically created when you deploy your validator [node](). Thus the only setup step is to get it featured by the SVs:
 
 **On DevNet**, you can self-feature your validator operator party as follows:
 
-1.  [Log into the wallet UI for the validator user](https://docs.dev.sync.global/validator_operator/validator_helm.html#logging-into-the-wallet-ui), which presents itself as in this screenshot:
+1.  Log into the wallet UI for the validator [user](), which presents itself as in this screenshot:
 
-    ![image](images/wallet_ui.png)
+    ![image](/images/splice_wallet_kernel/wallet_ui.png)
 
 2.  Tap 20 \$ of CC to ensure that your validator operator party has enough funds to purchase traffic.
 
@@ -804,7 +816,7 @@ That's all. Continue with setting up your treasury party.
 
 **On MainNet**, apply for featured status for your validator operator party as follows:
 
-1.  [Log into the wallet UI for the validator user](https://docs.dev.sync.global/validator_operator/validator_helm.html#logging-into-the-wallet-ui) on your MainNet validator node.
+1.  Log into the wallet UI for the validator [user]() on your MainNet validator node.
 2.  Copy the party-id of your validator operator party using the copy button right of the abbreviated `"google-oaut.."` party name in the screenshot above.
 3.  Apply for featured application status using this link: <https://sync.global/featured-app-request/>
 
@@ -818,9 +830,9 @@ Setup the `treasuryParty` as follows with a transfer preapproval managed by your
 
 1.  Create the `treasuryParty` using the wallet SDK to `create-an-external-party` with a key managed in a system of your choice
 
-2.  Copy the party id of your `exchangeParty` from the Splice Wallet UI as explained above, or retrieve it by calling `/v0/validator-user` on the [Validator API](https://github.com/hyperledger-labs/splice/blob/36ed55ea1fbb9b0030000bb0d0265ba811101df5/apps/validator/src/main/openapi/validator-internal.yaml#L14C3-L14C21).
+2.  Copy the party id of your `exchangeParty` from the Splice Wallet UI as explained above, or retrieve it by calling `/v0/validator-user` on the Validator [API]().
 
-3.  Call `/v2/commands/submit-and-wait` on the [Ledger API](https://github.com/digital-asset/canton/blob/eeb56bc5d9779a7f918893b7a6b15e0b312a044e/community/ledger/ledger-json-api/src/test/resources/json-api-docs/openapi.yaml#L6C3-L6C31) to create a `#splice-wallet:Splice.Wallet.TransferPreapproval:TransferPreapprovalProposal` ([code](https://github.com/hyperledger-labs/splice/blob/edb2257410dfc3660314765c40e59f41e2381150/daml/splice-wallet/daml/Splice/Wallet/TransferPreapproval.daml#L9)) directly with the `provider` set to your `exchangeParty`.
+3.  Call `/v2/commands/submit-and-wait` on the Ledger [API]() to create a `#splice-wallet:Splice.Wallet.TransferPreapproval:TransferPreapprovalProposal` ([code]()) directly with the `provider` set to your `exchangeParty`.
 
     Note that setting up this transfer preapproval requires the `exchangeParty` to pay a small fee of about 0.25 \$ worth of CC. The funds for this fee usually come from the validator liveness rewards that a validator node starts minting about 30 minutes after it is created. On DevNet or LocalNet, you don't have to wait that long: just "Tap" the required funds from the built-in faucet.
 
@@ -836,17 +848,17 @@ You can test the party setup on LocalNet or DevNet as follows:
 
 ## Setup Ledger API Users
 
-Clients need to [authenticate as a Ledger API user](https://docs.digitalasset.com/build/3.3/sdlc-howtos/applications/secure/authorization.html) to access the Ledger API of your Exchange Validator Node. You can manage Ledger API users and their rights using the `/v2/users/...` [endpoints of the Ledger API](https://github.com/digital-asset/canton/blob/97b837d7b7e9a499963cba1d39a017648c46e8d7/community/ledger/ledger-json-api/src/test/resources/json-api-docs/openapi.yaml#L1172).
+Clients need to authenticate as a Ledger API [user]() to access the Ledger API of your Exchange Validator Node. You can manage Ledger API users and their rights using the `/v2/users/...` endpoints of the Ledger [API]().
 
-You will need to authenticate as an existing user that has `participant_admin` rights to create additional users and grant rights. One option is to authenticate as the `ledger-api-user` that you [configured when setting up authentication for your validator node](https://docs.dev.sync.global/validator_operator/validator_helm.html#oidc-provider-requirements). Another option is to [log-in to your Splice Wallet UI for the validator operatory party](https://docs.dev.sync.global/validator_operator/validator_helm.html#logging-into-the-wallet-ui) and use the JWT token used by the UI.
+You will need to authenticate as an existing user that has `participant_admin` rights to create additional users and grant rights. One option is to authenticate as the `ledger-api-user` that you configured when setting up authentication for your validator [node](). Another option is to log-in to your Splice Wallet UI for the validator operatory [party]() and use the JWT token used by the UI.
 
-We recommend that you setup one user per service that needs to access the Ledger API. This way you can easily manage permissions and access rights for each service independently. The [rights](https://docs.digitalasset.com/build/3.3/sdlc-howtos/applications/secure/authorization.html#access-tokens-and-rights) required by the integration components are as follows:
+We recommend that you setup one user per service that needs to access the Ledger API. This way you can easily manage permissions and access rights for each service independently. The [rights]() required by the integration components are as follows:
 
-| Component                                                                                      | Required Rights                                   | Purpose                                                                                                                                                                                         |
-|------------------------------------------------------------------------------------------------|---------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Tx History Ingestion                                                                           | `canReadAs(treasuryParty)`                        | Read transactions and contracts for the `treasuryParty`.                                                                                                                                        |
-| Withdrawal Automation                                                                          | `canActAs(treasuryParty)`                         | Prepare and execute transactions on behalf of the `treasuryParty`.                                                                                                                              |
-| Multi-Step Deposit Automation                                                                  | `canActAs(treasuryParty)`                         | Prepare and execute transactions on behalf of the `treasuryParty`.                                                                                                                              |
+| Component                                                           | Required Rights                                   | Purpose                                                                                                                                                                                         |
+|---------------------------------------------------------------------|---------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Tx History Ingestion                                                | `canReadAs(treasuryParty)`                        | Read transactions and contracts for the `treasuryParty`.                                                                                                                                        |
+| Withdrawal Automation                                               | `canActAs(treasuryParty)`                         | Prepare and execute transactions on behalf of the `treasuryParty`.                                                                                                                              |
+| Multi-Step Deposit Automation                                       | `canActAs(treasuryParty)`                         | Prepare and execute transactions on behalf of the `treasuryParty`.                                                                                                                              |
 | Automated exchange parties setup for `exchange-integration-testing` | `participant_admin` and `canActAs(treasuryParty)` | Create parties and use the `treasuryParty` to create its `TransferPreapprovalProposal`. Hint: grant `canActAs(treasuryParty)` to the user doing the setup after allocating the `treasuryParty`. |
 
 Required Ledger API User Rights
@@ -855,7 +867,7 @@ Required Ledger API User Rights
 
 `.dar` files define the Daml workflows used by the token admins for their tokens. They must be uploaded to your Exchange Validator Node to be able to process withdrawals and deposits for those tokens.
 
-The `.dar` files for Canton Coin are managed by the Validator Node itself. The `.dar` files for other tokens need to be uploaded by you using the `/v2/packages` endpoint of the [Ledger API](https://github.com/digital-asset/canton/blob/eeb56bc5d9779a7f918893b7a6b15e0b312a044e/community/ledger/ledger-json-api/src/test/resources/json-api-docs/openapi.yaml#L316). See this [how-to guide](https://docs.digitalasset.com/build/3.3/sdlc-howtos/applications/develop/manage-daml-packages.html) for more information.
+The `.dar` files for Canton Coin are managed by the Validator Node itself. The `.dar` files for other tokens need to be uploaded by you using the `/v2/packages` endpoint of the Ledger [API](). See this how-to [guide]() for more information.
 
 <Warning>
 Only upload `.dar` files from token admins that you trust. The uploaded `.dar` files define the choices available on active contracts. Uploading a malicious `.dar` file could result in granting an attacker an unintended delegation on your contracts, which could lead to loss of funds.
@@ -863,13 +875,13 @@ Only upload `.dar` files from token admins that you trust. The uploaded `.dar` f
 
 ## Monitoring
 
-See the Splice documentation for guidance on [how to monitor your validator node](https://docs.dev.sync.global/deployment/observability/index.html). Note in particular that it includes [Grafana dashboards](https://docs.dev.sync.global/deployment/observability/metrics.html#grafana-dashboards) for monitoring the traffic usage, balances of local parties (e.g., the `exchangeParty`), and [many other metrics](https://docs.dev.sync.global/deployment/observability/metrics_reference.html).
+See the Splice documentation for guidance on how to monitor your validator [node](). Note in particular that it includes Grafana [dashboards]() for monitoring the traffic usage, balances of local parties (e.g., the `exchangeParty`), and many other [metrics]().
 
 ## Rolling out Major Splice Upgrades
 
-For major protocol changes, the global sychronizer undergoes a [Major Upgrade Procedure](https://docs.dev.sync.global/validator_operator/validator_major_upgrades.html). The schedule for these upgrades is published by the [Super Validators](https://docs.google.com/document/d/1QhLL5bL0u8temBL86y957VbWDtZJhH9udH-_C7nBlvc/edit?tab=t.0#heading=h.ripdn5ydglli) and also announced in the `#validator-operations` slack channel.
+For major protocol changes, the global sychronizer undergoes a Major Upgrade Procedure. The schedule for these upgrades is published by the Super Validators and also announced in the `#validator-operations` slack channel.
 
-As part of this procedure, the old synchronizer is paused, all validator operators create an export of the state of their validator, and deploy a new validator connected to the new synchronizer and import their state again. For a more detailed overview, refer to the [Splice docs](https://docs.dev.sync.global/validator_operator/validator_major_upgrades.html).
+As part of this procedure, the old synchronizer is paused, all validator operators create an export of the state of their validator, and deploy a new validator connected to the new synchronizer and import their state again. For a more detailed overview, refer to the Splice [docs]().
 
 The procedure requires some experience to get it right, so it is highly recommended to run nodes on DevNet and TestNet so you can practice the procedure before you encounter it on MainNet.
 
@@ -883,19 +895,21 @@ From an integration perspective, there are a few things to keep in mind:
 
 We recommend to roll-out the upgrade as follows:
 
-1.  Wait for the synchronizer to be paused and your node to have written the migration dump as described in the [Splice docs](https://docs.dev.sync.global/validator_operator/validator_major_upgrades.html#catching-up-before-the-migration).
+1.  Wait for the synchronizer to be paused and your node to have written the migration dump as described in the Splice [docs]().
 
-2.  Open the migration dump and extract the `acs_timestamp` from it, e.g., using jq .acs_timestamp to guarantee that your Tx History Ingestion advances past `acs_timestamp`.
+2.  Open the migration dump and extract the `acs_timestamp` from it, e.g., using `jq .acs_timestamp < /domain-upgrade-dump/domain_migration_dump.json`. This is the timestamp at which the synchronizer was paused.
+
+3.  Wait for your Tx History Ingestion to have caught up to record time `acs_timestamp` or higher. Note that you must consume offset checkpoints to guarantee that your Tx History Ingestion advances past `acs_timestamp`.
 
 4.  Stop your Tx History Ingestion component.
 
-5.  Upgrade your validator and connect it to the new synchronizer following the [Splice docs](https://docs.dev.sync.global/validator_operator/validator_major_upgrades.html#deploying-the-validator-app-and-participant-docker-compose).
+5.  Upgrade your validator and connect it to the new synchronizer following the Splice [docs]().
 
 6.  Follow the shortened version below of the procedure for restoring a validator node from a backup to determine the offset from which to restart your Tx History Ingestion:
 
     > 1.  Retrieve the `synchronizerId` of the last ingested transaction from the Canton Integration DB.
     >
-    > 2.  Log into the [Canton Console of your validator node](https://docs.dev.sync.global/deployment/console_access.html) and query the offset `offRecovery` assigned to the ACS import transactions at time `0001-01-01T00:00:00.000000Z` using
+    > 2.  Log into the Canton Console of your validator [node]() and query the offset `offRecovery` assigned to the ACS import transactions at time `0001-01-01T00:00:00.000000Z` using
     >
     >     ```scala
     >     def parseTimestamp(t: String) = {
@@ -925,6 +939,7 @@ We recommend to roll-out the upgrade as follows:
 
 Once you have completed these steps, the integration workflows will continue.
 
+
 {/* COPIED_END */}
 
 
@@ -932,7 +947,7 @@ Once you have completed these steps, the integration workflows will continue.
 
 <Warning title="Pre-reviewed Content - Do Not Modify">
 This section was copied from existing reviewed documentation.
-**Source:** `splice-wallet-kernel:docs/wallet-integration-guide/src/exchange-integration/disaster-recovery.rst`
+**Source:** `docs/wallet-integration-guide/src/exchange-integration/disaster-recovery.rst`
 Reviewers: Skip this section. Remove markers after final approval.
 </Warning>
 
@@ -942,11 +957,11 @@ Recall that the `integration-architecture`, shown in the diagram below, relies o
 
 Restoring these components from a backup can lead to data loss, which needs to be handled carefully in the integration components you are building. See the sections below for guidance on how to do so.
 
-![Integration architecture component overview](images/component_diagram.png)
+![Integration architecture component overview](/images/splice_wallet_kernel/component_diagram.png)
 
 ## Backing up the Exchange Validator Node
 
-Follow the [Splice documentation on how to backup a validator node](https://docs.dev.sync.global/validator_operator/validator_backups.html).
+Follow the Splice documentation on how to backup a validator [node]().
 
 ## Backing up the Canton Integration DB
 
@@ -956,9 +971,9 @@ Follow your internal guidance and best practices on what DB system to use and ho
 
 ## Restoring the Exchange Validator Node from a Backup
 
-Follow the [Splice documentation on how to restore a validator node from a backup](https://docs.dev.sync.global/validator_operator/validator_disaster_recovery.html#restoring-a-validator-from-backups) to restore the Exchange Validator Node from a backup that is less than 30 days old.
+Follow the Splice documentation on how to restore a validator node from a [backup]() to restore the Exchange Validator Node from a backup that is less than 30 days old.
 
-The node will resubscribe to transaction data from the synchronizer and recover all committed transactions and the corresponding changes to the set of active contracts (i.e. UTXOs). However validator-node local data written after the backup will be lost, as described on the [Canton documentation page](https://docs.digitalasset.com/operate/3.3/howtos/recover/backup-restore.html#restore-caveats).
+The node will resubscribe to transaction data from the synchronizer and recover all committed transactions and the corresponding changes to the set of active contracts (i.e. UTXOs). However validator-node local data written after the backup will be lost, as described on the Canton documentation [page]().
 
 In the context of the recommended `integration-workflows`, this data loss affects:
 
@@ -977,7 +992,7 @@ Follow these steps to restore the Exchange Validator Node from a backup:
 
 4.  Reupload all `.dar` files that were uploaded after the backup.
 
-5.  Log into the [Canton Console of your validator node](https://docs.dev.sync.global/deployment/console_access.html) and query the offset `offRecovery` assigned to `tRecovery` using
+5.  Log into the Canton Console of your validator [node]() and query the offset `offRecovery` assigned to `tRecovery` using
 
     ```scala
     def parseTimestamp(t: String) = {
@@ -1008,7 +1023,7 @@ Follow these steps to restore the Exchange Validator Node from a backup:
 Once Tx History Ingestion has caught up, the integration workflows will continue as before the disaster.
 
 <Note>
-These steps assume that record times assigned to transactions are unique, which is the case unless you are using participant-local operations that modify the transaction history. These are ACS imports, party migrations, party replication, or [repair commands](https://docs.digitalasset.com/operate/3.4/explanations/repairing.html). Multi-hosting a party from the start does not lead to non-unique record times.
+These steps assume that record times assigned to transactions are unique, which is the case unless you are using participant-local operations that modify the transaction history. These are ACS imports, party migrations, party replication, or repair [commands](). Multi-hosting a party from the start does not lead to non-unique record times.
 
 If your are using participant-local operations that modify the transaction history, then you we recommend adjusting Step 5 as follows to deal with the rare case of a partial ingestion of transactions with the same record time:
 
@@ -1037,6 +1052,7 @@ Step 3 takes care to resynchronize the state of the Canton Integration DB with t
 
 We recommend doing so by having the Tx History Ingestion re-create the withdrawal request record from the on-chain data. Likely not all fields can be recovered, so consider either marking the withdrawal as "recovered" and leaving them blank. Alternatively, you can store these fields in additional metadata on the transfer record when creating the withdrawal transfer on-chain. This will though cost additional traffic and may leak information to your customer and the token admin.
 
+
 {/* COPIED_END */}
 
 
@@ -1044,7 +1060,7 @@ We recommend doing so by having the Tx History Ingestion re-create the withdrawa
 
 <Warning title="Pre-reviewed Content - Do Not Modify">
 This section was copied from existing reviewed documentation.
-**Source:** `splice-wallet-kernel:docs/wallet-integration-guide/src/exchange-integration/testing.rst`
+**Source:** `docs/wallet-integration-guide/src/exchange-integration/testing.rst`
 Reviewers: Skip this section. Remove markers after final approval.
 </Warning>
 
@@ -1052,9 +1068,9 @@ Reviewers: Skip this section. Remove markers after final approval.
 
 ## Test Node Setup
 
-When testing on your laptop or in CI, we recommend using Splice's [LocalNet](https://docs.dev.sync.global/app_dev/testing/localnet.html), which is a Docker-Compose based local deployment of a Global Synchronizer and Canton Coin. Automate the exchange parties setup as part of your test setup, so that you can start from a clean state for each test run while reusing the same LocalNet. Thereby achieving test isolation without the overhead of starting and stopping LocalNet for each test run.
+When testing on your laptop or in CI, we recommend using Splice's [LocalNet](), which is a Docker-Compose based local deployment of a Global Synchronizer and Canton Coin. Automate the exchange parties setup as part of your test setup, so that you can start from a clean state for each test run while reusing the same LocalNet. Thereby achieving test isolation without the overhead of starting and stopping LocalNet for each test run.
 
-Alternatively you can consider setting up a DevNet validator node using either Docker-Compose or k8s as [documented in Splice](https://docs.dev.sync.global/validator_operator/index.html) and using that for testing.
+Alternatively you can consider setting up a DevNet validator node using either Docker-Compose or k8s as documented in [Splice]() and using that for testing.
 
 ## Test Scenarios
 
@@ -1082,6 +1098,7 @@ Apart from testing functional correctness, we recommend testing for robustness a
 
 Where possible, we recommend to automate these tests as part of your CI pipeline so that you can run them frequently and with little overhead.
 
+
 {/* COPIED_END */}
 
 
@@ -1089,7 +1106,7 @@ Where possible, we recommend to automate these tests as part of your CI pipeline
 
 <Warning title="Pre-reviewed Content - Do Not Modify">
 This section was copied from existing reviewed documentation.
-**Source:** `splice-wallet-kernel:docs/wallet-integration-guide/src/exchange-integration/extensions.rst`
+**Source:** `docs/wallet-integration-guide/src/exchange-integration/extensions.rst`
 Reviewers: Skip this section. Remove markers after final approval.
 </Warning>
 
@@ -1099,17 +1116,17 @@ This page describes the following additional features that you can consider addi
 
 ## Optimizing App Rewards
 
-The MVP for all CN tokens described in the `exchange-integration-overview` section comes with the limitation that application rewards are only earned on deposits of CC, but not on deposits of other CN tokens. We recommend to lift this limitation and to improve the profitability of the integration using Canton Coin's [featured application activity marker mechanism](https://docs.dev.sync.global/background/tokenomics/feat_app_act_marker_tokenomics.html). It allows tagging transactions with a featured application activity marker and earn application rewards for them.
+The MVP for all CN tokens described in the `exchange-integration-overview` section comes with the limitation that application rewards are only earned on deposits of CC, but not on deposits of other CN tokens. We recommend to lift this limitation and to improve the profitability of the integration using Canton Coin's featured application activity marker [mechanism](). It allows tagging transactions with a featured application activity marker and earn application rewards for them.
 
-The idea is to tag both the initatiation of withdrawals and the acceptance of deposit offers with a featured application activity marker to attribute the transaction to the `exchangeParty`. Tagging these transactions is compliant with the [guidance given in the Splice documentation](https://docs.dev.sync.global/background/tokenomics/feat_app_act_marker_tokenomics.html), as they correspond to transfers and create value for the network.
+The idea is to tag both the initatiation of withdrawals and the acceptance of deposit offers with a featured application activity marker to attribute the transaction to the `exchangeParty`. Tagging these transactions is compliant with the guidance given in the Splice [documentation](), as they correspond to transfers and create value for the network.
 
-In order for the `treasuryParty` to create featured application activity markers in the name of the `exchangeParty`, a delegation contract is required. A suitable [delegation template](https://github.com/hyperledger-labs/splice/blob/5870d2d8b0c6b9dfcf8afe11ab0685e2ee58342f/daml/splice-util-featured-app-proxies/daml/Splice/Util/FeaturedApp/DelegateProxy.daml#L35-L55) called `DelegateProxy` is part of the [splice-util-featured-app-proxies](https://github.com/hyperledger-labs/splice/tree/main/daml/splice-util-featured-app-proxies) package. We recommend to use this package and template as explained in the sections below.
+In order for the `treasuryParty` to create featured application activity markers in the name of the `exchangeParty`, a delegation contract is required. A suitable delegation [template]() called `DelegateProxy` is part of the [splice-util-featured-app-proxies]() package. We recommend to use this package and template as explained in the sections below.
 
 ### Earning App Rewards for Withdrawals
 
 The following steps describe how to adjust the Withdrawal Automation to tag withdrawal transfers with a featured application activity marker.
 
-1.  Download the most recent version of the `splice-util-featured-app-proxies.dar` file from the [Splice repository's checked-in .dars](https://github.com/hyperledger-labs/splice/tree/main/daml/dars).
+1.  Download the most recent version of the `splice-util-featured-app-proxies.dar` file from the Splice repository's checked-in .[dars]().
 
     Note that at the time of writing, there was no official release of the Splice .dars that included this package, which is why we recommend downloading the .dar directly from the repository.
 
@@ -1122,16 +1139,16 @@ The following steps describe how to adjust the Withdrawal Automation to tag with
 
 4.  Add a step to the treasury party setup to also create a `DelegateProxy` contract with `provider = exchangeParty` and `delegate = treasuryParty`.
 
-    Use the `/v2/commands/submit-and-wait` [endpoint](https://github.com/digital-asset/canton/blob/97b837d7b7e9a499963cba1d39a017648c46e8d7/community/ledger/ledger-json-api/src/test/resources/json-api-docs/openapi.yaml#L6) submit the `create` command for the `DelegateProxy` template.
+    Use the `/v2/commands/submit-and-wait` [endpoint]() submit the `create` command for the `DelegateProxy` template.
 
 5.  Change the initialization code of the Withdrawal Automation to:
 
     1.  query the active contracts of the `exchangeParty` for the `DelegateProxy` contract created in the previous step and store its contract ID in `proxyCid`.
-    2.  query the active contracts of the `exchangeParty` for the `FeaturedAppRight` contract and store its contract ID in `featuredAppRightCid` and its [create-event-blob](https://docs.digitalasset.com/build/3.3/sdlc-howtos/applications/develop/explicit-contract-disclosure.html) in `featuredAppRightEventBlob`.
+    2.  query the active contracts of the `exchangeParty` for the `FeaturedAppRight` contract and store its contract ID in `featuredAppRightCid` and its [create-event-blob]() in `featuredAppRightEventBlob`.
 
-6.  Change the Withdrawal Automation code that initiates a withdrawal transfer to call the `DelegateProxy_TransferFactory_Transfer` choice instead of the `TransferFactory_Transfer` choice, as shown in [this test case](https://github.com/hyperledger-labs/splice/blob/5870d2d8b0c6b9dfcf8afe11ab0685e2ee58342f/daml/splice-util-featured-app-proxies-test/daml/Splice/Scripts/TestFeaturedDepositsAndWithdrawals.daml#L204-L215).
+6.  Change the Withdrawal Automation code that initiates a withdrawal transfer to call the `DelegateProxy_TransferFactory_Transfer` choice instead of the `TransferFactory_Transfer` choice, as shown in this test [case]().
 
-    The call to the choice takes the `proxyCid` and the `featuredAppRightCid` as parameters alongside the actual transfer parameters. Pass in the `featuredAppRightEventBlob` as an [additional disclosed contract](https://docs.digitalasset.com/build/3.3/sdlc-howtos/applications/develop/explicit-contract-disclosure.html).
+    The call to the choice takes the `proxyCid` and the `featuredAppRightCid` as parameters alongside the actual transfer parameters. Pass in the `featuredAppRightEventBlob` as an additional disclosed [contract]().
 
 The Tx History Ingestion as described here does not need changing, as it descends into the `TransferFactory_Transfer` choice that is called by the `DelegateProxy_TransferFactory_Transfer` choice.
 
@@ -1139,13 +1156,13 @@ The Tx History Ingestion as described here does not need changing, as it descend
 
 Steps 1 to 5 are analogous to the steps described in the `withdrawal-app-rewards` section above.
 
-In Step 6, change the Deposit Automation code that accepts a deposit offer to call the `DelegateProxy_TransferInstruction_Accept` choice instead of the `TransferInstruction_Accept` choice, as shown in [this test case](https://github.com/hyperledger-labs/splice/blob/5870d2d8b0c6b9dfcf8afe11ab0685e2ee58342f/daml/splice-util-featured-app-proxies-test/daml/Splice/Scripts/TestFeaturedDepositsAndWithdrawals.daml#L147-L161).
+In Step 6, change the Deposit Automation code that accepts a deposit offer to call the `DelegateProxy_TransferInstruction_Accept` choice instead of the `TransferInstruction_Accept` choice, as shown in this test [case]().
 
 ### Sharing App Rewards with your Customers
 
 The featured app marker API allows splitting the activity record across multiple beneficiaries. Each of them then gets credited for a fraction of the activity. You can use this feature to share some of the application rewards with your customers to incentivize them to use your exchange.
 
-To do so, you need to adjust the code changes described in the sections above to pass in multiple beneficiaries to the respective choices, as called out in [this test case](https://github.com/hyperledger-labs/splice/blob/5870d2d8b0c6b9dfcf8afe11ab0685e2ee58342f/daml/splice-util-featured-app-proxies-test/daml/Splice/Scripts/TestFeaturedDepositsAndWithdrawals.daml#L147-L161).
+To do so, you need to adjust the code changes described in the sections above to pass in multiple beneficiaries to the respective choices, as called out in this test [case]().
 
 ## Sharding the Treasury
 
@@ -1160,7 +1177,7 @@ You can shard your treasury over multiple parties as follows:
 
 ## Multi-Hosting the Treasury Party
 
-The documentation on setting up the exchange party describes how to setup a party with a single confirming node. This can be sufficient but the confirming nodes for the party are essential to keep your party secure and compromise of them could lead to loss of funds. Refer to the trust model [trust model](https://docs.digitalasset.com/overview/3.3/explanations/canton/external-party.html#party-trust-model) for more details.
+The documentation on setting up the exchange party describes how to setup a party with a single confirming node. This can be sufficient but the confirming nodes for the party are essential to keep your party secure and compromise of them could lead to loss of funds. Refer to the trust model trust model for more details.
 
 To guard against compromise of the confirming nodes, you can setup your `treasuryParty` with multiple confirming nodes and a threshold N \> 1. As long as less than N nodes are compromised, your party is still secured. Common setups are:
 
@@ -1169,11 +1186,15 @@ To guard against compromise of the confirming nodes, you can setup your `treasur
 
 ### Party Setup
 
-{/* TODO: Update this when wallet SDK support is available https://github.com/hyperledger-labs/splice-wallet-kernel/issues/272 */}
+<div className="todo">
+
+<https://github.com/hyperledger-labs/splice-wallet-kernel/issues/272> Update this when wallet SDK support is available
+
+</div>
 
 As part of the initial treasury party setup, you generate the `PartyToParticipant` topology transaction which lists both the confirming nodes and the confirmation threshold. To host a party on multiple nodes, you need to include all confirming nodes in the `PartyToParticipant` mapping when you setup the party initially. Note that at this point, the wallet SDK library does not yet support this so you must go directly through the Canton APIs. This is expected to change soon.
 
-Until then, the easiest way to do so at the moment is through the Canton console. You can find a full reference for all required steps in the [integration test](https://github.com/digital-asset/canton/blob/3c9ac9891c03cb06303736d7224bcc01dbd50084/community/app/src/test/scala/com/digitalasset/canton/integration/tests/jsonapi/ExternalPartyLedgerApiOnboardingTest.scala#L183). Note in particular that you must sign the `PartyToParticipant` mapping not just by your party's key but also by all confirming participants. This is accomplished through the `participant2.topology.transactions.authorize` step in the test.
+Until then, the easiest way to do so at the moment is through the Canton console. You can find a full reference for all required steps in the integration test. Note in particular that you must sign the `PartyToParticipant` mapping not just by your party's key but also by all confirming participants. This is accomplished through the `participant2.topology.transactions.authorize` step in the test.
 
 ### .dar File Management
 
@@ -1181,11 +1202,15 @@ Any .dar file that you upload, both as part of the initial setup but also whenev
 
 ### Reading Data and Submitting Transactions
 
-Both nodes serve all transactions for the `treasuryParty` and can thus be used in principle to read them. However, offsets are not comparable across nodes so it is recommended that to run Tx History Ingestion against the same node under normal operations. If you do need to switch nodes, you can do so following the same procedure used for [restoring a validator from a backup](validator_backup_restore) to resynchronize Tx History Ingestion against the offsets of the new node.
+Both nodes serve all transactions for the `treasuryParty` and can thus be used in principle to read them. However, offsets are not comparable across nodes so it is recommended that to run Tx History Ingestion against the same node under normal operations. If you do need to switch nodes, you can do so following the same procedure used for restoring a validator from a backup to resynchronize Tx History Ingestion against the offsets of the new node.
 
-Preparation and execution of transactions can also be done against any of the confirming nodes of the party. However, [Command Deduplication](https://docs.digitalasset.com/build/3.3/sdlc-howtos/applications/develop/command-deduplication.html) is only performed by the executing node so if you submit across nodes you cannot rely on it. It is therefore recommend \_[not]() to rely on command deduplication at all in favor of UTXO and max record time based deuplication.
+Preparation and execution of transactions can also be done against any of the confirming nodes of the party. However, Command Deduplication is only performed by the executing node so if you submit across nodes you cannot rely on it. It is therefore recommend \_[not]() to rely on command deduplication at all in favor of UTXO and max record time based deuplication.
+
+<div className="todo">
 
 Link to recommended deduplication strategy <https://github.com/hyperledger-labs/splice-wallet-kernel/issues/423>
+
+</div>
 
 ### Changing the set of Confirming Nodes
 
@@ -1204,91 +1229,12 @@ Future versions of Canton will allow changing the confirming nodes without the n
 
 ## Using a KMS for Validator Node Keys
 
-See the [Splice docs for how to setup you validator node with keys stored in a KMS](https://docs.dev.sync.global/validator_operator/validator_security.html#using-an-external-kms-for-managing-participant-keys). Consider doing so as an additional security hardening measure to protect the keys of the [confirming node(s)](treasury-party-multi-hosting) of your `treasuryParty`.
+See the Splice docs for how to setup you validator node with keys stored in a [KMS](). Consider doing so as an additional security hardening measure to protect the keys of the confirming node(s)\_ of your `treasuryParty`.
 
 ## Using the gRPC Ledger API
 
-Feel free to do so if you prefer using gRPC. It is functionally equivalent to the JSON Ledger API. See this [Ledger API overview](https://docs.digitalasset.com/build/3.3/explanations/ledger-api.html) for more information.
+Feel free to do so if you prefer using gRPC. It is functionally equivalent to the JSON Ledger API. See this Ledger API [overview]() for more information.
 
-{/* COPIED_END */}
-
-
-{/* COPIED_START source="splice-wallet-kernel:docs/wallet-integration-guide/src/exchange-integration/non-functionals.rst" hash="d3042647" */}
-
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was copied from existing reviewed documentation.
-**Source:** `splice-wallet-kernel:docs/wallet-integration-guide/src/exchange-integration/non-functionals.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
-
-# Fault Tolerance
-
-Recall the architecture diagram from the `integration-architecture` section:
-
-![Integration architecture component overview](images/component_diagram.png)
-
-Below you learn how to handle crashes of the integration components, how to handle RPC errors, and how to perform disaster recovery for the Exchange Validator Node.
-
-## Handling Crashes
-
-Validator nodes are crash-fault tolerant and do not lose data shared on the Ledger API in case of a crash. Thus a restart is sufficient to recover from crashes. Likewise, we assume that the Canton Integration DB is backed by a crash-fault tolerant database (e.g., PostgreSQL or MySQL).
-
-For the integration components that you build, we recommend the following strategy to handle crashes and restarts:
-
-- **Tx History Ingestion**: keep track of the last ingested offset in the Canton Integration DB. On restart, continue from that offset. If none is set, then that means it never ingested any transaction. In that case, start from the beginning of the transaction history, i.e., start from offset `0`.
-
-  For this to work, it is important that you store the ingested offset in the same transaction as you store the ingested data. See the individual `integration-workflows` descriptions for details.
-
-- **Withdrawal Automation**: make it stateless, so that it can just restart. This is in line with how we recommend to implement both the `one-step-withdrawal-workflow` and the `multi-step-withdrawal-workflow`.
-
-- **Multi-Step Deposit Automation**: make it stateless, so that it can just restart. This is in line with how we recommend to implement the `multi-step-deposit-workflow`.
-
-## Handling RPC Errors
-
-Below we explain our recommendation for handling RPC errors in the integration components you are building. We focus on handling errors from interacting with the Ledger API and the Registry API Servers of the token admins. We do not cover handling errors from accessing DBs or other internal systems, as we assume you have strategies in place for those.
-
-- **Tx History Ingestion**: only reads from the Ledger API. We recommend to retry these reads a bounded number of times on `retryable-errors`. Wait at least a few seconds between retries and consider using [exponential backoff](https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/retry-backoff.html) to avoid overloading the Validator Node. Consider crashing the ingestion component if the bounded number of retries is exceeded to recover from bugs in the in-memory state of the ingestion component.
-
-- **Withdrawal Automation**: recall from `one-step-withdrawal-workflow` that the Withdrawal Automation first retrieves extra context from the Registry API Server of the token admin and then prepares, signs, and executes the transaction to submit the transfer for the withdrawal using the `/v2/interactive-submission/execute` endpoint of the Ledger API.
-
-  The endpoint is asynchronous and observing its response only means that the transaction has been accepted for processing. You can retrieve the status of the execution via the `/v2/commands/completions` endpoint of the Ledger API; or alternatively, by observing the effect of the execution via the Tx History Ingestion component. The latter option is more robust, as it ensures that you observe the effect of the execution in a persistent manner.
-
-  We recommend that you retry the steps from the start when not observing the successful completion of the withdrawal within the expected time or when encountering a retryable error on the execution itself. You thereby ensure that you prepare the withdrawal transaction using the latest state of the Validator Node and the latest extra context from the Registry API Server. Use a bounded number of retries with at least a few seconds between retries and consider using exponential backoff.
-
-  Retrying all steps is safe from a consistency perspective because the withdrawal transaction is idempotent, as it archives the UTXOs used to fund the transfer once the transfer is submitted. You nevertheless want to avoid retrying too often, as executing a transaction costs traffic.
-
-  Stop retrying once the withdrawal has been marked as definitely failed in the Canton Integration DB by the Tx History Ingestion component. A withdrawal is considered definitely failed once its target record time `trecTgt` is below the last ingested record time.
-
-- **Multi-Step Deposit Automation**: the approach is analogous to the one for Withdrawal Automation.
-
-  Recall from `multi-step-deposit-workflow` that the Multi-Step Deposit Automation discovers a pending deposit by reading from the Canton Integration DB, then retrieves extra context from the Registry API Server of the token admin and finally prepares, signs, and executes the transaction to accept the transfer offer using the `/v2/interactive-submission/execute` endpoint of the Ledger API.
-
-  The endpoint is asynchronous and observing its response only means that the transaction has been accepted for processing. You can retrieve the status of the execution via the `/v2/commands/completions` endpoint of the Ledger API; or alternatively, by observing the effect of the execution via the Tx History Ingestion component. The latter option is more robust, as it ensures that you observe the effect of the execution in a persistent manner.
-
-  We recommend that you retry the steps from the start when not observing the successful completion of the transfer offer acceptance within the expected time or when encountering a retryable error on the execution itself. You thereby ensure that you prepare the transaction to accept the transfer offer using the latest state of the Validator Node and the latest extra context from the Registry API Server. Use a bounded number of retries with at least a few seconds between retries and consider using exponential backoff.
-
-  Retrying all steps is safe from a consistency perspective because the accept transaction is idempotent, as it archives the transfer offer once it is accepted. You nevertheless want to avoid retrying too often, as executing a transaction costs traffic.
-
-  You can stop retrying after a bounded number of retries. The sender can reclaim their funds at any point by withdrawing the offer. The Multi-Step Deposit Automation will learn about the withdrawal of the offer via the Tx History Ingestion component, which will mark the transfer offer as withdrawn in the Canton Integration DB.
-
-### Retryable errors
-
-For increased robustness and fault tolerance, we recommend to retry by default on all errors and manage an exclude list of non-retryable errors. As a starting opint, we suggest to exclude the following HTTP error codes from retries:
-
-- 401 Unauthorized
-- 403 Forbidden
-- 500 Internal Server Error
-- 501 Not Implemented
-
-### Reading from Canton Coin Scan
-
-As explained in `mvp-for-cc`, the Registry API Server of the token admin for Canton Coin is provided by the Canton Coin [Scan services](https://docs.dev.sync.global/app_dev/scan_api/toc_proxy.html). They are run as part of every SV node.
-
-For convenience, every Validator Node provides a [Scan proxy service](https://docs.dev.sync.global/app_dev/validator_api/index.html#scan-proxy-api) to read from the Scan instances run by SVs with Byzantine fault tolerance. The Scan proxy service also implements the Token Standard Registry API for Canton Coin.
-
-We recommend to use Scan proxy service of the Exchange Validator Node to retrieve the extra context for Canton Coin transfers.
-
-If that is not possible, then you can read from a random Canton Coin Scan instance for the purpose of retrieving extra context for Canton Coin transfers. The on-ledger validation of the transfers ensures that you do not need to trust the Scan instance for correctness. Ensure that you read from a different Scan instance on every retry to avoid being affected by a faulty Scan instance for too long.
 
 {/* COPIED_END */}
 
