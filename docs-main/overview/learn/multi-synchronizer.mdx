@@ -3,6 +3,7 @@ title: "Multi-Synchronizer Architecture"
 description: "How contracts are assigned to synchronizers and moved between them"
 ---
 
+
 Canton Network supports multiple synchronizers operating simultaneously. Each contract on the ledger is assigned to a specific synchronizer, and contracts can be moved between synchronizers as needed. This design allows the network to scale horizontally and supports specialized synchronizers for different use cases.
 
 ## Contracts and synchronizer assignment
@@ -46,6 +47,8 @@ Most applications only need the Global Synchronizer. Multiple synchronizers beco
 - **Isolation** — Keep certain transaction flows entirely separate from the public network
 - **Performance** — Reduce contention by spreading high-throughput workflows across synchronizers
 - **Regulatory compliance** — Ensure certain transactions are processed only by specific validators in specific jurisdictions
+
+
 {/* COPIED_START source="docs-website:docs/replicated/canton/3.4/overview/explanations/canton/multi-synchronizer.rst" hash="71dbc111" */}
 
 <Warning title="Pre-reviewed Content - Do Not Modify">
@@ -54,9 +57,9 @@ This section was copied from existing reviewed documentation.
 Reviewers: Skip this section. Remove markers after final approval.
 </Warning>
 
-## Multiple Synchronizers — formal specification
+# Multiple Synchronizers
 
-### Motivation
+## Motivation
 
 Participant Nodes execute Daml transactions using a Synchronizer Synchronizer, which can be either the Global Synchronizer or a privately operated Synchronizer. There are multiple reasons why you might require more than one Synchronizer:
 
@@ -82,14 +85,18 @@ Participant Nodes execute Daml transactions using a Synchronizer Synchronizer, w
 
 To allow for the different use cases, a Participant Node can be connected to several Synchronizers.
 
+<div id="def-multi-sync-assignation">
+
 Definition **assignation** of a contract:
 For any Daml contract, the participants hosting at least one stakeholder of the contract agree on which Synchronizer to use to coordinate changes on that contract. This agreed-upon Synchronizer is called the *assignation* of the contract.
+
+</div>
 
 More generally, the guiding principle is that for any piece of shared state, the participants maintaining this state agree which Synchronizer to use to coordinate changes of this state.
 
 The stakeholders of a contract can agree to change the assigned Synchronizer of a contract. This procedure, which is called a *reassignment*, is described below. Reassignments are needed because a Daml transaction executes on a single synchronizer, i.e., all input contracts must be assigned to this synchronizer.
 
-### Transactions with Multiple Synchronizers
+## Transactions with Multiple Synchronizers
 
 Suppose a user wants to execute a Daml transaction that involves contracts that are currently assigned to different Synchronizers. The transaction can be execute by performing the following steps, which are made more precise below:
 
@@ -118,14 +125,14 @@ There are two ways to change the assignation of a contract:
   - Ledger API accepts commands to submit reassignments.
   - When submitting a Daml transaction, the user can prescribe which Synchronizer to use. If the prescribed Synchronizer is not suited for the transaction, the submission fails.
 
-#### Automatic selection of the Synchronizer
+### Automatic selection of the Synchronizer
 
 When the transaction cannot be executed on a single Synchronizer because not all input contracts are assigned to the same Synchronizer, the Synchronizer router attempts to find the best common Synchronizer for the submission.
 
-For each input contract `c`<sub>i</sub>, denote by `S`<sub>i</sub> its assignation (at the submission time). A Synchronizer `S` is admissible for the transaction if:
+For each input contract `c``i`, denote by `S``i` its assignation (at the submission time). A Synchronizer `S` is admissible for the transaction if:
 
-- The reassignment of `c`<sub>i</sub> from `S`<sub>i</sub> to `S` is valid.
-- The submitting participant is a reassigning participant for the submitting party for each `c`<sub>i</sub>.
+- The reassignment of `c``i` from `S``i` to `S` is valid.
+- The submitting participant is a reassigning participant for the submitting party for each `c``i`.
 
 Among all admissible Synchronizers, the router will pick the one which satisfies (in order of importance):
 
@@ -133,17 +140,17 @@ Among all admissible Synchronizers, the router will pick the one which satisfies
 - minimize the number of reassignments,
 - has the lowest Synchronizer id.
 
-#### Importance of the Global Synchronizer
+### Importance of the Global Synchronizer
 
 As mentioned above, for a Daml transaction to be executed, all stakeholders of all input contracts must trust single a Synchronizer. Moreover, all input packages must be vetted on this common Synchronizer. The purpose of the Global Synchronizer is to be the standard Synchronizer that every party trusts so that it can be used to settle most of the transactions.
 
-### Reassignment protocol
+## Reassignment protocol
 
 When a contract `c` is created using a Synchronizer `S` the stakeholders agree to use this Synchronizer to coordinate further changes to the contract (for example, exercise and archive). At this point, the assignation of the `c` is `S`. To change the assignation of `c` to a different Synchronizer `S'`, the stakeholders of `c` perform the *reassignment* of `c` from `S` to `S'`.
 
 In this section, we describe the reassignment protocol.
 
-#### Overview
+### Overview
 
 Reassigning a contract `c` from Synchronizer `S1` (called the *source* Synchronizer) to Synchronizer `S2` (called the *target* Synchronizer) allows the stakeholders to change the assignation from `S1` to `S2`. The procedure consists of two steps:
 
@@ -161,16 +168,24 @@ Reassigning a contract `c` from Synchronizer `S1` (called the *source* Synchroni
 
 The two steps can be visualized in the following diagram:
 
-![Reassignment protocol overview](/images/overview/reassignment-high-level-2.svg)
+<div id="reassignment-high-level">
+
+</div>
+
+<img src="/images/docs_website/reassignment-high-level-2.svg" className="align-center" style={{width: "80.0%"}} alt="image" />
 
 The reassignment of a contract is thus a **non-atomic** procedure involving two confirmation requests on two distinct Synchronizers (the source and the target). Once the unassignment is successful, the contract is marked as **pending assignment** and cannot be used until the assignment is performed.
 
 Before presenting the reassignments from the point of view of the Ledger API, consider the following definition.
 
+<div id="def-multi-sync-reassignment-counter">
+
 Definition: **reassignment counter**
 The **reassignment counter** tracks the number of times a contract was reassigned. It is set to zero when the contract is created and increased by one with each unassignment. The unassignment event and the corresponding assignment event have the same reassignment counter.
 
-#### Reassignment from Ledger API and application point of view
+</div>
+
+### Reassignment from Ledger API and application point of view
 
 The unassign command consists of the following fields:
 
@@ -196,7 +211,7 @@ A successful assignment yield an assigned event which contains the following fie
 - reassignment counter: The value is the same as in the unassigned event.
 - created event: Contract data (see `entering-leaving-visibility` to learn about the purpose).
 
-#### Running example
+### Running example
 
 To illustrate the different scenarios and definitions, we consider an `Iou` whose signatory is the Bank and observer (owner) is Alice and we will discuss reassignments of the `Iou` from `S1` to `S2`.
 
@@ -205,20 +220,24 @@ The topology of the network is the following:
 - Five participants `P1`, ..., `P3` and two Synchronizers `S1` and `S2`.
 - Hosting relationships as shown in the picture below. The letter in parenthesis indicates the permission (Submission, Confirmation, Observation).
 
-![Multi-synchronizer running example](/images/overview/reassignment-running-example.svg)
+<div id="multi-synchronizer-running-example">
 
-#### Main definitions around reassignments
+</div>
+
+<img src="/images/docs_website/reassignment-running-example.svg" className="align-center" style={{width: "80.0%"}} alt="image" />
+
+### Main definitions around reassignments
 
 Before we present the validations which are done as part of the confirmation of unassignment and assignment requests, we need a few definitions.
 
-##### Target timestamp
+#### Target timestamp
 
 When processing an unassignment request, confirming participants need to check that the target Synchronizer meets some requirements (for example, the required package are vetted). These requirements depends on the topology on the target Synchronizer which can change over time. To ensure that all involved participant perform the same validations and reach the same conclusion, the unassignment request contains a timestamp of the target Synchronizer which is used for all topology related validations.
 
 Definition: **target timestamp**
 When an unassignment is submitted, a time proof is requested on the target Synchronizer. This timestamp is used to perform validations related to the target Synchronizer (package is vetted, stakeholders are hosted on the target Synchronizer, and so forth) during unassignment processing. This timestamp is called the **target timestamp**.
 
-##### Reassigning participant
+#### Reassigning participant
 
 Because stakeholders can be hosted on several Participant Nodes and because topology can be inhomogeneous (for example, a Participant Node might host a party only on some Synchronizers it is connected to), a Participant Node involved in a reassignment might be an informee of only the unassignment request or only the assignment request (see discussion about contracts entering and leaving the visibility of a Participant Node below). Such Participant Nodes cannot perform all the validations (which would require it to be connected to both the source and target Synchronizers) and cannot protect against double spends (reassigned contract being active both on the source and target Synchronizers). This motivates the following definition.
 
@@ -233,7 +252,7 @@ The last condition is checked during submission using a recent topology snapshot
 
 In the running example, `P1`, `P3` and `P5` are reassigning participants. `P2` is not a reassigning participant since it is not connected to the target Synchronizer. Similarly, `P4` is not connected to the source Synchronizer and therefore is not a reassigning participant.
 
-##### Signatory unassigning participant
+#### Signatory unassigning participant
 
 One key ingredient to describing the confirmation policies of reassignments is to derive the conditions that must be met for a Participant Node to be a confirmer of the unassignment request. As mentioned previously, one requirement is that the nodes is a reassigning participant.
 
@@ -250,7 +269,7 @@ For a contract `c`, a participant `P` is a **signatory unassigning participant**
 
 In the running example, the signatory unassigning participants are `P3` and `P5`. Participant `P1` does not host a signatory of the contract and `P2` and `P4` are not reassigning participants for any party.
 
-##### Signatory assigning participant
+#### Signatory assigning participant
 
 Definition: **signatory assigning participant**
 For a contract `c`, a participant `P` is a **signatory assigning participant** for a party `S` if the following hold:
@@ -261,12 +280,12 @@ For a contract `c`, a participant `P` is a **signatory assigning participant** f
 
 Informally, a signatory assigning participant is informed of both the unassignment and the assignment of a contract and is a confirmer of the assignment request.
 
-In the running example, the only signatory assigning participant is `P5`:
+In the running example, the only signatory assigning participant is \`P5\`:
 
 - `P1` does not host a signatory of the contract.
 - `P3` hosts a signatory but only with observation rights.
 
-#### Confirmation policies
+### Confirmation policies
 
 In this section, we discuss which informee participants should send confirmation responses for an unassignment or an assignment request.
 
@@ -274,7 +293,7 @@ Since some of the validations can be performed only by reassigning participants 
 
 The number of confirmations expected by the mediator for one of the signatory is exactly the confirmation threshold of the signatory (on the source Synchronizer for the unassignment and on the target Synchronizer for the assignment).
 
-#### Validation of unassignment and assignment requests
+### Validation of unassignment and assignment requests
 
 The guiding principles behind validation rules for reassignments are:
 
@@ -301,7 +320,7 @@ Some additional validations that are not specific to unassignments or assignment
 - root hash messages is correct,
 - etc.
 
-#### Submission policies
+### Submission policies
 
 The reassignment (unassignment or assignment) of a contract `c` can be submitted by a participant `P` if `P` hosts at least a stakeholder `S` of `c` for which it is a reassigning participant. It is *not* required that `P` hosts `S` with submission permission.
 
@@ -310,8 +329,13 @@ There are several reasons to not require the submission permission to submit a r
 - In the running example, Alice loses the ability to exercise choices on the `Iou` when it is reassigned to `S2` as she is not hosted with submission permissions on Synchronizer `S2`. Because she is allowed to initiate a reassignment back to `S1`, she has a way to regain the possibility to exercise choices on the `Iou`.
 - Decentralized parties cannot submit Daml transactions but should be able to submit reassignments for composability of applications.
 
-{/* TODO: Mention external parties use case once implemented \<<https://github.com/DACH-NY/canton/issues/25878>\> */}
-#### Contracts entering and leaving the visibility of the participant
+<div className="todo">
+
+Mention external parties use case once implemented \<<https://github.com/DACH-NY/canton/issues/25878>\>
+
+</div>
+
+### Contracts entering and leaving the visibility of the participant
 
 Consider the running example of this page.
 
@@ -321,7 +345,7 @@ Now consider the "opposite" scenario. Participant `P4` is an informee participan
 
 From the point of view of a participant, a contract can enter and leave its visibility several times during its life cycle. This can happen if all stakeholders hosted on the participant are multi-hosted.
 
-#### Non causality of the updates stream
+### Non causality of the updates stream
 
 In this section, we focus on the **updates stream** which contains only (de)activations of contracts: `Created`, `Archived`, `Unassigned` and `Assigned`. The content can easily be extended to cover update trees streams that also contains non-consuming exercises.
 
@@ -364,24 +388,31 @@ Note that the projection of events for each Synchronizer is causally consistent 
 
 Finally, recall from above that a Participant Node might learn about a contract with an assignment, so the updates stream isn't guaranteed to contain a `Created` or `Archived`.
 
-#### Reassignments and contention
+### Reassignments and contention
 
 An assignment is an activation and thus has a impact similar to a create. Similarly, an unassignment is a deactivation and has a similar impact than an archive. In particular, both assignments and unassignments lock the contract, which means that reassignments lead to contention with other workflows, including read-only transactions. This additional contention might be unexpected and difficult to debug if reassignments are done automatically by the Synchronizer router as part of transaction submission. It is advised to consider reassignments explicitly when designing Daml workflows such that contention can be minimized.
 
-### Multi-Synchronizer Time
+## Multi-Synchronizer Time
 
-{/* TODO: Fill that section \<<https://github.com/DACH-NY/canton/issues/25859>\> */}
+<div className="todo">
+
+Fill that section \<<https://github.com/DACH-NY/canton/issues/25859>\>
+
+</div>
+
 Relate to time monotonicity of the ledger model
 
 Contrast to command dedup time model
 
+
 {/* COPIED_END */}
+
 
 {/* COPIED_START source="docs-website:docs/replicated/canton/3.4/overview/explanations/canton/traffic-management.rst" hash="c8ff2996" */}
 
 <Warning title="Pre-reviewed Content - Do Not Modify">
 This section was copied from existing reviewed documentation.
-**Source:** `docs-website:docs/replicated/canton/3.4/overview/explanations/canton/traffic-management.rst`
+**Source:** `docs/replicated/canton/3.4/overview/explanations/canton/traffic-management.rst`
 Reviewers: Skip this section. Remove markers after final approval.
 </Warning>
 
@@ -448,7 +479,7 @@ When a node subscribes to receive events from several sequencers of a given sync
 
 The following diagram gives a high level of the enforcement flow and scenarios.
 
-<img src="./images/traffic_control_enforcement.svg" class="align-center" style="width:100.0%" alt="image" />
+<img src="/images/docs_website/traffic_control_enforcement.svg" className="align-center" style={{width: "100.0%"}} alt="image" />
 
 There are a few points to highlight on this diagram.
 
@@ -527,4 +558,6 @@ optional uint64 base_event_cost = 7;
 
 Instructions on how to configure traffic are available in the how-to section.
 
+
 {/* COPIED_END */}
+

@@ -1,178 +1,13 @@
 ---
 title: "Topology"
-description: "Canton topology management — namespaces, cryptographic keys, party-to-participant mappings, authorization chains, and topology transactions"
+description: "Canton topology management: namespaces, cryptographic keys, party-to-participant mappings, authorization chains, and topology transactions."
 ---
-
-{/* Reference source: https://docs.digitalasset.com/overview/3.4/explanations/canton/topology.html */}
-
-All participant nodes and synchronizer components must know the topology state of a synchronizer:
--  the identities present,
--  their associated keys,
--  party hosting relationships,
--  and vetted packages.
-
-Topology state is distributed via the synchronizer so that every connected node maintains synchronized topology state through deterministic state machine replication. Each node locally validates incoming topology changes using identical rules. Because the state machine is deterministic, all nodes connected to a synchronizer compute the same topology state at any given point in time.
-
-## Design Principles
-
-Canton's topology system is built on four principles.
-
-**No single trust anchor:** A globally synchronized network cannot rely on a single, globally trusted entity for establishing identities. Each namespace is independently anchored by its own root key, and no central authority controls identity issuance.
-
-**Key-based identity:** A Canton key holder is an entity that can authorize actions and whose authorized actions can be verified. Every key holder possesses keys that are known to belong together. Cryptographic fingerprints uniquely identify key pairs, and signatures prove ownership.
-
-**Separation of system and legal identity:** Cryptographic identity is separated from real-world legal identity. Canton enforces cryptographic proof only; legal ownership is a matter of external belief, rooted in trust anchors outside the protocol. Legal identity is relevant for interpreting shared data, not for the synchronization protocol itself.
-
-**Asymmetric identity requirements:** Large corporations want to be known; individuals may prefer privacy. Identity on the ledger is an asymmetric problem. Whether to prioritize privacy or publicity must be weighed case by case, and the protocol does not force a uniform answer.
-
-## Namespaces and Unique Identifiers
-
-### Namespaces
-
-A namespace is defined by a self-signed root certificate: a `NamespaceDelegation` where the namespace, target key, and signing key are all the same key fingerprint. For example, a root certificate for a namespace with fingerprint `abc123` takes the form:
-
-```
-NamespaceDelegation(namespace=abc123, target=abc123, signedBy=abc123)
-```
-
-The root certificate together with the corresponding private key form the trust anchor for the namespace. Whoever controls the private key controls the namespace and can authorize topology transactions within it.
-
-### Unique Identifiers (UIDs)
-
-A unique identifier (UID) represents an identity -- a node or a party. A UID consists of an identifier string and a namespace, formatted as `identifier::namespace`. For example:
-
-```
-jane_doe::abc123
-```
-
-Two UIDs can share the same identifier string if their namespaces differ. The namespace portion links each UID back to a cryptographic root of trust.
-
-### Node Identity
-
-By default, a Canton node creates a new identity on first startup by generating a key pair. The fingerprint of that key becomes both the node's namespace and the namespace portion of its UID. The node automatically creates the corresponding root certificate (a self-signed `NamespaceDelegation`) and an `OwnerToKeyMapping` declaring its signing and encryption keys.
-
-### Party Identity
-
-Party identifiers follow the same UID format:
-
-```
-alice::abc123
-```
-
-By default, parties are created within the namespace of the hosting participant. The participant's namespace key authorizes the party's topology transactions without additional signatures. Parties can also be created in a separate namespace to decouple ownership from hosting -- useful when the party owner and the hosting participant are distinct entities.
-
-## Topology Transactions
-
-Topology state is a key-value map. Each topology transaction affects exactly one key in this map and contains:
-
-- **Mapping**: The content of the change -- what aspect of topology is being modified (e.g., `PartyToParticipant`, `OwnerToKeyMapping`, `VettedPackages`)
-- **Serial**: A monotonically increasing version number for each unique key, starting at 1. Serials must increment by exactly one with no gaps or repetitions. This prevents replay attacks and enables conflict detection.
-- **Change operation**: Either `REPLACE` (create or update a mapping) or `REMOVE` (delete a mapping). Removals follow the same serial rules as replacements; a removed mapping can be reactivated with a subsequent `REPLACE`.
-- **Signatures**: Cryptographic signatures from all required authorizers. The signatures cover the mapping content, serial, and change operation, so tampering invalidates authorization.
-
-A topology transaction must be *well-formed* (passing static structural checks) and *well-authorized* (passing state-dependent authorization checks based on certificate chains).
-
-### Proposals
-
-When a topology transaction requires signatures from multiple parties (for example, a `PartyToParticipant` mapping where the party owner and participant are in different namespaces), incompletely signed transactions are stored as proposals. Signatures from separate submitters merge automatically. A proposal has no expiration -- it remains pending until fully authorized or superseded by a competing proposal that achieves full authorization first.
-
-### Mapping Types
-
-The topology system defines several mapping types, each governing a different aspect of topology state.
-
-**NamespaceDelegation** -- Delegates signing authority within a namespace to other keys. Supports three restriction levels:
-
-- `CanSignAllMappings`: Unrestricted signing authority within the namespace
-- `CanSignAllButNamespaceDelegations`: Can sign all mapping types except further namespace delegations. Suitable for operational keys while the root key remains offline.
-- `CanSignSpecificMappings`: A whitelist of allowed mapping types. The most restrictive option.
-
-**OwnerToKeyMapping** -- Declares the signing and encryption keys for a Canton node. Keys declared here are used for protocol operations (message signing, payload encryption) but cannot sign topology transactions unless they are also targets of a `NamespaceDelegation`, which is discouraged for security reasons.
-
-**PartyToKeyMapping** -- Declares cryptographic keys for external parties, those whose keys are held outside any participant node. Enables independent key management for parties with their own namespaces.
-
-**PartyToParticipant** -- Defines which participant nodes host a party and with what permission level. See [Party Hosting and Permissions](#party-hosting-and-permissions) below.
-
-**VettedPackages** -- Declares which Daml packages a participant agrees to run. Vetting can be restricted to specific time windows. The vetting state determines which Daml template versions are available to interpret Ledger API commands.
-
-**SynchronizerTrustCertificate** -- A participant's explicit signal to join a specific synchronizer. This binding is synchronizer-specific; the same certificate cannot be replayed across different synchronizers.
-
-**SequencerSynchronizerState** -- Lists all sequencers of a synchronizer. Synchronizer owners add entries to this mapping; the sequencer itself does not authorize its own inclusion.
-
-**MediatorSynchronizerState** -- Lists all mediators of a synchronizer. Multiple mediator groups can exist, distributing the mediator workload across groups.
-
-## Party Hosting and Permissions
-
-The `PartyToParticipant` mapping assigns one of three permission levels to each hosting relationship:
-
-- **Observation**: The participant receives notifications of transactions where the party is a stakeholder, but cannot confirm or submit transactions on behalf of the party.
-- **Confirmation**: The participant can confirm or reject transactions as part of the two-phase commit protocol. Subsumes Observation.
-- **Submission**: The participant can submit transactions on behalf of the party. Subsumes Confirmation.
-
-When the party owner and the hosting participant are in different namespaces, both must sign the `PartyToParticipant` mapping. If they share the same namespace, a single signature suffices.
-
-<Note>
-The distinction between Submission and Confirmation is enforced only at the participant level. A malicious participant with Confirmation permission could submit transactions for the party, because Canton's privacy model hides the identity of the submitting participant from other validators.
-</Note>
-
-## Multi-Hosting
-
-A party can be hosted on multiple participant nodes. When multi-hosted, the confirmation policy requires a threshold number of hosting participants to confirm each transaction involving that party. This provides two benefits:
-
-- **Resilience**: The party remains available even if some hosting participants go offline, as long as the threshold is met.
-- **Decentralization**: No single participant controls the party unilaterally. Multiple participants must agree before transactions commit.
-
-## Authorization Chains and Key Delegation
-
-The root namespace key is the ultimate trust anchor and should be kept in cold storage. Canton supports delegation chains so that day-to-day operations do not require the root key to be online.
-
-A delegation chain works as follows: the root key signs a `NamespaceDelegation` for an intermediate key, granting it signing authority. The intermediate key can then sign further delegations (if its restriction level permits) or sign topology transactions directly.
-
-```mermaid
-flowchart TD
-    ROOT["Root Key (abc123)<br/>Cold storage"]
-    INT["Intermediate Key (def456)<br/>CanSignAllButNamespaceDelegations"]
-    OP["Operational Key (ghi789)<br/>CanSignSpecificMappings"]
-
-    ROOT -->|"NamespaceDelegation<br/>serial=1, REPLACE"| INT
-    INT -->|"NamespaceDelegation<br/>serial=1, REPLACE"| OP
-    OP -->|"Signs topology transactions<br/>(e.g., PartyToParticipant)"| TX["Topology Transactions"]
-
-    style ROOT fill:#dc3545,color:#fff
-    style INT fill:#fd7e14,color:#fff
-    style OP fill:#28a745,color:#fff
-    style TX fill:#6c757d,color:#fff
-```
-
-When validating a topology transaction's signature, nodes build a directed acyclic graph from all `NamespaceDelegation` entries and verify that a valid chain exists from the signing key back to the root certificate. The chain must be unbroken at the transaction's effective time.
-
-### Key Revocation
-
-A key holder revokes an intermediate certificate by broadcasting a `NamespaceDelegation` with a `REMOVE` operation targeting that certificate. Revocation leaves downstream certificates "dangling" -- they can no longer authorize new topology transactions because the chain back to the root is broken. However, transactions that were previously validated under the now-revoked chain remain valid. Validation always checks the certificate chain at the transaction's sequenced effective time, so past authorization is unaffected.
-
-## Topology Change Propagation
-
-### Broadcast Mechanism
-
-Topology transactions are broadcast to all members of the synchronizer via the sequencer, addressed to the `AllMembersOfSynchronizer` group. The sequencer resolves group membership at sequencing time. Nodes reject topology transactions that arrive outside this broadcast channel, preventing ledger forks from privately submitted topology changes.
-
-### Sequential Validation
-
-Nodes validate topology transactions strictly sequentially, not in parallel. Sequential processing is required to maintain deterministic state across all nodes. If two nodes processed the same topology transactions in different orders, they could diverge and produce inconsistent topology snapshots.
-
-### Future Dating
-
-Topology changes become effective at time `t + epsilon` rather than immediately, where `t` is the sequencing timestamp and `epsilon` is the topology change delay. This delay is a configurable synchronizer parameter.
-
-Future dating serves a specific purpose: it separates topology processing from Daml transaction processing in time. Without the delay, validating topology changes could block processing of Daml transactions, since both depend on topology snapshots. With the delay, a node can process incoming messages at time `t` using the topology snapshot from `t - epsilon`, which is already finalized and will not change.
-
-The trade-off is straightforward. If `epsilon` is too small, topology processing may still block message processing. If `epsilon` is too large, topology changes take longer to become effective. The appropriate value depends on the synchronizer's throughput and latency characteristics.
-
 
 {/* COPIED_START source="docs-website:docs/replicated/canton/3.4/overview/explanations/canton/topology.rst" hash="efe99632" */}
 
 <Warning title="Pre-reviewed Content - Do Not Modify">
 This section was copied from existing reviewed documentation.
-**Source:** `docs-website:docs/replicated/canton/3.4/overview/explanations/canton/topology.rst`
+**Source:** `docs/replicated/canton/3.4/overview/explanations/canton/topology.rst`
 Reviewers: Skip this section. Remove markers after final approval.
 </Warning>
 
@@ -204,9 +39,13 @@ To understand the approach to Canton's topology management, a few key principles
 
 Similar to how there is no single globally trusted entity for synchronizing Daml transactions, there is also no single globally trusted entity for establishing identities, which leads us to the first principle:
 
+<div className="todo">
+
 cross-reference to the multi-synchronizer motivation \<<https://github.com/DACH-NY/canton/issues/25656>\>
 
 *Principle 1: For global synchronization to work in reality, there cannot be a single trust anchor.*
+
+</div>
 
 A cryptographic key pair can uniquely be identified through the fingerprint of the public key. By owning the associated private key, an entity can always prove unambiguously through a signature that the entity is the owner of the public key. We are using this principle heavily in our system to verify and authorize the activities of Canton key holders acting on a Canton Synchronizer. As such, we can introduce the second principle:
 
@@ -264,13 +103,21 @@ Every mapping type defines how to compute the unique key based on the mapping's 
 
 For definitions of all mappings and the respective unique keys, please refer to topology.proto.
 
+<div className="todo">
+
 link to topology proto? \<<https://github.com/DACH-NY/canton/issues/25656>\>
+
+</div>
 
 ### Serial
 
 The serial of a topology transaction is used to evolve the mapping of a particular unique key. The first serial of a unique key always starts at `1`. Any subsequent topology transaction must increase the serial of the preceding topology transaction for the same key by exactly one. There must be no gaps (going from `1` to `3` is not permitted) or repetitions (same serial but different content). However, additional signatures of expected authorizers can be added to an already fully authorized and currently effective topology transaction. More on that later.
 
+<div className="todo">
+
 link to the section that covers the "more on that later". \<<https://github.com/DACH-NY/canton/issues/25656>\>
+
+</div>
 
 The serial on the topology transaction prevents replay attacks. A malicious actor cannot simply take a previously fully authorized transaction and submit it again, because the Canton nodes on the Synchronizer detect an unexpected serial and therefore reject the topology transaction.
 
@@ -286,7 +133,11 @@ For example, hosting a party(`alice::abc123`) on Participant Node (`p1::xyz789`)
 
 The cryptographic signature of a topology transaction covers the mapping, the serial, and the change operation. Therefore, tampering with any of these attributes of a topology transaction invalidates the existing signatures. Likewise, the signature of a previous topology transaction cannot be used for any other topology transaction, because the data that is covered by the signature is not the same, not even for the same unique key and the same content. At least the serial must change in a later evolution of the value for the unique key.
 
+<div className="todo">
+
 Section "Binding topology transactions to Synchronizers" \<<https://github.com/DACH-NY/canton/issues/25656>\>
+
+</div>
 
 ## Types of topology mappings
 
@@ -312,12 +163,15 @@ Canton key holders declare which keys they want to use with topology mappings; `
 
 Parties are declared via the `PartyToParticipant` topology mapping, which defines the Participant Nodes that host the party. Hosting a party gives the Participant Node the rights, if not the obligation, to process Daml Transactions for the party. This gives the Participant Node access to the party's contracts. Therefore, the owner of a party, (i.e., key holder of the party's namespace) must carefully select which Participant Nodes are trustworthy to process the party's sensitive data.
 
-From the Participant Node's perspective, hosting a party implies certain responsibilities and obligations towards the party. Most notably, the Participant Node is expected to participate in the two-phase
-commit protocol for the party's transactions and store the data locally so that applications can access the data on the party's behalf.
+From the Participant Node's perspective, hosting a party implies certain responsibilities and obligations towards the party. Most notably, the Participant Node is expected to participate in the two-phase commit protocol for the party's transactions and store the data locally so that applications can access the data on the party's behalf.
 
 Both the party's owner and the Participant Node must consent to enter this relationship by authorizing the respective `PartyToParticipant` topology transaction.
 
+<div id="topology-participant-permission">
+
 Participant Nodes can host a party with different permissions, which are assigned by the party's owner:
+
+</div>
 
 - **Observation**: the Participant Node only gets notified of transactions in which the hosted party is a stakeholder.
 - **Confirmation**: the Participant Node confirms or rejects Daml Transactions as part of the two-phase commit protocol. This permission subsumes the *Observation* permission.
@@ -331,7 +185,11 @@ A party's owner may decide to have the party hosted on multiple Participant Node
 
 Validating Daml Transactions ultimately means running Daml code written by third parties. This exposes the Participant Node to certain risks, as Daml code can run for an arbitrarily long time and consume a large amount of memory. Therefore, a Participant Node's owner must explicitly declare which packages they agree to run on their Participant Node. They do this via the topology mapping `VettedPackages`. The Participant Node's owner may restrict the vetting of a package to a specific window of time, which can be open-ended on either side. Furthermore, the `VettedPackages` topology mapping determines what version of a Daml template will be used for interpreting a Ledger API command.
 
+<div className="todo">
+
 add section Synchronizer Parameters \<<https://github.com/DACH-NY/canton/issues/25656>\>
+
+</div>
 
 ### Membership with a Synchronizer
 
@@ -363,9 +221,13 @@ Proposals have no timestamp of expiration. This means that a proposal is pending
 
 The starting point is a `PartyToParticipant` mapping for party `Alice::abc123` and its hosting Participant Node `P1::abc123` at serial `1`. The owner of the party now wants the Participant Node `P2::xyz789` to host the party as well. Therefore, the party's owner submits a proposal of the mapping that includes `P2::xyz789` as a hosting Participant Node with serial `2`. According to the authorization rules defined by the `PartyToParticipant` mapping, the key holders of both namespaces `abc123` and `xyz789` must authorize this change. Since the party's owner can only provide the signature for the namespace `abc123`, the Canton nodes store the topology transaction with serial `2` as a proposal. Once the new hosting Participant Node's key holder submits their signature for this topology transaction to the Synchronizer, the Canton nodes merge the signatures and store the now fully authorized `PartyToParticipant` mapping after successful validation.
 
-<img src="./images/overview/topology-simple-proposal.svg" class="align-center" style="width:80.0%" alt="image" />
+<img src="/images/docs_website/topology-simple-proposal.svg" className="align-center" style={{width: "80.0%"}} alt="image" />
+
+<div className="todo">
 
 link to the PartyToParticipant mapping topology proto documentation. \<<https://github.com/DACH-NY/canton/issues/25656>\>
+
+</div>
 
 ### Concurrent / competing proposals
 
@@ -375,7 +237,7 @@ When Canton nodes submit proposals for a mapping with the same unique key, the s
 
 To illustrate, consider the scenario where the Participant Node `P1::abc123` hosts the party `Alice::abc123`. The key holder for `abc123` is in negotiations with two other key holders for the Participant Nodes `P2::xyz789` and `P3::jkl456`. Both of those other key holders decide to submit their proposal to host `Alice::abc123`. Both send a topology transaction with serial `2` to add themselves as hosting Participant Node. Since `abc123`’s signature is required to satisfy the authorization requirements, both transactions are considered proposals until `abc123` decides to sign one of them. In this example, `abc123` chooses to allow hosting Alice on `P3::jkl456` and signs the respective proposal, turning it into a fully authorized transaction. `P2::xyz789`’s proposal automatically gets invalidated, since now there is a fully authorized transaction with serial `2`. `P2::xyz789`’s proposal has no chance of ever becoming valid, because there may only be at most one fully authorized topology transaction for a unique key with a given serial.
 
-<img src="./images/overview/topology-competing-proposals.svg" class="align-center" style="width:80.0%" alt="image" />
+<img src="/images/docs_website/topology-competing-proposals.svg" className="align-center" style={{width: "80.0%"}} alt="image" />
 
 ### Validity / effectiveness
 
@@ -383,7 +245,11 @@ Upon validating a topology transaction received from the Sequencer, Canton nodes
 
 As a consequence of the definition of the validity period, all fully authorized topology transaction for a unique key build a "validity timeline" with no gaps, which unambiguously defines which topology transaction is considered effective for any given point in time.
 
+<div className="todo">
+
 Add pointers to API docs and howtos in "Operate" and "Subnet" subsites \<<https://github.com/DACH-NY/canton/issues/25656>\>
+
+</div>
 
 ## Disseminating topology transactions
 
@@ -411,17 +277,25 @@ The downside of this simple approach is that any topology transaction puts a tem
 
 One way to work around the problem of topology transactions pausing the processing of messages in the various protocol layers is to make topology transactions effective at some point in the future. The concept of *effective time* was already introduced in the section `topology-effectiveness`. While a topology transaction is sequenced at time `t`, it only becomes effective after the *topology change delay* `ε`. The time `t+ε` gives the lower bound for the effective time. If the topology change delay hasn't been changed recently, the effective time is equal to the lower bound `t+ε`. The topology change delay is a dynamic Synchronizer parameter in the topology state and can be changed by the Synchronizer owners. Therefore the actual topology change delay used for the calculation of the effective time must be read from the topology state during the validation of topology transactions.
 
+<div className="todo">
+
 link to a howto for changing Synchronizer parameters \<<https://github.com/DACH-NY/canton/issues/25656>\>
+
+</div>
 
 This mechanism allows other messages and events between `t` and `t+ε` to be processed normally without having to wait for the topology processing layer.
 
 How big should `ε`, the topology change delay, be? The trade off is between not blocking the processing of other messages and not waiting too long for a topology transaction to become effective. Topology change delay should be just larger than it takes to process a topology transaction. With a topology change delay of 0 ms, topology transactions become effective immediately, but as described in previous section, the processing of other messages needs to wait until the Canton node can be sure that there are no pending topology transactions for the topology snapshot required for that message. On the other hand, with a topology change delay of 30 s, Daml transactions are unlikely to be blocked from processing, but it takes quite a while before, for example, a party can actually be used in a transaction.
 
-To illustrate the benefits of future dating, consider the following example. The effective time of the topology transaction at t<sub>3</sub> is computed to be t<sub>5</sub>. Therefore, once the processing of the topology transaction completes, the processing of the Daml Transaction at t<sub>4</sub> can access the topology snapshot at t<sub>4</sub>, because the Canton node knows, that it has seen all changes to the topology state that are relevant for a snapshot up to t<sub>5</sub>.
+To illustrate the benefits of future dating, consider the following example. The effective time of the topology transaction at t`3` is computed to be t`5`. Therefore, once the processing of the topology transaction completes, the processing of the Daml Transaction at t`4` can access the topology snapshot at t`4`, because the Canton node knows, that it has seen all changes to the topology state that are relevant for a snapshot up to t`5`.
 
-<img src="./images/overview/topology-change-delay.svg" class="align-center" style="width:80.0%" alt="image" />
+<img src="/images/docs_website/topology-change-delay.svg" className="align-center" style={{width: "80.0%"}} alt="image" />
+
+<div className="todo">
 
 link to dynamic Synchronizer parameters reference. \<<https://github.com/DACH-NY/canton/issues/25656>\>
+
+</div>
 
 ## Authorization
 
@@ -435,7 +309,11 @@ Each type of topology mapping changes a certain aspect of the Synchronizer's top
 
 For definitions of all mappings and the respective authorization rules, please refer to topology.proto.
 
+<div className="todo">
+
 link to topology proto? \<<https://github.com/DACH-NY/canton/issues/25656>\>
+
+</div>
 
 Some topology mappings define more than one required authorizer for certain changes. A common scenario is the hosting of a party on a Participant Node that is not owned by the same key holder as the party. This scenario was shown in the example for evolving topology mappings (see `topology-proposals-example`). On the one hand, hosting a party gives the Participant Node access to data in Daml transactions that pertains to the party. Therefore, the party's key holder must express its consent that it wishes the Participant Node to receive and process the party's Daml transactions. On the other hand, the Participant Node's key holders must consent to host the party, because hosting a party incurs network and storage cost, as well as the obligation to comply with the two-phase commit protocol for Daml transactions that involve the party.
 
@@ -449,7 +327,7 @@ Whenever a Canton node validates a signature of a topology transaction, it valid
 
 Consider the following scenario, where the key holder for namespace `abc123` creates a root certificate and a "root-substitute" certificate for key `def456`. The key for the root-substitute in turn is restricted to only sign other namespace delegations and signs the "main topology signing key" `ghi789`. This signing key cannot sign other namespace delegations, but can be used to sign any other topology transaction.
 
-<img src="./images/overview/topology-certificate-chain.svg" class="align-center" alt="image" />
+<img src="/images/docs_website/topology-certificate-chain.svg" className="align-center" alt="image" />
 
 To continue the example, consider that the key holder for namespace `abc123` broadcasts a `PartyToParticipant` mapping for party `alice::abc123` signed by the key `ghi789` on a Synchronizer. When validating this topology transaction, all Canton nodes on the Synchronizer build a directed acylic graph of all namespace delegations for the namespace `abc123` and verify that there is a valid chain of certificates in the topology snapshot at the topology transaction's effective time from the root certificate `abc123` to the key `ghi789`. And indeed there is such a chain `abc123 -> def456 -> ghi789`.
 
@@ -459,6 +337,8 @@ A Canton key holder can revoke an intermediate certificate by broadcasting a nam
 
 Continuing the example from the preceding section, the key holder for `abc123` revokes the certificate for the key `def456`, which leaves the certificate for the key `ghi789` dangling. Therefore, Canton nodes must reject any signatures for future topology transactions on behalf of the namespace `abc123` made by either of the keys `def456` or `ghi789`.
 
-<img src="./images/overview/topology-broken-certificate-chain.svg" class="align-center" alt="image" />
+<img src="/images/docs_website/topology-broken-certificate-chain.svg" className="align-center" alt="image" />
+
 
 {/* COPIED_END */}
+
