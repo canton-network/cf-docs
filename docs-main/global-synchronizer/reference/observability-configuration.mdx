@@ -85,12 +85,13 @@ This list is not exhaustive. It highlights the most important metrics.
 
 Prometheus can be enabled using:
 
-    canton.monitoring.metrics.reporters = [{
-      type = prometheus
-      address = "localhost" // default
-      port = 9000 // default
-    }]
-
+```hocon
+canton.monitoring.metrics.reporters = [{
+  type = prometheus
+  address = "localhost" // default
+  port = 9000 // default
+}]
+```
 ### Prometheus-Only Metrics
 
 Some metrics are available only when using the Prometheus reporter. These metrics include common gRPC and HTTP metrics (which help you to measure the four golden [signals]()), and JVM GC and memory usage metrics (if enabled). The metrics are documented in detail below.
@@ -101,34 +102,37 @@ Any metric marked with `*` is available only when using the Prometheus reporter.
 
 JMX-based reporting (for testing purposes only) can be enabled using:
 
-    canton.monitoring.metrics.reporters = [{ type = jmx }]
-
+```hocon
+canton.monitoring.metrics.reporters = [{ type = jmx }]
+```
 Additionally, metrics can be written to a file:
 
-    canton.monitoring.metrics.reporters = [{
-      type = jmx
-    }, {
-      type = csv
-      directory = "metrics"
-      interval = 5s // default
-      filters = [{
-        contains = "canton"
-      }]
-    }]
-
+```hocon
+canton.monitoring.metrics.reporters = [{
+  type = jmx
+}, {
+  type = csv
+  directory = "metrics"
+  interval = 5s // default
+  filters = [{
+    contains = "canton"
+  }]
+}]
+```
 or reported via Graphite (to Grafana) using:
 
-    canton.monitoring.metrics.reporters = [{
-      type = graphite
-      address = "localhost" // default
-      port = 2003
-      prefix.type = hostname // default
-      interval = 30s // default
-      filters = [{
-        contains = "canton"
-      }]
-    }]
-
+```hocon
+canton.monitoring.metrics.reporters = [{
+  type = graphite
+  address = "localhost" // default
+  port = 2003
+  prefix.type = hostname // default
+  interval = 30s // default
+  filters = [{
+    contains = "canton"
+  }]
+}]
+```
 When using the `graphite` or the `csv` reporter, Canton periodically evaluates all metrics matching the given filters. Filter for only those metrics that are relevant to you.
 
 In addition to Canton metrics, the process can also report Daml metrics (of the Ledger API server). Optionally, JVM metrics can be included using:
@@ -3048,12 +3052,13 @@ You can configure the service where traces and spans are reported for observing 
 
 Jaeger and Zipkin are supported. For example, Jaeger reporting can be configured as follows:
 
-    monitoring.tracing.tracer.exporter {
-      type = jaeger
-      address = ... // default: "localhost"
-      port = ... // default: 14250
-    }
-
+```text
+monitoring.tracing.tracer.exporter {
+  type = jaeger
+  address = ... // default: "localhost"
+  port = ... // default: 14250
+}
+```
 This configuration connects to a running Jaeger server to report tracing information.
 
 You can run Jaeger in a Docker container as follows:
@@ -3073,11 +3078,12 @@ Apart from jaeger, Canton nodes can also be configured to report in Zipkin or OT
 
 You can change how often spans are sampled and reported to the configured exporter. By default, it will always report (`monitoring.tracing.tracer.sampler.type = always-on`). You can configure it to never report (`monitoring.tracing.tracer.sampler.type = always-off`), although this is less useful. Also, you can configure only a specific fraction of spans to be reported as follows:
 
-    monitoring.tracing.tracer.sampler = {
-      type = trace-id-ratio
-      ratio = 0.5
-    }
-
+```text
+monitoring.tracing.tracer.sampler = {
+  type = trace-id-ratio
+  ratio = 0.5
+}
+```
 You can also change the parent-based sampling property. By default, it is turned on (`monitoring.tracing.tracer.sampler.parent-based = true`). When turned on, a span is sampled iff its parent is sampled (the root span will follow the configured sampling strategy). There will never be incomplete traces; either the full trace is sampled or it is not. If you change this property, all spans will follow the configured sampling strategy and ignore whether the parent is sampled.
 
 ### Known Limitations
@@ -3223,19 +3229,20 @@ Optionally, the `canton` process can expose an HTTP endpoint indicating whether 
 
 To enable this health endpoint, add a `monitoring` section to the Canton configuration. Since this health check is for the whole process, add it directly to the `canton` configuration rather than for a specific node.
 
-    canton {
-      monitoring.health {
-       server {
-          port = 7000
-       }
+```hocon
+canton {
+  monitoring.health {
+   server {
+      port = 7000
+   }
 
-       check {
-         type = ping
-         participant = participant1
-         interval = 30s
-       }
-    }
-
+   check {
+     type = ping
+     participant = participant1
+     interval = 30s
+   }
+}
+```
 This health check causes `participant1` to "ledger ping" itself every 30 seconds. The process is considered healthy if the ping is successful.
 
 ## Health Dumps
@@ -3315,34 +3322,36 @@ Other reporters (jmx, graphite, and csv) are supported, but they are deprecated.
 
 JMX-based reporting (for testing purposes only) can be enabled using:
 
-    canton.monitoring.metrics.reporters = [{ type = jmx }]
-
+```hocon
+canton.monitoring.metrics.reporters = [{ type = jmx }]
+```
 Additionally, metrics can be written to a file:
 
-    canton.monitoring.metrics.reporters = [{
-      type = jmx
-    }, {
-      type = csv
-      directory = "metrics"
-      interval = 5s // default
-      filters = [{
-        contains = "canton"
-      }]
-    }]
-
+```hocon
+canton.monitoring.metrics.reporters = [{
+  type = jmx
+}, {
+  type = csv
+  directory = "metrics"
+  interval = 5s // default
+  filters = [{
+    contains = "canton"
+  }]
+}]
+```
 or reported via Graphite (to Grafana) using:
 
-    canton.monitoring.metrics.reporters = [{
-      type = graphite
-      port = 2003
-      interval = 30s // default
-      filters = [{
-        contains = "canton"
-      }]
-    }]
-
+```hocon
+canton.monitoring.metrics.reporters = [{
+  type = graphite
+  port = 2003
+  interval = 30s // default
+  filters = [{
+    contains = "canton"
+  }]
+}]
+```
 When using the `graphite` or the `csv` reporter, Canton periodically evaluates all metrics matching the given filters. Filter for only those metrics that are relevant to you.
 
 
 {/* COPIED_END */}
-

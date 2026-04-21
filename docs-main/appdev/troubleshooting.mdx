@@ -900,21 +900,21 @@ The following switches/steps should be taken to improve analyzing errors. Withou
   >     c.d.c.p.p.s.InFlightSubmissionTracker:participant=participant1
   >     tid:d5df95972a95b5ff00cb5cc3346c545f - NOT_SEQUENCED_TIMEOUT(2,d5df9597):
   >     Transaction was not sequenced within the pre-defined max sequencing time and has
-  >     therefore timed out err-context:{location=SubmissionTrackingData.scala:175,
-  >     timestamp=2022-10-19T17:45:56.393151Z}
+  >     therefore timed out err-context:&#123;location=SubmissionTrackingData.scala:175,
+  >     timestamp=2022-10-19T17:45:56.393151Z&#125;
   >
   > In above example, we see the trace id twice: `tid:d5df95972a95b5ff00cb5cc3346c545f` and `NOT_SEQUENCED_TIMEOUT(2,d5df9597)`. By filtering according to the `trace-id`, you can find almost all log statements that relate to a particular command. However, sometimes, we also need to find out the command id of a transaction. You can do that by grepping for the “rosetta stone”, which is one particular log line that contains both strings:
   >
   >     2023-07-04 12:03:26,517 [⋮] INFO
   >     c.d.c.p.a.s.c.CommandSubmissionServiceImpl:participant=participant1
   >     tid:35e389f0e41fd0273443dd866ff9e347 - Submitting commands for interpretation,
-  >     commands -> {readAs: [], deduplicationPeriod: {duration: 'PT168H'},
+  >     commands -> &#123;readAs: [], deduplicationPeriod: &#123;duration: 'PT168H'&#125;,
   >     submittedAt: '2023-07-04T10:03:26.514885Z', ledgerId: 'participant1',
   >     userId: 'CSsubmitAndWaitBasic',
   >     submissionId: 'CSsubmitAndWaitBasic-alpha-410b4d7b1b585-submission-0',
   >     actAs: ['CSsubmitAndWaitBasic-alpha-410b4d7b1b585-party-0::122035bd93d74879ce582adf5aa04a809b4b20618d39c1a9c2a17d35c29ab1ed098f'],
   >     commandId: 'CSsubmitAndWaitBasic-alpha-410b4d7b1b585-command-0',
-  >     workflowId: 'CSsubmitAndWaitBasic-410b4d7b1b585'}.
+  >     workflowId: 'CSsubmitAndWaitBasic-410b4d7b1b585'&#125;.
   >
   > The first string is again the trace id. Additionally, the commandId of the transaction, the userId, the submissionId and the workflowId are logged and can be used to filter the logs.
 
@@ -1163,7 +1163,7 @@ To get a first impression of database performance, enable the following metrics:
 
 > - Metrics containing `executor.waittime`. These metrics show the time (in millis) a db command needs to wait until Canton sends it to the db. High values indicate that the db is a bottleneck.
 > - Metrics containing `executor.queued`. These metrics show the number of db commands waiting in a queue for being sent to the db. High values indicate that the db is a bottleneck.
-> - Metrics containing `executor.running`. These metrics show the number of tasks currently being executed by the db. Very high values indicate that Canton is overloading the db. Very low values indicate that Canton is not fully loading the db. The number of db connections can be configured via `canton.<path-to-my-node>.storage.parameters.max-connections`.
+> - Metrics containing `executor.running`. These metrics show the number of tasks currently being executed by the db. Very high values indicate that Canton is overloading the db. Very low values indicate that Canton is not fully loading the db. The number of db connections can be configured via `canton.&lt;path-to-my-node&gt;.storage.parameters.max-connections`.
 
 ### How to Diagnose Slow Database Queries
 
@@ -1227,11 +1227,12 @@ Therefore, if we run the system under full load with N pending requests, such th
 
 3.  Open the log files and pick a transaction in the middle of your test run:
 
-    > - Look for “TransactionAccepted” somewhere in the log file and pick the trace-id
-    > - Filter for the trace-id and find the command-id. Add the command-id to the filter
-    > - Hit Shift-T to see the time differences.
-    > - Find the gaps
-
+```text
+> - Look for “TransactionAccepted” somewhere in the log file and pick the trace-id
+> - Filter for the trace-id and find the command-id. Add the command-id to the filter
+> - Hit Shift-T to see the time differences.
+> - Find the gaps
+```
 To increase confidence, repeat this assessment on a few more transactions.
 
 ## Contention
@@ -1263,16 +1264,17 @@ Whether you get `INACTIVE_CONTRACTS`, `LOCKED_CONTRACT` or `CONTRACT_NOT_FOUND` 
 
 Now, you can resolve such accidental raciness by “introducing order” into the race. As an example, you let individuals submit “request contracts” and you add one delegated party that receives these requests and orders and performs their application to a shared resource (through delegation). As an example, if you have an AccountIdGenerator:
 
-    template AccountIdGenerator
-        next : Integer
-        …
-    where
-        choice NextAccount : (ContractId AccountId, ContractId AccountIdGenerator)
-        do
-            a <- create this with next = next + 1
-            b <- create AccountId with accountId = next
-            return (a,b)
-
+```daml
+template AccountIdGenerator
+    next : Integer
+    …
+where
+    choice NextAccount : (ContractId AccountId, ContractId AccountIdGenerator)
+    do
+        a <- create this with next = next + 1
+        b <- create AccountId with accountId = next
+        return (a,b)
+```
 This `AccountIdGenerator` contract will be very racy. However, you can just add a:
 
     template GetAccountIdRequest
@@ -1366,7 +1368,7 @@ Mint a JWT token for the `temporary-admin` in your IAM system. Use the obtained 
 
 ``` 
 curl \
-  -H "Authorization: Bearer <JWT-token>" \
+  -H "Authorization: Bearer &lt;JWT-token&gt;" \
   -d '{
       "rights" : [
         {
@@ -1378,7 +1380,7 @@ curl \
         }
       ],
       "user" : {
-        "id" : "<permanent-participant-admin>",
+        "id" : "&lt;permanent-participant-admin&gt;",
         "identityProviderId" : "",
         "isDeactivated" : false,
         "metadata" : null,
@@ -1397,7 +1399,7 @@ Configuring a Canton Admin Token should be considered an exceptional measure and
 Generate a random string and add the following options to the canton command line:
 
 ``` 
--C canton.participants.<participant>.ledger-api.admin-token-config.fixed-admin-token=<generated-random-string> \
+-C canton.participants.<participant>.ledger-api.admin-token-config.fixed-admin-token=&lt;generated-random-string&gt; \
 -C canton.participants.<participant>.ledger-api.admin-token-config.admin-claim=true \
 -C canton.parameters.non-standard-config=true
 ```
@@ -1415,7 +1417,7 @@ canton.participants.<participant>.ledger-api.admin-token-config.admin-claim=true
 canton.participants.<participant>.alpha-dynamic {
   users = [
     {
-      user = "<permanent-participant-admin>",
+      user = "&lt;permanent-participant-admin&gt;",
       is-deactivated = false,
       rights = {
         participant-admin = true
@@ -1434,7 +1436,7 @@ Declarative api requires setting the `non-standard-config` and `admin-token-conf
 Create an additional participant admin in a bootstrap script:
 
 ``` 
-<participant>.ledger_api.users.create(id="<permanent-participant-admin>", participantAdmin=true)
+<participant>.ledger_api.users.create(id="&lt;permanent-participant-admin&gt;", participantAdmin=true)
 ```
 
 <Note>
@@ -1442,4 +1444,3 @@ Bootstrap script requires setting the `non-standard-config` and `admin-token-con
 </Note>
 
 {/* COPIED_END */}
-

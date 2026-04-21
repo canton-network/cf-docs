@@ -161,77 +161,30 @@ To configure [Docker Compose](https://docs.docker.com/compose/) to spin up the D
 
 This example is intended to demonstrate how to expose, aggregate, and observe monitoring information from Canton. It is not suitable for production without alterations. Note the following warnings:
 
-> <Warning>
->
-> >
-> Warning
->
->
+<Warning>
+Ports are exposed from the Docker network that are not necessary to support the UI. For example, the network can allow low-level interaction with the underlying service via a REST or similar interface. In a production system, the only ports that should be exposed are those required for the operation of the system.
 </Warning>
->
-> Ports are exposed from the Docker network that are not necessary to support the UI. For example, the network can allow low-level interaction with the underlying service via a REST or similar interface. In a production system, the only ports that should be exposed are those required for the operation of the system.
->
-> 
->
-> <Warning>
->
-> >
-> Warning
->
->
+
+<Warning>
+Some of the services used in the example (for example, Postgres and Elasticsearch) persist data to disk. For this example, the volumes used for this persisted data are internal to the Docker container. This means that when the Docker network is torn down, all data is cleaned up along with the containers. In a production system, these volumes would be mounted onto permanent storage.
 </Warning>
->
-> Some of the services used in the example (for example, Postgres and Elasticsearch) persist data to disk. For this example, the volumes used for this persisted data are internal to the Docker container. This means that when the Docker network is torn down, all data is cleaned up along with the containers. In a production system, these volumes would be mounted onto permanent storage.
->
-> 
->
-> <Warning>
->
-> >
-> Warning
->
->
+
+<Warning>
+Passwords are stored in plaintext in configuration files. In a production system, passwords should be extracted from a secure keystore at runtime.
 </Warning>
->
-> Passwords are stored in plaintext in configuration files. In a production system, passwords should be extracted from a secure keystore at runtime.
->
-> 
->
-> <Warning>
->
-> >
-> Warning
->
->
+
+<Warning>
+Network connections are not secured. In a production system, connections between services should be TLS-enabled, with a certificate authority (CA) provided.
 </Warning>
->
-> Network connections are not secured. In a production system, connections between services should be TLS-enabled, with a certificate authority (CA) provided.
->
-> 
->
-> <Warning>
->
-> >
-> Warning
->
->
+
+<Warning>
+The memory use of the containers is only suitable for light demonstration loads. In a production setup, containers need to be given sufficient memory based on memory profiling.
 </Warning>
->
-> The memory use of the containers is only suitable for light demonstration loads. In a production setup, containers need to be given sufficient memory based on memory profiling.
->
-> 
->
-> <Warning>
->
-> >
-> Warning
->
->
+
+<Warning>
+The versions of the Docker images used in the example may become outdated. In a production system, only the latest patched versions should be used.
 </Warning>
->
-> The versions of the Docker images used in the example may become outdated. In a production system, only the latest patched versions should be used.
->
-> 
+
 
 ### Network Configuration
 
@@ -289,7 +242,7 @@ create database index2db;
 
 Run the synchronizer with the `--log-profile container` that writes plain text to standard out at debug level.
 
-#\. Add examples here \<<https://github.com/DACH-NY/canton/issues/23872>\>
+#\. Add examples here \<[https://github.com/DACH-NY/canton/issues/23872](https://github.com/DACH-NY/canton/issues/23872)\>
 
 ### Participant Setup
 
@@ -562,14 +515,14 @@ services:
 
 To view container metrics:
 
-> 1.  Navigate to <http://localhost:8080/docker/>.
+> 1.  Navigate to [http://localhost:8080/docker/](http://localhost:8080/docker/).
 > 2.  Select a Docker container of interest.
 
 You should now see a UI similar to the one shown.
 
 <img src="./images/c-advisor.png" class="align-center" style="width:100.0%" alt="An example cAdvisor UI" />
 
-Prometheus-formatted metrics are available by default at <http://localhost:8080/metrics>.
+Prometheus-formatted metrics are available by default at [http://localhost:8080/metrics](http://localhost:8080/metrics).
 
 ### Prometheus
 
@@ -862,7 +815,7 @@ Using the previous scripts, you can follow the examples provided in the Getting 
 
 When Kibana is started for the first time, you must set up a data view to allow view the log data:
 
-> 1.  Navigate to <http://localhost:5601/>.
+> 1.  Navigate to [http://localhost:5601/](http://localhost:5601/).
 > 2.  Click **Explore on my own**.
 > 3.  From the menu select **Analytics** \> **Discover**.
 > 4.  Click **Create data view**.
@@ -889,7 +842,7 @@ For more details, see the Kibana documentation. Note that querying based on plai
 
 You can log into the Grafana UI and set up a dashboard. The example imports a [GrafanaLabs community dashboard](https://grafana.com/grafana/dashboards/) that has graphs for cAdvisor metrics. The [cAdvisor Export dashboard](https://grafana.com/grafana/dashboards/14282-cadvisor-exporter/) imported below has an ID of **14282**.
 
-> 1.  Navigate to <http://localhost:3000/login>.
+> 1.  Navigate to [http://localhost:3000/login](http://localhost:3000/login).
 > 2.  Enter the username/password: `grafana/grafana`.
 > 3.  In the side border, select **Dashboards** and then **Import**.
 > 4.  Enter the dashboard ID `14282` and click **Load**.
@@ -981,10 +934,11 @@ The Participant Node provides a `grpc.health.v1.Health` service, implementing th
 
 Kubernetes containers can be [configured](https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/#define-a-grpc-liveness-probe) to use this for readiness or liveness [probes](https://kubernetes.io/docs/concepts/configuration/liveness-readiness-startup-probes/#readiness-probe), e.g.
 
-    readinessProbe:
-      grpc:
-        port: <port>
-
+```text
+readinessProbe:
+  grpc:
+    port: <port>
+```
 By default the port is the one used for the `Ledger API`.
 
 Likewise, [gRPC clients](https://grpc.io/docs/guides/health-checking/#enabling-client-health-checking) and [NGinx](https://docs.nginx.com/nginx/admin-guide/load-balancer/grpc-health-check/) can be configured to watch the health service for traffic management and load balancing.
@@ -1018,11 +972,12 @@ Here the important information is reported via the HTTP Reponse status code.
 
 Kubernetes can use also use these for readiness probes:
 
-    readinessProbe:
-      httpGet:
-        port: <port>
-        path: /health
-
+```text
+readinessProbe:
+  httpGet:
+    port: <port>
+    path: /health
+```
 ## Inspection of General Health Status
 
 General information about the Participant Node, including about unhealthy synchronizers and dependencies, and whether the node is currently Active, can be displayed in the canton console by invoking the `health.status` command on the node.
@@ -1261,11 +1216,7 @@ All metrics below are described in detail in the Metrics reference section.
   )
   ```
 
-- *Individually monitored*: The operator can optionally select counter-participants whose commitment status it wants to monitor individually, for example because they recently presented intermittent failures and have just recovered, or because the operator observes a slowdown in one of the other groups and wants to locate the cause. Each participant gets its own unique label under daml.participant.sync.commitments.synchronizer.counter-participant-latency. Individual alerting can be set based on the business relations.
-
-  <Note>
-Any participant, whether *Default* or *Distinguished*, can be added to *Individually monitored*. A distinguished participant remains in the *Distinguished* group even if it is *Individually monitored*. In contrast, a *Default* participant that is added to *Individually monitored* is removed from the Default group.
-</Note>
+- *Individually monitored*: The operator can optionally select counter-participants whose commitment status it wants to monitor individually, for example because they recently presented intermittent failures and have just recovered, or because the operator observes a slowdown in one of the other groups and wants to locate the cause. Each participant gets its own unique label under daml.participant.sync.commitments.synchronizer.counter-participant-latency. Individual alerting can be set based on the business relations. (Note: any participant, whether *Default* or *Distinguished*, can be added to *Individually monitored*. A distinguished participant remains in the *Distinguished* group even if it is *Individually monitored*. In contrast, a *Default* participant that is added to *Individually monitored* is removed from the Default group.)
 
   The following examples show how the operator of `participant1` adds/removes counter-participant `participant3` to be *Individually monitored* on the synchronizer `synchronizerId`:
 
@@ -1315,16 +1266,17 @@ You can check your validator's health using the readiness endpoints. All CN appl
 
   - In Kubernetes: readiness and liveness probes are already configured.
 
-    You can also manually check validator readiness with the following command:
+```bash
+You can also manually check validator readiness with the following command:
 
-    ```yaml
-    kubectl exec <pod-name> -n <namespace> -- curl -v https://localhost:5003/api/validator/readyz
-    ```
-
+```yaml
+kubectl exec &lt;pod-name&gt; -n <namespace> -- curl -v https://localhost:5003/api/validator/readyz
+```
+```
   - In Docker: run for example this command to check validator liveness inside a container:
 
     ```yaml
-    docker exec <container-name> -- curl -v https://localhost:5003/api/validator/livez
+    docker exec &lt;container-name&gt; -- curl -v https://localhost:5003/api/validator/livez
     ```
 
   You should expect in both case HTTP status code 200 if the validator is ready and live.
