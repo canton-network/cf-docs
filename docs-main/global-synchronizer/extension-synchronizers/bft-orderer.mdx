@@ -1,13 +1,13 @@
 ---
 title: "BFT Orderer Architecture"
-description: "Architecture of the Byzantine Fault Tolerant ordering service for Canton synchronizers"
+description: "Byzantine fault-tolerant orderer architecture for Canton synchronizers."
 ---
 
 {/* COPIED_START source="docs-website:docs/replicated/canton/3.4/synchronizer/explanations/bft_orderer_arch.rst" hash="ef905796" */}
 
 <Warning title="Pre-reviewed Content - Do Not Modify">
 This section was copied from existing reviewed documentation.
-**Source:** `docs-website:docs/replicated/canton/3.4/synchronizer/explanations/bft_orderer_arch.rst`
+**Source:** `docs/replicated/canton/3.4/synchronizer/explanations/bft_orderer_arch.rst`
 Reviewers: Skip this section. Remove markers after final approval.
 </Warning>
 
@@ -19,9 +19,17 @@ The BFT Orderer runs within the Canton ecosystem and serves as one of the primar
 
 ## Background
 
-The BFT Orderer draws inspiration from two recently published BFT consensus algorithms. The primary influence is [Insanely Scalable State-Machine Replication (ISS)](https://arxiv.org/pdf/2203.05681), which presents a parallel leader-based BFT replication protocol that achieves scalability and performance, even in the presence of unavailable replicas. For the BFT Orderer, ISS inspires the core consensus subprotocol.
+<div id="bft-iss-algorithm">
 
-The second inspiration is [Narwhal](https://arxiv.org/pdf/2105.11827), a protocol that separates data dissemination from data ordering into two separate phases of the ordering process. This decoupling allows the BFT consensus protocol, which tends to be a bottleneck in most ordering services, to work faster and more efficiently by simply ordering references to already-disseminated data. For the BFT Orderer, Narwhal inspires the pre-consensus availability subprotocol.
+The BFT Orderer draws inspiration from two recently published BFT consensus algorithms. The primary influence is Insanely Scalable State-Machine Replication (ISS), which presents a parallel leader-based BFT replication protocol that achieves scalability and performance, even in the presence of unavailable replicas. For the BFT Orderer, ISS inspires the core consensus subprotocol.
+
+</div>
+
+<div id="bft-narwhal-algorithm">
+
+The second inspiration is Narwhal, a protocol that separates data dissemination from data ordering into two separate phases of the ordering process. This decoupling allows the BFT consensus protocol, which tends to be a bottleneck in most ordering services, to work faster and more efficiently by simply ordering references to already-disseminated data. For the BFT Orderer, Narwhal inspires the pre-consensus availability subprotocol.
+
+</div>
 
 ## Trust and threat model
 
@@ -38,7 +46,7 @@ The BFT Orderer relies on the following assumptions:
 
 The following dataflow diagram illustrates the BFT Orderer APIs and network trust boundaries. Note that the remote peer node contains fewer elements than the local node just to simplify the illustration. In practice, all BFT Orderer nodes are identical.
 
-<img src="./images/bft-orderer-api-architecture.svg" id="bft-orderer-api-architecture" class="align-center" style="width:100.0%" alt="image" />
+<img src="/images/docs_website/bft-orderer-api-architecture.svg" id="bft-orderer-api-architecture" className="align-center" style={{width: "100.0%"}} alt="image" />
 
 ## APIs
 
@@ -86,7 +94,7 @@ As a result, node administrators must separately manage endpoint information dir
 
 The BFT Orderer utilizes four main subprotocols, split into separate modules, to order transactions across the distributed network of nodes. The following diagram and subsequent sections explain the main responsibilities of each module and how they contribute to the ordering process.
 
-<img src="./images/bft-orderer-pipeline.svg" id="bft-orderer-pipeline" class="align-center" style="width:100.0%" alt="image" />
+<img src="/images/docs_website/bft-orderer-pipeline.svg" id="bft-orderer-pipeline" className="align-center" style={{width: "100.0%"}} alt="image" />
 
 ### Mempool
 
@@ -135,5 +143,6 @@ Third, the output module assigns strictly-increasing BFT timestamps to the order
 Once the output module completes the above steps, it streams blocks in order to the colocated Sequencer using the BlockOrderer API.
 
 Finally, at the end of each epoch, the output module fetches an updated topology from the colocated Sequencer's topology manager that reflects all topology changes up to that point in time. The output module sends this topology, along with an updated set of eligible leaders, to consensus to correctly start the next epoch.
+
 
 {/* COPIED_END */}

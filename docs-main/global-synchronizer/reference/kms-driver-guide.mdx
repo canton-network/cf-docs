@@ -1,13 +1,13 @@
 ---
-title: "KMS Driver Developer Guide"
-description: "Implement a custom KMS driver for Canton key management"
+title: "Canton KMS Driver Developer Guide"
+description: "Develop a custom Canton KMS driver."
 ---
 
 {/* COPIED_START source="docs-website:docs/replicated/canton/3.4/participant/tutorials/kms_driver_guide.rst" hash="2256a3cc" */}
 
 <Warning title="Pre-reviewed Content - Do Not Modify">
 This section was copied from existing reviewed documentation.
-**Source:** `docs-website:docs/replicated/canton/3.4/participant/tutorials/kms_driver_guide.rst`
+**Source:** `docs/replicated/canton/3.4/participant/tutorials/kms_driver_guide.rst`
 Reviewers: Skip this section. Remove markers after final approval.
 </Warning>
 
@@ -19,7 +19,7 @@ The Canton protocol relies on cryptographic operations such as asymmetric encryp
 
 AWS KMS and Google Cloud KMS are supported as of Canton v2.7. To broaden the support of other KMSs and HSMs, Canton v2.9 introduced a plug-in approach, called KMS Drivers, which allows the implementation of custom integrations. This document explains the APIs that must be implemented for a KMS Driver, provides a guide on the implementation, and describes how to configure Canton to run with a KMS Driver. Currently, the KMS Driver is only available in a Scala implementation.
 
-You can find a ["mock" KMS Driver implementation](https://github.com/digital-asset/canton/blob/main/community/mock-kms-driver/src/main/scala/com/digitalasset/canton/crypto/kms/mock/v1/MockKmsDriver.scala) built on a software-based crypto library in the Canton community repository.
+You can find a "mock" KMS Driver implementation built on a software-based crypto library in the Canton community repository.
 
 ## KMS Driver API
 
@@ -125,7 +125,7 @@ trait KmsDriverFactory extends DriverFactory {
 
 #### Driver Configuration Reading & Parsing
 
-Canton uses [pureconfig](https://pureconfig.github.io/) configuration library to read its configuration. Given that the configuration of the driver can be embedded inside a Canton configuration file, the factory of the driver needs to specify the type of configuration, as well as configuration readers and writers. A `ConfigType` can be a case class or as basic as a `Map[String, String]`. In the latter case, the config reader and writer can be defined as:
+Canton uses [pureconfig]() configuration library to read its configuration. Given that the configuration of the driver can be embedded inside a Canton configuration file, the factory of the driver needs to specify the type of configuration, as well as configuration readers and writers. A `ConfigType` can be a case class or as basic as a `Map[String, String]`. In the latter case, the config reader and writer can be defined as:
 
 - `val configReader = pureconfig.ConfigReader.mapReader[String]`
 - `val configWriter = pureconfig.ConfigWriter.mapWriter[String]`
@@ -169,7 +169,7 @@ The driver should report its health through the health method. A Canton node per
 
 The Canton KMS Driver API is published as an artifact on Digital Asset's JFrog Artifactory:
 
-`https://digitalasset.jfrog.io/ui/repos/tree/General/canton-kms-driver-api`
+[https://digitalasset.jfrog.io/ui/repos/tree/General/canton-kms-driver-api](https://digitalasset.jfrog.io/ui/repos/tree/General/canton-kms-driver-api)
 
 You must have a Canton enterprise license and account to access the artifact. You may need to configure your build system to authenticate with a personal access token towards JFrog Artifactory.
 
@@ -197,7 +197,7 @@ Bundle your driver into a self-contained jar, that is, with all required librari
 
 ### KMS Driver Testing
 
-The reusable test suite for KMS Drivers is published at [canton-kms-driver-testing](https://digitalasset.jfrog.io/ui/repos/tree/General/canton-kms-driver-testing). Configure your build system to depend on this maven artifact in the test scope of your project (e.g. for sbt append % Test to limit the dependency to the test scope).
+The reusable test suite for KMS Drivers is published at [canton-kms-driver-testing](). Configure your build system to depend on this maven artifact in the test scope of your project (e.g. for sbt append % Test to limit the dependency to the test scope).
 
 #### KmsDriverTest
 
@@ -313,5 +313,6 @@ Run Canton with your driver jar on its class path:
 `java -cp driver.jar:canton.jar com.digitalasset.canton.CantonEnterpriseApp -c canton.conf # further canton arguments`
 
 Where canton.jar depends on the Canton version, e.g., `lib/canton-enterprise-3.3.3.jar`. The `canton.conf` is a configuration file that needs to configure at least one of the nodes to use the driver KMS as outlined above. Run a ping for example with `participant1.health.ping(participant1)` to validate that the participant can use the configured KMS and driver.
+
 
 {/* COPIED_END */}
