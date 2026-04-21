@@ -1,7 +1,224 @@
 ---
 title: "Daml-LF Reference"
-description: "Daml-LF type conversion, JSON encoding, Protobuf mapping, and DAR file structure"
+description: "Daml-LF type conversion, JSON encoding, Protobuf mapping, packages, and DAR file structure."
 ---
+
+import DamllfLfTranslationCodeSnippetTypeSynonyms from '/snippets/daml-docs/damllf_LfTranslation_code_snippet_type_synonyms.mdx';
+import DamllfLfTranslationCodeSnippetTemplateDataTypes from '/snippets/daml-docs/damllf_LfTranslation_code_snippet_template_data_types.mdx';
+import DamllfLfResultsSnippetDataFromTemplate from '/snippets/daml-docs/damllf_LfResults_snippet_data_from_template.mdx';
+import DamllfLfTranslationCodeSnippetChoiceDataTypes from '/snippets/daml-docs/damllf_LfTranslation_code_snippet_choice_data_types.mdx';
+import DamllfLfResultsSnippetDataFromChoices from '/snippets/daml-docs/damllf_LfResults_snippet_data_from_choices.mdx';
+import GrpcNotationSnippet from '/snippets/daml-docs/grpc_notation_snippet.mdx';
+import GrpcNotationFull from '/snippets/daml-docs/grpc_notation_full.mdx';
+import GrpcTypesPRODUCTTYPEDEF from '/snippets/daml-docs/grpc_Types_PRODUCT_TYPE_DEF.mdx';
+import GrpcTypesPRODUCTTYPECREATE from '/snippets/daml-docs/grpc_Types_PRODUCT_TYPE_CREATE.mdx';
+import GrpcRecordsFull from '/snippets/daml-docs/grpc_records_full.mdx';
+import GrpcTypesSUMTYPEDEF from '/snippets/daml-docs/grpc_Types_SUM_TYPE_DEF.mdx';
+import GrpcTypesSUMTYPECREATE from '/snippets/daml-docs/grpc_Types_SUM_TYPE_CREATE.mdx';
+import GrpcMySumTypeL112 from '/snippets/daml-docs/grpc_MySumType_L1-12.mdx';
+import GrpcMySumTypeL1438 from '/snippets/daml-docs/grpc_MySumType_L14-38.mdx';
+import GrpcTemplatesSIMPLETEMPLATE from '/snippets/daml-docs/grpc_Templates_SIMPLE_TEMPLATE.mdx';
+import GrpcCreateMySimpleTemplateFull from '/snippets/daml-docs/grpc_CreateMySimpleTemplate_full.mdx';
+import GrpcCreatedEventMySimpleTemplateFull from '/snippets/daml-docs/grpc_CreatedEventMySimpleTemplate_full.mdx';
+import GrpcExerciseMySimpleTemplateFull from '/snippets/daml-docs/grpc_ExerciseMySimpleTemplate_full.mdx';
+import GrpcExerciseByKeyMySimpleTemplateFull from '/snippets/daml-docs/grpc_ExerciseByKeyMySimpleTemplate_full.mdx';
+
+{/* COPIED_START source="docs-website:docs/replicated/daml/3.4/sdk/explanations/ledger-api.rst" hash="096c6edb" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was copied from existing reviewed documentation.
+**Source:** `docs/replicated/daml/3.4/sdk/explanations/ledger-api.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+# Ledger API overview
+
+## What is the Ledger API
+
+The **Ledger API** is an API that's exposed by any Participant Node. Users access and manipulate the ledger state through the Ledger API. There are two protocols available for the Ledger API: gRPC and JSON. The core services are implemented using [gRPC]() and [Protobuf](). There is a translation layer that additionally exposes all the Ledger API services as JSON Ledger API.
+
+For a high level introduction to the services see `ledger-api-services`.
+
+You may also want to read the protobuf documentation of the API, which explains how each service is defined through its protobuf messages.
+
+## How to Access the Ledger API
+
+You can access the gRPC Ledger API via the Java bindings.
+
+If you don't use a language that targets the JVM, you can use gRPC to generate the code to access the Ledger API in several programming languages that support the `proto` standard.
+
+If you don't want to use the gRPC API, you can also use the JSON Ledger API. This API is formally described using an openapi and asyncapi descriptions. You can use any language that supports OpenAPI standard to generate the clients using the OpenAPI [Generators]().
+
+## Daml-LF
+
+When you compile Daml source into a .dar file, the underlying format is Daml-LF. Daml-LF is similar to Daml, but is stripped down to a core set of features. The relationship between the surface Daml syntax and Daml-LF is loosely similar to that between Java and JVM bytecode.
+
+As a user, you don't need to interact with Daml-LF directly. But internally, it's used for:
+
+- Executing Daml code on the Ledger
+- Sending and receiving values via the Ledger API
+- Generating code in other languages for interacting with Daml models (often called “codegen”)
+
+Daml assistant offers two code generators that convert the DAML-LF to the idiomatic representations of Daml in Java or Typescript.
+
+### When You Need to Know About Daml-LF
+
+Daml-LF is only really relevant when you're dealing with the objects you send to or receive from the ledger. If you use any of the provided code generators, you don't need to know about Daml-LF at all.
+
+Otherwise, it can be helpful to know what the types in your Daml code look like at the Daml-LF level, so you know what to expect from the Ledger API.
+
+For example, if you are writing an application that creates some Daml contracts, you need to construct values to pass as parameters to the contract. These values are determined by the Daml-LF types in that contract template. This means you need an idea of how the Daml-LF types correspond to the types in the original Daml model.
+
+For the most part the translation of types from Daml to Daml-LF should not be surprising. This page goes through all the cases in detail.
+
+
+{/* COPIED_END */}
+
+
+{/* COPIED_START source="docs-website:docs/replicated/canton/3.4/sdk/reference/json-api/lf-value-specification.rst" hash="a3820c5d" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was copied from existing reviewed documentation.
+**Source:** `docs/replicated/canton/3.4/sdk/reference/json-api/lf-value-specification.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+> \<br /\>
+
+# Daml-LF JSON encoding
+
+Daml-LF values are represented as JSON values in the JSON Ledger API. This representation is used whenever the `JSON Ledger API` expects a `Daml` record or value, such as in the `createArguments` field of the `CreateCommand` component. The conversion from Daml values to JSON also occurs when a value is returned from the `JSON Ledger API`. For more information about `Daml` types, see `daml-ref-built-in-types`.
+
+<table>
+<caption>Daml LF JSON encoding</caption>
+<colgroup>
+<col style={{width: "20%"}} />
+<col style={{width: "20%"}} />
+<col style={{width: "60%"}} />
+</colgroup>
+<thead>
+<tr className="header">
+<th>Daml LF type</th>
+<th>JSON Type</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr className="odd">
+<td>`Int`</td>
+<td>`string` (number accepted as input)<a href="#fn1" className="footnote-ref" id="fnref1" role="doc-noteref"><sup>1</sup></a> range [-9223372036854775808, 9223372036854775807]</td>
+<td>1234567890</td>
+</tr>
+<tr className="even">
+<td>`Decimal`</td>
+<td>`string` (number accepted as input)<a href="#fn2" className="footnote-ref" id="fnref2" role="doc-noteref"><sup>2</sup></a> range: [–(10³⁸–1)÷10¹⁰,(10³⁸–1)÷10¹⁰] format: <code>-?[0-9]{1,28}(\.[0-9]{1,10})?</code></td>
+<td>"1234.56"</td>
+</tr>
+<tr className="odd">
+<td>`Timestamp`</td>
+<td>`string` ISO 8601 timestamp(<code>yyyy-mm-ddThh:mm:ss.ssssssZ</code>)<a href="#fn3" className="footnote-ref" id="fnref3" role="doc-noteref"><sup>3</sup></a></td>
+<td>"2023-04-06T04:30:23.1234569Z"</td>
+</tr>
+<tr className="even">
+<td>`Date`</td>
+<td>`string` ISO 8601 date (<code>yyyy-mm-dd</code>)</td>
+<td>"2023-04-06"</td>
+</tr>
+<tr className="odd">
+<td>`Unit`</td>
+<td><code>{}</code> empty JSON Object</td>
+<td><code>{}</code></td>
+</tr>
+<tr className="even">
+<td>`Text`</td>
+<td>`string`</td>
+<td>"my text value"</td>
+</tr>
+<tr className="odd">
+<td>`Bool`</td>
+<td>boolean</td>
+<td>false</td>
+</tr>
+<tr className="even">
+<td>`ContractId`</td>
+<td>`string`</td>
+<td>"1234:56:7890"</td>
+</tr>
+<tr className="odd">
+<td>`Party`</td>
+<td>`string`</td>
+<td>"Alice:1234567890"</td>
+</tr>
+<tr className="even">
+<td>`Record`</td>
+<td>JSON `object` <code>{"prop1":val1, ..., "propN":valV}</code></td>
+<td><p>.. code-block:</p>
+<pre><code>{
+    &quot;field1Label&quot;:{ /*value of field1*/},
+    &quot;field2Label&quot;: { /*value of field2*/},
+    /*...*/
+}</code></pre></td>
+</tr>
+<tr className="odd">
+<td>`List`</td>
+<td>JSON array</td>
+<td><code>[1,7,3,4,5]</code></td>
+</tr>
+<tr className="even">
+<td>`TextMap`</td>
+<td>JSON `object` <code>{"key1":"val1", ..., "keyn":"valn"}</code></td>
+<td><code>{"key1":"value1", "key2":"value2"}</code></td>
+</tr>
+<tr className="odd">
+<td>`Variant`</td>
+<td><p>.. code-block:</p>
+<pre><code>{
+ &quot;tag&quot;: &quot;&lt;constructor_name&gt;&quot;,
+ &quot;value&quot;: &quot;&lt;variant_value&gt;&quot;
+}</code></pre></td>
+<td><p>.. code-block:</p>
+<pre><code>data Location
+  = InHand
+  ; InAccount Account
+    deriving (Eq, Show)</code></pre>
+<pre><code>{
+ &quot;tag&quot;: &quot;InAccount&quot;,
+     &quot;value&quot;: {
+         &quot;number&quot;: &quot;CH-1234567890&quot;,
+         &quot;bank&quot;: { }
+     }
+}</code></pre></td>
+</tr>
+<tr className="even">
+<td>`Optional`</td>
+<td>JSON `value` when defined or `null` when empty</td>
+<td>null</td>
+</tr>
+<tr className="odd">
+<td>`Enum`</td>
+<td>`string` enum value name</td>
+<td><code>Red</code> (for Daml <code>data Color = Red | Green | Blue</code>)</td>
+</tr>
+</tbody>
+</table>
+<aside id="footnotes" className="footnotes footnotes-end-of-document" role="doc-endnotes">
+<hr />
+<ol>
+<li id="fn1"><p>Note that JSON numbers is enough to represent all Decimals. Strings are preferred because many languages (most notably JavaScript) use IEEE Doubles to express JSON numbers, and IEEE Doubles cannot express Daml-LF Decimals correctly. For convenience, during parsing we accept both JSON numbers and strings.<a href="#fnref1" className="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn2"><p>Note that JSON numbers is enough to represent all Decimals. Strings are preferred because many languages (most notably JavaScript) use IEEE Doubles to express JSON numbers, and IEEE Doubles cannot express Daml-LF Decimals correctly. For convenience, during parsing we accept both JSON numbers and strings.<a href="#fnref2" className="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn3"><p>Timestamp parsing is more flexible and uses the format <code>yyyy-mm-ddThh:mm:ss(\.s+)?Z</code>, i.e. it's OK to omit the microsecond part partially or entirely, or have more than 6 decimals. Sub-second data beyond microseconds will be dropped. The UTC timezone designator must be included. The rationale behind the inclusion of the timezone designator is minimizing the risk that users pass in local times.<a href="#fnref3" className="footnote-back" role="doc-backlink">↩︎</a></p></li>
+</ol>
+</aside>
+
+Daml LF JSON encoding
+
+**Footnotes**
+
+
+{/* COPIED_END */}
+
+
+
 
 {/* COPIED_START source="docs-website:docs/replicated/daml/3.4/sdk/reference/damllf/daml-lf-translation.rst" hash="2de9f83c" */}
 
@@ -42,7 +259,19 @@ Be aware that only the Daml primitive types exported by the Prelude module map t
 
 Daml tuple type constructors take types `T1, T2, …, TN` to the type `(T1, T2, …, TN)`. These are exposed in the Daml surface language through the Prelude module.
 
-The equivalent Daml-LF type constructors are `daml-prim:DA.Types:TupleN, for each particular N (where 2 \ (starting with the `data` keyword) are translated to record, variant or enum types. It’s sometimes not obvious what they will be translated to, so this section lists many examples of data types in Daml and their translations in Daml-LF.
+The equivalent Daml-LF type constructors are `daml-prim:DA.Types:TupleN`, for each particular N (where 2 \<= N \<= 20). This qualified name refers to the package name (`ghc-prim`) and the module name (`GHC.Tuple`).
+
+For example: the Daml pair type `(Int, Text)` is translated to `daml-prim:DA.Types:Tuple2 Int64 Text`.
+
+## Data Types
+
+Daml-LF has three kinds of data declarations:
+
+- **Record** types, which define a collection of data
+- **Variant** or **sum** types, which define a number of alternatives
+- **Enum**, which defines simplified **sum** types without type parameters nor argument.
+
+Data type declarations in Daml (starting with the `data` keyword) are translated to record, variant or enum types. It’s sometimes not obvious what they will be translated to, so this section lists many examples of data types in Daml and their translations in Daml-LF.
 
 ### Record declarations
 
@@ -70,10 +299,10 @@ This section uses the syntax for Daml records with curly braces.
 | `data Foo = Bar Int`                                                           | `variant Foo ↦ Bar Int64`                                                                                                                   |
 | `data Foo = Foo ()`                                                            | `variant Foo ↦ Foo Unit`                                                                                                                    |
 | `data Foo = Bar ()`                                                            | `variant Foo ↦ Bar Unit`                                                                                                                    |
-| `data Foo = Bar { bar: Int } \| Baz Text`                                       | `variant Foo ↦ Bar Foo.Bar \| Baz Text`, `record Foo.Bar ↦ { bar: Int64 }`                                                                   |
-| `data Foo = Foo { foo: Int } \| Baz Text`                                       | `variant Foo ↦ Foo Foo.Foo \| Baz Text`, `record Foo.Foo ↦ { foo: Int64 }`                                                                   |
-| `data Foo = Bar { bar1: Int; bar2: Decimal } \| Baz Text`                       | `variant Foo ↦ Bar Foo.Bar \| Baz Text`, `record Foo.Bar ↦ { bar1: Int64; bar2: Decimal }`                                                   |
-| `data Foo = Bar { bar1: Int; bar2: Decimal } \| Baz { baz1: Text; baz2: Date }` | `variant Foo ↦ Bar Foo.Bar \| Baz Foo.Baz`, `record Foo.Bar ↦ { bar1: Int64; bar2: Decimal }`, `record Foo.Baz ↦ { baz1: Text; baz2: Date }` |
+| `data Foo = Bar { bar: Int } | Baz Text`                                       | `variant Foo ↦ Bar Foo.Bar | Baz Text`, `record Foo.Bar ↦ { bar: Int64 }`                                                                   |
+| `data Foo = Foo { foo: Int } | Baz Text`                                       | `variant Foo ↦ Foo Foo.Foo | Baz Text`, `record Foo.Foo ↦ { foo: Int64 }`                                                                   |
+| `data Foo = Bar { bar1: Int; bar2: Decimal } | Baz Text`                       | `variant Foo ↦ Bar Foo.Bar | Baz Text`, `record Foo.Bar ↦ { bar1: Int64; bar2: Decimal }`                                                   |
+| `data Foo = Bar { bar1: Int; bar2: Decimal } | Baz { baz1: Text; baz2: Date }` | `variant Foo ↦ Bar Foo.Bar | Baz Foo.Baz`, `record Foo.Bar ↦ { bar1: Int64; bar2: Decimal }`, `record Foo.Baz ↦ { baz1: Text; baz2: Date }` |
 
 ### Enum declarations
 
@@ -187,10 +416,7 @@ Type synonyms (starting with the `type` keyword) are eliminated during conversio
 
 For example, consider the following Daml type declarations.
 
-```daml
--- Code from: code-snippets/LfTranslation.daml
--- [Include actual code example here]
-```
+<DamllfLfTranslationCodeSnippetTypeSynonyms />
 
 The `Username` type is eliminated in the Daml-LF translation, as follows:
 
@@ -210,17 +436,11 @@ These declarations are all at the top level of the module in which the template 
 
 Every contract template defines a record type for the parameters of the contract. For example, the template declaration:
 
-```daml
--- Code from: code-snippets/LfTranslation.daml
--- [Include actual code example here]
-```
+<DamllfLfTranslationCodeSnippetTemplateDataTypes />
 
 results in this record declaration:
 
-```daml
--- Code from: code-snippets/LfResults.daml
--- [Include actual code example here]
-```
+<DamllfLfResultsSnippetDataFromTemplate />
 
 This translates to the Daml-LF record declaration:
 
@@ -232,17 +452,11 @@ record Iou ↦ { issuer: Party; owner: Party; currency: Text; amount: Decimal }
 
 Every choice within a contract template results in a record type for the parameters of that choice. For example, let’s suppose the earlier `Iou` template has the following choices:
 
-```daml
--- Code from: code-snippets/LfTranslation.daml
--- [Include actual code example here]
-```
+<DamllfLfTranslationCodeSnippetChoiceDataTypes />
 
 This results in these two record types:
 
-```daml
--- Code from: code-snippets/LfResults.daml
--- [Include actual code example here]
-```
+<DamllfLfResultsSnippetDataFromChoices />
 
 Whether the choice is consuming or nonconsuming is irrelevant to the data type declaration. The data type is a record even if there are no fields.
 
@@ -269,7 +483,11 @@ All names in Daml—of types, templates, choices, fields, and variant data const
 | `naïveté` | `na$u00efvet$u00e9`      |
 | `:🙂:`    | `$u003a$U0001f642$u003a` |
 
+
 {/* COPIED_END */}
+
+
+
 
 {/* COPIED_START source="docs-website:docs/replicated/daml/3.4/sdk/sdlc-howtos/applications/integrate/grpc/daml-to-ledger-api.rst" hash="b7b29e30" */}
 
@@ -292,17 +510,11 @@ The Daml code in the examples below is written in Daml *1.1*.
 
 The notation used on this page for the protobuf messages is the same as you get if you invoke `protoc --decode=Foo < some_payload.bin`. To illustrate the notation, here is a simple definition of the messages `Foo` and `Bar`:
 
-```protobuf
--- Code from: code-snippets/notation.proto
--- [Include actual code example here]
-```
+<GrpcNotationSnippet />
 
 A particular value of `Foo` is then represented by the Ledger API in this way:
 
-```daml
--- Code from: code-snippets/notation.payload
--- [Include actual code example here]
-```
+<GrpcNotationFull />
 
 The name of messages is added as a comment after the opening curly brace.
 
@@ -310,54 +522,32 @@ The name of messages is added as a comment after the opening curly brace.
 
 Records or product types are translated to `com.daml.ledger.api.v1.record`. Here's an example Daml record type that contains a field for each primitive type:
 
-```daml
--- Code from: code-snippets/Types.daml
--- [Include actual code example here]
-```
+<GrpcTypesPRODUCTTYPEDEF />
 
 And here's an example of creating a value of type \`MyProductType\`:
 
-```daml
--- Code from: code-snippets/Types.daml
--- [Include actual code example here]
-```
+<GrpcTypesPRODUCTTYPECREATE />
 
 For this data, the respective data on the Ledger API is shown below. Note that this value would be enclosed by a particular contract containing a field of type `MyProductType`. See [Contract templates](#contract-templates) for the translation of Daml contracts to the representation by the Ledger API.
 
-```daml
--- Code from: code-snippets/records.payload
--- [Include actual code example here]
-```
+<GrpcRecordsFull />
 
 ## Variants
 
 Variants or sum types are types with multiple constructors. This example defines a simple variant type with two constructors:
 
-```daml
--- Code from: code-snippets/Types.daml
--- [Include actual code example here]
-```
+<GrpcTypesSUMTYPEDEF />
 
 The constructor `MyConstructor1` takes a single parameter of type `Integer`, whereas the constructor `MyConstructor2` takes a tuple with two fields as parameter. The snippet below shows how you can create values with either of the constructors.
 
-```daml
--- Code from: code-snippets/Types.daml
--- [Include actual code example here]
-```
+<GrpcTypesSUMTYPECREATE />
 
 Similar to records, variants are also enclosed by a contract, a record, or another variant.
 
 The snippets below shows the value of `mySum1` and `mySum2` respectively as they would be transmitted on the Ledger API within a contract.
 
-```daml
--- Code from: code-snippets/MySumType.payload
--- [Include actual code example here]
-```
-
-```daml
--- Code from: code-snippets/MySumType.payload
--- [Include actual code example here]
-```
+<GrpcMySumTypeL112 />
+<GrpcMySumTypeL1438 />
 
 ## Contract Templates
 
@@ -365,46 +555,33 @@ Contract templates are represented as records with the same identifier as the te
 
 This first example template below contains only the signatory party and a simple choice to exercise:
 
-```daml
--- Code from: code-snippets/Templates.daml
--- [Include actual code example here]
-```
+<GrpcTemplatesSIMPLETEMPLATE />
 
 ### Create a Contract
 
 Creating contracts is done by sending a `com.daml.ledger.api.v1.createcommand` to the `com.daml.ledger.api.v1.commandsubmissionservice` or the `com.daml.ledger.api.v1.commandservice`. The message to create a `MySimpleTemplate` contract with *Alice* being the owner is shown below:
 
-```daml
--- Code from: code-snippets/CreateMySimpleTemplate.payload
--- [Include actual code example here]
-```
+<GrpcCreateMySimpleTemplateFull />
 
 ### Receive a Contract
 
 Contracts are received from the `com.daml.ledger.api.v1.transactionservice` in the form of a `com.daml.ledger.api.v1.createdevent`. The data contained in the event corresponds to the data that was used to create the contract.
 
-```daml
--- Code from: code-snippets/CreatedEventMySimpleTemplate.payload
--- [Include actual code example here]
-```
+<GrpcCreatedEventMySimpleTemplateFull />
 
 ### Exercise a Choice
 
 A choice is exercised by sending an `com.daml.ledger.api.v1.exercisecommand`. Taking the same contract template again, exercising the choice `MyChoice` would result in a command similar to the following:
 
-```daml
--- Code from: code-snippets/ExerciseMySimpleTemplate.payload
--- [Include actual code example here]
-```
+<GrpcExerciseMySimpleTemplateFull />
 
 If the template specifies a key, the `com.daml.ledger.api.v1.exercisebykeycommand` can be used. It works in a similar way as `com.daml.ledger.api.v1.exercisecommand`, but instead of specifying the contract identifier you have to provide its key. The example above could be rewritten as follows:
 
-```daml
--- Code from: code-snippets/ExerciseByKeyMySimpleTemplate.payload
--- [Include actual code example here]
-```
+<GrpcExerciseByKeyMySimpleTemplateFull />
+
 
 {/* COPIED_END */}
+
 
 {/* COPIED_START source="docs-website:docs/replicated/daml/3.4/sdk/explanations/daml-packages-and-archive-files.rst" hash="b5af20b7" */}
 
@@ -513,7 +690,9 @@ In general, any time a DAR is compiled for a package that has further DAR depend
 
 For more information on how to open up and inspect the DAR files and DALF files, refer to the documentation on how to parse Daml archive files.
 
+
 {/* COPIED_END */}
+
 
 {/* COPIED_START source="docs-website:docs/replicated/daml/3.4/sdk/component-howtos/development-tooling-authors/how-to-parse-daml-archive-files.rst" hash="1a25e77f" */}
 
@@ -611,7 +790,11 @@ In addition to the human-readable output, you can also get the output as JSON. T
 }
 ```
 
-Note that `name` and `version` will be `null for packages in Daml-LF \ prints all of the code in the main package of that DAR file in a human-readable format.
+Note that `name` and `version` will be `null` for packages in Daml-LF \< 1.8.
+
+## Inspecting the main package of a DAR file
+
+If you'd like to inspect the code inside the main package of a DAR, the Daml compiler provides the `inspect` tool; running `dpm damlc inspect <path-to-dar-file>` prints all of the code in the main package of that DAR file in a human-readable format.
 
 For example, run the `inspect` tool on the DAR produced in the previous section:
 
@@ -628,7 +811,7 @@ module Main where
 
 ## Inspecting a DALF file
 
-The `inspect` tool also accepts DALF files; running dpm damlc inspect on a DALF file prints all of the code in that DALF file.
+The `inspect` tool also accepts DALF files; running `dpm damlc inspect <path-to-dalf-file>` on a DALF file prints all of the code in that DALF file.
 
 We can unzip a DAR to access its dalfs and inspect them, for example with the DAR from the previous section:
 
@@ -661,7 +844,7 @@ module Main where
 
 ## Parsing DAR and DALF files
 
-To parse a DAR or DALF file from within Scala code, the `com-daml:daml-lf-archive-reader` library on Maven \ provides a Scala package object `com.digitalasset.daml.lf.archive` with several decoders. Below are the common types of inputs and outputs a decoder can have, and which decoders to use depending on the input and output that is desired. For more details on inputs, outputs, and decoders, please refer to Maven to find the source code for the associated libraries.
+To parse a DAR or DALF file from within Scala code, the `com-daml:daml-lf-archive-reader` library on Maven provides a Scala package object `com.digitalasset.daml.lf.archive` with several decoders. Below are the common types of inputs and outputs a decoder can have, and which decoders to use depending on the input and output that is desired. For more details on inputs, outputs, and decoders, please refer to Maven to find the source code for the associated libraries.
 
 ### Output types
 
@@ -669,15 +852,15 @@ When decoding a package, a decoder can have one of several possible outputs, dep
 
 - When the full code of the package is needed, pick a decoder returning tuples `(PackageId, Package)`.
 
-  In this case, `PackageId` is a string-like type that comes from `com.digitalasset.daml.lf.language.Ref` in the `com.daml:daml-lf-data` library on Maven \. `Package` represents the full structure of a package, and comes from `com.digitalasset.daml.lf.language.Ast`, in the `com.daml:daml-lf-language` library on Maven \.
+  In this case, `PackageId` is a string-like type that comes from `com.digitalasset.daml.lf.language.Ref` in the `com.daml:daml-lf-data` library on Maven. `Package` represents the full structure of a package, and comes from `com.digitalasset.daml.lf.language.Ast`, in the `com.daml:daml-lf-language` library on Maven.
 
   Because fully decoding the package takes more processing time than the next two examples, only use it when the full package code is needed.
 
-  For example, the `com.digitalasset.daml.lf.typesig.reader.SignatureReader` class from the `com-daml:daml-lf-api-type-signature` library on Maven \ takes a `(PackageId, Package)` pair to produce a `com.digitalasset.daml.lf.typesig.PackageSignature` (also from the `api-type-signature`) package, which specifies all of the templates, datatypes, and interfaces in a package.
+  For example, the `com.digitalasset.daml.lf.typesig.reader.SignatureReader` class from the `com-daml:daml-lf-api-type-signature` library on Maven takes a `(PackageId, Package)` pair to produce a `com.digitalasset.daml.lf.typesig.PackageSignature` (also from the `api-type-signature`) package, which specifies all of the templates, datatypes, and interfaces in a package.
 
-- When only the simplest representation of the protobuf of the package is needed, pick a decoder returning a `com.digitalasset.daml.lf.ArchivePayload` (from the `com-daml:daml-lf-archive` library on Maven \). This should only be needed when working with internal protobuf representations of a package.
+- When only the simplest representation of the protobuf of the package is needed, pick a decoder returning a `com.digitalasset.daml.lf.ArchivePayload` (from the `com-daml:daml-lf-archive` library on Maven). This should only be needed when working with internal protobuf representations of a package.
 
-- When only the package's byte representation and hash is needed, use a decoder that returns `Archive` (from the `com-daml:daml-lf-archive-proto` library on Maven \). When using this, the decoder will not spend time decoding any of the package's actual content, such as its metadata or its code.
+- When only the package's byte representation and hash is needed, use a decoder that returns `Archive` (from the `com-daml:daml-lf-archive-proto` library on Maven). When using this, the decoder will not spend time decoding any of the package's actual content, such as its metadata or its code.
 
 ### Input types
 
@@ -761,6 +944,7 @@ Get the names of all the dependency packages in the DAR by using the `.metadata.
 scala> dar.dependencies.map(_._2.metadata.name)
 val res2: List[com.digitalasset.daml.lf.data.Ref.PackageName] = List(daml-prim, daml-prim-DA-Exception-ArithmeticError, ...
 ```
+
 
 {/* COPIED_END */}
 
