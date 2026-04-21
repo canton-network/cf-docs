@@ -3,6 +3,7 @@ title: "Smart Contract Upgrades in Production"
 description: "Operational considerations for rolling out smart contract upgrades in production"
 ---
 
+
 import DamlDocsAppdevModulesM7SmartContractUpgradesL39 from "/snippets/daml-docs/appdev_modules_m7-smart-contract-upgrades_L39.mdx";
 import DamlDocsAppdevModulesM7SmartContractUpgradesL68 from "/snippets/daml-docs/appdev_modules_m7-smart-contract-upgrades_L68.mdx";
 
@@ -113,15 +114,14 @@ Use this checklist for each production upgrade:
 - [Error Handling](/docs-main/appdev/modules/m7-error-handling) -- Handling errors that may arise during mixed-version deployments
 - [Deployment Progression](/docs-main/appdev/modules/m5-deployment-progression) -- The DevNet to TestNet to MainNet path
 
+
 {/* COPIED_START source="docs-website:docs/replicated/daml/3.4/sdk/reference/smart-contract-upgrades.rst" hash="9f2fcd76" */}
 
 <Warning title="Pre-reviewed Content - Do Not Modify">
 This section was copied from existing reviewed documentation.
-**Source:** `docs-website:docs/replicated/daml/3.4/sdk/reference/smart-contract-upgrades.rst`
+**Source:** `docs/replicated/daml/3.4/sdk/reference/smart-contract-upgrades.rst`
 Reviewers: Skip this section. Remove markers after final approval.
 </Warning>
-
-Add more details around acquired interfaces and link to best practices wrt interface view changes. Verify that the ledger API normalization rules are still correct.
 
 # Smart contract upgrading reference
 
@@ -135,13 +135,17 @@ DAR upgrade checks are broken down into package-level checks, which are in turn 
 
 ### Packages
 
-**Definition:** A *utility package* is a package with no template definition, no interface definition, no exception definition, and only non-[serializable](https://github.com/digital-asset/daml/blob/main/sdk/daml-lf/spec/daml-lf-2.rst#serializable-types) data type definitions. A utility package typically consists of helper functions and constants, but no type definitions.
+<div id="upgrades-utility-package">
+
+**Definition:** A *utility package* is a package with no template definition, no interface definition, no exception definition, and only [non-serializable]() data type definitions. A utility package typically consists of helper functions and constants, but no type definitions.
+
+</div>
 
 A DAR is checked against previously uploaded DARs for upgrade validity on upload to a participant. Specifically, for every package with name *p* and version *v* present in the uploaded DAR:
 
 1.  The participant looks up versions *v_prev* and *v_next* of *p* in its package database, such that *v_prev* is the greatest version of *p* smaller than *v*, and *v_next* is the smallest version of *p* greater than *v*. Note that they may not always exist.
 
-    ![image](./smart-contract-upgrades/images/upgrade-static-checks-order.svg)
+    ![image](/images/docs_website/upgrade-static-checks-order.svg)
 
 2.  The participant checks that version *v* of *p* is a valid upgrade of version *v_prev* of p, if it exists.
 
@@ -187,25 +191,29 @@ In the file tree below, package v2 cannot possibly be a valid upgrade of v1 beca
 
 The templates of the new version of a package must form a superset of the templates of the prior version of that package. In other words, it is valid to add new templates but deleting a template leads to a validation error.
 
+<div id="examples-1">
+
 **Examples**
+
+</div>
 
 Below, the module on the right is a valid upgrade of the module on the left. But the module on the left is **not** a valid upgrade of the module on the right because it lacks a definition for template `T2`.
 
 <table>
 <colgroup>
-<col style="width: 50%" />
-<col style="width: 50%" />
+<col style={{width: "50%"}} />
+<col style={{width: "50%"}} />
 </colgroup>
 <tbody>
-<tr class="odd">
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>module M where</span>
+<tr className="odd">
+<td><div className="sourceCode" id="cb1"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>module M where</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>template T1      </span>
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  with           </span>
 <span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    p : Party    </span>
 <span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>  where          </span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    signatory p  </span></code></pre></td>
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>module M where   </span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    signatory p  </span></code></pre></div></td>
+<td><div className="sourceCode" id="cb2"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>module M where   </span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>  template T1</span>
 <span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    with</span>
@@ -217,7 +225,7 @@ Below, the module on the right is a valid upgrade of the module on the left. But
 <span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>    with</span>
 <span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>      p : Party</span>
 <span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>    where</span>
-<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>      signatory p</span></code></pre></td>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>      signatory p</span></code></pre></div></td>
 </tr>
 </tbody>
 </table>
@@ -234,28 +242,32 @@ As a special case of the two points above, renaming a parameter leads to a valid
 
 Adding a non-optional parameter at the end of the parameter leads to a validation error.
 
+<div id="examples-2">
+
 **Examples**
+
+</div>
 
 Below, the template on the right is a valid upgrade of the template on the left. It adds an optional parameter `x1` at the end of the parameter sequence.
 
 <table>
 <colgroup>
-<col style="width: 50%" />
-<col style="width: 50%" />
+<col style={{width: "50%"}} />
+<col style={{width: "50%"}} />
 </colgroup>
 <tbody>
-<tr class="odd">
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>template T</span>
+<tr className="odd">
+<td><div className="sourceCode" id="cb1"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>template T</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    with</span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>      p : Party</span>
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    where</span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>      signatory p</span></code></pre></td>
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>template T</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>      signatory p</span></code></pre></div></td>
+<td><div className="sourceCode" id="cb2"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>template T</span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    with</span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>      p : Party</span>
 <span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>      x1 : Optional Int</span>
 <span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    where</span>
-<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>      signatory p</span></code></pre></td>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>      signatory p</span></code></pre></div></td>
 </tr>
 </tbody>
 </table>
@@ -264,22 +276,22 @@ Below, the template on the right is **not** a valid upgrade of the template on t
 
 <table>
 <colgroup>
-<col style="width: 50%" />
-<col style="width: 50%" />
+<col style={{width: "50%"}} />
+<col style={{width: "50%"}} />
 </colgroup>
 <tbody>
-<tr class="odd">
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>template T</span>
+<tr className="odd">
+<td><div className="sourceCode" id="cb1"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>template T</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  with</span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    p : Party</span>
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  where</span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    signatory p</span></code></pre></td>
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>template T</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    signatory p</span></code></pre></div></td>
+<td><div className="sourceCode" id="cb2"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>template T</span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  with</span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    x1 : Optional Int</span>
 <span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    p : Party</span>
 <span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>  where</span>
-<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    signatory p</span></code></pre></td>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    signatory p</span></code></pre></div></td>
 </tr>
 </tbody>
 </table>
@@ -288,22 +300,22 @@ Below, the template on the right is **not** a valid upgrade of the template on t
 
 <table>
 <colgroup>
-<col style="width: 50%" />
-<col style="width: 50%" />
+<col style={{width: "50%"}} />
+<col style={{width: "50%"}} />
 </colgroup>
 <tbody>
-<tr class="odd">
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>template T</span>
+<tr className="odd">
+<td><div className="sourceCode" id="cb1"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>template T</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  with</span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    p : Party</span>
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    x1 : Int</span>
 <span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>  where</span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    signatory p</span></code></pre></td>
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>template T</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    signatory p</span></code></pre></div></td>
+<td><div className="sourceCode" id="cb2"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>template T</span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  with</span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    p : Party</span>
 <span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>  where</span>
-<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    signatory p</span></code></pre></td>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    signatory p</span></code></pre></div></td>
 </tr>
 </tbody>
 </table>
@@ -312,23 +324,23 @@ Below, the template on the right is **not** a valid upgrade of the template on t
 
 <table>
 <colgroup>
-<col style="width: 50%" />
-<col style="width: 50%" />
+<col style={{width: "50%"}} />
+<col style={{width: "50%"}} />
 </colgroup>
 <tbody>
-<tr class="odd">
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>template T</span>
+<tr className="odd">
+<td><div className="sourceCode" id="cb1"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>template T</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  with</span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    p : Party</span>
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    x1 : Int</span>
 <span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>  where</span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    signatory p</span></code></pre></td>
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>template T</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    signatory p</span></code></pre></div></td>
+<td><div className="sourceCode" id="cb2"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>template T</span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  with</span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    p : Party</span>
 <span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    x1 : Text</span>
 <span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>  where</span>
-<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    signatory p</span></code></pre></td>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    signatory p</span></code></pre></div></td>
 </tr>
 </tbody>
 </table>
@@ -337,23 +349,27 @@ Below, the template on the right is **not** a valid upgrade of the template on t
 
 The choices of the new version of a template must form a superset of the choices of the prior version of the template template. In other words, it is valid to add new choices but deleting a choice leads to a validation error.
 
+<div id="examples-4">
+
 **Examples**
+
+</div>
 
 Below, the template on the right is a valid upgrade of the template on the left. It adds a choice `C` to the previous version of the template. But the template on the left is **not** a valid upgrade of the template on the right as it deletes a choice.
 
 <table>
 <colgroup>
-<col style="width: 50%" />
-<col style="width: 50%" />
+<col style={{width: "50%"}} />
+<col style={{width: "50%"}} />
 </colgroup>
 <tbody>
-<tr class="odd">
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>template T</span>
+<tr className="odd">
+<td><div className="sourceCode" id="cb1"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>template T</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  with</span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    p : Party</span>
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  where</span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    signatory p</span></code></pre></td>
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>template T</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    signatory p</span></code></pre></div></td>
+<td><div className="sourceCode" id="cb2"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>template T</span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  with</span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    p : Party</span>
 <span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>  where</span>
@@ -362,7 +378,7 @@ Below, the template on the right is a valid upgrade of the template on the left.
 <span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>    choice C : ()</span>
 <span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>      controller p</span>
 <span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>      do</span>
-<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>        return ()</span></code></pre></td>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>        return ()</span></code></pre></div></td>
 </tr>
 </tbody>
 </table>
@@ -385,24 +401,24 @@ Below, the choice on the right is a valid upgrade of the choice on the left. It 
 
 <table>
 <colgroup>
-<col style="width: 50%" />
-<col style="width: 50%" />
+<col style={{width: "50%"}} />
+<col style={{width: "50%"}} />
 </colgroup>
 <tbody>
-<tr class="odd">
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>choice C : ()</span>
+<tr className="odd">
+<td><div className="sourceCode" id="cb1"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>choice C : ()</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  with</span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    x1 : Int</span>
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  controller p</span>
 <span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>  do </span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    return ()</span></code></pre></td>
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>choice C : ()</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    return ()</span></code></pre></div></td>
+<td><div className="sourceCode" id="cb2"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>choice C : ()</span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  with</span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    x1 : Int</span>
 <span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    x2 : Optional Text</span>
 <span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>  controller p</span>
 <span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>  do </span>
-<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>    return ()</span></code></pre></td>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>    return ()</span></code></pre></div></td>
 </tr>
 </tbody>
 </table>
@@ -411,24 +427,24 @@ Below, the choice on the right is **not** a valid upgrade of the choice on the l
 
 <table>
 <colgroup>
-<col style="width: 50%" />
-<col style="width: 50%" />
+<col style={{width: "50%"}} />
+<col style={{width: "50%"}} />
 </colgroup>
 <tbody>
-<tr class="odd">
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>choice C : ()</span>
+<tr className="odd">
+<td><div className="sourceCode" id="cb1"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>choice C : ()</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  with</span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    x1 : Int</span>
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  controller p</span>
 <span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>  do </span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    return ()</span></code></pre></td>
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>choice C : ()</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    return ()</span></code></pre></div></td>
+<td><div className="sourceCode" id="cb2"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>choice C : ()</span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  with</span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    x2 : Optional Text</span>
 <span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    x1 : Int</span>
 <span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>  controller p</span>
 <span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>  do </span>
-<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>    return ()</span></code></pre></td>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>    return ()</span></code></pre></div></td>
 </tr>
 </tbody>
 </table>
@@ -437,24 +453,24 @@ Below, the choice on the right is **not** a valid upgrade of the choice on the l
 
 <table>
 <colgroup>
-<col style="width: 50%" />
-<col style="width: 50%" />
+<col style={{width: "50%"}} />
+<col style={{width: "50%"}} />
 </colgroup>
 <tbody>
-<tr class="odd">
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>choice C : ()</span>
+<tr className="odd">
+<td><div className="sourceCode" id="cb1"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>choice C : ()</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  with</span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    x1 : Int</span>
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  controller p</span>
 <span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>  do </span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    return ()</span></code></pre></td>
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>choice C : ()</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    return ()</span></code></pre></div></td>
+<td><div className="sourceCode" id="cb2"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>choice C : ()</span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  with</span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    x2 : Optional Text</span>
 <span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    x1 : Int</span>
 <span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>  controller p</span>
 <span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>  do </span>
-<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>    return ()</span></code></pre></td>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>    return ()</span></code></pre></div></td>
 </tr>
 </tbody>
 </table>
@@ -463,22 +479,22 @@ Below, the choice on the right is **not** a valid upgrade of the choice on the l
 
 <table>
 <colgroup>
-<col style="width: 50%" />
-<col style="width: 50%" />
+<col style={{width: "50%"}} />
+<col style={{width: "50%"}} />
 </colgroup>
 <tbody>
-<tr class="odd">
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>choice C : ()</span>
+<tr className="odd">
+<td><div className="sourceCode" id="cb1"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>choice C : ()</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  with</span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    x1 : Int</span>
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  controller p</span>
 <span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>  do </span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    return ()</span></code></pre></td>
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>choice C : ()</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    return ()</span></code></pre></div></td>
+<td><div className="sourceCode" id="cb2"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>choice C : ()</span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  with</span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>  controller p</span>
 <span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>  do </span>
-<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    return ()</span></code></pre></td>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    return ()</span></code></pre></div></td>
 </tr>
 </tbody>
 </table>
@@ -487,22 +503,22 @@ Below, the choice on the right is **not** a valid upgrade of the choice on the l
 
 <table>
 <colgroup>
-<col style="width: 50%" />
-<col style="width: 50%" />
+<col style={{width: "50%"}} />
+<col style={{width: "50%"}} />
 </colgroup>
 <tbody>
-<tr class="odd">
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>choice C : ()</span>
+<tr className="odd">
+<td><div className="sourceCode" id="cb1"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>choice C : ()</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  with</span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    x1 : Int</span>
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  controller p</span>
 <span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>  do </span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    return ()</span></code></pre></td>
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>choice C : ()</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    return ()</span></code></pre></div></td>
+<td><div className="sourceCode" id="cb2"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>choice C : ()</span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  with</span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>  controller p</span>
 <span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>  do </span>
-<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    return ()</span></code></pre></td>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    return ()</span></code></pre></div></td>
 </tr>
 </tbody>
 </table>
@@ -513,25 +529,29 @@ The return type of the new version of a choice must be a valid upgrade of the re
 
 Changing the return type of a choice for a non-valid upgrade leads to a validation error.
 
+<div id="examples-5">
+
 **Examples**
+
+</div>
 
 Below, the choice on the right is **not** a valid upgrade of the choice on the left because it changes its return type from `()` to `Int`. `Int` is not a valid upgrade of `()`.
 
 <table>
 <colgroup>
-<col style="width: 50%" />
-<col style="width: 50%" />
+<col style={{width: "50%"}} />
+<col style={{width: "50%"}} />
 </colgroup>
 <tbody>
-<tr class="odd">
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>choice C : ()</span>
+<tr className="odd">
+<td><div className="sourceCode" id="cb1"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>choice C : ()</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  controller p</span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>  do</span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    return ()</span></code></pre></td>
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>choice C : Int</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    return ()</span></code></pre></div></td>
+<td><div className="sourceCode" id="cb2"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>choice C : Int</span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  controller p</span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>  do</span>
-<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    return 1</span></code></pre></td>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    return 1</span></code></pre></div></td>
 </tr>
 </tbody>
 </table>
@@ -544,24 +564,28 @@ Changing the variety of a serializable data type leads to a validation error. Fo
 
 Non-serializable data types are inexistent from the point of view of the upgrade validity check. Turning a non-serializable data type into a serializable one amounts to adding a new data type, which is valid. Turning a serializable data type into a non-serializable one amounts to deleting this data type, which is invalid.
 
+<div id="examples-6">
+
 **Examples**
+
+</div>
 
 Below, the module on the right is a valid upgrade of the module on the left. It defines an additional serializable data type `B`.
 
 <table>
 <colgroup>
-<col style="width: 50%" />
-<col style="width: 50%" />
+<col style={{width: "50%"}} />
+<col style={{width: "50%"}} />
 </colgroup>
 <tbody>
-<tr class="odd">
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>module M where</span>
+<tr className="odd">
+<td><div className="sourceCode" id="cb1"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>module M where</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>data A = A</span></code></pre></td>
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>module M where</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>data A = A</span></code></pre></div></td>
+<td><div className="sourceCode" id="cb2"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>module M where</span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>data A = A</span>
-<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>data B = B</span></code></pre></td>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>data B = B</span></code></pre></div></td>
 </tr>
 </tbody>
 </table>
@@ -570,20 +594,20 @@ Below, the module on the right is a valid upgrade of the module on the left. It 
 
 <table>
 <colgroup>
-<col style="width: 50%" />
-<col style="width: 50%" />
+<col style={{width: "50%"}} />
+<col style={{width: "50%"}} />
 </colgroup>
 <tbody>
-<tr class="odd">
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>module M where</span>
+<tr className="odd">
+<td><div className="sourceCode" id="cb1"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>module M where</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>data A = A</span>
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  with </span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    x : Int -&gt; Int</span></code></pre></td>
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>module M where</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    x : Int -&gt; Int</span></code></pre></div></td>
+<td><div className="sourceCode" id="cb2"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>module M where</span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>data A = A</span>
-<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>  with</span></code></pre></td>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>  with</span></code></pre></div></td>
 </tr>
 </tbody>
 </table>
@@ -592,18 +616,18 @@ Below, the module on the right is **not** a valid upgrade of the module on the l
 
 <table>
 <colgroup>
-<col style="width: 50%" />
-<col style="width: 50%" />
+<col style={{width: "50%"}} />
+<col style={{width: "50%"}} />
 </colgroup>
 <tbody>
-<tr class="odd">
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>module M where</span>
+<tr className="odd">
+<td><div className="sourceCode" id="cb1"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>module M where</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>data A = A</span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  with</span></code></pre></td>
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>module M where</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  with</span></code></pre></div></td>
+<td><div className="sourceCode" id="cb2"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>module M where</span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>data A = A | B</span></code></pre></td>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>data A = A | B</span></code></pre></div></td>
 </tr>
 </tbody>
 </table>
@@ -612,15 +636,15 @@ Below, the module on the right is **not** a valid upgrade of the module on the l
 
 <table>
 <colgroup>
-<col style="width: 50%" />
-<col style="width: 50%" />
+<col style={{width: "50%"}} />
+<col style={{width: "50%"}} />
 </colgroup>
 <tbody>
-<tr class="odd">
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>module M where</span>
+<tr className="odd">
+<td><div className="sourceCode" id="cb1"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>module M where</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>data A = A</span></code></pre></td>
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>module M where</span></code></pre></td>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>data A = A</span></code></pre></div></td>
+<td><div className="sourceCode" id="cb2"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>module M where</span></code></pre></div></td>
 </tr>
 </tbody>
 </table>
@@ -629,20 +653,20 @@ Below, the module on the right is **not** a valid upgrade of the module on the l
 
 <table>
 <colgroup>
-<col style="width: 50%" />
-<col style="width: 50%" />
+<col style={{width: "50%"}} />
+<col style={{width: "50%"}} />
 </colgroup>
 <tbody>
-<tr class="odd">
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>module M where</span>
+<tr className="odd">
+<td><div className="sourceCode" id="cb1"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>module M where</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>data A = A</span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  with</span></code></pre></td>
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>module M where</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  with</span></code></pre></div></td>
+<td><div className="sourceCode" id="cb2"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>module M where</span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>data A = A </span>
 <span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>  with </span>
-<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    x : Optional (Int -&gt; Int)</span></code></pre></td>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    x : Optional (Int -&gt; Int)</span></code></pre></div></td>
 </tr>
 </tbody>
 </table>
@@ -659,22 +683,26 @@ As a special case of the two points above, renaming a field leads to a validatio
 
 Adding a non-optional field at the end of the field sequence leads to a validation error.
 
+<div id="examples-7">
+
 **Examples**
+
+</div>
 
 Below, the record on the right is a valid upgrade of the module on the left. It adds an optional field `x2` at the end of the field sequence.
 
 <table>
 <colgroup>
-<col style="width: 50%" />
-<col style="width: 50%" />
+<col style={{width: "50%"}} />
+<col style={{width: "50%"}} />
 </colgroup>
 <tbody>
-<tr class="odd">
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>data T = T with</span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  x1 : Int</span></code></pre></td>
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>data T = T with</span>
+<tr className="odd">
+<td><div className="sourceCode" id="cb1"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>data T = T with</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  x1 : Int</span></code></pre></div></td>
+<td><div className="sourceCode" id="cb2"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>data T = T with</span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a> x1 : Int</span>
-<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a> x2 : Optional Text</span></code></pre></td>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a> x2 : Optional Text</span></code></pre></div></td>
 </tr>
 </tbody>
 </table>
@@ -683,16 +711,16 @@ Below, the record on the right is **not** a valid upgrade of the record on the l
 
 <table>
 <colgroup>
-<col style="width: 50%" />
-<col style="width: 50%" />
+<col style={{width: "50%"}} />
+<col style={{width: "50%"}} />
 </colgroup>
 <tbody>
-<tr class="odd">
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>data T = T with</span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  x1 : Int</span></code></pre></td>
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>data T = T with</span>
+<tr className="odd">
+<td><div className="sourceCode" id="cb1"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>data T = T with</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  x1 : Int</span></code></pre></div></td>
+<td><div className="sourceCode" id="cb2"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>data T = T with</span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  x2 : Optional Text</span>
-<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>  x1 : Int</span></code></pre></td>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>  x1 : Int</span></code></pre></div></td>
 </tr>
 </tbody>
 </table>
@@ -701,16 +729,16 @@ Below, the record on the right is **not** a valid upgrade of the record on the l
 
 <table>
 <colgroup>
-<col style="width: 50%" />
-<col style="width: 50%" />
+<col style={{width: "50%"}} />
+<col style={{width: "50%"}} />
 </colgroup>
 <tbody>
-<tr class="odd">
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>data T = T with</span>
+<tr className="odd">
+<td><div className="sourceCode" id="cb1"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>data T = T with</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  x1 : Int</span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>  x2 : Text</span></code></pre></td>
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>data T = T with</span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  x1 : Int</span></code></pre></td>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>  x2 : Text</span></code></pre></div></td>
+<td><div className="sourceCode" id="cb2"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>data T = T with</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  x1 : Int</span></code></pre></div></td>
 </tr>
 </tbody>
 </table>
@@ -719,15 +747,15 @@ Below, the record on the right is **not** a valid upgrade of the record on the l
 
 <table>
 <colgroup>
-<col style="width: 50%" />
-<col style="width: 50%" />
+<col style={{width: "50%"}} />
+<col style={{width: "50%"}} />
 </colgroup>
 <tbody>
-<tr class="odd">
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>data T = T with</span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  x1 : Int</span></code></pre></td>
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>data T = T with</span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  x1 : Text</span></code></pre></td>
+<tr className="odd">
+<td><div className="sourceCode" id="cb1"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>data T = T with</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  x1 : Int</span></code></pre></div></td>
+<td><div className="sourceCode" id="cb2"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>data T = T with</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  x1 : Text</span></code></pre></div></td>
 </tr>
 </tbody>
 </table>
@@ -746,50 +774,76 @@ Removing a constructor leads to a validation error.
 
 Enums cannot get upgraded to variants: adding a constructor with an argument at the end of the constructor sequence of an enum leads to a validation error.
 
+<div id="examples-8">
+
 **Examples**
+
+</div>
 
 Below, the variant on the right is a valid upgrade of the variant on the left. It adds a new constructor `C` at the end of the constructor sequence.
 
 <table>
 <colgroup>
-<col style="width: 50%" />
-<col style="width: 50%" />
+<col style={{width: "50%"}} />
+<col style={{width: "50%"}} />
 </colgroup>
 <tbody>
-<tr class="odd">
-<td><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">T</span> <span class="ot">=</span></span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">A</span> <span class="dt">Int</span> <span class="op">|</span> <span class="dt">B</span> <span class="dt">Text</span></span></code></pre></td>
-<td><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">T</span> <span class="ot">=</span> </span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">A</span> <span class="dt">Int</span> <span class="op">|</span> <span class="dt">B</span> <span class="dt">Text</span> <span class="op">|</span> <span class="dt">C</span> <span class="dt">Bool</span></span></code></pre></td>
+<tr className="odd">
+<td><div className="sourceCode" id="cb1"><pre className="sourceCode haskell"><code className="sourceCode haskell"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span className="kw">data</span> <span className="dt">T</span> <span className="ot">=</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  <span className="dt">A</span> <span className="dt">Int</span> <span className="op">|</span> <span className="dt">B</span> <span className="dt">Text</span></span></code></pre></div></td>
+<td><div className="sourceCode" id="cb2"><pre className="sourceCode haskell"><code className="sourceCode haskell"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span className="kw">data</span> <span className="dt">T</span> <span className="ot">=</span> </span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  <span className="dt">A</span> <span className="dt">Int</span> <span className="op">|</span> <span className="dt">B</span> <span className="dt">Text</span> <span className="op">|</span> <span className="dt">C</span> <span className="dt">Bool</span></span></code></pre></div></td>
 </tr>
 </tbody>
 </table>
 
 Below, the variant on the right is a valid upgrade of the variant on the left. It adds a new optional field to constructor `B`.
 
-| Before | After |
-|--------|-------|
-| `data T = A \| B { x : Int }` | `data T = A \| B { x : Int, y : Optional Text }` |
+<table>
+<colgroup>
+<col style={{width: "50%"}} />
+<col style={{width: "50%"}} />
+</colgroup>
+<tbody>
+<tr className="odd">
+<td><div className="sourceCode" id="cb1"><pre className="sourceCode haskell"><code className="sourceCode haskell"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span className="kw">data</span> <span className="dt">T</span> <span className="ot">=</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  <span className="dt">A</span> <span className="op">|</span> <span className="dt">B</span> { x <span className="op">:</span> <span className="dt">Int</span> }</span></code></pre></div></td>
+<td><div className="sourceCode" id="cb2"><pre className="sourceCode haskell"><code className="sourceCode haskell"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span className="kw">data</span> <span className="dt">T</span> <span className="ot">=</span> </span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  <span className="dt">A</span> <span className="op">|</span> <span className="dt">B</span> { x <span className="op">:</span> <span className="dt">Int</span>, y <span className="op">:</span> <span className="dt">Optional</span> <span className="dt">Text</span> }</span></code></pre></div></td>
+</tr>
+</tbody>
+</table>
 
 Below, the variant on the right is **not** a valid upgrade of the variant on the left because it adds a new constructor `C` before `B` instead of adding it at the end of the constructor sequence.
 
-| Before | After |
-|--------|-------|
-| `data T = A Int \| B Text` | `data T = A Int \| C Bool \| B Text` |
+<table>
+<colgroup>
+<col style={{width: "50%"}} />
+<col style={{width: "50%"}} />
+</colgroup>
+<tbody>
+<tr className="odd">
+<td><div className="sourceCode" id="cb1"><pre className="sourceCode haskell"><code className="sourceCode haskell"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span className="kw">data</span> <span className="dt">T</span> <span className="ot">=</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  <span className="dt">A</span> <span className="dt">Int</span> <span className="op">|</span> <span className="dt">B</span> <span className="dt">Text</span></span></code></pre></div></td>
+<td><div className="sourceCode" id="cb2"><pre className="sourceCode haskell"><code className="sourceCode haskell"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span className="kw">data</span> <span className="dt">T</span> <span className="ot">=</span> </span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  <span className="dt">A</span> <span className="dt">Int</span> <span className="op">|</span> <span className="dt">C</span> <span className="dt">Bool</span> <span className="op">|</span> <span className="dt">B</span> <span className="dt">Text</span></span></code></pre></div></td>
+</tr>
+</tbody>
+</table>
 
 Below, the variant on the right is **not** a valid upgrade of the variant on the left because it changes the order of its constructors.
 
 <table>
 <colgroup>
-<col style="width: 50%" />
-<col style="width: 50%" />
+<col style={{width: "50%"}} />
+<col style={{width: "50%"}} />
 </colgroup>
 <tbody>
-<tr class="odd">
-<td><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">T</span> <span class="ot">=</span></span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">A</span> <span class="dt">Int</span> <span class="op">|</span> <span class="dt">B</span> <span class="dt">Text</span></span></code></pre></td>
-<td><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">T</span> <span class="ot">=</span> </span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">B</span> <span class="dt">Text</span> <span class="op">|</span> <span class="dt">A</span> <span class="dt">Int</span></span></code></pre></td>
+<tr className="odd">
+<td><div className="sourceCode" id="cb1"><pre className="sourceCode haskell"><code className="sourceCode haskell"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span className="kw">data</span> <span className="dt">T</span> <span className="ot">=</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  <span className="dt">A</span> <span className="dt">Int</span> <span className="op">|</span> <span className="dt">B</span> <span className="dt">Text</span></span></code></pre></div></td>
+<td><div className="sourceCode" id="cb2"><pre className="sourceCode haskell"><code className="sourceCode haskell"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span className="kw">data</span> <span className="dt">T</span> <span className="ot">=</span> </span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  <span className="dt">B</span> <span className="dt">Text</span> <span className="op">|</span> <span className="dt">A</span> <span className="dt">Int</span></span></code></pre></div></td>
 </tr>
 </tbody>
 </table>
@@ -798,15 +852,15 @@ Below, the variant on the right is **not** a valid upgrade of the variant on the
 
 <table>
 <colgroup>
-<col style="width: 50%" />
-<col style="width: 50%" />
+<col style={{width: "50%"}} />
+<col style={{width: "50%"}} />
 </colgroup>
 <tbody>
-<tr class="odd">
-<td><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">T</span> <span class="ot">=</span></span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">A</span> <span class="dt">Int</span> <span class="op">|</span> <span class="dt">B</span> <span class="dt">Text</span></span></code></pre></td>
-<td><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">T</span> <span class="ot">=</span> </span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">A</span> <span class="dt">Int</span></span></code></pre></td>
+<tr className="odd">
+<td><div className="sourceCode" id="cb1"><pre className="sourceCode haskell"><code className="sourceCode haskell"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span className="kw">data</span> <span className="dt">T</span> <span className="ot">=</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  <span className="dt">A</span> <span className="dt">Int</span> <span className="op">|</span> <span className="dt">B</span> <span className="dt">Text</span></span></code></pre></div></td>
+<td><div className="sourceCode" id="cb2"><pre className="sourceCode haskell"><code className="sourceCode haskell"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span className="kw">data</span> <span className="dt">T</span> <span className="ot">=</span> </span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  <span className="dt">A</span> <span className="dt">Int</span></span></code></pre></div></td>
 </tr>
 </tbody>
 </table>
@@ -815,15 +869,15 @@ Below, the variant on the right is **not** a valid upgrade of the variant on the
 
 <table>
 <colgroup>
-<col style="width: 50%" />
-<col style="width: 50%" />
+<col style={{width: "50%"}} />
+<col style={{width: "50%"}} />
 </colgroup>
 <tbody>
-<tr class="odd">
-<td><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">T</span> <span class="ot">=</span></span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">A</span> <span class="dt">Int</span> <span class="op">|</span> <span class="dt">B</span> <span class="dt">Text</span></span></code></pre></td>
-<td><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">T</span> <span class="ot">=</span> </span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">A</span> <span class="dt">Int</span> <span class="op">|</span> <span class="dt">B</span> <span class="dt">Bool</span></span></code></pre></td>
+<tr className="odd">
+<td><div className="sourceCode" id="cb1"><pre className="sourceCode haskell"><code className="sourceCode haskell"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span className="kw">data</span> <span className="dt">T</span> <span className="ot">=</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  <span className="dt">A</span> <span className="dt">Int</span> <span className="op">|</span> <span className="dt">B</span> <span className="dt">Text</span></span></code></pre></div></td>
+<td><div className="sourceCode" id="cb2"><pre className="sourceCode haskell"><code className="sourceCode haskell"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span className="kw">data</span> <span className="dt">T</span> <span className="ot">=</span> </span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  <span className="dt">A</span> <span className="dt">Int</span> <span className="op">|</span> <span className="dt">B</span> <span className="dt">Bool</span></span></code></pre></div></td>
 </tr>
 </tbody>
 </table>
@@ -832,15 +886,15 @@ Below, the variant on the right is **not** a valid upgrade of the variant on the
 
 <table>
 <colgroup>
-<col style="width: 50%" />
-<col style="width: 50%" />
+<col style={{width: "50%"}} />
+<col style={{width: "50%"}} />
 </colgroup>
 <tbody>
-<tr class="odd">
-<td><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">T</span> <span class="ot">=</span></span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">A</span> <span class="dt">Int</span> <span class="op">|</span> <span class="dt">B</span></span></code></pre></td>
-<td><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">T</span> <span class="ot">=</span> </span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">A</span> <span class="dt">Int</span> <span class="op">|</span> <span class="dt">B</span> { x <span class="op">:</span> <span class="dt">Optional</span> <span class="dt">Text</span> }</span></code></pre></td>
+<tr className="odd">
+<td><div className="sourceCode" id="cb1"><pre className="sourceCode haskell"><code className="sourceCode haskell"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span className="kw">data</span> <span className="dt">T</span> <span className="ot">=</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  <span className="dt">A</span> <span className="dt">Int</span> <span className="op">|</span> <span className="dt">B</span></span></code></pre></div></td>
+<td><div className="sourceCode" id="cb2"><pre className="sourceCode haskell"><code className="sourceCode haskell"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span className="kw">data</span> <span className="dt">T</span> <span className="ot">=</span> </span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  <span className="dt">A</span> <span className="dt">Int</span> <span className="op">|</span> <span className="dt">B</span> { x <span className="op">:</span> <span className="dt">Optional</span> <span className="dt">Text</span> }</span></code></pre></div></td>
 </tr>
 </tbody>
 </table>
@@ -849,22 +903,22 @@ Below, the variant on the right is **not** a valid upgrade of the enum on the le
 
 <table>
 <colgroup>
-<col style="width: 50%" />
-<col style="width: 50%" />
+<col style={{width: "50%"}} />
+<col style={{width: "50%"}} />
 </colgroup>
 <tbody>
-<tr class="odd">
-<td><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">T</span> <span class="ot">=</span></span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">A</span> <span class="op">|</span> <span class="dt">B</span></span></code></pre></td>
-<td><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">T</span> <span class="ot">=</span> </span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">A</span> <span class="op">|</span> <span class="dt">B</span> <span class="op">|</span> <span class="dt">C</span> <span class="dt">Int</span></span></code></pre></td>
+<tr className="odd">
+<td><div className="sourceCode" id="cb1"><pre className="sourceCode haskell"><code className="sourceCode haskell"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span className="kw">data</span> <span className="dt">T</span> <span className="ot">=</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  <span className="dt">A</span> <span className="op">|</span> <span className="dt">B</span></span></code></pre></div></td>
+<td><div className="sourceCode" id="cb2"><pre className="sourceCode haskell"><code className="sourceCode haskell"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span className="kw">data</span> <span className="dt">T</span> <span className="ot">=</span> </span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  <span className="dt">A</span> <span className="op">|</span> <span className="dt">B</span> <span className="op">|</span> <span className="dt">C</span> <span className="dt">Int</span></span></code></pre></div></td>
 </tr>
 </tbody>
 </table>
 
 ### Data Types - Enums
 
-For the purpose of upgrade validation, enums can be treated as a special case of variants. The rules of [the section on variants](#data-types---variants) apply, only without constructor arguments.
+For the purpose of upgrade validation, enums can be treated as a special case of variants. The rules of the section on [variants]() apply, only without constructor arguments.
 
 ### Data Types - Type References
 
@@ -897,29 +951,33 @@ A reference *r2* to a data type upgrades a reference *r1* to a data type if and 
 
 It is worth noting that even when *t2* upgrades *t1*, *r2* only upgrades *r1* provided that package *p2* is a valid upgrade of package *p1* as a whole.
 
+<div id="examples-9">
+
 **Examples**
+
+</div>
 
 In these examples we assume the existence of packages `q-1.0.0` and `q-2.0.0` and that the latter is a valid upgrade of the former.
 
 <table>
 <colgroup>
-<col style="width: 50%" />
-<col style="width: 50%" />
+<col style={{width: "50%"}} />
+<col style={{width: "50%"}} />
 </colgroup>
 <tbody>
-<tr class="odd">
+<tr className="odd">
 <td>In <code>q-1.0.0</code>:</td>
 <td>In <code>q-2.0.0</code>:</td>
 </tr>
-<tr class="even">
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>module Dep where</span>
+<tr className="even">
+<td><div className="sourceCode" id="cb1"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>module Dep where</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>data U = C1</span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>data V = V</span></code></pre></td>
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>module Dep where</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>data V = V</span></code></pre></div></td>
+<td><div className="sourceCode" id="cb2"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>module Dep where</span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>data U = C1 | C2</span>
-<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>data V = V</span></code></pre></td>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>data V = V</span></code></pre></div></td>
 </tr>
 </tbody>
 </table>
@@ -928,23 +986,23 @@ Then below, the module on the right is a valid upgrade of the module on the left
 
 <table>
 <colgroup>
-<col style="width: 50%" />
-<col style="width: 50%" />
+<col style={{width: "50%"}} />
+<col style={{width: "50%"}} />
 </colgroup>
 <tbody>
-<tr class="odd">
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>module Main where</span>
+<tr className="odd">
+<td><div className="sourceCode" id="cb1"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>module Main where</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>-- imported from q-1.0.0</span>
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>import qualified Dep</span>
 <span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>data T = T Dep.U</span></code></pre></td>
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>module Main where</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>data T = T Dep.U</span></code></pre></div></td>
+<td><div className="sourceCode" id="cb2"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>module Main where</span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>-- imported from q-2.0.0</span>
 <span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>import qualified Dep</span>
 <span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>data T = T Dep.U</span></code></pre></td>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>data T = T Dep.U</span></code></pre></div></td>
 </tr>
 </tbody>
 </table>
@@ -953,23 +1011,23 @@ However below, the module on the right is **not** a valid upgrade of the module 
 
 <table>
 <colgroup>
-<col style="width: 50%" />
-<col style="width: 50%" />
+<col style={{width: "50%"}} />
+<col style={{width: "50%"}} />
 </colgroup>
 <tbody>
-<tr class="odd">
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>module Main where</span>
+<tr className="odd">
+<td><div className="sourceCode" id="cb1"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>module Main where</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>-- imported from q-2.0.0</span>
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>import qualified Dep</span>
 <span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>data T = T Dep.V</span></code></pre></td>
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>module Main where</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>data T = T Dep.V</span></code></pre></div></td>
+<td><div className="sourceCode" id="cb2"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>module Main where</span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>-- imported from q-1.0.0</span>
 <span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>import qualified Dep</span>
 <span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>data T = T Dep.V</span></code></pre></td>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>data T = T Dep.V</span></code></pre></div></td>
 </tr>
 </tbody>
 </table>
@@ -988,20 +1046,20 @@ Below, the parameterized data type on the right is a valid upgrade of the parame
 
 <table>
 <colgroup>
-<col style="width: 50%" />
-<col style="width: 50%" />
+<col style={{width: "50%"}} />
+<col style={{width: "50%"}} />
 </colgroup>
 <tbody>
-<tr class="odd">
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>data Tree a = </span>
+<tr className="odd">
+<td><div className="sourceCode" id="cb1"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>data Tree a = </span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  Tree with </span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    label : a</span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    children : [Tree a]</span></code></pre></td>
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>data Tree b = </span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    children : [Tree a]</span></code></pre></div></td>
+<td><div className="sourceCode" id="cb2"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>data Tree b = </span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  Tree with </span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    label : b</span>
 <span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    children : [Tree b]</span>
-<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    cachedSize : Optional Int</span></code></pre></td>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    cachedSize : Optional Int</span></code></pre></div></td>
 </tr>
 </tbody>
 </table>
@@ -1016,27 +1074,27 @@ Below, the module on the right is a valid upgrade of the module on the left. The
 
 <table>
 <colgroup>
-<col style="width: 50%" />
-<col style="width: 50%" />
+<col style={{width: "50%"}} />
+<col style={{width: "50%"}} />
 </colgroup>
 <tbody>
-<tr class="odd">
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>module M where</span>
+<tr className="odd">
+<td><div className="sourceCode" id="cb1"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>module M where</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>data T = T {}</span>
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>data Demo = Demo with</span>
 <span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>  field1 : List T</span>
 <span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>  field2 : Map T T</span>
-<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>  field3 : Optional T </span></code></pre></td>
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>module M where</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>  field3 : Optional T </span></code></pre></div></td>
+<td><div className="sourceCode" id="cb2"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>module M where</span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>data T = T { i : Optional Int }</span>
 <span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>data Demo = Demo with</span>
 <span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>  field1 : List T</span>
 <span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>  field2 : Map T T</span>
-<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>  field3 : Optional T </span></code></pre></td>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>  field3 : Optional T </span></code></pre></div></td>
 </tr>
 </tbody>
 </table>
@@ -1045,23 +1103,23 @@ Below, the module on the right is a valid upgrade of the module on the left. The
 
 <table>
 <colgroup>
-<col style="width: 50%" />
-<col style="width: 50%" />
+<col style={{width: "50%"}} />
+<col style={{width: "50%"}} />
 </colgroup>
 <tbody>
-<tr class="odd">
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>module M where</span>
+<tr className="odd">
+<td><div className="sourceCode" id="cb1"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>module M where</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>data C a = C { x : a }</span>
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>data Demo = Demo with</span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>  field1 : C T</span></code></pre></td>
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>module M where</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>  field1 : C T</span></code></pre></div></td>
+<td><div className="sourceCode" id="cb2"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>module M where</span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>data C a = C { x : a, y : Optional Int }</span>
 <span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>data Demo = Demo with</span>
-<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>  field1 : C T</span></code></pre></td>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>  field1 : C T</span></code></pre></div></td>
 </tr>
 </tbody>
 </table>
@@ -1093,12 +1151,12 @@ Then, below, the instance of `I` for template `T` on the right is a valid upgrad
 
 <table>
 <colgroup>
-<col style="width: 50%" />
-<col style="width: 50%" />
+<col style={{width: "50%"}} />
+<col style={{width: "50%"}} />
 </colgroup>
 <tbody>
-<tr class="odd">
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>template T </span>
+<tr className="odd">
+<td><div className="sourceCode" id="cb1"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>template T </span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  with</span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    p : Party</span>
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    i : Int</span>
@@ -1107,8 +1165,8 @@ Then, below, the instance of `I` for template `T` on the right is a valid upgrad
 <span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>    interface instance I for T where</span>
 <span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>      view = IView i</span>
-<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>      m = i</span></code></pre></td>
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>template T </span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>      m = i</span></code></pre></div></td>
+<td><div className="sourceCode" id="cb2"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>template T </span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  with</span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    p : Party</span>
 <span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    i : Int</span>
@@ -1118,7 +1176,7 @@ Then, below, the instance of `I` for template `T` on the right is a valid upgrad
 <span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>    interface instance I for T where</span>
 <span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>      view = IView (fromOptional i j)</span>
-<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>      m = fromOptional i j</span></code></pre></td>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>      m = fromOptional i j</span></code></pre></div></td>
 </tr>
 </tbody>
 </table>
@@ -1127,18 +1185,18 @@ Below, the template on the right is a valid upgrade of the template on the left.
 
 <table>
 <colgroup>
-<col style="width: 50%" />
-<col style="width: 50%" />
+<col style={{width: "50%"}} />
+<col style={{width: "50%"}} />
 </colgroup>
 <tbody>
-<tr class="odd">
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>template T3 </span>
+<tr className="odd">
+<td><div className="sourceCode" id="cb1"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>template T3 </span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  with</span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    p : Party</span>
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    i : Int</span>
 <span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>  where</span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    signatory p</span></code></pre></td>
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>template T3 </span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    signatory p</span></code></pre></div></td>
+<td><div className="sourceCode" id="cb2"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>template T3 </span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  with</span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    p : Party</span>
 <span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    i : Int</span>
@@ -1147,7 +1205,7 @@ Below, the template on the right is a valid upgrade of the template on the left.
 <span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>    interface instance I for T3 where</span>
 <span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>      view = IView i</span>
-<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>      m = i</span></code></pre></td>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>      m = i</span></code></pre></div></td>
 </tr>
 </tbody>
 </table>
@@ -1156,12 +1214,12 @@ Below, the template on the right is **not** a valid upgrade of the template on t
 
 <table>
 <colgroup>
-<col style="width: 50%" />
-<col style="width: 50%" />
+<col style={{width: "50%"}} />
+<col style={{width: "50%"}} />
 </colgroup>
 <tbody>
-<tr class="odd">
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>template T2 </span>
+<tr className="odd">
+<td><div className="sourceCode" id="cb1"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>template T2 </span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  with</span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    p : Party</span>
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    i : Int</span>
@@ -1170,13 +1228,13 @@ Below, the template on the right is **not** a valid upgrade of the template on t
 <span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>    interface instance I for T2 where</span>
 <span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>      view = IView i</span>
-<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>      m = i</span></code></pre></td>
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>template T2 </span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>      m = i</span></code></pre></div></td>
+<td><div className="sourceCode" id="cb2"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>template T2 </span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  with</span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    p : Party</span>
 <span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    i : Int</span>
 <span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>  where</span>
-<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    signatory p</span></code></pre></td>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    signatory p</span></code></pre></div></td>
 </tr>
 </tbody>
 </table>
@@ -1195,8 +1253,7 @@ Below, we detail the rules governing target template selection, then explain how
 
 In a non-interface fetch or exercise triggered by the body of a choice, the target template is determined by the dependencies of the package that defines the choice. In other words, it is statically known.
 
-Interface fetches and exercises, on the other hand, are subject to dynamic target template selection, as detailed in the next
-section. However, operations acting on interface *values* — as opposed to IDs — are static. Their mode of operation is detailed below.
+Interface fetches and exercises, on the other hand, are subject to dynamic target template selection, as detailed in the next section. However, operations acting on interface *values* — as opposed to IDs — are static. Their mode of operation is detailed below.
 
 Daml contracts are represented by one of two sorts of values at runtime: template values or interface values.
 
@@ -1227,30 +1284,30 @@ Assume two versions of a package called dep, defining a template U and its upgra
 
 <table>
 <colgroup>
-<col style="width: 50%" />
-<col style="width: 50%" />
+<col style={{width: "50%"}} />
+<col style={{width: "50%"}} />
 </colgroup>
 <tbody>
-<tr class="odd">
+<tr className="odd">
 <td>In <code>dep-1.0.0</code>:</td>
 <td>In <code>dep-2.0.0</code>:</td>
 </tr>
-<tr class="even">
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>module Dep where</span>
+<tr className="even">
+<td><div className="sourceCode" id="cb1"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>module Dep where</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>template U</span>
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  with</span>
 <span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    p : Party</span>
 <span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>  where</span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    signatory p</span></code></pre></td>
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>module Dep where</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    signatory p</span></code></pre></div></td>
+<td><div className="sourceCode" id="cb2"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>module Dep where</span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>template U</span>
 <span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>  with</span>
 <span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    p : Party</span>
 <span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    t : Optional Text</span>
 <span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>  where</span>
-<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>    signatory p</span></code></pre></td>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>    signatory p</span></code></pre></div></td>
 </tr>
 </tbody>
 </table>
@@ -1308,20 +1365,20 @@ Assume then two versions of a template `T` that implements `I`.
 
 <table>
 <colgroup>
-<col style="width: 50%" />
-<col style="width: 50%" />
+<col style={{width: "50%"}} />
+<col style={{width: "50%"}} />
 </colgroup>
 <tbody>
-<tr class="odd">
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>template T </span>
+<tr className="odd">
+<td><div className="sourceCode" id="cb1"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>template T </span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  with</span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    p : Party</span>
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  where</span>
 <span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    signatory p</span>
 <span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    interface instance I for T where</span>
-<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>      view = IView {}</span></code></pre></td>
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>template T </span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>      view = IView {}</span></code></pre></div></td>
+<td><div className="sourceCode" id="cb2"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>template T </span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  with</span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    p : Party</span>
 <span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    i : Optional Int</span>
@@ -1329,7 +1386,7 @@ Assume then two versions of a template `T` that implements `I`.
 <span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    signatory p</span>
 <span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>    interface instance I for T where</span>
-<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>      view = IView {}</span></code></pre></td>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>      view = IView {}</span></code></pre></div></td>
 </tr>
 </tbody>
 </table>
@@ -1342,8 +1399,7 @@ Finally, assume that the module defining the first version of `T` is imported as
 
 ### Dynamic Target Template Selection
 
-In a top-level exercise triggered by a Ledger API command, or in an interface fetch or exercise triggered from the body of a choice, the rules of package preference detailed in dynamic package
-resolution determine the target template at runtime.
+In a top-level exercise triggered by a Ledger API command, or in an interface fetch or exercise triggered from the body of a choice, the rules of package preference detailed in dynamic package resolution determine the target template at runtime.
 
 **Example 1**
 
@@ -1351,26 +1407,26 @@ Assume a package `p` with two versions. The new version adds an optional text fi
 
 <table>
 <colgroup>
-<col style="width: 50%" />
-<col style="width: 50%" />
+<col style={{width: "50%"}} />
+<col style={{width: "50%"}} />
 </colgroup>
 <tbody>
-<tr class="odd">
+<tr className="odd">
 <td>In <code>p-1.0.0</code>:</td>
 <td>In <code>p-2.0.0</code>:</td>
 </tr>
-<tr class="even">
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>template T </span>
+<tr className="even">
+<td><div className="sourceCode" id="cb1"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>template T </span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  with</span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    p : Party</span>
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  where</span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    signatory p</span></code></pre></td>
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>template T </span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    signatory p</span></code></pre></div></td>
+<td><div className="sourceCode" id="cb2"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>template T </span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  with</span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    p : Party</span>
 <span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    t : Optional Text</span>
 <span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>  where</span>
-<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    signatory p</span></code></pre></td>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    signatory p</span></code></pre></div></td>
 </tr>
 </tbody>
 </table>
@@ -1412,16 +1468,16 @@ Now, assume two versions of a package called `inst`, defining a template `Inst` 
 
 <table>
 <colgroup>
-<col style="width: 50%" />
-<col style="width: 50%" />
+<col style={{width: "50%"}} />
+<col style={{width: "50%"}} />
 </colgroup>
 <tbody>
-<tr class="odd">
+<tr className="odd">
 <td>In <code>inst-1.0.0</code>:</td>
 <td>In <code>inst-2.0.0</code>:</td>
 </tr>
-<tr class="even">
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>template Inst</span>
+<tr className="even">
+<td><div className="sourceCode" id="cb1"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>template Inst</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  with</span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    p : Party</span>
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  where</span>
@@ -1429,8 +1485,8 @@ Now, assume two versions of a package called `inst`, defining a template `Inst` 
 <span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    interface instance I for T where</span>
 <span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>      view = IView</span>
-<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>      getInt = 1</span></code></pre></td>
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>template Inst</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>      getInt = 1</span></code></pre></div></td>
+<td><div className="sourceCode" id="cb2"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>template Inst</span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  with</span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    p : Party</span>
 <span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>  where</span>
@@ -1438,7 +1494,7 @@ Now, assume two versions of a package called `inst`, defining a template `Inst` 
 <span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>    interface instance I for T where</span>
 <span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>      view = IView</span>
-<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>      getInt = 2</span></code></pre></td>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>      getInt = 2</span></code></pre></div></td>
 </tr>
 </tbody>
 </table>
@@ -1477,16 +1533,16 @@ Assume now a package `r` with two versions. They define a template with a choice
 
 <table>
 <colgroup>
-<col style="width: 50%" />
-<col style="width: 50%" />
+<col style={{width: "50%"}} />
+<col style={{width: "50%"}} />
 </colgroup>
 <tbody>
-<tr class="odd">
+<tr className="odd">
 <td>In <code>r-1.0.0</code>:</td>
 <td>In <code>r-2.0.0</code>:</td>
 </tr>
-<tr class="even">
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>module M where</span>
+<tr className="even">
+<td><div className="sourceCode" id="cb1"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>module M where</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>data Ret = Ret with</span>
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a></span>
@@ -1500,8 +1556,8 @@ Assume now a package `r` with two versions. They define a template with a choice
 <span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>      with </span>
 <span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>        i : Int</span>
 <span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>      controller p</span>
-<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>      do return Ret</span></code></pre></td>
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>module M where</span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>      do return Ret</span></code></pre></div></td>
+<td><div className="sourceCode" id="cb2"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>module M where</span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>data Ret = Ret with</span>
 <span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>  j : Optional Int</span>
@@ -1517,7 +1573,7 @@ Assume now a package `r` with two versions. They define a template with a choice
 <span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>         i : Int</span>
 <span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>         j : Optional Int</span>
 <span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>       controller p</span>
-<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a>       do return Ret with j = j</span></code></pre></td>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a>       do return Ret with j = j</span></code></pre></div></td>
 </tr>
 </tbody>
 </table>
@@ -1537,7 +1593,7 @@ Then:
 
 ### Transformation Rules
 
-Once the target type has been determined, the data transformation rules themselves follow the [upgrading rules of protocol buffers](https://protobuf.dev/programming-guides/proto3/#updating).
+Once the target type has been determined, the data transformation rules themselves follow the upgrading rules of protocol [buffers]().
 
 #### Records and Parameters
 
@@ -1545,22 +1601,22 @@ Given a record type and its upgrade, referred to respectively as `T-v1` and `T-v
 
 <table>
 <colgroup>
-<col style="width: 50%" />
-<col style="width: 50%" />
+<col style={{width: "50%"}} />
+<col style={{width: "50%"}} />
 </colgroup>
 <tbody>
-<tr class="odd">
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>data T = T with</span>
+<tr className="odd">
+<td><div className="sourceCode" id="cb1"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>data T = T with</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  x1 : T1</span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>  ...</span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  xn : Tn</span></code></pre></td>
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>data T = T with</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  xn : Tn</span></code></pre></div></td>
+<td><div className="sourceCode" id="cb2"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>data T = T with</span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  x1 : T1&#39;</span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>  ...</span>
 <span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>  xn : Tn&#39;</span>
 <span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>  y1 : Optional U1</span>
 <span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>  ...</span>
-<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>  ym : Optional Um</span></code></pre></td>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>  ym : Optional Um</span></code></pre></div></td>
 </tr>
 </tbody>
 </table>
@@ -1577,22 +1633,22 @@ Given a variant type and its upgrade, referred to respectively as `V-v1` and `V-
 
 <table>
 <colgroup>
-<col style="width: 50%" />
-<col style="width: 50%" />
+<col style={{width: "50%"}} />
+<col style={{width: "50%"}} />
 </colgroup>
 <tbody>
-<tr class="odd">
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>data V =</span>
+<tr className="odd">
+<td><div className="sourceCode" id="cb1"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>data V =</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  = C1 T1</span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>  | ...</span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  | Cn Tn</span></code></pre></td>
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>data V =</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  | Cn Tn</span></code></pre></div></td>
+<td><div className="sourceCode" id="cb2"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>data V =</span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  = C1 T1&#39;</span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>  | ...</span>
 <span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>  | Cn Tn&#39;</span>
 <span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>  | D1 U1</span>
 <span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>  | ...</span>
-<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>  | Dm Um</span></code></pre></td>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>  | Dm Um</span></code></pre></div></td>
 </tr>
 </tbody>
 </table>
@@ -1634,26 +1690,26 @@ Below the template on the right is a valid upgrade of the template on the left.
 
 <table>
 <colgroup>
-<col style="width: 50%" />
-<col style="width: 50%" />
+<col style={{width: "50%"}} />
+<col style={{width: "50%"}} />
 </colgroup>
 <tbody>
-<tr class="odd">
+<tr className="odd">
 <td>In <code>p-1.0.0</code>:</td>
 <td>In <code>p-2.0.0</code>:</td>
 </tr>
-<tr class="even">
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>template T </span>
+<tr className="even">
+<td><div className="sourceCode" id="cb1"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>template T </span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  with</span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    sig : Party</span>
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  where</span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    signatory sig</span></code></pre></td>
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>template T </span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    signatory sig</span></code></pre></div></td>
+<td><div className="sourceCode" id="cb2"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>template T </span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  with</span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    sig : Party</span>
 <span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    additionalSig : Optional Party</span>
 <span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>  where</span>
-<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    signatory sig, fromOptional [] additionalSig</span></code></pre></td>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    signatory sig, fromOptional [] additionalSig</span></code></pre></div></td>
 </tr>
 </tbody>
 </table>
@@ -1670,25 +1726,25 @@ On the other hand, below, the template on the right is **not** a valid upgrade o
 
 <table>
 <colgroup>
-<col style="width: 50%" />
-<col style="width: 50%" />
+<col style={{width: "50%"}} />
+<col style={{width: "50%"}} />
 </colgroup>
 <tbody>
-<tr class="odd">
+<tr className="odd">
 <td>In <code>p-1.0.0</code>:</td>
 <td>In <code>p-2.0.0</code>:</td>
 </tr>
-<tr class="even">
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>template T </span>
+<tr className="even">
+<td><div className="sourceCode" id="cb1"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>template T </span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  with</span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    sig : Party</span>
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  where</span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    signatory sig</span></code></pre></td>
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>template T </span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    signatory sig</span></code></pre></div></td>
+<td><div className="sourceCode" id="cb2"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>template T </span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  with</span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    sig : Party</span>
 <span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>  where</span>
-<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    signatory sig, sig</span></code></pre></td>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    signatory sig, sig</span></code></pre></div></td>
 </tr>
 </tbody>
 </table>
@@ -1705,25 +1761,25 @@ Below, the template on the right is **not** a valid upgrade of the template on t
 
 <table>
 <colgroup>
-<col style="width: 50%" />
-<col style="width: 50%" />
+<col style={{width: "50%"}} />
+<col style={{width: "50%"}} />
 </colgroup>
 <tbody>
-<tr class="odd">
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>template T </span>
+<tr className="odd">
+<td><div className="sourceCode" id="cb1"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>template T </span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  with</span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    sig : Party</span>
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    n : Int</span>
 <span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>  where</span>
 <span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    signatory sig</span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    ensure n &gt;= 0</span></code></pre></td>
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>template T </span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    ensure n &gt;= 0</span></code></pre></div></td>
+<td><div className="sourceCode" id="cb2"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>template T </span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  with</span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    sig : Party</span>
 <span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    n : Int</span>
 <span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>  where</span>
 <span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    signatory sig</span>
-<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>    ensure n &gt; 0</span></code></pre></td>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>    ensure n &gt; 0</span></code></pre></div></td>
 </tr>
 </tbody>
 </table>
@@ -1748,16 +1804,16 @@ Below, the template on the right is a valid upgrade of the template on the left.
 
 <table>
 <colgroup>
-<col style="width: 50%" />
-<col style="width: 50%" />
+<col style={{width: "50%"}} />
+<col style={{width: "50%"}} />
 </colgroup>
 <tbody>
-<tr class="odd">
+<tr className="odd">
 <td>In <code>p-1.0.0</code>:</td>
 <td>In <code>p-2.0.0</code>:</td>
 </tr>
-<tr class="even">
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>template T </span>
+<tr className="even">
+<td><div className="sourceCode" id="cb1"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>template T </span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  with</span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    p : Party</span>
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    i : Int</span>
@@ -1766,8 +1822,8 @@ Below, the template on the right is a valid upgrade of the template on the left.
 <span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>    interface instance I for T where</span>
 <span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>      view = IView i</span>
-<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>      m = i</span></code></pre></td>
-<td><pre class="sourceCode daml"><code class="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>template T </span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>      m = i</span></code></pre></div></td>
+<td><div className="sourceCode" id="cb2"><pre className="sourceCode daml"><code className="sourceCode xml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>template T </span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  with</span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    p : Party</span>
 <span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    i : Int</span>
@@ -1776,7 +1832,7 @@ Below, the template on the right is a valid upgrade of the template on the left.
 <span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>    interface instance I for T where</span>
 <span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>      view = IView (i+1)</span>
-<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>      m = i</span></code></pre></td>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>      m = i</span></code></pre></div></td>
 </tr>
 </tbody>
 </table>
@@ -1795,8 +1851,7 @@ Commands and queries have relaxed validation rules for ingested values. Returned
 
 ### Value Validation in Commands
 
-In the following examples, the *target template* of a command is the template or interface identified by the `template_id` field of the command after dynamic package
-resolution.
+In the following examples, the *target template* of a command is the template or interface identified by the `template_id` field of the command after dynamic package resolution.
 
 A value featured in a command (e.g. `create_arguments`) has *expected type* `T` if the value needs to type-check against `T` in order to satisfy the type signatures of the target template of the command. Note that this definition necessarily extends to sub-values.
 
@@ -2112,6 +2167,7 @@ res15: Seq[com.digitalasset.canton.admin.api.client.commands.LedgerApiTypeWrappe
 ```
 
 Note that not only has the third template argument (originally `j`) been omitted from the response, but also the third field of the nested record (originally `rk`). Note also that despite being optional fields of value `None`, the second template argument (originally `i`) and the first nested record field (originally `ri`) are present in the response because they are not in trailing positions.
+
 
 {/* COPIED_END */}
 
