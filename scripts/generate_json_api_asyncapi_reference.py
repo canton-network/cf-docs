@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -19,9 +20,10 @@ import reference_nav
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_CACHE_ROOT = Path(os.environ.get("XDG_CACHE_HOME", "~/.cache")).expanduser() / "x2mdx"
 DEFAULT_SOURCE_CONFIG = REPO_ROOT / "config" / "x2mdx" / "ledger-api-asyncapi" / "source-artifacts.json"
-DEFAULT_BUNDLE_CACHE_DIR = REPO_ROOT / ".internal" / "cache" / "x2mdx" / "ledger-api-bundles"
-DEFAULT_CACHE_DIR = REPO_ROOT / ".internal" / "cache" / "x2mdx" / "ledger-api-asyncapi"
+DEFAULT_BUNDLE_CACHE_DIR = DEFAULT_CACHE_ROOT / "ledger-api-bundles"
+DEFAULT_CACHE_DIR = DEFAULT_CACHE_ROOT / "ledger-api-asyncapi"
 DEFAULT_MANIFEST = REPO_ROOT / ".internal" / "generated" / "x2mdx" / "ledger-api-asyncapi" / "manifest.json"
 DEFAULT_OUTPUT_FILE = REPO_ROOT / "docs-main" / "reference" / "json-api-asyncapi-reference.mdx"
 LEGACY_OUTPUT_FILE = REPO_ROOT / "docs-main" / "appdev" / "reference" / "json-api-asyncapi-reference.mdx"
@@ -100,7 +102,7 @@ def write_manifest(
                 "version": version,
                 "url": bundle_url(source_config, version_entry),
                 "source_path": source_path,
-                "fixture_path": str(fixture_path.resolve().relative_to(repo_root.resolve())),
+                "fixture_path": str(fixture_path.resolve()),
             }
         )
 
