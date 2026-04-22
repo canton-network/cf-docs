@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 
 from splice_openapi_release_bundles import render_reference
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_CACHE_ROOT = Path(os.environ.get("XDG_CACHE_HOME", "~/.cache")).expanduser() / "x2mdx"
 DEFAULT_SOURCE_CONFIG = REPO_ROOT / "config" / "x2mdx" / "splice-scan-openapi" / "source-artifacts.json"
-DEFAULT_CACHE_DIR = REPO_ROOT / ".internal" / "cache" / "x2mdx" / "splice-openapi"
+DEFAULT_CACHE_DIR = DEFAULT_CACHE_ROOT / "splice-openapi"
 DEFAULT_MANIFEST = REPO_ROOT / ".internal" / "generated" / "x2mdx" / "splice-scan-openapi" / "manifest.json"
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "docs-main" / "reference" / "splice-scan-openapi"
 DEFAULT_DOCS_JSON = REPO_ROOT / "docs-main" / "docs.json"

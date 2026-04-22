@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import copy
 import json
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -28,7 +29,8 @@ from x2mdx.render import write_pages
 
 
 DEFAULT_SOURCE_CONFIG = REPO_ROOT / "config" / "x2mdx" / "grpc-ledger-api-reference" / "source-artifacts.json"
-DEFAULT_CACHE_DIR = REPO_ROOT / ".internal" / "cache" / "x2mdx" / "protobuf-history"
+DEFAULT_CACHE_ROOT = Path(os.environ.get("XDG_CACHE_HOME", "~/.cache")).expanduser() / "x2mdx"
+DEFAULT_CACHE_DIR = DEFAULT_CACHE_ROOT / "protobuf-history"
 DEFAULT_MANIFEST = REPO_ROOT / ".internal" / "generated" / "x2mdx" / "grpc-ledger-api-reference" / "manifest.json"
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "docs-main" / "reference" / "grpc-ledger-api-reference"
 DEFAULT_DOCS_JSON = REPO_ROOT / "docs-main" / "docs.json"

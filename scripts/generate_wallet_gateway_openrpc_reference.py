@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -12,8 +13,9 @@ from typing import Any
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_CACHE_ROOT = Path(os.environ.get("XDG_CACHE_HOME", "~/.cache")).expanduser() / "x2mdx"
 DEFAULT_SOURCE_CONFIG = REPO_ROOT / "config" / "x2mdx" / "wallet-gateway-openrpc" / "source-artifacts.json"
-DEFAULT_CACHE_DIR = REPO_ROOT / ".internal" / "cache" / "x2mdx" / "wallet-gateway-openrpc"
+DEFAULT_CACHE_DIR = DEFAULT_CACHE_ROOT / "wallet-gateway-openrpc"
 DEFAULT_MANIFEST = REPO_ROOT / ".internal" / "generated" / "x2mdx" / "wallet-gateway-openrpc" / "manifest.json"
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "docs-main" / "reference" / "wallet-gateway-json-rpc"
 DEFAULT_DOCS_JSON = REPO_ROOT / "docs-main" / "docs.json"
@@ -255,7 +257,7 @@ def write_manifest(
                 {
                     "version": version,
                     "source_path": spec["source_path"],
-                    "fixture_path": str(fixture_path.resolve().relative_to(repo_root.resolve())),
+                    "fixture_path": str(fixture_path.resolve()),
                 }
             )
         if versions_payload:
