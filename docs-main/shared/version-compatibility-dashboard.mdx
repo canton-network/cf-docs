@@ -3,23 +3,26 @@ title: "Version Compatibility Dashboard"
 description: "Compatibility matrix for Canton Network component versions"
 ---
 
-import { networkData } from '/snippets/generated/version-dashboard-data.mdx'; 
+import { networkData as dashboardData } from '/snippets/generated/version-dashboard-data.mdx';
 
 
 export const componentDescriptions = {
   splice: { text: 'Canton Network infrastructure including validator apps, wallet, and governance tools.', link: 'https://github.com/hyperledger-labs/splice/releases', linkText: 'View releases' },
   damlSdk: { text: 'Smart contract language SDK for building and compiling Daml applications.', link: 'https://github.com/digital-asset/daml/releases', linkText: 'View releases' },
-  pqs: { text: 'Participant Query Store - SQL database for querying ledger data.', link: 'https://docs.digitalasset.com/', linkText: 'Documentation' },
+  pqs: { text: 'Recommended Participant Query Store / scribe runtime version for the Canton version currently deployed on Canton Network.', link: 'https://docs.digitalasset.com/build/3.5/component-howtos/pqs/download.html', linkText: 'Documentation' },
   tokenStandard: { text: 'Canton Network Token Standard API for fungible token operations (CIP-0056).' },
   walletSdk: { text: 'TypeScript SDK for wallet providers and exchanges.', link: 'https://www.npmjs.com/package/@canton-network/wallet-sdk', linkText: 'npm package' },
   dappSdk: { text: 'Browser-optimized SDK for building decentralized applications.', link: 'https://www.npmjs.com/package/@canton-network/dapp-sdk', linkText: 'npm package' },
-  walletGateway: { text: 'Server-side gateway for dApp/validator/wallet communication.', link: 'https://github.com/hyperledger-labs/splice-wallet-kernel', linkText: 'GitHub' },
+  walletGateway: { text: 'Remote client package for wallet gateway integrations.', link: 'https://www.npmjs.com/package/@canton-network/wallet-gateway-remote', linkText: 'npm package' },
 }
 
 export const darTooltips = {
   'splice-amulet': 'Core token contracts for Canton Coin (CC) including minting, burning, and transfer logic.',
+  'splice-amulet-name-service': 'Name service contracts for registering and resolving human-readable names.',
   'splice-wallet': 'Wallet application contracts for user balances, payment requests, and transaction history.',
+  'splice-wallet-payments': 'Payment workflow contracts used by wallet payment and settlement flows.',
   'splice-dso-governance': 'Decentralized Synchronizer Operator governance contracts for voting, proposals, and network rules.',
+  'splice-validator-lifecycle': 'Validator onboarding and lifecycle management contracts.',
 }
 
 export const parameterTooltips = {
@@ -204,9 +207,11 @@ export const NetworkCard = ({ network, data }) => {
                   className="text-[10px] font-mono text-gray-400 px-2 py-1 bg-white/5 border border-gray-700 rounded flex items-center"
                 >
                   {dar.name} {dar.version}
-                  <Tooltip content={darTooltips[dar.name]}>
-                    <InfoIcon size={10} />
-                  </Tooltip>
+                  {darTooltips[dar.name] ? (
+                    <Tooltip content={darTooltips[dar.name]}>
+                      <InfoIcon size={10} />
+                    </Tooltip>
+                  ) : null}
                 </span>
               ))}
             </div>
@@ -229,18 +234,14 @@ export const NetworkCard = ({ network, data }) => {
   )
 }
 
-<Note>**Starting a new project?** Use the versions currently deployed on DevNet.</Note>
-
-<Info>Last Updated: Jan 13, 2026 14:30 UTC</Info>
-
-export const VersionDashboard = () => {
+export const VersionDashboard = ({ data }) => {
   const [showAllEndpoints, setShowAllEndpoints] = React.useState(false)
   return (
     <div className="space-y-8">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-start">
-        <NetworkCard network="mainnet" data={networkData.mainnet} />
-        <NetworkCard network="testnet" data={networkData.testnet} />
-        <NetworkCard network="devnet" data={networkData.devnet} />
+        <NetworkCard network="mainnet" data={data.mainnet} />
+        <NetworkCard network="testnet" data={data.testnet} />
+        <NetworkCard network="devnet" data={data.devnet} />
       </div>
       <div className="bg-gray-900 rounded-xl border border-gray-800 p-5">
         <h3 className="text-base font-semibold text-white mt-0 mb-4 flex items-center gap-2">
@@ -258,10 +259,10 @@ export const VersionDashboard = () => {
             </tr>
           </thead>
           <tbody>
-            {Object.entries(networkData).map(([key, data]) => (
+            {Object.entries(data).map(([key, network]) => (
               <tr key={key} className="border-t border-gray-800">
-                <td className="py-2 font-medium" style={{ color: data.color }}>{data.name}</td>
-                <td className="py-2 font-mono text-xs text-gray-400 break-all">{data.endpoint}</td>
+                <td className="py-2 font-medium" style={{ color: network.color }}>{network.name}</td>
+                <td className="py-2 font-mono text-xs text-gray-400 break-all">{network.endpoint}</td>
               </tr>
             ))}
           </tbody>
@@ -337,4 +338,8 @@ export const VersionDashboard = () => {
   )
 }
 
-<VersionDashboard />
+<Note>**Starting a new project?** Use the versions currently deployed on DevNet.</Note>
+
+<Info>Generated from live Canton Network docs, the matching release bundle, and published package versions.</Info>
+
+<VersionDashboard data={dashboardData} />

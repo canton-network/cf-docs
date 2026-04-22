@@ -4,7 +4,8 @@
  * updateVersionDashboardData.js
  *
  * Reads repo-version-config.json and version-dashboard-meta.json, merges the data,
- * and generates snippets/generated/version-dashboard-data.mdx with the networkData export.
+ * and generates docs-main/snippets/generated/version-dashboard-data.mdx with the
+ * networkData export.
  */
 
 const fs = require('fs');
@@ -13,7 +14,7 @@ const path = require('path');
 const PROJECT_ROOT = path.join(__dirname, '../..');
 const REPO_VERSION_CONFIG_PATH = path.join(PROJECT_ROOT, 'config/repo-version-config.json');
 const VERSION_DASHBOARD_META_PATH = path.join(PROJECT_ROOT, 'config/version-dashboard-meta.json');
-const OUTPUT_PATH = path.join(PROJECT_ROOT, 'snippets/generated/version-dashboard-data.mdx');
+const OUTPUT_PATH = path.join(PROJECT_ROOT, 'docs-main', 'snippets', 'generated', 'version-dashboard-data.mdx');
 
 /**
  * Format helper for MDX output

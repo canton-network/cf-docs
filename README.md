@@ -74,6 +74,42 @@ python3 scripts/generate_all_reference_docs.py
 
 Use `--dry-run` to print the exact per-step commands without executing them.
 
+### Generate the Version Compatibility Dashboard
+
+The version dashboard generator fetches the live Canton Network docs sources for MainNet, TestNet, and DevNet, rewrites the legacy dashboard config, and regenerates the published MDX snippet consumed by the version dashboard page:
+
+```bash
+python3 scripts/generate_network_component_versions.py
+```
+
+or:
+
+```bash
+npm run generate:version-compatibility-dashboard
+```
+
+By default this writes:
+
+- `config/repo-version-config.json`
+- `docs-main/snippets/generated/version-dashboard-data.mdx`
+
+Source rules:
+
+| Dashboard entry | Sourcing rule |
+| --- | --- |
+| `Splice` | Read from the network's `/info` endpoint and cross-check against the same network's `/index.html` Docker image tag and Helm chart version. |
+| `Daml SDK` | Read from the `Daml SDK version used to compile .dars` row on that network's `version_information.html` page. |
+| `PQS` | Read the network's current Canton version, then choose the highest PQS docs version whose compatibility table lists that Canton major.minor line. The displayed PQS value is that directly recommended PQS release. |
+| `Token Standard` | Read from the npm `latest` dist-tag for `@canton-network/core-token-standard`. |
+| `Wallet SDK` | Read from the npm `latest` dist-tag for `@canton-network/wallet-sdk`. |
+| `dApp SDK` | Read from the npm `latest` dist-tag for `@canton-network/dapp-sdk`. |
+| `Wallet Gateway` | Read from the npm `latest` dist-tag for `@canton-network/wallet-gateway-remote`. |
+| `Min Protocol Version` | Fallback carried forward from the previous checked-in dashboard value until a public live source is available. |
+| `Migration ID` | Read from `synchronizer.active.migration_id` on the network's `/info` endpoint and validated against `sv.migration_id`. |
+| `Splice DAR Versions` | Inferred from the published `splice-node` release bundle for the observed Splice release by taking the highest tracked DAR version found in that bundle. |
+| `Release Notes` | Link to the same network's `release_notes.html` anchor for the observed Splice release. |
+| `Primary Scan API` | Static canonical `scan.sv-1...` endpoint for each network. |
+
 ### Generate the JSON API reference
 
 This repo includes a checked-in source config plus regenerated local Ledger API OpenAPI snapshots under `config/x2mdx/ledger-api/`.
