@@ -17,6 +17,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
+from docs_env import ensure_repo_direnv, repo_direnv_command
 import reference_nav
 
 
@@ -480,7 +481,8 @@ def build_manifest(
 def build_command(args: argparse.Namespace, manifest_path: Path) -> list[str]:
     render_overview_file = DEFAULT_RENDER_ROOT / "ledger-api-jvm-bindings.mdx"
     render_details_dir = DEFAULT_RENDER_ROOT / "details"
-    command = [
+    command = repo_direnv_command(
+        REPO_ROOT,
         "x2mdx",
         "jvm-docs",
         "build-api-pages-from-manifest",
@@ -496,7 +498,7 @@ def build_command(args: argparse.Namespace, manifest_path: Path) -> list[str]:
         args.source_name,
         "--version-filter",
         args.version_filter,
-    ]
+    )
     for version in args.version or []:
         command.extend(["--version", version])
     return command
@@ -864,6 +866,7 @@ def publish_rendered_pages(
 
 
 def main() -> int:
+    ensure_repo_direnv(repo_root=REPO_ROOT, script_path=Path(__file__).resolve(), argv=sys.argv[1:])
     args = parse_args()
     source_config = load_json(Path(args.source_config).resolve())
     include_versions = set(args.version) if args.version else None

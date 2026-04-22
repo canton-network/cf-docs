@@ -13,6 +13,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+from docs_env import repo_direnv_command
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
@@ -421,7 +422,8 @@ def build_command(
         raise ValueError("source_path_prefix must be a non-empty string")
     spec_filename = spec_page["filename"]
 
-    command = [
+    command = repo_direnv_command(
+        REPO_ROOT,
         "x2mdx",
         "openapi",
         "build-api-pages-from-manifest",
@@ -435,7 +437,7 @@ def build_command(
         source_name,
         "--version-filter",
         version_filter,
-    ]
+    )
     command.extend(["--include-spec-pattern", rf"^{re.escape(spec_filename)}$"])
     for mapping in source_config.get("canonical_paths", []):
         command.extend(["--canonical-path", mapping])

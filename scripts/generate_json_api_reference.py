@@ -9,6 +9,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from docs_env import ensure_repo_direnv, repo_direnv_command
 from ledger_api_release_bundles import (
     bundle_url,
     load_json,
@@ -111,7 +112,8 @@ def build_command(args: argparse.Namespace) -> list[str]:
     nav_groups = args.nav_group if args.nav_group is not None else [DEFAULT_NAV_GROUP]
     versions = args.version or DEFAULT_SNAPSHOT_VERSIONS
 
-    command = [
+    command = repo_direnv_command(
+        REPO_ROOT,
         "x2mdx",
         "openapi",
         "build-api-pages-from-manifest",
@@ -131,7 +133,7 @@ def build_command(args: argparse.Namespace) -> list[str]:
         args.source_name,
         "--version-filter",
         args.version_filter,
-    ]
+    )
 
     for version in versions:
         command.extend(["--version", version])
@@ -312,6 +314,7 @@ def write_manifest(
 
 
 def main() -> int:
+    ensure_repo_direnv(repo_root=REPO_ROOT, script_path=Path(__file__).resolve(), argv=sys.argv[1:])
     args = parse_args()
     source_config = load_json(Path(args.source_config).resolve())
     include_versions = set(args.version) if args.version else None
