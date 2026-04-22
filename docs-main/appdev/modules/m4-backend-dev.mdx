@@ -273,7 +273,7 @@ Compile the new Daml module and regenerate the Java bindings. If you're working 
 
 ```bash
 dpm build
-dpm codegen-java <DAR-file> -o <output-dir>
+dpm codegen-java &lt;DAR-file&gt; -o &lt;output-dir&gt;
 ```
 
 In cn-quickstart, the Gradle build handles both steps. Run the Daml build task, which compiles the `.daml` files into a DAR and then runs the transcode codegen plugin to produce Java classes:
@@ -620,11 +620,7 @@ A command submission is considered a **duplicate submission** if at least one of
 
 The outcome of command deduplication is communicated as follows:
 
-- Command submissions via the Command Service indicate the command deduplication outcome as a synchronous gRPC response unless the [gRPC deadline](https://grpc.io/blog/deadlines/) was exceeded.
-
-  <Note>
-The outcome MAY additionally appear as a completion event on the Command Completion Service, but applications using the Command Service typically need not process completion events.
-</Note>
+- Command submissions via the Command Service indicate the command deduplication outcome as a synchronous gRPC response unless the [gRPC deadline](https://grpc.io/blog/deadlines/) was exceeded. (Note: the outcome MAY additionally appear as a completion event on the Command Completion Service, but applications using the Command Service typically need not process completion events.)
 
 - Command submissions via the Command Submission Service can indicate the outcome as a synchronous gRPC response, or asynchronously through the Command Completion Service. In particular, the submission may be a duplicate even if the Command Submission Service acknowledges the submission with the gRPC status code `OK`.
 
@@ -660,11 +656,7 @@ For this strategy, you must estimate a bound `B` on the processing time and forw
 The bound `B` should be at most the configured maximum deduplication duration. Otherwise you rely on the ledger accepting longer deduplication durations. Such reliance makes your application harder to port to other Daml ledgers and fragile, as the ledger may stop accepting such extended durations at its own discretion.
 </Note>
 
-1.  Choose a command ID for the ledger change, in a way that makes sure the same ledger change is always assigned the same command ID. Either determine the command ID deterministically (e.g., if your contract payload contains a globally unique identifier, you can use that as your command ID), or choose the command ID randomly and persist it with the ledger change so that the application can use the same command ID in resubmissions after a crash and restart.
-
-    <Note>
-Make sure that you assign the same command ID to all command (re-)submissions of the same ledger change. This is useful for the recovery procedure after an application crash/restart. After a crash, the application in general cannot know whether it has submitted a set of commands before the crash. If in doubt, resubmit the commands using the same command ID. If the commands had been submitted before the crash, command deduplication on the ledger will reject the resubmissions.
-</Note>
+1.  Choose a command ID for the ledger change, in a way that makes sure the same ledger change is always assigned the same command ID. Either determine the command ID deterministically (e.g., if your contract payload contains a globally unique identifier, you can use that as your command ID), or choose the command ID randomly and persist it with the ledger change so that the application can use the same command ID in resubmissions after a crash and restart. (Note: make sure that you assign the same command ID to all command (re-)submissions of the same ledger change. This is useful for the recovery procedure after an application crash/restart. After a crash, the application in general cannot know whether it has submitted a set of commands before the crash. If in doubt, resubmit the commands using the same command ID. If the commands had been submitted before the crash, command deduplication on the ledger will reject the resubmissions.)
 
 2.  When you use the Command Submission Service, obtain a recent offset on the State Service `OFF1`, say the current ledger end.
 
@@ -672,23 +664,7 @@ Make sure that you assign the same command ID to all command (re-)submissions of
 
     - Set the command ID to the chosen command ID from Step 1.
 
-    \- Set the deduplication duration to the bound `B`.
-
-    > <Note>
->
-    > >
-    > Note
-    >
-    >
-</Note>
-    >
-    > It is prudent to explicitly set the deduplication duration to the desired bound `B`,
-    >
-    > 
-    >
-    > to guard against the case where a ledger configuration update shortens the maximum deduplication duration. With the bound `B`, you will be notified of such a problem via an INVALID_DEDUPLICATION_PERIOD error if the ledger does not support deduplication durations of length `B` any more.
-    >
-    > If you omitted the deduplication period, the currently valid maximum deduplication duration would be used. In this case, a ledger configuration update could silently shorten the deduplication period and thus invalidate your deduplication analysis.
+    - Set the deduplication duration to the bound `B`. (Note: it is prudent to explicitly set the deduplication duration to the desired bound `B`, to guard against the case where a ledger configuration update shortens the maximum deduplication duration. With the bound `B`, you will be notified of such a problem via an INVALID_DEDUPLICATION_PERIOD error if the ledger does not support deduplication durations of length `B` any more. If you omitted the deduplication period, the currently valid maximum deduplication duration would be used. In this case, a ledger configuration update could silently shorten the deduplication period and thus invalidate your deduplication analysis.)
 
     - Set the submission ID to a fresh value, e.g., a random UUID.
 
@@ -711,60 +687,109 @@ Make sure that you assign the same command ID to all command (re-)submissions of
 Error handling is needed when the status code of the command submission RPC call or in the completion event is not `OK`. The following table lists appropriate reactions by status code (written as `STATUS_CODE`) and error code (written in capital letters with a link to the error code documentation). Fields in the error metadata are written as `field` in lowercase letters.
 
 <table>
-<caption>Command deduplication error handling with known processing time bound</caption>
-<colgroup>
-<col style="width: 16%" />
-<col style="width: 83%" />
-</colgroup>
-<thead>
-<tr class="header">
-<th>Error condition</th>
-<th>Reaction</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td><p><code>DEADLINE_EXCEEDED</code></p></td>
-<td><p>Consider the submission lost.</p>
-<p>Retry from <code class="interpreted-text" role="ref">Step 2 &lt;dedup-bounded-step-offset&gt;</code>, obtaining the completion offset <code>OFF1</code>, and possibly increase the timeout.</p></td>
-</tr>
-<tr class="even">
-<td>Application crashed</td>
-<td>Retry from <code class="interpreted-text" role="ref">Step 2 &lt;dedup-bounded-step-offset&gt;</code>, obtaining the completion offset <code>OFF1</code>.</td>
-</tr>
-<tr class="odd">
-<td><code>ALREADY_EXISTS</code> / <code class="interpreted-text" role="brokenref">DUPLICATE_COMMAND &lt;error_code_DUPLICATE_COMMAND&gt;</code></td>
-<td>The change ID has already been accepted by the ledger within the reported deduplication period. The optional field <code>completion_offset</code> contains the precise offset. The optional field <code>existing_submission_id</code> contains the submission ID of the successful submission. Report success for the ledger change.</td>
-</tr>
-<tr class="even">
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td><p><code>FAILED_PRECONDITION</code> / <code class="interpreted-text" role="brokenref">PARTICIPANT_PRUNED_DATA_ACCESSED &lt;error_code_PARTICIPANT_PRUNED_DATA_ACCESSED&gt;</code></p></td>
-<td><p>The specified deduplication offset has been pruned by the participant. <code>earliest_offset</code> contains the last pruned offset.</p>
-<blockquote>
-<p>Use the <code class="interpreted-text" role="ref">Command Completion Service &lt;command-completion-service&gt;</code> by asking for the <code class="interpreted-text" role="subsiteref">completions &lt;com.daml.ledger.api.v2.CompletionStreamRequest&gt;</code>, starting from the last pruned offset by setting <code class="interpreted-text" role="subsiteref">offset &lt;com.daml.ledger.api.v2.CompletionStreamRequest.begin_exclusive&gt;</code> to the value of <code>earliest_offset</code>, and use the first received <code class="interpreted-text" role="subsiteref">completion offset &lt;com.daml.ledger.api.v2.Completion.offset&gt;</code> or <code class="interpreted-text" role="subsiteref">checkpoint offset &lt;com.daml.ledger.api.v2.OffsetCheckpoint.offset&gt;</code> as a deduplication offset.</p>
-</blockquote></td>
-</tr>
-<tr class="even">
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td><code>ABORTED</code> / other error codes</td>
-<td>Wait a bit and retry from <code class="interpreted-text" role="ref">Step 2 &lt;dedup-bounded-step-offset&gt;</code>, obtaining the completion offset <code>OFF1</code>.</td>
-</tr>
-<tr class="even">
-<td><p>other error conditions</p></td>
-<td><p>Use background knowledge about the business workflow and the current ledger state to decide whether earlier submissions might still get accepted.</p>
-<ul>
-<li>If you conclude that it cannot be accepted any more, stop retrying and report that the ledger change failed.</li>
-<li>Otherwise, retry from <code class="interpreted-text" role="ref">Step 2 &lt;dedup-bounded-step-offset&gt;</code>, obtaining a completion offset <code>OFF1</code>, or give up without knowing for sure that the ledger change will not happen.</li>
-</ul>
-<p>For example, if the ledger change only creates a contract instance of a template, you can never be sure, as any outstanding submission might still be accepted on the ledger. In particular, you must not draw any conclusions from not having received a <code class="interpreted-text" role="brokenref">SUBMISSION_ALREADY_IN_FLIGHT &lt;error_code_SUBMISSION_ALREADY_IN_FLIGHT&gt;</code> error, because the outstanding submission may be queued somewhere and will reach the relevant processing point only later.</p></td>
-</tr>
-</tbody>
+  <caption>Command deduplication error handling with known processing time bound</caption>
+  <colgroup>
+    <col style={{ width: "16%" }} />
+    <col style={{ width: "83%" }} />
+  </colgroup>
+  <thead>
+    <tr className="header">
+      <th>Error condition</th>
+      <th>Reaction</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr className="odd">
+      <td>
+        <code>DEADLINE_EXCEEDED</code>
+      </td>
+      <td>
+        <p>Consider the submission lost.</p>
+        <p>
+          Retry from <code>Step 2 &lt;dedup-bounded-step-offset&gt;</code>, obtaining the
+          completion offset <code>OFF1</code>, and possibly increase the timeout.
+        </p>
+      </td>
+    </tr>
+    <tr className="even">
+      <td>Application crashed</td>
+      <td>
+        Retry from <code>Step 2 &lt;dedup-bounded-step-offset&gt;</code>, obtaining the
+        completion offset <code>OFF1</code>.
+      </td>
+    </tr>
+    <tr className="odd">
+      <td>
+        <code>ALREADY_EXISTS</code> / <code>DUPLICATE_COMMAND &lt;error_code_DUPLICATE_COMMAND&gt;</code>
+      </td>
+      <td>
+        The change ID has already been accepted by the ledger within the reported deduplication
+        period. The optional field <code>completion_offset</code> contains the precise offset. The
+        optional field <code>existing_submission_id</code> contains the submission ID of the
+        successful submission. Report success for the ledger change.
+      </td>
+    </tr>
+    <tr className="odd">
+      <td>
+        <code>FAILED_PRECONDITION</code> /{" "}
+        <code>PARTICIPANT_PRUNED_DATA_ACCESSED &lt;error_code_PARTICIPANT_PRUNED_DATA_ACCESSED&gt;</code>
+      </td>
+      <td>
+        <p>
+          The specified deduplication offset has been pruned by the participant.{" "}
+          <code>earliest_offset</code> contains the last pruned offset.
+        </p>
+        <p>
+          Use the <code>Command Completion Service &lt;command-completion-service&gt;</code> by
+          asking for the{" "}
+          <code>completions &lt;com.daml.ledger.api.v2.CompletionStreamRequest&gt;</code>,
+          starting from the last pruned offset by setting{" "}
+          <code>offset &lt;com.daml.ledger.api.v2.CompletionStreamRequest.begin_exclusive&gt;</code>{" "}
+          to the value of <code>earliest_offset</code>, and use the first received{" "}
+          <code>completion offset &lt;com.daml.ledger.api.v2.Completion.offset&gt;</code> or{" "}
+          <code>checkpoint offset &lt;com.daml.ledger.api.v2.OffsetCheckpoint.offset&gt;</code> as
+          a deduplication offset.
+        </p>
+      </td>
+    </tr>
+    <tr className="odd">
+      <td>
+        <code>ABORTED</code> / other error codes
+      </td>
+      <td>
+        Wait a bit and retry from <code>Step 2 &lt;dedup-bounded-step-offset&gt;</code>,
+        obtaining the completion offset <code>OFF1</code>.
+      </td>
+    </tr>
+    <tr className="even">
+      <td>Other error conditions</td>
+      <td>
+        <p>
+          Use background knowledge about the business workflow and the current ledger state to
+          decide whether earlier submissions might still get accepted.
+        </p>
+        <ul>
+          <li>
+            If you conclude that it cannot be accepted any more, stop retrying and report that the
+            ledger change failed.
+          </li>
+          <li>
+            Otherwise, retry from <code>Step 2 &lt;dedup-bounded-step-offset&gt;</code>, obtaining
+            a completion offset <code>OFF1</code>, or give up without knowing for sure that the
+            ledger change will not happen.
+          </li>
+        </ul>
+        <p>
+          For example, if the ledger change only creates a contract instance of a template, you can
+          never be sure, as any outstanding submission might still be accepted on the ledger. In
+          particular, you must not draw any conclusions from not having received a{" "}
+          <code>SUBMISSION_ALREADY_IN_FLIGHT &lt;error_code_SUBMISSION_ALREADY_IN_FLIGHT&gt;</code>{" "}
+          error, because the outstanding submission may be queued somewhere and will reach the
+          relevant processing point only later.
+        </p>
+      </td>
+    </tr>
+  </tbody>
 </table>
 
 Command deduplication error handling with known processing time bound
@@ -794,21 +819,19 @@ Finding a good bound `B` on the processing time is hard, and there may still be 
 
 2.  Obtain a recent offset `OFF0` on the completion stream and remember across crashes that you use `OFF0` with the chosen command ID. There are several ways to do so:
 
-    \- Use the State Service by asking for the current ledger end.
+- Use the State Service by asking for the current ledger end.
 
-    > <Note>
->
-    > >
-    > Note
-    >
-    >
-</Note>
-    >
-    > 
-    >
-    > Some ledger implementations reject deduplication offsets that do not identify a command completion visible to the submitting parties with the error code id INVALID_DEDUPLICATION_PERIOD. In general, the ledger end need not identify a command completion that is visible to the submitting parties. When running on such a ledger, use the Command Service approach described next.
+  <Note>
+    Some ledger implementations reject deduplication offsets that do not identify a command
+    completion visible to the submitting parties with the error code id
+    <code> INVALID_DEDUPLICATION_PERIOD</code>. In general, the ledger end need not identify a
+    command completion that is visible to the submitting parties. When running on such a ledger,
+    use the Command Service approach described next.
+  </Note>
 
-    - Use the Command Service to obtain a recent offset by repeatedly submitting a dummy command, e.g., a Create-And-Exercise command of some single-signatory template with the Archive choice, until you get a successful response. The response contains the completion offset.
+- Use the Command Service to obtain a recent offset by repeatedly submitting a dummy command, e.g.,
+  a Create-And-Exercise command of some single-signatory template with the Archive choice, until
+  you get a successful response. The response contains the completion offset.
 
 3.  When you use the Command Completion Service:
 
@@ -1033,13 +1056,14 @@ Then, the **Buyer** attaches the disclosed contract payloads to the command subm
 
 These last two steps are executed using the new Daml Script functions supporting explicit disclosure: `queryDisclosure` and `submitWithDisclosures`.
 
-    disclosedStock <- fromSome <$> queryDisclosure stockExchange stockCid
-    disclosedOffer <- fromSome <$> queryDisclosure seller offerCid
-    disclosedPriceQuotation <- fromSome <$> queryDisclosure stockExchange priceQuotationCid
+```daml
+disclosedStock <- fromSome <$> queryDisclosure stockExchange stockCid
+disclosedOffer <- fromSome <$> queryDisclosure seller offerCid
+disclosedPriceQuotation <- fromSome <$> queryDisclosure stockExchange priceQuotationCid
 
-    _ <- submitWithDisclosures buyer [disclosedStock, disclosedOffer, disclosedPriceQuotation] do
-      exerciseCmd offerCid Offer_Accept with priceQuotationCid = priceQuotationCid, buyer = buyer, buyerIou = buyerIouCid
-
+_ <- submitWithDisclosures buyer [disclosedStock, disclosedOffer, disclosedPriceQuotation] do
+  exerciseCmd offerCid Offer_Accept with priceQuotationCid = priceQuotationCid, buyer = buyer, buyerIou = buyerIouCid
+```
 <Note>
 For an example using Java bindings for client applications, see the [Java Bindings StockExchange example project](https://github.com/digital-asset/ex-java-bindings/blob/f474ae83976b0ad197e2fabfce9842fb9b3de907/StockExchange/README.rst).
 </Note>
@@ -1074,4 +1098,3 @@ When modeling Daml workflows using disclosed contracts, such safeguards assure:
 In our case, the Daml assertions in `Offer_Accept` ensure that the price quotation is coming from a party that the **Seller** is trusting (**Issuer**) and that it actually matches stock that the **Seller** intends to sell.
 
 {/* COPIED_END */}
-

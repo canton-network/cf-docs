@@ -1,6 +1,6 @@
 ---
 title: "API Configuration"
-description: "Configure Admin API, Ledger API, and JSON Ledger API for Canton nodes"
+description: "Configure Admin API, Ledger API, JSON Ledger API, and caching for Canton nodes."
 ---
 
 {/* COPIED_START source="docs-website:docs/replicated/canton/3.4/participant/howtos/configure/apis/apis.rst" hash="e2cf7d55" */}
@@ -10,8 +10,6 @@ This section was copied from existing reviewed documentation.
 **Source:** `docs/replicated/canton/3.4/participant/howtos/configure/apis/apis.rst`
 Reviewers: Skip this section. Remove markers after final approval.
 </Warning>
-
-Separate security hardening and move it into the "secure" section (TLS, max message size, authzn) Separate optimizations such as caching to "optimize" section Move API specific configuration to their sub-sections, only cover general configuration here (such as ports, keep alive, netty).
 
 # API Configuration
 
@@ -56,7 +54,7 @@ To tweak the keep-alive configuration of a connection, adjust the following para
 
 You can adjust the first two parameters for either the Synchronizer Public API client in the `keep-alive-client` section, or for the server side of the Admin API and the gRPC Ledger API in the `keep-alive-server` section. The last two parameters are server only, and you can therefore adjust them only in the `keep-alive-server` section of the Admin API and the gRPC Ledger API.
 
-The [gRPC documentation](https://grpc.io/docs/guides/keepalive/) further describes these parameters and their effect.
+The gRPC [documentation]() further describes these parameters and their effect.
 
 <Note>
 `permit-keep-alive-time` specifies the most aggressive keep-alive time that a client is permitted to use. If a client uses a keep-alive `time` that is more aggressive than the server's `permit-keep-alive-time`, the connection is terminated with a `GOAWAY` error with “too_many_pings” as the debug data.
@@ -105,7 +103,7 @@ ledger-api {
 
 ## Native libraries usage by Netty
 
-Canton ships with native libraries (for some processor architectures: x86_64, ARM64, S390_64) so that the Netty network access library can take advantage of the `epoll` [system call](https://en.wikipedia.org/wiki/Epoll) on Linux. This generally leads to improved performance and less pressure on the JVM garbage collector.
+Canton ships with native libraries (for some processor architectures: x86_64, ARM64, S390_64) so that the Netty network access library can take advantage of the `epoll` system [call]() on Linux. This generally leads to improved performance and less pressure on the JVM garbage collector.
 
 The system automatically picks the native library if available for the current operating system and architecture, or falls back to the standard NIO library if the native library is not available.
 
@@ -117,7 +115,9 @@ To switch off using the native library, set the following when running Canton:
 
 Even when this is expected, falling back to NIO might lead to a warning being emitted at `DEBUG` level on your log.
 
+
 {/* COPIED_END */}
+
 
 {/* COPIED_START source="docs-website:docs/replicated/canton/3.4/participant/howtos/configure/apis/admin_api.rst" hash="eb18a523" */}
 
@@ -126,8 +126,6 @@ This section was copied from existing reviewed documentation.
 **Source:** `docs/replicated/canton/3.4/participant/howtos/configure/apis/admin_api.rst`
 Reviewers: Skip this section. Remove markers after final approval.
 </Warning>
-
-Review and update with missing Admin API specific configuration. Link to secure howto for JWT token support for Admin API and service-based restrictions on Admin API tokens. Add "Mutual TLS (mTLS) is recommended for the Admin API." with link on how to configure it
 
 # Admin API Configuration
 
@@ -139,7 +137,9 @@ The configuration is currently simple (see the TLS example below) and specifical
 
 You should not expose the admin-api publicly in an unsecured way as it serves administrative purposes only.
 
+
 {/* COPIED_END */}
+
 
 {/* COPIED_START source="docs-website:docs/replicated/canton/3.4/participant/howtos/configure/apis/ledger_api.rst" hash="1c225af4" */}
 
@@ -212,7 +212,9 @@ canton.participants.participant.ledger-api.index-service {
 }
 ```
 
+
 {/* COPIED_END */}
+
 
 {/* COPIED_START source="docs-website:docs/replicated/canton/3.4/participant/howtos/configure/apis/json_api.rst" hash="a4b05afb" */}
 
@@ -273,6 +275,32 @@ The latter type of requests can be parameterized in the Participant Node's confi
 ## Daml definitions service
 
 You can enable the experimental `Daml Definitions Service` by setting the `daml-definitions-service-enabled` parameter to `true`.
+
+
+{/* COPIED_END */}
+
+
+{/* COPIED_START source="docs-website:docs/replicated/canton/3.4/participant/howtos/optimize/caching.rst" hash="89c687c5" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was copied from existing reviewed documentation.
+**Source:** `docs/replicated/canton/3.4/participant/howtos/optimize/caching.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+# Configure Caching
+
+## Ledger API Caches
+
+The `max-contract-state-cache-size` and `max-contract-key-state-cache-size` parameters control the size of the Ledger API contract and contract key caches, respectively. Modifying these parameters changes the likelihood that a transaction using a contract or a contract key that was recently accessed (created or read) can still find it in the memory, rather than needing to query it from the database. Larger caches might be of interest when there is a big pool of ambient contracts that are consistently fetched or used for non-consuming exercises. Larger caches can also benefit use cases where a big pool of contracts rotates through a create -\> archive -\> create-successor cycle. Consider adjusting these parameters explicitly if the performance of your specific workflow depends on large caches.
+
+``` none
+canton.participants.participant.ledger-api.index-service {
+    max-contract-state-cache-size = 100000      // default 1e4
+    max-contract-key-state-cache-size = 100000  // default 1e4
+}
+```
+
 
 {/* COPIED_END */}
 

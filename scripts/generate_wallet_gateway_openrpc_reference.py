@@ -4,16 +4,19 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
 from pathlib import Path
 from typing import Any
 
+from docs_env import ensure_repo_direnv, repo_direnv_command
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_CACHE_ROOT = Path(os.environ.get("XDG_CACHE_HOME", "~/.cache")).expanduser() / "x2mdx"
 DEFAULT_SOURCE_CONFIG = REPO_ROOT / "config" / "x2mdx" / "wallet-gateway-openrpc" / "source-artifacts.json"
-DEFAULT_CACHE_DIR = REPO_ROOT / ".internal" / "cache" / "x2mdx" / "wallet-gateway-openrpc"
+DEFAULT_CACHE_DIR = DEFAULT_CACHE_ROOT / "wallet-gateway-openrpc"
 DEFAULT_MANIFEST = REPO_ROOT / ".internal" / "generated" / "x2mdx" / "wallet-gateway-openrpc" / "manifest.json"
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "docs-main" / "reference" / "wallet-gateway-json-rpc"
 DEFAULT_DOCS_JSON = REPO_ROOT / "docs-main" / "docs.json"
@@ -255,7 +258,7 @@ def write_manifest(
                 {
                     "version": version,
                     "source_path": spec["source_path"],
-                    "fixture_path": str(fixture_path.resolve().relative_to(repo_root.resolve())),
+                    "fixture_path": str(fixture_path.resolve()),
                 }
             )
         if versions_payload:
@@ -280,6 +283,7 @@ def write_manifest(
 
 
 def main() -> int:
+    ensure_repo_direnv(repo_root=REPO_ROOT, script_path=Path(__file__).resolve(), argv=sys.argv[1:])
     args = parse_args()
     source_config = load_json(Path(args.source_config).resolve())
     include_versions = set(args.version) if args.version else None
@@ -332,7 +336,8 @@ def main() -> int:
     )
 
     fixture_root = REPO_ROOT
-    command = [
+    command = repo_direnv_command(
+        REPO_ROOT,
         "x2mdx",
         "openrpc",
         "build-api-pages-from-manifest",
@@ -352,7 +357,7 @@ def main() -> int:
         args.source_name,
         "--version-filter",
         args.version_filter or f"{tag_prefix} GitHub releases",
-    ]
+    )
     for version in args.version or []:
         command.extend(["--version", version])
     print("Running:", " ".join(command))
