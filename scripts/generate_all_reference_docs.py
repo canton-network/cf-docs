@@ -18,6 +18,7 @@ SCRIPT_PATHS = [
     REPO_ROOT / "scripts" / "generate_daml_standard_library_reference.py",
     REPO_ROOT / "scripts" / "generate_canton_protobuf_history.py",
     REPO_ROOT / "scripts" / "generate_wallet_gateway_openrpc_reference.py",
+    REPO_ROOT / "scripts" / "generate_splice_scan_openapi_reference.py",
     REPO_ROOT / "scripts" / "generate_typescript_bindings_reference.py",
 ]
 

@@ -1,129 +1,66 @@
 ---
-title: Wallet Integration Guidance
-description: "Signing Canton Coin transactions from third-party dApps using the Wallet SDK"
+title: "Wallet Integration Guide"
+description: "Integrate with the Canton Network as a wallet: onboard external parties, read data, sign transactions, and support Canton Coin and USDCx."
 ---
 
-Third-party dApps on Canton Network often need users to sign transactions that the dApp prepares. The Wallet SDK provides the infrastructure for this signing flow, similar to how browser wallet extensions work on other blockchain networks.
-
-## Transaction Signing Flow
-
-{/* COPIED_START source="splice-wallet-kernel:signing-transactions-from-dapps/index.rst" hash="wallet-dapp-signing" */}
-
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was adapted from existing reviewed documentation.
-**Source:** `splice-wallet-kernel:signing-transactions-from-dapps/index.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
-
-A dApp can integrate with a user's wallet provider through:
-
-- **Embedded wallet** — The dApp embeds the wallet provider directly
-- **Browser extension** — The dApp connects to an external wallet provider via browser extension
-- **External connection** — Other connection mechanisms provided by the wallet provider
-
-The dApp uses the wallet provider's dApp API (defined as an [OpenRPC specification](https://github.com/hyperledger-labs/splice-wallet-kernel/blob/main/api-specs/openrpc-dapp-api.json)) to funnel transactions through to the wallet for signing.
-
-### Preparing Transactions
-
-A dApp typically calls the `prepareExecute` or `prepareExecuteAndWait` endpoint. The wallet provider then prepares, signs, and submits the transaction to the ledger.
-
-You can prepare incoming transactions using the Wallet SDK's transaction preparation functions.
-
-### Displaying Transactions for User Review
-
-Before applying a signature, show the user exactly what they are signing. Once signed, the transaction is considered valid and will be executed. Convert a prepared transaction to a JSON representation for display using the SDK's conversion utilities.
-
-{/* COPIED_END */}
-
-The dApp API follows the vendor-neutral standard defined in [CIP-0103 (dApp Standard for Canton Network)](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0103/cip-0103.md), which decouples network connectivity and key management from application logic. CIP-0103 supports both synchronous and asynchronous operation models, allowing any dApp to work with any wallet implementation that conforms to the standard.
-
-## Integration Patterns
-
-### Canton Coin Transfers
-
-The most common wallet integration is Canton Coin transfers using the Token Standard:
-
-1. **Query holdings** — Use the Token Standard APIs to list the user's Canton Coin holdings
-2. **Prepare transfer** — Build a transfer command that selects UTXOs, specifies the recipient, and calculates change
-3. **Sign and submit** — Present the transaction to the user for signing, then submit to the ledger
-4. **Confirm completion** — Monitor the update stream for the completion event
-
-### Transfer Preapprovals
-
-For automated or high-volume transfers, set up a `TransferPreapproval` contract. This allows senders to transfer Canton Coin to the recipient in a single step without requiring the recipient to accept each individual transfer.
-
-The validator API provides endpoints for managing transfer preapprovals:
-
-- `POST /v0/wallet/transfer-preapproval` — Create a transfer preapproval
-- `POST /v0/wallet/transfer-preapproval/send` — Send Canton Coin using a preapproval
-
-<Note>
-These endpoints are defined in the [wallet-internal.yaml](https://github.com/hyperledger-labs/splice-wallet-kernel/blob/main/api-specs/splice/0.5.8/wallet-internal.yaml) specification. Only endpoints tagged `external` in the [wallet-external.yaml](https://github.com/hyperledger-labs/splice-wallet-kernel/blob/main/api-specs/splice/0.5.8/wallet-external.yaml) specification are considered part of the publicly stable API surface.
-</Note>
-
-### Buying Synchronizer Traffic
-
-Users can purchase synchronizer traffic for any validator using Canton Coin:
-
-1. Create a `BuyTrafficRequest` via `POST /v0/wallet/buy-traffic-requests`
-2. The wallet automation burns the required Canton Coin and increases the validator's traffic budget
-
-## Security Considerations
-
-- Always display the full transaction details to users before they sign
-- Validate that the transaction matches what the dApp claims it will do
-- Use the Token Standard APIs rather than building raw Daml commands
-- Implement proper error handling for rejected or timed-out transactions
-
-## Next Steps
-
-- [Wallet SDK Download](/docs-main/integrations/wallet/sdk-download) — Install the Wallet SDK
-- [Wallet Configuration](/docs-main/integrations/wallet/configuration) — Configure for your environment
-
-{/* COPIED_START source="splice-wallet-kernel:docs/wallet-integration-guide/src/signing-transactions-from-dapps/index.rst" hash="4b0292af" */}
-
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was copied from existing reviewed documentation.
-**Source:** `splice-wallet-kernel:docs/wallet-integration-guide/src/signing-transactions-from-dapps/index.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
-
-# Signing Transactions from third party dApps
-
-A normal flow on blockchain applications is to have dApps that interact with the blockchain on the clients behalf, these flows usually require the user to sign transactions that the dApp prepares and submit it. To faciliate this in Canton it is required that the prepared transaction is sent to the wallet for signing. An easy way of supporting this is to expose a dApp API (OpenRPC spec can be found here: `https://github.com/hyperledger-labs/splice-wallet-kernel/blob/main/api-specs/openrpc-dapp-api.json`).
-
-*The specs are in OpenRPC to conform with traditional standards like for ethereum.*
-
-A client can provide access to a Wallet Providers dApp API by either embedding a wallet provider in the dApp or by connecting to an external wallet provider via a browser extension or other means. Then the dApp is able to funnel transactions through to the wallet provider for signing.
-
-## Receiving a Transaction
-
-A dApp would usually call the `prepareExecute` endpoint or the `prepareExecuteAndWait` endpoint. In both cases the Wallet Provider would prepare, sign and submit the transaction to the ledger.
-
-You can prepare the incoming transaction using the Wallet SDK:
-
-```typescript
--- Code from: ../../examples/snippets/prepare-incoming-command.ts
--- [Include actual code example here]
-```
-
-## Reading and Visualising the Transaction
-
-It is important when integrating with third party dApps to showcase the User exactly what is being signed. Once the signature is applied the transaction can be considered valid (and executed). The easiest would be to create a visualizer that takes a JSON representation of the transaction. The Json for a prepared transaction (before signature is applied) can be obtained using the Wallet SDK:
-
-```typescript
--- Code from: ../../examples/snippets/convert-transaction-to-json.ts
--- [Include actual code example here]
-```
-
-{/* COPIED_END */}
-
+import PartyManagement02AuthLocalnetFull from '/snippets/daml-docs/party-management_02-auth-localnet_full.mdx';
+import PartyManagementAllocatePartyFull from '/snippets/daml-docs/party-management_allocate-party_full.mdx';
+import PartyManagement01AuthFull from '/snippets/daml-docs/party-management_01-auth_full.mdx';
+import PartyManagementCreateKeyPairFull from '/snippets/daml-docs/party-management_create-key-pair_full.mdx';
+import PartyManagementCreateKeyFromMnenomicPhraseFull from '/snippets/daml-docs/party-management_create-key-from-mnenomic-phrase_full.mdx';
+import PartyManagementGenerateFingerprintFull from '/snippets/daml-docs/party-management_generate-fingerprint_full.mdx';
+import PartyManagementCreateTopologyTransactionsFull from '/snippets/daml-docs/party-management_create-topology-transactions_full.mdx';
+import PartyManagementDecodeTopologyTxFull from '/snippets/daml-docs/party-management_decode-topology-tx_full.mdx';
+import PartyManagementSignPartyTransactionHashFull from '/snippets/daml-docs/party-management_sign-party-transaction-hash_full.mdx';
+import PartyManagementSubmitSignedTopologyTransactionFull from '/snippets/daml-docs/party-management_submit-signed-topology-transaction_full.mdx';
+import PartyManagement06MultiHostedPartyFull from '/snippets/daml-docs/party-management_06-multi-hosted-party_full.mdx';
+import FindingAndReadingDataChangePartyAndSynchronizerFull from '/snippets/daml-docs/finding-and-reading-data_change-party-and-synchronizer_full.mdx';
+import FindingAndReadingDataListWalletsFull from '/snippets/daml-docs/finding-and-reading-data_list-wallets_full.mdx';
+import FindingAndReadingDataReadLedgerEndFull from '/snippets/daml-docs/finding-and-reading-data_read-ledger-end_full.mdx';
+import FindingAndReadingDataReadActiveContractsFull from '/snippets/daml-docs/finding-and-reading-data_read-active-contracts_full.mdx';
+import FindingAndReadingDataTapEventFull from '/snippets/daml-docs/finding-and-reading-data_tap-event_full.mdx';
+import FindingAndReadingDataMergeSplitEventFull from '/snippets/daml-docs/finding-and-reading-data_merge-split-event_full.mdx';
+import FindingAndReadingDataTransferOutEventFull from '/snippets/daml-docs/finding-and-reading-data_transfer-out-event_full.mdx';
+import FindingAndReadingDataTransferInEventFull from '/snippets/daml-docs/finding-and-reading-data_transfer-in-event_full.mdx';
+import PreparingAndSigningTransactions03PingLocalnetFull from '/snippets/daml-docs/preparing-and-signing-transactions_03-ping-localnet_full.mdx';
+import PreparingAndSigningTransactionsCreateTransferCommandFull from '/snippets/daml-docs/preparing-and-signing-transactions_create-transfer-command_full.mdx';
+import PreparingAndSigningTransactionsCreateCommandFull from '/snippets/daml-docs/preparing-and-signing-transactions_create-command_full.mdx';
+import PreparingAndSigningTransactionsPrepareTransferTransactionFull from '/snippets/daml-docs/preparing-and-signing-transactions_prepare-transfer-transaction_full.mdx';
+import PreparingAndSigningTransactionsPrepareTransactionFull from '/snippets/daml-docs/preparing-and-signing-transactions_prepare-transaction_full.mdx';
+import PreparingAndSigningTransactionsComputeTransactionHashFull from '/snippets/daml-docs/preparing-and-signing-transactions_compute-transaction-hash_full.mdx';
+import PreparingAndSigningTransactionsSignTransactionHashFull from '/snippets/daml-docs/preparing-and-signing-transactions_sign-transaction-hash_full.mdx';
+import PreparingAndSigningTransactionsExecuteTransactionFull from '/snippets/daml-docs/preparing-and-signing-transactions_execute-transaction_full.mdx';
+import PreparingAndSigningTransactionsAwaitCompletionAndFetchFull from '/snippets/daml-docs/preparing-and-signing-transactions_await-completion-and-fetch_full.mdx';
+import PreparingAndSigningTransactions08OfflineSigningLocalnetFull from '/snippets/daml-docs/preparing-and-signing-transactions_08-offline-signing-localnet_full.mdx';
+import SigningTransactionsFromDappsPrepareIncomingCommandFull from '/snippets/daml-docs/signing-transactions-from-dapps_prepare-incoming-command_full.mdx';
+import SigningTransactionsFromDappsConvertTransactionToJsonFull from '/snippets/daml-docs/signing-transactions-from-dapps_convert-transaction-to-json_full.mdx';
+import TokenStandard04TokenStandardLocalnetFull from '/snippets/daml-docs/token-standard_04-token-standard-localnet_full.mdx';
+import TokenStandardListHoldingsFull from '/snippets/daml-docs/token-standard_list-holdings_full.mdx';
+import TokenStandardMonitorTransactionHoldingsFull from '/snippets/daml-docs/token-standard_monitor-transaction-holdings_full.mdx';
+import TokenStandardTapCoinsFull from '/snippets/daml-docs/token-standard_tap-coins_full.mdx';
+import TokenStandardCreateTransferCommandFull from '/snippets/daml-docs/token-standard_create-transfer-command_full.mdx';
+import TokenStandardCreateTransferCommandFullFull from '/snippets/daml-docs/token-standard_create-transfer-command-full_full.mdx';
+import TokenStandardCreateTransferPreapprovalFull from '/snippets/daml-docs/token-standard_create-transfer-preapproval_full.mdx';
+import TokenStandardReadPendingTransferInstructionsFull from '/snippets/daml-docs/token-standard_read-pending-transfer-instructions_full.mdx';
+import TokenStandardAcceptOrRejectTransferFull from '/snippets/daml-docs/token-standard_accept-or-reject-transfer_full.mdx';
+import TokenStandardWithdrawTransferInstructionFull from '/snippets/daml-docs/token-standard_withdraw-transfer-instruction_full.mdx';
+import TokenStandard05TokenStandardTransferAutoacceptFull from '/snippets/daml-docs/token-standard_05-token-standard-transfer-autoaccept_full.mdx';
+import TokenStandardRenewPreapprovalFull from '/snippets/daml-docs/token-standard_renew-preapproval_full.mdx';
+import TokenStandardCancelPreapprovalFull from '/snippets/daml-docs/token-standard_cancel-preapproval_full.mdx';
+import WalletSdkConfigurationDefaultConfigFull from '/snippets/daml-docs/wallet-sdk-configuration_default-config_full.mdx';
+import WalletSdkConfigurationConfigTemplateFull from '/snippets/daml-docs/wallet-sdk-configuration_config-template_full.mdx';
+import WalletSdkConfigurationOauthControllerFull from '/snippets/daml-docs/wallet-sdk-configuration_oauth-controller_full.mdx';
+import UserManagement11MultiUserSetupFull from '/snippets/daml-docs/user-management_11-multi-user-setup_full.mdx';
+import UserManagementCreateNewUserFull from '/snippets/daml-docs/user-management_create-new-user_full.mdx';
+import UserManagementAllocatePartyWithoutRightsFull from '/snippets/daml-docs/user-management_allocate-party-without-rights_full.mdx';
+import UserManagementCanReadAsAnyPartyFull from '/snippets/daml-docs/user-management_can-read-as-any-party_full.mdx';
+import UserManagementCanExecuteAsAnyPartyFull from '/snippets/daml-docs/user-management_can-execute-as-any-party_full.mdx';
 
 {/* COPIED_START source="splice-wallet-kernel:docs/wallet-integration-guide/src/canton-network-overview/index.rst" hash="cdfe654c" */}
 
 <Warning title="Pre-reviewed Content - Do Not Modify">
 This section was copied from existing reviewed documentation.
-**Source:** `splice-wallet-kernel:docs/wallet-integration-guide/src/canton-network-overview/index.rst`
+**Source:** `docs/wallet-integration-guide/src/canton-network-overview/index.rst`
 Reviewers: Skip this section. Remove markers after final approval.
 </Warning>
 
@@ -170,11 +107,11 @@ Parties come in two forms, internal and external. An internal party is created o
 
 External parties are similar to how node interactions happens on other networks and therefore Externally Owned Accounts. In this case the signing key can be held externally and a signature is required alongside the transaction to authorize the action. For external parties the base flow follows three steps: Prepare a transaction, sign the transaction and submit the transaction. In this guide, when a party is referenced, it is referring to an external party unless otherwise specified.
 
-To read more about the differences between internal and external parties, see the [Local and external parties documentation section here](https://docs.digitalasset.com/overview/3.3/explanations/canton/external-party.html#overview-canton-external-parties/).
+To read more about the differences between internal and external parties, see the Local and external parties documentation section [here]().
 
 **Onboarding and Format**
 
-Parties are formatted as `name::fingerprint`. The party name or hint is freely chosen at time of creation - there's a maximum limit of 185 characters from \[a-zA-Z0-9:-\_ \], it must not use two consecutive colons, and must be unique in the namespace. The **fingerprint** is a unique identifier and a sha256 hash of the public key prefixed with '12' (as indicated by the [hash purpose](https://github.com/digital-asset/canton/blob/8ee65155e7f866e1f420703c376c867336b75088/community/base/src/main/scala/com/digitalasset/canton/crypto/HashPurpose.scala#L63)).
+Parties are formatted as `name::fingerprint`. The party name or hint is freely chosen at time of creation - there's a maximum limit of 185 characters from \[a-zA-Z0-9:-\_ \], it must not use two consecutive colons, and must be unique in the namespace. The **fingerprint** is a unique identifier and a sha256 hash of the public key prefixed with '12' (as indicated by the hash purpose).
 
 If you want to be able to derive your Party IDs from the public key, you can either use a static Party Name, and therefore derive the key from the fingerprint, or derive Party Name from the public key, too.
 
@@ -212,22 +149,125 @@ The design of the Canton Network leads to several significant advantages:
 
 However, this architecture has the consequence of decentralized data access, as previously mentioned.
 
+<div id="implications-for-wallet-providers">
+
 **Implications for Wallet Providers**
 
-To offer services on the Canton Network, you will need a **validator node to host your parties and your customers' parties**. You have two options for this: you can **self-host** a node or use a [node-as-a-service provider](https://sync.global/current-validators-offering-nodes/).
+</div>
+
+To offer services on the Canton Network, you will need a **validator node to host your parties and your customers' parties**. You have two options for this: you can **self-host** a node or use a node-as-a-service [provider]().
 
 For **wallets and custodians**, this means your role extends beyond just safekeeping assets; you are also responsible for **safekeeping your customers' data** and preserving their privacy.
 
 The Canton Network is designed to be agile and undergoes frequent upgrades. Node operators are asked to run nodes in three different environments: **DevNet, TestNet, and MainNet** to ensure that applications and integrations can be tested with new network upgrades. If you choose to self-host, be prepared to spin up and maintain nodes for all three environments. To stay informed and get support, it's highly recommended that self-hosting node operators join the validator node operator community on Slack.
 
+
 {/* COPIED_END */}
+
+
+{/* COPIED_START source="splice-wallet-kernel:docs/wallet-integration-guide/src/integrating-with-canton-network/index.rst" hash="241a9637" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was copied from existing reviewed documentation.
+**Source:** `docs/wallet-integration-guide/src/integrating-with-canton-network/index.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+# Integrating with the Canton Network
+
+When integrating with the Canton Network, we recommend that wallet providers support the necessary features outlined below to optimal user experience. Additionally, there are optional features that can further enhance the integration and provide additional value to users.
+
+## Necessary Features
+
+The following features are required for wallet providers to integrate with the Canton Network:
+
+- Support the CIP-0056 token standard to enable the holding and transferring of assets on the Canton Network. Documentation and guidance on how to implement this with the Wallet SDK is in the Token Standard section of this guide.
+- Provide support specifically for Canton Coin and USDCx. The Canton Coin package of Amulet is preinstalled with all validators and USDCx is issued with the Digital Asset Registry and that dars for that application can be found in the DAR Package Versions of the Utilities documentation.
+- Memo tag support to allow deposits to be sent to exchanges
+- UTXO management to reduce the number of UTXOs
+
+## Optional Features
+
+While optional for wallet providers, the following features are strongly recommended to ensure full support for the Canton Network and maximize user adoption:
+
+- Canton Coin pre-approvals. Documentation on how to implement pre-approvals with the Wallet SDK are in the 2-step transfer vs 1-step transfer section of this guide.
+- dApp support by conforming to CIP-0103, the standard for wallet and dApp integration.
+- The requirement to hold and transfer USDCx is included in the Necessary Features section above, however there are additional levels of support for USDCx for wallet providers to support such as supporting xReserves deposits and withdrawals and integrating the xReserve UI into the wallet directly. The options and instructions are laid out in the USDCx Support for Wallets section of this guide.
+- Pre-approvals for DA Registry issued assets.
+
+## How to install the Wallet SDK
+
+The Wallet SDK is available as a package on the NPM registry. You can install it using your preferred package manager.
+
+<div className="tabs">
+
+.. group-tab:: npm .. code:: shell
+
+npm install @canton-network/wallet-sdk .. group-tab:: yarn .. code:: shell
+
+yarn add @canton-network/wallet-sdk .. group-tab:: pnpm .. code:: shell
+
+pnpm add @canton-network/wallet-sdk
+
+</div>
+
+Alternatively, to do dApp development only, the dApp SDK can be used which has a smaller bundle size and is optimized for browser usage. The dApp SDK can be installed with:
+
+<div className="tabs">
+
+.. group-tab:: npm .. code:: shell
+
+npm install @canton-network/dapp-sdk .. group-tab:: yarn .. code:: shell
+
+yarn add @canton-network/dapp-sdk .. group-tab:: pnpm .. code:: shell
+
+pnpm add @canton-network/dapp-sdk
+
+</div>
+
+Both SDKs use the same underlying core packages and where only partial code is needed (like for transaction visualization or hash verification) those packages can be used independently.
+
+## Hosting a Validator
+
+As stated in the Implications for Wallet Providers section here, it's important for wallet providers to have a validator to host their users' parties. It's also strongly advised to operate a node in all three network environments so that you can test and verify your applications and integration as the Canton Network evolves.
+
+Links to the node deployment docs are below depending on the deployment choice and environment. The guidance differs very little based on the environment - different URLs and arguments etc.:
+
+- MainNet docs
+  - Docker Compose MainNet docs
+  - Kubernetes MainNet docs
+
+- TestNet docs
+  - Docker Compose TestNet docs
+  - Kubernetes TestNet docs
+
+- DevNet
+  - Docker Compose DevNet docs
+  - Kubernetes DevNet docs
+
+The Wallet integration guide is tailored to work with a LocalNet setup ([https://docs.dev.sync.global/app_dev/testing/localnet.html](https://docs.dev.sync.global/app_dev/testing/localnet.html)) to make testing and verification easy.
+
+## Connecting to a Synchronizer
+
+For onboarding a validator with the global synchronizer it is recommended to read the Splice documentation here: [https://docs.dev.sync.global/validator_operator/validator_onboarding.html](https://docs.dev.sync.global/validator_operator/validator_onboarding.html)
+
+## Supporting Tokens and Applications
+
+To integrate and support tokens, it is recommended to use the Splice documentation here: [https://docs.sync.global/validator_operator/validator_onboarding.html](https://docs.sync.global/validator_operator/validator_onboarding.html)
+
+If you are interested in building your own application, a good first place would be to utilize the CN quickstart: [https://github.com/digital-asset/cn-quickstart](https://github.com/digital-asset/cn-quickstart)
+
+
+{/* COPIED_END */}
+
+
 
 
 {/* COPIED_START source="splice-wallet-kernel:docs/wallet-integration-guide/src/party-management/index.rst" hash="6b3d9715" */}
 
 <Warning title="Pre-reviewed Content - Do Not Modify">
 This section was copied from existing reviewed documentation.
-**Source:** `splice-wallet-kernel:docs/wallet-integration-guide/src/party-management/index.rst`
+**Source:** `docs/wallet-integration-guide/src/party-management/index.rst`
 Reviewers: Skip this section. Remove markers after final approval.
 </Warning>
 
@@ -237,7 +277,7 @@ Reviewers: Skip this section. Remove markers after final approval.
 
 Parties represent acting entities in the network and all transaction happens between one or more parties. To understand more about parties see the Parties in the Overview.
 
-A detailed tutorial of the steps below can be seen in the External Signing Tutorial [here](https://docs.digitalasset.com/build/3.3/tutorials/app-dev/external_signing_onboarding.html) using python example scripts.
+A detailed tutorial of the steps below can be seen in the External Signing Tutorial here using python example scripts.
 
 *This document focuses on the steps required to create an external party using the Wallet SDK.*
 
@@ -245,48 +285,49 @@ A detailed tutorial of the steps below can be seen in the External Signing Tutor
 
 Using the wallet SDK you can quickly allocate a party using the following code snippet:
 
+<div className="tabs">
+
+<div className="tab">
+
 Comprehensive using Splice LocalNet
 
-```typescript
--- Code from: ../../examples/scripts/02-auth-localnet.ts
--- [Include actual code example here]
-```
+<PartyManagement02AuthLocalnetFull />
+
+</div>
+
+<div className="tab">
 
 Quick using Splice LocalNet
 
-```typescript
--- Code from: ../../examples/snippets/allocate-party.ts
--- [Include actual code example here]
-```
+<PartyManagementAllocatePartyFull />
+
+</div>
+
+<div className="tab">
 
 Comprehensive using OAuth
 
-```typescript
--- Code from: ../../examples/scripts/01-auth.ts
--- [Include actual code example here]
-```
+<PartyManagement01AuthFull />
+
+</div>
+
+</div>
 
 ## Create a key pair
 
-The process for creating a key using standard encryption practices is similar that in other blockchains. The full details of supported cryptographic algorithms can be found [Here](https://docs.daml.com/canton/usermanual/security.html#common-node-keys). By default an **Ed25519** encryption is used. There exists many libraries that can be used to generate such a key pair, you can do it simply with the WalletSDK using:
+The process for creating a key using standard encryption practices is similar that in other blockchains. The full details of supported cryptographic algorithms can be found [Here](). By default an **Ed25519** encryption is used. There exists many libraries that can be used to generate such a key pair, you can do it simply with the WalletSDK using:
 
-```typescript
--- Code from: ../../examples/snippets/create-key-pair.ts
--- [Include actual code example here]
-```
+<PartyManagementCreateKeyPairFull />
 
 ### Generating Keys from a Mnemonic Phrase (BIP-0039)
 
-The Canton Network supports the generation of cryptographic keys using a mnemonic code or mnemonic sentence, following the [BIP-0039 standard](https://github.com/bitcoin/bips/blob/master/bip-0039.mediawiki).
+The Canton Network supports the generation of cryptographic keys using a mnemonic code or mnemonic sentence, following the BIP-0039 standard.
 
 Using a mnemonic phrase allows for deterministic key generation, which simplifies the backup and recovery process. Instead of managing individual private key files, you can recreate your keys across different environments using a human-readable sequence of words.
 
 A typescript example of generating an Ed25519 key pair with a BIP-0039 mnemonic phrase using the libraries bip39 and ed25519 as dependencies is shown below:
 
-```typescript
--- Code from: ../../examples/snippets/create-key-from-mnenomic-phrase.ts
--- [Include actual code example here]
-```
+<PartyManagementCreateKeyFromMnenomicPhraseFull />
 
 ## Choosing a party hint
 
@@ -298,10 +339,7 @@ If you want to be to derive your party IDs from the public key, you can use a st
 
 The wallet SDK has a built in function to generate the fingerprint:
 
-```typescript
--- Code from: ../../examples/snippets/generate-fingerprint.ts
--- [Include actual code example here]
-```
+<PartyManagementGenerateFingerprintFull />
 
 this can be used to determine the unique party id beforehand or recompute the fingerprint based on the public key.
 
@@ -315,37 +353,25 @@ When onboarding using external signing, multiple topology transactions are requi
 
 Once all the transactions are built they can be combined into a single hash and submitted as part of a single signature. The wallet SDK has helper functions to generate these transactions:
 
-```typescript
--- Code from: ../../examples/snippets/create-topology-transactions.ts
--- [Include actual code example here]
-```
+<PartyManagementCreateTopologyTransactionsFull />
 
 ## Decoding the topology transactions
 
 Sometimes converting the topology transactions to human readable json might be needed, for this you can use the decodeTopologyTx function:
 
-```typescript
--- Code from: ../../examples/snippets/decode-topology-tx.ts
--- [Include actual code example here]
-```
+<PartyManagementDecodeTopologyTxFull />
 
 ## Sign multi-hash
 
 Since the topology transactions need to be submitted together the combined hash needs to be signed. The wallet SDK has a helper function to sign the combined hash:
 
-```typescript
--- Code from: ../../examples/snippets/sign-party-transaction-hash.ts
--- [Include actual code example here]
-```
+<PartyManagementSignPartyTransactionHashFull />
 
 ## Submit the topology transactions
 
 Once the signature is generated, the topology transactions can be submitted to the validator. The wallet SDK has a helper function to submit the transactions:
 
-```typescript
--- Code from: ../../examples/snippets/submit-signed-topology-transaction.ts
--- [Include actual code example here]
-```
+<PartyManagementSubmitSignedTopologyTransactionFull />
 
 ## Multi-hosting a party
 
@@ -355,21 +381,21 @@ To facilitate multi-hosting we simply need to extend `partyToParticipant` and `P
 
 The below script allows you (by using the SDK) to host a single party on both `app-user` and `app-provider` validators.
 
-```typescript
--- Code from: ../../examples/scripts/06-multi-hosted-party.ts
--- [Include actual code example here]
-```
+<PartyManagement06MultiHostedPartyFull />
 
 Using the `userLedgerControllers` party allocation we only need to specify other validators the party is hosted on. The default is `app-user`, however if you do the onboarding using the `topologyController` legacy variant, then you would also need to supply configurations for the `app-user`.
 
+
 {/* COPIED_END */}
+
+
 
 
 {/* COPIED_START source="splice-wallet-kernel:docs/wallet-integration-guide/src/finding-and-reading-data/index.rst" hash="22f63846" */}
 
 <Warning title="Pre-reviewed Content - Do Not Modify">
 This section was copied from existing reviewed documentation.
-**Source:** `splice-wallet-kernel:docs/wallet-integration-guide/src/finding-and-reading-data/index.rst`
+**Source:** `docs/wallet-integration-guide/src/finding-and-reading-data/index.rst`
 Reviewers: Skip this section. Remove markers after final approval.
 </Warning>
 
@@ -377,19 +403,13 @@ Reviewers: Skip this section. Remove markers after final approval.
 
 The wallet SDK primarily focus on an on-party basis interaction, therefore it is almost always required to define the party you are using. You can however create a party without defining a party, otherwise you have to set the party as done below:
 
-```typescript
--- Code from: ../../examples/snippets/change-party-and-synchronizer.ts
--- [Include actual code example here]
-```
+<FindingAndReadingDataChangePartyAndSynchronizerFull />
 
 ## Reading Available Parties
 
 Reading all available parties to you can easily be done using the wallet SDK as shown in the example below, and the result is paginated. It's worth noting that the call to read all available parties doesn't use the the party and synchronizer fields therefore changing them has no effect on the result.
 
-```typescript
--- Code from: ../../examples/snippets/list-wallets.ts
--- [Include actual code example here]
-```
+<FindingAndReadingDataListWalletsFull />
 
 ## Reading Ledger End
 
@@ -402,23 +422,17 @@ Ledger time should be used for all operations in your local environment (that do
 
 Ledger end can easily be derived from with the wallet SDK:
 
-```typescript
--- Code from: ../../examples/snippets/read-ledger-end.ts
--- [Include actual code example here]
-```
+<FindingAndReadingDataReadLedgerEndFull />
 
 ## Reading Active Contracts
 
 Using the above ledger time we can figure out what the current state of all active contracts are. Contracts can be in two states - active and archived - which correlates to the UTXO mode of unspent and spent. Active contracts are contracts that are unspent and thereby can be used in new transactions or to exercise choices.
 
-```typescript
--- Code from: ../../examples/snippets/read-active-contracts.ts
--- [Include actual code example here]
-```
+<FindingAndReadingDataReadActiveContractsFull />
 
 ## Visualizing a Transaction
 
-The Wallet SDK uses a transaction parsing transform a fully fledged transaction tree into human recognizable transaction view. The full code for the transaction parsing can be found at [parser typescript class](https://github.com/hyperledger-labs/splice-wallet-kernel/blob/main/core/ledger-client/src/txparse/parser.ts).
+The Wallet SDK uses a transaction parsing transform a fully fledged transaction tree into human recognizable transaction view. The full code for the transaction parsing can be found at parser typescript [class]().
 
 The Wallet SDK uses this parser to transform all transaction tree interacted with into PrettyTransactions.
 
@@ -451,14 +465,15 @@ export interface TokenStandardEvent {
 
 below you can have a look at different event types and how to potentially visualize the transaction for a client
 
+<div className="tabs">
+
+<div className="tab">
+
 Tap operation
 
 Here is an example on how a "tap" event looks like (Performing tap):
 
-```json
--- Code from: ../../examples/snippets/tap-event.json
--- [Include actual code example here]
-```
+<FindingAndReadingDataTapEventFull />
 
 The tap gives a nice and simple view some key values to look at. Using the `label` we can quickly gage what is happening:
 
@@ -508,14 +523,15 @@ For a "tap" event we don't have any locked holding changes, however we do have a
 }
 ```
 
+</div>
+
+<div className="tab">
+
 Merge Split
 
 A Merge or split is usually done by performing a transfer to yourself, by selecting several input utxos they can be consolidated into one and likewise a transfer to yourself of one big utxo can be used to split it into two. Below is the usual merge split that you would see if you use an utxo that is bigger than the transferred amount when performing a 2-step transfer:
 
-```json
--- Code from: ../../examples/snippets/merge-split-event.json
--- [Include actual code example here]
-```
+<FindingAndReadingDataMergeSplitEventFull />
 
 The label gives us the quick information
 
@@ -628,14 +644,15 @@ There is also an unlocked holding change, consist of one create and one archive.
       }
 ```
 
+</div>
+
+<div className="tab">
+
 Transfer Out
 
 When Bob accepts the transfer we see the actual transfer out event. This is seen from Alice point of view
 
-```json
--- Code from: ../../examples/snippets/transfer-out-event.json
--- [Include actual code example here]
-```
+<FindingAndReadingDataTransferOutEventFull />
 
 The label gives us the quick information.
 
@@ -693,14 +710,15 @@ We can see that the locked 100 transfer is now archived, on Bobs side he will se
       }
 ```
 
+</div>
+
+<div className="tab">
+
 Transfer In
 
 Bob will see a transfer in once he has accepted the transferInstruction from Alice. If Bob had set up transfer pre-approval, then he would only see the below transfer:
 
-```json
--- Code from: ../../examples/snippets/transfer-in-event.json
--- [Include actual code example here]
-```
+<FindingAndReadingDataTransferInEventFull />
 
 The label gives us the quick information.
 
@@ -747,38 +765,256 @@ Bob then also sees one new unlocked utxo for the 100.
       }
 ```
 
+</div>
+
+</div>
+
+
 {/* COPIED_END */}
+
+
+
+
+{/* COPIED_START source="splice-wallet-kernel:docs/wallet-integration-guide/src/preparing-and-signing-transactions/index.rst" hash="cf0da06a" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was copied from existing reviewed documentation.
+**Source:** `docs/wallet-integration-guide/src/preparing-and-signing-transactions/index.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+# Preparing and Signing Transactions Using External Party
+
+## High-level Signing Process
+
+The basic steps of preparing and signing a transaction using an external party are as follows:
+
+1.  **Creating a command** - You start by simply creating a command.
+2.  **Preparing the transaction** - You send the command to the blockchain RPC, offered by your node, to prepare the transaction.
+3.  **Validating the transaction** - You inspect the transaction and decide whether to sign it.
+4.  **Signing the transaction** - Once validated, you sign the transaction hash using your private key (typically with ECDSA/EdDSA).
+5.  **Submitting the transaction** - You submit the signed transaction to be executed.
+6.  **Observing the transaction** - You observe the blockchain until the transaction is committed.
+
+In the examples below, the SDK examples use the Pint app which comes pre-installed with the validator and the cURL examples show the underlying HTTP requests using Canton Coin following a token standard transfer.
+
+## How do I quickly execute a Ping?
+
+Below shows how to quickly execute a ping command against yourself on a running Splice LocalNet:
+
+<PreparingAndSigningTransactions03PingLocalnetFull />
+
+## Creating a Command
+
+Commands are the intents of an user on the validator, there are two kinds of commands: `CreateCommand` and `ExerciseCommand`.
+
+The `CreateCommand` is used to create a new implementation of a template with the given arguments and can result in one or more new contracts being created. The `ExerciseCommand` takes an existing contract and exercises a choice on it, which also can result in new contracts being created.
+
+In the Canton Network, it is often necessary to need to include input data when creating commands which needs to be read from the ledger. For example, which UTXOs to include in a transfer. This is private data which you read from your own node. It's also often necessary to include contextual information in a transfer. For example, information about a particular asset which you don't get from your own node - you get from an API provided by the asset issuer. See here for more information.
+
+The general process for forming a transaction is:
+
+1.  Call your own node's RPC to get the current ledger end (think “latest block”)
+2.  Call your own node's RPC to get relevant private data at ledger end (e.g. wallet's holdings)
+3.  Call app/token specific APIs to get context information (e.g. mining round contracts)
+4.  Assemble the data into the full command using the OpenAPI/JSON or gRPC schemas.
+
+In the examples below, the SDK example uses the Token Standards inside the a validator to create a simple transfer command. The transfer command is sent to a recipient party who can then exercise `accept` or `reject` on the created contract (thereby archiving it). In the cURL example, we show the steps above gaining information from a validator and context information from the Canton Coin scan API.
+
+The Wallet SDK allow us to build such a command easily:
+
+<div className="tabs">
+
+<div className="tab">
+
+SDK
+
+<PreparingAndSigningTransactionsCreateTransferCommandFull />
+
+</div>
+
+<div className="tab">
+
+cURL
+
+<PreparingAndSigningTransactionsCreateCommandFull />
+
+</div>
+
+</div>
+
+## Preparing the Transaction
+
+Now that we have a command we need to prepare the transaction by calling a node's RPC API which will return an unsigned transaction. It must be a validator which hosts the party initiating the transaction as private information is needed to construct the transaction. This is unlike other chains where you construct the transaction fully offline using an SDK. A transaction is a collection of commands that are atomic, meaning that either all commands succeed or none of them do.
+
+Note: contractId's are pinned as part of prepare step, the execution of the transfer will only go succeed if the contractId's haven't been archived between preparation and execution steps.
+
+To prepare a transaction we need to send the commands to the ledger.
+
+<div className="tabs">
+
+<div className="tab">
+
+SDK
+
+<PreparingAndSigningTransactionsPrepareTransferTransactionFull />
+
+</div>
+
+<div className="tab">
+
+cURL
+
+<PreparingAndSigningTransactionsPrepareTransactionFull />
+
+</div>
+
+</div>
+
+The return type is an unsigned transaction if the combination of the commands are possible, otherwise an error is returned. The transaction can then be visualised and signed by the party.
+
+## Validating the Transaction
+
+The result from the prepare step is an encoded protobuf message and easily decoded and inspected to go through a policy engine, for example. The transaction is returned alongside with the hash that needs to be signed. If the validator is not controlled by you, then it might be a good idea to validate that the transaction is what you expect it to be. You can use the Wallet SDK to visualize the transaction as described in the Visualizing a transaction section.
+
+On top of visualizing the transaction, it's also important to compute the transaction hash yourself and confirm that it matches the hash of the transaction provided by the validator from the prepare step.
+
+The hash can be computed using the Wallet SDK:
+
+<PreparingAndSigningTransactionsComputeTransactionHashFull />
+
+You can then compare the `hash` with the `transaction.preparedTransactionHash` to ensure they match.
+
+## Signing the Transaction
+
+Once the transaction is validated, the hash retrieved from the prepare step can be signed using the private key of the party.
+
+Below shows an example in the Wallet SDK and using cURL commands:
+
+<div className="tabs">
+
+<div className="tab">
+
+SDK
+
+<PreparingAndSigningTransactionsSignTransactionHashFull />
+
+</div>
+
+<div className="tab">
+
+cURL
+
+<PreparingAndSigningTransactionsSignTransactionHashFull />
+
+</div>
+
+</div>
+
+## Submitting the Transaction
+
+Once the transaction is signed, it can be executed on the validator. You can observe completions by seeing the committed transactions. If they don't appear on your ledger, you are guaranteed some response, and you can keep retrying; signed transactions are idempotent. Finality usually takes 3-10s.
+
+<div className="tabs">
+
+<div className="tab">
+
+SDK
+
+<PreparingAndSigningTransactionsExecuteTransactionFull />
+
+</div>
+
+<div className="tab">
+
+cURL
+
+<PreparingAndSigningTransactionsExecuteTransactionFull />
+
+</div>
+
+</div>
+
+## Observing the Transaction
+
+There are two ways to observe the transaction you have submitted. You can either:
+
+1.  continuously monitor holdings changes using token standard history parser.
+2.  use WaitFor to get the updateId and retrieve the transaction:
+
+<PreparingAndSigningTransactionsAwaitCompletionAndFetchFull />
+
+## How to use the SDK to Offline sign a Transaction
+
+The SDK exposes functionality that can be used in an offline environment to sign and validate transactions the below script shows an entire interaction between `Alice` and `Bob` with signing happening in an offline environment and online environment that performs the prepare and submit.
+
+<PreparingAndSigningTransactions08OfflineSigningLocalnetFull />
+
+
+{/* COPIED_END */}
+
+
+
+
+{/* COPIED_START source="splice-wallet-kernel:docs/wallet-integration-guide/src/signing-transactions-from-dapps/index.rst" hash="4b0292af" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was copied from existing reviewed documentation.
+**Source:** `docs/wallet-integration-guide/src/signing-transactions-from-dapps/index.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+# Signing Transactions from third party dApps
+
+A normal flow on blockchain applications is to have dApps that interact with the blockchain on the clients behalf, these flows usually require the user to sign transactions that the dApp prepares and submit it. To faciliate this in Canton it is required that the prepared transaction is sent to the wallet for signing. An easy way of supporting this is to expose a dApp API (OpenRPC spec can be found here: [https://github.com/hyperledger-labs/splice-wallet-kernel/blob/main/api-specs/openrpc-dapp-api.json](https://github.com/hyperledger-labs/splice-wallet-kernel/blob/main/api-specs/openrpc-dapp-api.json) ).
+
+*The specs are in OpenRPC to conform with traditional standards like for ethereum.*
+
+A client can provide access to a Wallet Providers dApp API by either embedding a wallet provider in the dApp or by connecting to an external wallet provider via a browser extension or other means. Then the dApp is able to funnel transactions through to the wallet provider for signing.
+
+## Receiving a Transaction
+
+A dApp would usually call the `prepareExecute` endpoint or the `prepareExecuteAndWait` endpoint. In both cases the Wallet Provider would prepare, sign and submit the transaction to the ledger.
+
+You can prepare the incoming transaction using the Wallet SDK:
+
+<SigningTransactionsFromDappsPrepareIncomingCommandFull />
+
+## Reading and Visualising the Transaction
+
+It is important when integrating with third party dApps to showcase the User exactly what is being signed. Once the signature is applied the transaction can be considered valid (and executed). The easiest would be to create a visualizer that takes a JSON representation of the transaction. The Json for a prepared transaction (before signature is applied) can be obtained using the Wallet SDK:
+
+<SigningTransactionsFromDappsConvertTransactionToJsonFull />
+
+
+{/* COPIED_END */}
+
+
 
 
 {/* COPIED_START source="splice-wallet-kernel:docs/wallet-integration-guide/src/token-standard/index.rst" hash="c3641fc0" */}
 
 <Warning title="Pre-reviewed Content - Do Not Modify">
 This section was copied from existing reviewed documentation.
-**Source:** `splice-wallet-kernel:docs/wallet-integration-guide/src/token-standard/index.rst`
+**Source:** `docs/wallet-integration-guide/src/token-standard/index.rst`
 Reviewers: Skip this section. Remove markers after final approval.
 </Warning>
 
 # Token Standard
 
-The Wallet SDK support performing basic token standard operations, these are exposed through the `sdk.tokenStandard` a complete overview of the underlying integration can be found here \ and the CIP is defined here \.
+The Wallet SDK support performing basic token standard operations, these are exposed through the `sdk.tokenStandard` a complete overview of the underlying integration can be found here and the CIP is defined here.
 
 ## How do i quickly perform a transfer between two parties?
 
 The below performs a 2-step transfer between Alice and Bob and expose their holdings:
 
-```typescript
--- Code from: ../../examples/scripts/04-token-standard-localnet.ts
--- [Include actual code example here]
-```
+<TokenStandard04TokenStandardLocalnetFull />
 
 ## Listing holdings (UTXO's)
 
 Canton uses created and archived events to determine the state of the ledger. This correlates to how UTXO's are handled on other blockchains like Bitcoin. This means that at any point in time you can retrieve all your active contracts with the interface 'Holding' to see all assets you posses across different instruments.
 
-```typescript
--- Code from: ../../examples/snippets/list-holdings.ts
--- [Include actual code example here]
-```
+<TokenStandardListHoldingsFull />
 
 the above script can safely be used to determine used in a transfer, if you provide no boolean value or true then you need to filter out the locked ones manually.
 
@@ -786,10 +1022,7 @@ the above script can safely be used to determine used in a transfer, if you prov
 
 In order to stream transaction events as they happen on ledger the `listHoldingTransactions` endpoint can be used. This takes two ledger offset and gives an overview of all token standard transactions that have happened between. It also returns a `nextOffset` that can be used when calling the endpoint again. This will allow you to easily ensure you do not receive any transaction twice and you are only querying the transactions that have happened after.
 
-```typescript
--- Code from: ../../examples/snippets/monitor-transaction-holdings.ts
--- [Include actual code example here]
-```
+<TokenStandardMonitorTransactionHoldingsFull />
 
 to quickly convert the stream into deposit and withdrawal you can use this function:
 
@@ -830,10 +1063,7 @@ function convertToTransaction(pt: Transaction, associatedParty: string): object[
 
 When writing scripts and setup it is important to have funds present, this can be very tedious on blockchains. Therefor most blockchains support some form of a faucet (that allows to receive a small amount of funds to play with). On canton we allow the `tap` method that is only present on DevNet (or LocalNet), by using this you can stock funds to easily attempt some of the CC transfer flows:
 
-```typescript
--- Code from: ../../examples/snippets/tap-coins.ts
--- [Include actual code example here]
-```
+<TokenStandardTapCoinsFull />
 
 this is an important pre-requisite for the creating of transfer in your script.
 
@@ -841,19 +1071,13 @@ this is an important pre-requisite for the creating of transfer in your script.
 
 In order to create a simple transfer you can use the `createTransfer` on the token standard. Then like any other operation you can use the `prepareSubmission` endpoint, sign the returned hash and finally `executeSubmission`.
 
-```typescript
--- Code from: ../../examples/snippets/create-transfer-command.ts
--- [Include actual code example here]
-```
+<TokenStandardCreateTransferCommandFull />
 
 ## UTXO management and locked funds
 
 The default script for creating a transfer above uses automated utxo selection, the automatic being to simply select all utxo's. In a more professional way, you would want to carefully pick which utxo's you would like to use as input for your transfers, alongside you might also want to define a custom expiration time for when the transaction should automatically expire.
 
-```typescript
--- Code from: ../../examples/snippets/create-transfer-command-full.ts
--- [Include actual code example here]
-```
+<TokenStandardCreateTransferCommandFullFull />
 
 if we call `sdk.tokenStandard?.listHoldingUtxos(false)` then it will show 1 utxo of 50 (then one we excluded).
 
@@ -863,71 +1087,53 @@ if we call `sdk.tokenStandard?.listHoldingUtxos(true)` then it will show all 3 u
 
 The default behavior for all tokens are a 2-step transfer, this matches how funds are usually transferred in TradFi, however this is counter-intuitive in the blockchain world. Canton Coin supports setting up a "Transfer Pre-approval", this allows a party to designate that he wants to auto-accept all incoming transfer, giving a similar behavior of the blockchain world.
 
-```typescript
--- Code from: ../../examples/snippets/create-transfer-preapproval.ts
--- [Include actual code example here]
-```
+<TokenStandardCreateTransferPreapprovalFull />
 
 ## Accepting or rejecting a 2-step transfer
 
 If no Transfer pre-approval have been set up, then it is required to fetch incoming transfer instructions and consume either the `Accept` or `Reject` choice, this can be done easily using the Wallet SDK.
 
-```typescript
--- Code from: ../../examples/snippets/read-pending-transfer-instructions.ts
--- [Include actual code example here]
-```
+<TokenStandardReadPendingTransferInstructionsFull />
 
 the above give a list of pending transfer instructions, you can then exercise the accept or reject choice on them:
 
-```typescript
--- Code from: ../../examples/snippets/accept-or-reject-transfer.ts
--- [Include actual code example here]
-```
+<TokenStandardAcceptOrRejectTransferFull />
 
 ## Withdrawing a 2-step transfer before it gets accepted
 
 Apart from accepting or rejecting a transfer instruction, it is also possible for the sender to `withdraw` the offer, thereby retrieving the locked funds.
 
-```typescript
--- Code from: ../../examples/snippets/withdraw-transfer-instruction.ts
--- [Include actual code example here]
-```
+<TokenStandardWithdrawTransferInstructionFull />
 
 ## How do i quickly setup transfer preapproval?
 
 It is worth nothing that using the validator operator party as the providing party causes the transfer pre-approval to auto-renew. The below script setup transfer preapproval for Bob and performs a 1-step transfer from Alice to Bob:
 
-```typescript
--- Code from: ../../examples/scripts/05-token-standard-transfer-autoaccept.ts
--- [Include actual code example here]
-```
+<TokenStandard05TokenStandardTransferAutoacceptFull />
 
 ## How to renew or cancel a transfer preapproval
 
 If you have used the validator operator party as the provider, then it will automatically renew the transfer preapproval approximately 20 days before expiry, however there are cases where you would like to perform the preapproval renewal manually:
 
-```typescript
--- Code from: ../../examples/snippets/renew-preapproval.ts
--- [Include actual code example here]
-```
+<TokenStandardRenewPreapprovalFull />
 
 You can also deploy a secondary transfer preapproval, however this means that there are simply two preapprovals instead of it replacing the existing.
 
 If you have accidentally created a transfer preapproval that you dont want to keep you can perform a cancel instead:
 
-```typescript
--- Code from: ../../examples/snippets/cancel-preapproval.ts
--- [Include actual code example here]
-```
+<TokenStandardCancelPreapprovalFull />
+
 
 {/* COPIED_END */}
+
+
 
 
 {/* COPIED_START source="splice-wallet-kernel:docs/wallet-integration-guide/src/wallet-sdk-configuration/index.rst" hash="c5b36cba" */}
 
 <Warning title="Pre-reviewed Content - Do Not Modify">
 This section was copied from existing reviewed documentation.
-**Source:** `splice-wallet-kernel:docs/wallet-integration-guide/src/wallet-sdk-configuration/index.rst`
+**Source:** `docs/wallet-integration-guide/src/wallet-sdk-configuration/index.rst`
 Reviewers: Skip this section. Remove markers after final approval.
 </Warning>
 
@@ -935,19 +1141,13 @@ Reviewers: Skip this section. Remove markers after final approval.
 
 If you have already played around with the wallet SDK you might have come across snippets like:
 
-```typescript
--- Code from: ../../examples/snippets/default-config.ts
--- [Include actual code example here]
-```
+<WalletSdkConfigurationDefaultConfigFull />
 
-This is the default config that can be used in combination with a non-altered [Localnet](https://docs.global.canton.network.sync.global/app_dev/testing/localnet.html) running instance.
+This is the default config that can be used in combination with a non-altered [Localnet]() running instance.
 
 However as soon as you need to migrate your script, code and deployment to a different environment these default configurations are no longer viable to use. In those cases creating custom factories for each controller is needed. Here is a template that you can use when setting up your own custom connectivity configuration:
 
-```typescript
--- Code from: ../../examples/snippets/config-template.ts
--- [Include actual code example here]
-```
+<WalletSdkConfigurationConfigTemplateFull />
 
 ## How do I validate my configurations?
 
@@ -1045,15 +1245,12 @@ unsafeSecret = 'unsafe'
 this produces a self-signed HMAC auth token using "unsafe" for signing.
 
 <Warning>
-The value for some of the audiences in localnet would have to be adjusted to match "<https://canton.network.global>". This is specifically the `LEDGER_API_AUTH_AUDIENCE` & `VALIDATOR_AUTH_AUDIENCE`.
+The value for some of the audiences in localnet would have to be adjusted to match "[https://canton.network.global](https://canton.network.global)". This is specifically the `LEDGER_API_AUTH_AUDIENCE` & `VALIDATOR_AUTH_AUDIENCE`.
 </Warning>
 
-When upgrading your setup from a localnet setup to a production or client facing environment then it might make more sense to add proper authentication to the ledger api and other services. The community contributions include okta and keycloak [OIDC](https://docs.dev.sync.global/community/oidc-config-okta-keycloak.html). These can easily be configured for the SDK using a custom `clientCredentialOAuthController`
+When upgrading your setup from a localnet setup to a production or client facing environment then it might make more sense to add proper authentication to the ledger api and other services. The community contributions include okta and keycloak [OIDC](). These can easily be configured for the SDK using a custom `clientCredentialOAuthController`
 
-```typescript
--- Code from: ../../examples/snippets/oauth-controller.ts
--- [Include actual code example here]
-```
+<WalletSdkConfigurationOauthControllerFull />
 
 However since it follows a simple interface, you can build your own implementation of it if you have unique requirements:
 
@@ -1069,6 +1266,498 @@ export interface AuthController {
     userId: string | undefined
 }
 ```
+
+
+{/* COPIED_END */}
+
+
+{/* COPIED_START source="splice-wallet-kernel:docs/wallet-integration-guide/src/traffic/index.rst" hash="2ba91b35" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was copied from existing reviewed documentation.
+**Source:** `docs/wallet-integration-guide/src/traffic/index.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+# Traffic
+
+Below is a high-level summary of the Sycnrhonizer Traffic Fees page in the Splice Validator documentation. For more detail on point, it's advised to read the that documenation.
+
+## Traffic
+
+- Traffic fees are paid at the validator node level, not the party level.
+
+- Every validator has a traffic balance at the global synchronizer level.
+  - Traffic is measured in bytes.
+  - A trickle rate of free traffic is provided to validator nodes every 10 minutes (each mining round).
+
+- Traffic is deducted from your validator node's traffic balance every time your node sends a message to the synchronizer. Traffic is charged for:
+  - Broadcasting a transaction - this is where the bulk of the traffic fees will be paid.
+  - Sending consensus messages for transactions a validator is involved in.
+
+- If your node runs out of traffic it is unable to transact. It'll recover by itself thanks to the free trickle rate. However, you can buy more traffic. See the next section.
+
+## Getting more traffic
+
+- Traffic is obtained by burning Canton Coin and it is always pre-purchased.
+
+- The conversion Canton Coin \<\> Bytes can be derived from on-chain parameters.
+  - Super Validators publish an on-chain conversion CC \<\> USD.
+  - Super Validators publish a traffic cost USD \<\> Bytes.
+
+- Anyone can burn Canton Coin to get traffic for any node.
+  - You can buy your own traffic.
+  - You can sign up with a service like the Denex Gas [Station]() to buy your traffic.
+
+- The validator node has automation to keep traffic topped up. As long as you keep CC in your validator party, it'll stay available. See [here]() for how to configure automatic traffic purchases.
+
+## How to determine the traffic cost of a transaction?
+
+Follow this FAQ entry in the Splice [documentation]().
+
+
+{/* COPIED_END */}
+
+
+{/* COPIED_START source="splice-wallet-kernel:docs/wallet-integration-guide/src/tokenomics-and-rewards/index.rst" hash="08ff71a4" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was copied from existing reviewed documentation.
+**Source:** `docs/wallet-integration-guide/src/tokenomics-and-rewards/index.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+# Tokenomics and Rewards
+
+## CC Rewards
+
+- The tokenomics operate on 10m “mining rounds”.
+- Every 10 minutes, different stakeholders of the network are rewarded with coupons which can be used to mint Canton Coin according to how much value they've brought to the network.
+- Coupons are rewarded to the Validator admin party.
+- All rewards awarded to a node's local parties will be auto-minted by the node administrator party.
+- The validators automation is not able to mint the rewards for an external parties - the external party needs to delegate the ability for the validator admin party to mint their rewards on their behalf or manually mint the rewards themselves each round they receive rewards.
+- All rewards and coupons are mintable the follow mining round
+- If rewards are not redeemed then they are lost\*
+
+You can find more information about the tokenomics of Canton Coin here.
+
+## Ways of Obtaining Canton Coin Rewards
+
+The tokenomics of the network give you options for obtaining Canton Coin:
+
+### Validator & Super Validator Liveness Rewards
+
+Just for being online and growing the network, Canton Coin tokenomics enable validator operators to mint CC. Validators and Super Validators generate reward coupons that can be used to mint Canton Coins. The coupons are paid out to the validator adminstration party. For local parties onboarded to a validator, the validator application runs background automation to mint all activity records automatically. An external party signs transactions using a key they control. As a consequence, the validator automation is not able to perform minting for external parties.
+
+For external parties, automation needs to be developed to call `AmuletRules_Transfer` at least once per round with all activity records as inputs.
+
+You can find more information about the tokenomics of Canton Coin at [https://docs.dev.sync.global/overview/overview.html#tokenomics](https://docs.dev.sync.global/overview/overview.html#tokenomics).
+
+*All rewards and coupons are mintable the follow mining round, if rewards are not redemed then they are lost*
+
+### Validator Activeness Rewards
+
+If you self-purchase traffic, you get a discount via these rewards.
+
+### Application Rewards and Featured Activity Markers
+
+**Application Rewards**
+
+- Transactions which include Canton Coin and featured application transactions earn application rewards.
+- The percentage of Canton Coin awarded to applications is significant and will grow over time.
+- The current amount of CC awarded to applications can be seen in the 'Canton Coin Reward Split By Role Over Time' chart [here]().
+
+**Featured application activity markers**
+
+- Applications which generate valuable activity for the canton network, and have 'featured application' status can earn more application rewards.
+- By qualifying as a Featured Application (apply [here]()) and applying a `FeaturedAppActivityMarker` to a transaction it is marked and converted to reward coupons that can be redeemed.
+- A weighting is applied to each transaction in that Canton Coin minting round.
+- More weightings in a round equate to more application rewards.
+- Currently, featured apps receive many more rewards in Canton Coin than the average transaction costs in traffic fees.
+
+## Gaining Application Rewards as a Wallet/Custodian/Exchange
+
+- Request featured application status. Apply [here]().
+  - On DevNet you can self-feature through the wallet UI.
+
+**Enabling Pre-approval / 1-step Transfers**
+
+- One way that wallets can earn app rewards is by enabling direct / 1 step / pre-approval transfers
+- Setting up pre-approvals costs around \$1 per 90 days per party
+- By enabling 1-step transfers your party is added as the operator party to incoming deposits
+- Therefore, when users deposit funds into your account you'll receive rewards.
+- You can also mark transactions out of your wallet (that don't go to parties which have 1-step transfers enabled) with your party as the operator part for that transaction
+- It's anticipated that you will receive far more Canton Coin through rewards for pre-approval deposits and transfers than you pay in traffic fees, setting up pre-approvals and for creating parties.
+- Therefore:
+  - You may not want to charge your users for traffic in the near term.
+  - In the mid-to-long term the tokenomics may not support this model, so you may want to think about a charging strategy.
+  - We still advise monitoring or even controlling the number of parties that a user can create so that you don't end up with users creating too many parties and therefore cost.
+
+## Redeming Reward Coupons with External Party
+
+To accept rewards with an external party you need to call `AmuletRules_Transfer` with the activity records as inputs.
+
+## Sharing Featured Application Reward between multiple parties
+
+Featured Application rewards can be shared between multiple parties, this can be done by defining a list of benificiaries and give them a weighted amount of the total reward. The sum of all beneficiaries weight must be equal to 1.0. This results in separate coupons being generated for each beneficiary.
+
+
+{/* COPIED_END */}
+
+
+
+
+{/* COPIED_START source="splice-wallet-kernel:docs/wallet-integration-guide/src/user-management/index.rst" hash="ae1fa985" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was copied from existing reviewed documentation.
+**Source:** `docs/wallet-integration-guide/src/user-management/index.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+# User Management
+
+The Wallet SDK has functionality for creating and managing user rights, by default when you are connecting it uses whichever user is defined in your auth-controller. If the user is an admin user on the ledger api they can be used to create other users and grant them rights.
+
+## How do I quickly setup canReadAsAnyParty and canExecuteAsAnyParty?
+
+This script sets up three users `alice`, `bob` and `master`. `master` is given canReadAsAnyParty and canExecuteAsAnyParty and it shows proper access control by creating parties and ensuring that `alice` and `bob` can not see each others parties.
+
+<UserManagement11MultiUserSetupFull />
+
+## Creating a new user
+
+Creating a new user can be done using the adminLedger, this new user can then be granted rights or can create new parties as needed.
+
+<UserManagementCreateNewUserFull />
+
+## ReadAs and ActAs limitations
+
+Currently when allocating a new party we also grant ReadAs and ActAs rights for that party for the submitting user. This allows the user to do the normal flows involved like preparing transactions and executing those. There are performance issues if too many of these rights are assigned to the same user, in the case of a `master` user that is interacting on behalf of a client, then it might be more convenient to use `CanReadAsAnyParty` and `CanExecuteAsAnyParty` as described below.
+
+Here is how the method changes if you need to allocate a party without granting rights:
+
+<UserManagementAllocatePartyWithoutRightsFull />
+
+## CanReadAsAnyParty
+
+CanReadAsAnyParty gives a user full information about any party on the ledger, if a user is set up with this they will see: 1. All parties hosted on the ledger (multi-hosted and single hosted) 2. All transaction happening involving a party on the ledger 3. Prepare transactions on behalf of any party
+
+This will not grant information about parties hosted on other ledgers or their transactions.
+
+<UserManagementCanReadAsAnyPartyFull />
+
+The SDK automatically leverages this elevated permission for certain endpoints like `listWallets`.
+
+## CanExecuteAsAnyParty
+
+CanExecuteAsAnyParty gives full execution rights for a party, this means that a user with these rights can submit transaction on behalf of a party hosted on the ledger.
+
+**This does not give the user rights to move funds without a valid signature!**
+
+The setup is similar to the \`CanReadAsAnyParty\`:
+
+<UserManagementCanExecuteAsAnyPartyFull />
+
+
+{/* COPIED_END */}
+
+
+{/* COPIED_START source="splice-wallet-kernel:docs/wallet-integration-guide/src/canton-coin-specific-considerations/index.rst" hash="45961707" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was copied from existing reviewed documentation.
+**Source:** `docs/wallet-integration-guide/src/canton-coin-specific-considerations/index.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+# Canton Coin Specific Considerations
+
+## Handling Time-Bound Signatures (Canton Coin)
+
+If your wallet infrastructure relies on offline signing, cold storage, or multi-party approval flows that take longer than **10–20 minutes**, then this guide is for you.
+
+### The 10-Minute Signing Window
+
+Canton Coin transactions operate on a strict **10-minute minting cycle**. Unlike standard Daml transactions, **Canton Coin** transfers and acceptances must reference a specific OpenMiningRound contract to calculate network fees and rewards.
+
+- A new `OpenMiningRound` is created every **10 minutes**.
+- The contract remains active for approximately **20 minutes** (the current round + overlap).
+- **The Problem:** If you prepare a transaction referencing *Round A*, but you do not sign and submit it before *Round A* expires, the network will reject it.
+
+**Common Error:** If your transaction exceeds this window, the API will return a `409 Conflict` with the following error:
+
+``` text
+LOCAL_VERDICT_INACTIVE_CONTRACTS
+```
+
+There is one way of handle incoming transfers and another way to handle outgoing transfers, listed below.
+
+### Solution 1: Implement Pre-approvals for Incoming Transfers / Receiving Funds
+
+**Use Case:** Your users need to receive Canton Coin, but you cannot sign a transaction within 10 minutes (e.g., due to cold storage of the receiver's keys).
+
+**The Fix:** Enable **1-Step Transfers** using Pre-approvals.
+
+Instead of signing every incoming transfer, the receiver signs a single, long-living `TransferPreapproval` contract. This authorizes the sending party (or a specific provider) to deposit funds immediately without requiring an interactive acceptance signature for every transaction.
+
+To do this, create a `Splice.Wallet.TransferPreapproval` contract. The guide on how to create the pre-approval contract in the Wallet SDK is here and the general information about Canton Coin Preapprovals is here. By implementing a preapproval contract the receiver doesn't need to accept Canton Coin transfers sent to them as they are automatically accepted.
+
+### Solution 2: Use Command Delegation for Outgoing Transfers / Sending Funds
+
+<Note>
+Using `TransferCommand` only works where the receiver has enabled pre-approvals for Canton Coin and the sending external party has been onboarded to the splice wallet using the Validator APIs. Parties set up using the validator APIs and not using these workarounds are subject to the 200 party limit described here.
+</Note>
+
+**Use Case:** Your users need to send Canton Coin, but the signing process (e.g., institutional custody approval) takes hours.
+
+**The Fix:** Use **Command Delegation** - TransferCommand.
+
+Instead of signing the transfer transaction directly (which pins a short-lived Mining Round), the user signs a long-living instruction to transfer funds.
+
+#### How it works
+
+1.  **User Signs Instruction:** The user signs a transaction to create a `Splice.ExternalPartyAmuletRules.TransferCommand` contract.
+    - This contract **does not** reference a mining round.
+    - It can remain valid for up to 24 hours (or as defined by `expiresAt`).
+2.  **Delegated Execution:** Once this command is on the ledger, a Super Validator (SV) or a delegate picks it up.
+3.  **Execution:** The delegate executes the actual transfer. The *delegate* selects the current `OpenMiningRound` at the moment of execution, ensuring the transaction succeeds regardless of how long ago the user signed the instruction.
+
+
+{/* COPIED_END */}
+
+
+{/* COPIED_START source="splice-wallet-kernel:docs/wallet-integration-guide/src/deposits-into-exchanges/index.rst" hash="8d2784fe" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was copied from existing reviewed documentation.
+**Source:** `docs/wallet-integration-guide/src/deposits-into-exchanges/index.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+# Sending Deposits to Exchanges
+
+To enable deposits to be sent to specific user accounts at exchanges, an account identifier needs to be sent to the exchange along with the transfer information. In Canton, the “memo tag” [pattern]() is implemented as follows.
+
+## Canton Coin Wallet
+
+In the Canton Coin wallet, the “Description” field in the screenshot below must be used to communicate this account identifier in the format required by the exchange. For example: “AcmeExchange account: \<exchangeInternalAccountId\>”.
+
+![Splice wallet UI](/images/splice_wallet_kernel/splice-wallet.png)
+
+## CN Token Standard Wallets
+
+The token standard defines the `splice.lfdecentralizedtrust.org/reason` metadata key for the purpose of communicating a human-readable description for the transfer (see [CIP-0056]()).
+
+Token standard wallets must provide a “Description” or “Reason” field analogous to the Canton Coin wallet, and store its value in the metadata field of the `Transfer` specification ([code]()) when initiating a transfer. This is actually what the Canton Coin wallet does behind the scenes when initiating a Canton Coin transfer.
+
+Likewise when displaying an incoming transfer or the tx history for a transfer the content of `splice.lfdecentralizedtrust.org/reason` metadata key should be parsed and displayed, as done for example by the transaction history parser in the token standard CLI ([docs]()). This allows exchanges to communicate a correlation-id for a redemption.
+
+Code sample for setting the right metadata field: see this change to the experimental token standard [CLI]() to take the “reason” as command line argument and store it in the metadata field.
+
+## CN Token Registries
+
+Token standard compliant registries must ensure that they pass the `Transfer` specification unchanged along when implementing multi-step transfers using the `TransferInstruction` interface ([code]()).
+
+
+{/* COPIED_END */}
+
+
+{/* COPIED_START source="splice-wallet-kernel:docs/wallet-integration-guide/src/usdcx-support/index.rst" hash="852eb3cf" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was copied from existing reviewed documentation.
+**Source:** `docs/wallet-integration-guide/src/usdcx-support/index.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+# USDCx Support for Wallets
+
+## Overview
+
+Circle and Digital Asset have partnered to develop and implement a USDC token on Canton Network. This implementation requires users to send USDC on L1 chains (starting with Ethereum) to Circle’s xReserve contract which is then created as a USDC token on Canton Network. Conversely a withdrawal request for a USDC token on the Canton Network will result in the release of the asset on another chain. During the existence of the USDC token on Canton Network, it is available for use in financial transactions.
+
+USDC on Canton Network represents USDC locked by Circle on the original L1 chain. And this token on Canton Network, is in the form of a Canton Network Standard Token (CIP-56) as defined through the Canton Network Utilities service.
+
+Wallet providers and exchanges have three options for supporting USDCx on the Canton Network:
+
+1.  Transfer & hold USDCx - Since USDCx is a token standard (CIP-56) compliant asset then as such any wallet that supports the token standard will have built in support for transfers and holding.
+
+2.  Support xReserves deposits and withdrawals - Custom API integration is required for wallet providers and exchanges to support xReserve deposits and withdrawals to the utility-bridge daml models to / from their parties using the xReserves UI. Instructions for doing this are included in the section “Supporting xReserve Deposits and Withdrawals” below.
+
+3.  Integrating the xReserve UI (Ethereum) into the wallet - To enable a full end-to-end experience for the user, a wallet can integrate against Ethereum directly for deposits on top of integrating point 2. To provide an example for doing this, the xReserves UI as well as open-sourced example scripts are available for reference. This demonstrates the 2 ethereum transactions that must be submitted to an ethereum node:
+    - approve a USDC spending allowance.
+    - depositToRemote to deposit USDC into the xReserve contract.
+
+## Supporting xReserve Deposits and Withdrawals
+
+The required dar file can be found here
+
+There are 3 choices (API calls) a wallet will need to implement in order to fully support the xReserve:
+
+### Onboarding
+
+To use the xReserve a party will first need to onboard to the bridge using the below: Example API call:
+
+```json
+{
+   "CreateCommand": {
+       "templateId": "#utility-bridge-v0:Utility.Bridge.V0.Agreement.User:BridgeUserAgreementRequest",
+       "createArguments": {
+           "crossChainRepresentative": "${ADMIN_PARTY_ID}",
+           "operator": "${UTILITY_OPERATOR_PARTY_ID}",
+           "bridgeOperator": "${BRIDGE_OPERATOR_PARTY_ID}",
+           "user": "${USER_PARTY_ID}",
+           "instrumentId": {
+               "admin": "${ADMIN_PARTY_ID}",
+               "id": "USDCx"
+           },
+           "preApproval": false
+       }
+   }
+}
+```
+
+### Mint
+
+Once a user deposits USDC into ethereum a DepositAttestation is created on the Canton network. In order for the recipient party to claim those funds they will need to call a choice to mint from the DepositAttestation:
+
+`\#utility-bridge-v0:Utility.Bridge.V0.Attestation.Deposit:DepositAttestation`
+
+Example API call:
+
+```json
+{
+    "commands": [
+        {
+            "ExerciseCommand": {
+                "templateId": "#utility-bridge-v0:Utility.Bridge.V0.Agreement.User:BridgeUserAgreement",
+                "contractId": "${BRIDGE_USER_AGREEMENT_CONTRACT_ID}",
+                "choice": "BridgeUserAgreement_Mint",
+                "choiceArgument": {
+                    "depositAttestationCid": "${DEPOSIT_ATTESTATION_CID}",
+                    "factoryCid": "${FACTORY_CID}",
+                    "contextContractIds": "${CONTEXT_CONTRACT_IDS}"
+                }
+            }
+        }
+    ],
+    "disclosedContracts": "${DISCLOSED_CONTRACTS}",
+}
+```
+
+### Withdraw
+
+To withdraw from the Canton Network to Ethereum a user must burn the USDC on Canton. Specifying the:
+
+- destination domain id: Currently only Ethereum is supported (domain id of 0).
+- Amount: In Decimal to a max 6 decimal precision.
+- Destination recipient: a valid Ethereum address.
+- An optional reference. Empty Text field if not provided.
+
+In addition the wallet will need to provide:
+
+- The available Holding contract Ids
+- A UUID as the requestId
+
+Example API call:
+
+```json
+{
+    "commands": [
+        {
+            "ExerciseCommand": {
+                "templateId": "#utility-bridge-v0:Utility.Bridge.V0.Agreement.User:BridgeUserAgreement",
+                "contractId": "${BRIDGE_USER_AGREEMENT_CONTRACT_ID}",
+                "choice": "BridgeUserAgreement_Burn",
+                "choiceArgument": {
+                "amount": "${AMOUNT_IN_DECIMAL}",
+                "destinationDomain": "0",
+                "destinationRecipient": "${ETHEREUM_ADDRESS}",
+                    "holdingCids": "${HOLDING_CONTRACT_IDS}",
+                "requestId": "${UUID_REQUEST_ID}",
+                "reference": "",
+                "factoryCid": "${FACTORY_CID}",
+                    "contextContractIds": "${CONTEXT_CONTRACT_IDS}"
+                }
+            }
+        }
+    ],
+    "disclosedContracts": "${DISCLOSED_CONTRACTS}",
+}
+```
+
+### Extracting Contract IDs and Disclosed Contracts
+
+The utilities backend provides a Burn Mint Factory API Endpoint
+
+Endpoint:
+
+> \${UTILITY_BACKEND_URL}/api/utilities/v0/registry/burn-mint-instruction/v0/burn-mint-factory
+
+Example request body:
+
+```json
+{
+    "instrumentId": {
+        "admin": "${ADMIN_PARTY_ID}",
+        "id": "USDCx"
+    },
+    "inputHoldingCids": "${HOLDING_CONTRACT_IDS_IF_WITHDRAWING}",
+    "outputs": [
+        {
+            "owner": "${ADMIN_PARTY_ID}",
+            "amount": "${AMOUNT_IN_DECIMAL}" // For minting, this is the amount to mint. For burning, this is the change amount.
+        }
+    ]
+}
+```
+
+------------------------------------------------------------------------
+
+When you call the Burn Mint factory endpoint, the response contains the contract IDs and disclosed contracts you need for both minting and withdrawing.
+
+Note that these values can be cached to reduce api calls as these values change infrequently.
+
+As an example for extracting the required contexts and contracts from the response:
+
+``` typescript
+// Assume `response` is the parsed JSON from the API call
+const choiceContext = response.httpResponse.body.choiceContext;
+
+// Extract CONTEXT_CONTRACT_IDS
+const values = choiceContext.choiceContextData.values;
+const contextContractIds = {
+    instrumentConfigurationCid: values["utility.digitalasset.com/instrument-configuration"].value,
+    appRewardConfigurationCid: values["utility.digitalasset.com/app-reward-configuration"].value,
+    featuredAppRightCid: values["utility.digitalasset.com/featured-app-right"].value,
+};
+
+// Extract FACTORY_CID
+const factoryCid = response.httpResponse.body.factoryId;
+
+// Extract DISCLOSED_CONTRACTS
+const disclosedContracts = choiceContext.disclosedContracts;
+```
+
+### MainNet Environment Variables
+
+| Variable                  | Value                                                                                                    |
+|---------------------------|----------------------------------------------------------------------------------------------------------|
+| UTILITY_BACKEND_URL       | [https://api.utilities.digitalasset.com](https://api.utilities.digitalasset.com)                                                                 |
+| ADMIN_PARTY_ID            | decentralized-usdc-interchain-rep::12208115f1e168dd7e792320be9c4ca720c751a02a3053c7606e1c1cd3dad9bf60ef  |
+| UTILITY_OPERATOR_PARTY_ID | auth0_007c6643538f2eadd3e573dd05b9::12205bcc106efa0eaa7f18dc491e5c6f5fb9b0cc68dc110ae66f4ed6467475d7c78e |
+| BRIDGE_OPERATOR_PARTY_ID  | Bridge-Operator::1220c8448890a70e65f6906bd48d797ee6551f094e9e6a53e329fd5b2b549334f13f                    |
+
+### TestNet Environment Variables
+
+| Variable                  | Value                                                                                                   |
+|---------------------------|---------------------------------------------------------------------------------------------------------|
+| UTILITY_BACKEND_URL       | [https://api.utilities.digitalasset-staging.com](https://api.utilities.digitalasset-staging.com)                                                        |
+| ADMIN_PARTY_ID            | decentralized-usdc-interchain-rep::122049e2af8a725bd19759320fc83c638e7718973eac189d8f201309c512d1ffec61 |
+| UTILITY_OPERATOR_PARTY_ID | DigitalAsset-UtilityOperator::12202679f2bbe57d8cba9ef3cee847ac8239df0877105ab1f01a77d47477fdce1204      |
+| BRIDGE_OPERATOR_PARTY_ID  | Bridge-Operator::12209d011ce250de439fefc35d16d1ab9d56fb99ccb24c18d798efb22352d533bcdb                   |
+
 
 {/* COPIED_END */}
 
