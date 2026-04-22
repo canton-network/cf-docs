@@ -143,7 +143,10 @@ def docs_json_page_ref(path: Path, docs_json_path: Path) -> str:
     relative = path.resolve().relative_to(docs_json_path.resolve().parent)
     if relative.suffix != ".mdx":
         raise ValueError(f"Expected MDX file under docs root, got: {path}")
-    return relative.with_suffix("").as_posix()
+    page_ref = relative.with_suffix("").as_posix()
+    if page_ref.endswith("/index"):
+        return page_ref[: -len("/index")]
+    return page_ref
 
 
 def read_mdx_title(path: Path) -> str:
@@ -212,7 +215,6 @@ def build_jvm_nav_group(
     publish_root: Path,
     docs_json_path: Path,
     group_label: str,
-    overview_file: Path,
 ) -> tuple[dict[str, Any], set[str]]:
     language_pages: dict[str, list[tuple[str, dict[str, Any]]]] = defaultdict(list)
     generated_refs: set[str] = set()
@@ -229,15 +231,15 @@ def build_jvm_nav_group(
             if not package_index.exists():
                 continue
             package_label = read_package_label(package_index)
-            package_pages: list[tuple[str, str]] = [("Overview", docs_json_page_ref(package_index, docs_json_path))]
-            generated_refs.add(package_pages[0][1])
+            package_pages: list[tuple[str, str]] = []
+            generated_refs.add(docs_json_page_ref(package_index, docs_json_path))
             for object_page in sorted(package_dir.glob("*.mdx")):
                 if object_page.name == "index.mdx":
                     continue
                 page_ref = docs_json_page_ref(object_page, docs_json_path)
                 package_pages.append((read_mdx_title(object_page), page_ref))
                 generated_refs.add(page_ref)
-            package_pages.sort(key=lambda item: (item[0] != "Overview", item[0].lower(), item[0]))
+            package_pages.sort(key=lambda item: (item[0].lower(), item[0]))
             language_pages[language].append(
                 (
                     package_label,
@@ -266,8 +268,7 @@ def build_jvm_nav_group(
         )
 
     language_groups.sort(key=lambda item: (item[0], item[1]))
-    group_pages: list[Any] = [docs_json_page_ref(overview_file, docs_json_path)]
-    group_pages.extend(group for _, _, group in language_groups)
+    group_pages: list[Any] = [group for _, _, group in language_groups]
     return (
         {
             "group": group_label,
@@ -309,7 +310,6 @@ def update_docs_navigation(
         publish_root=publish_root,
         docs_json_path=docs_json_path,
         group_label=group_label,
-        overview_file=overview_file,
     )
     generated_refs.add(docs_json_page_ref(overview_file, docs_json_path))
     dropdown["pages"] = prune_nav_items(
@@ -583,6 +583,27 @@ def strip_inline_code(text: str) -> str:
     return stripped
 
 
+def strip_markdown_link_label(text: str) -> str:
+    stripped = text.strip()
+    match = re.match(r"^\[(.+)\]\([^)]+\)$", stripped)
+    if match:
+        return match.group(1).strip()
+    return stripped
+
+
+def remove_overview_backlinks(text: str) -> str:
+    filtered_lines = [
+        line
+        for line in text.splitlines()
+        if line.strip() != "Back to [overview](../ledger-api-jvm-bindings)."
+    ]
+    return "\n".join(filtered_lines).strip() + "\n"
+
+
+def remove_inline_code_links(text: str) -> str:
+    return re.sub(r"\[(`[^`]+`)\]\([^)]+\)", r"\1", text)
+
+
 def parse_markdown_table(lines: list[str]) -> tuple[list[str], list[list[str]]]:
     table_lines = [line.strip() for line in lines if line.strip().startswith("|")]
     if len(table_lines) < 2:
@@ -651,18 +672,14 @@ def render_artifact_toc_rows(package_reference_lines: list[str], *, versions: li
     for row in rows:
         if len(row) != 6:
             continue
-        link_cell, package_cell, types_cell, introduced_cell, deprecated_cell, removed_cell = row
-        link_target = markdown_link_target(link_cell)
-        package_name = strip_inline_code(package_cell)
+        _, package_cell, types_cell, introduced_cell, deprecated_cell, removed_cell = row
+        package_name = strip_inline_code(strip_markdown_link_label(package_cell))
         type_count = parse_int_cell(types_cell)
         introduced = parse_int_cell(introduced_cell)
         deprecated = parse_int_cell(deprecated_cell)
         removed = parse_int_cell(removed_cell)
 
-        if link_target:
-            name_cell = f"[`{package_name}`]({link_target})"
-        else:
-            name_cell = f"`{package_name}`"
+        name_cell = f"`{package_name}`"
         status_cell = build_package_status_cell(
             versions=versions,
             introduced=introduced,
@@ -706,7 +723,7 @@ def rewrite_artifact_page_layout(text: str, *, artifact_entry: dict[str, Any]) -
         "Version Change Summary",
         "Reference",
     }.issubset(sections.keys()):
-        return normalized_frontmatter + normalized_body.rstrip() + "\n"
+        return normalized_frontmatter + remove_inline_code_links(remove_overview_backlinks(normalized_body))
 
     # Older x2mdx revisions emitted different section names. Preserve compatibility
     # with those raw pages by reshaping them into the current published layout.
@@ -721,11 +738,13 @@ def rewrite_artifact_page_layout(text: str, *, artifact_entry: dict[str, Any]) -
         normalized_frontmatter.rstrip(),
     ]
 
-    intro_lines = trim_blank_lines(intro_lines)
+    intro_lines = [
+        line
+        for line in trim_blank_lines(intro_lines)
+        if line.strip() != "Back to [overview](../ledger-api-jvm-bindings)."
+    ]
     if intro_lines:
         output_lines.extend(intro_lines)
-    else:
-        output_lines.append("Back to [overview](../ledger-api-jvm-bindings).")
     output_lines.extend(["", "## Table of Contents", ""])
 
     toc_versions = extract_versions_from_artifact_lines(artifact_lines)
