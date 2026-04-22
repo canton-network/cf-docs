@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import shlex
 import subprocess
 import sys
@@ -10,6 +11,7 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_CACHE_ROOT = Path(os.environ.get("XDG_CACHE_HOME", "~/.cache")).expanduser() / "x2mdx"
 SCRIPT_PATHS = [
     REPO_ROOT / "scripts" / "generate_json_api_reference.py",
     REPO_ROOT / "scripts" / "generate_json_api_asyncapi_reference.py",
@@ -21,6 +23,16 @@ SCRIPT_PATHS = [
     REPO_ROOT / "scripts" / "generate_splice_scan_openapi_reference.py",
     REPO_ROOT / "scripts" / "generate_typescript_bindings_reference.py",
 ]
+PARALLEL_EXTRA_ARGS: dict[str, list[str]] = {
+    # The gRPC and protobuf wrappers both default to the same protobuf-history cache
+    # tree, so parallel fanout needs a separate cache root for the gRPC wrapper.
+    "generate_grpc_ledger_api_reference.py": [
+        "--cache-dir",
+        str(DEFAULT_CACHE_ROOT / "grpc-ledger-api-reference"),
+        "--repo-dir",
+        str(DEFAULT_CACHE_ROOT / "grpc-ledger-api-reference" / "repos" / "canton"),
+    ],
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -41,12 +53,15 @@ def print_banner(*, index: int, total: int, script_path: Path) -> None:
 
 
 def build_command(script_path: Path) -> list[str]:
-    return [sys.executable, str(script_path)]
+    command = [sys.executable, str(script_path)]
+    command.extend(PARALLEL_EXTRA_ARGS.get(script_path.name, []))
+    return command
 
 
 def main() -> int:
     args = parse_args()
     total = len(SCRIPT_PATHS)
+    running_processes: list[tuple[Path, subprocess.Popen[bytes]]] = []
 
     for index, script_path in enumerate(SCRIPT_PATHS, start=1):
         command = build_command(script_path)
@@ -55,14 +70,27 @@ def main() -> int:
         if args.dry_run:
             continue
 
-        completed = subprocess.run(command, cwd=REPO_ROOT)
-        if completed.returncode != 0:
-            return completed.returncode
+        running_processes.append((script_path, subprocess.Popen(command, cwd=REPO_ROOT)))
 
     if args.dry_run:
         print(f"\nDry run complete: {total} commands listed.", flush=True)
-    else:
-        print(f"\nCompleted {total} reference-doc generation steps.", flush=True)
+        return 0
+
+    failures: list[tuple[Path, int]] = []
+    for script_path, process in running_processes:
+        return_code = process.wait()
+        if return_code == 0:
+            print(f"[{script_path.name}] completed successfully.", flush=True)
+            continue
+        print(f"[{script_path.name}] failed with exit code {return_code}.", flush=True)
+        failures.append((script_path, return_code))
+
+    if failures:
+        failed_names = ", ".join(script_path.name for script_path, _return_code in failures)
+        print(f"\nParallel reference-doc run finished with failures: {failed_names}", flush=True)
+        return failures[0][1]
+
+    print(f"\nCompleted {total} reference-doc generation steps in parallel.", flush=True)
     return 0
 
 
