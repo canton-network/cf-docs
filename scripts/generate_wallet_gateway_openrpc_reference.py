@@ -11,6 +11,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from docs_env import ensure_repo_direnv, repo_direnv_command
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CACHE_ROOT = Path(os.environ.get("XDG_CACHE_HOME", "~/.cache")).expanduser() / "x2mdx"
@@ -282,6 +283,7 @@ def write_manifest(
 
 
 def main() -> int:
+    ensure_repo_direnv(repo_root=REPO_ROOT, script_path=Path(__file__).resolve(), argv=sys.argv[1:])
     args = parse_args()
     source_config = load_json(Path(args.source_config).resolve())
     include_versions = set(args.version) if args.version else None
@@ -334,7 +336,8 @@ def main() -> int:
     )
 
     fixture_root = REPO_ROOT
-    command = [
+    command = repo_direnv_command(
+        REPO_ROOT,
         "x2mdx",
         "openrpc",
         "build-api-pages-from-manifest",
@@ -354,7 +357,7 @@ def main() -> int:
         args.source_name,
         "--version-filter",
         args.version_filter or f"{tag_prefix} GitHub releases",
-    ]
+    )
     for version in args.version or []:
         command.extend(["--version", version])
     print("Running:", " ".join(command))

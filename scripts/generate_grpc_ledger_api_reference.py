@@ -11,8 +11,10 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from docs_env import ensure_repo_direnv
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+ensure_repo_direnv(repo_root=REPO_ROOT, script_path=Path(__file__).resolve(), argv=sys.argv[1:])
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 

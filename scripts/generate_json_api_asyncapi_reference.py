@@ -9,6 +9,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from docs_env import ensure_repo_direnv, repo_direnv_command
 from ledger_api_release_bundles import (
     bundle_url,
     load_json,
@@ -254,7 +255,8 @@ def normalize_nav_group_into_pages(*, docs_json_path: Path, dropdown_label: str,
 
 def build_command(args: argparse.Namespace, manifest_path: Path, publish_version: str, versions: list[str]) -> list[str]:
     nav_groups = args.nav_group if args.nav_group is not None else [DEFAULT_NAV_GROUP]
-    command = [
+    command = repo_direnv_command(
+        REPO_ROOT,
         "x2mdx",
         "asyncapi",
         "build-api-pages-from-manifest",
@@ -278,7 +280,7 @@ def build_command(args: argparse.Namespace, manifest_path: Path, publish_version
         args.page_title,
         "--page-description",
         args.page_description,
-    ]
+    )
     for nav_group in nav_groups:
         command.extend(["--nav-group", nav_group])
     for version in versions:
@@ -296,6 +298,7 @@ def remove_legacy_output(*, output_file: Path) -> None:
 
 
 def main() -> int:
+    ensure_repo_direnv(repo_root=REPO_ROOT, script_path=Path(__file__).resolve(), argv=sys.argv[1:])
     args = parse_args()
     source_config = load_json(Path(args.source_config).resolve())
     selected_version_entries = selected_versions(source_config, set(args.version) if args.version else None)

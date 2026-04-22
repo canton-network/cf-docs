@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import argparse
 import os
+import sys
 from pathlib import Path
 
+from docs_env import ensure_repo_direnv
 from splice_openapi_release_bundles import render_reference
 
 
@@ -45,6 +47,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
+    ensure_repo_direnv(repo_root=REPO_ROOT, script_path=Path(__file__).resolve(), argv=sys.argv[1:])
     args = parse_args()
     include_versions = set(args.version) if args.version else None
     version_filter = args.version_filter

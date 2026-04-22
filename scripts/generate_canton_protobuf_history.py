@@ -17,6 +17,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+from docs_env import ensure_repo_direnv, repo_direnv_command
 import reference_nav
 
 
@@ -370,6 +371,7 @@ def sync_output_tree(*, source_dir: Path, target_dir: Path) -> None:
 
 
 def main() -> int:
+    ensure_repo_direnv(repo_root=REPO_ROOT, script_path=Path(__file__).resolve(), argv=sys.argv[1:])
     args = parse_args()
     source_config = load_json(Path(args.source_config).resolve())
     repo_config = source_config.get("repo") if isinstance(source_config.get("repo"), dict) else {}
@@ -442,7 +444,8 @@ def main() -> int:
         else:
             version_filter = f"stable Canton release bundles >= {min_version}"
 
-    command = [
+    command = repo_direnv_command(
+        REPO_ROOT,
         "x2mdx",
         "protobuf",
         "build-api-pages-from-manifest",
@@ -454,7 +457,7 @@ def main() -> int:
         args.source_name,
         "--version-filter",
         version_filter,
-    ]
+    )
     print("Running:", " ".join(command))
     completed = subprocess.run(command, cwd=REPO_ROOT)
     if completed.returncode != 0:

@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
+from docs_env import ensure_repo_direnv, repo_direnv_command
 import reference_nav
 
 
@@ -110,10 +111,14 @@ def scratch_docs_json_path(job: ScriptJob) -> Path:
 
 
 def build_command(job: ScriptJob) -> list[str]:
-    command = [sys.executable, str(job.script_path)]
-    command.extend(job.extra_args)
-    command.extend(["--docs-json", str(scratch_docs_json_path(job))])
-    return command
+    return repo_direnv_command(
+        REPO_ROOT,
+        "python3",
+        str(job.script_path),
+        *job.extra_args,
+        "--docs-json",
+        str(scratch_docs_json_path(job)),
+    )
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -280,6 +285,7 @@ def consolidate_docs_json() -> None:
 
 
 def main() -> int:
+    ensure_repo_direnv(repo_root=REPO_ROOT, script_path=Path(__file__).resolve(), argv=sys.argv[1:])
     args = parse_args()
     total = len(SCRIPT_JOBS)
     running_processes: list[tuple[ScriptJob, subprocess.Popen[bytes]]] = []

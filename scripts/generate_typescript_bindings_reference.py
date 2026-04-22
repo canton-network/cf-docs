@@ -12,6 +12,7 @@ import tarfile
 from pathlib import Path
 from typing import Any
 
+from docs_env import ensure_repo_direnv, repo_direnv_command
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CACHE_ROOT = Path(os.environ.get("XDG_CACHE_HOME", "~/.cache")).expanduser() / "x2mdx"
@@ -266,6 +267,7 @@ def write_manifest(
 
 
 def main() -> int:
+    ensure_repo_direnv(repo_root=REPO_ROOT, script_path=Path(__file__).resolve(), argv=sys.argv[1:])
     args = parse_args()
     source_config = load_json(Path(args.source_config).resolve())
     configured_versions = source_config.get("versions")
@@ -299,7 +301,8 @@ def main() -> int:
         publish_version=publish_version,
     )
 
-    command = [
+    command = repo_direnv_command(
+        REPO_ROOT,
         "x2mdx",
         "typedoc",
         "build-api-pages-from-manifest",
@@ -317,7 +320,7 @@ def main() -> int:
         args.page_title,
         "--page-description",
         args.page_description,
-    ]
+    )
     for version in args.version or []:
         command.extend(["--version", version])
     print("Running:", " ".join(command))
