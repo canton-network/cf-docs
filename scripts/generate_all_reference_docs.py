@@ -202,7 +202,8 @@ def prune_page_refs(node: object, page_refs: set[str]) -> object | None:
         return items
     if isinstance(node, dict):
         updated = {key: prune_page_refs(value, page_refs) for key, value in node.items()}
-        if updated.get("group") and not updated.get("pages") and not updated.get("groups"):
+        is_container_group = "pages" in updated or "groups" in updated
+        if updated.get("group") and is_container_group and not updated.get("pages") and not updated.get("groups"):
             return None
         return updated
     if isinstance(node, str) and node in page_refs:
