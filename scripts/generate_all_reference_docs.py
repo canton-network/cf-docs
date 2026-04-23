@@ -79,8 +79,8 @@ SCRIPT_JOBS = [
         nav_slice=NavSlice("top_group", ("Wallet Gateway JSON-RPC",)),
     ),
     ScriptJob(
-        script_path=REPO_ROOT / "scripts" / "generate_splice_scan_openapi_reference.py",
-        nav_slice=NavSlice("nested_group", ("Splice APIs", "Scan APIs")),
+        script_path=REPO_ROOT / "scripts" / "generate_splice_mintlify_openapi.py",
+        nav_slice=NavSlice("top_group", ("Splice APIs",)),
     ),
     ScriptJob(
         script_path=REPO_ROOT / "scripts" / "generate_typescript_bindings_reference.py",

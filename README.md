@@ -259,28 +259,25 @@ or:
 npm run generate:wallet-gateway-openrpc-reference
 ```
 
-### Generate the Splice Scan OpenAPI reference
+### Generate the Splice Mintlify OpenAPI specs
 
-This repo also includes a checked-in source config for the published decentralized-canton-sync OpenAPI bundle at `config/x2mdx/splice-scan-openapi/source-artifacts.json`.
-The generator script discovers matching stable releases through the GitHub releases API, downloads `*_openapi.tar.gz` bundle assets into `.internal/cache/x2mdx/splice-openapi/`, materializes all bundled YAML files into local versioned fixtures for `$ref` resolution, writes a local x2mdx manifest into `.internal/generated/x2mdx/splice-scan-openapi/manifest.json`, and then renders the checked-in Mintlify pages through the docs repo `direnv` / `nix` shell.
+This repo also includes a dedicated wrapper that fetches the configured Splice OpenAPI specs from published decentralized-canton-sync `*_openapi.tar.gz` release bundles and writes the managed source files under `docs-main/openapi/splice/`, so Mintlify can render them natively. The wrapper only updates `docs-main/docs.json` for specs listed in `config/mintlify-openapi/splice-openapi/source-artifacts.json` under `enabled_nav_specs`.
 
 Run:
 
 ```bash
-python3 scripts/generate_splice_scan_openapi_reference.py
+python3 scripts/generate_splice_mintlify_openapi.py
 ```
 
 or:
 
 ```bash
-npm run generate:splice-scan-openapi-reference
+npm run generate:splice-mintlify-openapi
 ```
 
 By default this writes:
 
-- `docs-main/reference/splice-scan-openapi/`
-- `docs-main/docs.json`
+- `docs-main/openapi/splice/`
+- `docs-main/docs.json` only when one or more specs are enabled in `enabled_nav_specs`
 
-The generated nav is added under the top-level `API Reference` dropdown as `Splice APIs -> Scan APIs`, with one generated page per OpenAPI spec in the published bundle family.
-
-The generated nav is added under the top-level `API Reference` dropdown as `Wallet Gateway JSON-RPC`, with the overview page plus one page per published OpenRPC surface.
+Enabled specs are added under the top-level `API Reference` dropdown as `Splice APIs`, with Mintlify-rendered OpenAPI entries grouped under `Scan APIs`, `Validator APIs`, and `Token Standard APIs`.
