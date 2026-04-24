@@ -47,14 +47,23 @@ def _find_group(items: list[Any], label: str) -> dict[str, Any] | None:
 
 
 def _merge_group_entries(target: dict[str, Any], source: dict[str, Any]) -> None:
-    target_pages = target.setdefault("pages", [])
-    if not isinstance(target_pages, list):
-        target_pages = []
-        target["pages"] = target_pages
+    for spec_key in ("openapi", "asyncapi"):
+        if spec_key in source:
+            target[spec_key] = source[spec_key]
 
-    source_pages = source.get("pages", [])
+    source_pages = source.get("pages")
+    if source_pages is None:
+        return
     if not isinstance(source_pages, list):
         return
+
+    target_pages = target.get("pages")
+    if target_pages is None:
+        target_pages = []
+        target["pages"] = target_pages
+    elif not isinstance(target_pages, list):
+        target_pages = []
+        target["pages"] = target_pages
 
     for item in source_pages:
         if isinstance(item, str):
@@ -76,7 +85,7 @@ def _merge_group_entries(target: dict[str, Any], source: dict[str, Any]) -> None
 def _upsert_group(collected: dict[str, dict[str, Any]], label: str) -> dict[str, Any]:
     group = collected.get(label)
     if group is None:
-        group = {"group": label, "pages": []}
+        group = {"group": label}
         collected[label] = group
     return group
 
