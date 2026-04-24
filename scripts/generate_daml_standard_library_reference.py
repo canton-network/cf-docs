@@ -4,15 +4,18 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
 from typing import Any
 
+from docs_env import ensure_repo_direnv, repo_direnv_command
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_CACHE_ROOT = Path(os.environ.get("XDG_CACHE_HOME", "~/.cache")).expanduser() / "x2mdx"
 DEFAULT_SOURCE_CONFIG = REPO_ROOT / "config" / "x2mdx" / "daml-standard-library" / "source-artifacts.json"
-DEFAULT_CACHE_DIR = REPO_ROOT / ".internal" / "cache" / "x2mdx" / "daml-standard-library"
+DEFAULT_CACHE_DIR = DEFAULT_CACHE_ROOT / "daml-standard-library"
 DEFAULT_MANIFEST = REPO_ROOT / ".internal" / "generated" / "x2mdx" / "daml-standard-library" / "manifest.json"
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "docs-main" / "appdev" / "reference" / "daml-standard-library"
 DEFAULT_DOCS_JSON = REPO_ROOT / "docs-main" / "docs.json"
@@ -219,6 +222,7 @@ def update_docs_navigation(
 
 
 def main() -> int:
+    ensure_repo_direnv(repo_root=REPO_ROOT, script_path=Path(__file__).resolve(), argv=sys.argv[1:])
     args = parse_args()
     source_config = load_json(Path(args.source_config).resolve())
     configured_versions = source_config.get("versions")
@@ -250,7 +254,8 @@ def main() -> int:
         manifest_path=Path(args.manifest_out).resolve(),
         versions=selected_versions,
     )
-    command = [
+    command = repo_direnv_command(
+        REPO_ROOT,
         "x2mdx",
         "daml-json",
         "build-api-pages-from-manifest",
@@ -266,7 +271,7 @@ def main() -> int:
         args.version_filter,
         "--link-prefix",
         docs_route_prefix(Path(args.output_dir).resolve(), Path(args.docs_json).resolve()),
-    ]
+    )
     for version in args.version or []:
         command.extend(["--version", version])
     print("Running:", " ".join(command))

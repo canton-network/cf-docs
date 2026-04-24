@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -11,10 +12,12 @@ import tarfile
 from pathlib import Path
 from typing import Any
 
+from docs_env import ensure_repo_direnv, repo_direnv_command
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_CACHE_ROOT = Path(os.environ.get("XDG_CACHE_HOME", "~/.cache")).expanduser() / "x2mdx"
 DEFAULT_SOURCE_CONFIG = REPO_ROOT / "config" / "x2mdx" / "typescript-bindings" / "source-artifacts.json"
-DEFAULT_CACHE_DIR = REPO_ROOT / ".internal" / "cache" / "x2mdx" / "typescript-bindings"
+DEFAULT_CACHE_DIR = DEFAULT_CACHE_ROOT / "typescript-bindings"
 DEFAULT_MANIFEST = REPO_ROOT / ".internal" / "generated" / "x2mdx" / "typescript-bindings" / "manifest.json"
 DEFAULT_TYPEDOC_DIR = REPO_ROOT / ".internal" / "generated" / "x2mdx" / "typescript-bindings" / "typedoc"
 DEFAULT_OUTPUT_FILE = REPO_ROOT / "docs-main" / "reference" / "typescript.mdx"
@@ -264,6 +267,7 @@ def write_manifest(
 
 
 def main() -> int:
+    ensure_repo_direnv(repo_root=REPO_ROOT, script_path=Path(__file__).resolve(), argv=sys.argv[1:])
     args = parse_args()
     source_config = load_json(Path(args.source_config).resolve())
     configured_versions = source_config.get("versions")
@@ -297,7 +301,8 @@ def main() -> int:
         publish_version=publish_version,
     )
 
-    command = [
+    command = repo_direnv_command(
+        REPO_ROOT,
         "x2mdx",
         "typedoc",
         "build-api-pages-from-manifest",
@@ -315,7 +320,7 @@ def main() -> int:
         args.page_title,
         "--page-description",
         args.page_description,
-    ]
+    )
     for version in args.version or []:
         command.extend(["--version", version])
     print("Running:", " ".join(command))
