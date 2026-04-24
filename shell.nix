@@ -7,12 +7,12 @@ let
   ]);
   x2mdx = pythonBase.pkgs.buildPythonApplication rec {
     pname = "x2mdx";
-    version = "0.1.0+git-9e5dbaa";
+    version = "0.1.0+git-f049144";
     pyproject = true;
     src = builtins.fetchGit {
       url = "https://github.com/danielporterda/x2mdx.git";
       ref = "refs/heads/main";
-      rev = "9e5dbaab203e471a26121a47297b1bebc9ba251a";
+      rev = "f049144b4f13d0bcd25619ea604da383c6aa02d9";
       allRefs = true;
     };
     nativeBuildInputs = with pythonBase.pkgs; [
