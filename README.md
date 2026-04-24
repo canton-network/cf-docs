@@ -65,7 +65,7 @@ mintlify dev
 
 ### Run all generated reference docs
 
-Load the repo's `direnv` / `nix` shell first, then rerun all generated reference-doc wrappers in one command:
+Load the repo's `direnv` / `nix` shell first, then rerun all generated reference-doc wrappers in one command. The wrappers also re-exec through the docs repo shell themselves, so they do not pick up a local `x2mdx` checkout from ambient `PATH`:
 
 ```bash
 direnv allow
@@ -77,7 +77,7 @@ Use `--dry-run` to print the exact per-step commands without executing them.
 ### Generate the JSON API reference
 
 This repo includes a checked-in source config plus regenerated local Ledger API OpenAPI snapshots under `config/x2mdx/ledger-api/`.
-The generator script refreshes those local `openapi.yaml` snapshots from configured Canton release bundles, rewrites the local manifest, and then regenerates the page and `docs.json` update with the GitHub-pinned `x2mdx`:
+The generator script refreshes those local `openapi.yaml` snapshots from configured Canton release bundles, rewrites the local manifest, and then regenerates the page and `docs.json` update through the docs repo `direnv` / `nix` shell:
 
 ```bash
 python3 scripts/generate_json_api_reference.py
@@ -99,7 +99,7 @@ The generated page is placed directly under the top-level `API Reference` dropdo
 ### Generate the JSON API AsyncAPI reference
 
 This repo also includes a checked-in source config for the Ledger API AsyncAPI bundle inputs under `config/x2mdx/ledger-api-asyncapi/source-artifacts.json`.
-The generator script downloads the configured Canton release bundles, extracts `asyncapi.yaml` into `.internal/cache/x2mdx/ledger-api-asyncapi/`, writes a local x2mdx manifest into `.internal/generated/x2mdx/ledger-api-asyncapi/manifest.json`, and then renders the MDX page with the GitHub-pinned `x2mdx`.
+The generator script downloads the configured Canton release bundles, extracts `asyncapi.yaml` into `.internal/cache/x2mdx/ledger-api-asyncapi/`, writes a local x2mdx manifest into `.internal/generated/x2mdx/ledger-api-asyncapi/manifest.json`, and then renders the MDX page through the docs repo `direnv` / `nix` shell.
 
 Run:
 
@@ -123,7 +123,7 @@ The generated page is placed directly under the top-level `API Reference` dropdo
 ### Generate the Ledger bindings API reference
 
 This repo also includes a checked-in source config for the published Java/Scala bindings Javadoc/Scaladoc jars at `config/x2mdx/ledger-bindings/source-artifacts.json`.
-The generator script downloads those jars into `.internal/cache/x2mdx/ledger-bindings/`, writes a local x2mdx manifest into `.internal/generated/x2mdx/ledger-bindings/manifest.json`, and then renders the MDX pages with the GitHub-pinned `x2mdx`.
+The generator script downloads those jars into `.internal/cache/x2mdx/ledger-bindings/`, writes a local x2mdx manifest into `.internal/generated/x2mdx/ledger-bindings/manifest.json`, and then renders the MDX pages through the docs repo `direnv` / `nix` shell.
 
 Run:
 
@@ -149,7 +149,7 @@ The generated nav is added under the top-level `API Reference` dropdown as `Ledg
 ### Generate the Daml Standard Library reference
 
 This repo also includes a checked-in source config for versioned Daml Standard Library docs JSON generation at `config/x2mdx/daml-standard-library/source-artifacts.json`.
-The generator script uses local SDK artifacts via `dpm` or `daml` to build cached docs JSON snapshots under `.internal/cache/x2mdx/daml-standard-library/`, writes a local x2mdx manifest into `.internal/generated/x2mdx/daml-standard-library/manifest.json`, and then renders MDX pages with the GitHub-pinned `x2mdx`.
+The generator script uses local SDK artifacts via `dpm` or `daml` to build cached docs JSON snapshots under `.internal/cache/x2mdx/daml-standard-library/`, writes a local x2mdx manifest into `.internal/generated/x2mdx/daml-standard-library/manifest.json`, and then renders MDX pages through the docs repo `direnv` / `nix` shell.
 
 Run:
 
@@ -173,7 +173,7 @@ The generated nav is added under the top-level `API Reference` dropdown as `Daml
 ### Generate the Canton protobuf history reference
 
 This repo also includes a checked-in source config for Canton release-bundle protobuf inputs at `config/x2mdx/protobuf-history/source-artifacts.json`.
-The generator script discovers stable Canton versions from the source repo tags, downloads the matching `canton-open-source-<version>.tar.gz` bundles from `canton.io/releases`, extracts the published `protobuf/` tree under `.internal/cache/x2mdx/protobuf-history/`, compiles local descriptor images with `grpc_tools.protoc`, writes a local x2mdx manifest into `.internal/generated/x2mdx/protobuf-history/manifest.json`, and then renders MDX pages with the GitHub-pinned `x2mdx`.
+The generator script discovers stable Canton versions from the source repo tags, downloads the matching `canton-open-source-<version>.tar.gz` bundles from `canton.io/releases`, extracts the published `protobuf/` tree under `.internal/cache/x2mdx/protobuf-history/`, compiles local descriptor images with `grpc_tools.protoc`, writes a local x2mdx manifest into `.internal/generated/x2mdx/protobuf-history/manifest.json`, and then renders MDX pages through the docs repo `direnv` / `nix` shell.
 
 Run:
 
@@ -221,7 +221,7 @@ The generated nav is added under the top-level `Reference` dropdown as `gRPC Led
 ### Generate the TypeScript bindings reference
 
 This repo also includes a checked-in source config for published `@daml/types` npm artifacts at `config/x2mdx/typescript-bindings/source-artifacts.json`.
-The generator script downloads the configured tarballs into `.internal/cache/x2mdx/typescript-bindings/`, installs local package dependencies, renders TypeDoc JSON into `.internal/generated/x2mdx/typescript-bindings/`, writes a local x2mdx manifest, and then rewrites the checked-in Mintlify page with the GitHub-pinned `x2mdx`.
+The generator script downloads the configured tarballs into `.internal/cache/x2mdx/typescript-bindings/`, installs local package dependencies, renders TypeDoc JSON into `.internal/generated/x2mdx/typescript-bindings/`, writes a local x2mdx manifest, and then rewrites the checked-in Mintlify page through the docs repo `direnv` / `nix` shell.
 
 Run:
 
@@ -245,7 +245,7 @@ The generator also adds that page under the top-level `API Reference` dropdown a
 ### Generate the Wallet Gateway JSON-RPC reference
 
 This repo also includes a checked-in source config for versioned Wallet Gateway OpenRPC specs from `hyperledger-labs/splice-wallet-kernel` at `config/x2mdx/wallet-gateway-openrpc/source-artifacts.json`.
-The generator script discovers versions from GitHub releases filtered to the `@canton-network/wallet-gateway-remote@` release stream, clones or fetches a cached bare repo under `.internal/cache/x2mdx/wallet-gateway-openrpc/`, materializes local versioned OpenRPC JSON files from the matching tag snapshots, writes a local x2mdx manifest into `.internal/generated/x2mdx/wallet-gateway-openrpc/manifest.json`, and then renders MDX pages with the GitHub-pinned `x2mdx`.
+The generator script discovers versions from GitHub releases filtered to the `@canton-network/wallet-gateway-remote@` release stream, clones or fetches a cached bare repo under `.internal/cache/x2mdx/wallet-gateway-openrpc/`, materializes local versioned OpenRPC JSON files from the matching tag snapshots, writes a local x2mdx manifest into `.internal/generated/x2mdx/wallet-gateway-openrpc/manifest.json`, and then renders MDX pages through the docs repo `direnv` / `nix` shell.
 
 Run:
 
@@ -259,9 +259,25 @@ or:
 npm run generate:wallet-gateway-openrpc-reference
 ```
 
+### Generate the Splice Mintlify OpenAPI specs
+
+This repo also includes a dedicated wrapper that fetches the configured Splice OpenAPI specs from published decentralized-canton-sync `*_openapi.tar.gz` release bundles and writes the managed source files under `docs-main/openapi/splice/`, so Mintlify can render them natively. The wrapper only updates `docs-main/docs.json` for specs listed in `config/mintlify-openapi/splice-openapi/source-artifacts.json` under `enabled_nav_specs`.
+
+Run:
+
+```bash
+python3 scripts/generate_splice_mintlify_openapi.py
+```
+
+or:
+
+```bash
+npm run generate:splice-mintlify-openapi
+```
+
 By default this writes:
 
-- `docs-main/reference/wallet-gateway-json-rpc/`
-- `docs-main/docs.json`
+- `docs-main/openapi/splice/`
+- `docs-main/docs.json` only when one or more specs are enabled in `enabled_nav_specs`
 
-The generated nav is added under the top-level `API Reference` dropdown as `Wallet Gateway JSON-RPC`, with the overview page plus one page per published OpenRPC surface.
+Enabled specs are added under the top-level `API Reference` dropdown as `Splice APIs`, with Mintlify-rendered OpenAPI entries grouped under `Scan APIs`, `Validator APIs`, and `Token Standard APIs`.

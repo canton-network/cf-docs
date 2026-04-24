@@ -17,14 +17,17 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+from docs_env import ensure_repo_direnv, repo_direnv_command
 import reference_nav
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SOURCE_CONFIG = REPO_ROOT / "config" / "x2mdx" / "protobuf-history" / "source-artifacts.json"
-DEFAULT_CACHE_DIR = REPO_ROOT / ".internal" / "cache" / "x2mdx" / "protobuf-history"
+DEFAULT_CACHE_ROOT = Path(os.environ.get("XDG_CACHE_HOME", "~/.cache")).expanduser() / "x2mdx"
+DEFAULT_CACHE_DIR = DEFAULT_CACHE_ROOT / "protobuf-history"
 DEFAULT_MANIFEST = REPO_ROOT / ".internal" / "generated" / "x2mdx" / "protobuf-history" / "manifest.json"
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "docs-main" / "appdev" / "reference" / "protobuf-history"
+DEFAULT_LEGACY_OUTPUT_DIR = REPO_ROOT / "docs-main" / "reference" / "protobuf"
 DEFAULT_DOCS_JSON = REPO_ROOT / "docs-main" / "docs.json"
 DEFAULT_REPO_DIR = DEFAULT_CACHE_DIR / "repos" / "canton"
 GROUP_LABEL = "Canton Protobuf History"
@@ -49,6 +52,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--cache-dir", default=str(DEFAULT_CACHE_DIR))
     parser.add_argument("--manifest-out", default=str(DEFAULT_MANIFEST))
     parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
+    parser.add_argument("--legacy-output-dir", default=str(DEFAULT_LEGACY_OUTPUT_DIR))
     parser.add_argument("--docs-json", default=str(DEFAULT_DOCS_JSON))
     parser.add_argument("--nav-dropdown", default="API Reference")
     parser.add_argument("--nav-group", action="append")
@@ -74,6 +78,15 @@ def load_json(path: Path) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise ValueError(f"Expected JSON object in {path}")
     return payload
+
+
+def load_excluded_versions(source_config: dict[str, Any]) -> set[str]:
+    configured = source_config.get("excluded_versions")
+    if configured is None:
+        return set()
+    if not isinstance(configured, list) or not all(isinstance(item, str) and item for item in configured):
+        raise ValueError("Source config excluded_versions must be a list of non-empty strings")
+    return set(configured)
 
 
 def run(args: list[str], *, cwd: Path | None = None, capture: bool = False) -> str:
@@ -350,7 +363,15 @@ def write_manifest(
     return manifest_path
 
 
+def sync_output_tree(*, source_dir: Path, target_dir: Path) -> None:
+    if target_dir.exists():
+        shutil.rmtree(target_dir)
+    shutil.copytree(source_dir, target_dir)
+    print(f"Synced output tree: {target_dir}")
+
+
 def main() -> int:
+    ensure_repo_direnv(repo_root=REPO_ROOT, script_path=Path(__file__).resolve(), argv=sys.argv[1:])
     args = parse_args()
     source_config = load_json(Path(args.source_config).resolve())
     repo_config = source_config.get("repo") if isinstance(source_config.get("repo"), dict) else {}
@@ -362,12 +383,17 @@ def main() -> int:
         raise ValueError("Source config must define bundle_proto_dir")
 
     include_versions = set(args.version) if args.version else None
+    excluded_versions = load_excluded_versions(source_config)
+    if include_versions is not None:
+        include_versions -= excluded_versions
     min_version = args.min_version or source_config.get("min_version") or "0.0.0"
     if not isinstance(min_version, str):
         raise ValueError("min_version must be a string")
 
     repo_dir = ensure_repo(Path(args.repo_dir).resolve(), remote=remote, fetch=not args.skip_fetch)
     selected_tags = stable_tags(repo_dir, min_version=min_version, include_versions=include_versions)
+    if excluded_versions:
+        selected_tags = [(version, tag) for version, tag in selected_tags if version not in excluded_versions]
     if not selected_tags:
         raise ValueError("No stable Canton tags selected")
     cache_dir = Path(args.cache_dir).resolve()
@@ -418,7 +444,8 @@ def main() -> int:
         else:
             version_filter = f"stable Canton release bundles >= {min_version}"
 
-    command = [
+    command = repo_direnv_command(
+        REPO_ROOT,
         "x2mdx",
         "protobuf",
         "build-api-pages-from-manifest",
@@ -430,11 +457,16 @@ def main() -> int:
         args.source_name,
         "--version-filter",
         version_filter,
-    ]
+    )
     print("Running:", " ".join(command))
     completed = subprocess.run(command, cwd=REPO_ROOT)
     if completed.returncode != 0:
         return completed.returncode
+
+    sync_output_tree(
+        source_dir=Path(args.output_dir).resolve(),
+        target_dir=Path(args.legacy_output_dir).resolve(),
+    )
 
     update_docs_navigation(
         docs_json_path=Path(args.docs_json).resolve(),

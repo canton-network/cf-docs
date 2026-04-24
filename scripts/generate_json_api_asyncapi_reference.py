@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
 
+from docs_env import ensure_repo_direnv, repo_direnv_command
 from ledger_api_release_bundles import (
     bundle_url,
     load_json,
@@ -19,9 +21,10 @@ import reference_nav
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_CACHE_ROOT = Path(os.environ.get("XDG_CACHE_HOME", "~/.cache")).expanduser() / "x2mdx"
 DEFAULT_SOURCE_CONFIG = REPO_ROOT / "config" / "x2mdx" / "ledger-api-asyncapi" / "source-artifacts.json"
-DEFAULT_BUNDLE_CACHE_DIR = REPO_ROOT / ".internal" / "cache" / "x2mdx" / "ledger-api-bundles"
-DEFAULT_CACHE_DIR = REPO_ROOT / ".internal" / "cache" / "x2mdx" / "ledger-api-asyncapi"
+DEFAULT_BUNDLE_CACHE_DIR = DEFAULT_CACHE_ROOT / "ledger-api-bundles"
+DEFAULT_CACHE_DIR = DEFAULT_CACHE_ROOT / "ledger-api-asyncapi"
 DEFAULT_MANIFEST = REPO_ROOT / ".internal" / "generated" / "x2mdx" / "ledger-api-asyncapi" / "manifest.json"
 DEFAULT_OUTPUT_FILE = REPO_ROOT / "docs-main" / "reference" / "json-api-asyncapi-reference.mdx"
 LEGACY_OUTPUT_FILE = REPO_ROOT / "docs-main" / "appdev" / "reference" / "json-api-asyncapi-reference.mdx"
@@ -100,7 +103,7 @@ def write_manifest(
                 "version": version,
                 "url": bundle_url(source_config, version_entry),
                 "source_path": source_path,
-                "fixture_path": str(fixture_path.resolve().relative_to(repo_root.resolve())),
+                "fixture_path": str(fixture_path.resolve()),
             }
         )
 
@@ -252,7 +255,8 @@ def normalize_nav_group_into_pages(*, docs_json_path: Path, dropdown_label: str,
 
 def build_command(args: argparse.Namespace, manifest_path: Path, publish_version: str, versions: list[str]) -> list[str]:
     nav_groups = args.nav_group if args.nav_group is not None else [DEFAULT_NAV_GROUP]
-    command = [
+    command = repo_direnv_command(
+        REPO_ROOT,
         "x2mdx",
         "asyncapi",
         "build-api-pages-from-manifest",
@@ -276,7 +280,7 @@ def build_command(args: argparse.Namespace, manifest_path: Path, publish_version
         args.page_title,
         "--page-description",
         args.page_description,
-    ]
+    )
     for nav_group in nav_groups:
         command.extend(["--nav-group", nav_group])
     for version in versions:
@@ -294,6 +298,7 @@ def remove_legacy_output(*, output_file: Path) -> None:
 
 
 def main() -> int:
+    ensure_repo_direnv(repo_root=REPO_ROOT, script_path=Path(__file__).resolve(), argv=sys.argv[1:])
     args = parse_args()
     source_config = load_json(Path(args.source_config).resolve())
     selected_version_entries = selected_versions(source_config, set(args.version) if args.version else None)
