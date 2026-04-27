@@ -27,11 +27,14 @@ DEFAULT_BUNDLE_CACHE_DIR = DEFAULT_CACHE_ROOT / "ledger-api-bundles"
 DEFAULT_CACHE_DIR = DEFAULT_CACHE_ROOT / "ledger-api-asyncapi"
 DEFAULT_MANIFEST = REPO_ROOT / ".internal" / "generated" / "x2mdx" / "ledger-api-asyncapi" / "manifest.json"
 DEFAULT_OUTPUT_FILE = REPO_ROOT / "docs-main" / "reference" / "json-api-asyncapi-reference.mdx"
+DEFAULT_OUTPUT_DIR = REPO_ROOT / "docs-main" / "reference" / "json-api-asyncapi-reference"
+DEFAULT_OVERVIEW_NAME = "index.mdx"
 LEGACY_OUTPUT_FILE = REPO_ROOT / "docs-main" / "appdev" / "reference" / "json-api-asyncapi-reference.mdx"
 DEFAULT_DOCS_JSON = REPO_ROOT / "docs-main" / "docs.json"
 DEFAULT_NAV_GROUP = "Ledger API Endpoints"
 DEFAULT_NAV_PAGE_ORDER = [
     "reference/json-api-reference",
+    "reference/json-api-asyncapi-reference/index",
     "reference/json-api-asyncapi-reference",
 ]
 
@@ -44,7 +47,20 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--bundle-cache-dir", default=str(DEFAULT_BUNDLE_CACHE_DIR))
     parser.add_argument("--cache-dir", default=str(DEFAULT_CACHE_DIR))
     parser.add_argument("--manifest-out", default=str(DEFAULT_MANIFEST))
-    parser.add_argument("--output-file", default=str(DEFAULT_OUTPUT_FILE))
+    parser.add_argument(
+        "--output-dir",
+        default=str(DEFAULT_OUTPUT_DIR),
+        help="Directory for multipage output. Ignored when --output-file is provided.",
+    )
+    parser.add_argument(
+        "--overview-name",
+        default=DEFAULT_OVERVIEW_NAME,
+        help="Overview page filename for multipage output.",
+    )
+    parser.add_argument(
+        "--output-file",
+        help="Compatibility mode: render one MDX file with in-page operation anchors instead of a multipage tree.",
+    )
     parser.add_argument("--docs-json", default=str(DEFAULT_DOCS_JSON))
     parser.add_argument("--nav-dropdown", default="API Reference")
     parser.add_argument(
@@ -143,10 +159,10 @@ def prune_page_ref(node: object, page_ref: str) -> object | None:
     return node
 
 
-def cleanup_legacy_docs_ref(*, docs_json_path: Path) -> None:
-    legacy_ref = docs_json_page_ref(LEGACY_OUTPUT_FILE.resolve(), docs_json_path)
+def cleanup_docs_ref(*, docs_json_path: Path, page_path: Path) -> None:
+    page_ref = docs_json_page_ref(page_path.resolve(), docs_json_path)
     payload = load_json(docs_json_path)
-    cleaned = prune_page_ref(payload, legacy_ref)
+    cleaned = prune_page_ref(payload, page_ref)
     if not isinstance(cleaned, dict):
         raise ValueError(f"Expected cleaned docs.json object for {docs_json_path}")
     docs_json_path.write_text(json.dumps(cleaned, indent=2) + "\n", encoding="utf-8")
@@ -264,8 +280,6 @@ def build_command(args: argparse.Namespace, manifest_path: Path, publish_version
         str(manifest_path),
         "--fixture-root",
         str(REPO_ROOT),
-        "--output-file",
-        str(Path(args.output_file).resolve()),
         "--docs-json",
         str(Path(args.docs_json).resolve()),
         "--nav-dropdown",
@@ -281,6 +295,17 @@ def build_command(args: argparse.Namespace, manifest_path: Path, publish_version
         "--page-description",
         args.page_description,
     )
+    if args.output_file:
+        command.extend(["--output-file", str(Path(args.output_file).resolve())])
+    else:
+        command.extend(
+            [
+                "--output-dir",
+                str(Path(args.output_dir).resolve()),
+                "--overview-name",
+                args.overview_name,
+            ]
+        )
     for nav_group in nav_groups:
         command.extend(["--nav-group", nav_group])
     for version in versions:
@@ -288,13 +313,21 @@ def build_command(args: argparse.Namespace, manifest_path: Path, publish_version
     return command
 
 
-def remove_legacy_output(*, output_file: Path) -> None:
+def remove_legacy_output(*, output_file: Path | None, output_dir: Path | None) -> None:
     legacy_output = LEGACY_OUTPUT_FILE.resolve()
-    if output_file == legacy_output:
+    if output_file is not None and output_file == legacy_output:
         return
     if legacy_output.exists():
         legacy_output.unlink()
         print(f"Removed legacy output: {legacy_output}")
+
+    default_single_output = DEFAULT_OUTPUT_FILE.resolve()
+    if output_file is None and default_single_output.exists():
+        default_single_output.unlink()
+        print(f"Removed single-page AsyncAPI output: {default_single_output}")
+
+    if output_file is not None and output_dir is not None and output_dir.exists():
+        print(f"Leaving multipage AsyncAPI output in place: {output_dir}")
 
 
 def main() -> int:
@@ -342,7 +375,9 @@ def main() -> int:
     if completed.returncode == 0:
         docs_json_path = Path(args.docs_json).resolve()
         nav_groups = args.nav_group if args.nav_group is not None else [DEFAULT_NAV_GROUP]
-        cleanup_legacy_docs_ref(docs_json_path=docs_json_path)
+        cleanup_docs_ref(docs_json_path=docs_json_path, page_path=LEGACY_OUTPUT_FILE)
+        if not args.output_file:
+            cleanup_docs_ref(docs_json_path=docs_json_path, page_path=DEFAULT_OUTPUT_FILE)
         if nav_groups:
             normalize_nav_group_into_pages(
                 docs_json_path=docs_json_path,
@@ -353,7 +388,10 @@ def main() -> int:
             docs_json_path=docs_json_path,
             dropdown_label=args.nav_dropdown,
         )
-        remove_legacy_output(output_file=Path(args.output_file).resolve())
+        remove_legacy_output(
+            output_file=Path(args.output_file).resolve() if args.output_file else None,
+            output_dir=Path(args.output_dir).resolve() if not args.output_file else None,
+        )
     return completed.returncode
 
 

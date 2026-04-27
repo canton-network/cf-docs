@@ -22,7 +22,7 @@ LEDGER_API_CHILD_ORDER = [
     BINDINGS_GROUP,
 ]
 OPENAPI_PAGE_REF = "reference/json-api-reference"
-ASYNCAPI_PAGE_REF = "reference/json-api-asyncapi-reference"
+ASYNCAPI_PAGE_REF = "reference/json-api-asyncapi-reference/index"
 GRPC_OVERVIEW_PAGE_REF = "reference/grpc-ledger-api-reference/index"
 GRPC_PACKAGES_PREFIX = "reference/grpc-ledger-api-reference/packages/"
 PROTOBUF_OVERVIEW_PAGE_REF = "reference/protobuf/index"
