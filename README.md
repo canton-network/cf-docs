@@ -51,6 +51,7 @@ This repository uses a dual-license model:
 ### Direnv + Nix workflow
 
 This repo includes `.envrc` and `shell.nix` for a reproducible local toolchain.
+The Nix package set is pinned by `nix/nixpkgs.src.json`.
 
 Required:
 - `direnv`
