@@ -76,8 +76,8 @@ Use `--dry-run` to print the exact per-step commands without executing them.
 
 ### Generate the JSON API reference
 
-This repo includes a checked-in source config plus regenerated local Ledger API OpenAPI snapshots under `config/x2mdx/ledger-api/`.
-The generator script refreshes those local `openapi.yaml` snapshots from configured Canton release bundles, rewrites the local manifest, and then regenerates the page and `docs.json` update through the docs repo `direnv` / `nix` shell:
+This repo includes a checked-in source config for the Ledger API OpenAPI bundle inputs under `config/x2mdx/ledger-api/source-artifacts.json`.
+The generator script refreshes the latest configured `openapi.yaml` from the Canton release bundle into the docs tree and rewires `docs-main/docs.json` so Mintlify renders the JSON API reference natively:
 
 ```bash
 python3 scripts/generate_json_api_reference.py
@@ -91,10 +91,10 @@ npm run generate:json-api-reference
 
 By default this writes:
 
-- `docs-main/reference/json-api-reference.mdx`
+- `docs-main/openapi/json-ledger-api/openapi.yaml`
 - `docs-main/docs.json`
 
-The generated page is placed directly under the top-level `API Reference` dropdown in `docs-main/docs.json`, outside the `MainNet`/`TestNet`/`DevNet` versioned navigation branches.
+The generated nav is published under `API Reference -> Ledger API -> OpenAPI`, using Mintlify's native generated endpoint pages under `reference/json-api-reference`. The legacy checked-in MDX page at `docs-main/reference/json-api-reference.mdx` is removed by the generator.
 
 ### Generate the JSON API AsyncAPI reference
 
