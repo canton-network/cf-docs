@@ -1,4 +1,4 @@
-{ pkgs ? import <nixpkgs> {} }:
+{ pkgs ? import ./nix/nixpkgs.nix }:
 
 let
   pythonBase = pkgs.python311;
@@ -7,12 +7,12 @@ let
   ]);
   x2mdx = pythonBase.pkgs.buildPythonApplication rec {
     pname = "x2mdx";
-    version = "0.1.0+git-f049144";
+    version = "0.1.0+git-5ff8aed";
     pyproject = true;
     src = builtins.fetchGit {
       url = "https://github.com/danielporterda/x2mdx.git";
       ref = "refs/heads/main";
-      rev = "f049144b4f13d0bcd25619ea604da383c6aa02d9";
+      rev = "5ff8aed163729ae157853103528cba955ff6c142";
       allRefs = true;
     };
     nativeBuildInputs = with pythonBase.pkgs; [

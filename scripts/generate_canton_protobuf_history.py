@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from docs_env import ensure_repo_direnv, repo_direnv_command
+import generated_reference_nav
 import reference_nav
 
 
@@ -313,7 +314,8 @@ def update_docs_navigation(
     docs_json_path: Path,
     dropdown_label: str,
     parent_groups: list[str],
-    overview_path: Path,
+    output_dir: Path,
+    legacy_overview_path: Path,
 ) -> None:
     docs = load_json(docs_json_path)
     navigation = docs.get("navigation")
@@ -329,10 +331,15 @@ def update_docs_navigation(
     if not isinstance(pages, list):
         raise ValueError(f"Dropdown does not expose a pages list: {dropdown_label}")
 
-    page_ref = docs_json_page_ref(overview_path, docs_json_path)
-    dropdown["pages"] = prune_nav_items(pages, page_refs={page_ref}, group_labels={GROUP_LABEL})
+    page_ref = docs_json_page_ref(output_dir / "index.mdx", docs_json_path)
+    legacy_page_ref = docs_json_page_ref(legacy_overview_path, docs_json_path)
+    dropdown["pages"] = prune_nav_items(
+        pages,
+        page_refs={page_ref, legacy_page_ref},
+        group_labels=reference_nav.PROTOBUF_GROUP_ALIASES,
+    )
     target_pages = ensure_group_path(dropdown["pages"], parent_groups)
-    target_pages.append({"group": GROUP_LABEL, "pages": [page_ref]})
+    target_pages.append({"group": GROUP_LABEL, "pages": [page_ref, legacy_page_ref]})
     docs_json_path.write_text(json.dumps(docs, indent=2) + "\n", encoding="utf-8")
     print(f"Updated docs navigation: {docs_json_path}")
 
@@ -472,11 +479,27 @@ def main() -> int:
         docs_json_path=Path(args.docs_json).resolve(),
         dropdown_label=args.nav_dropdown,
         parent_groups=args.nav_group or [],
-        overview_path=Path(args.output_dir).resolve() / "index.mdx",
+        output_dir=Path(args.output_dir).resolve(),
+        legacy_overview_path=Path(args.legacy_output_dir).resolve() / "index.mdx",
     )
     reference_nav.regroup_ledger_api_nav(
         docs_json_path=Path(args.docs_json).resolve(),
         dropdown_label=args.nav_dropdown,
+    )
+    generated_reference_nav.replace_group_in_dropdown(
+        docs_json_path=Path(args.docs_json).resolve(),
+        dropdown_label=args.nav_dropdown,
+        group=generated_reference_nav.build_protobuf_nav_group(
+            output_dir=Path(args.legacy_output_dir).resolve(),
+            docs_json_path=Path(args.docs_json).resolve(),
+            group_label=reference_nav.PROTOBUF_GROUP,
+            extra_page_refs=[
+                generated_reference_nav.docs_json_page_ref(
+                    Path(args.output_dir).resolve() / "index.mdx",
+                    Path(args.docs_json).resolve(),
+                )
+            ],
+        ),
     )
     return 0
 

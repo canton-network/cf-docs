@@ -25,6 +25,7 @@ API_REFERENCE_DROPDOWN = "API Reference"
 LEGACY_PAGE_REFS = {
     "appdev/reference/json-api-reference",
     "appdev/reference/json-api-asyncapi-reference",
+    "reference/json-api-asyncapi-reference",
 }
 
 
