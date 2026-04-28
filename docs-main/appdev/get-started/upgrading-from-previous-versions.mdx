@@ -1,103 +1,30 @@
 ---
 title: "Upgrading from Previous Versions"
-description: "Guide for migrating applications from Canton 2.x to Canton 3.x"
+description: "Pointers to migration guides and component release notes for upgrading Canton Network applications"
 ---
 
-Canton 3.x introduces significant changes from the 2.x series. This page summarizes the breaking changes and provides a migration path for applications built on Canton 2.x.
+Per-version migration steps live with the component release notes. Use the links below for the change you are migrating across.
 
-## Breaking Changes Summary
+## Within Canton 3.x
 
-Canton 3.x is a major release with backward-incompatible changes across the SDK, APIs, and runtime:
+- **Splice and the Global Synchronizer** — [Current release](/docs-main/global-synchronizer/release-notes/current-release), [release history](/docs-main/global-synchronizer/release-notes/release-history), [weekly patch releases](/docs-main/global-synchronizer/release-notes/weekly-patch-releases)
+- **Wallet SDK** — [Wallet SDK release notes](/docs-main/integrations/wallet/release-notes)
+- **Canton and Daml SDK** — [GitHub releases (digital-asset/daml)](https://github.com/digital-asset/daml/releases) and the upstream changelog at [docs.digitalasset.com](https://docs.digitalasset.com)
 
-- **SDK tooling** -- The `daml` CLI is replaced by `dpm` for build and codegen tasks
-- **Ledger API** -- Several API services have been restructured or removed
-- **Package management** -- New smart contract upgrade (SCU) mechanism replaces the previous upgrade model
-- **Synchronizer terminology** -- What was previously called a "domain" is now called a "synchronizer" throughout the APIs and documentation
-- **Daml exceptions** -- Deprecated and being removed from the language. See the [Splice 0.4.0 / Canton 3.3 release notes](https://blog.digitalasset.com/developers/release-notes/splice-0.4.0-canton-3.3).
+## From Canton 2.x to 3.x
 
-## SDK Migration: daml to dpm
+Canton 3.x is a major release with backward-incompatible changes across the SDK, APIs, and runtime. The high-level shape of the migration:
 
-The `daml` CLI tool is replaced by `dpm` in the 3.x SDK. The most commonly used commands map as follows:
+- **SDK tooling** — `daml` CLI is replaced by [`dpm`](/docs-main/sdks-tools/cli-tools/dpm).
+- **Ledger API** — services have been restructured. Regenerate gRPC stubs from the 3.x protobuf definitions, or update to a 3.x client library.
+- **Package management** — the new [Smart Contract Upgrade (SCU)](/docs-main/appdev/modules/m6-overview) mechanism replaces the previous upgrade model.
+- **Synchronizer terminology** — what was previously called a "domain" is now called a **synchronizer** throughout the APIs and documentation.
+- **Daml exceptions** — deprecated and being removed. Replace with preconditions, encoded return types, or workflow patterns.
 
-| 2.x Command | 3.x Command | Notes |
-|---|---|---|
-| `daml build` | `dpm build` | Compiles Daml source to DAR |
-| `daml test` | `dpm test` | Runs Daml Script tests |
-| `daml codegen java` | `dpm codegen-java` | Generates Java bindings from a DAR |
-| `daml codegen js` | `dpm codegen-js` | Generates TypeScript/JavaScript bindings |
-| `daml sandbox` | (removed) | Use LocalNet via cn-quickstart instead |
-| `daml navigator` | (removed) | Use PQS + your own UI |
-| `daml json-api` | JSON API server | Separate deployment, configuration changed |
+For a worked migration path, build against the [cn-quickstart](https://github.com/digital-asset/cn-quickstart) reference application and consult the version-specific release notes above.
 
-Install the 3.x SDK and verify the `dpm` command is available before migrating.
+## Related
 
-## Ledger API Changes
-
-The 3.x Ledger API has been restructured:
-
-- **Transaction Service** is now the **Update Service**. Method names and protobuf message types have changed.
-- **Command Completion Service** is folded into the Update Service.
-- **Active Contract Set Service** still exists but response types have changed.
-- **Package Service** has been updated to support the new SCU package management model.
-
-If your backend uses generated gRPC stubs, regenerate them from the 3.x protobuf definitions. If you use a higher-level client library, update to the 3.x version of the library.
-
-### Party Management
-
-In 2.x, party allocation was done through the Party Management Service. In 3.x, party management is handled through the Admin API on the validator. The Ledger API no longer exposes party allocation.
-
-## Package Management Changes
-
-Canton 3.x introduces smart contract upgrades (SCU), which changes how packages are managed:
-
-- **No more package IDs in command submissions** -- The validator resolves the appropriate package version automatically based on the contract's creation-time package and the latest compatible upgrade.
-- **Upgrade compatibility is enforced** -- When you upload a new version of a package, Canton verifies it is SCU-compatible with the previous version.
-- **DAR upload behavior** -- Uploading a DAR still registers it on the validator, but the upgrade resolution logic is new.
-
-If your 2.x application pinned specific package IDs in commands, remove those references. The 3.x runtime handles version resolution.
-
-## Daml Language Changes
-
-### Exceptions Deprecated
-
-Daml exceptions (`exception` declarations and `try...catch` blocks) are deprecated in Canton 3.x and are being removed. If your 2.x Daml code uses exceptions, replace them with:
-
-- Precondition checks (`ensure` clauses, `assert`, explicit validation in choice bodies)
-- Return types that encode failure (e.g., `Either ErrorType ResultType` or `Optional`)
-- Separate "request/accept" workflow patterns where the accepting party validates before proceeding
-
-### Interface Changes
-
-Interfaces are fully supported in 3.x and are the recommended way to define cross-package APIs. If your 2.x code did not use interfaces, consider introducing them during the migration -- they enable cleaner package separation and upgrade paths.
-
-## Migration Steps
-
-A practical approach to migrating a 2.x application:
-
-1. **Install the 3.x SDK** and set up a local development environment with cn-quickstart as a reference
-2. **Update your Daml source** -- Remove exception declarations, update any deprecated syntax
-3. **Rebuild with `dpm build`** -- Fix compilation errors. The Daml compiler will flag deprecated features.
-4. **Run tests with `dpm test`** -- Update test scripts to account for API and runtime changes
-5. **Regenerate bindings** -- Run `dpm codegen-java` or `dpm codegen-js` to produce 3.x-compatible client code
-6. **Update your backend** -- Replace 2.x Ledger API calls with 3.x equivalents. Regenerate gRPC stubs from 3.x protos.
-7. **Test on LocalNet** -- Run your application end-to-end against a 3.x LocalNet environment
-8. **Deploy to DevNet** -- Validate on the network before moving to TestNet or MainNet
-
-## Deprecated and Removed Features
-
-| Feature | Status in 3.x | Replacement |
-|---|---|---|
-| `daml` CLI | Removed | `dpm` |
-| Daml Sandbox | Removed | LocalNet (cn-quickstart) |
-| Daml Navigator | Removed | PQS + custom UI |
-| Daml exceptions | Deprecated, being removed | Preconditions, return types, workflow patterns |
-| "Domain" terminology | Renamed | "Synchronizer" in all APIs and docs |
-| Transaction Service | Renamed | Update Service |
-| Ledger API party allocation | Moved | Admin API |
-
-## Further Reading
-
-- [Development Stack](/docs-main/appdev/modules/m1-development-stack) -- The 3.x technology stack
-- [Smart Contract Upgrades Overview](/docs-main/appdev/modules/m6-overview) -- The new SCU mechanism
-- [Backend Development](/docs-main/appdev/modules/m4-backend-dev) -- 3.x Ledger API usage patterns
-- [cn-quickstart](https://github.com/digital-asset/cn-quickstart) -- Reference application built on 3.x
+- [Development Stack](/docs-main/appdev/modules/m1-development-stack) — the 3.x technology stack
+- [Smart Contract Upgrades Overview](/docs-main/appdev/modules/m6-overview) — SCU model
+- [Backend Development](/docs-main/appdev/modules/m4-backend-dev) — 3.x Ledger API usage patterns
