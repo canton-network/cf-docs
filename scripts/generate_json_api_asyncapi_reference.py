@@ -17,6 +17,7 @@ from ledger_api_release_bundles import (
     materialize_bundle_spec,
     selected_versions,
 )
+import generated_reference_nav
 import reference_nav
 
 
@@ -388,6 +389,16 @@ def main() -> int:
             docs_json_path=docs_json_path,
             dropdown_label=args.nav_dropdown,
         )
+        if not args.output_file:
+            generated_reference_nav.replace_group_in_dropdown(
+                docs_json_path=docs_json_path,
+                dropdown_label=args.nav_dropdown,
+                group=generated_reference_nav.build_asyncapi_nav_group(
+                    output_dir=Path(args.output_dir).resolve(),
+                    docs_json_path=docs_json_path,
+                    group_label=reference_nav.ASYNCAPI_GROUP,
+                ),
+            )
         remove_legacy_output(
             output_file=Path(args.output_file).resolve() if args.output_file else None,
             output_dir=Path(args.output_dir).resolve() if not args.output_file else None,
