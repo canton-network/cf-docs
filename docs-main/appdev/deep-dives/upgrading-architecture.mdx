@@ -31,7 +31,7 @@ In practice, the frontends, backends, and Daml models of an application evolve a
 
 ## 1. Recommended Approach
 
-### 1.1 Asynchronous Rollout with a Synchronous Switch-Over
+### Asynchronous Rollout with a Synchronous Switch-Over
 
 The recommended high-level approach combines an asynchronous rollout with a synchronous switch-over:
 
@@ -50,7 +50,7 @@ Switching to v2 workflows may require more than deploying and using v2 component
 
 The switch-over ensures that the new workflows are synchronized on-ledger as of the target date.
 
-### 1.2 Risks of Uncoordinated Switch-Overs
+### Risks of Uncoordinated Switch-Overs
 
 Uncoordinated transitions to v2 workflows can cause command submission failures, resulting in workflows getting stuck. Common scenarios include:
 
@@ -75,11 +75,11 @@ Given the challenges, upgrades should be planned carefully to minimize disruptio
 
 ## 3. Backward Compatibility
 
-### 3.1 Backward-Compatible Changes to Daml Models
+### Backward-Compatible Changes to Daml Models
 
 Starting with Daml version 2.9, Smart Contract Upgrade (SCU) supports several backward-compatible changes to facilitate zero-downtime cross-version interactions:
 
-#### 3.1.1 Adding `Optional` Fields
+#### Adding `Optional` Fields
 
 `Optional` fields can be added to contracts, choice arguments, and choice return types, with the following default component behaviors:
 
@@ -115,36 +115,36 @@ This failure prevents data loss in workflows like archive-and-recreate:
 
 Had the read succeeded, `newlyAddedField` would have been defaulted to `None`, causing silent data loss. Instead, the Daml engine fails any transaction that involves such contracts. To advance the workflows, the Daml models on the participant node must be upgraded before the Daml engine can fetch the contract.
 
-#### 3.1.2 Daml Record as Choice Return Types
+#### Daml Record as Choice Return Types
 
 - When adding `Optional` fields to choice return types, the return type must be a Daml record rather than a scalar type or assembly type, such as a tuple, list, set, or map.
 - When designing a choice that may include a new field in its return value in the future, use a Daml record as the return type. A Daml record is preferred over a tuple for choice return types.
 
-#### 3.1.3 Adding New Constructors to Variants, Including Enums
+#### Adding New Constructors to Variants, Including Enums
 
 - New constructors can be added to variants, including enums. Newer versions of a DAR package can add new constructors to variant types, including enums.
 - Downgrading these changes, such as using a new constructor in older versions, fails just as downgrading a newly added `Optional` field with a non-`None` value fails.
 
-#### 3.1.4 Adding New Choices
+#### Adding New Choices
 
 - New choices in v2 become available on active contracts created with v1 once all stakeholders’ participant nodes have uploaded the v2 DAR files.
 
-#### 3.1.5 Modifying Existing Choices
+#### Modifying Existing Choices
 
 - Controllers, observers, and the choice body can be updated for bug fixes or to handle new arguments.
 - Existing choices cannot be removed but can be made non-functional using the `abort` function.
 
-#### 3.1.6 Updating Signatories, Observers, and `ensure` Clauses
+#### Updating Signatories, Observers, and `ensure` Clauses
 
 - The code for determining signatories, observers, and ensure clauses can be updated, but with restrictions. For existing contracts, the computed signatories and observers must remain unchanged. When a contract is fetched or exercised, Daml recomputes these values using the latest code and compares them to the original values. If they don’t match, the transaction is aborted to prevent unintended permission changes.
 - The ensure clause is also recomputed and re-evaluated for existing contracts when fetching or exercising choices on them.
 
-#### 3.1.7 Adding Interface Definitions and Instances
+#### Adding Interface Definitions and Instances
 
 - Interface definitions cannot be changed once deployed. Always place interface definitions in a standalone package containing only interfaces and no templates.
 - New interface instances can be added, but existing instances cannot be removed from a template. Interface choices can be made inoperable by having them evaluate to `error “No longer implemented.”`
 
-#### 3.1.8 Adding and Deprecating Templates
+#### Adding and Deprecating Templates
 
 New templates can be added. Existing templates cannot be removed but can be deprecated by:
 
@@ -153,7 +153,7 @@ New templates can be added. Existing templates cannot be removed but can be depr
 
 Note that the latter approach may result in a large number of active contracts stored on the ledger without a way to archive them, unless another update is deployed to evaluate the `ensure` clause to `True`. To deprecate a template without leaving contracts on the ledger that cannot be archived, add `ensure False` to the template only after all active contracts created from it have been archived through automation or other means.
 
-##### 3.1.8.1 Understanding Contract Archival in Daml
+##### Understanding Contract Archival in Daml
 
 At a purely technical level, "archived" means a consuming choice has been exercised on the contract. However, there are meaningful distinctions between the various business and operational contexts in which an archive may occur.
 
@@ -171,13 +171,13 @@ The incremental migration in case 3, can be handled in various ways, including b
 
 The preferred approach is to handle versioning and upgrades directly in Daml rather than relying on external automation. However, in some cases, a valid v2 can only be generated from a v1 in consultation with either off-ledger systems or Active Contract Set (ACS)/Participant Query Store (PQS) queries that require off-ledger support.
 
-### 3.2 Backward Compatibility in Backend Code
+### Backward Compatibility in Backend Code
 
 To ensure that ledger reads in the v2 backend remain compatible with contracts created using v1 Daml models, use transaction and contract filters with symbolic package references. These references take the form of `\#package-name:module-name:template-id` for ledger reads to retrieve data from all contracts that are instances of the template with `module-name` and `template-id` of any version of the `package-name`.
 
 Since newer versions of a template may introduce fields of type `Optional` that did not exist in earlier versions, the backend must handle cases where these fields are missing. The Daml SDK’s codegens assist with this by automatically setting missing `Optional` fields to `None`.
 
-### 3.3 Manage Backward-Incompatible Changes
+### Manage Backward-Incompatible Changes
 
 Not all changes can maintain backward compatibility. The strategy for updating Daml models follows principles similar to how APIs evolve in a service-based architecture.
 
@@ -187,7 +187,7 @@ Only backward-compatible changes are allowed for existing APIs, that is for the 
 - Where necessary, provide reference data, such as default values, for `Upgrade` choices via additional choice arguments.
 - Use backend automation to migrate old contracts to new ones. The process may incur downtime on workflows until the contracts are converted by the automation.
 
-### 3.4 Avoid Package Name Conflicts
+### Avoid Package Name Conflicts
 
 <img src="/images/docs_website/package-name.png" className="align-center" alt="Avoid Package Name Conflicts" />
 
@@ -195,19 +195,19 @@ Avoid package name conflicts, particularly between packages published by differe
 
 ## 4. Package Vetting, Testing, and Rollback
 
-### 4.1 Package Vetting
+### Package Vetting
 
-#### 4.1.1 Vetting
+#### Vetting
 
 By default, when a Daml package is uploaded, the participant node automatically marks it as vetted and publishes its vetting status on the synchronizer. This allows other participant nodes to determine which workflows the parties on the participant can engage in. A package cannot be used until it is vetted, providing an additional verification step in the deployment process.
 
-#### 4.1.2 Unvetting
+#### Unvetting
 
 Packages can also be unvetted. For example, after uploading and vetting v2, unvetting v1 signals that the participant node can no longer participate in v1 workflows, finalizing the upgrade process.
 
 Note that all v1 contracts must be fully upgraded before unvetting v1 to avoid potential issues. This requirement extends beyond a zero-downtime upgrade.
 
-### 4.2 Testing
+### Testing
 
 Once the Daml packages are vetted, it is essential to ensure that the new version remains compatible with the previous versions. This involves two types of testing:
 
@@ -221,13 +221,13 @@ Once the Daml packages are vetted, it is essential to ensure that the new versio
 
 For more complex upgrades, additional tests may be needed.
 
-### 4.3 Rollback
+### Rollback
 
-#### 4.3.1 Rollback by Unvetting
+#### Rollback by Unvetting
 
 To roll back upgrades that do not modify the types of existing templates and choices, unvet the v2 DAR package.
 
-#### 4.3.2 Rollback by Roll-Forward
+#### Rollback by Roll-Forward
 
 Rollback is more complex for upgrades that add new fields to existing templates. In such cases, the rollback must be performed in a “roll-forward” fashion by publishing a new upgrade. This is necessary because if at least one contract has been created using the new fields, those contracts cannot be read with the previous version of the Daml code. Simply unvetting v2 is not an option unless it is acceptable for contracts using the new fields to no longer be referenced. Instead, follow these steps:
 
