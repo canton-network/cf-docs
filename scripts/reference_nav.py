@@ -12,8 +12,8 @@ ASYNCAPI_GROUP = "AsyncAPI"
 GRPC_GROUP = "gRPC Ledger API Reference"
 PROTOBUF_GROUP = "Protobufs"
 PROTOBUF_GROUP_ALIASES = {"Canton Protobuf", "Canton Protobuf History", PROTOBUF_GROUP}
-BINDINGS_GROUP = "Ledger API Java Bindings"
-BINDINGS_GROUP_ALIASES = {BINDINGS_GROUP, "Ledger API JVM Bindings"}
+BINDINGS_GROUP = "Java Bindings"
+BINDINGS_GROUP_ALIASES = {BINDINGS_GROUP, "Ledger API Java Bindings", "Ledger API JVM Bindings"}
 LEDGER_API_CHILD_ORDER = [
     OPENAPI_GROUP,
     ASYNCAPI_GROUP,
