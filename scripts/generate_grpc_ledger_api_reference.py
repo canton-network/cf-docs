@@ -229,6 +229,14 @@ def retitle_generated_pages(*, output_dir: Path) -> None:
         replace_text(package_page, [("Canton Protobuf History", GROUP_LABEL)])
 
 
+def normalize_generated_markdown(*, output_dir: Path) -> None:
+    for path in sorted(output_dir.rglob("*.mdx")):
+        text = path.read_text(encoding="utf-8")
+        normalized = "\n".join(line.rstrip() for line in text.splitlines()) + "\n"
+        if normalized != text:
+            path.write_text(normalized, encoding="utf-8")
+
+
 def build_nav_group(
     *,
     docs_json_path: Path,
@@ -401,6 +409,7 @@ def main() -> int:
     root, pages = build_pages(report, output_dir=output_dir)
     written_paths = write_pages(pages, root)
     retitle_generated_pages(output_dir=output_dir)
+    normalize_generated_markdown(output_dir=output_dir)
 
     overview_path = output_dir / "index.mdx"
     package_paths = [root / page.path for page in pages[1:]]
