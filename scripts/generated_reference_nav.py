@@ -2,8 +2,12 @@ from __future__ import annotations
 
 import json
 import re
+from html import unescape
 from pathlib import Path
 from typing import Any
+
+
+DETAILS_AND_HISTORY_TITLE = "Details and history"
 
 
 def docs_json_page_ref(path: Path, docs_json_path: Path) -> str:
@@ -41,6 +45,41 @@ def mdx_title(path: Path) -> str:
     return path.stem
 
 
+def mdx_page_heading(path: Path) -> str:
+    text = path.read_text(encoding="utf-8", errors="replace")
+    match = re.search(r'<h1 class="x2mdx-ref-title">([^<]+)</h1>', text)
+    if match:
+        return unescape(match.group(1)).strip()
+    return mdx_title(path)
+
+
+def set_mdx_title(path: Path, title: str) -> None:
+    text = path.read_text(encoding="utf-8")
+    if not text.startswith("---\n"):
+        return
+    frontmatter_end = text.find("\n---", 4)
+    if frontmatter_end == -1:
+        return
+    frontmatter = text[:frontmatter_end]
+    replacement = f'title: "{title}"'
+    updated_frontmatter, count = re.subn(
+        r"(?m)^title:\s*(?:\"[^\"]*\"|'[^']*'|.+?)\s*$",
+        replacement,
+        frontmatter,
+        count=1,
+    )
+    if count == 0:
+        updated_frontmatter = frontmatter + "\n" + replacement
+    updated = updated_frontmatter + text[frontmatter_end:]
+    if updated != text:
+        path.write_text(updated, encoding="utf-8")
+
+
+def details_page_ref(path: Path, docs_json_path: Path) -> str:
+    set_mdx_title(path, DETAILS_AND_HISTORY_TITLE)
+    return docs_json_page_ref(path, docs_json_path)
+
+
 def _protobuf_service_name(path: Path) -> str:
     text = path.read_text(encoding="utf-8", errors="replace")
     match = re.search(r"<dt>Service</dt>\s*<dd>([^<]+)</dd>", text)
@@ -55,9 +94,9 @@ def build_asyncapi_nav_group(
     docs_json_path: Path,
     group_label: str,
 ) -> dict[str, Any]:
-    pages: list[Any] = [docs_json_page_ref(output_dir / "index.mdx", docs_json_path)]
+    pages: list[Any] = []
     channel_groups: list[Any] = []
-    for channel_page in sorted((output_dir / "channels").glob("*.mdx"), key=mdx_title):
+    for channel_page in sorted((output_dir / "channels").glob("*.mdx"), key=mdx_page_heading):
         channel_slug = channel_page.stem
         operation_dir = output_dir / "operations" / channel_slug
         operation_refs = [
@@ -66,12 +105,12 @@ def build_asyncapi_nav_group(
         ]
         channel_groups.append(
             {
-                "group": mdx_title(channel_page),
-                "pages": [docs_json_page_ref(channel_page, docs_json_path), *operation_refs],
+                "group": mdx_page_heading(channel_page),
+                "pages": [*operation_refs, details_page_ref(channel_page, docs_json_path)],
             }
         )
-    if channel_groups:
-        pages.append({"group": "Channels", "pages": channel_groups})
+    pages.extend(channel_groups)
+    pages.append(details_page_ref(output_dir / "index.mdx", docs_json_path))
     return {"group": group_label, "pages": pages}
 
 
@@ -83,7 +122,7 @@ def build_openrpc_nav_group(
     spec_ids: list[str],
     spec_dir_name: str = "specs",
 ) -> dict[str, Any]:
-    pages: list[Any] = [docs_json_page_ref(output_dir / "index.mdx", docs_json_path)]
+    pages: list[Any] = []
     for spec_id in spec_ids:
         spec_page = output_dir / spec_dir_name / f"{slugify(spec_id)}.mdx"
         if not spec_page.exists():
@@ -95,10 +134,11 @@ def build_openrpc_nav_group(
         ]
         pages.append(
             {
-                "group": mdx_title(spec_page),
-                "pages": [docs_json_page_ref(spec_page, docs_json_path), *operation_refs],
+                "group": mdx_page_heading(spec_page),
+                "pages": [*operation_refs, details_page_ref(spec_page, docs_json_path)],
             }
         )
+    pages.append(details_page_ref(output_dir / "index.mdx", docs_json_path))
     return {"group": group_label, "pages": pages}
 
 
@@ -109,15 +149,20 @@ def build_protobuf_nav_group(
     group_label: str,
     extra_page_refs: list[str] | None = None,
 ) -> dict[str, Any]:
-    pages: list[Any] = [docs_json_page_ref(output_dir / "index.mdx", docs_json_path)]
+    pages: list[Any] = []
     package_groups: list[Any] = []
-    for package_page in sorted((output_dir / "packages").glob("*.mdx"), key=mdx_title):
+    for package_page in sorted((output_dir / "packages").glob("*.mdx"), key=mdx_page_heading):
         package_slug = package_page.stem
-        package_pages: list[Any] = [docs_json_page_ref(package_page, docs_json_path)]
+        package_pages: list[Any] = []
         operation_root = output_dir / "operations" / package_slug
         service_groups: list[Any] = []
         if not operation_root.is_dir():
-            package_groups.append({"group": mdx_title(package_page), "pages": package_pages})
+            package_groups.append(
+                {
+                    "group": mdx_page_heading(package_page),
+                    "pages": [details_page_ref(package_page, docs_json_path)],
+                }
+            )
             continue
         service_dirs = sorted(
             (path for path in operation_root.iterdir() if path.is_dir()),
@@ -134,13 +179,11 @@ def build_protobuf_nav_group(
                 }
             )
         if service_groups:
-            package_pages.append({"group": "Services", "pages": service_groups})
-        package_groups.append({"group": mdx_title(package_page), "pages": package_pages})
-    if package_groups:
-        pages.append({"group": "Packages", "pages": package_groups})
-    for page_ref in extra_page_refs or []:
-        if page_ref not in pages:
-            pages.append(page_ref)
+            package_pages.extend(service_groups)
+        package_pages.append(details_page_ref(package_page, docs_json_path))
+        package_groups.append({"group": mdx_page_heading(package_page), "pages": package_pages})
+    pages.extend(package_groups)
+    pages.append(details_page_ref(output_dir / "index.mdx", docs_json_path))
     return {"group": group_label, "pages": pages}
 
 
