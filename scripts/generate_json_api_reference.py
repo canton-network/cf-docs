@@ -131,7 +131,8 @@ def update_docs_navigation(
 
     group = _find_group(parent_pages, group_label)
     if group is None:
-        raise ValueError(f"Group not found in docs.json: {group_label}")
+        group = {}
+        parent_pages.append(group)
 
     group.clear()
     group["group"] = group_label

@@ -15,6 +15,7 @@ from typing import Any, Literal
 
 from docs_env import ensure_repo_direnv, repo_direnv_command
 import reference_nav
+from validate_splice_mintlify_openapi_nav import validate_splice_nav
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -284,6 +285,7 @@ def consolidate_docs_json() -> None:
         docs_json_path=DOCS_JSON_PATH,
         dropdown_label=API_REFERENCE_DROPDOWN,
     )
+    validate_splice_nav(docs_json_path=DOCS_JSON_PATH)
 
 
 def main() -> int:
