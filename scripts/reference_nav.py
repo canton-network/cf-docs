@@ -9,7 +9,8 @@ LEDGER_API_PARENT_GROUP = "Ledger API"
 LEGACY_ENDPOINTS_GROUP = "Ledger API Endpoints"
 OPENAPI_GROUP = "OpenAPI"
 ASYNCAPI_GROUP = "AsyncAPI"
-GRPC_GROUP = "gRPC Ledger API Reference"
+GRPC_GROUP = "gRPC API"
+GRPC_GROUP_ALIASES = {GRPC_GROUP, "gRPC Ledger API Reference"}
 PROTOBUF_GROUP = "Protobufs"
 PROTOBUF_GROUP_ALIASES = {"Canton Protobuf", "Canton Protobuf History", PROTOBUF_GROUP}
 BINDINGS_GROUP = "Java Bindings"
@@ -23,8 +24,11 @@ LEDGER_API_CHILD_ORDER = [
 ]
 OPENAPI_PAGE_REF = "reference/json-api-reference"
 ASYNCAPI_PAGE_REF = "reference/json-api-asyncapi-reference/index"
-GRPC_OVERVIEW_PAGE_REF = "reference/grpc-ledger-api-reference/index"
+GRPC_DETAILS_PAGE_REF = "reference/grpc-ledger-api-reference/details"
+GRPC_LEGACY_OVERVIEW_PAGE_REF = "reference/grpc-ledger-api-reference/index"
+GRPC_PREFIX = "reference/grpc-ledger-api-reference/"
 GRPC_PACKAGES_PREFIX = "reference/grpc-ledger-api-reference/packages/"
+GRPC_OPERATIONS_PREFIX = "reference/grpc-ledger-api-reference/operations/"
 PROTOBUF_OVERVIEW_PAGE_REF = "reference/protobuf/index"
 BINDINGS_OVERVIEW_PAGE_REF = "reference/ledger-api-jvm-bindings"
 LANGUAGE_GROUPS = {"Scaladocs", "Javadocs"}
@@ -96,22 +100,55 @@ def _append_unique(items: list[str], values: list[str]) -> None:
             items.append(value)
 
 
+def _normalized_grpc_ref(page_ref: str) -> str | None:
+    if page_ref == GRPC_LEGACY_OVERVIEW_PAGE_REF:
+        return GRPC_DETAILS_PAGE_REF
+    if page_ref == GRPC_DETAILS_PAGE_REF:
+        return page_ref
+    for prefix in (GRPC_PACKAGES_PREFIX, GRPC_OPERATIONS_PREFIX):
+        if page_ref.startswith(prefix):
+            return f"{GRPC_PREFIX}{page_ref.removeprefix(prefix)}"
+    if page_ref.startswith(GRPC_PREFIX):
+        return page_ref
+    return None
+
+
+def _absorb_grpc_pages(items: list[Any], collected: dict[str, dict[str, Any]]) -> bool:
+    absorbed = False
+    normalized_refs: list[str] = []
+    for item in items:
+        if isinstance(item, str):
+            normalized = _normalized_grpc_ref(item)
+            if normalized is not None:
+                normalized_refs.append(normalized)
+                absorbed = True
+            continue
+        if isinstance(item, dict):
+            pages = item.get("pages")
+            if isinstance(pages, list):
+                absorbed = _absorb_grpc_pages(pages, collected) or absorbed
+    if normalized_refs:
+        _merge_group_entries(
+            _upsert_group(collected, GRPC_GROUP),
+            {"group": GRPC_GROUP, "pages": normalized_refs},
+        )
+    return absorbed
+
+
 def _absorb_known_item(item: Any, collected: dict[str, dict[str, Any]]) -> bool:
     if isinstance(item, str):
+        normalized_grpc = _normalized_grpc_ref(item)
+        if normalized_grpc is not None:
+            _merge_group_entries(
+                _upsert_group(collected, GRPC_GROUP),
+                {"group": GRPC_GROUP, "pages": [normalized_grpc]},
+            )
+            return True
         if item == OPENAPI_PAGE_REF:
             _merge_group_entries(_upsert_group(collected, OPENAPI_GROUP), {"group": OPENAPI_GROUP, "pages": [item]})
             return True
         elif item == ASYNCAPI_PAGE_REF:
             _merge_group_entries(_upsert_group(collected, ASYNCAPI_GROUP), {"group": ASYNCAPI_GROUP, "pages": [item]})
-            return True
-        elif item == GRPC_OVERVIEW_PAGE_REF:
-            _merge_group_entries(_upsert_group(collected, GRPC_GROUP), {"group": GRPC_GROUP, "pages": [item]})
-            return True
-        elif item.startswith(GRPC_PACKAGES_PREFIX):
-            _merge_group_entries(
-                _upsert_group(collected, GRPC_GROUP),
-                {"group": GRPC_GROUP, "pages": [{"group": "Packages", "pages": [item]}]},
-            )
             return True
         elif item == PROTOBUF_OVERVIEW_PAGE_REF:
             _merge_group_entries(_upsert_group(collected, PROTOBUF_GROUP), {"group": PROTOBUF_GROUP, "pages": [item]})
@@ -156,8 +193,16 @@ def _absorb_known_item(item: Any, collected: dict[str, dict[str, Any]]) -> bool:
                 absorbed = _absorb_known_item(page_ref, collected) or absorbed
         return absorbed
 
-    if label in {OPENAPI_GROUP, ASYNCAPI_GROUP, GRPC_GROUP}:
+    if label in {OPENAPI_GROUP, ASYNCAPI_GROUP}:
         _merge_group_entries(_upsert_group(collected, label), item)
+        return True
+
+    if label in GRPC_GROUP_ALIASES:
+        pages = item.get("pages")
+        if isinstance(pages, list):
+            _absorb_grpc_pages(pages, collected)
+        else:
+            _upsert_group(collected, GRPC_GROUP)
         return True
 
     if label in PROTOBUF_GROUP_ALIASES:
@@ -174,9 +219,8 @@ def _absorb_known_item(item: Any, collected: dict[str, dict[str, Any]]) -> bool:
 
     if label == "Packages":
         pages = item.get("pages")
-        if isinstance(pages, list) and all(isinstance(page, str) and page.startswith(GRPC_PACKAGES_PREFIX) for page in pages):
-            _merge_group_entries(_upsert_group(collected, GRPC_GROUP), {"group": GRPC_GROUP, "pages": [item]})
-            return True
+        if isinstance(pages, list):
+            return _absorb_grpc_pages(pages, collected)
 
     if label in LANGUAGE_GROUPS:
         _merge_group_entries(_upsert_group(collected, BINDINGS_GROUP), {"group": BINDINGS_GROUP, "pages": [item]})
@@ -209,7 +253,7 @@ def regroup_ledger_api_nav(*, docs_json_path: Path, dropdown_label: str) -> None
     known_labels = {
         LEDGER_API_PARENT_GROUP,
         LEGACY_ENDPOINTS_GROUP,
-        GRPC_GROUP,
+        *GRPC_GROUP_ALIASES,
         *PROTOBUF_GROUP_ALIASES,
         *BINDINGS_GROUP_ALIASES,
     }
