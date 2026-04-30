@@ -49,29 +49,46 @@ def _protobuf_service_name(path: Path) -> str:
     return path.parent.name
 
 
+def _asyncapi_channel_name(path: Path) -> str:
+    text = path.read_text(encoding="utf-8", errors="replace")
+    match = re.search(r"<dt>Channel</dt>\s*<dd>([^<]+)</dd>", text)
+    if match:
+        return match.group(1)
+    match = re.search(r'<h1 class="x2mdx-ref-title">([^<]+)</h1>', text)
+    if match:
+        return match.group(1)
+    return mdx_title(path)
+
+
 def build_asyncapi_nav_group(
     *,
     output_dir: Path,
     docs_json_path: Path,
     group_label: str,
 ) -> dict[str, Any]:
-    pages: list[Any] = [docs_json_page_ref(output_dir / "index.mdx", docs_json_path)]
+    pages: list[Any] = []
     channel_groups: list[Any] = []
-    for channel_page in sorted((output_dir / "channels").glob("*.mdx"), key=mdx_title):
-        channel_slug = channel_page.stem
+    operation_root = output_dir / "operations"
+    for channel_details_page in sorted(operation_root.glob("*/details.mdx"), key=lambda path: path.parent.name):
+        channel_slug = channel_details_page.parent.name
         operation_dir = output_dir / "operations" / channel_slug
         operation_refs = [
             docs_json_page_ref(path, docs_json_path)
-            for path in sorted(operation_dir.glob("*.mdx"), key=mdx_title)
+            for path in sorted(
+                operation_dir.glob("*.mdx"),
+                key=lambda path: (path.name == "details.mdx", mdx_title(path)),
+            )
         ]
         channel_groups.append(
             {
-                "group": mdx_title(channel_page),
-                "pages": [docs_json_page_ref(channel_page, docs_json_path), *operation_refs],
+                "group": _asyncapi_channel_name(channel_details_page),
+                "pages": operation_refs,
             }
         )
-    if channel_groups:
-        pages.append({"group": "Channels", "pages": channel_groups})
+    pages.extend(channel_groups)
+    details_page = operation_root / "details.mdx"
+    if details_page.exists():
+        pages.append(docs_json_page_ref(details_page, docs_json_path))
     return {"group": group_label, "pages": pages}
 
 
