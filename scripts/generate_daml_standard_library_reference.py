@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -20,6 +21,7 @@ DEFAULT_MANIFEST = REPO_ROOT / ".internal" / "generated" / "x2mdx" / "daml-stand
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "docs-main" / "appdev" / "reference" / "daml-standard-library"
 DEFAULT_DOCS_JSON = REPO_ROOT / "docs-main" / "docs.json"
 GROUP_LABEL = "Daml Standard Library"
+DETAILS_AND_HISTORY_LABEL = "Details and history"
 MODULES_GROUP_LABEL = "Modules"
 
 
@@ -84,6 +86,28 @@ def read_mdx_title(path: Path) -> str:
     raise ValueError(f"Missing title frontmatter in {path}")
 
 
+def set_mdx_title(path: Path, title: str) -> None:
+    text = path.read_text(encoding="utf-8")
+    if not text.startswith("---\n"):
+        return
+    frontmatter_end = text.find("\n---", 4)
+    if frontmatter_end == -1:
+        return
+    frontmatter = text[:frontmatter_end]
+    replacement = f'title: "{title}"'
+    updated_frontmatter, count = re.subn(
+        r"(?m)^title:\s*(?:\"[^\"]*\"|'[^']*'|.+?)\s*$",
+        replacement,
+        frontmatter,
+        count=1,
+    )
+    if count == 0:
+        updated_frontmatter = frontmatter + "\n" + replacement
+    updated = updated_frontmatter + text[frontmatter_end:]
+    if updated != text:
+        path.write_text(updated, encoding="utf-8")
+
+
 def prune_nav_items(items: list[Any], *, page_refs: set[str], group_labels: set[str]) -> list[Any]:
     pruned: list[Any] = []
     for item in items:
@@ -117,6 +141,28 @@ def ensure_group_path(items: list[Any], group_path: list[str]) -> list[Any]:
             group["pages"] = pages
         current_pages = pages
     return current_pages
+
+
+def find_group_path(items: list[Any], group_path: list[str]) -> list[Any] | None:
+    current_pages = items
+    for label in group_path:
+        group = next((item for item in current_pages if isinstance(item, dict) and item.get("group") == label), None)
+        if group is None:
+            return None
+        pages = group.get("pages")
+        if not isinstance(pages, list):
+            return None
+        current_pages = pages
+    return current_pages
+
+
+def find_group_index(items: list[Any] | None, group_label: str) -> int | None:
+    if items is None:
+        return None
+    for index, item in enumerate(items):
+        if isinstance(item, dict) and item.get("group") == group_label:
+            return index
+    return None
 
 
 def generate_json_snapshot(
@@ -193,28 +239,33 @@ def update_docs_navigation(
     if not isinstance(pages, list):
         raise ValueError(f"Dropdown does not expose a pages list: {dropdown_label}")
 
-    page_entries: list[tuple[str, str]] = []
+    page_entries: list[tuple[str, str, Path]] = []
     for page in sorted(output_dir.glob("*.mdx")):
         title = read_mdx_title(page)
-        page_entries.append((title, docs_json_page_ref(page, docs_json_path)))
+        page_entries.append((title, docs_json_page_ref(page, docs_json_path), page))
     page_entries.sort(key=lambda item: (0 if item[0] == GROUP_LABEL else 1, item[0].lower(), item[0]))
-    page_refs = {page_ref for _title, page_ref in page_entries}
+    page_refs = {page_ref for _title, page_ref, _path in page_entries}
 
+    existing_group_index = find_group_index(find_group_path(pages, parent_groups), GROUP_LABEL)
     dropdown["pages"] = prune_nav_items(pages, page_refs=page_refs, group_labels={GROUP_LABEL})
     target_pages = ensure_group_path(dropdown["pages"], parent_groups)
-    overview_ref = next((page_ref for title, page_ref in page_entries if title == GROUP_LABEL), None)
-    module_refs = [page_ref for title, page_ref in page_entries if title != GROUP_LABEL]
+    overview_entry = next(((page_ref, path) for _title, page_ref, path in page_entries if path.name == "index.mdx"), None)
+    module_refs = [page_ref for _title, page_ref, path in page_entries if path.name != "index.mdx"]
     group_pages: list[Any] = []
-    if overview_ref is not None:
-        group_pages.append(overview_ref)
     if module_refs:
         group_pages.append({"group": MODULES_GROUP_LABEL, "pages": module_refs})
-    target_pages.append(
-        {
-            "group": GROUP_LABEL,
-            "pages": group_pages,
-        }
-    )
+    if overview_entry is not None:
+        overview_ref, overview_path = overview_entry
+        set_mdx_title(overview_path, DETAILS_AND_HISTORY_LABEL)
+        group_pages.append(overview_ref)
+    group = {
+        "group": GROUP_LABEL,
+        "pages": group_pages,
+    }
+    if existing_group_index is None or existing_group_index >= len(target_pages):
+        target_pages.append(group)
+    else:
+        target_pages.insert(existing_group_index, group)
 
     docs_json_path.write_text(json.dumps(docs, indent=2) + "\n", encoding="utf-8")
     print(f"Updated docs navigation: {docs_json_path}")
