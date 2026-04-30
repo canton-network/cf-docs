@@ -15,10 +15,7 @@ This repo manages the contents of the docs.canton.network website.
 ### Running the dev server
 
 ```bash
-# Install Mintlify CLI (first time only)
-npm i -g mintlify
-
-# Start local dev server
+direnv allow
 cd docs-main && mintlify dev
 ```
 
@@ -61,7 +58,7 @@ Then run:
 
 ```bash
 direnv allow
-mintlify dev
+cd docs-main && mintlify dev
 ```
 
 ### Run all generated reference docs
