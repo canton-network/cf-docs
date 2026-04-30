@@ -37,8 +37,9 @@ DEFAULT_MANIFEST = REPO_ROOT / ".internal" / "generated" / "x2mdx" / "grpc-ledge
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "docs-main" / "reference" / "grpc-ledger-api-reference"
 DEFAULT_DOCS_JSON = REPO_ROOT / "docs-main" / "docs.json"
 DEFAULT_REPO_DIR = DEFAULT_CACHE_DIR / "repos" / "canton"
-GROUP_LABEL = "gRPC Ledger API Reference"
-PACKAGE_GROUP_LABEL = "Packages"
+GROUP_LABEL = "gRPC API"
+LEGACY_GROUP_LABEL = "gRPC Ledger API Reference"
+DETAILS_LABEL = "Details and history"
 DEFAULT_INSERT_AFTER_GROUP = "Ledger API Endpoints"
 DEFAULT_SOURCE_NAME = "Canton Ledger API protobuf release bundles"
 
@@ -213,7 +214,8 @@ def retitle_generated_pages(*, output_dir: Path) -> None:
         replace_text(
             overview_path,
             [
-                ("Canton Protobuf History", GROUP_LABEL),
+                ('title: "Canton Protobuf History"', f'title: "{DETAILS_LABEL}"'),
+                ('title: "Canton Protobuf Reference"', f'title: "{DETAILS_LABEL}"'),
                 (
                     'description: "Descriptor-backed protobuf API history grouped by package."',
                     'description: "Generated Ledger API gRPC reference grouped by package."',
@@ -229,21 +231,55 @@ def retitle_generated_pages(*, output_dir: Path) -> None:
         replace_text(package_page, [("Canton Protobuf History", GROUP_LABEL)])
 
 
+def flattened_page_path(path: Path, *, output_dir: Path) -> Path:
+    relative = path.resolve().relative_to(output_dir.resolve())
+    if relative == Path("index.mdx"):
+        return output_dir / "details.mdx"
+    if relative.parts and relative.parts[0] in {"packages", "operations"}:
+        return output_dir.joinpath(*relative.parts[1:])
+    return path
+
+
+def flatten_generated_tree(*, output_dir: Path, page_paths: list[Path]) -> list[Path]:
+    flattened_paths = [flattened_page_path(path, output_dir=output_dir) for path in page_paths]
+
+    index_path = output_dir / "index.mdx"
+    details_path = output_dir / "details.mdx"
+    if index_path.exists():
+        if details_path.exists():
+            details_path.unlink()
+        index_path.rename(details_path)
+
+    for source_dir_name in ("packages", "operations"):
+        source_dir = output_dir / source_dir_name
+        if not source_dir.is_dir():
+            continue
+        for source_path in sorted(source_dir.iterdir()):
+            destination = output_dir / source_path.name
+            if destination.exists():
+                if destination.is_dir():
+                    shutil.rmtree(destination)
+                else:
+                    destination.unlink()
+            source_path.rename(destination)
+        source_dir.rmdir()
+
+    return flattened_paths
+
+
 def build_nav_group(
     *,
     docs_json_path: Path,
-    overview_path: Path,
-    package_paths: list[Path],
+    details_path: Path,
+    page_paths: list[Path],
 ) -> tuple[dict[str, Any], set[str]]:
-    overview_ref = canton_protobuf_history.docs_json_page_ref(overview_path, docs_json_path)
-    package_refs = [
-        canton_protobuf_history.docs_json_page_ref(package_path, docs_json_path)
-        for package_path in package_paths
+    details_ref = canton_protobuf_history.docs_json_page_ref(details_path, docs_json_path)
+    page_refs = [
+        canton_protobuf_history.docs_json_page_ref(page_path, docs_json_path)
+        for page_path in page_paths
     ]
-    refs = {overview_ref, *package_refs}
-    pages: list[Any] = [overview_ref]
-    if package_refs:
-        pages.append({"group": PACKAGE_GROUP_LABEL, "pages": package_refs})
+    refs = {*page_refs, details_ref}
+    pages: list[Any] = [*page_refs, details_ref]
     return {"group": GROUP_LABEL, "pages": pages}, refs
 
 
@@ -262,8 +298,8 @@ def update_docs_navigation(
     dropdown_label: str,
     parent_groups: list[str],
     insert_after_group: str | None,
-    overview_path: Path,
-    package_paths: list[Path],
+    details_path: Path,
+    page_paths: list[Path],
 ) -> None:
     docs = load_json(docs_json_path)
     navigation = docs.get("navigation")
@@ -281,13 +317,13 @@ def update_docs_navigation(
 
     nav_group, generated_refs = build_nav_group(
         docs_json_path=docs_json_path,
-        overview_path=overview_path,
-        package_paths=package_paths,
+        details_path=details_path,
+        page_paths=page_paths,
     )
     dropdown["pages"] = canton_protobuf_history.prune_nav_items(
         pages,
         page_refs=generated_refs,
-        group_labels={GROUP_LABEL},
+        group_labels={GROUP_LABEL, LEGACY_GROUP_LABEL},
     )
     target_pages = canton_protobuf_history.ensure_group_path(dropdown["pages"], parent_groups)
     insert_group(target_pages, group=nav_group, after_group=insert_after_group)
@@ -401,16 +437,19 @@ def main() -> int:
     root, pages = build_pages(report, output_dir=output_dir)
     written_paths = write_pages(pages, root)
     retitle_generated_pages(output_dir=output_dir)
+    page_paths = flatten_generated_tree(
+        output_dir=output_dir,
+        page_paths=[root / page.path for page in pages[1:]],
+    )
 
-    overview_path = output_dir / "index.mdx"
-    package_paths = [root / page.path for page in pages[1:]]
+    details_path = output_dir / "details.mdx"
     update_docs_navigation(
         docs_json_path=Path(args.docs_json).resolve(),
         dropdown_label=args.nav_dropdown,
         parent_groups=args.nav_group or [],
         insert_after_group=args.insert_after_group,
-        overview_path=overview_path,
-        package_paths=package_paths,
+        details_path=details_path,
+        page_paths=page_paths,
     )
     reference_nav.regroup_ledger_api_nav(
         docs_json_path=Path(args.docs_json).resolve(),

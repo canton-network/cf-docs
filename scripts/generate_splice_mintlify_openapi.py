@@ -13,6 +13,8 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+from validate_splice_mintlify_openapi_nav import validate_splice_nav
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 USER_AGENT = "digital-asset-docs-mintlify-openapi/1.0"
 DEFAULT_SOURCE_CONFIG = REPO_ROOT / "config" / "mintlify-openapi" / "splice-openapi" / "source-artifacts.json"
@@ -468,6 +470,10 @@ def main() -> int:
         docs_json_path=docs_json_path,
         source_config=source_config,
         families=families,
+    )
+    validate_splice_nav(
+        source_config_path=Path(args.source_config).resolve(),
+        docs_json_path=docs_json_path,
     )
     print(f"Updated docs navigation: {docs_json_path}")
     return 0

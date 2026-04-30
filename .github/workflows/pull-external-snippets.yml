@@ -1,0 +1,68 @@
+name: Pull external Snippet updates
+
+on: 
+  workflow_dispatch:
+    inputs:
+      artifact-id:
+        description: 'External Artifact Id'
+        required: true
+        type: string
+      run-id:
+        description: 'Github Action Run Id'
+        required: true
+        type: string
+      repo-name:
+        description: 'External repo name'
+        required: true
+        type: string
+      repo-org:
+        description: 'External repo org'
+        required: true
+        type: string
+      repo-version:
+        description: 'External repo version'
+        required: true
+        type: string
+  repository_dispatch:
+    types: [update_snippets]
+
+env: 
+  external_token: ${{ secrets.EXTERNAL_REPO_TOKEN }}
+  docs_pr_token: ${{ secrets.DOCS_PR_TOKEN }}
+  artifact_id: ${{ inputs.artifact-id || github.event.client_payload.artifact-id }}
+  run_id: ${{ inputs.run-id || github.event.client_payload.run-id }}
+  repo_name: ${{ inputs.repo-name || github.event.client_payload.repo-name }}
+  repo_org: ${{ inputs.repo-org || github.event.client_payload.repo-org }}
+  repo_version: ${{ inputs.repo-version || github.event.client_payload.repo-version }}
+  trigger_sha_short: ${{ github.event.client_payload.trigger_sha_short || 'manual' }}
+
+jobs:
+  pull-update-snippets:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check input data
+        run: |
+          echo "Artifact Id: ${{ env.artifact_id }}"
+          echo "GH Action run id: ${{ env.run_id }}"
+          echo "external repo name: ${{ env.repo_name }}"
+          echo "external repo org: ${{ env.repo_org }}"
+          echo "external repo version: ${{ env.repo_version }}"
+          echo "Token is set: ${{ env.external_token != '' }}"
+      - name: Checkout repository
+        uses: actions/checkout@v5
+      - name: pull artifacts
+        uses: actions/download-artifact@v5
+        with:
+          artifact-ids: ${{ env.artifact_id }}
+          path: snippets/external/${{ env.repo_name }}/${{ env.repo_version }}
+          github-token: ${{ env.external_token }}
+          repository: ${{ env.repo_org }}/${{ env.repo_name }}
+          run-id: ${{ env.run_id }}
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v8
+        with:
+          branch: external-snippet-update-${{ env.repo_name }}-${{ env.repo_version }}
+          base: main
+          token: ${{ secrets.DOCS_PR_TOKEN }}
+          title: External Snippet updates ${{ env.repo_name }} (${{ env.repo_version }}) [${{ env.trigger_sha_short }}]
+          commit-message: External Snippet updates ${{ env.repo_name }} (${{ env.repo_version }}) [${{ env.trigger_sha_short }}]
