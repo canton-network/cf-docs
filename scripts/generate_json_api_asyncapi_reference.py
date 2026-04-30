@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -35,9 +36,10 @@ DEFAULT_DOCS_JSON = REPO_ROOT / "docs-main" / "docs.json"
 DEFAULT_NAV_GROUP = "Ledger API Endpoints"
 DEFAULT_NAV_PAGE_ORDER = [
     "reference/json-api-reference",
-    "reference/json-api-asyncapi-reference/index",
+    "reference/json-api-asyncapi-reference/operations/details",
     "reference/json-api-asyncapi-reference",
 ]
+DETAILS_TITLE = "Details and history"
 
 
 def parse_args() -> argparse.Namespace:
@@ -142,6 +144,50 @@ def docs_json_page_ref(path: Path, docs_json_path: Path) -> str:
     return relative.with_suffix("").as_posix()
 
 
+def replace_frontmatter_title(path: Path, title: str) -> None:
+    text = path.read_text(encoding="utf-8")
+    lines = text.splitlines(keepends=True)
+    if not lines or lines[0].strip() != "---":
+        return
+    for index in range(1, len(lines)):
+        if lines[index].strip() == "---":
+            break
+        if lines[index].startswith("title: "):
+            lines[index] = f'title: "{title}"\n'
+            path.write_text("".join(lines), encoding="utf-8")
+            return
+
+
+def move_generated_file(source: Path, destination: Path) -> None:
+    if not source.exists():
+        return
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    if destination.exists():
+        destination.unlink()
+    source.rename(destination)
+
+
+def normalize_asyncapi_output_tree(*, output_dir: Path) -> None:
+    operations_dir = output_dir / "operations"
+    operations_dir.mkdir(parents=True, exist_ok=True)
+
+    overview_details = operations_dir / "details.mdx"
+    move_generated_file(output_dir / "index.mdx", overview_details)
+    if overview_details.exists():
+        replace_frontmatter_title(overview_details, DETAILS_TITLE)
+
+    channels_dir = output_dir / "channels"
+    if channels_dir.is_dir():
+        for channel_page in sorted(channels_dir.glob("*.mdx")):
+            channel_details = operations_dir / channel_page.stem / "details.mdx"
+            move_generated_file(channel_page, channel_details)
+            replace_frontmatter_title(channel_details, DETAILS_TITLE)
+        try:
+            channels_dir.rmdir()
+        except OSError:
+            shutil.rmtree(channels_dir)
+
+
 def prune_page_ref(node: object, page_ref: str) -> object | None:
     if isinstance(node, list):
         items: list[object] = []
@@ -152,7 +198,8 @@ def prune_page_ref(node: object, page_ref: str) -> object | None:
         return items
     if isinstance(node, dict):
         updated = {key: prune_page_ref(value, page_ref) for key, value in node.items()}
-        if updated.get("group") and not updated.get("pages") and not updated.get("groups"):
+        has_content = any(updated.get(key) for key in ("pages", "groups", "openapi", "asyncapi"))
+        if updated.get("group") and not has_content:
             return None
         return updated
     if isinstance(node, str) and node == page_ref:
@@ -371,25 +418,15 @@ def main() -> int:
         publish_version=publish_version,
         versions=[entry["version"] for entry in selected_version_entries],
     )
+    docs_json_path = Path(args.docs_json).resolve()
+    baseline_docs = load_json(docs_json_path)
     print("Running:", " ".join(command))
     completed = subprocess.run(command, cwd=REPO_ROOT)
     if completed.returncode == 0:
-        docs_json_path = Path(args.docs_json).resolve()
         nav_groups = args.nav_group if args.nav_group is not None else [DEFAULT_NAV_GROUP]
-        cleanup_docs_ref(docs_json_path=docs_json_path, page_path=LEGACY_OUTPUT_FILE)
         if not args.output_file:
-            cleanup_docs_ref(docs_json_path=docs_json_path, page_path=DEFAULT_OUTPUT_FILE)
-        if nav_groups:
-            normalize_nav_group_into_pages(
-                docs_json_path=docs_json_path,
-                dropdown_label=args.nav_dropdown,
-                group_label=nav_groups[0],
-            )
-        reference_nav.regroup_ledger_api_nav(
-            docs_json_path=docs_json_path,
-            dropdown_label=args.nav_dropdown,
-        )
-        if not args.output_file:
+            normalize_asyncapi_output_tree(output_dir=Path(args.output_dir).resolve())
+            docs_json_path.write_text(json.dumps(baseline_docs, indent=2) + "\n", encoding="utf-8")
             generated_reference_nav.replace_group_in_dropdown(
                 docs_json_path=docs_json_path,
                 dropdown_label=args.nav_dropdown,
@@ -399,6 +436,19 @@ def main() -> int:
                     group_label=reference_nav.ASYNCAPI_GROUP,
                 ),
             )
+            cleanup_docs_ref(docs_json_path=docs_json_path, page_path=DEFAULT_OUTPUT_FILE)
+        else:
+            cleanup_docs_ref(docs_json_path=docs_json_path, page_path=LEGACY_OUTPUT_FILE)
+            if nav_groups:
+                normalize_nav_group_into_pages(
+                    docs_json_path=docs_json_path,
+                    dropdown_label=args.nav_dropdown,
+                    group_label=nav_groups[0],
+                )
+        reference_nav.regroup_ledger_api_nav(
+            docs_json_path=docs_json_path,
+            dropdown_label=args.nav_dropdown,
+        )
         remove_legacy_output(
             output_file=Path(args.output_file).resolve() if args.output_file else None,
             output_dir=Path(args.output_dir).resolve() if not args.output_file else None,
