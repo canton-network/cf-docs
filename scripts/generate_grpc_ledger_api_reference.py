@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import argparse
 import copy
+import html
 import json
 import os
+import re
 import shutil
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from docs_env import ensure_repo_direnv
@@ -25,7 +27,7 @@ from x2mdx.protobuf.lifecycle import (
     build_protobuf_history_report_from_sources,
     build_release_diffs,
 )
-from x2mdx.protobuf.render import build_pages
+from x2mdx.protobuf.render import build_pages, package_page_path, slugify_segment
 from x2mdx.protobuf.snapshots import load_protobuf_sources
 from x2mdx.render import write_pages
 
@@ -230,7 +232,6 @@ def retitle_generated_pages(*, output_dir: Path) -> None:
     for package_page in sorted(packages_dir.glob("*.mdx")):
         replace_text(package_page, [("Canton Protobuf History", GROUP_LABEL)])
 
-
 def flattened_page_path(path: Path, *, output_dir: Path) -> Path:
     relative = path.resolve().relative_to(output_dir.resolve())
     if relative == Path("index.mdx"):
@@ -265,6 +266,84 @@ def flatten_generated_tree(*, output_dir: Path, page_paths: list[Path]) -> list[
         source_dir.rmdir()
 
     return flattened_paths
+
+
+def html_text(value: str) -> str:
+    return html.escape(value, quote=False)
+
+
+def split_package_local_name(name: str, *, package_names: list[str]) -> tuple[str, str | None]:
+    for package_name in sorted(package_names, key=len, reverse=True):
+        prefix = f"{package_name}."
+        if name.startswith(prefix):
+            return name.removeprefix(prefix), package_name
+    return name, None
+
+
+def shorten_package_page_headings(*, output_dir: Path, report: dict[str, Any]) -> None:
+    latest_snapshot = report["latestSnapshot"]
+    files = latest_snapshot["files"]
+    messages = latest_snapshot["messages"]
+    enums = latest_snapshot["enums"]
+    package_names = [str(package["package"]) for package in latest_snapshot["packages"]]
+
+    for package_doc in latest_snapshot["packages"]:
+        package_name = str(package_doc["package"])
+        package_page = package_page_path(output_dir, package_name)
+        if not package_page.exists():
+            package_page = output_dir / f"{slugify_segment(package_name)}.mdx"
+        if not package_page.exists():
+            continue
+
+        text = package_page.read_text(encoding="utf-8")
+        for file_id in package_doc["fileIds"]:
+            file_doc = files.get(file_id)
+            if not file_doc:
+                continue
+            repo_path = str(file_doc["repoPath"])
+            path = PurePosixPath(repo_path)
+            text = text.replace(
+                f"      <h3>{html_text(repo_path)}</h3>",
+                f"      <h3>{html_text(path.name)}</h3>",
+            )
+            text = text.replace(
+                "    <p class=\"x2mdx-ref-card-summary\">Current source file in the latest published descriptor snapshot.</p>",
+                "    <p class=\"x2mdx-ref-card-summary\">Source file from the latest descriptor snapshot.</p>",
+                1,
+            )
+
+        package_types = [
+            *[
+                message
+                for message in messages.values()
+                if any(str(message["id"]).startswith(f"{candidate}.") for candidate in package_names)
+            ],
+            *[
+                enum_doc
+                for enum_doc in enums.values()
+                if any(str(enum_doc["id"]).startswith(f"{candidate}.") for candidate in package_names)
+            ],
+        ]
+        for type_doc in package_types:
+            full_name = str(type_doc["id"])
+            local_name, type_package = split_package_local_name(full_name, package_names=package_names)
+            if type_package is None:
+                continue
+            pattern = re.compile(
+                rf"    <h3>{re.escape(html_text(full_name))}</h3>\n"
+                rf"    \n"
+                rf"    <p class=\"x2mdx-ref-schema-summary\">(?P<summary>[^<]+)</p>"
+            )
+            text = pattern.sub(
+                lambda match: (
+                    f"    <h3>{html_text(local_name)}</h3>\n"
+                    f"    \n"
+                    f"    <p class=\"x2mdx-ref-schema-summary\">{html_text(type_package)} · {match.group('summary')}</p>"
+                ),
+                text,
+            )
+
+        package_page.write_text(text, encoding="utf-8")
 
 
 def build_nav_group(
@@ -441,6 +520,7 @@ def main() -> int:
         output_dir=output_dir,
         page_paths=[root / page.path for page in pages[1:]],
     )
+    shorten_package_page_headings(output_dir=output_dir, report=report)
 
     details_path = output_dir / "details.mdx"
     update_docs_navigation(
