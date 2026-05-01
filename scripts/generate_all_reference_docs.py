@@ -78,7 +78,7 @@ SCRIPT_JOBS = [
     ),
     ScriptJob(
         script_path=REPO_ROOT / "scripts" / "generate_wallet_gateway_openrpc_reference.py",
-        nav_slice=NavSlice("top_group", ("Wallet Gateway JSON-RPC",)),
+        nav_slice=NavSlice("top_group", ("Wallet Kernel SDK",)),
     ),
     ScriptJob(
         script_path=REPO_ROOT / "scripts" / "generate_splice_mintlify_openapi.py",
