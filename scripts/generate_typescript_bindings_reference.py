@@ -23,7 +23,12 @@ DEFAULT_TYPEDOC_DIR = REPO_ROOT / ".internal" / "generated" / "x2mdx" / "typescr
 DEFAULT_OUTPUT_FILE = REPO_ROOT / "docs-main" / "reference" / "typescript.mdx"
 LEGACY_OUTPUT_FILE = REPO_ROOT / "docs-main" / "sdks-tools" / "language-bindings" / "typescript.mdx"
 DEFAULT_DOCS_JSON = REPO_ROOT / "docs-main" / "docs.json"
-DEFAULT_NAV_GROUP = "Daml TypeScript Bindings"
+DEFAULT_NAV_GROUP = "TypeScript"
+LEGACY_NAV_GROUPS = ("Daml TypeScript Bindings",)
+
+
+def nav_group_labels(group_label: str) -> set[str]:
+    return {group_label, *LEGACY_NAV_GROUPS}
 
 
 def parse_args() -> argparse.Namespace:
@@ -53,7 +58,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--page-title",
-        default="TypeScript",
+        default="@daml/types",
         help="Title to use for the generated page.",
     )
     parser.add_argument(
@@ -80,13 +85,14 @@ def docs_json_page_ref(path: Path, docs_json_path: Path) -> str:
 
 def prune_nav_items(items: list[Any], *, page_ref: str, group_label: str) -> list[Any]:
     pruned: list[Any] = []
+    group_labels = nav_group_labels(group_label)
     for item in items:
         if isinstance(item, str):
             if item != page_ref:
                 pruned.append(item)
             continue
         if isinstance(item, dict):
-            if item.get("group") == group_label:
+            if item.get("group") in group_labels:
                 continue
             updated = dict(item)
             pages = updated.get("pages")
@@ -96,6 +102,14 @@ def prune_nav_items(items: list[Any], *, page_ref: str, group_label: str) -> lis
             continue
         pruned.append(item)
     return pruned
+
+
+def nav_group_index(items: list[Any], *, group_label: str) -> int | None:
+    group_labels = nav_group_labels(group_label)
+    for index, item in enumerate(items):
+        if isinstance(item, dict) and item.get("group") in group_labels:
+            return index
+    return None
 
 
 def update_docs_navigation(
@@ -117,8 +131,14 @@ def update_docs_navigation(
         raise ValueError(f"Dropdown does not expose a pages list: {dropdown_label}")
 
     page_ref = docs_json_page_ref(output_file, docs_json_path)
-    dropdown["pages"] = prune_nav_items(pages, page_ref=page_ref, group_label=nav_group)
-    dropdown["pages"].append({"group": nav_group, "pages": [page_ref]})
+    existing_index = nav_group_index(pages, group_label=nav_group)
+    updated_pages = prune_nav_items(pages, page_ref=page_ref, group_label=nav_group)
+    nav_item = {"group": nav_group, "pages": [page_ref]}
+    if existing_index is None:
+        updated_pages.append(nav_item)
+    else:
+        updated_pages.insert(min(existing_index, len(updated_pages)), nav_item)
+    dropdown["pages"] = updated_pages
 
     docs_json_path.write_text(json.dumps(docs, indent=2) + "\n", encoding="utf-8")
     print(f"Updated docs navigation: {docs_json_path}")

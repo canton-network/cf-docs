@@ -86,7 +86,7 @@ SCRIPT_JOBS = [
     ),
     ScriptJob(
         script_path=REPO_ROOT / "scripts" / "generate_typescript_bindings_reference.py",
-        nav_slice=NavSlice("top_group", ("Daml TypeScript Bindings",)),
+        nav_slice=NavSlice("top_group", ("TypeScript",)),
     ),
 ]
 

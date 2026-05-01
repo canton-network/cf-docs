@@ -238,7 +238,7 @@ By default this writes:
 - `docs-main/reference/typescript.mdx`
 - `docs-main/docs.json`
 
-The generator also adds that page under the top-level `API Reference` dropdown as `Daml TypeScript Bindings -> TypeScript`.
+The generator also adds that page under the top-level `API Reference` dropdown as `TypeScript -> @daml/types`.
 
 ### Generate the Wallet Gateway JSON-RPC reference
 
