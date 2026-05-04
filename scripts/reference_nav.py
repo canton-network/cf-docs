@@ -114,25 +114,38 @@ def _normalized_grpc_ref(page_ref: str) -> str | None:
 
 
 def _absorb_grpc_pages(items: list[Any], collected: dict[str, dict[str, Any]]) -> bool:
-    absorbed = False
-    normalized_refs: list[str] = []
+    normalized_items: list[Any] = []
     for item in items:
-        if isinstance(item, str):
-            normalized = _normalized_grpc_ref(item)
-            if normalized is not None:
-                normalized_refs.append(normalized)
-                absorbed = True
-            continue
-        if isinstance(item, dict):
-            pages = item.get("pages")
-            if isinstance(pages, list):
-                absorbed = _absorb_grpc_pages(pages, collected) or absorbed
-    if normalized_refs:
+        normalized = _normalized_grpc_nav_item(item)
+        if normalized is not None:
+            normalized_items.append(normalized)
+    if normalized_items:
         _merge_group_entries(
             _upsert_group(collected, GRPC_GROUP),
-            {"group": GRPC_GROUP, "pages": normalized_refs},
+            {"group": GRPC_GROUP, "pages": normalized_items},
         )
-    return absorbed
+        return True
+    return False
+
+
+def _normalized_grpc_nav_item(item: Any) -> Any | None:
+    if isinstance(item, str):
+        return _normalized_grpc_ref(item)
+    if not isinstance(item, dict):
+        return None
+    pages = item.get("pages")
+    if not isinstance(pages, list):
+        return None
+    normalized_pages = [
+        normalized
+        for page in pages
+        if (normalized := _normalized_grpc_nav_item(page)) is not None
+    ]
+    if not normalized_pages:
+        return None
+    normalized_item = dict(item)
+    normalized_item["pages"] = normalized_pages
+    return normalized_item
 
 
 def _absorb_known_item(item: Any, collected: dict[str, dict[str, Any]]) -> bool:
