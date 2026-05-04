@@ -27,6 +27,7 @@ DEFAULT_NAV_DROPDOWN = "API Reference"
 DEFAULT_PARENT_GROUP = "Ledger API"
 DEFAULT_GROUP_LABEL = "OpenAPI"
 DEFAULT_OPENAPI_DIRECTORY = "reference/json-api-reference"
+DEFAULT_DETAILS_PAGE_REF = "reference/json-api-reference/details"
 LEGACY_OUTPUT_FILE = REPO_ROOT / "docs-main" / "reference" / "json-api-reference.mdx"
 
 
@@ -45,6 +46,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--parent-group", default=DEFAULT_PARENT_GROUP)
     parser.add_argument("--group-label", default=DEFAULT_GROUP_LABEL)
     parser.add_argument("--openapi-directory", default=DEFAULT_OPENAPI_DIRECTORY)
+    parser.add_argument("--details-page-ref", default=DEFAULT_DETAILS_PAGE_REF)
     parser.add_argument("--publish-version", help="Explicit docs major version to publish.")
     parser.add_argument(
         "--version",
@@ -100,6 +102,7 @@ def update_docs_navigation(
     group_label: str,
     openapi_source_ref: str,
     openapi_directory: str,
+    details_page_ref: str,
 ) -> None:
     payload = load_json(docs_json_path)
     navigation = payload.get("navigation")
@@ -140,6 +143,7 @@ def update_docs_navigation(
         "source": openapi_source_ref,
         "directory": openapi_directory,
     }
+    group["pages"] = [details_page_ref]
     docs_json_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
 
@@ -183,6 +187,7 @@ def main() -> int:
         group_label=args.group_label,
         openapi_source_ref=docs_relative_file_ref(output_spec, docs_json_path),
         openapi_directory=args.openapi_directory,
+        details_page_ref=args.details_page_ref,
     )
     remove_legacy_output(output_file=LEGACY_OUTPUT_FILE.resolve())
     return 0
