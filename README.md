@@ -120,7 +120,7 @@ The generated page is placed directly under the top-level `API Reference` dropdo
 
 ### Generate the Ledger bindings API reference
 
-This repo also includes a checked-in source config for the published Java/Scala bindings Javadoc/Scaladoc jars at `config/x2mdx/ledger-bindings/source-artifacts.json`.
+This repo also includes a checked-in source config for the published Java bindings Javadoc jars at `config/x2mdx/ledger-bindings/source-artifacts.json`.
 The generator script downloads those jars into `.internal/cache/x2mdx/ledger-bindings/`, writes a local x2mdx manifest into `.internal/generated/x2mdx/ledger-bindings/manifest.json`, and then renders the MDX pages through the docs repo `direnv` / `nix` shell.
 
 Run:
@@ -137,12 +137,11 @@ npm run generate:ledger-bindings-api-reference
 
 By default this writes:
 
-- `docs-main/reference/ledger-api-jvm-bindings.mdx`
+- `docs-main/reference/java-bindings.mdx`
 - `docs-main/reference/java/`
-- `docs-main/reference/scala/`
 - `docs-main/docs.json`
 
-The generated nav is added under the top-level `API Reference` dropdown as `Ledger API JVM Bindings -> Scaladocs/Javadocs`, with each nested group populated directly from the generated JVM package pages.
+The generated nav is added under the top-level `API Reference` dropdown as `Java Bindings -> Javadocs`, with each nested group populated directly from the generated Java package pages.
 
 ### Generate the Daml Standard Library reference
 
@@ -238,7 +237,7 @@ By default this writes:
 - `docs-main/reference/typescript.mdx`
 - `docs-main/docs.json`
 
-The generator also adds that page under the top-level `API Reference` dropdown as `Daml TypeScript Bindings -> TypeScript`.
+The generator also adds that page under the top-level `API Reference` dropdown as `TypeScript -> @daml/types`.
 
 ### Generate the Wallet Gateway JSON-RPC reference
 
