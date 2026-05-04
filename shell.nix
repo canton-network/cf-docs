@@ -4,39 +4,22 @@ let
   pythonBase = pkgs.python311;
   python = pythonBase.withPackages (ps: [
     ps.grpcio-tools
+    ps.jinja2
+    ps.protobuf
+    ps.pytest
+    ps.pyyaml
   ]);
-  x2mdx = pythonBase.pkgs.buildPythonApplication rec {
-    pname = "x2mdx";
-    version = "0.1.0+git-5ff8aed";
-    pyproject = true;
-    src = builtins.fetchGit {
-      url = "https://github.com/danielporterda/x2mdx.git";
-      ref = "refs/heads/main";
-      rev = "5ff8aed163729ae157853103528cba955ff6c142";
-      allRefs = true;
-    };
-    nativeBuildInputs = with pythonBase.pkgs; [
-      setuptools
-      wheel
-    ];
-    propagatedBuildInputs = with pythonBase.pkgs; [
-      jinja2
-      protobuf
-      pyyaml
-    ];
-    doCheck = false;
-  };
 in
 pkgs.mkShell {
   packages = [
     pkgs.gh
     pkgs.nodejs_22
     python
-    x2mdx
   ];
 
   shellHook = ''
     export PATH="$HOME/.dpm/bin:$HOME/.daml/bin:$PWD/node_modules/.bin:$PATH"
+    export PYTHONPATH="$PWD/src''${PYTHONPATH:+:$PYTHONPATH}"
 
     case " $NODE_OPTIONS " in
       *" --max-old-space-size="*) ;;
