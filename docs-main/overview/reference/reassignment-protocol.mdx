@@ -40,15 +40,41 @@ sequenceDiagram
 
 ### Reassignment counter
 
+The **reassignment counter** tracks the number of times a contract has been reassigned. It is set to zero when the contract is created and increased by one with each unassignment. The unassignment event and the corresponding assignment event have the same reassignment counter.
+
 ### Target timestamp
+
+When an unassignment is submitted, a time proof is requested on the target synchronizer. This timestamp — the **target timestamp** — is used to perform validations related to the target synchronizer (package vetting, stakeholder hosting, and so on) during unassignment processing. Using a single fixed target-timestamp ensures all confirming participants run the same validations against the same topology snapshot.
 
 ### Reassigning participant
 
 A reassigning participant is connected to both the source and target synchronizers and hosts a stakeholder on both. This dual connectivity allows it to validate the full reassignment and guard against double spends.
 
+Formally, a participant `P` is a **reassigning participant** for a party `S` and contract `c` if all of the following hold:
+
+- `S` is a stakeholder of `c`.
+- `S` is hosted by `P` on the target synchronizer at the [target timestamp](#target-timestamp).
+- `S` is hosted by `P` on the source synchronizer.
+
+The last condition is checked during submission using a recent topology snapshot and during phase 3 of the protocol using a topology snapshot at request time.
+
 ### Signatory unassigning participant
 
+A **signatory unassigning participant** for a contract `c` and party `S` is a [reassigning participant](#reassigning-participant) where:
+
+- `S` is a **signatory** of `c`.
+- `S` is hosted on `P` with at least confirmation rights on the source synchronizer.
+
+Signatory unassigning participants are the confirmers of an unassignment request — only signatories should confirm because non-signatory observers would not block the reassignment regardless.
+
 ### Signatory assigning participant
+
+A **signatory assigning participant** for a contract `c` and party `S` is a [reassigning participant](#reassigning-participant) where:
+
+- `S` is a **signatory** of `c`.
+- `S` is hosted on `P` with at least confirmation rights on the target synchronizer.
+
+A signatory assigning participant is informed of both the unassignment and the assignment of a contract, and is a confirmer of the assignment request.
 
 ## Confirmation policies
 
@@ -117,6 +143,12 @@ Automatic reassignment is convenient but can cause unexpected contention. Both u
 - **Created event**: The contract data, included so that participants learning about the contract for the first time (because it entered their visibility) can access its payload.
 
 ## Contracts entering and leaving visibility
+
+A contract can **enter the visibility** of a participant when the participant hosts a stakeholder on the target synchronizer (and is therefore an informee of the assignment) but did not host a stakeholder on the source synchronizer (so it was not an informee of the unassignment). The created event included in the assigned event lets the participant learn about the contract's payload as it becomes usable for the first time.
+
+The reverse — a contract **leaves the visibility** of a participant — happens when the participant was an informee of the unassignment (because it hosted a stakeholder on the source synchronizer) but is not an informee of the assignment (because the same stakeholder is not hosted there, or because that stakeholder is hosted on a different node on the target synchronizer). The contract becomes unusable on that participant after the unassignment, even though it remains active for other stakeholders on the target synchronizer.
+
+A contract can enter and leave a participant's visibility multiple times during its life cycle. This typically happens when stakeholders hosted on the participant are multi-hosted across synchronizers in a way that changes over time.
 
 ## Updates stream ordering
 
