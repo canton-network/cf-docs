@@ -7,10 +7,13 @@ import json
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SOURCE_CONFIG = REPO_ROOT / "config" / "mintlify-openapi" / "splice-openapi" / "source-artifacts.json"
 DEFAULT_DOCS_JSON = REPO_ROOT / "docs-main" / "docs.json"
+HTTP_METHODS = {"get", "put", "post", "delete", "options", "head", "patch", "trace"}
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -103,6 +106,47 @@ def collect_openapi_entries(node: Any, entries: set[tuple[str, str]]) -> None:
         collect_openapi_entries(pages, entries)
 
 
+def openapi_operations_without_summary(openapi_path: Path) -> list[str]:
+    spec = yaml.safe_load(openapi_path.read_text(encoding="utf-8"))
+    if not isinstance(spec, dict):
+        raise ValueError(f"Expected OpenAPI spec to parse as an object: {openapi_path}")
+    paths = spec.get("paths")
+    if not isinstance(paths, dict):
+        return []
+
+    missing: list[str] = []
+    for path, path_item in paths.items():
+        if not isinstance(path, str) or not isinstance(path_item, dict):
+            continue
+        for method, operation in path_item.items():
+            if method.lower() not in HTTP_METHODS or not isinstance(operation, dict):
+                continue
+            summary = operation.get("summary")
+            if not isinstance(summary, str) or not summary.strip():
+                missing.append(f"{method.upper()} {path}")
+    return missing
+
+
+def validate_openapi_operation_summaries(
+    *,
+    docs_json_path: Path,
+    entries: list[tuple[str, str]],
+) -> None:
+    failures: list[str] = []
+    docs_root = docs_json_path.parent
+    for source, _directory in entries:
+        openapi_path = docs_root / source
+        missing = openapi_operations_without_summary(openapi_path)
+        failures.extend(f"{source}: {operation}" for operation in missing)
+
+    if failures:
+        details = "\n".join(f"- {failure}" for failure in failures)
+        raise ValueError(
+            "Splice OpenAPI specs contain operations without summaries; Mintlify uses summaries for readable TOC labels.\n"
+            f"{details}"
+        )
+
+
 def validate_splice_nav(*, source_config_path: Path = DEFAULT_SOURCE_CONFIG, docs_json_path: Path = DEFAULT_DOCS_JSON) -> None:
     source_config = load_json(source_config_path)
     docs = load_json(docs_json_path)
@@ -120,10 +164,12 @@ def validate_splice_nav(*, source_config_path: Path = DEFAULT_SOURCE_CONFIG, doc
 
     actual_entries: set[tuple[str, str]] = set()
     collect_openapi_entries(top_group, actual_entries)
-    missing = [entry for entry in expected_openapi_entries(source_config) if entry not in actual_entries]
+    expected_entries = expected_openapi_entries(source_config)
+    missing = [entry for entry in expected_entries if entry not in actual_entries]
     if missing:
         details = "\n".join(f"- source={source} directory={directory}" for source, directory in missing)
         raise ValueError(f"Splice OpenAPI nav is missing configured entries:\n{details}")
+    validate_openapi_operation_summaries(docs_json_path=docs_json_path, entries=expected_entries)
 
 
 def parse_args() -> argparse.Namespace:
