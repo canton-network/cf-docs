@@ -13,6 +13,8 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 from validate_splice_mintlify_openapi_nav import validate_splice_nav
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -20,6 +22,7 @@ USER_AGENT = "digital-asset-docs-mintlify-openapi/1.0"
 DEFAULT_SOURCE_CONFIG = REPO_ROOT / "config" / "mintlify-openapi" / "splice-openapi" / "source-artifacts.json"
 DEFAULT_CACHE_DIR = REPO_ROOT / ".internal" / "cache" / "mintlify-openapi" / "splice-openapi"
 DEFAULT_DOCS_JSON = REPO_ROOT / "docs-main" / "docs.json"
+HTTP_METHODS = {"get", "put", "post", "delete", "options", "head", "patch", "trace"}
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -250,7 +253,80 @@ def render_output_bytes(*, spec_bytes: bytes, output_path: Path) -> bytes:
         if not re.fullmatch(r"\s*required:\s*\[\s*\]\s*", line)
     ]
     normalized_text = "\n".join(filtered_lines).rstrip() + "\n"
+    normalized_text = add_missing_operation_summaries(normalized_text)
     return normalized_text.encode("utf-8")
+
+
+def missing_operation_summaries(spec: dict[str, Any]) -> set[tuple[str, str]]:
+    paths = spec.get("paths")
+    if not isinstance(paths, dict):
+        return set()
+
+    missing: set[tuple[str, str]] = set()
+    for path, path_item in paths.items():
+        if not isinstance(path, str) or not isinstance(path_item, dict):
+            continue
+        for method, operation in path_item.items():
+            if method.lower() not in HTTP_METHODS or not isinstance(operation, dict):
+                continue
+            summary = operation.get("summary")
+            if not isinstance(summary, str) or not summary.strip():
+                missing.add((path, method.lower()))
+    return missing
+
+
+def add_missing_operation_summaries(text: str) -> str:
+    spec = yaml.safe_load(text)
+    if not isinstance(spec, dict):
+        raise ValueError("Expected generated OpenAPI YAML to parse as an object")
+
+    missing = missing_operation_summaries(spec)
+    if not missing:
+        return text
+
+    lines = text.splitlines()
+    output_lines: list[str] = []
+    in_paths = False
+    current_path: str | None = None
+
+    for line in lines:
+        output_lines.append(line)
+
+        if re.fullmatch(r"paths:\s*", line):
+            in_paths = True
+            current_path = None
+            continue
+
+        if not in_paths:
+            continue
+
+        if line and not line.startswith(" "):
+            in_paths = False
+            current_path = None
+            continue
+
+        path_match = re.fullmatch(r"  (?P<path>/.*):\s*", line)
+        if path_match:
+            current_path = path_match.group("path")
+            continue
+
+        method_match = re.fullmatch(r"    (?P<method>get|put|post|delete|options|head|patch|trace):\s*", line)
+        if current_path is None or method_match is None:
+            continue
+
+        method = method_match.group("method")
+        if (current_path, method) in missing:
+            output_lines.append(f'      summary: "{current_path}"')
+
+    rendered = "\n".join(output_lines).rstrip() + "\n"
+    parsed = yaml.safe_load(rendered)
+    if not isinstance(parsed, dict):
+        raise ValueError("Generated OpenAPI YAML stopped parsing after summary insertion")
+    remaining = missing_operation_summaries(parsed)
+    if remaining:
+        details = ", ".join(f"{method.upper()} {path}" for path, method in sorted(remaining))
+        raise ValueError(f"Failed to insert generated summaries for OpenAPI operations: {details}")
+    return rendered
 
 
 def write_managed_specs(
