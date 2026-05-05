@@ -22,11 +22,17 @@ DEFAULT_MANIFEST = REPO_ROOT / ".internal" / "generated" / "x2mdx" / "wallet-gat
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "docs-main" / "reference" / "wallet-gateway-json-rpc"
 DEFAULT_DOCS_JSON = REPO_ROOT / "docs-main" / "docs.json"
 DEFAULT_REPO_DIR = DEFAULT_CACHE_DIR / "repos" / "splice-wallet-kernel"
-GROUP_LABEL = "Wallet Kernel"
-LEGACY_GROUP_LABELS = {"Wallet Gateway JSON-RPC", "Wallet Kernel SDK"}
+GROUP_LABEL = "Wallet Gateway"
+LEGACY_GROUP_LABELS = {"Wallet Kernel", "Wallet Gateway JSON-RPC", "Wallet Kernel SDK"}
 DETAILS_LABEL = "Details and history"
 SPEC_DIR_NAME = "specs"
 DEFAULT_RELEASE_REPO = "hyperledger-labs/splice-wallet-kernel"
+NAV_SECTION_BY_SPEC_ID = {
+    "dapp-api": "dApp API",
+    "dapp-remote-api": "dApp API",
+    "user-api": "Wallet Gateway",
+    "signing-api": "Wallet Gateway",
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -293,6 +299,7 @@ def update_docs_navigation(
         group_label=GROUP_LABEL,
         spec_ids=[str(spec["spec_id"]) for spec in spec_entries],
         spec_dir_name=SPEC_DIR_NAME,
+        spec_group_sections=NAV_SECTION_BY_SPEC_ID,
     )
     pruned_pages.insert(min(insert_at, len(pruned_pages)), group)
     dropdown["pages"] = pruned_pages
