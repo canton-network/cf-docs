@@ -116,15 +116,16 @@ def build_openrpc_nav_group(
         details_page = operation_dir / "details.mdx"
         if details_page.exists():
             operation_refs.append(docs_json_page_ref(details_page, docs_json_path))
-        spec_group = {
-            "group": mdx_title(spec_page),
-            "pages": operation_refs,
-        }
         section = spec_group_sections.get(spec_id) if spec_group_sections else None
         if section:
-            section_pages.setdefault(section, []).append(spec_group)
+            section_pages.setdefault(section, []).extend([docs_json_page_ref(spec_page, docs_json_path), *operation_refs])
         else:
-            pages.append(spec_group)
+            pages.append(
+                {
+                    "group": mdx_title(spec_page),
+                    "pages": operation_refs,
+                }
+            )
     if spec_group_sections:
         for section in dict.fromkeys(spec_group_sections[spec_id] for spec_id in spec_ids if spec_id in spec_group_sections):
             grouped_pages = section_pages.get(section)
