@@ -1,0 +1,119 @@
+---
+title: "Code snippet rendering test"
+description: "Exercises every code-block form Mintlify supports so we can eyeball syntax highlighting, copy buttons, and wrapping behavior."
+---
+
+This page exists only to verify how code snippets render. Delete it once
+you're satisfied.
+
+## Inline code
+
+A single `dpm build` run produces an artifact under `target/`. The
+`--profile=release` flag enables LTO. Inline `code` should sit cleanly
+inside flowing prose without breaking the line height.
+
+## Plain fenced block (bash)
+
+```bash
+# Build and run the local sandbox
+dpm build
+dpm sandbox start --port 6865
+```
+
+## Fenced block with title and line highlighting
+
+```typescript title="src/ledger.ts" {3-5}
+import { Ledger } from "@daml/ledger";
+
+const ledger = new Ledger({
+  token,
+  httpBaseUrl: "http://localhost:7575/",
+});
+
+await ledger.create(MyTemplate, { issuer: "Alice" });
+```
+
+## Daml example
+
+```daml
+module Iou where
+
+template Iou
+  with
+    issuer : Party
+    owner : Party
+    amount : Decimal
+  where
+    signatory issuer
+    observer owner
+
+    choice Transfer : ContractId Iou
+      with newOwner : Party
+      controller owner
+      do
+        create this with owner = newOwner
+```
+
+## CodeGroup (multi-language tabs)
+
+<CodeGroup>
+
+```bash bash
+curl -X POST http://localhost:7575/v1/create \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"templateId": "Iou:Iou", "payload": {...}}'
+```
+
+```typescript TypeScript
+await ledger.create(Iou.Iou, {
+  issuer: alice,
+  owner: bob,
+  amount: "100.0",
+});
+```
+
+```python Python
+ledger.commands.create(
+    "Iou:Iou",
+    {"issuer": alice, "owner": bob, "amount": "100.0"},
+)
+```
+
+</CodeGroup>
+
+## Long-line wrapping
+
+```bash
+dpm canton run --config conf/local.conf --bootstrap conf/bootstrap.canton --log-level-canton=DEBUG --log-level-stdout=INFO --log-file-name=canton.log --log-file-rolling-pattern='yyyy-MM-dd' --log-file-history-size=10
+```
+
+## JSON with nested structure
+
+```json
+{
+  "ledger": {
+    "host": "localhost",
+    "port": 6865,
+    "tls": {
+      "enabled": true,
+      "certChainFile": "/etc/canton/cert.pem"
+    }
+  },
+  "parties": ["Alice", "Bob", "Charlie"]
+}
+```
+
+## Diff highlighting
+
+```diff
+  signatory issuer
+- observer owner
++ observer owner, custodian
+  ensure amount > 0.0
+```
+
+## Empty / minimal block
+
+```
+plain text, no language hint
+```
