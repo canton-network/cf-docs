@@ -1,0 +1,37 @@
+{% import "shared/macros.md.j2" as shared %}
+{{ paragraph("Generated from AsyncAPI snapshots for `" ~ (report.info_title or "unknown spec") ~ "`.") }}
+
+{% if report.info_description %}
+{{ paragraph(report.info_description) }}
+{% endif %}
+
+{% call shared.standard_reference_layout(toc_rows=channel_summary_rows, version_rows=version_timeline_rows) %}
+{% for channel in channels %}
+
+{{ anchor(channel.anchor) }}
+
+{{ heading(3, channel.name) }}
+
+{{ bullet_list(channel.lifecycle_bits) }}
+{% if channel.description %}
+{{ paragraph(channel.description) }}
+{% endif %}
+{{ shared.version_changes(channel.change_rows) }}
+{% for action in channel.actions %}
+{{ shared.detail_label(action.heading) }}
+{% if action.detail_items %}
+
+{{ bullet_list(action.detail_items) }}
+{% endif %}
+{% if action.description %}
+
+{{ paragraph(action.description) }}
+{% endif %}
+
+{{ table(["Payload Schema", "Required Fields"], [action.payload_row]) }}
+{% if action.sample is not none %}
+{{ shared.detail_code_block("Message Example", "json", pretty_json(action.sample)) }}
+{% endif %}
+{% endfor %}
+{% endfor %}
+{% endcall %}
