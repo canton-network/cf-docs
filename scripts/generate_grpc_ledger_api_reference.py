@@ -312,7 +312,8 @@ def normalize_flattened_links_and_labels(*, output_dir: Path, report: dict[str, 
             package_name = package_names[package_slug]
             replacements.extend(
                 [
-                    (f'href="packages/{package_slug}"', f'href="{package_slug}"'),
+                    (f'href="packages/{package_slug}"', f'href="./{package_slug}"'),
+                    (f'href="./packages/{package_slug}"', f'href="./{package_slug}"'),
                     (f"      <h3>{html_text(package_name)}</h3>", f"      <h3>{html_text(label)}</h3>"),
                 ]
             )
@@ -321,7 +322,13 @@ def normalize_flattened_links_and_labels(*, output_dir: Path, report: dict[str, 
     for package_slug, label in package_labels.items():
         package_page = output_dir / f"{package_slug}.mdx"
         if package_page.exists():
-            replace_text(package_page, [('href="../index"', 'href="details"')])
+            replace_text(
+                package_page,
+                [
+                    ('href="../index"', 'href="./details"'),
+                    (f'href="../operations/{package_slug}/', f'href="./{package_slug}/'),
+                ],
+            )
 
         package_operation_dir = output_dir / package_slug
         if not package_operation_dir.is_dir():
