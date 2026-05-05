@@ -70,23 +70,43 @@ def test_openrpc_nav_uses_wallet_gateway_section_shape(tmp_path: Path) -> None:
             {
                 "group": "dApp API",
                 "pages": [
-                    "reference/wallet-gateway-json-rpc/specs/dapp-api",
-                    "reference/wallet-gateway-json-rpc/operations/dapp-api/connect",
-                    "reference/wallet-gateway-json-rpc/operations/dapp-api/details",
-                    "reference/wallet-gateway-json-rpc/specs/dapp-remote-api",
-                    "reference/wallet-gateway-json-rpc/operations/dapp-remote-api/connect",
-                    "reference/wallet-gateway-json-rpc/operations/dapp-remote-api/details",
+                    {
+                        "group": "Sync dApp API",
+                        "pages": [
+                            "reference/wallet-gateway-json-rpc/specs/dapp-api",
+                            "reference/wallet-gateway-json-rpc/operations/dapp-api/connect",
+                            "reference/wallet-gateway-json-rpc/operations/dapp-api/details",
+                        ],
+                    },
+                    {
+                        "group": "Async dApp API",
+                        "pages": [
+                            "reference/wallet-gateway-json-rpc/specs/dapp-remote-api",
+                            "reference/wallet-gateway-json-rpc/operations/dapp-remote-api/connect",
+                            "reference/wallet-gateway-json-rpc/operations/dapp-remote-api/details",
+                        ],
+                    },
                 ],
             },
             {
                 "group": "Wallet Gateway",
                 "pages": [
-                    "reference/wallet-gateway-json-rpc/specs/user-api",
-                    "reference/wallet-gateway-json-rpc/operations/user-api/createWallet",
-                    "reference/wallet-gateway-json-rpc/operations/user-api/details",
-                    "reference/wallet-gateway-json-rpc/specs/signing-api",
-                    "reference/wallet-gateway-json-rpc/operations/signing-api/signTransaction",
-                    "reference/wallet-gateway-json-rpc/operations/signing-api/details",
+                    {
+                        "group": "User API",
+                        "pages": [
+                            "reference/wallet-gateway-json-rpc/specs/user-api",
+                            "reference/wallet-gateway-json-rpc/operations/user-api/createWallet",
+                            "reference/wallet-gateway-json-rpc/operations/user-api/details",
+                        ],
+                    },
+                    {
+                        "group": "Signing API",
+                        "pages": [
+                            "reference/wallet-gateway-json-rpc/specs/signing-api",
+                            "reference/wallet-gateway-json-rpc/operations/signing-api/signTransaction",
+                            "reference/wallet-gateway-json-rpc/operations/signing-api/details",
+                        ],
+                    },
                 ],
             },
             "reference/wallet-gateway-json-rpc/operations/details",

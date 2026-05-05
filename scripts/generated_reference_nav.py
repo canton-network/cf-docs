@@ -107,6 +107,7 @@ def build_openrpc_nav_group(
         spec_page = output_dir / spec_dir_name / f"{slugify(spec_id)}.mdx"
         if not spec_page.exists():
             continue
+        spec_page_ref = docs_json_page_ref(spec_page, docs_json_path)
         operation_dir = output_dir / "operations" / slugify(spec_id)
         operation_refs = [
             docs_json_page_ref(path, docs_json_path)
@@ -118,12 +119,17 @@ def build_openrpc_nav_group(
             operation_refs.append(docs_json_page_ref(details_page, docs_json_path))
         section = spec_group_sections.get(spec_id) if spec_group_sections else None
         if section:
-            section_pages.setdefault(section, []).extend([docs_json_page_ref(spec_page, docs_json_path), *operation_refs])
+            section_pages.setdefault(section, []).append(
+                {
+                    "group": mdx_title(spec_page),
+                    "pages": [spec_page_ref, *operation_refs],
+                }
+            )
         else:
             pages.append(
                 {
                     "group": mdx_title(spec_page),
-                    "pages": operation_refs,
+                    "pages": [spec_page_ref, *operation_refs],
                 }
             )
     if spec_group_sections:
