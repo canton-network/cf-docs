@@ -18,7 +18,7 @@ pkgs.mkShell {
   ];
 
   shellHook = ''
-    export PATH="$HOME/.dpm/bin:$HOME/.daml/bin:$PWD/node_modules/.bin:$PATH"
+    export PATH="$PWD/node_modules/.bin:${pkgs.nodejs_22}/bin:${python}/bin:${pkgs.gh}/bin:$HOME/.dpm/bin:$HOME/.daml/bin:$PATH"
     export PYTHONPATH="$PWD/src''${PYTHONPATH:+:$PYTHONPATH}"
 
     case " $NODE_OPTIONS " in

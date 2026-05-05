@@ -227,7 +227,7 @@ def normalize_asyncapi_overview_details_page(path: Path) -> None:
     if not path.exists():
         return
     text = path.read_text(encoding="utf-8")
-    text = re.sub(r'href="channels/([^"]+)"', r'href="\1/details"', text)
+    text = re.sub(r'href="(?:\./)?channels/([^"]+)"', r'href="./\1/details"', text)
     text = normalize_card_markup(text)
     path.write_text(text, encoding="utf-8")
 
@@ -237,13 +237,14 @@ def normalize_asyncapi_channel_details_page(path: Path, *, channel_slug: str) ->
         return
     text = path.read_text(encoding="utf-8")
     text = text.replace('href="../index"', 'href="../../index"')
-    text = re.sub(rf'href="\.\./operations/{re.escape(channel_slug)}/([^"]+)"', r'href="\1"', text)
+    text = text.replace('href="../../index"', 'href="../details"')
+    text = re.sub(rf'href="\.\./operations/{re.escape(channel_slug)}/([^"]+)"', r'href="./\1"', text)
 
     summaries_by_href: dict[str, str] = {}
     for action_name in ("publish", "subscribe"):
         operation_page = path.parent / f"{action_name}.mdx"
         if operation_page.exists():
-            summaries_by_href[action_name] = action_card_summary(
+            summaries_by_href[f"./{action_name}"] = action_card_summary(
                 action_name=action_name,
                 channel_slug=channel_slug,
                 operation_page=operation_page,
@@ -257,7 +258,8 @@ def normalize_asyncapi_operation_page(path: Path, *, channel_slug: str) -> None:
     if not path.exists():
         return
     text = path.read_text(encoding="utf-8")
-    text = text.replace(f'href="../../channels/{channel_slug}"', 'href="details"')
+    text = text.replace(f'href="../../channels/{channel_slug}"', 'href="./details"')
+    text = text.replace('href="../../index"', 'href="../details"')
     path.write_text(text, encoding="utf-8")
 
 
