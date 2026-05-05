@@ -206,18 +206,65 @@ func TestConvertRawHTMLVideo_MultipleSources(t *testing.T) {
 	}
 }
 
-func TestConvertTodo_InlineSummaryWithAutolink(t *testing.T) {
-	// The inline summary often contains a `<https://...>` autolink.
-	// convertTodo preserves the summary verbatim; convertLinks runs
-	// later in the pipeline to rewrite the autolink. This test covers
-	// just the convertTodo half — the autolink rewrite is asserted in
-	// links_test.go.
+func TestConvertTodo_InlineSummaryBecomesComment(t *testing.T) {
+	// Single-line todos (inline summary, no indented body) collapse to
+	// one MDX-comment line that readers never see.
 	in := `.. todo:: Write this section <https://github.com/DACH-NY/canton/issues/25689>
 `
 	got := convertTodo(in)
-	want := "<Note>\n**TODO:** Write this section <https://github.com/DACH-NY/canton/issues/25689>\n</Note>"
+	want := "{/* TODO: Write this section <https://github.com/DACH-NY/canton/issues/25689> */}"
 	if !contains(got, want) {
 		t.Errorf("want substring:\n%s\ngot:\n%s", want, got)
+	}
+	// And nothing renders.
+	for _, banned := range []string{"<Note>", "**TODO:**", ".. todo::"} {
+		if contains(got, banned) {
+			t.Errorf("%q leaked into output:\n%s", banned, got)
+		}
+	}
+}
+
+func TestConvertTodo_MultiLineBodyBecomesBlockComment(t *testing.T) {
+	// Multi-line todos emit `{/*` and `*/}` on their own lines, with
+	// the dedented body in between.
+	in := `.. todo::
+   Repeat integrity, consensus, transparency from protocols section.
+
+   Define them formally.
+`
+	got := convertTodo(in)
+	for _, want := range []string{
+		"{/*",
+		"TODO:",
+		"Repeat integrity, consensus, transparency from protocols section.",
+		"Define them formally.",
+		"*/}",
+	} {
+		if !contains(got, want) {
+			t.Errorf("missing %q in:\n%s", want, got)
+		}
+	}
+	if contains(got, "<Note>") {
+		t.Errorf("Note tag leaked into output:\n%s", got)
+	}
+}
+
+func TestConvertTodo_EscapesCommentTerminatorInBody(t *testing.T) {
+	// A stray `*/` in the body would prematurely close the MDX comment.
+	// sanitizeCommentBody escapes it; verify by ensuring the output
+	// has at most one `*/` (the real close).
+	in := `.. todo::
+   See https://example.com/*/foo for context.
+`
+	got := convertTodo(in)
+	count := 0
+	for i := 0; i+1 < len(got); i++ {
+		if got[i] == '*' && got[i+1] == '/' {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Errorf("expected exactly one unescaped `*/` (the close); got %d:\n%s", count, got)
 	}
 }
 

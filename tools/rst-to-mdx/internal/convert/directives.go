@@ -395,14 +395,13 @@ func convertRawHTMLVideo(s string) string {
 	return strings.Join(out, "\n")
 }
 
-// convertTodo rewrites `.. todo::` blocks into visible `<Note>`
-// admonitions with a `**TODO:**` prefix so readers (especially
-// developers) can see pending work and follow any linked issue. We do
-// NOT strip todos — losing the body silently was the previous behavior
-// and it hid documentation. The inline summary, if any (often a
-// `<https://github.com/...>` autolink), is preserved on the first line
-// of the note. The body is dedented so nested constructs reach the rest
-// of the pipeline at column 0.
+// convertTodo rewrites `.. todo::` blocks into MDX comments
+// (`{/* … */}`) so the work item is preserved in the source for
+// developers but never rendered to docs readers. The body is dedented
+// before wrapping so any nested constructs (links, fences, etc.) keep
+// their natural shape inside the comment, and any `*/` in the body is
+// escaped via sanitizeCommentBody so a stray sequence can't terminate
+// the comment early.
 //
 // Two shapes occur in the corpus:
 //
@@ -413,6 +412,10 @@ func convertRawHTMLVideo(s string) string {
 //	.. todo::
 //	   Body line 1.
 //	   Body line 2.
+//
+// Single-line todos (inline summary, no indented body) emit a one-line
+// comment; everything else emits a multi-line `{/* … */}` block whose
+// `*/}` close lines up with the directive's original indent.
 func convertTodo(s string) string {
 	lines := strings.Split(s, "\n")
 	var out []string
@@ -448,17 +451,32 @@ func convertTodo(s string) string {
 		}
 		dedented := dedentForWip(body)
 
-		out = append(out, indent+"<Note>")
+		// Build the comment payload: a "TODO:" header (with the optional
+		// inline summary on the same line) followed by any dedented body
+		// lines.
+		var content []string
 		if inline != "" {
-			out = append(out, indent+"**TODO:** "+inline)
+			content = append(content, "TODO: "+inline)
 		} else {
-			out = append(out, indent+"**TODO:**")
+			content = append(content, "TODO:")
 		}
 		if len(dedented) > 0 {
-			out = append(out, "")
-			out = append(out, dedented...)
+			content = append(content, "")
+			content = append(content, dedented...)
 		}
-		out = append(out, indent+"</Note>")
+		joined := sanitizeCommentBody(strings.Join(content, "\n"))
+
+		// Single-line todo with no indented body collapses to one
+		// `{/* TODO: … */}` line; otherwise emit a multi-line block so
+		// readers see no rendered output and the close lands cleanly
+		// after the original directive's content.
+		if !strings.Contains(joined, "\n") {
+			out = append(out, indent+"{/* "+joined+" */}")
+			continue
+		}
+		out = append(out, indent+"{/*")
+		out = append(out, joined)
+		out = append(out, indent+"*/}")
 	}
 	return strings.Join(out, "\n")
 }
