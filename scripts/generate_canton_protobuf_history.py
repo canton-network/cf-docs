@@ -314,6 +314,7 @@ def update_docs_navigation(
     dropdown_label: str,
     parent_groups: list[str],
     overview_path: Path,
+    package_paths: list[Path] | None = None,
 ) -> None:
     docs = load_json(docs_json_path)
     navigation = docs.get("navigation")
@@ -329,10 +330,22 @@ def update_docs_navigation(
     if not isinstance(pages, list):
         raise ValueError(f"Dropdown does not expose a pages list: {dropdown_label}")
 
-    page_ref = docs_json_page_ref(overview_path, docs_json_path)
-    dropdown["pages"] = prune_nav_items(pages, page_refs={page_ref}, group_labels={GROUP_LABEL})
+    overview_ref = docs_json_page_ref(overview_path, docs_json_path)
+    package_refs = [
+        docs_json_page_ref(package_path, docs_json_path)
+        for package_path in (package_paths or [])
+    ]
+    refs_to_prune = {overview_ref, *package_refs}
+    dropdown["pages"] = prune_nav_items(
+        pages,
+        page_refs=refs_to_prune,
+        group_labels={GROUP_LABEL, *reference_nav.PROTOBUF_GROUP_ALIASES},
+    )
     target_pages = ensure_group_path(dropdown["pages"], parent_groups)
-    target_pages.append({"group": GROUP_LABEL, "pages": [page_ref]})
+    group_pages: list[Any] = [overview_ref]
+    if package_refs:
+        group_pages.append({"group": "Packages", "pages": package_refs})
+    target_pages.append({"group": GROUP_LABEL, "pages": group_pages})
     docs_json_path.write_text(json.dumps(docs, indent=2) + "\n", encoding="utf-8")
     print(f"Updated docs navigation: {docs_json_path}")
 
@@ -468,11 +481,14 @@ def main() -> int:
         target_dir=Path(args.legacy_output_dir).resolve(),
     )
 
+    canonical_dir = Path(args.legacy_output_dir).resolve()
+    package_paths = sorted((canonical_dir / "packages").glob("*.mdx"))
     update_docs_navigation(
         docs_json_path=Path(args.docs_json).resolve(),
         dropdown_label=args.nav_dropdown,
         parent_groups=args.nav_group or [],
-        overview_path=Path(args.output_dir).resolve() / "index.mdx",
+        overview_path=canonical_dir / "index.mdx",
+        package_paths=package_paths,
     )
     reference_nav.regroup_ledger_api_nav(
         docs_json_path=Path(args.docs_json).resolve(),

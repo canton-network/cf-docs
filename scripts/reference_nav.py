@@ -26,6 +26,7 @@ ASYNCAPI_PAGE_REF = "reference/json-api-asyncapi-reference"
 GRPC_OVERVIEW_PAGE_REF = "reference/grpc-ledger-api-reference/index"
 GRPC_PACKAGES_PREFIX = "reference/grpc-ledger-api-reference/packages/"
 PROTOBUF_OVERVIEW_PAGE_REF = "reference/protobuf/index"
+PROTOBUF_PACKAGES_PREFIX = "reference/protobuf/packages/"
 BINDINGS_OVERVIEW_PAGE_REF = "reference/ledger-api-jvm-bindings"
 LANGUAGE_GROUPS = {"Scaladocs", "Javadocs"}
 SCALADOC_PREFIX = "reference/scala/"
@@ -102,6 +103,11 @@ def _absorb_known_item(item: Any, collected: dict[str, dict[str, Any]]) -> None:
             )
         elif item == PROTOBUF_OVERVIEW_PAGE_REF:
             _merge_group_entries(_upsert_group(collected, PROTOBUF_GROUP), {"group": PROTOBUF_GROUP, "pages": [item]})
+        elif item.startswith(PROTOBUF_PACKAGES_PREFIX):
+            _merge_group_entries(
+                _upsert_group(collected, PROTOBUF_GROUP),
+                {"group": PROTOBUF_GROUP, "pages": [{"group": "Packages", "pages": [item]}]},
+            )
         elif item == BINDINGS_OVERVIEW_PAGE_REF:
             _merge_group_entries(_upsert_group(collected, BINDINGS_GROUP), {"group": BINDINGS_GROUP, "pages": [item]})
         elif item.startswith(SCALADOC_PREFIX):
@@ -155,9 +161,13 @@ def _absorb_known_item(item: Any, collected: dict[str, dict[str, Any]]) -> None:
 
     if label == "Packages":
         pages = item.get("pages")
-        if isinstance(pages, list) and all(isinstance(page, str) and page.startswith(GRPC_PACKAGES_PREFIX) for page in pages):
-            _merge_group_entries(_upsert_group(collected, GRPC_GROUP), {"group": GRPC_GROUP, "pages": [item]})
-            return
+        if isinstance(pages, list) and pages:
+            if all(isinstance(page, str) and page.startswith(GRPC_PACKAGES_PREFIX) for page in pages):
+                _merge_group_entries(_upsert_group(collected, GRPC_GROUP), {"group": GRPC_GROUP, "pages": [item]})
+                return
+            if all(isinstance(page, str) and page.startswith(PROTOBUF_PACKAGES_PREFIX) for page in pages):
+                _merge_group_entries(_upsert_group(collected, PROTOBUF_GROUP), {"group": PROTOBUF_GROUP, "pages": [item]})
+                return
 
     if label in LANGUAGE_GROUPS:
         _merge_group_entries(_upsert_group(collected, BINDINGS_GROUP), {"group": BINDINGS_GROUP, "pages": [item]})
