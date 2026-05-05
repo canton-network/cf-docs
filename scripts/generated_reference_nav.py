@@ -100,7 +100,7 @@ def build_openrpc_nav_group(
     spec_ids: list[str],
     spec_dir_name: str = "specs",
 ) -> dict[str, Any]:
-    pages: list[Any] = [docs_json_page_ref(output_dir / "index.mdx", docs_json_path)]
+    pages: list[Any] = []
     for spec_id in spec_ids:
         spec_page = output_dir / spec_dir_name / f"{slugify(spec_id)}.mdx"
         if not spec_page.exists():
@@ -109,13 +109,20 @@ def build_openrpc_nav_group(
         operation_refs = [
             docs_json_page_ref(path, docs_json_path)
             for path in sorted(operation_dir.glob("*.mdx"), key=mdx_title)
+            if path.name != "details.mdx"
         ]
+        details_page = operation_dir / "details.mdx"
+        if details_page.exists():
+            operation_refs.append(docs_json_page_ref(details_page, docs_json_path))
         pages.append(
             {
                 "group": mdx_title(spec_page),
-                "pages": [docs_json_page_ref(spec_page, docs_json_path), *operation_refs],
+                "pages": operation_refs,
             }
         )
+    details_page = output_dir / "operations" / "details.mdx"
+    if details_page.exists():
+        pages.append(docs_json_page_ref(details_page, docs_json_path))
     return {"group": group_label, "pages": pages}
 
 
