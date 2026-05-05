@@ -126,7 +126,8 @@ def build_protobuf_nav_group(
     group_label: str,
     extra_page_refs: list[str] | None = None,
 ) -> dict[str, Any]:
-    pages: list[Any] = [docs_json_page_ref(output_dir / "index.mdx", docs_json_path)]
+    details_page_ref = docs_json_page_ref(output_dir / "index.mdx", docs_json_path)
+    pages: list[Any] = []
     package_groups: list[Any] = []
     for package_page in sorted((output_dir / "packages").glob("*.mdx"), key=mdx_title):
         package_slug = package_page.stem
@@ -154,8 +155,8 @@ def build_protobuf_nav_group(
             package_pages.append({"group": "Services", "pages": service_groups})
         package_groups.append({"group": mdx_title(package_page), "pages": package_pages})
     if package_groups:
-        pages.append({"group": "Packages", "pages": package_groups})
-    for page_ref in extra_page_refs or []:
+        pages.extend(package_groups)
+    for page_ref in [*(extra_page_refs or []), details_page_ref]:
         if page_ref not in pages:
             pages.append(page_ref)
     return {"group": group_label, "pages": pages}
