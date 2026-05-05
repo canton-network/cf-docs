@@ -113,6 +113,7 @@ func Convert(rst []byte, opts Options) (*Result, error) {
 	// as real headings downstream.
 	body = convertWip(body)
 	body = convertTodo(body)
+	body = convertToggle(body)
 	body = convertRawHTMLVideo(body)
 	body = convertYoutube(body)
 	body = convertTabs(body)

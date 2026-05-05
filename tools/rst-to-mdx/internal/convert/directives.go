@@ -112,6 +112,13 @@ var reYoutubeStart = regexp.MustCompile(
 // most recent one as the iframe title.
 var reAnyHeadingTitle = regexp.MustCompile(`^([=\-~^"]{3,})\s*$`)
 
+// reToggleStart matches `.. toggle::` — the sphinx-togglebutton directive
+// that wraps indented content in a click-to-expand button. An optional
+// argument on the same line becomes the accordion title; otherwise we
+// use a generic default. Mintlify's `<Accordion>` is the natural target
+// because it has the same expand/collapse UX.
+var reToggleStart = regexp.MustCompile(`^(\s*)\.\.\s+toggle::\s*(.*)$`)
+
 // reWipStart matches `.. wip::` — Canton's custom Sphinx directive
 // for "work in progress" content. Body lines are indented under the
 // directive; convertWip wraps them in an Info admonition with a
@@ -211,6 +218,64 @@ func convertWip(s string) string {
 		out = append(out, "")
 		out = append(out, dedented...)
 		out = append(out, indent+"</Info>")
+	}
+	return strings.Join(out, "\n")
+}
+
+// convertToggle rewrites `.. toggle::` blocks into `<Accordion>` so the
+// click-to-expand UX from sphinx-togglebutton survives the migration.
+// The body is dedented so any nested `.. code-block::` (the dominant
+// use in the corpus) reaches convertCodeBlocks at column 0 and emits as
+// a regular fenced block inside the accordion.
+//
+// Title preference, in order:
+//
+//  1. an explicit argument: `.. toggle:: V3 implementation`
+//  2. the literal "Show example" — descriptive enough for the corpus
+//     where toggles consistently hide long code samples
+func convertToggle(s string) string {
+	lines := strings.Split(s, "\n")
+	var out []string
+	i := 0
+	for i < len(lines) {
+		line := lines[i]
+		m := reToggleStart.FindStringSubmatch(line)
+		if m == nil {
+			out = append(out, line)
+			i++
+			continue
+		}
+		indent := m[1]
+		title := strings.TrimSpace(m[2])
+		if title == "" {
+			title = "Show example"
+		}
+		i++
+
+		var body []string
+		for i < len(lines) {
+			cur := lines[i]
+			if strings.TrimSpace(cur) == "" {
+				body = append(body, "")
+				i++
+				continue
+			}
+			if !strings.HasPrefix(cur, indent) || !deeperIndentForWip(cur, indent) {
+				break
+			}
+			body = append(body, cur)
+			i++
+		}
+		for len(body) > 0 && strings.TrimSpace(body[len(body)-1]) == "" {
+			body = body[:len(body)-1]
+		}
+		dedented := dedentForWip(body)
+
+		out = append(out, indent+`<Accordion title="`+escapeAttr(title)+`">`)
+		out = append(out, "")
+		out = append(out, dedented...)
+		out = append(out, "")
+		out = append(out, indent+"</Accordion>")
 	}
 	return strings.Join(out, "\n")
 }

@@ -108,6 +108,56 @@ func TestConvertRubric(t *testing.T) {
 	}
 }
 
+func TestConvertToggle_DefaultTitle(t *testing.T) {
+	in := `.. toggle::
+
+    .. code-block:: none
+
+        line one
+        line two
+`
+	got := convertToggle(in)
+	for _, want := range []string{
+		`<Accordion title="Show example">`,
+		`.. code-block:: none`,
+		`line one`,
+		`</Accordion>`,
+	} {
+		if !contains(got, want) {
+			t.Errorf("missing %q in:\n%s", want, got)
+		}
+	}
+	if contains(got, ".. toggle::") {
+		t.Errorf("toggle directive not consumed:\n%s", got)
+	}
+}
+
+func TestConvertToggle_ExplicitTitle(t *testing.T) {
+	in := `.. toggle:: V3 implementation
+
+    body content here
+`
+	got := convertToggle(in)
+	if !contains(got, `<Accordion title="V3 implementation">`) {
+		t.Errorf("title not used; got:\n%s", got)
+	}
+}
+
+func TestConvertToggle_BodyDedentedForCodeBlock(t *testing.T) {
+	// The inner code-block must end up at column 0 so convertCodeBlocks
+	// downstream picks it up.
+	in := `.. toggle::
+
+    .. code-block:: python
+
+        x = 1
+`
+	got := convertToggle(in)
+	if !contains(got, "\n.. code-block:: python\n") {
+		t.Errorf("inner code-block not dedented; got:\n%s", got)
+	}
+}
+
 func TestConvertRawHTMLVideo_CantonDemoPattern(t *testing.T) {
 	in := `.. raw:: html
 

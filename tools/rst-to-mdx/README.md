@@ -45,10 +45,11 @@ that depends on `docs-website/` is **cross-reference resolution**:
 
 Every other transform — headings, inline formatting and roles, links
 (named, anonymous, `:doc:`, `:download:`, autolinks like `<https://…>`),
-code blocks, admonitions, `.. todo::` / `.. wip::` notes, images and
-figures, lists, tables (list-table, csv-table, grid), Sphinx tabs,
-`.. youtube::` and `.. raw:: html` video embeds, comments, frontmatter,
-and provenance markers — runs identically regardless of input location.
+code blocks, admonitions, `.. todo::` / `.. wip::` notes, `.. toggle::`
+collapsibles → `<Accordion>`, images and figures, lists, tables
+(list-table, csv-table, grid), Sphinx tabs, `.. youtube::` and
+`.. raw:: html` video embeds, comments, frontmatter, and provenance
+markers — runs identically regardless of input location.
 
 ## Heading mapping
 
