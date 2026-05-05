@@ -25,9 +25,9 @@ pkgs.mkShell {
       *" --max-old-space-size="*) ;;
       *)
         if [ -z "$NODE_OPTIONS" ]; then
-          export NODE_OPTIONS="--max-old-space-size=8192"
+          export NODE_OPTIONS="--max-old-space-size=12288"
         else
-          export NODE_OPTIONS="$NODE_OPTIONS --max-old-space-size=8192"
+          export NODE_OPTIONS="$NODE_OPTIONS --max-old-space-size=12288"
         fi
         ;;
     esac
