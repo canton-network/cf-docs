@@ -15,10 +15,7 @@ This repo manages the contents of the docs.canton.network website.
 ### Running the dev server
 
 ```bash
-# Install Mintlify CLI (first time only)
-npm i -g mintlify
-
-# Start local dev server
+direnv allow
 cd docs-main && mintlify dev
 ```
 
@@ -51,6 +48,7 @@ This repository uses a dual-license model:
 ### Direnv + Nix workflow
 
 This repo includes `.envrc` and `shell.nix` for a reproducible local toolchain.
+The Nix package set is pinned by `nix/nixpkgs.src.json`.
 
 Required:
 - `direnv`
@@ -60,7 +58,7 @@ Then run:
 
 ```bash
 direnv allow
-mintlify dev
+cd docs-main && mintlify dev
 ```
 
 ### Run all generated reference docs
@@ -76,8 +74,8 @@ Use `--dry-run` to print the exact per-step commands without executing them.
 
 ### Generate the JSON API reference
 
-This repo includes a checked-in source config plus regenerated local Ledger API OpenAPI snapshots under `config/x2mdx/ledger-api/`.
-The generator script refreshes those local `openapi.yaml` snapshots from configured Canton release bundles, rewrites the local manifest, and then regenerates the page and `docs.json` update through the docs repo `direnv` / `nix` shell:
+This repo includes a checked-in source config for the Ledger API OpenAPI bundle inputs under `config/x2mdx/ledger-api/source-artifacts.json`.
+The generator script refreshes the latest configured `openapi.yaml` from the Canton release bundle into the docs tree and rewires `docs-main/docs.json` so Mintlify renders the JSON API reference natively:
 
 ```bash
 python3 scripts/generate_json_api_reference.py
@@ -91,10 +89,10 @@ npm run generate:json-api-reference
 
 By default this writes:
 
-- `docs-main/reference/json-api-reference.mdx`
+- `docs-main/openapi/json-ledger-api/openapi.yaml`
 - `docs-main/docs.json`
 
-The generated page is placed directly under the top-level `API Reference` dropdown in `docs-main/docs.json`, outside the `MainNet`/`TestNet`/`DevNet` versioned navigation branches.
+The generated nav is published under `API Reference -> Ledger API -> OpenAPI`, using Mintlify's native generated endpoint pages under `reference/json-api-reference`. The legacy checked-in MDX page at `docs-main/reference/json-api-reference.mdx` is removed by the generator.
 
 ### Generate the JSON API AsyncAPI reference
 
@@ -122,7 +120,7 @@ The generated page is placed directly under the top-level `API Reference` dropdo
 
 ### Generate the Ledger bindings API reference
 
-This repo also includes a checked-in source config for the published Java/Scala bindings Javadoc/Scaladoc jars at `config/x2mdx/ledger-bindings/source-artifacts.json`.
+This repo also includes a checked-in source config for the published Java bindings Javadoc jars at `config/x2mdx/ledger-bindings/source-artifacts.json`.
 The generator script downloads those jars into `.internal/cache/x2mdx/ledger-bindings/`, writes a local x2mdx manifest into `.internal/generated/x2mdx/ledger-bindings/manifest.json`, and then renders the MDX pages through the docs repo `direnv` / `nix` shell.
 
 Run:
@@ -139,12 +137,11 @@ npm run generate:ledger-bindings-api-reference
 
 By default this writes:
 
-- `docs-main/reference/ledger-api-jvm-bindings.mdx`
+- `docs-main/reference/java-bindings.mdx`
 - `docs-main/reference/java/`
-- `docs-main/reference/scala/`
 - `docs-main/docs.json`
 
-The generated nav is added under the top-level `API Reference` dropdown as `Ledger API JVM Bindings -> Scaladocs/Javadocs`, with each nested group populated directly from the generated JVM package pages.
+The generated nav is added under the top-level `API Reference` dropdown as `Java Bindings -> Javadocs`, with each nested group populated directly from the generated Java package pages.
 
 ### Generate the Daml Standard Library reference
 
@@ -240,7 +237,7 @@ By default this writes:
 - `docs-main/reference/typescript.mdx`
 - `docs-main/docs.json`
 
-The generator also adds that page under the top-level `API Reference` dropdown as `Daml TypeScript Bindings -> TypeScript`.
+The generator also adds that page under the top-level `API Reference` dropdown as `TypeScript -> @daml/types`.
 
 ### Generate the Wallet Gateway JSON-RPC reference
 

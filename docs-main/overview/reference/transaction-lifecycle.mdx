@@ -13,57 +13,6 @@ The phases are:
 4. **Validation and Confirmation** — each confirming participant validates its views and responds to the mediator
 5. **Aggregation and Commit** — the mediator collects responses, renders a verdict, and participants apply (or discard) the result based on the verdict
 
-```mermaid
-sequenceDiagram
-    participant App as Application
-    participant SP as Submitting<br>Participant
-    participant SEQ as Sequencer
-    participant MED as Mediator
-    participant CP as Confirming<br>Participant(s)
-
-    rect rgb(240, 240, 255)
-    note over App,SP: Phase 1 — Preparation
-    App->>SP: Command via Ledger API (gRPC)
-    SP->>SP: Execute Daml engine locally
-    SP->>SP: Produce transaction tree, decompose into views
-    SP->>SP: Encrypt each view for its informees
-    SP->>SP: Compute root hash over full tree
-    end
-
-    rect rgb(240, 255, 240)
-    note over SP,SEQ: Phase 2 — Submission
-    SP->>SEQ: Confirmation request batch<br>(encrypted views + root hash messages + informee messages)
-    end
-
-    rect rgb(255, 245, 230)
-    note over SEQ,CP: Phase 3 — Sequencing & Distribution
-    SEQ->>SEQ: Assign timestamp (BFT-write)
-    SEQ->>CP: Encrypted views + root hash message<br>(only views where CP hosts an informee)
-    SEQ->>SP: Encrypted views + root hash message<br>(for submitter's own informees)
-    SEQ->>MED: Informee messages<br>(informee list + confirmation policy per view)
-    MED->>MED: Record request metadata, start deadline timer
-    end
-
-    rect rgb(255, 240, 240)
-    note over CP,MED: Phase 4 — Validation & Confirmation
-    CP->>CP: Decrypt views, validate (conformance, authorization, consistency, time bounds, root hash)
-    SP->>SP: Same validation on submitter's own views
-    CP->>SEQ: Mediator response (approve/reject)
-    SP->>SEQ: Mediator response (approve/reject)
-    SEQ->>SEQ: Timestamp response (BFT-write)
-    SEQ->>MED: Deliver mediator responses
-    end
-
-    rect rgb(245, 240, 255)
-    note over MED,CP: Phase 5 — Aggregation & Commit
-    MED->>MED: Collect responses, evaluate confirmation policy
-    MED->>SEQ: Transaction result (approve or reject)
-    SEQ->>SP: Deliver verdict
-    SEQ->>CP: Deliver verdict
-    SP->>SP: Commit or discard
-    CP->>CP: Commit or discard
-    end
-```
 
 ## Phase 1: Preparation
 
@@ -77,7 +26,7 @@ The lifecycle begins when the submitting participant node receives a command fro
 
 - **Computes a root hash** that cryptographically commits to the entire transaction tree. The root hash binds all views together: every confirming participant can verify that the view it received belongs to the same transaction that every other participant is validating. The mediator uses the root hash to correlate confirmation responses.
 
-If the transaction touches contracts on multiple synchronizers, the participant may need to reassign those contracts to a common synchronizer before submission. This is handled by the [Reassignment Protocol](/docs-main/overview/reference/reassignment-protocol).
+If the transaction touches contracts on multiple synchronizers, the participant may need to reassign those contracts to a common synchronizer before submission. This is handled by the [Reassignment Protocol](/overview/reference/reassignment-protocol).
 
 ## Phase 2: Submission (Confirmation Request)
 

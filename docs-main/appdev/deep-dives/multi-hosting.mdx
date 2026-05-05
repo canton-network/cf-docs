@@ -94,40 +94,7 @@ Once both validators have signed, the party appears as hosted on both nodes. You
 
 Multi-hosting addresses compute resilience (can I submit transactions?), but you also need data resilience (can I query my party's contract state?). The Participant Query Store (PQS) is the primary query layer for Canton applications, and its availability matters as much as the validator itself.
 
-### PQS High Availability
-
-Each hosting validator runs its own PQS instance backed by its own PostgreSQL database. If one validator's PQS becomes unavailable, your application can fail over to another hosting validator's PQS.
-
-Design your backend to support PQS failover:
-
-- Configure multiple PQS connection strings, one per hosting validator
-- Implement connection health checks and automatic failover
-- Accept that different PQS instances may be at slightly different offsets during normal operation — they converge once the synchronizer delivers all pending updates
-
-### Sharing PQS Databases with Application Tables
-
-{/* COPIED_START source="docs-website:pqs/3.5/component-howtos/pqs/references/sharing-database.rst" hash="pqs-sharing" */}
-
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was adapted from existing reviewed documentation.
-**Source:** `replicated/pqs/3.5/component-howtos/pqs/references/sharing-database.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
-
-An application making use of the PQS datastore may also manage its own database migrations via Flyway — either embedded, command-line, or other supported means. An example of such a scenario is the creation of application-specific indexes.
-
-With default settings, the application's Flyway produces an error because its view of available/valid migrations is different from PQS. However, it is trivial to instruct the application's Flyway to use a different, non-default table name to store its versioning information, which allows both Flyways to coexist in the same database:
-
-```bash
-flyway -configFiles=conf/flyway.toml migrate \
-  -table=myapp_version \
-  -baselineOnMigrate=true \
-  -baselineVersion=0
-```
-
-Now both PQS and the application can manage their own schema versions independently. The application should limit itself to adding indexes and other non-conflicting changes so the two Flyways can coexist without issues.
-
-{/* COPIED_END */}
+For PQS deployment patterns — including high availability across hosting validators and sharing the PQS database with application tables — see [PQS (Participant Query Store)](/sdks-tools/development-tools/pqs#high-availability-and-database-sharing).
 
 ## When to Use Multi-Hosting vs. Other Resilience Strategies
 
@@ -147,5 +114,5 @@ Multi-hosting is one of several resilience approaches. Choose based on your requ
 
 ## Next Steps
 
-- [Decentralization](/docs-main/appdev/deep-dives/decentralization) — How multi-hosting fits into Canton's decentralization spectrum
-- [Composition and Multi-Party Workflows](/docs-main/appdev/deep-dives/composition-multi-party) — Daml patterns for multi-party interactions
+- [Decentralization](/appdev/deep-dives/decentralization) — How multi-hosting fits into Canton's decentralization spectrum
+- [Composition and Multi-Party Workflows](/appdev/deep-dives/composition-multi-party) — Daml patterns for multi-party interactions

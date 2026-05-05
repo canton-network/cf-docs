@@ -65,22 +65,20 @@ This section was copied from existing reviewed documentation.
 Reviewers: Skip this section. Remove markers after final approval.
 </Warning>
 
-# Overview: Template Structure
-
+## Overview: Template Structure
 This page covers what a template looks like: what parts of a template there are, and where they go.
 
 For the structure of a Daml file *outside* a template, see `file-structure`.
 
-## Template Outline Structure
-
+### Template Outline Structure
 Here’s the structure of a Daml template:
 
 <DamlStructureOfTemplateOutlineSnippet />
 
-template name
+[template name](#template-name)
 `template` keyword
 
-parameters
+[parameters](#template-parameters)
 `with` followed by the names of parameters and their types
 
 template body
@@ -88,67 +86,66 @@ template body
 
 Can include:
 
-template-local definitions (deprecated)
+[template-local definitions (deprecated)](#template-local-definitions-deprecated)
 `let` keyword
 
 Lets you make definitions that have access to the contract arguments and are available in the rest of the template definition.
 
-signatories
+[signatories](#signatory-parties)
 `signatory` keyword
 
-Required. The parties (see the Party type) who must consent to the creation of this contract. You won't be able to create this contract until all of these parties have authorized it.
+Required. The parties (see the [Party](#built-in-types) type) who must consent to the creation of this contract. You won't be able to create this contract until all of these parties have authorized it.
 
-observers
+[observers](#observers)
 `observer` keyword
 
 Optional. Parties that aren't signatories but who you still want to be able to see this contract.
 
-a precondition
+[a precondition](#preconditions)
 `ensure` keyword
 
 Only create the contract if the conditions after `ensure` evaluate to true.
 
-a contract key
+[a contract key](#contract-keys-and-maintainers)
 `key` keyword
 
-Optional. Lets you specify a combination of a party and other data that uniquely identifies a contract of this template. See `contractkeys`.
+Optional. Lets you specify a combination of a party and other data that uniquely identifies a contract of this template. See [Contract Keys and Maintainers](#contract-keys-and-maintainers).
 
-maintainers
+[maintainers](#contract-keys-and-maintainers)
 `maintainer` keyword
 
-Required if you have specified a `key`. Keys are only unique to a `maintainer`. See `contractkeys`.
+Required if you have specified a `key`. Keys are only unique to a `maintainer`. See [Contract Keys and Maintainers](#contract-keys-and-maintainers).
 
-choices
+[choices](#choices)
 `choice NameOfChoice : ReturnType controller nameOfParty do`
 
 Defines choices that can be exercised. See [Choice structure](#choice-structure) for what can go in a choice.
 
-## Choice Structure
-
+### Choice Structure
 Here is the structure of a choice inside a template:
 
 <DamlStructureOfChoiceSnippet />
 
-consumption annotation
-Optionally one of `preconsuming`, `postconsuming`, `nonconsuming`, which changes the behavior of the choice with respect to privacy and if and when the contract is archived. See contract consumption in choices for more details.
+[consumption annotation](#contract-consumption)
+Optionally one of `preconsuming`, `postconsuming`, `nonconsuming`, which changes the behavior of the choice with respect to privacy and if and when the contract is archived. See [contract consumption in choices](#contract-consumption) for more details.
 
-a name
+[a name](#choice-name)
 Must begin with a capital letter. Must be unique - choices in different templates can't have the same name.
 
-a return type
+[a return type](#return-type)
 after a `:`, the return type of the choice
 
-choice arguments
+[choice arguments](#choice-arguments)
 `with` keyword
 
 If you include a `Party` as a choice argument, you can make that `Party` the `controller` of the choice. This means that the controller can be specified when the choice is exercised, rather than when the contract is created. For the exercise to work, the party needs to be able to see the contract, i.e. it must be an `observer` or a `signatory`.
 
-a controller (or controllers)
+[a controller (or controllers)](#controllers)
 `controller` keyword
 
 Who can exercise the choice.
 
-choice observers
+[choice observers](#choice-observers)
 `observer` keyword
 
 Optional. Additional parties that are guaranteed to be informed of an exercise of the choice.
@@ -157,65 +154,64 @@ To specify choice observers, you must start you choice with the `choice` keyword
 
 The optional `observer` keyword must precede the mandatory `controller` keyword.
 
-a choice body
+[a choice body](#choice-body)
 After `do` keyword
 
 What happens when someone exercises the choice. A choice body can contain update statements: see [Choice body structure](#choice-body-structure) below.
 
-## Choice Body Structure
-
-A choice body contains `Update` expressions, wrapped in a do block.
+### Choice Body Structure
+A choice body contains `Update` expressions, wrapped in a [do](#do) block.
 
 The update expressions are:
 
-create
+[create](#create)
 Create a new contract of this template.
 
 `create NameOfContract with contractArgument1 = value1; contractArgument2 = value2; ...`
 
-exercise
+[exercise](#exercise)
 Exercise a choice on a particular contract.
 
 `exercise idOfContract NameOfChoiceOnContract with choiceArgument1 = value1; choiceArgument2 = value 2; ...`
 
-fetch
+[fetch](#fetch)
 Fetch a contract using its ID. Often used with assert to check conditions on the contract’s content.
 
 `fetchedContract <- fetch IdOfContract`
 
-fetchByKey
-Like `fetch`, but uses a contract key rather than an ID.
+[fetchByKey](#fetchbykey)
+Like `fetch`, but uses a [contract key](#contract-keys-and-maintainers) rather than an ID.
 
 `fetchedContract <- fetchByKey @ContractType contractKey`
 
-lookupByKey
-Confirm that a contract with the given contract key exists.
+[lookupByKey](#lookupbykey)
+Confirm that a contract with the given [contract key](#contract-keys-and-maintainers) exists.
 
 `fetchedContractId <- lookupByKey @ContractType contractKey`
 
-abort
+[abort](#abort)
 Stop execution of the choice, fail the update.
 
 `if False then abort`
 
-assert
+[assert](#assert)
 Fail the update unless the condition is true. Usually used to limit the arguments that can be supplied to a contract choice.
 
 `assert (amount > 0)`
 
-getTime
+[getTime](#gettime)
 Gets the ledger time. Usually used to restrict when a choice can be exercised.
 
 `currentTime <- getTime`
 
-return
+[return](#return)
 Explicitly return a value. By default, a choice returns the result of its last update expression. This means you only need to use `return` if you want to return something else.
 
 `return ContractID ExampleTemplate`
 
 The choice body can also contain:
 
-let keyword
+[let keyword](#let)
 Used to assign values or functions.
 
 assign a value to the result of an update statement
@@ -235,22 +231,19 @@ This section was copied from existing reviewed documentation.
 Reviewers: Skip this section. Remove markers after final approval.
 </Warning>
 
-# Reference: Templates
-
+## Reference: Templates
 This page gives reference information on templates:
 
 For the structure of a template, see `structure`.
 
-## Template Name
-
+### Template Name
 <DamlReferenceTemplateIntroSnippet />
 
 - This is the name of the template. It's preceded by `template` keyword. Must begin with a capital letter.
 - This is the highest level of nesting.
 - The name is used when creating a contract of this template (usually, from within a choice).
 
-## Template Parameters
-
+### Template Parameters
 <DamlReferenceTemplateParamsSnippet />
 
 - `with` keyword. The parameters are in the form of a record type.
@@ -258,22 +251,19 @@ For the structure of a template, see `structure`.
 - A template parameter can't have the same name as any choice arguments inside the template.
 - For all parties involved in the contract (whether they're a `signatory`, `observer`, or `controller`) you must pass them in as parameters to the contract, whether individually or as a list (`[Party]`).
 
-## Implicit Record
-
+### Implicit Record
 Whenever a template is defined, a record is implicitly defined with the same name and fields as that template. This record structure is used in Daml code to represent the data of a contract based on that template.
 
 Note that in the general case, the existence of a local binding `b` of type `T`, where `T` is a template (and thus also a record), does not necessarily imply the existence of a contract with the same data as `b` on the ledger. You can only assume the existence of such a contract if `b` is the result of a fetch from the ledger within the same transaction.
 
 You can create a new instance of a record of type `T` without any interaction with the ledger; in fact, this is how you construct a create command.
 
-## `this` and `self`
-
+### `this` and `self`
 Within the body of a template we implicitly define a local binding `this` to represent the data of the current contract. For a template `T`, this binding is of type `T`, i.e. the implicit record defined by the template.
 
 Within choices, you can additionally use the binding `self` to refer to the contract ID of the current contract (the one on which the choice is being executed). For a contract of template `T`, the `self` binding is of type `ContractId T`.
 
-## Template-local Definitions (Deprecated)
-
+### Template-local Definitions (Deprecated)
 <div className="todo">
 
 Fix or remove this literal include
@@ -297,8 +287,7 @@ for the contract fields or body ("this") if necessary.
 The reason for this deprecation is that some uses of the `this` keyword in template-local definitions would create implicit circular dependencies, causing an infinite loop upon evaluation.
 </Warning>
 
-### Migration
-
+#### Migration
 Users are strongly encouraged to adapt their code to avoid this feature. This involves replacing each template-local definition with a regular top-level definition. If the old definition made use of contract fields or the contract body ("this"), the new definition should take them as parameters. Correspondingly, the use sites of these definitions should supply the appropriate values as arguments.
 
 For example, consider the template `Person` below. It defines and uses a template-local binding `fullName`, which now triggers the deprecation warning.
@@ -342,8 +331,7 @@ template Person
         debug desc
 ```
 
-### Turning off the warning
-
+#### Turning off the warning
 This warning is controlled by the warning flag `template-let`, which means that it can be toggled independently of other warnings. This is especially useful for gradually migrating code that used this syntax.
 
 To turn off the warning within a Daml file, add the following line at the top of the file:
@@ -365,8 +353,7 @@ Within a project where the warning has been turned off via the `daml.yaml` file,
 {-# OPTIONS_GHC -Wtemplate-let #-}
 ```
 
-## Signatory Parties
-
+### Signatory Parties
 <DamlReferenceTemplateSigsSnippet />
 
 - `signatory` keyword. After `where`. Followed by at least one `Party`.
@@ -383,8 +370,7 @@ Within a project where the warning has been turned off via the `daml.yaml` file,
 
 - Each template **must** have at least one signatory. A signatory declaration consists of the `signatory` keyword followed by a comma-separated list of one or more expressions, each expression denoting a `Party` or collection thereof.
 
-## Observers
-
+### Observers
 <DamlReferenceTemplateObsSnippet />
 
 - `observer` keyword. After `where`. Followed by at least one `Party`.
@@ -393,8 +379,7 @@ Within a project where the warning has been turned off via the `daml.yaml` file,
 - Use when a party needs visibility on a contract, or be informed or contract events, but is not a signatory or controller.
 - If you start your choice with `choice` rather than `controller` (see `daml-ref-choices` below), you must make sure to add any potential controller as an observer. Otherwise, they will not be able to exercise the choice, because they won't be able to see the contract.
 
-## Choices
-
+### Choices
 <DamlReferenceTemplateChoiceSnippet />
 
 - A right that the contract gives the controlling party. Can be *exercised*.
@@ -402,8 +387,7 @@ Within a project where the warning has been turned off via the `daml.yaml` file,
 - By default, choices are *consuming*: that is, exercising the choice archives the contract, so no further choices can be exercised on it. You can make a choice non-consuming using the `nonconsuming` keyword.
 - See `choices` for full reference information.
 
-## Serializable Types
-
+### Serializable Types
 Every parameter to a template, choice argument, and choice result must have a *serializable type*. This does not merely mean "convertible to bytes"; it has a specific meaning in Daml. The serializability rule serves three purposes:
 
 1.  Offer a stable means to store ledger values permanently.
@@ -421,19 +405,16 @@ The following types are *not serializable*, and thus may not be used in template
 - References to a parameterized data type with any non-serializable type argument. This applies whether or not the data type definition uses the type parameter.
 - Defined data types with any type parameter of kind `Nat`, or any kind other than `*`. This means higher-kinded types, and types that take a parameter just to pass to `Numeric`, are not serializable.
 
-### Migration
-
+#### Migration
 Users should remove any agreement declarations from their code, as this feature has been fully removed from the language.
 
-## Preconditions
-
+### Preconditions
 <DamlReferenceTemplateEnsureSnippet />
 
 - `ensure` keyword, followed by a boolean condition.
 - Used on contract creation. `ensure` limits the values on parameters that can be passed to the contract: the contract can only be created if the boolean condition is true.
 
-## Contract Keys and Maintainers<span id="daml-ref-contract-keys"></span>
-
+### Contract Keys and Maintainers<span id="daml-ref-contract-keys"></span>
 <DamlReferenceContractKeySnippet />
 
 - `key` and `maintainer` keywords.
@@ -446,8 +427,7 @@ Users should remove any agreement declarations from their code, as this feature 
 
 - For a full explanation, see `contractkeys`.
 
-## Interface Instances
-
+### Interface Instances
 <DamlInterfacesINTERFACEINSTANCEINTEMPLATE />
 
 - Used to make a template an instance of an existing interface.
@@ -468,20 +448,17 @@ This section was copied from existing reviewed documentation.
 Reviewers: Skip this section. Remove markers after final approval.
 </Warning>
 
-# Reference: Choices
-
+## Reference: Choices
 This page gives reference information on choices. For information on the high-level structure of a choice, see `structure`.
 
-## Choice Name
-
+### Choice Name
 <DamlReferenceChoiceNameSnippet />
 
 - `choice` keyword
 - The name of the choice. Must begin with a capital letter.
 - Must be unique in the module. Different templates defined in the same module cannot share a choice name.
 
-## Controllers
-
+### Controllers
 <DamlReferenceControllerSnippet />
 
 - `controller` keyword
@@ -494,18 +471,15 @@ This page gives reference information on choices. For information on the high-le
 You **must** make sure that the controller parties are observers (or signatories) of the contract, otherwise they cannot see the contract (and therefore cannot exercise the choice).
 </Warning>
 
-## Choice Observers
-
+### Choice Observers
 *Choice observers* can be attached to a choice using the `observer` keyword. The choice observers are a list of parties who are not stakeholders but who see all the consequences of the action.
 
 <DamlStructureOfChoiceObserverSnippet />
 
-### Contract Consumption
-
+#### Contract Consumption
 If no qualifier is present, choices are *consuming*: the contract is archived before the evaluation of the choice body and both the controllers and all contract stakeholders see all consequences of the action.
 
-## Preconsuming Choices
-
+### Preconsuming Choices
 <DamlReferencePreconsumingSnippet />
 
 - `preconsuming` keyword. Optional.
@@ -515,8 +489,7 @@ If no qualifier is present, choices are *consuming*: the contract is archived be
 - Only the controllers and signatories of the contract see all consequences of the action. Other stakeholders merely see an archive action.
 - Can be thought as a non-consuming choice that implicitly archives the contract before anything else happens
 
-## Postconsuming Choices
-
+### Postconsuming Choices
 <DamlReferencePostconsumingSnippet />
 
 - `postconsuming` keyword. Optional.
@@ -525,8 +498,7 @@ If no qualifier is present, choices are *consuming*: the contract is archived be
 - Only the controllers and signatories of the contract see all consequences of the action. Other stakeholders merely see an archive action.
 - Can be thought as a non-consuming choice that implicitly archives the contract after the choice has been exercised
 
-## Non-consuming Choices
-
+### Non-consuming Choices
 <DamlReferenceNonconsumingSnippet />
 
 - `nonconsuming` keyword. Optional.
@@ -534,14 +506,12 @@ If no qualifier is present, choices are *consuming*: the contract is archived be
 - Only the controllers and signatories of the contract see all consequences of the action.
 - Useful in the many situations when you want to be able to exercise a choice more than once.
 
-### Return Type
-
+#### Return Type
 - Return type is written immediately after choice name.
 - All choices have a return type. A contract returning nothing should be marked as returning a "unit", ie `()`.
 - If a contract is/contracts are created in the choice body, usually you would return the contract ID(s) (which have the type `ContractId <name of template>`). This is returned when the choice is exercised, and can be used in a variety of ways.
 
-## Choice Arguments
-
+### Choice Arguments
 <DamlReferenceChoiceParamsSnippet />
 
 - `with` keyword.
@@ -549,8 +519,7 @@ If no qualifier is present, choices are *consuming*: the contract is archived be
 - A choice argument can't have the same name as any parameter to the template the choice is in.
 - Optional - only if you need extra information passed in to exercise the choice.
 
-## Choice Body
-
+### Choice Body
 - Introduced with `do`
 - The logic in this section is what is executed when the choice gets exercised.
 - The choice body contains `Update` expressions. For detail on this, see `updates`.
@@ -569,25 +538,21 @@ This section was copied from existing reviewed documentation.
 Reviewers: Skip this section. Remove markers after final approval.
 </Warning>
 
-# Reference: Updates
-
+## Reference: Updates
 This page gives reference information on Updates. For the structure around them, see `structure`.
 
-## Background
-
+### Background
 - An `Update` is ledger update. There are many different kinds of these, and they're listed below.
 - They are what can go in a choice body.
 
-## Binding Variables
-
+### Binding Variables
 ```daml
 boundVariable <- UpdateExpression1
 ```
 
 - One of the things you can do in a choice body is bind (assign) an Update expression to a variable. This works for any of the Updates below.
 
-## do
-
+### do
 ```daml
 do
    updateExpression1
@@ -602,8 +567,7 @@ do
 
   So if you want to return something else, you'll need to use `return` explicitly - see `daml-ref-return` for an example.
 
-## archive
-
+### archive
 ```daml
 archive ContractId
 ```
@@ -620,8 +584,7 @@ choice Archive : ()
   do return ()
 ```
 
-## create
-
+### create
 ```daml
 create NameOfTemplate with exampleParameters
 ```
@@ -638,8 +601,7 @@ create NameOfTemplate with exampleParameters
 
   If the required authorization is not given, the transaction fails. For more detail on authorization, see `daml-ref-signatories`.
 
-## exercise
-
+### exercise
 ```daml
 exercise IdOfContract NameOfChoiceOnContract with choiceArgument1 = value1
 ```
@@ -649,8 +611,7 @@ exercise IdOfContract NameOfChoiceOnContract with choiceArgument1 = value1
 - Use `with` to specify the choice parameters.
 - Requires authorization from the controller(s) of the choice. If the authorization is not given, the transaction fails.
 
-## exerciseByKey
-
+### exerciseByKey
 ```daml
 exerciseByKey @ContractType contractKey NameOfChoiceOnContract with choiceArgument1 = value1
 ```
@@ -659,8 +620,7 @@ exerciseByKey @ContractType contractKey NameOfChoiceOnContract with choiceArgume
 - Like `exercise`, but the contract is specified by contract key, instead of contract ID.
 - For details see Reference: Contract Keys: exerciseByKey
 
-## fetch
-
+### fetch
 ```daml
 fetchedContract <- fetch IdOfContract
 ```
@@ -671,8 +631,7 @@ fetchedContract <- fetch IdOfContract
 - `fetch cid` fails if `cid` is not the contract id of an active contract, and thus causes the entire transaction to abort.
 - The submitting party must be an observer or signatory on the contract, otherwise `fetch` fails, and similarly causes the entire transaction to abort.
 
-## fetchByKey
-
+### fetchByKey
 ```daml
 fetchedContract <- fetchByKey @ContractType contractKey
 ```
@@ -681,8 +640,7 @@ fetchedContract <- fetchByKey @ContractType contractKey
 - Like `fetch`, but fetches the contract with that contract key, instead of the contract ID.
 - For details see Reference: Contract Keys: fetchByKey.
 
-## visibleByKey
-
+### visibleByKey
 ```daml
 isVisible <- visibleByKey @ContractType contractKey
 ```
@@ -691,8 +649,7 @@ isVisible <- visibleByKey @ContractType contractKey
 - Use this to check whether a contract with the given contract key exists.
 - For details see Reference: Contract Keys: visibleByKey
 
-## lookupByKey
-
+### lookupByKey
 ```daml
 fetchedContractId <- lookupByKey @ContractType contractKey
 ```
@@ -701,8 +658,7 @@ fetchedContractId <- lookupByKey @ContractType contractKey
 - Use this to confirm that a contract with the given contract key exists.
 - For details see Reference: Contract Keys: lookupByKey
 
-## abort
-
+### abort
 ```daml
 abort errorMessage
 ```
@@ -712,8 +668,7 @@ abort errorMessage
 - `errorMessage` is of type `Text`. Use the error message to provide more context to an external system (e.g., it gets displayed in Daml Studio script results).
 - You could use `assert False` as an alternative.
 
-## assert
-
+### assert
 ```daml
 assert (condition == True)
 ```
@@ -726,8 +681,7 @@ Here's an example of using `assert` to prevent a choice being exercised if the `
 
 <DamlRestrictedPayoutCHOICEWITHASSERT />
 
-## getTime
-
+### getTime
 ```daml
 currentTime <- getTime
 ```
@@ -740,8 +694,7 @@ Here's an example of a choice that uses a check on the current time:
 
 <DamlSnippetsCHOICEWITHTIMECHECK />
 
-## return
-
+### return
 ```daml
 return ()
 ```
@@ -758,8 +711,7 @@ do
   return (firstContract, secondContract)
 ```
 
-## let
-
+### let
 See the documentation on `daml-ref-let`.
 
 Let looks similar to binding variables, but it's very different! This code example shows how:
@@ -774,8 +726,7 @@ do
   createContract party2
 ```
 
-## this
-
+### this
 `this` lets you refer to the current contract from within the choice body. This refers to the contract, *not* the contract ID.
 
 It's useful, for example, if you want to pass the current contract to a helper function outside the template.
@@ -794,14 +745,11 @@ This section was copied from existing reviewed documentation.
 Reviewers: Skip this section. Remove markers after final approval.
 </Warning>
 
-# Reference: Data Types
-
+## Reference: Data Types
 This page gives reference information on Daml's data types.
 
-## Built-in Types
-
-### Table of built-in primitive types
-
+### Built-in Types
+#### Table of built-in primitive types
 | Type        | For                                    | Example                           | Notes                                                                                                                                                                                                                                                                                                                                                                                               |
 |-------------|----------------------------------------|-----------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `Int`       | integers                               | `1`, `1000000`, `1_000_000`       | `Int` values are signed 64-bit integers which represent numbers between `-9,223,372,036,854,775,808` and `9,223,372,036,854,775,807` inclusive. Arithmetic operations raise an error on overflows and division by `0`. To make long numbers more readable you can optionally add underscores.                                                                                                       |
@@ -814,28 +762,23 @@ This page gives reference information on Daml's data types.
 | `Time`      | models absolute time (UTC)             | `time (date 2007 Apr 5) 14 30 05` | `Time` values have microsecond precision with allowed range from `0001-01-01` to `9999-12-31` (using a year-month-day format). To create a value of type `Time`, use a `Date` and the function `time` (to get this function, import `DA.Time`).                                                                                                                                                     |
 | `RelTime`   | models differences between time values | `seconds 1`, `seconds (-2)`       | `RelTime` values have microsecond precision with allowed range from `-9,223,372,036,854,775,808ms` to `9,223,372,036,854,775,807ms` There are no literals for `RelTime`. Instead they are created using one of `days`, `hours`, `minutes`, `seconds`, `milliseconds` and `microseconds` (to get these functions, import `DA.Time`).       |
 
-### Escaping Characters
-
+#### Escaping Characters
 `Text` literals support backslash escapes to include their delimiter (`\"`) and a backslash itself (`\\`).
 
-### Time
-
+#### Time
 Definition of time on the ledger is a property of the execution environment. Daml assumes there is a shared understanding of what time is among the stakeholders of contracts.
 
-## Lists
-
+### Lists
 `[a]` is the built-in data type for a list of elements of type `a`. The empty list is denoted by `[]` and `[1, 3, 2]` is an example of a list of type `[Int]`.
 
 You can also construct lists using `[]` (the empty list) and `::` (which is an operator that appends an element to the front of a list). For example:
 
 <DamlSnippetsLISTSEXAMPLE />
 
-### Sum a List
-
+#### Sum a List
 To sum a list, use a *fold* (because there are no loops in Daml). See `daml-ref-folding` for details.
 
-## Records and Record Types
-
+### Records and Record Types
 You declare a new record type using the `data` and `with` keyword:
 
 ```daml
@@ -881,8 +824,7 @@ newRecord = MyRecord with first = 1; second = 2
 newRecord = MyRecord 1 2
 ```
 
-### Data Constructors
-
+#### Data Constructors
 You can use `data` keyword to define a new data type, for example `data Floor a = Floor a` for some type `a`.
 
 The first `Floor` in the expression is the *type constructor*. The second `Floor` is a *data constructor* that can be used to specify values of the `Floor Int` type: for example, `Floor 0`, `Floor 1`.
@@ -895,8 +837,7 @@ An example of a data constructor with zero arguments is `data Empty = Empty {}`.
 In `data Confusing = Int`, the `Int` is a data constructor with no arguments. It has nothing to do with the built-in `Int` type.
 </Note>
 
-### Access Record Fields
-
+#### Access Record Fields
 To access the fields of a record type, use dot notation. For example:
 
 ```daml
@@ -907,8 +848,7 @@ val.first
 val.second
 ```
 
-### Update Record Fields
-
+#### Update Record Fields
 You can also use the `with` keyword to create a new record on the basis of an existing replacing select fields.
 
 For example:
@@ -944,8 +884,7 @@ myRecord5 = r with second
 The `with` keyword binds more strongly than function application. So for a function, say `return`, either write `return IntegerCoordinate with first = 1; second = 5` or `return (IntegerCoordinate {first = 1; second = 5})`, where the latter expression is enclosed in parentheses.
 </Note>
 
-### Parameterized Data Types
-
+#### Parameterized Data Types
 Daml supports parameterized data types.
 
 For example, to express a more general type for 2D coordinates:
@@ -958,8 +897,7 @@ data Coordinate a b = Coordinate with first : a; second : b
 
 An example of a type that can be constructed with `Coordinate` is `Coordinate Int Int`.
 
-## Type Synonyms
-
+### Type Synonyms
 To declare a synonym for a type, use the `type` keyword.
 
 For example:
@@ -972,18 +910,15 @@ This makes `IntegerTuple` and `(Int, Int)` synonyms: they have the same type and
 
 You can use the `type` keyword for any type, including `daml-ref-built-in-types`.
 
-### Function Types
-
+#### Function Types
 A function's type includes its parameter and result types. A function `foo` with two parameters has type `ParamType1 -> ParamType2 -> ReturnType`.
 
 Note that this can be treated as any other type. You could for instance give it a synonym using `type FooType = ParamType1 -> ParamType2 -> ReturnType`.
 
-## Algebraic Data Types
-
+### Algebraic Data Types
 An algebraic data type is a composite type: a type formed by a combination of other types. The enumeration data type is an example. This section introduces more powerful algebraic data types.
 
-### Product Types
-
+#### Product Types
 The following data constructor is not valid in Daml: `data AlternativeCoordinate a b = AlternativeCoordinate a b`. This is because data constructors can only have one argument.
 
 To get around this, wrap the values in a record: `data Coordinate a b = Coordinate {first: a; second: b}`.
@@ -992,8 +927,7 @@ These kinds of types are called *product* types.
 
 A way of thinking about this is that the `Coordinate Int Int` type has a first and second dimension (that is, a 2D product space). By adding an extra type to the record, you get a third dimension, and so on.
 
-### Sum Types
-
+#### Sum Types
 Sum types capture the notion of being of one kind or another.
 
 An example is the built-in data type `Bool`. This is defined by `data Bool = True | False deriving (Eq,Show)`, where `True` and `False` are data constructors with zero arguments . This means that a `Bool` value is either `True` or `False` and cannot be instantiated with any other value.
@@ -1008,8 +942,7 @@ A very useful sum type is `data Optional a = None | Some a deriving (Eq,Show)`. 
 
 The `Some` data constructor takes one argument, and it expects a value of type `a` as a parameter.
 
-### Pattern Matching
-
+#### Pattern Matching
 You can match a value to a specific pattern using the `case` keyword.
 
 The pattern is expressed with data constructors. For example, the `Optional Int` sum type:
@@ -1036,72 +969,6 @@ An underscore was used in place of a variable name. The reason for this is that 
 {/* COPIED_END */}
 
 
-{/* COPIED_START source="docs-website:docs/replicated/daml/3.4/sdk/reference/daml/stdlib/index.rst" hash="33e68583" */}
-
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was copied from existing reviewed documentation.
-**Source:** `docs/replicated/daml/3.4/sdk/reference/daml/stdlib/index.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
-
-# The Standard Library
-
-The Daml standard library is a collection of Daml modules that are bundled with the SDK, and can be used to implement Daml applications.
-
-The Prelude module is imported automatically in every Daml module. Other modules must be imported manually, just like your own project's modules. For example:
-
-```daml
-import DA.Optional
-import DA.Time
-```
-
-Here is a complete list of modules in the standard library:
-
-- Prelude
-- DA.Action
-- DA.Action.State
-- DA.Action.State.Class
-- DA.Assert
-- DA.Bifunctor
-- DA.Crypto.Text
-- DA.Date
-- DA.Either
-- DA.Exception
-- DA.Fail
-- DA.Foldable
-- DA.Functor
-- DA.Internal.Interface.AnyView
-- DA.Internal.Interface.AnyView.Types
-- DA.List
-- DA.List.BuiltinOrder
-- DA.List.Total
-- DA.Logic
-- DA.Map
-- DA.Math
-- DA.Monoid
-- DA.NonEmpty
-- DA.NonEmpty.Types
-- DA.Numeric
-- DA.Optional
-- DA.Record
-- DA.Semigroup
-- DA.Set
-- DA.Stack
-- DA.Text
-- DA.TextMap
-- DA.Time
-- DA.Traversable
-- DA.Tuple
-- DA.Validation
-- GHC.Show.Text
-- GHC.Tuple.Check
-
-
-{/* COPIED_END */}
-
-
-
-
 {/* COPIED_START source="docs-website:docs/replicated/daml/3.4/sdk/reference/daml/expressions.rst" hash="ed2e9625" */}
 
 <Warning title="Pre-reviewed Content - Do Not Modify">
@@ -1110,16 +977,13 @@ This section was copied from existing reviewed documentation.
 Reviewers: Skip this section. Remove markers after final approval.
 </Warning>
 
-# Reference: Expressions
-
+## Reference: Expressions
 This page gives reference information for Daml expressions that are not updates.
 
-## Definitions
-
+### Definitions
 Use assignment to bind values or functions at the top level of a Daml file or in a contract template body.
 
-### Values
-
+#### Values
 For example:
 
 <DamlTubeSurfaceAreaL9 />
@@ -1128,8 +992,7 @@ The fact that `pi` has type `Decimal` is inferred from the value. To explicitly 
 
 <DamlTubeSurfaceArea2L11 />
 
-### Functions
-
+#### Functions
 You can define functions. Here's an example: a function for computing the surface area of a tube:
 
 <DamlTubeSurfaceAreaL1416 />
@@ -1144,8 +1007,7 @@ Here you see:
 
 - the definition `= 2.0 * pi * r * h` (which uses the previously defined `pi`)
 
-## Arithmetic Operators
-
+### Arithmetic Operators
 | Operator                          | Works for                   |
 |-----------------------------------|-----------------------------|
 | `+`                               | `Int`, `Decimal`, `RelTime` |
@@ -1164,15 +1026,13 @@ The result of the modulo operation has the same sign as the dividend:
 
 To write infix expressions in prefix form, wrap the operators in parentheses. For example, `(+) 1 2` is another way of writing `1 + 2`.
 
-## Comparison Operators
-
+### Comparison Operators
 | Operator             | Works for                                                                                                                |
 |----------------------|--------------------------------------------------------------------------------------------------------------------------|
 | `<`, `<=`, `>`, `>=` | `Bool`, `Text`, `Int`, `Decimal`, `Party`, `Time`                                                                        |
 | `==`, `/=`           | `Bool`, `Text`, `Int`, `Decimal`, `Party`, `Time`, and identifiers of contracts stemming from the same contract template |
 
-## Logical Operators
-
+### Logical Operators
 The logical operators in Daml are:
 
 - `not` for negation, e.g., `not True == False`
@@ -1181,16 +1041,14 @@ The logical operators in Daml are:
 
 for `Bool` variables `a` and `b`.
 
-## If-then-else
-
+### If-then-else
 You can use conditional *if-then-else* expressions, for example:
 
 ```daml
 if owner == scroogeMcDuck then "sell" else "buy"
 ```
 
-## Let
-
+### Let
 To bind values or functions to be in scope beneath the expression, use the block keyword `let`:
 
 <DamlSnippetsLETEXPRESSION />
@@ -1212,14 +1070,12 @@ This section was copied from existing reviewed documentation.
 Reviewers: Skip this section. Remove markers after final approval.
 </Warning>
 
-# Reference: Functions
-
+## Reference: Functions
 This page gives reference information on functions in Daml.
 
 Daml is a functional language. It lets you apply functions partially and also have functions that take other functions as arguments. This page discusses these *higher-order functions*.
 
-## Defining Functions
-
+### Defining Functions
 In `expressions`, the `tubeSurfaceArea` function was defined as:
 
 <DamlTubeSurfaceAreaL1416 />
@@ -1228,8 +1084,7 @@ You can define this function equivalently using lambdas, involving `\`, a sequen
 
 <DamlTubeSurfaceArea2L1314 />
 
-## Partial Application
-
+### Partial Application
 The type of the `tubeSurfaceArea` function described previously, is `Decimal -> Decimal -> Decimal`. An equivalent, but more instructive, way to read its type is: `Decimal -> (Decimal -> Decimal)`: saying that `tubeSurfaceArea` is a function that takes *one* argument and returns another function.
 
 So `tubeSurfaceArea` expects one argument of type `Decimal` and returns a function of type `Decimal -> Decimal`. In other words, this function returns another function. *Only the last application of an argument yields a non-function.*
@@ -1246,8 +1101,7 @@ You could also define equivalent lambda functions:
 
 <DamlFunctionsPARTIALLAMBDA />
 
-## Functions are Values
-
+### Functions are Values
 The function type can be explicitly added to the `tubeSurfaceArea` function (when it is written with the lambda notation):
 
 <DamlTubeSurfaceArea2L814 />
@@ -1266,8 +1120,7 @@ The `daml-ref-folding` section looks into two useful built-in functions, `foldl`
 Daml does not allow functions as parameters of contract templates and contract choices. However, a follow up of a choice can use built-in functions, defined at the top level or in the contract template body.
 </Note>
 
-## Generic Functions
-
+### Generic Functions
 A function is *parametrically polymorphic* if it behaves uniformly for all types, in at least one of its type parameters. For example, you can define function composition as follows:
 
 <DamlFunctionsGENERICFUNCTION />
@@ -1292,39 +1145,33 @@ This section was copied from existing reviewed documentation.
 Reviewers: Skip this section. Remove markers after final approval.
 </Warning>
 
-# Reference: Daml File Structure
-
+## Reference: Daml File Structure
 This page gives reference information on the structure of Daml files outside of templates.
 
-## File Structure
-
+### File Structure
 - This file's module name (`module NameOfThisFile where`).
 
   Part of a hierarchical module system to facilitate code reuse. Must be the same as the Daml file name, without the file extension.
 
   For a file with path `./Scenarios/Demo.daml`, use `module Scenarios.Demo where`.
 
-## Imports
-
+### Imports
 - You can import other modules (`import OtherModuleName`), including qualified imports (`import qualified AndYetOtherModuleName`, `import qualified AndYetOtherModuleName as Signifier`). Can't have circular import references.
 - To import the `Prelude` module of `./Prelude.daml`, use `import Prelude`.
 - To import a module of `./Scenarios/Demo.daml`, use `import Scenarios.Demo`.
 - If you leave out `qualified`, and a module alias is specified, top-level declarations of the imported module are imported into the module's namespace as well as the namespace specified by the given alias.
 
-## Libraries
-
+### Libraries
 A Daml library is a collection of related Daml modules.
 
 Define a Daml library using a `LibraryModules.daml` file: a normal Daml file that imports the root modules of the library. The library consists of the `LibraryModules.daml` file and all its dependencies, found by recursively following the imports of each module.
 
 Errors are reported in Daml Studio on a per-library basis. This means that breaking changes on shared Daml modules are displayed even when the files are not explicitly open.
 
-## Comments
-
+### Comments
 Use `--` for a single line comment. Use `{-` and `-}` for a comment extending over multiple lines.
 
-## Contract Identifiers
-
+### Contract Identifiers
 When an instance of a template (that is, a contract) is added to the ledger, it's assigned a unique identifier, of type `ContractId <name of template>`.
 
 The runtime representation of these identifiers depends on the execution environment: a contract identifier from the Sandbox may look different to ones on other Daml Ledgers.
@@ -1343,12 +1190,10 @@ This section was copied from existing reviewed documentation.
 Reviewers: Skip this section. Remove markers after final approval.
 </Warning>
 
-# Reference: Daml Packages
-
+## Reference: Daml Packages
 This page gives reference information on Daml package dependencies.
 
-## Building Daml Archives
-
+### Building Daml Archives
 When a Daml project is compiled, the compiler produces a `Daml archive`. These are platform-independent packages of compiled Daml code that can be uploaded to a Daml ledger or imported in other Daml projects.
 
 Daml archives have a `.dar` file ending. By default, when you run `dpm build`, it will generate the `.dar` file in the `.daml/dist` folder in the project root folder. For example, running `dpm build` in project `foo` with project version `0.0.1` will result in a Daml archive `.daml/dist/foo-0.0.1.dar`.
@@ -1361,12 +1206,10 @@ dpm build -o foo.dar
 The rest of this page will focus on how to import a Daml package in other Daml projects.
 ```
 
-## Inspecting DARs
-
+### Inspecting DARs
 Refer to the section on decoding DARs and DALF files.
 
-## Import Daml Packages
-
+### Import Daml Packages
 There are two ways to import a Daml package in a project: via `dependencies`, and via `data-dependencies`. They each have certain advantages and disadvantages. To summarize:
 
 - `dependencies` allow you to import a Daml archive as a library. The definitions in the dependency will all be made available to the importing project. However, the dependency must be compiled with the same SDK version, so this method is only suitable for breaking up large projects into smaller projects that depend on each other, or to reuse existing libraries.
@@ -1374,8 +1217,7 @@ There are two ways to import a Daml package in a project: via `dependencies`, an
 
 The following sections will cover these two approaches in more depth.
 
-### Import a Daml package via Dependencies
-
+#### Import a Daml package via Dependencies
 A Daml project can declare a Daml archive as a dependency in the `dependencies` field of `daml.yaml`. This lets you import modules and reuse definitions from another Daml project. The main limitation of this method is that the dependency must be built for the same SDK version as the importing project.
 
 Let's go through an example. Suppose you have an existing Daml project `foo`, located at `/home/user/foo`, and you want to use it as a dependency in a project `bar`, located at `/home/user/bar`.
@@ -1410,8 +1252,7 @@ exposed-modules:
 - Foo
 ```
 
-### Import a Daml Archive via `data-dependencies`
-
+#### Import a Daml Archive via `data-dependencies`
 You can import a Daml archive (.dar) or Daml-LF package (.dalf) using `data-dependencies`. Unlike `dependencies`, this can be used when the SDK versions do not match.
 
 For example, you can import `foo.dar` as follows:
@@ -1431,8 +1272,7 @@ When importing packages this way, the Daml compiler will try to reconstruct the 
 3.  Prior to Daml-LF version 1.8, typeclasses could not be reconstructed. This means if you have a package that is compiled with an older version of Daml-LF, typeclasses and typeclass instances will not be carried over via data-dependencies, and you won't be able to call functions that rely on typeclass instances. This includes the template functions, such as `create`, `signatory`, and `exercise`, as these rely on typeclass instances.
 4.  Starting from Daml-LF version 1.8, when possible, typeclass instances will be reconstructed by re-using the typeclass definitions from dependencies, such as the typeclasses exported in `daml-stdlib`. However, if the typeclass signature has changed, you will get an instance for a reconstructed typeclass instead, which will not interoperate with code from dependencies.
 
-### Transitive dependency management
-
+#### Transitive dependency management
 The Daml compiler identifies each DAR dependency in the project by its `packageId` and fully qualified name (Daml project package name and version number).
 
 If you have a Daml project which contains multiple common transitive DAR dependencies, those common transitive dependencies must either:
@@ -1449,8 +1289,7 @@ For example:
 
 When compiling Daml project X, you must ensure that the `DarC` dependency referenced by both `DarA` and `DarB` either has identical Daml contents or has a different version number if the contents differ. The version number is defined in the daml.yaml file of the Daml project producing `DarC`, under the `version` key.
 
-### Reference Daml Packages Already On the Ledger
-
+#### Reference Daml Packages Already On the Ledger
 Daml packages that have been uploaded to a ledger can be imported as data dependencies, given you have the necessary permissions to download these packages. To import such a package, add the package name and version separated by a colon to the data-dependencies stanza as follows:
 
 ```yaml
@@ -1475,8 +1314,7 @@ dependencies:
 
 The `daml.lock` file needs to be checked into version control of your project. This assures that package name/version tuples specified in your data dependencies are always resolved to the same package ID. To recreate or update your `daml.lock` file, delete it and run `dpm build` again.
 
-## Handling Module Name Collisions
-
+### Handling Module Name Collisions
 Sometimes you will have multiple packages with the same module name. In that case, a simple import will fail, since the compiler doesn't know which version of the module to load. Fortunately, there are a few tools you can use to approach this problem.
 
 The first is to use package qualified imports. Supposing you have packages with different names, `foo` and `bar`, which both expose a module `X`, you can select which one you want with a package qualified import.
@@ -1545,16 +1383,14 @@ This section was copied from existing reviewed documentation.
 Reviewers: Skip this section. Remove markers after final approval.
 </Warning>
 
-# Reference: Contract Keys
-
+## Reference: Contract Keys
 <Warning>
 Contract keys are not supported in this release of Canton 3.x. Support for **non-unique contract keys** will come in a future release of Canton 3.x. Unique contract keys are not planned be supported in Canton 3.x, as there are no known good solutions for enforcing uniqueness constraints at the infrastructure level when there are multiple independent subnetworks that can be (dis)connected at any point in time.
 
 The documentation below is kept for completeness, but can be ignored for this release of Canton 3.x.
 </Warning>
 
-## Unsupported feature
-
+### Unsupported feature
 Contract keys are an optional addition to templates. They let you specify a way of uniquely identifying contracts, using the parameters to the template - similar to a primary key for a database.
 
 Contract keys do not change and can be used to refer to a contract even when the contract id changes.
@@ -1563,14 +1399,12 @@ Here's an example of setting up a contract key for a bank account, to act as a b
 
 <DamlAccountContractKeySetupSnippet />
 
-## What Can Be a Contract Key
-
+### What Can Be a Contract Key
 The key can be an arbitrary serializable expression that does **not** contain contract IDs. However, it **must** include every party that you want to use as a `maintainer` (see [Specify Maintainers](#specify-maintainers) below).
 
 It's best to use simple types for your keys like `Text` or `Int`, rather than a list or more complex type.
 
-## Specify Maintainers
-
+### Specify Maintainers
 If you specify a contract key for a template, you must also specify a `maintainer` or maintainers, in a similar way to specifying signatories or observers. The maintainers "own" the key in the same way the signatories "own" a contract. Just like signatories of contracts prevent double spends or use of false contract data, maintainers of keys prevent double allocation or incorrect lookups. Since the key is part of the contract, the maintainers **must** be signatories of the contract. However, maintainers are computed from the `key` instead of the template arguments. In the example above, the `bank` is ultimately the maintainer of the key.
 
 Uniqueness of keys is guaranteed per template. Since multiple templates may use the same key type, some key-related functions must be annotated using the `@ContractType` as shown in the examples below.
@@ -1579,16 +1413,14 @@ When you are writing Daml models, the maintainers matter since they affect autho
 
 Checking of the keys is done automatically at execution time, by the Daml execution engine: if someone tries to create a new contract that duplicates an existing contract key, the execution engine will cause that creation to fail.
 
-## Contract Lookups
-
+### Contract Lookups
 The primary purpose of contract keys is to provide a stable, and possibly meaningful, identifier that can be used in Daml to fetch contracts. There are two functions to perform such lookups: `fetchbykey` and `lookupbykey`. Both types of lookup are performed at interpretation time on the submitting Participant Node, on a best-effort basis. Currently, that best-effort means lookups only return contracts if the submitting Party is a stakeholder of that contract.
 
 In particular, the above means that if multiple commands are submitted simultaneously, all using contract lookups to find and consume a given contract, there will be contention between these commands, and at most one will succeed. For more information, see the section on Avoiding [Contention]().
 
 Limiting key usage to stakeholders also means that keys cannot be used to access a divulged contract, i.e. there can be cases where `fetch` succeeds and `fetchByKey` does not. See the example at the end of this section for details.
 
-### fetchByKey
-
+#### fetchByKey
 `(fetchedContractId, fetchedContract) <- fetchByKey @ContractType contractKey`
 
 Use `fetchByKey` to fetch the ID and data of the contract with the specified key. It is an alternative to `fetch` and behaves the same in most ways.
@@ -1604,8 +1436,7 @@ Like `fetch`, `fetchByKey` needs to be authorized by at least one stakeholder.
 
 This means that if it fails, it doesn't guarantee that a contract with that key doesn't exist, just that the submitting Party doesn't know about it, or there are issues with authorization.
 
-### visibleByKey
-
+#### visibleByKey
 `boolean <- visibleByKey @ContractType contractKey`
 
 Use `visibleByKey` to check whether you can see an active contract for the given key with the current authorizations. If the contract exists and you have permission to see it, returns `True`, otherwise returns `False`.
@@ -1621,8 +1452,7 @@ While it may at first seem too restrictive to require **all** maintainers to aut
 
 For the negative case, however, the transaction submitted for execution cannot say *which* contract it has not found (as, by definition, it has not found it, and it may not even exist). Still, validators have to be able to reproduce the result of not finding the contract, and therefore they need to be able to look for it, which means having the authorization to ask the maintainers about it.
 
-### lookupByKey
-
+#### lookupByKey
 `optionalContractId <- lookupByKey @ContractType contractKey`
 
 Use `lookupByKey` to check whether a contract with the specified key exists. If it does exist, `lookupByKey` returns the `Some contractId`, where `contractId` is the ID of the contract; otherwise, it returns `None`.
@@ -1644,14 +1474,12 @@ Therefore, `lookupByKey` needs all the same authorizations as `visibleByKey`, fo
 
 To get the data from the contract once you've confirmed it exists, you'll still need to use `fetch`.
 
-## exerciseByKey
-
+### exerciseByKey
 `exerciseByKey @ContractType contractKey`
 
 Use `exerciseByKey` to exercise a choice on a contract identified by its `key` (compared to `exercise`, which lets you exercise a contract identified by its `ContractId`). Just like `exercise`, running `exerciseByKey` requires visibility of the contract (either through divulgence, `readAs` or being a stakeholder) and authorization from the controllers of the choice.
 
-## Example
-
+### Example
 A complete example of possible success and failure scenarios of `fetchByKey` and `lookupByKey` is shown below.
 
 <DamlKeysFull />
@@ -1670,30 +1498,25 @@ This section was copied from existing reviewed documentation.
 Reviewers: Skip this section. Remove markers after final approval.
 </Warning>
 
-# Reference: Interfaces
-
+## Reference: Interfaces
 In Daml, an interface defines an abstract type together with a behavior specified by its view type, method signatures, and choices. For a template to conform to this interface, there must be a corresponding `interface instance` definition where all the methods of the interface (including the special `view` method) are implemented. This allows decoupling such behavior from its implementation, so other developers can write applications in terms of the interface instead of the concrete template.
 
-## Configuration
-
+### Configuration
 To use this feature your Daml project must target Daml-LF version `1.15` or higher, which is the current default.
 
 If using Canton, the protocol version of the sync domain should be `4` or higher, see Canton protocol version for more details.
 
-## Interface Declaration
-
+### Interface Declaration
 An interface declaration is somewhat similar to a template declaration.
 
-### Interface Name
-
+#### Interface Name
 <DamlInterfacesINTERFACENAME />
 
 - This is the name of the interface.
 - It's preceded by the keyword `interface` and followed by the keyword `where`.
 - It must begin with a capital letter, like any other type name.
 
-### Implicit abstract type
-
+#### Implicit abstract type
 - Whenever an interface is defined, an abstract type is defined with the same name. "Abstract" here means:
   - Values of this type cannot be created using a data constructor. Instead, they are constructed by applying the function `toInterface` to a template value.
   - Values of this type cannot be inspected directly via case analysis. Instead, use functions such as `fromInterface`.
@@ -1701,8 +1524,7 @@ An interface declaration is somewhat similar to a template declaration.
 - An interface value carries inside it the type and parameters of the template value from which it was constructed.
 - As for templates, the existence of a local binding `b` of type `I`, where `I` is an interface does not necessarily imply the existence on the ledger of a contract with the template type and parameters used to construct `b`. This can only be assumed if `b` the result of a fetch from the ledger within the same transaction.
 
-### Interface Methods
-
+#### Interface Methods
 <DamlInterfacesINTERFACEMETHODS />
 
 - An interface may define any number of methods.
@@ -1718,8 +1540,7 @@ An interface declaration is somewhat similar to a template declaration.
   - Applying the function to such argument results in a value of type `M`, corresponding to the implementation of `m` in the interface instance of `I` for the underlying template type `t` (the type of the template value from which the interface value was constructed).
 - One special method, `view`, must be defined for the viewtype. (see `interface-viewtype` below).
 
-### Interface View Type
-
+#### Interface View Type
 <DamlInterfacesINTERFACEVIEWTYPEDATATYPE />
 <DamlInterfacesINTERFACEVIEWTYPE />
 
@@ -1727,8 +1548,7 @@ An interface declaration is somewhat similar to a template declaration.
 - The type must be a record.
 - This type is returned by subscriptions on interfaces.
 
-### Interface Choices
-
+#### Interface Choices
 <DamlInterfacesINTERFACECHOICES />
 
 - Interface choices work in a very similar way to template choices. Any contract of a template type for which an interface instance exists will grant the choice to the controlling party.
@@ -1737,20 +1557,17 @@ An interface declaration is somewhat similar to a template declaration.
 - As for template choices, the `choice` keyword can be optionally prefixed with the `nonconsuming` keyword to specify that the contract will not be consumed when the choice is exercised. If not specified, the choice will be `consuming`. Note that the `preconsuming` and `postconsuming` qualifiers are not supported on interface choices.
 - See `choices` for full reference information, but note that controller-first syntax is not supported for interface choices.
 
-### Empty Interfaces
-
+#### Empty Interfaces
 <DamlInterfacesEMPTYINTERFACE />
 
 - It is possible (though not necessarily useful) to define an interface without methods, precondition or choices. However, a view type must always be defined, though it can be set to unit.
 
-## Interface Instances
-
+### Interface Instances
 For context, a simple template definition:
 
 <DamlInterfacesTEMPLATEHEADER />
 
-### `interface instance` clause
-
+#### `interface instance` clause
 <DamlInterfacesINTERFACEINSTANCEINTEMPLATE />
 
 - To make a template an instance of an existing interface, an `interface instance` clause must be defined in the template declaration.
@@ -1761,16 +1578,13 @@ For context, a simple template definition:
 - Each method implementation must return the same type as specified for that method in the interface declaration.
 - The implementation of the special `view` method must return the type specified as the `viewtype` in the interface declaration.
 
-### Empty `interface instance` clause
-
+#### Empty `interface instance` clause
 - If the interface has no methods, the interface instance only needs to implement the `view` method:
 
 <DamlInterfacesEMPTYINTERFACEINSTANCE />
 
-## Interface Functions
-
-### `interfaceTypeRep`
-
+### Interface Functions
+#### `interfaceTypeRep`
 <table>
 <tbody>
 <tr className="odd">
@@ -1789,8 +1603,7 @@ For context, a simple template definition:
 </tbody>
 </table>
 
-### `toInterface`
-
+#### `toInterface`
 <table>
 <tbody>
 <tr className="odd">
@@ -1810,8 +1623,7 @@ For context, a simple template definition:
 </tbody>
 </table>
 
-### `fromInterface`
-
+#### `fromInterface`
 <table>
 <tbody>
 <tr className="odd">
@@ -1830,8 +1642,7 @@ For context, a simple template definition:
 </tbody>
 </table>
 
-### `toInterfaceContractId`
-
+#### `toInterfaceContractId`
 <table>
 <tbody>
 <tr className="odd">
@@ -1851,8 +1662,7 @@ For context, a simple template definition:
 </tbody>
 </table>
 
-### `fromInterfaceContractId`
-
+#### `fromInterfaceContractId`
 <table>
 <tbody>
 <tr className="odd">
@@ -1872,8 +1682,7 @@ For context, a simple template definition:
 </tbody>
 </table>
 
-### `coerceInterfaceContractId`
-
+#### `coerceInterfaceContractId`
 <table>
 <tbody>
 <tr className="odd">
@@ -1893,8 +1702,7 @@ For context, a simple template definition:
 </tbody>
 </table>
 
-### `fetchFromInterface`
-
+#### `fetchFromInterface`
 <table>
 <tbody>
 <tr className="odd">
@@ -1915,8 +1723,7 @@ For context, a simple template definition:
 </tbody>
 </table>
 
-## Required Interfaces
-
+### Required Interfaces
 <DamlInterfacesINTERFACEREQUIRES />
 
 - An interface can depend on other interfaces. These are specified with the `requires` keyword after the interface name but before the `where` keyword, separated by commas.
@@ -1937,8 +1744,7 @@ For context, a simple template definition:
 
 - For a template `T` to be a valid `interface instance` of an interface `I`, `T` must also be an `interface instance` of each of the interfaces required by `I`.
 
-### Interface Functions
-
+#### Interface Functions
 | Function                  | Notes                                                                                                                              |
 |---------------------------|------------------------------------------------------------------------------------------------------------------------------------|
 | `toInterface`             | Can also be used to convert an interface value to one of its required interfaces.                                                  |
@@ -1960,8 +1766,7 @@ This section was copied from existing reviewed documentation.
 Reviewers: Skip this section. Remove markers after final approval.
 </Warning>
 
-# Reference: Exceptions (Deprecated)
-
+## Reference: Exceptions (Deprecated)
 <Warning>
 User-defined Daml Exceptions, catching, and throwing have been deprecated and are being phased out in favour of the Canton error framework, which represents Daml errors as `InvalidGivenCurrentSystemStateOther`.
 </Warning>
@@ -1970,8 +1775,7 @@ Exceptions are a deprecated Daml feature which provides a way to handle certain 
 
 There are two types of errors:
 
-## Builtin Errors
-
+### Builtin Errors
 | Exception type       | Thrown on                                                   |
 |----------------------|-------------------------------------------------------------|
 | `GeneralError`       | Calls to `error` and `abort`                                |
@@ -1981,16 +1785,14 @@ There are two types of errors:
 
 Note that other errors cannot be handled via exceptions, e.g., an exercise on an inactive contract will still result in a transaction abort.
 
-## User-defined Exceptions
-
+### User-defined Exceptions
 Users can define their own exception types which can be thrown and caught. The definition looks similar to templates, and just like with templates, the definition produces a record type of the given name as well as instances to make that type throwable and catchable.
 
 In addition to the record fields, exceptions also need to define a `message` function.
 
 <DamlExceptionsEXCEPTION />
 
-## Throw Exceptions
-
+### Throw Exceptions
 There are two ways to throw exceptions:
 
 1.  Inside of an `Action` like `Update` or `Script` you can use `throw` from `DA.Exception`. This works for any `Action` that is an instance of `ActionThrow`.
@@ -1998,8 +1800,7 @@ There are two ways to throw exceptions:
 
 If both are an option, it is generally preferable to use `throw` since it is easier to reason about when exactly the exception will get thrown.
 
-## Catch Exceptions
-
+### Catch Exceptions
 Exceptions are caught in try-catch blocks similar to those found in languages like Java. The `try` block defines the scope within which errors should be handled while the `catch` clauses defines which types of errors are handled and how the program should continue. If an exception gets caught, the subtransaction between the `try` and the the point where the exception is thrown is rolled back. The actions under rollback nodes are still validated, so, e.g., you can never fetch a contract that is inactive at that point or have two contracts with the same key active at the same time. However, all ledger state changes (creates, consuming exercises) are rolled back to the state before the rollback node.
 
 Each try-catch block can have multiple `catch` clauses with the first one that applies taking precedence.
@@ -2022,12 +1823,10 @@ This section was copied from existing reviewed documentation.
 Reviewers: Skip this section. Remove markers after final approval.
 </Warning>
 
-# Reference: Built-in Functions
-
+## Reference: Built-in Functions
 This page gives reference information on built-in functions for working with a variety of common concepts.
 
-## Work with Time
-
+### Work with Time
 Daml has these built-in functions for working with time:
 
 - `datetime`: creates a `Time` given year, month, day, hours, minutes, and seconds as argument.
@@ -2036,8 +1835,7 @@ Daml has these built-in functions for working with time:
 - `days`, `hours`, `minutes`, `seconds`: constructs a `RelTime` of the specified length.
 - `pass`: (in Daml Script tests only) use `pass : RelTime -> Script Time` to advance the ledger time by the argument amount. Returns the new time.
 
-## Work with Numbers
-
+### Work with Numbers
 Daml has these built-in functions for working with numbers:
 
 - `round`: rounds a `Decimal` number to `Int`.
@@ -2060,8 +1858,7 @@ Daml has these built-in functions for working with numbers:
 
 The set of numbers expressed by `Decimal` is not closed under division as the result may require more than 10 decimal places to represent. For example, `1.0 / 3.0 == 0.3333...` is a rational number, but not a `Decimal`.
 
-## Work with Text
-
+### Work with Text
 Daml has these built-in functions for working with text:
 
 - `<>` operator: concatenates two `Text` values.
@@ -2118,14 +1915,12 @@ To escape text in Daml strings, use `\`:
 </tbody>
 </table>
 
-## Work with Lists
-
+### Work with Lists
 Daml has these built-in functions for working with lists:
 
 - `foldl` and `foldr`: see `daml-ref-folding` below.
 
-### Fold
-
+#### Fold
 A *fold* takes:
 
 - a binary operator
@@ -2160,8 +1955,7 @@ This section was copied from existing reviewed documentation.
 Reviewers: Skip this section. Remove markers after final approval.
 </Warning>
 
-# Fixity, Associativity and Precedence
-
+## Fixity, Associativity and Precedence
 With normal, *prefix* operators (e.g. functions), the semantics of `f g h` is clear: `f` is a function that takes `g` and `h` as parameters. If we want `f` to take the result of applying `g` to `h` we write `f (g h)`.
 
 In the case of *infix* operators (e.g. symbol operators such as `+` and `*`, or functions surrounded by backticks, for example `` `elem ```), it is less clear. What does ``x - y - z`` mean? Subtracting ``x`` from ``y`` first (i.e. ``(x - y) - z``) generally yields different results than subtracting ``z`` from ``y`` first (i.e. ``x - (y - z)``). In Daml, the subtraction operator ``-`` is defined as a \*left-assocative\* operator. That is, when we write ``x - y - z - ...`` the parser associates \*to the left\*, meaning the parser interprets this as ``((x - y) - z) - ...`\`.

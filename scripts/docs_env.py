@@ -10,6 +10,11 @@ DIRENV_ENV_MARKER = "DIGITAL_ASSET_DOCS_DIRENV"
 
 
 def repo_direnv_command(repo_root: Path, *args: str) -> list[str]:
+    if args and args[0] == "x2mdx":
+        x2mdx_repo = os.environ.get("X2MDX_REPO")
+        if x2mdx_repo:
+            return ["direnv", "exec", str(Path(x2mdx_repo).expanduser()), *args]
+
     return ["direnv", "exec", str(repo_root), *args]
 
 

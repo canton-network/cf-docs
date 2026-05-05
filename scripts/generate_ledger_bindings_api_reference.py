@@ -9,10 +9,8 @@ import re
 import shutil
 import subprocess
 import sys
-import tarfile
 import urllib.error
 import urllib.request
-import zipfile
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
@@ -27,32 +25,30 @@ DEFAULT_SOURCE_CONFIG = REPO_ROOT / "config" / "x2mdx" / "ledger-bindings" / "so
 DEFAULT_CACHE_DIR = DEFAULT_CACHE_ROOT / "ledger-bindings"
 DEFAULT_MANIFEST = REPO_ROOT / ".internal" / "generated" / "x2mdx" / "ledger-bindings" / "manifest.json"
 DEFAULT_RENDER_ROOT = REPO_ROOT / ".internal" / "generated" / "x2mdx" / "ledger-bindings" / "site"
-DEFAULT_OVERVIEW_FILE = REPO_ROOT / "docs-main" / "reference" / "ledger-api-jvm-bindings.mdx"
+DEFAULT_OVERVIEW_FILE = REPO_ROOT / "docs-main" / "reference" / "java-bindings.mdx"
 DEFAULT_DETAILS_DIR = REPO_ROOT / "docs-main" / "reference"
 DEFAULT_DOCS_JSON = REPO_ROOT / "docs-main" / "docs.json"
+LEGACY_JVM_OVERVIEW_FILE = REPO_ROOT / "docs-main" / "reference" / "ledger-api-jvm-bindings.mdx"
 LEGACY_OVERVIEW_FILE = REPO_ROOT / "docs-main" / "appdev" / "reference" / "ledger-bindings-api-lifecycle.mdx"
 LEGACY_DETAILS_DIR = REPO_ROOT / "docs-main" / "appdev" / "reference" / "ledger-bindings-api-lifecycle"
 LANGUAGE_LABELS = {
-    "scala": "Scaladocs",
     "java": "Javadocs",
 }
 LANGUAGE_ORDER = {
-    "scala": 0,
-    "java": 1,
+    "java": 0,
 }
 LANGUAGE_DIRS = {
-    "scala": "scala",
     "java": "java",
 }
+REMOVED_LANGUAGE_DIRS = {"scala"}
 ARTIFACT_PAGE_DESCRIPTIONS = {
-    "scala": "Generated package reference and version summary from local Scaladoc snapshots",
     "java": "Generated package reference and version summary from local Javadoc snapshots",
 }
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Download configured JVM doc sources, write a local x2mdx manifest, and generate the Ledger bindings reference pages."
+        description="Download configured Java doc sources, write a local x2mdx manifest, and generate the Ledger bindings reference pages."
     )
     parser.add_argument(
         "--source-config",
@@ -62,7 +58,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--cache-dir",
         default=str(DEFAULT_CACHE_DIR),
-        help="Directory used to cache downloaded JVM doc artifacts and generated jars.",
+        help="Directory used to cache downloaded Java doc artifacts and generated jars.",
     )
     parser.add_argument(
         "--manifest-out",
@@ -77,7 +73,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--details-dir",
         default=str(DEFAULT_DETAILS_DIR),
-        help="Directory for published per-language pages, such as reference/java/... and reference/scala/....",
+        help="Directory for published Java package pages, such as reference/java/....",
     )
     parser.add_argument(
         "--docs-json",
@@ -87,7 +83,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--nav-dropdown",
         default="API Reference",
-        help="Top-level Mintlify dropdown to update with the generated JVM bindings section.",
+        help="Top-level Mintlify dropdown to update with the generated Java bindings section.",
     )
     parser.add_argument(
         "--nav-group",
@@ -110,12 +106,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--source-name",
-        default="Published JVM docs snapshots",
+        default="Published Java docs snapshots",
         help="Source label embedded in generated content.",
     )
     parser.add_argument(
         "--overview-title",
-        default="Ledger API JVM Bindings",
+        default="Java Bindings",
         help="Title to use for the generated overview page and parent Mintlify nav group.",
     )
     parser.add_argument(
@@ -143,7 +139,10 @@ def docs_json_page_ref(path: Path, docs_json_path: Path) -> str:
     relative = path.resolve().relative_to(docs_json_path.resolve().parent)
     if relative.suffix != ".mdx":
         raise ValueError(f"Expected MDX file under docs root, got: {path}")
-    return relative.with_suffix("").as_posix()
+    page_ref = relative.with_suffix("").as_posix()
+    if page_ref.endswith("/index"):
+        return page_ref[: -len("/index")]
+    return page_ref
 
 
 def read_mdx_title(path: Path) -> str:
@@ -159,6 +158,14 @@ def read_mdx_title(path: Path) -> str:
         if line.startswith("title: "):
             return line.split(":", 1)[1].strip().strip('"')
     raise ValueError(f"Missing title frontmatter in {path}")
+
+
+def read_package_label(path: Path) -> str:
+    for line in path.read_text(encoding="utf-8").splitlines():
+        match = re.match(r"## Package `(.*)`$", line)
+        if match:
+            return match.group(1)
+    raise ValueError(f"Missing package heading in {path}")
 
 
 def prune_nav_items(items: list[Any], *, page_refs: set[str], group_labels: set[str]) -> list[Any]:
@@ -204,10 +211,8 @@ def build_jvm_nav_group(
     publish_root: Path,
     docs_json_path: Path,
     group_label: str,
-    overview_file: Path,
 ) -> tuple[dict[str, Any], set[str]]:
-    language_pages: dict[str, list[tuple[str, str]]] = defaultdict(list)
-    language_index_refs: dict[str, str] = {}
+    language_pages: dict[str, list[tuple[str, dict[str, Any]]]] = defaultdict(list)
     generated_refs: set[str] = set()
 
     for language, directory_name in LANGUAGE_DIRS.items():
@@ -216,15 +221,30 @@ def build_jvm_nav_group(
             continue
         artifact_index = language_dir / "index.mdx"
         if artifact_index.exists():
-            index_ref = docs_json_page_ref(artifact_index, docs_json_path)
-            language_index_refs[language] = index_ref
-            generated_refs.add(index_ref)
-        for package_page in sorted(language_dir.glob("*.mdx")):
-            if package_page.name == "index.mdx":
+            generated_refs.add(docs_json_page_ref(artifact_index, docs_json_path))
+        for package_dir in sorted(path for path in language_dir.iterdir() if path.is_dir()):
+            package_index = package_dir / "index.mdx"
+            if not package_index.exists():
                 continue
-            page_ref = docs_json_page_ref(package_page, docs_json_path)
-            language_pages[language].append((read_mdx_title(package_page), page_ref))
-            generated_refs.add(page_ref)
+            package_label = read_package_label(package_index)
+            package_pages: list[tuple[str, str]] = []
+            generated_refs.add(docs_json_page_ref(package_index, docs_json_path))
+            for object_page in sorted(package_dir.glob("*.mdx")):
+                if object_page.name == "index.mdx":
+                    continue
+                page_ref = docs_json_page_ref(object_page, docs_json_path)
+                package_pages.append((read_mdx_title(object_page), page_ref))
+                generated_refs.add(page_ref)
+            package_pages.sort(key=lambda item: (item[0].lower(), item[0]))
+            language_pages[language].append(
+                (
+                    package_label,
+                    {
+                        "group": package_label,
+                        "pages": [page_ref for _, page_ref in package_pages],
+                    },
+                )
+            )
 
     language_groups: list[tuple[int, str, dict[str, Any]]] = []
     for language, page_entries in language_pages.items():
@@ -232,25 +252,19 @@ def build_jvm_nav_group(
             continue
         page_entries.sort(key=lambda item: (item[0].lower(), item[0]))
         label = LANGUAGE_LABELS.get(language, language.title())
-        pages: list[Any] = []
-        language_index_ref = language_index_refs.get(language)
-        if language_index_ref is not None:
-            pages.append(language_index_ref)
-        pages.extend(page_ref for _, page_ref in page_entries)
         language_groups.append(
             (
                 LANGUAGE_ORDER.get(language, 99),
                 label,
                 {
                     "group": label,
-                    "pages": pages,
+                    "pages": [group for _, group in page_entries],
                 },
             )
         )
 
     language_groups.sort(key=lambda item: (item[0], item[1]))
-    group_pages: list[Any] = [docs_json_page_ref(overview_file, docs_json_path)]
-    group_pages.extend(group for _, _, group in language_groups)
+    group_pages: list[Any] = [group for _, _, group in language_groups]
     return (
         {
             "group": group_label,
@@ -292,7 +306,6 @@ def update_docs_navigation(
         publish_root=publish_root,
         docs_json_path=docs_json_path,
         group_label=group_label,
-        overview_file=overview_file,
     )
     generated_refs.add(docs_json_page_ref(overview_file, docs_json_path))
     dropdown["pages"] = prune_nav_items(
@@ -331,31 +344,6 @@ def download_file(url: str, target: Path, *, force: bool) -> None:
         raise RuntimeError(f"Network error while downloading {url}: {exc}") from exc
 
 
-def normalize_archive_member_name(name: str) -> str:
-    parts = [part for part in Path(name).parts if part not in {"", "."}]
-    return Path(*parts).as_posix() if parts else ""
-
-
-def repackage_tarball_as_jar(source_tarball: Path, target_jar: Path) -> None:
-    target_jar.parent.mkdir(parents=True, exist_ok=True)
-    with tarfile.open(source_tarball, "r:gz") as tar, zipfile.ZipFile(
-        target_jar,
-        "w",
-        compression=zipfile.ZIP_DEFLATED,
-    ) as archive:
-        for member in tar.getmembers():
-            if not member.isfile():
-                continue
-            arcname = normalize_archive_member_name(member.name)
-            if not arcname:
-                continue
-            extracted = tar.extractfile(member)
-            if extracted is None:
-                continue
-            with extracted:
-                archive.writestr(arcname, extracted.read())
-
-
 def resolve_cached_jar(
     *,
     repo_base: str,
@@ -363,41 +351,21 @@ def resolve_cached_jar(
     group: str,
     artifact: str,
     version: str,
-    source_kind: str,
-    url_template: str | None,
     force_download: bool,
 ) -> Path:
-    if source_kind == "maven-javadoc-jar":
-        jar_target = cache_dir / "jars" / group / artifact / version / f"{artifact}-{version}-javadoc.jar"
-        download_file(
-            maven_javadoc_url(repo_base, group, artifact, version),
-            jar_target,
-            force=force_download,
-        )
-        return jar_target
-
-    if source_kind == "canton-scaladoc-tarball":
-        if not isinstance(url_template, str) or "{version}" not in url_template:
-            raise ValueError(
-                f"Artifact {group}:{artifact} uses source_kind={source_kind!r} but does not provide a valid url_template"
-            )
-        archive_url = url_template.format(version=version)
-        archive_target = cache_dir / "archives" / artifact / version / Path(archive_url).name
-        jar_target = cache_dir / "jars" / group / artifact / version / f"{artifact}-{version}-scaladoc.jar"
-        download_file(archive_url, archive_target, force=force_download)
-        if force_download or not jar_target.exists():
-            print(f"Packaging scaladoc archive as jar: {jar_target}")
-            repackage_tarball_as_jar(archive_target, jar_target)
-        else:
-            print(f"Using cached jar: {jar_target}")
-        return jar_target
-
-    raise ValueError(f"Unsupported source_kind for {group}:{artifact}: {source_kind}")
+    jar_target = cache_dir / "jars" / group / artifact / version / f"{artifact}-{version}-javadoc.jar"
+    download_file(
+        maven_javadoc_url(repo_base, group, artifact, version),
+        jar_target,
+        force=force_download,
+    )
+    return jar_target
 
 
 def build_manifest(
     *,
     source_config: dict[str, Any],
+    source_config_path: Path,
     cache_dir: Path,
     manifest_path: Path,
     include_versions: set[str] | None,
@@ -419,13 +387,12 @@ def build_manifest(
         language = artifact_entry.get("language")
         versions = artifact_entry.get("versions")
         include_prefixes = artifact_entry.get("include_prefixes") or []
-        source_kind = artifact_entry.get("source_kind") or "maven-javadoc-jar"
-        url_template = artifact_entry.get("url_template")
+        status_manifest = artifact_entry.get("status_manifest")
         if not isinstance(group, str) or not group:
             continue
         if not isinstance(artifact, str) or not artifact:
             continue
-        if language not in {"java", "scala"}:
+        if language != "java":
             continue
         if not isinstance(versions, list):
             continue
@@ -443,8 +410,6 @@ def build_manifest(
                 group=group,
                 artifact=artifact,
                 version=version,
-                source_kind=str(source_kind),
-                url_template=str(url_template) if isinstance(url_template, str) else None,
                 force_download=force_download,
             )
             version_entries.append(
@@ -463,13 +428,18 @@ def build_manifest(
                 "artifact": artifact,
                 "language": language,
                 "include_prefixes": [prefix for prefix in include_prefixes if isinstance(prefix, str)],
+                **(
+                    {"status_manifest": str((source_config_path.parent / status_manifest).resolve())}
+                    if isinstance(status_manifest, str) and status_manifest
+                    else {}
+                ),
                 "versions": version_entries,
             }
         )
 
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     manifest = {
-        "source": source_config.get("source") or "digital-asset/docs local JVM docs cache",
+        "source": source_config.get("source") or "digital-asset/docs local Java docs cache",
         "repo_base": repo_base,
         "artifacts": artifacts_payload,
     }
@@ -479,7 +449,7 @@ def build_manifest(
 
 
 def build_command(args: argparse.Namespace, manifest_path: Path) -> list[str]:
-    render_overview_file = DEFAULT_RENDER_ROOT / "ledger-api-jvm-bindings.mdx"
+    render_overview_file = DEFAULT_RENDER_ROOT / "java-bindings.mdx"
     render_details_dir = DEFAULT_RENDER_ROOT / "details"
     command = repo_direnv_command(
         REPO_ROOT,
@@ -505,7 +475,7 @@ def build_command(args: argparse.Namespace, manifest_path: Path) -> list[str]:
 
 
 def render_output_paths() -> tuple[Path, Path]:
-    return DEFAULT_RENDER_ROOT / "ledger-api-jvm-bindings.mdx", DEFAULT_RENDER_ROOT / "details"
+    return DEFAULT_RENDER_ROOT / "java-bindings.mdx", DEFAULT_RENDER_ROOT / "details"
 
 
 def rewrite_markdown_links(text: str, replacements: list[tuple[str, str]]) -> str:
@@ -557,6 +527,48 @@ def strip_inline_code(text: str) -> str:
     if len(stripped) >= 2 and stripped.startswith("`") and stripped.endswith("`"):
         return stripped[1:-1]
     return stripped
+
+
+def strip_markdown_link_label(text: str) -> str:
+    stripped = text.strip()
+    match = re.match(r"^\[(.+)\]\([^)]+\)$", stripped)
+    if match:
+        return match.group(1).strip()
+    return stripped
+
+
+def remove_overview_backlinks(text: str) -> str:
+    filtered_lines = [
+        line
+        for line in text.splitlines()
+        if line.strip() not in {
+            "Back to [overview](../ledger-api-jvm-bindings).",
+            "Back to [overview](../java-bindings).",
+        }
+    ]
+    return "\n".join(filtered_lines).strip() + "\n"
+
+
+def remove_inline_code_links(text: str) -> str:
+    return re.sub(r"\[(`[^`]+`)\]\([^)]+\)", r"\1", text)
+
+
+def rewrite_java_only_generated_text(text: str) -> str:
+    replacements = {
+        "Javadoc/Scaladoc artifacts": "Javadoc artifacts",
+        "Javadoc/Scaladoc jars": "Javadoc jars",
+        "Javadoc/Scaladoc snapshots": "Javadoc snapshots",
+        "local Java docs snapshots": "local Javadoc snapshots",
+    }
+    for old, new in replacements.items():
+        text = text.replace(old, new)
+
+    filtered_lines = [
+        line
+        for line in text.splitlines()
+        if line.strip() != "- Scala deprecation is not inferred from Scaladoc indexes in this initial implementation."
+    ]
+    return "\n".join(filtered_lines).rstrip() + "\n"
 
 
 def parse_markdown_table(lines: list[str]) -> tuple[list[str], list[list[str]]]:
@@ -627,18 +639,14 @@ def render_artifact_toc_rows(package_reference_lines: list[str], *, versions: li
     for row in rows:
         if len(row) != 6:
             continue
-        link_cell, package_cell, types_cell, introduced_cell, deprecated_cell, removed_cell = row
-        link_target = markdown_link_target(link_cell)
-        package_name = strip_inline_code(package_cell)
+        _, package_cell, types_cell, introduced_cell, deprecated_cell, removed_cell = row
+        package_name = strip_inline_code(strip_markdown_link_label(package_cell))
         type_count = parse_int_cell(types_cell)
         introduced = parse_int_cell(introduced_cell)
         deprecated = parse_int_cell(deprecated_cell)
         removed = parse_int_cell(removed_cell)
 
-        if link_target:
-            name_cell = f"[`{package_name}`]({link_target})"
-        else:
-            name_cell = f"`{package_name}`"
+        name_cell = f"`{package_name}`"
         status_cell = build_package_status_cell(
             versions=versions,
             introduced=introduced,
@@ -660,7 +668,7 @@ def rewrite_artifact_page_layout(text: str, *, artifact_entry: dict[str, Any]) -
     title = LANGUAGE_LABELS.get(language, language.title())
     description = ARTIFACT_PAGE_DESCRIPTIONS.get(
         language,
-        "Generated package reference and version summary from local JVM docs snapshots",
+        "Generated package reference and version summary from local Java docs snapshots",
     )
     _, body = split_frontmatter(text)
     normalized_frontmatter = "\n".join(
@@ -675,14 +683,14 @@ def rewrite_artifact_page_layout(text: str, *, artifact_entry: dict[str, Any]) -
     normalized_body = body.lstrip("\n")
     intro_lines, sections = extract_markdown_sections(normalized_body)
 
-    # Current x2mdx JVM artifact pages already have the desired section layout.
+    # Current x2mdx Java artifact pages already have the desired section layout.
     # Keep that body intact and only normalize the published title/description.
     if {
         "Table of Contents",
         "Version Change Summary",
         "Reference",
     }.issubset(sections.keys()):
-        return normalized_frontmatter + normalized_body.rstrip() + "\n"
+        return normalized_frontmatter + remove_inline_code_links(remove_overview_backlinks(normalized_body))
 
     # Older x2mdx revisions emitted different section names. Preserve compatibility
     # with those raw pages by reshaping them into the current published layout.
@@ -697,11 +705,17 @@ def rewrite_artifact_page_layout(text: str, *, artifact_entry: dict[str, Any]) -
         normalized_frontmatter.rstrip(),
     ]
 
-    intro_lines = trim_blank_lines(intro_lines)
+    intro_lines = [
+        line
+        for line in trim_blank_lines(intro_lines)
+        if line.strip()
+        not in {
+            "Back to [overview](../ledger-api-jvm-bindings).",
+            "Back to [overview](../java-bindings).",
+        }
+    ]
     if intro_lines:
         output_lines.extend(intro_lines)
-    else:
-        output_lines.append("Back to [overview](../ledger-api-jvm-bindings).")
     output_lines.extend(["", "## Table of Contents", ""])
 
     toc_versions = extract_versions_from_artifact_lines(artifact_lines)
@@ -777,6 +791,7 @@ def copy_rewritten_page(
     *,
     artifact_entry: dict[str, Any] | None = None,
     rewrite_artifact_layout: bool = False,
+    rewrite_java_only_text: bool = False,
 ) -> None:
     target.parent.mkdir(parents=True, exist_ok=True)
     text = source.read_text(encoding="utf-8")
@@ -785,6 +800,10 @@ def copy_rewritten_page(
         text = rewrite_upstream_docs_links(text, artifact_entry)
         if rewrite_artifact_layout:
             text = rewrite_artifact_page_layout(text, artifact_entry=artifact_entry)
+        if artifact_entry.get("language") == "java":
+            rewrite_java_only_text = True
+    if rewrite_java_only_text:
+        text = rewrite_java_only_generated_text(text)
     target.write_text(text, encoding="utf-8")
 
 
@@ -815,8 +834,12 @@ def publish_rendered_pages(
         if language_dir in preserved_language_dirs:
             continue
         shutil.rmtree(publish_root / language_dir, ignore_errors=True)
+    for language_dir in REMOVED_LANGUAGE_DIRS:
+        shutil.rmtree(publish_root / language_dir, ignore_errors=True)
     if publish_overview_file.exists():
         publish_overview_file.unlink()
+    if LEGACY_JVM_OVERVIEW_FILE.exists():
+        LEGACY_JVM_OVERVIEW_FILE.unlink()
     if LEGACY_OVERVIEW_FILE.exists():
         LEGACY_OVERVIEW_FILE.unlink()
     shutil.rmtree(LEGACY_DETAILS_DIR, ignore_errors=True)
@@ -850,17 +873,37 @@ def publish_rendered_pages(
         if not source_package_dir.exists():
             continue
         language_dir.mkdir(parents=True, exist_ok=True)
-        for package_page in sorted(source_package_dir.glob("*.mdx")):
-            target_package_page = language_dir / package_page.name
+        for package_dir in sorted(path for path in source_package_dir.iterdir() if path.is_dir()):
+            source_package_page = package_dir / "index.mdx"
+            if not source_package_page.exists():
+                continue
+            target_package_dir = language_dir / package_dir.name
+            target_package_page = target_package_dir / "index.mdx"
             copy_rewritten_page(
-                package_page,
+                source_package_page,
                 target_package_page,
                 replacements=[(f"(../{artifact_slug})", "(index)")],
                 artifact_entry=artifact_entry,
             )
             generated_refs.add(docs_json_page_ref(target_package_page, DEFAULT_DOCS_JSON))
+            for object_page in sorted(package_dir.glob("*.mdx")):
+                if object_page.name == "index.mdx":
+                    continue
+                target_object_page = target_package_dir / object_page.name
+                copy_rewritten_page(
+                    object_page,
+                    target_object_page,
+                    replacements=[],
+                    artifact_entry=artifact_entry,
+                )
+                generated_refs.add(docs_json_page_ref(target_object_page, DEFAULT_DOCS_JSON))
 
-    copy_rewritten_page(render_overview_file, publish_overview_file, replacements=overview_replacements)
+    copy_rewritten_page(
+        render_overview_file,
+        publish_overview_file,
+        replacements=overview_replacements,
+        rewrite_java_only_text=True,
+    )
     generated_refs.add(docs_json_page_ref(publish_overview_file, DEFAULT_DOCS_JSON))
     return publish_overview_file, generated_refs
 
@@ -868,10 +911,12 @@ def publish_rendered_pages(
 def main() -> int:
     ensure_repo_direnv(repo_root=REPO_ROOT, script_path=Path(__file__).resolve(), argv=sys.argv[1:])
     args = parse_args()
-    source_config = load_json(Path(args.source_config).resolve())
+    source_config_path = Path(args.source_config).resolve()
+    source_config = load_json(source_config_path)
     include_versions = set(args.version) if args.version else None
     manifest_path = build_manifest(
         source_config=source_config,
+        source_config_path=source_config_path,
         cache_dir=Path(args.cache_dir).resolve(),
         manifest_path=Path(args.manifest_out).resolve(),
         include_versions=include_versions,

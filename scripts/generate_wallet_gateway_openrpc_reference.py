@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from docs_env import ensure_repo_direnv, repo_direnv_command
+import generated_reference_nav
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CACHE_ROOT = Path(os.environ.get("XDG_CACHE_HOME", "~/.cache")).expanduser() / "x2mdx"
@@ -21,7 +22,8 @@ DEFAULT_MANIFEST = REPO_ROOT / ".internal" / "generated" / "x2mdx" / "wallet-gat
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "docs-main" / "reference" / "wallet-gateway-json-rpc"
 DEFAULT_DOCS_JSON = REPO_ROOT / "docs-main" / "docs.json"
 DEFAULT_REPO_DIR = DEFAULT_CACHE_DIR / "repos" / "splice-wallet-kernel"
-GROUP_LABEL = "Wallet Gateway JSON-RPC"
+GROUP_LABEL = "Wallet Kernel SDK"
+LEGACY_GROUP_LABEL = "Wallet Gateway JSON-RPC"
 SPEC_DIR_NAME = "specs"
 DEFAULT_RELEASE_REPO = "hyperledger-labs/splice-wallet-kernel"
 
@@ -223,16 +225,25 @@ def update_docs_navigation(
 
     refs = {overview_page_ref(output_dir, docs_json_path)}
     refs.update(spec_page_ref(output_dir, docs_json_path, spec["spec_id"]) for spec in spec_entries)
-    dropdown["pages"] = prune_nav_items(pages, page_refs=refs, group_labels={GROUP_LABEL})
-    dropdown["pages"].append(
-        {
-            "group": GROUP_LABEL,
-            "pages": [
-                overview_page_ref(output_dir, docs_json_path),
-                *[spec_page_ref(output_dir, docs_json_path, spec["spec_id"]) for spec in spec_entries],
-            ],
-        }
+    group_labels = {GROUP_LABEL, LEGACY_GROUP_LABEL}
+    insert_at = next(
+        (
+            index
+            for index, item in enumerate(pages)
+            if isinstance(item, dict) and item.get("group") in group_labels
+        ),
+        len(pages),
     )
+    pruned_pages = prune_nav_items(pages, page_refs=refs, group_labels=group_labels)
+    group = generated_reference_nav.build_openrpc_nav_group(
+        output_dir=output_dir,
+        docs_json_path=docs_json_path,
+        group_label=GROUP_LABEL,
+        spec_ids=[str(spec["spec_id"]) for spec in spec_entries],
+        spec_dir_name=SPEC_DIR_NAME,
+    )
+    pruned_pages.insert(min(insert_at, len(pruned_pages)), group)
+    dropdown["pages"] = pruned_pages
     docs_json_path.write_text(json.dumps(docs, indent=2) + "\n", encoding="utf-8")
     print(f"Updated docs navigation: {docs_json_path}")
 

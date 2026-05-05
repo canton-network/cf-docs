@@ -19,17 +19,17 @@ Building and operating a production-level Canton Network application requires ca
 
 <img src="/images/docs_website/tsa-master-arch-with-user-backend.png" className="align-center" alt="Canton Network application architecture diagram as described below." />
 
-### 1.1 Frontend
+### Frontend
 
 Frontends enable human end-users to efficiently interact with the business processes of a Canton Network application. Apps designed purely for system-to-system integration solutions may not require a frontend, but all other apps need one.
 
 To achieve non-repudiation, all actions taken by an end-user in the name of an app provider or an app user organization must be submitted via that organization’s participant node from a frontend under their control. Otherwise, the organization could dispute a transaction record, claiming that it does not correspond to the actions performed by the end-user. To ensure the best possible non-repudiation guarantees, the app provider and each app user should host the app frontend on a web server under their control. For the same reason, each organization’s frontend should be configured to log in via that organization’s IAM. The IAM issues access tokens that can be used to submit commands to the organization’s participant node. Note that frontends don't directly communicate with the ledger. The frontends send commands to the backends, which in turn send commands to the ledger.
 
-### 1.2 Daml Model
+### Daml Model
 
 Daml models define the cross-organization workflows and serve as API definitions for the components interacting with these workflows. They are compiled into DAR files, also known as Daml packages. The DAR files must be uploaded to all Canton participant nodes of app users.
 
-### 1.3 Backend
+### Backend
 
 The backends interact directly with the Ledger API to manage access to participant nodes. The backends utilize Daml parties to represent the app provider and the app users, and Daml contracts to represent the state of the workflows between these organizations.
 
@@ -43,7 +43,7 @@ The backends typically serve one or more of the following purposes:
 
 Details of the backend functionalities and design considerations are as follows:
 
-#### 1.3.1 Provision higher-level APIs
+#### Provision higher-level APIs
 
 The participant nodes and the synchronizer ensure that shared application data is synchronized across organizations in real time. When frontends or other systems need to run specific queries on this data, they send requests to the backend. The backend serves these queries from application specific APIs with appropriate access control and performance characteristics.
 
@@ -66,7 +66,7 @@ As a Daml model design consideration, it is recommended to avoid storing informa
 
 PQS provides a general-purpose, queryable view of ledger history and state suitable for a wide range of use cases. PQS is the recommended path for automation and integration components to access ledger data. However, for certain specialized high-scale read use cases, a custom operational data store (ODS) solution may need to be designed to store and index data in a format tailored to specific read requirements.
 
-##### 1.3.1.2 Write
+##### Write
 
 On the write path, the most important consideration when implementing higher-level APIs is reliability, which breaks down into two related items: retry behavior on command failure and idempotency of command submission.
 
@@ -78,13 +78,13 @@ On the write path, the most important consideration when implementing higher-lev
 
   Another technique is to use command deduplication. Participant nodes provide a mechanism known as command deduplication in the Ledger API to ensure that they execute a command at most once. The participant node stores the command ID and deduplicates later submissions with the same command ID. For details on the mechanics of command deduplication, see the Ledger API documentation.
 
-##### 1.3.1.3 Serve reference data contracts
+##### Serve reference data contracts
 
 A special case of provisioning a higher-level API is serving reference data contracts required by app users to submit their Daml transactions. Sometimes, Daml models include contracts that provide reference data. For example, an app provider may store a directory of eligible counterparties for over-the-counter trades as on-ledger contracts. Another example is financial market data, such as a stock index closing value, foreign exchange, or interest rate fixing provided by an oracle party and stored as an on-ledger contract.
 
 Such contracts are typically not visible to the app users' Daml parties, because maintaining their visibility on-ledger for app users' parties is onerous, and because contracts with many observers should be avoided for performance reasons. Instead of managing the visibility of such contracts on-ledger, a Daml feature named “explicit disclosure” is utilized. This feature allows the stakeholders of a contract to share it out of band with other parties, so that these parties can include the contract with a Daml transaction submission, which in turn allows the submitting parties to access these contracts during Daml transaction processing. With explicit disclosure, a transaction that requires the submitting party to have visibility of a contract will succeed even though the submitting party is not a stakeholder in the contract.
 
-#### 1.3.2 Automate on-ledger workflows
+#### Automate on-ledger workflows
 
 Steps in on-ledger workflows that do not require human intervention are automated using the backend. For example, in a customer onboarding workflow of a financial services app, the backend might listen to a new customer onboarding request on-ledger and advance it automatically once the provider's off-ledger "know your customer" (KYC) compliance system gives the green light to onboard the customer.
 
@@ -100,7 +100,7 @@ When implementing automation in a Canton Network application backend, it is reco
 
 Each task should be automatically retried on retryable errors up to a limit. The entire code block that processes the task should be retried, not just the ledger command submission within the block. This ensures that the most recent ledger state is reflected in the command being submitted—or even discovering that, due to concurrent actions on the ledger, the task has already been completed or is otherwise no longer valid. In such cases, the retrying loop should exit.
 
-#### 1.3.3 Integrate with off-ledger systems
+#### Integrate with off-ledger systems
 
 Backend functionality also includes integration with off-ledger systems. For example, this may involve running off-ledger anti-money laundering compliance checks, populating reporting databases while processing on-ledger financial transactions, or initiating on-ledger financial transactions from an off-ledger pre-trade analytics system. When designing a Canton Network application it is crucial to understand the specific integration needs of the app users as well as the app provider organization and to put the backend infrastructure in place to serve these.
 
@@ -115,7 +115,7 @@ There are various integration options:
 
 ## 2. Choose Tech Stack for Backend
 
-### 2.1 Use a standard stack for building an enterprise application
+### Use a standard stack for building an enterprise application
 
 - To interact with the Ledger API, use any library considered standard for interacting with gRPC services.
 - Adopt the standard tech stack for IAM integration.
@@ -136,13 +136,13 @@ There is no one-size-fits-all architecture for Canton Network applications. Inst
 - App User Operates the Backend Built by the App Provider
 - Each Organization Builds and Operates Its Own Backend
 
-### 3.1 App Provider Operates the Backend
+### App Provider Operates the Backend
 
 The first option requires the fewest components to build, where app users operate only the frontends, while the app provider exclusively operates the backend.
 
 In this architecture, app users’ frontends submit commands to the ledger using the Ledger API or HTTP JSON API. To read from the ledger, app users’ frontends rely on the app provider’s backend. This approach is the simplest to deploy and still ensures non-repudiation and self-sovereignty of app data for both app providers and app users. However, it does not support integration with app users’ off-ledger systems and limits the possibilities for automating on-ledger workflows. In this configuration, the backend can only submit commands to the ledger on behalf of the app provider’s Daml parties, while app users’ Daml parties can send commands to the ledger exclusively through the frontend.
 
-### 3.2 App User Operates the Backend Built by the App Provider
+### App User Operates the Backend Built by the App Provider
 
 When app users operate the backends built by the app provider, they gain additional benefits beyond non-repudiation and self-sovereignty over app data provided by operating a participant node:
 
@@ -163,7 +163,7 @@ The disadvantages of app users operating the backend built by the app provider i
 
   App provider release management: Releasing software for customer operations on-prem requires additional communication and care compared to managing internal releases, adding complexity to the release process.
 
-### 3.3 Each Organization Builds and Operates Its Own Backend
+### Each Organization Builds and Operates Its Own Backend
 
 The architecture where each organization builds and operates its own app frontend and backend provides maximum flexibility for meeting specific requirements related to automation and integration with off-ledger systems. However, this flexibility comes at a cost.
 
@@ -178,15 +178,15 @@ The disadvantages of this highly flexible architecture include:
 - Cross-organization software development: The initial development of the app and future changes necessitate coordination between the app provider and app user organizations. While Daml facilitates specifying APIs for workflows across organizations, the complexities of cross-organization software development should not be underestimated.
 - Restricted app evolution: Apps are expected to evolve over time to address new business requirements. However, app users may lack the willingness or capability to modify their frontend and backend code, complicating efforts to change or decommission existing workflows.
 
-### 3.4 Properties Summary
+### Properties Summary
 
-#### 3.4.1 Properties of the Architectures
+#### Properties of the Architectures
 
 <img src="/images/docs_website/properties-of-arch.png" className="align-center" alt="Properties of the architectures as described below." />
 
 This table summarizes the properties of each of the three architectures under consideration. Note that there is a continuum of possible architectures in between. App architecture can also evolve over time. Starting with a simpler architecture that provides the minimum required set of properties is recommended, with additional complexity introduced as business requirements evolve.
 
-#### 3.4.2 Properties of the Architectures from a Cost Perspective
+#### Properties of the Architectures from a Cost Perspective
 
 <img src="/images/docs_website/properties-of-arch-from-cost-perspective.png" className="align-center" alt="Properties of the architectures from a cost perspective as described below." />
 

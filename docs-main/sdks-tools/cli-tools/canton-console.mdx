@@ -12,193 +12,15 @@ import CantonSdksToolsCliToolsCantonConsoleL287 from "/snippets/canton-docs/sdks
 
 The Canton Console is an interactive Scala REPL that connects to Canton nodes for administration, debugging, and automation. It provides direct access to participant, sequencer, and mediator operations through a typed API.
 
-For full operational documentation, see the [Global Synchronizer section](/docs-main/global-synchronizer/understand/introduction), which covers node setup and management in detail. This page provides a brief orientation to the Console as a development and operations tool.
+For full operational documentation, see the [Global Synchronizer section](/global-synchronizer/understand/introduction), which covers node setup and management in detail. This page provides a brief orientation to the Console as a development and operations tool.
 
 ## Overview
 
 The Console is bundled with the Canton distribution. When you start a Canton process, the Console is available as an interactive shell. You can also connect a remote Console to a running node.
 
-{/* COPIED_START source="splice:docs/src/deployment/console_access.rst" hash="bccf3653" */}
-
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was copied from existing reviewed documentation.
-**Source:** `docs/src/deployment/console_access.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
-
-# Getting console access to Canton nodes
-
-For more involved debugging and disaster recovery, direct access to the console of a Canton node (participant, sequencer, mediator) might be required. Steps to obtain such access:
-
-Requirements:
-
-- Direct access to the Canton node process
-- Canton binary
-
-Once you see the following banner for the console you have successfully gained access
-
-``` text
-_____            _
-/ ____|          | |
-| |     __ _ _ __ | |_ ___  _ __
-| |    / _` | '_ \| __/ _ \| '_ \
-| |___| (_| | | | | || (_) | | | |
-\_____\__,_|_| |_|\__\___/|_| |_|
-
-Welcome to Canton!
-```
-
-## Participant console
-
-1.  Obtain an authentication token as specified in [the Canton authentication docs](https://docs.digitalasset.com/operate/3.4/howtos/secure/apis/jwt.html)
-
-2.  Ensure you can access the participant's ports 5001 and 5002
-
-3.  Add the configuration to a local file <span class="title-ref">console.conf</span>
-    ```
-    canton {
-      remote-participants {
-        participant {
-          admin-api {
-            port = 5002
-            address = localhost
-          }
-          ledger-api {
-            port = 5001
-            address = localhost
-          }
-          token = "<auth token>"
-        }
-      }
-      features.enable-preview-commands = yes
-      features.enable-testing-commands = yes
-      features.enable-repair-commands = yes
-    }
-    ```
-
-4.  Run the docker command
-
-    ```
-    docker run -it --rm --network host -v $(pwd)/console.conf:/app/app.conf /canton: --console
-    ```
-
-    <Warning>
-    If you run the participant using the docker compose setup the docker command must be run with the docker network used by the participant. Adjust the configuration to connect to the participant container:
-    </Warning>
-
-    ```
-    canton {
-      remote-participants {
-        participant {
-          admin-api {
-            port = 5002
-            address = participant
-          }
-          ledger-api {
-            port = 5001
-            address = participant
-          }
-          token = "<auth token>"
-        }
-      }
-      features.enable-preview-commands = yes
-      features.enable-testing-commands = yes
-      features.enable-repair-commands = yes
-    }
-    ```
-
-    Running docker with the default network (`splice-validator`):
-
-    ```
-    docker run -it --rm --network splice-validator -v $(pwd)/console.conf:/app/app.conf /canton: --console
-    ```
-
-## Sequencer console
-
-1.  Ensure you can access the sequencer's ports 5008 and 5009
-
-2.  Add the configuration to a local file <span class="title-ref">console.conf</span>
-
-    > ```
-    > canton {
-    >   remote-sequencers {
-    >     sequencer {
-    >       public-api {
-    >         port = 5008
-    >         address = localhost
-    >       }
-    >       admin-api {
-    >         port = 5009
-    >         address = localhost
-    >       }
-    >     }
-    >   }
-    >   features.enable-preview-commands = yes
-    >   features.enable-testing-commands = yes
-    >   features.enable-repair-commands = yes
-    > }
-    > ```
-
-3.  Run the docker command
-
-    > <div class="parsed-literal">
-    >
-    > docker run -it --rm --network host -v \$(pwd)/console.conf:/app/app.conf /canton: --console
-    >
-    > </div>
-
-## Mediator console
-
-1.  Ensure you can access the mediator's port 5007
-
-2.  Add the configuration to a local file <span class="title-ref">console.conf</span>
-
-    > ```
-    > canton {
-    >   remote-mediators {
-    >     mediator {
-    >       admin-api {
-    >         port = 5007
-    >         address = localhost
-    >       }
-    >     }
-    >   }
-    >   features.enable-preview-commands = yes
-    >   features.enable-testing-commands = yes
-    >   features.enable-repair-commands = yes
-    > }
-    > ```
-
-3.  Run the docker command
-
-    > <div class="parsed-literal">
-    >
-    > docker run -it --rm --network host -v \$(pwd)/console.conf:/app/app.conf /canton: --console
-    >
-    > </div>
-
-## Access in a K8s cluster
-
-In a K8s cluster you can use a debug pod to access the console directly from the cluster.
-
-First you can create a pod running the right canton version using:
-
-```bash
-kubectl debug "${POD_NAME}" --image "$(kubectl get pod "${POD_NAME}" -o json | jq -re '.spec.containers[0].image')" -i -t -- bash
-```
-
-where <span class="title-ref">POD_NAME</span> is the name of the participant/sequencer/mediator pod.
-
-Once you are inside the running pod you can install a text editor and create the config file <span class="title-ref">console.conf</span> that is described above.
-
-```bash
-$ apt-get update
-$ apt-get install -y vim
-$ vim console.conf # paste in the config from above
-$ /app/bin/canton -v -c console.conf
-```
-
-{/* COPIED_END */}
+<Note>
+For operational guidance — node setup, party management, topology administration, debugging workflows — see the [Canton Console group under Global Synchronizer](/global-synchronizer/canton-console/console-overview). This page focuses on the Console as a CLI development tool.
+</Note>
 
 What you can do with the Console:
 
@@ -264,8 +86,6 @@ Scripts have access to the same node references and APIs as the interactive Cons
 - Health check routines that run periodically
 - Data export scripts for auditing
 
-See [Scala bindings](/docs-main/sdks-tools/language-bindings/scala) for more on writing automation scripts.
-
 ## Tab Completion
 
 The Console provides tab completion for discovering available commands. Type a node reference followed by a period, then press Tab:
@@ -279,6 +99,5 @@ This is the fastest way to explore the API without referring to documentation.
 
 ## Related Pages
 
-- [Global Synchronizer introduction](/docs-main/global-synchronizer/understand/introduction) -- Operational context for Console use
-- [Scala bindings](/docs-main/sdks-tools/language-bindings/scala) -- Writing Scala automation scripts for the Console
-- [Validator roles](/docs-main/global-synchronizer/understand/validator-roles) -- Understanding the nodes you manage through the Console
+- [Global Synchronizer introduction](/global-synchronizer/understand/introduction) -- Operational context for Console use
+- [Validator roles](/global-synchronizer/understand/validator-roles) -- Understanding the nodes you manage through the Console

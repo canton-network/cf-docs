@@ -15,6 +15,7 @@ from typing import Any, Literal
 
 from docs_env import ensure_repo_direnv, repo_direnv_command
 import reference_nav
+from validate_splice_mintlify_openapi_nav import validate_splice_nav
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -25,6 +26,7 @@ API_REFERENCE_DROPDOWN = "API Reference"
 LEGACY_PAGE_REFS = {
     "appdev/reference/json-api-reference",
     "appdev/reference/json-api-asyncapi-reference",
+    "reference/json-api-asyncapi-reference",
 }
 
 
@@ -76,7 +78,7 @@ SCRIPT_JOBS = [
     ),
     ScriptJob(
         script_path=REPO_ROOT / "scripts" / "generate_wallet_gateway_openrpc_reference.py",
-        nav_slice=NavSlice("top_group", ("Wallet Gateway JSON-RPC",)),
+        nav_slice=NavSlice("top_group", ("Wallet Kernel SDK",)),
     ),
     ScriptJob(
         script_path=REPO_ROOT / "scripts" / "generate_splice_mintlify_openapi.py",
@@ -84,7 +86,7 @@ SCRIPT_JOBS = [
     ),
     ScriptJob(
         script_path=REPO_ROOT / "scripts" / "generate_typescript_bindings_reference.py",
-        nav_slice=NavSlice("top_group", ("Daml TypeScript Bindings",)),
+        nav_slice=NavSlice("top_group", ("TypeScript",)),
     ),
 ]
 
@@ -202,7 +204,8 @@ def prune_page_refs(node: object, page_refs: set[str]) -> object | None:
         return items
     if isinstance(node, dict):
         updated = {key: prune_page_refs(value, page_refs) for key, value in node.items()}
-        if updated.get("group") and not updated.get("pages") and not updated.get("groups"):
+        is_container_group = "pages" in updated or "groups" in updated
+        if updated.get("group") and is_container_group and not updated.get("pages") and not updated.get("groups"):
             return None
         return updated
     if isinstance(node, str) and node in page_refs:
@@ -282,6 +285,7 @@ def consolidate_docs_json() -> None:
         docs_json_path=DOCS_JSON_PATH,
         dropdown_label=API_REFERENCE_DROPDOWN,
     )
+    validate_splice_nav(docs_json_path=DOCS_JSON_PATH)
 
 
 def main() -> int:
