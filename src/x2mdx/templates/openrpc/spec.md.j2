@@ -1,0 +1,46 @@
+{% import "shared/macros.md.j2" as shared %}
+{{ heading(1, spec.display_name) }}
+
+[Back to overview]({{ overview_link }})
+{% if spec.info_description %}
+
+{{ paragraph(spec.info_description) }}
+{% endif %}
+
+{{ bullet_list(metadata_items) }}
+
+{{ heading(2, "Version Change Timeline") }}
+
+{{ table(["Version", "Active Methods", "Added", "Changed", "Removed"], version_timeline_rows) }}
+
+{{ shared.status_toc(method_summary_rows, legend=method_summary_legend) }}
+
+{{ heading(2, "Methods") }}
+{% for method in methods %}
+
+{{ anchor(method.anchor) }}
+{{ heading(3, method.heading_text) }}
+
+{{ paragraph(method.lifecycle_text) }}
+{% if method.summary %}
+
+{{ paragraph(method.summary) }}
+{% endif %}
+{% if method.description %}
+
+{{ paragraph(method.description) }}
+{% endif %}
+{{ shared.version_changes(method.change_rows) }}
+
+{{ shared.detail_table("Parameters", ["Parameter", "Schema", "Required Fields", "Description"], method.parameter_rows, empty_message="_No parameters._") }}
+
+{{ shared.detail_table("Result", ["Schema", "Required Fields", "Description"], [method.result_row]) }}
+{% if method.param_sample is not none %}
+
+{{ shared.detail_code_block("Params Example", "json", pretty_json(method.param_sample)) }}
+{% endif %}
+{% if method.result_sample is not none %}
+
+{{ shared.detail_code_block("Result Example", "json", pretty_json(method.result_sample)) }}
+{% endif %}
+{% endfor %}
