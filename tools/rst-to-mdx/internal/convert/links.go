@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"strings"
 
-	"daml.com/x/dpm-components/rst-to-mdx/internal/labelindex"
+	"daml.com/x/dpm-components/mintlify/links"
 	"daml.com/x/dpm-components/rst-to-mdx/internal/pathmap"
 )
 
@@ -179,13 +179,17 @@ func resolveLabelWithHeading(label string, opts Options) (string, string, bool) 
 	// anchor anyway. Section-level labels still need the anchor so
 	// the reader lands on the right place inside the page.
 	if !loc.IsPageTitle {
-		anchor := headingToAnchor(loc.Heading)
+		anchor := links.HeadingAnchor(loc.Heading)
 		if anchor != "" {
 			url += "#" + anchor
 		}
 	}
 	return url, loc.Heading, true
 }
+
+// (No package-level pin needed: the labelindex package is reached via the
+// LabelIndex field type declared in convert.go, so Go's normal type
+// checking keeps that import honest.)
 
 // stripDocsWebsitePrefix removes the leading docs-website/docs/replicated/
 // segment from an absolute RST path so the remainder can be fed to
@@ -200,26 +204,3 @@ func stripDocsWebsitePrefix(p string) string {
 	return p
 }
 
-// headingToAnchor converts a heading string to the anchor id Mintlify
-// auto-generates: lowercase, spaces and punctuation collapsed to hyphens.
-func headingToAnchor(heading string) string {
-	var b strings.Builder
-	prevDash := false
-	for _, r := range strings.ToLower(heading) {
-		switch {
-		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
-			b.WriteRune(r)
-			prevDash = false
-		default:
-			if !prevDash && b.Len() > 0 {
-				b.WriteByte('-')
-				prevDash = true
-			}
-		}
-	}
-	return strings.TrimRight(b.String(), "-")
-}
-
-// Compile-time usage check so the import doesn't go stale if someone
-// removes all resolver calls during refactoring.
-var _ = (&labelindex.Index{})

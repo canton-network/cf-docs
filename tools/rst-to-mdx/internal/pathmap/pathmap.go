@@ -31,6 +31,8 @@ package pathmap
 import (
 	"path/filepath"
 	"strings"
+
+	"daml.com/x/dpm-components/mintlify/links"
 )
 
 // DerivedPath is the mapped target path, relative to docs-main/, without
@@ -44,8 +46,10 @@ import (
 type DerivedPath string
 
 // URL returns the `/<path>` form used in MDX internal links —
-// docs-site-root-relative, no `docs-main/` prefix.
-func (d DerivedPath) URL() string { return "/" + string(d) }
+// docs-site-root-relative, no `docs-main/` prefix. Delegates to the
+// shared mintlify/links package so the format stays consistent across
+// rst-to-mdx and any future validator.
+func (d DerivedPath) URL() string { return links.PageURL(string(d), "") }
 
 // File returns the absolute on-disk path under `targetRoot` where the
 // MDX file should be written (with the .mdx extension).

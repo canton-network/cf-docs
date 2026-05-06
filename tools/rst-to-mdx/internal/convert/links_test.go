@@ -159,20 +159,4 @@ Some content.
 	}
 }
 
-func TestHeadingToAnchor(t *testing.T) {
-	cases := []struct {
-		in, want string
-	}{
-		{"Getting Started", "getting-started"},
-		{"Canton Admin APIs", "canton-admin-apis"},
-		{"What is a `Daml Contract`?", "what-is-a-daml-contract"},
-		{"  Trimmed & weird !!  ", "trimmed-weird"},
-	}
-	for _, tc := range cases {
-		t.Run(tc.in, func(t *testing.T) {
-			if got := headingToAnchor(tc.in); got != tc.want {
-				t.Errorf("want %q got %q", tc.want, got)
-			}
-		})
-	}
-}
+// HeadingAnchor coverage moved to daml.com/x/dpm-components/mintlify/links.

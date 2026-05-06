@@ -20,6 +20,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"daml.com/x/dpm-components/mintlify/links"
 	"daml.com/x/dpm-components/rst-to-mdx/internal/convert"
 	"daml.com/x/dpm-components/rst-to-mdx/internal/labelindex"
 	"daml.com/x/dpm-components/rst-to-mdx/internal/navindex"
@@ -109,7 +110,7 @@ Use --batch to walk a directory tree.`,
 	cmd.Flags().StringVar(&opts.inputDir, "input-dir", "", "input directory for --batch")
 	cmd.Flags().StringVar(&opts.outputDir, "output-dir", "./converted", "output directory for --batch")
 	cmd.Flags().StringVar(&opts.docsRoot, "docs-root", "", "root of an RST docs tree for cross-ref resolution (auto-detects docs-website/ when input lives in one)")
-	cmd.Flags().StringVar(&opts.targetRoot, "target-root", "./docs-main", "target docs-main/ root for path derivation")
+	cmd.Flags().StringVar(&opts.targetRoot, "target-root", "./"+links.SiteRoot, "target docs-main/ root for path derivation")
 	cmd.Flags().StringVar(&opts.docsJSON, "docs-json", "", "path to Mintlify docs.json for nav-aware link resolution (auto-detects <target-root>/docs.json)")
 	cmd.Flags().BoolVar(&opts.copyImages, "copy-images", false, "copy referenced images into target-root/images/docs_website/")
 	cmd.Flags().BoolVar(&opts.strict, "strict", false, "fail on unresolved :ref: or missing literalinclude")
