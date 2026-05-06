@@ -184,7 +184,10 @@ def safe_markdown_text(text: str) -> str:
 
 def relative_page_ref(from_path: Path, to_path: Path) -> str:
     relative = os.path.relpath(to_path.with_suffix(""), start=from_path.parent)
-    return Path(relative).as_posix()
+    link = Path(relative).as_posix()
+    if not link.startswith("."):
+        return f"./{link}"
+    return link
 
 
 def rooted_page_ref(root_prefix: str, target_path: Path, output_dir: Path) -> str:

@@ -38,7 +38,7 @@ def code_block(language: str, body: str) -> str:
 
 
 def anchor(anchor_id: str) -> str:
-    return f'<a id="{anchor_id}"></a>'
+    return f'<span id="{anchor_id}"></span>'
 
 
 def admonition(kind: str, body: str) -> str:

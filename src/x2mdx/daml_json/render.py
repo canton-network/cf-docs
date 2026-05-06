@@ -233,7 +233,7 @@ def render_function(fn: dict[str, Any]) -> str:
     signature = f"{name} : {render_context(fn.get('fct_context', []))}{render_type(fn['fct_type'])}"
     parts: list[str] = []
     if anchor:
-        parts.append(f'<a id="{anchor}"></a>')
+        parts.append(f'<span id="{anchor}"></span>')
     parts.append(f"### `{name}`")
     parts.append(f"```daml\n{signature}\n```")
     descr = render_doc_blocks(fn.get("fct_descr"))
@@ -247,7 +247,7 @@ def render_choice(choice: dict[str, Any]) -> str:
     anchor = choice.get("cd_anchor")
     parts: list[str] = []
     if anchor:
-        parts.append(f'<a id="{anchor}"></a>')
+        parts.append(f'<span id="{anchor}"></span>')
     parts.append(f"#### Choice `{name}`")
     desc = render_doc_blocks(choice.get("cd_descr"))
     if desc:
@@ -271,7 +271,7 @@ def render_template_doc(template: dict[str, Any]) -> str:
     anchor = template.get("td_anchor")
     parts: list[str] = []
     if anchor:
-        parts.append(f'<a id="{anchor}"></a>')
+        parts.append(f'<span id="{anchor}"></span>')
     parts.append(f"### Template `{name}`")
     desc = render_doc_blocks(template.get("td_descr"))
     if desc:
@@ -304,7 +304,7 @@ def render_interface_method(method: dict[str, Any]) -> str:
     anchor = method.get("mtd_anchor")
     parts: list[str] = []
     if anchor:
-        parts.append(f'<a id="{anchor}"></a>')
+        parts.append(f'<span id="{anchor}"></span>')
     parts.append(f"#### Method `{name}`")
     desc = render_doc_blocks(method.get("mtd_descr"))
     if desc:
@@ -321,7 +321,7 @@ def render_interface(interface: dict[str, Any]) -> str:
     anchor = interface.get("if_anchor")
     parts: list[str] = []
     if anchor:
-        parts.append(f'<a id="{anchor}"></a>')
+        parts.append(f'<span id="{anchor}"></span>')
     parts.append(f"### Interface `{name}`")
     desc = render_doc_blocks(interface.get("if_descr"))
     if desc:
@@ -369,7 +369,7 @@ def render_class(cls: dict[str, Any]) -> str:
         header = f"{header} {args}"
     parts: list[str] = []
     if anchor:
-        parts.append(f'<a id="{anchor}"></a>')
+        parts.append(f'<span id="{anchor}"></span>')
     parts.append(f"### `{header}`")
     desc = render_doc_blocks(cls.get("cl_descr"))
     if desc:
@@ -391,7 +391,7 @@ def render_constructor(constructor: dict[str, Any]) -> str:
     anchor = payload.get("ac_anchor")
     parts: list[str] = []
     if anchor:
-        parts.append(f'<a id="{anchor}"></a>')
+        parts.append(f'<span id="{anchor}"></span>')
     if tag == "PrefixC":
         args = " ".join(render_type(arg, 2) for arg in payload.get("ac_args", []))
         parts.append(f"- `{f'{name} {args}'.strip()}`")
@@ -417,7 +417,7 @@ def render_adt(adt_union: dict[str, Any]) -> str:
         anchor = adt.get("ad_anchor")
         parts: list[str] = []
         if anchor:
-            parts.append(f'<a id="{anchor}"></a>')
+            parts.append(f'<span id="{anchor}"></span>')
         args = " ".join(adt.get("ad_args", []))
         header = f"data {name}"
         if args:
@@ -444,7 +444,7 @@ def render_adt(adt_union: dict[str, Any]) -> str:
         rhs = render_type(adt.get("ad_rhs"))
         parts: list[str] = []
         if anchor:
-            parts.append(f'<a id="{anchor}"></a>')
+            parts.append(f'<span id="{anchor}"></span>')
         parts.append(f"### `type {name} = {rhs}`")
         desc = render_doc_blocks(adt.get("ad_descr"))
         if desc:
@@ -461,7 +461,7 @@ def render_adt(adt_union: dict[str, Any]) -> str:
     anchor = adt.get("ad_anchor")
     parts: list[str] = []
     if anchor:
-        parts.append(f'<a id="{anchor}"></a>')
+        parts.append(f'<span id="{anchor}"></span>')
     if tag in {"Data", "Newtype", "Template", "Interface"}:
         args = " ".join(adt.get("ad_args", []))
         header = f"{'newtype' if tag == 'Newtype' else 'data'} {name}"
