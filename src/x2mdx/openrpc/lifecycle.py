@@ -60,6 +60,15 @@ def method_anchor(name: str) -> str:
     return f"method-{slugify(name)}"
 
 
+def normalize_lifecycle_state(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip().lower()
+    if normalized in {"alpha", "beta", "stable", "deprecated"}:
+        return normalized
+    return None
+
+
 def doc_lookup_key(source_path: str) -> str:
     return source_path.replace("\\", "/")
 
@@ -392,6 +401,8 @@ def extract_method_detail(
             "anchor": method_anchor(name),
             "summary": str(method.get("summary") or ""),
             "description": str(method.get("description") or ""),
+            "lifecycle_state": normalize_lifecycle_state(method.get("x-state")),
+            "replaces": str(method.get("x-replaces")) if isinstance(method.get("x-replaces"), str) else None,
             "params": [extract_param_detail(doc_index, current_source_path, param) for param in params if isinstance(param, dict)],
             "result": extract_result_detail(doc_index, current_source_path, method.get("result")),
         }
@@ -399,6 +410,8 @@ def extract_method_detail(
             {
                 "summary": detail["summary"],
                 "description": detail["description"],
+                "lifecycle_state": detail["lifecycle_state"],
+                "replaces": detail["replaces"],
                 "params": detail["params"],
                 "result": detail["result"],
             }
@@ -430,6 +443,10 @@ def describe_method_changes(previous: dict[str, Any], current: dict[str, Any]) -
         changes.append("summary updated")
     if previous["description"] != current["description"]:
         changes.append("description updated")
+    if previous.get("lifecycle_state") != current.get("lifecycle_state"):
+        changes.append("lifecycle state updated")
+    if previous.get("replaces") != current.get("replaces"):
+        changes.append("replacement target updated")
 
     previous_params = {param["name"]: param for param in previous["params"]}
     current_params = {param["name"]: param for param in current["params"]}
@@ -568,6 +585,8 @@ def build_openrpc_report_from_sources(
                     removed_version=None,
                     last_seen_in=history["versions"][-1],
                     status="active",
+                    lifecycle_state=method_detail.get("lifecycle_state"),
+                    replaces=method_detail.get("replaces"),
                     latest=method_detail,
                 )
             )
@@ -592,6 +611,8 @@ def build_openrpc_report_from_sources(
                     removed_version=removed_in,
                     last_seen_in=last_seen_in,
                     status="removed",
+                    lifecycle_state=history["details"][last_seen_in].get("lifecycle_state"),
+                    replaces=history["details"][last_seen_in].get("replaces"),
                     latest=history["details"][last_seen_in],
                 )
             )
