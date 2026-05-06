@@ -32,6 +32,7 @@ DEFAULT_LEGACY_OUTPUT_DIR = REPO_ROOT / "docs-main" / "reference" / "protobuf"
 DEFAULT_DOCS_JSON = REPO_ROOT / "docs-main" / "docs.json"
 DEFAULT_REPO_DIR = DEFAULT_CACHE_DIR / "repos" / "canton"
 GROUP_LABEL = "Canton Protobuf History"
+DETAILS_LABEL = "Details and History"
 DESCRIPTOR_IMAGE_NAME = ".proto_snapshot_image.bin.gz"
 STABLE_TAG_RE = re.compile(r"^v(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)$")
 SECTION_TO_REPO_PREFIX = {
@@ -267,6 +268,34 @@ def import_to_repo_path_from_bundle(protobuf_root: Path) -> dict[str, str]:
     return mapping
 
 
+def replace_text(path: Path, replacements: list[tuple[str, str]]) -> None:
+    text = path.read_text(encoding="utf-8")
+    updated = text
+    for old, new in replacements:
+        updated = updated.replace(old, new)
+    if updated != text:
+        path.write_text(updated, encoding="utf-8")
+
+
+def retitle_overview_page(path: Path) -> None:
+    replace_text(
+        path,
+        [
+            ('title: "Canton Protobuf History"', f'title: "{DETAILS_LABEL}"'),
+            ('title: "Canton Protobuf Reference"', f'title: "{DETAILS_LABEL}"'),
+            ('title: "Canton Protobuf References"', f'title: "{DETAILS_LABEL}"'),
+            (
+                '<h1 class="x2mdx-ref-title">Canton Protobuf Reference</h1>',
+                f'<h1 class="x2mdx-ref-title">{DETAILS_LABEL}</h1>',
+            ),
+            (
+                '<h1 class="x2mdx-ref-title">Canton Protobuf References</h1>',
+                f'<h1 class="x2mdx-ref-title">{DETAILS_LABEL}</h1>',
+            ),
+        ],
+    )
+
+
 def docs_json_page_ref(path: Path, docs_json_path: Path) -> str:
     relative = path.resolve().relative_to(docs_json_path.resolve().parent)
     if relative.suffix != ".mdx":
@@ -470,6 +499,7 @@ def main() -> int:
     if completed.returncode != 0:
         return completed.returncode
 
+    retitle_overview_page(Path(args.output_dir).resolve() / "index.mdx")
     sync_output_tree(
         source_dir=Path(args.output_dir).resolve(),
         target_dir=Path(args.legacy_output_dir).resolve(),
@@ -495,12 +525,6 @@ def main() -> int:
             output_dir=Path(args.legacy_output_dir).resolve(),
             docs_json_path=Path(args.docs_json).resolve(),
             group_label=reference_nav.PROTOBUF_GROUP,
-            extra_page_refs=[
-                generated_reference_nav.docs_json_page_ref(
-                    Path(args.output_dir).resolve() / "index.mdx",
-                    Path(args.docs_json).resolve(),
-                )
-            ],
         ),
     )
     return 0
