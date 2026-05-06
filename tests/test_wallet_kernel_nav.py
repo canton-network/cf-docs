@@ -30,10 +30,28 @@ def write_mdx(path: Path, title: str) -> None:
 
 
 def test_openrpc_nav_uses_wallet_gateway_section_shape(tmp_path: Path) -> None:
-    generated_reference_nav = load_script("generated_reference_nav")
+    generate_wallet_gateway_openrpc_reference = load_script("generate_wallet_gateway_openrpc_reference")
     docs_json = tmp_path / "docs-main" / "docs.json"
     docs_json.parent.mkdir(parents=True)
-    docs_json.write_text("{}", encoding="utf-8")
+    docs_json.write_text(
+        json.dumps(
+            {
+                "navigation": {
+                    "dropdowns": [
+                        {
+                            "dropdown": "API Reference",
+                            "pages": [
+                                {"group": "TypeScript", "pages": []},
+                                {"group": "Wallet Kernel SDK", "pages": ["old-wallet"]},
+                                {"group": "Splice APIs", "pages": []},
+                            ],
+                        }
+                    ]
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
     output_dir = docs_json.parent / "reference" / "wallet-gateway-json-rpc"
 
     write_mdx(output_dir / "index.mdx", "Wallet Gateway")
@@ -51,65 +69,96 @@ def test_openrpc_nav_uses_wallet_gateway_section_shape(tmp_path: Path) -> None:
     write_mdx(output_dir / "operations" / "signing-api" / "details.mdx", "Details and history")
     write_mdx(output_dir / "operations" / "details.mdx", "Details and history")
 
+    generate_wallet_gateway_openrpc_reference.update_docs_navigation(
+        docs_json_path=docs_json,
+        dropdown_label="API Reference",
+        output_dir=output_dir,
+        spec_entries=[
+            {"spec_id": "dapp-api"},
+            {"spec_id": "dapp-remote-api"},
+            {"spec_id": "user-api"},
+            {"spec_id": "signing-api"},
+        ],
+    )
+    docs = json.loads(docs_json.read_text(encoding="utf-8"))
+    pages = docs["navigation"]["dropdowns"][0]["pages"]
+
+    assert pages == [
+        {"group": "TypeScript", "pages": []},
+        {
+            "group": "dApp API",
+            "pages": [
+                {
+                    "group": "Sync dApp API",
+                    "pages": [
+                        "reference/wallet-gateway-json-rpc/specs/dapp-api",
+                        "reference/wallet-gateway-json-rpc/operations/dapp-api/connect",
+                        "reference/wallet-gateway-json-rpc/operations/dapp-api/details",
+                    ],
+                },
+                {
+                    "group": "Async dApp API",
+                    "pages": [
+                        "reference/wallet-gateway-json-rpc/specs/dapp-remote-api",
+                        "reference/wallet-gateway-json-rpc/operations/dapp-remote-api/connect",
+                        "reference/wallet-gateway-json-rpc/operations/dapp-remote-api/details",
+                    ],
+                },
+            ],
+        },
+        {
+            "group": "Wallet Gateway",
+            "pages": [
+                {
+                    "group": "User API",
+                    "pages": [
+                        "reference/wallet-gateway-json-rpc/specs/user-api",
+                        "reference/wallet-gateway-json-rpc/operations/user-api/createWallet",
+                        "reference/wallet-gateway-json-rpc/operations/user-api/details",
+                    ],
+                },
+                {
+                    "group": "Signing API",
+                    "pages": [
+                        "reference/wallet-gateway-json-rpc/specs/signing-api",
+                        "reference/wallet-gateway-json-rpc/operations/signing-api/signTransaction",
+                        "reference/wallet-gateway-json-rpc/operations/signing-api/details",
+                    ],
+                },
+                "reference/wallet-gateway-json-rpc/operations/details",
+            ],
+        },
+        {"group": "Splice APIs", "pages": []},
+    ]
+
+
+def test_openrpc_nav_group_helper_keeps_spec_pages_routable(tmp_path: Path) -> None:
+    generated_reference_nav = load_script("generated_reference_nav")
+    docs_json = tmp_path / "docs-main" / "docs.json"
+    docs_json.parent.mkdir(parents=True)
+    docs_json.write_text("{}", encoding="utf-8")
+    output_dir = docs_json.parent / "reference" / "wallet-gateway-json-rpc"
+
+    write_mdx(output_dir / "specs" / "dapp-api.mdx", "Sync dApp API")
+    write_mdx(output_dir / "operations" / "dapp-api" / "connect.mdx", "connect")
+
     group = generated_reference_nav.build_openrpc_nav_group(
         output_dir=output_dir,
         docs_json_path=docs_json,
-        group_label="Wallet Gateway",
-        spec_ids=["dapp-api", "dapp-remote-api", "user-api", "signing-api"],
-        spec_group_sections={
-            "dapp-api": "dApp API",
-            "dapp-remote-api": "dApp API",
-            "user-api": "Wallet Gateway",
-            "signing-api": "Wallet Gateway",
-        },
+        group_label="dApp API",
+        spec_ids=["dapp-api"],
     )
 
     assert group == {
-        "group": "Wallet Gateway",
+        "group": "dApp API",
         "pages": [
             {
-                "group": "dApp API",
+                "group": "Sync dApp API",
                 "pages": [
-                    {
-                        "group": "Sync dApp API",
-                        "pages": [
-                            "reference/wallet-gateway-json-rpc/specs/dapp-api",
-                            "reference/wallet-gateway-json-rpc/operations/dapp-api/connect",
-                            "reference/wallet-gateway-json-rpc/operations/dapp-api/details",
-                        ],
-                    },
-                    {
-                        "group": "Async dApp API",
-                        "pages": [
-                            "reference/wallet-gateway-json-rpc/specs/dapp-remote-api",
-                            "reference/wallet-gateway-json-rpc/operations/dapp-remote-api/connect",
-                            "reference/wallet-gateway-json-rpc/operations/dapp-remote-api/details",
-                        ],
-                    },
+                    "reference/wallet-gateway-json-rpc/specs/dapp-api",
+                    "reference/wallet-gateway-json-rpc/operations/dapp-api/connect",
                 ],
             },
-            {
-                "group": "Wallet Gateway",
-                "pages": [
-                    {
-                        "group": "User API",
-                        "pages": [
-                            "reference/wallet-gateway-json-rpc/specs/user-api",
-                            "reference/wallet-gateway-json-rpc/operations/user-api/createWallet",
-                            "reference/wallet-gateway-json-rpc/operations/user-api/details",
-                        ],
-                    },
-                    {
-                        "group": "Signing API",
-                        "pages": [
-                            "reference/wallet-gateway-json-rpc/specs/signing-api",
-                            "reference/wallet-gateway-json-rpc/operations/signing-api/signTransaction",
-                            "reference/wallet-gateway-json-rpc/operations/signing-api/details",
-                        ],
-                    },
-                ],
-            },
-            "reference/wallet-gateway-json-rpc/operations/details",
         ],
     }
 
