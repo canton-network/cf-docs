@@ -32,7 +32,7 @@ LEGACY_PAGE_REFS = {
 
 @dataclass(frozen=True)
 class NavSlice:
-    kind: Literal["ledger_child", "top_group", "nested_group"]
+    kind: Literal["ledger_child", "top_group", "top_groups", "nested_group"]
     labels: tuple[str, ...]
 
 
@@ -78,7 +78,7 @@ SCRIPT_JOBS = [
     ),
     ScriptJob(
         script_path=REPO_ROOT / "scripts" / "generate_wallet_gateway_openrpc_reference.py",
-        nav_slice=NavSlice("top_group", ("Wallet Kernel",)),
+        nav_slice=NavSlice("top_groups", ("dApp API", "Wallet Gateway")),
     ),
     ScriptJob(
         script_path=REPO_ROOT / "scripts" / "generate_splice_mintlify_openapi.py",
@@ -174,19 +174,35 @@ def group_pages(group: dict[str, Any], *, source_path: Path) -> list[Any]:
     return pages
 
 
-def replace_group(items: list[Any], group: dict[str, Any]) -> None:
+def top_group_aliases(label: str) -> set[str]:
+    for canonical_label, aliases in TOP_GROUP_ALIAS_SETS:
+        if label == canonical_label or label in aliases:
+            return aliases
+    return {label}
+
+
+def replace_group(items: list[Any], group: dict[str, Any], *, aliases: set[str] | None = None) -> None:
     label = group.get("group")
     if not isinstance(label, str) or not label:
         raise ValueError(f"Expected group label on item: {group}")
-    for index, item in enumerate(items):
-        if isinstance(item, dict) and item.get("group") == label:
-            items[index] = copy.deepcopy(group)
-            return
-    items.append(copy.deepcopy(group))
+    labels = aliases or {label}
+    insert_at: int | None = None
+    kept: list[Any] = []
+    for item in items:
+        if isinstance(item, dict) and item.get("group") in labels:
+            if insert_at is None:
+                insert_at = len(kept)
+            continue
+        kept.append(item)
+    if insert_at is None:
+        kept.append(copy.deepcopy(group))
+    else:
+        kept.insert(insert_at, copy.deepcopy(group))
+    items[:] = kept
 
 
 TOP_GROUP_ALIAS_SETS = [
-    ("Wallet Kernel", {"Wallet Kernel", "Wallet Kernel SDK", "Wallet Gateway JSON-RPC"}),
+    ("Wallet Gateway", {"Wallet Gateway", "Wallet Kernel", "Wallet Kernel SDK", "Wallet Gateway JSON-RPC"}),
 ]
 
 
@@ -251,7 +267,29 @@ def merge_nav_slice(*, final_docs: dict[str, Any], scratch_docs: dict[str, Any],
         replace_group(
             final_pages,
             require_group(scratch_pages, nav_slice.labels[0], source_path=scratch_path),
+            aliases=top_group_aliases(nav_slice.labels[0]),
         )
+        return
+
+    if nav_slice.kind == "top_groups":
+        groups = [require_group(scratch_pages, label, source_path=scratch_path) for label in nav_slice.labels]
+        aliases = set().union(*(top_group_aliases(label) for label in nav_slice.labels))
+        insert_at = next(
+            (
+                index
+                for index, item in enumerate(final_pages)
+                if isinstance(item, dict) and item.get("group") in aliases
+            ),
+            len(final_pages),
+        )
+        kept_pages = [
+            item
+            for item in final_pages
+            if not (isinstance(item, dict) and item.get("group") in aliases)
+        ]
+        for offset, group in enumerate(groups):
+            kept_pages.insert(min(insert_at + offset, len(kept_pages)), copy.deepcopy(group))
+        final_pages[:] = kept_pages
         return
 
     if nav_slice.kind == "nested_group":

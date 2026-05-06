@@ -22,11 +22,17 @@ DEFAULT_MANIFEST = REPO_ROOT / ".internal" / "generated" / "x2mdx" / "wallet-gat
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "docs-main" / "reference" / "wallet-gateway-json-rpc"
 DEFAULT_DOCS_JSON = REPO_ROOT / "docs-main" / "docs.json"
 DEFAULT_REPO_DIR = DEFAULT_CACHE_DIR / "repos" / "splice-wallet-kernel"
-GROUP_LABEL = "Wallet Kernel"
-LEGACY_GROUP_LABELS = {"Wallet Gateway JSON-RPC", "Wallet Kernel SDK"}
+GROUP_LABEL = "Wallet Gateway"
+LEGACY_GROUP_LABELS = {"Wallet Kernel", "Wallet Gateway JSON-RPC", "Wallet Kernel SDK"}
 DETAILS_LABEL = "Details and history"
 SPEC_DIR_NAME = "specs"
 DEFAULT_RELEASE_REPO = "hyperledger-labs/splice-wallet-kernel"
+NAV_SECTION_BY_SPEC_ID = {
+    "dapp-api": "dApp API",
+    "dapp-remote-api": "dApp API",
+    "user-api": "Wallet Gateway",
+    "signing-api": "Wallet Gateway",
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -277,7 +283,7 @@ def update_docs_navigation(
         docs_json_page_ref(output_dir / "operations" / slugify(str(spec["spec_id"])) / "details.mdx", docs_json_path)
         for spec in spec_entries
     )
-    group_labels = {GROUP_LABEL, *LEGACY_GROUP_LABELS}
+    group_labels = {"dApp API", GROUP_LABEL, *LEGACY_GROUP_LABELS}
     insert_at = next(
         (
             index
@@ -287,14 +293,27 @@ def update_docs_navigation(
         len(pages),
     )
     pruned_pages = prune_nav_items(pages, page_refs=refs, group_labels=group_labels)
-    group = generated_reference_nav.build_openrpc_nav_group(
+    generated_group = generated_reference_nav.build_openrpc_nav_group(
         output_dir=output_dir,
         docs_json_path=docs_json_path,
         group_label=GROUP_LABEL,
         spec_ids=[str(spec["spec_id"]) for spec in spec_entries],
         spec_dir_name=SPEC_DIR_NAME,
+        spec_group_sections=NAV_SECTION_BY_SPEC_ID,
     )
-    pruned_pages.insert(min(insert_at, len(pruned_pages)), group)
+    section_groups = [
+        item
+        for item in generated_group["pages"]
+        if isinstance(item, dict) and item.get("group") in {"dApp API", GROUP_LABEL}
+    ]
+    details_ref = docs_json_page_ref(output_dir / "operations" / "details.mdx", docs_json_path)
+    gateway_group = next((item for item in section_groups if item.get("group") == GROUP_LABEL), None)
+    if gateway_group is not None:
+        gateway_pages = gateway_group.get("pages")
+        if isinstance(gateway_pages, list) and details_ref not in gateway_pages:
+            gateway_pages.append(details_ref)
+    for offset, group in enumerate(section_groups):
+        pruned_pages.insert(min(insert_at + offset, len(pruned_pages)), group)
     dropdown["pages"] = pruned_pages
     docs_json_path.write_text(json.dumps(docs, indent=2) + "\n", encoding="utf-8")
     print(f"Updated docs navigation: {docs_json_path}")
