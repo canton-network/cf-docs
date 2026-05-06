@@ -132,6 +132,7 @@ def build_protobuf_nav_group(
     docs_json_path: Path,
     group_label: str,
     extra_page_refs: list[str] | None = None,
+    include_details_page: bool = True,
 ) -> dict[str, Any]:
     details_page_ref = docs_json_page_ref(output_dir / "index.mdx", docs_json_path)
     pages: list[Any] = []
@@ -163,7 +164,8 @@ def build_protobuf_nav_group(
         package_groups.append({"group": mdx_title(package_page), "pages": package_pages})
     if package_groups:
         pages.extend(package_groups)
-    for page_ref in [*(extra_page_refs or []), details_page_ref]:
+    details_refs = [details_page_ref] if include_details_page else []
+    for page_ref in [*(extra_page_refs or []), *details_refs]:
         if page_ref not in pages:
             pages.append(page_ref)
     return {"group": group_label, "pages": pages}

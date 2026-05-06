@@ -39,22 +39,22 @@ class NavSlice:
 @dataclass(frozen=True)
 class ScriptJob:
     script_path: Path
-    nav_slice: NavSlice
+    nav_slices: tuple[NavSlice, ...]
     extra_args: tuple[str, ...] = ()
 
 
 SCRIPT_JOBS = [
     ScriptJob(
         script_path=REPO_ROOT / "scripts" / "generate_json_api_reference.py",
-        nav_slice=NavSlice("ledger_child", (reference_nav.OPENAPI_GROUP,)),
+        nav_slices=(NavSlice("ledger_child", (reference_nav.OPENAPI_GROUP,)),),
     ),
     ScriptJob(
         script_path=REPO_ROOT / "scripts" / "generate_json_api_asyncapi_reference.py",
-        nav_slice=NavSlice("ledger_child", (reference_nav.ASYNCAPI_GROUP,)),
+        nav_slices=(NavSlice("ledger_child", (reference_nav.ASYNCAPI_GROUP,)),),
     ),
     ScriptJob(
         script_path=REPO_ROOT / "scripts" / "generate_grpc_ledger_api_reference.py",
-        nav_slice=NavSlice("ledger_child", (reference_nav.GRPC_GROUP,)),
+        nav_slices=(NavSlice("ledger_child", (reference_nav.GRPC_GROUP,)),),
         extra_args=(
             # The gRPC and protobuf wrappers both default to the same protobuf-history
             # cache tree, so parallel fanout gives the gRPC wrapper its own cache root.
@@ -66,27 +66,30 @@ SCRIPT_JOBS = [
     ),
     ScriptJob(
         script_path=REPO_ROOT / "scripts" / "generate_ledger_bindings_api_reference.py",
-        nav_slice=NavSlice("ledger_child", (reference_nav.BINDINGS_GROUP,)),
+        nav_slices=(NavSlice("ledger_child", (reference_nav.BINDINGS_GROUP,)),),
     ),
     ScriptJob(
         script_path=REPO_ROOT / "scripts" / "generate_daml_standard_library_reference.py",
-        nav_slice=NavSlice("top_group", ("Daml Standard Library",)),
+        nav_slices=(NavSlice("top_group", ("Daml Standard Library",)),),
     ),
     ScriptJob(
         script_path=REPO_ROOT / "scripts" / "generate_canton_protobuf_history.py",
-        nav_slice=NavSlice("ledger_child", (reference_nav.PROTOBUF_GROUP,)),
+        nav_slices=(
+            NavSlice("ledger_child", (reference_nav.PROTOBUF_GROUP,)),
+            NavSlice("top_group", (reference_nav.ADMIN_API_PARENT_GROUP,)),
+        ),
     ),
     ScriptJob(
         script_path=REPO_ROOT / "scripts" / "generate_wallet_gateway_openrpc_reference.py",
-        nav_slice=NavSlice("top_group", ("Wallet Kernel",)),
+        nav_slices=(NavSlice("top_group", ("Wallet Kernel",)),),
     ),
     ScriptJob(
         script_path=REPO_ROOT / "scripts" / "generate_splice_mintlify_openapi.py",
-        nav_slice=NavSlice("top_group", ("Splice APIs",)),
+        nav_slices=(NavSlice("top_group", ("Splice APIs",)),),
     ),
     ScriptJob(
         script_path=REPO_ROOT / "scripts" / "generate_typescript_bindings_reference.py",
-        nav_slice=NavSlice("top_group", ("TypeScript",)),
+        nav_slices=(NavSlice("top_group", ("TypeScript",)),),
     ),
 ]
 
@@ -285,12 +288,14 @@ def cleanup_scratch_docs_json_files() -> None:
 def consolidate_docs_json() -> None:
     final_docs = load_json(DOCS_JSON_PATH)
     for job in SCRIPT_JOBS:
-        merge_nav_slice(
-            final_docs=final_docs,
-            scratch_docs=load_json(scratch_docs_json_path(job)),
-            nav_slice=job.nav_slice,
-            scratch_path=scratch_docs_json_path(job),
-        )
+        scratch_docs = load_json(scratch_docs_json_path(job))
+        for nav_slice in job.nav_slices:
+            merge_nav_slice(
+                final_docs=final_docs,
+                scratch_docs=scratch_docs,
+                nav_slice=nav_slice,
+                scratch_path=scratch_docs_json_path(job),
+            )
 
     cleaned = prune_page_refs(final_docs, LEGACY_PAGE_REFS)
     if not isinstance(cleaned, dict):
