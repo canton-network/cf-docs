@@ -28,7 +28,7 @@ def write_json(path: Path, payload: object) -> None:
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
 
-def test_splice_openapi_nav_can_flatten_configured_family(tmp_path: Path) -> None:
+def test_splice_openapi_nav_emits_explicit_pages_for_every_spec(tmp_path: Path) -> None:
     module = load_script_module("generate_splice_mintlify_openapi.py")
     docs_json = tmp_path / "docs-main" / "docs.json"
     write_json(
@@ -67,14 +67,13 @@ components: {}
         "enabled_nav_specs": ["token.yaml"],
         "families": [
             {
-                "group": "Token Standard APIs",
-                "flatten_openapi_nav": True,
+                "group": "Scan APIs",
                 "specs": [
                     {
                         "filename": "token.yaml",
-                        "nav_label": "Token Metadata Service",
+                        "nav_label": "Scan API",
                         "source": "openapi/splice/token-standard/token.yaml",
-                        "directory": "reference/splice-token-metadata-service",
+                        "directory": "reference/splice-scan-api",
                     }
                 ],
             }
@@ -90,13 +89,13 @@ components: {}
     docs = json.loads(docs_json.read_text(encoding="utf-8"))
     api_pages = docs["navigation"]["dropdowns"][0]["pages"]
     splice_group = api_pages[1]
-    token_group = splice_group["pages"][0]
-    token_metadata = token_group["pages"][0]
-    assert token_metadata == {
-        "group": "Token Metadata Service",
+    scan_group = splice_group["pages"][0]
+    scan_api = scan_group["pages"][0]
+    assert scan_api == {
+        "group": "Scan API",
         "openapi": {
             "source": "openapi/splice/token-standard/token.yaml",
-            "directory": "reference/splice-token-metadata-service",
+            "directory": "reference/splice-scan-api",
         },
         "pages": [
             "GET /registry/metadata",

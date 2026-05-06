@@ -192,10 +192,6 @@ def normalized_families(source_config: dict[str, Any]) -> list[dict[str, Any]]:
             raise ValueError("Each family must define a non-empty group")
         if not isinstance(specs, list) or not specs:
             raise ValueError(f"Family '{group}' must define a non-empty specs list")
-        flatten_family_nav = family.get("flatten_openapi_nav", False)
-        if not isinstance(flatten_family_nav, bool):
-            raise ValueError(f"Family '{group}' flatten_openapi_nav must be a boolean when set")
-
         normalized_specs: list[dict[str, Any]] = []
         for spec in specs:
             if not isinstance(spec, dict):
@@ -204,11 +200,6 @@ def normalized_families(source_config: dict[str, Any]) -> list[dict[str, Any]]:
             nav_label = spec.get("nav_label")
             source_ref = spec.get("source")
             directory = spec.get("directory")
-            flatten_spec_nav = spec.get("flatten_openapi_nav", flatten_family_nav)
-            if not isinstance(flatten_spec_nav, bool):
-                raise ValueError(
-                    f"Spec '{filename}' in family '{group}' flatten_openapi_nav must be a boolean when set"
-                )
             if not all(isinstance(item, str) and item for item in (filename, nav_label, source_ref, directory)):
                 raise ValueError(
                     f"Specs for family '{group}' must define non-empty filename, nav_label, source, and directory"
@@ -219,7 +210,6 @@ def normalized_families(source_config: dict[str, Any]) -> list[dict[str, Any]]:
                     "nav_label": nav_label,
                     "source": source_ref,
                     "directory": directory,
-                    "flatten_openapi_nav": flatten_spec_nav,
                 }
             )
         normalized.append({"group": group, "specs": normalized_specs})
@@ -432,19 +422,18 @@ def openapi_operation_page_refs(spec: dict[str, Any]) -> list[str]:
 
 
 def build_splice_openapi_nav_entry(*, docs_root: Path, spec: dict[str, Any]) -> dict[str, Any]:
+    openapi_path = docs_root / spec["source"]
+    payload = yaml.safe_load(openapi_path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError(f"Expected OpenAPI spec to parse as an object: {openapi_path}")
     entry: dict[str, Any] = {
         "group": spec["nav_label"],
         "openapi": {
             "source": spec["source"],
             "directory": spec["directory"],
         },
+        "pages": openapi_operation_page_refs(payload),
     }
-    if spec.get("flatten_openapi_nav"):
-        openapi_path = docs_root / spec["source"]
-        payload = yaml.safe_load(openapi_path.read_text(encoding="utf-8"))
-        if not isinstance(payload, dict):
-            raise ValueError(f"Expected OpenAPI spec to parse as an object: {openapi_path}")
-        entry["pages"] = openapi_operation_page_refs(payload)
     return entry
 
 

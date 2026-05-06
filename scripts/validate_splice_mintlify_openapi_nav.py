@@ -74,13 +74,10 @@ def expected_openapi_specs(source_config: dict[str, Any]) -> list[dict[str, Any]
             raise ValueError("Each source config family must be an object")
         family_group = family.get("group")
         specs = family.get("specs")
-        flatten_family_nav = family.get("flatten_openapi_nav", False)
         if not isinstance(family_group, str) or not family_group:
             raise ValueError("Each source config family must define group")
         if not isinstance(specs, list):
             raise ValueError("Each source config family must define specs")
-        if not isinstance(flatten_family_nav, bool):
-            raise ValueError(f"Family '{family_group}' flatten_openapi_nav must be a boolean when set")
         for spec in specs:
             if not isinstance(spec, dict):
                 raise ValueError("Each source config spec must be an object")
@@ -88,13 +85,8 @@ def expected_openapi_specs(source_config: dict[str, Any]) -> list[dict[str, Any]
             nav_label = spec.get("nav_label")
             source = spec.get("source")
             directory = spec.get("directory")
-            flatten_spec_nav = spec.get("flatten_openapi_nav", flatten_family_nav)
             if not all(isinstance(item, str) and item for item in (filename, nav_label, source, directory)):
                 raise ValueError("Each source config spec must define filename, nav_label, source, and directory")
-            if not isinstance(flatten_spec_nav, bool):
-                raise ValueError(
-                    f"Spec '{filename}' in family '{family_group}' flatten_openapi_nav must be a boolean when set"
-                )
             if selected is None or filename in selected:
                 entries.append(
                     {
@@ -103,7 +95,6 @@ def expected_openapi_specs(source_config: dict[str, Any]) -> list[dict[str, Any]
                         "nav_label": nav_label,
                         "source": source,
                         "directory": directory,
-                        "flatten_openapi_nav": flatten_spec_nav,
                     }
                 )
     return entries
@@ -191,7 +182,7 @@ def validate_openapi_operation_summaries(
         )
 
 
-def validate_flattened_openapi_nav(
+def validate_explicit_openapi_nav_pages(
     *,
     docs_json_path: Path,
     top_group: dict[str, Any],
@@ -203,24 +194,22 @@ def validate_flattened_openapi_nav(
         raise ValueError("Configured Splice OpenAPI top-level group must expose pages")
 
     for spec in expected_specs:
-        if not spec["flatten_openapi_nav"]:
-            continue
         family_group = find_group(top_group_pages, spec["family_group"])
         if family_group is None:
-            raise ValueError(f"Flattened Splice OpenAPI family is missing from nav: {spec['family_group']}")
+            raise ValueError(f"Splice OpenAPI family is missing from nav: {spec['family_group']}")
         family_pages = family_group.get("pages")
         if not isinstance(family_pages, list):
-            raise ValueError(f"Flattened Splice OpenAPI family must expose pages: {spec['family_group']}")
+            raise ValueError(f"Splice OpenAPI family must expose pages: {spec['family_group']}")
         spec_group = find_group(family_pages, spec["nav_label"])
         if spec_group is None:
-            raise ValueError(f"Flattened Splice OpenAPI spec is missing from nav: {spec['nav_label']}")
+            raise ValueError(f"Splice OpenAPI spec is missing from nav: {spec['nav_label']}")
         actual_pages = spec_group.get("pages")
         if not isinstance(actual_pages, list):
-            raise ValueError(f"Flattened Splice OpenAPI spec must expose explicit pages: {spec['nav_label']}")
+            raise ValueError(f"Splice OpenAPI spec must expose explicit pages: {spec['nav_label']}")
         expected_pages = openapi_operation_page_refs(docs_root / spec["source"])
         if actual_pages != expected_pages:
             raise ValueError(
-                f"Flattened Splice OpenAPI nav pages differ for {spec['nav_label']}:\n"
+                f"Splice OpenAPI nav pages differ for {spec['nav_label']}:\n"
                 f"expected={expected_pages}\nactual={actual_pages}"
             )
 
@@ -249,7 +238,7 @@ def validate_splice_nav(*, source_config_path: Path = DEFAULT_SOURCE_CONFIG, doc
         details = "\n".join(f"- source={source} directory={directory}" for source, directory in missing)
         raise ValueError(f"Splice OpenAPI nav is missing configured entries:\n{details}")
     validate_openapi_operation_summaries(docs_json_path=docs_json_path, entries=expected_entries)
-    validate_flattened_openapi_nav(
+    validate_explicit_openapi_nav_pages(
         docs_json_path=docs_json_path,
         top_group=top_group,
         expected_specs=expected_specs,
