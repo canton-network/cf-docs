@@ -305,7 +305,7 @@ def build_method_page(
         back_link=page_ref(page_path, spec_path, output_dir=output_dir, link_prefix=link_prefix),
         back_label="Back to spec",
         breadcrumbs=[
-            ReferenceBreadcrumb("Wallet Gateway"),
+            ReferenceBreadcrumb("Wallet Gateway JSON-RPC"),
             ReferenceBreadcrumb(spec.display_name, page_ref(page_path, spec_path, output_dir=output_dir, link_prefix=link_prefix)),
             ReferenceBreadcrumb(method.method),
         ],
