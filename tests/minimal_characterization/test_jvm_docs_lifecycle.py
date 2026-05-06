@@ -303,6 +303,8 @@ class JvmDocsMinimalLifecycleTests(unittest.TestCase):
         assert_contains_all(native_deprecated_text, ["## NativeDeprecated - deprecated"])
 
     def test_cli_renders_replacement_metadata(self) -> None:
+        # TODO(https://github.com/digital-asset/docs/issues/341): define the
+        # JVM status-manifest contract for successor-side replacement metadata.
         site_root = self._render_pages(include_replacement=True, relative_site_root="site-replacements")
 
         assert_text_tree_matches_fixture(site_root, "jvm_docs/replacements")

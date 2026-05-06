@@ -188,6 +188,8 @@ class DamlJsonMinimalLifecycleTests(unittest.TestCase):
         assert_contains_none(alpha, ["WarnData", "ADTDoc", "RecordC", "TypeFun"])
 
     def test_cli_renders_explicit_lifecycle_states(self) -> None:
+        # TODO(https://github.com/digital-asset/docs/issues/341): define the
+        # Daml JSON source convention for beta and stable lifecycle states.
         manifest_path = self._write_beta_stable_manifest()
         output_dir = self.root / "out" / "daml-json-lifecycle"
 
