@@ -32,7 +32,7 @@ LEGACY_PAGE_REFS = {
 
 @dataclass(frozen=True)
 class NavSlice:
-    kind: Literal["ledger_child", "top_group", "nested_group"]
+    kind: Literal["ledger_child", "top_group", "top_groups", "nested_group"]
     labels: tuple[str, ...]
 
 
@@ -81,7 +81,7 @@ SCRIPT_JOBS = [
     ),
     ScriptJob(
         script_path=REPO_ROOT / "scripts" / "generate_wallet_gateway_openrpc_reference.py",
-        nav_slices=(NavSlice("top_group", ("Wallet Kernel",)),),
+        nav_slices=(NavSlice("top_groups", ("dApp API", "Wallet Gateway")),),
     ),
     ScriptJob(
         script_path=REPO_ROOT / "scripts" / "generate_splice_mintlify_openapi.py",
@@ -177,20 +177,59 @@ def group_pages(group: dict[str, Any], *, source_path: Path) -> list[Any]:
     return pages
 
 
-def replace_group(items: list[Any], group: dict[str, Any]) -> None:
+def replace_group(items: list[Any], group: dict[str, Any], *, aliases: set[str] | None = None) -> None:
     label = group.get("group")
     if not isinstance(label, str) or not label:
         raise ValueError(f"Expected group label on item: {group}")
+    matching_labels = {label, *(aliases or set())}
+    replacement_index: int | None = None
+    filtered_items: list[Any] = []
     for index, item in enumerate(items):
-        if isinstance(item, dict) and item.get("group") == label:
-            items[index] = copy.deepcopy(group)
-            return
-    items.append(copy.deepcopy(group))
+        if isinstance(item, dict) and item.get("group") in matching_labels:
+            if replacement_index is None:
+                replacement_index = len(filtered_items)
+            continue
+        filtered_items.append(item)
+    if replacement_index is None:
+        filtered_items.append(copy.deepcopy(group))
+    else:
+        filtered_items.insert(replacement_index, copy.deepcopy(group))
+    items[:] = filtered_items
+
+
+def replace_groups(items: list[Any], groups: list[dict[str, Any]]) -> None:
+    if not groups:
+        return
+    matching_labels: set[str] = set()
+    for group in groups:
+        label = group.get("group")
+        if not isinstance(label, str) or not label:
+            raise ValueError(f"Expected group label on item: {group}")
+        matching_labels.update(top_group_aliases(label))
+    replacement_index: int | None = None
+    filtered_items: list[Any] = []
+    for item in items:
+        if isinstance(item, dict) and item.get("group") in matching_labels:
+            if replacement_index is None:
+                replacement_index = len(filtered_items)
+            continue
+        filtered_items.append(item)
+    insert_at = len(filtered_items) if replacement_index is None else replacement_index
+    for offset, group in enumerate(groups):
+        filtered_items.insert(insert_at + offset, copy.deepcopy(group))
+    items[:] = filtered_items
 
 
 TOP_GROUP_ALIAS_SETS = [
-    ("Wallet Kernel", {"Wallet Kernel", "Wallet Kernel SDK", "Wallet Gateway JSON-RPC"}),
+    ("Wallet Gateway", {"Wallet Gateway", "Wallet Kernel", "Wallet Kernel SDK", "Wallet Gateway JSON-RPC"}),
 ]
+
+
+def top_group_aliases(label: str) -> set[str]:
+    for canonical_label, aliases in TOP_GROUP_ALIAS_SETS:
+        if label == canonical_label:
+            return aliases
+    return {label}
 
 
 def assert_no_duplicate_top_group_aliases(docs: dict[str, Any]) -> None:
@@ -254,6 +293,14 @@ def merge_nav_slice(*, final_docs: dict[str, Any], scratch_docs: dict[str, Any],
         replace_group(
             final_pages,
             require_group(scratch_pages, nav_slice.labels[0], source_path=scratch_path),
+            aliases=top_group_aliases(nav_slice.labels[0]),
+        )
+        return
+
+    if nav_slice.kind == "top_groups":
+        replace_groups(
+            final_pages,
+            [require_group(scratch_pages, label, source_path=scratch_path) for label in nav_slice.labels],
         )
         return
 
