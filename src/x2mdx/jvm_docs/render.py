@@ -54,7 +54,10 @@ def page_path(root: Path, target: Path) -> str:
 
 def relative_page_link(from_path: Path, to_path: Path) -> str:
     relative = os.path.relpath(to_path.with_suffix(""), start=from_path.parent)
-    return Path(relative).as_posix()
+    link = Path(relative).as_posix()
+    if not link.startswith("."):
+        return f"./{link}"
+    return link
 
 
 def compute_output_root(overview_output: Path, details_dir: Path) -> Path:

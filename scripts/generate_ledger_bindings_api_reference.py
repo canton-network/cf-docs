@@ -857,7 +857,12 @@ def publish_rendered_pages(
         source_package_dir = render_details_dir / f"{artifact_slug}-packages"
         target_artifact_page = language_dir / "index.mdx"
 
-        overview_replacements.append((f"({render_details_dir.name}/{artifact_slug})", f"({LANGUAGE_DIRS[language]})"))
+        overview_replacements.extend(
+            [
+                (f"({render_details_dir.name}/{artifact_slug})", f"({LANGUAGE_DIRS[language]})"),
+                (f"(./{render_details_dir.name}/{artifact_slug})", f"(./{LANGUAGE_DIRS[language]})"),
+            ]
+        )
         copy_rewritten_page(
             source_artifact_page,
             target_artifact_page,
