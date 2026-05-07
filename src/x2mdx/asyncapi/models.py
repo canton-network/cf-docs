@@ -23,6 +23,8 @@ class AsyncApiChannelLifecycle:
     removed_version: str | None
     last_seen_in: str
     status: str
+    lifecycle_state: str | None
+    replaces: str | None
     latest: dict[str, Any]
 
 
