@@ -1,0 +1,51 @@
+{% import "shared/macros.md.j2" as shared %}
+{{ paragraph("Generated from published `" ~ report.package_name ~ "` TypeDoc snapshots.") }}
+
+{% call shared.standard_reference_layout(toc_rows=toc_rows, version_rows=version_change_summary_rows) %}
+{% for group in grouped_exports %}
+
+{{ heading(3, group.title) }}
+{% for export in group.exports %}
+
+{{ anchor(export.anchor) }}
+
+{{ heading(4, export.name) }}
+
+{{ bullet_list(export.lifecycle_bits) }}
+{{ shared.version_changes(export.change_rows) }}
+{% if export.signature %}
+{{ shared.detail_code_block("Signature", "ts", export.signature) }}
+{% endif %}
+{% if export.summary %}
+{{ paragraph(export.summary) }}
+{% endif %}
+{% if export.type_parameter_rows %}
+{{ shared.detail_table("Type Parameters", ["Name", "Constraint", "Default", "Description"], export.type_parameter_rows) }}
+{% endif %}
+{% if export.signature_docs %}
+{{ shared.detail_label("Call Signatures") }}
+{% for signature in export.signature_docs %}
+{% if export.signature_docs|length > 1 %}
+
+{{ paragraph("Overload " ~ loop.index ~ ":") }}
+{% endif %}
+
+{{ code_block("ts", signature.declaration) }}
+{% if signature.summary %}
+{{ paragraph(signature.summary) }}
+{% endif %}
+{% if signature.type_parameter_rows %}
+{{ table(["Type Parameter", "Constraint", "Default", "Description"], signature.type_parameter_rows) }}
+{% endif %}
+{% if signature.parameter_rows %}
+{{ table(["Parameter", "Type", "Required", "Description"], signature.parameter_rows) }}
+{% endif %}
+{{ paragraph("Returns: `" ~ signature.returns ~ "`") }}
+{% endfor %}
+{% endif %}
+{% if export.member_rows %}
+{{ shared.detail_table("Members", ["Member", "Type", "Description"], export.member_rows) }}
+{% endif %}
+{% endfor %}
+{% endfor %}
+{% endcall %}

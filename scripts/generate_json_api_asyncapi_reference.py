@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import html
 import json
 import os
+import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -35,9 +38,27 @@ DEFAULT_DOCS_JSON = REPO_ROOT / "docs-main" / "docs.json"
 DEFAULT_NAV_GROUP = "Ledger API Endpoints"
 DEFAULT_NAV_PAGE_ORDER = [
     "reference/json-api-reference",
-    "reference/json-api-asyncapi-reference/index",
+    "reference/json-api-asyncapi-reference/operations/details",
     "reference/json-api-asyncapi-reference",
 ]
+DETAILS_TITLE = "Details and history"
+CARD_LINK_RE = re.compile(
+    r'(?P<open><a class="x2mdx-ref-card" href="(?P<href>[^"]+)">)(?P<body>.*?)(?P<close>\n\s*</a>)',
+    flags=re.DOTALL,
+)
+CARD_HEAD_BADGES_RE = re.compile(
+    r'(?P<head><div class="x2mdx-ref-card-head">\s*<h3>.*?</h3>)(?P<badges>\s*<div class="x2mdx-ref-badges">.*?</div>\s*)(?P<tail>\s*</div>)',
+    flags=re.DOTALL,
+)
+CARD_SUMMARY_RE = re.compile(
+    r'(?P<summary>\s*<p class="x2mdx-ref-card-summary">.*?</p>)',
+    flags=re.DOTALL,
+)
+PANEL_TITLE_RE = re.compile(r'<div class="x2mdx-ref-panel-head">\s*<h3>(?P<title>[^<]+)</h3>', flags=re.DOTALL)
+OPERATION_TARGET_RE = re.compile(
+    r'<div class="x2mdx-ref-operation-bar">.*?<code>(?P<target>[^<]+)</code>',
+    flags=re.DOTALL,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -142,6 +163,142 @@ def docs_json_page_ref(path: Path, docs_json_path: Path) -> str:
     return relative.with_suffix("").as_posix()
 
 
+def replace_frontmatter_title(path: Path, title: str) -> None:
+    text = path.read_text(encoding="utf-8")
+    lines = text.splitlines(keepends=True)
+    if not lines or lines[0].strip() != "---":
+        return
+    for index in range(1, len(lines)):
+        if lines[index].strip() == "---":
+            break
+        if lines[index].startswith("title: "):
+            lines[index] = f'title: "{title}"\n'
+            path.write_text("".join(lines), encoding="utf-8")
+            return
+
+
+def action_card_summary(*, action_name: str, channel_slug: str, operation_page: Path) -> str:
+    text = operation_page.read_text(encoding="utf-8", errors="replace") if operation_page.exists() else ""
+    message_match = PANEL_TITLE_RE.search(text)
+    message_name = html.unescape(message_match.group("title")).strip() if message_match else ""
+    message_label = message_name or "messages"
+    target_match = OPERATION_TARGET_RE.search(text)
+    channel_name = html.unescape(target_match.group("target")).strip() if target_match else f"/{channel_slug}"
+    if action_name == "publish":
+        return f"Publish {message_label} messages from the client to {channel_name}."
+    if action_name == "subscribe":
+        return f"Receive {message_label} messages from {channel_name} on the subscription stream."
+    return f"{action_name.title()} {message_label} messages for {channel_name}."
+
+
+def move_card_badges_after_summary(card_html: str) -> str:
+    match = CARD_HEAD_BADGES_RE.search(card_html)
+    if match is None:
+        return card_html
+
+    badges = "\n" + match.group("badges").strip() + "\n"
+    card_html = f"{card_html[:match.start()]}{match.group('head')}\n    </div>{card_html[match.end():]}"
+    card_html = re.sub(r'(</div>)\s+(<p class="x2mdx-ref-card-summary">)', r"\1\n    \2", card_html, count=1)
+    summary_match = CARD_SUMMARY_RE.search(card_html)
+    if summary_match is None:
+        return card_html
+    return f"{card_html[:summary_match.end()]}{badges}{card_html[summary_match.end():]}"
+
+
+def normalize_card_markup(text: str, *, summaries_by_href: dict[str, str] | None = None) -> str:
+    summaries_by_href = summaries_by_href or {}
+
+    def replace_card(match: re.Match[str]) -> str:
+        card_html = f"{match.group('open')}{match.group('body')}{match.group('close')}"
+        summary = summaries_by_href.get(html.unescape(match.group("href")))
+        if summary is not None:
+            escaped_summary = html.escape(summary, quote=False)
+            card_html = CARD_SUMMARY_RE.sub(
+                f'\n    <p class="x2mdx-ref-card-summary">{escaped_summary}</p>',
+                card_html,
+                count=1,
+            )
+        return move_card_badges_after_summary(card_html)
+
+    return CARD_LINK_RE.sub(replace_card, text)
+
+
+def normalize_asyncapi_overview_details_page(path: Path) -> None:
+    if not path.exists():
+        return
+    text = path.read_text(encoding="utf-8")
+    text = re.sub(r'href="(?:\./)?channels/([^"]+)"', r'href="./\1/details"', text)
+    text = normalize_card_markup(text)
+    path.write_text(text, encoding="utf-8")
+
+
+def normalize_asyncapi_channel_details_page(path: Path, *, channel_slug: str) -> None:
+    if not path.exists():
+        return
+    text = path.read_text(encoding="utf-8")
+    text = text.replace('href="../index"', 'href="../../index"')
+    text = text.replace('href="../../index"', 'href="../details"')
+    text = re.sub(rf'href="\.\./operations/{re.escape(channel_slug)}/([^"]+)"', r'href="./\1"', text)
+
+    summaries_by_href: dict[str, str] = {}
+    for action_name in ("publish", "subscribe"):
+        operation_page = path.parent / f"{action_name}.mdx"
+        if operation_page.exists():
+            summaries_by_href[f"./{action_name}"] = action_card_summary(
+                action_name=action_name,
+                channel_slug=channel_slug,
+                operation_page=operation_page,
+            )
+
+    text = normalize_card_markup(text, summaries_by_href=summaries_by_href)
+    path.write_text(text, encoding="utf-8")
+
+
+def normalize_asyncapi_operation_page(path: Path, *, channel_slug: str) -> None:
+    if not path.exists():
+        return
+    text = path.read_text(encoding="utf-8")
+    text = text.replace(f'href="../../channels/{channel_slug}"', 'href="./details"')
+    text = text.replace('href="../../index"', 'href="../details"')
+    path.write_text(text, encoding="utf-8")
+
+
+def move_generated_file(source: Path, destination: Path) -> None:
+    if not source.exists():
+        return
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    if destination.exists():
+        destination.unlink()
+    source.rename(destination)
+
+
+def normalize_asyncapi_output_tree(*, output_dir: Path) -> None:
+    operations_dir = output_dir / "operations"
+    operations_dir.mkdir(parents=True, exist_ok=True)
+
+    overview_details = operations_dir / "details.mdx"
+    move_generated_file(output_dir / "index.mdx", overview_details)
+    if overview_details.exists():
+        replace_frontmatter_title(overview_details, DETAILS_TITLE)
+        normalize_asyncapi_overview_details_page(overview_details)
+
+    channels_dir = output_dir / "channels"
+    if channels_dir.is_dir():
+        for channel_page in sorted(channels_dir.glob("*.mdx")):
+            channel_details = operations_dir / channel_page.stem / "details.mdx"
+            move_generated_file(channel_page, channel_details)
+            replace_frontmatter_title(channel_details, DETAILS_TITLE)
+            normalize_asyncapi_channel_details_page(channel_details, channel_slug=channel_page.stem)
+            for operation_page in sorted(channel_details.parent.glob("*.mdx")):
+                if operation_page.name == "details.mdx":
+                    continue
+                normalize_asyncapi_operation_page(operation_page, channel_slug=channel_page.stem)
+        try:
+            channels_dir.rmdir()
+        except OSError:
+            shutil.rmtree(channels_dir)
+
+
 def prune_page_ref(node: object, page_ref: str) -> object | None:
     if isinstance(node, list):
         items: list[object] = []
@@ -152,7 +309,8 @@ def prune_page_ref(node: object, page_ref: str) -> object | None:
         return items
     if isinstance(node, dict):
         updated = {key: prune_page_ref(value, page_ref) for key, value in node.items()}
-        if updated.get("group") and not updated.get("pages") and not updated.get("groups"):
+        has_content = any(updated.get(key) for key in ("pages", "groups", "openapi", "asyncapi"))
+        if updated.get("group") and not has_content:
             return None
         return updated
     if isinstance(node, str) and node == page_ref:
@@ -371,25 +529,15 @@ def main() -> int:
         publish_version=publish_version,
         versions=[entry["version"] for entry in selected_version_entries],
     )
+    docs_json_path = Path(args.docs_json).resolve()
+    baseline_docs = load_json(docs_json_path)
     print("Running:", " ".join(command))
     completed = subprocess.run(command, cwd=REPO_ROOT)
     if completed.returncode == 0:
-        docs_json_path = Path(args.docs_json).resolve()
         nav_groups = args.nav_group if args.nav_group is not None else [DEFAULT_NAV_GROUP]
-        cleanup_docs_ref(docs_json_path=docs_json_path, page_path=LEGACY_OUTPUT_FILE)
         if not args.output_file:
-            cleanup_docs_ref(docs_json_path=docs_json_path, page_path=DEFAULT_OUTPUT_FILE)
-        if nav_groups:
-            normalize_nav_group_into_pages(
-                docs_json_path=docs_json_path,
-                dropdown_label=args.nav_dropdown,
-                group_label=nav_groups[0],
-            )
-        reference_nav.regroup_ledger_api_nav(
-            docs_json_path=docs_json_path,
-            dropdown_label=args.nav_dropdown,
-        )
-        if not args.output_file:
+            normalize_asyncapi_output_tree(output_dir=Path(args.output_dir).resolve())
+            docs_json_path.write_text(json.dumps(baseline_docs, indent=2) + "\n", encoding="utf-8")
             generated_reference_nav.replace_group_in_dropdown(
                 docs_json_path=docs_json_path,
                 dropdown_label=args.nav_dropdown,
@@ -399,6 +547,19 @@ def main() -> int:
                     group_label=reference_nav.ASYNCAPI_GROUP,
                 ),
             )
+            cleanup_docs_ref(docs_json_path=docs_json_path, page_path=DEFAULT_OUTPUT_FILE)
+        else:
+            cleanup_docs_ref(docs_json_path=docs_json_path, page_path=LEGACY_OUTPUT_FILE)
+            if nav_groups:
+                normalize_nav_group_into_pages(
+                    docs_json_path=docs_json_path,
+                    dropdown_label=args.nav_dropdown,
+                    group_label=nav_groups[0],
+                )
+        reference_nav.regroup_ledger_api_nav(
+            docs_json_path=docs_json_path,
+            dropdown_label=args.nav_dropdown,
+        )
         remove_legacy_output(
             output_file=Path(args.output_file).resolve() if args.output_file else None,
             output_dir=Path(args.output_dir).resolve() if not args.output_file else None,

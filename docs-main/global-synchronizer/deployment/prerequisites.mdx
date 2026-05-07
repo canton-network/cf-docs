@@ -166,6 +166,90 @@ For a production Kubernetes deployment, plan for at least:
 - SSD-backed storage class
 - An external managed PostgreSQL instance (not in-cluster)
 
+## Database hosting options
+
+| Option | Pros | Cons |
+|--------|------|------|
+| **Managed (RDS, Cloud SQL, Azure Database)** | Automated backups, high availability | Cost, less operational control |
+| **Self-managed PostgreSQL** | Full control, cost-effective | Operational overhead |
+| **Container-local PostgreSQL** | Simple setup | Not suitable for production |
+
+## Scaling considerations
+
+### Factors affecting scale
+
+| Factor | Impact |
+|--------|--------|
+| **Number of hosted parties** | Database size, memory usage |
+| **Transaction volume** | CPU, network, database IOPS |
+| **Contract complexity** | CPU for Daml execution |
+| **Historical retention** | Storage requirements |
+
+### Scaling strategies
+
+| Strategy | When to use |
+|----------|-------------|
+| **Vertical scaling** | Increase node resources for moderate growth |
+| **Database optimization** | Tune PostgreSQL for workload |
+| **Pruning** | Remove old data to manage storage |
+| **PQS offloading** | Move read queries to a separate service |
+
+## Security requirements
+
+### Network security
+
+| Requirement | Details |
+|-------------|---------|
+| **TLS** | All API endpoints must use TLS 1.2+ |
+| **Firewall** | Whitelist-based access control |
+| **Network isolation** | Separate management and data planes |
+| **DDoS protection** | Recommended for public endpoints |
+
+### Key management
+
+| Key Type | Storage |
+|----------|---------|
+| **Party keys** | HSM recommended for production |
+| **TLS certificates** | Secure certificate management |
+| **Database credentials** | Secrets management (Vault, KMS) |
+
+### Access control
+
+| Access | Recommendation |
+|--------|----------------|
+| **Admin API** | VPN or private network only |
+| **SSH/Console** | Key-based, MFA enabled |
+| **Database** | Network-restricted, strong passwords |
+
+## Cloud-specific guidance
+
+### AWS
+
+| Service | Recommendation |
+|---------|----------------|
+| **Compute** | EC2 (m6i.xlarge+) or EKS |
+| **Database** | RDS PostgreSQL or Aurora |
+| **Storage** | gp3 EBS volumes |
+| **Networking** | VPC with NAT Gateway |
+
+### Google Cloud
+
+| Service | Recommendation |
+|---------|----------------|
+| **Compute** | GCE (n2-standard-4+) or GKE |
+| **Database** | Cloud SQL PostgreSQL |
+| **Storage** | SSD persistent disks |
+| **Networking** | VPC with Cloud NAT |
+
+### Azure
+
+| Service | Recommendation |
+|---------|----------------|
+| **Compute** | VM (Standard_D4s_v5+) or AKS |
+| **Database** | Azure Database for PostgreSQL |
+| **Storage** | Premium SSD |
+| **Networking** | VNet with NAT Gateway |
+
 ## Next steps
 
 <CardGroup cols={2}>
@@ -174,7 +258,7 @@ For a production Kubernetes deployment, plan for at least:
   Get onboarded with an SV sponsor.
 </Card>
 
-<Card title="Installation" icon="download" href="/global-synchronizer/deployment/installation">
+<Card title="Installation" icon="download" href="/global-synchronizer/deployment/deployment-options">
   Deploy your validator node.
 </Card>
 

@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import argparse
 import copy
+import html
 import json
 import os
+import re
 import shutil
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from docs_env import ensure_repo_direnv
@@ -25,7 +27,7 @@ from x2mdx.protobuf.lifecycle import (
     build_protobuf_history_report_from_sources,
     build_release_diffs,
 )
-from x2mdx.protobuf.render import build_pages
+from x2mdx.protobuf.render import build_pages, package_page_path, slugify_segment
 from x2mdx.protobuf.snapshots import load_protobuf_sources
 from x2mdx.render import write_pages
 
@@ -37,10 +39,12 @@ DEFAULT_MANIFEST = REPO_ROOT / ".internal" / "generated" / "x2mdx" / "grpc-ledge
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "docs-main" / "reference" / "grpc-ledger-api-reference"
 DEFAULT_DOCS_JSON = REPO_ROOT / "docs-main" / "docs.json"
 DEFAULT_REPO_DIR = DEFAULT_CACHE_DIR / "repos" / "canton"
-GROUP_LABEL = "gRPC Ledger API Reference"
-PACKAGE_GROUP_LABEL = "Packages"
+GROUP_LABEL = "gRPC API"
+LEGACY_GROUP_LABEL = "gRPC Ledger API Reference"
+DETAILS_LABEL = "Details and history"
 DEFAULT_INSERT_AFTER_GROUP = "Ledger API Endpoints"
 DEFAULT_SOURCE_NAME = "Canton Ledger API protobuf release bundles"
+LEDGER_API_PACKAGE_PREFIX = "com.daml.ledger.api."
 
 
 def parse_args() -> argparse.Namespace:
@@ -207,13 +211,49 @@ def replace_text(path: Path, replacements: list[tuple[str, str]]) -> None:
         path.write_text(updated, encoding="utf-8")
 
 
+def mdx_title(path: Path) -> str:
+    text = path.read_text(encoding="utf-8", errors="replace")
+    match = re.search(r'^title:\s*"([^"]+)"\s*$', text, flags=re.MULTILINE)
+    if match:
+        return match.group(1)
+    match = re.search(r"^title:\s*'([^']+)'\s*$", text, flags=re.MULTILINE)
+    if match:
+        return match.group(1)
+    return path.stem
+
+
+def service_name(path: Path) -> str:
+    text = path.read_text(encoding="utf-8", errors="replace")
+    match = re.search(r"<dt>Service</dt>\s*<dd>([^<]+)</dd>", text)
+    if match:
+        return match.group(1)
+    return path.parent.name
+
+
+def package_nav_label(package_name: str) -> str:
+    if package_name.startswith(LEDGER_API_PACKAGE_PREFIX):
+        return package_name.removeprefix(LEDGER_API_PACKAGE_PREFIX)
+    return package_name
+
+
+def package_sort_key(package_name: str) -> tuple[str, str]:
+    label = package_nav_label(package_name)
+    return (label.lower(), package_name.lower())
+
+
+def sort_report_packages(report: dict[str, Any]) -> None:
+    for release in report["releases"]:
+        release["snapshot"]["packages"].sort(key=lambda package: package_sort_key(str(package["package"])))
+
+
 def retitle_generated_pages(*, output_dir: Path) -> None:
     overview_path = output_dir / "index.mdx"
     if overview_path.exists():
         replace_text(
             overview_path,
             [
-                ("Canton Protobuf History", GROUP_LABEL),
+                ('title: "Canton Protobuf History"', f'title: "{DETAILS_LABEL}"'),
+                ('title: "Canton Protobuf Reference"', f'title: "{DETAILS_LABEL}"'),
                 (
                     'description: "Descriptor-backed protobuf API history grouped by package."',
                     'description: "Generated Ledger API gRPC reference grouped by package."',
@@ -222,6 +262,12 @@ def retitle_generated_pages(*, output_dir: Path) -> None:
                     "This page is generated from local descriptor-image snapshots with source info.",
                     "This page is generated from published Canton protobuf release bundles and filtered to the Ledger API gRPC packages.",
                 ),
+                ('<p class="x2mdx-ref-eyebrow">Protobuf Reference</p>', '<p class="x2mdx-ref-eyebrow">gRPC API</p>'),
+                ('<h1 class="x2mdx-ref-title">Canton Protobuf Reference</h1>', f'<h1 class="x2mdx-ref-title">{DETAILS_LABEL}</h1>'),
+                (
+                    '<span class="x2mdx-ref-badge x2mdx-ref-badge--protocol">Protobuf</span>',
+                    '<span class="x2mdx-ref-badge x2mdx-ref-badge--protocol">gRPC</span>',
+                ),
             ],
         )
     packages_dir = output_dir / "packages"
@@ -229,21 +275,239 @@ def retitle_generated_pages(*, output_dir: Path) -> None:
         replace_text(package_page, [("Canton Protobuf History", GROUP_LABEL)])
 
 
+def shorten_package_page_titles(*, output_dir: Path, report: dict[str, Any]) -> None:
+    for package_doc in report["latestSnapshot"]["packages"]:
+        package_name = str(package_doc["package"])
+        label = package_nav_label(package_name)
+        if label == package_name:
+            continue
+        package_page = package_page_path(output_dir, package_name)
+        if not package_page.exists():
+            package_page = output_dir / f"{slugify_segment(package_name)}.mdx"
+        if not package_page.exists():
+            continue
+        replace_text(
+            package_page,
+            [
+                (f'title: "{package_name}"', f'title: "{label}"'),
+                (f'<h1 class="x2mdx-ref-title">{html_text(package_name)}</h1>', f'<h1 class="x2mdx-ref-title">{html_text(label)}</h1>'),
+            ],
+        )
+
+
+def normalize_flattened_links_and_labels(*, output_dir: Path, report: dict[str, Any]) -> None:
+    package_labels = {
+        slugify_segment(str(package_doc["package"])): package_nav_label(str(package_doc["package"]))
+        for package_doc in report["latestSnapshot"]["packages"]
+    }
+    package_names = {
+        slugify_segment(str(package_doc["package"])): str(package_doc["package"])
+        for package_doc in report["latestSnapshot"]["packages"]
+    }
+
+    details_path = output_dir / "details.mdx"
+    if details_path.exists():
+        replacements: list[tuple[str, str]] = []
+        for package_slug, label in package_labels.items():
+            package_name = package_names[package_slug]
+            replacements.extend(
+                [
+                    (f'href="packages/{package_slug}"', f'href="./{package_slug}"'),
+                    (f'href="./packages/{package_slug}"', f'href="./{package_slug}"'),
+                    (f"      <h3>{html_text(package_name)}</h3>", f"      <h3>{html_text(label)}</h3>"),
+                ]
+            )
+        replace_text(details_path, replacements)
+
+    for package_slug, label in package_labels.items():
+        package_page = output_dir / f"{package_slug}.mdx"
+        if package_page.exists():
+            replace_text(
+                package_page,
+                [
+                    ('href="../index"', 'href="./details"'),
+                    (f'href="../operations/{package_slug}/', f'href="./{package_slug}/'),
+                ],
+            )
+
+        package_operation_dir = output_dir / package_slug
+        if not package_operation_dir.is_dir():
+            continue
+        package_name = package_names[package_slug]
+        for operation_page in package_operation_dir.glob("*/*.mdx"):
+            replace_text(
+                operation_page,
+                [
+                    ('href="../../../index">Protobuf</a>', 'href="../../details">gRPC API</a>'),
+                    (
+                        f'href="../../../packages/{package_slug}">{html_text(package_name)}</a>',
+                        f'href="../../{package_slug}">{html_text(label)}</a>',
+                    ),
+                ],
+            )
+
+
+def flattened_page_path(path: Path, *, output_dir: Path) -> Path:
+    relative = path.resolve().relative_to(output_dir.resolve())
+    if relative == Path("index.mdx"):
+        return output_dir / "details.mdx"
+    if relative.parts and relative.parts[0] in {"packages", "operations"}:
+        return output_dir.joinpath(*relative.parts[1:])
+    return path
+
+
+def flatten_generated_tree(*, output_dir: Path, page_paths: list[Path]) -> list[Path]:
+    flattened_paths = [flattened_page_path(path, output_dir=output_dir) for path in page_paths]
+
+    index_path = output_dir / "index.mdx"
+    details_path = output_dir / "details.mdx"
+    if index_path.exists():
+        if details_path.exists():
+            details_path.unlink()
+        index_path.rename(details_path)
+
+    for source_dir_name in ("packages", "operations"):
+        source_dir = output_dir / source_dir_name
+        if not source_dir.is_dir():
+            continue
+        for source_path in sorted(source_dir.iterdir()):
+            destination = output_dir / source_path.name
+            if destination.exists():
+                if destination.is_dir():
+                    shutil.rmtree(destination)
+                else:
+                    destination.unlink()
+            source_path.rename(destination)
+        source_dir.rmdir()
+
+    return flattened_paths
+
+
+def html_text(value: str) -> str:
+    return html.escape(value, quote=False)
+
+
+def split_package_local_name(name: str, *, package_names: list[str]) -> tuple[str, str | None]:
+    for package_name in sorted(package_names, key=len, reverse=True):
+        prefix = f"{package_name}."
+        if name.startswith(prefix):
+            return name.removeprefix(prefix), package_name
+    return name, None
+
+
+def shorten_package_page_headings(*, output_dir: Path, report: dict[str, Any]) -> None:
+    latest_snapshot = report["latestSnapshot"]
+    files = latest_snapshot["files"]
+    messages = latest_snapshot["messages"]
+    enums = latest_snapshot["enums"]
+    package_names = [str(package["package"]) for package in latest_snapshot["packages"]]
+
+    for package_doc in latest_snapshot["packages"]:
+        package_name = str(package_doc["package"])
+        package_page = package_page_path(output_dir, package_name)
+        if not package_page.exists():
+            package_page = output_dir / f"{slugify_segment(package_name)}.mdx"
+        if not package_page.exists():
+            continue
+
+        text = package_page.read_text(encoding="utf-8")
+        for file_id in package_doc["fileIds"]:
+            file_doc = files.get(file_id)
+            if not file_doc:
+                continue
+            repo_path = str(file_doc["repoPath"])
+            path = PurePosixPath(repo_path)
+            text = text.replace(
+                f"      <h3>{html_text(repo_path)}</h3>",
+                f"      <h3>{html_text(path.name)}</h3>",
+            )
+            text = text.replace(
+                "    <p class=\"x2mdx-ref-card-summary\">Current source file in the latest published descriptor snapshot.</p>",
+                "    <p class=\"x2mdx-ref-card-summary\">Source file from the latest descriptor snapshot.</p>",
+                1,
+            )
+
+        package_types = [
+            *[
+                message
+                for message in messages.values()
+                if any(str(message["id"]).startswith(f"{candidate}.") for candidate in package_names)
+            ],
+            *[
+                enum_doc
+                for enum_doc in enums.values()
+                if any(str(enum_doc["id"]).startswith(f"{candidate}.") for candidate in package_names)
+            ],
+        ]
+        for type_doc in package_types:
+            full_name = str(type_doc["id"])
+            local_name, type_package = split_package_local_name(full_name, package_names=package_names)
+            if type_package is None:
+                continue
+            pattern = re.compile(
+                rf"    <h3>{re.escape(html_text(full_name))}</h3>\n"
+                rf"    \n"
+                rf"    <p class=\"x2mdx-ref-schema-summary\">(?P<summary>[^<]+)</p>"
+            )
+            text = pattern.sub(
+                lambda match: (
+                    f"    <h3>{html_text(local_name)}</h3>\n"
+                    f"    \n"
+                    f"    <p class=\"x2mdx-ref-schema-summary\">{html_text(type_package)} · {match.group('summary')}</p>"
+                ),
+                text,
+            )
+
+        package_page.write_text(text, encoding="utf-8")
+
+
 def build_nav_group(
     *,
     docs_json_path: Path,
-    overview_path: Path,
-    package_paths: list[Path],
+    details_path: Path,
+    page_paths: list[Path],
 ) -> tuple[dict[str, Any], set[str]]:
-    overview_ref = canton_protobuf_history.docs_json_page_ref(overview_path, docs_json_path)
-    package_refs = [
-        canton_protobuf_history.docs_json_page_ref(package_path, docs_json_path)
-        for package_path in package_paths
-    ]
-    refs = {overview_ref, *package_refs}
-    pages: list[Any] = [overview_ref]
-    if package_refs:
-        pages.append({"group": PACKAGE_GROUP_LABEL, "pages": package_refs})
+    details_ref = canton_protobuf_history.docs_json_page_ref(details_path, docs_json_path)
+    refs = {details_ref}
+    output_dir = details_path.parent
+    package_groups: list[Any] = []
+    for package_page in sorted(
+        (path for path in page_paths if path.parent == output_dir and path.name != details_path.name),
+        key=lambda path: mdx_title(path).lower(),
+    ):
+        package_ref = canton_protobuf_history.docs_json_page_ref(package_page, docs_json_path)
+        refs.add(package_ref)
+        package_pages: list[Any] = [package_ref]
+        package_operation_dir = output_dir / package_page.stem
+        service_groups: list[Any] = []
+        if package_operation_dir.is_dir():
+            service_dirs = sorted(
+                (path for path in package_operation_dir.iterdir() if path.is_dir()),
+                key=lambda path: path.name,
+            )
+            for service_dir in service_dirs:
+                operation_pages = sorted(service_dir.glob("*.mdx"), key=lambda path: mdx_title(path).lower())
+                if not operation_pages:
+                    continue
+                operation_refs = [
+                    canton_protobuf_history.docs_json_page_ref(operation_page, docs_json_path)
+                    for operation_page in operation_pages
+                ]
+                refs.update(operation_refs)
+                service_groups.append(
+                    {
+                        "group": service_name(operation_pages[0]),
+                        "pages": operation_refs,
+                    }
+                )
+        if service_groups:
+            package_pages.append({"group": "Services", "pages": service_groups})
+        package_groups.append({"group": mdx_title(package_page), "pages": package_pages})
+
+    pages: list[Any] = []
+    if package_groups:
+        pages.append({"group": "Packages", "pages": package_groups})
+    pages.append(details_ref)
     return {"group": GROUP_LABEL, "pages": pages}, refs
 
 
@@ -262,8 +526,8 @@ def update_docs_navigation(
     dropdown_label: str,
     parent_groups: list[str],
     insert_after_group: str | None,
-    overview_path: Path,
-    package_paths: list[Path],
+    details_path: Path,
+    page_paths: list[Path],
 ) -> None:
     docs = load_json(docs_json_path)
     navigation = docs.get("navigation")
@@ -281,13 +545,13 @@ def update_docs_navigation(
 
     nav_group, generated_refs = build_nav_group(
         docs_json_path=docs_json_path,
-        overview_path=overview_path,
-        package_paths=package_paths,
+        details_path=details_path,
+        page_paths=page_paths,
     )
     dropdown["pages"] = canton_protobuf_history.prune_nav_items(
         pages,
         page_refs=generated_refs,
-        group_labels={GROUP_LABEL},
+        group_labels={GROUP_LABEL, LEGACY_GROUP_LABEL},
     )
     target_pages = canton_protobuf_history.ensure_group_path(dropdown["pages"], parent_groups)
     insert_group(target_pages, group=nav_group, after_group=insert_after_group)
@@ -395,22 +659,29 @@ def main() -> int:
         source_name=args.source_name,
         version_filter=version_filter,
     )
+    sort_report_packages(report)
     output_dir = Path(args.output_dir).resolve()
     if output_dir.exists():
         shutil.rmtree(output_dir)
     root, pages = build_pages(report, output_dir=output_dir)
     written_paths = write_pages(pages, root)
     retitle_generated_pages(output_dir=output_dir)
+    page_paths = flatten_generated_tree(
+        output_dir=output_dir,
+        page_paths=[root / page.path for page in pages[1:]],
+    )
+    shorten_package_page_headings(output_dir=output_dir, report=report)
+    shorten_package_page_titles(output_dir=output_dir, report=report)
+    normalize_flattened_links_and_labels(output_dir=output_dir, report=report)
 
-    overview_path = output_dir / "index.mdx"
-    package_paths = [root / page.path for page in pages[1:]]
+    details_path = output_dir / "details.mdx"
     update_docs_navigation(
         docs_json_path=Path(args.docs_json).resolve(),
         dropdown_label=args.nav_dropdown,
         parent_groups=args.nav_group or [],
         insert_after_group=args.insert_after_group,
-        overview_path=overview_path,
-        package_paths=package_paths,
+        details_path=details_path,
+        page_paths=page_paths,
     )
     reference_nav.regroup_ledger_api_nav(
         docs_json_path=Path(args.docs_json).resolve(),

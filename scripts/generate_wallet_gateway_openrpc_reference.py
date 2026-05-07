@@ -22,9 +22,18 @@ DEFAULT_MANIFEST = REPO_ROOT / ".internal" / "generated" / "x2mdx" / "wallet-gat
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "docs-main" / "reference" / "wallet-gateway-json-rpc"
 DEFAULT_DOCS_JSON = REPO_ROOT / "docs-main" / "docs.json"
 DEFAULT_REPO_DIR = DEFAULT_CACHE_DIR / "repos" / "splice-wallet-kernel"
-GROUP_LABEL = "Wallet Gateway JSON-RPC"
+GROUP_LABEL = "Wallet Gateway"
+DAPP_GROUP_LABEL = "dApp API"
+LEGACY_GROUP_LABELS = {"Wallet Kernel", "Wallet Gateway JSON-RPC", "Wallet Kernel SDK"}
+DETAILS_LABEL = "Details and history"
 SPEC_DIR_NAME = "specs"
 DEFAULT_RELEASE_REPO = "hyperledger-labs/splice-wallet-kernel"
+NAV_SECTION_BY_SPEC_ID = {
+    "dapp-api": DAPP_GROUP_LABEL,
+    "dapp-remote-api": DAPP_GROUP_LABEL,
+    "user-api": "Wallet Gateway",
+    "signing-api": "Wallet Gateway",
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -106,7 +115,7 @@ def ensure_repo(repo_dir: Path, *, remote: str, fetch: bool) -> Path:
     if not repo_dir.exists():
         run(["git", "clone", "--bare", remote, str(repo_dir)])
     if fetch:
-        git(["fetch", "origin", "--tags", "--prune"], cwd=repo_dir)
+        git(["fetch", "origin", "--tags", "--prune", "--force"], cwd=repo_dir)
     return repo_dir
 
 
@@ -119,10 +128,11 @@ def stable_release_versions(
     release_repo: str,
     tag_prefix: str,
     min_version: str,
+    max_version: str | None,
     include_versions: set[str] | None,
 ) -> list[str]:
     releases_raw = gh(
-        ["release", "list", "-R", release_repo, "--json", "tagName", "--limit", "200"],
+        ["release", "list", "-R", release_repo, "--json", "tagName", "--limit", "1000"],
         capture=True,
     )
     payload = json.loads(releases_raw)
@@ -131,6 +141,7 @@ def stable_release_versions(
     semver_re = re.compile(rf"^{re.escape(tag_prefix)}(?P<version>\d+\.\d+\.\d+)$")
     selected: list[str] = []
     minimum = version_key(min_version)
+    maximum = version_key(max_version) if max_version else None
     for entry in payload:
         if not isinstance(entry, dict):
             continue
@@ -142,6 +153,8 @@ def stable_release_versions(
             continue
         version = match.group("version")
         if version_key(version) < minimum:
+            continue
+        if maximum is not None and version_key(version) > maximum:
             continue
         if include_versions is not None and version not in include_versions:
             continue
@@ -179,6 +192,49 @@ def overview_route_prefix(output_dir: Path, docs_json_path: Path) -> str:
     if page_ref.endswith("/index"):
         return "/" + page_ref[: -len("/index")]
     return "/" + page_ref
+
+
+def rewrite_frontmatter_title(contents: str, title: str) -> str:
+    if not contents.startswith("---\n"):
+        return contents
+    end = contents.find("\n---\n", 4)
+    if end == -1:
+        return contents
+    frontmatter = contents[4:end].splitlines()
+    updated: list[str] = []
+    replaced = False
+    for line in frontmatter:
+        if line.startswith("title:"):
+            updated.append(f'title: "{title}"')
+            replaced = True
+        else:
+            updated.append(line)
+    if not replaced:
+        updated.insert(0, f'title: "{title}"')
+    return "---\n" + "\n".join(updated) + contents[end:]
+
+
+def write_details_pages(*, output_dir: Path, spec_entries: list[dict[str, Any]]) -> None:
+    overview = output_dir / "index.mdx"
+    if overview.exists():
+        details = output_dir / "operations" / "details.mdx"
+        details.parent.mkdir(parents=True, exist_ok=True)
+        details.write_text(
+            rewrite_frontmatter_title(overview.read_text(encoding="utf-8"), DETAILS_LABEL),
+            encoding="utf-8",
+        )
+
+    for spec in spec_entries:
+        spec_id = str(spec["spec_id"])
+        spec_page = output_dir / SPEC_DIR_NAME / f"{slugify(spec_id)}.mdx"
+        if not spec_page.exists():
+            continue
+        details = output_dir / "operations" / slugify(spec_id) / "details.mdx"
+        details.parent.mkdir(parents=True, exist_ok=True)
+        details.write_text(
+            rewrite_frontmatter_title(spec_page.read_text(encoding="utf-8"), DETAILS_LABEL),
+            encoding="utf-8",
+        )
 
 
 def prune_nav_items(items: list[Any], *, page_refs: set[str], group_labels: set[str]) -> list[Any]:
@@ -222,18 +278,39 @@ def update_docs_navigation(
     if not isinstance(pages, list):
         raise ValueError(f"Dropdown does not expose a pages list: {dropdown_label}")
 
-    refs = {overview_page_ref(output_dir, docs_json_path)}
+    refs = {overview_page_ref(output_dir, docs_json_path), docs_json_page_ref(output_dir / "operations" / "details.mdx", docs_json_path)}
     refs.update(spec_page_ref(output_dir, docs_json_path, spec["spec_id"]) for spec in spec_entries)
-    dropdown["pages"] = prune_nav_items(pages, page_refs=refs, group_labels={GROUP_LABEL})
-    dropdown["pages"].append(
-        generated_reference_nav.build_openrpc_nav_group(
-            output_dir=output_dir,
-            docs_json_path=docs_json_path,
-            group_label=GROUP_LABEL,
-            spec_ids=[str(spec["spec_id"]) for spec in spec_entries],
-            spec_dir_name=SPEC_DIR_NAME,
-        )
+    refs.update(
+        docs_json_page_ref(output_dir / "operations" / slugify(str(spec["spec_id"])) / "details.mdx", docs_json_path)
+        for spec in spec_entries
     )
+    group_labels = {DAPP_GROUP_LABEL, GROUP_LABEL, *LEGACY_GROUP_LABELS}
+    insert_at = next(
+        (
+            index
+            for index, item in enumerate(pages)
+            if isinstance(item, dict) and item.get("group") in group_labels
+        ),
+        len(pages),
+    )
+    pruned_pages = prune_nav_items(pages, page_refs=refs, group_labels=group_labels)
+    group = generated_reference_nav.build_openrpc_nav_group(
+        output_dir=output_dir,
+        docs_json_path=docs_json_path,
+        group_label=GROUP_LABEL,
+        spec_ids=[str(spec["spec_id"]) for spec in spec_entries],
+        spec_dir_name=SPEC_DIR_NAME,
+        spec_group_sections=NAV_SECTION_BY_SPEC_ID,
+    )
+    wallet_groups = [item for item in group["pages"] if isinstance(item, dict)]
+    details_refs = [item for item in group["pages"] if isinstance(item, str)]
+    for wallet_group in wallet_groups:
+        if wallet_group.get("group") == GROUP_LABEL:
+            wallet_group["pages"].extend(details_refs)
+            break
+    for offset, wallet_group in enumerate(wallet_groups):
+        pruned_pages.insert(min(insert_at + offset, len(pruned_pages)), wallet_group)
+    dropdown["pages"] = pruned_pages
     docs_json_path.write_text(json.dumps(docs, indent=2) + "\n", encoding="utf-8")
     print(f"Updated docs navigation: {docs_json_path}")
 
@@ -292,6 +369,11 @@ def main() -> int:
     release_repo = str(source_config.get("release_repo") or DEFAULT_RELEASE_REPO)
     tag_prefix = str(source_config.get("tag_prefix") or "")
     min_version = str(args.min_version or source_config.get("min_version") or "0.0.0")
+    configured_publish_version = source_config.get("publish_version")
+    requested_publish_version = (
+        args.publish_version
+        or (configured_publish_version.strip() if isinstance(configured_publish_version, str) else None)
+    )
     spec_entries = source_config.get("specs")
     if not remote or not tag_prefix or not release_repo:
         raise ValueError("Source config must define `remote`, `release_repo`, and `tag_prefix`")
@@ -302,12 +384,13 @@ def main() -> int:
         release_repo=release_repo,
         tag_prefix=tag_prefix,
         min_version=min_version,
+        max_version=requested_publish_version,
         include_versions=include_versions,
     )
     if not selected_versions:
         raise ValueError("No wallet-gateway-remote OpenRPC releases selected")
 
-    publish_version = args.publish_version or str(source_config.get("publish_version") or selected_versions[-1])
+    publish_version = requested_publish_version or selected_versions[-1]
     if publish_version not in selected_versions:
         raise ValueError(f"Publish version '{publish_version}' is not selected")
 
@@ -366,6 +449,10 @@ def main() -> int:
     if completed.returncode != 0:
         return completed.returncode
 
+    write_details_pages(
+        output_dir=Path(args.output_dir).resolve(),
+        spec_entries=spec_entries,
+    )
     update_docs_navigation(
         docs_json_path=Path(args.docs_json).resolve(),
         dropdown_label=args.nav_dropdown,

@@ -108,12 +108,58 @@ The following sequence diagram describes the submission flow both for local and 
 - Interactions in a blue background are exclusive to local parties
 - Interactions with no background are common to both local and external parties
 
-<div className="mermaid">
-
+```mermaid
 sequenceDiagram
-actor Alice participant PPN participant EPN note over PPN,EPN: For local parties,\<br/\>PPN == EPN == SPN\<br/\>(with submission permission) Alice-\>\>+PPN: Ledger API Command rect rgb(255, 153, 153) PPN-\>\>+Alice: - Transaction Data\<br/\>- Transaction Hash Note over Alice: Inspects transaction data Note over Alice: Validates transaction hash Note over Alice: Signs transaction hash Alice-\>\>+EPN: - Transaction Data\<br/\>- Transaction Signature end note over EPN: From there on the flow for\<br/\>local and external parties\<br/\>is the same participant Synchronizer participant CPN 1 participant CPN 2 participant OPN Note over CPN 1,CPN 2: Host Alice w/ Confirmation rights EPN-\>\>+Synchronizer: Confirmation Request Synchronizer-\>\>+EPN: Confirmation Request Synchronizer-\>\>+CPN 1: Confirmation Request Synchronizer-\>\>+CPN 2: Confirmation Request Synchronizer-\>\>+OPN: Confirmation Request Note over OPN: OPNs do not send confirmation responses\<br/\>but receive the confirmation request... Note over EPN: For local parties,\<br/\>the SPN sends a confirmation response as\<br/\>it has confirmation permission for the party. Note over EPN: For external parties,\<br/\>the EPN also sends a confirmation response\<br/\>but only as a veto mechanism to provide\<br/\>consistent completion events. EPN-\>\>+Synchronizer: Confirmation Response rect rgb(255, 153, 153) Note over CPN 1: Validate Alice's transaction signature end CPN 1-\>\>+Synchronizer: Confirmation Response rect rgb(255, 153, 153) Note over CPN 2: Validate Alice's transaction signature end CPN 2-\>\>+Synchronizer: Confirmation Response Synchronizer-\>\>+CPN 1: Transaction Verdict Synchronizer-\>\>+CPN 2: Transaction Verdict Synchronizer-\>\>+OPN: Transaction Verdict Note over OPN: ...and the verdict Synchronizer-\>\>+EPN: Transaction Verdict Note over Alice: Listens to completion events\<br/\>to learn about the\<br/\>outcome of the transaction. EPN-\>\>+Alice: Completion event Note over Alice: Queries CPNs for transaction stream,\<br/\> active contract states. CPN 1-\>\>+Alice: Transaction stream, ACS CPN 2-\>\>+Alice: Transaction stream, ACS Note over EPN: For local parties, SPN can also provide\<br/\>ledger data. rect rgb(153, 204, 255) EPN-\>\>+Alice: Transaction stream, ACS end
-
-</div>
+    actor Alice
+    participant PPN
+    participant EPN
+    note over PPN,EPN: For local parties,<br/>PPN == EPN == SPN<br/>(with submission permission)
+    Alice->>+PPN: Ledger API Command
+    rect rgb(255, 153, 153)
+    PPN->>+Alice: - Transaction Data<br/>- Transaction Hash
+    Note over Alice: Inspects transaction data
+    Note over Alice: Validates transaction hash
+    Note over Alice: Signs transaction hash
+    Alice->>+EPN: - Transaction Data<br/>- Transaction Signature
+    end
+    note over EPN: From there on the flow for<br/>local and external parties<br/>is the same
+    participant Synchronizer
+    participant CPN 1
+    participant CPN 2
+    participant OPN
+    Note over CPN 1,CPN 2: Host Alice w/ Confirmation rights
+    EPN->>+Synchronizer: Confirmation Request
+    Synchronizer->>+EPN: Confirmation Request
+    Synchronizer->>+CPN 1: Confirmation Request
+    Synchronizer->>+CPN 2: Confirmation Request
+    Synchronizer->>+OPN: Confirmation Request
+    Note over OPN: OPNs do not send confirmation responses<br/>but receive the confirmation request...
+    Note over EPN: For local parties,<br/>the SPN sends a confirmation response as<br/>it has confirmation permission for the party.
+    Note over EPN: For external parties,<br/>the EPN also sends a confirmation response<br/>but only as a veto mechanism to provide<br/>consistent completion events.
+    EPN->>+Synchronizer: Confirmation Response
+    rect rgb(255, 153, 153)
+    Note over CPN 1: Validate Alice's transaction signature
+    end
+    CPN 1->>+Synchronizer: Confirmation Response
+    rect rgb(255, 153, 153)
+    Note over CPN 2: Validate Alice's transaction signature
+    end
+    CPN 2->>+Synchronizer: Confirmation Response
+    Synchronizer->>+CPN 1: Transaction Verdict
+    Synchronizer->>+CPN 2: Transaction Verdict
+    Synchronizer->>+OPN: Transaction Verdict
+    Note over OPN: ...and the verdict
+    Synchronizer->>+EPN: Transaction Verdict
+    Note over Alice: Listens to completion events<br/>to learn about the<br/>outcome of the transaction.
+    EPN->>+Alice: Completion event
+    Note over Alice: Queries CPNs for transaction stream,<br/>active contract states.
+    CPN 1->>+Alice: Transaction stream, ACS
+    CPN 2->>+Alice: Transaction stream, ACS
+    Note over EPN: For local parties, SPN can also provide<br/>ledger data.
+    rect rgb(153, 204, 255)
+    EPN->>+Alice: Transaction stream, ACS
+    end
+```
 
 ## Limitations
 

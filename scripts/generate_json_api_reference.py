@@ -5,9 +5,12 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 from pathlib import Path
 from typing import Any
+
+import yaml
 
 from ledger_api_release_bundles import (
     load_json,
@@ -27,7 +30,9 @@ DEFAULT_NAV_DROPDOWN = "API Reference"
 DEFAULT_PARENT_GROUP = "Ledger API"
 DEFAULT_GROUP_LABEL = "OpenAPI"
 DEFAULT_OPENAPI_DIRECTORY = "reference/json-api-reference"
+DEFAULT_DETAILS_PAGE_REF = "reference/json-api-reference/details"
 LEGACY_OUTPUT_FILE = REPO_ROOT / "docs-main" / "reference" / "json-api-reference.mdx"
+HTTP_METHODS = {"get", "put", "post", "delete", "options", "head", "patch", "trace"}
 
 
 def parse_args() -> argparse.Namespace:
@@ -45,6 +50,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--parent-group", default=DEFAULT_PARENT_GROUP)
     parser.add_argument("--group-label", default=DEFAULT_GROUP_LABEL)
     parser.add_argument("--openapi-directory", default=DEFAULT_OPENAPI_DIRECTORY)
+    parser.add_argument("--details-page-ref", default=DEFAULT_DETAILS_PAGE_REF)
     parser.add_argument("--publish-version", help="Explicit docs major version to publish.")
     parser.add_argument(
         "--version",
@@ -100,6 +106,8 @@ def update_docs_navigation(
     group_label: str,
     openapi_source_ref: str,
     openapi_directory: str,
+    details_page_ref: str,
+    openapi_page_refs: list[str],
 ) -> None:
     payload = load_json(docs_json_path)
     navigation = payload.get("navigation")
@@ -140,6 +148,7 @@ def update_docs_navigation(
         "source": openapi_source_ref,
         "directory": openapi_directory,
     }
+    group["pages"] = [*openapi_page_refs, details_page_ref]
     docs_json_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
 
@@ -147,6 +156,122 @@ def remove_legacy_output(*, output_file: Path) -> None:
     if output_file.exists():
         output_file.unlink()
         print(f"Removed legacy output: {output_file}")
+
+
+def missing_operation_summaries(spec: dict[str, Any]) -> set[tuple[str, str]]:
+    paths = spec.get("paths")
+    if not isinstance(paths, dict):
+        return set()
+
+    missing: set[tuple[str, str]] = set()
+    for path, path_item in paths.items():
+        if not isinstance(path, str) or not isinstance(path_item, dict):
+            continue
+        for method, operation in path_item.items():
+            if method.lower() not in HTTP_METHODS or not isinstance(operation, dict):
+                continue
+            summary = operation.get("summary")
+            if not isinstance(summary, str) or not summary.strip():
+                missing.add((path, method.lower()))
+    return missing
+
+
+def openapi_operation_page_refs(spec: dict[str, Any]) -> list[str]:
+    paths = spec.get("paths")
+    if not isinstance(paths, dict):
+        return []
+
+    refs: list[str] = []
+    for path, path_item in paths.items():
+        if not isinstance(path, str) or not isinstance(path_item, dict):
+            continue
+        for method, operation in path_item.items():
+            if method.lower() not in HTTP_METHODS or not isinstance(operation, dict):
+                continue
+            refs.append(f"{method.upper()} {path}")
+    return refs
+
+
+def add_missing_operation_summaries(text: str) -> str:
+    spec = yaml.safe_load(text)
+    if not isinstance(spec, dict):
+        raise ValueError("Expected generated OpenAPI YAML to parse as an object")
+
+    missing = missing_operation_summaries(spec)
+    if not missing:
+        return text
+
+    lines = text.splitlines()
+    output_lines: list[str] = []
+    in_paths = False
+    paths_indent = ""
+    current_path: str | None = None
+    current_path_indent: str | None = None
+
+    for line in lines:
+        output_lines.append(line)
+
+        paths_match = re.fullmatch(r"(?P<indent>\s*)paths:\s*", line)
+        if paths_match:
+            in_paths = True
+            paths_indent = paths_match.group("indent")
+            current_path = None
+            current_path_indent = None
+            continue
+
+        if not in_paths:
+            continue
+
+        if line and not line.startswith(f"{paths_indent} "):
+            in_paths = False
+            current_path = None
+            current_path_indent = None
+            continue
+
+        path_match = re.fullmatch(rf"(?P<indent>{re.escape(paths_indent)}\s{{2}})(?P<path>/.*):\s*", line)
+        if path_match:
+            current_path = path_match.group("path")
+            current_path_indent = path_match.group("indent")
+            continue
+
+        if current_path is None or current_path_indent is None:
+            continue
+
+        method_match = re.fullmatch(
+            rf"(?P<indent>{re.escape(current_path_indent)}\s{{2}})(?P<method>{'|'.join(sorted(HTTP_METHODS))}):\s*",
+            line,
+        )
+        if method_match is None:
+            continue
+
+        method = method_match.group("method")
+        if (current_path, method) in missing:
+            summary_indent = f"{method_match.group('indent')}  "
+            output_lines.append(f'{summary_indent}summary: "{current_path}"')
+
+    rendered = "\n".join(output_lines).rstrip() + "\n"
+    parsed = yaml.safe_load(rendered)
+    if not isinstance(parsed, dict):
+        raise ValueError("Generated OpenAPI YAML stopped parsing after summary insertion")
+    remaining = missing_operation_summaries(parsed)
+    if remaining:
+        details = ", ".join(f"{method.upper()} {path}" for path, method in sorted(remaining))
+        raise ValueError(f"Failed to insert generated summaries for OpenAPI operations: {details}")
+    return rendered
+
+
+def normalize_mintlify_operation_summaries(openapi_path: Path) -> None:
+    original = openapi_path.read_text(encoding="utf-8")
+    normalized = add_missing_operation_summaries(original)
+    if normalized != original:
+        openapi_path.write_text(normalized, encoding="utf-8")
+
+
+def mintlify_openapi_page_refs(openapi_path: Path) -> list[str]:
+    spec = yaml.safe_load(openapi_path.read_text(encoding="utf-8"))
+    if not isinstance(spec, dict):
+        raise ValueError(f"Expected generated OpenAPI YAML to parse as an object: {openapi_path}")
+    return openapi_operation_page_refs(spec)
 
 
 def main() -> int:
@@ -169,6 +294,7 @@ def main() -> int:
         output_path=output_spec,
         force_refresh=args.force_refresh,
     )
+    normalize_mintlify_operation_summaries(output_spec)
     print(f"Published Mintlify OpenAPI source: {output_spec}")
 
     docs_json_path = Path(args.docs_json).resolve()
@@ -183,6 +309,8 @@ def main() -> int:
         group_label=args.group_label,
         openapi_source_ref=docs_relative_file_ref(output_spec, docs_json_path),
         openapi_directory=args.openapi_directory,
+        details_page_ref=args.details_page_ref,
+        openapi_page_refs=mintlify_openapi_page_refs(output_spec),
     )
     remove_legacy_output(output_file=LEGACY_OUTPUT_FILE.resolve())
     return 0
