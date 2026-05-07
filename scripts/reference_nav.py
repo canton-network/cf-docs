@@ -12,7 +12,13 @@ ASYNCAPI_GROUP = "AsyncAPI"
 GRPC_GROUP = "gRPC API"
 GRPC_GROUP_ALIASES = {GRPC_GROUP, "gRPC Ledger API Reference"}
 PROTOBUF_GROUP = "Protobufs"
-PROTOBUF_GROUP_ALIASES = {"Canton Protobuf", "Canton Protobuf History", PROTOBUF_GROUP}
+PROTOBUF_GROUP_ALIASES = {
+    "Canton Protobuf",
+    "Canton Protobuf History",
+    "Canton Protobuf Reference",
+    "Canton Protobuf References",
+    PROTOBUF_GROUP,
+}
 BINDINGS_GROUP = "Java Bindings"
 BINDINGS_GROUP_ALIASES = {BINDINGS_GROUP, "Ledger API Java Bindings", "Ledger API JVM Bindings"}
 LEDGER_API_CHILD_ORDER = [
@@ -30,9 +36,9 @@ GRPC_PREFIX = "reference/grpc-ledger-api-reference/"
 GRPC_PACKAGES_PREFIX = "reference/grpc-ledger-api-reference/packages/"
 GRPC_OPERATIONS_PREFIX = "reference/grpc-ledger-api-reference/operations/"
 PROTOBUF_OVERVIEW_PAGE_REF = "reference/protobuf/index"
-BINDINGS_OVERVIEW_PAGE_REF = "reference/ledger-api-jvm-bindings"
-LANGUAGE_GROUPS = {"Scaladocs", "Javadocs"}
-SCALADOC_PREFIX = "reference/scala/"
+BINDINGS_OVERVIEW_PAGE_REF = "reference/java-bindings"
+LEGACY_BINDINGS_OVERVIEW_PAGE_REF = "reference/ledger-api-jvm-bindings"
+LANGUAGE_GROUPS = {"Javadocs"}
 JAVADOC_PREFIX = "reference/java/"
 
 
@@ -100,6 +106,30 @@ def _append_unique(items: list[str], values: list[str]) -> None:
             items.append(value)
 
 
+def _java_bindings_nav_item(item: Any) -> Any | None:
+    if isinstance(item, str):
+        if item in {BINDINGS_OVERVIEW_PAGE_REF, LEGACY_BINDINGS_OVERVIEW_PAGE_REF}:
+            return BINDINGS_OVERVIEW_PAGE_REF
+        if item.startswith(JAVADOC_PREFIX):
+            return item
+        return None
+    if not isinstance(item, dict):
+        return None
+    pages = item.get("pages")
+    if not isinstance(pages, list):
+        return item if item.get("group") in {BINDINGS_GROUP, "Javadocs"} else None
+    filtered_pages = [
+        filtered
+        for page in pages
+        if (filtered := _java_bindings_nav_item(page)) is not None
+    ]
+    if not filtered_pages:
+        return None
+    filtered_item = dict(item)
+    filtered_item["pages"] = filtered_pages
+    return filtered_item
+
+
 def _normalized_grpc_ref(page_ref: str) -> str | None:
     if page_ref == GRPC_LEGACY_OVERVIEW_PAGE_REF:
         return GRPC_DETAILS_PAGE_REF
@@ -114,25 +144,38 @@ def _normalized_grpc_ref(page_ref: str) -> str | None:
 
 
 def _absorb_grpc_pages(items: list[Any], collected: dict[str, dict[str, Any]]) -> bool:
-    absorbed = False
-    normalized_refs: list[str] = []
+    normalized_items: list[Any] = []
     for item in items:
-        if isinstance(item, str):
-            normalized = _normalized_grpc_ref(item)
-            if normalized is not None:
-                normalized_refs.append(normalized)
-                absorbed = True
-            continue
-        if isinstance(item, dict):
-            pages = item.get("pages")
-            if isinstance(pages, list):
-                absorbed = _absorb_grpc_pages(pages, collected) or absorbed
-    if normalized_refs:
+        normalized = _normalized_grpc_nav_item(item)
+        if normalized is not None:
+            normalized_items.append(normalized)
+    if normalized_items:
         _merge_group_entries(
             _upsert_group(collected, GRPC_GROUP),
-            {"group": GRPC_GROUP, "pages": normalized_refs},
+            {"group": GRPC_GROUP, "pages": normalized_items},
         )
-    return absorbed
+        return True
+    return False
+
+
+def _normalized_grpc_nav_item(item: Any) -> Any | None:
+    if isinstance(item, str):
+        return _normalized_grpc_ref(item)
+    if not isinstance(item, dict):
+        return None
+    pages = item.get("pages")
+    if not isinstance(pages, list):
+        return None
+    normalized_pages = [
+        normalized
+        for page in pages
+        if (normalized := _normalized_grpc_nav_item(page)) is not None
+    ]
+    if not normalized_pages:
+        return None
+    normalized_item = dict(item)
+    normalized_item["pages"] = normalized_pages
+    return normalized_item
 
 
 def _absorb_known_item(item: Any, collected: dict[str, dict[str, Any]]) -> bool:
@@ -153,13 +196,10 @@ def _absorb_known_item(item: Any, collected: dict[str, dict[str, Any]]) -> bool:
         elif item == PROTOBUF_OVERVIEW_PAGE_REF:
             _merge_group_entries(_upsert_group(collected, PROTOBUF_GROUP), {"group": PROTOBUF_GROUP, "pages": [item]})
             return True
-        elif item == BINDINGS_OVERVIEW_PAGE_REF:
-            _merge_group_entries(_upsert_group(collected, BINDINGS_GROUP), {"group": BINDINGS_GROUP, "pages": [item]})
-            return True
-        elif item.startswith(SCALADOC_PREFIX):
+        elif item in {BINDINGS_OVERVIEW_PAGE_REF, LEGACY_BINDINGS_OVERVIEW_PAGE_REF}:
             _merge_group_entries(
                 _upsert_group(collected, BINDINGS_GROUP),
-                {"group": BINDINGS_GROUP, "pages": [{"group": "Scaladocs", "pages": [item]}]},
+                {"group": BINDINGS_GROUP, "pages": [BINDINGS_OVERVIEW_PAGE_REF]},
             )
             return True
         elif item.startswith(JAVADOC_PREFIX):
@@ -212,9 +252,13 @@ def _absorb_known_item(item: Any, collected: dict[str, dict[str, Any]]) -> bool:
         return True
 
     if label in BINDINGS_GROUP_ALIASES:
-        normalized = {"group": BINDINGS_GROUP, "pages": []}
-        _merge_group_entries(normalized, item)
-        _merge_group_entries(_upsert_group(collected, BINDINGS_GROUP), normalized)
+        normalized_item = _java_bindings_nav_item(item)
+        if normalized_item is None:
+            _upsert_group(collected, BINDINGS_GROUP)
+        else:
+            normalized = {"group": BINDINGS_GROUP, "pages": []}
+            _merge_group_entries(normalized, normalized_item)
+            _merge_group_entries(_upsert_group(collected, BINDINGS_GROUP), normalized)
         return True
 
     if label == "Packages":

@@ -13,6 +13,8 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 from validate_splice_mintlify_openapi_nav import validate_splice_nav
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -20,6 +22,7 @@ USER_AGENT = "digital-asset-docs-mintlify-openapi/1.0"
 DEFAULT_SOURCE_CONFIG = REPO_ROOT / "config" / "mintlify-openapi" / "splice-openapi" / "source-artifacts.json"
 DEFAULT_CACHE_DIR = REPO_ROOT / ".internal" / "cache" / "mintlify-openapi" / "splice-openapi"
 DEFAULT_DOCS_JSON = REPO_ROOT / "docs-main" / "docs.json"
+HTTP_METHODS = {"get", "put", "post", "delete", "options", "head", "patch", "trace"}
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -189,8 +192,7 @@ def normalized_families(source_config: dict[str, Any]) -> list[dict[str, Any]]:
             raise ValueError("Each family must define a non-empty group")
         if not isinstance(specs, list) or not specs:
             raise ValueError(f"Family '{group}' must define a non-empty specs list")
-
-        normalized_specs: list[dict[str, str]] = []
+        normalized_specs: list[dict[str, Any]] = []
         for spec in specs:
             if not isinstance(spec, dict):
                 raise ValueError(f"Spec entries for family '{group}' must be objects")
@@ -250,7 +252,80 @@ def render_output_bytes(*, spec_bytes: bytes, output_path: Path) -> bytes:
         if not re.fullmatch(r"\s*required:\s*\[\s*\]\s*", line)
     ]
     normalized_text = "\n".join(filtered_lines).rstrip() + "\n"
+    normalized_text = add_missing_operation_summaries(normalized_text)
     return normalized_text.encode("utf-8")
+
+
+def missing_operation_summaries(spec: dict[str, Any]) -> set[tuple[str, str]]:
+    paths = spec.get("paths")
+    if not isinstance(paths, dict):
+        return set()
+
+    missing: set[tuple[str, str]] = set()
+    for path, path_item in paths.items():
+        if not isinstance(path, str) or not isinstance(path_item, dict):
+            continue
+        for method, operation in path_item.items():
+            if method.lower() not in HTTP_METHODS or not isinstance(operation, dict):
+                continue
+            summary = operation.get("summary")
+            if not isinstance(summary, str) or not summary.strip():
+                missing.add((path, method.lower()))
+    return missing
+
+
+def add_missing_operation_summaries(text: str) -> str:
+    spec = yaml.safe_load(text)
+    if not isinstance(spec, dict):
+        raise ValueError("Expected generated OpenAPI YAML to parse as an object")
+
+    missing = missing_operation_summaries(spec)
+    if not missing:
+        return text
+
+    lines = text.splitlines()
+    output_lines: list[str] = []
+    in_paths = False
+    current_path: str | None = None
+
+    for line in lines:
+        output_lines.append(line)
+
+        if re.fullmatch(r"paths:\s*", line):
+            in_paths = True
+            current_path = None
+            continue
+
+        if not in_paths:
+            continue
+
+        if line and not line.startswith(" "):
+            in_paths = False
+            current_path = None
+            continue
+
+        path_match = re.fullmatch(r"  (?P<path>/.*):\s*", line)
+        if path_match:
+            current_path = path_match.group("path")
+            continue
+
+        method_match = re.fullmatch(r"    (?P<method>get|put|post|delete|options|head|patch|trace):\s*", line)
+        if current_path is None or method_match is None:
+            continue
+
+        method = method_match.group("method")
+        if (current_path, method) in missing:
+            output_lines.append(f'      summary: "{current_path}"')
+
+    rendered = "\n".join(output_lines).rstrip() + "\n"
+    parsed = yaml.safe_load(rendered)
+    if not isinstance(parsed, dict):
+        raise ValueError("Generated OpenAPI YAML stopped parsing after summary insertion")
+    remaining = missing_operation_summaries(parsed)
+    if remaining:
+        details = ", ".join(f"{method.upper()} {path}" for path, method in sorted(remaining))
+        raise ValueError(f"Failed to insert generated summaries for OpenAPI operations: {details}")
+    return rendered
 
 
 def write_managed_specs(
@@ -330,20 +405,44 @@ def filtered_families_for_navigation(
     return filtered
 
 
-def build_splice_group_pages(families: list[dict[str, Any]]) -> list[Any]:
+def openapi_operation_page_refs(spec: dict[str, Any]) -> list[str]:
+    paths = spec.get("paths")
+    if not isinstance(paths, dict):
+        return []
+
+    refs: list[str] = []
+    for path, path_item in paths.items():
+        if not isinstance(path, str) or not isinstance(path_item, dict):
+            continue
+        for method, operation in path_item.items():
+            if method.lower() not in HTTP_METHODS or not isinstance(operation, dict):
+                continue
+            refs.append(f"{method.upper()} {path}")
+    return refs
+
+
+def build_splice_openapi_nav_entry(*, docs_root: Path, spec: dict[str, Any]) -> dict[str, Any]:
+    openapi_path = docs_root / spec["source"]
+    payload = yaml.safe_load(openapi_path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError(f"Expected OpenAPI spec to parse as an object: {openapi_path}")
+    entry: dict[str, Any] = {
+        "group": spec["nav_label"],
+        "openapi": {
+            "source": spec["source"],
+            "directory": spec["directory"],
+        },
+        "pages": openapi_operation_page_refs(payload),
+    }
+    return entry
+
+
+def build_splice_group_pages(*, docs_root: Path, families: list[dict[str, Any]]) -> list[Any]:
     pages: list[Any] = []
     for family in families:
         family_pages: list[dict[str, Any]] = []
         for spec in family["specs"]:
-            family_pages.append(
-                {
-                    "group": spec["nav_label"],
-                    "openapi": {
-                        "source": spec["source"],
-                        "directory": spec["directory"],
-                    },
-                }
-            )
+            family_pages.append(build_splice_openapi_nav_entry(docs_root=docs_root, spec=spec))
         pages.append({"group": family["group"], "pages": family_pages})
     return pages
 
@@ -404,7 +503,7 @@ def update_docs_navigation(
         insert_at,
         {
             "group": top_level_group_label,
-            "pages": build_splice_group_pages(navigation_families),
+            "pages": build_splice_group_pages(docs_root=docs_json_path.parent, families=navigation_families),
         },
     )
     dropdown["pages"] = deduped_pages

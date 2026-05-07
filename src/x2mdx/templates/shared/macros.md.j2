@@ -1,0 +1,153 @@
+{% macro anchor_heading(anchor_id, level, text) -%}
+{{ anchor(anchor_id) }}
+
+{{ heading(level, text) }}
+{%- endmacro %}
+
+{% macro generic_table_section(title, headers, rows, empty_message=None, note=None, level=2) -%}
+{{ heading(level, title) }}
+
+{% if rows %}
+{{ table(headers, rows) }}
+{% if note %}
+
+{{ paragraph(note) }}
+{% endif %}
+{% elif empty_message %}
+{{ paragraph(empty_message) }}
+{% endif %}
+{%- endmacro %}
+
+{% macro status_toc(
+    rows,
+    empty_message=None,
+    note=None,
+    level=2,
+    title="Table of Contents",
+    legend=None,
+    first_column_title="NAME"
+) -%}
+{{ heading(level, title) }}
+
+{% if legend %}
+{{ paragraph(legend) }}
+{% endif %}
+{% if rows %}
+{{ table([first_column_title, "STATUS", "SUMMARY"], rows) }}
+{% if note %}
+
+{{ paragraph(note) }}
+{% endif %}
+{% elif empty_message %}
+{{ paragraph(empty_message) }}
+{% endif %}
+{%- endmacro %}
+
+{% macro standard_toc(rows, empty_message=None, note=None, level=2, title="Table of Contents") -%}
+{{ generic_table_section(
+    title,
+    ["Name", "Kind", "Summary", "Introduced", "Changed", "Deprecated", "Removed"],
+    rows,
+    empty_message=empty_message,
+    note=note,
+    level=level
+) }}
+{%- endmacro %}
+
+{% macro version_change_summary(rows, empty_message=None, note=None, level=2, title="Version Change Summary") -%}
+{{ generic_table_section(
+    title,
+    ["Version", "Added", "Changed", "Removed"],
+    rows,
+    empty_message=empty_message,
+    note=note,
+    level=level
+) }}
+{%- endmacro %}
+
+{% macro standard_reference_layout(
+    toc_rows,
+    version_rows=None,
+    include_version_summary=True,
+    toc_empty_message=None,
+    toc_note=None,
+    version_empty_message=None,
+    version_note=None,
+    level=2,
+    reference_title="Reference"
+) -%}
+{{ standard_toc(
+    toc_rows,
+    empty_message=toc_empty_message,
+    note=toc_note,
+    level=level
+) }}
+{% if include_version_summary %}
+
+{{ version_change_summary(
+    version_rows or [],
+    empty_message=version_empty_message,
+    note=version_note,
+    level=level
+) }}
+{% endif %}
+
+{{ heading(level, reference_title) }}
+
+{{ caller() }}
+{%- endmacro %}
+
+{% macro bullet_section(title, items, level=2) -%}
+{{ heading(level, title) }}
+
+{{ bullet_list(items) }}
+{%- endmacro %}
+
+{% macro table_section(title, headers, rows, level=2) -%}
+{{ generic_table_section(title, headers, rows, level=level) }}
+{%- endmacro %}
+
+{% macro detail_label(title) -%}
+{{ paragraph("**" ~ title ~ "**") }}
+{%- endmacro %}
+
+{% macro detail_table(title, headers, rows, empty_message=None) -%}
+{{ detail_label(title) }}
+{% if rows %}
+
+{{ table(headers, rows) }}
+{% elif empty_message %}
+
+{{ paragraph(empty_message) }}
+{% endif %}
+{%- endmacro %}
+
+{% macro detail_code_block(title, language, body) -%}
+{{ detail_label(title) }}
+
+{{ code_block(language, body) }}
+{%- endmacro %}
+
+{% macro detail_bullet_list(title, items) -%}
+{{ detail_label(title) }}
+
+{{ bullet_list(items) }}
+{%- endmacro %}
+
+{% macro version_changes(rows) -%}
+{% if rows %}
+{{ detail_table("Version Changes", ["Version", "Changes"], rows) }}
+{% endif %}
+{%- endmacro %}
+
+{% macro warning(text) -%}
+{{ admonition("Warning", text) }}
+{%- endmacro %}
+
+{% macro accordion(title, items) -%}
+{{ accordion_list(title, items) }}
+{%- endmacro %}
+
+{% macro card_group(cards, cols=2) -%}
+{{ render_card_group(cards, cols) }}
+{%- endmacro %}

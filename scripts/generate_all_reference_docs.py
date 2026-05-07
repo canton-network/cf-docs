@@ -78,7 +78,7 @@ SCRIPT_JOBS = [
     ),
     ScriptJob(
         script_path=REPO_ROOT / "scripts" / "generate_wallet_gateway_openrpc_reference.py",
-        nav_slice=NavSlice("top_group", ("Wallet Kernel SDK",)),
+        nav_slice=NavSlice("top_group", ("Wallet Kernel",)),
     ),
     ScriptJob(
         script_path=REPO_ROOT / "scripts" / "generate_splice_mintlify_openapi.py",
@@ -86,7 +86,7 @@ SCRIPT_JOBS = [
     ),
     ScriptJob(
         script_path=REPO_ROOT / "scripts" / "generate_typescript_bindings_reference.py",
-        nav_slice=NavSlice("top_group", ("Daml TypeScript Bindings",)),
+        nav_slice=NavSlice("top_group", ("TypeScript",)),
     ),
 ]
 
@@ -183,6 +183,21 @@ def replace_group(items: list[Any], group: dict[str, Any]) -> None:
             items[index] = copy.deepcopy(group)
             return
     items.append(copy.deepcopy(group))
+
+
+TOP_GROUP_ALIAS_SETS = [
+    ("Wallet Kernel", {"Wallet Kernel", "Wallet Kernel SDK", "Wallet Gateway JSON-RPC"}),
+]
+
+
+def assert_no_duplicate_top_group_aliases(docs: dict[str, Any]) -> None:
+    pages = dropdown_pages(docs, dropdown_label=API_REFERENCE_DROPDOWN)
+    labels = [item.get("group") for item in pages if isinstance(item, dict) and isinstance(item.get("group"), str)]
+    for canonical_label, aliases in TOP_GROUP_ALIAS_SETS:
+        matches = [label for label in labels if label in aliases]
+        if len(matches) > 1:
+            joined = ", ".join(matches)
+            raise ValueError(f"Duplicate {canonical_label} navigation groups found: {joined}")
 
 
 def ensure_group(items: list[Any], label: str) -> dict[str, Any]:
@@ -285,6 +300,8 @@ def consolidate_docs_json() -> None:
         docs_json_path=DOCS_JSON_PATH,
         dropdown_label=API_REFERENCE_DROPDOWN,
     )
+    final_docs = load_json(DOCS_JSON_PATH)
+    assert_no_duplicate_top_group_aliases(final_docs)
     validate_splice_nav(docs_json_path=DOCS_JSON_PATH)
 
 
