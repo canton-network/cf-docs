@@ -163,7 +163,7 @@ def build_protobuf_nav_group(
             package_pages.append({"group": "Services", "pages": service_groups})
         package_groups.append({"group": mdx_title(package_page), "pages": package_pages})
     if package_groups:
-        pages.extend(package_groups)
+        pages.append({"group": "Packages", "pages": package_groups})
     details_refs = [details_page_ref] if include_details_page else []
     for page_ref in [*(extra_page_refs or []), *details_refs]:
         if page_ref not in pages:
