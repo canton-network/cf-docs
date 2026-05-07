@@ -505,6 +505,8 @@ def main() -> int:
         target_dir=Path(args.legacy_output_dir).resolve(),
     )
 
+    canonical_dir = Path(args.legacy_output_dir).resolve()
+    package_paths = sorted((canonical_dir / "packages").glob("*.mdx"))
     update_docs_navigation(
         docs_json_path=Path(args.docs_json).resolve(),
         dropdown_label=args.nav_dropdown,
