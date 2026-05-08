@@ -1,8 +1,9 @@
 (function () {
   "use strict";
 
-  var JVM_REFERENCE_PATH = /^\/reference\/(?:java|scala)(?:\/|$)/;
   var PATCHED_ATTR = "data-mintlify-sidebar-footer-patch";
+  var PATCH_MARKER = "__daMintlifySidebarFooterPatch";
+  var PATCH_VERSION = "global-2026-04-29";
   var LARGE_NAV_MULTIPLIER = 2;
   var DEFAULT_TOP_REM = 4;
 
@@ -10,10 +11,6 @@
   var sidebarObserver = null;
   var scheduled = false;
   var lastSafeTopPx = null;
-
-  function isJvmReferencePage() {
-    return JVM_REFERENCE_PATH.test(window.location.pathname);
-  }
 
   function px(value) {
     if (!value || typeof value !== "string" || !value.endsWith("px")) {
@@ -65,10 +62,6 @@
   }
 
   function clampSidebarTop() {
-    if (!isJvmReferencePage()) {
-      return;
-    }
-
     var sidebar = document.getElementById("sidebar");
     var navigationItems = document.getElementById("navigation-items");
     var sidebarContent = document.getElementById("sidebar-content");
@@ -97,7 +90,8 @@
      * visible sidebar scrollport before deriving sidebar.style.top.
      *
      * Until that upstream change exists, preserve Mintlify's footer-driven
-     * bottom value and only clamp the impossible negative top offset.
+     * bottom value and only clamp impossible negative top offsets on pages
+     * with abnormally large nav trees.
      */
     sidebar.style.top = safeTopPx(sidebar) + "px";
     sidebar.setAttribute(PATCHED_ATTR, "clamped-negative-top");
@@ -147,6 +141,11 @@
 
   patchHistoryMethod("pushState");
   patchHistoryMethod("replaceState");
+
+  window[PATCH_MARKER] = {
+    loaded: true,
+    version: PATCH_VERSION,
+  };
 
   window.addEventListener("popstate", scheduleClamp);
   window.addEventListener("resize", scheduleClamp, { passive: true });

@@ -75,6 +75,38 @@ def extract_block_tag_texts(comment: dict[str, Any] | None, tag_name: str) -> li
     return out
 
 
+def comment_has_tag(comment: dict[str, Any] | None, tag_name: str) -> bool:
+    if not isinstance(comment, dict):
+        return False
+    modifier_tags = comment.get("modifierTags")
+    if isinstance(modifier_tags, list) and tag_name in modifier_tags:
+        return True
+    block_tags = comment.get("blockTags")
+    return isinstance(block_tags, list) and any(isinstance(tag, dict) and tag.get("tag") == tag_name for tag in block_tags)
+
+
+def normalize_lifecycle_state(comment: dict[str, Any] | None) -> str | None:
+    if comment_has_tag(comment, "@deprecated"):
+        return "deprecated"
+    for tag_name, state in [
+        ("@alpha", "alpha"),
+        ("@beta", "beta"),
+        ("@stable", "stable"),
+    ]:
+        if comment_has_tag(comment, tag_name):
+            return state
+    return None
+
+
+def lifecycle_state_label(value: str) -> str:
+    return value.replace("_", " ").replace("-", " ").title()
+
+
+def extract_first_block_tag_text(comment: dict[str, Any] | None, tag_name: str) -> str | None:
+    texts = extract_block_tag_texts(comment, tag_name)
+    return texts[0] if texts else None
+
+
 def parse_named_tag_map(comment: dict[str, Any] | None, tag_name: str) -> dict[str, str]:
     mapping: dict[str, str] = {}
     for item in extract_block_tag_texts(comment, tag_name):
@@ -312,6 +344,12 @@ def describe_export_changes(previous_export: dict[str, Any], current_export: dic
     changes: list[str] = []
     if previous_export["summary"] != current_export["summary"]:
         changes.append("summary updated")
+    if previous_export.get("lifecycle_state") != current_export.get("lifecycle_state"):
+        changes.append("lifecycle state updated")
+    if previous_export.get("replaces") != current_export.get("replaces"):
+        changes.append("replacement target updated")
+    if previous_export.get("deprecated_text") != current_export.get("deprecated_text"):
+        changes.append("deprecation text updated")
     if (
         previous_export["signature"] != current_export["signature"]
         and not previous_export["signature_docs"]
@@ -449,6 +487,12 @@ def build_export_doc(group_title: str, node: dict[str, Any], *, group_index: int
                 source_location = str(file_name)
 
     export_comment = node.get("comment") if isinstance(node.get("comment"), dict) else None
+    lifecycle_comment = export_comment
+    if lifecycle_comment is None and public_signatures:
+        lifecycle_comment = public_signatures[0].get("comment") if isinstance(public_signatures[0].get("comment"), dict) else None
+    lifecycle_state = normalize_lifecycle_state(lifecycle_comment)
+    deprecated_text = extract_first_block_tag_text(lifecycle_comment, "@deprecated") if lifecycle_state == "deprecated" else None
+    replaces = extract_first_block_tag_text(lifecycle_comment, "@replaces")
     type_parameter_docs = extract_type_parameter_docs(node, fallback_comment=export_comment)
     signature_docs = extract_signature_docs(public_signatures)
     fingerprint = json.dumps(
@@ -473,6 +517,10 @@ def build_export_doc(group_title: str, node: dict[str, Any], *, group_index: int
         "type_parameters": type_parameter_docs,
         "members": build_member_docs(children),
         "source_location": source_location,
+        "lifecycle_state": lifecycle_state,
+        "lifecycle_label": lifecycle_state_label(lifecycle_state) if lifecycle_state else "",
+        "deprecated_text": deprecated_text or "",
+        "replaces": replaces or "",
         "sort_group_index": group_index,
         "sort_item_index": item_index,
         "fingerprint": fingerprint,

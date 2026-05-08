@@ -601,13 +601,24 @@ def write_manifest(
             bundle_proto_dir=bundle_proto_dir,
             force_refresh=force_refresh,
         )
-        import_to_repo_path = canton_protobuf_history.import_to_repo_path_from_bundle(protobuf_root)
+        import_to_repo_path = canton_protobuf_history.import_to_repo_path_from_bundle(
+            protobuf_root,
+            selections=canton_protobuf_history.LEDGER_API_SELECTIONS,
+        )
         if not import_to_repo_path:
             print(f"Skipping {tag}: no published owned protobuf files found")
             continue
-        image_path = canton_protobuf_history.descriptor_image_path(cache_dir, version)
+        image_path = canton_protobuf_history.descriptor_image_path(
+            cache_dir,
+            version,
+            surface="grpc-ledger-api",
+        )
         if not image_path.exists() or force_refresh:
-            canton_protobuf_history.compile_descriptor_image(protobuf_root, output_path=image_path)
+            canton_protobuf_history.compile_descriptor_image(
+                protobuf_root,
+                output_path=image_path,
+                selections=canton_protobuf_history.LEDGER_API_SELECTIONS,
+            )
         releases.append(
             {
                 "version": version,
