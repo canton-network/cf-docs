@@ -6,6 +6,7 @@ from typing import Any
 
 
 LEDGER_API_PARENT_GROUP = "Ledger API"
+ADMIN_API_PARENT_GROUP = "Admin API"
 LEGACY_ENDPOINTS_GROUP = "Ledger API Endpoints"
 OPENAPI_GROUP = "OpenAPI"
 ASYNCAPI_GROUP = "AsyncAPI"
