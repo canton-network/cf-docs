@@ -24,6 +24,7 @@ ACRONYM_PARTS = {
     "ghc": "GHC",
     "lf": "LF",
 }
+REPLACED_BY_RE = re.compile(r"^Replaced by: (?P<target>[A-Za-z][A-Za-z0-9_.]*[A-Za-z0-9])\.$")
 
 
 def slugify(text: str) -> str:
@@ -225,6 +226,14 @@ def render_warn_blocks(warns: Any) -> list[str]:
     for message in deprecation_messages:
         blocks.append("\n".join(["<Warning>", f"Deprecated: {message}", "</Warning>"]))
     return blocks
+
+
+def extract_exact_replacement_target(messages: list[str]) -> str | None:
+    for message in messages:
+        match = REPLACED_BY_RE.fullmatch(message.strip())
+        if match:
+            return match.group("target")
+    return None
 
 
 def render_function(fn: dict[str, Any]) -> str:
@@ -518,6 +527,7 @@ def module_template_context(
     module_deprecations = extract_tagged_warning_messages(module_doc.get("md_warn"), "DeprecatedData")
     module_alpha_warning = next((msg for msg in module_warnings if "alpha" in msg.lower()), None)
     module_deprecation_warning = module_deprecations[0] if module_deprecations else None
+    replacement_target = extract_exact_replacement_target(module_deprecations)
 
     module_status = "active"
     introduced_in = "-"
@@ -575,6 +585,17 @@ def module_template_context(
     if orphan_instances:
         sections.append({"title": "Orphan Typeclass Instances", "bodies": [f"- `{render_instance(item)}`" for item in orphan_instances]})
 
+    notice_lines = [
+        f"Status: `{module_status}`",
+        f"Introduced in: `{introduced_in}`",
+        f"Removed in: `{removed_in}`",
+        f"Warnings: `{len(module_warnings)}`",
+        f"Deprecations: `{len(module_deprecations)}`",
+        deprecation_since_line,
+    ]
+    if replacement_target:
+        notice_lines.append(f"Replaces: `{replacement_target}`")
+
     return {
         "anchor_id": str(anchor) if anchor else "",
         "module_title": display_name,
@@ -583,16 +604,7 @@ def module_template_context(
             {"title": "Lifecycle", "body": lifecycle},
             {
                 "title": "Notices",
-                "body": "\n".join(
-                    [
-                        f"Status: `{module_status}`",
-                        f"Introduced in: `{introduced_in}`",
-                        f"Removed in: `{removed_in}`",
-                        f"Warnings: `{len(module_warnings)}`",
-                        f"Deprecations: `{len(module_deprecations)}`",
-                        deprecation_since_line,
-                    ]
-                ),
+                "body": "\n".join(notice_lines),
             },
         ],
         "primary_warning": primary_warning,

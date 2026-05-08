@@ -529,9 +529,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             from x2mdx.render import write_pages
 
             report = build_daml_doc_report_from_manifest_args(args)
+            output_dir = Path(args.output_dir)
+            if output_dir.exists():
+                shutil.rmtree(output_dir)
             output_root, pages = build_pages(
                 report,
-                output_dir=Path(args.output_dir),
+                output_dir=output_dir,
                 overview_title=args.overview_title,
                 link_prefix=args.link_prefix,
             )

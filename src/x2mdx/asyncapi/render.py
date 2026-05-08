@@ -48,13 +48,41 @@ def page_ref(from_path: Path, to_path: Path) -> str:
     return relative_page_ref(from_path, to_path)
 
 
+def lifecycle_state_label(state: str | None) -> str | None:
+    if not state:
+        return None
+    return state.title()
+
+
+def lifecycle_state_tone(state: str | None) -> str:
+    return {
+        "alpha": "changed",
+        "beta": "neutral",
+        "stable": "added",
+        "deprecated": "removed",
+    }.get(state or "", "neutral")
+
+
 def lifecycle_badges(channel: AsyncApiChannelLifecycle) -> list[ReferenceBadge]:
     badges = [ReferenceBadge("WebSocket", tone="protocol"), ReferenceBadge(f"Since {channel.introduced_version}", tone="added")]
+    state_label = lifecycle_state_label(channel.lifecycle_state)
+    if state_label:
+        badges.append(ReferenceBadge(state_label, tone=lifecycle_state_tone(channel.lifecycle_state)))
     if channel.changed_in_versions:
         badges.append(ReferenceBadge(f"Changed {channel.changed_in_versions[-1]}", tone="changed"))
     if channel.removed_version:
         badges.append(ReferenceBadge(f"Removed {channel.removed_version}", tone="removed"))
     return badges
+
+
+def lifecycle_meta_items(channel: AsyncApiChannelLifecycle) -> list[ReferenceMetaItem]:
+    items: list[ReferenceMetaItem] = []
+    state_label = lifecycle_state_label(channel.lifecycle_state)
+    if state_label:
+        items.append(ReferenceMetaItem("Lifecycle", state_label))
+    if channel.replaces:
+        items.append(ReferenceMetaItem("Replaces", channel.replaces))
+    return items
 
 
 def channel_summary(channel: AsyncApiChannelLifecycle) -> str:
@@ -175,6 +203,7 @@ def build_action_operation(
             ReferenceMetaItem("Action", str(action["action"])),
             ReferenceMetaItem("Introduced", channel.introduced_version),
             ReferenceMetaItem("Removed", channel.removed_version or "-"),
+            *lifecycle_meta_items(channel),
         ],
         operation_method=str(action["action"]).upper(),
         operation_target=channel.channel,
@@ -186,6 +215,7 @@ def build_action_operation(
             ReferenceMetaItem("Operation ID", str(action.get("operation_id") or "-")),
             ReferenceMetaItem("Content type", str(action["message"].get("content_type") or "-")),
             ReferenceMetaItem("Payload", str(action["message"].get("payload_schema") or "-")),
+            *lifecycle_meta_items(channel),
         ],
         inputs=inputs,
         outputs=outputs,
@@ -216,6 +246,7 @@ def build_overview_page(
             meta_items=[
                 ReferenceMetaItem("Actions", ", ".join(channel.latest.get("action_names") or []) or "-"),
                 ReferenceMetaItem("Last seen", channel.last_seen_in),
+                *lifecycle_meta_items(channel),
             ],
         )
         for channel in report.channels
@@ -261,6 +292,7 @@ def build_channel_page(
                 ReferenceMetaItem("Operation ID", str(action.get("operation_id") or "-")),
                 ReferenceMetaItem("Method", str(action.get("ws_method") or "-")),
                 ReferenceMetaItem("Payload", str(action["message"].get("payload_schema") or "-")),
+                *lifecycle_meta_items(channel),
             ],
         )
         for action in channel.latest.get("actions", [])
@@ -279,6 +311,7 @@ def build_channel_page(
             ReferenceMetaItem("Actions", ", ".join(channel.latest.get("action_names") or []) or "-"),
             ReferenceMetaItem("Introduced", channel.introduced_version),
             ReferenceMetaItem("Removed", channel.removed_version or "-"),
+            *lifecycle_meta_items(channel),
         ],
         sections=[
             ReferenceSection(
