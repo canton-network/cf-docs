@@ -1,6 +1,6 @@
 export const VersionOption = ({ children }) => <>{children}</>;
 
-export const Version = ({ children, title, description, defaultLabel, defaultVersion, previousVersion, currentVersion, networkData = {} }) => {
+export const Version = ({ children, title, description, defaultLabel, networkData = {} }) => {
   const networkOrder = ['mainnet', 'testnet', 'devnet'];
   const networksForVersion = (version) => {
     return networkOrder.filter((networkKey) => networkData[networkKey]?.versions?.splice === version);
@@ -10,26 +10,21 @@ export const Version = ({ children, title, description, defaultLabel, defaultVer
   };
   const labelForVersion = (version) => {
     const networks = networksForVersion(version);
-    return networks.length ? networkNames(networks) : `CN ${version}`;
+    return networks.length ? `${networkNames(networks)} (${version})` : `CN ${version}`;
   };
-  const optionLabel = (option) => option.props.label ?? labelForVersion(option.props.version);
+  const labelWithVersion = (label, version) => {
+    return version ? `${label} (${version})` : label;
+  };
+  const optionLabel = (option) => option.props.label
+    ? labelWithVersion(option.props.label, option.props.version)
+    : labelForVersion(option.props.version);
   const options = React.Children.toArray(children).filter((child) => child?.props?.label || child?.props?.version);
   const defaultIndex = Math.max(
     0,
-    options.findIndex((child) => {
-      if (defaultVersion) {
-        return child.props.version === defaultVersion;
-      }
-      return optionLabel(child) === defaultLabel;
-    }),
+    options.findIndex((child) => optionLabel(child) === defaultLabel),
   );
   const [activeIndex, setActiveIndex] = React.useState(defaultIndex);
   const activeOption = options[activeIndex] ?? options[0];
-  const resolvedDescription = description ?? (
-    previousVersion && currentVersion
-      ? `This section changed between Canton Network ${previousVersion} and ${currentVersion}. Use the tab that matches your network.`
-      : null
-  );
 
   if (!options.length) {
     return null;
@@ -37,10 +32,10 @@ export const Version = ({ children, title, description, defaultLabel, defaultVer
 
   return (
     <div data-component="version" className="my-6 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-950">
-      {(title || resolvedDescription) && (
+      {(title || description) && (
         <div className="border-b border-gray-200 px-4 py-3 dark:border-gray-800">
           {title && <div className="text-sm font-semibold text-gray-950 dark:text-gray-100">{title}</div>}
-          {resolvedDescription && <div className="mt-1 text-sm leading-6 text-gray-600 dark:text-gray-400">{resolvedDescription}</div>}
+          {description && <div className="mt-1 text-sm leading-6 text-gray-600 dark:text-gray-400">{description}</div>}
         </div>
       )}
       <div role="tablist" className="flex gap-1 border-b border-gray-200 bg-gray-50 p-1 dark:border-gray-800 dark:bg-gray-900">
