@@ -7,14 +7,17 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_api_reference_landing_page_is_dropdown_root_not_sidebar_page() -> None:
+def test_api_reference_landing_page_is_dropdown_root_and_index_page() -> None:
     docs = json.loads((REPO_ROOT / "docs-main" / "docs.json").read_text(encoding="utf-8"))
     dropdowns = docs["navigation"]["dropdowns"]
     api_reference = next(item for item in dropdowns if item["dropdown"] == "API Reference")
 
     assert api_reference["root"] == "api-reference"
-    assert "api-reference" not in api_reference["pages"]
+    assert api_reference["pages"][0] == "api-reference"
     assert any(
         isinstance(item, dict) and item.get("group") == "Ledger API"
         for item in api_reference["pages"]
     )
+
+    frontmatter = (REPO_ROOT / "docs-main" / "api-reference.mdx").read_text(encoding="utf-8")
+    assert 'sidebarTitle: "api reference index"' in frontmatter
