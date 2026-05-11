@@ -1,0 +1,231 @@
+---
+title: "Debugging Tools"
+description: "Tools and workflows for debugging Canton applications: test output, Canton Console, PQS queries, and log analysis"
+---
+
+import CantonAppdevToolingDebuggingToolsL30 from "/snippets/canton-docs/appdev_tooling_debugging-tools_L30.mdx";
+import CantonAppdevToolingDebuggingToolsL46 from "/snippets/canton-docs/appdev_tooling_debugging-tools_L46.mdx";
+import CantonAppdevToolingDebuggingToolsL57 from "/snippets/canton-docs/appdev_tooling_debugging-tools_L57.mdx";
+
+
+When a transaction fails, a contract goes missing, or your application behaves unexpectedly, Canton provides several tools to investigate. This page covers the debugging tools available and common workflows for diagnosing issues.
+
+## dpm test Output
+
+`dpm test` runs your Daml Script tests and reports results to the terminal. When a test fails, the output includes:
+
+- The script name and the line where the failure occurred
+- The error type (e.g., `ContractNotFound`, `AuthorizationError`, `PreconditionFailed`)
+- For assertion failures, the expected and actual values
+
+Read the error message carefully -- Daml errors are specific. A `ContractNotFound` means the contract ID you referenced has been archived or never existed for your party. An `AuthorizationError` means the submitting party lacks the required signatory or controller role.
+
+### Choice Coverage
+
+Run `dpm test --show-coverage` to see which choices in your templates were exercised during testing. Low coverage often correlates with untested edge cases. If a choice has zero coverage, consider whether your test suite exercises it.
+
+## Canton Console
+
+The Canton Console is an interactive REPL that connects to a running Canton node. It is the most direct way to inspect ledger state during development.
+
+### Inspecting the Active Contract Set
+
+To see what contracts currently exist for a party:
+
+<CantonAppdevToolingDebuggingToolsL30 />
+
+If a contract you expect to exist is missing from the ACS, it has either been archived or your party was never a stakeholder on it.
+
+### Inspecting Transactions
+
+To see recent transactions:
+
+<CantonAppdevToolingDebuggingToolsL46 />
+
+Transaction details show which contracts were created, archived, and exercised. Compare the transaction trace against your expectations to identify where logic diverged.
+
+### Uploading Packages
+
+If you need to update your Daml packages on a running node:
+
+<CantonAppdevToolingDebuggingToolsL57 />
+
+## PQS SQL Queries
+
+PQS projects ledger state into PostgreSQL tables. When you need to investigate contract state across multiple templates or trace historical events, SQL is often the fastest approach.
+
+### Finding a Contract
+
+```sql
+-- Find active contracts of a given template
+SELECT contract_id, create_arguments
+FROM active_contracts
+WHERE template_id LIKE '%MyTemplate%';
+```
+
+### Tracing an Archived Contract
+
+```sql
+-- Find when and why a contract was archived
+SELECT contract_id, archive_event_id, effective_at
+FROM contracts
+WHERE template_id LIKE '%MyTemplate%'
+  AND contract_id = 'your-contract-id';
+```
+
+### Checking Event History
+
+```sql
+-- List recent events for a template
+SELECT event_id, event_type, contract_id, effective_at
+FROM events
+WHERE template_id LIKE '%MyTemplate%'
+ORDER BY effective_at DESC
+LIMIT 20;
+```
+
+PQS queries are scoped to your party's data. If you cannot find a contract in PQS, your party may not be a stakeholder on it.
+
+## Log Analysis
+
+When running LocalNet or a local Sandbox, logs capture detailed information about transaction processing, validation errors, and node behavior.
+
+### Capturing Logs
+
+In the cn-quickstart environment:
+
+```bash
+make capture-logs
+```
+
+This collects logs from all Docker containers into a local directory for analysis.
+
+### Log Files
+
+- **Canton Trace Ids**
+
+  > All Canton log statements contain a trace-id. This tracing is turned on by default and the `trace-id` is passed between the distributed processes:
+  >
+  >     c.d.c.p.p.s.InFlightSubmissionTracker:participant=participant1
+  >     tid:d5df95972a95b5ff00cb5cc3346c545f - NOT_SEQUENCED_TIMEOUT(2,d5df9597):
+  >     Transaction was not sequenced within the pre-defined max sequencing time and has
+  >     therefore timed out err-context:&#123;location=SubmissionTrackingData.scala:175,
+  >     timestamp=2022-10-19T17:45:56.393151Z&#125;
+  >
+  > In above example, we see the trace id twice: `tid:d5df95972a95b5ff00cb5cc3346c545f` and `NOT_SEQUENCED_TIMEOUT(2,d5df9597)`. By filtering according to the `trace-id`, you can find almost all log statements that relate to a particular command. However, sometimes, we also need to find out the command id of a transaction. You can do that by grepping for the “rosetta stone”, which is one particular log line that contains both strings:
+  >
+  >     2023-07-04 12:03:26,517 [⋮] INFO
+  >     c.d.c.p.a.s.c.CommandSubmissionServiceImpl:participant=participant1
+  >     tid:35e389f0e41fd0273443dd866ff9e347 - Submitting commands for interpretation,
+  >     commands -> &#123;readAs: [], deduplicationPeriod: &#123;duration: 'PT168H'&#125;,
+  >     submittedAt: '2023-07-04T10:03:26.514885Z', ledgerId: 'participant1',
+  >     userId: 'CSsubmitAndWaitBasic',
+  >     submissionId: 'CSsubmitAndWaitBasic-alpha-410b4d7b1b585-submission-0',
+  >     actAs: ['CSsubmitAndWaitBasic-alpha-410b4d7b1b585-party-0::122035bd93d74879ce582adf5aa04a809b4b20618d39c1a9c2a17d35c29ab1ed098f'],
+  >     commandId: 'CSsubmitAndWaitBasic-alpha-410b4d7b1b585-command-0',
+  >     workflowId: 'CSsubmitAndWaitBasic-410b4d7b1b585'&#125;.
+  >
+  > The first string is again the trace id. Additionally, the commandId of the transaction, the userId, the submissionId and the workflowId are logged and can be used to filter the logs.
+
+- **Extract the Context of a Log Message**
+
+  > The log lines often also contain the “context” of the component. Examples:
+  >
+  > - This log line tells us which component of which participant (participant1) of which synchronizer connection (da) has been emitting this log line. It also includes the trace ID of the underlying request:
+  >
+  >       2022-10-04 15:55:50,077 [⋮] DEBUG
+  >       c.d.c.p.p.TransactionProcessingSteps:participant=participant1/synchronizer=da
+  >       tid:461cae6245cfaadc87c2481a17d7e1bb - Preparing batch for transaction
+  >       submission
+  >
+  > - During tests, the log line includes the name of the test. In this case, it is `SimplestPingIntegrationTestInMemory`:
+  >
+  >       :: 2022-10-04 15:55:50,077 [⋮] DEBUG c.d.c.p.p.TransactionProcessingSteps:SimplestPingIntegrationTestInMemory/
+  >       participant=participant1/synchronizer=da tid:461cae6245cfaadc87c2481a17d7e1bb
+  >       - Preparing batch for transaction submission
+
+- **Compare with a Happy Path Successful Logging Trace**
+
+  > Many components will log something and it is impossible to document every micro-step that happens (as this is also subject to change). But it makes sense to compare a failure trace with a successful transaction trace. To get such a trace, you start up a canton “simple topology” example setup and run a simple:
+  >
+  >     participant1.health.ping(participant2)
+  >
+  > You then open the log file and filter for the command processing of that ping (search for "Starting ping"). This will give you a “clean happy path trace”. You can then subsequently compare your failure trace to the happy-path trace and look for the differences, i.e. where did the steps start to take a different path etc.
+
+- **Use the API Request Logger to Locate the Component**
+
+  > One key logging component is the `ApiRequestLogger`. This component is injected into the GRPC library and will log every incoming and outgoing request / message. Therefore, we can easily observe when a transaction left a node and when it arrived at a subsequent node. If api logging is turned on, the api request logger will print the full detail of all the GRPC messages into the log files.
+
+### Using LNAV to View Log Files
+
+- **Setup and Use LNAV**
+
+  > Setup lnav for viewing logs as described in viewing logs. It will require a few minutes to get used to it, but the payoff of this investment is great and comes fast. **In particular get familiar with loading multiple files, filtering, searching and jumping to errors**.
+
+- **Open Multiple Log Files in one LNAV Session**
+
+  > Generally, when you start reading log files, then open the log files of all involved nodes in a single lnav session (if the files are small enough): `lnav participant1.log sequencer1.log participant2.log`
+
+- **Split Log Files if they are too big**
+
+  > If your log files are too big the unix utility `split` can be used to split the file into chunks.
+
+- **Uncompress GZ Log files for faster reading**
+
+  > Normally, log files are compressed when you get them. Lnav works much better and faster if you pass uncompressed files on the command line.
+
+- **Easily Navigate to the First Logged Error**
+
+  > Then hit `g` to go to the beginning of the file and subsequently `w` or `e` to get to the first warning or error. Usually, the first error gives you the hint on what is going on.
+
+- **Look at All Warnings and Errors**
+
+  > Canton’s error reporting has been designed to log a warning/error whenever it detects that something is not working as it should. Therefore, any problem will likely show up in the log file. On the flip side, Canton may log a huge number of warnings/errors, in particular if a node or the database goes down. If the first warning or error does not completely explain the situation, it is important to look at all such messages. Use the following recipe:
+  >
+  > > 1.  Set the minimum log level to WARN to display only warnings and errors (`:set-min-log-level warn`).
+  > > 2.  Look at the first message. Mark the message (pressing `m`) so you can later get back to the message.
+  > > 3.  Define an out-filter to hide the first message and all similar messages.
+  > > 4.  Repeat steps (2) and (3) until you have filtered out all messages.
+  > > 5.  Disable all out-filters. You can now press u and U to step through all marked warning and error messages.
+
+- **Filter Irrelevant Items**
+
+  > One useful strategy when working with logs is to continuously remove lines that are not relevant, adding “filter-out” until only the relevant log messages remain.
+
+- **Show Gap In Logging Times**
+
+  > Once you start filtering for a particular command trace, you might want to hit “shift-t”. This will show you the delta time between the first log line and the subsequent one. Usually, you just need to find the “gap”. This will tell you immediately where something got stuck / slow / timed out:
+  >
+  > > - open the log files of all components
+  > > - search for the first error / warn (i.e. hit `w` or `e`)
+  > > - pick the trace-id (as described above) and filter for it
+  > > - hit `shift-t` and find the gap.
+### What to Look For
+
+- **WARN and ERROR level messages** -- These indicate problems. Search for the transaction ID or command ID from your failing operation.
+- **Rejection reasons** -- When the mediator rejects a transaction, the logs include the reason (timeout, inconsistency, authorization failure).
+- **Connectivity issues** -- If your validator cannot reach the synchronizer, transactions stall. Look for connection errors or timeout messages.
+
+## Common Debugging Workflows
+
+### "Why did my transaction fail?"
+
+1. Check the error returned by the Ledger API or your backend. Note the command ID.
+2. Search the validator logs for that command ID to find the detailed rejection reason.
+3. Common causes: insufficient authorization (wrong submitting party), contract already archived (race condition), insufficient traffic credits (check your validator's traffic budget).
+
+### "Where is my contract?"
+
+1. Query PQS or the Canton Console ACS for the contract ID or template.
+2. If the contract is not in the ACS, check PQS for archive events -- it may have been consumed by a choice.
+3. If you never see the contract, verify that your party is a stakeholder (signatory or observer) on it. Canton's privacy model means your party simply will not see contracts it has no stake in.
+
+### "Why can't I see this contract?"
+
+This is almost always a privacy question. Your party can see a contract only if it is a signatory, observer, or has received the contract through divulgence or explicit disclosure. Check the template definition to confirm your party's role. If your party is not listed, you need to either add it as an observer in the Daml model or use explicit disclosure.
+
+## Next Steps
+
+- [Development Tools Overview](/devnet/appdev/tooling/development-tools-overview) -- Summary of all available tools
+- [Troubleshooting](/devnet/appdev/troubleshooting) -- Solutions for common Canton development issues
+- [Testing Daml Contracts](/devnet/appdev/modules/m3-testing) -- Writing effective tests to catch issues early

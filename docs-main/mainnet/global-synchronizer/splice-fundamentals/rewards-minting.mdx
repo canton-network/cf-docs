@@ -1,0 +1,237 @@
+---
+title: "Rewards and Minting"
+description: "How rewards work, the minting mechanism, and reward distribution on the Global Synchronizer"
+---
+
+Canton Coin (CC) is minted through a round-based cycle. Each round produces activity records that represent valuable contributions to the network, and those records are converted into CC during the minting phase. As a validator operator, your node earns rewards automatically for being live and available.
+
+## Rounds
+
+{/* COPIED_START source="splice:docs/src/background/tokenomics/overview_tokenomics.rst" */}
+A round starts every 10 minutes, which is a configuration parameter that the Super Validators may change in the future via a governance vote.
+{/* COPIED_END */}
+
+Each round progresses through five phases:
+
+1. **Fee recording** -- Fee values for the round are written to the ledger.
+2. **Activity recording** -- Activity records are created. Records created in this phase belong to that round.
+3. **Issuance calculation** -- Because the total CC issued per round is constant, a CC-issuance-per-activity-weight is calculated for each kind of activity record. The per-weight issuance varies with the number and type of activity records in that round.
+4. **Minting** -- Owners of activity records mint CC proportional to their minting weight.
+5. **Closing** -- The round is closed after all minting is complete.
+
+Several rounds are active concurrently, each in a different phase.
+
+## Types of activity records
+
+There are four activity record types and one related marker:
+
+- **SvRewardCoupon** -- Created by each Super Validator in each round. SV minting rights are granted by the tokenomics committee in exchange for operating an SV node or contributing key infrastructure or activity to the network. The current list of SV rights is available from the [CIP repository](https://github.com/global-synchronizer-foundation/cips).
+
+- **ValidatorLivenessActivityRecord** -- Created by each live validator in each round. This rewards your validator for being available to confirm transactions and provides initial funds to purchase traffic after onboarding.
+
+- **ValidatorRewardCoupon** -- Created when CC is burned (e.g., for traffic purchases) or when a call to `AmuletRules_Transfer` is made. The `user` field identifies the validator operator of the validator hosting the purchasing party.
+
+- **AppRewardCoupon** -- Created for application providers when their Daml code interacts with models that feature the application provider's party, or when a `FeaturedAppActivityMarker` is converted by Super Validator automation.
+
+- **FeaturedAppActivityMarker** -- Not itself an activity record, but is converted into an `AppRewardCoupon` by automation run by the Super Validators. This is the preferred way for applications to generate app activity records.
+
+### Featured vs. unfeatured applications
+
+After [CIP-0078](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0078/cip-0078.md) was implemented, only featured applications receive a reward. A featured application receives a minting weight with a total equivalent value of about $1 USD (the Super Validators may adjust this in the future).
+
+To become a featured application, you submit a request through the [GSF form](https://sync.global/featured-app-request/). The tokenomics committee reviews the application. You can track submissions on the [tokenomics committee topics page](https://lists.sync.global/g/tokenomics/topics). For testing purposes, you can self-feature your application on DevNet.
+
+### Featured application activity markers
+
+{/* COPIED_START source="splice:docs/src/background/tokenomics/feat_app_act_marker_tokenomics.rst" */}
+Featured application activity markers can be created for a transaction that adds value but does not involve a CC Transfer (e.g., a stable coin transfer or the settlement of a trade).
+{/* COPIED_END */}
+
+The general guidance is to create a `FeaturedAppActivityMarker` for economically important events such as:
+
+- Lock or unlock a Real World Asset (RWA)
+- Transfer a RWA
+- Mint or burn tokens
+
+Do not create markers for intermediate steps or propose steps in a propose-accept pattern.
+
+The marker is specified in [CIP-47](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0047/cip-0047.md). Multiple markers per transaction tree are allowed for composed transactions (e.g., a settlement where both the trading venue and the registries of transferred assets receive featured app rewards).
+
+### Sharing activity attribution
+
+For both `FeaturedAppActivityMarker` and `AppRewardCoupon`, the attribution of activity can be shared among multiple beneficiary parties. Each beneficiary is assigned a weight, and the weights must sum to 1.0. A separate contract is created for each beneficiary and weight pair.
+
+## Minting for external parties
+
+For local parties onboarded to a validator, the validator application runs background automation to mint all activity records automatically. External parties sign transactions using a key they control, so the validator automation cannot perform minting on their behalf directly.
+
+External parties have two options:
+
+- **Minting delegation** -- Delegate reward collection to a validator, avoiding the need to build custom automation.
+- **Custom automation** -- Call `AmuletRules_Transfer` at least once per round with all activity records as inputs.
+
+An approved CIP called [Weighted Validator Liveness Rewards for SV-Determined Parties](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0073/cip-0073.md) describes further support for this.
+
+## Minting delegations
+
+{/* COPIED_START source="splice:docs/src/validator_operator/validator_delegations.rst" */}
+Minting delegations allow a delegate to instruct their validator node to automate the minting of rewards on behalf of an external party (the beneficiary) hosted on the same validator node. The delegate can be any party onboarded to the validator node's wallet (e.g., the validator operator party, but other internal parties are also possible).
+{/* COPIED_END */}
+
+A minting delegation grants a delegate party the authority to:
+
+- Mint reward coupons on behalf of a beneficiary party
+- Auto-merge coins for the beneficiary (up to a configured limit)
+
+The following reward coupon types can be minted through a delegation:
+
+- `ValidatorRewardCoupon`
+- `UnclaimedActivityRecord`
+- `DevelopmentFundCoupon`
+- `AppRewardCoupon`
+- `ValidatorLivenessActivityRecord`
+
+### Delegation properties
+
+- **Beneficiary** -- The external party on whose behalf minting is performed
+- **Delegate** -- The internal party authorized to perform minting operations
+- **Expiration** -- The time after which the delegation is no longer valid
+- **Amulet merge limit** -- The number of coins to keep after auto-merging
+
+### Managing delegations
+
+The delegation workflow has three steps:
+
+1. **Proposal creation** -- The beneficiary creates a `MintingDelegationProposal` specifying the delegate, expiration date, and merge limit (typically through the Ledger API).
+2. **Proposal acceptance** -- The delegate reviews and accepts (or rejects) the proposal through the wallet UI. Acceptance creates an active `MintingDelegation` contract.
+3. **Withdrawal** -- When the delegation is no longer needed, the delegate can withdraw it through the wallet UI.
+
+Delegates manage delegations through the **Delegations** tab in the wallet UI, which shows both proposed and active delegations.
+
+<Note>
+Minting delegations count towards the max 200 Splice wallet parties limit. Transaction costs for minting are paid from the validator node's traffic balance.
+</Note>
+
+### Security considerations for delegations
+
+- Verify the beneficiary party ID before accepting a delegation
+- Confirm the validator operator is willing to pay the traffic cost of minting transactions
+- Only accept delegations from parties already hosted on the validator node (the UI enforces this)
+- Periodically review active delegations and withdraw any that are no longer needed
+
+{/* COPIED_START source="splice:docs/src/validator_operator/validator_delegations.rst" hash="0f96d8bc" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was copied from existing reviewed documentation.
+**Source:** `splice:docs/src/validator_operator/validator_delegations.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+# Minting Delegations
+
+Minting delegations allow a delegate to instruct their validator node to automate the minting of rewards on behalf of an external party (the beneficiary) hosted on the same validator node. The delegate can be any party onboarded to the validator node's wallet (e.g., the validator operator party, but other internal parties are also possible). This is useful to automate the reward collection for external parties.
+
+## Overview
+
+A **minting delegation** grants a delegate party the authority to:
+
+- Mint reward coupons on behalf of a beneficiary party
+- Auto-merge amulets for the beneficiary (up to the configured limit)
+
+The following reward coupon types may be minted through a delegation:
+
+- ValidatorRewardCoupon
+- UnclaimedActivityRecord
+- DevelopmentFundCoupon
+- AppRewardCoupon
+- ValidatorLivenessActivityRecord
+
+<Note>
+To mint ValidatorRewardCoupon, the beneficiary must first create a ValidatorRight.
+</Note>
+
+The delegation has the following key properties:
+
+| Property           | Description                                                 |
+|--------------------|-------------------------------------------------------------|
+| Beneficiary        | The external party on whose behalf minting is performed     |
+| Delegate           | The internal party authorized to perform minting operations |
+| Expiration         | The time after which the delegation is no longer valid      |
+| Amulet merge limit | The number of amulets to keep after auto-merging            |
+
+## Automation
+
+When a minting delegation is active, the validator node runs automation (`MintingDelegationCollectRewardsTrigger`) for the beneficiary party that periodically:
+
+1.  Checks for reward coupons owned by the beneficiary that are eligible for minting
+2.  Collects and mints these rewards on behalf of the beneficiary
+3.  Merges the beneficiary's amulets when the count exceeds twice the configured merge limit
+
+For the automation to run successfully, the following conditions must be met:
+
+- The delegate must be a party onboarded to the validator node's wallet (e.g., the validator operator party, or another internal party with its own user account)
+- The delegation must not be expired
+- The beneficiary must be hosted on the validator node in at least observer mode
+- The beneficiary should not be onboarded to the wallet app, as otherwise the delegated automation contends with the built-in automation of the wallet app
+- The beneficiary must have reward coupons or amulets that need processing
+
+Note that minting delegations count towards the max 200 Splice wallet parties limit.
+
+The automation submits transactions as the delegate party. Transaction costs are paid from the validator node's traffic balance.
+
+<Note>
+The amulet merge limit controls automatic consolidation of the beneficiary's amulets: when the number of amulets exceeds twice the limit, the smallest amulets are merged to maintain exactly the configured number.
+</Note>
+
+## Managing Minting Delegations
+
+The minting delegation workflow consists of the following steps:
+
+1.  **Proposal Creation**: The beneficiary creates a `MintingDelegationProposal` specifying the delegate, expiration date, and amulet merge limit. This is typically done via the Ledger API.
+2.  **Proposal Acceptance**: The delegate reviews and accepts (or rejects) the proposal through the wallet UI. Upon acceptance, an active `MintingDelegation` contract is created.
+3.  **Withdrawal**: When the delegation is no longer needed, the delegate can withdraw it through the wallet UI. This terminates the delegation and stops the automation from minting rewards for the beneficiary.
+
+### Using the Delegations Tab
+
+Delegates can manage minting delegations through the **Delegations** tab in the wallet UI. This tab displays two sections:
+
+#### Proposed Delegations
+
+The **Proposed** section shows all pending `MintingDelegationProposal` contracts where the current user is the designated delegate.
+
+For each proposal, the delegate can:
+
+- **Accept**: Approve the delegation request. This creates an active minting delegation. If a delegation already exists for the same beneficiary, accepting a new proposal will replace the existing delegation.
+- **Reject**: Decline the delegation request. This archives the proposal.
+
+<Note>
+The Accept button is disabled if the beneficiary is not yet hosted on the validator node. The beneficiary must be hosted before a delegation can be accepted.
+</Note>
+
+#### Active Delegations
+
+The **Active** section shows all current `MintingDelegation` contracts where the current user is the delegate.
+
+For each active delegation, the delegate can:
+
+- **Withdraw**: Terminate the delegation. This archives the delegation contract and stops the automation from minting rewards for the beneficiary.
+
+### Replacing Delegations
+
+When a delegate accepts a proposal for a beneficiary that already has an active delegation, a confirmation dialog will appear showing:
+
+- The current delegation's Merge Threshold and Expiration values
+- The new proposal's Merge Threshold and Expiration values
+
+Accepting the proposal will automatically replace the existing delegation with the new one. This allows beneficiaries to update their delegation parameters (such as extending the expiration date) without the delegate having to manually withdraw the old delegation first.
+
+### Security Considerations
+
+When managing minting delegations, delegates should consider:
+
+1.  **Verify the beneficiary**: Before accepting a delegation, ensure you recognize and trust the beneficiary party. The Party ID should match the expected party.
+2.  **Traffic costs**: Verify that the validator operator is willing to pay the cost of minting transactions from the validator node's traffic balance.
+3.  **Hosting status**: Only accept delegations from hosted parties. The UI enforces this by disabling the Accept button for non-hosted beneficiaries.
+4.  **Monitor active delegations**: Periodically review active delegations and withdraw any that are no longer needed or authorized.
+
+{/* COPIED_END */}

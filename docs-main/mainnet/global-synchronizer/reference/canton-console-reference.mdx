@@ -1,0 +1,344 @@
+---
+title: "Canton Console Reference"
+description: "Reference for Canton console commands used by validators and SV operators on the Global Synchronizer"
+---
+
+import CantonGlobalSynchronizerReferenceCantonConsoleReferenceL331 from "/snippets/canton-docs/global-synchronizer_reference_canton-console-reference_L331.mdx";
+
+
+The Canton console is a Scala-based REPL (built on [Ammonite](http://ammonite.io)) that provides administrative access to Canton nodes. All console commands are valid Scala expressions. String arguments are automatically converted to the appropriate Canton types (`SynchronizerAlias`, `Fingerprint`, `Identifier`) where needed.
+
+This page covers the commands most relevant to validator and SV operators. For the full
+command reference, see the [Canton documentation](https://docs.digitalasset.com/operate/3.5/reference/console.html).
+
+## Starting the Console
+
+{/* COPIED_START source="splice:docs/src/deployment/console_access.rst" hash="bccf3653" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was copied from existing reviewed documentation.
+**Source:** `docs/src/deployment/console_access.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+# Getting console access to Canton nodes
+
+For more involved debugging and disaster recovery, direct access to the console of a Canton node (participant, sequencer, mediator) might be required. Steps to obtain such access:
+
+Requirements:
+
+- Direct access to the Canton node process
+- Canton binary
+
+Once you see the following banner for the console you have successfully gained access
+
+``` text
+_____            _
+/ ____|          | |
+| |     __ _ _ __ | |_ ___  _ __
+| |    / _` | '_ \| __/ _ \| '_ \
+| |___| (_| | | | | || (_) | | | |
+\_____\__,_|_| |_|\__\___/|_| |_|
+
+Welcome to Canton!
+```
+
+## Participant console
+
+1.  Obtain an authentication token as specified in [the Canton authentication docs](https://docs.digitalasset.com/operate/3.4/howtos/secure/apis/jwt.html)
+
+2.  Ensure you can access the participant's ports 5001 and 5002
+
+3.  Add the configuration to a local file <span class="title-ref">console.conf</span>
+    ```
+    canton {
+      remote-participants {
+        participant {
+          admin-api {
+            port = 5002
+            address = localhost
+          }
+          ledger-api {
+            port = 5001
+            address = localhost
+          }
+          token = "<auth token>"
+        }
+      }
+      features.enable-preview-commands = yes
+      features.enable-testing-commands = yes
+      features.enable-repair-commands = yes
+    }
+    ```
+
+4.  Run the docker command
+
+    ```
+    docker run -it --rm --network host -v $(pwd)/console.conf:/app/app.conf /canton: --console
+    ```
+
+    <Warning>
+    If you run the participant using the docker compose setup the docker command must be run with the docker network used by the participant. Adjust the configuration to connect to the participant container:
+    </Warning>
+
+    ```
+    canton {
+      remote-participants {
+        participant {
+          admin-api {
+            port = 5002
+            address = participant
+          }
+          ledger-api {
+            port = 5001
+            address = participant
+          }
+          token = "<auth token>"
+        }
+      }
+      features.enable-preview-commands = yes
+      features.enable-testing-commands = yes
+      features.enable-repair-commands = yes
+    }
+    ```
+
+    Running docker with the default network (`splice-validator`):
+
+    ```
+    docker run -it --rm --network splice-validator -v $(pwd)/console.conf:/app/app.conf /canton: --console
+    ```
+
+## Sequencer console
+
+1.  Ensure you can access the sequencer's ports 5008 and 5009
+
+2.  Add the configuration to a local file <span class="title-ref">console.conf</span>
+
+    > ```
+    > canton {
+    >   remote-sequencers {
+    >     sequencer {
+    >       public-api {
+    >         port = 5008
+    >         address = localhost
+    >       }
+    >       admin-api {
+    >         port = 5009
+    >         address = localhost
+    >       }
+    >     }
+    >   }
+    >   features.enable-preview-commands = yes
+    >   features.enable-testing-commands = yes
+    >   features.enable-repair-commands = yes
+    > }
+    > ```
+
+3.  Run the docker command
+
+    > <div class="parsed-literal">
+    >
+    > docker run -it --rm --network host -v \$(pwd)/console.conf:/app/app.conf /canton: --console
+    >
+    > </div>
+
+## Mediator console
+
+1.  Ensure you can access the mediator's port 5007
+
+2.  Add the configuration to a local file <span class="title-ref">console.conf</span>
+
+    > ```
+    > canton {
+    >   remote-mediators {
+    >     mediator {
+    >       admin-api {
+    >         port = 5007
+    >         address = localhost
+    >       }
+    >     }
+    >   }
+    >   features.enable-preview-commands = yes
+    >   features.enable-testing-commands = yes
+    >   features.enable-repair-commands = yes
+    > }
+    > ```
+
+3.  Run the docker command
+
+    > <div class="parsed-literal">
+    >
+    > docker run -it --rm --network host -v \$(pwd)/console.conf:/app/app.conf /canton: --console
+    >
+    > </div>
+
+## Access in a K8s cluster
+
+In a K8s cluster you can use a debug pod to access the console directly from the cluster.
+
+First you can create a pod running the right canton version using:
+
+```bash
+kubectl debug "${POD_NAME}" --image "$(kubectl get pod "${POD_NAME}" -o json | jq -re '.spec.containers[0].image')" -i -t -- bash
+```
+
+where <span class="title-ref">POD_NAME</span> is the name of the participant/sequencer/mediator pod.
+
+Once you are inside the running pod you can install a text editor and create the config file <span class="title-ref">console.conf</span> that is described above.
+
+```bash
+$ apt-get update
+$ apt-get install -y vim
+$ vim console.conf # paste in the config from above
+$ /app/bin/canton -v -c console.conf
+```
+
+{/* COPIED_END */}
+
+You can connect a console to a running Canton node over its Admin API and Ledger API ports. This is the standard approach for production validators, where nodes run as background services or containers.
+
+To run a script against a remote node without entering the interactive REPL:
+
+```bash
+./bin/canton run <script.canton> -c console.conf
+```
+
+### TLS and Authorization
+
+This section will be expanded in a future update. For TLS configuration, see the [Validator Configuration Reference](/mainnet/global-synchronizer/reference/configuration-reference).
+
+## Node References
+
+This section will be expanded in a future update. Node references (`participant`, `sequencer`, `mediator`) are automatically bound when the console starts based on the nodes defined in your configuration file.
+
+## Help System
+
+This section will be expanded in a future update. Run `help` in the console to list available commands, or append `.help` to any command group (e.g., `participant.health.help`) to see its subcommands.
+
+## Command Groups for Operators
+
+The following groups are the most relevant for day-to-day validator and SV operations. Each group is accessed as `<node-ref>.<group>`.
+
+### health
+
+Status checks, liveness probes, and diagnostics.
+
+| Command | Description |
+|---------|-------------|
+| `health.status` | Current node status |
+| `health.active` | Whether the node is the active instance (for HA setups) |
+| `health.ping(targetParticipant)` | Round-trip connectivity check between participants |
+| `health.dump(outputFile)` | Generate a diagnostic bundle for support |
+| `health.initialized` | Whether the node has completed initialization |
+| `health.is_running` | Whether the node process is up |
+| `health.set_log_level(level)` | Change log verbosity at runtime |
+| `health.last_errors` | Recent errors from the node's error log |
+
+### synchronizers
+
+Manage connections between your validator's participant node and synchronizers.
+
+| Command | Description |
+|---------|-------------|
+| `synchronizers.connect(alias, url)` | Connect to a synchronizer |
+| `synchronizers.disconnect(alias)` | Disconnect from a synchronizer |
+| `synchronizers.reconnect(alias)` | Reconnect after a disconnection |
+| `synchronizers.reconnect_all` | Reconnect to all previously connected synchronizers |
+| `synchronizers.list_connected` | List active synchronizer connections |
+| `synchronizers.list_registered` | List all registered synchronizers (connected or not) |
+| `synchronizers.is_connected(alias)` | Check connectivity to a specific synchronizer |
+| `synchronizers.config(alias)` | View the connection configuration for a synchronizer |
+
+### parties
+
+Register and manage parties hosted on your validator.
+
+| Command | Description |
+|---------|-------------|
+| `parties.enable(name)` | Register a new party on the participant |
+| `parties.disable(party)` | Remove a party from the participant |
+| `parties.list` | List all parties known to this participant |
+| `parties.find(name)` | Look up a party by name or identifier |
+
+### dars
+
+Upload and manage Daml archive (DAR) packages.
+
+| Command | Description |
+|---------|-------------|
+| `dars.upload(path)` | Upload a DAR file |
+| `dars.list` | List uploaded DARs |
+| `dars.remove(darHash)` | Remove a DAR (only if not in use). The `darHash` is the SHA-256 hash of the DAR file, used to uniquely identify and reference a specific package archive. |
+| `dars.validate(path)` | Validate a DAR without uploading |
+| `topology.vetted_packages.list(darHash)` | Vet a DAR for use in transactions |
+| `dars.vetting.disable(darHash)` | Unvet a DAR |
+
+### topology
+
+Manage identity and topology state, including keys, namespace delegations, and synchronizer parameters.
+
+| Command | Description |
+|---------|-------------|
+| `topology.init_id(name)` | Initialize the node's identity |
+| `topology.transactions.list` | List topology transactions |
+| `topology.transactions.authorize(...)` | Authorize a topology transaction |
+| `topology.transactions.export_topology_snapshot(...)` | Export the current topology state |
+| `topology.synchronizer_parameters.list(...)` | View synchronizer parameters |
+| `topology.synchronizer_parameters.propose_update(...)` | Propose a synchronizer parameter change (SV operators) |
+
+### ledger_api
+
+Interact with the Ledger API from the console. Useful for debugging contract state and testing submissions.
+
+| Command | Description |
+|---------|-------------|
+| `ledger_api.state.acs.of_party(party)` | Active contract set for a party |
+| `ledger_api.state.acs.of_all` | Active contracts across all parties on this participant |
+| `ledger_api.updates.flat(...)` | Flat transaction stream |
+| `ledger_api.updates.trees(...)` | Transaction tree stream |
+| `ledger_api.commands.submit(...)` | Submit a command |
+| `ledger_api.commands.submit_async(...)` | Submit a command without waiting for completion |
+| `ledger_api.completions.list(...)` | List command completions |
+| `ledger_api.packages.list` | List packages known to the Ledger API server |
+
+### pruning
+
+Control data retention and storage growth.
+
+| Command | Description |
+|---------|-------------|
+| `pruning.prune(offset)` | Prune ledger data up to a given offset |
+| `pruning.prune_internally` | Prune Canton-internal data |
+| `pruning.find_safe_offset(beforeOrAt)` | Find the latest safe pruning offset for a timestamp |
+| `pruning.set_schedule(cron, maxDuration, retention)` | Configure automatic pruning |
+| `pruning.get_schedule` | View the current pruning schedule |
+| `pruning.clear_schedule` | Disable automatic pruning |
+
+## Console Scripting
+
+Canton scripts are files with a `.canton` extension containing valid Scala code. They run in the same environment as the interactive console, with full access to node references and all command groups.
+
+```bash
+./bin/canton run my-script.canton -c console.conf
+```
+
+A typical operator script might look like this:
+
+<CantonGlobalSynchronizerReferenceCantonConsoleReferenceL331 />
+
+### Database Migrations
+
+## Sequencer and Mediator Commands
+
+SV operators who manage sequencer and mediator nodes have access to additional command groups on those node references.
+
+**Sequencer-specific commands** include BFT ordering topology management (`sequencer.bft.get_ordering_topology`, `sequencer.bft.get_peer_network_status`) and pruning operations.
+
+**Mediator-specific commands** include `mediator.setup.assign` for assigning a mediator to a synchronizer and `mediator.inspection` for examining mediator state.
+
+Both sequencer and mediator nodes also expose `health`, `keys`, and `topology` command groups with the same interface as the participant versions.
+
+## Related Resources
+
+- [Canton documentation - Console reference](https://docs.digitalasset.com/operate/3.5/reference/console.html) for the full command listing
+- [Canton documentation - Administration APIs](https://docs.digitalasset.com/operate/3.5/reference/apis.html) for the underlying gRPC APIs

@@ -1,0 +1,61 @@
+---
+title: "Current Release"
+description: "Release notes for Splice 0.6.2 and Canton 3.5.1 (DevNet)"
+---
+
+The current production release of the Global Synchronizer software on DevNet is **Splice 0.6.2** running on **Canton 3.5.1**.
+
+## Splice 0.5.9
+
+{/* COPIED_START source="splice:docs/src/release_notes.rst" */}
+
+### Scan
+
+- Added `canton.scan-apps.scan-app.acs-store-descriptor-user-version` and `canton.scan-apps.scan-app.tx-log-store-descriptor-user-version` configuration settings to set a `user-version` for the ACS and TxLog stores respectively. Modifying the `user-version` wipes the respective store and triggers re-ingestion.
+- Added a new external endpoint `GET /v0/unclaimed-development-fund-coupons` to retrieve all active unclaimed development fund coupon contracts.
+
+### Daml
+
+- Implemented minting delegation as described in [CIP-0073 — Weighted Validator Liveness Rewards for SV-Chosen Parties](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0073/cip-0073.md). New templates added in the `splice-wallet` package:
+  - **MintingDelegationProposal** — a proposal from the beneficiary to the delegate to create a `MintingDelegation`
+  - **MintingDelegation** — an active delegation granting the delegate authority to mint rewards on behalf of the beneficiary
+
+Enabling this feature on all validators requires SVs to vote on wallet Daml version 0.1.16.
+
+### Wallet
+
+- Added endpoint `POST /v0/wallet/development-fund-coupons/allocate` to allocate a development fund coupon for a given beneficiary, amount, expiration time, and reason.
+- Added endpoint `GET /v0/wallet/development-fund-coupons` to retrieve all active DevelopmentFundCoupon contracts, sorted by expiration date.
+- Added endpoint `POST /v0/wallet/development-fund-coupons/{contract_id}/withdraw` to withdraw a development fund coupon when the wallet user party is the development fund manager.
+- Minting delegation management added to the wallet UI.
+- Enhanced rewards collection automation to support collecting development fund coupons.
+
+### Validator
+
+- Automation added to perform minting for hosted external parties if they have an active `MintingDelegation` contract with an internal party.
+
+{/* COPIED_END */}
+
+## Canton 3.4.7
+
+{/* COPIED_START source="splice:canton/release-notes/3.4.7.md" */}
+This is a maintenance release that fixes an issue when replaying too many ACS changes during connection to a synchronizer.
+{/* COPIED_END */}
+
+### Compatibility
+
+| Dependency | Version |
+|---|---|
+| Canton protocol versions | 34 |
+| Java Runtime | OpenJDK 21 |
+| PostgreSQL | Recommended: 17.6. Also tested: 14.19, 15.14, 16.10 |
+
+## Upgrade notes
+
+If you are upgrading from 0.5.7 or earlier, skip 0.5.7 and go directly to at least 0.5.8. Version 0.5.7 introduced a performance regression related to topology transaction processing that was fixed in 0.5.8.
+
+<Warning>
+Version 0.5.8 breaks backwards compatibility with migration dumps taken on 0.4.x versions. Deploy with `migrating: false` (Helm) or without `-M` (Docker Compose).
+</Warning>
+
+For the full upgrade procedure, see [Upgrade Procedures](/devnet/global-synchronizer/production-operations/upgrade-procedures).

@@ -1,0 +1,180 @@
+---
+title: "Minor Releases"
+description: "Release notes for Splice 0.5.x minor releases"
+---
+
+This page covers the minor releases in the current Splice 0.5.x series. Each release corresponds to a Canton 3.4.x version. For the current release, see [Current Release](/devnet/global-synchronizer/release-notes/current-release).
+
+## Splice 0.5.8
+
+<Note>
+Version 0.5.7 introduced a performance regression in topology transaction processing. Skip 0.5.7 and upgrade directly to 0.5.8 or later.
+</Note>
+
+{/* COPIED_START source="splice:docs/src/release_notes.rst" */}
+
+### Canton
+
+- Fixed the performance regression related to topology transaction processing.
+- Improved performance of some queries used in participant pruning. The database migration can take up to 2 minutes.
+
+### Scan
+
+- Deprecated `/v0/total-amulet-balance` and `/v0/wallet-balance` endpoints have been removed. Use the Token Standard metadata endpoint and `/v0/holdings/summary` instead.
+
+### Deployments
+
+- Default logger switched to asynchronous appender for better performance. Set `LOG_IMMEDIATE_FLUSH=true` to revert to synchronous logging.
+- This version breaks backwards compatibility with migration dumps taken on 0.4.x versions. Deploy with `migrating: false`.
+
+{/* COPIED_END */}
+
+## Splice 0.5.7
+
+{/* COPIED_START source="splice:docs/src/release_notes.rst" */}
+
+<Warning>
+App developers whose Daml code statically depends on `splice-amulet < 0.1.15` should recompile against `splice-amulet >= 0.1.15` to be ready for the new fields introduced in `AmuletConfig` (`optDevelopmentFundManager`) and `IssuanceConfig` (`optDevelopmentFundPercentage`).
+</Warning>
+
+### Sequencer Connections
+
+- Fixed an issue that caused participants to randomly crash and restart.
+
+### Daml
+
+- Implemented Daml changes for [CIP-0082 — Establish a 5% Development Fund](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0082/cip-0082.md):
+  - **UnclaimedDevelopmentFundCoupon** — represents unallocated Development Fund entitlements created per issuance round
+  - **DevelopmentFundCoupon** — represents an allocated portion of the Development Fund for a specific beneficiary
+  - `IssuanceConfig` extended with optional `optDevelopmentFundPercentage` (default 0.05)
+  - `AmuletConfig` extended with optional `optDevelopmentFundManager`
+  - Modified `AmuletRules_Transfer` to accept `DevelopmentFundCoupon` as valid input
+
+These Daml changes require upgrading to the following versions before voting to set transfer fees to zero:
+
+| Package | Version |
+|---|---|
+| amulet | 0.1.15 |
+| amuletNameService | 0.1.16 |
+| dsoGovernance | 0.1.21 |
+| splitwell | 0.1.15 |
+| validatorLifecycle | 0.1.6 |
+| wallet | 0.1.15 |
+| walletPayments | 0.1.15 |
+
+### SV App
+
+- New `MergeUnclaimedDevelopmentFundCouponsTrigger` that merges small unclaimed coupons when their count exceeds a configurable threshold (default: 10).
+- New config field `unclaimedDevelopmentFundCouponsThreshold` in `SvOnboardingConfig`.
+
+### Deployments
+
+- Default logger switched to asynchronous appender for Docker Compose deployments.
+
+### Validator
+
+- Exposed `/v0/holdings/summary` endpoint from scan proxy.
+
+{/* COPIED_END */}
+
+## Splice 0.5.6
+
+{/* COPIED_START source="splice:docs/src/release_notes.rst" */}
+
+### Sequencer
+
+- Performance improvements to improve stability under higher load.
+
+{/* COPIED_END */}
+
+## Splice 0.5.5
+
+{/* COPIED_START source="splice:docs/src/release_notes.rst" */}
+
+### API Security
+
+- Tightened authorization checks for all non-public API endpoints. All non-public endpoints now properly respect user rights defined in the participant user management service. Revoking user rights revokes access to corresponding API endpoints.
+- Administrative SV app endpoints (`/v0/admin/domain/pause`, `unpause`, `migration-dump`, `identities-dump`, `data-snapshot`) now require participant admin rights.
+
+### Validator
+
+- Added support for custom party names when onboarding users via the `/v0/admin/users` API.
+- Added optional `excludeDebugFields` boolean to Token Standard allocation and transfer endpoints.
+
+{/* COPIED_END */}
+
+## Splice 0.5.4
+
+{/* COPIED_START source="splice:docs/src/release_notes.rst" */}
+
+### Participant
+
+- Fixed a bug (introduced in 0.5.0/0.5.1) that could cause participant pruning to prune active data. The bug only manifests in a rare edge case involving manual ACS import on a participant that was already running.
+- Fixed a performance regression causing event processing to pause for multiple minutes at random times due to a bad database query plan.
+
+### Scan
+
+- Removed non-existent `command_id` field from the OpenAPI spec. No impact on API behavior.
+
+{/* COPIED_END */}
+
+## Splice 0.5.3
+
+<Note>
+Version 0.5.2 mistakenly introduced default pruning for Canton participants and should be skipped. Participants do not prune data by default.
+</Note>
+
+{/* COPIED_START source="splice:docs/src/release_notes.rst" */}
+
+### Sequencer Connections
+
+- Improved retries for sequencer submissions when a sequencer returns an overloaded error code — now retries immediately on another node.
+- Network timeout lowered to 15 seconds for faster failure detection.
+
+### Validator
+
+- Fixed a bug causing validators to fail on restoring participant users without rights during a synchronizer migration.
+
+### Scan
+
+- Round-based balance aggregates set to zero to avoid consensus problems when new SVs join. The `/v0/total-amulet-balance` and `/v0/wallet-balance` endpoints are marked for removal.
+
+### Daml
+
+- Fixed a bug in `WalletUserProxy_TransferInstruction_Withdraw` where the controller was required to be the `receiver` instead of the `sender`. Upgrade to `splice-util-featured-app-proxies` version 1.2.1 or newer.
+
+### SV App
+
+- The SV app no longer stores update history. All updates involving the DSO party are stored and returned by Scan.
+- Helm values under `scan` (`publicUrl` and `internalUrl`) are now mandatory.
+
+{/* COPIED_END */}
+
+## Splice 0.5.0
+
+{/* COPIED_START source="splice:docs/src/release_notes.rst" */}
+
+<Warning>
+This upgrade requires a synchronizer migration with downtime and cannot be applied through a regular upgrade. See [CIP-0089](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0089/cip-0089.md) for details.
+</Warning>
+
+### Deployment
+
+- Docker Compose deployments of LocalNet, validator, and SV now expose only to 127.0.0.1 by default. Use `-E` to expose externally. For LocalNet, set `export HOST_BIND_IP=0.0.0.0`.
+
+### Validator
+
+- Offboarding a user now also deletes the Ledger API user in the participant node.
+- HTTP proxy support via `https.proxyHost` and `https.proxyPort` Java system properties.
+
+### Scan
+
+- Added `record_time_match` property to `/v0/state/acs`, `/v0/holdings/state`, and `/v0/holdings/summary` requests. Set to `exact` (default) or `at-or-before`.
+
+### Mediator
+
+- Mediators now prune data to retain only the last 30 days, matching the sequencer pruning interval.
+
+{/* COPIED_END */}
+
+For the complete release history including the 0.4.x series, see [Release History](/devnet/global-synchronizer/release-notes/release-history).
