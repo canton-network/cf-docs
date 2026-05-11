@@ -1,32 +1,55 @@
-export const VersionOption = ({ children }) => <>{children}</>
+export const VersionOption = ({ children }) => <>{children}</>;
 
-export const Version = ({ children, title, description, defaultLabel }) => {
-  const options = React.Children.toArray(children).filter((child) => child?.props?.label)
+export const Version = ({ children, title, description, defaultLabel, defaultVersion, previousVersion, currentVersion, networkData = {} }) => {
+  const networkOrder = ['mainnet', 'testnet', 'devnet'];
+  const networksForVersion = (version) => {
+    return networkOrder.filter((networkKey) => networkData[networkKey]?.versions?.splice === version);
+  };
+  const networkNames = (networkKeys) => {
+    return networkKeys.map((networkKey) => networkData[networkKey]?.name ?? networkKey).join(' / ');
+  };
+  const labelForVersion = (version) => {
+    const networks = networksForVersion(version);
+    return networks.length ? networkNames(networks) : `CN ${version}`;
+  };
+  const optionLabel = (option) => option.props.label ?? labelForVersion(option.props.version);
+  const options = React.Children.toArray(children).filter((child) => child?.props?.label || child?.props?.version);
   const defaultIndex = Math.max(
     0,
-    options.findIndex((child) => child.props.label === defaultLabel),
-  )
-  const [activeIndex, setActiveIndex] = React.useState(defaultIndex)
-  const activeOption = options[activeIndex] ?? options[0]
+    options.findIndex((child) => {
+      if (defaultVersion) {
+        return child.props.version === defaultVersion;
+      }
+      return optionLabel(child) === defaultLabel;
+    }),
+  );
+  const [activeIndex, setActiveIndex] = React.useState(defaultIndex);
+  const activeOption = options[activeIndex] ?? options[0];
+  const resolvedDescription = description ?? (
+    previousVersion && currentVersion
+      ? `This section changed between Canton Network ${previousVersion} and ${currentVersion}. Use the tab that matches your network.`
+      : null
+  );
 
   if (!options.length) {
-    return null
+    return null;
   }
 
   return (
     <div data-component="version" className="my-6 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-950">
-      {(title || description) && (
+      {(title || resolvedDescription) && (
         <div className="border-b border-gray-200 px-4 py-3 dark:border-gray-800">
           {title && <div className="text-sm font-semibold text-gray-950 dark:text-gray-100">{title}</div>}
-          {description && <div className="mt-1 text-sm leading-6 text-gray-600 dark:text-gray-400">{description}</div>}
+          {resolvedDescription && <div className="mt-1 text-sm leading-6 text-gray-600 dark:text-gray-400">{resolvedDescription}</div>}
         </div>
       )}
       <div role="tablist" className="flex gap-1 border-b border-gray-200 bg-gray-50 p-1 dark:border-gray-800 dark:bg-gray-900">
         {options.map((option, index) => {
-          const isActive = index === activeIndex
+          const isActive = index === activeIndex;
+          const label = optionLabel(option);
           return (
             <button
-              key={option.props.label}
+              key={`${label}-${index}`}
               type="button"
               role="tab"
               aria-selected={isActive}
@@ -37,14 +60,14 @@ export const Version = ({ children, title, description, defaultLabel }) => {
                   : 'rounded-md text-gray-600 hover:bg-white/80 hover:text-gray-950 dark:text-gray-400 dark:hover:bg-gray-800/70 dark:hover:text-gray-100'
               }`}
             >
-              {option.props.label}
+              {label}
             </button>
-          )
+          );
         })}
       </div>
       <div role="tabpanel" className="px-4 py-4 text-sm leading-6 text-gray-800 dark:text-gray-200">
         {activeOption}
       </div>
     </div>
-  )
-}
+  );
+};
