@@ -1,0 +1,161 @@
+---
+title: "SV Operations"
+description: "Operational procedures for Super Validator node operators"
+---
+
+import CantonDocsGlobalSynchronizerDeploymentSvOperationsL130 from "/snippets/canton-docs/global-synchronizer_deployment_sv-operations_L130.mdx";
+import CantonDocsGlobalSynchronizerDeploymentSvOperationsL141 from "/snippets/canton-docs/global-synchronizer_deployment_sv-operations_L141.mdx";
+import CantonDocsGlobalSynchronizerDeploymentSvOperationsL161 from "/snippets/canton-docs/global-synchronizer_deployment_sv-operations_L161.mdx";
+import CantonDocsGlobalSynchronizerDeploymentSvOperationsL169 from "/snippets/canton-docs/global-synchronizer_deployment_sv-operations_L169.mdx";
+
+
+This page covers day-to-day operational procedures for Super Validator (SV) node operators, including generating onboarding secrets, understanding SV identities, adjusting reward weights, and configuring traffic parameters.
+
+## Security notice
+
+<Warning>
+As an SV operator, you are most welcome to review, install, and use third-party Daml apps provided you **install third-party Daml apps on a validator node separate from your SV node**.
+
+Installing additional Daml apps on an SV node is not supported and may compromise its secure operations. In particular, refrain from manually uploading additional `.dar` files to your SV node or manually connecting it to third-party synchronizers.
+</Warning>
+
+For more information on hardening your SV node, see [Security Hardening](/global-synchronizer/production-operations/security-hardening).
+
+## Generating a validator onboarding secret
+
+{/* COPIED_START source="splice:docs/src/sv_operator/sv_operations.rst" */}
+If you want to onboard a new validator, you can obtain a one-time use onboarding secret directly from the SV web UI.
+
+The onboarding secret expires after 48 hours.
+{/* COPIED_END */}
+
+To generate the secret:
+
+1. Log in to the SV web UI.
+2. Navigate to the **Validator Onboarding** tab.
+3. Click the button to create a new secret.
+4. Copy the generated onboarding secret and provide it to the validator operator.
+
+The validator operator then uses this secret to complete their onboarding process.
+
+## Identities used by SV nodes on different layers
+
+{/* COPIED_START source="splice:docs/src/sv_operator/sv_operations.rst" */}
+Each identity is relevant on different layers, or within different subsystems, of the Canton and Global Synchronizer software stack. The system strives to reduce coupling between layers, so that in general it is possible to rotate identities independently of each other.
+{/* COPIED_END */}
+
+### SV identity
+
+- Used for identifying your node *before* it was onboarded. Established SVs confirm onboarding requests from SVs that can authenticate themselves with an approved SV identity.
+- An SV identity can be reused for multiple onboardings, as long as it is approved by a quorum of established SVs and (for non-DevNet clusters) no SV with the same name is already onboarded.
+- If you lose control of your SV identity, you cannot onboard SVs until a quorum of established SV operators approves a new identity under your control.
+
+### Participant identities
+
+- Used for securing Daml workflows and for determining your `svPartyId`, which is used for DSO governance flows and for receiving SV rewards.
+- Participant identities affect multiple types of quorums:
+  - Confirming Daml transactions as the DSO party (more than 1/3 of onboarded SVs)
+  - Administering the synchronizer topology on behalf of the DSO party (more than 2/3 of onboarded SVs, once activated)
+  - Confirmation-based DSO Daml workflows (more than 2/3 of onboarded SVs; on DevNet usually more than 1/2)
+- Participant identities generally cannot be reused on the same global synchronizer without a network reset or redeployment.
+- Loss of control over a participant namespace means loss of control over Canton Coin balances for all parties hosted under that namespace. At the network level, this constitutes an SV failure and reduces the overall fault tolerance buffer until the SV is offboarded from the DSO.
+
+### CometBFT node identities
+
+- Used within the CometBFT network spanned by SVs for operating the global synchronizer.
+- The CometBFT validator key is used in CometBFT quorums (more than 2/3 of SVs), required for advancing the CometBFT blockchain and changing the CometBFT configuration and validator set.
+- Reusing CometBFT node identities can cause transient instability in the CometBFT network and is not recommended.
+- Compromise of CometBFT key material constitutes an SV failure and reduces the fault tolerance buffer. To recover, set up a new CometBFT node with a fresh identity and update your SV app backend configuration to register it.
+
+## Updating reward weight
+
+{/* COPIED_START source="splice:docs/src/sv_operator/sv_operations.rst" */}
+The following steps are required to update the reward weight of an SV:
+{/* COPIED_END */}
+
+1. Receive from the SV owners an agreed-upon update to the SV weights.
+
+2. If the SV whose weight is being adjusted defined `extraBeneficiaries`, they must update them accordingly:
+   - On weight increases, add a new entry with the extra weight -- otherwise any leftovers go to the SV party.
+   - On weight decreases, the last extra beneficiary will have their weight capped.
+
+3. You can and usually should update the extra-beneficiaries config before the weight change takes effect. Extra entries at the end are ignored until the weight change activates.
+
+4. Start a governance vote. In the SV web UI under the **Governance** tab, create a new vote request. Select "Update SV Reward Weight", then select the SV member and specify the new reward weight.
+
+5. Wait for the vote request to get approved and executed. Once complete, the DSO info tab shows the updated reward weight, and the SV earns rewards according to the new weight going forward.
+
+6. Make sure the changed reward is also reflected in the [configs repository](https://github.com/global-synchronizer-foundation/configs). Otherwise, the old value would become effective again in the event of an onboarding or re-onboarding.
+
+## Determining good synchronizer traffic parameters
+
+SVs are responsible for deciding on suitable synchronizer traffic parameters. Two key parameters are the `extraTrafficPrice` and the `readVsWriteScalingFactor`.
+
+### Cost of a single CC transfer
+
+Per [CIP-0042](https://github.com/canton-foundation/cips/blob/main/cip-0042/cip-0042.pdf), the `extraTrafficPrice` should be set so that the cost of a standard CC transfer is 1 USD. Actual traffic costs change with factors such as the DSO size (number of SVs) and the Canton protocol version, so SVs should measure costs periodically and adjust parameters accordingly.
+
+To measure the current traffic consumption of a CC transfer:
+
+1. Pick two non-SV validators that you control -- one hosts the sending party, the other the receiving party. They must be different validators to avoid skewing results.
+2. Initiate a CC transfer from a party on the sender validator to a party on the receiver validator. Accept the transfer on the receiver side.
+3. Inspect your `validator-app` logs on the sender side for the final transaction. Confirm that the transaction was not batched with another coin operation and had a single coin input.
+4. Use the `trace-id` from the log entry to find the corresponding Canton-side `trace-id` in the request submission log.
+5. Search your SV's sequencer logs for that `trace-id`, filtering for the `TrafficConsumedManager` logger.
+6. Filter the resulting log lines for only the sender and receiver participant IDs (SV participants are also stakeholders to CC transfers but should be excluded from this measurement).
+7. Sum the traffic consumed across all log entries for the sender and receiver.
+8. Divide 1 MB by the sender's total traffic consumption to get the appropriate `extraTrafficPrice` in USD/MB.
+
+Based on the assumption that TestNet has the same configuration and DSO size as MainNet, it is sufficient to conduct this measurement on TestNet.
+
+### Read vs. write scaling factor
+
+The `readVsWriteScalingFactor` determines how read traffic is priced relative to write traffic.
+
+**Lower bound** -- The price charged for read traffic should cover the cost of Internet egress and compute for message delivery. With BFT sequencer reading, `2f+1` sequencers deliver the same message to each recipient, which amplifies delivery costs. For a network of 16 SVs, the read amplification factor is 11. Given typical cloud egress costs and compute overhead, the minimum `readVsWriteScalingFactor` is around 2 basis points.
+
+**Upper bound** -- Message delivery is clearly less expensive than ordering and persistence, so the factor should be well below 100%. There is no reason to significantly overcharge for delivery.
+
+## Ignoring party IDs of stale validators in reward expiry automation
+
+<Note>
+This workaround is expected to become unnecessary with improvements in Canton 3.4 (Splice > 0.4).
+</Note>
+
+{/* COPIED_START source="splice:docs/src/sv_operator/sv_operations.rst" */}
+Due to a current limitation, the rewards expiry automation (`ExpireRewardCouponsTrigger`) can become faulty when the following conditions apply:
+
+- There was a recent upgrade of core Daml packages, most notably `amulet`.
+- Some validators have not upgraded to a sufficiently recent version of Splice and are therefore unable to apply the Daml upgrade locally.
+{/* COPIED_END */}
+
+The expiry automation will fail to expire rewards linked to parties hosted on an outdated validator. **Each** SV operator is asked to follow these steps on **each Daml upgrade** in the network:
+
+1. Shortly before the Daml upgrade becomes effective, pause the trigger by adding to `.additionalEnvVars` in `sv-values.yaml`:
+
+<CantonDocsGlobalSynchronizerDeploymentSvOperationsL130 />
+
+2. Shortly after the Daml upgrade becomes effective, one SV operator constructs a party exclusion config, confirms its correctness, and shares it with all operators.
+
+3. Each SV operator adopts the party exclusion config and resumes the trigger by reverting the change from step 1 and adding:
+
+<CantonDocsGlobalSynchronizerDeploymentSvOperationsL141 />
+
+### Determining parties to ignore
+
+This process is advanced and likely involves some trial and error. A single operator can perform this work and share the resulting config.
+
+1. Wait until the new Daml upgrade has become effective.
+2. Pick a round that was open shortly after the upgrade became effective (`UPGRADE_ROUND`).
+3. Resume the expiry trigger (accepting that it will fail until the ignore list is complete).
+4. Set `delegatelessAutomationExpiredRewardCouponBatchSize: 1` in `sv-values.yaml`.
+
+You can wait for the trigger to fail and investigate which parties caused the failure, or query the SV app database directly:
+
+<CantonDocsGlobalSynchronizerDeploymentSvOperationsL161 />
+
+This query overapproximates the set of parties to ignore, so you may need to remove some later. Once you are confident in the list, remove the `delegatelessAutomationExpiredRewardCouponBatchSize` override and confirm that the trigger has a 100% success rate.
+
+If outdated validators eventually upgrade, their parties should be removed from the ignore list. The following query shows expired rewards generated *after* the Daml upgrade, indicating the hosting validator has upgraded:
+
+<CantonDocsGlobalSynchronizerDeploymentSvOperationsL169 />
