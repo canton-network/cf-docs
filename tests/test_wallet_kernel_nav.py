@@ -91,7 +91,6 @@ def test_openrpc_nav_uses_wallet_gateway_section_shape(tmp_path: Path) -> None:
                 {
                     "group": "Sync dApp API",
                     "pages": [
-                        "reference/wallet-gateway-json-rpc/specs/dapp-api",
                         "reference/wallet-gateway-json-rpc/operations/dapp-api/connect",
                         "reference/wallet-gateway-json-rpc/operations/dapp-api/details",
                     ],
@@ -99,7 +98,6 @@ def test_openrpc_nav_uses_wallet_gateway_section_shape(tmp_path: Path) -> None:
                 {
                     "group": "Async dApp API",
                     "pages": [
-                        "reference/wallet-gateway-json-rpc/specs/dapp-remote-api",
                         "reference/wallet-gateway-json-rpc/operations/dapp-remote-api/connect",
                         "reference/wallet-gateway-json-rpc/operations/dapp-remote-api/details",
                     ],
@@ -112,7 +110,6 @@ def test_openrpc_nav_uses_wallet_gateway_section_shape(tmp_path: Path) -> None:
                 {
                     "group": "User API",
                     "pages": [
-                        "reference/wallet-gateway-json-rpc/specs/user-api",
                         "reference/wallet-gateway-json-rpc/operations/user-api/createWallet",
                         "reference/wallet-gateway-json-rpc/operations/user-api/details",
                     ],
@@ -120,7 +117,6 @@ def test_openrpc_nav_uses_wallet_gateway_section_shape(tmp_path: Path) -> None:
                 {
                     "group": "Signing API",
                     "pages": [
-                        "reference/wallet-gateway-json-rpc/specs/signing-api",
                         "reference/wallet-gateway-json-rpc/operations/signing-api/signTransaction",
                         "reference/wallet-gateway-json-rpc/operations/signing-api/details",
                     ],
@@ -132,7 +128,7 @@ def test_openrpc_nav_uses_wallet_gateway_section_shape(tmp_path: Path) -> None:
     ]
 
 
-def test_openrpc_nav_group_helper_keeps_spec_pages_routable(tmp_path: Path) -> None:
+def test_openrpc_nav_group_helper_omits_redundant_spec_page_child(tmp_path: Path) -> None:
     generated_reference_nav = load_script("generated_reference_nav")
     docs_json = tmp_path / "docs-main" / "docs.json"
     docs_json.parent.mkdir(parents=True)
@@ -155,7 +151,6 @@ def test_openrpc_nav_group_helper_keeps_spec_pages_routable(tmp_path: Path) -> N
             {
                 "group": "Sync dApp API",
                 "pages": [
-                    "reference/wallet-gateway-json-rpc/specs/dapp-api",
                     "reference/wallet-gateway-json-rpc/operations/dapp-api/connect",
                 ],
             },
