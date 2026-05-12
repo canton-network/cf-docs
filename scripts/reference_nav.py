@@ -44,7 +44,7 @@ JAVADOC_PREFIX = "reference/java/"
 API_REFERENCE_TOP_LEVEL_DETAILS = {
     LEDGER_API_PARENT_GROUP: "reference/ledger-api/details",
     "Daml Standard Library": "appdev/reference/daml-standard-library/index",
-    "TypeScript": "reference/typescript/details",
+    "TypeScript": "reference/typescript",
     "dApp API": "reference/dapp-api/details",
     "Wallet Gateway": "reference/wallet-gateway-json-rpc/operations/details",
     "Splice APIs": "reference/splice-apis/details",

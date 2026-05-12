@@ -29,7 +29,7 @@ def test_api_reference_cards_link_to_top_level_details_pages() -> None:
     expected_hrefs = {
         "Ledger API": "/reference/ledger-api/details",
         "Daml Standard Library": "/appdev/reference/daml-standard-library/index",
-        "TypeScript": "/reference/typescript/details",
+        "TypeScript": "/reference/typescript",
         "dApp API": "/reference/dapp-api/details",
         "Wallet Gateway": "/reference/wallet-gateway-json-rpc/operations/details",
         "Splice APIs": "/reference/splice-apis/details",
@@ -51,7 +51,7 @@ def test_api_reference_top_groups_expose_details_and_history_entry() -> None:
     expected_details = {
         "Ledger API": "reference/ledger-api/details",
         "Daml Standard Library": "appdev/reference/daml-standard-library/index",
-        "TypeScript": "reference/typescript/details",
+        "TypeScript": "reference/typescript",
         "dApp API": "reference/dapp-api/details",
         "Wallet Gateway": "reference/wallet-gateway-json-rpc/operations/details",
         "Splice APIs": "reference/splice-apis/details",
@@ -64,4 +64,8 @@ def test_api_reference_top_groups_expose_details_and_history_entry() -> None:
         assert details_path.exists()
         details_page = details_path.read_text(encoding="utf-8")
         assert 'title: "Details and history"' in details_page
-        assert 'class="x2mdx-ref-hero"' in details_page
+
+        if group in {"Ledger API", "TypeScript", "dApp API", "Splice APIs", "Admin API"}:
+            assert '<div class="x2mdx-ref-card-grid">' not in details_page
+            assert '<a class="x2mdx-ref-card"' not in details_page
+            assert "## Table of Contents" in details_page
