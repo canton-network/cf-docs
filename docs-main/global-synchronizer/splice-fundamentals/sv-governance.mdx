@@ -3,82 +3,112 @@ title: "SV Governance"
 description: "Governance model, voting and proposals, and Super Validator responsibilities"
 ---
 
-The Global Synchronizer is governed by a decentralized collective of Super Validators (SVs) through on-ledger governance mechanisms. Canton Coin, the Canton Name Service, and synchronizer configuration are all managed through this governance model, implemented in the `splice-dso-governance` Daml package.
+{/* COPIED_START source="splice:docs/src/background/architecture.rst" hash="6eba999e" */}
 
-## The DSO party
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was copied from existing reviewed documentation.
+**Source:** `docs/src/background/architecture.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
 
-At the center of governance is the **DSO party** -- a decentralized Daml party hosted on all SV nodes with a confirmation threshold of `ceiling(numSvNodes * 2/3)`. Any action taken "by the DSO" requires confirmation from at least 2/3 of the SV nodes.
+<div className="todo">
 
-{/* COPIED_START source="splice:docs/src/background/architecture.rst" */}
-The implementation uses three key techniques to achieve this Byzantine fault tolerance:
+add more architecture docs (possibly starting with the architecture currently in the scan bulk api docs)
+
+</div>
+
+## Daml Code Architecture
+
+### Package Structure
+
+The Daml code implementing Canton Coin (CC), the Canton Name Service (CNS), and Global Synchronizer governance is implemented in seven packages:
+
+- `splice-util`: implements utility functions used across the other packages
+- `splice-amulet`: implements CC
+- `splice-amulet-name-service`: implements CNS
+- `splice-dso-governance`: implements Global Synchronizer governance, and decentralized CC and CNS automation
+- `splice-validator-lifecycle`: implements the workflows required for an SV node to onboard a validator
+- `splice-wallet-payments`: implements CC specific payment workflows
+- `splice-wallet`: implements the splice-wallet specific workflows for peer-to-peer transfers of CC and for delegating the automation for traffic-top-ups, sweeping, and batched transfer execution to a validator operator.
+
+You can find their Daml docs in the `app_dev_daml_api` section.
+
+<Note>
+`splice-wallet-payments` implements both a pay-with-CC workflow and a CC subscription workflow. The latter is deprecated, and but still used to pay for CNS entries. The former is expected to be replaced with the asset-generic DVP workflows from the [CN token standard](https://lists.sync.global/g/cip-discuss/message/5) in the near future. Analogously, the CC-specific peer-to-peer transfer workflow implemented in `splice-wallet` is is expected to be replaced by the peer-to-peer transfer from the CN token standard.
+
+The benefits of replacing these with workflows from the CN token standard are:
+
+- they will work for any asset, not just CC
+- the Daml interfaces used in the CN token standard make it much easier to consume upgrades to the `splice` Daml packages
+- the workflows work across different wallet implementations, not just the splice-wallet
+</Note>
+
+<div className="todo">
+
+\- TODO(#552): update the text above and below with the changes from the token-standard
+
+</div>
+
+### Decentralized Transaction Validation and Automation
+
+CC, CNS, and Global Synchronizer governance are implemented in a decentralized fashion to tolerate up to `f` faulty or dishonest SV nodes for `f = numSvNodes - t` and confirmation threshold `t = ceiling (numSvNodes * 2.0 / 3.0)`.
+
+The implementation uses three key techniques to achieves this Byzantine fault tolerance:
 
 - **DSO party**: it sets up a decentralized Daml party, called the DSO party, with confirmation threshold `t` and hosted on all SV nodes.
 - **on-ledger confirmations**: it requires explicit on-ledger confirmations from `t` SV nodes for exercising choices with off-ledger input in the name of the DSO party.
-- **decentralized automation**: all SV nodes run automation code that attempts to exercise choices required to be executed by the DSO party.
+- **decentralized automation**: all SV nodes run automation code that attempts to exercise choices required to be executed by the DSO party. The choices are either executed directly if they do not require off-ledger input, or they are exercised indirectly by creating the corresponding confirmation if they require off-ledger input. The automation exercises choices in a timely fashion, so that the skew between the target time and the actual time is bounded on average.
 - **median-based voting**: agreement on conversion rates and like configuration parameters is achieved using median-based voting, where every SV operator publishes their desired value on-ledger and the DSO party uses the median of these values.
+
+Thus CC and CNS users that are willing to assume that no more than `f` SV nodes are dishonest can rely on the following guarantees:
+
+- **valid transactions**: every transaction that requires confirmation from the DSO party is [valid](https://docs.daml.com/concepts/ledger-model/ledger-integrity.html#valid-ledgers).
+- **timely automation**: actions required to be taken by the DSO party are taken in a timely fashion.
+- **predictable fees and configuration values**: fees and configuration values are reasonably predictable as they represent the *aggregate preferences* of ~2/3 of SV operators, which can be assumed to be acting in their own best interest.
+
+The guarantee of valid transactions is particularly important for CC and CNS users, as it is used to decouple the concerns of implementing decentralized automation and governance from the concern of implementing the tokenomics and business logic of CC and CNS.
+
+All code other than `splice-dso-governance` and `splice-validator-lifecycle` is written under the assumption that the DSO party behaves as an honest provider of the CC and CNS applications. We define what this means in the sections below.
+
+This approach of factoring out decentralization concerns using a decentralized party greatly simplifies the code, and enables factoring the code as shown in the package dependency graph:
+
+<img src="/images/splice/daml-package-dependencies.png" className="align-center" alt="Daml package dependency graph" />
+
+### DSO Party Requirements for CC
+
+The high-level requirement on the DSO party for CC is to ensure that the total amount of CC in circulation (as represented by the set of all active `Amulet` contracts for that DSO party) follows the tokenomics described in the [Canton Coin whitepaper](https://www.digitalasset.com/hubfs/Canton%20Network%20Files/Documents%20(whitepapers%2C%20etc...)/Canton%20Coin_%20A%20Canton-Network-native%20payment%20application.pdf).
+
+This requirement is satisfied by the Daml code in the `splice-amulet` package under the following assumptions on the actions of the DSO party (we recommend reading them jointly with the source code):
+
+1.  There is exactly one `AmuletRules` and `ExternalPartyAmuletRules` contract.
+2.  The choice `AmuletRules_Bootstrap_Rounds` is called exactly once as part of network bootstrapping and `isDevNet` is set to `false`.
+3.  On-ledger confirmations from `t` SV nodes are used for exercising the following choices with the specified constraints:
+    - `AmuletRules_MiningRound_StartIssuing` is called with an `OpenMiningRoundSummary` contains the totals of all activity records associated with the round.
+    - `AmuletRules_AddFutureAmuletConfigSchedule`, `AmuletRules_RemoveFutureAmuletConfigSchedule`, and `AmuletRules_UpdateFutureAmuletConfigSchedule` are only called as the result of a vote accepted by at least `t` SV operators.
+    - `ValidatorLicense_Withdraw` is only called as the result of a vote accepted by at least `t` SV operators.
+4.  The `AmuletRules_Mint` choice is never called outside the `splice-amulet` package.
+5.  All choices in `splice-amulet` granted to the DSO party and not mentioned in assumptions 3 or 4 are exercised as soon as possible and without any additional constraints on their arguments, except for:
+    - `AmuletRules_AdvanceOpenMiningRounds` is called with the `amuletPrice` parameter set to the median of the votes on the dollar-to-CC conversion rate set by the SV nodes.
+6.  The only `create` and `archive` commands for `splice-amulet` templates that are executed by the DSO party *outside* of the choices defined in `splice-amulet` are:
+    - create and archive `AmuletRules` is only used to directly update the `configSchedule` field in the `AmuletRules` contract. Any change to the schedule has been accepted by at least `t` SV nodes.
+    - create and archive `FeaturedAppRight` is used to feature or unfeature a particular app provider party. Any such action has been voted on by at least `t` SV nodes.
+    - create `SvRewardCoupon` is only used for round numbers for which there is an active `OpenMiningRound` contract whose `opensAt` time is past.
+    - create `ValidatorLicense` is called at most once per `validator` party
+    - create `TransferCommandCounter`: is called at most once per `sender` party to create their `TransferCommandCounter` contract in a lazy fashion.
+
+Note that these assumptions are satisfied by the code in `splice-dso-governance` and the automation code run by the SV nodes.
+
+### CNS Party Requirements for CNS
+
+There is no whitepaper for CNS that defines the high-level requirements for how it is expected to work, which is why we define them here. They are:
+
+1.  entries names are unique
+2.  entries are never archived before they expire
+3.  the owner of an entry can always renew them before they expire
+4.  anybody can purchase an entry for name that is not yet allocated
+5.  expired entries are archived
+
+The split of the implementation between `splice-amulet-name-service` and `slice-dso-governance` follows the same pattern as the one explained for CC above. We refer the reader to the Daml code in these two packages for more details.
+
+
 {/* COPIED_END */}
-
-## What the governance model guarantees
-
-Users who are willing to assume that no more than `f` SV nodes are dishonest (where `f = numSvNodes - t`) can rely on:
-
-- **Valid transactions** -- Every transaction requiring DSO confirmation follows the Daml ledger integrity model
-- **Timely automation** -- Actions required by the DSO party are executed promptly
-- **Predictable fees and configuration** -- Fees and parameters represent the aggregate preferences of roughly 2/3 of SV operators, who can be assumed to act in their own interest
-
-## Governance actions
-
-Super Validators govern the network through several mechanisms:
-
-### On-ledger voting
-
-SVs vote on proposals through the SV web UI under the Governance tab. Proposals that receive confirmation from the required threshold of SVs are executed. Examples include:
-
-- Updating SV reward weights
-- Featuring or unfeaturing application providers (granting or revoking `FeaturedAppRight`)
-- Changing the `AmuletRules` configuration schedule (fee parameters, traffic pricing)
-- Withdrawing a `ValidatorLicense`
-
-### Median-based parameter voting
-
-For continuously changing parameters like the USD-to-CC conversion rate, each SV operator publishes their preferred value on-ledger. The DSO party uses the median of all published values. This prevents any single SV from disproportionately influencing the rate while still reflecting the collective judgment of the SV operators.
-
-The conversion rate set through this mechanism is written to `OpenMiningRound` contracts and used as the reference rate for traffic purchases and CC transfers.
-
-### Decentralized automation
-
-All SV nodes run the same automation code. Choices that do not require off-ledger input are exercised directly by the DSO party. Choices that require off-ledger input (such as transitioning a mining round to its issuing phase) are exercised indirectly -- each SV creates an on-ledger confirmation, and the choice executes once the threshold is met.
-
-The automation keeps the system running: advancing mining rounds, converting `FeaturedAppActivityMarker` contracts into `AppRewardCoupon` contracts, expiring old coin contracts, and archiving expired CNS entries.
-
-## SV responsibilities
-
-Each Super Validator is responsible for:
-
-- **Operating infrastructure** -- Running sequencer, mediator, SV app, Scan app, and validators
-- **Governance participation** -- Voting on proposals, publishing conversion rate preferences, reviewing CIPs
-- **Validator onboarding** -- Generating onboarding secrets for new validators that want to join the network
-- **Fee configuration** -- Jointly ensuring synchronizer traffic parameters are sound and aligned with network objectives
-- **Monitoring** -- Tracking traffic consumption, reward expiry, and overall network health
-- **Upgrades** -- Keeping pace with network upgrades and ensuring the reward expiry automation runs correctly across Daml package upgrades
-
-## Daml package structure
-
-The governance-related Daml packages are:
-
-- **splice-dso-governance** -- Implements Global Synchronizer governance and decentralized CC/CNS automation
-- **splice-validator-lifecycle** -- Implements workflows for SV nodes to onboard validators
-- **splice-amulet** -- Implements CC (the DSO party requirements for honest behavior are defined against this package)
-- **splice-amulet-name-service** -- Implements CNS
-
-All packages other than `splice-dso-governance` and `splice-validator-lifecycle` are written under the assumption that the DSO party behaves as an honest provider. This separation of concerns simplifies the codebase -- decentralization logic is contained in the governance package, while business logic focuses on correctness under an honest-DSO assumption.
-
-## How upgrades work
-
-Network upgrades -- including Daml package upgrades -- are coordinated through the governance process. SVs vote on configuration changes that schedule upgrades. Once a vote passes, all SV nodes apply the change through their automation.
-
-During Daml package upgrades, the reward expiry automation (`ExpireRewardCouponsTrigger`) may need temporary adjustments if some validators have not yet upgraded to a sufficiently recent Splice version. SV operators may need to pause the trigger, determine which party IDs to exclude, and resume with an exclusion list until all validators catch up.
-
-<Warning>
-Validators that fall behind on upgrades may have their reward coupons excluded from expiry processing, which can block the archival of closed mining rounds. Keep your validator current with network versions.
-</Warning>
