@@ -69,7 +69,7 @@ class CantonProtobufGeneratorTests(unittest.TestCase):
         self.assertNotIn("com/digitalasset/canton/protocol/v30/common.proto", admin_mapping)
         self.assertNotIn("com/digitalasset/canton/participant/foo.proto", admin_mapping)
 
-    def test_split_protobuf_navigation_places_admin_details_beside_protobufs(self) -> None:
+    def test_split_protobuf_navigation_flattens_admin_packages_under_grpc(self) -> None:
         docs_root = self.root / "docs-main"
         docs_json = docs_root / "docs.json"
         docs_root.mkdir(parents=True)
@@ -115,10 +115,21 @@ class CantonProtobufGeneratorTests(unittest.TestCase):
         admin = next(item for item in pages if item["group"] == "Admin API")
         ledger_protobuf = next(item for item in ledger["pages"] if item["group"] == "Protobufs")
         admin_grpc = next(item for item in admin["pages"] if item["group"] == "gRPC API")
-        admin_protobuf = next(item for item in admin_grpc["pages"] if isinstance(item, dict) and item["group"] == "Protobufs")
+        admin_packages = next(item for item in admin_grpc["pages"] if isinstance(item, dict) and item["group"] == "Packages")
 
         self.assertIn("reference/protobuf/index", ledger_protobuf["pages"])
-        self.assertNotIn("reference/admin-api/protobuf/index", admin_protobuf["pages"])
+        self.assertEqual(
+            admin_packages["pages"],
+            [
+                {
+                    "group": "com.digitalasset.canton.admin.health.v30",
+                    "pages": ["reference/admin-api/protobuf/packages/com-digitalasset-canton-admin-health-v30"],
+                }
+            ],
+        )
+        self.assertFalse(
+            any(isinstance(item, dict) and item.get("group") == "Protobufs" for item in admin_grpc["pages"])
+        )
         self.assertEqual(admin_grpc["pages"][-1], "reference/admin-api/protobuf/index")
 
 
