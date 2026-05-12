@@ -1,0 +1,139 @@
+---
+title: "Deploying a Private Synchronizer"
+description: "Step-by-step guide for deploying sequencer and mediator nodes for a private Canton synchronizer"
+---
+
+import CantonGlobalSynchronizerExtensionSynchronizersDeploymentL101 from "/snippets/canton-docs/global-synchronizer_extension-synchronizers_deployment_L101.mdx";
+import CantonGlobalSynchronizerExtensionSynchronizersDeploymentL116 from "/snippets/canton-docs/global-synchronizer_extension-synchronizers_deployment_L116.mdx";
+
+
+A private synchronizer requires deploying sequencer and mediator nodes, configuring their database backends, and connecting validators. This guide covers the infrastructure setup for both standalone and hybrid deployments.
+
+## Prerequisites
+
+Before you begin:
+
+- A Kubernetes cluster (1.27+) with Helm 3 installed
+- PostgreSQL 14+ (managed service recommended for production)
+- TLS certificates for the sequencer endpoint
+- Canton release artifacts (Docker images or JARs)
+- Familiarity with [Canton's synchronizer architecture](/testnet/overview/learn/global-synchronizer-architecture)
+
+## Ordering backends
+
+The sequencer requires a backend to store and order messages. Canton supports two options:
+
+- **Centralized ordering (PostgreSQL)** — A single PostgreSQL database acts as the ordering backend. Simpler to operate, suitable for private synchronizers where a single operator manages the infrastructure. Currently in **Alpha**.
+- **Decentralized ordering (BFT with CometBFT)** — Multiple sequencer nodes run BFT consensus. Required when multiple independent parties operate the synchronizer and no single party should control ordering. This is how the Global Synchronizer operates.
+
+For most private synchronizer deployments where a single organization controls the infrastructure, the centralized ordering backend is the simpler choice.
+
+## Database setup
+
+You need separate PostgreSQL databases for the sequencer and mediator. Each node stores its own state independently.
+
+Create separate databases (`sequencer_db`, `mediator_db`) with dedicated users. For production, use a managed PostgreSQL service (Cloud SQL, RDS, Azure Database for PostgreSQL) with automated backups, high availability, at least 4 vCPUs / 16 GB memory, and SSD-backed storage.
+
+## Deploying the sequencer
+
+### Helm chart configuration
+
+Create a values file for the sequencer:
+
+```yaml
+# sequencer-values.yaml
+sequencer:
+  storage:
+    type: postgres
+    config:
+      dataSourceClass: "org.postgresql.ds.PGSimpleDataSource"
+      properties:
+        serverName: "<postgres-host>"
+        portNumber: 5432
+        databaseName: "sequencer_db"
+        user: "sequencer_user"
+        password: "<password>"
+  publicApi:
+    tls:
+      certChainFile: "/certs/tls.crt"
+      privateKeyFile: "/certs/tls.key"
+  parameters:
+    synchronizerName: "my-private-sync"
+```
+
+Deploy with Helm:
+
+```bash
+helm install sequencer canton/canton-sequencer \
+  -f sequencer-values.yaml \
+  --namespace canton-sync
+```
+
+## Deploying the mediator
+
+Create a values file for the mediator:
+
+```yaml
+# mediator-values.yaml
+mediator:
+  storage:
+    type: postgres
+    config:
+      dataSourceClass: "org.postgresql.ds.PGSimpleDataSource"
+      properties:
+        serverName: "<postgres-host>"
+        portNumber: 5432
+        databaseName: "mediator_db"
+        user: "mediator_user"
+        password: "<password>"
+  sequencerConnection:
+    address: "https://sequencer.canton-sync.svc.cluster.local"
+```
+
+Deploy with Helm:
+
+```bash
+helm install mediator canton/canton-mediator \
+  -f mediator-values.yaml \
+  --namespace canton-sync
+```
+
+## Initializing the synchronizer
+
+After both nodes are running, initialize the synchronizer topology. Using the Canton Console connected to the sequencer:
+
+<CantonGlobalSynchronizerExtensionSynchronizersDeploymentL101 />
+
+This creates the synchronizer identity and registers the sequencer and mediator in the synchronizer topology.
+
+## Connecting validators
+
+Once the synchronizer is initialized, validators can connect to it. On each validator's Canton Console:
+
+<CantonGlobalSynchronizerExtensionSynchronizersDeploymentL116 />
+
+Or configure the connection in the validator's Helm values:
+
+```yaml
+participant:
+  additionalSynchronizerConnections:
+    - alias: "my-private-sync"
+      sequencerConnection: "https://sequencer.private-sync.example.com"
+```
+
+After connecting, verify the connection with `participant.synchronizers.list_connected()`.
+
+## Verification
+
+Confirm end-to-end functionality by allocating a test party and creating a contract on the private synchronizer. Check the sequencer health endpoint (HTTP 200 means ready) and verify the mediator is registered in the synchronizer topology.
+
+## Production considerations
+
+- **TLS everywhere** — Use TLS for all connections between validators and the synchronizer
+- **Network policies** — Restrict sequencer endpoint access to known validator IPs
+- **Monitoring** — Sequencer and mediator nodes expose Prometheus metrics; use the same monitoring stack as your validators
+- **Backups** — Back up sequencer and mediator databases regularly
+
+<Warning>
+The centralized ordering backend (PostgreSQL) is in Alpha. For production workloads, test thoroughly with your expected transaction volume and plan for the possibility of breaking changes in future Canton releases.
+</Warning>

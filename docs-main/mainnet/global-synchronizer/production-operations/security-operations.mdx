@@ -1,0 +1,129 @@
+---
+title: "Security Operations"
+description: "Key management, KMS integration, and security hardening for Canton Network nodes"
+---
+
+This page covers security hardening for validator and SV nodes, focusing on key management with external KMS providers and operational security practices.
+
+## Key Management Overview
+
+By default, Canton participants generate and store cryptographic keys in their regular PostgreSQL database. For production deployments, you should use an external Key Management System (KMS) to improve key security. Canton supports the External Key Storage mode, where the KMS generates and stores keys while Canton uses them through the KMS API.
+
+Supported KMS providers:
+
+- **Google Cloud KMS**
+- **Amazon Web Services KMS**
+
+<Note>
+Both GCP and AWS KMS drivers are available for general use.
+</Note>
+
+## Validator Security Hardening
+
+### Using an External KMS
+
+{/* COPIED_START source="splice:validator_operator/validator_security.rst" hash="validator-kms" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was adapted from existing reviewed documentation.
+**Source:** `validator_operator/validator_security.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+To configure a validator's participant keys with an external KMS, you must use the Helm-based deployment. KMS is not currently supported for Docker Compose deployments.
+
+**Migrating an existing validator to KMS** requires deploying a fresh validator:
+
+1. Set up a fresh validator from scratch with KMS configuration
+2. Transfer all assets from the existing validator to the new KMS-enabled validator
+3. Retire the non-KMS validator
+
+KMS configuration goes in the `kms` section of the participant Helm chart. Values are mapped to Canton's `crypto.kms` config, so all Canton-supported configuration keys work. Use `.additionalEnvVars`, `.extraVolumeMounts`, and `.extraVolumes` in the Splice participant Helm chart to configure KMS authentication.
+
+{/* COPIED_END */}
+
+### Network Security Best Practices
+
+- **TLS everywhere** — All API endpoints must use TLS 1.2+
+- **Admin API isolation** — Never expose the Admin API to the public internet. Use VPN or private networks.
+- **Firewall rules** — Allowlist-based access control for all inbound and outbound traffic
+- **Network segmentation** — Separate management and data planes
+- **DDoS protection** — Recommended for publicly exposed endpoints
+
+### Access Control
+
+- SSH and console access: key-based authentication with MFA
+- Database access: network-restricted with strong credentials
+- API access: JWT-based authentication via your OIDC provider
+- Secrets management: use Vault, AWS Secrets Manager, or GCP Secret Manager for credentials
+
+## SV Node Security Hardening
+
+{/* COPIED_START source="splice:sv_operator/sv_security.rst" hash="sv-security" */}
+
+<Warning title="Pre-reviewed Content - Do Not Modify">
+This section was adapted from existing reviewed documentation.
+**Source:** `sv_operator/sv_security.rst`
+Reviewers: Skip this section. Remove markers after final approval.
+</Warning>
+
+### Third-Party Daml Apps
+
+SV operators must review any Daml code (DARs) installed on their participant node. Third-party Daml apps running on the same participant can interact with the Splice Daml models and potentially trigger unintended behavior. Only install DARs from trusted sources and audit all third-party code before deployment.
+
+### External KMS for SV Participants
+
+Configuring KMS for an SV participant follows the same principles as for validators, with one additional consideration: the CometBFT governance key.
+
+By default, the SV app manages the CometBFT governance key using the participant for key generation and storage. This mechanism is not supported with KMS-enabled participants, so SV operators using KMS must manage the CometBFT governance key externally.
+
+**Migrating an existing SV to KMS:**
+
+1. Set up a fresh SV with KMS configuration. Coordinate with other SVs to onboard it with weight 0.
+2. Coordinate with other SVs to move your reward weight to the new SV (set old SV weight to 0).
+3. Transfer all assets from the old SV to the new KMS-enabled SV.
+4. Coordinate with other SVs to offboard the old SV.
+5. Retire the old SV.
+
+**Generating an external CometBFT governance key:**
+
+```bash
+# Generate the private key
+openssl genpkey -algorithm ed25519 -out cometbft-governance-keys.pem
+
+# Extract and encode the keys
+public_key_base64=$(openssl pkey -in cometbft-governance-keys.pem -pubout -outform DER | tail -c 32 | base64 | tr -d "\n")
+private_key_base64=$(openssl pkey -in cometbft-governance-keys.pem -outform DER | tail -c 32 | base64 | tr -d "\n")
+
+echo "publicKey: $public_key_base64"
+echo "privateKey: $private_key_base64"
+
+rm cometbft-governance-keys.pem
+```
+
+Store the key in a Kubernetes secret:
+
+```bash
+kubectl create secret --namespace sv generic splice-app-sv-cometbft-governance-key \
+  --from-literal=publicKey="$public_key_base64" \
+  --from-literal=privateKey="$private_key_base64"
+```
+
+Then set `cometBFT.externalGovernanceKey` to `true` in the `splice-sv-node` Helm chart.
+
+{/* COPIED_END */}
+
+## Credential Rotation
+
+Rotate the following credentials on a regular schedule:
+
+- **OIDC client secrets** — Rotate according to your OIDC provider's recommendations
+- **Database credentials** — Rotate at least quarterly
+- **TLS certificates** — Automate renewal before expiration (use cert-manager in Kubernetes)
+- **SV identity keys** — The SV EC keypair is long-lived and stable across deployments; rotate only if compromised
+
+## Next Steps
+
+- [Backup and Recovery](/mainnet/global-synchronizer/production-operations/backup-and-recovery) — Backup procedures and disaster recovery
+- [Upgrade Procedures](/mainnet/global-synchronizer/production-operations/upgrade-procedures) — Upgrade processes for validators and SVs
+- [Infrastructure Requirements](/mainnet/global-synchronizer/understand/infrastructure-requirements) — Hardware and network security requirements

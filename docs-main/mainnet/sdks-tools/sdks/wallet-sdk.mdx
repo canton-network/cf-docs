@@ -1,0 +1,189 @@
+---
+title: Wallet Gateway SDK
+description: Reference for the Splice Wallet SDK, a TypeScript library for programmatic wallet operations on Canton Network.
+---
+
+import DamlDocsSdksToolsSdksWalletSdkL69 from "/snippets/daml-docs/sdks-tools_sdks_wallet-sdk_L69.mdx";
+import DamlDocsSdksToolsSdksWalletSdkL93 from "/snippets/daml-docs/sdks-tools_sdks_wallet-sdk_L93.mdx";
+import DamlDocsSdksToolsSdksWalletSdkL129 from "/snippets/daml-docs/sdks-tools_sdks_wallet-sdk_L129.mdx";
+import DamlDocsSdksToolsSdksWalletSdkL144 from "/snippets/daml-docs/sdks-tools_sdks_wallet-sdk_L144.mdx";
+import DamlDocsSdksToolsSdksWalletSdkL161 from "/snippets/daml-docs/sdks-tools_sdks_wallet-sdk_L161.mdx";
+import DamlDocsSdksToolsSdksWalletSdkL205 from "/snippets/daml-docs/sdks-tools_sdks_wallet-sdk_L205.mdx";
+import DamlDocsSdksToolsSdksWalletSdkL214 from "/snippets/daml-docs/sdks-tools_sdks_wallet-sdk_L214.mdx";
+
+
+The [Splice Wallet SDK](https://github.com/canton-network/wallet-gateway/tree/main/sdk/wallet-sdk) is a TypeScript library that enables programmatic wallet operations on Canton Network. It provides APIs for party management, token transfers, UTXO queries, transaction signing, and integration with third-party dApps.
+
+The SDK is designed for wallet providers, exchanges, and application developers who need to interact with Canton Network tokens and manage external party wallets.
+
+A smaller variant, the dApp SDK, is also available for browser-based applications providing transaction signing and submission capabilities.
+
+## Prerequisites
+
+- Node.js (v18+)
+- A running Canton validator node (either self-hosted or via a node-as-a-service provider). Any network validator can be used -- [Splice LocalNet](/mainnet/sdks-tools/development-tools/localnet) is convenient for development and testing, but DevNet, TestNet, or MainNet validators work as well.
+
+## Installation
+
+{/* COPIED_START: integrating-with-canton-network/index.rst - install-wallet-sdk */}
+
+Install the full Wallet SDK from the NPM registry:
+
+<Tabs>
+  <Tab title="npm">
+  ```shell
+  npm install @canton-network/wallet-sdk
+  ```
+  </Tab>
+  <Tab title="yarn">
+  ```shell
+  yarn add @canton-network/wallet-sdk
+  ```
+  </Tab>
+  <Tab title="pnpm">
+  ```shell
+  pnpm add @canton-network/wallet-sdk
+  ```
+  </Tab>
+</Tabs>
+
+For dApp development only, you can install the smaller dApp SDK, which is optimized for browser usage:
+
+<Tabs>
+  <Tab title="npm">
+  ```shell
+  npm install @canton-network/dapp-sdk
+  ```
+  </Tab>
+  <Tab title="yarn">
+  ```shell
+  yarn add @canton-network/dapp-sdk
+  ```
+  </Tab>
+  <Tab title="pnpm">
+  ```shell
+  pnpm add @canton-network/dapp-sdk
+  ```
+  </Tab>
+</Tabs>
+
+Both SDKs share the same underlying core packages. Where only partial functionality is needed (for example, transaction visualization or hash verification), those packages can be used independently.
+
+{/* COPIED_END */}
+
+## Configuration
+
+The SDK requires configuration for authentication, ledger access, and token standard connectivity. For local development against a Splice LocalNet, you can use the built-in defaults:
+
+<DamlDocsSdksToolsSdksWalletSdkL69 />
+
+When moving to a production or non-LocalNet environment, you need custom factory functions that point to your specific endpoints. See the [Wallet SDK Configuration](#authentication) section below.
+
+## Key pair and party creation
+
+Before performing any operations, you need to create a key pair and allocate an external party on your validator.
+
+<DamlDocsSdksToolsSdksWalletSdkL93 />
+
+The SDK generates Ed25519 key pairs by default. BIP-0039 mnemonic-based key generation is also supported for deterministic key recovery. For details on the key pair and party creation process, including topology transactions and multi-hosting, see the full [Wallet Integration Guide](https://docs.digitalasset.com/integrate/mainnet/index.html).
+
+## Token operations
+
+The SDK exposes token standard operations through `sdk.tokenStandard`. These follow [CIP-0056](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0056/cip-0056.md), the Canton Network token standard.
+
+### Querying holdings (UTXOs)
+
+Canton uses a UTXO model where active contracts represent unspent holdings. You can list all holdings for a party:
+
+<DamlDocsSdksToolsSdksWalletSdkL129 />
+
+### Monitoring transactions
+
+To stream transaction events as they occur on ledger, use `listHoldingTransactions`. It accepts a start offset and a step size, and returns a `nextOffset` for pagination so that you never receive the same transaction twice:
+
+<DamlDocsSdksToolsSdksWalletSdkL144 />
+
+Each returned transaction contains events typed as `TransferIn`, `TransferOut`, `MergeSplit`, or `Mint`, with full details about holdings changes and memo tags.
+
+### Creating and submitting a transfer
+
+Token transfers follow a prepare-sign-submit flow. The SDK handles command construction, but transaction preparation happens on your validator node (unlike chains where you construct transactions fully offline).
+
+<DamlDocsSdksToolsSdksWalletSdkL161 />
+
+Transaction finality typically takes 3-10 seconds. Signed transactions are idempotent, so you can safely retry if the result does not appear on your ledger.
+
+### Transfer modes
+
+By default, all token transfers follow a two-step process: the sender initiates the transfer, and the receiver must accept or reject it. This matches traditional finance settlement patterns.
+
+To enable one-step transfers (similar to other blockchains), the receiving party can set up a **transfer pre-approval**, which auto-accepts all incoming transfers:
+
+<DamlDocsSdksToolsSdksWalletSdkL205 />
+
+If no pre-approval exists, the receiver must fetch and act on pending transfer instructions:
+
+<DamlDocsSdksToolsSdksWalletSdkL214 />
+
+## Authentication
+
+{/* COPIED_START: wallet-sdk-configuration/index.rst - auth-controller */}
+
+For local development, the SDK uses a self-signed HMAC token with default credentials. When deploying to a production environment, configure an OAuth-based auth controller:
+
+```typescript
+import {
+    WalletSDKImpl,
+    AuthController,
+    ClientCredentialOAuthController,
+} from '@canton-network/wallet-sdk'
+
+const myOAuthController = (logger?: Logger): AuthController => {
+    const controller = new ClientCredentialOAuthController(
+        'http://your-oauth-server/.well-known/openid-configuration',
+        logger
+    )
+    controller.userId = 'your-client-id'
+    controller.userSecret = 'your-client-secret'
+    controller.audience = `https://daml.com/jwt/aud/participant/${participantId}`
+    controller.scope = 'openid daml_ledger_api offline_access'
+    return controller
+}
+
+const sdk = new WalletSDKImpl().configure({
+    logger: console,
+    authFactory: myOAuthController,
+    ledgerFactory: myLedgerFactory,
+    tokenStandardFactory: myTokenStandardFactory,
+})
+```
+
+You can also implement a custom `AuthController` that satisfies the interface:
+
+```typescript
+export interface AuthController {
+    getUserToken(): Promise<AuthContext>
+    getAdminToken(): Promise<AuthContext>
+    userId: string | undefined
+}
+```
+
+Community contributions include OIDC configurations for [Okta and Keycloak](/mainnet/global-synchronizer/deployment/oidc-providers).
+
+{/* COPIED_END */}
+
+## dApp integration
+
+Third-party dApps can submit transactions to your wallet for signing through a standardized API. The SDK supports receiving prepared transactions from dApps, visualizing them for user approval, and signing and submitting them.
+
+The dApp API follows an [OpenRPC specification](https://github.com/canton-network/wallet-gateway/blob/main/api-specs/openrpc-dapp-api.json). A dApp calls `prepareExecute` or `prepareExecuteAndWait`, and the wallet provider prepares, signs, and submits the transaction on the user's behalf.
+
+The SDK can decode prepared transactions into human-readable JSON for display to users before signing. For details on this flow, see [CIP-0103](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0103/cip-0103.md) (the dApp Standard).
+
+## Further resources
+
+- [Wallet Gateway GitHub repository](https://github.com/canton-network/wallet-gateway) -- source code, API specs, and example scripts
+- [Token standard documentation](https://docs.sync.global/app_dev/token_standard/index.html) -- full token standard reference
+- [CIP-0056](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0056/cip-0056.md) -- Canton Network token standard specification
+- [External party signing tutorial](https://docs.digitalasset.com/build/3.5/tutorials/app-dev/external_signing_onboarding) -- step-by-step external signing walkthrough
+- [CN Quickstart](https://github.com/digital-asset/cn-quickstart) -- reference application for getting started with Canton Network development
