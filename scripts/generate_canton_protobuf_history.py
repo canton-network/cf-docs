@@ -488,19 +488,19 @@ def update_split_protobuf_navigation(
 
     if admin_output_dir is not None:
         admin_details_page_ref = docs_json_page_ref(admin_output_dir / "index.mdx", docs_json_path)
-        admin_protobuf_group = generated_reference_nav.build_protobuf_nav_group(
+        admin_protobuf_group_pages = generated_reference_nav.build_protobuf_nav_group(
             output_dir=admin_output_dir,
             docs_json_path=docs_json_path,
             group_label=reference_nav.PROTOBUF_GROUP,
             include_details_page=False,
-        )
+        )["pages"]
         replace_group_at_path(
             dropdown["pages"],
             [reference_nav.ADMIN_API_PARENT_GROUP],
             {
                 "group": reference_nav.GRPC_GROUP,
                 "pages": [
-                    admin_protobuf_group,
+                    *admin_protobuf_group_pages,
                     admin_details_page_ref,
                 ],
             },
