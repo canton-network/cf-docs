@@ -3,6 +3,13 @@ title: "Performance Optimization"
 description: "Scale Canton applications for throughput and latency: network and node scaling, contention avoidance, ACS sizing, and batching."
 ---
 
+import ExternalCantonMainCommunityAppSrcTestResourcesDocumentationSnippetsCommandServiceMaxCommandsInFlight from "/snippets/external/canton/main/community/app/src/test/resources/documentation-snippets/command-service-max-commands-in-flight.mdx";
+import ExternalCantonMainCommunityAppSrcTestResourcesDocumentationSnippetsSequencerClientThrottling from "/snippets/external/canton/main/community/app/src/test/resources/documentation-snippets/sequencer-client-throttling.mdx";
+import ExternalScribeMainScribeRstCodeDocsUserComponentHowtosPqsOptimizeIndexSql194 from "/snippets/external/scribe/main/scribe-rst-code-docs-user-component-howtos-pqs-optimize-index-sql-194.mdx";
+import ExternalCantonMainCommunityAppSrcTestResourcesDocumentationSnippetsCachingConfig from "/snippets/external/canton/main/community/app/src/test/resources/documentation-snippets/caching-configs.mdx";
+import DamlAppdevModulesM7PerformanceL36 from "/snippets/daml-docs/appdev_modules_m7-performance_L36.mdx";
+import DamlAppdevModulesM7PerformanceL45 from "/snippets/daml-docs/appdev_modules_m7-performance_L45.mdx";
+
 {/* COPIED_START source="docs-website:docs/replicated/canton/3.4/participant/howtos/optimize/performance.rst" hash="398aa5ae" */}
 
 <Warning title="Pre-reviewed Content - Do Not Modify">
@@ -66,9 +73,7 @@ In order to achieve the best performance, we suggest that you use asynchronous c
 
 If you use synchronous command submissions, the system will wait for the entire transaction to complete, which will require even more threads. Also, please note that the synchronous command submission has a default upper limit of 256 in flight commands, which can be reconfigured using
 
-``` none
-canton.participants.participant1.ledger-api.command-service.max-commands-in-flight = 256 // default value
-```
+<ExternalCantonMainCommunityAppSrcTestResourcesDocumentationSnippetsCommandServiceMaxCommandsInFlight />
 
 ## Storage Estimation
 
@@ -254,12 +259,7 @@ Detailed instructions on handling this issue can also be found in `max_connectio
 
 **Throttling configuration for SequencerClient.** The `SequencerClient` is the component responsible for managing the connection of any member (participant, mediator, or topology manager) in a Canton network to the synchronizer. Each synchronizer can have multiple sequencers, and the `SequencerClient` connects to one of them. However, there is a possibility that the `SequencerClient` can become overwhelmed and struggle to keep up with the incoming messages. To address this issue, a configuration parameter called `maximum-in-flight-event-batches` is available:
 
-``` none
-canton.participants.participant1.sequencer-client.maximum-in-flight-event-batches = 100
-canton.mediators.mediator1.sequencer-client.maximum-in-flight-event-batches = 100
-canton.sequencers.sequencer1.sequencer-client.maximum-in-flight-event-batches = 100
-canton.monitoring.metrics.qualifiers = [debug, traffic, errors, saturation, latency]
-```
+<ExternalCantonMainCommunityAppSrcTestResourcesDocumentationSnippetsSequencerClientThrottling />
 
 By setting the `maximum-in-flight-event-batches` parameter, you can control the maximum number of event batches that the system processes concurrently. This configuration helps prevent overload and ensures that the system can handle the workload effectively.
 
@@ -324,31 +324,7 @@ While replication can be turned off to try to obtain performance gains, it must 
 
 Generally, the caches that usually matter with respect to size are the contract caches and the in-memory fan-out event buffer. You can tune these using the following configurations. The values depicted here are the ones recommended for smaller memory-footprints and are therefore also helpful if you run into out-of-memory issues:
 
-``` none
-canton.participants.participant1 {
-    // tune caching configs of the ledger api server
-    ledger-api {
-        index-service {
-            max-contract-state-cache-size = 1000 // default 1e4
-            max-contract-key-state-cache-size = 1000 // default 1e4
-
-            // The in-memory fan-out will serve the transaction streams from memory as they are finalized, rather than
-            // using the database. Therefore, you should choose this buffer to be large enough such that the likeliness of
-            // applications having to stream transactions from the database is low. Generally, having a 10s buffer is
-            // sensible. Therefore, if you expect e.g. a throughput of 20 tx/s, then setting this number to 200 is sensible.
-            // The default setting assumes 100 tx/s.
-            max-transactions-in-memory-fan-out-buffer-size = 200 // default 1000
-        }
-    }
-    // tune the synchronisation protocols contract store cache
-    parameters.caching {
-        contract-store {
-            maximum-size = 1000 // default 1e6
-            expire-after-access = 120s // default 10 minutes
-        }
-    }
-}
-```
+<ExternalCantonMainCommunityAppSrcTestResourcesDocumentationSnippetsCachingConfig />
 
 ## Model Tuning
 
@@ -376,7 +352,7 @@ You can also reduce the number of views being generated for the children of a no
 
 For example, if the `doUpdate` below is called from a choice visible to the `owner` party alone, then whether the `efficient` flag is set or not has a huge impact on the number of views created. In the choice `Foo` of the `Example` contract, even though the participants to be informed are a subset of the contract's informee participants they are not merged into a single view if this choice is called independently each time. On the contrary, you will produce multiple root actions each belonging to their own view. Finally, aligning the choice observer of `Run` to its template contract means that either the choice observer is the same in each case or the new observer is hosted by any of the contract's informee participants.
 
-```daml
+```haskell
 doUpdate : Bool -> Party -> Party -> [ContractId Example] -> Update ()
 
 doUpdate efficient owner obs batch = do
@@ -634,7 +610,7 @@ Each of the following actions in Daml adds a node to the transaction containing 
 
 Use the above actions sparingly. For example, if contracts have intermediary states within a transaction, you can often skip them by writing only the end state. For example:
 
-```daml
+```haskell
 template Incrementor
 with
 p : Party
@@ -662,7 +638,7 @@ choice GoodIncrementMany : ContractId Incrementor
 
 When you need to read a contract, or act on a single contract in multiple ways, you can often bundle those operations into a single action. For example:
 
-```daml
+```haskell
 template Asset
 with
 issuer : Party
@@ -721,7 +697,7 @@ Separate templates for large payloads that change rarely and require minimum acc
 
 This batching approach makes updates in one transaction submission rather than requiring separate transactions for each update. Note: this option can cause a small increase in latency and may increase the possibility of command failure but this can be avoided. For example:
 
-```daml
+```haskell
 template T
 with
 p : Party
@@ -1142,7 +1118,7 @@ Additionally, the success or failure of a whole batch of transactions is tied to
 
 In this technique, assume that all contention is within the asset allocation steps. Imagine that there is a single contract on the ledger that takes care of all bookkeeping, as shown in this Daml code snippet:
 
-```daml
+```haskell
 template AllAssets
   with
     -- A map from owner and type to quantity
@@ -1155,7 +1131,7 @@ This is a typical pattern in replicated state machine ledgers, where contention 
 
 Since you typically only need to touch one owner’s asset of one type at a time and constraints such as non-negativity are also at that level, assets are usually represented by asset positions in UTXO ledgers, as shown in this Daml code snippet:
 
-```daml
+```haskell
 template
   with
     assetType : AssetType
@@ -1321,12 +1297,7 @@ PQS stores contract data in JSONB columns in PostgreSQL. For read-heavy workload
 
 Use the PQS helper function to create JSONB indexes:
 
-```sql
-call create_index_for_contract('token_wallet_holder_idx',
-                               'register:DA.Register:Token',
-                               '(payload->''wallet''->>''holder'')',
-                               'hash');
-```
+<ExternalScribeMainScribeRstCodeDocsUserComponentHowtosPqsOptimizeIndexSql194 />
 
 This index allows efficient lookups on the wallet holder field without scanning the entire JSONB payload.
 
