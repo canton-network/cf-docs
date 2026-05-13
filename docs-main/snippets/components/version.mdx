@@ -115,14 +115,18 @@ export const NetworkVariables = ({
         replacementForToken(token, activeData.substitutions) ?? match
       );
 
-    for (const codeRoot of panelRef.current.querySelectorAll('pre, code')) {
-      const walker = document.createTreeWalker(codeRoot, NodeFilter.SHOW_TEXT);
-      let textNode = walker.nextNode();
-      while (textNode) {
-        textNode.nodeValue = replaceTokenText(textNode.nodeValue);
-        textNode = walker.nextNode();
+    const replaceRenderedCode = () => {
+      for (const codeRoot of panelRef.current.querySelectorAll('pre, code')) {
+        if (codeRoot.tagName === 'PRE' && codeRoot.querySelector('code')) {
+          continue;
+        }
+        codeRoot.textContent = replaceTokenText(codeRoot.textContent ?? '');
       }
-    }
+    };
+
+    replaceRenderedCode();
+    const timeout = window.setTimeout(replaceRenderedCode, 100);
+    return () => window.clearTimeout(timeout);
   }, [activeNetwork, activeData]);
 
   if (!activeData) {
