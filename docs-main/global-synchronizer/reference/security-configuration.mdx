@@ -3,6 +3,10 @@ title: "Canton Security Configuration"
 description: "Configure TLS, JWT authentication, and API limits for Canton nodes"
 ---
 
+import ExternalCantonMainCommunityAppSrcTestResourcesDocumentationSnippetsLedgerApiTargetScope from "/snippets/external/canton/main/community/app/src/test/resources/documentation-snippets/ledger-api-target-scope.mdx";
+import ExternalCantonMainCommunityAppSrcTestResourcesDocumentationSnippetsLedgerApiUserList from "/snippets/external/canton/main/community/app/src/test/resources/documentation-snippets/ledger-api-user-list.mdx";
+import ExternalCantonMainCommunityAppSrcTestResourcesDocumentationSnippetsLedgerApiPrivileged from "/snippets/external/canton/main/community/app/src/test/resources/documentation-snippets/ledger-api-privileged.mdx";
+
 {/* COPIED_START source="docs-website:docs/replicated/canton/3.4/participant/howtos/secure/apis/tls.rst" hash="4223ca62" */}
 
 <Warning title="Pre-reviewed Content - Do Not Modify">
@@ -217,21 +221,7 @@ canton.participants.participant.ledger-api.jwt-timestamp-leeway {
 
 The default audience (`aud` field in the audience-based token) for authenticating on the Ledger API using JWT is `https://daml.com/participant/jwt/aud/participant/${participantId}`. Other audiences can be configured explicitly using the custom target audience configuration option:
 
-``` none
-canton {
-  participants {
-    participant {
-      ledger-api {
-        auth-services = [{
-          type = jwt-jwks
-          url = "https://target.audience.url/jwks.json"
-          target-audience = "https://rewrite.target.audience.url"
-        }]
-      }
-    }
-  }
-}
-```
+<ExternalCantonMainCommunityAppSrcTestResourcesDocumentationSnippetsLedgerApiTargetScope />
 
 ## Configure the target scope for JWT authorization
 
@@ -239,21 +229,7 @@ The default scope (`scope` field in the scope-based access token) for authentica
 
 Other scopes can be configured explicitly using the custom target scope configuration option:
 
-``` none
-canton {
-  participants {
-    participant {
-      ledger-api {
-        auth-services = [{
-          type = jwt-jwks
-          url = "https://some.url/jwks.json"
-          target-scope = "custom/Scope-5:with_special_characters"
-        }]
-      }
-    }
-  }
-}
-```
+<ExternalCantonMainCommunityAppSrcTestResourcesDocumentationSnippetsLedgerApiUserList />
 
 Target scope can be any case-sensitive string containing alphanumeric characters, hyphens, slashes, colons and underscores. Either the `target-scope` or the `target-audience` parameter can be configured individually, but not both at the same time.
 
@@ -263,38 +239,7 @@ Authorization service with user list is a form of JWT Authorization that can be 
 
 You can specify which users should be allowed in and which gRPC services should be accessible to them. An example configuration for both the Ledger and Admin APIs looks like this:
 
-``` none
-canton {
-  participants {
-    participant {
-      ledger-api {
-        port = 5001
-        auth-services = [{
-          type = jwt-jwks
-          url = "https://target.audience.url/jwks.json"
-          target-audience = "https://rewrite.target.audience.url"
-        }]
-      }
-      admin-api {
-        port = 5002
-        auth-services = [{
-          type = jwt-jwks
-          url = "https://target.audience.url/jwks.json"
-          target-audience = "https://rewrite.target.audience.url"
-          users = [{
-            user-id = alice
-            allowed-services = [
-              "admin.v0.ParticipantRepairService",
-              "connection.v30.ApiInfoService",
-              "v1.ServerReflection",
-            ]
-          }]
-        }]
-      }
-    }
-  }
-}
-```
+<ExternalCantonMainCommunityAppSrcTestResourcesDocumentationSnippetsLedgerApiPrivileged />
 
 Unlike the Ledger API, the Admin API doesn't require the users appearing in the sub-claims of the JWT tokens to be present in the Participant’s user database. The user in the authorization service configcan be an arbitrary choice of the Participant Node’s operator. This user also needs to be configured in the associated IDP system issuing the JWT tokens.
 
