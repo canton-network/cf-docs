@@ -103,6 +103,27 @@ export const NetworkVariables = ({
   const [activeIndex, setActiveIndex] = React.useState(defaultIndex);
   const activeNetwork = options[activeIndex] ?? options[0];
   const activeData = networkData[activeNetwork];
+  const panelRef = React.useRef(null);
+
+  React.useEffect(() => {
+    if (!activeData?.substitutions || !panelRef.current) {
+      return;
+    }
+
+    const replaceTokenText = (value) =>
+      value.replace(/\|([A-Za-z0-9_]+)\|/g, (match, token) =>
+        replacementForToken(token, activeData.substitutions) ?? match
+      );
+
+    for (const codeRoot of panelRef.current.querySelectorAll('pre, code')) {
+      const walker = document.createTreeWalker(codeRoot, NodeFilter.SHOW_TEXT);
+      let textNode = walker.nextNode();
+      while (textNode) {
+        textNode.nodeValue = replaceTokenText(textNode.nodeValue);
+        textNode = walker.nextNode();
+      }
+    }
+  }, [activeNetwork, activeData]);
 
   if (!activeData) {
     return null;
@@ -143,7 +164,12 @@ export const NetworkVariables = ({
           );
         })}
       </div>
-      <div role="tabpanel" className="px-4 py-4 text-sm leading-6 text-gray-800 dark:text-gray-200">
+      <div
+        key={activeNetwork}
+        ref={panelRef}
+        role="tabpanel"
+        className="px-4 py-4 text-sm leading-6 text-gray-800 dark:text-gray-200"
+      >
         {React.Children.map(children, (child, index) =>
           replaceNode(child, activeData.substitutions, `network-${activeNetwork}-${index}`)
         )}
