@@ -29,3 +29,18 @@ def test_product_selector_has_visible_accent_line() -> None:
     assert ".nav-dropdown-products-selector-trigger" in styles
     assert "--canton-product-selector-line-active: #734BE2;" in styles
     assert "box-shadow: inset 0 0 0 2px var(--canton-product-selector-line-active)" in styles
+
+
+def test_site_uses_small_nav_logo_assets() -> None:
+    docs = json.loads((REPO_ROOT / "docs-main" / "docs.json").read_text(encoding="utf-8"))
+
+    assert docs["favicon"] == "/images/canton-logo-dark.svg"
+    assert docs["logo"]["light"] == "/images/canton-nav-logo-dark.svg"
+    assert docs["logo"]["dark"] == "/images/canton-nav-logo-white.svg"
+
+    for logo_path in docs["logo"]["light"], docs["logo"]["dark"]:
+        svg_path = REPO_ROOT / "docs-main" / logo_path.removeprefix("/")
+        assert svg_path.exists()
+        svg = svg_path.read_text(encoding="utf-8")
+        assert 'width="150"' in svg
+        assert "<text" in svg
