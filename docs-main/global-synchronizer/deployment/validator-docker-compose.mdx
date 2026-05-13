@@ -3,92 +3,17 @@ title: "Docker Compose Validator Deployment"
 description: "Deploy a Canton Network validator using Docker Compose"
 ---
 
-import CantonDocsGlobalSynchronizerDeploymentInstallationL22 from "/snippets/canton-docs/global-synchronizer_deployment_installation_L22.mdx";
-import CantonDocsGlobalSynchronizerDeploymentInstallationL41 from "/snippets/canton-docs/global-synchronizer_deployment_installation_L41.mdx";
-import CantonDocsGlobalSynchronizerDeploymentInstallationL47 from "/snippets/canton-docs/global-synchronizer_deployment_installation_L47.mdx";
-import CantonDocsGlobalSynchronizerDeploymentInstallationL53 from "/snippets/canton-docs/global-synchronizer_deployment_installation_L53.mdx";
-import CantonDocsGlobalSynchronizerDeploymentInstallationL66 from "/snippets/canton-docs/global-synchronizer_deployment_installation_L66.mdx";
-import CantonDocsGlobalSynchronizerDeploymentInstallationL87 from "/snippets/canton-docs/global-synchronizer_deployment_installation_L87.mdx";
-import CantonDocsGlobalSynchronizerDeploymentInstallationL95 from "/snippets/canton-docs/global-synchronizer_deployment_installation_L95.mdx";
-import CantonDocsGlobalSynchronizerDeploymentInstallationL103 from "/snippets/canton-docs/global-synchronizer_deployment_installation_L103.mdx";
 import ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorComposeBash58 from "/snippets/external/splice/main/splice-rst-code-docs-src-validator-operator-validator-compose-bash-58.mdx";
 import ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorComposeYaml96 from "/snippets/external/splice/main/splice-rst-code-docs-src-validator-operator-validator-compose-yaml-96.mdx";
 import ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorComposeYaml105 from "/snippets/external/splice/main/splice-rst-code-docs-src-validator-operator-validator-compose-yaml-105.mdx";
+import ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorComposeBash123 from "/snippets/external/splice/main/splice-rst-code-docs-src-validator-operator-validator-compose-bash-123.mdx";
 import ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorComposeBash262 from "/snippets/external/splice/main/splice-rst-code-docs-src-validator-operator-validator-compose-bash-262.mdx";
 
-
-This page walks through deploying a Canton Network validator using Docker Compose. For Kubernetes, see [Kubernetes Validator Deployment](/global-synchronizer/deployment/validator-kubernetes).
-
-## Before you begin
-
-Confirm that you have completed the [onboarding process](/global-synchronizer/deployment/onboarding-process) and have the following ready:
-
-- Your static egress IP is allowlisted
-- You have an onboarding secret from your SV sponsor (or self-generated for DevNet)
-- You know the sponsor SV URL
-- You have the current migration ID (published at [sync.global/sv-network/](https://sync.global/sv-network/))
-- You have chosen a party hint for your validator admin (format: `organization-function-enumerator`, for example `acmeCorp-validator-1`)
-
-## Download the Splice node bundle
-
-Both deployment methods start by downloading the release bundle from GitHub:
-
-<CantonDocsGlobalSynchronizerDeploymentInstallationL22 />
-
-The extracted bundle contains Docker Compose files, sample Helm values, and configuration templates.
-
-## Docker Compose installation
-
-### 1. Navigate to the validator directory
-
-<CantonDocsGlobalSynchronizerDeploymentInstallationL41 />
-
-### 2. Set the image tag
-
-<CantonDocsGlobalSynchronizerDeploymentInstallationL47 />
-
-### 3. Start the validator
-
-<CantonDocsGlobalSynchronizerDeploymentInstallationL53 />
-
-The `-w` flag enables the Wallet UI. Add `-a` to enable authentication (recommended for anything beyond local testing).
-
-On subsequent restarts, you can omit the `-o` flag since the onboarding secret is consumed on first use:
-
-<CantonDocsGlobalSynchronizerDeploymentInstallationL66 />
-
-### 4. Verify the deployment
-
-After startup completes, access the web UIs:
-
-| Service | URL |
-|---|---|
-| Wallet UI | http://wallet.localhost |
-| CNS UI | http://ans.localhost |
-| JSON Ledger API | http://json-ledger-api.localhost |
-| gRPC Ledger API | http://grpc-ledger-api.localhost |
-
-Check the logs for successful onboarding:
-
-<CantonDocsGlobalSynchronizerDeploymentInstallationL87 />
-
-Look for messages indicating the validator has connected to the synchronizer and completed onboarding.
-
-### 5. Stop the validator
-
-<CantonDocsGlobalSynchronizerDeploymentInstallationL95 />
-
-### Systemd integration
-
-For persistent deployments, create a systemd service. Set `RemainAfterExit=true` since `start.sh` runs Docker Compose in detached mode:
-
-<CantonDocsGlobalSynchronizerDeploymentInstallationL103 />
-
-{/* COPIED_START source="splice:docs/src/validator_operator/validator_compose.rst" hash="3481a1d6" */}
+{/* COPIED_START source="splice:docs/src/validator_operator/validator_compose.rst" hash="074ae45b" */}
 
 <Warning title="Pre-reviewed Content - Do Not Modify">
 This section was copied from existing reviewed documentation.
-**Source:** `splice:docs/src/validator_operator/validator_compose.rst`
+**Source:** `docs/src/validator_operator/validator_compose.rst`
 Reviewers: Skip this section. Remove markers after final approval.
 </Warning>
 
@@ -119,9 +44,11 @@ To validate that the dependencies are set up correctly, run the following comman
 <ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorComposeBash58 />
 
 2)  Your machine should either be connected to a VPN that is whitelisted on the network (contact your sponsor SV to obtain access), or have a static egress IP address. In the latter case, please provide that IP address to your sponsor SV to add it to the firewall rules.
-3)  Please download the release artifacts containing the docker-compose files, from here: , and extract the bundle:
+3)  Please download the release artifacts containing the docker-compose files, from here: [Download Bundle](https://github.com/digital-asset/decentralized-canton-sync/releases/download/v0.6.3/0.6.3_splice-node.tar.gz), and extract the bundle:
 
-tar xzvf \_splice-node.tar.gz
+```bash
+tar xzvf 0.6.3_splice-node.tar.gz
+```
 
 Additional parameters describing your own setup as opposed to the connection to the network are described below.
 
@@ -133,15 +60,46 @@ If you need to use an HTTP forward proxy for egress in your environment, you nee
 
 <ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorComposeYaml105 />
 
-Replace `your.proxy.host` and `your_proxy_port` with the actual host and port of your HTTP proxy. You can set `https.nonProxyHosts` as well to prevent proxying for particular addresses. Proxy authentication is currently not supported.
+Replace `your.proxy.host` and `your_proxy_port` with the actual host and port of your HTTP proxy. Proxy authentication is currently not supported.
+
+## Bypassing the proxy for specific hosts
+
+<Note>
+Setting `http.nonProxyHosts` affects:
+
+- The HTTP client used by the CN apps (Validator, Scan, SV, Wallet).
+- JDK-level HTTP clients in the same JVM (via the default `ProxySelector`). This includes the Auth0 JWK library used by the CN apps **and** by the Canton participant for JWKS / OIDC discovery, as well as file downloads that use `java.net.HttpURLConnection`.
+- gRPC egress from other components, because gRPC's Netty transport delegates proxy decisions to the default JDK `ProxySelector`.
+</Note>
+
+You can set `http.nonProxyHosts` to bypass the proxy for specific target hosts. Matching hosts will be contacted directly rather than through the configured proxy. This is useful for services that are reachable on the local network, such as an in-cluster Scan instance or internal monitoring endpoints.
+
+The value is a `|`-separated list of patterns that follows the standard Java `nonProxyHosts` grammar:
+
+- Patterns match the request host name case-insensitively.
+- `*` is a wildcard. Conventionally it is used at the start (`*.internal`) or end (`10.*`) of a pattern.
+- Matching is performed on the raw host string from the request URI. No DNS resolution is performed, so `localhost` and `127.0.0.1` are treated as different names unless you list both.
+- An empty value (e.g. `-Dhttp.nonProxyHosts=`) means "no bypass patterns".
+
+Example that proxies external traffic from the `validator` service but bypasses the proxy for `localhost` / `127.0.0.1`, any host in the `.internal` domain, and any IPv4 address whose literal string representation starts with `10.`:
+
+```yaml
+services:
+  validator:
+    environment:
+      JAVA_TOOL_OPTIONS: >-
+        -Dhttps.proxyHost=your.proxy.host
+        -Dhttps.proxyPort=your_proxy_port
+        -Dhttp.nonProxyHosts=localhost|127.0.0.1|*.internal|10.*
+```
 
 ## Deployment
 
 1)  Change to the `docker-compose` directory inside the extracted bundle:
 
-<CantonDocsGlobalSynchronizerDeploymentInstallationL41 />
+<ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorComposeBash123 />
 
-2)  Export the current version to an environment variable:
+2)  Export the current version to an environment variable: export IMAGE_TAG=0.6.3
 3)  Run the following command to start the validator node, and wait for it to become ready (could take a few minutes):
 
 > ```bash
@@ -165,7 +123,11 @@ The wallet UI is accessible at [http://wallet.localhost](http://wallet.localhost
 
 You can also logout of the administrator account and login as any other username. The first time a user logs in, they will be prompted with a message asking them to confirm whether they wish to be onboarded to the validator node.
 
+<div className="todo">
+
 link to section that explains what this onbarding means
+
+</div>
 
 ## Logging into the CNS UI
 
@@ -189,21 +151,76 @@ Please refer to the authentication section for instructions on how to set up an 
 
 Once you have set up your OAuth provider, you need to configure it by setting the following environment variables in the `.env` file:
 
-| Name                         | Value                                                                                                                                                                                                        |
-|------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| AUTH_URL                     | The URL of your OIDC provider for obtaining the `openid-configuration` and `jwks.json`.                                                                                                                      |
-| AUTH_JWKS_URL                | The URL of your OIDC provider for obtaining the `jwks.json`, will typically be `${AUTH_URL}/.well-known/jwks.json`.                                                                                          |
-| AUTH_WELLKNOWN_URL           | The URL of your OIDC provider for obtaining the `openid-configuration`, will typically be `${AUTH_URL}/.well-known/openid-configuration`.                                                                    |
-| LEDGER_API_AUTH_AUDIENCE     | The audience for the participant ledger API. e.g. `https://ledger_api.example.com`. This will set the `ledger-api.auth-services.target-audience` configuration for the participant.                          |
-| LEDGER_API_AUTH_SCOPE        | The scope for the participant ledger API. This will set the participant's `ledger-api.auth-services.target-scope` configuration. Optional                                                                    |
-| VALIDATOR_AUTH_AUDIENCE      | The audience for the validator backend API. e.g. `https://validator.example.com`.                                                                                                                            |
-| VALIDATOR_AUTH_CLIENT_ID     | The client id of the OAuth app for the validator app backend.                                                                                                                                                |
-| VALIDATOR_AUTH_CLIENT_SECRET | The client secret of the OAuth app for the validator app backend.                                                                                                                                            |
-| LEDGER_API_ADMIN_USER        | Should match the `sub` field of JWTs issued for the validator app. For some auth providers, this would be formed as `CLIENT_ID@clients`.                                        |
-| WALLET_ADMIN_USER            | The user ID of the user which should login as the wallet administrator. Note that this should be the full user id, e.g., `auth0|43b68e1e4978b000cefba352`, *not* only the suffix `43b68e1e4978b000cefba352`. |
-| WALLET_UI_CLIENT_ID          | The client id of the OAuth app for the wallet UI.                                                                                                                                                            |
-| ANS_UI_CLIENT_ID             | The client id of the OAuth app for the CNS UI.                                                                                                                                                               |
-| CONTACT_POINT                | The contact point for your validator node that can be used by other node operators to reach out to you if needed (slack username or an email address). Optional                                              |
+<table>
+<thead>
+<tr className="header">
+<th>Name</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr className="odd">
+<td>AUTH_URL</td>
+<td>The URL of your OIDC provider for obtaining the <code>openid-configuration</code> and <code>jwks.json</code>.</td>
+</tr>
+<tr className="even">
+<td>AUTH_JWKS_URL</td>
+<td>The URL of your OIDC provider for obtaining the <code>jwks.json</code>, will typically be <code>${AUTH_URL}/.well-known/jwks.json</code>.</td>
+</tr>
+<tr className="odd">
+<td>AUTH_WELLKNOWN_URL</td>
+<td>The URL of your OIDC provider for obtaining the <code>openid-configuration</code>, will typically be <code>${AUTH_URL}/.well-known/openid-configuration</code>.</td>
+</tr>
+<tr className="even">
+<td><ul>
+<li>**LEDGER_API_AUTH_AUDIENCE</li>
+</ul></td>
+<td><blockquote>
+<p>The audience for the participant ledger API. e.g. <code>https://ledger_api.example.com</code>.** — This will set the <code>ledger-api.auth-services.target-audience</code> configuration for the participant.</p>
+</blockquote></td>
+</tr>
+<tr className="odd">
+<td><ul>
+<li>**LEDGER_API_AUTH_SCOPE</li>
+</ul></td>
+<td><blockquote>
+<p>The scope for the participant ledger API.** — This will set the participant's <code>ledger-api.auth-services.target-scope</code> configuration. Optional</p>
+</blockquote></td>
+</tr>
+<tr className="even">
+<td>VALIDATOR_AUTH_AUDIENCE</td>
+<td>The audience for the validator backend API. e.g. <code>https://validator.example.com</code>.</td>
+</tr>
+<tr className="odd">
+<td>VALIDATOR_AUTH_CLIENT_ID</td>
+<td>The client id of the OAuth app for the validator app backend.</td>
+</tr>
+<tr className="even">
+<td>VALIDATOR_AUTH_CLIENT_SECRET</td>
+<td>The client secret of the OAuth app for the validator app backend.</td>
+</tr>
+<tr className="odd">
+<td>LEDGER_API_ADMIN_USER</td>
+<td>Should match the `sub` field of JWTs issued for the validator app. For some auth providers, this would be formed as <code>CLIENT_ID@clients</code>.</td>
+</tr>
+<tr className="even">
+<td>WALLET_ADMIN_USER</td>
+<td>The user ID of the user which should login as the wallet administrator. Note that this should be the full user id, e.g., <code>auth0|43b68e1e4978b000cefba352</code>, <em>not</em> only the suffix <code>43b68e1e4978b000cefba352</code>.</td>
+</tr>
+<tr className="odd">
+<td>WALLET_UI_CLIENT_ID</td>
+<td>The client id of the OAuth app for the wallet UI.</td>
+</tr>
+<tr className="even">
+<td>ANS_UI_CLIENT_ID</td>
+<td>The client id of the OAuth app for the CNS UI.</td>
+</tr>
+<tr className="odd">
+<td>CONTACT_POINT</td>
+<td>The contact point for your validator node that can be used by other node operators to reach out to you if needed (slack username or an email address). Optional</td>
+</tr>
+</tbody>
+</table>
 
 In order to enable auth in the deployment, add the `-a` flag to the `start.sh` command, as follows:
 
@@ -219,6 +236,47 @@ Your node is configured to automatically purchase traffic on a pay-as-you-go bas
 
 <ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorComposeBash262 />
 
+## Configuring sweeps and auto-accepts of transfer offers
+
+To do so, fill the following section and add the following additional config to your validator environment:
+
+```yaml
+# sweep by transferring directly through the transfer preapproval of the receiver,
+# if set to false sweeping creates transfer offers that need to be accepted on the receiver side.
+# Note that this refers to the preapprovals described in https://docs.dev.sync.global/background/preapprovals.html
+# and not to auto accepting transfers. Auto accept transfers does not setup preapproval contracts that allow
+# for a direct transfer but just automates the acceptance of the transfer offer so in that case
+# useTransferPreapproval should be set to false.
+services:
+  validator:
+    environment:
+       - |
+          ADDITIONAL_CONFIG_WALLET_SWEEP=
+            canton.validator-apps.validator_backend.wallet-sweep {
+              "<senderPartyId1>" {
+                max-balance-usd = 1000
+                min-balance-usd = 100
+                receiver = "<receiverPartyId>"
+                use-transfer-preapproval = false
+              }
+            }
+```
+
+Similarly, you can configure the validator to automatically accept transfer offers from certain parties on the network. To do so, add the following additional config:
+
+```yaml
+services:
+  validator:
+    environment:
+       - |
+          ADDITIONAL_CONFIG_AUTO_ACCEPT_TRANSFERS=
+            canton.validator-apps.validator_backend.auto-accept-transfers {
+              "<receiverPartyId>" {
+                from-parties = ["<senderPartyId1>", "<senderPartyId2>"]
+              }
+            }
+```
+
 ## Integration with systemd and other init systems
 
 If you want to manage the validator through systemd or a similar init system, create a service that calls the `start.sh` script with the right arguments. However, note that `start.sh` invokes `docker compose up` with the `-d/--detach` option so the script exits after the containers are up instead of continuing running.
@@ -227,32 +285,5 @@ You need to make sure that your service does not stop docker compose at that poi
 
 Alternatively, you can edit the script to remove the `-d` option so the script continues running.
 
+
 {/* COPIED_END */}
-
-## First startup verification checklist
-
-After deploying with either method, verify:
-
-- Validator logs show successful connection to the Global Synchronizer sequencer
-- The onboarding process completed without errors
-- The Wallet UI loads and displays your validator identity
-- Your party hint appears correctly in the validator admin party
-- Traffic auto-top-up is functioning (if configured)
-
-<Warning>
-If startup fails with connection errors, verify that your egress IP is allowlisted and that outbound HTTPS (port 443) is permitted to `*.sync.global` endpoints.
-</Warning>
-
-## Next steps
-
-<CardGroup cols={2}>
-
-<Card title="Configuration" icon="gear" href="/global-synchronizer/deployment/configuration">
-  Tune your validator's configuration.
-</Card>
-
-<Card title="Authorization Setup" icon="lock" href="/global-synchronizer/deployment/authorization-setup">
-  Configure authentication for production use.
-</Card>
-
-</CardGroup>

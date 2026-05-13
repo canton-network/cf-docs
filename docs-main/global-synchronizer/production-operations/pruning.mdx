@@ -3,47 +3,9 @@ title: "Pruning"
 description: "Sequencer and CometBFT pruning configuration for Global Synchronizer nodes"
 ---
 
-import CantonDocsGlobalSynchronizerProductionOperationsPruningL16 from "/snippets/canton-docs/global-synchronizer_production-operations_pruning_L16.mdx";
-import CantonDocsGlobalSynchronizerProductionOperationsPruningL45 from "/snippets/canton-docs/global-synchronizer_production-operations_pruning_L45.mdx";
+This page covers Canton-side pruning for participant nodes and automatic pruning configuration.
 
-
-Pruning removes old data from the sequencer and CometBFT to keep storage usage within reasonable bounds. Without pruning, storage grows indefinitely and can degrade performance or cause disk exhaustion. Pruning also supports compliance requirements by limiting the retention window for operational data.
-
-Participant pruning can also be configured but is not currently recommended for Super Validator nodes.
-
-## Sequencer pruning
-
-{/* COPIED_START source="splice:docs/src/sv_operator/sv_pruning.rst" */}
-Sequencer pruning is enabled through the following Helm values:
-{/* COPIED_END */}
-
-<CantonDocsGlobalSynchronizerProductionOperationsPruningL16 />
-
-
-{/* COPIED_START source="splice:docs/src/sv_operator/sv_pruning.rst" */}
-The recommended settings are a `pruningInterval` of `1 hour` and a `retentionPeriod` of `30 days`.
-{/* COPIED_END */}
-
-<Warning>
-A validator that falls more than 30 days behind (the default retention period) will be unable to catch up on the synchronizer, because the sequencer will have pruned the data it needs. Set the retention period with this constraint in mind.
-</Warning>
-
-When sequencer pruning is enabled, you must keep historical backups for each pruning window. The time difference between two historical backups must be smaller than the `retentionPeriod`. See the [Backup and Recovery](/global-synchronizer/production-operations/backup-and-recovery) page for full backup requirements.
-
-## CometBFT pruning
-
-{/* COPIED_START source="splice:docs/src/sv_operator/sv_pruning.rst" */}
-CometBFT pruning is enabled by default. Pruning is defined as the number of blocks to keep. Older blocks are pruned.
-{/* COPIED_END */}
-
-The number of blocks to keep is configured under the `node` Helm values key for CometBFT:
-
-<CantonDocsGlobalSynchronizerProductionOperationsPruningL45 />
-
-
-The default value of `5040000` is calculated to retain approximately 30 days of data assuming an upper bound of 7,000 blocks per hour.
-
-As with the sequencer, CometBFT historical backups must be kept such that the difference between block heights at backup time is smaller than the configured `retainBlocks` value. A backup frequency of every 2 weeks is recommended.
+For Super Validator pruning of the sequencer and CometBFT layers, see [SV Pruning](/global-synchronizer/production-operations/sv-pruning).
 
 {/* COPIED_START source="docs-website:docs/replicated/canton/3.4/participant/howtos/operate/pruning/pruning.rst" hash="4a51fcd8" */}
 
@@ -129,7 +91,6 @@ Monitor the pruning state to determine that the pruning schedule allows pruning 
 Monitor the `daml_pruning_max_event_age` metric describing the age of the "oldest, un-pruned" event (in hours). The `max-event-age` metrics should not exceed the value of the pruning schedule `retention` plus the length of the interval. For example, if your schedule specifies a retention of 30 days and a cron that calls for weekly pruning, `max-event-age` must remain below 37 days. If for any node the `max-event-age` metric exceeds this upper limit, consider allocating more time for pruning by reducing the interval between pruning windows, or by increasing the `maximum duration` pruning schedule setting.
 
 {/* COPIED_END */}
-
 
 {/* COPIED_START source="docs-website:docs/replicated/canton/3.4/participant/reference/automatic_pruning.rst" hash="6e2b1915" */}
 

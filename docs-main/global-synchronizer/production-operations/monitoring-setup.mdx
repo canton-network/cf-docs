@@ -1,143 +1,15 @@
 ---
 title: "Monitoring Setup"
-description: "Configuring Prometheus metrics collection and Grafana dashboards for Canton Network nodes"
+description: "Canton monitoring example, participant node health, and ACS commitment monitoring"
 ---
 
-import CantonGlobalSynchronizerReferenceConfigurationReferenceL298 from "/snippets/canton-docs/global-synchronizer_reference_configuration-reference_L298.mdx";
-import ExternalCantonMainCommunityAppSrcTestResourcesDocumentationSnippetsLogSlowFutures from "/snippets/external/canton/main/community/app/src/test/resources/documentation-snippets/log-slow-futures.mdx";
-import ExternalCantonMainCommunityAppSrcTestResourcesDocumentationSnippetsDeadlockDetection from "/snippets/external/canton/main/community/app/src/test/resources/documentation-snippets/deadlock-detection.mdx";
-import ExternalCantonMainCommunityAppSrcTestResourcesDocumentationSnippetsExitOnFatalFailures from "/snippets/external/canton/main/community/app/src/test/resources/documentation-snippets/exit-on-fatal-failures.mdx";
-import ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosObserveHealth0 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/participant/howtos/observe/health-0.mdx";
-import ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosObserveHealth1 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/participant/howtos/observe/health-1.mdx";
+This page covers Canton-side monitoring topics: an example containerised monitoring setup (Prometheus, Grafana, ELK), participant node health endpoints, and how to monitor ACS commitments.
 
+For Splice / Canton Network metrics specifically — what each component exposes, how to scrape it, and which metrics to watch on validators and Super Validators — see:
 
-Every Canton Network node exposes Prometheus-format metrics on port 10013 at the `/metrics` path. This page covers how to configure metrics scraping, enable optional metric triggers, and set up Grafana dashboards.
-
-## Components That Expose Metrics
-
-{/* COPIED_START source="splice:deployment/observability/metrics.rst" hash="metrics-components" */}
-
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was adapted from existing reviewed documentation.
-**Source:** `deployment/observability/metrics.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
-
-For a validator, the following components expose metrics:
-
-- The validator app
-- The participant
-
-For a Super Validator, these additional components also expose metrics:
-
-- The SV app
-- The scan app
-
-{/* COPIED_END */}
-
-## Scraping Metrics
-
-{/* COPIED_START source="splice:deployment/observability/metrics.rst" hash="metrics-scraping" */}
-
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was adapted from existing reviewed documentation.
-**Source:** `deployment/observability/metrics.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
-
-Metrics are built with OpenTelemetry and exposed in Prometheus format. Any Prometheus-compatible server can scrape them.
-
-### Histograms
-
-Histograms are exposed as [exponential histograms](https://opentelemetry.io/docs/specs/otel/metrics/data-model/#exponentialhistogram), which convert to [Prometheus native histograms](https://prometheus.io/docs/specs/native_histograms/).
-
-<Note>
-Prometheus native histogram support must be enabled with the flag `-enable-feature=native-histograms`. Native histograms are only available via the protobuf format, so Prometheus will switch to protobuf collection automatically.
-</Note>
-
-To switch back to regular histograms, add the following environment variable to a node:
-
-<CantonGlobalSynchronizerReferenceConfigurationReferenceL298 />
-
-{/* COPIED_END */}
-
-## Enabling Metrics in Kubernetes
-
-{/* COPIED_START source="splice:deployment/observability/metrics.rst" hash="metrics-helm" */}
-
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was adapted from existing reviewed documentation.
-**Source:** `deployment/observability/metrics.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
-
-Set `metrics.enable` to `true` in your Helm values (default: `false`). This creates a `ServiceMonitor` Kubernetes custom resource, which requires the [Prometheus Operator](https://github.com/prometheus-operator/prometheus-operator) to be installed in your cluster.
-
-Alternatively, add Prometheus scrape annotations to your charts configured to scrape port 10013.
-
-{/* COPIED_END */}
-
-## Enabling Metrics in Docker Compose
-
-{/* COPIED_START source="splice:deployment/observability/metrics.rst" hash="metrics-compose" */}
-
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was adapted from existing reviewed documentation.
-**Source:** `deployment/observability/metrics.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
-
-<Note>
-Docker Compose metrics are for validator nodes only.
-</Note>
-
-Metrics are enabled by default in Docker Compose deployments. Access them at:
-
-- `http://validator.localhost/metrics` — validator app metrics
-- `http://participant.localhost/metrics` — participant metrics
-
-{/* COPIED_END */}
-
-## Enabling Extra Metric Triggers
-
-{/* COPIED_START source="splice:deployment/observability/metrics.rst" hash="metrics-extra-triggers" */}
-
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was adapted from existing reviewed documentation.
-**Source:** `deployment/observability/metrics.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
-
-The validator app can run a trigger that polls topology state and exports metrics summarizing it. These metrics use the `splice.synchronizer-topology` prefix. The trigger is disabled by default.
-
-To enable it with a 5-minute polling interval, add this environment variable:
-
-```bash
-ADDITIONAL_CONFIG_TOPOLOGY_METRICS_EXPORT=canton.validator-apps.validator_backend.automation.topology-metrics-polling-interval = 5m
-```
-
-{/* COPIED_END */}
-
-## Grafana Dashboards
-
-{/* COPIED_START source="splice:deployment/observability/metrics.rst" hash="metrics-grafana" */}
-
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was adapted from existing reviewed documentation.
-**Source:** `deployment/observability/metrics.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
-
-The release bundle contains pre-built Grafana dashboards in the `grafana-dashboards` folder. Import these into your Grafana instance.
-
-The dashboards assume a Kubernetes deployment and may need modification for other deployment types. Dashboard queries use Prometheus native histogram syntax.
-
-{/* COPIED_END */}
-
-## Next Steps
-
-- [Key Metrics](/global-synchronizer/production-operations/key-metrics) — Which metrics to monitor and what they mean
-- [Metrics Reference](/global-synchronizer/reference/metrics-reference) — Complete metrics catalog
+- [Splice Metrics Overview](/global-synchronizer/production-operations/splice-metrics-overview)
+- [Key Metrics](/global-synchronizer/production-operations/key-metrics)
+- [Metrics Reference](/global-synchronizer/reference/metrics-reference)
 
 {/* COPIED_START source="docs-website:docs/replicated/canton/3.4/participant/tutorials/monitoring/example_monitoring_setup.rst" hash="c78cf431" */}
 
@@ -921,7 +793,6 @@ This version of the example only has the logging structure provided via GELF. It
 
 {/* COPIED_END */}
 
-
 {/* COPIED_START source="docs-website:docs/replicated/canton/3.4/participant/howtos/observe/health.rst" hash="64490235" */}
 
 <Warning title="Pre-reviewed Content - Do Not Modify">
@@ -988,13 +859,119 @@ readinessProbe:
 
 General information about the Participant Node, including about unhealthy synchronizers and dependencies, and whether the node is currently Active, can be displayed in the canton console by invoking the `health.status` command on the node.
 
-<ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosObserveHealth0 />
+``` none
+@ participant1.health.status
+    res1: NodeStatus[ParticipantStatus] = Participant id: PAR::participant1::12201ff69b1d24edbf0ee2028a304ea702ee8536790dab1a31e7136e6d90ff6d473c
+    Uptime: 2.069737s
+    Ports: 
+        ledger: 30183
+        admin: 30184
+        json: 30185
+    Connected synchronizers: None
+    Unhealthy synchronizers: None
+    Active: true
+    Components: 
+        memory_storage : Ok()
+        connected-synchronizer : Not Initialized
+        sync-ephemeral-state : Not Initialized
+        sequencer-client : Not Initialized
+        acs-commitment-processor : Not Initialized
+    Version: 3.4.11-SNAPSHOT
+    Supported protocol version(s): 34
+```
 
 The Admin API of the Participant Node provides programmatic access to this data in a structured form, via [ParticipantStatusService](https://github.com/DACH-NY/canton/blob/release-line-3.3/community/admin-api/src/main/protobuf/com/digitalasset/canton/admin/participant/v30/participant_status_service.proto#L10)'s `ParticipantStatus` call.
 
 The canton console can also provide information about *all* connected nodes, including those remotely connected, by invoking the command at the top level.
 
-<ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosObserveHealth1 />
+``` none
+@ health.status
+    res2: CantonStatus = Status for Sequencer 'sequencer1':
+    Sequencer id: da::1220a82692abc55c0367abefc4bdbc23df25688230430ddfeef5759845f26d5cc29c
+    Synchronizer id: da::1220a82692abc55c0367abefc4bdbc23df25688230430ddfeef5759845f26d5cc29c::34-0
+    Uptime: 5.968597s
+    Ports: 
+        public: 30187
+        admin: 30188
+    Connected participants: 
+        PAR::participant2::1220a4d7463b...
+        PAR::participant1::12201ff69b1d...
+    Connected mediators: 
+        MED::mediator1::122009299340...
+    Sequencer: SequencerHealthStatus(active = true)
+    details-extra: None
+    Components: 
+        memory_storage : Ok()
+        sequencer : Ok()
+    Accepts admin changes: true
+    Version: 3.4.11-SNAPSHOT
+    Protocol version: 34
+
+    Status for Mediator 'mediator1':
+    Node uid: mediator1::12200929934059da3e012af672ee8a5d26a7e4b3e5084920be298f791f7619843c78
+    Synchronizer id: da::1220a82692abc55c0367abefc4bdbc23df25688230430ddfeef5759845f26d5cc29c::34-0
+    Uptime: 5.920214s
+    Ports: 
+        admin: 30186
+    Active: true
+    Components: 
+        memory_storage : Ok()
+        sequencer-client : Ok()
+        sequencer-connection-pool : Ok()
+        sequencer-subscription-pool : Ok()
+        internal-sequencer-connection-sequencer1-0 : Ok()
+        subscription-sequencer-connection-sequencer1-0 : Ok()
+    Version: 3.4.11-SNAPSHOT
+    Protocol version: 34
+
+    Status for Participant 'participant1':
+    Participant id: PAR::participant1::12201ff69b1d24edbf0ee2028a304ea702ee8536790dab1a31e7136e6d90ff6d473c
+    Uptime: 7.954779s
+    Ports: 
+        ledger: 30183
+        admin: 30184
+        json: 30185
+    Connected synchronizers: 
+        da::1220a82692ab...::34-0
+    Unhealthy synchronizers: None
+    Active: true
+    Components: 
+        memory_storage : Ok()
+        connected-synchronizer : Ok()
+        sync-ephemeral-state : Ok()
+        sequencer-client : Ok()
+        acs-commitment-processor : Ok()
+        sequencer-connection-pool : Ok()
+        sequencer-subscription-pool : Ok()
+        internal-sequencer-connection-sequencer1-0 : Ok()
+        subscription-sequencer-connection-sequencer1-0 : Ok()
+    Version: 3.4.11-SNAPSHOT
+    Supported protocol version(s): 34
+
+    Status for Participant 'participant2':
+    Participant id: PAR::participant2::1220a4d7463bd34b2ba3704401b48ab41d8f88cdcbe512fc1ef071aad97fef106161
+    Uptime: 8.670214s
+    Ports: 
+        ledger: 30180
+        admin: 30181
+        json: 30182
+    Connected synchronizers: 
+        da::1220a82692ab...::34-0
+    Unhealthy synchronizers: None
+    Active: true
+    Components: 
+        memory_storage : Ok()
+        connected-synchronizer : Ok()
+        sync-ephemeral-state : Ok()
+        sequencer-client : Ok()
+        acs-commitment-processor : Ok()
+        sequencer-connection-pool : Ok()
+        sequencer-subscription-pool : Ok()
+        internal-sequencer-connection-sequencer1-0 : Ok()
+        subscription-sequencer-connection-sequencer1-0 : Ok()
+    Version: 3.4.11-SNAPSHOT
+    Supported protocol version(s): 34
+```
 
 ## Generating a Node Health Dump for Troubleshooting
 
@@ -1029,13 +1006,17 @@ Health dumps can also be gathered via gRPC on the `Admin API` of the Participant
 
 Some operations can report when they are slow, if you enable
 
-<ExternalCantonMainCommunityAppSrcTestResourcesDocumentationSnippetsLogSlowFutures />
+``` none
+canton.monitoring.logging.log-slow-futures = yes
+```
 
 If a task is taking longer than expected, a log line will be emitted periodically until it completes, such as `<task name> has not completed after <duration>`. This feature is disabled by default to reduce the overhead.
 
 Canton also provides a facility to periodically test whether we are able to schedule new tasks in a timely manner, enabled via the configuration
 
-<ExternalCantonMainCommunityAppSrcTestResourcesDocumentationSnippetsDeadlockDetection />
+``` none
+canton.monitoring.deadlock-detection.enabled = yes
+```
 
 If a problem is detected, a log line containing `Task runner <name> is stuck or overloaded for <duration>` will be emitted. This may indicate that resources such as CPU are overloaded, that the Execution Context is too small, or that too many tasks are otherwise stuck. If the issue resolves itself, a subsequent log message: `Task runner <name> is just overloaded, but operating correctly. Task got executed in the meantime` will be emitted.
 
@@ -1045,12 +1026,13 @@ Processes should be run under a process supervisor, such as `systemd` or Kuberne
 
 If you wish to disable this behaviour
 
-<ExternalCantonMainCommunityAppSrcTestResourcesDocumentationSnippetsExitOnFatalFailures />
+``` none
+canton.parameters.exit-on-fatal-failures = no
+```
 
 which will cause the Node to stay alive and report unhealthy in such cases.
 
 {/* COPIED_END */}
-
 
 {/* COPIED_START source="docs-website:docs/replicated/canton/3.4/participant/howtos/observe/commitments.rst" hash="448aca51" */}
 
@@ -1140,48 +1122,5 @@ val update1Config = new SlowCounterParticipantSynchronizerConfig(
 )
 participant1.commitments.set_config_for_slow_counter_participants(Seq(update1Config))
 ```
-
-{/* COPIED_END */}
-
-
-{/* COPIED_START source="splice:docs/src/deployment/observability/validator_health.rst" hash="08633c30" */}
-
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was copied from existing reviewed documentation.
-**Source:** `splice:docs/src/deployment/observability/validator_health.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
-
-# Validator Health
-
-You can check your validator's health using the readiness endpoints. All CN applications provide the `/readyz` and `/livez` endpoints, which are used for readiness and liveness probes.
-
-- **Checking readiness**
-
-  - In Kubernetes: readiness and liveness probes are already configured.
-
-```bash
-You can also manually check validator readiness with the following command:
-
-```yaml
-kubectl exec &lt;pod-name&gt; -n <namespace> -- curl -v https://localhost:5003/api/validator/readyz
-```
-```
-  - In Docker: run for example this command to check validator liveness inside a container:
-
-    ```yaml
-    docker exec &lt;container-name&gt; -- curl -v https://localhost:5003/api/validator/livez
-    ```
-
-  You should expect in both case HTTP status code 200 if the validator is ready and live.
-
-- **Using metrics**
-
-  The `splice_store_last_ingested_record_time_ms` metric represents the last ingested record time in each validator store. It can be used to track general activity of the node:
-
-  - If this value continue to increase over time, your node is active and stays in sync with the network. Note that it only advances if your node actually ingests new transactions. For a validator collecting validator liveness rewards this happens every round so you should expect your lag to never go above 20min.
-  - If it remains static, further investigation may be required.
-
-  For more details and to visualize this metric on its dedicated dashboard `Splice Store Last Ingested Record Time`, refer to the documentation about Metrics.
 
 {/* COPIED_END */}
