@@ -1,100 +1,5 @@
 export const VersionOption = ({ children }) => <>{children}</>;
 
-export const networkOrder = ['mainnet', 'testnet', 'devnet'];
-export const deploymentNetworkOrder = ['devnet', 'testnet', 'mainnet'];
-
-export const tokenPattern = /\|([A-Za-z0-9_]+)\|/g;
-
-export const tokenTextValue = (value) => {
-  if (value && typeof value === 'object' && 'href' in value) {
-    return value.href;
-  }
-  return value ?? null;
-};
-
-export const replacementForToken = (token, substitutions) => tokenTextValue(substitutions?.[token]);
-
-export const replaceStringProp = (value, substitutions) => {
-  if (typeof value !== 'string') {
-    return value;
-  }
-  return value.replace(tokenPattern, (match, token) => replacementForToken(token, substitutions) ?? match);
-};
-
-export const replaceTextNode = (value, substitutions, keyPrefix = 'token') => {
-  if (typeof value !== 'string') {
-    return value;
-  }
-
-  const pieces = [];
-  let lastIndex = 0;
-  let match;
-  tokenPattern.lastIndex = 0;
-
-  while ((match = tokenPattern.exec(value)) !== null) {
-    const [rawToken, token] = match;
-    const replacement = substitutions?.[token];
-    if (!replacement) {
-      continue;
-    }
-
-    if (match.index > lastIndex) {
-      pieces.push(value.slice(lastIndex, match.index));
-    }
-
-    if (replacement && typeof replacement === 'object' && replacement.href) {
-      pieces.push(
-        <a key={`${keyPrefix}-${pieces.length}`} href={replacement.href}>
-          {replacement.label ?? replacement.href}
-        </a>
-      );
-    } else {
-      pieces.push(String(replacement));
-    }
-    lastIndex = match.index + rawToken.length;
-  }
-
-  if (!pieces.length) {
-    return value;
-  }
-
-  if (lastIndex < value.length) {
-    pieces.push(value.slice(lastIndex));
-  }
-
-  return pieces;
-};
-
-export const replaceNode = (node, substitutions, keyPrefix = 'node') => {
-  if (typeof node === 'string') {
-    return replaceTextNode(node, substitutions, keyPrefix);
-  }
-
-  if (Array.isArray(node)) {
-    return node.map((child, index) => replaceNode(child, substitutions, `${keyPrefix}-${index}`));
-  }
-
-  if (!React.isValidElement(node)) {
-    return node;
-  }
-
-  const props = {};
-  for (const [name, value] of Object.entries(node.props ?? {})) {
-    if (name === 'children') {
-      continue;
-    }
-    props[name] = typeof value === 'string' ? replaceStringProp(value, substitutions) : value;
-  }
-
-  return React.cloneElement(
-    node,
-    props,
-    React.Children.map(node.props.children, (child, index) =>
-      replaceNode(child, substitutions, `${keyPrefix}-${index}`)
-    )
-  );
-};
-
 export const NetworkVariables = ({
   children,
   title = 'Network-specific values',
@@ -102,6 +7,93 @@ export const NetworkVariables = ({
   defaultNetwork = 'devnet',
   networkData = {},
 }) => {
+  const deploymentNetworkOrder = ['devnet', 'testnet', 'mainnet'];
+  const tokenPattern = /\|([A-Za-z0-9_]+)\|/g;
+  const tokenTextValue = (value) => {
+    if (value && typeof value === 'object' && 'href' in value) {
+      return value.href;
+    }
+    return value ?? null;
+  };
+  const replacementForToken = (token, substitutions) => tokenTextValue(substitutions?.[token]);
+  const replaceStringProp = (value, substitutions) => {
+    if (typeof value !== 'string') {
+      return value;
+    }
+    return value.replace(tokenPattern, (match, token) => replacementForToken(token, substitutions) ?? match);
+  };
+  const replaceTextNode = (value, substitutions, keyPrefix = 'token') => {
+    if (typeof value !== 'string') {
+      return value;
+    }
+
+    const pieces = [];
+    let lastIndex = 0;
+    let match;
+    tokenPattern.lastIndex = 0;
+
+    while ((match = tokenPattern.exec(value)) !== null) {
+      const [rawToken, token] = match;
+      const replacement = substitutions?.[token];
+      if (!replacement) {
+        continue;
+      }
+
+      if (match.index > lastIndex) {
+        pieces.push(value.slice(lastIndex, match.index));
+      }
+
+      if (replacement && typeof replacement === 'object' && replacement.href) {
+        pieces.push(
+          <a key={`${keyPrefix}-${pieces.length}`} href={replacement.href}>
+            {replacement.label ?? replacement.href}
+          </a>
+        );
+      } else {
+        pieces.push(String(replacement));
+      }
+      lastIndex = match.index + rawToken.length;
+    }
+
+    if (!pieces.length) {
+      return value;
+    }
+
+    if (lastIndex < value.length) {
+      pieces.push(value.slice(lastIndex));
+    }
+
+    return pieces;
+  };
+  const replaceNode = (node, substitutions, keyPrefix = 'node') => {
+    if (typeof node === 'string') {
+      return replaceTextNode(node, substitutions, keyPrefix);
+    }
+
+    if (Array.isArray(node)) {
+      return node.map((child, index) => replaceNode(child, substitutions, `${keyPrefix}-${index}`));
+    }
+
+    if (!React.isValidElement(node)) {
+      return node;
+    }
+
+    const props = {};
+    for (const [name, value] of Object.entries(node.props ?? {})) {
+      if (name === 'children') {
+        continue;
+      }
+      props[name] = typeof value === 'string' ? replaceStringProp(value, substitutions) : value;
+    }
+
+    return React.cloneElement(
+      node,
+      props,
+      React.Children.map(node.props.children, (child, index) =>
+        replaceNode(child, substitutions, `${keyPrefix}-${index}`)
+      )
+    );
+  };
   const options = deploymentNetworkOrder.filter((networkKey) => networkData[networkKey]?.substitutions);
   const defaultIndex = Math.max(0, options.indexOf(defaultNetwork));
   const [activeIndex, setActiveIndex] = React.useState(defaultIndex);
@@ -157,6 +149,7 @@ export const NetworkVariables = ({
 };
 
 export const Version = ({ children, title, description, defaultLabel, networkData = {} }) => {
+  const networkOrder = ['mainnet', 'testnet', 'devnet'];
   const networksForVersion = (version) => {
     return networkOrder.filter((networkKey) => networkData[networkKey]?.versions?.splice === version);
   };
