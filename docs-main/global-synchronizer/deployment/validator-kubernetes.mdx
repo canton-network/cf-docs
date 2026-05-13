@@ -3,6 +3,23 @@ title: "Kubernetes Validator Deployment"
 description: "Deploy a Canton Network validator on Kubernetes using Helm charts"
 ---
 
+import ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorHelmBash65 from "/snippets/external/splice/main/splice-rst-code-docs-src-validator-operator-validator-helm-bash-65.mdx";
+import ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorHelmYaml82 from "/snippets/external/splice/main/splice-rst-code-docs-src-validator-operator-validator-helm-yaml-82.mdx";
+import ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorHelmBash103 from "/snippets/external/splice/main/splice-rst-code-docs-src-validator-operator-validator-helm-bash-103.mdx";
+import ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorHelmBash116 from "/snippets/external/splice/main/splice-rst-code-docs-src-validator-operator-validator-helm-bash-116.mdx";
+import ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorHelmBash310 from "/snippets/external/splice/main/splice-rst-code-docs-src-validator-operator-validator-helm-bash-310.mdx";
+import ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorHelmBash322 from "/snippets/external/splice/main/splice-rst-code-docs-src-validator-operator-validator-helm-bash-322.mdx";
+import ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorHelmBash451 from "/snippets/external/splice/main/splice-rst-code-docs-src-validator-operator-validator-helm-bash-451.mdx";
+import ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorHelmBash514 from "/snippets/external/splice/main/splice-rst-code-docs-src-validator-operator-validator-helm-bash-514.mdx";
+import ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorHelmBash526 from "/snippets/external/splice/main/splice-rst-code-docs-src-validator-operator-validator-helm-bash-526.mdx";
+import ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorHelmYaml535 from "/snippets/external/splice/main/splice-rst-code-docs-src-validator-operator-validator-helm-yaml-535.mdx";
+import ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorHelmYaml553 from "/snippets/external/splice/main/splice-rst-code-docs-src-validator-operator-validator-helm-yaml-553.mdx";
+import ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorHelmBash567 from "/snippets/external/splice/main/splice-rst-code-docs-src-validator-operator-validator-helm-bash-567.mdx";
+import ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorHelmYaml576 from "/snippets/external/splice/main/splice-rst-code-docs-src-validator-operator-validator-helm-yaml-576.mdx";
+import ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorHelmBash611 from "/snippets/external/splice/main/splice-rst-code-docs-src-validator-operator-validator-helm-bash-611.mdx";
+import ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorHelmYaml771 from "/snippets/external/splice/main/splice-rst-code-docs-src-validator-operator-validator-helm-yaml-771.mdx";
+import ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorHelmYaml797 from "/snippets/external/splice/main/splice-rst-code-docs-src-validator-operator-validator-helm-yaml-797.mdx";
+
 {/* COPIED_START source="splice:docs/src/validator_operator/validator_helm.rst" hash="b0bc851d" */}
 
 <Warning title="Pre-reviewed Content - Do Not Modify">
@@ -42,9 +59,7 @@ Additional parameters describing your own setup as opposed to the connection to 
 
 Create the application namespace within Kubernetes.
 
-```bash
-kubectl create ns validator
-```
+<ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorHelmBash65 />
 
 <Note>
 The validator deployment assumes one validator per namespace. If you wish to run multiple validators in the same cluster, please create a separate namespace for each.
@@ -54,11 +69,7 @@ The validator deployment assumes one validator per namespace. If you wish to run
 
 If you need to use an HTTP forward proxy for egress in your environment, you need to set `https.proxyHost` and `https.proxyPort` in `additionalJvmOptions` in the validator and participant helm charts to use the HTTP proxy for outgoing connections:
 
-```yaml
-additionalJvmOptions: |
-  -Dhttps.proxyHost=your.proxy.host
-  -Dhttps.proxyPort=your_proxy_port
-```
+<ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorHelmYaml82 />
 
 Replace `your.proxy.host` and `your_proxy_port` with the actual host and port of your HTTP proxy. Proxy authentication is currently not supported.
 
@@ -100,21 +111,13 @@ call out the option of using a managed postgres instance
 
 </div>
 
-```bash
-kubectl create secret generic postgres-secrets \
-    --from-literal=postgresPassword=${POSTGRES_PASSWORD} \
-    -n validator
-```
+<ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorHelmBash103 />
 
 ## Preparing for Validator Onboarding
 
 Ensure that your validator onboarding secret `ONBOARDING_SECRET` is set in the namespace you created earlier.
 
-```bash
-kubectl create secret generic splice-app-validator-onboarding-validator \
-    "--from-literal=secret=${ONBOARDING_SECRET}" \
-    -n validator
-```
+<ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorHelmBash116 />
 
 ## Configuring Authentication
 
@@ -236,27 +239,11 @@ We are now going to configure your Validator node software based on the OIDC pro
 
 The validator app backend requires the following secret (omit the scope if it is not needed in your setup)
 
-```bash
-kubectl create --namespace validator secret generic splice-app-validator-ledger-api-auth \
-    "--from-literal=ledger-api-user=${VALIDATOR_CLIENT_ID}@clients" \
-    "--from-literal=url=${OIDC_AUTHORITY_URL}/.well-known/openid-configuration" \
-    "--from-literal=client-id=${VALIDATOR_CLIENT_ID}" \
-    "--from-literal=client-secret=${VALIDATOR_CLIENT_SECRET}" \
-    "--from-literal=audience=${OIDC_AUTHORITY_LEDGER_API_AUDIENCE}" \
-    "--from-literal=scope=${OIDC_AUTHORITY_LEDGER_API_SCOPE}"
-```
+<ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorHelmBash310 />
 
 To setup the wallet and CNS UI, create the following two secrets.
 
-```bash
-kubectl create --namespace validator secret generic splice-app-wallet-ui-auth \
-    "--from-literal=url=${OIDC_AUTHORITY_URL}" \
-    "--from-literal=client-id=${WALLET_UI_CLIENT_ID}"
-
-kubectl create --namespace validator secret generic splice-app-cns-ui-auth \
-    "--from-literal=url=${OIDC_AUTHORITY_URL}" \
-    "--from-literal=client-id=${CNS_UI_CLIENT_ID}"
-```
+<ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorHelmBash322 />
 
 ### Running without Authentication
 
@@ -391,15 +378,7 @@ helm install validator /splice-validator -n validator --version ${CHART_VERSION}
 
 Once this is running, you should be able to inspect the state of the cluster and observe pods running in the new namespace. A typical query might look as follows:
 
-```bash
-$ kubectl get pods -n validator
-NAMESPACE         NAME                                  READY   STATUS             RESTARTS        AGE
-validator         ans-web-ui-5bf489db78-bdn2j           1/1     Running            0               24m
-validator         participant-8988dfb54-m9655           1/1     Running            0               26m
-validator         postgres-0                            1/1     Running            0               37m
-validator         validator-app-f8c74d5dd-zf9j4         1/1     Running            0               24m
-validator         wallet-web-ui-69d85cdb99-fnj7q        1/1     Running            0               24m
-```
+<ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorHelmBash451 />
 
 Note also that `Pod` restarts may happen during bringup, particularly if all helm charts are deployed at the same time. For example, the `participant` cannot start until `postgres` is running.
 
@@ -436,94 +415,33 @@ In order to install the reference charts, the following must be satisfied in you
 
 **Example of Istio installation:**
 
-```bash
-helm repo add istio https://istio-release.storage.googleapis.com/charts
-helm repo update
-helm install istio-base istio/base -n istio-system --set defaults.global.istioNamespace=cluster-ingress --wait
-helm install istiod istio/istiod -n cluster-ingress --set global.istioNamespace="cluster-ingress" --set meshConfig.accessLogFile="/dev/stdout"  --wait
-```
+<ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorHelmBash514 />
 
 ### Installation Instructions
 
 Create a `cluster-ingress` namespace:
 
-```bash
-kubectl create ns cluster-ingress
-```
+<ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorHelmBash526 />
 
 Ensure that there is a cert-manager certificate available in a secret named `cn-net-tls`. An example of a suitable certificate definition:
 
-```yaml
-apiVersion: cert-manager.io/v1
-kind: Certificate
-metadata:
-   name: cn-certificate
-   namespace: cluster-ingress
-spec:
-    dnsNames:
-    - '*.validator.YOUR_HOSTNAME'
-    issuerRef:
-        name: letsencrypt-production
-    secretName: cn-net-tls
-```
+<ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorHelmYaml535 />
 
 Create a file named `istio-gateway-values.yaml` with the following content (Tip: on GCP you can get the cluster IP from `gcloud compute addresses list`):
 
-```yaml
-service:
-    loadBalancerIP: "YOUR_CLUSTER_IP"
-    loadBalancerSourceRanges:
-        - "35.194.81.56/32"
-        - "35.198.147.95/32"
-        - "35.189.40.124/32"
-        - "34.132.91.75/32"
-```
+<ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorHelmYaml553 />
 
 And install it to your cluster:
 
-```bash
-helm install istio-ingress istio/gateway -n cluster-ingress -f istio-gateway-values.yaml
-```
+<ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorHelmBash567 />
 
 Create an Istio Gateway resource in the `cluster-ingress` namespace. Save the following to a file named `gateway.yaml`, and replace `YOUR_HOSTNAME` with the actual hostname you want to use for your validator node (and has a DNS record pointing to the cluster IP you configured above):
 
-```yaml
-apiVersion: networking.istio.io/v1alpha3
-kind: Gateway
-metadata:
-  name: cn-http-gateway
-  namespace: cluster-ingress
-spec:
-  selector:
-    app: istio-ingress
-    istio: ingress
-  servers:
-  - port:
-      number: 443
-      name: https
-      protocol: HTTPS
-    tls:
-      mode: SIMPLE
-      credentialName: cn-net-tls # name of the secret created above
-    hosts:
-    - "*.YOUR_HOSTNAME"
-    - "YOUR_HOSTNAME"
-  - port:
-      number: 80
-      name: http
-      protocol: HTTP
-    tls:
-      httpsRedirect: true
-    hosts:
-    - "*.YOUR_HOSTNAME"
-    - "YOUR_HOSTNAME"
-```
+<ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorHelmYaml576 />
 
 And apply it to your cluster:
 
-```bash
-kubectl apply -f gateway.yaml -n cluster-ingress
-```
+<ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorHelmBash611 />
 
 This gateway terminates tls using the secret that you configured above, and exposes raw http traffic in its outbound port 443. Istio VirtualServices can now be created to route traffic from there to the required pods within the cluster. A reference Helm chart is provided for that, which can be installed after
 
@@ -635,17 +553,7 @@ Refer to the Canton documentation for more details on participant pruning:
 
 If you need to configure init containers on the participant or validator deployments, you can use the following helm values for `splice-participant` or `splice-validator`:
 
-```yaml
-# if you want to disable the default postgres init container:
-persistence:
-  enablePgInitContainer: false
-
-# if you want additional init containers:
-extraInitContainers:
-  - name: my-extra-container
-    image: busybox
-    command: [ "sh", "-c", "echo 'example extra container'" ]
-```
+<ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorHelmYaml771 />
 
 ## Working around volume ownership issues
 
@@ -653,15 +561,7 @@ The containers in the `splice-validator` chart run as non-root users (specifical
 
 For example, for the `/domain-upgrade-dump` volume (required for synchronizer upgrades), you can add the following to your `validator-values.yaml` file:
 
-```yaml
-extraInitContainers:
-    - name: chown-domain-upgrade-dump
-      image: busybox:1.37.0
-      command: ["sh", "-c", "chown -R 1001:1001 /domain-upgrade-dump"]
-      volumeMounts:
-        - name: domain-upgrade-dump-volume
-          mountPath: /domain-upgrade-dump
-```
+<ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorHelmYaml797 />
 
 A similar workaround will be required for mounting a usable `/participant-bootstrapping-dump` (required when recovering from identities backup).
 
