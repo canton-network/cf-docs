@@ -179,9 +179,10 @@ class DamlJsonMinimalLifecycleTests(unittest.TestCase):
         assert_contains_all(
             overview,
             [
-                "[`DA.Alpha`](/reference/daml-json/da-alpha)",
-                "[`DA.Current`](/reference/daml-json/da-current)",
-                "`1.1.0`",
+                '<p class="x2mdx-ref-eyebrow">Daml Reference</p>',
+                '<a class="x2mdx-ref-card" href="/reference/daml-json/da-alpha">',
+                '<a class="x2mdx-ref-card" href="/reference/daml-json/da-current">',
+                "1.1.0",
             ],
         )
         assert_contains_all(alpha, ["Lifecycle", "Alpha (experimental).", "Alpha: experimental module.", "### `data Token`"])

@@ -1,137 +1,15 @@
 ---
 title: "Monitoring Setup"
-description: "Configuring Prometheus metrics collection and Grafana dashboards for Canton Network nodes"
+description: "Canton monitoring example, participant node health, and ACS commitment monitoring"
 ---
 
-Every Canton Network node exposes Prometheus-format metrics on port 10013 at the `/metrics` path. This page covers how to configure metrics scraping, enable optional metric triggers, and set up Grafana dashboards.
+This page covers Canton-side monitoring topics: an example containerised monitoring setup (Prometheus, Grafana, ELK), participant node health endpoints, and how to monitor ACS commitments.
 
-## Components That Expose Metrics
+For Splice / Canton Network metrics specifically — what each component exposes, how to scrape it, and which metrics to watch on validators and Super Validators — see:
 
-{/* COPIED_START source="splice:deployment/observability/metrics.rst" hash="metrics-components" */}
-
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was adapted from existing reviewed documentation.
-**Source:** `deployment/observability/metrics.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
-
-For a validator, the following components expose metrics:
-
-- The validator app
-- The participant
-
-For a Super Validator, these additional components also expose metrics:
-
-- The SV app
-- The scan app
-
-{/* COPIED_END */}
-
-## Scraping Metrics
-
-{/* COPIED_START source="splice:deployment/observability/metrics.rst" hash="metrics-scraping" */}
-
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was adapted from existing reviewed documentation.
-**Source:** `deployment/observability/metrics.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
-
-Metrics are built with OpenTelemetry and exposed in Prometheus format. Any Prometheus-compatible server can scrape them.
-
-### Histograms
-
-Histograms are exposed as [exponential histograms](https://opentelemetry.io/docs/specs/otel/metrics/data-model/#exponentialhistogram), which convert to [Prometheus native histograms](https://prometheus.io/docs/specs/native_histograms/).
-
-<Note>
-Prometheus native histogram support must be enabled with the flag `-enable-feature=native-histograms`. Native histograms are only available via the protobuf format, so Prometheus will switch to protobuf collection automatically.
-</Note>
-
-To switch back to regular histograms, add the following environment variable to a node:
-
-```bash
-ADDITIONAL_CONFIG_DISABLE_NATIVE_HISTOGRAMS="canton.monitoring.metrics.histograms=[]"
-```
-
-{/* COPIED_END */}
-
-## Enabling Metrics in Kubernetes
-
-{/* COPIED_START source="splice:deployment/observability/metrics.rst" hash="metrics-helm" */}
-
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was adapted from existing reviewed documentation.
-**Source:** `deployment/observability/metrics.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
-
-Set `metrics.enable` to `true` in your Helm values (default: `false`). This creates a `ServiceMonitor` Kubernetes custom resource, which requires the [Prometheus Operator](https://github.com/prometheus-operator/prometheus-operator) to be installed in your cluster.
-
-Alternatively, add Prometheus scrape annotations to your charts configured to scrape port 10013.
-
-{/* COPIED_END */}
-
-## Enabling Metrics in Docker Compose
-
-{/* COPIED_START source="splice:deployment/observability/metrics.rst" hash="metrics-compose" */}
-
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was adapted from existing reviewed documentation.
-**Source:** `deployment/observability/metrics.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
-
-<Note>
-Docker Compose metrics are for validator nodes only.
-</Note>
-
-Metrics are enabled by default in Docker Compose deployments. Access them at:
-
-- `http://validator.localhost/metrics` — validator app metrics
-- `http://participant.localhost/metrics` — participant metrics
-
-{/* COPIED_END */}
-
-## Enabling Extra Metric Triggers
-
-{/* COPIED_START source="splice:deployment/observability/metrics.rst" hash="metrics-extra-triggers" */}
-
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was adapted from existing reviewed documentation.
-**Source:** `deployment/observability/metrics.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
-
-The validator app can run a trigger that polls topology state and exports metrics summarizing it. These metrics use the `splice.synchronizer-topology` prefix. The trigger is disabled by default.
-
-To enable it with a 5-minute polling interval, add this environment variable:
-
-```bash
-ADDITIONAL_CONFIG_TOPOLOGY_METRICS_EXPORT=canton.validator-apps.validator_backend.automation.topology-metrics-polling-interval = 5m
-```
-
-{/* COPIED_END */}
-
-## Grafana Dashboards
-
-{/* COPIED_START source="splice:deployment/observability/metrics.rst" hash="metrics-grafana" */}
-
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was adapted from existing reviewed documentation.
-**Source:** `deployment/observability/metrics.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
-
-The release bundle contains pre-built Grafana dashboards in the `grafana-dashboards` folder. Import these into your Grafana instance.
-
-The dashboards assume a Kubernetes deployment and may need modification for other deployment types. Dashboard queries use Prometheus native histogram syntax.
-
-{/* COPIED_END */}
-
-## Next Steps
-
-- [Key Metrics](/global-synchronizer/production-operations/key-metrics) — Which metrics to monitor and what they mean
-- [Metrics Reference](/global-synchronizer/reference/metrics-reference) — Complete metrics catalog
+- [Splice Metrics Overview](/global-synchronizer/production-operations/splice-metrics-overview)
+- [Key Metrics](/global-synchronizer/production-operations/key-metrics)
+- [Metrics Reference](/global-synchronizer/reference/metrics-reference)
 
 {/* COPIED_START source="docs-website:docs/replicated/canton/3.4/participant/tutorials/monitoring/example_monitoring_setup.rst" hash="c78cf431" */}
 
@@ -915,7 +793,6 @@ This version of the example only has the logging structure provided via GELF. It
 
 {/* COPIED_END */}
 
-
 {/* COPIED_START source="docs-website:docs/replicated/canton/3.4/participant/howtos/observe/health.rst" hash="64490235" */}
 
 <Warning title="Pre-reviewed Content - Do Not Modify">
@@ -1157,7 +1034,6 @@ which will cause the Node to stay alive and report unhealthy in such cases.
 
 {/* COPIED_END */}
 
-
 {/* COPIED_START source="docs-website:docs/replicated/canton/3.4/participant/howtos/observe/commitments.rst" hash="448aca51" */}
 
 <Warning title="Pre-reviewed Content - Do Not Modify">
@@ -1246,48 +1122,5 @@ val update1Config = new SlowCounterParticipantSynchronizerConfig(
 )
 participant1.commitments.set_config_for_slow_counter_participants(Seq(update1Config))
 ```
-
-{/* COPIED_END */}
-
-
-{/* COPIED_START source="splice:docs/src/deployment/observability/validator_health.rst" hash="08633c30" */}
-
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was copied from existing reviewed documentation.
-**Source:** `splice:docs/src/deployment/observability/validator_health.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
-
-# Validator Health
-
-You can check your validator's health using the readiness endpoints. All CN applications provide the `/readyz` and `/livez` endpoints, which are used for readiness and liveness probes.
-
-- **Checking readiness**
-
-  - In Kubernetes: readiness and liveness probes are already configured.
-
-```bash
-You can also manually check validator readiness with the following command:
-
-```yaml
-kubectl exec &lt;pod-name&gt; -n <namespace> -- curl -v https://localhost:5003/api/validator/readyz
-```
-```
-  - In Docker: run for example this command to check validator liveness inside a container:
-
-    ```yaml
-    docker exec &lt;container-name&gt; -- curl -v https://localhost:5003/api/validator/livez
-    ```
-
-  You should expect in both case HTTP status code 200 if the validator is ready and live.
-
-- **Using metrics**
-
-  The `splice_store_last_ingested_record_time_ms` metric represents the last ingested record time in each validator store. It can be used to track general activity of the node:
-
-  - If this value continue to increase over time, your node is active and stays in sync with the network. Note that it only advances if your node actually ingests new transactions. For a validator collecting validator liveness rewards this happens every round so you should expect your lag to never go above 20min.
-  - If it remains static, further investigation may be required.
-
-  For more details and to visualize this metric on its dedicated dashboard `Splice Store Last Ingested Record Time`, refer to the documentation about Metrics.
 
 {/* COPIED_END */}
