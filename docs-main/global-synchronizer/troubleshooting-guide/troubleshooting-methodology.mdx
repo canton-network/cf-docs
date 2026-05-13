@@ -3,7 +3,14 @@ title: "Troubleshooting Methodology"
 description: "A systematic approach to diagnosing and resolving Global Synchronizer issues"
 ---
 
-import CantonGlobalSynchronizerTroubleshootingGuideTroubleshootingMethodologyL98 from "/snippets/canton-docs/global-synchronizer_troubleshooting-guide_troubleshooting-methodology_L98.mdx";
+import CANTON_DOCS_CN_GS_TROUBLESHOOTING_GUIDE_METHODOLOGY_0 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/docs-cn/global-synchronizer-troubleshooting-guide-troubleshooting-methodology-0.mdx";
+import DamlAppdevModulesM5LocalnetDevelopmentL190 from "/snippets/daml-docs/appdev_modules_m5-localnet-development_L190.mdx";
+import ExternalSpliceMainSpliceRstCodeDocsSrcDeploymentTroubleshootingText89 from "/snippets/external/splice/main/splice-rst-code-docs-src-deployment-troubleshooting-text-89.mdx";
+import ExternalSpliceMainSpliceRstCodeDocsSrcDeploymentTroubleshootingText109 from "/snippets/external/splice/main/splice-rst-code-docs-src-deployment-troubleshooting-text-109.mdx";
+import ExternalSpliceMainSpliceRstCodeDocsSrcDeploymentTroubleshootingText123 from "/snippets/external/splice/main/splice-rst-code-docs-src-deployment-troubleshooting-text-123.mdx";
+import ExternalSpliceMainSpliceRstCodeDocsSrcDeploymentTroubleshootingText135 from "/snippets/external/splice/main/splice-rst-code-docs-src-deployment-troubleshooting-text-135.mdx";
+import ExternalSpliceMainSpliceRstCodeDocsSrcDeploymentTroubleshootingText161 from "/snippets/external/splice/main/splice-rst-code-docs-src-deployment-troubleshooting-text-161.mdx";
+import ExternalSpliceMainSpliceRstCodeDocsSrcDeploymentTroubleshootingText174 from "/snippets/external/splice/main/splice-rst-code-docs-src-deployment-troubleshooting-text-174.mdx";
 
 
 When something goes wrong with your validator, a structured approach saves time. This page outlines a repeatable process for diagnosing issues and knowing when to escalate.
@@ -14,9 +21,7 @@ Logs are your primary diagnostic tool. Start here before anything else.
 
 **Capture logs from a Docker Compose deployment:**
 
-```bash
-make capture-logs
-```
+<DamlAppdevModulesM5LocalnetDevelopmentL190 />
 
 This creates a timestamped archive of all container logs in the `logs/` directory.
 
@@ -98,7 +103,7 @@ If tables are large (tens of GB), enable pruning. See [Performance Issues](/glob
 
 If the validator is running, the Canton console provides direct insight into internal state:
 
-<CantonGlobalSynchronizerTroubleshootingGuideTroubleshootingMethodologyL98 />
+<CANTON_DOCS_CN_GS_TROUBLESHOOTING_GUIDE_METHODOLOGY_0 />
 
 ## Debugging Web UI Issues
 
@@ -165,9 +170,7 @@ A log of the form shown below indicates that your validator app has not been abl
 
 If you only want to rely on free traffic and do not want to purchase any extra traffic, remove the validator top-up config.
 
-``` text
-ABORTED: Traffic balance below reserved traffic amount (0 < 200000)
-```
+<ExternalSpliceMainSpliceRstCodeDocsSrcDeploymentTroubleshootingText89 />
 
 ### Insufficient funds to buy configured traffic amount
 
@@ -175,9 +178,7 @@ A log of the form shown below indicates that your validator app attempted to [pu
 
 If you only want to rely on free traffic and do not want to purchase any extra traffic, remove the validator top-up config.
 
-``` text
-Insufficient funds to buy configured traffic amount. Please ensure that the validator’s wallet has enough amulets to purchase 1.9998 MB of traffic to continue healthy operation.
-```
+<ExternalSpliceMainSpliceRstCodeDocsSrcDeploymentTroubleshootingText109 />
 
 ### Gave up getting app version
 
@@ -185,17 +186,13 @@ A log of the form below can often indicate that you used a scan URL in a place w
 
 In a docker-compose setup, verify the URL passed to `-s` which should be a SV URL or `svSponsorAddress` for the helm deployment.
 
-``` text
-2025-02-11T10:16:13.098Z [⋮] ERROR - o.l.s.v.ValidatorSvConnection:validator=validator_backend (7427be2620676fce8a464eee769eb1d8-app_version-2d71c55f5ecd731b-793d382fa2d6ce14) - Gave up getting 'app version of https://scan.sv-2.dev.global.canton.network.digitalasset.com/api/sv' org.apache.pekko.http.scaladsl.unmarshalling.Unmarshaller$UnsupportedContentTypeException: Unsupported Content-Type [Some(text/html)], supported: application/json
-```
+<ExternalSpliceMainSpliceRstCodeDocsSrcDeploymentTroubleshootingText123 />
 
 ### UNAUTHENTICATED errors in validator, sv and scan app
 
 A log of the form below in the SV, scan or validator app logs indicates an authenitcation error on the connection to the participant. Check the participant logs which will contain more details on why the request got rejected.
 
-``` text
-2025-02-14T11:32:00.304Z [⋮] INFO - o.l.s.v.ValidatorApp:validator=validator_backend (50836441bf579035d64a56f776566cbf) - The operation 'Get user 7D95xiEUxju4IUXFQgyUrwHMMuZO0g2F@clients' failed with a retryable error (full stack trace omitted): UNAUTHENTICATED: An error occurred. Please contact the operator and inquire about the request efd009557dec03da74dd29b723949cd6 with tid efd009557dec03da74dd29b723949cd6
-```
+<ExternalSpliceMainSpliceRstCodeDocsSrcDeploymentTroubleshootingText135 />
 
 ### Node has identity X, but identifier Y was expected
 
@@ -207,38 +204,15 @@ This deletes all data on your node and you cannot recover it. Only run this on f
 
 If this is not a new node, change the values back to what you had before.
 
-``` text
-│Caused by: io.grpc.StatusRuntimeException: INTERNAL: Node has identity a-b-c-1::122098ffcd99..., but identifier a-b-1 was expected.                │
-```
+<ExternalSpliceMainSpliceRstCodeDocsSrcDeploymentTroubleshootingText161 />
 
 ### MemberDisabled error when connecting to sequencer
 
 A log of the form below in your participant indicates that it has been down longer than the 30 day sequencer pruning window so the SVs have disabled it. Any attempts to connect will fail with the same error. You can recover your CC balance by spinning up a new node via `validator_reonboard`.
 
-``` text
-2025-04-16T08:18:06.451Z [⋮] DEBUG - c.d.c.s.c.t.GrpcSequencerSubscription:participant=participant/domainId=global-domain::12206d339948/sequencerAlias=Some-Alias (---) - Completed subscription with Success(GrpcSubscriptionError(Request failed for sequencer.
-  GrpcRequestRefusedByServer: FAILED_PRECONDITION/MemberDisabled(PAR::validator1::12203d9ed85f...)
-  Request: subscription
-```
+<ExternalSpliceMainSpliceRstCodeDocsSrcDeploymentTroubleshootingText174 />
 
 {/* COPIED_END */}
-
-## Error Escalation
-
-When you encounter an error, use this decision path:
-
-1. **Check the category.** Categories 1 and 2 are transient -- retry with backoff. If retries fail for more than a few minutes, move to step 2.
-2. **Check connectivity.** Verify network connectivity, VPN status (for DevNet), DNS resolution, and that the target sequencer endpoint is reachable.
-3. **Check resources.** Look for `DB_STORAGE_DEGRADATION`, `SERVER_OVERLOADED`, or `SEQUENCER_BACKPRESSURE` in logs. These point to resource constraints.
-4. **Category 4 or 5 errors require investigation.** Gather full logs, the error code, correlation ID, and node version. Do not repeatedly restart a node showing category 4 errors without understanding the cause.
-5. **Contact support** with the error code, full correlation ID, timestamps, node version, and relevant log excerpts. Support channels:
-   - Discretionary support: [da-support@digitalasset.com](mailto:da-support@digitalasset.com)
-   - SLA-based support: [support@digitalasset.com](mailto:support@digitalasset.com)
-   - Community: Slack `#validator-operations` channel
-
-<Note>
-When sharing logs with support, redact private keys, passwords, and JWT tokens, but preserve error codes, correlation IDs, and timestamps.
-</Note>
 
 ## Escalation Path
 
