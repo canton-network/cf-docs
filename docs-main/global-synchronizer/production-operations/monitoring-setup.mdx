@@ -3,6 +3,14 @@ title: "Monitoring Setup"
 description: "Configuring Prometheus metrics collection and Grafana dashboards for Canton Network nodes"
 ---
 
+import CantonGlobalSynchronizerReferenceConfigurationReferenceL298 from "/snippets/canton-docs/global-synchronizer_reference_configuration-reference_L298.mdx";
+import ExternalCantonMainCommunityAppSrcTestResourcesDocumentationSnippetsLogSlowFutures from "/snippets/external/canton/main/community/app/src/test/resources/documentation-snippets/log-slow-futures.mdx";
+import ExternalCantonMainCommunityAppSrcTestResourcesDocumentationSnippetsDeadlockDetection from "/snippets/external/canton/main/community/app/src/test/resources/documentation-snippets/deadlock-detection.mdx";
+import ExternalCantonMainCommunityAppSrcTestResourcesDocumentationSnippetsExitOnFatalFailures from "/snippets/external/canton/main/community/app/src/test/resources/documentation-snippets/exit-on-fatal-failures.mdx";
+import ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosObserveHealth0 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/participant/howtos/observe/health-0.mdx";
+import ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosObserveHealth1 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/participant/howtos/observe/health-1.mdx";
+
+
 Every Canton Network node exposes Prometheus-format metrics on port 10013 at the `/metrics` path. This page covers how to configure metrics scraping, enable optional metric triggers, and set up Grafana dashboards.
 
 ## Components That Expose Metrics
@@ -49,9 +57,7 @@ Prometheus native histogram support must be enabled with the flag `-enable-featu
 
 To switch back to regular histograms, add the following environment variable to a node:
 
-```bash
-ADDITIONAL_CONFIG_DISABLE_NATIVE_HISTOGRAMS="canton.monitoring.metrics.histograms=[]"
-```
+<CantonGlobalSynchronizerReferenceConfigurationReferenceL298 />
 
 {/* COPIED_END */}
 
@@ -982,119 +988,13 @@ readinessProbe:
 
 General information about the Participant Node, including about unhealthy synchronizers and dependencies, and whether the node is currently Active, can be displayed in the canton console by invoking the `health.status` command on the node.
 
-``` none
-@ participant1.health.status
-    res1: NodeStatus[ParticipantStatus] = Participant id: PAR::participant1::12201ff69b1d24edbf0ee2028a304ea702ee8536790dab1a31e7136e6d90ff6d473c
-    Uptime: 2.069737s
-    Ports: 
-        ledger: 30183
-        admin: 30184
-        json: 30185
-    Connected synchronizers: None
-    Unhealthy synchronizers: None
-    Active: true
-    Components: 
-        memory_storage : Ok()
-        connected-synchronizer : Not Initialized
-        sync-ephemeral-state : Not Initialized
-        sequencer-client : Not Initialized
-        acs-commitment-processor : Not Initialized
-    Version: 3.4.11-SNAPSHOT
-    Supported protocol version(s): 34
-```
+<ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosObserveHealth0 />
 
 The Admin API of the Participant Node provides programmatic access to this data in a structured form, via [ParticipantStatusService](https://github.com/DACH-NY/canton/blob/release-line-3.3/community/admin-api/src/main/protobuf/com/digitalasset/canton/admin/participant/v30/participant_status_service.proto#L10)'s `ParticipantStatus` call.
 
 The canton console can also provide information about *all* connected nodes, including those remotely connected, by invoking the command at the top level.
 
-``` none
-@ health.status
-    res2: CantonStatus = Status for Sequencer 'sequencer1':
-    Sequencer id: da::1220a82692abc55c0367abefc4bdbc23df25688230430ddfeef5759845f26d5cc29c
-    Synchronizer id: da::1220a82692abc55c0367abefc4bdbc23df25688230430ddfeef5759845f26d5cc29c::34-0
-    Uptime: 5.968597s
-    Ports: 
-        public: 30187
-        admin: 30188
-    Connected participants: 
-        PAR::participant2::1220a4d7463b...
-        PAR::participant1::12201ff69b1d...
-    Connected mediators: 
-        MED::mediator1::122009299340...
-    Sequencer: SequencerHealthStatus(active = true)
-    details-extra: None
-    Components: 
-        memory_storage : Ok()
-        sequencer : Ok()
-    Accepts admin changes: true
-    Version: 3.4.11-SNAPSHOT
-    Protocol version: 34
-
-    Status for Mediator 'mediator1':
-    Node uid: mediator1::12200929934059da3e012af672ee8a5d26a7e4b3e5084920be298f791f7619843c78
-    Synchronizer id: da::1220a82692abc55c0367abefc4bdbc23df25688230430ddfeef5759845f26d5cc29c::34-0
-    Uptime: 5.920214s
-    Ports: 
-        admin: 30186
-    Active: true
-    Components: 
-        memory_storage : Ok()
-        sequencer-client : Ok()
-        sequencer-connection-pool : Ok()
-        sequencer-subscription-pool : Ok()
-        internal-sequencer-connection-sequencer1-0 : Ok()
-        subscription-sequencer-connection-sequencer1-0 : Ok()
-    Version: 3.4.11-SNAPSHOT
-    Protocol version: 34
-
-    Status for Participant 'participant1':
-    Participant id: PAR::participant1::12201ff69b1d24edbf0ee2028a304ea702ee8536790dab1a31e7136e6d90ff6d473c
-    Uptime: 7.954779s
-    Ports: 
-        ledger: 30183
-        admin: 30184
-        json: 30185
-    Connected synchronizers: 
-        da::1220a82692ab...::34-0
-    Unhealthy synchronizers: None
-    Active: true
-    Components: 
-        memory_storage : Ok()
-        connected-synchronizer : Ok()
-        sync-ephemeral-state : Ok()
-        sequencer-client : Ok()
-        acs-commitment-processor : Ok()
-        sequencer-connection-pool : Ok()
-        sequencer-subscription-pool : Ok()
-        internal-sequencer-connection-sequencer1-0 : Ok()
-        subscription-sequencer-connection-sequencer1-0 : Ok()
-    Version: 3.4.11-SNAPSHOT
-    Supported protocol version(s): 34
-
-    Status for Participant 'participant2':
-    Participant id: PAR::participant2::1220a4d7463bd34b2ba3704401b48ab41d8f88cdcbe512fc1ef071aad97fef106161
-    Uptime: 8.670214s
-    Ports: 
-        ledger: 30180
-        admin: 30181
-        json: 30182
-    Connected synchronizers: 
-        da::1220a82692ab...::34-0
-    Unhealthy synchronizers: None
-    Active: true
-    Components: 
-        memory_storage : Ok()
-        connected-synchronizer : Ok()
-        sync-ephemeral-state : Ok()
-        sequencer-client : Ok()
-        acs-commitment-processor : Ok()
-        sequencer-connection-pool : Ok()
-        sequencer-subscription-pool : Ok()
-        internal-sequencer-connection-sequencer1-0 : Ok()
-        subscription-sequencer-connection-sequencer1-0 : Ok()
-    Version: 3.4.11-SNAPSHOT
-    Supported protocol version(s): 34
-```
+<ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosObserveHealth1 />
 
 ## Generating a Node Health Dump for Troubleshooting
 
@@ -1129,17 +1029,13 @@ Health dumps can also be gathered via gRPC on the `Admin API` of the Participant
 
 Some operations can report when they are slow, if you enable
 
-``` none
-canton.monitoring.logging.log-slow-futures = yes
-```
+<ExternalCantonMainCommunityAppSrcTestResourcesDocumentationSnippetsLogSlowFutures />
 
 If a task is taking longer than expected, a log line will be emitted periodically until it completes, such as `<task name> has not completed after <duration>`. This feature is disabled by default to reduce the overhead.
 
 Canton also provides a facility to periodically test whether we are able to schedule new tasks in a timely manner, enabled via the configuration
 
-``` none
-canton.monitoring.deadlock-detection.enabled = yes
-```
+<ExternalCantonMainCommunityAppSrcTestResourcesDocumentationSnippetsDeadlockDetection />
 
 If a problem is detected, a log line containing `Task runner <name> is stuck or overloaded for <duration>` will be emitted. This may indicate that resources such as CPU are overloaded, that the Execution Context is too small, or that too many tasks are otherwise stuck. If the issue resolves itself, a subsequent log message: `Task runner <name> is just overloaded, but operating correctly. Task got executed in the meantime` will be emitted.
 
@@ -1149,9 +1045,7 @@ Processes should be run under a process supervisor, such as `systemd` or Kuberne
 
 If you wish to disable this behaviour
 
-``` none
-canton.parameters.exit-on-fatal-failures = no
-```
+<ExternalCantonMainCommunityAppSrcTestResourcesDocumentationSnippetsExitOnFatalFailures />
 
 which will cause the Node to stay alive and report unhealthy in such cases.
 
