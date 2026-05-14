@@ -1,326 +1,261 @@
-# Splice Network Vars Wrapped Section Screenshots
+# Splice Network Variables Screenshots
 
-Generated: 2026-05-13T20:51:06.264Z
-Preview commit: 085b15a9
-Screenshots: 36
+Captured from https://cantonfoundation-splice-network-vars.mintlify.app at docs commit `ec639593`.
 
-## /appdev/deep-dives/token-standard - block 1
+Total wrapped sections: 34.
 
-Page: https://cantonfoundation-splice-network-vars.mintlify.app/appdev/deep-dives/token-standard
-Nearest heading: ​
-Setting up MergeDelegations
-Selected tab: DevNet (0.6.3)
+<details>
+<summary>/appdev/deep-dives/token-standard (1)</summary>
 
-![/appdev/deep-dives/token-standard block 1](/Users/danielporter/control/reference_rollout/splice-network-vars-screenshots-20260513/images/appdev-deep-dives-token-standard--block-01.png)
+[Open page](https://cantonfoundation-splice-network-vars.mintlify.app/appdev/deep-dives/token-standard)
 
-## /appdev/modules/m7-canton-coin-preapprovals - block 1
+**Block 1: default DevNet (0.6.3) tab**
 
-Page: https://cantonfoundation-splice-network-vars.mintlify.app/appdev/modules/m7-canton-coin-preapprovals
-Nearest heading: Canton Coin Preapprovals
-Selected tab: DevNet (0.6.3)
+![/appdev/deep-dives/token-standard block 1](https://raw.githubusercontent.com/canton-network/cf-docs/pr-assets/splice-network-vars-screenshots/pr-assets/splice-network-vars-screenshots/images/appdev-deep-dives-token-standard--block-01.png)
 
-![/appdev/modules/m7-canton-coin-preapprovals block 1](/Users/danielporter/control/reference_rollout/splice-network-vars-screenshots-20260513/images/appdev-modules-m7-canton-coin-preapprovals--block-01.png)
+</details>
 
-## /global-synchronizer/canton-console/console-overview - block 1
+<details>
+<summary>/global-synchronizer/canton-console/console-overview (4)</summary>
 
-Page: https://cantonfoundation-splice-network-vars.mintlify.app/global-synchronizer/canton-console/console-overview
-Nearest heading: ​
-Participant console
-Selected tab: DevNet (0.6.3)
+[Open page](https://cantonfoundation-splice-network-vars.mintlify.app/global-synchronizer/canton-console/console-overview)
 
-![/global-synchronizer/canton-console/console-overview block 1](/Users/danielporter/control/reference_rollout/splice-network-vars-screenshots-20260513/images/global-synchronizer-canton-console-console-overview--block-01.png)
+**Block 1: default DevNet (0.6.3) tab**
 
-## /global-synchronizer/canton-console/console-overview - block 2
+![/global-synchronizer/canton-console/console-overview block 1](https://raw.githubusercontent.com/canton-network/cf-docs/pr-assets/splice-network-vars-screenshots/pr-assets/splice-network-vars-screenshots/images/global-synchronizer-canton-console-console-overview--block-01.png)
 
-Page: https://cantonfoundation-splice-network-vars.mintlify.app/global-synchronizer/canton-console/console-overview
-Nearest heading: ​
-Participant console
-Selected tab: DevNet (0.6.3)
+**Block 2: default DevNet (0.6.3) tab**
 
-![/global-synchronizer/canton-console/console-overview block 2](/Users/danielporter/control/reference_rollout/splice-network-vars-screenshots-20260513/images/global-synchronizer-canton-console-console-overview--block-02.png)
+![/global-synchronizer/canton-console/console-overview block 2](https://raw.githubusercontent.com/canton-network/cf-docs/pr-assets/splice-network-vars-screenshots/pr-assets/splice-network-vars-screenshots/images/global-synchronizer-canton-console-console-overview--block-02.png)
 
-## /global-synchronizer/canton-console/console-overview - block 3
+**Block 3: default DevNet (0.6.3) tab**
 
-Page: https://cantonfoundation-splice-network-vars.mintlify.app/global-synchronizer/canton-console/console-overview
-Nearest heading: ​
-Sequencer console
-Selected tab: DevNet (0.6.3)
+![/global-synchronizer/canton-console/console-overview block 3](https://raw.githubusercontent.com/canton-network/cf-docs/pr-assets/splice-network-vars-screenshots/pr-assets/splice-network-vars-screenshots/images/global-synchronizer-canton-console-console-overview--block-03.png)
 
-![/global-synchronizer/canton-console/console-overview block 3](/Users/danielporter/control/reference_rollout/splice-network-vars-screenshots-20260513/images/global-synchronizer-canton-console-console-overview--block-03.png)
+**Block 4: default DevNet (0.6.3) tab**
 
-## /global-synchronizer/canton-console/console-overview - block 4
+![/global-synchronizer/canton-console/console-overview block 4](https://raw.githubusercontent.com/canton-network/cf-docs/pr-assets/splice-network-vars-screenshots/pr-assets/splice-network-vars-screenshots/images/global-synchronizer-canton-console-console-overview--block-04.png)
 
-Page: https://cantonfoundation-splice-network-vars.mintlify.app/global-synchronizer/canton-console/console-overview
-Nearest heading: ​
-Mediator console
-Selected tab: DevNet (0.6.3)
+</details>
 
-![/global-synchronizer/canton-console/console-overview block 4](/Users/danielporter/control/reference_rollout/splice-network-vars-screenshots-20260513/images/global-synchronizer-canton-console-console-overview--block-04.png)
+<details>
+<summary>/global-synchronizer/deployment/kubernetes-deployment (6)</summary>
 
-## /global-synchronizer/deployment/kubernetes-deployment - block 1
+[Open page](https://cantonfoundation-splice-network-vars.mintlify.app/global-synchronizer/deployment/kubernetes-deployment)
 
-Page: https://cantonfoundation-splice-network-vars.mintlify.app/global-synchronizer/deployment/kubernetes-deployment
-Nearest heading: ​
-Requirements
-Selected tab: DevNet (0.6.3)
+**Block 1: default DevNet (0.6.3) tab**
 
-![/global-synchronizer/deployment/kubernetes-deployment block 1](/Users/danielporter/control/reference_rollout/splice-network-vars-screenshots-20260513/images/global-synchronizer-deployment-kubernetes-deployment--block-01.png)
+![/global-synchronizer/deployment/kubernetes-deployment block 1](https://raw.githubusercontent.com/canton-network/cf-docs/pr-assets/splice-network-vars-screenshots/pr-assets/splice-network-vars-screenshots/images/global-synchronizer-deployment-kubernetes-deployment--block-01.png)
 
-## /global-synchronizer/deployment/kubernetes-deployment - block 2
+**Block 2: default DevNet (0.6.3) tab**
 
-Page: https://cantonfoundation-splice-network-vars.mintlify.app/global-synchronizer/deployment/kubernetes-deployment
-Nearest heading: ​
-Generating your CometBFT node keys
-Selected tab: DevNet (0.6.3)
+![/global-synchronizer/deployment/kubernetes-deployment block 2](https://raw.githubusercontent.com/canton-network/cf-docs/pr-assets/splice-network-vars-screenshots/pr-assets/splice-network-vars-screenshots/images/global-synchronizer-deployment-kubernetes-deployment--block-02.png)
 
-![/global-synchronizer/deployment/kubernetes-deployment block 2](/Users/danielporter/control/reference_rollout/splice-network-vars-screenshots-20260513/images/global-synchronizer-deployment-kubernetes-deployment--block-02.png)
+**Block 3: default DevNet (0.6.3) tab**
 
-## /global-synchronizer/deployment/kubernetes-deployment - block 3
+![/global-synchronizer/deployment/kubernetes-deployment block 3](https://raw.githubusercontent.com/canton-network/cf-docs/pr-assets/splice-network-vars-screenshots/pr-assets/splice-network-vars-screenshots/images/global-synchronizer-deployment-kubernetes-deployment--block-03.png)
 
-Page: https://cantonfoundation-splice-network-vars.mintlify.app/global-synchronizer/deployment/kubernetes-deployment
-Nearest heading: ​
-Postgres in the Cluster
-Selected tab: DevNet (0.6.3)
+**Block 4: default DevNet (0.6.3) tab**
 
-![/global-synchronizer/deployment/kubernetes-deployment block 3](/Users/danielporter/control/reference_rollout/splice-network-vars-screenshots-20260513/images/global-synchronizer-deployment-kubernetes-deployment--block-03.png)
+![/global-synchronizer/deployment/kubernetes-deployment block 4](https://raw.githubusercontent.com/canton-network/cf-docs/pr-assets/splice-network-vars-screenshots/pr-assets/splice-network-vars-screenshots/images/global-synchronizer-deployment-kubernetes-deployment--block-04.png)
 
-## /global-synchronizer/deployment/kubernetes-deployment - block 4
+**Block 5: default DevNet (0.6.3) tab**
 
-Page: https://cantonfoundation-splice-network-vars.mintlify.app/global-synchronizer/deployment/kubernetes-deployment
-Nearest heading: ​
-Configuring the Helm Charts
-Selected tab: DevNet (0.6.3)
+![/global-synchronizer/deployment/kubernetes-deployment block 5](https://raw.githubusercontent.com/canton-network/cf-docs/pr-assets/splice-network-vars-screenshots/pr-assets/splice-network-vars-screenshots/images/global-synchronizer-deployment-kubernetes-deployment--block-05.png)
 
-![/global-synchronizer/deployment/kubernetes-deployment block 4](/Users/danielporter/control/reference_rollout/splice-network-vars-screenshots-20260513/images/global-synchronizer-deployment-kubernetes-deployment--block-04.png)
+**Block 6: default DevNet (0.6.3) tab**
 
-## /global-synchronizer/deployment/kubernetes-deployment - block 5
+![/global-synchronizer/deployment/kubernetes-deployment block 6](https://raw.githubusercontent.com/canton-network/cf-docs/pr-assets/splice-network-vars-screenshots/pr-assets/splice-network-vars-screenshots/images/global-synchronizer-deployment-kubernetes-deployment--block-06.png)
 
-Page: https://cantonfoundation-splice-network-vars.mintlify.app/global-synchronizer/deployment/kubernetes-deployment
-Nearest heading: ​
-Installing the Helm Charts
-Selected tab: DevNet (0.6.3)
+</details>
 
-![/global-synchronizer/deployment/kubernetes-deployment block 5](/Users/danielporter/control/reference_rollout/splice-network-vars-screenshots-20260513/images/global-synchronizer-deployment-kubernetes-deployment--block-05.png)
+<details>
+<summary>/global-synchronizer/deployment/onboarding-process (1)</summary>
 
-## /global-synchronizer/deployment/kubernetes-deployment - block 6
+[Open page](https://cantonfoundation-splice-network-vars.mintlify.app/global-synchronizer/deployment/onboarding-process)
 
-Page: https://cantonfoundation-splice-network-vars.mintlify.app/global-synchronizer/deployment/kubernetes-deployment
-Nearest heading: ​
-Installation Instructions
-Selected tab: DevNet (0.6.3)
+**Block 1: default DevNet (0.6.3) tab**
 
-![/global-synchronizer/deployment/kubernetes-deployment block 6](/Users/danielporter/control/reference_rollout/splice-network-vars-screenshots-20260513/images/global-synchronizer-deployment-kubernetes-deployment--block-06.png)
+![/global-synchronizer/deployment/onboarding-process block 1](https://raw.githubusercontent.com/canton-network/cf-docs/pr-assets/splice-network-vars-screenshots/pr-assets/splice-network-vars-screenshots/images/global-synchronizer-deployment-onboarding-process--block-01.png)
 
-## /global-synchronizer/deployment/onboarding-process - block 1
+</details>
 
-Page: https://cantonfoundation-splice-network-vars.mintlify.app/global-synchronizer/deployment/onboarding-process
-Nearest heading: ​
-Validating that your IP has been approved
-Selected tab: DevNet (0.6.3)
+<details>
+<summary>/global-synchronizer/deployment/required-network-parameters (1)</summary>
 
-![/global-synchronizer/deployment/onboarding-process block 1](/Users/danielporter/control/reference_rollout/splice-network-vars-screenshots-20260513/images/global-synchronizer-deployment-onboarding-process--block-01.png)
+[Open page](https://cantonfoundation-splice-network-vars.mintlify.app/global-synchronizer/deployment/required-network-parameters)
 
-## /global-synchronizer/deployment/required-network-parameters - block 1
+**Block 1: default DevNet (0.6.3) tab**
 
-Page: https://cantonfoundation-splice-network-vars.mintlify.app/global-synchronizer/deployment/required-network-parameters
-Nearest heading: Required Network Parameters
-Selected tab: DevNet (0.6.3)
+![/global-synchronizer/deployment/required-network-parameters block 1](https://raw.githubusercontent.com/canton-network/cf-docs/pr-assets/splice-network-vars-screenshots/pr-assets/splice-network-vars-screenshots/images/global-synchronizer-deployment-required-network-parameters--block-01.png)
 
-![/global-synchronizer/deployment/required-network-parameters block 1](/Users/danielporter/control/reference_rollout/splice-network-vars-screenshots-20260513/images/global-synchronizer-deployment-required-network-parameters--block-01.png)
+</details>
 
-## /global-synchronizer/deployment/sv-network-resets - block 1
+<details>
+<summary>/global-synchronizer/deployment/sv-network-resets (1)</summary>
 
-Page: https://cantonfoundation-splice-network-vars.mintlify.app/global-synchronizer/deployment/sv-network-resets
-Nearest heading: SV Network Resets
-Selected tab: DevNet (0.6.3)
+[Open page](https://cantonfoundation-splice-network-vars.mintlify.app/global-synchronizer/deployment/sv-network-resets)
 
-![/global-synchronizer/deployment/sv-network-resets block 1](/Users/danielporter/control/reference_rollout/splice-network-vars-screenshots-20260513/images/global-synchronizer-deployment-sv-network-resets--block-01.png)
+**Block 1: default DevNet (0.6.3) tab**
 
-## /global-synchronizer/deployment/synchronizer-traffic - block 1
+![/global-synchronizer/deployment/sv-network-resets block 1](https://raw.githubusercontent.com/canton-network/cf-docs/pr-assets/splice-network-vars-screenshots/pr-assets/splice-network-vars-screenshots/images/global-synchronizer-deployment-sv-network-resets--block-01.png)
 
-Page: https://cantonfoundation-splice-network-vars.mintlify.app/global-synchronizer/deployment/synchronizer-traffic
-Nearest heading: ​
-Traffic parameters
-Selected tab: DevNet (0.6.3)
+</details>
 
-![/global-synchronizer/deployment/synchronizer-traffic block 1](/Users/danielporter/control/reference_rollout/splice-network-vars-screenshots-20260513/images/global-synchronizer-deployment-synchronizer-traffic--block-01.png)
+<details>
+<summary>/global-synchronizer/deployment/synchronizer-traffic (1)</summary>
 
-## /global-synchronizer/deployment/validator-docker-compose - block 1
+[Open page](https://cantonfoundation-splice-network-vars.mintlify.app/global-synchronizer/deployment/synchronizer-traffic)
 
-Page: https://cantonfoundation-splice-network-vars.mintlify.app/global-synchronizer/deployment/validator-docker-compose
-Nearest heading: ​
-Requirements
-Selected tab: DevNet (0.6.3)
+**Block 1: default DevNet (0.6.3) tab**
 
-![/global-synchronizer/deployment/validator-docker-compose block 1](/Users/danielporter/control/reference_rollout/splice-network-vars-screenshots-20260513/images/global-synchronizer-deployment-validator-docker-compose--block-01.png)
+![/global-synchronizer/deployment/synchronizer-traffic block 1](https://raw.githubusercontent.com/canton-network/cf-docs/pr-assets/splice-network-vars-screenshots/pr-assets/splice-network-vars-screenshots/images/global-synchronizer-deployment-synchronizer-traffic--block-01.png)
 
-## /global-synchronizer/deployment/validator-docker-compose - block 2
+</details>
 
-Page: https://cantonfoundation-splice-network-vars.mintlify.app/global-synchronizer/deployment/validator-docker-compose
-Nearest heading: ​
-Deployment
-Selected tab: DevNet (0.6.3)
+<details>
+<summary>/global-synchronizer/deployment/validator-docker-compose (2)</summary>
 
-![/global-synchronizer/deployment/validator-docker-compose block 2](/Users/danielporter/control/reference_rollout/splice-network-vars-screenshots-20260513/images/global-synchronizer-deployment-validator-docker-compose--block-02.png)
+[Open page](https://cantonfoundation-splice-network-vars.mintlify.app/global-synchronizer/deployment/validator-docker-compose)
 
-## /global-synchronizer/deployment/validator-kubernetes - block 1
+**Block 1: default DevNet (0.6.3) tab**
 
-Page: https://cantonfoundation-splice-network-vars.mintlify.app/global-synchronizer/deployment/validator-kubernetes
-Nearest heading: ​
-Requirements
-Selected tab: DevNet (0.6.3)
+![/global-synchronizer/deployment/validator-docker-compose block 1](https://raw.githubusercontent.com/canton-network/cf-docs/pr-assets/splice-network-vars-screenshots/pr-assets/splice-network-vars-screenshots/images/global-synchronizer-deployment-validator-docker-compose--block-01.png)
 
-![/global-synchronizer/deployment/validator-kubernetes block 1](/Users/danielporter/control/reference_rollout/splice-network-vars-screenshots-20260513/images/global-synchronizer-deployment-validator-kubernetes--block-01.png)
+**Block 2: default DevNet (0.6.3) tab**
 
-## /global-synchronizer/deployment/validator-kubernetes - block 2
+![/global-synchronizer/deployment/validator-docker-compose block 2](https://raw.githubusercontent.com/canton-network/cf-docs/pr-assets/splice-network-vars-screenshots/pr-assets/splice-network-vars-screenshots/images/global-synchronizer-deployment-validator-docker-compose--block-02.png)
 
-Page: https://cantonfoundation-splice-network-vars.mintlify.app/global-synchronizer/deployment/validator-kubernetes
-Nearest heading: ​
-Configuring the Helm Charts
-Selected tab: DevNet (0.6.3)
+</details>
 
-![/global-synchronizer/deployment/validator-kubernetes block 2](/Users/danielporter/control/reference_rollout/splice-network-vars-screenshots-20260513/images/global-synchronizer-deployment-validator-kubernetes--block-02.png)
+<details>
+<summary>/global-synchronizer/deployment/validator-kubernetes (4)</summary>
 
-## /global-synchronizer/deployment/validator-kubernetes - block 3
+[Open page](https://cantonfoundation-splice-network-vars.mintlify.app/global-synchronizer/deployment/validator-kubernetes)
 
-Page: https://cantonfoundation-splice-network-vars.mintlify.app/global-synchronizer/deployment/validator-kubernetes
-Nearest heading: ​
-Installing the Helm Charts
-Selected tab: DevNet (0.6.3)
+**Block 1: default DevNet (0.6.3) tab**
 
-![/global-synchronizer/deployment/validator-kubernetes block 3](/Users/danielporter/control/reference_rollout/splice-network-vars-screenshots-20260513/images/global-synchronizer-deployment-validator-kubernetes--block-03.png)
+![/global-synchronizer/deployment/validator-kubernetes block 1](https://raw.githubusercontent.com/canton-network/cf-docs/pr-assets/splice-network-vars-screenshots/pr-assets/splice-network-vars-screenshots/images/global-synchronizer-deployment-validator-kubernetes--block-01.png)
 
-## /global-synchronizer/deployment/validator-kubernetes - block 4
+**Block 2: default DevNet (0.6.3) tab**
 
-Page: https://cantonfoundation-splice-network-vars.mintlify.app/global-synchronizer/deployment/validator-kubernetes
-Nearest heading: ​
-Installation Instructions
-Selected tab: DevNet (0.6.3)
+![/global-synchronizer/deployment/validator-kubernetes block 2](https://raw.githubusercontent.com/canton-network/cf-docs/pr-assets/splice-network-vars-screenshots/pr-assets/splice-network-vars-screenshots/images/global-synchronizer-deployment-validator-kubernetes--block-02.png)
 
-![/global-synchronizer/deployment/validator-kubernetes block 4](/Users/danielporter/control/reference_rollout/splice-network-vars-screenshots-20260513/images/global-synchronizer-deployment-validator-kubernetes--block-04.png)
+**Block 3: default DevNet (0.6.3) tab**
 
-## /global-synchronizer/production-operations/splice-metrics-overview - block 1
+![/global-synchronizer/deployment/validator-kubernetes block 3](https://raw.githubusercontent.com/canton-network/cf-docs/pr-assets/splice-network-vars-screenshots/pr-assets/splice-network-vars-screenshots/images/global-synchronizer-deployment-validator-kubernetes--block-03.png)
 
-Page: https://cantonfoundation-splice-network-vars.mintlify.app/global-synchronizer/production-operations/splice-metrics-overview
-Nearest heading: ​
-Grafana Dashboards
-Selected tab: DevNet (0.6.3)
+**Block 4: default DevNet (0.6.3) tab**
 
-![/global-synchronizer/production-operations/splice-metrics-overview block 1](/Users/danielporter/control/reference_rollout/splice-network-vars-screenshots-20260513/images/global-synchronizer-production-operations-splice-metrics-overview--block-01.png)
+![/global-synchronizer/deployment/validator-kubernetes block 4](https://raw.githubusercontent.com/canton-network/cf-docs/pr-assets/splice-network-vars-screenshots/pr-assets/splice-network-vars-screenshots/images/global-synchronizer-deployment-validator-kubernetes--block-04.png)
 
-## /global-synchronizer/production-operations/validator-disaster-recovery - block 1
+</details>
 
-Page: https://cantonfoundation-splice-network-vars.mintlify.app/global-synchronizer/production-operations/validator-disaster-recovery
-Nearest heading: ​
-Troubleshooting failed ACS imports
-Selected tab: DevNet (0.6.3)
+<details>
+<summary>/global-synchronizer/production-operations/splice-metrics-overview (1)</summary>
 
-![/global-synchronizer/production-operations/validator-disaster-recovery block 1](/Users/danielporter/control/reference_rollout/splice-network-vars-screenshots-20260513/images/global-synchronizer-production-operations-validator-disaster-recovery--block-01.png)
+[Open page](https://cantonfoundation-splice-network-vars.mintlify.app/global-synchronizer/production-operations/splice-metrics-overview)
 
-## /global-synchronizer/production-operations/validator-disaster-recovery - block 2
+**Block 1: default DevNet (0.6.3) tab**
 
-Page: https://cantonfoundation-splice-network-vars.mintlify.app/global-synchronizer/production-operations/validator-disaster-recovery
-Nearest heading: ​
-Recover the Coin balance of an external party
-Selected tab: DevNet (0.6.3)
+![/global-synchronizer/production-operations/splice-metrics-overview block 1](https://raw.githubusercontent.com/canton-network/cf-docs/pr-assets/splice-network-vars-screenshots/pr-assets/splice-network-vars-screenshots/images/global-synchronizer-production-operations-splice-metrics-overview--block-01.png)
 
-![/global-synchronizer/production-operations/validator-disaster-recovery block 2](/Users/danielporter/control/reference_rollout/splice-network-vars-screenshots-20260513/images/global-synchronizer-production-operations-validator-disaster-recovery--block-02.png)
+</details>
 
-## /global-synchronizer/reference/canton-console-reference - block 1
+<details>
+<summary>/global-synchronizer/production-operations/validator-disaster-recovery (2)</summary>
 
-Page: https://cantonfoundation-splice-network-vars.mintlify.app/global-synchronizer/reference/canton-console-reference
-Nearest heading: ​
-Participant console
-Selected tab: DevNet (0.6.3)
+[Open page](https://cantonfoundation-splice-network-vars.mintlify.app/global-synchronizer/production-operations/validator-disaster-recovery)
 
-![/global-synchronizer/reference/canton-console-reference block 1](/Users/danielporter/control/reference_rollout/splice-network-vars-screenshots-20260513/images/global-synchronizer-reference-canton-console-reference--block-01.png)
+**Block 1: default DevNet (0.6.3) tab**
 
-## /global-synchronizer/reference/canton-console-reference - block 2
+![/global-synchronizer/production-operations/validator-disaster-recovery block 1](https://raw.githubusercontent.com/canton-network/cf-docs/pr-assets/splice-network-vars-screenshots/pr-assets/splice-network-vars-screenshots/images/global-synchronizer-production-operations-validator-disaster-recovery--block-01.png)
 
-Page: https://cantonfoundation-splice-network-vars.mintlify.app/global-synchronizer/reference/canton-console-reference
-Nearest heading: ​
-Participant console
-Selected tab: DevNet (0.6.3)
+**Block 2: default DevNet (0.6.3) tab**
 
-![/global-synchronizer/reference/canton-console-reference block 2](/Users/danielporter/control/reference_rollout/splice-network-vars-screenshots-20260513/images/global-synchronizer-reference-canton-console-reference--block-02.png)
+![/global-synchronizer/production-operations/validator-disaster-recovery block 2](https://raw.githubusercontent.com/canton-network/cf-docs/pr-assets/splice-network-vars-screenshots/pr-assets/splice-network-vars-screenshots/images/global-synchronizer-production-operations-validator-disaster-recovery--block-02.png)
 
-## /global-synchronizer/reference/canton-console-reference - block 3
+</details>
 
-Page: https://cantonfoundation-splice-network-vars.mintlify.app/global-synchronizer/reference/canton-console-reference
-Nearest heading: ​
-Sequencer console
-Selected tab: DevNet (0.6.3)
+<details>
+<summary>/global-synchronizer/reference/canton-console-reference (4)</summary>
 
-![/global-synchronizer/reference/canton-console-reference block 3](/Users/danielporter/control/reference_rollout/splice-network-vars-screenshots-20260513/images/global-synchronizer-reference-canton-console-reference--block-03.png)
+[Open page](https://cantonfoundation-splice-network-vars.mintlify.app/global-synchronizer/reference/canton-console-reference)
 
-## /global-synchronizer/reference/canton-console-reference - block 4
+**Block 1: default DevNet (0.6.3) tab**
 
-Page: https://cantonfoundation-splice-network-vars.mintlify.app/global-synchronizer/reference/canton-console-reference
-Nearest heading: ​
-Mediator console
-Selected tab: DevNet (0.6.3)
+![/global-synchronizer/reference/canton-console-reference block 1](https://raw.githubusercontent.com/canton-network/cf-docs/pr-assets/splice-network-vars-screenshots/pr-assets/splice-network-vars-screenshots/images/global-synchronizer-reference-canton-console-reference--block-01.png)
 
-![/global-synchronizer/reference/canton-console-reference block 4](/Users/danielporter/control/reference_rollout/splice-network-vars-screenshots-20260513/images/global-synchronizer-reference-canton-console-reference--block-04.png)
+**Block 2: default DevNet (0.6.3) tab**
 
-## /global-synchronizer/understand/local-testing - block 1
+![/global-synchronizer/reference/canton-console-reference block 2](https://raw.githubusercontent.com/canton-network/cf-docs/pr-assets/splice-network-vars-screenshots/pr-assets/splice-network-vars-screenshots/images/global-synchronizer-reference-canton-console-reference--block-02.png)
 
-Page: https://cantonfoundation-splice-network-vars.mintlify.app/global-synchronizer/understand/local-testing
-Nearest heading: ​
-Setup
-Selected tab: DevNet (0.6.3)
+**Block 3: default DevNet (0.6.3) tab**
 
-![/global-synchronizer/understand/local-testing block 1](/Users/danielporter/control/reference_rollout/splice-network-vars-screenshots-20260513/images/global-synchronizer-understand-local-testing--block-01.png)
+![/global-synchronizer/reference/canton-console-reference block 3](https://raw.githubusercontent.com/canton-network/cf-docs/pr-assets/splice-network-vars-screenshots/pr-assets/splice-network-vars-screenshots/images/global-synchronizer-reference-canton-console-reference--block-03.png)
 
-## /overview/reference/splice-wallet-reference - block 1
+**Block 4: default DevNet (0.6.3) tab**
 
-Page: https://cantonfoundation-splice-network-vars.mintlify.app/overview/reference/splice-wallet-reference
-Nearest heading: ​
-Wallet Automation
-Selected tab: DevNet (0.6.3)
+![/global-synchronizer/reference/canton-console-reference block 4](https://raw.githubusercontent.com/canton-network/cf-docs/pr-assets/splice-network-vars-screenshots/pr-assets/splice-network-vars-screenshots/images/global-synchronizer-reference-canton-console-reference--block-04.png)
 
-![/overview/reference/splice-wallet-reference block 1](/Users/danielporter/control/reference_rollout/splice-network-vars-screenshots-20260513/images/overview-reference-splice-wallet-reference--block-01.png)
+</details>
 
-## /sdks-tools/api-reference/splice-daml-apis - block 1
+<details>
+<summary>/global-synchronizer/understand/local-testing (1)</summary>
 
-Page: https://cantonfoundation-splice-network-vars.mintlify.app/sdks-tools/api-reference/splice-daml-apis
-Nearest heading: ​
-How to use the WalletUserProxy to earn featured app rewards
-Selected tab: DevNet (0.6.3)
+[Open page](https://cantonfoundation-splice-network-vars.mintlify.app/global-synchronizer/understand/local-testing)
 
-![/sdks-tools/api-reference/splice-daml-apis block 1](/Users/danielporter/control/reference_rollout/splice-network-vars-screenshots-20260513/images/sdks-tools-api-reference-splice-daml-apis--block-01.png)
+**Block 1: default DevNet (0.6.3) tab**
 
-## /sdks-tools/api-reference/splice-http-apis - block 1
+![/global-synchronizer/understand/local-testing block 1](https://raw.githubusercontent.com/canton-network/cf-docs/pr-assets/splice-network-vars-screenshots/pr-assets/splice-network-vars-screenshots/images/global-synchronizer-understand-local-testing--block-01.png)
 
-Page: https://cantonfoundation-splice-network-vars.mintlify.app/sdks-tools/api-reference/splice-http-apis
-Nearest heading: ​
-OpenAPI Conventions
-Selected tab: DevNet (0.6.3)
+</details>
 
-![/sdks-tools/api-reference/splice-http-apis block 1](/Users/danielporter/control/reference_rollout/splice-network-vars-screenshots-20260513/images/sdks-tools-api-reference-splice-http-apis--block-01.png)
+<details>
+<summary>/sdks-tools/api-reference/splice-daml-apis (1)</summary>
 
-## /sdks-tools/api-reference/splice-scan-bulk-data-api - block 1
+[Open page](https://cantonfoundation-splice-network-vars.mintlify.app/sdks-tools/api-reference/splice-daml-apis)
 
-Page: https://cantonfoundation-splice-network-vars.mintlify.app/sdks-tools/api-reference/splice-scan-bulk-data-api
-Nearest heading: ​
-Open API Specification
-Selected tab: DevNet (0.6.3)
+**Block 1: default DevNet (0.6.3) tab**
 
-![/sdks-tools/api-reference/splice-scan-bulk-data-api block 1](/Users/danielporter/control/reference_rollout/splice-network-vars-screenshots-20260513/images/sdks-tools-api-reference-splice-scan-bulk-data-api--block-01.png)
+![/sdks-tools/api-reference/splice-daml-apis block 1](https://raw.githubusercontent.com/canton-network/cf-docs/pr-assets/splice-network-vars-screenshots/pr-assets/splice-network-vars-screenshots/images/sdks-tools-api-reference-splice-daml-apis--block-01.png)
 
-## /sdks-tools/api-reference/splice-scan-bulk-data-api - block 2
+</details>
 
-Page: https://cantonfoundation-splice-network-vars.mintlify.app/sdks-tools/api-reference/splice-scan-bulk-data-api
-Nearest heading: ​
-GET /v0/state/acs/snapshot-timestamp
-Selected tab: DevNet (0.6.3)
+<details>
+<summary>/sdks-tools/api-reference/splice-http-apis (1)</summary>
 
-![/sdks-tools/api-reference/splice-scan-bulk-data-api block 2](/Users/danielporter/control/reference_rollout/splice-network-vars-screenshots-20260513/images/sdks-tools-api-reference-splice-scan-bulk-data-api--block-02.png)
+[Open page](https://cantonfoundation-splice-network-vars.mintlify.app/sdks-tools/api-reference/splice-http-apis)
 
-## /sdks-tools/api-reference/splice-scan-gs-connectivity-api - block 1
+**Block 1: default DevNet (0.6.3) tab**
 
-Page: https://cantonfoundation-splice-network-vars.mintlify.app/sdks-tools/api-reference/splice-scan-gs-connectivity-api
-Nearest heading: ​
-Listing all SV Scans
-Selected tab: DevNet (0.6.3)
+![/sdks-tools/api-reference/splice-http-apis block 1](https://raw.githubusercontent.com/canton-network/cf-docs/pr-assets/splice-network-vars-screenshots/pr-assets/splice-network-vars-screenshots/images/sdks-tools-api-reference-splice-http-apis--block-01.png)
 
-![/sdks-tools/api-reference/splice-scan-gs-connectivity-api block 1](/Users/danielporter/control/reference_rollout/splice-network-vars-screenshots-20260513/images/sdks-tools-api-reference-splice-scan-gs-connectivity-api--block-01.png)
+</details>
+
+<details>
+<summary>/sdks-tools/api-reference/splice-scan-bulk-data-api (2)</summary>
+
+[Open page](https://cantonfoundation-splice-network-vars.mintlify.app/sdks-tools/api-reference/splice-scan-bulk-data-api)
+
+**Block 1: default DevNet (0.6.3) tab**
+
+![/sdks-tools/api-reference/splice-scan-bulk-data-api block 1](https://raw.githubusercontent.com/canton-network/cf-docs/pr-assets/splice-network-vars-screenshots/pr-assets/splice-network-vars-screenshots/images/sdks-tools-api-reference-splice-scan-bulk-data-api--block-01.png)
+
+**Block 2: default DevNet (0.6.3) tab**
+
+![/sdks-tools/api-reference/splice-scan-bulk-data-api block 2](https://raw.githubusercontent.com/canton-network/cf-docs/pr-assets/splice-network-vars-screenshots/pr-assets/splice-network-vars-screenshots/images/sdks-tools-api-reference-splice-scan-bulk-data-api--block-02.png)
+
+</details>
+
+<details>
+<summary>/sdks-tools/api-reference/splice-scan-gs-connectivity-api (1)</summary>
+
+[Open page](https://cantonfoundation-splice-network-vars.mintlify.app/sdks-tools/api-reference/splice-scan-gs-connectivity-api)
+
+**Block 1: default DevNet (0.6.3) tab**
+
+![/sdks-tools/api-reference/splice-scan-gs-connectivity-api block 1](https://raw.githubusercontent.com/canton-network/cf-docs/pr-assets/splice-network-vars-screenshots/pr-assets/splice-network-vars-screenshots/images/sdks-tools-api-reference-splice-scan-gs-connectivity-api--block-01.png)
+
+</details>
+
