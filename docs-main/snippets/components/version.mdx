@@ -82,6 +82,14 @@ export const NetworkVariables = ({
       return node;
     }
 
+    const networkOnly = node.props?.['data-network-only'];
+    if (typeof networkOnly === 'string') {
+      const allowedNetworks = networkOnly.split(',').map((network) => network.trim()).filter(Boolean);
+      if (!allowedNetworks.includes(activeNetwork)) {
+        return null;
+      }
+    }
+
     const props = {};
     for (const [name, value] of Object.entries(node.props ?? {})) {
       if (name === 'children') {
@@ -178,9 +186,13 @@ export const NetworkVariables = ({
           if (typeof child === 'string' && !child.trim()) {
             return null;
           }
+          const content = replaceNode(child, activeData.substitutions, `network-${activeNetwork}-${index}`);
+          if (content === null || content === false) {
+            return null;
+          }
           return (
             <div className="min-w-0">
-              {replaceNode(child, activeData.substitutions, `network-${activeNetwork}-${index}`)}
+              {content}
             </div>
           );
         })}
