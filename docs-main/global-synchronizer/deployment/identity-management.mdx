@@ -1,7 +1,23 @@
 ---
-title: "Identity Management"
+title: "Canton Identity Management"
 description: "Canton identity architecture, topology transactions, and the identity management cookbook"
 ---
+
+import ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosOperateIdentityManagement0 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/participant/howtos/operate/identity_management-0.mdx";
+import ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosOperateIdentityManagement6 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/participant/howtos/operate/identity_management-6.mdx";
+import ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosOperateIdentityManagement7 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/participant/howtos/operate/identity_management-7.mdx";
+import ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosOperateIdentityManagement8 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/participant/howtos/operate/identity_management-8.mdx";
+import ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosOperateIdentityManagement9 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/participant/howtos/operate/identity_management-9.mdx";
+import ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosOperateIdentityManagement11 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/participant/howtos/operate/identity_management-11.mdx";
+import ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosOperateIdentityManagement12 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/participant/howtos/operate/identity_management-12.mdx";
+import ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosOperateIdentityManagement14 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/participant/howtos/operate/identity_management-14.mdx";
+import ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosOperateIdentityManagement20 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/participant/howtos/operate/identity_management-20.mdx";
+import ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosOperateIdentityManagement1 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/participant/howtos/operate/identity_management-1.mdx";
+import ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosOperateIdentityManagement2 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/participant/howtos/operate/identity_management-2.mdx";
+import ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosOperateIdentityManagement5 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/participant/howtos/operate/identity_management-5.mdx";
+import ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosOperateIdentityManagement13 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/participant/howtos/operate/identity_management-13.mdx";
+import ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosOperateIdentityManagement15 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/participant/howtos/operate/identity_management-15.mdx";
+import ExternalCantonMainCommunityAppSrcTestResourcesRandomNodeIdentifier from "/snippets/external/canton/main/community/app/src/test/resources/random-node-identifier.mdx";
 
 {/* COPIED_START source="docs-website:docs/replicated/canton/3.4/participant/howtos/operate/identity_management.rst" hash="f3949198" */}
 
@@ -153,15 +169,7 @@ canton.participants.participant1.init.identity = {
 
 2.  Explicitly set a name
 
-``` none
-canton.participants.participant1.init.identity {
-    type = auto
-    identifier = {
-        type = explicit
-        name = MyName
-    }
-}
-```
+<ExternalCantonMainCommunityAppSrcTestResourcesRandomNodeIdentifier />
 
 3.  Generate a random name
 
@@ -218,25 +226,13 @@ You can manage users through the Canton console user management commands, an alp
 
 In this section, we present how you can manage participant users using the Canton console commands. First, we create three parties that we'll use in subsequent examples:
 
-``` none
-@ val Seq(alice, bob, eve) = Seq("alice", "bob", "eve").map(p => participant1.parties.enable(name = p))
-    Seq(alice, bob, eve) : Seq[PartyId] = List(alice::12201ff69b1d..., bob::12201ff69b1d..., eve::12201ff69b1d...)
-```
+<ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosOperateIdentityManagement0 />
 
 #### Create
 
 Next, create a user called `myuser` with act-as `alice` and read-as `bob` permissions and active user status. This user's primary party is `alice`. The user is not an administrator and has some custom annotations.
 
-``` none
-@ val user = participant1.ledger_api.users.create(id = "myuser", actAs = Set(alice), readAs = Set(bob), primaryParty = Some(alice), participantAdmin = false, isDeactivated = false, annotations = Map("foo" -> "bar", "description" -> "This is a description"))
-    user : User = User(
-      id = "myuser",
-      primaryParty = Some(value = alice::12201ff69b1d...),
-      isDeactivated = false,
-      annotations = Map("foo" -> "bar", "description" -> "This is a description"),
-      identityProviderId = ""
-    )
-```
+<ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosOperateIdentityManagement1 />
 
 There are some restrictions on what constitutes a valid annotation key. In contrast, the only constraint for annotation values is that they must not be empty. To learn more about annotations refer to the Ledger API Reference documentation.
 
@@ -246,16 +242,7 @@ You can update a user's primary party, active/deactivated status and annotations
 
 In the following snippet, you change the user's primary party to be unassigned, leave the active/deactivated status intact, and update the annotations. In the annotations, you change the value of the `description` key, remove the `foo` key and add the new `baz` key. The return value contains the updated state of the user:
 
-``` none
-@ val updatedUser = participant1.ledger_api.users.update(id = user.id, modifier = user => { user.copy(primaryParty = None, annotations = user.annotations.updated("description", "This is a new description").removed("foo").updated("baz", "bar")) })
-    updatedUser : User = User(
-      id = "myuser",
-      primaryParty = None,
-      isDeactivated = false,
-      annotations = Map("description" -> "This is a new description", "baz" -> "bar"),
-      identityProviderId = ""
-    )
-```
+<ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosOperateIdentityManagement2 />
 
 You can also update the user's identity provider ID. In the following snippets, you change the user's identity provider ID to the newly created one. Note that originally the user belonged to the default identity provider whose id is represented as the empty string `` `"" ``\`.
 
@@ -306,76 +293,23 @@ You can change the user's identity provider ID back to the default one:
 
 You can fetch the current state of the user as follows:
 
-``` none
-@ participant1.ledger_api.users.get(user.id)
-    res9: User = User(
-      id = "myuser",
-      primaryParty = None,
-      isDeactivated = false,
-      annotations = Map("description" -> "This is a new description", "baz" -> "bar"),
-      identityProviderId = ""
-    )
-```
+<ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosOperateIdentityManagement5 />
 
 You can query what rights a user has:
 
-``` none
-@ participant1.ledger_api.users.rights.list(user.id)
-    res10: UserRights = UserRights(
-      actAs = Set(alice::12201ff69b1d...),
-      readAs = Set(bob::12201ff69b1d...),
-      executeAs = Set(),
-      readAsAnyParty = false,
-      executeAsAnyParty = false,
-      participantAdmin = false,
-      identityProviderAdmin = false
-    )
-```
+<ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosOperateIdentityManagement6 />
 
 You can grant more rights. The returned value contains only newly granted rights; it does not contain rights the user already had even if you attempted to grant them again (like the read-as `alice` right in this example):
 
-``` none
-@ participant1.ledger_api.users.rights.grant(id = user.id, actAs = Set(alice, bob), readAs = Set(eve), participantAdmin = true)
-    res11: UserRights = UserRights(
-      actAs = Set(alice::12201ff69b1d..., bob::12201ff69b1d...),
-      readAs = Set(eve::12201ff69b1d..., bob::12201ff69b1d...),
-      executeAs = Set(),
-      readAsAnyParty = false,
-      executeAsAnyParty = false,
-      participantAdmin = true,
-      identityProviderAdmin = false
-    )
-```
+<ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosOperateIdentityManagement7 />
 
 You can revoke rights from the user. Again, the returned value contains only rights that were actually removed:
 
-``` none
-@ participant1.ledger_api.users.rights.revoke(id = user.id, actAs = Set(bob), readAs = Set(alice), participantAdmin = true)
-    res12: UserRights = UserRights(
-      actAs = Set(alice::12201ff69b1d...),
-      readAs = Set(bob::12201ff69b1d..., eve::12201ff69b1d...),
-      executeAs = Set(),
-      readAsAnyParty = false,
-      executeAsAnyParty = false,
-      participantAdmin = false,
-      identityProviderAdmin = false
-    )
-```
+<ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosOperateIdentityManagement8 />
 
 Now that you have granted and revoked some rights, you can fetch all of the user's rights again and see what they are:
 
-``` none
-@ participant1.ledger_api.users.rights.list(user.id)
-    res13: UserRights = UserRights(
-      actAs = Set(alice::12201ff69b1d...),
-      readAs = Set(bob::12201ff69b1d..., eve::12201ff69b1d...),
-      executeAs = Set(),
-      readAsAnyParty = false,
-      executeAsAnyParty = false,
-      participantAdmin = false,
-      identityProviderAdmin = false
-    )
-```
+<ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosOperateIdentityManagement9 />
 
 Also, multiple users can be fetched at the same time. To do that, first create another user called `myotheruser` and then list all the users whose user name starts with `my`:
 
@@ -417,29 +351,15 @@ Also, multiple users can be fetched at the same time. To do that, first create a
 
 You can delete a user by its ID:
 
-``` none
-@ participant1.ledger_api.users.delete("myotheruser")
-```
+<ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosOperateIdentityManagement11 />
 
 You can confirm it has been removed by e.g. listing it:
 
-``` none
-@ participant1.ledger_api.users.list("myotheruser")
-    res17: UsersPage = UsersPage(users = Vector(), nextPageToken = "")
-```
+<ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosOperateIdentityManagement12 />
 
 If you want to prevent a user from accessing the Ledger API it may be better to deactivate it rather than deleting it. A deleted user can be recreated as if it never existed in the first place, while a deactivated user must be explicitly reactivated to be able to access the Ledger API again.
 
-``` none
-@ participant1.ledger_api.users.update("myuser", user => user.copy(isDeactivated = true))
-    res18: User = User(
-      id = "myuser",
-      primaryParty = None,
-      isDeactivated = true,
-      annotations = Map("description" -> "This is a new description", "baz" -> "bar"),
-      identityProviderId = ""
-    )
-```
+<ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosOperateIdentityManagement13 />
 
 #### Configure a default Participant Admin
 
@@ -486,22 +406,11 @@ To avoid this, you need your client to create a new party on their own and expor
 
 For this process, we use a participant node which won't be connected to any synchronizer. We don't need the full node, but just the topology manager. First, we need to find out the participant ID of the hosting node:
 
-``` none
-@ hosting.id.toProtoPrimitive
-    res1: String = "PAR::participant2::1220a4d7463bd34b2ba3704401b48ab41d8f88cdcbe512fc1ef071aad97fef106161"
-```
+<ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosOperateIdentityManagement14 />
 
 This identifier needs to be communicated to the client and can be imported using `ParticipantId.tryFromProtoPrimitive`. The client then creates first a new key (they could use the default key created):
 
-``` none
-@ val secret = client.keys.secret.generate_signing_key("my-party-key", SigningKeyUsage.NamespaceOnly)
-    secret : SigningPublicKey = SigningPublicKey(
-      id = 12205ab17db1...,
-      format = DER-encoded X.509 SubjectPublicKeyInfo,
-      keySpec = EC-Curve25519,
-      usage = namespace
-    )
-```
+<ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosOperateIdentityManagement15 />
 
 and an appropriate root certificate for this key:
 
@@ -571,12 +480,7 @@ Create and export the party to participant delegation:
 
 The client now shares the `rootCert.bin` and `partyDelegation.bin` files with the hosting node. The hosting node imports them into their topology state:
 
-``` none
-@ hosting.topology.transactions.load_single_from_files(
-    files = Seq("rootCert.bin", "partyDelegation.bin"),
-    store = synchronizerId,
-)
-```
+<ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosOperateIdentityManagement20 />
 
 Finally, the hosting node needs to issue the corresponding topology transaction to enable the party on its node:
 
