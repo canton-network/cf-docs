@@ -15,10 +15,10 @@ The canonical example of Canton's capabilities is atomic delivery vs. payment ac
 
 ### The Scenario
 
-Alice wants to buy a tokenized asset from Bob. She'll pay with Canton Coin, which she obtained from Carol. The settlement should be:
+Alice wants to buy a tokenized asset from Bob, paying with a tokenized cash instrument settled on a private payment synchronizer. The settlement should be:
 
 - **Atomic**: Either both legs complete, or neither does
-- **Private**: Carol shouldn't know about Alice's purchase; observers shouldn't see the price
+- **Private**: Observers shouldn't see the counterparties or the price
 
 ### On Traditional Blockchains
 
@@ -26,7 +26,6 @@ This is problematic:
 
 - If done in two transactions: risk of one completing without the other
 - If done atomically: all parties (and observers) see all legs of the trade
-- Carol learns Alice bought something from Bob
 - Anyone watching can see the price and terms
 
 ### On Canton
@@ -37,15 +36,13 @@ The entire exchange happens in a single atomic transaction with sub-transaction 
 flowchart TB
     subgraph TX[Atomic DvP Transaction]
         direction LR
-        L1[Leg 1: Carol → Alice<br>Canton Coin transfer]
-        L2[Leg 2: Alice → Bob<br>Canton Coin payment]
-        L3[Leg 3: Bob → Alice<br>Asset delivery]
+        L1[Leg 1: Alice → Bob<br>Cash payment]
+        L2[Leg 2: Bob → Alice<br>Asset delivery]
     end
 
     subgraph Views[What Each Party Sees]
-        VC[Carol's View<br>- Sent CC to Alice<br>- Doesn't see Bob or asset]
-        VA[Alice's View<br>- Received CC from Carol<br>- Paid Bob<br>- Received asset]
-        VB[Bob's View<br>- Received CC from Alice<br>- Transferred asset<br>- Doesn't see Carol]
+        VA[Alice's View<br>- Paid Bob<br>- Received asset]
+        VB[Bob's View<br>- Received cash from Alice<br>- Transferred asset]
     end
 
     TX --> Views
@@ -53,15 +50,18 @@ flowchart TB
 
 | Party | Sees | Doesn't See |
 |-------|------|-------------|
-| **Carol** | CC transfer to Alice | Bob's involvement, the asset, the price |
-| **Alice** | All three legs | N/A (she's the central party) |
-| **Bob** | CC receipt, asset transfer | Carol's involvement, source of funds |
-| **Third party** | Nothing | Everything |
+| **Alice** | Both legs (she is the buyer) | N/A |
+| **Bob** | Both legs (he is the seller) | N/A |
+| **Third party** | Nothing | Everything about this trade |
+
+<Note>
+This example assumes the cash and asset legs both settle on synchronizers where the trade participants are the only stakeholders — for instance, a private payment synchronizer for the cash leg and a private securities synchronizer for the asset leg. Trades that involve assets settled on the Global Synchronizer behave differently: Canton Coin transfers, topology transactions, and network governance transactions are visible to the Super Validators that operate the Global Synchronizer, so they are not private in the same sense. Private synchronizers preserve the full sub-transaction privacy model.
+</Note>
 
 ### Why This Matters
 
 - **Regulatory compliance**: Each party sees only their entitled information
-- **Atomic settlement**: No settlement risk—both legs or neither
+- **Atomic settlement**: No settlement risk — both legs or neither
 - **Privacy**: Trading relationships and prices protected
 - **Audit trail**: Entitled auditors can be added as observers
 
