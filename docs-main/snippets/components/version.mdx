@@ -18,6 +18,17 @@ export const Version = ({ children, title, description, defaultLabel, networkDat
   const optionLabel = (option) => option.props.label
     ? labelWithVersion(option.props.label, option.props.version)
     : labelForVersion(option.props.version);
+  const renderOption = (option) => {
+    if (option.props.code) {
+      return (
+        <pre>
+          <code>{option.props.code}</code>
+        </pre>
+      );
+    }
+
+    return option;
+  };
   const options = React.Children.toArray(children).filter((child) => child?.props?.label || child?.props?.version);
   const defaultIndex = Math.max(
     0,
@@ -42,6 +53,9 @@ export const Version = ({ children, title, description, defaultLabel, networkDat
         {options.map((option, index) => {
           const isActive = index === activeIndex;
           const label = optionLabel(option);
+          const buttonClass = isActive
+            ? 'rounded-md bg-white text-gray-950 shadow-sm dark:bg-gray-800 dark:text-gray-100'
+            : 'rounded-md text-gray-600 hover:bg-white/80 hover:text-gray-950 dark:text-gray-400 dark:hover:bg-gray-800/70 dark:hover:text-gray-100';
           return (
             <button
               key={`${label}-${index}`}
@@ -49,11 +63,7 @@ export const Version = ({ children, title, description, defaultLabel, networkDat
               role="tab"
               aria-selected={isActive}
               onClick={() => setActiveIndex(index)}
-              className={`min-h-9 px-3 text-sm font-medium transition-colors ${
-                isActive
-                  ? 'rounded-md bg-white text-gray-950 shadow-sm dark:bg-gray-800 dark:text-gray-100'
-                  : 'rounded-md text-gray-600 hover:bg-white/80 hover:text-gray-950 dark:text-gray-400 dark:hover:bg-gray-800/70 dark:hover:text-gray-100'
-              }`}
+              className={`min-h-9 px-3 text-sm font-medium transition-colors ${buttonClass}`}
             >
               {label}
             </button>
@@ -61,7 +71,7 @@ export const Version = ({ children, title, description, defaultLabel, networkDat
         })}
       </div>
       <div role="tabpanel" className="px-4 py-4 text-sm leading-6 text-gray-800 dark:text-gray-200">
-        {activeOption}
+        {renderOption(activeOption)}
       </div>
     </div>
   );
