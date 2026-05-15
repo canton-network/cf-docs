@@ -1,6 +1,6 @@
 # Splice Network Variables Screenshots
 
-Captured from https://cantonfoundation-splice-network-vars.mintlify.app at docs commit `ec639593`.
+Captured from https://cantonfoundation-splice-network-vars.mintlify.app at docs commit `f629e6a2`.
 
 Total wrapped sections: 34.
 
