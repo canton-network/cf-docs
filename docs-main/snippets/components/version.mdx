@@ -1,0 +1,301 @@
+export const VersionOption = ({ children }) => <>{children}</>;
+
+export const NetworkVariables = ({
+  children,
+  title = null,
+  description,
+  defaultNetwork = 'devnet',
+  networkData = {},
+}) => {
+  const deploymentNetworkOrder = ['devnet', 'testnet', 'mainnet'];
+  const tokenPattern = /\|([A-Za-z0-9_]+)\|/g;
+  const tokenTextValue = (value) => {
+    if (value && typeof value === 'object' && 'href' in value) {
+      return value.href;
+    }
+    return value ?? null;
+  };
+  const replacementForToken = (token, substitutions) => tokenTextValue(substitutions?.[token]);
+  const replaceStringProp = (value, substitutions) => {
+    if (typeof value !== 'string') {
+      return value;
+    }
+    return value.replace(tokenPattern, (match, token) => replacementForToken(token, substitutions) ?? match);
+  };
+  const replaceTextNode = (value, substitutions, keyPrefix = 'token') => {
+    if (typeof value !== 'string') {
+      return value;
+    }
+
+    const pieces = [];
+    let lastIndex = 0;
+    let match;
+    tokenPattern.lastIndex = 0;
+
+    while ((match = tokenPattern.exec(value)) !== null) {
+      const [rawToken, token] = match;
+      const replacement = substitutions?.[token];
+      if (!replacement) {
+        continue;
+      }
+
+      if (match.index > lastIndex) {
+        pieces.push(value.slice(lastIndex, match.index));
+      }
+
+      if (replacement && typeof replacement === 'object' && replacement.href) {
+        const linkLabel = replacement.label ?? replacement.href;
+        const networkLabel = activeData?.versions?.splice
+          ? `${activeData.name ?? activeNetwork} ${activeData.versions.splice}`
+          : activeData?.name ?? activeNetwork;
+        pieces.push(
+          <a key={`${keyPrefix}-${pieces.length}`} href={replacement.href}>
+            {networkLabel ? `${linkLabel} (${networkLabel})` : linkLabel}
+          </a>
+        );
+      } else {
+        pieces.push(String(replacement));
+      }
+      lastIndex = match.index + rawToken.length;
+    }
+
+    if (!pieces.length) {
+      return value;
+    }
+
+    if (lastIndex < value.length) {
+      pieces.push(value.slice(lastIndex));
+    }
+
+    return pieces;
+  };
+  const replaceNode = (node, substitutions, keyPrefix = 'node') => {
+    if (typeof node === 'string') {
+      return replaceTextNode(node, substitutions, keyPrefix);
+    }
+
+    if (Array.isArray(node)) {
+      return node.map((child, index) => replaceNode(child, substitutions, `${keyPrefix}-${index}`));
+    }
+
+    if (!React.isValidElement(node)) {
+      return node;
+    }
+
+    const networkOnly = node.props?.['data-network-only'];
+    if (typeof networkOnly === 'string') {
+      const allowedNetworks = networkOnly.split(',').map((network) => network.trim()).filter(Boolean);
+      if (!allowedNetworks.includes(activeNetwork)) {
+        return null;
+      }
+    }
+
+    const props = {};
+    for (const [name, value] of Object.entries(node.props ?? {})) {
+      if (name === 'children') {
+        continue;
+      }
+      props[name] = typeof value === 'string' ? replaceStringProp(value, substitutions) : value;
+    }
+
+    return React.cloneElement(
+      node,
+      props,
+      React.Children.map(node.props.children, (child, index) =>
+        replaceNode(child, substitutions, `${keyPrefix}-${index}`)
+      )
+    );
+  };
+  const options = deploymentNetworkOrder.filter((networkKey) => networkData[networkKey]?.substitutions);
+  const defaultIndex = Math.max(0, options.indexOf(defaultNetwork));
+  const [activeIndex, setActiveIndex] = React.useState(defaultIndex);
+  const activeNetwork = options[activeIndex] ?? options[0];
+  const activeData = networkData[activeNetwork];
+  const panelRef = React.useRef(null);
+
+  React.useEffect(() => {
+    if (!activeData?.substitutions || !panelRef.current) {
+      return;
+    }
+
+    const replaceTokenText = (value) =>
+      value.replace(/\|([A-Za-z0-9_]+)\|/g, (match, token) =>
+        replacementForToken(token, activeData.substitutions) ?? match
+      );
+
+    const replaceRenderedCode = () => {
+      for (const codeRoot of panelRef.current.querySelectorAll('pre, code')) {
+        if (codeRoot.tagName === 'PRE' && codeRoot.querySelector('code')) {
+          continue;
+        }
+        codeRoot.textContent = replaceTokenText(codeRoot.textContent ?? '');
+      }
+    };
+
+    let animationFrame;
+    const scheduleReplaceRenderedCode = () => {
+      if (animationFrame) {
+        window.cancelAnimationFrame(animationFrame);
+      }
+      animationFrame = window.requestAnimationFrame(() => {
+        animationFrame = null;
+        replaceRenderedCode();
+      });
+    };
+    const observer = new MutationObserver(scheduleReplaceRenderedCode);
+    const timeouts = [100, 500, 1000].map((delay) => window.setTimeout(replaceRenderedCode, delay));
+
+    replaceRenderedCode();
+    observer.observe(panelRef.current, { childList: true, characterData: true, subtree: true });
+
+    return () => {
+      observer.disconnect();
+      if (animationFrame) {
+        window.cancelAnimationFrame(animationFrame);
+      }
+      for (const timeout of timeouts) {
+        window.clearTimeout(timeout);
+      }
+    };
+  }, [activeNetwork, activeData]);
+
+  if (!activeData) {
+    return null;
+  }
+
+  const label = (networkKey) => {
+    const network = networkData[networkKey];
+    const version = network?.versions?.splice;
+    return version ? `${network?.name ?? networkKey} (${version})` : network?.name ?? networkKey;
+  };
+
+  return (
+    <div data-component="network-variables" className="my-6 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-950">
+      {(title || description) && (
+        <div className="border-b border-gray-200 px-4 py-3 dark:border-gray-800">
+          {title && <div className="text-sm font-semibold text-gray-950 dark:text-gray-100">{title}</div>}
+          {description && <div className="mt-1 text-sm leading-6 text-gray-600 dark:text-gray-400">{description}</div>}
+        </div>
+      )}
+      <div role="tablist" className="flex gap-1 border-b border-gray-200 bg-gray-50 p-1 dark:border-gray-800 dark:bg-gray-900">
+        {options.map((networkKey, index) => {
+          const isActive = index === activeIndex;
+          return (
+            <button
+              key={networkKey}
+              type="button"
+              role="tab"
+              aria-selected={isActive}
+              onClick={() => setActiveIndex(index)}
+              className={`min-h-9 px-3 text-sm font-medium transition-colors ${
+                isActive
+                  ? 'rounded-md bg-white text-gray-950 shadow-sm dark:bg-gray-800 dark:text-gray-100'
+                  : 'rounded-md text-gray-600 hover:bg-white/80 hover:text-gray-950 dark:text-gray-400 dark:hover:bg-gray-800/70 dark:hover:text-gray-100'
+              }`}
+            >
+              {label(networkKey)}
+            </button>
+          );
+        })}
+      </div>
+      <div
+        key={activeNetwork}
+        ref={panelRef}
+        role="tabpanel"
+        className="space-y-4 px-4 py-4 text-sm leading-6 text-gray-800 dark:text-gray-200"
+      >
+        {React.Children.map(children, (child, index) => {
+          if (typeof child === 'string' && !child.trim()) {
+            return null;
+          }
+          const content = replaceNode(child, activeData.substitutions, `network-${activeNetwork}-${index}`);
+          if (content === null || content === false) {
+            return null;
+          }
+          return (
+            <div className="min-w-0">
+              {content}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+export const Version = ({ children, title, description, defaultLabel, networkData = {} }) => {
+  const networkOrder = ['mainnet', 'testnet', 'devnet'];
+  const networksForVersion = (version) => {
+    return networkOrder.filter((networkKey) => networkData[networkKey]?.versions?.splice === version);
+  };
+  const networkNames = (networkKeys) => {
+    return networkKeys.map((networkKey) => networkData[networkKey]?.name ?? networkKey).join(' / ');
+  };
+  const labelForVersion = (version) => {
+    const networks = networksForVersion(version);
+    return networks.length ? `${networkNames(networks)} (${version})` : `CN ${version}`;
+  };
+  const labelWithVersion = (label, version) => {
+    return version ? `${label} (${version})` : label;
+  };
+  const optionLabel = (option) => option.props.label
+    ? labelWithVersion(option.props.label, option.props.version)
+    : labelForVersion(option.props.version);
+  const renderOption = (option) => {
+    if (option.props.code) {
+      return (
+        <pre>
+          <code>{option.props.code}</code>
+        </pre>
+      );
+    }
+
+    return option;
+  };
+  const options = React.Children.toArray(children).filter((child) => child?.props?.label || child?.props?.version);
+  const defaultIndex = Math.max(
+    0,
+    options.findIndex((child) => optionLabel(child) === defaultLabel),
+  );
+  const [activeIndex, setActiveIndex] = React.useState(defaultIndex);
+  const activeOption = options[activeIndex] ?? options[0];
+
+  if (!options.length) {
+    return null;
+  }
+
+  return (
+    <div data-component="version" className="my-6 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-950">
+      {(title || description) && (
+        <div className="border-b border-gray-200 px-4 py-3 dark:border-gray-800">
+          {title && <div className="text-sm font-semibold text-gray-950 dark:text-gray-100">{title}</div>}
+          {description && <div className="mt-1 text-sm leading-6 text-gray-600 dark:text-gray-400">{description}</div>}
+        </div>
+      )}
+      <div role="tablist" className="flex gap-1 border-b border-gray-200 bg-gray-50 p-1 dark:border-gray-800 dark:bg-gray-900">
+        {options.map((option, index) => {
+          const isActive = index === activeIndex;
+          const label = optionLabel(option);
+          const buttonClass = isActive
+            ? 'rounded-md bg-white text-gray-950 shadow-sm dark:bg-gray-800 dark:text-gray-100'
+            : 'rounded-md text-gray-600 hover:bg-white/80 hover:text-gray-950 dark:text-gray-400 dark:hover:bg-gray-800/70 dark:hover:text-gray-100';
+          return (
+            <button
+              key={`${label}-${index}`}
+              type="button"
+              role="tab"
+              aria-selected={isActive}
+              onClick={() => setActiveIndex(index)}
+              className={`min-h-9 px-3 text-sm font-medium transition-colors ${buttonClass}`}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
+      <div role="tabpanel" className="px-4 py-4 text-sm leading-6 text-gray-800 dark:text-gray-200">
+        {renderOption(activeOption)}
+      </div>
+    </div>
+  );
+};
