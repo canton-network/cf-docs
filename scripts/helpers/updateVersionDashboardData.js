@@ -93,6 +93,7 @@ function buildNetworkData(repoConfig, metaConfig) {
     network.versions = versions;
     network.advanced = repoVersion.advanced;
     network.endpoint = repoVersion.endpoint;
+    network.substitutions = repoVersion.substitutions || {};
     
     networkData[networkKey] = network;
   }
@@ -137,6 +138,7 @@ function generateMDX(networkData) {
     lines.push(`    },`);
     
     lines.push(`    endpoint: ${formatValue(network.endpoint, 2)},`);
+    lines.push(`    substitutions: ${formatValue(network.substitutions, 2)},`);
     lines.push(`  },`);
   }
   
