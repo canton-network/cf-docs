@@ -64,15 +64,41 @@ def lifecycle_badges(
     *,
     protocol_label: str,
     introduced: str,
+    lifecycle_state: str | None = None,
     changed: list[str] | None = None,
     removed: str | None = None,
 ) -> list[ReferenceBadge]:
     badges = [ReferenceBadge(protocol_label, tone="protocol"), ReferenceBadge(f"Since {introduced}", tone="added")]
+    if lifecycle_state:
+        badges.append(ReferenceBadge(lifecycle_state_label(lifecycle_state), tone=lifecycle_state_tone(lifecycle_state)))
     if changed:
         badges.append(ReferenceBadge(f"Changed {changed[-1]}", tone="changed"))
     if removed:
         badges.append(ReferenceBadge(f"Removed {removed}", tone="removed"))
     return badges
+
+
+def lifecycle_state_label(value: str) -> str:
+    return value.replace("_", " ").replace("-", " ").title()
+
+
+def lifecycle_state_tone(value: str) -> str:
+    if value == "deprecated":
+        return "removed"
+    if value in {"alpha", "beta"}:
+        return "changed"
+    if value == "stable":
+        return "added"
+    return "neutral"
+
+
+def lifecycle_meta_items(method: OpenRpcMethodLifecycle) -> list[ReferenceMetaItem]:
+    items: list[ReferenceMetaItem] = []
+    if method.lifecycle_state:
+        items.append(ReferenceMetaItem("Lifecycle", lifecycle_state_label(method.lifecycle_state)))
+    if method.replaces:
+        items.append(ReferenceMetaItem("Replaces", method.replaces))
+    return items
 
 
 def info_summary(spec: OpenRpcSpecLifecycle) -> str:
@@ -202,12 +228,14 @@ def build_spec_page(
             badges=lifecycle_badges(
                 protocol_label="JSON-RPC",
                 introduced=method.introduced_version,
+                lifecycle_state=method.lifecycle_state,
                 changed=method.changed_in_versions,
                 removed=method.removed_version,
             ),
             meta_items=[
                 ReferenceMetaItem("Parameters", str(len(method.latest.get("params", [])))),
                 ReferenceMetaItem("Result", str(method.latest.get("result", {}).get("schema") or "-")),
+                *lifecycle_meta_items(method),
             ],
         )
         for method in spec.methods
@@ -305,13 +333,14 @@ def build_method_page(
         back_link=page_ref(page_path, spec_path, output_dir=output_dir, link_prefix=link_prefix),
         back_label="Back to spec",
         breadcrumbs=[
-            ReferenceBreadcrumb("Wallet Gateway JSON-RPC"),
+            ReferenceBreadcrumb("Wallet Gateway"),
             ReferenceBreadcrumb(spec.display_name, page_ref(page_path, spec_path, output_dir=output_dir, link_prefix=link_prefix)),
             ReferenceBreadcrumb(method.method),
         ],
         badges=lifecycle_badges(
             protocol_label="JSON-RPC",
             introduced=method.introduced_version,
+            lifecycle_state=method.lifecycle_state,
             changed=method.changed_in_versions,
             removed=method.removed_version,
         ),
@@ -320,6 +349,7 @@ def build_method_page(
             ReferenceMetaItem("Introduced", method.introduced_version),
             ReferenceMetaItem("Last seen", method.last_seen_in),
             ReferenceMetaItem("Removed", method.removed_version or "-"),
+            *lifecycle_meta_items(method),
         ],
         operation_method="POST",
         operation_target=f"JSON-RPC {method.method}",
@@ -330,6 +360,7 @@ def build_method_page(
             ReferenceMetaItem("Method", method.method),
             ReferenceMetaItem("Parameters", str(len(params))),
             ReferenceMetaItem("Result", str(result.get("schema") or "-")),
+            *lifecycle_meta_items(method),
         ],
         inputs=param_panels,
         outputs=[

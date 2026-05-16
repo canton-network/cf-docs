@@ -13,12 +13,14 @@ in
 pkgs.mkShell {
   packages = [
     pkgs.gh
+    pkgs.jdk17_headless
     pkgs.nodejs_22
     python
   ];
 
   shellHook = ''
-    export PATH="$PWD/node_modules/.bin:${pkgs.nodejs_22}/bin:${python}/bin:${pkgs.gh}/bin:$HOME/.dpm/bin:$HOME/.daml/bin:$PATH"
+    export JAVA_HOME="${pkgs.jdk17_headless}"
+    export PATH="$PWD/node_modules/.bin:$JAVA_HOME/bin:${pkgs.nodejs_22}/bin:${python}/bin:${pkgs.gh}/bin:$HOME/.dpm/bin:$HOME/.daml/bin:$PATH"
     export PYTHONPATH="$PWD/src''${PYTHONPATH:+:$PYTHONPATH}"
 
     case " $NODE_OPTIONS " in

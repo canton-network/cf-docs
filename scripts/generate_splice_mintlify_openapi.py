@@ -192,8 +192,7 @@ def normalized_families(source_config: dict[str, Any]) -> list[dict[str, Any]]:
             raise ValueError("Each family must define a non-empty group")
         if not isinstance(specs, list) or not specs:
             raise ValueError(f"Family '{group}' must define a non-empty specs list")
-
-        normalized_specs: list[dict[str, str]] = []
+        normalized_specs: list[dict[str, Any]] = []
         for spec in specs:
             if not isinstance(spec, dict):
                 raise ValueError(f"Spec entries for family '{group}' must be objects")
@@ -406,20 +405,44 @@ def filtered_families_for_navigation(
     return filtered
 
 
-def build_splice_group_pages(families: list[dict[str, Any]]) -> list[Any]:
+def openapi_operation_page_refs(spec: dict[str, Any]) -> list[str]:
+    paths = spec.get("paths")
+    if not isinstance(paths, dict):
+        return []
+
+    refs: list[str] = []
+    for path, path_item in paths.items():
+        if not isinstance(path, str) or not isinstance(path_item, dict):
+            continue
+        for method, operation in path_item.items():
+            if method.lower() not in HTTP_METHODS or not isinstance(operation, dict):
+                continue
+            refs.append(f"{method.upper()} {path}")
+    return refs
+
+
+def build_splice_openapi_nav_entry(*, docs_root: Path, spec: dict[str, Any]) -> dict[str, Any]:
+    openapi_path = docs_root / spec["source"]
+    payload = yaml.safe_load(openapi_path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError(f"Expected OpenAPI spec to parse as an object: {openapi_path}")
+    entry: dict[str, Any] = {
+        "group": spec["nav_label"],
+        "openapi": {
+            "source": spec["source"],
+            "directory": spec["directory"],
+        },
+        "pages": openapi_operation_page_refs(payload),
+    }
+    return entry
+
+
+def build_splice_group_pages(*, docs_root: Path, families: list[dict[str, Any]]) -> list[Any]:
     pages: list[Any] = []
     for family in families:
         family_pages: list[dict[str, Any]] = []
         for spec in family["specs"]:
-            family_pages.append(
-                {
-                    "group": spec["nav_label"],
-                    "openapi": {
-                        "source": spec["source"],
-                        "directory": spec["directory"],
-                    },
-                }
-            )
+            family_pages.append(build_splice_openapi_nav_entry(docs_root=docs_root, spec=spec))
         pages.append({"group": family["group"], "pages": family_pages})
     return pages
 
@@ -480,7 +503,7 @@ def update_docs_navigation(
         insert_at,
         {
             "group": top_level_group_label,
-            "pages": build_splice_group_pages(navigation_families),
+            "pages": build_splice_group_pages(docs_root=docs_json_path.parent, families=navigation_families),
         },
     )
     dropdown["pages"] = deduped_pages

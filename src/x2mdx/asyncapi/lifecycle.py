@@ -52,6 +52,15 @@ def channel_anchor(channel: str) -> str:
     return f"channel-{slugify(channel)}"
 
 
+def normalize_lifecycle_state(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip().lower()
+    if normalized in {"alpha", "beta", "stable", "deprecated"}:
+        return normalized
+    return None
+
+
 def resolve_local_ref(doc: dict[str, Any], node: Any, max_depth: int = 8) -> Any:
     current = node
     depth = 0
@@ -355,6 +364,8 @@ def extract_channel_detail(doc: dict[str, Any], channel_name: str, channel_node:
         "channel": channel_name,
         "anchor": channel_anchor(channel_name),
         "description": str(resolved_channel.get("description") or ""),
+        "lifecycle_state": normalize_lifecycle_state(resolved_channel.get("x-state")),
+        "replaces": str(resolved_channel.get("x-replaces")) if isinstance(resolved_channel.get("x-replaces"), str) else None,
         "actions": actions,
         "action_names": [action["action"] for action in actions],
     }
@@ -413,6 +424,10 @@ def describe_channel_changes(previous: dict[str, Any], current: dict[str, Any]) 
     changes: list[str] = []
     if previous["description"] != current["description"]:
         changes.append("channel description updated")
+    if previous.get("lifecycle_state") != current.get("lifecycle_state"):
+        changes.append("channel lifecycle state updated")
+    if previous.get("replaces") != current.get("replaces"):
+        changes.append("channel replacement target updated")
 
     previous_actions = {action["action"]: action for action in previous["actions"]}
     current_actions = {action["action"]: action for action in current["actions"]}
@@ -532,6 +547,8 @@ def build_asyncapi_report_from_sources(
                 removed_version=None,
                 last_seen_in=history["versions"][-1],
                 status="active",
+                lifecycle_state=channel_detail.get("lifecycle_state"),
+                replaces=channel_detail.get("replaces"),
                 latest=channel_detail,
             )
         )
@@ -556,6 +573,8 @@ def build_asyncapi_report_from_sources(
                 removed_version=removed_in,
                 last_seen_in=last_seen_in,
                 status="removed",
+                lifecycle_state=history["details"][last_seen_in].get("lifecycle_state"),
+                replaces=history["details"][last_seen_in].get("replaces"),
                 latest=history["details"][last_seen_in],
             )
         )

@@ -99,8 +99,10 @@ def build_openrpc_nav_group(
     group_label: str,
     spec_ids: list[str],
     spec_dir_name: str = "specs",
+    spec_group_sections: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     pages: list[Any] = []
+    section_pages: dict[str, list[Any]] = {}
     for spec_id in spec_ids:
         spec_page = output_dir / spec_dir_name / f"{slugify(spec_id)}.mdx"
         if not spec_page.exists():
@@ -114,12 +116,26 @@ def build_openrpc_nav_group(
         details_page = operation_dir / "details.mdx"
         if details_page.exists():
             operation_refs.append(docs_json_page_ref(details_page, docs_json_path))
-        pages.append(
-            {
-                "group": mdx_title(spec_page),
-                "pages": operation_refs,
-            }
-        )
+        section = spec_group_sections.get(spec_id) if spec_group_sections else None
+        if section:
+            section_pages.setdefault(section, []).append(
+                {
+                    "group": mdx_title(spec_page),
+                    "pages": operation_refs,
+                }
+            )
+        else:
+            pages.append(
+                {
+                    "group": mdx_title(spec_page),
+                    "pages": operation_refs,
+                }
+            )
+    if spec_group_sections:
+        for section in dict.fromkeys(spec_group_sections[spec_id] for spec_id in spec_ids if spec_id in spec_group_sections):
+            grouped_pages = section_pages.get(section)
+            if grouped_pages:
+                pages.append({"group": section, "pages": grouped_pages})
     details_page = output_dir / "operations" / "details.mdx"
     if details_page.exists():
         pages.append(docs_json_page_ref(details_page, docs_json_path))
@@ -132,6 +148,7 @@ def build_protobuf_nav_group(
     docs_json_path: Path,
     group_label: str,
     extra_page_refs: list[str] | None = None,
+    include_details_page: bool = True,
 ) -> dict[str, Any]:
     details_page_ref = docs_json_page_ref(output_dir / "index.mdx", docs_json_path)
     pages: list[Any] = []
@@ -162,8 +179,9 @@ def build_protobuf_nav_group(
             package_pages.append({"group": "Services", "pages": service_groups})
         package_groups.append({"group": mdx_title(package_page), "pages": package_pages})
     if package_groups:
-        pages.extend(package_groups)
-    for page_ref in [*(extra_page_refs or []), details_page_ref]:
+        pages.append({"group": "Packages", "pages": package_groups})
+    details_refs = [details_page_ref] if include_details_page else []
+    for page_ref in [*(extra_page_refs or []), *details_refs]:
         if page_ref not in pages:
             pages.append(page_ref)
     return {"group": group_label, "pages": pages}

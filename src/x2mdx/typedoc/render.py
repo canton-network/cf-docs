@@ -88,6 +88,12 @@ def _export_context(export: dict[str, Any]) -> dict[str, Any]:
         f"Kind: `{export['kind_label']}`",
         f"Introduced: `{export['introduced_in']}`",
     ]
+    if export["lifecycle_label"]:
+        lifecycle_bits.append(f"Lifecycle: `{export['lifecycle_label']}`")
+    if export["replaces"]:
+        lifecycle_bits.append(f"Replaces: `{export['replaces']}`")
+    if export["deprecated_text"]:
+        lifecycle_bits.append(f"Deprecated: {export['deprecated_text']}")
     if export["change_details"]:
         lifecycle_bits.append("Changed in: " + ", ".join(f"`{entry['version']}`" for entry in export["change_details"]))
     if export["removed_in"]:
@@ -152,7 +158,7 @@ def build_page(
                 render_summary_cell(str(export["summary"])),
                 f"`{export['introduced_in']}`",
                 escape_md_cell(render_change_summary(export["change_details"])),
-                "-",
+                f"`{export['lifecycle_label']}`" if export["lifecycle_label"] == "Deprecated" else "-",
                 f"`{export['removed_in']}`" if export["removed_in"] else "-",
             ]
             for export in report.exports

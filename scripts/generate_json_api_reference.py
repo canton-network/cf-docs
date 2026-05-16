@@ -13,11 +13,25 @@ from typing import Any
 import yaml
 
 from ledger_api_release_bundles import (
+    ensure_bundle_archive,
     load_json,
     materialize_bundle_spec,
+    read_bundle_spec_text,
     selected_versions,
 )
 import reference_nav
+from x2mdx.output import Page, RawMarkdown
+from x2mdx.reference_pages import (
+    ReferenceBadge,
+    ReferenceCard,
+    ReferenceCollectionPage,
+    ReferenceMetaItem,
+    ReferenceSection,
+    compact_text,
+    render_collection_page,
+    safe_markdown_text,
+)
+from x2mdx.render import write_page
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -274,6 +288,205 @@ def mintlify_openapi_page_refs(openapi_path: Path) -> list[str]:
     return openapi_operation_page_refs(spec)
 
 
+def operation_items(path_item: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
+    return [
+        (method.lower(), operation)
+        for method, operation in path_item.items()
+        if method.lower() in HTTP_METHODS and isinstance(operation, dict)
+    ]
+
+
+def operation_summary(path: str, path_item: dict[str, Any]) -> str:
+    summaries: list[str] = []
+    for method, operation in operation_items(path_item):
+        summary = str(operation.get("summary") or "").strip()
+        description = str(operation.get("description") or "").strip()
+        label = summary if summary and summary != path else description
+        if label:
+            summaries.append(f"{method.upper()}: {label}")
+    if summaries:
+        return compact_text("; ".join(summaries), limit=190)
+    return "OpenAPI endpoint"
+
+
+def operation_methods(path_item: dict[str, Any]) -> list[str]:
+    return [method.upper() for method, _operation in operation_items(path_item)]
+
+
+def path_item_fingerprint(path_item: Any) -> str:
+    return json.dumps(path_item, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+
+
+def versioned_openapi_specs(
+    *,
+    source_config: dict[str, Any],
+    cache_dir: Path,
+    versions: list[dict[str, str]],
+    spec_filename: str,
+    force_refresh: bool,
+) -> dict[str, dict[str, Any]]:
+    specs: dict[str, dict[str, Any]] = {}
+    for entry in versions:
+        archive_path = ensure_bundle_archive(
+            source_config=source_config,
+            cache_dir=cache_dir,
+            version_entry=entry,
+            force_refresh=force_refresh,
+        )
+        spec = yaml.safe_load(
+            add_missing_operation_summaries(
+                read_bundle_spec_text(
+                    archive_path,
+                    source_config=source_config,
+                    spec_filename=spec_filename,
+                )
+            )
+        )
+        if not isinstance(spec, dict):
+            raise ValueError(f"Expected OpenAPI spec for {entry['version']} to parse as an object")
+        specs[entry["version"]] = spec
+    return specs
+
+
+def strip_raw_markdown_trailing_whitespace(page: Page) -> Page:
+    return Page(
+        path=page.path,
+        title=page.title,
+        description=page.description,
+        blocks=[
+            RawMarkdown("\n".join(line.rstrip() for line in block.text.splitlines()))
+            if isinstance(block, RawMarkdown)
+            else block
+            for block in page.blocks
+        ],
+    )
+
+
+def build_openapi_details_page(
+    *,
+    specs_by_version: dict[str, dict[str, Any]],
+    versions: list[str],
+    publish_version: str,
+    details_page_ref: str,
+    source_name: str,
+) -> Any:
+    latest = specs_by_version[publish_version]
+    latest_paths = latest.get("paths")
+    if not isinstance(latest_paths, dict):
+        raise ValueError("Published OpenAPI spec must define a paths object")
+
+    version_path_items: dict[str, dict[str, Any]] = {}
+    for version in versions:
+        paths = specs_by_version[version].get("paths")
+        version_path_items[version] = paths if isinstance(paths, dict) else {}
+
+    endpoint_cards: list[ReferenceCard] = []
+    version_cards: list[ReferenceCard] = []
+    for path, path_item in latest_paths.items():
+        if not isinstance(path, str) or not isinstance(path_item, dict):
+            continue
+        present_versions = [
+            version
+            for version in versions
+            if isinstance(version_path_items[version].get(path), dict)
+        ]
+        if not present_versions:
+            continue
+        introduced = present_versions[0]
+        last_seen = present_versions[-1]
+        changed_versions: list[str] = []
+        previous_fingerprint: str | None = None
+        for version in present_versions:
+            fingerprint = path_item_fingerprint(version_path_items[version][path])
+            if previous_fingerprint is not None and fingerprint != previous_fingerprint:
+                changed_versions.append(version)
+            previous_fingerprint = fingerprint
+
+        badges = [
+            ReferenceBadge(", ".join(operation_methods(path_item)) or "Endpoint", tone="protocol"),
+            ReferenceBadge(f"Since {introduced}", tone="added"),
+        ]
+        if changed_versions:
+            badges.append(ReferenceBadge(f"Changed {changed_versions[-1]}", tone="changed"))
+        if any(bool(operation.get("deprecated")) for _method, operation in operation_items(path_item)):
+            badges.append(ReferenceBadge("Deprecated", tone="removed"))
+        endpoint_cards.append(
+            ReferenceCard(
+                title=path,
+                summary=operation_summary(path, path_item),
+                badges=badges,
+                meta_items=[
+                    ReferenceMetaItem("Operations", ", ".join(operation_methods(path_item)) or "-"),
+                    ReferenceMetaItem("Last seen", last_seen),
+                ],
+            )
+        )
+
+    for version in versions:
+        current_paths = version_path_items[version]
+        previous_index = versions.index(version) - 1
+        previous_paths = version_path_items[versions[previous_index]] if previous_index >= 0 else {}
+        current_keys = {key for key, value in current_paths.items() if isinstance(key, str) and isinstance(value, dict)}
+        previous_keys = {key for key, value in previous_paths.items() if isinstance(key, str) and isinstance(value, dict)}
+        changed = sum(
+            1
+            for key in current_keys & previous_keys
+            if path_item_fingerprint(current_paths[key]) != path_item_fingerprint(previous_paths[key])
+        )
+        version_cards.append(
+            ReferenceCard(
+                title=version,
+                summary="Endpoint changes included in this release snapshot.",
+                badges=[
+                    ReferenceBadge(f"Added {len(current_keys - previous_keys)}", tone="added"),
+                    ReferenceBadge(f"Changed {changed}", tone="changed"),
+                    ReferenceBadge(f"Removed {len(previous_keys - current_keys)}", tone="removed"),
+                ],
+            )
+        )
+
+    return strip_raw_markdown_trailing_whitespace(
+        render_collection_page(
+            ReferenceCollectionPage(
+                path=f"{details_page_ref}.mdx",
+                title="Details and history",
+                description="JSON Ledger API OpenAPI endpoint details and version history.",
+                eyebrow="OpenAPI Reference",
+                summary="Endpoint overview for the JSON Ledger API OpenAPI surface, built from versioned release snapshots.",
+                badges=[ReferenceBadge("OpenAPI", tone="protocol"), ReferenceBadge(publish_version, tone="neutral")],
+                meta_items=[
+                    ReferenceMetaItem("Publish version", publish_version),
+                    ReferenceMetaItem("Source", source_name),
+                    ReferenceMetaItem("Version filter", ", ".join(versions)),
+                ],
+                sections=[
+                    ReferenceSection(
+                        heading="Endpoints",
+                        body_markdown=safe_markdown_text(
+                            "Select an OpenAPI operation from the sidebar for request and response details. "
+                            "This page summarizes endpoint lifecycle changes across the configured Ledger API versions."
+                        ),
+                        cards=endpoint_cards,
+                    ),
+                    ReferenceSection(
+                        heading="Version Summary",
+                        cards=version_cards,
+                    ),
+                ],
+            )
+        )
+    )
+
+
+def write_openapi_details_page(
+    *,
+    docs_json_path: Path,
+    details_page_ref: str,
+    page: Any,
+) -> None:
+    write_page(page, docs_json_path.parent / f"{details_page_ref}.mdx")
+
+
 def main() -> int:
     args = parse_args()
     source_config = load_json(Path(args.source_config).resolve())
@@ -286,9 +499,10 @@ def main() -> int:
     )
 
     output_spec = Path(args.output_spec).resolve()
+    cache_dir = Path(args.cache_dir).resolve()
     materialize_bundle_spec(
         source_config=source_config,
-        cache_dir=Path(args.cache_dir).resolve(),
+        cache_dir=cache_dir,
         version_entry=publish_entry,
         spec_filename="openapi.yaml",
         output_path=output_spec,
@@ -311,6 +525,24 @@ def main() -> int:
         openapi_directory=args.openapi_directory,
         details_page_ref=args.details_page_ref,
         openapi_page_refs=mintlify_openapi_page_refs(output_spec),
+    )
+    specs_by_version = versioned_openapi_specs(
+        source_config=source_config,
+        cache_dir=cache_dir,
+        versions=versions,
+        spec_filename="openapi.yaml",
+        force_refresh=args.force_refresh,
+    )
+    write_openapi_details_page(
+        docs_json_path=docs_json_path,
+        details_page_ref=args.details_page_ref,
+        page=build_openapi_details_page(
+            specs_by_version=specs_by_version,
+            versions=[entry["version"] for entry in versions],
+            publish_version=publish_entry["version"],
+            details_page_ref=args.details_page_ref,
+            source_name=str(source_config.get("source") or "Canton release bundle JSON Ledger API OpenAPI fixtures"),
+        ),
     )
     remove_legacy_output(output_file=LEGACY_OUTPUT_FILE.resolve())
     return 0

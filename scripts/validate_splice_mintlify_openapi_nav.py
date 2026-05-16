@@ -63,29 +63,45 @@ def enabled_specs(source_config: dict[str, Any]) -> set[str] | None:
     return specs
 
 
-def expected_openapi_entries(source_config: dict[str, Any]) -> list[tuple[str, str]]:
+def expected_openapi_specs(source_config: dict[str, Any]) -> list[dict[str, Any]]:
     selected = enabled_specs(source_config)
     families = source_config.get("families")
     if not isinstance(families, list):
         raise ValueError("Source config must define families")
-    entries: list[tuple[str, str]] = []
+    entries: list[dict[str, Any]] = []
     for family in families:
         if not isinstance(family, dict):
             raise ValueError("Each source config family must be an object")
+        family_group = family.get("group")
         specs = family.get("specs")
+        if not isinstance(family_group, str) or not family_group:
+            raise ValueError("Each source config family must define group")
         if not isinstance(specs, list):
             raise ValueError("Each source config family must define specs")
         for spec in specs:
             if not isinstance(spec, dict):
                 raise ValueError("Each source config spec must be an object")
             filename = spec.get("filename")
+            nav_label = spec.get("nav_label")
             source = spec.get("source")
             directory = spec.get("directory")
-            if not all(isinstance(item, str) and item for item in (filename, source, directory)):
-                raise ValueError("Each source config spec must define filename, source, and directory")
+            if not all(isinstance(item, str) and item for item in (filename, nav_label, source, directory)):
+                raise ValueError("Each source config spec must define filename, nav_label, source, and directory")
             if selected is None or filename in selected:
-                entries.append((source, directory))
+                entries.append(
+                    {
+                        "family_group": family_group,
+                        "filename": filename,
+                        "nav_label": nav_label,
+                        "source": source,
+                        "directory": directory,
+                    }
+                )
     return entries
+
+
+def expected_openapi_entries(source_config: dict[str, Any]) -> list[tuple[str, str]]:
+    return [(spec["source"], spec["directory"]) for spec in expected_openapi_specs(source_config)]
 
 
 def collect_openapi_entries(node: Any, entries: set[tuple[str, str]]) -> None:
@@ -127,6 +143,25 @@ def openapi_operations_without_summary(openapi_path: Path) -> list[str]:
     return missing
 
 
+def openapi_operation_page_refs(openapi_path: Path) -> list[str]:
+    spec = yaml.safe_load(openapi_path.read_text(encoding="utf-8"))
+    if not isinstance(spec, dict):
+        raise ValueError(f"Expected OpenAPI spec to parse as an object: {openapi_path}")
+    paths = spec.get("paths")
+    if not isinstance(paths, dict):
+        return []
+
+    refs: list[str] = []
+    for path, path_item in paths.items():
+        if not isinstance(path, str) or not isinstance(path_item, dict):
+            continue
+        for method, operation in path_item.items():
+            if method.lower() not in HTTP_METHODS or not isinstance(operation, dict):
+                continue
+            refs.append(f"{method.upper()} {path}")
+    return refs
+
+
 def validate_openapi_operation_summaries(
     *,
     docs_json_path: Path,
@@ -147,6 +182,38 @@ def validate_openapi_operation_summaries(
         )
 
 
+def validate_explicit_openapi_nav_pages(
+    *,
+    docs_json_path: Path,
+    top_group: dict[str, Any],
+    expected_specs: list[dict[str, Any]],
+) -> None:
+    docs_root = docs_json_path.parent
+    top_group_pages = top_group.get("pages")
+    if not isinstance(top_group_pages, list):
+        raise ValueError("Configured Splice OpenAPI top-level group must expose pages")
+
+    for spec in expected_specs:
+        family_group = find_group(top_group_pages, spec["family_group"])
+        if family_group is None:
+            raise ValueError(f"Splice OpenAPI family is missing from nav: {spec['family_group']}")
+        family_pages = family_group.get("pages")
+        if not isinstance(family_pages, list):
+            raise ValueError(f"Splice OpenAPI family must expose pages: {spec['family_group']}")
+        spec_group = find_group(family_pages, spec["nav_label"])
+        if spec_group is None:
+            raise ValueError(f"Splice OpenAPI spec is missing from nav: {spec['nav_label']}")
+        actual_pages = spec_group.get("pages")
+        if not isinstance(actual_pages, list):
+            raise ValueError(f"Splice OpenAPI spec must expose explicit pages: {spec['nav_label']}")
+        expected_pages = openapi_operation_page_refs(docs_root / spec["source"])
+        if actual_pages != expected_pages:
+            raise ValueError(
+                f"Splice OpenAPI nav pages differ for {spec['nav_label']}:\n"
+                f"expected={expected_pages}\nactual={actual_pages}"
+            )
+
+
 def validate_splice_nav(*, source_config_path: Path = DEFAULT_SOURCE_CONFIG, docs_json_path: Path = DEFAULT_DOCS_JSON) -> None:
     source_config = load_json(source_config_path)
     docs = load_json(docs_json_path)
@@ -164,12 +231,18 @@ def validate_splice_nav(*, source_config_path: Path = DEFAULT_SOURCE_CONFIG, doc
 
     actual_entries: set[tuple[str, str]] = set()
     collect_openapi_entries(top_group, actual_entries)
-    expected_entries = expected_openapi_entries(source_config)
+    expected_specs = expected_openapi_specs(source_config)
+    expected_entries = [(spec["source"], spec["directory"]) for spec in expected_specs]
     missing = [entry for entry in expected_entries if entry not in actual_entries]
     if missing:
         details = "\n".join(f"- source={source} directory={directory}" for source, directory in missing)
         raise ValueError(f"Splice OpenAPI nav is missing configured entries:\n{details}")
     validate_openapi_operation_summaries(docs_json_path=docs_json_path, entries=expected_entries)
+    validate_explicit_openapi_nav_pages(
+        docs_json_path=docs_json_path,
+        top_group=top_group,
+        expected_specs=expected_specs,
+    )
 
 
 def parse_args() -> argparse.Namespace:

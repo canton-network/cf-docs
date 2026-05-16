@@ -22,11 +22,18 @@ DEFAULT_MANIFEST = REPO_ROOT / ".internal" / "generated" / "x2mdx" / "wallet-gat
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "docs-main" / "reference" / "wallet-gateway-json-rpc"
 DEFAULT_DOCS_JSON = REPO_ROOT / "docs-main" / "docs.json"
 DEFAULT_REPO_DIR = DEFAULT_CACHE_DIR / "repos" / "splice-wallet-kernel"
-GROUP_LABEL = "Wallet Kernel"
-LEGACY_GROUP_LABELS = {"Wallet Gateway JSON-RPC", "Wallet Kernel SDK"}
+GROUP_LABEL = "Wallet Gateway"
+DAPP_GROUP_LABEL = "dApp API"
+LEGACY_GROUP_LABELS = {"Wallet Kernel", "Wallet Gateway JSON-RPC", "Wallet Kernel SDK"}
 DETAILS_LABEL = "Details and history"
 SPEC_DIR_NAME = "specs"
 DEFAULT_RELEASE_REPO = "hyperledger-labs/splice-wallet-kernel"
+NAV_SECTION_BY_SPEC_ID = {
+    "dapp-api": DAPP_GROUP_LABEL,
+    "dapp-remote-api": DAPP_GROUP_LABEL,
+    "user-api": "Wallet Gateway",
+    "signing-api": "Wallet Gateway",
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -277,7 +284,7 @@ def update_docs_navigation(
         docs_json_page_ref(output_dir / "operations" / slugify(str(spec["spec_id"])) / "details.mdx", docs_json_path)
         for spec in spec_entries
     )
-    group_labels = {GROUP_LABEL, *LEGACY_GROUP_LABELS}
+    group_labels = {DAPP_GROUP_LABEL, GROUP_LABEL, *LEGACY_GROUP_LABELS}
     insert_at = next(
         (
             index
@@ -293,8 +300,16 @@ def update_docs_navigation(
         group_label=GROUP_LABEL,
         spec_ids=[str(spec["spec_id"]) for spec in spec_entries],
         spec_dir_name=SPEC_DIR_NAME,
+        spec_group_sections=NAV_SECTION_BY_SPEC_ID,
     )
-    pruned_pages.insert(min(insert_at, len(pruned_pages)), group)
+    wallet_groups = [item for item in group["pages"] if isinstance(item, dict)]
+    details_refs = [item for item in group["pages"] if isinstance(item, str)]
+    for wallet_group in wallet_groups:
+        if wallet_group.get("group") == GROUP_LABEL:
+            wallet_group["pages"].extend(details_refs)
+            break
+    for offset, wallet_group in enumerate(wallet_groups):
+        pruned_pages.insert(min(insert_at + offset, len(pruned_pages)), wallet_group)
     dropdown["pages"] = pruned_pages
     docs_json_path.write_text(json.dumps(docs, indent=2) + "\n", encoding="utf-8")
     print(f"Updated docs navigation: {docs_json_path}")

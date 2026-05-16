@@ -193,8 +193,10 @@ class DamlJsonTests(unittest.TestCase):
         legacy_text = (output_dir / "da-legacy.mdx").read_text(encoding="utf-8")
 
         self.assertIn("Utility Credential API", index_text)
-        self.assertIn("[DA.List](daml-standard-library/da-list)", index_text)
-        self.assertIn("removed in `1.1.0`", index_text)
+        self.assertIn('<div class="x2mdx-ref-hero">', index_text)
+        self.assertIn('<p class="x2mdx-ref-eyebrow">Daml Reference</p>', index_text)
+        self.assertIn('<a class="x2mdx-ref-card" href="daml-standard-library/da-list">', index_text)
+        self.assertIn("Removed 1.1.0", index_text)
         self.assertIn("Deprecated since: `1.1.0`", list_text)
         self.assertIn("historical reference", legacy_text)
 
@@ -264,4 +266,4 @@ class DamlJsonTests(unittest.TestCase):
 
         self.assertEqual(result, 0)
         index_text = (output_dir / "index.mdx").read_text(encoding="utf-8")
-        self.assertIn("[DA.List](/appdev/reference/daml-standard-library/da-list)", index_text)
+        self.assertIn('<a class="x2mdx-ref-card" href="/appdev/reference/daml-standard-library/da-list">', index_text)

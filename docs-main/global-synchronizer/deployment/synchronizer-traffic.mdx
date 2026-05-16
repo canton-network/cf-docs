@@ -3,15 +3,18 @@ title: "Synchronizer Traffic"
 description: "Traffic accounting, fees, and monitoring on the Global Synchronizer"
 ---
 
-{/* COPIED_START source="splice:docs/src/deployment/traffic.rst" hash="31931874" */}
+import ExternalSpliceMainSpliceRstCodeDocsSrcDeploymentTrafficJson94 from "/snippets/external/splice/main/splice-rst-code-docs-src-deployment-traffic-json-94.mdx";
+
+import { NetworkVariables } from '/snippets/components/version.mdx';
+import { networkData } from '/snippets/generated/version-dashboard-data.mdx';
+
+{/* COPIED_START source="splice:docs/src/deployment/traffic.rst" hash="0e110a7b" */}
 
 <Warning title="Pre-reviewed Content - Do Not Modify">
 This section was copied from existing reviewed documentation.
-**Source:** `splice:docs/src/deployment/traffic.rst`
+**Source:** `docs/src/deployment/traffic.rst`
 Reviewers: Skip this section. Remove markers after final approval.
 </Warning>
-
-# Synchronizer Traffic Fees
 
 Synchronizer usage incurs operational costs for SVs. For amortizing these costs, improving the incentives for operating an SV, and making Denial Of Service attacks on the network unattractive, synchronizer usage beyond a certain free `base rate` level is charged with so-called `synchronizer fees` paid in `Canton Coin`. For supporting this functionality, sequencers keep track of available and consumed traffic for each synchronizer member (most relevantly: for all validator participants). Whenever both the free (base rate) and paid-for (extra) traffic are exhausted for a participant, attempted writes are denied by the sequencer.
 
@@ -44,25 +47,17 @@ Traffic accounting is "by participant"; all parties hosted on the same participa
 
 ## Traffic parameters
 
+<NetworkVariables networkData={networkData}>
+
 The current synchronizer traffic parameters are recorded on the global `AmuletRules` contract and can be obtained from Scan. You can obtain them via the Scan UI or by querying the Scan API using, for example, this command (requires installing [jq](https://jqlang.org/)):
 
-curl -X POST --header "Content-Type: application/json" -d "{}" /api/scan/v0/amulet-rules \| jq ".amulet_rules_update.contract.payload.configSchedule.initialValue.decentralizedSynchronizer.fees"
+```bash
+curl -X POST --header "Content-Type: application/json" -d "{}" |gsf_scan_url|/api/scan/v0/amulet-rules | jq ".amulet_rules_update.contract.payload.configSchedule.initialValue.decentralizedSynchronizer.fees"
+```
 
 Above command will return a JSON object similar to the following:
 
-```json
-"fees": {
-  "baseRateTrafficLimits": {
-    "burstAmount": "400000",
-    "burstWindow": {
-      "microseconds": "1200000000"
-    }
-  },
-  "extraTrafficPrice": "60.0",
-  "readVsWriteScalingFactor": "4",
-  "minTopupAmount": "200000"
-}
-```
+<ExternalSpliceMainSpliceRstCodeDocsSrcDeploymentTrafficJson94 />
 
 This represents an encoded instance of the `SynchronizerFeesConfig` Daml data type. See the Daml API docs for detailed information on these fields. To give an overview here:
 
@@ -71,16 +66,30 @@ This represents an encoded instance of the `SynchronizerFeesConfig` Daml data ty
 - `extraTrafficPrice`: the price of extra traffic beyond the free tier, denominated in USD per MB. The price is charged in `CC` as per the current USD exchange rate. The exchange rate is determined by SVs via median voting and recorded on current `OpenMiningRound` contracts obtainable from Scan. For querying the current CC price in USD as per the currently open mining round, you can check the Scan UI or use the following command (requires installing [jq](https://jqlang.org/)):
 
   ```bash
-  curl -X POST --header "Content-Type: application/json" -d '{"cached_open_mining_round_contract_ids":[], "cached_issuing_round_contract_ids":[]}' /api/scan/v0/open-and-issuing-mining-rounds | jq ".open_mining_rounds | values[] | .contract.payload | {round, amuletPrice}"
+  curl -X POST --header "Content-Type: application/json" -d "{\"cached_open_mining_round_contract_ids\":[], \"cached_issuing_round_contract_ids\":[]}" |gsf_scan_url|/api/scan/v0/open-and-issuing-mining-rounds | jq ".open_mining_rounds | values[] | .contract.payload | {round, amuletPrice}"
   ```
-
-  
 
 - `readVsWriteScalingFactor`: specifies the weight of additional traffic balance subtractions (from a sender's balance) for delivering a synchronizer message to each of its recipients. Delivering messages incurs actual costs for the SVs, even if this cost is much smaller than the cost of ordering and persisting messages. The `readVsWriteScalingFactor` is specified in basis points (parts per 10,000), i.e., a value of 1 means that for each 1000 bytes that need to be delivered to a recipient, 0.1 bytes of traffic will be charged. So for example: At a factor of 4, a 1 MB message with 10 recipients will draw `1,000,000 * (1 + 10 * 0.004) = 1,040,000` bytes from the sending participant's traffic balance.
 
 - `minTopupAmount`: the minimum amount of traffic that must be bought when buying extra traffic. Keeping this value reasonably high ensures that SVs can amortize the cost of performing the top-up operation, i.e., protects them from disproportionate overhead from processing very small top-ups.
 
 Like all parts of the `AmuletRulesConfig`, the `SynchronizerFeesConfig` is set by SVs via on-ledger voting, as part of DSO governance. The SV operations docs contain pointers for determining good values for some of these parameters.
+
+</NetworkVariables>
+
+## How traffic balance interacts with transaction submission
+
+Here's an example of traffic accounting in practice for submitting a transaction:
+
+1.  Transaction submitted.
+2.  The traffic manager (on the sequencer) checks your node's base rate (i.e. free) traffic balance and the traffic that you have purchased.
+3.  Included in your base rate traffic is that accrued since your last submission. This accrual is time-linear, calculated to reach `burstAmount` after `burstWindow` time.
+4.  If you have enough base rate traffic, your submission is sequenced. Your base rate traffic balance is drawn down for the transaction and your extra traffic balance is unchanged.
+5.  If you do not have enough base rate traffic, but your extra traffic is enough to pay the difference, your submission is sequenced. Your base rate traffic balance is depleted and your extra traffic balance is drawn down for the remainder.
+6.  If neither of the above applies, the submission will fail.
+7.  Regardless of any situation, if you don't submit transactions for `burstWindow`, your base rate traffic balance will be fully replenished to `burstAmount`. This will, at minimum, allow you to buy traffic again to avoid getting stuck in the situation where you don't have enough traffic to top up your extra traffic.
+
+A successful sequencing does not necessarily mean the transaction is fully accepted. See `traffic_wasted` below for explanation of these cases and how best to avoid them.
 
 ## Traffic top-ups; how does one "buy" traffic?
 
@@ -89,7 +98,14 @@ Like all parts of the `AmuletRulesConfig`, the `SynchronizerFeesConfig` is set b
 1.  On-ledger `MemberTraffic` contracts (Daml API docs) that track each validator's traffic state and are updated (atomically) whenever CC is spent for buying traffic. Most importantly, on-ledger `MemberTraffic` contracts track the total amount of extra traffic purchased for that validator.
 2.  In-sequencer traffic state that tracks both available and spent traffic. SVs update the in-sequencer traffic state based on the `MemberTraffic` state they observe on ledger, thereby ensuring that paid traffic fees are translated into actual traffic balance increases. Sequencers also update the in-sequencer traffic state themselves, whenever traffic is consumed (see `traffic_accounting`).
 
-The validator app contains built-in top-up automation that automatically buys traffic to meet preconfigured throughput needs. In a nutshell, operators can configure a target throughput (per minimum top-up interval) and the validator app will automatically buy extra traffic ensuring that (1) sufficient traffic balance is available to sustain the configured target throughput, and (2) exceeding the target throughput will not incur additional charges. Additionally, to prevent top-up transactions from failing due to an already depleted traffic balance, the validator app will abort ledger submissions if the balance has fallen below a predefined amount.
+The validator app contains built-in top-up automation that automatically buys traffic to meet preconfigured throughput needs. Operators configure a target throughput (bytes per second) and a minimum top-up interval (seconds); the automation buys `target throughput × minimum top-up interval` bytes whenever both of the following conditions are met:
+
+- the extra traffic balance has fallen below that total top-up amount, and
+- at least the minimum top-up interval has elapsed since the last top-up.
+
+The latter condition is a safeguard: it gives the operator a chance to intervene before CC is rapidly spent down in the case of a bug or attack causing runaway submissions. This is a tradeoff for the operator to manage: a shorter interval reduces the risk of traffic running out between top-ups, but increases the risk of CC being spent quickly before the operator has time to notice it; a longer interval gives the operator more time to notice problems, but increases the risk of running out of traffic. Both failure modes occur in practice: a node can stop transacting either because it ran out of traffic, or because it ran out of CC to purchase more.
+
+Additionally, to prevent top-up transactions from failing due to an already depleted traffic balance, the validator app will abort ledger submissions if the balance has fallen below a predefined amount.
 
 For configuring the built-in top-up automation, please refer to the Kubernetes validator deployment guide or the corresponding Docker-compose one. Configuring alternative methods for buying traffic, e.g., using third-party services, exceeds the scope of this documentation.
 
@@ -112,5 +128,6 @@ The Splice distribution contains a Grafana dashboard about `Synchronizer Fees (v
 SV operators are encouraged to monitor wasted traffic across all synchronizer members, as reported for example by sequencer metrics, to detect cases where wasted traffic increases significantly and/or in a global manner. The Splice distribution contains a Grafana dashboard about `Synchronizer Fees (SV view)` that can be helpful, as well as an alert definition that focuses on validator participants.
 
 Note that wasted traffic is less relevant for SVs themselves, as SV components have unlimited traffic. Note also that SV mediators and sequencers waste traffic as part of their regular operation: They heavily use aggregate submissions where sequencers collect messages from a group of senders and only deliver a single message per recipient once a threshold of individual submissions has been sequenced; sequenced individual submissions beyond the aggregation threshold count as wasted traffic. All that said, should an SV component suddenly exhibit a significant increase in wasted traffic, this likely points to an actual issue that should be investigated.
+
 
 {/* COPIED_END */}

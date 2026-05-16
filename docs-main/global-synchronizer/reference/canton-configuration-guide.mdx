@@ -3,6 +3,11 @@ title: "Canton Configuration Guide"
 description: "Configure Canton nodes using HOCON files, command-line options, and declarative configuration"
 ---
 
+import ExternalCantonMainCommunityAppSrcTestResourcesDocumentationSnippetsNoFailFast from "/snippets/external/canton/main/community/app/src/test/resources/documentation-snippets/no-fail-fast.mdx";
+import ExternalCantonMainCommunityAppSrcTestResourcesDocumentationSnippetsPortsFile from "/snippets/external/canton/main/community/app/src/test/resources/documentation-snippets/ports-file.mdx";
+import ExternalCantonMainCommunityAppSrcTestResourcesDocumentationSnippetsPreviewCommands from "/snippets/external/canton/main/community/app/src/test/resources/documentation-snippets/preview-commands.mdx";
+import ExternalCantonMainCommunityAppSrcPackExampleSimpleTopology from "//snippets/external/canton/main/community/app/src/pack/examples/01-simple-topology/simple-topology.mdx";
+
 {/* COPIED_START source="docs-website:docs/replicated/canton/3.4/participant/howtos/configure/general/conf_file.rst" hash="01a8d862" */}
 
 <Warning title="Pre-reviewed Content - Do Not Modify">
@@ -29,46 +34,7 @@ Canton does not run one node, but any number of nodes, be it synchronizers or pa
 
 A sample configuration file for two participant nodes and a single synchronizer can be seen below.
 
-``` none
-canton {
-  // user-manual-entry-begin: SimpleSequencerNodeConfig
-  sequencers {
-    sequencer1 {
-      storage.type = memory
-      public-api.port = 5001
-      admin-api.port = 5002
-      sequencer.type = BFT
-    }
-  }
-  // user-manual-entry-end: SimpleSequencerNodeConfig
-
-  // user-manual-entry-begin: SimpleMediatorNodeConfig
-  mediators {
-    mediator1 {
-      storage.type = memory
-      admin-api.port = 5202
-    }
-  }
-  // user-manual-entry-end: SimpleMediatorNodeConfig
-
-  participants {
-    // user-manual-entry-begin: port configuration
-    participant1 {
-      storage.type = memory
-      admin-api.port = 5012
-      ledger-api.port = 5011
-      http-ledger-api.port = 5013
-    }
-    // user-manual-entry-end: port configuration
-    participant2 {
-      storage.type = memory
-      admin-api.port = 5022
-      ledger-api.port = 5021
-      http-ledger-api.port = 5023
-    }
-  }
-}
-```
+<ExternalCantonMainCommunityAppSrcPackExampleSimpleTopology />
 
 ## Configuration reference
 
@@ -181,19 +147,13 @@ canton {
 
 A Canton configuration allows you to define multiple synchronizers. Also, a Canton participant can connect to multiple synchronizers. This is however only supported as a preview feature and not yet suitable for production use.
 
-In particular, contract key uniqueness cannot be enforced over multiple synchronizers. In this situation, we need to turn contract key uniqueness off by setting
-
-[\#22917: Fix broken literalinclude](https://github.com/DACH-NY/canton/issues/22917) literalinclude:: CANTON/community/app/src/test/resources/documentation-snippets/non-uck-mode.conf
-
-Please note that the setting is final and cannot be changed subsequently. We will provide a migration path once multi-synchronizer functionality is fully implemented.
+In particular, contract key uniqueness cannot be enforced over multiple synchronizers. In this situation, you must turn off contract key uniqueness in the Canton configuration. Please note that the setting is final and cannot be changed subsequently. We will provide a migration path once multi-synchronizer functionality is fully implemented.
 
 ## Fail Fast Mode
 
 By default, Canton will fail to start if it cannot access some external dependency such as the database. This is preferable during initial deployment and development, as it provides instantaneous feedback, but can cause problems in production. As an example, if Canton is started with a database in parallel, the Canton process would fail if the database is not ready before the Canton process attempts to access it. To avoid this problem, you can configure a node to wait indefinitely for an external dependency such as a database to start. The config option below will disable the "fail fast" behavior for `participant1`.
 
-``` none
-canton.participants.participant1.storage.parameters.fail-fast-on-startup = "no"
-```
+<ExternalCantonMainCommunityAppSrcTestResourcesDocumentationSnippetsNoFailFast />
 
 This option should be used with care as, by design, it can cause infinite, noisy waits.
 
@@ -271,9 +231,7 @@ All configured entities will be automatically started and will resume operation.
 
 A failure to connect to the database storage will lead the process to exit with a non-zero exit code. This can be turned off using:
 
-``` none
-canton.participants.participant1.storage.parameters.fail-fast-on-startup = "no"
-```
+<ExternalCantonMainCommunityAppSrcTestResourcesDocumentationSnippetsNoFailFast />
 
 Any failures encountered while running the bootstrap script will immediately shutdown the Canton process with a non-zero exit code.
 
@@ -803,9 +761,7 @@ When running Canton inside a test environment, it can be useful to detect when C
 
 To instruct Canton to write a file containing details of the running ports when initialized, configure a ports-file:
 
-``` none
-canton.parameters.ports-file=ports.json
-```
+<ExternalCantonMainCommunityAppSrcTestResourcesDocumentationSnippetsPortsFile />
 
 On startup, Canton writes to the ports-file the values of the ports its services are running on:
 
@@ -829,8 +785,6 @@ To enable preview commands, set the `enable-preview-commands` parameter to `yes`
 Preview commands are not guaranteed to be stable and may change in future releases.
 </Warning>
 
-``` none
-canton.features.enable-preview-commands=yes
-```
+<ExternalCantonMainCommunityAppSrcTestResourcesDocumentationSnippetsPreviewCommands />
 
 {/* COPIED_END */}
