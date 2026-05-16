@@ -764,7 +764,13 @@ Help for specific commands (use help() or help("method") for more information).
 
 Download states of contracts and contract payloads necessary for commitment inspection and reconciliation.
 
-Returns the contract states (created, assigned, unassigned, archived, unknown) of the given contracts on all synchronizers the participant knows from the beginning of time until the present time on each synchronizer. The command returns best-effort the contract changes available. Specifically, it does not fail if the ACS and/or reassignment state has been pruned during the time interval, or if parts of the time interval are ahead of the clean ACS state. Optionally returns the contract payload if requested and available. The arguments are: - contracts: The contract ids whose state and payload we want to fetch - timestamp: The timestamp when some counter-participants reported the given contracts as active on the expected synchronizer. - expectedSynchronizerId: The synchronizer that the contracts are expected to be active on - downloadPayload: If true, the payload of the contracts is also downloaded - timeout: Time limit for the grpc call to complete
+Returns the contract states (created, assigned, unassigned, archived, unknown) of the given contracts on all synchronizers the participant knows from the beginning of time until the present time on each synchronizer. The command returns best-effort the contract changes available. Specifically, it does not fail if the ACS and/or reassignment state has been pruned during the time interval, or if parts of the time interval are ahead of the clean ACS state. Optionally returns the contract payload if requested and available. The arguments are:
+
+- `contracts`: The contract ids whose state and payload we want to fetch
+- `timestamp`: The timestamp when some counter-participants reported the given contracts as active on the expected synchronizer.
+- `expectedSynchronizerId`: The synchronizer that the contracts are expected to be active on
+- `downloadPayload`: If true, the payload of the contracts is also downloaded
+- `timeout`: Time limit for the grpc call to complete
 
 **Arguments**
 
@@ -783,7 +789,12 @@ Returns the contract states (created, assigned, unassigned, archived, unknown) o
 
 List the counter-participants of a participant and the ACS commitments received from them together withthe commitment state.
 
-Optional filtering through the arguments: synchronizerTimeRanges: Lists commitments received on the given synchronizers whose period overlaps with any of the given time ranges per synchronizer. If the list is empty, considers all synchronizers the participant is connected to. For synchronizers with an empty time range, considers the latest period the participant knows of for that synchronizer. Synchronizers can appear multiple times in the list with various time ranges, in which case we consider the union of the time ranges. counterParticipants: Lists commitments received only from the given counter-participants. If a counter-participant is not a counter-participant on some synchronizer, no commitments appear in the reply from that counter-participant on that synchronizer. commitmentState: Lists commitments that are in one of the given states. By default considers all states: - MATCH: the remote commitment matches the local commitment - MISMATCH: the remote commitment does not match the local commitment - BUFFERED: the remote commitment is buffered because the corresponding local commitment has not been computed yet - OUTSTANDING: we expect a remote commitment that has not yet been received verboseMode: If false, the reply does not contain the commitment bytes. If true, the reply contains: - In case of a mismatch, the reply contains both the received and the locally computed commitment that do not match. - In case of outstanding, the reply does not contain any commitment. - In all other cases (match and buffered), the reply contains the received commitment.
+Optional filtering through the arguments: synchronizerTimeRanges: Lists commitments received on the given synchronizers whose period overlaps with any of the given time ranges per synchronizer. If the list is empty, considers all synchronizers the participant is connected to. For synchronizers with an empty time range, considers the latest period the participant knows of for that synchronizer. Synchronizers can appear multiple times in the list with various time ranges, in which case we consider the union of the time ranges. counterParticipants: Lists commitments received only from the given counter-participants. If a counter-participant is not a counter-participant on some synchronizer, no commitments appear in the reply from that counter-participant on that synchronizer. commitmentState: Lists commitments that are in one of the given states. By default considers all states:
+
+- `MATCH`: the remote commitment matches the local commitment
+- `MISMATCH`: the remote commitment does not match the local commitment
+- `BUFFERED`: the remote commitment is buffered because the corresponding local commitment has not been computed yet
+- `OUTSTANDING`: we expect a remote commitment that has not yet been received verboseMode: If false, the reply does not contain the commitment bytes. If true, the reply contains: - In case of a mismatch, the reply contains both the received and the locally computed commitment that do not match. - In case of outstanding, the reply does not contain any commitment. - In all other cases (match and buffered), the reply contains the received commitment.
 
 **Arguments**
 
@@ -801,7 +812,11 @@ Optional filtering through the arguments: synchronizerTimeRanges: Lists commitme
 
 List the counter-participants of a participant and the ACS commitments that the participant computed and sent to them. Specifically, the command returns a map from synchronizer IDs to tuples of sent commitment data, specifying the period, target counter-participant, the commitment state, and additional data according to verbose mode.
 
-Optional filtering through the arguments: synchronizerTimeRanges: Lists commitments received on the given synchronizers whose period overlap with any of the given time ranges per synchronizer. If the list is empty, considers all synchronizers the participant is connected to. For synchronizers with an empty time range, considers the latest period the participant knows of for that synchronizer. Synchronizers can appear multiple times in the list with various time ranges, in which case we consider the union of the time ranges. counterParticipants: Lists commitments sent only to the given counter-participants. If a counter-participant is not a counter-participant on some synchronizer, no commitments appear in the reply for that counter-participant on that synchronizer. commitmentState: Lists sent commitments that are in one of the given states. By default considers all states: - MATCH: The local commitment matches the remote commitment - MISMATCH: The local commitment does not match the remote commitment - NOT_COMPARED: The local commitment has been computed and sent but no corresponding remote commitment has been received, which essentially indicates that a counter-participant is running behind verboseMode: If true, the reply contains the commitment bytes, as follows: - In case of a mismatch, the reply contains both the received and the locally computed commitment that do not match. - In all other cases (MATCH and NOT_COMPARED), the reply contains the sent commitment bytes.
+Optional filtering through the arguments: synchronizerTimeRanges: Lists commitments received on the given synchronizers whose period overlap with any of the given time ranges per synchronizer. If the list is empty, considers all synchronizers the participant is connected to. For synchronizers with an empty time range, considers the latest period the participant knows of for that synchronizer. Synchronizers can appear multiple times in the list with various time ranges, in which case we consider the union of the time ranges. counterParticipants: Lists commitments sent only to the given counter-participants. If a counter-participant is not a counter-participant on some synchronizer, no commitments appear in the reply for that counter-participant on that synchronizer. commitmentState: Lists sent commitments that are in one of the given states. By default considers all states:
+
+- `MATCH`: The local commitment matches the remote commitment
+- `MISMATCH`: The local commitment does not match the remote commitment
+- `NOT_COMPARED`: The local commitment has been computed and sent but no corresponding remote commitment has been received, which essentially indicates that a counter-participant is running behind verboseMode: If true, the reply contains the commitment bytes, as follows: - In case of a mismatch, the reply contains both the received and the locally computed commitment that do not match. - In all other cases (MATCH and NOT_COMPARED), the reply contains the sent commitment bytes.
 
 **Arguments**
 
@@ -819,7 +834,14 @@ Optional filtering through the arguments: synchronizerTimeRanges: Lists commitme
 
 Opens a commitment by retrieving the metadata of active contracts shared with the counter-participant.
 
-Retrieves the contract ids and the reassignment counters of the shared active contracts at the given timestamp and on the given synchronizer. Returns an error if the participant cannot retrieve the data for the given commitment anymore. The arguments are: - commitment: The commitment to be opened - physicalSynchronizerId: The synchronizer for which the commitment was computed - timestamp: The timestamp of the commitment. Needs to correspond to a commitment tick. - counterParticipant: The counter participant to whom we previously sent the commitment - outputFile: Optional file to which the result is written - timeout: Time limit for the grpc call to complete
+Retrieves the contract ids and the reassignment counters of the shared active contracts at the given timestamp and on the given synchronizer. Returns an error if the participant cannot retrieve the data for the given commitment anymore. The arguments are:
+
+- `commitment`: The commitment to be opened
+- `physicalSynchronizerId`: The synchronizer for which the commitment was computed
+- `timestamp`: The timestamp of the commitment. Needs to correspond to a commitment tick.
+- `counterParticipant`: The counter participant to whom we previously sent the commitment
+- `outputFile`: Optional file to which the result is written
+- `timeout`: Time limit for the grpc call to complete
 
 **Arguments**
 
@@ -839,7 +861,12 @@ Retrieves the contract ids and the reassignment counters of the shared active co
 
 Lookup ACS commitments received from other participants as part of the reconciliation protocol.
 
-The arguments are: - synchronizerAlias: the alias of the synchronizer - start: lowest time exclusive - end: highest time inclusive - counterParticipant: optionally filter by counter participant
+The arguments are:
+
+- `synchronizerAlias`: the alias of the synchronizer
+- `start`: lowest time exclusive
+- `end`: highest time inclusive
+- `counterParticipant`: optionally filter by counter participant
 
 **Arguments**
 
@@ -1646,7 +1673,11 @@ Collect Canton system information to help diagnose issues.
 
 Generates a comprehensive health report for the local Canton process and any connected remote nodes.
 
-The arguments are: - outputFile: Specifies the file path to save the report. If not set, a default path is used. - timeout: Sets a custom timeout for gathering data, useful for large reports from slow remote nodes. - chunkSize: Adjusts the data stream chunk size from remote nodes. Use this to prevent gRPC errors related to 'max inbound message size'
+The arguments are:
+
+- `outputFile`: Specifies the file path to save the report. If not set, a default path is used.
+- `timeout`: Sets a custom timeout for gathering data, useful for large reports from slow remote nodes.
+- `chunkSize`: Adjusts the data stream chunk size from remote nodes. Use this to prevent gRPC errors related to 'max inbound message size'
 
 **Arguments**
 
@@ -2043,7 +2074,11 @@ The optional name argument allows you to store an associated string for your con
 
 Generate new public/private key pair for signing and store it in the vault.
 
-The optional name argument allows you to store an associated string for your convenience. The usage specifies the intended use for the signing key that can be: - Namespace: for the root namespace key that defines a node's identity and signs topology requests; - SequencerAuthentication: for a signing key that authenticates members of the network towards a sequencer; - Protocol: for a signing key that deals with all the signing that happens as part of the protocol. The keySpec can be used to select a key specification, e.g., which elliptic curve to use, and the default spec is used if left unspecified.
+The optional name argument allows you to store an associated string for your convenience. The usage specifies the intended use for the signing key that can be:
+
+- `Namespace`: for the root namespace key that defines a node's identity and signs topology requests;
+- `SequencerAuthentication`: for a signing key that authenticates members of the network towards a sequencer;
+- `Protocol`: for a signing key that deals with all the signing that happens as part of the protocol. The keySpec can be used to select a key specification, e.g., which elliptic curve to use, and the default spec is used if left unspecified.
 
 **Arguments**
 
@@ -2114,7 +2149,11 @@ The id for the KMS encryption key. The optional name argument allows you to stor
 
 Register the specified KMS signing key in canton storing its public information in the vault.
 
-The id for the KMS signing key. The usage specifies the intended use for the signing key that can be: - Namespace: for the root namespace key that defines a node's identity and signs topology requests; - SequencerAuthentication: for a signing key that authenticates members of the network towards a sequencer; - Protocol: for a signing key that deals with all the signing that happens as part of the protocol. The optional name argument allows you to store an associated string for your convenience.
+The id for the KMS signing key. The usage specifies the intended use for the signing key that can be:
+
+- `Namespace`: for the root namespace key that defines a node's identity and signs topology requests;
+- `SequencerAuthentication`: for a signing key that authenticates members of the network towards a sequencer;
+- `Protocol`: for a signing key that deals with all the signing that happens as part of the protocol. The optional name argument allows you to store an associated string for your convenience.
 
 **Arguments**
 
@@ -3440,7 +3479,16 @@ List the set of active contracts of a given party.
 
 This command will return the current set of active contracts for the given party.
 
-Supported arguments: - party: for which party you want to load the acs - limit: limit (default set via canton.parameter.console) - verbose: whether the resulting events should contain detailed type information - filterTemplate: list of templates ids to filter for, empty sequence acts as a wildcard - filterInterfaces: list of interface ids to filter for, empty sequence does not influence the resulting filter - activeAtOffsetO: the offset at which the snapshot of the active contracts will be computed, it must be no greater than the current ledger end offset and must be greater than or equal to the last pruning offset. If no offset is specified then the current participant end will be used. - timeout: the maximum wait time for the complete acs to arrive - includeCreatedEventBlob: whether the result should contain the createdEventBlobs, it works only if the filterTemplate is non-empty
+Supported arguments:
+
+- `party`: for which party you want to load the acs
+- `limit`: limit (default set via canton.parameter.console)
+- `verbose`: whether the resulting events should contain detailed type information
+- `filterTemplate`: list of templates ids to filter for, empty sequence acts as a wildcard
+- `filterInterfaces`: list of interface ids to filter for, empty sequence does not influence the resulting filter
+- `activeAtOffsetO`: the offset at which the snapshot of the active contracts will be computed, it must be no greater than the current ledger end offset and must be greater than or equal to the last pruning offset. If no offset is specified then the current participant end will be used.
+- `timeout`: the maximum wait time for the complete acs to arrive
+- `includeCreatedEventBlob`: whether the result should contain the createdEventBlobs, it works only if the filterTemplate is non-empty
 
 **Arguments**
 
@@ -3507,7 +3555,16 @@ List the set of incomplete assigned events of a given party.
 
 This command will return the current set of incomplete assigned events for the given party.
 
-Supported arguments: - party: for which party you want to load the acs - limit: limit (default set via canton.parameter.console) - verbose: whether the resulting events should contain detailed type information - filterTemplate: list of templates ids to filter for, empty sequence acts as a wildcard - filterInterfaces: list of interface ids to filter for, empty sequence does not influence the resulting filter - activeAtOffsetO: the offset at which the snapshot of the events will be computed, it must be no greater than the current ledger end offset and must be greater than or equal to the last pruning offset. If no offset is specified then the current participant end will be used. - timeout: the maximum wait time for the complete acs to arrive - includeCreatedEventBlob: whether the result should contain the createdEventBlobs, it works only if the filterTemplate is non-empty
+Supported arguments:
+
+- `party`: for which party you want to load the acs
+- `limit`: limit (default set via canton.parameter.console)
+- `verbose`: whether the resulting events should contain detailed type information
+- `filterTemplate`: list of templates ids to filter for, empty sequence acts as a wildcard
+- `filterInterfaces`: list of interface ids to filter for, empty sequence does not influence the resulting filter
+- `activeAtOffsetO`: the offset at which the snapshot of the events will be computed, it must be no greater than the current ledger end offset and must be greater than or equal to the last pruning offset. If no offset is specified then the current participant end will be used.
+- `timeout`: the maximum wait time for the complete acs to arrive
+- `includeCreatedEventBlob`: whether the result should contain the createdEventBlobs, it works only if the filterTemplate is non-empty
 
 **Arguments**
 
@@ -3531,7 +3588,16 @@ List the set of incomplete unassigned events of a given party.
 
 This command will return the current set of incomplete unassigned events for the given party.
 
-Supported arguments: - party: for which party you want to load the acs - limit: limit (default set via canton.parameter.console) - verbose: whether the resulting events should contain detailed type information - filterTemplate: list of templates ids to filter for, empty sequence acts as a wildcard - filterInterfaces: list of interface ids to filter for, empty sequence does not influence the resulting filter - activeAtOffsetO: the offset at which the snapshot of the events will be computed, it must be no greater than the current ledger end offset and must be greater than or equal to the last pruning offset. If no offset is specified then the current participant end will be used. - timeout: the maximum wait time for the complete acs to arrive - includeCreatedEventBlob: whether the result should contain the createdEventBlobs, it works only if the filterTemplate is non-empty
+Supported arguments:
+
+- `party`: for which party you want to load the acs
+- `limit`: limit (default set via canton.parameter.console)
+- `verbose`: whether the resulting events should contain detailed type information
+- `filterTemplate`: list of templates ids to filter for, empty sequence acts as a wildcard
+- `filterInterfaces`: list of interface ids to filter for, empty sequence does not influence the resulting filter
+- `activeAtOffsetO`: the offset at which the snapshot of the events will be computed, it must be no greater than the current ledger end offset and must be greater than or equal to the last pruning offset. If no offset is specified then the current participant end will be used.
+- `timeout`: the maximum wait time for the complete acs to arrive
+- `includeCreatedEventBlob`: whether the result should contain the createdEventBlobs, it works only if the filterTemplate is non-empty
 
 **Arguments**
 
@@ -3555,7 +3621,17 @@ List the set of active contracts for all parties hosted on this participant.
 
 This command will return the current set of active contracts for all parties.
 
-Supported arguments: - limit: limit (default set via canton.parameter.console) - verbose: whether the resulting events should contain detailed type information - filterTemplate: list of templates ids to filter for, empty sequence acts as a wildcard - filterInterfaces: list of interface ids to filter for, empty sequence does not influence the resulting filter - activeAtOffsetO: the offset at which the snapshot of the active contracts will be computed, it must be no greater than the current ledger end offset and must be greater than or equal to the last pruning offset. If no offset is specified then the current participant end will be used. - timeout: the maximum wait time for the complete acs to arrive - identityProviderId: limit the response to parties governed by the given identity provider - includeCreatedEventBlob: whether the result should contain the createdEventBlobs, it works only if the filterTemplate is non-empty - resultFilter: custom filter of the results, applies before limit
+Supported arguments:
+
+- `limit`: limit (default set via canton.parameter.console)
+- `verbose`: whether the resulting events should contain detailed type information
+- `filterTemplate`: list of templates ids to filter for, empty sequence acts as a wildcard
+- `filterInterfaces`: list of interface ids to filter for, empty sequence does not influence the resulting filter
+- `activeAtOffsetO`: the offset at which the snapshot of the active contracts will be computed, it must be no greater than the current ledger end offset and must be greater than or equal to the last pruning offset. If no offset is specified then the current participant end will be used.
+- `timeout`: the maximum wait time for the complete acs to arrive
+- `identityProviderId`: limit the response to parties governed by the given identity provider
+- `includeCreatedEventBlob`: whether the result should contain the createdEventBlobs, it works only if the filterTemplate is non-empty
+- `resultFilter`: custom filter of the results, applies before limit
 
 **Arguments**
 
@@ -3580,7 +3656,16 @@ List the set of active contract entries of a given party.
 
 This command will return the current set of active contracts and incomplete reassignments for the given party.
 
-Supported arguments: - party: for which party you want to load the acs - limit: limit (default set via canton.parameter.console) - verbose: whether the resulting events should contain detailed type information - filterTemplate: list of templates ids to filter for, empty sequence acts as a wildcard - activeAtOffsetO: the offset at which the snapshot of the active contracts will be computed, it must be no greater than the current ledger end offset and must be greater than or equal to the last pruning offset. If no offset is specified then the current participant end will be used. - timeout: the maximum wait time for the complete acs to arrive - includeCreatedEventBlob: whether the result should contain the createdEventBlobs, it works only if the filterTemplate is non-empty - resultFilter: custom filter of the results, applies before limit
+Supported arguments:
+
+- `party`: for which party you want to load the acs
+- `limit`: limit (default set via canton.parameter.console)
+- `verbose`: whether the resulting events should contain detailed type information
+- `filterTemplate`: list of templates ids to filter for, empty sequence acts as a wildcard
+- `activeAtOffsetO`: the offset at which the snapshot of the active contracts will be computed, it must be no greater than the current ledger end offset and must be greater than or equal to the last pruning offset. If no offset is specified then the current participant end will be used.
+- `timeout`: the maximum wait time for the complete acs to arrive
+- `includeCreatedEventBlob`: whether the result should contain the createdEventBlobs, it works only if the filterTemplate is non-empty
+- `resultFilter`: custom filter of the results, applies before limit
 
 **Arguments**
 
@@ -4523,9 +4608,17 @@ This endpoint is idempotent and can be safely called multiple times. Polling is 
 
 Prerequisite: A prior party-to-participant mapping topology transaction must exist that activates the party on the participant with the onboarding flag set to true.
 
-Returns a tuple with the current status: - Cleared: (true, None) – The flag is successfully cleared. - Pending: (false, Some(timestamp)) – The flag is still set. The timestamp indicates the earliest safe time to clear the flag. You may wait until after this time to run the command again.
+Returns a tuple with the current status:
 
-The arguments are: - party: The party being onboarded, it must already be active on the participant. - synchronizerId: Restricts the party onboarding to the given synchronizer. - beginOffsetExclusive: Exclusive ledger offset used as a starting point to find the party's activation on the participant. - waitForActivationTimeout: The maximum duration the service will wait to find the topology transaction that activates the party.
+- `Cleared`: (true, None) – The flag is successfully cleared.
+- `Pending`: (false, Some(timestamp)) – The flag is still set. The timestamp indicates the earliest safe time to clear the flag. You may wait until after this time to run the command again.
+
+The arguments are:
+
+- `party`: The party being onboarded, it must already be active on the participant.
+- `synchronizerId`: Restricts the party onboarding to the given synchronizer.
+- `beginOffsetExclusive`: Exclusive ledger offset used as a starting point to find the party's activation on the participant.
+- `waitForActivationTimeout`: The maximum duration the service will wait to find the topology transaction that activates the party.
 
 **Arguments**
 
@@ -4585,7 +4678,15 @@ This command will fail if the party has not yet been activated on the target par
 
 Upon successful completion, the command writes a GZIP-compressed ACS snapshot file. This file should then be imported into the target participant's ACS using the `import_party_acs` command.
 
-The arguments are: - party: The party being replicated, it must already be active on the target participant. - synchronizerId: Restricts the export to the given synchronizer. - targetParticipantId: Unique identifier of the target participant where the party will be replicated. - beginOffsetExclusive: Exclusive ledger offset used as starting point fo find the party's activation on the target participant. - exportFilePath: The path denoting the file where the ACS snapshot will be stored. - waitForActivationTimeout: The maximum duration the service will wait to find the topology transaction that activates the party on the target participant. - timeout: A timeout for this operation to complete.
+The arguments are:
+
+- `party`: The party being replicated, it must already be active on the target participant.
+- `synchronizerId`: Restricts the export to the given synchronizer.
+- `targetParticipantId`: Unique identifier of the target participant where the party will be replicated.
+- `beginOffsetExclusive`: Exclusive ledger offset used as starting point fo find the party's activation on the target participant.
+- `exportFilePath`: The path denoting the file where the ACS snapshot will be stored.
+- `waitForActivationTimeout`: The maximum duration the service will wait to find the topology transaction that activates the party on the target participant.
+- `timeout`: A timeout for this operation to complete.
 
 **Arguments**
 
@@ -4627,7 +4728,11 @@ Possible failure causes: - The requested timestamp is too far in the past for wh
 
 Depending on the failure cause, this command can be tried to get a ledger offset. For example, if not all events have been processed fully and/or published to the Ledger API DB, a retry makes sense.
 
-The arguments are: - synchronizerId: Restricts the query to a particular synchronizer. - timestamp: A point in time. - force: Defaults to false. If true, returns the highest currently known ledger offset with a record time before or at the given timestamp.
+The arguments are:
+
+- `synchronizerId`: Restricts the query to a particular synchronizer.
+- `timestamp`: A point in time.
+- `force`: Defaults to false. If true, returns the highest currently known ledger offset with a record time before or at the given timestamp.
 
 **Arguments**
 
@@ -4656,7 +4761,16 @@ If `endOffsetInclusive` is not set (`None`), the search continues until `complet
 
 This command is useful for creating ACS snapshots with `export_acs`, which requires the party activation ledger offset.
 
-The arguments are: - partyId: The party to find activations for. - participantId: The participant hosting the new party. - synchronizerId: The synchronizer sequencing the activations. - validFrom: The activation's effective time (default: None). - beginOffsetExclusive: Starting ledger offset (default: 0). - endOffsetInclusive: Ending ledger offset (default: None = trailing search). - completeAfter: Number of transactions to find (default: Maximum = no limit). - timeout: Search timeout (default: 1 minute).
+The arguments are:
+
+- `partyId`: The party to find activations for.
+- `participantId`: The participant hosting the new party.
+- `synchronizerId`: The synchronizer sequencing the activations.
+- `validFrom`: The activation's effective time (default: None).
+- `beginOffsetExclusive`: Starting ledger offset (default: 0).
+- `endOffsetInclusive`: Ending ledger offset (default: None = trailing search).
+- `completeAfter`: Number of transactions to find (default: Maximum = no limit).
+- `timeout`: Search timeout (default: 1 minute).
 
 **Arguments**
 
@@ -4690,7 +4804,16 @@ If `endOffsetInclusive` is not set (`None`), the search continues until `complet
 
 This command is useful for finding active contracts at the ledger offset where a party has been off-boarded from a participant.
 
-The arguments are: - partyId: The party to find deactivations for. - participantId: The participant hosting the new party. - synchronizerId: The synchronizer sequencing the deactivations. - validFrom: The deactivation's effective time (default: None). - beginOffsetExclusive: Starting ledger offset (default: 0). - endOffsetInclusive: Ending ledger offset (default: None = trailing search). - completeAfter: Number of transactions to find (default: Maximum = no limit). - timeout: Search timeout (default: 1 minute).
+The arguments are:
+
+- `partyId`: The party to find deactivations for.
+- `participantId`: The participant hosting the new party.
+- `synchronizerId`: The synchronizer sequencing the deactivations.
+- `validFrom`: The deactivation's effective time (default: None).
+- `beginOffsetExclusive`: Starting ledger offset (default: 0).
+- `endOffsetInclusive`: Ending ledger offset (default: None = trailing search).
+- `completeAfter`: Number of transactions to find (default: Maximum = no limit).
+- `timeout`: Search timeout (default: 1 minute).
 
 **Arguments**
 
@@ -4762,7 +4885,12 @@ Import active contracts from a snapshot file to replicate a party.
 
 This command imports contracts from an Active Contract Set (ACS) snapshot file into the participant's ACS. It expects the given ACS snapshot file to be the result of a previous `export_party_acs` command invocation.
 
-The argument is: - importFilePath: The path denoting the file from where the ACS snapshot will be read. Defaults to "canton-acs-export.gz" when undefined. - workflowIdPrefix: Sets a custom prefix for the workflow ID to easily identify all transactions generated by this import. Defaults to "import-&lt;random_UUID&gt;" when unspecified. - contractImportMode: Governs contract authentication processing on import. Options include Validation (default), [Accept, Recomputation]. - representativePackageIdOverride: Defines override mappings for assigning representative package IDs to contracts upon ACS import. Defaults to NoOverride when undefined.
+The argument is:
+
+- `importFilePath`: The path denoting the file from where the ACS snapshot will be read. Defaults to "canton-acs-export.gz" when undefined.
+- `workflowIdPrefix`: Sets a custom prefix for the workflow ID to easily identify all transactions generated by this import. Defaults to "import-&lt;random_UUID&gt;" when unspecified.
+- `contractImportMode`: Governs contract authentication processing on import. Options include Validation (default), [Accept, Recomputation].
+- `representativePackageIdOverride`: Defines override mappings for assigning representative package IDs to contracts upon ACS import. Defaults to NoOverride when undefined.
 
 **Arguments**
 
@@ -4805,7 +4933,11 @@ Add specified contracts to a specific synchronizer on the participant.
 
 This is a last resort command to recover from data corruption, e.g. in scenarios in which participant contracts have somehow gotten out of sync and need to be manually created. The participant needs to be disconnected from the specified "synchronizer" at the time of the call, and as of now the synchronizer cannot have had any inflight requests. The effects of the command will take affect upon reconnecting to the sync synchronizer. As repair commands are powerful tools to recover from unforeseen data corruption, but dangerous under normal operation, use of this command requires (temporarily) enabling the "features.enable-repair-commands" configuration. In addition repair commands can run for an unbounded time depending on the number of contracts passed in. Be sure to not connect the participant to the synchronizer until the call returns.
 
-The arguments are: - synchronizerId: the id of the synchronizer to which to add the contract - protocolVersion: to protocol version used by the synchronizer - contracts: list of contracts to add with witness information
+The arguments are:
+
+- `synchronizerId`: the id of the synchronizer to which to add the contract
+- `protocolVersion`: to protocol version used by the synchronizer
+- `contracts`: list of contracts to add with witness information
 
 **Arguments**
 
@@ -4844,7 +4976,15 @@ Export active contracts for the given set of parties to a file.
 
 This command exports the current Active Contract Set (ACS) of a given set of parties to a GZIP compressed ACS snapshot file. Afterwards, the `import_acs` repair command imports it into a participant's ACS again.
 
-The arguments are: - parties: Identifying contracts having at least one stakeholder from the given set. - ledgerOffset: The offset at which the ACS snapshot is exported. - exportFilePath: The path denoting the file where the ACS snapshot will be stored. - excludedStakeholders: When defined, any contract that has one or more of these parties as a stakeholder will be omitted from the ACS snapshot. - synchronizerId: When defined, restricts the export to the given synchronizer. - contractSynchronizerRenames: Changes the associated synchronizer id of contracts from one synchronizer to another based on the mapping. - timeout: A timeout for this operation to complete.
+The arguments are:
+
+- `parties`: Identifying contracts having at least one stakeholder from the given set.
+- `ledgerOffset`: The offset at which the ACS snapshot is exported.
+- `exportFilePath`: The path denoting the file where the ACS snapshot will be stored.
+- `excludedStakeholders`: When defined, any contract that has one or more of these parties as a stakeholder will be omitted from the ACS snapshot.
+- `synchronizerId`: When defined, restricts the export to the given synchronizer.
+- `contractSynchronizerRenames`: Changes the associated synchronizer id of contracts from one synchronizer to another based on the mapping.
+- `timeout`: A timeout for this operation to complete.
 
 **Arguments**
 
@@ -4869,7 +5009,15 @@ Note that the 'export_acs_old' command execution may take a long time to complet
 
 DEPRECATION NOTICE: A future release removes this command, use `export_acs` instead.
 
-The arguments are: - parties: identifying contracts having at least one stakeholder from the given set. if empty, contracts of all parties will be exported. - partiesOffboarding: true if the parties will be offboarded (party migration) - outputFile: the output file name where to store the data. - filterSynchronizerId: restrict the export to a given synchronizer - timestamp: optionally a timestamp for which we should take the state (useful to reconcile states of a synchronizer) - contractSynchronizerRenames: As part of the export, allow to rename the associated synchronizer id of contracts from one synchronizer to another based on the mapping. - force: if is set to true, then the check that the timestamp is clean will not be done. For this option to yield a consistent snapshot, you need to wait at least confirmationResponseTimeout + mediatorReactionTimeout after the last submitted request.
+The arguments are:
+
+- `parties`: identifying contracts having at least one stakeholder from the given set. if empty, contracts of all parties will be exported.
+- `partiesOffboarding`: true if the parties will be offboarded (party migration)
+- `outputFile`: the output file name where to store the data.
+- `filterSynchronizerId`: restrict the export to a given synchronizer
+- `timestamp`: optionally a timestamp for which we should take the state (useful to reconcile states of a synchronizer)
+- `contractSynchronizerRenames`: As part of the export, allow to rename the associated synchronizer id of contracts from one synchronizer to another based on the mapping.
+- `force`: if is set to true, then the check that the timestamp is clean will not be done. For this option to yield a consistent snapshot, you need to wait at least confirmationResponseTimeout + mediatorReactionTimeout after the last submitted request.
 
 **Arguments**
 
@@ -4933,7 +5081,13 @@ Expert only: As validation or recomputation on contract IDs may lengthen the imp
 
 If the import process succeeds, the mapping from the old contract IDs to the new contract IDs will be returned. An empty map means that all contract IDs were valid, or have been accept as they are, and no contract ID was recomputed.
 
-The arguments are: - importFilePath: The path denoting the file from where the ACS snapshot will be read. Defaults to "canton-acs-export.gz" when undefined. - workflowIdPrefix: Sets a custom prefix for the workflow ID to easily identify all transactions generated by this import. Defaults to "import-&lt;random_UUID&gt;" when unspecified. - contractImportMode: Governs contract authentication processing on import. Options include Validation (default), [Accept, Recomputation]. - representativePackageIdOverride: Defines override mappings for assigning representative package IDs to contracts upon ACS import. - excludedStakeholders: When defined, any contract that has one or more of these parties as a stakeholder will be omitted from the import.
+The arguments are:
+
+- `importFilePath`: The path denoting the file from where the ACS snapshot will be read. Defaults to "canton-acs-export.gz" when undefined.
+- `workflowIdPrefix`: Sets a custom prefix for the workflow ID to easily identify all transactions generated by this import. Defaults to "import-&lt;random_UUID&gt;" when unspecified.
+- `contractImportMode`: Governs contract authentication processing on import. Options include Validation (default), [Accept, Recomputation].
+- `representativePackageIdOverride`: Defines override mappings for assigning representative package IDs to contracts upon ACS import.
+- `excludedStakeholders`: When defined, any contract that has one or more of these parties as a stakeholder will be omitted from the import.
 
 **Arguments**
 
@@ -6076,7 +6230,10 @@ Propose a new namespace delegation that is restricted to certain topology mappin
 
 A namespace delegation allows the owner of a namespace to delegate signing privileges for topology transactions on behalf of said namespace to additional signing keys.
 
-namespace: the namespace for which the target key can be used to sign topology transactions targetKey: the target key to be used for signing topology transactions on behalf of the namespace delegationRestriction: the types of topology mappings for which targetKey can sign. Can be one of the following values: - CanSignAllMappings: the target key can sign all topology mappings that are currently known or will be added in future releases. - CanSignAllButNamespaceDelegations: the target key can sign all topology mappings that are currently known or will be added in future releases, except for namespace delegations. - CanSignSpecificMappings(TopologyMapping.Code*): the target key can only sign the specified topology mappings.
+namespace: the namespace for which the target key can be used to sign topology transactions targetKey: the target key to be used for signing topology transactions on behalf of the namespace delegationRestriction: the types of topology mappings for which targetKey can sign. Can be one of the following values:
+
+- `CanSignAllMappings`: the target key can sign all topology mappings that are currently known or will be added in future releases.
+- `CanSignAllButNamespaceDelegations`: the target key can sign all topology mappings that are currently known or will be added in future releases, except for namespace delegations. - CanSignSpecificMappings(TopologyMapping.Code*): the target key can only sign the specified topology mappings.
 
 store: - "Authorized": the topology transaction will be stored in the node's authorized store and automatically propagated to connected synchronizers, if applicable. - `"<synchronizer id>"`: the topology transaction will be directly submitted to the specified synchronizer without storing it locally first. This also means it will _not_ be synchronized to other synchronizers automatically. mustFullyAuthorize: when set to true, the proposal's previously received signatures and the signature of this node must be sufficient to fully authorize the topology transaction. If this is not the case, the request fails. When set to false, the proposal retains the proposal status until enough signatures are accumulated to satisfy the mapping's authorization requirements. serial: the expected serial this topology transaction should have. Serials must be contiguous and start at 1. This transaction will be rejected if another fully authorized transaction with the same serial already exists, or if there is a gap between this serial and the most recently used serial. If None, the serial will be automatically selected by the node.
 
@@ -7334,7 +7491,11 @@ Collect Canton system information to help diagnose issues.
 
 Generates a comprehensive health report for the local Canton process and any connected remote nodes.
 
-The arguments are: - outputFile: Specifies the file path to save the report. If not set, a default path is used. - timeout: Sets a custom timeout for gathering data, useful for large reports from slow remote nodes. - chunkSize: Adjusts the data stream chunk size from remote nodes. Use this to prevent gRPC errors related to 'max inbound message size'
+The arguments are:
+
+- `outputFile`: Specifies the file path to save the report. If not set, a default path is used.
+- `timeout`: Sets a custom timeout for gathering data, useful for large reports from slow remote nodes.
+- `chunkSize`: Adjusts the data stream chunk size from remote nodes. Use this to prevent gRPC errors related to 'max inbound message size'
 
 **Arguments**
 
@@ -7699,7 +7860,11 @@ The optional name argument allows you to store an associated string for your con
 
 Generate new public/private key pair for signing and store it in the vault.
 
-The optional name argument allows you to store an associated string for your convenience. The usage specifies the intended use for the signing key that can be: - Namespace: for the root namespace key that defines a node's identity and signs topology requests; - SequencerAuthentication: for a signing key that authenticates members of the network towards a sequencer; - Protocol: for a signing key that deals with all the signing that happens as part of the protocol. The keySpec can be used to select a key specification, e.g., which elliptic curve to use, and the default spec is used if left unspecified.
+The optional name argument allows you to store an associated string for your convenience. The usage specifies the intended use for the signing key that can be:
+
+- `Namespace`: for the root namespace key that defines a node's identity and signs topology requests;
+- `SequencerAuthentication`: for a signing key that authenticates members of the network towards a sequencer;
+- `Protocol`: for a signing key that deals with all the signing that happens as part of the protocol. The keySpec can be used to select a key specification, e.g., which elliptic curve to use, and the default spec is used if left unspecified.
 
 **Arguments**
 
@@ -7770,7 +7935,11 @@ The id for the KMS encryption key. The optional name argument allows you to stor
 
 Register the specified KMS signing key in canton storing its public information in the vault.
 
-The id for the KMS signing key. The usage specifies the intended use for the signing key that can be: - Namespace: for the root namespace key that defines a node's identity and signs topology requests; - SequencerAuthentication: for a signing key that authenticates members of the network towards a sequencer; - Protocol: for a signing key that deals with all the signing that happens as part of the protocol. The optional name argument allows you to store an associated string for your convenience.
+The id for the KMS signing key. The usage specifies the intended use for the signing key that can be:
+
+- `Namespace`: for the root namespace key that defines a node's identity and signs topology requests;
+- `SequencerAuthentication`: for a signing key that authenticates members of the network towards a sequencer;
+- `Protocol`: for a signing key that deals with all the signing that happens as part of the protocol. The optional name argument allows you to store an associated string for your convenience.
 
 **Arguments**
 
@@ -8254,7 +8423,11 @@ Collect Canton system information to help diagnose issues.
 
 Generates a comprehensive health report for the local Canton process and any connected remote nodes.
 
-The arguments are: - outputFile: Specifies the file path to save the report. If not set, a default path is used. - timeout: Sets a custom timeout for gathering data, useful for large reports from slow remote nodes. - chunkSize: Adjusts the data stream chunk size from remote nodes. Use this to prevent gRPC errors related to 'max inbound message size'
+The arguments are:
+
+- `outputFile`: Specifies the file path to save the report. If not set, a default path is used.
+- `timeout`: Sets a custom timeout for gathering data, useful for large reports from slow remote nodes.
+- `chunkSize`: Adjusts the data stream chunk size from remote nodes. Use this to prevent gRPC errors related to 'max inbound message size'
 
 **Arguments**
 
@@ -8619,7 +8792,11 @@ The optional name argument allows you to store an associated string for your con
 
 Generate new public/private key pair for signing and store it in the vault.
 
-The optional name argument allows you to store an associated string for your convenience. The usage specifies the intended use for the signing key that can be: - Namespace: for the root namespace key that defines a node's identity and signs topology requests; - SequencerAuthentication: for a signing key that authenticates members of the network towards a sequencer; - Protocol: for a signing key that deals with all the signing that happens as part of the protocol. The keySpec can be used to select a key specification, e.g., which elliptic curve to use, and the default spec is used if left unspecified.
+The optional name argument allows you to store an associated string for your convenience. The usage specifies the intended use for the signing key that can be:
+
+- `Namespace`: for the root namespace key that defines a node's identity and signs topology requests;
+- `SequencerAuthentication`: for a signing key that authenticates members of the network towards a sequencer;
+- `Protocol`: for a signing key that deals with all the signing that happens as part of the protocol. The keySpec can be used to select a key specification, e.g., which elliptic curve to use, and the default spec is used if left unspecified.
 
 **Arguments**
 
@@ -8690,7 +8867,11 @@ The id for the KMS encryption key. The optional name argument allows you to stor
 
 Register the specified KMS signing key in canton storing its public information in the vault.
 
-The id for the KMS signing key. The usage specifies the intended use for the signing key that can be: - Namespace: for the root namespace key that defines a node's identity and signs topology requests; - SequencerAuthentication: for a signing key that authenticates members of the network towards a sequencer; - Protocol: for a signing key that deals with all the signing that happens as part of the protocol. The optional name argument allows you to store an associated string for your convenience.
+The id for the KMS signing key. The usage specifies the intended use for the signing key that can be:
+
+- `Namespace`: for the root namespace key that defines a node's identity and signs topology requests;
+- `SequencerAuthentication`: for a signing key that authenticates members of the network towards a sequencer;
+- `Protocol`: for a signing key that deals with all the signing that happens as part of the protocol. The optional name argument allows you to store an associated string for your convenience.
 
 **Arguments**
 
