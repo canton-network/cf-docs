@@ -50,6 +50,39 @@ def load_json(path: Path) -> dict[str, Any]:
     return payload
 
 
+def find_navigation_container(docs: dict[str, Any], *, label: str, docs_json_path: Path) -> dict[str, Any]:
+    navigation = docs.get("navigation")
+    if not isinstance(navigation, dict):
+        raise ValueError(f"docs.json missing navigation object: {docs_json_path}")
+
+    dropdowns = navigation.get("dropdowns")
+    if isinstance(dropdowns, list):
+        dropdown = next(
+            (item for item in dropdowns if isinstance(item, dict) and item.get("dropdown") == label),
+            None,
+        )
+        if dropdown is not None:
+            return dropdown
+
+    products = navigation.get("products")
+    if isinstance(products, list):
+        product = next(
+            (item for item in products if isinstance(item, dict) and item.get("product") == label),
+            None,
+        )
+        if product is not None:
+            return product
+
+    raise ValueError(f"Navigation entry not found in docs.json: {label}")
+
+
+def navigation_pages(container: dict[str, Any], *, label: str) -> list[Any]:
+    pages = container.get("pages")
+    if not isinstance(pages, list):
+        raise ValueError(f"Navigation entry does not expose a pages list: {label}")
+    return pages
+
+
 def _find_group(items: list[Any], label: str) -> dict[str, Any] | None:
     for item in items:
         if isinstance(item, dict) and item.get("group") == label:
@@ -276,24 +309,8 @@ def _absorb_known_item(item: Any, collected: dict[str, dict[str, Any]]) -> bool:
 
 def regroup_ledger_api_nav(*, docs_json_path: Path, dropdown_label: str) -> None:
     docs = load_json(docs_json_path)
-    navigation = docs.get("navigation")
-    if not isinstance(navigation, dict):
-        raise ValueError(f"docs.json missing navigation object: {docs_json_path}")
-
-    dropdowns = navigation.get("dropdowns")
-    if not isinstance(dropdowns, list):
-        raise ValueError(f"docs.json navigation.dropdowns must be a list: {docs_json_path}")
-
-    dropdown = next(
-        (item for item in dropdowns if isinstance(item, dict) and item.get("dropdown") == dropdown_label),
-        None,
-    )
-    if dropdown is None:
-        raise ValueError(f"Dropdown not found in docs.json: {dropdown_label}")
-
-    pages = dropdown.get("pages")
-    if not isinstance(pages, list):
-        raise ValueError(f"Dropdown does not expose a pages list: {dropdown_label}")
+    nav_container = find_navigation_container(docs, label=dropdown_label, docs_json_path=docs_json_path)
+    pages = navigation_pages(nav_container, label=dropdown_label)
 
     known_labels = {
         LEDGER_API_PARENT_GROUP,
@@ -340,5 +357,5 @@ def regroup_ledger_api_nav(*, docs_json_path: Path, dropdown_label: str) -> None
     else:
         remaining.insert(min(insert_at, len(remaining)), parent_group)
 
-    dropdown["pages"] = remaining
+    nav_container["pages"] = remaining
     docs_json_path.write_text(json.dumps(docs, indent=2) + "\n", encoding="utf-8")

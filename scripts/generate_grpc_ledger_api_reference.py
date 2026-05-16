@@ -477,7 +477,7 @@ def build_nav_group(
     ):
         package_ref = canton_protobuf_history.docs_json_page_ref(package_page, docs_json_path)
         refs.add(package_ref)
-        package_pages: list[Any] = [package_ref]
+        package_pages: list[Any] = []
         package_operation_dir = output_dir / package_page.stem
         service_groups: list[Any] = []
         if package_operation_dir.is_dir():
@@ -501,14 +501,31 @@ def build_nav_group(
                     }
                 )
         if service_groups:
-            package_pages.append({"group": "Services", "pages": service_groups})
+            package_pages.extend(service_groups)
+        package_pages.append(package_ref)
         package_groups.append({"group": mdx_title(package_page), "pages": package_pages})
 
     pages: list[Any] = []
-    if package_groups:
-        pages.append({"group": "Packages", "pages": package_groups})
+    pages.extend(package_groups)
     pages.append(details_ref)
     return {"group": GROUP_LABEL, "pages": pages}, refs
+
+
+def retitle_package_detail_pages(*, output_dir: Path, page_paths: list[Path]) -> None:
+    for package_page in sorted(
+        (path for path in page_paths if path.parent == output_dir),
+        key=lambda path: path.name,
+    ):
+        if package_page.name == "details.mdx":
+            continue
+        title = mdx_title(package_page)
+        replace_text(
+            package_page,
+            [
+                (f'title: "{title}"', f'title: "{DETAILS_LABEL}"'),
+                (f"<h1 class=\"x2mdx-ref-title\">{html_text(title)}</h1>", f"<h1 class=\"x2mdx-ref-title\">{DETAILS_LABEL}</h1>"),
+            ],
+        )
 
 
 def insert_group(items: list[Any], *, group: dict[str, Any], after_group: str | None) -> None:
@@ -518,6 +535,22 @@ def insert_group(items: list[Any], *, group: dict[str, Any], after_group: str | 
                 items.insert(index + 1, group)
                 return
     items.append(group)
+
+
+def ledger_api_target_pages(items: list[Any], *, parent_groups: list[str]) -> list[Any]:
+    if parent_groups:
+        return canton_protobuf_history.ensure_group_path(items, parent_groups)
+    ledger_group = next(
+        (item for item in items if isinstance(item, dict) and item.get("group") == reference_nav.LEDGER_API_PARENT_GROUP),
+        None,
+    )
+    if ledger_group is None:
+        return items
+    pages = ledger_group.get("pages")
+    if not isinstance(pages, list):
+        pages = []
+        ledger_group["pages"] = pages
+    return pages
 
 
 def update_docs_navigation(
@@ -530,30 +563,24 @@ def update_docs_navigation(
     page_paths: list[Path],
 ) -> None:
     docs = load_json(docs_json_path)
-    navigation = docs.get("navigation")
-    if not isinstance(navigation, dict):
-        raise ValueError(f"docs.json navigation must be an object: {docs_json_path}")
-    dropdowns = navigation.get("dropdowns")
-    if not isinstance(dropdowns, list):
-        raise ValueError(f"docs.json navigation.dropdowns must be a list: {docs_json_path}")
-    dropdown = next((item for item in dropdowns if isinstance(item, dict) and item.get("dropdown") == dropdown_label), None)
-    if dropdown is None:
-        raise ValueError(f"Dropdown not found in docs.json: {dropdown_label}")
-    pages = dropdown.get("pages")
-    if not isinstance(pages, list):
-        raise ValueError(f"Dropdown does not expose a pages list: {dropdown_label}")
+    nav_container = reference_nav.find_navigation_container(
+        docs,
+        label=dropdown_label,
+        docs_json_path=docs_json_path,
+    )
+    pages = reference_nav.navigation_pages(nav_container, label=dropdown_label)
 
     nav_group, generated_refs = build_nav_group(
         docs_json_path=docs_json_path,
         details_path=details_path,
         page_paths=page_paths,
     )
-    dropdown["pages"] = canton_protobuf_history.prune_nav_items(
-        pages,
+    target_pages = ledger_api_target_pages(pages, parent_groups=parent_groups)
+    target_pages[:] = canton_protobuf_history.prune_nav_items(
+        target_pages,
         page_refs=generated_refs,
         group_labels={GROUP_LABEL, LEGACY_GROUP_LABEL},
     )
-    target_pages = canton_protobuf_history.ensure_group_path(dropdown["pages"], parent_groups)
     insert_group(target_pages, group=nav_group, after_group=insert_after_group)
     docs_json_path.write_text(json.dumps(docs, indent=2) + "\n", encoding="utf-8")
     print(f"Updated docs navigation: {docs_json_path}")
@@ -698,6 +725,7 @@ def main() -> int:
         docs_json_path=Path(args.docs_json).resolve(),
         dropdown_label=args.nav_dropdown,
     )
+    retitle_package_detail_pages(output_dir=output_dir, page_paths=page_paths)
     print(f"Wrote {len(written_paths)} generated pages under {output_dir}")
     return 0
 
