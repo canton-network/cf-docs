@@ -27,9 +27,45 @@ import ExternalDpmMainDpmRstCodeDocsSrcPublicDpmComponentsShell42 from "/snippet
 
 `dpm` is the command-line interface for Canton development. It manages SDK installation, project scaffolding, compilation, testing, code generation, and local development environments. Most Canton development workflows start with a `dpm` command.
 
+## Pre-requisites
+
+Dpm runs on Windows, macOS and Linux.  For full functionality, you must have installed:
+
+1) [VS Code download](https://code.visualstudio.com/download)
+2) JDK 17 or greater, installed and part of your `JAVA_HOME`.  If you do not already have a JDK installed, try OpenJDK or [Eclipse Adoptium](https://adoptium.net/).
+
 ## Installation
 
-Install `dpm` following the instructions in the [Canton 3.x documentation](https://docs.digitalasset.com). On most systems, this involves downloading a single binary and adding it to your `PATH`.
+Install `dpm` usually involves downloading a single binary and adding it to your `PATH`.
+
+When installing `dpm`, you can set the `DPM_HOME` environment variable to change the location where the SDK and any future updates are installed. The default is:
+
+- `${HOME}/.dpm/` on Mac and Linux
+- `%APPDATA%/.dpm/` on Windows
+
+
+To install the latest version:
+
+### Mac/Linux Installation
+
+```shell
+curl https://get.digitalasset.com/install/install.sh | sh
+```
+
+### Windows Installation
+
+Download and run the [windows installer](https://get.digitalasset.com/install/latest-windows.html), which will install the dpm sdk and set up the PATH variable for you.
+
+### Manual Installation
+
+If you prefer a more manual installation process, see [Manual Installation Instructions](#manual-installation-instructions).
+
+### Installing dpm without an SDK
+
+You can download the `dpm` binary which doesn't have any SDK bundled with it from the [releases page](https://github.com/digital-asset/dpm/releases).
+You can then run `dpm install` or `dpm install package` described in the [next section](#project-management).
+
+### Verifying the Installation
 
 Once installed, verify the installation:
 
@@ -40,6 +76,71 @@ Once installed, verify the installation:
 ### Project Management
 
 **`dpm init`** -- Initialize a new Daml project in the current directory. Creates a `daml.yaml` configuration file and a basic project structure.
+
+You can manage SDK versions manually by using `dpm install`.  To install the SDK version specified in the daml.yaml, run:
+
+```shell
+dpm install package
+```
+
+To install a specific SDK version, for example version `3.4.11`, run:
+
+```shell
+dpm install 3.4.11
+```
+
+To see the active SDK version:
+
+```shell
+dpm version --active
+```
+
+```shell
+3.4.11
+```
+
+To list the installed SDK versions, including the currently active one (marked with `*`):
+
+```shell
+dpm version
+```
+
+```shell
+  3.4.10
+* 3.4.11
+```
+
+To additionally list all the SDK versions that can be installed, as well as the installed versions:
+
+```shell
+dpm version --all
+```
+
+To get the list in a machine readable format:
+
+```shell
+dpm version --all -o json
+```
+
+```json
+ [
+    {
+        "version": "3.4.9",
+        "remote": true
+    },
+    {
+        "version": "3.4.10",
+        "installed": true,
+        "remote": true
+    },
+    {
+        "version": "3.4.11",
+        "installed": true,
+        "remote": true,
+        "active": true
+    }
+]
+```
 
 <DamlDocsSdksToolsCliToolsDpmL24 />
 
@@ -95,11 +196,69 @@ Use `--help` on any command to see available options:
 
 <DamlDocsSdksToolsCliToolsDpmL98 />
 
+## Summary of `dpm` Commands
+
+- `dpm build`:                    Build a Daml package or project
+
+  This builds the Daml project according to the project config file `daml.yaml` (see [configuration files](#configuration-files)).
+
+  In particular, it will use the dpm SDK (specified in the `sdk-version` field in `daml.yaml`) to resolve dependencies and compile the Daml project.
+
+  Given a `daml.yaml` and `.daml` source files, the `dpm build` command will generate a .dar for this package. See [How to build Daml Archives](/appdev/reference/daml-language-reference#building-daml-archives) for how to define a package and build it to a DAR.
+
+- `dpm test`:                     Test the current Daml project or the given files by running all test declarations.
+
+  This runs all daml scripts defined within a package.
+
+  Daml Scripts are top level values of type `Script ()`, from the `daml-script` package. This package mimics a Canton Ledger Client for quick iterative testing,
+  and direct support within [Daml Studio](/sdks-tools/development-tools/daml-studio). The command runs these scripts against a reference Ledger called the IDE Ledger, which implements the core functionality of the Canton Ledger without the complexity of multi-participant setups.
+
+  It is most useful for verifying the fundamentals of your ledger model, before moving onto integration testing via the Ledger API directly, or the Daml Codegen.  `dpm test` also provides code coverage information for templates and choices used.
+
+- `dpm clean`:                    Clean a Daml package or project
+
+  This removes any Daml artifact files created in your package during a daml build, including DARs.
+
+- `dpm codegen-alpha-java`:       codegen (alpha) for java
+- `dpm codegen-alpha-scala`:      codegen (alpha) for scala
+- `dpm codegen-alpha-typescript`: codegen (alpha) for typescript
+- `dpm codegen-java`:             Daml to Java compiler
+- `dpm codegen-js`:               Daml to JavaScript compiler
+- `dpm canton-console`:           Canton console client
+- `dpm daml-shell`:               daml-shell client for PQS
+- `dpm damlc`:                    Compiler and IDE backend for the Daml programming language
+- `dpm docs`:                     Generate documentation for a daml package from its documentation comments
+- `dpm init`:                     Initialize a `daml.yaml` project configuration file in the current directory
+- `dpm install`:                  Install new SDK versions manually
+- `dpm install package`:          Install the SDK(s) or opt-in components used by current project
+- `dpm inspect-dar`:              Inspect a DAR archive
+- `dpm new`:                      Create a new Daml package
+- `dpm pqs`:                      participant query store
+- `dpm sandbox`:                  Run full Canton installation in a single process
+- `dpm script`:                   Daml Script Binary
+- `dpm studio`:                   Launch Daml Studio
+- `dpm upgrade-check`:            Check upgrade validity between package versions
+
+{/* You can disable the HTTP JSON API by passing `--json-api-port none` to `daml start`. */}
+  To specify additional options for sandbox/navigator/the HTTP JSON API you can use
+  `--sandbox-option=opt`, `--navigator-option=opt` and `--json-api-option=opt`.
+
+- `dpm validate-dar`              Validate a DAR archive
+
+  Note that you need to update your [project config file](#project-management) to use the new version.
+
+
 ## Configuration Files
 
 ### daml.yaml
 
-Every Daml project has a `daml.yaml` file at its root. It specifies the SDK version, project metadata, source directory, and dependencies.
+Every Daml project has a `daml.yaml` file at its root. If a `daml.yaml` file doesn't exist in your project, you can create one with:
+
+```shell
+dpm init
+```
+
+It specifies the SDK version, project metadata, source directory, and dependencies.
 
 <DamlDocsSdksToolsCliToolsDpmL111 />
 
@@ -122,6 +281,146 @@ Running `dpm build --all` from the root builds all listed packages in dependency
 ### dpm-config.yaml
 
 The `dpm-config.yaml` file stores global `dpm` configuration such as SDK installation paths and registry settings. It is typically located in your home directory and rarely needs manual editing.
+
+### `dpm` Global configuration (`dpm-config.yaml`)
+
+Global configuration is stored at `${DPM_HOME}/dpm-config.yaml` and is optional. It can be used for purposes such as:
+
+- **Registry URL** — Override the default OCI registry for SDK components.
+- **Authentication** — Point to registry credentials.
+- **Insecure registry** — Allow HTTP connections to a registry.
+
+### Variable interpolation
+
+Both `daml.yaml` and `dpm-config.yaml` support variable interpolation, which lets you avoid hardcoded values (such as registry URLs or credentials paths) and reference environment variables or other dynamic values.
+
+## `daml` assistant to `dpm` migration steps
+
+This section provides a step-by-step guide for projects originally built with the Daml assistant.
+
+## Migration steps
+
+1. **Install Dpm**
+
+   Follow the [installation instructions](#installation) above.
+
+2. **Verify Dpm is in your PATH**
+
+```shell
+dpm version
+```
+
+3. **Remove** `~/.daml/bin` **from your PATH**
+
+   Edit your shell configuration file (e.g., `~/.bashrc`, `~/.zshrc`, `~/.profile`) and remove any line that adds `~/.daml/bin` to your `PATH`
+
+4. **Remove the Daml assistant**
+
+```shell
+rm -rf ~/.daml
+```
+
+5. **Create a project configuration if needed**
+
+   If a `daml.yaml` file doesn't already exist in your project, generate one:
+
+```shell
+dpm init
+```
+
+6. **Replace** `daml` **commands with** `dpm`
+
+   Most commands map directly. See the [command migration table](/sdks-tools/cli-tools/dpm#command-migration-table) below.
+
+   Six `daml` commands have been removed and replaced with Declarative API, Canton Console, JSON API, and/or gRPC API calls. See [removed command replacements](/sdks-tools/cli-tools/dpm#removed-command-replacements) for full details.
+
+7. **Review project configuration**
+
+   Review your `daml.yaml` to ensure it is compatible with dpm. Audit parent directories for stale `daml.yaml` files. Delete orphan or invalid files.
+
+8. **Review global configuration** (optional)
+
+   Review or create `${DPM_HOME}/dpm-config.yaml` if you need to customize registry, authentication, or other global settings.
+
+9. **Set up variable interpolation** (optional)
+
+   Use [variable interpolation](/sdks-tools/cli-tools/dpm#variable-interpolation) in your configuration files to avoid hardcoded values.
+
+10. **Update CI/CD pipelines** (if applicable)
+
+    Update any CI/CD pipeline scripts that reference `daml` commands to use the corresponding `dpm` commands instead.
+
+## Command migration table
+
+| daml command | dpm command | purpose |
+| --- | --- | --- |
+| daml new | dpm new | Create a new Daml project |
+| daml build | dpm build | Compile the Daml project |
+| daml test | dpm test | Run tests for the Daml project |
+| daml install | dpm install | Install Daml SDK components |
+| daml codegen java | dpm codegen-java | Java code generation |
+| daml codegen js | dpm codegen-js | TypeScript code generation |
+| daml damlc | dpm damlc | Invoke the daml compiler |
+| daml studio | dpm studio | Open project in Visual Studio |
+| daml sandbox | dpm sandbox | Launch a Daml Sandbox |
+| `daml ledger allocate-parties`_ | Use Declarative API – OR – JSON / gRPC API | Allocate parties on a ledger |
+| `daml ledger list-parties`_ | JSON / gRPC API | list parties on a ledger |
+| `daml ledger upload-dar`_ | Use Declarative API – OR – JSON / gRPC API | Upload (and vet) dars on a ledger |
+| `daml ledger fetch-dar`_ | gRPC API | Fetch a Dar from a ledger. |
+| `daml packages`_ | JSON / gRPC API | Package a Daml project |
+| `daml start`_ | dpm sandbox dpm build Use Declarative API – OR – JSON / gRPC to upload/allocate | Start a local Daml Ledger |
+
+## Removed command replacements
+
+The following `daml` commands have no direct `dpm` equivalent. Use the Declarative API, Canton Console, JSON API, or gRPC API instead.
+
+### `daml ledger allocate-parties`
+
+| Method | Details |
+| --- | --- |
+| Declarative API | `canton.parameters.enable-alpha-state-via-config = yes` with `canton.participants.sandbox.alpha-dynamic { parties = [{ party = "Alice", synchronizers = ["mysync"] }, { party = "Bob" }] }` |
+| Canton Console | `ledger_api.parties.allocate(...)` |
+| JSON API | `POST /v2/parties/` |
+| gRPC | `PartyManagementService.AllocateParty` |
+
+### `daml ledger list-parties`
+
+| Method | Details |
+| --- | --- |
+| Canton Console | `ledger_api.parties.list()` |
+| JSON API | `GET /v2/parties` or `GET /v2/parties/{party}` |
+| gRPC | `PartyManagementService.ListKnownParties` |
+
+### `daml ledger upload-dar`
+
+| Method | Details |
+| --- | --- |
+| Declarative API | `canton.parameters.enable-alpha-state-via-config = yes` with `canton.participants.sandbox.alpha-dynamic.dars = [{ location = "./my-asset.dar" }, { location = "https://path.to/repo/token.dar", request-headers = { AuthenticationToken : "mytoken" } }]` |
+| Canton Console | `ledger_api.packages.upload_dar(...)` |
+| JSON API | `POST /v2/dars/` |
+| gRPC | `PackageManagementService.UploadDarFile` |
+
+### `daml ledger fetch-dar`
+
+| Method | Details |
+| --- | --- |
+| JSON API | `GET /v2/packages/{package-id}` |
+| gRPC | `PackageService.GetPackage` |
+
+### `daml packages`
+
+| Method | Details |
+| --- | --- |
+| Canton Console | `ledger_api.packages.list()` |
+| JSON API | `GET /v2/packages` or `GET /v2/packages/{package-id}/status` |
+| gRPC | `PackageService.ListPackages` |
+
+### `daml start`
+
+Replace with `dpm sandbox` combined with `dpm build`. Use the Declarative API or JSON/gRPC API to upload DARs and allocate parties as needed.
+
+See `dpm sandbox` for details on running a local Canton installation.
+
 
 ## Publishing Components
 
@@ -164,6 +463,7 @@ You can also view the published versions and tags of a component:
 A common development cycle with `dpm`:
 
 <DamlDocsSdksToolsCliToolsDpmL152 />
+
 
 ## Related Pages
 
@@ -355,7 +655,7 @@ canton.participants.sandbox.ledger-api.auth-services = [{
 }]
 ```
 
-The settings under `auth-services` are described in detail in [API configuration documentation](/global-synchronizer/reference/security-configuration#jwt-authorization)
+The settings under `auth-services` are described in detail in [Authorization documentation](/appdev/deep-dives/authorization#Authorization)
 
 #### Generate JSON web tokens (JWT)
 
@@ -494,5 +794,72 @@ To fix this, you can:
 - Install the SDK as instructed to by the error, or
 - Change the SDK version in the project's `daml.yaml` file, or
 - Change directories to be outside of the project, where the default Daml version that is already installed on your system will be used.
+
+{/* COPIED_END */}
+
+{/* COPIED_START source="docs-website:docs/replicated/dpm/3.5/manual-install.rst" hash="a0b738c0" */}
+
+
+# Manual Installation Instructions
+
+## Manual Mac/Linux Installation
+
+If you cannot / wish not to use the shell script to install for Linux or OSX, you can alternatively install dpm manually by running this set of commands in your terminal:
+
+The latest stable release version can be found by hitting the following URL:
+
+```shell
+VERSION="$(curl -sS "https://get.digitalasset.com/install/latest")"
+```
+
+And you can then use this to retrieve the tarball of the full installation, extract, and install, as outlined in the full instructions below.
+
+{/* literalinclude-slice: manual-install.sh (invalid :lines: range "4-") */}
+
+## Manual Windows Installation
+
+Download and unpack the [windows dpm-sdk archive (.zip)](https://get.digitalasset.com/install/latest-windows-archive.html), then:
+
+```powershell
+# Extract the downloaded zip ($ZIP_PATH) to temp directory ($EXTRACTED)
+# Avoid using the system's temp directory as the user may not have rights to it
+New-Item -ItemType Directory -Path $EXTRACTED | Out-Null
+Expand-Archive -Path $ZIP_PATH -DestinationPath $EXTRACTED
+
+# Optionally, override the TMP and DPM_HOME environment variable to point to directories other than the default,
+# as the user might not have rights to the default directories.
+# (You might also want to persist these variables as DPM uses them on every invocation)
+$env:TMP = "<user-owned temporary directory>"
+$env:DPM_HOME = "<user-owned directory>"
+
+& "$EXTRACTED\windows-amd64\bin\dpm.exe" bootstrap $EXTRACTED\windows-amd64
+```
+
+## Unstable Version Manual Installation
+
+Preview / unstable versions are also available for experimentation, though it is always recommended to use the stable versions listed above instead.
+
+### Unstable Mac / Linux
+
+Follow the Mac/Linux installation instructions to install an unstable version, but note the differences in VERSION and TARBALL_URL.
+
+The latest unstable release version can be found by hitting the following URL:
+
+```shell
+VERSION="$(curl -sS "https://get.digitalasset.com/unstable/install/latest")"
+```
+
+The unstable tarball can be retrieved from the following URL:
+
+```shell
+# determine location of tarball to download
+TARBALL_URL="https://get.digitalasset.com/unstable/install/dpm-sdk/${TARBALL}"
+```
+
+### Unstable Windows
+
+Download and unpack the latest [windows unstable dpm-sdk archive (.zip)](https://get.digitalasset.com/unstable/install/latest-windows-archive.html),
+then follow [Windows Installation](#manual-windows-installation) instructions.
+
 
 {/* COPIED_END */}
