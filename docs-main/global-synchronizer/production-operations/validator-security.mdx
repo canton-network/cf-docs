@@ -3,6 +3,9 @@ title: "Validator Security"
 description: "Security hardening and KMS configuration for validator nodes"
 ---
 
+import ExternalSpliceMainSpliceLiteralFullAppsAppSrcPackExamplesSvHelmKmsParticipantGcpValues from "/snippets/external/splice/main/splice-literal-full-apps-app-src-pack-examples-sv-helm-kms-participant-gcp-values.mdx";
+import ExternalSpliceMainSpliceLiteralFullAppsAppSrcPackExamplesSvHelmKmsParticipantAwsValues from "/snippets/external/splice/main/splice-literal-full-apps-app-src-pack-examples-sv-helm-kms-participant-aws-values.mdx";
+
 {/* COPIED_START source="splice:docs/src/validator_operator/validator_security.rst" hash="4360f1b1" */}
 
 <Warning title="Pre-reviewed Content - Do Not Modify">
@@ -50,37 +53,7 @@ Also recall that you need to deploy a **fresh** participant in order for KMS to 
 
 The mock configuration below for GCP KMS is included in `splice-node/examples/sv-helm/kms-participant-gcp-values.yaml`:
 
-```yaml
-# Participant using GCP KMS (mock values; please modify to match your setup)
-# See https://docs.daml.com/canton/usermanual/kms/kms_gcp_setup.html
-
-kms:
-  type: gcp
-  # Replace LOCATION_ID, PROJECT_ID, and KEY_RING_ID based on your GCP KMS setup
-  locationId: LOCATION_ID
-  projectId: PROJECT_ID
-  keyRingId: KEY_RING_ID
-  # All other Canton options are supported as well;
-  # camelCase keys here are automatically converted to kebab-case
-
-# Example for configuring authentication to the GCP KMS.
-# Adds an env var on the participant pod that points to the location of the Google
-# credentials file and mounts that file as a volume, reading its contents from a secret.
-# In order for this to work as-is, you need to create the appropriate k8s secret
-# and ensure that it holds the contents of a valid Google credentials file
-# (under the `googleCredentials` key).
-additionalEnvVars:
-  - name: GOOGLE_APPLICATION_CREDENTIALS
-    value: "/app/gcp-credentials.json"
-extraVolumeMounts:
-  - name: gcp-credentials
-    mountPath: "/app/gcp-credentials.json"
-    subPath: googleCredentials
-extraVolumes:
-  - name: gcp-credentials
-    secret:
-      secretName: gke-credentials
-```
+<ExternalSpliceMainSpliceLiteralFullAppsAppSrcPackExamplesSvHelmKmsParticipantGcpValues />
 
 Please refer to the [Canton documentation](https://docs.daml.com/canton/usermanual/kms/kms_gcp_setup.html) for a list of supported configuration options and their meaning, as well as for instructions on configuring authentication to the KMS. Note again that Splice participants support the External Key Storage mode of KMS usage, so that (per the [relevant Canton docs](https://docs.daml.com/canton/usermanual/kms/external_key_storage/external_key_storage_gcp.html)) the authentication credentials you supply must correspond to a GCP service account with the following IAM permissions:
 
@@ -96,33 +69,7 @@ For example, you can grant the `Cloud KMS Admin` and `Cloud KMS Crypto Operator`
 
 The mock configuration below for AWS KMS is included in `splice-node/examples/sv-helm/kms-participant-aws-values.yaml`:
 
-```yaml
-# Participant using AWS KMS (mock values; please modify to match your setup)
-# See https://docs.daml.com/canton/usermanual/kms/kms_aws_setup.html
-kms:
-  type: aws
-  # Replace REGION based on your AWS KMS setup
-  region: REGION
-  # All other Canton options are supported as well;
-  # camelCase keys here are automatically converted to kebab-case
-
-# Example for configuring authentication to the AWS KMS.
-# Adds env vars on the participant pod with credentials read from a k8s secret.
-# In order for this to work as-is, you need to create the appropriate k8s secret
-# and ensure that it holds valid credentials
-# (under the `accessKeyId` and `secretAccessKey` keys).
-additionalEnvVars:
-  - name: AWS_ACCESS_KEY_ID
-    valueFrom:
-      secretKeyRef:
-        name: aws-credentials
-        key: accessKeyId
-  - name: AWS_SECRET_ACCESS_KEY
-    valueFrom:
-      secretKeyRef:
-        name: aws-credentials
-        key: secretAccessKey
-```
+<ExternalSpliceMainSpliceLiteralFullAppsAppSrcPackExamplesSvHelmKmsParticipantAwsValues />
 
 Please refer to the [Canton documentation](https://docs.daml.com/canton/usermanual/kms/kms_aws_setup.html) for a list of supported configuration options and their meaning, as well as for instructions on configuring authentication to the KMS. Note again that Splice participants support the External Key Storage mode of KMS usage, so that (per the [relevant Canton docs](https://docs.daml.com/canton/usermanual/kms/external_key_storage/external_key_storage_aws.html)) the authentication credentials you supply must correspond to an entity with the following IAM permissions:
 
