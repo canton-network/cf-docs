@@ -352,6 +352,10 @@ def consolidate_docs_json() -> None:
         docs_json_path=DOCS_JSON_PATH,
         dropdown_label=API_REFERENCE_DROPDOWN,
     )
+    reference_nav.ensure_api_reference_top_level_details(
+        docs_json_path=DOCS_JSON_PATH,
+        dropdown_label=API_REFERENCE_DROPDOWN,
+    )
     final_docs = load_json(DOCS_JSON_PATH)
     assert_no_duplicate_top_group_aliases(final_docs)
     validate_splice_nav(docs_json_path=DOCS_JSON_PATH)

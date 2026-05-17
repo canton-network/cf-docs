@@ -58,7 +58,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--page-title",
-        default="@daml/types",
+        default="Details and history",
         help="Title to use for the generated page.",
     )
     parser.add_argument(

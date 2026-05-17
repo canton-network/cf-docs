@@ -41,6 +41,15 @@ BINDINGS_OVERVIEW_PAGE_REF = "reference/java-bindings"
 LEGACY_BINDINGS_OVERVIEW_PAGE_REF = "reference/ledger-api-jvm-bindings"
 LANGUAGE_GROUPS = {"Javadocs"}
 JAVADOC_PREFIX = "reference/java/"
+API_REFERENCE_TOP_LEVEL_DETAILS = {
+    LEDGER_API_PARENT_GROUP: "reference/ledger-api/details",
+    "Daml Standard Library": "appdev/reference/daml-standard-library/index",
+    "TypeScript": "reference/typescript",
+    "dApp API": "reference/dapp-api/details",
+    "Wallet Gateway": "reference/wallet-gateway-json-rpc/operations/details",
+    "Splice APIs": "reference/splice-apis/details",
+    ADMIN_API_PARENT_GROUP: "reference/admin-api/details",
+}
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -341,4 +350,38 @@ def regroup_ledger_api_nav(*, docs_json_path: Path, dropdown_label: str) -> None
         remaining.insert(min(insert_at, len(remaining)), parent_group)
 
     dropdown["pages"] = remaining
+    docs_json_path.write_text(json.dumps(docs, indent=2) + "\n", encoding="utf-8")
+
+
+def ensure_api_reference_top_level_details(*, docs_json_path: Path, dropdown_label: str) -> None:
+    docs = load_json(docs_json_path)
+    navigation = docs.get("navigation")
+    if not isinstance(navigation, dict):
+        raise ValueError(f"docs.json missing navigation object: {docs_json_path}")
+
+    dropdowns = navigation.get("dropdowns")
+    if not isinstance(dropdowns, list):
+        raise ValueError(f"docs.json navigation.dropdowns must be a list: {docs_json_path}")
+
+    dropdown = next(
+        (item for item in dropdowns if isinstance(item, dict) and item.get("dropdown") == dropdown_label),
+        None,
+    )
+    if dropdown is None:
+        raise ValueError(f"Dropdown not found in docs.json: {dropdown_label}")
+
+    pages = dropdown.get("pages")
+    if not isinstance(pages, list):
+        raise ValueError(f"Dropdown does not expose a pages list: {dropdown_label}")
+
+    for group_label, details_ref in API_REFERENCE_TOP_LEVEL_DETAILS.items():
+        group = _find_group(pages, group_label)
+        if group is None:
+            continue
+        group_pages = group.get("pages")
+        if not isinstance(group_pages, list):
+            continue
+        if details_ref not in group_pages:
+            group_pages.append(details_ref)
+
     docs_json_path.write_text(json.dumps(docs, indent=2) + "\n", encoding="utf-8")
