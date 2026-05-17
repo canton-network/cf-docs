@@ -1,4 +1,4 @@
-Copyright (c) 2025 Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved.
+Copyright (c) 2026 Canton Network. All rights reserved.
 SPDX-License-Identifier: Apache-2.0 AND CC-BY-4.0
 
 docs
@@ -278,3 +278,30 @@ By default this writes:
 - `docs-main/docs.json` only when one or more specs are enabled in `enabled_nav_specs`
 
 Enabled specs are added under the top-level `API Reference` dropdown as `Splice APIs`, with Mintlify-rendered OpenAPI entries grouped under `Scan APIs`, `Validator APIs`, and `Token Standard APIs`.
+
+
+## Provide Feedback on a Page
+
+Every page on docs.canton.network has two feedback buttons in the footer:
+- `Suggest edits`
+- `Raise issue`
+
+### Suggest edits:
+Use this to propose a direct change to the page, fix a typo, update a code sample, improve wording, etc.
+
+**How it works:**
+
+- Click “Suggest edits” in the footer of any page.
+- GitHub opens the source file for that exact page.
+- Fork the repo, make your edits, and open a Pull Request.
+- Canton docs team reviews and merges accepted changes if all checks out.
+
+### Raise Issue:
+Use this to report a problem or request new content without editing the source yourself.
+
+**How it works:**
+
+- Click “Raise Issue” in the footer of any page.
+- A GitHub Issue opens *Pre-filled* with the Path of the page you were on.
+- Describe in detail what's wrong or missing along with the source of information to verify and submit.
+- The team reviews it and responds.

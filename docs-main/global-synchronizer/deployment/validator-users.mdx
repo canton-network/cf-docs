@@ -3,17 +3,12 @@ title: "Validator Users and Wallets"
 description: "Manage users, parties, and wallets on a validator node"
 ---
 
+import ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorUsersBash48 from "/snippets/external/splice/main/splice-rst-code-docs-src-validator-operator-validator-users-bash-48.mdx";
+import ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorUsersBash66 from "/snippets/external/splice/main/splice-rst-code-docs-src-validator-operator-validator-users-bash-66.mdx";
+
 {/* COPIED_START source="splice:docs/src/validator_operator/validator_users.rst" hash="b6c1f50f" */}
 
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was copied from existing reviewed documentation.
-**Source:** `splice:docs/src/validator_operator/validator_users.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
-
-# Users, Parties and Wallets in the Splice Wallet
-
-Canton distinguishes between parties and users, as documented in detail in the [Canton docs](https://docs.daml.com/app-dev/parties-users.html). In essence, a party is an identity on-ledger, while a user represents an off-ledger entity that can be associated with one or more parties.
+Canton distinguishes between parties and users, as documented in detail in [Manage Daml parties](/appdev/deep-dives/manage-daml-parties). In essence, a party is an identity on-ledger, while a user represents an off-ledger entity that can be associated with one or more parties.
 
 By default, when a user logs in for the first time in the wallet, and presses the "Onboard yourself" button, the Validator allocates a fresh party, with a fresh Party ID, and associates that user with the newly allocated party. As part of validator initialization, a party is automatically created for the Validator Operator. The user provided during installation as the `validatorWalletUser` will be associated with this party as its primary party.
 
@@ -28,15 +23,11 @@ In order to associate a user with the party of the validator operator, the follo
 
 1.  Do not onboard the user through the UI, to avoid the validator allocating a new party for the user.
 2.  Create a new user in your OIDC provider, and obtain its user ID, e.g. `auth0\|123456789`. Save it in a USER environment variable: `export USER=auth0|123456789`.
-3.  Obtain validator operator credentials for interacting with the validator's API. One way of achieving this is by inspecting the network activity logs of the wallet when logged in as the operator, and copying from there the Bearer token used for API requests. Save it in a TOKEN environment variable: export TOKEN=
-4.  Obtain the PartyID of the validator operator. You can find that in the wallet UI when logged in as the operator, in the top right corner, next to the logout button. Save it in a PARTY_ID environment variable: export PARTY_ID=
+3.  Obtain validator operator credentials for interacting with the validator's API. One way of achieving this is by inspecting the network activity logs of the wallet when logged in as the operator, and copying from there the Bearer token used for API requests. Save it in a TOKEN environment variable: `export TOKEN=<content of the token you obtained>`
+4.  Obtain the PartyID of the validator operator. You can find that in the wallet UI when logged in as the operator, in the top right corner, next to the logout button. Save it in a PARTY_ID environment variable: `export PARTY_ID=<PartyID of the operator>`
 5.  Run the following command to associate the user with the party of the validator operator:
 
-```bash
-curl -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
---data-raw "{\"party_id\":\"$PARTY_ID\",\"name\":\"$USER\"}" \
-https://<URL of your wallet>/api/validator/v0/admin/users
-```
+<ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorUsersBash48 />
 
 6.  The user can now login to the wallet UI, and will be accessing the wallet of the validator operator. Note that the user should not be greeted with the "Onboard yourself" button, as the user is already onboarded through the API call above. If you do see the button, it means that something has gone wrong in the process above (do not click the button!).
 
@@ -46,21 +37,18 @@ Custom Party Hint: This mode allows providing a human-readable Party hint when c
 2.  Determine the desired, full PartyID `(Hint::Namespace)`, e.g., `alice::f3d917....`. Use the namespace of an existing party (like the validator operator's) for the namespace part. Save the full ID in a `PARTY_ID` environment variable: `export PARTY_ID=alice::f3d917...`.
 3.  Run the following command to create the new party and associate the user:
 
-```bash
-curl -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
---data-raw "{\"party_id\":\"$PARTY_ID\",\"name\":\"$USER\",\"createPartyIfMissing\":true}" \
-https://<URL of your wallet>/api/validator/v0/admin/users
-```
+<ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorUsersBash66 />
 
 ## Disable wallet and wallet automation
 
 To disable the wallet HTTP server and the wallet automation, update the `validator-values.yaml` file with `enableWallet: false`
 
 ```yaml
--- Code from: ../../../apps/app/src/pack/examples/sv-helm/validator-values.yaml
--- [Include actual code example here]
+# This will disable the wallet HTTP server and wallet automations when set to false
+enableWallet: true
 ```
 
 Since your wallet is disabled, your validator will not have funds to pay for traffic. You should therefore remove the validator top-up config to prevent its automation from trying to top up the traffic. See `helm_validator_topup` for more details.
+
 
 {/* COPIED_END */}
