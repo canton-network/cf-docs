@@ -25,12 +25,6 @@ import GrpcExerciseByKeyMySimpleTemplateFull from '/snippets/daml-docs/grpc_Exer
 
 {/* COPIED_START source="docs-website:docs/replicated/daml/3.4/sdk/explanations/ledger-api.rst" hash="096c6edb" */}
 
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was copied from existing reviewed documentation.
-**Source:** `docs/replicated/daml/3.4/sdk/explanations/ledger-api.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
-
 # Ledger API overview
 
 ## What is the Ledger API
@@ -77,157 +71,37 @@ For the most part the translation of types from Daml to Daml-LF should not be su
 
 {/* COPIED_START source="docs-website:docs/replicated/canton/3.4/sdk/reference/json-api/lf-value-specification.rst" hash="a3820c5d" */}
 
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was copied from existing reviewed documentation.
-**Source:** `docs/replicated/canton/3.4/sdk/reference/json-api/lf-value-specification.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
-
 > \<br /\>
 
 # Daml-LF JSON encoding
 
 Daml-LF values are represented as JSON values in the JSON Ledger API. This representation is used whenever the `JSON Ledger API` expects a `Daml` record or value, such as in the `createArguments` field of the `CreateCommand` component. The conversion from Daml values to JSON also occurs when a value is returned from the `JSON Ledger API`. For more information about `Daml` types, see `daml-ref-built-in-types`.
 
-<table>
-<caption>Daml LF JSON encoding</caption>
-<colgroup>
-<col style={{width: "20%"}} />
-<col style={{width: "20%"}} />
-<col style={{width: "60%"}} />
-</colgroup>
-<thead>
-<tr className="header">
-<th>Daml LF type</th>
-<th>JSON Type</th>
-<th>Example</th>
-</tr>
-</thead>
-<tbody>
-<tr className="odd">
-<td>`Int`</td>
-<td>`string` (number accepted as input)<a href="#fn1" className="footnote-ref" id="fnref1" role="doc-noteref"><sup>1</sup></a> range [-9223372036854775808, 9223372036854775807]</td>
-<td>1234567890</td>
-</tr>
-<tr className="even">
-<td>`Decimal`</td>
-<td>`string` (number accepted as input)<a href="#fn2" className="footnote-ref" id="fnref2" role="doc-noteref"><sup>2</sup></a> range: [–(10³⁸–1)÷10¹⁰,(10³⁸–1)÷10¹⁰] format: `-?[0-9]{1,28}(\.[0-9]{1,10})?`</td>
-<td>"1234.56"</td>
-</tr>
-<tr className="odd">
-<td>`Timestamp`</td>
-<td>`string` ISO 8601 timestamp(<code>yyyy-mm-ddThh:mm:ss.ssssssZ</code>)<a href="#fn3" className="footnote-ref" id="fnref3" role="doc-noteref"><sup>3</sup></a></td>
-<td>"2023-04-06T04:30:23.1234569Z"</td>
-</tr>
-<tr className="even">
-<td>`Date`</td>
-<td>`string` ISO 8601 date (<code>yyyy-mm-dd</code>)</td>
-<td>"2023-04-06"</td>
-</tr>
-<tr className="odd">
-<td>`Unit`</td>
-<td>`{}` empty JSON Object</td>
-<td>`{}`</td>
-</tr>
-<tr className="even">
-<td>`Text`</td>
-<td>`string`</td>
-<td>"my text value"</td>
-</tr>
-<tr className="odd">
-<td>`Bool`</td>
-<td>boolean</td>
-<td>false</td>
-</tr>
-<tr className="even">
-<td>`ContractId`</td>
-<td>`string`</td>
-<td>"1234:56:7890"</td>
-</tr>
-<tr className="odd">
-<td>`Party`</td>
-<td>`string`</td>
-<td>"Alice:1234567890"</td>
-</tr>
-<tr className="even">
-<td>`Record`</td>
-<td>JSON `object` `{"prop1":val1, ..., "propN":valV}`</td>
-<td>
+| Daml-LF type | JSON type | Example |
+| --- | --- | --- |
+| `Int` | `string` preferred; number accepted as input. Range: `[-9223372036854775808, 9223372036854775807]`. | `1234567890` |
+| `Decimal` | `string` preferred; number accepted as input. Range: `[-(10^38 - 1) / 10^10, (10^38 - 1) / 10^10]`. Format: `-?[0-9]{1,28}(\.[0-9]{1,10})?`. | `"1234.56"` |
+| `Timestamp` | `string` ISO 8601 timestamp. | `"2023-04-06T04:30:23.1234569Z"` |
+| `Date` | `string` ISO 8601 date. | `"2023-04-06"` |
+| `Unit` | Empty JSON object. | `{}` |
+| `Text` | `string` | `"my text value"` |
+| `Bool` | `boolean` | `false` |
+| `ContractId` | `string` | `"1234:56:7890"` |
+| `Party` | `string` | `"Alice:1234567890"` |
+| `Record` | JSON object with one property per record field. | `{"field1Label": "value of field1", "field2Label": "value of field2"}` |
+| `List` | JSON array. | `[1, 7, 3, 4, 5]` |
+| `TextMap` | JSON object keyed by text values. | `{"key1": "value1", "key2": "value2"}` |
+| `Variant` | JSON object with `tag` and `value` properties. | `{"tag": "InAccount", "value": {"number": "CH-1234567890", "bank": {}}}` |
+| `Optional` | JSON value when defined, or `null` when empty. | `null` |
+| `Enum` | `string` enum value name. | `"Red"` for Daml `data Color = Red | Green | Blue` |
 
-```text
-{
-    "field1Label":{ /*value of field1*/},
-    "field2Label": { /*value of field2*/},
-    /*...*/
-}
-```
+<Note>
+Strings are preferred for `Int` and `Decimal` values because many languages, most notably JavaScript, use IEEE doubles for JSON numbers and cannot precisely represent every Daml-LF value. For convenience, parsing accepts both JSON numbers and strings.
+</Note>
 
-</td>
-</tr>
-<tr className="odd">
-<td>`List`</td>
-<td>JSON array</td>
-<td><code>[1,7,3,4,5]</code></td>
-</tr>
-<tr className="even">
-<td>`TextMap`</td>
-<td>JSON `object` `{"key1":"val1", ..., "keyn":"valn"}`</td>
-<td>`{"key1":"value1", "key2":"value2"}`</td>
-</tr>
-<tr className="odd">
-<td>`Variant`</td>
-<td>
-<code>
-&#123;<br />
-&nbsp;&nbsp;"tag": "&lt;constructor_name&gt;",<br />
-&nbsp;&nbsp;"value": "&lt;variant_value&gt;"<br />
-&#125;
-</code>
-</td>
-<td>
-<code>
-data Location<br />
-&nbsp;&nbsp;= InHand<br />
-&nbsp;&nbsp;; InAccount Account<br />
-&nbsp;&nbsp;&nbsp;&nbsp;deriving (Eq, Show)
-</code>
-<br />
-<br />
-<code>
-&#123;<br />
-&nbsp;&nbsp;"tag": "InAccount",<br />
-&nbsp;&nbsp;"value": &#123;<br />
-&nbsp;&nbsp;&nbsp;&nbsp;"number": "CH-1234567890",<br />
-&nbsp;&nbsp;&nbsp;&nbsp;"bank": &#123; &#125;<br />
-&nbsp;&nbsp;&#125;<br />
-&#125;
-</code>
-</td>
-</tr>
-<tr className="even">
-<td>`Optional`</td>
-<td>JSON `value` when defined or `null` when empty</td>
-<td>null</td>
-</tr>
-<tr className="odd">
-<td>`Enum`</td>
-<td>`string` enum value name</td>
-<td><code>Red</code> (for Daml <code>data Color = Red | Green | Blue</code>)</td>
-</tr>
-</tbody>
-</table>
-<aside id="footnotes" className="footnotes footnotes-end-of-document" role="doc-endnotes">
-<hr />
-<ol>
-<li id="fn1"><p>Note that JSON numbers is enough to represent all Decimals. Strings are preferred because many languages (most notably JavaScript) use IEEE Doubles to express JSON numbers, and IEEE Doubles cannot express Daml-LF Decimals correctly. For convenience, during parsing we accept both JSON numbers and strings.<a href="#fnref1" className="footnote-back" role="doc-backlink">↩︎</a></p></li>
-<li id="fn2"><p>Note that JSON numbers is enough to represent all Decimals. Strings are preferred because many languages (most notably JavaScript) use IEEE Doubles to express JSON numbers, and IEEE Doubles cannot express Daml-LF Decimals correctly. For convenience, during parsing we accept both JSON numbers and strings.<a href="#fnref2" className="footnote-back" role="doc-backlink">↩︎</a></p></li>
-<li id="fn3"><p>Timestamp parsing is more flexible and uses the format <code>yyyy-mm-ddThh:mm:ss(\.s+)?Z</code>, i.e. it's OK to omit the microsecond part partially or entirely, or have more than 6 decimals. Sub-second data beyond microseconds will be dropped. The UTC timezone designator must be included. The rationale behind the inclusion of the timezone designator is minimizing the risk that users pass in local times.<a href="#fnref3" className="footnote-back" role="doc-backlink">↩︎</a></p></li>
-</ol>
-</aside>
-
-Daml LF JSON encoding
-
-**Footnotes**
+<Note>
+Timestamp parsing is flexible and accepts `yyyy-mm-ddThh:mm:ss(.s+)?Z`. Sub-second precision beyond microseconds is dropped. The UTC timezone designator must be included to reduce the risk of accidentally passing local times.
+</Note>
 
 
 {/* COPIED_END */}
@@ -236,12 +110,6 @@ Daml LF JSON encoding
 
 
 {/* COPIED_START source="docs-website:docs/replicated/daml/3.4/sdk/reference/damllf/daml-lf-translation.rst" hash="2de9f83c" */}
-
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was copied from existing reviewed documentation.
-**Source:** `docs/replicated/daml/3.4/sdk/reference/damllf/daml-lf-translation.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
 
 # How Daml Types are translated to Daml-LF
 
@@ -506,12 +374,6 @@ All names in Daml—of types, templates, choices, fields, and variant data const
 
 {/* COPIED_START source="docs-website:docs/replicated/daml/3.4/sdk/sdlc-howtos/applications/integrate/grpc/daml-to-ledger-api.rst" hash="b7b29e30" */}
 
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was copied from existing reviewed documentation.
-**Source:** `docs/replicated/daml/3.4/sdk/sdlc-howtos/applications/integrate/grpc/daml-to-ledger-api.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
-
 # How Daml Types are Translated to Protobuf
 
 This page gives an overview and reference on how Daml types and contracts are represented by the gRPC Ledger API as protobuf messages, most notably:
@@ -599,12 +461,6 @@ If the template specifies a key, the `com.daml.ledger.api.v1.exercisebykeycomman
 
 
 {/* COPIED_START source="docs-website:docs/replicated/daml/3.4/sdk/explanations/daml-packages-and-archive-files.rst" hash="b5af20b7" */}
-
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was copied from existing reviewed documentation.
-**Source:** `docs/replicated/daml/3.4/sdk/explanations/daml-packages-and-archive-files.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
 
 # Daml packages and archive (.dar) files
 
@@ -710,12 +566,6 @@ For more information on how to open up and inspect the DAR files and DALF files,
 
 
 {/* COPIED_START source="docs-website:docs/replicated/daml/3.4/sdk/component-howtos/development-tooling-authors/how-to-parse-daml-archive-files.rst" hash="1a25e77f" */}
-
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was copied from existing reviewed documentation.
-**Source:** `docs/replicated/daml/3.4/sdk/component-howtos/development-tooling-authors/how-to-parse-daml-archive-files.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
 
 # How to parse Daml archive files
 

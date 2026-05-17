@@ -3,9 +3,10 @@ title: "Performance Optimization"
 description: "Tuning database, JVM, and Canton configuration for validator and SV node performance"
 ---
 
-import CantonGlobalSynchronizerProductionOperationsPerformanceOptimizationL124 from "/snippets/canton-docs/global-synchronizer_production-operations_performance-optimization_L124.mdx";
-import CantonGlobalSynchronizerProductionOperationsPerformanceOptimizationL139 from "/snippets/canton-docs/global-synchronizer_production-operations_performance-optimization_L139.mdx";
-import CantonGlobalSynchronizerProductionOperationsPerformanceOptimizationL16 from "/snippets/canton-docs/global-synchronizer_production-operations_performance-optimization_L16.mdx";
+import CANTON_DOCS_CN_GS_PERFORMANCE_OPTIMIZATION_CONNECTION_POOL_HOCON_0 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/docs-cn/docs-global-synchronizer-performance-optimization-connection-pool-hocon-0.mdx";
+import CANTON_DOCS_CN_GS_PERFORMANCE_OPTIMIZATION_BATCHING_PARAMS_HOCON_1 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/docs-cn/docs-global-synchronizer-performance-optimization-batching-params-hocon-1.mdx";
+import CANTON_DOCS_CN_GS_PERFORMANCE_OPTIMIZATION_BURST_FACTOR_HOCON_2 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/docs-cn/docs-global-synchronizer-performance-optimization-burst-factor-hocon-2.mdx";
+import ExternalCantonMainCommunityAppSrcTestResourcesDocumentationSnippetsStorageQueueSize from "/snippets/external/canton/main/community/app/src/test/resources/documentation-snippets/storage-queue-size.mdx";
 
 
 Canton node performance depends on database throughput, JVM configuration, sequencer capacity, and pruning strategy. This page covers the key tuning areas for validator and SV node operators.
@@ -18,7 +19,9 @@ PostgreSQL is the primary performance bottleneck in most Canton deployments.
 
 Canton uses HikariCP for database connection pooling. The default pool size works for light workloads, but high-throughput deployments benefit from tuning:
 
-<CantonGlobalSynchronizerProductionOperationsPerformanceOptimizationL16 />
+
+<CANTON_DOCS_CN_GS_PERFORMANCE_OPTIMIZATION_CONNECTION_POOL_HOCON_0 />
+
 
 Set `maxConnections` based on your PostgreSQL `max_connections` setting and the number of Canton processes sharing the database server. A good starting point is `max_connections / number_of_canton_processes`, leaving headroom for monitoring and maintenance connections.
 
@@ -118,7 +121,9 @@ Canton stores a full history of transactions and ACS (Active Contract Set) snaps
 
 ### Configuration
 
-<CantonGlobalSynchronizerProductionOperationsPerformanceOptimizationL124 />
+
+<CANTON_DOCS_CN_GS_PERFORMANCE_OPTIMIZATION_BATCHING_PARAMS_HOCON_1 />
+
 
 <Warning>
 Pruned data cannot be recovered. Ensure you have backups before enabling aggressive pruning. Some regulatory contexts require retaining transaction history for a defined period.
@@ -128,7 +133,9 @@ Pruned data cannot be recovered. Ensure you have backups before enabling aggress
 
 Canton processes commands in batches internally. The default batch sizes balance latency and throughput. For high-throughput workloads, you can increase batch sizes:
 
-<CantonGlobalSynchronizerProductionOperationsPerformanceOptimizationL139 />
+
+<CANTON_DOCS_CN_GS_PERFORMANCE_OPTIMIZATION_BURST_FACTOR_HOCON_2 />
+
 
 Larger batches improve throughput at the cost of slightly higher per-command latency. Monitor sequencer and command completion latency metrics to find the right balance.
 
@@ -137,12 +144,6 @@ Larger batches improve throughput at the cost of slightly higher per-command lat
 Track these metrics to identify bottlenecks: `canton_participant_command_completion_latency` (end-to-end command time), `canton_sequencer_send_latency` (sequencer throughput), `canton_participant_db_query_latency` (database health), `hikaricp_connections_active` (connection pool saturation), and JVM heap/GC metrics. Set up dashboards and alert when values exceed your baseline — performance degradation is usually gradual, and early detection prevents outages.
 
 {/* COPIED_START source="docs-website:docs/replicated/canton/3.4/participant/howtos/operate/ha/ha.rst" hash="81b9b3df" */}
-
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was copied from existing reviewed documentation.
-**Source:** `docs-website:docs/replicated/canton/3.4/participant/howtos/operate/ha/ha.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
 
 Document howto enable replication (on by default) on enterprise nodes with supported storage. Document health check configuration and fail-over times. Document admin commands to work with multiple replicas (find active replica), document commands to inspect activeness. For participant: load balancer configuration in front of gRPC Ledger API to route to active instance. Link to explanation on HA architecture.
 
@@ -247,12 +248,6 @@ To use a load balancer it must support http/1 health checks for routing requests
 
 {/* COPIED_START source="docs-website:docs/replicated/canton/3.4/participant/howtos/optimize/storage.rst" hash="b2f96e3b" */}
 
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was copied from existing reviewed documentation.
-**Source:** `docs-website:docs/replicated/canton/3.4/participant/howtos/optimize/storage.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
-
 Add query cost logging.
 
 # Optimize Storage
@@ -264,7 +259,7 @@ Add query cost logging.
 The storage configuration can further be tuned using the following additional setting:
 
 ```
-canton.participants.&lt;service-name&gt;.storage.parameters.max-connections = X
+canton.participants.<service-name>.storage.parameters.max-connections = X
 ```
 
 This allows you to set the maximum number of DB connections used by a Canton node. If the value is None or non-positive, the value will be the number of processors. The setting has no effect if the number of connections is already set via slick options (i.e. storage.config.numThreads).
@@ -275,11 +270,15 @@ Generally, the number of connections should be up to two times the number of CPU
 
 The number of parallel indexer connections can be configured via
 
-    canton.participants.&lt;participant-name&gt;.parameters.ledger-api-server-parameters.indexer.ingestion-parallelism = Y
+```conf
+    canton.participants.<participant-name>.parameters.ledger-api-server-parameters.indexer.ingestion-parallelism = Y
+```
 
 The number `Z` of the connections used by the exclusive sequencer writer component is the final parameter that can be controlled.
 
-    canton.sequencers.&lt;sequencer-name&gt;.sequencer.high-availability.exclusive-storage.max-connections = Z
+```conf
+    canton.sequencers.<sequencer-name>.sequencer.high-availability.exclusive-storage.max-connections = Z
+```
 
 A Canton participant node will establish up to `X + Y + 2` permanent connections with the database, whereas a synchronizer will use up to `X` permanent connections, except for a sequencer with HA setup that will allocate up to `2X` connections. During startup, the node will use an additional set of at most `X` temporary connections during database initialisation.
 
@@ -360,15 +359,18 @@ The results of the divisions are always rounded down unless they yield a zero. I
 
 The values obtained from that formula can be overridden using explicit configuration settings for the *Ledger API* `A`, the *Read* `R`, the *Write* `W` pools.
 
-    canton.participants.&lt;participant-name&gt;.storage.parameters.connection-allocation.num-reads = R-overwrite
-    canton.participants.&lt;participant-name&gt;.storage.parameters.connection-allocation.num-writes = W-overwrite
-    canton.participants.&lt;participant-name&gt;.storage.parameters.connection-allocation.num-ledger-api = A-overwrite
+```conf
+    canton.participants.<participant-name>.storage.parameters.connection-allocation.num-reads = R-overwrite
+    canton.participants.<participant-name>.storage.parameters.connection-allocation.num-writes = W-overwrite
+    canton.participants.<participant-name>.storage.parameters.connection-allocation.num-ledger-api = A-overwrite
+```
 
 Similar parameters exist also for other Canton node types:
 
+```conf
     canton.sequencers.sequencer.storage.parameters.connection-allocation...
     canton.mediators.mediator.storage.parameters.connection-allocation...
-
+```
 Where a node operates a combined *Read/Write* connection pool, the numbers for `R` and `W` overwrites are added together to determine the overall pool size.
 
 The effective connection pool sizes are reported by the Canton nodes at startup.
@@ -379,9 +381,7 @@ The effective connection pool sizes are reported by the Canton nodes at startup.
 
 Canton may schedule more database queries than the database can handle. As a result, these queries will be placed into the database queue. By default, the database queue has a size of 1000 queries. Reaching the queueing limit will lead to a `DB_STORAGE_DEGRADATION` warning. The impact of this warning is that the queuing will overflow into the asynchronous execution context and slowly degrade the processing, which will result in fewer database queries being created. However, for high-performance setups, such spikes might occur more regularly. Therefore, to avoid the degradation warning appearing too frequently, the queue size can be configured using:
 
-``` none
-canton.participants.participant1.storage.config.queueSize = 10000
-```
+<ExternalCantonMainCommunityAppSrcTestResourcesDocumentationSnippetsStorageQueueSize />
 
 ## Postgres
 
