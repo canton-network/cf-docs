@@ -1,0 +1,555 @@
+---
+title: "Splice.Api.Token.TransferInstructionV1"
+description: "Documentation for Splice.Api.Token.TransferInstructionV1"
+---
+
+{/* COPIED_START source="splice:token-standard/splice-api-token-transfer-instruction-v1/docs/Splice-Api-Token-TransferInstructionV1.rst" hash="153e1c1b" */}
+
+Instruct transfers of holdings between parties.
+
+## Interfaces
+
+<div id="type-splice-api-token-transferinstructionv1-transferfactory-55548">
+
+**interface** TransferFactory
+
+</div>
+
+> A factory contract to instruct transfers of holdings between parties.
+>
+> **viewtype** TransferFactoryView
+>
+> - **Choice** Archive
+>
+>   Controller: Signatories of implementing template
+>
+>   Returns: ()
+>
+>   (no fields)
+>
+> - <div id="type-splice-api-token-transferinstructionv1-transferfactorypublicfetch-56912">
+>
+>   **Choice** TransferFactory_PublicFetch
+>
+>   </div>
+>
+>   Fetch the view of the factory contract.
+>
+>   Controller: actor
+>
+>   Returns: TransferFactoryView
+>
+>   | Field         | Type                                                                                    | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+>   |---------------|-----------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+>   | expectedAdmin | [Party](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-party-57932) | The expected admin party issuing the factory. Implementations MUST validate that this matches the admin of the factory. Callers SHOULD ensure they get `expectedAdmin` from a trusted source, e.g., a read against their own participant. That way they can ensure that it is safe to exercise a choice on a factory contract acquired from an untrusted source *provided* all vetted Daml packages only contain interface implementations that check the expected admin party. |
+>   | actor         | [Party](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-party-57932) | The party fetching the contract.                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+>
+> - <div id="type-splice-api-token-transferinstructionv1-transferfactorytransfer-25365">
+>
+>   **Choice** TransferFactory_Transfer
+>
+>   </div>
+>
+>   Instruct the registry to execute a transfer. Implementations MUST ensure that this choice fails if `transfer.executeBefore` is in the past.
+>
+>   Controller: (DA.Internal.Record.getField @"sender" transfer)
+>
+>   Returns: TransferInstructionResult
+>
+>   | Field         | Type                                                                                    | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+>   |---------------|-----------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+>   | expectedAdmin | [Party](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-party-57932) | The expected admin party issuing the factory. Implementations MUST validate that this matches the admin of the factory. Callers SHOULD ensure they get `expectedAdmin` from a trusted source, e.g., a read against their own participant. That way they can ensure that it is safe to exercise a choice on a factory contract acquired from an untrusted source *provided* all vetted Daml packages only contain interface implementations that check the expected admin party. |
+>   | transfer      | Transfer                                                                                | The transfer to execute.                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+>   | extraArgs     | ExtraArgs                                                                               | The extra arguments to pass to the transfer implementation.                                                                                                                                                                                                                                                                                                                                                                                                                     |
+>
+> - **Method transferFactory_publicFetchImpl :** [ContractId](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-contractid-95282) TransferFactory -\> TransferFactory_PublicFetch -\> [Update](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-update-68072) TransferFactoryView
+>
+> - **Method transferFactory_transferImpl :** [ContractId](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-contractid-95282) TransferFactory -\> TransferFactory_Transfer -\> [Update](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-update-68072) TransferInstructionResult
+
+<div id="type-splice-api-token-transferinstructionv1-transferinstruction-69882">
+
+**interface** TransferInstruction
+
+</div>
+
+> An interface for tracking the status of a transfer instruction, i.e., a request to a registry app to execute a transfer.
+>
+> Registries MAY evolve the transfer instruction in multiple steps. They SHOULD do so using only the choices on this interface, so that wallets can reliably parse the transaction history and determine whether the instruction ultimately succeeded or failed.
+>
+> **viewtype** TransferInstructionView
+>
+> - **Choice** Archive
+>
+>   Controller: Signatories of implementing template
+>
+>   Returns: ()
+>
+>   (no fields)
+>
+> - <div id="type-splice-api-token-transferinstructionv1-transferinstructionaccept-36884">
+>
+>   **Choice** TransferInstruction_Accept
+>
+>   </div>
+>
+>   Accept the transfer as the receiver.
+>
+>   This choice is only available if the instruction is in `TransferPendingReceiverAcceptance` state.
+>
+>   Note that while implementations will typically return `TransferInstructionResult_Completed`, this is not guaranteed. The result of the choice is implementation-specific and MAY be any of the three possible results.
+>
+>   Controller: (DA.Internal.Record.getField @"receiver" (DA.Internal.Record.getField @"transfer" (view this)))
+>
+>   Returns: TransferInstructionResult
+>
+>   | Field     | Type      | Description                                                  |
+>   |-----------|-----------|--------------------------------------------------------------|
+>   | extraArgs | ExtraArgs | Additional context required in order to exercise the choice. |
+>
+> - <div id="type-splice-api-token-transferinstructionv1-transferinstructionreject-89645">
+>
+>   **Choice** TransferInstruction_Reject
+>
+>   </div>
+>
+>   Reject the transfer as the receiver.
+>
+>   This choice is only available if the instruction is in `TransferPendingReceiverAcceptance` state.
+>
+>   Controller: (DA.Internal.Record.getField @"receiver" (DA.Internal.Record.getField @"transfer" (view this)))
+>
+>   Returns: TransferInstructionResult
+>
+>   | Field     | Type      | Description                                                  |
+>   |-----------|-----------|--------------------------------------------------------------|
+>   | extraArgs | ExtraArgs | Additional context required in order to exercise the choice. |
+>
+> - <div id="type-splice-api-token-transferinstructionv1-transferinstructionupdate-27423">
+>
+>   **Choice** TransferInstruction_Update
+>
+>   </div>
+>
+>   Update the state of the transfer instruction. Used by the registry to execute registry internal workflow steps that advance the state of the transfer instruction. A reason may be communicated via the metadata.
+>
+>   Controller: (DA.Internal.Record.getField @"admin" (DA.Internal.Record.getField @"instrumentId" (DA.Internal.Record.getField @"transfer" (view this)))), extraActors
+>
+>   Returns: TransferInstructionResult
+>
+>   | Field       | Type                                                                                        | Description                                                                                                                           |
+>   |-------------|---------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------|
+>   | extraActors | \[[Party](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-party-57932)\] | Extra actors authorizing the update. Implementations MUST check that this field contains the expected actors for the specific update. |
+>   | extraArgs   | ExtraArgs                                                                                   | Additional context required in order to exercise the choice.                                                                          |
+>
+> - <div id="type-splice-api-token-transferinstructionv1-transferinstructionwithdraw-43648">
+>
+>   **Choice** TransferInstruction_Withdraw
+>
+>   </div>
+>
+>   Withdraw the transfer instruction as the sender.
+>
+>   Controller: (DA.Internal.Record.getField @"sender" (DA.Internal.Record.getField @"transfer" (view this)))
+>
+>   Returns: TransferInstructionResult
+>
+>   | Field     | Type      | Description                                                  |
+>   |-----------|-----------|--------------------------------------------------------------|
+>   | extraArgs | ExtraArgs | Additional context required in order to exercise the choice. |
+>
+> - **Method transferInstruction_acceptImpl :** [ContractId](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-contractid-95282) TransferInstruction -\> TransferInstruction_Accept -\> [Update](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-update-68072) TransferInstructionResult
+>
+> - **Method transferInstruction_rejectImpl :** [ContractId](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-contractid-95282) TransferInstruction -\> TransferInstruction_Reject -\> [Update](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-update-68072) TransferInstructionResult
+>
+> - **Method transferInstruction_updateImpl :** [ContractId](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-contractid-95282) TransferInstruction -\> TransferInstruction_Update -\> [Update](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-update-68072) TransferInstructionResult
+>
+> - **Method transferInstruction_withdrawImpl :** [ContractId](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-contractid-95282) TransferInstruction -\> TransferInstruction_Withdraw -\> [Update](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-update-68072) TransferInstructionResult
+
+## Data Types
+
+<div id="type-splice-api-token-transferinstructionv1-transfer-51973">
+
+**data** Transfer
+
+</div>
+
+> A specification of a transfer of holdings between two parties.
+>
+> <div id="constr-splice-api-token-transferinstructionv1-transfer-5022">
+>
+> Transfer
+>
+> </div>
+>
+> > | Field            | Type                                                                                                          | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+> > |------------------|---------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+> > | sender           | [Party](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-party-57932)                       | The sender of the transfer.                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+> > | receiver         | [Party](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-party-57932)                       | The receiver of the transfer.                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+> > | amount           | [Decimal](https://docs.daml.com/daml/stdlib/Prelude.html#type-ghc-types-decimal-18135)                        | The amount to transfer.                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+> > | instrumentId     | InstrumentId                                                                                                  | The instrument identifier.                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+> > | requestedAt      | [Time](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-time-63886)                         | Wallet provided timestamp when the transfer was requested. MUST be in the past when instructing the transfer.                                                                                                                                                                                                                                                                                                                                                               |
+> > | executeBefore    | [Time](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-time-63886)                         | Until when (exclusive) the transfer may be executed. MUST be in the future when instructing the transfer. Registries SHOULD NOT execute the transfer instruction after this time, so that senders can retry creating a new transfer instruction after this time.                                                                                                                                                                                                            |
+> > | inputHoldingCids | \[[ContractId](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-contractid-95282) Holding\] | The holding contracts that should be used to fund the transfer. MAY be empty if the registry supports automatic selection of holdings for transfers or does not represent holdings on-ledger. If specified, then the transfer MUST archive all of these holdings, so that the execution of the transfer conflicts with any other transfers using these holdings. Thereby allowing that the sender can use deliberate contention on holdings to prevent duplicate transfers. |
+> > | meta             | Metadata                                                                                                      | Metadata.                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+>
+> **instance** [Eq](https://docs.daml.com/daml/stdlib/Prelude.html#class-ghc-classes-eq-22713) Transfer
+>
+> **instance** [Show](https://docs.daml.com/daml/stdlib/Prelude.html#class-ghc-show-show-65360) Transfer
+>
+> **instance** [GetField](https://docs.daml.com/daml/stdlib/DA-Record.html#class-da-internal-record-getfield-53979) "amount" Transfer [Decimal](https://docs.daml.com/daml/stdlib/Prelude.html#type-ghc-types-decimal-18135)
+>
+> **instance** [GetField](https://docs.daml.com/daml/stdlib/DA-Record.html#class-da-internal-record-getfield-53979) "executeBefore" Transfer [Time](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-time-63886)
+>
+> **instance** [GetField](https://docs.daml.com/daml/stdlib/DA-Record.html#class-da-internal-record-getfield-53979) "inputHoldingCids" Transfer \[[ContractId](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-contractid-95282) Holding\]
+>
+> **instance** [GetField](https://docs.daml.com/daml/stdlib/DA-Record.html#class-da-internal-record-getfield-53979) "instrumentId" Transfer InstrumentId
+>
+> **instance** [GetField](https://docs.daml.com/daml/stdlib/DA-Record.html#class-da-internal-record-getfield-53979) "meta" Transfer Metadata
+>
+> **instance** [GetField](https://docs.daml.com/daml/stdlib/DA-Record.html#class-da-internal-record-getfield-53979) "receiver" Transfer [Party](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-party-57932)
+>
+> **instance** [GetField](https://docs.daml.com/daml/stdlib/DA-Record.html#class-da-internal-record-getfield-53979) "requestedAt" Transfer [Time](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-time-63886)
+>
+> **instance** [GetField](https://docs.daml.com/daml/stdlib/DA-Record.html#class-da-internal-record-getfield-53979) "sender" Transfer [Party](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-party-57932)
+>
+> **instance** [GetField](https://docs.daml.com/daml/stdlib/DA-Record.html#class-da-internal-record-getfield-53979) "transfer" TransferFactory_Transfer Transfer
+>
+> **instance** [GetField](https://docs.daml.com/daml/stdlib/DA-Record.html#class-da-internal-record-getfield-53979) "transfer" TransferInstructionView Transfer
+>
+> **instance** [SetField](https://docs.daml.com/daml/stdlib/DA-Record.html#class-da-internal-record-setfield-4311) "amount" Transfer [Decimal](https://docs.daml.com/daml/stdlib/Prelude.html#type-ghc-types-decimal-18135)
+>
+> **instance** [SetField](https://docs.daml.com/daml/stdlib/DA-Record.html#class-da-internal-record-setfield-4311) "executeBefore" Transfer [Time](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-time-63886)
+>
+> **instance** [SetField](https://docs.daml.com/daml/stdlib/DA-Record.html#class-da-internal-record-setfield-4311) "inputHoldingCids" Transfer \[[ContractId](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-contractid-95282) Holding\]
+>
+> **instance** [SetField](https://docs.daml.com/daml/stdlib/DA-Record.html#class-da-internal-record-setfield-4311) "instrumentId" Transfer InstrumentId
+>
+> **instance** [SetField](https://docs.daml.com/daml/stdlib/DA-Record.html#class-da-internal-record-setfield-4311) "meta" Transfer Metadata
+>
+> **instance** [SetField](https://docs.daml.com/daml/stdlib/DA-Record.html#class-da-internal-record-setfield-4311) "receiver" Transfer [Party](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-party-57932)
+>
+> **instance** [SetField](https://docs.daml.com/daml/stdlib/DA-Record.html#class-da-internal-record-setfield-4311) "requestedAt" Transfer [Time](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-time-63886)
+>
+> **instance** [SetField](https://docs.daml.com/daml/stdlib/DA-Record.html#class-da-internal-record-setfield-4311) "sender" Transfer [Party](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-party-57932)
+>
+> **instance** [SetField](https://docs.daml.com/daml/stdlib/DA-Record.html#class-da-internal-record-setfield-4311) "transfer" TransferFactory_Transfer Transfer
+>
+> **instance** [SetField](https://docs.daml.com/daml/stdlib/DA-Record.html#class-da-internal-record-setfield-4311) "transfer" TransferInstructionView Transfer
+
+<div id="type-splice-api-token-transferinstructionv1-transferfactoryview-36679">
+
+**data** TransferFactoryView
+
+</div>
+
+> View for `TransferFactory`.
+>
+> <div id="constr-splice-api-token-transferinstructionv1-transferfactoryview-43930">
+>
+> TransferFactoryView
+>
+> </div>
+>
+> > | Field | Type                                                                                    | Description                                                                                                           |
+> > |-------|-----------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------|
+> > | admin | [Party](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-party-57932) | The party representing the registry app that administers the instruments for which this transfer factory can be used. |
+> > | meta  | Metadata                                                                                | Additional metadata specific to the transfer factory, used for extensibility.                                         |
+>
+> **instance** [Eq](https://docs.daml.com/daml/stdlib/Prelude.html#class-ghc-classes-eq-22713) TransferFactoryView
+>
+> **instance** [Show](https://docs.daml.com/daml/stdlib/Prelude.html#class-ghc-show-show-65360) TransferFactoryView
+>
+> **instance** HasMethod TransferFactory "transferFactory_publicFetchImpl" ([ContractId](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-contractid-95282) TransferFactory -\> TransferFactory_PublicFetch -\> [Update](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-update-68072) TransferFactoryView)
+>
+> **instance** [HasFromAnyView](https://docs.daml.com/daml/stdlib/DA-Internal-Interface-AnyView.html#class-da-internal-interface-anyview-hasfromanyview-30108) TransferFactory TransferFactoryView
+>
+> **instance** [HasInterfaceView](https://docs.daml.com/daml/stdlib/Prelude.html#class-da-internal-interface-hasinterfaceview-4492) TransferFactory TransferFactoryView
+>
+> **instance** [GetField](https://docs.daml.com/daml/stdlib/DA-Record.html#class-da-internal-record-getfield-53979) "admin" TransferFactoryView [Party](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-party-57932)
+>
+> **instance** [GetField](https://docs.daml.com/daml/stdlib/DA-Record.html#class-da-internal-record-getfield-53979) "meta" TransferFactoryView Metadata
+>
+> **instance** [SetField](https://docs.daml.com/daml/stdlib/DA-Record.html#class-da-internal-record-setfield-4311) "admin" TransferFactoryView [Party](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-party-57932)
+>
+> **instance** [SetField](https://docs.daml.com/daml/stdlib/DA-Record.html#class-da-internal-record-setfield-4311) "meta" TransferFactoryView Metadata
+>
+> **instance** [HasExercise](https://docs.daml.com/daml/stdlib/Prelude.html#class-da-internal-template-functions-hasexercise-70422) TransferFactory TransferFactory_PublicFetch TransferFactoryView
+>
+> **instance** [HasExerciseGuarded](https://docs.daml.com/daml/stdlib/Prelude.html#class-da-internal-template-functions-hasexerciseguarded-97843) TransferFactory TransferFactory_PublicFetch TransferFactoryView
+>
+> **instance** [HasFromAnyChoice](https://docs.daml.com/daml/stdlib/Prelude.html#class-da-internal-template-functions-hasfromanychoice-81184) TransferFactory TransferFactory_PublicFetch TransferFactoryView
+>
+> **instance** [HasToAnyChoice](https://docs.daml.com/daml/stdlib/Prelude.html#class-da-internal-template-functions-hastoanychoice-82571) TransferFactory TransferFactory_PublicFetch TransferFactoryView
+
+<div id="type-splice-api-token-transferinstructionv1-transferinstructionresult-24735">
+
+**data** TransferInstructionResult
+
+</div>
+
+> The result of instructing a transfer or advancing the state of a transfer instruction.
+>
+> <div id="constr-splice-api-token-transferinstructionv1-transferinstructionresult-25274">
+>
+> TransferInstructionResult
+>
+> </div>
+>
+> > | Field            | Type                                                                                                          | Description                                                                                                                                                                    |
+> > |------------------|---------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+> > | output           | TransferInstructionResult_Output                                                                              | The output of the step.                                                                                                                                                        |
+> > | senderChangeCids | \[[ContractId](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-contractid-95282) Holding\] | New holdings owned by the sender created to return "change". Can be used by callers to batch creating or updating multiple transfer instructions in a single Daml transaction. |
+> > | meta             | Metadata                                                                                                      | Additional metadata specific to the transfer instruction, used for extensibility; e.g., fees charged.                                                                          |
+>
+> **instance** [Eq](https://docs.daml.com/daml/stdlib/Prelude.html#class-ghc-classes-eq-22713) TransferInstructionResult
+>
+> **instance** [Show](https://docs.daml.com/daml/stdlib/Prelude.html#class-ghc-show-show-65360) TransferInstructionResult
+>
+> **instance** HasMethod TransferFactory "transferFactory_transferImpl" ([ContractId](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-contractid-95282) TransferFactory -\> TransferFactory_Transfer -\> [Update](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-update-68072) TransferInstructionResult)
+>
+> **instance** HasMethod TransferInstruction "transferInstruction_acceptImpl" ([ContractId](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-contractid-95282) TransferInstruction -\> TransferInstruction_Accept -\> [Update](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-update-68072) TransferInstructionResult)
+>
+> **instance** HasMethod TransferInstruction "transferInstruction_rejectImpl" ([ContractId](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-contractid-95282) TransferInstruction -\> TransferInstruction_Reject -\> [Update](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-update-68072) TransferInstructionResult)
+>
+> **instance** HasMethod TransferInstruction "transferInstruction_updateImpl" ([ContractId](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-contractid-95282) TransferInstruction -\> TransferInstruction_Update -\> [Update](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-update-68072) TransferInstructionResult)
+>
+> **instance** HasMethod TransferInstruction "transferInstruction_withdrawImpl" ([ContractId](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-contractid-95282) TransferInstruction -\> TransferInstruction_Withdraw -\> [Update](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-update-68072) TransferInstructionResult)
+>
+> **instance** [GetField](https://docs.daml.com/daml/stdlib/DA-Record.html#class-da-internal-record-getfield-53979) "meta" TransferInstructionResult Metadata
+>
+> **instance** [GetField](https://docs.daml.com/daml/stdlib/DA-Record.html#class-da-internal-record-getfield-53979) "output" TransferInstructionResult TransferInstructionResult_Output
+>
+> **instance** [GetField](https://docs.daml.com/daml/stdlib/DA-Record.html#class-da-internal-record-getfield-53979) "senderChangeCids" TransferInstructionResult \[[ContractId](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-contractid-95282) Holding\]
+>
+> **instance** [SetField](https://docs.daml.com/daml/stdlib/DA-Record.html#class-da-internal-record-setfield-4311) "meta" TransferInstructionResult Metadata
+>
+> **instance** [SetField](https://docs.daml.com/daml/stdlib/DA-Record.html#class-da-internal-record-setfield-4311) "output" TransferInstructionResult TransferInstructionResult_Output
+>
+> **instance** [SetField](https://docs.daml.com/daml/stdlib/DA-Record.html#class-da-internal-record-setfield-4311) "senderChangeCids" TransferInstructionResult \[[ContractId](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-contractid-95282) Holding\]
+>
+> **instance** [HasExercise](https://docs.daml.com/daml/stdlib/Prelude.html#class-da-internal-template-functions-hasexercise-70422) TransferFactory TransferFactory_Transfer TransferInstructionResult
+>
+> **instance** [HasExercise](https://docs.daml.com/daml/stdlib/Prelude.html#class-da-internal-template-functions-hasexercise-70422) TransferInstruction TransferInstruction_Accept TransferInstructionResult
+>
+> **instance** [HasExercise](https://docs.daml.com/daml/stdlib/Prelude.html#class-da-internal-template-functions-hasexercise-70422) TransferInstruction TransferInstruction_Reject TransferInstructionResult
+>
+> **instance** [HasExercise](https://docs.daml.com/daml/stdlib/Prelude.html#class-da-internal-template-functions-hasexercise-70422) TransferInstruction TransferInstruction_Update TransferInstructionResult
+>
+> **instance** [HasExercise](https://docs.daml.com/daml/stdlib/Prelude.html#class-da-internal-template-functions-hasexercise-70422) TransferInstruction TransferInstruction_Withdraw TransferInstructionResult
+>
+> **instance** [HasExerciseGuarded](https://docs.daml.com/daml/stdlib/Prelude.html#class-da-internal-template-functions-hasexerciseguarded-97843) TransferFactory TransferFactory_Transfer TransferInstructionResult
+>
+> **instance** [HasExerciseGuarded](https://docs.daml.com/daml/stdlib/Prelude.html#class-da-internal-template-functions-hasexerciseguarded-97843) TransferInstruction TransferInstruction_Accept TransferInstructionResult
+>
+> **instance** [HasExerciseGuarded](https://docs.daml.com/daml/stdlib/Prelude.html#class-da-internal-template-functions-hasexerciseguarded-97843) TransferInstruction TransferInstruction_Reject TransferInstructionResult
+>
+> **instance** [HasExerciseGuarded](https://docs.daml.com/daml/stdlib/Prelude.html#class-da-internal-template-functions-hasexerciseguarded-97843) TransferInstruction TransferInstruction_Update TransferInstructionResult
+>
+> **instance** [HasExerciseGuarded](https://docs.daml.com/daml/stdlib/Prelude.html#class-da-internal-template-functions-hasexerciseguarded-97843) TransferInstruction TransferInstruction_Withdraw TransferInstructionResult
+>
+> **instance** [HasFromAnyChoice](https://docs.daml.com/daml/stdlib/Prelude.html#class-da-internal-template-functions-hasfromanychoice-81184) TransferFactory TransferFactory_Transfer TransferInstructionResult
+>
+> **instance** [HasFromAnyChoice](https://docs.daml.com/daml/stdlib/Prelude.html#class-da-internal-template-functions-hasfromanychoice-81184) TransferInstruction TransferInstruction_Accept TransferInstructionResult
+>
+> **instance** [HasFromAnyChoice](https://docs.daml.com/daml/stdlib/Prelude.html#class-da-internal-template-functions-hasfromanychoice-81184) TransferInstruction TransferInstruction_Reject TransferInstructionResult
+>
+> **instance** [HasFromAnyChoice](https://docs.daml.com/daml/stdlib/Prelude.html#class-da-internal-template-functions-hasfromanychoice-81184) TransferInstruction TransferInstruction_Update TransferInstructionResult
+>
+> **instance** [HasFromAnyChoice](https://docs.daml.com/daml/stdlib/Prelude.html#class-da-internal-template-functions-hasfromanychoice-81184) TransferInstruction TransferInstruction_Withdraw TransferInstructionResult
+>
+> **instance** [HasToAnyChoice](https://docs.daml.com/daml/stdlib/Prelude.html#class-da-internal-template-functions-hastoanychoice-82571) TransferFactory TransferFactory_Transfer TransferInstructionResult
+>
+> **instance** [HasToAnyChoice](https://docs.daml.com/daml/stdlib/Prelude.html#class-da-internal-template-functions-hastoanychoice-82571) TransferInstruction TransferInstruction_Accept TransferInstructionResult
+>
+> **instance** [HasToAnyChoice](https://docs.daml.com/daml/stdlib/Prelude.html#class-da-internal-template-functions-hastoanychoice-82571) TransferInstruction TransferInstruction_Reject TransferInstructionResult
+>
+> **instance** [HasToAnyChoice](https://docs.daml.com/daml/stdlib/Prelude.html#class-da-internal-template-functions-hastoanychoice-82571) TransferInstruction TransferInstruction_Update TransferInstructionResult
+>
+> **instance** [HasToAnyChoice](https://docs.daml.com/daml/stdlib/Prelude.html#class-da-internal-template-functions-hastoanychoice-82571) TransferInstruction TransferInstruction_Withdraw TransferInstructionResult
+
+<div id="type-splice-api-token-transferinstructionv1-transferinstructionresultoutput-59824">
+
+**data** TransferInstructionResult_Output
+
+</div>
+
+> The output of instructing a transfer or advancing the state of a transfer instruction.
+>
+> <div id="constr-splice-api-token-transferinstructionv1-transferinstructionresultpending-18902">
+>
+> TransferInstructionResult_Pending
+>
+> </div>
+>
+> > Use this result to communicate that the transfer is pending further steps.
+> >
+> > | Field                  | Type                                                                                                                  | Description                                                             |
+> > |------------------------|-----------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------|
+> > | transferInstructionCid | [ContractId](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-contractid-95282) TransferInstruction | Contract id of the transfer instruction representing the pending state. |
+>
+> <div id="constr-splice-api-token-transferinstructionv1-transferinstructionresultcompleted-47798">
+>
+> TransferInstructionResult_Completed
+>
+> </div>
+>
+> > Use this result to communicate that the transfer succeeded and the receiver has received their holdings.
+> >
+> > | Field               | Type                                                                                                          | Description                                                                                       |
+> > |---------------------|---------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------|
+> > | receiverHoldingCids | \[[ContractId](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-contractid-95282) Holding\] | The newly created holdings owned by the receiver as part of successfully completing the transfer. |
+>
+> <div id="constr-splice-api-token-transferinstructionv1-transferinstructionresultfailed-21543">
+>
+> TransferInstructionResult_Failed
+>
+> </div>
+>
+> > Use this result to communicate that the transfer did not succeed and all holdings (minus fees) have been returned to the sender.
+>
+> **instance** [Eq](https://docs.daml.com/daml/stdlib/Prelude.html#class-ghc-classes-eq-22713) TransferInstructionResult_Output
+>
+> **instance** [Show](https://docs.daml.com/daml/stdlib/Prelude.html#class-ghc-show-show-65360) TransferInstructionResult_Output
+>
+> **instance** [GetField](https://docs.daml.com/daml/stdlib/DA-Record.html#class-da-internal-record-getfield-53979) "output" TransferInstructionResult TransferInstructionResult_Output
+>
+> **instance** [GetField](https://docs.daml.com/daml/stdlib/DA-Record.html#class-da-internal-record-getfield-53979) "receiverHoldingCids" TransferInstructionResult_Output \[[ContractId](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-contractid-95282) Holding\]
+>
+> **instance** [GetField](https://docs.daml.com/daml/stdlib/DA-Record.html#class-da-internal-record-getfield-53979) "transferInstructionCid" TransferInstructionResult_Output ([ContractId](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-contractid-95282) TransferInstruction)
+>
+> **instance** [SetField](https://docs.daml.com/daml/stdlib/DA-Record.html#class-da-internal-record-setfield-4311) "output" TransferInstructionResult TransferInstructionResult_Output
+>
+> **instance** [SetField](https://docs.daml.com/daml/stdlib/DA-Record.html#class-da-internal-record-setfield-4311) "receiverHoldingCids" TransferInstructionResult_Output \[[ContractId](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-contractid-95282) Holding\]
+>
+> **instance** [SetField](https://docs.daml.com/daml/stdlib/DA-Record.html#class-da-internal-record-setfield-4311) "transferInstructionCid" TransferInstructionResult_Output ([ContractId](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-contractid-95282) TransferInstruction)
+
+<div id="type-splice-api-token-transferinstructionv1-transferinstructionstatus-36298">
+
+**data** TransferInstructionStatus
+
+</div>
+
+> Status of a transfer instruction.
+>
+> <div id="constr-splice-api-token-transferinstructionv1-transferpendingreceiveracceptance-84710">
+>
+> TransferPendingReceiverAcceptance
+>
+> </div>
+>
+> > The transfer is pending acceptance by the receiver.
+>
+> <div id="constr-splice-api-token-transferinstructionv1-transferpendinginternalworkflow-24806">
+>
+> TransferPendingInternalWorkflow
+>
+> </div>
+>
+> > The transfer is pending actions to be taken as part of registry internal workflows.
+> >
+> > | Field          | Type                                                                                                                                                                                                                                                         | Description                                                                                                                                            |
+> > |----------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------|
+> > | pendingActions | [Map](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-map-90052) [Party](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-party-57932) [Text](https://docs.daml.com/daml/stdlib/Prelude.html#type-ghc-types-text-51952) | The actions that a party could take to advance the transfer. This field can by used to inform wallet users whether they need to take an action or not. |
+>
+> **instance** [Eq](https://docs.daml.com/daml/stdlib/Prelude.html#class-ghc-classes-eq-22713) TransferInstructionStatus
+>
+> **instance** [Show](https://docs.daml.com/daml/stdlib/Prelude.html#class-ghc-show-show-65360) TransferInstructionStatus
+>
+> **instance** [GetField](https://docs.daml.com/daml/stdlib/DA-Record.html#class-da-internal-record-getfield-53979) "pendingActions" TransferInstructionStatus ([Map](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-map-90052) [Party](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-party-57932) [Text](https://docs.daml.com/daml/stdlib/Prelude.html#type-ghc-types-text-51952))
+>
+> **instance** [GetField](https://docs.daml.com/daml/stdlib/DA-Record.html#class-da-internal-record-getfield-53979) "status" TransferInstructionView TransferInstructionStatus
+>
+> **instance** [SetField](https://docs.daml.com/daml/stdlib/DA-Record.html#class-da-internal-record-setfield-4311) "pendingActions" TransferInstructionStatus ([Map](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-map-90052) [Party](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-party-57932) [Text](https://docs.daml.com/daml/stdlib/Prelude.html#type-ghc-types-text-51952))
+>
+> **instance** [SetField](https://docs.daml.com/daml/stdlib/DA-Record.html#class-da-internal-record-setfield-4311) "status" TransferInstructionView TransferInstructionStatus
+
+<div id="type-splice-api-token-transferinstructionv1-transferinstructionview-46309">
+
+**data** TransferInstructionView
+
+</div>
+
+> View for `TransferInstruction`.
+>
+> <div id="constr-splice-api-token-transferinstructionv1-transferinstructionview-88808">
+>
+> TransferInstructionView
+>
+> </div>
+>
+> > | Field                  | Type                                                                                                                                                                                                                       | Description                                                                                                                                                                                                                          |
+> > |------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+> > | originalInstructionCid | [Optional](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-prelude-optional-37153) ([ContractId](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-contractid-95282) TransferInstruction) | The contract id of the original transfer instruction contract. Used by the wallet to track the lineage of transfer instructions through multiple steps. Only set if the registry evolves the transfer instruction in multiple steps. |
+> > | transfer               | Transfer                                                                                                                                                                                                                   | The transfer specified by the transfer instruction.                                                                                                                                                                                  |
+> > | status                 | TransferInstructionStatus                                                                                                                                                                                                  | The status of the transfer instruction.                                                                                                                                                                                              |
+> > | meta                   | Metadata                                                                                                                                                                                                                   | Additional metadata specific to the transfer instruction, used for extensibility; e.g., more detailed status information.                                                                                                            |
+>
+> **instance** [Eq](https://docs.daml.com/daml/stdlib/Prelude.html#class-ghc-classes-eq-22713) TransferInstructionView
+>
+> **instance** [Show](https://docs.daml.com/daml/stdlib/Prelude.html#class-ghc-show-show-65360) TransferInstructionView
+>
+> **instance** [HasFromAnyView](https://docs.daml.com/daml/stdlib/DA-Internal-Interface-AnyView.html#class-da-internal-interface-anyview-hasfromanyview-30108) TransferInstruction TransferInstructionView
+>
+> **instance** [HasInterfaceView](https://docs.daml.com/daml/stdlib/Prelude.html#class-da-internal-interface-hasinterfaceview-4492) TransferInstruction TransferInstructionView
+>
+> **instance** [GetField](https://docs.daml.com/daml/stdlib/DA-Record.html#class-da-internal-record-getfield-53979) "meta" TransferInstructionView Metadata
+>
+> **instance** [GetField](https://docs.daml.com/daml/stdlib/DA-Record.html#class-da-internal-record-getfield-53979) "originalInstructionCid" TransferInstructionView ([Optional](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-prelude-optional-37153) ([ContractId](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-contractid-95282) TransferInstruction))
+>
+> **instance** [GetField](https://docs.daml.com/daml/stdlib/DA-Record.html#class-da-internal-record-getfield-53979) "status" TransferInstructionView TransferInstructionStatus
+>
+> **instance** [GetField](https://docs.daml.com/daml/stdlib/DA-Record.html#class-da-internal-record-getfield-53979) "transfer" TransferInstructionView Transfer
+>
+> **instance** [SetField](https://docs.daml.com/daml/stdlib/DA-Record.html#class-da-internal-record-setfield-4311) "meta" TransferInstructionView Metadata
+>
+> **instance** [SetField](https://docs.daml.com/daml/stdlib/DA-Record.html#class-da-internal-record-setfield-4311) "originalInstructionCid" TransferInstructionView ([Optional](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-prelude-optional-37153) ([ContractId](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-contractid-95282) TransferInstruction))
+>
+> **instance** [SetField](https://docs.daml.com/daml/stdlib/DA-Record.html#class-da-internal-record-setfield-4311) "status" TransferInstructionView TransferInstructionStatus
+>
+> **instance** [SetField](https://docs.daml.com/daml/stdlib/DA-Record.html#class-da-internal-record-setfield-4311) "transfer" TransferInstructionView Transfer
+
+## Functions
+
+<div id="function-splice-api-token-transferinstructionv1-transferinstructionacceptimpl-78274">
+
+transferInstruction_acceptImpl
+: TransferInstruction -\> [ContractId](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-contractid-95282) TransferInstruction -\> TransferInstruction_Accept -\> [Update](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-update-68072) TransferInstructionResult
+
+</div>
+
+<div id="function-splice-api-token-transferinstructionv1-transferinstructionrejectimpl-50311">
+
+transferInstruction_rejectImpl
+: TransferInstruction -\> [ContractId](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-contractid-95282) TransferInstruction -\> TransferInstruction_Reject -\> [Update](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-update-68072) TransferInstructionResult
+
+</div>
+
+<div id="function-splice-api-token-transferinstructionv1-transferinstructionwithdrawimpl-10586">
+
+transferInstruction_withdrawImpl
+: TransferInstruction -\> [ContractId](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-contractid-95282) TransferInstruction -\> TransferInstruction_Withdraw -\> [Update](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-update-68072) TransferInstructionResult
+
+</div>
+
+<div id="function-splice-api-token-transferinstructionv1-transferinstructionupdateimpl-73329">
+
+transferInstruction_updateImpl
+: TransferInstruction -\> [ContractId](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-contractid-95282) TransferInstruction -\> TransferInstruction_Update -\> [Update](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-update-68072) TransferInstructionResult
+
+</div>
+
+<div id="function-splice-api-token-transferinstructionv1-transferfactorytransferimpl-82483">
+
+transferFactory_transferImpl
+: TransferFactory -\> [ContractId](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-contractid-95282) TransferFactory -\> TransferFactory_Transfer -\> [Update](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-update-68072) TransferInstructionResult
+
+</div>
+
+<div id="function-splice-api-token-transferinstructionv1-transferfactorypublicfetchimpl-930">
+
+transferFactory_publicFetchImpl
+: TransferFactory -\> [ContractId](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-contractid-95282) TransferFactory -\> TransferFactory_PublicFetch -\> [Update](https://docs.daml.com/daml/stdlib/Prelude.html#type-da-internal-lf-update-68072) TransferFactoryView
+
+</div>
+
+{/* COPIED_END */}
