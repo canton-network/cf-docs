@@ -147,11 +147,11 @@ Track these metrics to identify bottlenecks: `canton_participant_command_complet
 
 Document howto enable replication (on by default) on enterprise nodes with supported storage. Document health check configuration and fail-over times. Document admin commands to work with multiple replicas (find active replica), document commands to inspect activeness. For participant: load balancer configuration in front of gRPC Ledger API to route to active instance. Link to explanation on HA architecture.
 
-# High Availability Usage
+## High Availability Usage
 
 This section looks at some of the components already mentioned and supplies useful Canton commands.
 
-## Participant
+### Participant
 
 High availability of a participant node is achieved by running multiple participant node replicas that have access to a shared database.
 
@@ -164,7 +164,7 @@ Participant node replicas are configured in the Canton configuration file as ind
 Starting from Canton 2.4.0, participant replication is enabled by default when using supported storage.
 </Note>
 
-### Manual trigger of a fail-over
+#### Manual trigger of a fail-over
 
 Fail-over from the active to a passive replica is done automatically when the active replica has a failure, but one can also initiate a graceful fail-over with the following command:
 
@@ -174,7 +174,7 @@ activeParticipantReplica.replication.set_passive()
 
 The command succeeds if there is at least another passive replica that takes over from the current active replica, otherwise the active replica remains active.
 
-### Load balancer configuration
+#### Load balancer configuration
 
 Many replicated participants can be placed behind an appropriately sophisticated load balancer that will by health checks determine which participant instance is active and direct ledger and admin api requests to that instance appropriately. This makes participant replication and failover transparent from the perspective of the ledger-api application or canton console administering the logical participant, as they will simply be pointed at the load balancer.
 
@@ -250,11 +250,11 @@ To use a load balancer it must support http/1 health checks for routing requests
 
 Add query cost logging.
 
-# Optimize Storage
+## Optimize Storage
 
-## General Settings
+### General Settings
 
-### Max Connection Settings
+#### Max Connection Settings
 
 The storage configuration can further be tuned using the following additional setting:
 
@@ -286,74 +286,14 @@ The number `X` represents an upper bound of permanent connections and is divided
 
 The following table summarizes the detailed split of the connection pools in different Canton nodes. `R` signifies a *Read* pool, `W` a *Write* pool, `A` a *Ledger API* pool, `I` an *Indexer* pool, `RW` a combined *Read/Write* pool, and `M` the *Main* pool.
 
-<table style="width:98%;">
-<colgroup>
-<col style="width: 26%" />
-<col style="width: 23%" />
-<col style="width: 23%" />
-<col style="width: 23%" />
-</colgroup>
-<thead>
-<tr class="header">
-<th><blockquote>
-<p>Node Type</p>
-</blockquote></th>
-<th>Enterprise Edition with Replication</th>
-<th>Enterprise Edition</th>
-<th>Community Edition</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td>Participant</td>
-<td><p>A = X / 2<br />
-R = X / 4<br />
-W = X / 4 - 1<br />
-M = 1<br />
-I = Y</p></td>
-<td><p>A = X / 2<br />
-R = X / 4<br />
-W = X / 4 - 1<br />
-M = 1<br />
-I = Y</p></td>
-<td><p>A = X / 2<br />
-RW = X / 2<br />
-I = Y</p></td>
-</tr>
-<tr class="even">
-<td>Mediator</td>
-<td><p>R = X / 2<br />
-W = X / 2 - 1<br />
-M = 1</p></td>
-<td>N/A</td>
-<td>N/A</td>
-</tr>
-<tr class="odd">
-<td>Sequencer</td>
-<td>RW = X</td>
-<td>N/A</td>
-<td>N/A</td>
-</tr>
-<tr class="even">
-<td>Sequencer writer</td>
-<td><p>R = X / 2<br />
-W = X / 2 - 1<br />
-M = 1</p></td>
-<td>N/A</td>
-<td>N/A</td>
-</tr>
-<tr class="odd">
-<td>Sequencer exclusive writer</td>
-<td><p>R = Z / 2<br />
-W = Z / 2</p></td>
-<td>N/A</td>
-<td>N/A</td>
-</tr>
-<tr class="even">
-<td colspan="4">Synchronizer | N/A | RW = X | RW = X</td>
-</tr>
-</tbody>
-</table>
+| Node Type | Enterprise Edition with Replication | Enterprise Edition | Community Edition |
+| --- | --- | --- | --- |
+| Participant | A = X / 2<br/>R = X / 4<br/>W = X / 4 - 1<br/>M = 1<br/>I = Y | A = X / 2<br/>R = X / 4<br/>W = X / 4 - 1<br/>M = 1<br/>I = Y | A = X / 2<br/>RW = X / 2<br/>I = Y |
+| Mediator | R = X / 2<br/>W = X / 2 - 1<br/>M = 1 | N/A | N/A |
+| Sequencer | RW = X | N/A | N/A |
+| Sequencer writer | R = X / 2<br/>W = X / 2 - 1<br/>M = 1 | N/A | N/A |
+| Sequencer exclusive writer | R = Z / 2<br/>W = Z / 2 | N/A | N/A |
+| Synchronizer | N/A | RW = X | RW = X |
 
 The results of the divisions are always rounded down unless they yield a zero. In that case, a minimal pool size of 1 is ascertained.
 
@@ -377,15 +317,15 @@ The effective connection pool sizes are reported by the Canton nodes at startup.
 
     INFO  c.d.c.r.DbStorageMulti$:participant=participant_b - Creating storage, num-reads: 5, num-writes: 4
 
-### Queue Size
+#### Queue Size
 
 Canton may schedule more database queries than the database can handle. As a result, these queries will be placed into the database queue. By default, the database queue has a size of 1000 queries. Reaching the queueing limit will lead to a `DB_STORAGE_DEGRADATION` warning. The impact of this warning is that the queuing will overflow into the asynchronous execution context and slowly degrade the processing, which will result in fewer database queries being created. However, for high-performance setups, such spikes might occur more regularly. Therefore, to avoid the degradation warning appearing too frequently, the queue size can be configured using:
 
 <ExternalCantonMainCommunityAppSrcTestResourcesDocumentationSnippetsStorageQueueSize />
 
-## Postgres
+### Postgres
 
-### Postgres Configuration
+#### Postgres Configuration
 
 For Postgres, [the PGTune online tool](https://pgtune.leopard.in.ua/) is a good starting point for finding reasonable parameters (use online transaction processing system), but you need to increase the settings of `shared_buffers`, `checkpoint_timeout` and `max_wal_size`, as explained below.
 
@@ -395,7 +335,7 @@ Configuring the `shared_buffers` setting to hold 60-70% of the host memory is re
 
 Also increase the following variables beyond their default: Increase the `checkpoint_timeout` so that the flushing to disk includes several writes and not just one per page, accumulated over time, together with a higher `max_wal_size` to ensure that the system does not prematurely flush before reaching the `checkpoint_timeout`. Monitor your system during load testing and tune the parameters accordingly to your use case. The downside of changing the checkpointing parameters is that crash recovery takes longer.
 
-### Sizing and Performance
+#### Sizing and Performance
 
 Note that your Postgres database setup requires appropriate tuning to achieve the desired performance. Canton is database-heavy. This section should give you a starting point for your tuning efforts. You may want to consult the troubleshooting section on how to analyze whether the database is a limiting factor.
 
@@ -410,7 +350,7 @@ The memory requirements depend on your data retention period and the size of the
 
 Most Canton indexes are contract-id based, which means that the index lookups are randomly distributed. Solid state drives with high throughput perform much better than spinning disks for this purpose.
 
-### Predictability of Shared Environments
+#### Predictability of Shared Environments
 
 The throughput and latency of a Canton node depends on the performance of the database. Sharing hardware or software saves cost and better utilizes available resources, but it comes with some drawbacks: If the database is operated in a shared environment such as the Cloud, where other applications are using the same database or are operated on the same hardware, the performance of the Canton node varies due to contention on shared resources. This is a natural effect of shared environments and cannot be entirely avoided. It can be difficult to diagnose as a user of the shared environment due to lack of visibility into the other applications and the host system.
 
