@@ -7,7 +7,12 @@
     w[o][d] = w[o][d] || [];
 })(window, 'Osano', 'data');
 
+window.Osano('onInitialized', consent => {
+    console.log('Osano.js initialized', consent)
+});
+
 window.Osano('onAnalytics', consent => {
+    console.log('Consent granted for analytics.', consent);
     loadGoogleTag();
 });
 
