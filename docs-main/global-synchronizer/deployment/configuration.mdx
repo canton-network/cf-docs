@@ -3,30 +3,16 @@ title: "Custom Configuration"
 description: "Key configuration parameters for Canton Network validator nodes"
 ---
 
-import CantonGlobalSynchronizerDeploymentConfigurationL125 from "/snippets/canton-docs/global-synchronizer_deployment_configuration_L125.mdx";
-import CantonGlobalSynchronizerDeploymentConfigurationL190 from "/snippets/canton-docs/global-synchronizer_deployment_configuration_L190.mdx";
+import ExternalSpliceMainSpliceRstCodeDocsSrcDeploymentConfigurationNone49 from "/snippets/external/splice/main/splice-rst-code-docs-src-deployment-configuration-none-49.mdx";
+import ExternalSpliceMainSpliceRstCodeDocsSrcDeploymentConfigurationYaml68 from "/snippets/external/splice/main/splice-rst-code-docs-src-deployment-configuration-yaml-68.mdx";
 
-
-Validator configuration spans several layers: HOCON files for Canton components, Helm values for Kubernetes deployments, and environment variables for Docker Compose. This page covers the most important settings.
-
-## Configuration methods by deployment
-
-- **Docker Compose** — Primary config through environment variables in `.env` and `compose.yaml`. Use `JAVA_TOOL_OPTIONS` for JVM/HOCON overrides.
-- **Kubernetes** — Primary config through Helm `values.yaml` files. Use ConfigMaps, Secrets, and Helm value overrides for environment-specific settings.
-
-{/* COPIED_START source="splice:docs/src/deployment/configuration.rst" hash="10936f99" */}
-
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was copied from existing reviewed documentation.
-**Source:** `docs/src/deployment/configuration.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
+{/* COPIED_START source="splice:docs/src/deployment/configuration.rst" hash="22d3b95a" */}
 
 All the apps have an extended set of configuration options which might need tuning based on different scenarios. These configurations are accepted in the [HOCON](https://github.com/lightbend/config/blob/main/HOCON.md) format.
 
 ## Adding ad-hoc configuration
 
-Every app accepts extra configuration through environment variables. All the environment variables passed to the apps, that start with <span class="title-ref">ADDITIONAL_CONFIG</span> will be processed and the configuration will be applied when the app starts.
+Every app accepts extra configuration through environment variables. All the environment variables passed to the apps, that start with `ADDITIONAL_CONFIG` will be processed and the configuration will be applied when the app starts.
 
 <Note>
 Example env: ADDITIONAL_CONFIG_EXAMPLE="canton.example.key=value"
@@ -38,9 +24,13 @@ The full configuration for each app can be observed in the scala code, with the 
 - [SvAppConfig.scala](https://github.com/canton-network/splice/blob/main/apps/sv/src/main/scala/org/lfdecentralizedtrust/splice/sv/config/SvAppConfig.scala#L199)
 - [ScanAppConfig.scala](https://github.com/canton-network/splice/blob/main/apps/scan/src/main/scala/org/lfdecentralizedtrust/splice/scan/config/ScanAppConfig.scala#L28)
 
-Furthermore, the participant and other synchronizer components can be configured independently as well. Further info on such configurations can be found in the [daml docs](https://docs.daml.com/canton/usermanual/static_conf.html).
+Furthermore, the participant and other synchronizer components can be configured independently as well. Further information on such configurations can be found in the [Canton docs](/global-synchronizer/reference/canton-configuration-guide).
 
-<div class="todo">
+<Note>
+Examples in the Canton docs might have different root configuration keys for the configured nodes; Splice participants/mediators/sequencers are always configured under `canton.participants.participant {`/`canton.mediators.mediator {`/`canton.sequencers.sequencer {`, respectively.
+</Note>
+
+<div className="todo">
 
 point to the release that these docs are built from; or inline the source code or Scaladoc to avoid confusion
 
@@ -50,11 +40,7 @@ point to the release that these docs are built from; or inline the source code o
 
 Both Canton and splice support bootstrap scripts during initialization. While this usually should not be needed as the validator app takes care of initializing the node, in some scenarios it can be useful. To do so, you need to set the `OVERRIDE_BOOTSTRAP_SCRIPT` environment variable to the content of your bootstrap script. Note that the script must be wrapped in a `main` function, e.g.,
 
-``` 
-def main() {
-  logger.info(s"Participant id from bootstrap script: ${participant.id}")
-}
-```
+<ExternalSpliceMainSpliceRstCodeDocsSrcDeploymentConfigurationNone49 />
 
 You can set this environment variable through `additionalEnvVars` as described below.
 
@@ -64,172 +50,7 @@ Note that this overwrites any bootstrap scripts baked into the container image. 
 
 The helm charts can be configured through the value `additionalEnvVars`, which passes the values as environment variables to the apps.
 
-```yaml
-additionalEnvVars:
-    - name: ADDITIONAL_CONFIG_EXAMPLE
-      value: canton.example.key=value
-```
+<ExternalSpliceMainSpliceRstCodeDocsSrcDeploymentConfigurationYaml68 />
 
 
 {/* COPIED_END */}
-
-## Participant node configuration
-
-The participant node is the core component of your validator. Its configuration controls synchronizer connections, database settings, and API behavior.
-
-### Synchronizer connection
-
-The participant connects outbound to the Global Synchronizer sequencer over TLS on port 443. This connection is configured through the onboarding process and stored in the participant's database after initial setup.
-
-You do not need to manually configure sequencer URLs — the onboarding process handles this. If you need to update sequencer endpoints after onboarding (for example, after a network migration), the migration procedure provides the new connection parameters.
-
-### Database settings
-
-**Docker Compose** uses environment variables:
-
-```bash
-# In .env or compose.yaml environment section
-POSTGRES_HOST=localhost
-POSTGRES_PORT=5432
-POSTGRES_USER=canton
-POSTGRES_PASSWORD=<your-password>
-```
-
-**Kubernetes** uses Helm values:
-
-```yaml
-participant:
-  storage:
-    type: postgres
-    config:
-      url: "jdbc:postgresql://<DB_HOST>:5432/participant"
-      user: "canton"
-      password:
-        secretName: postgres-secrets
-        key: postgresPassword
-```
-
-For production, use a managed PostgreSQL service (RDS, Cloud SQL, or Azure Database for PostgreSQL) with:
-
-- Automated backups enabled
-- SSL connections enforced
-- Connection pooling if your application generates many concurrent connections
-- At least 200 max connections for production workloads
-
-### API configuration
-
-The participant exposes three APIs:
-
-- **Ledger API (gRPC, port 5001)** — Primary application interface. Supports TLS and JWT authentication.
-- **JSON Ledger API (port 7575)** — HTTP/JSON wrapper around the Ledger API. Suitable for frontend applications.
-- **Admin API (port 5002)** — Node administration. Must never be exposed publicly.
-
-In HOCON configuration, API settings look like:
-
-<CantonGlobalSynchronizerDeploymentConfigurationL125 />
-
-## Validator process configuration
-
-The validator process runs alongside the participant and manages Canton Network-specific operations.
-
-### Traffic auto-top-up
-
-The validator can automatically purchase traffic (bandwidth for submitting transactions) using Canton Coin. Configure the target throughput and minimum interval between purchases.
-
-**Docker Compose:**
-
-```bash
-TARGET_TRAFFIC_THROUGHPUT=20000    # bytes per second
-MIN_TRAFFIC_TOPUP_INTERVAL="1m"   # minimum interval between purchases
-```
-
-**Kubernetes Helm values:**
-
-```yaml
-validator:
-  traffic:
-    targetThroughput: 20000
-    minTopupInterval: "1m"
-```
-
-If auto-top-up is disabled, you must manually purchase traffic through the Wallet UI or API when your balance runs low.
-
-### Sweep and auto-accept
-
-The validator can automatically sweep Canton Coin to a designated wallet and auto-accept transfer offers:
-
-- **Sweep** — Moves CC from the validator wallet to a configured destination
-- **Auto-accept** — Automatically accepts incoming CC transfer offers
-
-These are configured in the validator Helm values or Docker Compose environment variables. Leave them disabled unless you have a specific operational reason to enable them.
-
-## Key management
-
-By default, the participant stores cryptographic keys in its PostgreSQL database. For production environments, you can use an external Key Management Service (KMS) to protect keys in hardware security modules.
-
-Supported KMS providers (available in community edition):
-
-- **Google Cloud KMS** — Uses Cloud KMS for key storage and signing
-- **AWS KMS** — Uses AWS KMS for key storage and signing
-
-KMS configuration is set in the participant's HOCON config:
-
-<CantonGlobalSynchronizerDeploymentConfigurationL190 />
-
-See the [Splice documentation on external KMS](https://docs.sync.global) for provider-specific configuration details.
-
-## HTTP proxy configuration
-
-If your network requires an HTTP proxy for outbound connections, configure it through JVM system properties:
-
-**Docker Compose:**
-
-```yaml
-environment:
-  JAVA_TOOL_OPTIONS: >-
-    -Dhttps.proxyHost=your.proxy.host
-    -Dhttps.proxyPort=3128
-```
-
-**Kubernetes:** Set the same properties in the Helm values or as environment variables on the validator and participant pods.
-
-## Participant pruning
-
-Over time, the participant database grows as transactions accumulate. Pruning removes old, committed transaction data that is no longer needed for active contract queries. The active contract set is preserved.
-
-Enable pruning in production to manage database growth. Configure the retention period based on your audit and compliance requirements.
-
-## Environment-specific considerations
-
-### DevNet
-
-- Authentication is optional (useful for development)
-- Traffic is available through faucets
-- Network resets every 3 months — do not store production data
-
-### TestNet
-
-- Enable authentication
-- Use managed database services
-- Monitor traffic balance — faucet CC is limited
-
-### MainNet
-
-- Full authentication and TLS required
-- External KMS recommended for key management
-- Automated monitoring and alerting required
-- Canton Coin has real economic value — configure auto-top-up carefully
-
-## Next steps
-
-<CardGroup cols={2}>
-
-<Card title="Authorization Setup" icon="lock" href="/global-synchronizer/deployment/authorization-setup">
-  Configure JWT authentication for your validator.
-</Card>
-
-<Card title="Upgrades" icon="arrow-up" href="/global-synchronizer/deployment/upgrades">
-  Plan for network upgrades.
-</Card>
-
-</CardGroup>

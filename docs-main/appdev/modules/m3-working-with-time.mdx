@@ -24,13 +24,13 @@ import DamlAppdevModulesM3WorkingWithTimeL67 from "/snippets/daml-docs/appdev_mo
 
 Contract time constraints may be implemented using either:
 
-- ledger time primitives (i.e. isLedgerTimeLT, isLedgerTimeLE, isLedgerTimeGT and isLedgerTimeGE) or assertions (i.e. assertWithinDeadline and assertDeadlineExceeded)
+- ledger time primitives (i.e. `isLedgerTimeLT`, `isLedgerTimeLE`, `isLedgerTimeGT` and `isLedgerTimeGE`) or assertions (i.e. `assertWithinDeadline` and `assertDeadlineExceeded`)
 
   > - the use of ledger time primitives and assertions do not constrain the time bound between transaction preparation and submission - e.g. they are suitable for workflows using external parties to sign transactions
 
-- or, by calling getTime
+- or, by calling `getTime`
 
-  > - calls to getTime constrain transaction preparation and submission workflows to be (by default) within 1 minute.
+  > - calls to `getTime` constrain transaction preparation and submission workflows to be (by default) within 1 minute.
   > - the 1 minute value is the default value for the ledger time record time tolerance parameter (a dynamic synchronizer parameter).
 
 The next subsections demonstrate how the following Coin and TransferProposal contracts can be modified to use different types of ledger time constraints to control when parties are allowed to perform ledger writes.
@@ -215,12 +215,6 @@ In the Coin contract, the Transfer choice has an additional deadline argument, s
 {/* COPIED_END */}
 {/* COPIED_START source="docs-website:docs/replicated/daml/3.4/sdk/tutorials/smart-contracts/constraints.rst" hash="dc7e974c" */}
 
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was copied from existing reviewed documentation.
-**Source:** `docs-website:docs/replicated/daml/3.4/sdk/tutorials/smart-contracts/constraints.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
-
 # Add constraints to a contract
 
 You will often want to constrain the data stored or the allowed data transformations in your contract models. In this section, you will learn about the two main mechanisms provided in Daml:
@@ -242,14 +236,14 @@ The first kind of restriction you may want to put on the contract model are call
 
 Suppose, for example, that the `SimpleIou` contract from `simple_iou` should only be able to store positive amounts. You can enforce this using the `ensure` keyword:
 
-```daml
+```haskell
 -- Code from: daml/daml-intro-constraints/daml/Restrictions.daml
 -- [Include actual code example here]
 ```
 
 The `ensure` keyword takes a single expression of type `Bool`. If you want to add more restrictions, use logical operators `&&`, `||`, and `not` to build up expressions. The below shows the additional restriction that currencies are three capital letters:
 
-```daml
+```haskell
 -- Code from: daml/daml-intro-constraints/daml/Restrictions.daml
 -- [Include actual code example here]
 ```
@@ -258,7 +252,7 @@ The `ensure` keyword takes a single expression of type `Bool`. If you want to ad
 The `T` here stands for the `DA.Text` which has been imported from the Daml standard library using `import DA.Text as T`:
 </Tip>
 
-```daml
+```haskell
 -- Code from: daml/daml-intro-constraints/daml/Restrictions.daml
 -- [Include actual code example here]
 ```
@@ -271,19 +265,19 @@ For example, the simple Iou in `simple_iou` allowed the no-op where the `owner` 
 
 `assert` does not return an informative error so often it's better to use the function `assertMsg`, which takes a custom error message:
 
-```daml
+```haskell
 -- Code from: daml/daml-intro-constraints/daml/Restrictions.daml
 -- [Include actual code example here]
 ```
 
-```daml
+```haskell
 -- Code from: daml/daml-intro-constraints/daml/Restrictions.daml
 -- [Include actual code example here]
 ```
 
 Similarly, you can write a `Redeem` choice, which allows the `owner` to redeem an `Iou` *during business hours on weekdays*. The `Redeem` choice implementation below confirms that `getTime` returns a value that is during business hours on weekdays. If all those checks pass, the choice does not do anything other than archive the `SimpleIou`. (This assumes that actual cash changes hands off-ledger:)
 
-```daml
+```haskell
 -- Code from: daml/daml-intro-constraints/daml/Restrictions.daml
 -- [Include actual code example here]
 ```
@@ -292,7 +286,7 @@ In the above example, the time is taken apart into day of week and hour of day u
 
 The following example shows how the `Redeem` choice is exercised in a script:
 
-```daml
+```haskell
 -- Code from: daml/daml-intro-constraints/daml/Restrictions.daml
 -- [Include actual code example here]
 ```
@@ -322,7 +316,7 @@ On a distributed Daml ledger, there are no guarantees that LT or RT are strictly
 
 The following script illustrates that idea by moving the logical time back by three days and then trying to exercise a choice on a contract *that hasn't been created yet*. That fails, as you would hope.
 
-```daml
+```haskell
 -- Code from: daml/daml-intro-constraints/daml/Restrictions.daml
 -- [Include actual code example here]
 ```
@@ -346,7 +340,7 @@ now syntax for functions later.
 
 You can't play any `CoinGame` game on pen and paper as you don't have a coin, but you can write down a script or recipe for a game:
 
-```daml
+```haskell
 -- Code from: daml/daml-intro-constraints/daml/Restrictions.daml
 -- [Include actual code example here]
 ```
@@ -363,7 +357,7 @@ More generally, if you want to learn more about Actions (aka Monads), we recomme
 
 Above, you've learnt about `assertMsg` and `abort`, which represent (potentially) failing actions. Actions only have an effect when they are performed, so the following script succeeds or fails depending on the value of `abortScript`:
 
-```daml
+```haskell
 -- Code from: daml/daml-intro-constraints/daml/Restrictions.daml
 -- [Include actual code example here]
 ```
@@ -372,21 +366,21 @@ However, what about errors in contexts other than actions? Suppose we wanted to 
 
 One option is to make the function explicitly partial by returning an `Optional`:
 
-```daml
+```haskell
 -- Code from: daml/daml-intro-constraints/daml/Restrictions.daml
 -- [Include actual code example here]
 ```
 
 This is a useful pattern if we need to be able to handle the error case, but it also forces us to always handle it as we need to extract the result from an `Optional`. We can see the impact on convenience in the definition of the above function. In cases, like division by zero or the above function, it can therefore be preferable to fail catastrophically instead:
 
-```daml
+```haskell
 -- Code from: daml/daml-intro-constraints/daml/Restrictions.daml
 -- [Include actual code example here]
 ```
 
 The big downside to this is that even unused errors cause failures. The following script will fail, because `failingComputation` is evaluated:
 
-```daml
+```haskell
 -- Code from: daml/daml-intro-constraints/daml/Restrictions.daml
 -- [Include actual code example here]
 ```
