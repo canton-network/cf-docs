@@ -14,12 +14,6 @@ import { networkData } from '/snippets/generated/version-dashboard-data.mdx';
 
 {/* COPIED_START source="splice:docs/src/validator_operator/validator_compose.rst" hash="074ae45b" */}
 
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was copied from existing reviewed documentation.
-**Source:** `docs/src/validator_operator/validator_compose.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
-
 This section describes how to deploy a standalone validator node on a VM or a local machine using [Docker Compose](https://docs.docker.com/compose/). The deployment consists of the validator node along with associated wallet and CNS UIs, and onboards the validator node to the target network.
 
 This deployment is useful for:
@@ -112,13 +106,13 @@ services:
 3)  Run the following command to start the validator node, and wait for it to become ready (could take a few minutes):
 
 > ```bash
-> ./start.sh -s "&lt;SPONSOR_SV_URL&gt;" -o "&lt;ONBOARDING_SECRET&gt;" -p "&lt;party_hint&gt;" -m "&lt;MIGRATION_ID&gt;" -w
-> ```text
+> ./start.sh -s "<SPONSOR_SV_URL>" -o "<ONBOARDING_SECRET>" -p "<party_hint>" -m "<MIGRATION_ID>" -w
+> ```
 >
 > Where:
 >
-> `&lt;party_hint&gt;` will be used as the prefix of the Party ID of your validator's administrator.
-> This must be of format `\<organization\>-\<function\>-\<enumerator\>`, e.g. `myCompany-myWallet-1`. It cannot be changed over time as it is part of the validator operator party ID.
+> `<party_hint>` will be used as the prefix of the Party ID of your validator's administrator.
+> This must be of format `<organization>-<function>-<enumerator>`, e.g. `myCompany-myWallet-1`. It cannot be changed over time as it is part of the validator operator party ID.
 
 Note that the validator may be stopped with the command `./stop.sh` and restarted again with the same `start.sh` command as above. Its data will be retained between invocations. In subseqent invocations, the secret itself may be left empty, but the `-o` is still mandatory, so a `-o ""` argument should be provided.
 
@@ -146,9 +140,9 @@ You can open your browser at [http://ans.localhost](http://ans.localhost) (note 
 
 ### Accessing the Canton Participant APIs
 
-The [JSON Ledger API](https://docs.digitalasset.com/build/3.4/tutorials/json-api/canton_and_the_json_ledger_api.html) is exposed under `json-ledger-api.localhost:80`. Note that for some clients you may explicitly need to set the `Host: json-ledger-api.localhost` header for this to get resolved correctly.
+The [JSON Ledger API](/sdks-tools/api-reference/json-api) is exposed under `json-ledger-api.localhost:80`. Note that for some clients you may explicitly need to set the `Host: json-ledger-api.localhost` header for this to get resolved correctly.
 
-The [gRPC Ledger API](https://docs.digitalasset.com/build/3.4/explanations/ledger-api-services.html) is exposed under `grpc-ledger-api.localhost:80`. Note that for some clients you may explicitly need to set the `:authority: json-ledger-api.localhost` pseudo-header for this to get resolved correctly.
+The [gRPC Ledger API](/sdks-tools/api-reference/ledger-api) is exposed under `grpc-ledger-api.localhost:80`. Note that for some clients you may explicitly need to set the `:authority: json-ledger-api.localhost` pseudo-header for this to get resolved correctly.
 
 The Canton Admin API is not exposed by default as it does not yet support auth. There is a commented out section in `nginx.conf` that you can enable to expose it if you ensure that it is not exposed publicly, e.g., through network restrictions.
 
@@ -183,20 +177,12 @@ Once you have set up your OAuth provider, you need to configure it by setting th
 <td>The URL of your OIDC provider for obtaining the <code>openid-configuration</code>, will typically be <code>${AUTH_URL}/.well-known/openid-configuration</code>.</td>
 </tr>
 <tr className="even">
-<td><ul>
-<li>**LEDGER_API_AUTH_AUDIENCE</li>
-</ul></td>
-<td><blockquote>
-<p>The audience for the participant ledger API. e.g. <code>https://ledger_api.example.com</code>.** — This will set the <code>ledger-api.auth-services.target-audience</code> configuration for the participant.</p>
-</blockquote></td>
+<td>LEDGER_API_AUTH_AUDIENCE</td>
+<td>The audience for the participant ledger API, e.g. <code>https://ledger_api.example.com</code>. This sets the <code>ledger-api.auth-services.target-audience</code> configuration for the participant.</td>
 </tr>
 <tr className="odd">
-<td><ul>
-<li>**LEDGER_API_AUTH_SCOPE</li>
-</ul></td>
-<td><blockquote>
-<p>The scope for the participant ledger API.** — This will set the participant's <code>ledger-api.auth-services.target-scope</code> configuration. Optional</p>
-</blockquote></td>
+<td>LEDGER_API_AUTH_SCOPE</td>
+<td>The scope for the participant ledger API. This sets the participant's <code>ledger-api.auth-services.target-scope</code> configuration. Optional.</td>
 </tr>
 <tr className="even">
 <td>VALIDATOR_AUTH_AUDIENCE</td>
@@ -236,7 +222,7 @@ Once you have set up your OAuth provider, you need to configure it by setting th
 In order to enable auth in the deployment, add the `-a` flag to the `start.sh` command, as follows:
 
 ```bash
-./start.sh -s "&lt;SPONSOR_SV_URL&gt;" -o "&lt;ONBOARDING_SECRET&gt;" -p "&lt;party_hint&gt;" -m "&lt;MIGRATION_ID&gt;" -w -a
+./start.sh -s "<SPONSOR_SV_URL>" -o "<ONBOARDING_SECRET>" -p "<party_hint>" -m "<MIGRATION_ID>" -w -a
 ```
 
 If you have already deployed a non-authenticated validator on your machine, you can migrate it to an authenticated one by stopping the validator with `./stop.sh` and restarting it with the `-a` flag as above. The validator operator user will be automatically migrated, and the user indicated by the `WALLET_ADMIN_USER` variable will be associated with the validator operator party. If you have also onboarded other users onto your validator, those will not be automatically migrated, and you need to manually associate the OAuth users with their corresponding parties. In order to do that, first take note of the party IDs of all relevant users (do this before stopping the unauthenticated validator), e.g. by copying them from the top-right corner of their wallet UIs. Now for every user that you wish to migrate, follow the instructions for associating a user with a party in the Users, Parties and Wallets in the Splice Wallet section, but replace the admin party ID with the party ID which you wish to associate with each user.
@@ -254,7 +240,7 @@ To do so, fill the following section and add the following additional config to 
 ```yaml
 # sweep by transferring directly through the transfer preapproval of the receiver,
 # if set to false sweeping creates transfer offers that need to be accepted on the receiver side.
-# Note that this refers to the preapprovals described in https://docs.dev.sync.global/background/preapprovals.html
+# Note that this refers to the preapprovals described in /appdev/modules/m7-canton-coin-preapprovals
 # and not to auto accepting transfers. Auto accept transfers does not setup preapproval contracts that allow
 # for a direct transfer but just automates the acceptance of the transfer offer so in that case
 # useTransferPreapproval should be set to false.

@@ -228,12 +228,13 @@ export const Version = ({ children, title, description, defaultLabel, networkDat
   const networksForVersion = (version) => {
     return networkOrder.filter((networkKey) => networkData[networkKey]?.versions?.splice === version);
   };
-  const networkNames = (networkKeys) => {
-    return networkKeys.map((networkKey) => networkData[networkKey]?.name ?? networkKey).join(' / ');
-  };
   const labelForVersion = (version) => {
     const networks = networksForVersion(version);
-    return networks.length ? `${networkNames(networks)} (${version})` : `CN ${version}`;
+    if (networks.length === 1) {
+      const networkKey = networks[0];
+      return `${networkData[networkKey]?.name ?? networkKey} (${version})`;
+    }
+    return `CN ${version}`;
   };
   const labelWithVersion = (label, version) => {
     return version ? `${label} (${version})` : label;
@@ -253,14 +254,29 @@ export const Version = ({ children, title, description, defaultLabel, networkDat
     return option;
   };
   const options = React.Children.toArray(children).filter((child) => child?.props?.label || child?.props?.version);
+  const tabOptions = options.flatMap((option) => {
+    if (option.props.label) {
+      return [{ label: optionLabel(option), option }];
+    }
+
+    const networks = networksForVersion(option.props.version);
+    if (!networks.length) {
+      return [{ label: optionLabel(option), option }];
+    }
+
+    return networks.map((networkKey) => ({
+      label: labelWithVersion(networkData[networkKey]?.name ?? networkKey, option.props.version),
+      option,
+    }));
+  });
   const defaultIndex = Math.max(
     0,
-    options.findIndex((child) => optionLabel(child) === defaultLabel),
+    tabOptions.findIndex((tab) => tab.label === defaultLabel),
   );
   const [activeIndex, setActiveIndex] = React.useState(defaultIndex);
-  const activeOption = options[activeIndex] ?? options[0];
+  const activeOption = tabOptions[activeIndex]?.option ?? tabOptions[0]?.option;
 
-  if (!options.length) {
+  if (!tabOptions.length) {
     return null;
   }
 
@@ -273,9 +289,8 @@ export const Version = ({ children, title, description, defaultLabel, networkDat
         </div>
       )}
       <div role="tablist" className="flex gap-1 border-b border-gray-200 bg-gray-50 p-1 dark:border-gray-800 dark:bg-gray-900">
-        {options.map((option, index) => {
+        {tabOptions.map(({ label }, index) => {
           const isActive = index === activeIndex;
-          const label = optionLabel(option);
           const buttonClass = isActive
             ? 'rounded-md bg-white text-gray-950 shadow-sm dark:bg-gray-800 dark:text-gray-100'
             : 'rounded-md text-gray-600 hover:bg-white/80 hover:text-gray-950 dark:text-gray-400 dark:hover:bg-gray-800/70 dark:hover:text-gray-100';
