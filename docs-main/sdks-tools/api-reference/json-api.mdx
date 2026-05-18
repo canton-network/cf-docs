@@ -107,6 +107,19 @@ curl localhost:7575/v2/state/active-contracts \
 
 The JSON API supports both HTTP POST and WebSocket connections for streaming updates. Use `/v2/updates` or `/v2/updates/flats` for flat transaction streams, and `/v2/updates/trees` for transaction trees. WebSocket connections use the `daml.ws.auth` subprotocol.
 
+### Ledger End
+
+`GET /v2/state/ledger-end` returns the latest absolute offset on the participant. Use it as the `activeAtOffset` value when querying the ACS to get the most recent state, or pass an older non-pruned offset to read state at a historical point.
+
+### Interactive Submission
+
+External-party command submission goes through two endpoints rather than the standard `submit-and-wait` flow:
+
+- `POST /v2/interactive-submission/prepare` — produces a prepared transaction the external party signs off-participant.
+- `POST /v2/interactive-submission/execute` — submits the signed prepared transaction back to the participant for ledger execution.
+
+See [Validator API](/sdks-tools/api-reference/splice-validator-api) for the surrounding external-signing flow.
+
 ## Configuration
 
 The JSON API is configured via the `http-ledger-api` section of the participant node's configuration. In cn-quickstart LocalNet deployments, it is pre-configured and available at `http://localhost:7575`.
