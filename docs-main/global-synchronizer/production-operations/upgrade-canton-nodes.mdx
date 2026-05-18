@@ -3,13 +3,21 @@ title: "Upgrade Canton Nodes"
 description: "Upgrade Canton participant and synchronizer binaries; change the Canton protocol version."
 ---
 
-{/* COPIED_START source="docs-website:docs/replicated/canton/3.4/participant/howtos/upgrade/index.rst" hash="1d3d613c" */}
+import ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosUpgradeIndex1 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/participant/howtos/upgrade/index-1.mdx";
+import ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosUpgradeIndex2 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/participant/howtos/upgrade/index-2.mdx";
+import ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosUpgradeIndex3 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/participant/howtos/upgrade/index-3.mdx";
+import ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosUpgradeIndex7 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/participant/howtos/upgrade/index-7.mdx";
+import ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosUpgradeIndex8 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/participant/howtos/upgrade/index-8.mdx";
+import ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosUpgradeIndex9 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/participant/howtos/upgrade/index-9.mdx";
+import ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosUpgradeIndex10 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/participant/howtos/upgrade/index-10.mdx";
+import ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosUpgradeIndex12 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/participant/howtos/upgrade/index-12.mdx";
+import ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosUpgradeIndex15 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/participant/howtos/upgrade/index-15.mdx";
+import ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosUpgradeIndex17 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/participant/howtos/upgrade/index-17.mdx";
+import ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosUpgradeIndex18 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/participant/howtos/upgrade/index-18.mdx";
+import ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosUpgradeIndex19 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/participant/howtos/upgrade/index-19.mdx";
+import ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosUpgradeIndex13 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/participant/howtos/upgrade/index-13.mdx";
 
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was copied from existing reviewed documentation.
-**Source:** `docs/replicated/canton/3.4/participant/howtos/upgrade/index.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
+{/* COPIED_START source="docs-website:docs/replicated/canton/3.4/participant/howtos/upgrade/index.rst" hash="1d3d613c" */}
 
 # Upgrade To a New Release
 
@@ -113,9 +121,7 @@ The database schema definitions are versioned and hashed. This error informs us 
 
 We can now force the migration to a new schema using:
 
-``` none
-@ participant.db.migrate()
-```
+<ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosUpgradeIndex1 />
 
 You can also configure the migrations to be applied automatically. Please note that you need to ensure that the user account the node is using to access the database allows to change the database schema. How long the migration takes depends on the version of the binary (see migration notes), the size of the database and the performance of the database server.
 
@@ -129,9 +135,7 @@ Otherwise, the restart may take a long time while the database is cleaning itsel
 
 Subsequently, you can successfully start the node
 
-``` none
-@ participant.start()
-```
+<ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosUpgradeIndex2 />
 
 Please note that the procedure remains the same for all other types of nodes, with a participant node used here as an example.
 
@@ -139,15 +143,11 @@ Please note that the procedure remains the same for all other types of nodes, wi
 
 Once your node is up and running, you can test it by running a ping. If you are testing the upgrade of your participant node, then you might want to connect to the test synchronizer
 
-``` none
-@ participant.synchronizers.connect_local(sequencer1, "testsynchronizer")
-```
+<ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosUpgradeIndex3 />
 
 If you did the actual upgrade of the production instance, then you would just reconnect to the current synchronizer before running the ping:
 
-``` none
-@ participant.synchronizers.reconnect_all()
-```
+<ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosUpgradeIndex13 />
 
 You can check that the synchronizer is up and running using
 
@@ -206,22 +206,15 @@ canton.features.enable-repair-commands=yes
 
 Assuming that you have several participants all connected to a synchronizer named `oldsynchronizer`, ensure that there are no pending transactions. You can do that by either controlling your applications, or by setting the resource limits to 0 on all participants:
 
-``` none
-@ participant.resources.set_resource_limits(ResourceLimits(Some(0), Some(0)))
-```
+<ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosUpgradeIndex7 />
 
 This rejects any new command and finishes processing the pending commands. Once you are sure that your participant node is idle, disconnect the participant node from the old synchronizer:
 
-``` none
-@ participant.synchronizers.disconnect("oldsynchronizer")
-```
+<ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosUpgradeIndex8 />
 
 Test that the synchronizer is disconnected by checking the list of active connections:
 
-``` none
-@ participant.synchronizers.list_connected()
-    res3: Seq[ListConnectedSynchronizersResult] = Vector()
-```
+<ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosUpgradeIndex9 />
 
 This is a good time to perform a backup of the database before proceeding:
 
@@ -233,15 +226,7 @@ Next, we want to run the migration step. For this, we need to run the `repair.mi
 
 In order to build a synchronizer connection config, we can just type
 
-``` none
-@ val config = SynchronizerConnectionConfig("newsynchronizer", GrpcSequencerConnection.tryCreate("https://127.0.0.1:5018"))
-    config : SynchronizerConnectionConfig = SynchronizerConnectionConfig(
-      synchronizer = Synchronizer 'newsynchronizer',
-      sequencerConnections = SequencerConnections(
-        connections = Sequencer 'DefaultSequencer' -> GrpcSequencerConnection(
-          sequencerAlias = Sequencer 'DefaultSequencer',
-    ..
-```
+<ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosUpgradeIndex10 />
 
 where the URL should point to the correct synchronizer. If you are testing the upgrade process locally in a single Canton process using a target synchronizer named `newsynchronizer` (which is what we are doing in this example), you can grab the connection details using
 
@@ -257,17 +242,13 @@ where the URL should point to the correct synchronizer. If you are testing the u
 
 Now, using this configuration object, we can trigger the hard synchronizer connection migration using
 
-``` none
-@ participant.repair.migrate_synchronizer("oldsynchronizer", config)
-```
+<ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosUpgradeIndex12 />
 
 This command will register the new synchronizer and re-associate the contracts tied to `oldsynchronizer` to the new synchronizer.
 
 Once all participants have performed the migration, they can reconnect to the synchronizer
 
-``` none
-@ participant.synchronizers.reconnect_all()
-```
+<ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosUpgradeIndex13 />
 
 Now, the new synchronizer should be connected:
 
@@ -284,9 +265,7 @@ Now, the new synchronizer should be connected:
 
 As we've previously set the resource limits to 0, we need to reset this back
 
-``` none
-@ participant.resources.set_resource_limits(ResourceLimits(None, None))
-```
+<ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosUpgradeIndex15 />
 
 Finally, we can test that the participant can process a transaction by running a ping on the new synchronizer
 
@@ -317,22 +296,15 @@ The hard synchronizer connection upgrade requires coordination among all partici
 
 Assuming the same setup as before, where the participant is connected to the old synchronizer, we can just connect it to the new synchronizer
 
-``` none
-@ participant.synchronizers.connect_local(sequencer3, "newsynchronizer")
-```
+<ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosUpgradeIndex17 />
 
 Give the new connection precedence over the old connection by changing the `priority` flag of the new synchronizer connection:
 
-``` none
-@ participant.synchronizers.modify("newsynchronizer", _.copy(priority=10))
-```
+<ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosUpgradeIndex18 />
 
 You can check the priority settings of the synchronizers using
 
-``` none
-@ participant.synchronizers.list_registered().map { case (c, _, _) => (c.synchronizerAlias, c.priority) }
-    res3: Seq[(SynchronizerAlias, Int)] = Vector((Synchronizer 'newsynchronizer', 10), (Synchronizer 'oldsynchronizer', 0))
-```
+<ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosUpgradeIndex19 />
 
 Existing contracts will not automatically move over to the new synchronizer. The synchronizer router will pick the synchronizer by minimizing the number of transfers and the priority. Therefore, most contracts will remain on the old synchronizer without additional action. However, by using the
 

@@ -4,6 +4,7 @@ description: "Testing pyramid for Canton applications, from Daml Script unit tes
 ---
 
 import DamlAppdevModulesM5TestingStrategiesL38 from "/snippets/daml-docs/appdev_modules_m5-testing-strategies_L38.mdx";
+import DamlAppdevModulesM5CiCdIntegrationL45 from "/snippets/daml-docs/appdev_modules_m5-ci-cd-integration_L45.mdx";
 
 
 Testing Canton applications follows the same principle as any distributed system: automate as much as possible and test at the lowest level that catches the bug. What differs is the tooling at each layer and the specific challenges that come with multi-party, privacy-preserving ledgers.
@@ -11,12 +12,6 @@ Testing Canton applications follows the same principle as any distributed system
 ## The Testing Pyramid
 
 {/* COPIED_START source="docs-website:manual/build/3.5/sdlc-howtos/sdlc-best-practices.rst" hash="test-section" */}
-
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was adapted from existing reviewed documentation.
-**Source:** `manual/build/3.5/sdlc-howtos/sdlc-best-practices.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
 
 Canton applications use a three-layer testing approach, where each layer catches different classes of issues:
 
@@ -30,9 +25,7 @@ Canton applications use a three-layer testing approach, where each layer catches
 
 Daml Script is the primary tool for unit testing smart contract logic. You write test scripts as top-level values of type `Script ()`, and `dpm test` runs them against the Sandbox.
 
-```bash
-dpm test
-```
+<DamlAppdevModulesM5CiCdIntegrationL45 />
 
 Daml Script tests can be run against the Sandbox, giving you rapid test execution — typically seconds.
 
@@ -55,12 +48,6 @@ Focus on the behaviors that are unique to your Daml model:
 ### Separating test code from production code
 
 {/* COPIED_START source="docs-website:manual/build/3.5/sdlc-howtos/sdlc-best-practices.rst" hash="test-separation" */}
-
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was adapted from existing reviewed documentation.
-**Source:** `manual/build/3.5/sdlc-howtos/sdlc-best-practices.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
 
 Unit tests for Daml workflows are compiled into DAR files. These DAR files are for testing only and should not be deployed to validators. Keep test code in separate DAR files from production code by placing tests in a dedicated package:
 
@@ -91,12 +78,6 @@ For backend services that talk to the Ledger API, write tests that:
 4. Assert on the resulting ledger state or API responses
 
 {/* COPIED_START source="docs-website:daml/3.5/sdk/tutorials/quickstart/template-root/src/main/java/com/daml/quickstart/iou/IouMain.java" hash="integration-pattern" */}
-
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was adapted from existing reviewed documentation.
-**Source:** `daml/3.5/sdk/tutorials/quickstart/template-root/src/main/java/com/daml/quickstart/iou/IouMain.java`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
 
 A Java integration test connects to the Ledger API over gRPC and submits commands:
 
@@ -140,12 +121,6 @@ Iterator<GetActiveContractsResponse> activeContracts =
 
 {/* COPIED_START source="docs-website:manual/build/3.5/sdlc-howtos/sdlc-best-practices.rst" hash="test-isolation" */}
 
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was adapted from existing reviewed documentation.
-**Source:** `manual/build/3.5/sdlc-howtos/sdlc-best-practices.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
-
 A testing optimization is to have a  long-running Canton instances to avoid repeatedly initializing and starting Canton. Isolate tests using unique participant users and parties for each test run.
 One approach is appending a test run ID as a suffix to party and user names in your test harness.
 
@@ -164,12 +139,6 @@ For frontend-involved tests, use tools like [Selenium](https://www.selenium.dev/
 ### Time-dependent workflows
 
 {/* COPIED_START source="docs-website:manual/build/3.5/sdlc-howtos/sdlc-best-practices.rst" hash="time-deps" */}
-
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was adapted from existing reviewed documentation.
-**Source:** `manual/build/3.5/sdlc-howtos/sdlc-best-practices.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
 
 For time-sensitive workflows, use the `passTime` function in Daml and configure reduced wait times for faster CI execution. Workflows that incorporate calendar or time functions — such as bond lifecycling with coupon payments — can be tested by advancing time with `passTime`. For end-to-end tests, configure workflows to advance in milliseconds to reduce CI execution time. Pause and resume automation from the test harness to prevent race conditions.
 
@@ -190,12 +159,6 @@ Investing time to eliminate flaky tests pays off quickly. A reliable test suite 
 ## Performance Testing
 
 {/* COPIED_START source="docs-website:manual/build/3.5/sdlc-howtos/sdlc-best-practices.rst" hash="perf-testing" */}
-
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was adapted from existing reviewed documentation.
-**Source:** `manual/build/3.5/sdlc-howtos/sdlc-best-practices.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
 
 Start performance testing early and continuously. Create separate performance tests for each relevant workflow. Test at scale with synthetic data resembling production characteristics. Measure performance characteristics and reset them between test runs to detect regressions. Perform soak testing with long-running deployments to detect bottlenecks. Set up alerting to monitor system failures, tuning it over time for optimal observability.
 

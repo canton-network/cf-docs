@@ -5,12 +5,6 @@ description: "Develop, deploy, and validate smart contract upgrades across Daml 
 
 {/* COPIED_START source="docs-website:docs/replicated/daml/3.4/sdk/sdlc-howtos/smart-contracts/upgrade/smart-contract-upgrades.rst" hash="ffdaf7cc" */}
 
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was copied from existing reviewed documentation.
-**Source:** `docs/replicated/daml/3.4/sdk/sdlc-howtos/smart-contracts/upgrade/smart-contract-upgrades.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
-
 # Smart Contract Upgrade
 
 ## Overview
@@ -234,7 +228,7 @@ For example, the simplest kind of data transformation that SCU supports is addin
 
 Given the following first version of a template:
 
-```daml
+```haskell
 template IOU
   with
     issuer: Party
@@ -247,7 +241,7 @@ template IOU
 
 You can add a new field for currency:
 
-```daml
+```haskell
 template IOU
   with
     issuer: Party
@@ -384,7 +378,7 @@ build-options:
 
 Then create `v1/my-pkg/daml/Main.daml`:
 
-```daml
+```haskell
 module Main where
 
 import Daml.Script
@@ -440,7 +434,7 @@ Any changes you make to v2 are now validated as correct upgrades over v1.
 
 Begin by adding a new `currency` field to `v2/my-pkg/daml/Main.daml`:
 
-```daml
+```haskell
 ...
 template IOU
   with
@@ -466,7 +460,7 @@ Any new fields added to a template must be optional - old contracts from the pre
 
 Fix the `currency` field to be optional, and re-run `dpm build`:
 
-```daml
+```haskell
 ...
     currency: Optional Text -- New field
 ...
@@ -486,7 +480,7 @@ Using the Daml Sandbox, we can see our old contracts automatically upgrade.
 
 Add a script to make and get IOUs to `v1/my-pkg/daml/Main.daml`:
 
-```daml
+```haskell
 module Main where
 
 import Daml.Script
@@ -503,7 +497,7 @@ getIOU key = queryContractKey @IOU key key
 
 Open `v2/my-pkg/daml/Main.daml` and add scripts to make IOUs with and without a currency field, and a script to get any IOU:
 
-```daml
+```haskell
 module Main where
 
 import Daml.Script
@@ -663,7 +657,7 @@ In this case, the query from v1 succeeded because all upgraded fields are set to
 
 SCU also allows package authors to add new choices - add the example choice `Double` to `v2/my-pkg/daml/Main.daml`, which archives the current contract and produces a new one with twice the value.
 
-```daml
+```haskell
 ...
     maintainer key
     choice Double : ContractId IOU
@@ -674,7 +668,7 @@ SCU also allows package authors to add new choices - add the example choice `Dou
 
 Along with a script to call it.
 
-```daml
+```haskell
 import DA.Optional (fromSome)
 
 ...
@@ -810,7 +804,7 @@ SCU allows package authors to change many more aspects of their packages - field
 
 Continue the package defined in the Writing Your First [Upgrade]() section above, but overwrite the v1 and v2 IOU modules. The v1 IOU module should be overwritten as follows:
 
-```daml
+```haskell
 module Main where
 
 import Daml.Script
@@ -838,7 +832,7 @@ getIOU key = queryContractKey @IOU key key
 
 The v2 IOU module should be overwritten to look like the following:
 
-```daml
+```haskell
 module Main where
 
 import Daml.Script
@@ -878,7 +872,7 @@ All other files should remain the same.
 
 Add the following choice, `Duplicate`, to both v1 and v2 versions of IOU:
 
-```daml
+```haskell
 data DuplicateResult = DuplicateResult with
   newCid : ContractId IOU
 
@@ -904,7 +898,7 @@ Created .daml/dist/my-pkg-1.1.0.dar
 
 Next, upgrade the `Duplicate` choice by adding an optional field `amount`, and changing the behavior of the choice to default to a multiple of 3. Also upgrade the `DuplicateResult` data type to include the old value. Replace the definitions of the `DuplicateResult` data type and of the `Duplicate` choice in v2 only:
 
-```daml
+```haskell
 ...
 -- Add import to top of module
 import DA.Optional (fromOptional)
@@ -930,7 +924,7 @@ data DuplicateResult = DuplicateResult with
 
 Add a script called `duplicateIOU` in V1:
 
-```daml
+```haskell
 ...
 duplicateIOU : Party -> Script (Optional (ContractId IOU, IOU))
 duplicateIOU key = do
@@ -947,7 +941,7 @@ duplicateIOU key = do
 
 A similar script called `duplicateIOU` should be added in V2, supplying an `amount` field:
 
-```daml
+```haskell
 ...
 duplicateIOU : Party -> Script (Optional (ContractId IOU, Int, IOU))
 duplicateIOU key = do
@@ -975,7 +969,7 @@ Signatories and observers are one expression that can be changed. Importantly, S
 
 For example, add a new field of "outside observers" to the v2 IOU template, and add them to the observer definition.
 
-```daml
+```haskell
 ...
     -- Add a new outsideObservers field
     outsideObservers: Optional [Party]
@@ -996,7 +990,7 @@ Variants and enums can be extended using SCU, either by adding fields to an exis
 
 Redefine the IOU package, overwriting the v1 and v2 sections similarly to the previous section. Overwrite the IOU package in both V1 and V2 with the following:
 
-```daml
+```haskell
 module Main where
 
 import Daml.Script
@@ -1045,7 +1039,7 @@ Created .daml/dist/my-pkg-1.1.0.dar
 
 When you want to extend our contract to support new currencies, you can add new entries to the end of our `Currency` enum.
 
-```daml
+```haskell
 ...
 data Currency
   = USD
@@ -1112,7 +1106,7 @@ Variants, also known as algebraic data types, are very similar to enums except t
 
 For example, the following variant has two constructors, each with unique fields. Overwrite both v1 and v2 modules with the following source:
 
-```daml
+```haskell
 module Main where
 
 data Shape
@@ -1122,7 +1116,7 @@ data Shape
 
 You can extend this variant in two ways. You can add a new constructor, similarly to enums. Modify the v2 module to add a new `Line` constructor with a `len` field:
 
-```daml
+```haskell
 module Main where
 
 data Shape
@@ -1146,7 +1140,7 @@ Created .daml/dist/my-pkg-1.1.0.dar
 
 You can also add a new field to a constructor, similarly to templates -for example, add a `sideLen` field to the `Polygon` constructor, to specify the lengths of the sides of the polygon.
 
-```daml
+```haskell
 data Shape
   = Circle
   | Polygon
@@ -1169,7 +1163,7 @@ ERROR: Creation of DAR file failed.
 
 Making the new `sideLen` field optional fixes the error:
 
-```daml
+```haskell
 ...
       , sideLen : Optional (Numeric 10) -- New field
 ...
@@ -1186,7 +1180,7 @@ Created .daml/dist/my-pkg-1.1.0.dar
 
 Upgrading variants has some limitations - because the `Circle` constructor has been defined without a field in curly braces, it cannot be upgraded with new fields.
 
-```daml
+```haskell
 ...
   -- Add a field where no fields existed
   = Circle { radius : Optional (Numeric 10) }
@@ -1204,7 +1198,7 @@ ERROR: Creation of DAR file failed.
 
 The same applies to variants with unnamed fields. If the v1 definition of the `Line` constructor were as follows, it would also not be able to upgrade:
 
-```daml
+```haskell
 ...
   | Line (Numeric 10)
 ```
@@ -1213,7 +1207,7 @@ In general, in order to enable future upgrades, it is strongly recommended that 
 
 For example, the correct way to write the v1 `Circle` constructor would be as follows:
 
-```daml
+```haskell
 ...
   = Circle { dummy : () }
 ...
@@ -1221,7 +1215,7 @@ For example, the correct way to write the v1 `Circle` constructor would be as fo
 
 The subsequent v2 upgrade would succeed:
 
-```daml
+```haskell
 ...
   = Circle { dummy : (), radius : Optional (Numeric 10) }
 ...
@@ -1233,7 +1227,7 @@ If a data type, choice, or template has a field which refers to another data typ
 
 For example, given the data type `A` with a field referring to data type `B`,
 
-```daml
+```haskell
 data A = A { b : B }
 data B = B { field : Text }
 ```
@@ -1255,7 +1249,7 @@ dep-3.0.0.dar
 
 Then assume a version `1.0.0` of a package `main` that depends on a datatype from version `2.0.0` of `dep`:
 
-```daml
+```haskell
 module Main where
 
 import qualified Dep
@@ -1331,7 +1325,7 @@ build-options:
 - --target=2.1
 ```
 
-```daml
+```haskell
 module MyIface where
 
 data HasValueView = HasValueView { hasValueView : Int }
@@ -1364,7 +1358,7 @@ dependencies:
 
 Overwrite both `v1/my-pkg/daml/Main.daml` and `v2/my-pkg/daml/Main.daml` with the following:
 
-```daml
+```haskell
 module Main where
 
 import Daml.Script
@@ -1390,7 +1384,7 @@ Interface instances can be changed by an upgrade. For example, v2 can change the
 
 Add a `quantity` field to the v2 IOU package, and amend the definition of `getValue` to use it:
 
-```daml
+```haskell
 ...
 import DA.Optional (fromOptional)
 
@@ -1473,13 +1467,13 @@ There are two ways to work around this:
 
 Environment variable interpolation in DPM can help with the latter. In the `daml.yaml` file of each of your packages, append an environment variable to the name of the package:
 
-```daml
+```haskell
 name: my-package-v${UNIQUE_BUILD_ID}
 ```
 
 Make sure to also append the variable to the name of the DAR file produced by `my-package` in the `daml.yaml` files that depend on it:
 
-```daml
+```haskell
 dependencies:
 - daml-prim
 - daml-stdlib
@@ -1564,7 +1558,7 @@ This means that template definitions that exist in the same package as interface
 
 For example, a single package `main` defined as follows would not be able to upgrade, leaving the template `T` non-upgradeable.
 
-```daml
+```haskell
 module Main where
 
 interface I where
@@ -1601,7 +1595,7 @@ error type checking <none>:
 
 The recommended way to fix this is to split the `main` package by redefining it as two packages, `helper` and `main`:
 
-```daml
+```haskell
 module Helper where
 
 interface I where
@@ -1620,7 +1614,7 @@ build-options:
 - --target=2.1
 ```
 
-```daml
+```haskell
 module Main where
 
 import qualified Helper
@@ -2043,7 +2037,7 @@ Each of the four submission commands now has an "exact" variant: `createExactCmd
 
 A submission can specify a package preference as a list of package IDs:
 
-```daml
+```haskell
 (actAs alice <> packagePreference [myPackageId]) `submitWithOptions` createCmd ...
 ```
 
@@ -2051,7 +2045,7 @@ Note the use of `submitWithOptions : SubmitOptions -> Commands a -> Script a`. Y
 
 The full list of builders for `SubmitOptions` is as follows:
 
-```daml
+```haskell
 -- `p` can be `Party`, `[Party]`, etc.
 actAs : IsParties p => p -> SubmiOptions
 readAs : IsParties p => p -> SubmitOptions
@@ -2080,7 +2074,7 @@ dpm script --dar ${SCRIPT_DAR} --script-name Main:main --ide-ledger --input-file
 
 Following this, your script would look like:
 
-```daml
+```haskell
 module Main where
 
 import Daml.Script

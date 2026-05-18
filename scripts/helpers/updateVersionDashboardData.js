@@ -13,7 +13,7 @@ const path = require('path');
 const PROJECT_ROOT = path.join(__dirname, '../..');
 const REPO_VERSION_CONFIG_PATH = path.join(PROJECT_ROOT, 'config/repo-version-config.json');
 const VERSION_DASHBOARD_META_PATH = path.join(PROJECT_ROOT, 'config/version-dashboard-meta.json');
-const OUTPUT_PATH = path.join(PROJECT_ROOT, 'snippets/generated/version-dashboard-data.mdx');
+const OUTPUT_PATH = path.join(PROJECT_ROOT, 'docs-main/snippets/generated/version-dashboard-data.mdx');
 
 /**
  * Format helper for MDX output
@@ -93,6 +93,7 @@ function buildNetworkData(repoConfig, metaConfig) {
     network.versions = versions;
     network.advanced = repoVersion.advanced;
     network.endpoint = repoVersion.endpoint;
+    network.substitutions = repoVersion.substitutions || {};
     
     networkData[networkKey] = network;
   }
@@ -137,6 +138,7 @@ function generateMDX(networkData) {
     lines.push(`    },`);
     
     lines.push(`    endpoint: ${formatValue(network.endpoint, 2)},`);
+    lines.push(`    substitutions: ${formatValue(network.substitutions, 2)},`);
     lines.push(`  },`);
   }
   
