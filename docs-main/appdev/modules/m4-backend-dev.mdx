@@ -3,6 +3,9 @@ title: "Backend Development"
 description: "Build a backend service that connects to the Canton Ledger API and PQS, with code examples from cn-quickstart"
 ---
 
+import DamlAppdevModulesM4BackendDevL261 from "/snippets/daml-docs/appdev_modules_m4-backend-dev_L261.mdx";
+
+
 The backend is the layer between your frontend and the Canton ledger. It submits commands, reads transactions, and queries contract state.
 
 This page uses [cn-quickstart](https://github.com/digital-asset/cn-quickstart) as a running example. cn-quickstart is a full-stack reference application that implements a software licensing workflow on Canton Network. It includes a Spring Boot backend, a React frontend, Daml smart contracts, and all the configuration needed to run locally or deploy to DevNet. The patterns shown here — connecting to the Ledger API, submitting commands, querying PQS, handling errors — apply to any Canton backend, but the code samples are drawn directly from the [cn-quickstart backend](https://github.com/digital-asset/cn-quickstart/tree/main/quickstart/backend) so you can see them in a working context.
@@ -258,21 +261,7 @@ By the end, you'll have a working `/licenses/{contractId}/comments` API that cre
 
 Create a new file `quickstart/daml/licensing/daml/Licensing/LicenseComment.daml`:
 
-```haskell
-module Licensing.LicenseComment where
-
-template LicenseComment
-  with
-    provider : Party
-    user : Party
-    licenseNum : Int
-    commenter : Party
-    body : Text
-    createdAt : Time
-  where
-    signatory commenter
-    observer provider, user
-```
+<DamlAppdevModulesM4BackendDevL261 />
 
 The `commenter` is the signatory — only the person writing the comment can create it. Both `provider` and `user` are observers so they can see comments on their licenses. The `licenseNum` field links the comment to a specific license without requiring a contract ID reference (which would break if the license is renewed or archived).
 
@@ -284,7 +273,7 @@ Compile the new Daml module and regenerate the Java bindings. If you're working 
 
 ```bash
 dpm build
-dpm codegen-java <DAR-file> -o <output-dir>
+dpm codegen-java &lt;DAR-file&gt; -o &lt;output-dir&gt;
 ```
 
 In cn-quickstart, the Gradle build handles both steps. Run the Daml build task, which compiles the `.daml` files into a DAR and then runs the transcode codegen plugin to produce Java classes:
@@ -580,6 +569,11 @@ curl -s "http://localhost:8080/licenses/${LICENSE_CID}/comments" \
 
 ## Next Steps
 
-- [Frontend Development](/docs-main/appdev/modules/m4-frontend-dev) -- Build a React UI that consumes this backend's REST API, including a frontend exercise that adds comment UI on top of these backend endpoints
-- [Canton Coin and Traffic](/docs-main/appdev/modules/m4-canton-coin) -- Understand traffic costs and wallet integration for payments
+- [Frontend Development](/appdev/modules/m4-frontend-dev) -- Build a React UI that consumes this backend's REST API, including a frontend exercise that adds comment UI on top of these backend endpoints
+- [Canton Coin and Traffic](/appdev/modules/m4-canton-coin) -- Understand traffic costs and wallet integration for payments
 - [cn-quickstart repository](https://github.com/digital-asset/cn-quickstart) -- Full working backend implementation
+
+## Advanced Topics
+
+- [Command Deduplication](/appdev/deep-dives/command-deduplication) — Designing application command flows so an intended ledger change is executed exactly once, even under retries, crashes, and lost network messages.
+- [Explicit Contract Disclosure](/appdev/deep-dives/explicit-contract-disclosure) — Submitting commands that read a contract you do not stakeholder by passing it as a disclosed contract on the Ledger API.

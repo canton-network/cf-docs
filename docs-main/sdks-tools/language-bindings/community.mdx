@@ -1,6 +1,69 @@
 ---
-title: Community Bindings
-description: Community-maintained language bindings for Canton.
+title: "Community Bindings"
+description: "Community-maintained language bindings for Python, Rust, Go, and other languages on Canton."
 ---
 
-Content coming soon.
+Beyond the officially supported Java and TypeScript bindings, community members have built client libraries for other languages. These bindings are **not maintained or supported by Digital Asset** and may not cover the full Ledger API surface or keep pace with every Canton release.
+
+## Available Community Bindings
+
+### Python
+
+Python bindings for the Daml Ledger API have been developed by community members. They typically wrap the gRPC Ledger API using Python's `grpcio` library, providing a more Pythonic interface for command submission and event streaming.
+
+Python can be a good choice for data analysis workflows, scripting, and integration with machine learning pipelines that need access to ledger data.
+
+### Rust
+
+Rust bindings provide low-level gRPC client access to the Ledger API. Rust's performance characteristics make it suitable for high-throughput event processing or embedding Canton access in systems-level software.
+
+### Go
+
+Go bindings wrap the Ledger API's Protobuf definitions using Go's standard gRPC tooling. Go is a common choice for backend microservices and infrastructure tooling.
+
+## Using Community Bindings
+
+Since these bindings are not code-generated from your Daml model the way Java and TypeScript bindings are, you typically work with the raw Ledger API types (template IDs as strings, contract payloads as generic value trees). This means less compile-time safety but full flexibility.
+
+A general approach for any language with gRPC support:
+
+1. Obtain the Ledger API `.proto` files from the [Canton repository](https://github.com/DACH-NY/canton) or the [Daml repository](https://github.com/digital-asset/daml)
+2. Generate gRPC stubs for your language using `protoc`
+3. Connect to a validator's Ledger API endpoint (typically port `x901`)
+4. Submit commands and subscribe to transaction streams using the generated stubs
+
+The JSON API (HTTP) is another option for languages where gRPC support is limited. You can interact with it using any HTTP client library, sending JSON payloads that match the Ledger API's JSON encoding.
+
+## Compatibility Considerations
+
+When using community bindings, keep the following in mind:
+
+- **API versioning** -- The Ledger API evolves across Canton releases. Community bindings may lag behind the latest version. Check that the binding version is compatible with your target Canton deployment.
+- **Feature coverage** -- Some bindings may only cover command submission and basic queries, omitting features like package management, party allocation, or transaction tree subscriptions.
+- **Testing** -- Validate community bindings against a local Sandbox (`dpm sandbox`) before using them against DevNet or TestNet.
+
+## Contributing and Finding Bindings
+
+The [Daml community forum](https://forum.canton.network/) is the primary place to find community-maintained bindings, ask questions, and share your own implementations. Search for your language of interest or post a question if you are starting a new binding project.
+
+Community members often announce new bindings and major updates on the forum. If you build a binding for a language not listed here, consider sharing it there so others can benefit.
+
+## When to Use Official vs Community Bindings
+
+**Use official bindings** (Java via `dpm codegen-java`, TypeScript via `dpm codegen-js`) when:
+
+- You need type-safe, code-generated classes that mirror your Daml model
+- You want guaranteed compatibility with the Canton version you are targeting
+- Your project requires production support from Digital Asset
+
+**Use community bindings** when:
+
+- Your team's primary language is not Java or TypeScript
+- You are building tooling, scripts, or data pipelines where raw API access is sufficient
+- You are prototyping and prefer a language you already know well
+
+## Related Pages
+
+- [Java bindings](/sdks-tools/language-bindings/java) -- Official code-generated Java bindings
+- [TypeScript bindings](/reference/typescript) -- Official code-generated TypeScript bindings
+- [Ledger API reference](/sdks-tools/api-reference/ledger-api) -- The underlying API that all bindings connect to

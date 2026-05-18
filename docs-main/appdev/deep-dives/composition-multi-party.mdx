@@ -1,6 +1,76 @@
 ---
-title: "Composition and Multi-Party Workflows"
-description: "Deep dive into composing multi-party workflows in Canton"
+title: "Composing Multi-Party Workflows in Daml"
+description: "Advanced Daml patterns for propose-accept, delegation, authorization chains, and atomic multi-party composition"
 ---
 
-Content coming soon.
+import DamlAppdevDeepDivesCompositionMultiPartyL117 from "/snippets/daml-docs/appdev_deep-dives_composition-multi-party_L117.mdx";
+import DamlAppdevDeepDivesCompositionMultiPartyL132 from "/snippets/daml-docs/appdev_deep-dives_composition-multi-party_L132.mdx";
+import DamlAppdevDeepDivesCompositionMultiPartyL154 from "/snippets/daml-docs/appdev_deep-dives_composition-multi-party_L154.mdx";
+import DamlAppdevDeepDivesCompositionMultiPartyL50 from "/snippets/daml-docs/appdev_deep-dives_composition-multi-party_L50.mdx";
+import DamlAppdevDeepDivesCompositionMultiPartyL78 from "/snippets/daml-docs/appdev_deep-dives_composition-multi-party_L78.mdx";
+
+
+Real-world Daml applications involve multiple parties with different roles, permissions, and trust relationships. This deep dive covers the Daml design patterns that make complex multi-party workflows work — from simple two-party agreements to multi-step authorization chains spanning several organizations.
+
+## The Propose-Accept Pattern
+
+For the canonical walkthrough of propose-accept, see [Module 2: Multi-Party Workflows](/appdev/modules/m2-multi-party-workflows#the-propose-accept-pattern). This deep dive focuses on the additional composition patterns that build on that foundation.
+
+## Delegation
+
+Delegation lets one party grant another party the authority to act on their behalf within a defined scope. Unlike the propose-accept pattern (which creates a shared agreement), delegation creates a one-directional trust relationship.
+
+<DamlAppdevDeepDivesCompositionMultiPartyL50 />
+
+The owner grants specific operations to the operator. The operator can exercise the `Operate` choice, but only for allowed operations. The owner can revoke the delegation by archiving the `OperatorLicense`.
+
+## Multi-Step Workflows
+
+Many business processes require a sequence of actions by different parties. Model these as a chain of contracts, where each step's output becomes the next step's input:
+
+<DamlAppdevDeepDivesCompositionMultiPartyL78 />
+
+Each step in the workflow is a separate template. This makes the workflow state visible and auditable — you can query the ledger to see which step any given trade is at.
+
+## Atomic Composition
+
+Daml transactions are atomic: either all the creates and archives in a transaction succeed, or none of them do. Use this property to implement complex operations that must happen together:
+
+<DamlAppdevDeepDivesCompositionMultiPartyL117 />
+
+If either transfer fails (wrong controller, contract already archived, assertion failure), neither happens. This is the foundation of delivery-versus-payment (DvP) and other settlement patterns.
+
+## Authorization Through Interfaces
+
+Interfaces define abstract capabilities that templates can implement. Use them to create composable authorization patterns:
+
+<DamlAppdevDeepDivesCompositionMultiPartyL132 />
+
+Any template that implements `Transferable` gets the `TransferTo` choice. Your backend can work with the interface without knowing the specific template type, enabling generic transfer logic across different asset types.
+
+<Note>
+Place interface definitions in standalone packages that contain only interfaces and no templates. An interface's structure (methods and view type) cannot be modified after deployment. If changes are needed, introduce a new interface version in a new package.
+</Note>
+
+## Multi-Party Visibility Patterns
+
+Canton's privacy model means each party sees only the contracts where they are a stakeholder (signatory or observer). For workflows that need broader visibility without giving parties the ability to act, use the observer pattern:
+
+<DamlAppdevDeepDivesCompositionMultiPartyL154 />
+
+For regulatory or compliance scenarios where a third party needs visibility into transactions without being a participant, add them as observers. They can read the contract data through the Ledger API but cannot exercise choices on it.
+
+## Design Considerations
+
+When composing multi-party workflows:
+
+- Keep the signatory set minimal — each additional signatory adds coordination overhead
+- Use observers for read-only access rather than making parties signatories
+- Design templates so that each party's choices are clear from the template declaration
+- Avoid deep transaction trees (many nested exercises) as they increase transaction size and latency
+- Consider whether a workflow step needs to be on-ledger or can happen off-ledger
+
+## Next Steps
+
+- [Decentralization](/appdev/deep-dives/decentralization) — Strategies for decentralizing at each layer
+- [Multi-Hosting](/appdev/deep-dives/multi-hosting) — Distributing parties across validators for resilience

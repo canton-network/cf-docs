@@ -3,6 +3,12 @@ title: "Canton for Blockchain Developers"
 description: "Bridge your Ethereum and blockchain knowledge to Canton concepts"
 ---
 
+import DamlAppdevModulesM2CantonForEthereumDevsL159 from "/snippets/daml-docs/appdev_modules_m2-canton-for-ethereum-devs_L159.mdx";
+import DamlAppdevModulesM2CantonForEthereumDevsL184 from "/snippets/daml-docs/appdev_modules_m2-canton-for-ethereum-devs_L184.mdx";
+import DamlAppdevModulesM2CantonForEthereumDevsL236 from "/snippets/daml-docs/appdev_modules_m2-canton-for-ethereum-devs_L236.mdx";
+import DamlAppdevModulesM2CantonForEthereumDevsL73 from "/snippets/daml-docs/appdev_modules_m2-canton-for-ethereum-devs_L73.mdx";
+
+
 If you're coming from Ethereum, Solana, or another blockchain platform, Canton will feel both familiar and fundamentally different. This section maps concepts you know to their Canton equivalents - and highlights where mental models must shift.
 
 ## Core Concept Mapping
@@ -70,24 +76,7 @@ contract Token {
 
 In Daml (Canton's smart contract language), you define templates with immutable contracts and choices that archive existing contracts and create new ones:
 
-```haskell
--- Daml: Immutable contracts with choices
-template Token
-  with
-    owner : Party
-    issuer : Party
-    amount : Decimal
-  where
-    signatory issuer
-    observer owner
-    
-    choice Transfer : ContractId Token
-      with
-        newOwner : Party
-      controller owner
-      do
-        create this with owner = newOwner
-```
+<DamlAppdevModulesM2CantonForEthereumDevsL73 />
 
 ### Key Differences
 
@@ -156,23 +145,7 @@ Canton's authorization model uses three key roles:
 
 ### Authorization Example
 
-```haskell
-template Asset
-  with
-    owner : Party
-    issuer : Party
-    auditor : Party
-  where
-    signatory issuer        -- Must authorize creation; always sees contract
-    observer owner, auditor -- Can see but cannot act unless also controller
-    
-    choice Transfer : ContractId Asset
-      with
-        newOwner : Party
-      controller owner      -- Only owner can exercise this choice
-      do
-        create this with owner = newOwner
-```
+<DamlAppdevModulesM2CantonForEthereumDevsL159 />
 
 In this template:
 - `issuer` must sign to create the contract (signatory)
@@ -181,17 +154,7 @@ In this template:
 
 Note that `controller` declarations are per-choice. A template can have multiple choices with different controllers:
 
-```haskell
-    choice Transfer : ContractId Asset
-      controller owner      -- Only owner can transfer
-      do
-        create this with owner = newOwner
-
-    choice Audit : AuditReport
-      controller auditor    -- Only auditor can audit
-      do
-        return AuditReport with ...
-```
+<DamlAppdevModulesM2CantonForEthereumDevsL184 />
 
 ## Developer Tooling Comparison
 
@@ -233,22 +196,7 @@ contract MultiSig {
 
 ### Canton Approach: Built-in Multi-Party
 
-```haskell
--- Daml: Native multi-party agreement
-template Agreement
-  with
-    partyA : Party
-    partyB : Party
-    terms : Text
-  where
-    signatory partyA, partyB  -- Both must agree to create
-    
-    choice Execute : ()
-      controller partyA, partyB  -- Both must agree to execute
-      do
-        -- ... execute action
-        return ()
-```
+<DamlAppdevModulesM2CantonForEthereumDevsL236 />
 
 The Daml version is enforced at the protocol level. There's no way to create the contract without both signatures, and no way to exercise `Execute` without both parties.
 
@@ -290,6 +238,6 @@ These are the most common mistakes blockchain developers make when first buildin
 
 ## Next Steps
 
-- **[Architecture Overview](/docs-main/overview/learn/architecture)** - Deep dive into Canton's component model
-- **[Privacy Model Explained](/docs-main/overview/learn/privacy-model)** - Understand sub-transaction privacy
-- **[Developer Track Module 3: Daml Development](/docs-main/appdev/modules/m3-dev-environment)** - Start writing Daml code
+- **[Architecture Overview](/overview/learn/architecture)** - Deep dive into Canton's component model
+- **[Privacy Model Explained](/overview/learn/privacy-model)** - Understand sub-transaction privacy
+- **[Developer Track Module 3: Daml Development](/appdev/modules/m3-dev-environment)** - Start writing Daml code

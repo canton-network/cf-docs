@@ -3,6 +3,22 @@ title: "Interfaces"
 description: "Define and implement Daml interfaces for polymorphic contract behavior and cross-template interoperability"
 ---
 
+import DamlAppdevModulesM3InterfacesL112 from "/snippets/daml-docs/appdev_modules_m3-interfaces_L112.mdx";
+import DamlAppdevModulesM3InterfacesL125 from "/snippets/daml-docs/appdev_modules_m3-interfaces_L125.mdx";
+import DamlAppdevModulesM3InterfacesL136 from "/snippets/daml-docs/appdev_modules_m3-interfaces_L136.mdx";
+import DamlAppdevModulesM3InterfacesL159 from "/snippets/daml-docs/appdev_modules_m3-interfaces_L159.mdx";
+import DamlAppdevModulesM3InterfacesL24 from "/snippets/daml-docs/appdev_modules_m3-interfaces_L24.mdx";
+import DamlAppdevModulesM3InterfacesL314 from "/snippets/daml-docs/appdev_modules_m3-interfaces_L314.mdx";
+import DamlAppdevModulesM3InterfacesL325 from "/snippets/daml-docs/appdev_modules_m3-interfaces_L325.mdx";
+import DamlAppdevModulesM3InterfacesL335 from "/snippets/daml-docs/appdev_modules_m3-interfaces_L335.mdx";
+import DamlAppdevModulesM3InterfacesL343 from "/snippets/daml-docs/appdev_modules_m3-interfaces_L343.mdx";
+import DamlAppdevModulesM3InterfacesL43 from "/snippets/daml-docs/appdev_modules_m3-interfaces_L43.mdx";
+import DamlAppdevModulesM3InterfacesL54 from "/snippets/daml-docs/appdev_modules_m3-interfaces_L54.mdx";
+import DamlAppdevModulesM3InterfacesL72 from "/snippets/daml-docs/appdev_modules_m3-interfaces_L72.mdx";
+import DamlAppdevModulesM3InterfacesL77 from "/snippets/daml-docs/appdev_modules_m3-interfaces_L77.mdx";
+import DamlAppdevModulesM3InterfacesL87 from "/snippets/daml-docs/appdev_modules_m3-interfaces_L87.mdx";
+
+
 {/* COPIED_START source="docs-website:docs/replicated/daml/3.4/sdk/reference/daml/interfaces.rst" hash="fdeb13bb" */}
 
 # Reference: Interfaces
@@ -21,9 +37,7 @@ An interface declaration is somewhat similar to a template declaration.
 
 ### Interface Name
 
-```daml
-interface MyInterface where
-```
+<DamlAppdevModulesM3InterfacesL24 />
 
 - This is the name of the interface.
 - It's preceded by the keyword `interface` and followed by the keyword `where`.
@@ -40,27 +54,14 @@ interface MyInterface where
 
 ### Interface Methods
 
-```daml
-  method1 : Party
-  method2 : Int
-  method3 : Bool -> Int -> Int -> Int
-```
+<DamlAppdevModulesM3InterfacesL43 />
 
 - An interface may define any number of methods.
 - A method definition consists of the method name and the method type, separated by a single colon `:`. The name of the method must be a valid identifier beginning with a lowercase letter or an underscore.
 - A method definition introduces a top level function of the same name:
   - If the interface is called `I`, the method is called `m`, and the method type is `M` (which might be a function type), this introduces the function `m : I -> M`:
 
-    ```daml
-func1 : MyInterface -> Party
-func1 = method1
-
-func2 : MyInterface -> Int
-func2 = method2
-
-func3 : MyInterface -> Bool -> Int -> Int -> Int
-func3 = method3
-```
+    <DamlAppdevModulesM3InterfacesL54 />
 
   - The first argument's type `I` means that the function can only be applied to values of the interface type `I` itself. Methods cannot be applied to template values, even if there exists an `interface instance` of `I` for that template. To use an interface method on a template value, first convert it using the `toInterface` function.
 
@@ -69,14 +70,9 @@ func3 = method3
 
 ### Interface View Type
 
-```daml
-data MyInterfaceViewType =
-  MyInterfaceViewType { name : Text, value : Int }
-```
+<DamlAppdevModulesM3InterfacesL72 />
 
-```daml
-  viewtype MyInterfaceViewType
-```
+<DamlAppdevModulesM3InterfacesL77 />
 
 - All interface instances must implement a special `view` method which returns a value of the type declared by `viewtype`.
 - The type must be a record.
@@ -84,22 +80,7 @@ data MyInterfaceViewType =
 
 ### Interface Choices
 
-```daml
-  choice MyChoice : (ContractId MyInterface, Int)
-    with
-      argument1 : Bool
-      argument2 : Int
-    controller method1 this
-    do
-      let n0 = method2 this
-      let n1 = method3 this argument1 argument2 n0
-      pure (self, n1)
-
-  nonconsuming choice MyNonConsumingChoice : Int
-    controller method1 this
-    do
-      pure $ method2 this
-```
+<DamlAppdevModulesM3InterfacesL87 />
 
 - Interface choices work in a very similar way to template choices. Any contract of a template type for which an interface instance exists will grant the choice to the controlling party.
 - Interface choices can only be exercised on values of the corresponding interface type. To exercise an interface choice on a template value, first convert it using the `toInterface` function.
@@ -109,12 +90,7 @@ data MyInterfaceViewType =
 
 ### Empty Interfaces
 
-```daml
-data EmptyInterfaceView = EmptyInterfaceView {}
-
-interface YourInterface where
-  viewtype EmptyInterfaceView
-```
+<DamlAppdevModulesM3InterfacesL112 />
 
 - It is possible (though not necessarily useful) to define an interface without methods, precondition or choices. However, a view type must always be defined, though it can be set to unit.
 
@@ -122,27 +98,11 @@ interface YourInterface where
 
 For context, a simple template definition:
 
-```daml
-template NameOfTemplate
-  with
-    field1 : Party
-    field2 : Int
-  where
-    signatory field1
-```
+<DamlAppdevModulesM3InterfacesL125 />
 
 ### `interface instance` clause
 
-```daml
-    interface instance MyInterface for NameOfTemplate where
-      view = MyInterfaceViewType "NameOfTemplate" 100
-      method1 = field1
-      method2 = field2
-      method3 False _ _ = 0
-      method3 True x y
-        | x > 0 = x + y
-        | otherwise = y
-```
+<DamlAppdevModulesM3InterfacesL136 />
 
 - To make a template an instance of an existing interface, an `interface instance` clause must be defined in the template declaration.
 - The template of the clause must match the enclosing declaration. In other words, a template `T` declaration can only contain `interface instance` clauses where the template is `T`.
@@ -156,10 +116,7 @@ template NameOfTemplate
 
 - If the interface has no methods, the interface instance only needs to implement the `view` method:
 
-```daml
-    interface instance YourInterface for NameOfTemplate where
-      view = EmptyInterfaceView
-```
+<DamlAppdevModulesM3InterfacesL159 />
 
 ## Interface Functions
 
@@ -311,10 +268,7 @@ template NameOfTemplate
 
 ## Required Interfaces
 
-```daml
-interface OurInterface requires MyInterface, YourInterface where
-  viewtype EmptyInterfaceView
-```
+<DamlAppdevModulesM3InterfacesL314 />
 
 - An interface can depend on other interfaces. These are specified with the `requires` keyword after the interface name but before the `where` keyword, separated by commas.
 
@@ -322,28 +276,15 @@ interface OurInterface requires MyInterface, YourInterface where
 
   For example, given
 
-  ```daml
-interface Shape where
-  viewtype EmptyInterfaceView
-
-interface Rectangle requires Shape where
-  viewtype EmptyInterfaceView
-```
+  <DamlAppdevModulesM3InterfacesL325 />
 
   This declaration for interface `Square` would cause a compiler error
 
-  ```daml
--- Compiler error! "Interface Square is missing requirement [Shape]"
-interface Square requires Rectangle where
-  viewtype EmptyInterfaceView
-```
+  <DamlAppdevModulesM3InterfacesL335 />
 
   Explicitly adding `Shape` to the required interfaces fixes the error
 
-  ```daml
-interface Square requires Rectangle, Shape where
-  viewtype EmptyInterfaceView
-```
+  <DamlAppdevModulesM3InterfacesL343 />
 
 - For a template `T` to be a valid `interface instance` of an interface `I`, `T` must also be an `interface instance` of each of the interfaces required by `I`.
 
