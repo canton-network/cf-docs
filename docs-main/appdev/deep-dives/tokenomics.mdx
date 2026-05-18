@@ -7,19 +7,13 @@ Following is an overview of the Canton Network tokenomics for application develo
 
 {/* COPIED_START source="splice:docs/src/background/tokenomics/overview_tokenomics.rst" hash="4b0e1a6e" */}
 
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was copied from existing reviewed documentation.
-**Source:** `docs/src/background/tokenomics/overview_tokenomics.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
-
 Canton Network tokenomics is based on an *Activity Record* which identifies a party that performed an action which provides value to the network. An activity record has a *weight* which is the relative share of CC minting associated with this activity record.
 
 Creating an activity record and minting the associated Canton Coin (CC) are two distinct steps. The creation and minting steps are performed in a cycle that is called a *round* which has five phases. In the first phase, any fee values for that round are written to the ledger (the fees can be obtained from the Scan State API). The second phase is called the *activity recording* and it is when activity records are created; records created in this phase belong to that round. The next phase calculates a [CC-issuance-per-activity-weight](https://github.com/canton-network/splice/blob/332e06a7ae9e13fde5bba0bf7dcb059aa36f979e/daml/splice-amulet/daml/Splice/Issuance.daml#L67) for each kind of activity record which is the share of total CC that can be minted for this type of activity record. This is followed by a *minting phase* where the owners of an activity record can mint CC proportional to its minting weight.
 
 There are several rounds active concurrently with each round being in a different phase. A round starts every 10 minutes, which is a configuration parameter that the Super Validators may change in the future via a governance vote. See the CC whitepaper for the details.
 
-There is no difference in activity record creation for an [external party](https://docs.digitalasset.com/build/3.4/tutorials/app-dev/external_signing_onboarding.html#tutorial-onboard-external-party) or a local party, but there is a difference in the automation support used in the minting phase. For local parties onboarded to a validator, the validator application runs background automation to mint all activity records automatically. An external party signs transactions using a key they control. As a consequence, the validator automation is not able to perform minting for external parties directly. For external parties, there are two options:
+There is no difference in activity record creation for an [external party](/appdev/deep-dives/external-signing-onboarding) or a local party, but there is a difference in the automation support used in the minting phase. For local parties onboarded to a validator, the validator application runs background automation to mint all activity records automatically. An external party signs transactions using a key they control. As a consequence, the validator automation is not able to perform minting for external parties directly. For external parties, there are two options:
 
 1.  Use a minting delegation to delegate reward collection to a validator, avoiding the need to build custom automation.
 2.  Develop custom automation to call AmuletRules_Transfer at least once per round with all activity records as inputs.
@@ -74,12 +68,6 @@ The holding fees is a fixed fee, per separate coin contract (UTXO) per unit of t
 
 {/* COPIED_START source="splice:docs/src/background/tokenomics/feat_app_act_marker_tokenomics.rst" hash="f4ed8911" */}
 
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was copied from existing reviewed documentation.
-**Source:** `docs/src/background/tokenomics/feat_app_act_marker_tokenomics.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
-
 ## Featured Application Activity Marker
 
 The *featured application activity marker* is specified in [CIP 47](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0047/cip-0047.md). A summary follows.
@@ -94,7 +82,7 @@ Generally the guidance is to create a `FeaturedAppActivityMarker` for any econom
 - Transfer a RWA.
 - Mint or burn tokens.
 
-However, it should not be created for any intermediate steps or a [propose step](https://docs.digitalasset.com/build/3.4/sdlc-howtos/smart-contracts/develop/patterns/propose-accept.html).
+However, it should not be created for any intermediate steps or a [propose step](/appdev/modules/m3-authorization#use-propose-accept-workflow-for-one-off-authorization).
 
 A `FeaturedAppActivityMarker` is immediately converted into an AppRewardCoupon by the automation run by the Super Validators. The AppRewardCoupon is created with the DSO as the `signatory` and the `provider` field as an observer. By default, the `provider` can mint CC in the minting step. The `featured` field is set to `true` to indicate eligibility to receive featured application rewards, based on a FeaturedAppRight contract.
 
@@ -158,12 +146,6 @@ It is possible to share the attribution of activity for the `FeaturedAppActivity
 
 {/* COPIED_START source="splice:docs/src/background/tokenomics/cc_transfer_splice_wallet_tokenomics.rst" hash="d0136d43" */}
 
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was copied from existing reviewed documentation.
-**Source:** `docs/src/background/tokenomics/cc_transfer_splice_wallet_tokenomics.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
-
 ## A CC Transfer using the Splice Wallet UI
 
 A manual CC transfer using the UI of the Splice wallet (the wallet UI built into every validator) is an example of an AmuletRules_Transfer. There are three types of manual transfers possible with the Splice Wallet UI:
@@ -193,12 +175,6 @@ When comparing the `Amulet` legacy and token standard two-step transfers, a diff
 
 {/* COPIED_START source="splice:docs/src/background/tokenomics/traffic_tokenomics.rst" hash="f063357a" */}
 
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was copied from existing reviewed documentation.
-**Source:** `docs/src/background/tokenomics/traffic_tokenomics.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
-
 Traffic credits are used for all submissions to the Global Synchronizer. Traffic costs are charged for sending all data based on the size of the messages and its delivery cost. However only the sending validator node is charged. Please refer to `traffic` for more details.
 
 A validator increases its traffic credit balance by burning CC at the current USD-to-Canton-Coin conversion rate (a USD/MB price). When needed, the operator of a validator (or a third-party service provider) burns CC in exchange for traffic credits. The CC burned creates a ValidatorRewardCoupon with the amount of CC burnt and where the `user` is the validator operator of the validator hosting the purchasing party. There is no application involved so no AppRewardCoupon is created.
@@ -213,12 +189,6 @@ Note that traffic credits are used whenever a confirmation request for a Daml tr
 
 {/* COPIED_START source="splice:docs/src/background/tokenomics/val_live_tokenomics.rst" hash="48ad8bfc" */}
 
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was copied from existing reviewed documentation.
-**Source:** `docs/src/background/tokenomics/val_live_tokenomics.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
-
 In each round, each live validator records its liveness activity with a ValidatorLivenessActivityRecord. This rewards a validator for being available to validate and confirm transactions. It also provides them with initial funds to purchase extra traffic for higher throughput, after onboarding.
 
 
@@ -226,12 +196,6 @@ In each round, each live validator records its liveness activity with a Validato
 
 
 {/* COPIED_START source="splice:docs/src/background/tokenomics/sv_live_tokenomics.rst" hash="a7bf1890" */}
-
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was copied from existing reviewed documentation.
-**Source:** `docs/src/background/tokenomics/sv_live_tokenomics.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
 
 Each Super Validator, in each round, creates an SvRewardCoupon.
 

@@ -25,12 +25,6 @@ import { networkData } from '/snippets/generated/version-dashboard-data.mdx';
 
 {/* COPIED_START source="splice:docs/src/validator_operator/validator_helm.rst" hash="b0bc851d" */}
 
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was copied from existing reviewed documentation.
-**Source:** `docs/src/validator_operator/validator_helm.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
-
 This section describes how to deploy a standalone validator node in Kubernetes using Helm charts. The Helm charts deploy a validator node along with associated wallet and CNS UIs, and connect it to a global synchronizer.
 
 ## Requirements
@@ -52,7 +46,7 @@ This section describes how to deploy a standalone validator node in Kubernetes u
 tar xzvf |version|_splice-node.tar.gz
 ```
 
-- **TRUSTED_SCAN_URL** — The scan URL of an SV that you trust and that is reachable by your validator, often your SV sponsor. This should be of the form [|generic_scan_url|](|generic_scan_url|), e.g., for the Global Synchronizer Foundation SV it is [|gsf_scan_url|](|gsf_scan_url|).
+- **TRUSTED_SCAN_URL** — The scan URL of an SV that you trust and that is reachable by your validator, often your SV sponsor. This should be of the form <a href="|generic_scan_url|">|generic_scan_url|</a>, e.g., for the Global Synchronizer Foundation SV it is <a href="|gsf_scan_url|">|gsf_scan_url|</a>.
 
 Additional parameters describing your own setup as opposed to the connection to the network are described below.
 
@@ -314,7 +308,7 @@ scanClient:
 #   scanType: "bft-custom"
 #   svNames: ["TRUSTED_SV"] # replace with trusted SV names(s)
 #   seedUrls: ["TRUSTED_SCAN_URL"] # replace with actual scan seed urls(s)
-#   threshold: &lt;TRUST_THRESHOLD&gt; # optional integer indicating the number of matching responses required for validation
+#   threshold: <TRUST_THRESHOLD> # optional integer indicating the number of matching responses required for validation
 
 # Mode 3: trust-single
 # Connects to a single trusted scan address.
@@ -326,7 +320,7 @@ scanClient:
 #   scanAddress: "TRUSTED_SCAN_URL" # replace with the trusted scan url
 ```
 
-For your selected `scanClient` type, replace `TRUSTED_SCAN_URL` with a URL of a Scan you host or trust that is reachable by your Validator. For example, the GSF scan URL, [|gsf_scan_url|](|gsf_scan_url|). For `bft-custom` and `bft` modes of `scanClient`, you can specify more than one scan seed URL by separating them with commas.
+For your selected `scanClient` type, replace `TRUSTED_SCAN_URL` with a URL of a Scan you host or trust that is reachable by your Validator. For example, the GSF scan URL, <a href="|gsf_scan_url|">|gsf_scan_url|</a>. For `bft-custom` and `bft` modes of `scanClient`, you can specify more than one scan seed URL by separating them with commas.
 
 - If you want to configure the audience for the Validator app backend API, replace `OIDC_AUTHORITY_VALIDATOR_AUDIENCE` in the `auth.audience` entry with audience for the Validator app backend API. e.g. `https://validator.example.com/api`.
 - If you want to configure the audience for the Ledger API, set the `audience` field in the `splice-app-validator-ledger-api-auth` k8s secret with the audience for the Ledger API. e.g. `https://ledger_api.example.com`.
@@ -357,7 +351,7 @@ synchronizer:
 # synchronizer:
 #   connectionType: "bft-custom"
 #   svNames: ["TRUSTED_SV"] # replace with trusted SV name(s)
-#   threshold: &lt;TRUST_THRESHOLD&gt; # optional integer indicating the number of matching responses required for validation
+#   threshold: <TRUST_THRESHOLD> # optional integer indicating the number of matching responses required for validation
 
 # Mode 3: trust-Single
 # Connects to a single specified sequencer URL.
@@ -405,15 +399,15 @@ The following routes should be configured in your cluster ingress controller.
 
 | Services                     | Port | Routes                                                                                                                                                                     |
 |------------------------------|------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `wallet-web-ui`              |      | `https://wallet.validator.&lt;YOUR_HOSTNAME&gt;`                                                                                                                                 |
-| `validator-app` `ans-web-ui` | 5003 | `https://wallet.validator.&lt;YOUR_HOSTNAME&gt;/api/validator` `https://cns.validator.&lt;YOUR_HOSTNAME&gt;`                                                                           |
-| `validator-app`              | 5003 | `https://cns.validator.&lt;YOUR_HOSTNAME&gt;/api/validator`                                                                                                                      |
-| `participant`                | 7575 | `https://&lt;YOUR_HOSTNAME&gt;/api/json-api` (optional, not required by the validator itself but if you want to access the ledger API yourself. You can change the route freely) |
+| `wallet-web-ui`              |      | `https://wallet.validator.<YOUR_HOSTNAME>`                                                                                                                                 |
+| `validator-app` `ans-web-ui` | 5003 | `https://wallet.validator.<YOUR_HOSTNAME>/api/validator` `https://cns.validator.<YOUR_HOSTNAME>`                                                                           |
+| `validator-app`              | 5003 | `https://cns.validator.<YOUR_HOSTNAME>/api/validator`                                                                                                                      |
+| `participant`                | 7575 | `https://<YOUR_HOSTNAME>/api/json-api` (optional, not required by the validator itself but if you want to access the ledger API yourself. You can change the route freely) |
 
-- `https://wallet.validator.&lt;YOUR_HOSTNAME&gt;` should be routed to service `wallet-web-ui` in the `validator` namespace
-- `https://wallet.validator.&lt;YOUR_HOSTNAME&gt;/api/validator` should be routed to `/api/validator` at port 5003 of service `validator-app` in the `validator` namespace
-- `https://cns.validator.&lt;YOUR_HOSTNAME&gt;` should be routed to service `ans-web-ui` in the `validator` namespace
-- `https://cns.validator.&lt;YOUR_HOSTNAME&gt;/api/validator` should be routed to `/api/validator` at port 5003 of service `validator-app` in the `validator` namespace
+- `https://wallet.validator.<YOUR_HOSTNAME>` should be routed to service `wallet-web-ui` in the `validator` namespace
+- `https://wallet.validator.<YOUR_HOSTNAME>/api/validator` should be routed to `/api/validator` at port 5003 of service `validator-app` in the `validator` namespace
+- `https://cns.validator.<YOUR_HOSTNAME>` should be routed to service `ans-web-ui` in the `validator` namespace
+- `https://cns.validator.<YOUR_HOSTNAME>/api/validator` should be routed to `/api/validator` at port 5003 of service `validator-app` in the `validator` namespace
 
 <Warning>
 To keep the attack surface on your validator deployment small, please disallow ingress connections to all other services in your validator deployment. It should be assumed that opening up *any* additional port or service represents a security risk that needs to be carefully evaluated on a case-by-case basis. In addition, it is recommended to restrict access to above services to a limited number of explicitly trusted IP address ranges.
@@ -522,7 +516,7 @@ To do so, uncomment and fill in the following section in the `validator-values.y
 #    receiver: "<receiverPartyId>"
 #    useTransferPreapproval: false # sweep by transferring directly through the transfer preapproval of the receiver,
 #                                    if set to false sweeping creates transfer offers that need to be accepted on the receiver side.
-#                                    Note that this refers to the preapprovals described in https://docs.dev.sync.global/background/preapprovals.html
+#                                    Note that this refers to the preapprovals described in /appdev/modules/m7-canton-coin-preapprovals
 #                                    and not to auto accepting transfers. Auto accept transfers does not setup preapproval contracts that allow
 #                                    for a direct transfer but just automates the acceptance of the transfer offer so in that case
 #                                    useTransferPreapproval should be set to false.
@@ -556,10 +550,7 @@ Below you can see an example of the pruning config that you need to add to `vali
 
 Note that if your node is down for longer than the pruning window (48 hours in the example above), your node will most probably get corrupted, as the apps race catching up with the participant's attempts to keep pruning. It is therefore advisable to set the pruning window to a value that you are comfortable with in terms of guaranteeing uptime of your node. Setting it to 30 days is in general a reasonable choice, as the sequencers currently are also pruned after 30 days, so you will not be able to catch up with the network after a longer downtime anyway (see Disaster Recovery for disaster recovery guidelines).
 
-Refer to the Canton documentation for more details on participant pruning:
-
-- [https://docs.daml.com/ops/pruning.html](https://docs.daml.com/ops/pruning.html)
-- [https://docs.daml.com/canton/usermanual/pruning.html](https://docs.daml.com/canton/usermanual/pruning.html)
+Refer to the [pruning guide](/global-synchronizer/production-operations/pruning) for more details on participant pruning.
 
 ```yaml
 # To configure participant pruning uncomment the following section.
