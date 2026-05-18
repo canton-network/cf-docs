@@ -5,13 +5,10 @@ description: "Traffic accounting, fees, and monitoring on the Global Synchronize
 
 import ExternalSpliceMainSpliceRstCodeDocsSrcDeploymentTrafficJson94 from "/snippets/external/splice/main/splice-rst-code-docs-src-deployment-traffic-json-94.mdx";
 
-{/* COPIED_START source="splice:docs/src/deployment/traffic.rst" hash="0e110a7b" */}
+import { NetworkVariables } from '/snippets/components/version.mdx';
+import { networkData } from '/snippets/generated/version-dashboard-data.mdx';
 
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was copied from existing reviewed documentation.
-**Source:** `docs/src/deployment/traffic.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
+{/* COPIED_START source="splice:docs/src/deployment/traffic.rst" hash="0e110a7b" */}
 
 Synchronizer usage incurs operational costs for SVs. For amortizing these costs, improving the incentives for operating an SV, and making Denial Of Service attacks on the network unattractive, synchronizer usage beyond a certain free `base rate` level is charged with so-called `synchronizer fees` paid in `Canton Coin`. For supporting this functionality, sequencers keep track of available and consumed traffic for each synchronizer member (most relevantly: for all validator participants). Whenever both the free (base rate) and paid-for (extra) traffic are exhausted for a participant, attempted writes are denied by the sequencer.
 
@@ -21,7 +18,7 @@ SVs, or more specifically SV participants and mediators, have unlimited traffic 
 
 Sequencers keep track of the traffic used by validator participants. `Traffic` in this context refers to all messages from participants that have to be `sequenced`, i.e., messages that the group of sequencers has to order, persist (up to a pruning interval), and deliver to recipients (typically mediators and other participants).
 
-Most prominently, traffic is used for Daml workflows as part of the [Canton transaction processing protocol](https://docs.daml.com/canton/architecture/overview.html#transaction-processing-in-canton). This includes:
+Most prominently, traffic is used for Daml workflows as part of the [Canton transaction processing protocol](/overview/learn/how-transactions-work). This includes:
 
 - Confirmation requests; sent when a participant initiates the committing of a ledger transaction.
 - Confirmation responses; sent for participants that host stakeholders of a transaction.
@@ -44,10 +41,12 @@ Traffic accounting is "by participant"; all parties hosted on the same participa
 
 ## Traffic parameters
 
+<NetworkVariables networkData={networkData}>
+
 The current synchronizer traffic parameters are recorded on the global `AmuletRules` contract and can be obtained from Scan. You can obtain them via the Scan UI or by querying the Scan API using, for example, this command (requires installing [jq](https://jqlang.org/)):
 
 ```bash
-curl -X POST --header "Content-Type: application/json" -d "{}" https://scan.sv-1.unknown_cluster.global.canton.network.sync.global/api/scan/v0/amulet-rules | jq ".amulet_rules_update.contract.payload.configSchedule.initialValue.decentralizedSynchronizer.fees"
+curl -X POST --header "Content-Type: application/json" -d "{}" |gsf_scan_url|/api/scan/v0/amulet-rules | jq ".amulet_rules_update.contract.payload.configSchedule.initialValue.decentralizedSynchronizer.fees"
 ```
 
 Above command will return a JSON object similar to the following:
@@ -61,7 +60,7 @@ This represents an encoded instance of the `SynchronizerFeesConfig` Daml data ty
 - `extraTrafficPrice`: the price of extra traffic beyond the free tier, denominated in USD per MB. The price is charged in `CC` as per the current USD exchange rate. The exchange rate is determined by SVs via median voting and recorded on current `OpenMiningRound` contracts obtainable from Scan. For querying the current CC price in USD as per the currently open mining round, you can check the Scan UI or use the following command (requires installing [jq](https://jqlang.org/)):
 
   ```bash
-  curl -X POST --header "Content-Type: application/json" -d "{\"cached_open_mining_round_contract_ids\":[], \"cached_issuing_round_contract_ids\":[]}" https://scan.sv-1.unknown_cluster.global.canton.network.sync.global/api/scan/v0/open-and-issuing-mining-rounds | jq ".open_mining_rounds | values[] | .contract.payload | {round, amuletPrice}"
+  curl -X POST --header "Content-Type: application/json" -d "{\"cached_open_mining_round_contract_ids\":[], \"cached_issuing_round_contract_ids\":[]}" |gsf_scan_url|/api/scan/v0/open-and-issuing-mining-rounds | jq ".open_mining_rounds | values[] | .contract.payload | {round, amuletPrice}"
   ```
 
 - `readVsWriteScalingFactor`: specifies the weight of additional traffic balance subtractions (from a sender's balance) for delivering a synchronizer message to each of its recipients. Delivering messages incurs actual costs for the SVs, even if this cost is much smaller than the cost of ordering and persisting messages. The `readVsWriteScalingFactor` is specified in basis points (parts per 10,000), i.e., a value of 1 means that for each 1000 bytes that need to be delivered to a recipient, 0.1 bytes of traffic will be charged. So for example: At a factor of 4, a 1 MB message with 10 recipients will draw `1,000,000 * (1 + 10 * 0.004) = 1,040,000` bytes from the sending participant's traffic balance.
@@ -69,6 +68,8 @@ This represents an encoded instance of the `SynchronizerFeesConfig` Daml data ty
 - `minTopupAmount`: the minimum amount of traffic that must be bought when buying extra traffic. Keeping this value reasonably high ensures that SVs can amortize the cost of performing the top-up operation, i.e., protects them from disproportionate overhead from processing very small top-ups.
 
 Like all parts of the `AmuletRulesConfig`, the `SynchronizerFeesConfig` is set by SVs via on-ledger voting, as part of DSO governance. The SV operations docs contain pointers for determining good values for some of these parameters.
+
+</NetworkVariables>
 
 ## How traffic balance interacts with transaction submission
 

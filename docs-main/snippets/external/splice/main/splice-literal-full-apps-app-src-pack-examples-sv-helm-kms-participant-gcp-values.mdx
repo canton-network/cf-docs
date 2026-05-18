@@ -1,8 +1,8 @@
 ```yaml
-  # Participant using GCP KMS (mock values; please modify to match your setup)
-  # See https://docs.daml.com/canton/usermanual/kms/kms_gcp_setup.html
+# Participant using GCP KMS (mock values; please modify to match your setup)
+# See [Canton KMS operations](/global-synchronizer/production-operations/kms-operations#configure-a-google-cloud-provider-gcp-kms)
 
-  kms:
+kms:
   type: gcp
   # Replace LOCATION_ID, PROJECT_ID, and KEY_RING_ID based on your GCP KMS setup
   locationId: LOCATION_ID
@@ -11,22 +11,21 @@
   # All other Canton options are supported as well;
   # camelCase keys here are automatically converted to kebab-case
 
-  # Example for configuring authentication to the GCP KMS.
-  # Adds an env var on the participant pod that points to the location of the Google
-  # credentials file and mounts that file as a volume, reading its contents from a secret.
-  # In order for this to work as-is, you need to create the appropriate k8s secret
-  # and ensure that it holds the contents of a valid Google credentials file
-  # (under the `googleCredentials` key).
-  additionalEnvVars:
+# Example for configuring authentication to the GCP KMS.
+# Adds an env var on the participant pod that points to the location of the Google
+# credentials file and mounts that file as a volume, reading its contents from a secret.
+# In order for this to work as-is, you need to create the appropriate k8s secret
+# and ensure that it holds the contents of a valid Google credentials file
+# (under the `googleCredentials` key).
+additionalEnvVars:
   - name: GOOGLE_APPLICATION_CREDENTIALS
-  value: "/app/gcp-credentials.json"
-  extraVolumeMounts:
+    value: "/app/gcp-credentials.json"
+extraVolumeMounts:
   - name: gcp-credentials
-  mountPath: "/app/gcp-credentials.json"
-  subPath: googleCredentials
-  extraVolumes:
+    mountPath: "/app/gcp-credentials.json"
+    subPath: googleCredentials
+extraVolumes:
   - name: gcp-credentials
-  secret:
-  secretName: gke-credentials
-
+    secret:
+      secretName: gke-credentials
 ```

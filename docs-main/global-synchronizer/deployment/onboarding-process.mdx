@@ -6,13 +6,10 @@ description: "How to onboard your validator on DevNet, TestNet, and MainNet via 
 import ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorOnboardingBash107 from "/snippets/external/splice/main/splice-rst-code-docs-src-validator-operator-validator-onboarding-bash-107.mdx";
 import ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorOnboardingBash136 from "/snippets/external/splice/main/splice-rst-code-docs-src-validator-operator-validator-onboarding-bash-136.mdx";
 
-{/* COPIED_START source="splice:docs/src/validator_operator/validator_onboarding.rst" hash="a1a3ab0c" */}
+import { NetworkVariables } from '/snippets/components/version.mdx';
+import { networkData } from '/snippets/generated/version-dashboard-data.mdx';
 
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was copied from existing reviewed documentation.
-**Source:** `docs/src/validator_operator/validator_onboarding.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
+{/* COPIED_START source="splice:docs/src/validator_operator/validator_onboarding.rst" hash="a1a3ab0c" */}
 
 ## Networks
 
@@ -42,6 +39,8 @@ Onboarding a Validator involves the following steps (for each network you want t
 
 ## Validating that your IP has been approved
 
+<NetworkVariables networkData={networkData}>
+
 To validate that the SVs have added you to their respective IP allowlists, you can query their Scan URLs. Note that this must be run from the same egress IP from which you want to deploy your validator, e.g., from the VM that you want to run your docker compose setup on, or from within your Kubernetes cluster.
 
 First, please confirm that your egress IP in the terminal in which you are running the command is indeed the one you provided for whitelisting by running:
@@ -57,7 +56,7 @@ Note that the following snippet requires installing [jq](https://jqlang.org/).
 ```bash
 (set -o pipefail
 CURL='curl -fsS -m 5 --connect-timeout 5'
-for url in $($CURL https://scan.sv-1.unknown_cluster.global.canton.network.sync.global/api/scan/v0/scans | jq -r '.scans[].scans[].publicUrl'); do
+for url in $($CURL |gsf_scan_url|/api/scan/v0/scans | jq -r '.scans[].scans[].publicUrl'); do
   echo -n "$url: "
   $CURL "$url"/api/scan/version | jq -r '.version'
 done)
@@ -71,7 +70,7 @@ Apart from connectivity to Scan, your validator must also be able to connect to 
 
 ```bash
 (set -o pipefail
-for url in $(curl -fsS -m 5 --connect-timeout 5 https://scan.sv-1.unknown_cluster.global.canton.network.sync.global/api/scan/v0/dso-sequencers | jq -r '.domainSequencers[].sequencers[].url | sub("https://"; "")'); do
+for url in $(curl -fsS -m 5 --connect-timeout 5 |gsf_scan_url|/api/scan/v0/dso-sequencers | jq -r '.domainSequencers[].sequencers[].url | sub("https://"; "")'); do
   echo -n "$url: "
   grpcurl --max-time 10 "$url":443 grpc.health.v1.Health/Check
 done)
@@ -82,6 +81,8 @@ Sequencers that are functional and have whitelisted your IP correctly will retur
 <ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorOnboardingBash136 />
 
 The default configuration for both of these requires access to at least 2/3 of the SVs for each of scans and sequencers. You may, at your option and own risk, configure connection to a single trusted scan and sequencer as described under validator helm chart configuration, at the cost of losing BFT integrity guarantees.
+
+</NetworkVariables>
 
 ## Stay Connected
 

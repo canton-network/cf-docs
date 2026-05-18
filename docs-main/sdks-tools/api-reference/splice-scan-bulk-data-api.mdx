@@ -3,13 +3,10 @@ title: "Scan Bulk Data API"
 description: "Full update history and ACS snapshots from the SV participant node"
 ---
 
-{/* COPIED_START source="splice:docs/src/app_dev/scan_api/scan_bulk_data_api.rst" hash="2753bd48" */}
+import { NetworkVariables } from '/snippets/components/version.mdx';
+import { networkData } from '/snippets/generated/version-dashboard-data.mdx';
 
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was copied from existing reviewed documentation.
-**Source:** `docs/src/app_dev/scan_api/scan_bulk_data_api.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
+{/* COPIED_START source="splice:docs/src/app_dev/scan_api/scan_bulk_data_api.rst" hash="2753bd48" */}
 
 At a high level, participant nodes provide two separate endpoints through a Ledger API:
 
@@ -27,10 +24,12 @@ The Scan App ingests new updates as they occur on the ledger, and also back-fill
 
 The Bulk Data Scan API provides access to the update history and ACS snapshots as they were recorded. Since the API exposes the underlying Daml transactions directly, there are a couple of concerns to keep in mind:
 
-- The API does not hide or abstract any detail in the data, it provides the raw events as they occurred. This means that you get direct access to all information in the transactions, and you need to familiarize yourself with the Daml code that underlies these events. Please see [Reference Documentation](..%20note::Please%20see%20%60Ledger%20Structure%20%3Chttps://docs.daml.com/concepts/ledger-model/ledger-structure.html%3E%60_%20on%20how%20actions%20are%20executed%20in%20transactions%20to%20change%20the%20ledger,%20creating%20contracts%20and%20exercising%20choices,which%20gets%20described%20further%20in%20%60Transform%20Data%20Using%20Choices%20%3Chttps://docs.daml.com/daml/intro/4_Transformations.html%3E%60_.) for a refresher on how the Ledger changes through actions grouped in transactions, and how UTXO contract states are created, exercised and archived in general.
-- The events need to be parsed in a flexible manner. Choices and optional fields can be added over time, and new templates and data types can be introduced. A parser should be able to ignore these kinds of changes, and not fail when they occur. This means that parsing logic should be selective, and not fail when unknown fields or templates are encountered. Please see [Daml upgrades](https://docs.daml.com/upgrade/index.html) for more information. The rules for Daml upgrades align well with a relaxed, intuitive approach to JSON parsing, e.g. not asserting absence of unexpected fields and not assuming key-presence for optional fields.
+- The API does not hide or abstract any detail in the data, it provides the raw events as they occurred. This means that you get direct access to all information in the transactions, and you need to familiarize yourself with the Daml code that underlies these events. Please see [Ledger Structure](/overview/reference/ledger-model-detailed) on how actions are executed in transactions to change the ledger, creating contracts and exercising choices, which gets described further in [Transform Data Using Choices](/appdev/modules/m3-choices), for a refresher on how the Ledger changes through actions grouped in transactions, and how UTXO contract states are created, exercised and archived in general.
+- The events need to be parsed in a flexible manner. Choices and optional fields can be added over time, and new templates and data types can be introduced. A parser should be able to ignore these kinds of changes, and not fail when they occur. This means that parsing logic should be selective, and not fail when unknown fields or templates are encountered. Please see [Daml upgrades](/appdev/modules/m7-smart-contract-upgrades) for more information. The rules for Daml upgrades align well with a relaxed, intuitive approach to JSON parsing, e.g. not asserting absence of unexpected fields and not assuming key-presence for optional fields.
 
 ## Open API Specification
+
+<NetworkVariables networkData={networkData}>
 
 The `scan_openapi` describes the Scan API in detail. The below table provides a quick overview of the endpoints that the Scan Bulk Data API consists of:
 
@@ -45,10 +44,12 @@ If you would rather read the yaml Open API specification file directly, this can
 
 Example URLs for accessing the Scan Bulk Data API are:
 
-- [https://scan.sv-1.unknown_cluster.global.canton.network.sync.global/api/scan/v2/updates](https://scan.sv-1.unknown_cluster.global.canton.network.sync.global/api/scan/v2/updates)
-- [https://scan.sv-1.unknown_cluster.global.canton.network.sync.global/api/scan/v0/state/acs/snapshot-timestamp](https://scan.sv-1.unknown_cluster.global.canton.network.sync.global/api/scan/v0/state/acs/snapshot-timestamp)
+- [|gsf_scan_url|/api/scan/v2/updates](|gsf_scan_url|/api/scan/v2/updates)
+- [|gsf_scan_url|/api/scan/v0/state/acs/snapshot-timestamp](|gsf_scan_url|/api/scan/v0/state/acs/snapshot-timestamp)
 
 Please note the `api/scan` prefix in the URLs, which is the base path for the Scan API.
+
+</NetworkVariables>
 
 ### Updates
 
@@ -337,12 +338,14 @@ The ACS snapshots are periodically taken and stored in the Scan App. This endpoi
 
 #### GET /v0/state/acs/snapshot-timestamp
 
+<NetworkVariables networkData={networkData}>
+
 The /v0/state/acs/snapshot-timestamp endpoint returns the timestamp of the most recent snapshot before the given date, for the given `migration_id`. Specify `migration_id = 0` for the beginning of the network. The returned timestamp corresponds to the record time of the last transaction in the snapshot.
 
 An example request to get the timestamp of the most recent snapshot before a given date is shown below:
 
 ```bash
-curl https://scan.sv-1.unknown_cluster.global.canton.network.sync.global/api/scan/v0/state/acs/snapshot-timestamp\?before\="2025-02-12T00:00:00.000000Z"\&migration_id\=4
+curl |gsf_scan_url|/api/scan/v0/state/acs/snapshot-timestamp\?before\="2025-02-12T00:00:00.000000Z"\&migration_id\=4
 ```
 
 The response returns the timestamp of the most recent snapshot before the given date:
@@ -352,6 +355,8 @@ The response returns the timestamp of the most recent snapshot before the given 
   "record_time" : "2025-02-11T18:00:00Z"
 }
 ```
+
+</NetworkVariables>
 
 #### POST /v0/state/acs
 
@@ -409,7 +414,7 @@ An example response is shown below:
 }
 ```
 
-The `created_events` object contains the created events in the ACS snapshot. A `created_event` is encoded exactly as explained in [Created Event](#created-event).
+The `created_events` object contains the created events in the ACS snapshot. A `created_event` is encoded exactly as explained in Created Event.
 
 #### POST /v0/state/acs/force
 
