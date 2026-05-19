@@ -314,7 +314,10 @@ def normalize_flattened_links_and_labels(*, output_dir: Path, report: dict[str, 
                 [
                     (f'href="packages/{package_slug}"', f'href="./{package_slug}"'),
                     (f'href="./packages/{package_slug}"', f'href="./{package_slug}"'),
-                    (f"      <h3>{html_text(package_name)}</h3>", f"      <h3>{html_text(label)}</h3>"),
+                    (
+                        f'<a class="x2mdx-ref-card-title" href="./{package_slug}">{html_text(package_name)}</a>',
+                        f'<a class="x2mdx-ref-card-title" href="./{package_slug}">{html_text(label)}</a>',
+                    ),
                 ]
             )
         replace_text(details_path, replacements)
@@ -418,8 +421,8 @@ def shorten_package_page_headings(*, output_dir: Path, report: dict[str, Any]) -
             repo_path = str(file_doc["repoPath"])
             path = PurePosixPath(repo_path)
             text = text.replace(
-                f"      <h3>{html_text(repo_path)}</h3>",
-                f"      <h3>{html_text(path.name)}</h3>",
+                f'<span class="x2mdx-ref-card-title">{html_text(repo_path)}</span>',
+                f'<span class="x2mdx-ref-card-title">{html_text(path.name)}</span>',
             )
             text = text.replace(
                 "    <p class=\"x2mdx-ref-card-summary\">Current source file in the latest published descriptor snapshot.</p>",

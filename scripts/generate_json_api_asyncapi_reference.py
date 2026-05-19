@@ -47,7 +47,7 @@ CARD_LINK_RE = re.compile(
     flags=re.DOTALL,
 )
 CARD_HEAD_BADGES_RE = re.compile(
-    r'(?P<head><div class="x2mdx-ref-card-head">\s*<h3>.*?</h3>)(?P<badges>\s*<div class="x2mdx-ref-badges">.*?</div>\s*)(?P<tail>\s*</div>)',
+    r'(?P<head><div class="x2mdx-ref-card-head">\s*(?:<a class="x2mdx-ref-card-title" href="[^"]+">.*?</a>|<span class="x2mdx-ref-card-title">.*?</span>))(?P<badges>\s*<div class="x2mdx-ref-badges">.*?</div>\s*)(?P<tail>\s*</div>)',
     flags=re.DOTALL,
 )
 CARD_SUMMARY_RE = re.compile(
