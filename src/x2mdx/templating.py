@@ -62,6 +62,14 @@ def inline_text(value: Any) -> str:
     return re.sub(r"\s+", " ", "" if value is None else str(value)).strip()
 
 
+def escape_md_cell(value: Any) -> str:
+    return str("" if value is None else value).replace("|", "\\|").replace("\n", " ")
+
+
+def safe_markdown_text(value: Any) -> str:
+    return str("" if value is None else value).replace("<", "&lt;")
+
+
 def accordion_list(title: str, items: list[str]) -> str:
     lines = ["<AccordionGroup>", f'<Accordion title="{title}">']
     lines.extend(f"- {item}" for item in items)
@@ -182,6 +190,8 @@ def template_environment() -> Environment:
         escape_mdx_html_text=escape_mdx_html_text,
         escape_js_template_literal=escape_js_template_literal,
         inline_text=inline_text,
+        escape_md_cell=escape_md_cell,
+        safe_markdown_text=safe_markdown_text,
         accordion_list=accordion_list,
         render_card_group=render_card_group,
         pretty_json=pretty_json,

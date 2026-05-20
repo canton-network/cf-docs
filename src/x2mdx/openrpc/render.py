@@ -9,6 +9,9 @@ from typing import Any
 
 from x2mdx.openrpc.models import OpenRpcMethodLifecycle, OpenRpcReport, OpenRpcSpecLifecycle
 from x2mdx.reference_pages import (
+    DetailsHistoryChange,
+    DetailsHistoryPage,
+    DetailsHistoryVersionRow,
     ReferenceBadge,
     ReferenceBreadcrumb,
     ReferenceCard,
@@ -43,6 +46,10 @@ def spec_page_path(output_dir: Path, spec: OpenRpcSpecLifecycle, *, spec_dir_nam
 
 def operation_page_path(output_dir: Path, spec: OpenRpcSpecLifecycle, method: OpenRpcMethodLifecycle) -> Path:
     return output_dir / "operations" / slugify(spec.spec_id) / f"{slugify(method.method)}.mdx"
+
+
+def spec_details_history_page_path(output_dir: Path, spec: OpenRpcSpecLifecycle) -> Path:
+    return output_dir / "operations" / slugify(spec.spec_id) / "details.mdx"
 
 
 def normalize_link_prefix(link_prefix: str) -> str:
@@ -267,6 +274,240 @@ def build_spec_page(
                 body_markdown=safe_markdown_text("Method pages are the primary reference surface. This spec page stays focused on grouping and discovery."),
                 cards=method_cards,
             )
+        ],
+    )
+
+
+def count_matching_methods(methods: list[OpenRpcMethodLifecycle], version: str, field_name: str) -> int:
+    count = 0
+    for method in methods:
+        value = getattr(method, field_name)
+        if value == version:
+            count += 1
+        elif isinstance(value, list) and version in value:
+            count += 1
+    return count
+
+
+def version_summary_rows(spec: OpenRpcSpecLifecycle) -> list[DetailsHistoryVersionRow]:
+    rows: list[DetailsHistoryVersionRow] = []
+    for version in spec.versions_present:
+        deltas = spec.per_version_method_deltas.get(version, {})
+        deprecated_count = sum(
+            1
+            for method in spec.methods
+            if method.lifecycle_state == "deprecated"
+            and (method.introduced_version == version or version in method.changed_in_versions)
+        )
+        replaced_count = sum(
+            1
+            for method in spec.methods
+            if method.replaces
+            and (method.introduced_version == version or version in method.changed_in_versions)
+        )
+        rows.append(
+            DetailsHistoryVersionRow(
+                version=version,
+                added=str(deltas.get("added_count", 0)),
+                changed=str(deltas.get("changed_count", 0)),
+                removed=str(deltas.get("removed_count", 0)),
+                deprecated=str(deprecated_count or "-"),
+                replaced=str(replaced_count or "-"),
+            )
+        )
+    return rows
+
+
+def details_history_change_list(
+    spec: OpenRpcSpecLifecycle,
+    *,
+    details_path: Path,
+    output_dir: Path,
+    link_prefix: str | None,
+) -> list[DetailsHistoryChange]:
+    changes: list[DetailsHistoryChange] = [
+        DetailsHistoryChange(
+            version=spec.introduced_version,
+            title="Initial selected snapshot",
+            details=f"{len([method for method in spec.methods if method.introduced_version == spec.introduced_version])} methods were present when this source stream first appears in the selected inputs.",
+            tone="added",
+        )
+    ]
+
+    for method in spec.methods:
+        operation_path = operation_page_path(output_dir, spec, method)
+        href = page_ref(details_path, operation_path, output_dir=output_dir, link_prefix=link_prefix)
+        if method.introduced_version != spec.introduced_version:
+            changes.append(
+                DetailsHistoryChange(
+                    version=method.introduced_version,
+                    title=f"Added {method.method}",
+                    details="Method added to the published JSON-RPC surface.",
+                    tone="added",
+                    href=href,
+                )
+            )
+        for entry in method.change_details:
+            version = str(entry["version"])
+            changes.append(
+                DetailsHistoryChange(
+                    version=version,
+                    title=f"Changed {method.method}",
+                    details="; ".join(str(change) for change in entry["changes"]),
+                    tone="changed",
+                    href=href,
+                )
+            )
+        if method.removed_version:
+            changes.append(
+                DetailsHistoryChange(
+                    version=method.removed_version,
+                    title=f"Removed {method.method}",
+                    details=f"Last seen in {method.last_seen_in}.",
+                    tone="removed",
+                    href=href,
+                )
+            )
+
+    version_order = {version: index for index, version in enumerate(spec.versions_present)}
+    tone_order = {"added": 0, "changed": 1, "removed": 2}
+    return sorted(
+        changes,
+        key=lambda change: (
+            version_order.get(change.version, len(version_order)),
+            tone_order.get(change.tone, 9),
+            change.title,
+        ),
+    )
+
+
+def method_inventory_cards(
+    spec: OpenRpcSpecLifecycle,
+    methods: list[OpenRpcMethodLifecycle],
+    *,
+    details_path: Path,
+    output_dir: Path,
+    link_prefix: str | None,
+) -> list[ReferenceCard]:
+    cards: list[ReferenceCard] = []
+    for method in methods:
+        cards.append(
+            ReferenceCard(
+                title=method.method,
+                href=page_ref(details_path, operation_page_path(output_dir, spec, method), output_dir=output_dir, link_prefix=link_prefix),
+                summary=compact_text(method.latest.get("summary") or method.latest.get("description") or "", limit=150),
+                badges=lifecycle_badges(
+                    protocol_label="JSON-RPC",
+                    introduced=method.introduced_version,
+                    lifecycle_state=method.lifecycle_state,
+                    changed=method.changed_in_versions,
+                    removed=method.removed_version,
+                ),
+                meta_items=[
+                    ReferenceMetaItem("Parameters", str(len(method.latest.get("params", [])))),
+                    ReferenceMetaItem("Result", str(method.latest.get("result", {}).get("schema") or "-")),
+                    ReferenceMetaItem("Last seen", method.last_seen_in),
+                    *lifecycle_meta_items(method),
+                ],
+            )
+        )
+    return cards
+
+
+def build_spec_details_history_page(
+    report: OpenRpcReport,
+    spec: OpenRpcSpecLifecycle,
+    *,
+    output_dir: Path,
+    overview_name: str,
+    spec_dir_name: str,
+    link_prefix: str | None = None,
+) -> DetailsHistoryPage:
+    details_path = spec_details_history_page_path(output_dir, spec)
+    spec_path = spec_page_path(output_dir, spec, spec_dir_name=spec_dir_name)
+    normalized_link_prefix = normalize_link_prefix(link_prefix) if link_prefix else None
+    active_methods = [method for method in spec.methods if method.status != "removed"]
+    removed_methods = [method for method in spec.methods if method.status == "removed"]
+    inventory_sections = [
+        ReferenceSection(
+            heading="Published methods",
+            body_markdown=safe_markdown_text("These methods are present in the publish version and link to the generated operation pages."),
+            meta_items=[
+                ReferenceMetaItem("Methods", str(len(active_methods))),
+                ReferenceMetaItem("Publish version", report.publish_version),
+            ],
+            cards=method_inventory_cards(
+                spec,
+                active_methods,
+                details_path=details_path,
+                output_dir=output_dir,
+                link_prefix=normalized_link_prefix,
+            ),
+        )
+    ]
+    if removed_methods:
+        inventory_sections.append(
+            ReferenceSection(
+                heading="Removed methods",
+                body_markdown=safe_markdown_text("These methods are retained for history because they appeared in earlier selected inputs."),
+                meta_items=[ReferenceMetaItem("Methods", str(len(removed_methods)))],
+                cards=method_inventory_cards(
+                    spec,
+                    removed_methods,
+                    details_path=details_path,
+                    output_dir=output_dir,
+                    link_prefix=normalized_link_prefix,
+                ),
+            )
+        )
+
+    return DetailsHistoryPage(
+        path=details_path.relative_to(output_dir).as_posix(),
+        title=f"{spec.display_name} details and history",
+        description=f"Generated source details and version history for the {spec.display_name} JSON-RPC reference.",
+        eyebrow="Details and history",
+        summary="Generated-source metadata, version coverage, method inventory, and per-version changes for this source stream.",
+        back_link=page_ref(details_path, spec_path, output_dir=output_dir, link_prefix=normalized_link_prefix),
+        back_label=f"Back to {spec.display_name}",
+        badges=[
+            ReferenceBadge("JSON-RPC", tone="protocol"),
+            ReferenceBadge(report.publish_version, tone="neutral"),
+            ReferenceBadge(f"Since {spec.introduced_version}", tone="added"),
+        ],
+        meta_items=[
+            ReferenceMetaItem("Source stream", spec.display_name),
+            ReferenceMetaItem("Publish version", report.publish_version),
+            ReferenceMetaItem("Versions compared", ", ".join(spec.versions_present)),
+        ],
+        source_items=[
+            ReferenceMetaItem("Input family", report.source_name),
+            ReferenceMetaItem("Version filter", report.version_filter),
+            ReferenceMetaItem("Latest source path", spec.latest_source_path),
+            ReferenceMetaItem("OpenRPC version", spec.openrpc_version or "-"),
+            ReferenceMetaItem("Spec info.version", spec.info_version or "-"),
+        ],
+        source_cards=[
+            ReferenceCard(
+                title="Generated reference pages",
+                summary="Operation pages are generated from the publish-version OpenRPC document, with history calculated across selected snapshots.",
+                meta_items=[
+                    ReferenceMetaItem("Spec page", spec.display_name, href=page_ref(details_path, spec_path, output_dir=output_dir, link_prefix=normalized_link_prefix)),
+                    ReferenceMetaItem("Operation pages", str(len(spec.methods))),
+                ],
+            )
+        ],
+        version_rows=version_summary_rows(spec),
+        inventory_sections=inventory_sections,
+        changes=details_history_change_list(
+            spec,
+            details_path=details_path,
+            output_dir=output_dir,
+            link_prefix=normalized_link_prefix,
+        ),
+        limitations=[
+            "Change detection is structural and compares selected generated inputs; it does not infer behavioral compatibility.",
+            "Method-level additions, removals, and changed request or result shapes are tracked when they are present in the selected snapshots.",
+            "Lifecycle labels and replacement links are included only when the source document carries that metadata.",
         ],
     )
 

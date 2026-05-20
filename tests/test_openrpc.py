@@ -11,7 +11,9 @@ from pathlib import Path
 from x2mdx.cli import main as cli_main
 from x2mdx.openrpc.lifecycle import build_openrpc_report_from_sources, parse_openrpc
 from x2mdx.openrpc.models import OpenRpcSourceSnapshot
-from x2mdx.openrpc.render import build_method_page
+from x2mdx.openrpc.render import build_method_page, build_spec_details_history_page
+from x2mdx.reference_pages import render_details_history_page
+from x2mdx.render import render_page
 
 
 def write_text(path: Path, contents: str) -> None:
@@ -463,3 +465,81 @@ class OpenRpcTests(unittest.TestCase):
         self.assertEqual(page.examples[0].title, "cURL")
         self.assertIn('"method": "status"', page.examples[0].body)
         self.assertEqual(page.examples[1].title, "Result")
+
+    def test_spec_details_history_template_renders_source_scoped_openrpc_page(self) -> None:
+        report = build_openrpc_report_from_sources(
+            [
+                self._snapshot(
+                    version="1.0.0",
+                    spec_id="user-api",
+                    display_name="User API",
+                    source_path="api-specs/openrpc-user-api.json",
+                    contents="""
+                        {
+                          "openrpc": "1.2.6",
+                          "info": {"title": "User API", "version": "1.0.0"},
+                          "methods": [
+                            {
+                              "name": "status",
+                              "description": "Return user API status.",
+                              "params": [],
+                              "result": {"name": "result", "schema": {"type": "string"}}
+                            }
+                          ]
+                        }
+                    """,
+                ),
+                self._snapshot(
+                    version="1.1.0",
+                    spec_id="user-api",
+                    display_name="User API",
+                    source_path="api-specs/openrpc-user-api.json",
+                    contents="""
+                        {
+                          "openrpc": "1.2.6",
+                          "info": {"title": "User API", "version": "1.1.0"},
+                          "methods": [
+                            {
+                              "name": "status",
+                              "description": "Return Wallet Gateway user API status.",
+                              "params": [],
+                              "result": {"name": "result", "schema": {"type": "string"}}
+                            },
+                            {
+                              "name": "balance",
+                              "description": "Return the user balance.",
+                              "params": [],
+                              "result": {"name": "result", "schema": {"type": "string"}}
+                            }
+                          ]
+                        }
+                    """,
+                ),
+            ],
+            source_name="wallet-gateway-remote release snapshots",
+            version_filter="@canton-network/wallet-gateway-remote@ releases",
+            publish_version="1.1.0",
+        )
+
+        page = build_spec_details_history_page(
+            report,
+            report.specs[0],
+            output_dir=self.root / "out",
+            overview_name="index.mdx",
+            spec_dir_name="specs",
+            link_prefix="/reference/wallet-gateway-json-rpc",
+        )
+        rendered = render_page(render_details_history_page(page))
+
+        self.assertEqual(page.path, "operations/user-api/details.mdx")
+        self.assertIn("User API details and history", rendered)
+        self.assertIn("## Generated from", rendered)
+        self.assertIn("## Version summary", rendered)
+        self.assertIn("| 1.1.0 | 1 | 1 | 0 | - | - |", rendered)
+        self.assertIn("## Current reference inventory", rendered)
+        self.assertIn("## Change details", rendered)
+        self.assertIn("Added balance", rendered)
+        self.assertIn("Changed status", rendered)
+        self.assertIn('href="/reference/wallet-gateway-json-rpc/operations/user-api/balance"', rendered)
+        self.assertIn("## Known limits", rendered)
+        self.assertNotIn("OpenAPI", rendered)

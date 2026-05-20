@@ -104,6 +104,44 @@ class ReferenceCollectionPage:
 
 
 @dataclass(frozen=True)
+class DetailsHistoryVersionRow:
+    version: str
+    added: str = "-"
+    changed: str = "-"
+    removed: str = "-"
+    deprecated: str = "-"
+    replaced: str = "-"
+
+
+@dataclass(frozen=True)
+class DetailsHistoryChange:
+    version: str
+    title: str
+    details: str = ""
+    tone: str = "changed"
+    href: str | None = None
+
+
+@dataclass(frozen=True)
+class DetailsHistoryPage:
+    path: str
+    title: str
+    description: str | None = None
+    eyebrow: str | None = None
+    summary: str | None = None
+    back_link: str | None = None
+    back_label: str | None = None
+    badges: list[ReferenceBadge] = field(default_factory=list)
+    meta_items: list[ReferenceMetaItem] = field(default_factory=list)
+    source_items: list[ReferenceMetaItem] = field(default_factory=list)
+    source_cards: list[ReferenceCard] = field(default_factory=list)
+    version_rows: list[DetailsHistoryVersionRow] = field(default_factory=list)
+    inventory_sections: list[ReferenceSection] = field(default_factory=list)
+    changes: list[DetailsHistoryChange] = field(default_factory=list)
+    limitations: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
 class ReferenceChange:
     version: str
     details: str
@@ -156,6 +194,17 @@ def render_collection_page(page: ReferenceCollectionPage) -> Page:
         description=page.description,
         template_name="reference/collection.md.j2",
         page=page,
+    )
+
+
+def render_details_history_page(page: DetailsHistoryPage) -> Page:
+    body = render_template("reference/details_history.md.j2", collapse_blank_lines=False, page=page)
+    body = "\n".join(line.rstrip() for line in body.splitlines())
+    return Page(
+        path=page.path,
+        title=page.title,
+        description=page.description,
+        blocks=[RawMarkdown(body)],
     )
 
 

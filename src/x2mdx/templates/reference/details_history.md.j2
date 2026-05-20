@@ -1,0 +1,55 @@
+{% import "shared/reference_macros.md.j2" as ref %}
+{{ ref.header(page.eyebrow, page.title, page.summary, page.back_link, page.back_label, page.badges, page.meta_items) }}
+
+## Generated from
+
+{{ ref.meta_grid(page.source_items) }}
+{{ ref.card_grid(page.source_cards) }}
+
+{% if page.version_rows %}
+## Version summary
+
+| Version | Added | Changed | Removed | Deprecated | Replaced |
+| --- | ---: | ---: | ---: | ---: | ---: |
+{% for row in page.version_rows -%}
+| {{ escape_md_cell(row.version) }} | {{ escape_md_cell(row.added) }} | {{ escape_md_cell(row.changed) }} | {{ escape_md_cell(row.removed) }} | {{ escape_md_cell(row.deprecated) }} | {{ escape_md_cell(row.replaced) }} |
+{% endfor %}
+{% endif %}
+
+{% if page.inventory_sections %}
+## Current reference inventory
+
+{% for section in page.inventory_sections %}
+### {{ section.heading }}
+
+{% if section.body_markdown %}
+{{ section.body_markdown }}
+{% endif %}
+{{ ref.meta_grid(section.meta_items) }}
+{{ ref.card_grid(section.cards) }}
+{% endfor %}
+{% endif %}
+
+{% if page.changes %}
+## Change details
+
+<div class="x2mdx-ref-change-list">
+  {% for change in page.changes %}
+  <div class="x2mdx-ref-change-item x2mdx-ref-change-item--{{ escape_html(inline_text(change.tone)) }}">
+    <span class="x2mdx-ref-change-version">{{ escape_mdx_html_text(inline_text(change.version)) }}</span>
+    <span class="x2mdx-ref-change-detail">
+      {% if change.href %}<a href="{{ change.href }}">{{ escape_mdx_html_text(inline_text(change.title)) }}</a>{% else %}{{ escape_mdx_html_text(inline_text(change.title)) }}{% endif %}
+      {% if change.details %}<span>{{ escape_mdx_html_text(inline_text(change.details)) }}</span>{% endif %}
+    </span>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if page.limitations %}
+## Known limits
+
+{% for limitation in page.limitations %}
+- {{ safe_markdown_text(limitation) }}
+{% endfor %}
+{% endif %}

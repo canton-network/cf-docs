@@ -214,7 +214,14 @@ def rewrite_frontmatter_title(contents: str, title: str) -> str:
     return "---\n" + "\n".join(updated) + contents[end:]
 
 
-def write_details_pages(*, output_dir: Path, spec_entries: list[dict[str, Any]]) -> None:
+def write_details_pages(
+    *,
+    output_dir: Path,
+    spec_entries: list[dict[str, Any]],
+    openrpc_report: Any | None = None,
+    link_prefix: str | None = None,
+    preserved_spec_details: dict[str, str] | None = None,
+) -> None:
     overview = output_dir / "index.mdx"
     if overview.exists():
         details = output_dir / "operations" / "details.mdx"
@@ -226,15 +233,52 @@ def write_details_pages(*, output_dir: Path, spec_entries: list[dict[str, Any]])
 
     for spec in spec_entries:
         spec_id = str(spec["spec_id"])
+        if spec_id == "user-api" and openrpc_report is not None:
+            from x2mdx.openrpc.render import build_spec_details_history_page
+            from x2mdx.reference_pages import render_details_history_page
+            from x2mdx.render import write_page
+
+            report_spec = next((item for item in openrpc_report.specs if item.spec_id == spec_id), None)
+            if report_spec is None:
+                raise ValueError(f"OpenRPC report does not contain spec '{spec_id}'")
+            page = render_details_history_page(
+                build_spec_details_history_page(
+                    openrpc_report,
+                    report_spec,
+                    output_dir=output_dir,
+                    overview_name="index.mdx",
+                    spec_dir_name=SPEC_DIR_NAME,
+                    link_prefix=link_prefix,
+                )
+            )
+            write_page(page, output_dir / page.path)
+            continue
+        details = output_dir / "operations" / slugify(spec_id) / "details.mdx"
+        preserved_contents = (preserved_spec_details or {}).get(spec_id)
+        if preserved_contents is not None:
+            details.parent.mkdir(parents=True, exist_ok=True)
+            details.write_text(preserved_contents, encoding="utf-8")
+            continue
         spec_page = output_dir / SPEC_DIR_NAME / f"{slugify(spec_id)}.mdx"
         if not spec_page.exists():
             continue
-        details = output_dir / "operations" / slugify(spec_id) / "details.mdx"
         details.parent.mkdir(parents=True, exist_ok=True)
         details.write_text(
             rewrite_frontmatter_title(spec_page.read_text(encoding="utf-8"), DETAILS_LABEL),
             encoding="utf-8",
         )
+
+
+def read_existing_spec_details(output_dir: Path, spec_entries: list[dict[str, Any]], *, exclude_spec_ids: set[str]) -> dict[str, str]:
+    preserved: dict[str, str] = {}
+    for spec in spec_entries:
+        spec_id = str(spec["spec_id"])
+        if spec_id in exclude_spec_ids:
+            continue
+        details = output_dir / "operations" / slugify(spec_id) / "details.mdx"
+        if details.exists():
+            preserved[spec_id] = details.read_text(encoding="utf-8")
+    return preserved
 
 
 def prune_nav_items(items: list[Any], *, page_refs: set[str], group_labels: set[str]) -> list[Any]:
@@ -268,15 +312,24 @@ def update_docs_navigation(
     navigation = docs.get("navigation")
     if not isinstance(navigation, dict):
         raise ValueError(f"docs.json navigation must be an object: {docs_json_path}")
+    nav_container = None
     dropdowns = navigation.get("dropdowns")
-    if not isinstance(dropdowns, list):
-        raise ValueError(f"docs.json navigation.dropdowns must be a list: {docs_json_path}")
-    dropdown = next((item for item in dropdowns if isinstance(item, dict) and item.get("dropdown") == dropdown_label), None)
-    if dropdown is None:
-        raise ValueError(f"Dropdown not found in docs.json: {dropdown_label}")
-    pages = dropdown.get("pages")
+    if isinstance(dropdowns, list):
+        nav_container = next(
+            (item for item in dropdowns if isinstance(item, dict) and item.get("dropdown") == dropdown_label),
+            None,
+        )
+    products = navigation.get("products")
+    if nav_container is None and isinstance(products, list):
+        nav_container = next(
+            (item for item in products if isinstance(item, dict) and item.get("product") == dropdown_label),
+            None,
+        )
+    if nav_container is None:
+        raise ValueError(f"Navigation section not found in docs.json: {dropdown_label}")
+    pages = nav_container.get("pages")
     if not isinstance(pages, list):
-        raise ValueError(f"Dropdown does not expose a pages list: {dropdown_label}")
+        raise ValueError(f"Navigation section does not expose a pages list: {dropdown_label}")
 
     refs = {overview_page_ref(output_dir, docs_json_path), docs_json_page_ref(output_dir / "operations" / "details.mdx", docs_json_path)}
     refs.update(spec_page_ref(output_dir, docs_json_path, spec["spec_id"]) for spec in spec_entries)
@@ -310,7 +363,7 @@ def update_docs_navigation(
             break
     for offset, wallet_group in enumerate(wallet_groups):
         pruned_pages.insert(min(insert_at + offset, len(pruned_pages)), wallet_group)
-    dropdown["pages"] = pruned_pages
+    nav_container["pages"] = pruned_pages
     docs_json_path.write_text(json.dumps(docs, indent=2) + "\n", encoding="utf-8")
     print(f"Updated docs navigation: {docs_json_path}")
 
@@ -364,6 +417,9 @@ def main() -> int:
     ensure_repo_direnv(repo_root=REPO_ROOT, script_path=Path(__file__).resolve(), argv=sys.argv[1:])
     args = parse_args()
     source_config = load_json(Path(args.source_config).resolve())
+    from x2mdx.openrpc.lifecycle import build_openrpc_report_from_sources
+    from x2mdx.openrpc.snapshots import load_openrpc_source_snapshots
+
     include_versions = set(args.version) if args.version else None
     remote = str(source_config.get("remote") or "")
     release_repo = str(source_config.get("release_repo") or DEFAULT_RELEASE_REPO)
@@ -420,6 +476,11 @@ def main() -> int:
     )
 
     fixture_root = REPO_ROOT
+    output_dir = Path(args.output_dir).resolve()
+    docs_json_path = Path(args.docs_json).resolve()
+    link_prefix = overview_route_prefix(output_dir, docs_json_path)
+    preserved_spec_details = read_existing_spec_details(output_dir, spec_entries, exclude_spec_ids={"user-api"})
+
     command = repo_direnv_command(
         REPO_ROOT,
         "x2mdx",
@@ -430,13 +491,13 @@ def main() -> int:
         "--fixture-root",
         str(fixture_root),
         "--output-dir",
-        str(Path(args.output_dir).resolve()),
+        str(output_dir),
         "--publish-version",
         publish_version,
         "--overview-title",
         args.overview_title,
         "--link-prefix",
-        overview_route_prefix(Path(args.output_dir).resolve(), Path(args.docs_json).resolve()),
+        link_prefix,
         "--source-name",
         args.source_name,
         "--version-filter",
@@ -449,14 +510,28 @@ def main() -> int:
     if completed.returncode != 0:
         return completed.returncode
 
+    include_versions = set(args.version) if args.version else None
+    openrpc_report = build_openrpc_report_from_sources(
+        load_openrpc_source_snapshots(
+            manifest_path,
+            fixture_root=fixture_root,
+            include_versions=include_versions,
+        ),
+        source_name=args.source_name,
+        version_filter=args.version_filter or f"{tag_prefix} GitHub releases",
+        publish_version=publish_version,
+    )
     write_details_pages(
-        output_dir=Path(args.output_dir).resolve(),
+        output_dir=output_dir,
         spec_entries=spec_entries,
+        openrpc_report=openrpc_report,
+        link_prefix=link_prefix,
+        preserved_spec_details=preserved_spec_details,
     )
     update_docs_navigation(
-        docs_json_path=Path(args.docs_json).resolve(),
+        docs_json_path=docs_json_path,
         dropdown_label=args.nav_dropdown,
-        output_dir=Path(args.output_dir).resolve(),
+        output_dir=output_dir,
         spec_entries=spec_entries,
     )
     return 0
