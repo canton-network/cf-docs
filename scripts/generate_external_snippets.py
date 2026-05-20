@@ -63,6 +63,11 @@ REPOS: dict[str, SnippetRepo] = {
         config_name="daml-shell-snippet-list-remote.json",
         aliases=("daml-shell",),
     ),
+    "daml-finance": SnippetRepo(
+        name="daml-finance",
+        config_name="daml-finance-snippet-list-remote.json",
+        aliases=("daml-finance",),
+    ),
     "scribe": SnippetRepo(
         name="scribe",
         config_name="scribe-snippet-list-remote.json",
@@ -161,7 +166,7 @@ def config_path(repo: SnippetRepo) -> Path:
 
 
 def helper_path() -> Path:
-    return CF_DOCS_ROOT / "scripts" / "helpers" / "generateOutputDocs.js"
+    return CF_DOCS_ROOT / "scripts" / "generateOutputDocs.js"
 
 
 def repo_label(repo: SnippetRepo) -> str:
@@ -317,10 +322,9 @@ def checkout_ref(source_dir: Path, ref: str | None, fetch: bool, dry_run: bool) 
 
 
 def copy_helper_and_config(repo: SnippetRepo, source_dir: Path, dry_run: bool) -> Path:
-    target_scripts = source_dir / "docs" / "scripts"
-    target_config = source_dir / "docs" / "config"
+    target_scripts = source_dir / "scripts" / "docs"
     target_helper = target_scripts / repo.helper_name
-    target_export = target_config / "exportConfig.json"
+    target_export = target_scripts / "exportConfig.json"
 
     print(f"Copy helper: {helper_path()} -> {target_helper}")
     print(f"Copy config: {config_path(repo)} -> {target_export}")
@@ -328,7 +332,6 @@ def copy_helper_and_config(repo: SnippetRepo, source_dir: Path, dry_run: bool) -
         return target_helper
 
     target_scripts.mkdir(parents=True, exist_ok=True)
-    target_config.mkdir(parents=True, exist_ok=True)
     shutil.copy2(helper_path(), target_helper)
     shutil.copy2(config_path(repo), target_export)
     return target_helper
