@@ -44,6 +44,10 @@ The location of the script and config file might vary depending on the source re
 * The snippet list json file is located at `/docs/config/exportConfig.json`
 * The helper script is located at `/docs/scripts/generateOutputDocs.js`
 
+### Manual extraction
+
+You can find all configuration files (`xyz-snippet-list-remote.json`) in this folder (`config/snippet-config`). The script to generate the output snippets can be found in `/scripts/generateOutputDocs.js` (in this repository).
+
 The GitHub action file needs to be adjusted accordingly:
 
 ```
@@ -175,7 +179,7 @@ import MySnippet from "/shared/my-snippet.mdx";
 The above mentioned files:
 * `config/snippet-config/*-snippet-list-remote.json`
 * `config/snippet-config/update-docs-snippets.yml`
-* `scripts/helpers/generateOutputDocs.js`
+* `scripts/generateOutputDocs.js`
 
 are only added to this repository for reference. They are only used in the external repositories.
 
