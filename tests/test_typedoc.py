@@ -6,7 +6,8 @@ import unittest
 from pathlib import Path
 
 from x2mdx.cli import main as cli_main
-from x2mdx.typedoc.lifecycle import build_typedoc_report_from_sources
+from x2mdx.typedoc.render import escape_md_cell
+from x2mdx.typedoc.lifecycle import build_typedoc_report_from_sources, normalize_source_location, render_type
 from x2mdx.typedoc.snapshots import load_typedoc_sources
 
 
@@ -296,3 +297,57 @@ class TypeDocTests(unittest.TestCase):
         self.assertIn("`kind`", text)
         self.assertNotIn("internalOnly", text)
         self.assertNotIn("`debug`", text)
+
+    def test_render_type_handles_sdk_typedoc_type_nodes(self) -> None:
+        self.assertEqual(
+            render_type(
+                {
+                    "type": "indexedAccess",
+                    "objectType": {"type": "reference", "name": "LedgerTypes"},
+                    "indexType": {"type": "literal", "value": "DisclosedContract"},
+                }
+            ),
+            'LedgerTypes["DisclosedContract"]',
+        )
+        self.assertEqual(
+            render_type(
+                {
+                    "type": "conditional",
+                    "checkType": {"type": "reference", "name": "K"},
+                    "extendsType": {"type": "literal", "value": "token"},
+                    "trueType": {"type": "reference", "name": "TokenNamespace"},
+                    "falseType": {"type": "intrinsic", "name": "never"},
+                }
+            ),
+            'K extends "token" ? TokenNamespace : never',
+        )
+        self.assertEqual(
+            render_type(
+                {
+                    "type": "mapped",
+                    "parameter": "K",
+                    "parameterType": {
+                        "type": "typeOperator",
+                        "operator": "keyof",
+                        "target": {"type": "reference", "name": "ExtendedSDKOptions"},
+                    },
+                    "templateType": {"type": "reference", "name": "SDKInterface"},
+                }
+            ),
+            "{ [K in keyof ExtendedSDKOptions]: SDKInterface }",
+        )
+
+    def test_source_locations_strip_local_package_cache_prefix(self) -> None:
+        self.assertEqual(
+            normalize_source_location(
+                "/Users/example/.cache/x2mdx/typescript-bindings/canton-network-dapp-sdk/1.1.0/package/dist/sdk.d.ts",
+                16,
+            ),
+            "dist/sdk.d.ts:16",
+        )
+
+    def test_table_cells_escape_mdx_angle_brackets(self) -> None:
+        self.assertEqual(
+            escape_md_cell("Provider<DappRpcTypes>\nleft|right"),
+            "Provider&lt;DappRpcTypes&gt;<br/>left\\|right",
+        )

@@ -28,18 +28,32 @@ def navigation_dropdown_pages(docs: dict[str, Any], dropdown_label: str, docs_js
     if not isinstance(navigation, dict):
         raise ValueError(f"docs.json missing navigation object: {docs_json_path}")
     dropdowns = navigation.get("dropdowns")
-    if not isinstance(dropdowns, list):
-        raise ValueError(f"docs.json navigation.dropdowns must be a list: {docs_json_path}")
-    dropdown = next(
-        (item for item in dropdowns if isinstance(item, dict) and item.get("dropdown") == dropdown_label),
-        None,
-    )
-    if dropdown is None:
-        raise ValueError(f"Dropdown not found in docs.json: {dropdown_label}")
-    pages = dropdown.get("pages")
-    if not isinstance(pages, list):
-        raise ValueError(f"Dropdown does not expose a pages list: {dropdown_label}")
-    return pages
+    if isinstance(dropdowns, list):
+        dropdown = next(
+            (item for item in dropdowns if isinstance(item, dict) and item.get("dropdown") == dropdown_label),
+            None,
+        )
+        if dropdown is None:
+            raise ValueError(f"Dropdown not found in docs.json: {dropdown_label}")
+        pages = dropdown.get("pages")
+        if not isinstance(pages, list):
+            raise ValueError(f"Dropdown does not expose a pages list: {dropdown_label}")
+        return pages
+
+    products = navigation.get("products")
+    if isinstance(products, list):
+        product = next(
+            (item for item in products if isinstance(item, dict) and item.get("product") == dropdown_label),
+            None,
+        )
+        if product is None:
+            raise ValueError(f"Product not found in docs.json: {dropdown_label}")
+        pages = product.get("pages")
+        if not isinstance(pages, list):
+            raise ValueError(f"Product does not expose a pages list: {dropdown_label}")
+        return pages
+
+    raise ValueError(f"docs.json navigation must define dropdowns or products: {docs_json_path}")
 
 
 def find_group(items: list[Any], label: str) -> dict[str, Any] | None:
