@@ -343,9 +343,11 @@ def prepare_repo(repo: SnippetRepo, source_dir: Path, skip_prepare: bool, dry_ru
     if repo.needs_docker:
         check_docker(dry_run)
     env = os.environ.copy()
+    commands = repo.prepare
     if repo.name == "canton":
-        env.setdefault("SBT_OPTS", "-Xmx8G -Xms2G")
-    for command in repo.prepare:
+        env["SBT_OPTS"] = os.environ.get("SNIPPET_CANTON_SBT_OPTS", "-Xmx8G -Xms2G")
+        commands = tuple(f'SBT_OPTS="{env["SBT_OPTS"]}" {command}' for command in commands)
+    for command in commands:
         run(command_for_repo(source_dir, command), cwd=source_dir, dry_run=dry_run, env=env)
 
 
