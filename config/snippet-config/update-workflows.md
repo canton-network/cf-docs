@@ -6,6 +6,28 @@ This document describes the external snippet update workflow for this docs repos
 
 The automation to pull the snippet updates into this repository is implemented using GitHub Action workflows
 
+## Local one-command extraction
+
+From this repository, use `generate:external-snippets` to copy the matching helper/config into a local source repository and run extraction there:
+
+```bash
+npm run generate:external-snippets -- canton --source-dir ../canton
+```
+
+The first positional argument selects the snippet repository. Supported names are listed with:
+
+```bash
+npm run generate:external-snippets -- --list
+```
+
+By default, the generated files remain in the source repository's `docs-output/` directory. To also copy the output into this repository's snippet tree, pass `--copy-output` and a version folder:
+
+```bash
+npm run generate:external-snippets -- canton --source-dir ../canton --copy-output --version main
+```
+
+For repositories with generated snippet JSON, the wrapper runs the required preparation step first. For example, `canton` runs `docs-open / reset` and `docs-open / generateSphinxSnippets` before invoking the extraction helper. Use `--skip-prepare` only when those generated inputs already exist.
+
 # Workflow architecture
 
 Changes in the external repository snippet source files are being extracted on the external repository, wrapped into an artifact and then being pulled in from this repository into the appropriate folder in the `snippets/external/` folder.
