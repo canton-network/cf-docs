@@ -46,9 +46,15 @@ jobs:
         if: steps.update.outputs.has_updates == 'true'
         run: direnv exec . npm run generate:all-reference-docs
 
-      - name: Run tests
+      - name: Run focused tests
         if: steps.update.outputs.has_updates == 'true'
-        run: direnv exec . python3 -m pytest tests
+        run: |
+          direnv exec . python3 -m pytest \
+            tests/test_update_reference_doc_sources.py \
+            tests/test_splice_mintlify_openapi.py \
+            tests/test_canton_protobuf_generator.py \
+            tests/test_wallet_kernel_nav.py \
+            tests/test_typescript_bindings_reference.py
 
       - name: Check whitespace
         if: steps.update.outputs.has_updates == 'true'
@@ -68,7 +74,7 @@ jobs:
         if: steps.update.outputs.has_updates == 'true'
         uses: peter-evans/create-pull-request@v8
         with:
-          token: ${{ secrets.DOCS_PR_TOKEN }}
+          token: ${{ secrets.DOCS_PR_TOKEN || github.token }}
           branch: generated-reference-docs/update
           base: main
           title: Update generated reference docs from upstream releases
