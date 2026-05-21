@@ -384,7 +384,13 @@ def build_repositories(existing_config: dict, snapshot: dict) -> dict:
 
 def build_source_contract(snapshot: dict) -> dict:
     return {
-        "splice": "Network /info endpoint, cross-checked against network index Docker image tag and Helm chart version.",
+        "splice": (
+            "Network /info endpoint: MainNet "
+            "https://docs.global.canton.network.sync.global/info, TestNet "
+            "https://docs.test.global.canton.network.sync.global/info, DevNet "
+            "https://docs.dev.global.canton.network.sync.global/info. Cross-check against "
+            "the same network's /index.html Docker image tag and Helm chart version."
+        ),
         "canton": "Network version_information.html row: Canton version used for validator and SV nodes.",
         "damlSdkInstaller": (
             f"DPM installer channel: curl {DPM_INSTALLER_URL} | sh; "
