@@ -113,6 +113,15 @@ Source rules:
 | `Release Notes` | Link to the observed Splice release. |
 | `Primary Scan API` | Static canonical `scan.sv-1...` endpoint for each network. |
 
+### Generate external snippets
+
+External snippet extraction from source repositories is documented in [config/snippet-config/update-workflows.md](config/snippet-config/update-workflows.md). Use that workflow when updating snippet configs under `config/snippet-config/` or regenerating checked-in snippets under `docs-main/snippets/external/`.
+
+```bash
+npm run generate:external-snippets -- --list
+npm run generate:external-snippets -- canton --source-dir ../canton
+```
+
 ### Generate the JSON API reference
 
 This repo includes a checked-in source config for the Ledger API OpenAPI bundle inputs under `config/x2mdx/ledger-api/source-artifacts.json`.
