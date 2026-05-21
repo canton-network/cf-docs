@@ -32,21 +32,18 @@ NETWORKS = {
         "display_name": "MainNet",
         "info_url": "https://docs.global.canton.network.sync.global/info",
         "index_url": "https://docs.global.canton.network.sync.global/index.html",
-        "version_info_url": "https://docs.global.canton.network.sync.global/app_dev/overview/version_information.html",
         "endpoint": "scan.sv-1.global.canton.network.sync.global",
     },
     "testnet": {
         "display_name": "TestNet",
         "info_url": "https://docs.test.global.canton.network.sync.global/info",
         "index_url": "https://docs.test.global.canton.network.sync.global/index.html",
-        "version_info_url": "https://docs.test.global.canton.network.sync.global/app_dev/overview/version_information.html",
         "endpoint": "scan.sv-1.test.global.canton.network.sync.global",
     },
     "devnet": {
         "display_name": "DevNet",
         "info_url": "https://docs.dev.global.canton.network.sync.global/info",
         "index_url": "https://docs.dev.global.canton.network.sync.global/index.html",
-        "version_info_url": "https://docs.dev.global.canton.network.sync.global/app_dev/overview/version_information.html",
         "endpoint": "scan.sv-1.dev.global.canton.network.sync.global",
     },
 }
@@ -247,24 +244,15 @@ def collect_network_snapshot(network_key: str, timeout: float) -> dict:
             f"docs index version {docker_image_tag}"
         )
 
-    version_pairs = parse_table_pairs(fetch_text(urls["version_info_url"], timeout))
-    canton_version = require_value(
-        version_pairs,
-        "Canton version used for validator and SV nodes",
-        urls["version_info_url"],
-    )
-
     return {
         "displayName": urls["display_name"],
         "endpoint": urls["endpoint"],
         "spliceVersion": observed_release,
         "migrationId": migration_id,
         "chainIdSuffix": chain_id_suffix,
-        "cantonVersion": canton_version,
         "sources": {
             "infoUrl": urls["info_url"],
             "indexUrl": urls["index_url"],
-            "versionInfoUrl": urls["version_info_url"],
         },
         "checks": {
             "dockerImageTag": docker_image_tag,
@@ -319,8 +307,6 @@ def repository_url(repository_key: str, existing_config: dict) -> str:
     existing = existing_config.get("repositories", {}).get(repository_key, {})
     if repository_key == "splice":
         return "https://github.com/canton-network/splice/releases"
-    if repository_key == "damlSdk":
-        return "https://docs.digitalasset.com/build/3.5/"
     if repository_key == "walletGateway":
         return WALLET_GATEWAY_PACKAGE_URL
     if repository_key in NPM_PACKAGE_URLS:
@@ -340,11 +326,6 @@ def build_repository_mapping(
             external_version = network["spliceVersion"]
             branch = "main"
             folder_path_repo = "splice-wallet-kernel"
-        elif repository_key == "damlSdk":
-            # Historical config key. The dashboard currently labels this row as "Canton".
-            external_version = network["cantonVersion"]
-            branch = ""
-            folder_path_repo = ""
         elif repository_key in NPM_PACKAGE_NAMES:
             external_version = snapshot["npmVersions"][repository_key]
             branch = ""
@@ -391,7 +372,10 @@ def build_source_contract(snapshot: dict) -> dict:
             "https://docs.dev.global.canton.network.sync.global/info. Cross-check against "
             "the same network's /index.html Docker image tag and Helm chart version."
         ),
-        "canton": "Network version_information.html row: Canton version used for validator and SV nodes.",
+        "canton": (
+            "Manual/fallback until an owner-approved public source is confirmed. "
+            "The config key remains damlSdk for compatibility with the existing dashboard component."
+        ),
         "damlSdkInstaller": (
             f"DPM installer channel: curl {DPM_INSTALLER_URL} | sh; "
             f"latest stable SDK from {DPM_LATEST_URL} currently resolves to {snapshot['latestDpmSdk']}."
