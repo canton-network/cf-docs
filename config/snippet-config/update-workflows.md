@@ -65,6 +65,14 @@ Line 21 with the path to the `generateOutputDocs.js` script
 The snippet extraction script is then called from the GitHub action and extracts snippet files into a temp folder `docs-output`. During the extraction, the files are also transformed: Content is wrapped into a markdown codeblock.
 The content of this folder (full extract) is then stored into the [GitHub artifact storage](https://docs.github.com/en/actions/concepts/workflows-and-actions/workflow-artifacts). Afterwards, the `update_snippets` workflow is called on the main repository (this repo), which will pull the snippet files.
 
+Each generated snippet starts with, or for MDX snippets that start with imports places after the import block, a searchable provenance comment:
+
+```mdx
+<!-- source-snippet repo="canton" path="docs-open/target/snippet_json_data/example.json" commit="abc123..." snippet="docs-open/target/snippet_json_data/example-0" location="jsonIndex:0-0" -->
+```
+
+Use the `source-snippet` prefix, `repo`, `path`, or `commit` fields to map a generated snippet file back to the source repository state that produced it.
+
 ## Pulling snippet files
 
 In this repository, the [pull-external-snippets](/.github/workflows/pull-external-snippets.yml) workflow (dispatch name: `update_snippets`) is triggered with the following parameters:

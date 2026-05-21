@@ -5,14 +5,48 @@
 // - Reads a single export config: docs/config/exportConfig.json
 // - Writes extracted snippets into: docs-output/<snippetName>.mdx
 // - Resolves source files relative to the repo root
+// - Adds a searchable source-snippet provenance comment to each output file
 
 const fs = require('fs')
 const path = require('path')
 const { convertRstIncludeToMdx } = require('./rstIncludeToMdx')
+const childProcess = require('child_process')
 
 const REPO_ROOT = path.join(__dirname, '..', '..')
 const EXPORT_CONFIG_PATH = path.join(__dirname, 'exportConfig.json')
 const OUTPUT_FOLDER_PATH = path.join(REPO_ROOT, 'docs-output')
+
+function runGit(args) {
+    try {
+        return childProcess
+            .execFileSync('git', args, {
+                cwd: REPO_ROOT,
+                encoding: 'utf8',
+                stdio: ['ignore', 'pipe', 'ignore'],
+            })
+            .trim()
+    } catch (_) {
+        return ''
+    }
+}
+
+const SOURCE_COMMIT = runGit(['rev-parse', 'HEAD']) || 'unknown'
+
+function getSourceRepoName() {
+    if (process.env.SOURCE_REPO_NAME) {
+        return process.env.SOURCE_REPO_NAME
+    }
+
+    const remoteUrl = runGit(['config', '--get', 'remote.origin.url'])
+    const remoteMatch = remoteUrl.match(/([^/:]+?)(?:\.git)?$/)
+    if (remoteMatch) {
+        return remoteMatch[1]
+    }
+
+    return path.basename(REPO_ROOT)
+}
+
+const SOURCE_REPO_NAME = getSourceRepoName()
 
 function readFileContent(filePath) {
     try {
@@ -318,6 +352,70 @@ function formatSnippetContent(content, options, globalOptions = {}) {
     }
 }
 
+function commentAttribute(value) {
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/--/g, '&#45;&#45;')
+}
+
+function formatLocation(location) {
+    if (!location || !location.type) return 'unknown'
+
+    switch (location.type) {
+        case 'fullFile':
+            return 'fullFile'
+        case 'lines':
+        case 'jsonIndex':
+            return `${location.type}:${location.start}-${location.end}`
+        case 'stringMarker':
+        case 'regexWrap':
+            return `${location.type}:${location.start}->${location.end}`
+        default:
+            return location.type
+    }
+}
+
+function buildProvenanceComment(snippet) {
+    const repo = snippet.sourceRepo || SOURCE_REPO_NAME
+    const fields = [
+        ['repo', repo],
+        ['path', snippet.sourceFilepath],
+        ['commit', SOURCE_COMMIT],
+        ['snippet', snippet.snippetName],
+        ['location', formatLocation(snippet.location)],
+    ]
+        .filter(([, value]) => value !== undefined && value !== null && value !== '')
+        .map(([key, value]) => `${key}="${commentAttribute(value)}"`)
+        .join(' ')
+
+    return `<!-- source-snippet ${fields} -->`
+}
+
+function addProvenanceComment(content, snippet) {
+    const comment = buildProvenanceComment(snippet)
+    const lines = content.split('\n')
+    let insertAt = 0
+
+    while (insertAt < lines.length) {
+        const line = lines[insertAt]
+        if (line.trim() === '') {
+            insertAt++
+            continue
+        }
+        if (/^import\s/.test(line)) {
+            insertAt++
+            continue
+        }
+        break
+    }
+
+    lines.splice(insertAt, 0, comment)
+    return lines.join('\n')
+}
+
 function getSourceFilePath(snippet) {
     if (snippet.sourceFilepath) {
         return path.join(REPO_ROOT, snippet.sourceFilepath)
@@ -369,6 +467,10 @@ function processSnippet(snippet, verbose, globalOptions = {}) {
             snippet.options || {},
             globalOptions
         )
+        const contentWithProvenance = addProvenanceComment(
+            formattedContent,
+            snippet
+        )
 
         const outputFileName = `${snippet.snippetName}.mdx`
         const outputPath = path.join(OUTPUT_FOLDER_PATH, outputFileName)
@@ -376,7 +478,7 @@ function processSnippet(snippet, verbose, globalOptions = {}) {
 
         fs.mkdirSync(outputPathDir, { recursive: true })
 
-        fs.writeFileSync(outputPath, formattedContent, 'utf8')
+        fs.writeFileSync(outputPath, contentWithProvenance, 'utf8')
 
         if (verbose) {
             console.log(`✓ Successfully extracted snippet to: ${outputPath}`)
