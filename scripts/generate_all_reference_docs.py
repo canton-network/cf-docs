@@ -142,17 +142,23 @@ def dropdown_pages(docs: dict[str, Any], *, dropdown_label: str) -> list[Any]:
     if not isinstance(navigation, dict):
         raise ValueError(f"docs.json missing navigation object: {DOCS_JSON_PATH}")
     dropdowns = navigation.get("dropdowns")
-    if not isinstance(dropdowns, list):
-        raise ValueError(f"docs.json navigation.dropdowns must be a list: {DOCS_JSON_PATH}")
-    dropdown = next(
-        (item for item in dropdowns if isinstance(item, dict) and item.get("dropdown") == dropdown_label),
-        None,
-    )
-    if dropdown is None:
-        raise ValueError(f"Dropdown not found in docs.json: {dropdown_label}")
-    pages = dropdown.get("pages")
+    nav_section = None
+    if isinstance(dropdowns, list):
+        nav_section = next(
+            (item for item in dropdowns if isinstance(item, dict) and item.get("dropdown") == dropdown_label),
+            None,
+        )
+    products = navigation.get("products")
+    if nav_section is None and isinstance(products, list):
+        nav_section = next(
+            (item for item in products if isinstance(item, dict) and item.get("product") == dropdown_label),
+            None,
+        )
+    if nav_section is None:
+        raise ValueError(f"Navigation section not found in docs.json: {dropdown_label}")
+    pages = nav_section.get("pages")
     if not isinstance(pages, list):
-        raise ValueError(f"Dropdown does not expose a pages list: {dropdown_label}")
+        raise ValueError(f"Navigation section does not expose a pages list: {dropdown_label}")
     return pages
 
 

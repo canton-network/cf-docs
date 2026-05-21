@@ -233,7 +233,7 @@ def write_details_pages(
 
     for spec in spec_entries:
         spec_id = str(spec["spec_id"])
-        if spec_id == "user-api" and openrpc_report is not None:
+        if openrpc_report is not None:
             from x2mdx.openrpc.render import build_spec_details_history_page
             from x2mdx.reference_pages import render_details_history_page
             from x2mdx.render import write_page
@@ -359,7 +359,7 @@ def update_docs_navigation(
     details_refs = [item for item in group["pages"] if isinstance(item, str)]
     for wallet_group in wallet_groups:
         if wallet_group.get("group") == GROUP_LABEL:
-            wallet_group["pages"].extend(details_refs)
+            wallet_group["pages"] = [*details_refs, *wallet_group["pages"]]
             break
     for offset, wallet_group in enumerate(wallet_groups):
         pruned_pages.insert(min(insert_at + offset, len(pruned_pages)), wallet_group)
@@ -479,7 +479,11 @@ def main() -> int:
     output_dir = Path(args.output_dir).resolve()
     docs_json_path = Path(args.docs_json).resolve()
     link_prefix = overview_route_prefix(output_dir, docs_json_path)
-    preserved_spec_details = read_existing_spec_details(output_dir, spec_entries, exclude_spec_ids={"user-api"})
+    preserved_spec_details = read_existing_spec_details(
+        output_dir,
+        spec_entries,
+        exclude_spec_ids={str(spec["spec_id"]) for spec in spec_entries},
+    )
 
     command = repo_direnv_command(
         REPO_ROOT,

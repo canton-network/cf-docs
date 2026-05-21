@@ -13,6 +13,16 @@ from urllib.parse import quote
 
 from x2mdx.jvm_docs.models import JvmDocArtifactLifecycle, JvmDocLifecycleReport, JvmDocSymbolLifecycle
 from x2mdx.output import Page
+from x2mdx.reference_pages import (
+    DetailsHistoryChange,
+    DetailsHistoryPage,
+    DetailsHistoryVersionRow,
+    ReferenceBadge,
+    ReferenceCard,
+    ReferenceMetaItem,
+    ReferenceSection,
+    render_details_history_page,
+)
 from x2mdx.templating import markdown_page
 
 CHANGE_MARKER = "🔵"
@@ -97,6 +107,133 @@ def summarize_changes(artifact: JvmDocArtifactLifecycle) -> dict[str, int]:
         "deprecated": sum(1 for symbol in artifact.symbols if symbol.deprecated_version is not None),
         "removed": sum(1 for symbol in artifact.symbols if symbol.removed_version is not None),
     }
+
+
+def aggregate_version_rows(report: JvmDocLifecycleReport) -> list[DetailsHistoryVersionRow]:
+    versions: list[str] = []
+    for artifact in report.artifacts:
+        for version in artifact.versions:
+            if version not in versions:
+                versions.append(version)
+    rows: list[DetailsHistoryVersionRow] = []
+    for version in versions:
+        added = sum(1 for artifact in report.artifacts for symbol in artifact.symbols if symbol.introduced_version == version)
+        deprecated = sum(1 for artifact in report.artifacts for symbol in artifact.symbols if symbol.deprecated_version == version)
+        removed = sum(1 for artifact in report.artifacts for symbol in artifact.symbols if symbol.removed_version == version)
+        rows.append(
+            DetailsHistoryVersionRow(
+                version=version,
+                added=str(added),
+                deprecated=str(deprecated or "-"),
+                removed=str(removed),
+            )
+        )
+    return rows
+
+
+def build_details_history_page(
+    report: JvmDocLifecycleReport,
+    *,
+    overview_output: Path,
+    details_dir: Path,
+    overview_title: str,
+    artifact_pages: list[tuple[JvmDocArtifactLifecycle, Page]],
+) -> DetailsHistoryPage:
+    root = compute_output_root(overview_output, details_dir)
+    cards: list[ReferenceCard] = []
+    changes: list[DetailsHistoryChange] = []
+    for artifact, artifact_page in artifact_pages:
+        summary = summarize_changes(artifact)
+        cards.append(
+            ReferenceCard(
+                title=f"{artifact.group}:{artifact.artifact}",
+                href=relative_page_link(overview_output, root / artifact_page.path),
+                summary=f"{artifact.type_count} types and {artifact.member_count} members across {len(artifact.versions)} selected versions.",
+                badges=[
+                    ReferenceBadge(f"Since {artifact.versions[0]}", tone="added"),
+                    ReferenceBadge(f"{artifact.language}", tone="neutral"),
+                ],
+                meta_items=[
+                    ReferenceMetaItem("Versions", ", ".join(artifact.versions)),
+                    ReferenceMetaItem("Introduced", str(summary["introduced"])),
+                    ReferenceMetaItem("Deprecated", str(summary["deprecated"])),
+                    ReferenceMetaItem("Removed", str(summary["removed"])),
+                ],
+            )
+        )
+        for symbol in changed_symbols(artifact):
+            if symbol.introduced_version != artifact.versions[0]:
+                changes.append(
+                    DetailsHistoryChange(
+                        version=symbol.introduced_version,
+                        title=f"Added {symbol.symbol}",
+                        details=symbol.kind,
+                        tone="added",
+                        href=latest_doc_link(symbol) or None,
+                    )
+                )
+            if symbol.deprecated_version:
+                changes.append(
+                    DetailsHistoryChange(
+                        version=symbol.deprecated_version,
+                        title=f"Deprecated {symbol.symbol}",
+                        details=symbol.deprecation_note or symbol.kind,
+                        tone="deprecated",
+                        href=latest_doc_link(symbol) or None,
+                    )
+                )
+            if symbol.removed_version:
+                changes.append(
+                    DetailsHistoryChange(
+                        version=symbol.removed_version,
+                        title=f"Removed {symbol.symbol}",
+                        details=symbol.kind,
+                        tone="removed",
+                        href=latest_doc_link(symbol) or None,
+                    )
+                )
+
+    return DetailsHistoryPage(
+        path=page_path(root, overview_output),
+        title=f"{overview_title} details and history",
+        description="Generated source details and version history for Java bindings Javadocs.",
+        eyebrow="Details and history",
+        summary="Generated-source metadata, version coverage, artifact inventory, and symbol lifecycle changes for this source stream.",
+        badges=[ReferenceBadge("Javadocs", tone="protocol")],
+        meta_items=[
+            ReferenceMetaItem("Source stream", overview_title),
+            ReferenceMetaItem("Artifacts", str(report.summary["artifact_count"])),
+            ReferenceMetaItem("Types", str(report.summary["type_count"])),
+            ReferenceMetaItem("Members", str(report.summary["member_count"])),
+        ],
+        source_items=[
+            ReferenceMetaItem("Input family", report.source_name),
+            ReferenceMetaItem("Version filter", report.version_filter),
+            ReferenceMetaItem("Artifacts", str(report.summary["artifact_count"])),
+            ReferenceMetaItem("Types", str(report.summary["type_count"])),
+            ReferenceMetaItem("Members", str(report.summary["member_count"])),
+        ],
+        source_cards=[
+            ReferenceCard(
+                title="Generated reference pages",
+                summary="Artifact, package, and object pages are generated from selected local Javadoc snapshots.",
+                meta_items=[
+                    ReferenceMetaItem("Artifacts", str(len(report.artifacts))),
+                    ReferenceMetaItem("Failures", str(sum(len(artifact.failures) for artifact in report.artifacts))),
+                ],
+            )
+        ],
+        version_rows=aggregate_version_rows(report),
+        inventory_sections=[
+            ReferenceSection(
+                heading="Published artifacts",
+                body_markdown="These artifacts link to generated package and object reference pages.",
+                cards=cards,
+            )
+        ],
+        changes=sorted(changes, key=lambda change: (change.version, change.title)),
+        limitations=report.notes,
+    )
 
 
 def format_lifecycle_value(value: str | None) -> str:
@@ -566,20 +703,14 @@ def build_pages(
             ]
         )
 
-    overview_page = markdown_page(
-        path=page_path(root, overview_output),
-        title=overview_title,
-        description="Generated lifecycle timeline and reference pages for local Javadoc/Scaladoc artifacts",
-        template_name="jvm_docs/overview.md.j2",
-        source_items=[
-            f"Source name: `{md_code(report.source_name)}`",
-            f"Version filter: `{md_code(report.version_filter)}`",
-            f"Artifacts: `{report.summary['artifact_count']}`",
-            f"Types: `{report.summary['type_count']}`",
-            f"Members: `{report.summary['member_count']}`",
-        ],
-        overview_rows=overview_rows,
-        notes=[md_text(note) for note in report.notes],
+    overview_page = render_details_history_page(
+        build_details_history_page(
+            report,
+            overview_output=overview_output,
+            details_dir=details_dir,
+            overview_title=overview_title,
+            artifact_pages=artifact_pages,
+        )
     )
 
     pages.append(overview_page)

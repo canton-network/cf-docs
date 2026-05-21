@@ -406,24 +406,33 @@ def update_docs_navigation(
     navigation = docs.get("navigation")
     if not isinstance(navigation, dict):
         raise ValueError(f"docs.json navigation must be an object: {docs_json_path}")
+    nav_section = None
     dropdowns = navigation.get("dropdowns")
-    if not isinstance(dropdowns, list):
-        raise ValueError(f"docs.json navigation.dropdowns must be a list: {docs_json_path}")
-    dropdown = next((item for item in dropdowns if isinstance(item, dict) and item.get("dropdown") == dropdown_label), None)
-    if dropdown is None:
-        raise ValueError(f"Dropdown not found in docs.json: {dropdown_label}")
-    pages = dropdown.get("pages")
+    if isinstance(dropdowns, list):
+        nav_section = next(
+            (item for item in dropdowns if isinstance(item, dict) and item.get("dropdown") == dropdown_label),
+            None,
+        )
+    products = navigation.get("products")
+    if nav_section is None and isinstance(products, list):
+        nav_section = next(
+            (item for item in products if isinstance(item, dict) and item.get("product") == dropdown_label),
+            None,
+        )
+    if nav_section is None:
+        raise ValueError(f"Navigation section not found in docs.json: {dropdown_label}")
+    pages = nav_section.get("pages")
     if not isinstance(pages, list):
-        raise ValueError(f"Dropdown does not expose a pages list: {dropdown_label}")
+        raise ValueError(f"Navigation section does not expose a pages list: {dropdown_label}")
 
     page_ref = docs_json_page_ref(output_dir / "index.mdx", docs_json_path)
     legacy_page_ref = docs_json_page_ref(legacy_overview_path, docs_json_path)
-    dropdown["pages"] = prune_nav_items(
+    nav_section["pages"] = prune_nav_items(
         pages,
         page_refs={page_ref, legacy_page_ref},
         group_labels=reference_nav.PROTOBUF_GROUP_ALIASES,
     )
-    target_pages = ensure_group_path(dropdown["pages"], parent_groups)
+    target_pages = ensure_group_path(nav_section["pages"], parent_groups)
     target_pages.append({"group": GROUP_LABEL, "pages": [page_ref, legacy_page_ref]})
     docs_json_path.write_text(json.dumps(docs, indent=2) + "\n", encoding="utf-8")
     print(f"Updated docs navigation: {docs_json_path}")
@@ -453,15 +462,24 @@ def update_split_protobuf_navigation(
     navigation = docs.get("navigation")
     if not isinstance(navigation, dict):
         raise ValueError(f"docs.json navigation must be an object: {docs_json_path}")
+    nav_section = None
     dropdowns = navigation.get("dropdowns")
-    if not isinstance(dropdowns, list):
-        raise ValueError(f"docs.json navigation.dropdowns must be a list: {docs_json_path}")
-    dropdown = next((item for item in dropdowns if isinstance(item, dict) and item.get("dropdown") == dropdown_label), None)
-    if dropdown is None:
-        raise ValueError(f"Dropdown not found in docs.json: {dropdown_label}")
-    pages = dropdown.get("pages")
+    if isinstance(dropdowns, list):
+        nav_section = next(
+            (item for item in dropdowns if isinstance(item, dict) and item.get("dropdown") == dropdown_label),
+            None,
+        )
+    products = navigation.get("products")
+    if nav_section is None and isinstance(products, list):
+        nav_section = next(
+            (item for item in products if isinstance(item, dict) and item.get("product") == dropdown_label),
+            None,
+        )
+    if nav_section is None:
+        raise ValueError(f"Navigation section not found in docs.json: {dropdown_label}")
+    pages = nav_section.get("pages")
     if not isinstance(pages, list):
-        raise ValueError(f"Dropdown does not expose a pages list: {dropdown_label}")
+        raise ValueError(f"Navigation section does not expose a pages list: {dropdown_label}")
 
     stale_refs = {
         docs_json_page_ref(ledger_output_dir / "index.mdx", docs_json_path),
@@ -469,7 +487,7 @@ def update_split_protobuf_navigation(
     }
     if admin_output_dir is not None:
         stale_refs.add(docs_json_page_ref(admin_output_dir / "index.mdx", docs_json_path))
-    dropdown["pages"] = prune_nav_items(
+    nav_section["pages"] = prune_nav_items(
         pages,
         page_refs=stale_refs,
         group_labels=reference_nav.PROTOBUF_GROUP_ALIASES,
@@ -481,7 +499,7 @@ def update_split_protobuf_navigation(
         group_label=reference_nav.PROTOBUF_GROUP,
     )
     replace_group_at_path(
-        dropdown["pages"],
+        nav_section["pages"],
         [reference_nav.LEDGER_API_PARENT_GROUP],
         ledger_group,
     )
@@ -495,13 +513,13 @@ def update_split_protobuf_navigation(
             include_details_page=False,
         )["pages"]
         replace_group_at_path(
-            dropdown["pages"],
+            nav_section["pages"],
             [reference_nav.ADMIN_API_PARENT_GROUP],
             {
                 "group": reference_nav.GRPC_GROUP,
                 "pages": [
-                    *admin_protobuf_group_pages,
                     admin_details_page_ref,
+                    *admin_protobuf_group_pages,
                 ],
             },
         )
@@ -615,6 +633,8 @@ def render_protobuf_reference(
     output_dir: Path,
     source_name: str,
     version_filter: str,
+    page_title: str,
+    page_description: str,
 ) -> int:
     command = repo_direnv_command(
         REPO_ROOT,
@@ -629,6 +649,10 @@ def render_protobuf_reference(
         source_name,
         "--version-filter",
         version_filter,
+        "--page-title",
+        page_title,
+        "--page-description",
+        page_description,
     )
     print("Running:", " ".join(command))
     completed = subprocess.run(command, cwd=REPO_ROOT)
@@ -694,6 +718,8 @@ def main() -> int:
         output_dir=Path(args.output_dir).resolve(),
         source_name=args.source_name,
         version_filter=version_filter,
+        page_title="Ledger API protobuf",
+        page_description="Generated source details and version history for the Ledger API protobuf reference.",
     )
     if result != 0:
         return result
@@ -731,6 +757,8 @@ def main() -> int:
             output_dir=admin_output_dir,
             source_name=admin_source_name,
             version_filter=version_filter,
+            page_title="Admin API protobuf",
+            page_description="Generated source details and version history for the Admin API protobuf reference.",
         )
         if result != 0:
             return result

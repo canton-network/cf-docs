@@ -229,15 +229,19 @@ def update_docs_navigation(
     output_dir: Path,
 ) -> Path:
     docs = load_json(docs_json_path)
-    dropdowns = docs.get("navigation", {}).get("dropdowns")
-    if not isinstance(dropdowns, list):
-        raise ValueError(f"docs.json navigation.dropdowns must be a list: {docs_json_path}")
-    dropdown = next((item for item in dropdowns if isinstance(item, dict) and item.get("dropdown") == dropdown_label), None)
-    if dropdown is None:
-        raise ValueError(f"Dropdown not found in docs.json: {dropdown_label}")
-    pages = dropdown.get("pages")
+    navigation = docs.get("navigation", {})
+    nav_section = None
+    dropdowns = navigation.get("dropdowns") if isinstance(navigation, dict) else None
+    if isinstance(dropdowns, list):
+        nav_section = next((item for item in dropdowns if isinstance(item, dict) and item.get("dropdown") == dropdown_label), None)
+    products = navigation.get("products") if isinstance(navigation, dict) else None
+    if nav_section is None and isinstance(products, list):
+        nav_section = next((item for item in products if isinstance(item, dict) and item.get("product") == dropdown_label), None)
+    if nav_section is None:
+        raise ValueError(f"Navigation section not found in docs.json: {dropdown_label}")
+    pages = nav_section.get("pages")
     if not isinstance(pages, list):
-        raise ValueError(f"Dropdown does not expose a pages list: {dropdown_label}")
+        raise ValueError(f"Navigation section does not expose a pages list: {dropdown_label}")
 
     page_entries: list[tuple[str, str, Path]] = []
     for page in sorted(output_dir.glob("*.mdx")):
@@ -247,17 +251,17 @@ def update_docs_navigation(
     page_refs = {page_ref for _title, page_ref, _path in page_entries}
 
     existing_group_index = find_group_index(find_group_path(pages, parent_groups), GROUP_LABEL)
-    dropdown["pages"] = prune_nav_items(pages, page_refs=page_refs, group_labels={GROUP_LABEL})
-    target_pages = ensure_group_path(dropdown["pages"], parent_groups)
+    nav_section["pages"] = prune_nav_items(pages, page_refs=page_refs, group_labels={GROUP_LABEL})
+    target_pages = ensure_group_path(nav_section["pages"], parent_groups)
     overview_entry = next(((page_ref, path) for _title, page_ref, path in page_entries if path.name == "index.mdx"), None)
     module_refs = [page_ref for _title, page_ref, path in page_entries if path.name != "index.mdx"]
     group_pages: list[Any] = []
-    if module_refs:
-        group_pages.append({"group": MODULES_GROUP_LABEL, "pages": module_refs})
     if overview_entry is not None:
         overview_ref, overview_path = overview_entry
         set_mdx_title(overview_path, DETAILS_AND_HISTORY_LABEL)
         group_pages.append(overview_ref)
+    if module_refs:
+        group_pages.append({"group": MODULES_GROUP_LABEL, "pages": module_refs})
     group = {
         "group": GROUP_LABEL,
         "pages": group_pages,

@@ -76,11 +76,11 @@ def test_java_bindings_nav_includes_details_and_history_page(tmp_path: Path) -> 
     assert ledger_pages[-1] == {
         "group": "Java Bindings",
         "pages": [
+            "reference/java-bindings",
             {
                 "group": "Javadocs",
                 "pages": [{"group": "com.example", "pages": ["reference/java/com-example/Client"]}],
             },
-            "reference/java-bindings",
         ],
     }
 

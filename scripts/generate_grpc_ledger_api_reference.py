@@ -505,9 +505,9 @@ def build_nav_group(
         package_groups.append({"group": mdx_title(package_page), "pages": package_pages})
 
     pages: list[Any] = []
+    pages.append(details_ref)
     if package_groups:
         pages.append({"group": "Packages", "pages": package_groups})
-    pages.append(details_ref)
     return {"group": GROUP_LABEL, "pages": pages}, refs
 
 
@@ -533,27 +533,30 @@ def update_docs_navigation(
     navigation = docs.get("navigation")
     if not isinstance(navigation, dict):
         raise ValueError(f"docs.json navigation must be an object: {docs_json_path}")
+    nav_section = None
     dropdowns = navigation.get("dropdowns")
-    if not isinstance(dropdowns, list):
-        raise ValueError(f"docs.json navigation.dropdowns must be a list: {docs_json_path}")
-    dropdown = next((item for item in dropdowns if isinstance(item, dict) and item.get("dropdown") == dropdown_label), None)
-    if dropdown is None:
-        raise ValueError(f"Dropdown not found in docs.json: {dropdown_label}")
-    pages = dropdown.get("pages")
+    if isinstance(dropdowns, list):
+        nav_section = next((item for item in dropdowns if isinstance(item, dict) and item.get("dropdown") == dropdown_label), None)
+    products = navigation.get("products")
+    if nav_section is None and isinstance(products, list):
+        nav_section = next((item for item in products if isinstance(item, dict) and item.get("product") == dropdown_label), None)
+    if nav_section is None:
+        raise ValueError(f"Navigation section not found in docs.json: {dropdown_label}")
+    pages = nav_section.get("pages")
     if not isinstance(pages, list):
-        raise ValueError(f"Dropdown does not expose a pages list: {dropdown_label}")
+        raise ValueError(f"Navigation section does not expose a pages list: {dropdown_label}")
 
     nav_group, generated_refs = build_nav_group(
         docs_json_path=docs_json_path,
         details_path=details_path,
         page_paths=page_paths,
     )
-    dropdown["pages"] = canton_protobuf_history.prune_nav_items(
+    nav_section["pages"] = canton_protobuf_history.prune_nav_items(
         pages,
         page_refs=generated_refs,
         group_labels={GROUP_LABEL, LEGACY_GROUP_LABEL},
     )
-    target_pages = canton_protobuf_history.ensure_group_path(dropdown["pages"], parent_groups)
+    target_pages = canton_protobuf_history.ensure_group_path(nav_section["pages"], parent_groups)
     insert_group(target_pages, group=nav_group, after_group=insert_after_group)
     docs_json_path.write_text(json.dumps(docs, indent=2) + "\n", encoding="utf-8")
     print(f"Updated docs navigation: {docs_json_path}")
@@ -674,7 +677,12 @@ def main() -> int:
     output_dir = Path(args.output_dir).resolve()
     if output_dir.exists():
         shutil.rmtree(output_dir)
-    root, pages = build_pages(report, output_dir=output_dir)
+    root, pages = build_pages(
+        report,
+        output_dir=output_dir,
+        page_title="Ledger API gRPC",
+        page_description="Generated source details and version history for the Ledger API gRPC reference.",
+    )
     written_paths = write_pages(pages, root)
     retitle_generated_pages(output_dir=output_dir)
     page_paths = flatten_generated_tree(

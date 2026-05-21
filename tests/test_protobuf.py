@@ -184,10 +184,13 @@ class ProtobufTests(unittest.TestCase):
             / "getfoo.mdx"
         ).read_text(encoding="utf-8")
 
-        self.assertIn("Canton Protobuf Reference", overview_text)
-        self.assertIn("## Release Summary", overview_text)
+        self.assertIn("Protobuf details and history", overview_text)
+        self.assertIn("## Generated from", overview_text)
+        self.assertIn("## Version summary", overview_text)
+        self.assertIn("## Current reference inventory", overview_text)
+        self.assertIn("x2mdx-ref-status-table--inventory", overview_text)
         self.assertIn("com.example.v1", overview_text)
-        self.assertIn('href="packages/com-example-v1"', overview_text)
+        self.assertIn('href="./packages/com-example-v1"', overview_text)
         self.assertIn("## ExampleService", package_text)
         self.assertIn("ExampleService.GetFoo", package_text)
         self.assertIn("## Protocol Details", operation_text)

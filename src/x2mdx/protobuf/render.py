@@ -9,6 +9,9 @@ from pathlib import Path
 from typing import Any
 
 from x2mdx.reference_pages import (
+    DetailsHistoryChange,
+    DetailsHistoryPage,
+    DetailsHistoryVersionRow,
     ReferenceBadge,
     ReferenceBreadcrumb,
     ReferenceCard,
@@ -24,6 +27,7 @@ from x2mdx.reference_pages import (
     compact_text,
     relative_page_ref,
     render_collection_page,
+    render_details_history_page,
     render_operation_page,
     safe_markdown_text,
 )
@@ -492,6 +496,142 @@ def build_overview_page(
     )
 
 
+def release_version_rows(report: dict[str, Any]) -> list[DetailsHistoryVersionRow]:
+    rows: list[DetailsHistoryVersionRow] = []
+    for release in report["releases"]:
+        counts = release["changes"]["counts"]
+        added = sum(int(counts[kind]["added"]) for kind in ("endpoints", "messages", "enums"))
+        changed = sum(int(counts[kind]["modified"]) for kind in ("endpoints", "messages", "enums"))
+        removed = sum(int(counts[kind]["removed"]) for kind in ("endpoints", "messages", "enums"))
+        rows.append(
+            DetailsHistoryVersionRow(
+                version=str(release["version"]),
+                added=str(added),
+                changed=str(changed),
+                removed=str(removed),
+            )
+        )
+    return rows
+
+
+def package_lifecycle_badges(package: dict[str, Any], report: dict[str, Any]) -> list[ReferenceBadge]:
+    version_order = {str(release["version"]): index for index, release in enumerate(report["releases"])}
+    endpoint_lifecycles = [
+        entry
+        for entry in report["endpointLifecycle"]
+        if entry.get("package") == package["package"]
+    ]
+    if not endpoint_lifecycles:
+        return [ReferenceBadge("Current", tone="neutral")]
+
+    introduced = min((str(entry["introducedIn"]) for entry in endpoint_lifecycles), key=lambda version: version_order.get(version, 9999))
+    changed_versions = [
+        str(entry["lastChangedIn"])
+        for entry in endpoint_lifecycles
+        if entry.get("lastChangedIn") and str(entry["lastChangedIn"]) != introduced
+    ]
+    badges = [ReferenceBadge(f"Since {introduced}", tone="added")]
+    if changed_versions:
+        latest_changed = max(changed_versions, key=lambda version: version_order.get(version, -1))
+        badges.append(ReferenceBadge(f"Changed {latest_changed}", tone="changed"))
+    return badges
+
+
+def protobuf_details_changes(report: dict[str, Any]) -> list[DetailsHistoryChange]:
+    changes: list[DetailsHistoryChange] = []
+    for release in report["releases"]:
+        version = str(release["version"])
+        counts = release["changes"]["counts"]
+        parts = []
+        for label, key in (("endpoints", "endpoints"), ("messages", "messages"), ("enums", "enums")):
+            added = int(counts[key]["added"])
+            changed = int(counts[key]["modified"])
+            removed = int(counts[key]["removed"])
+            if added or changed or removed:
+                parts.append(f"{label}: {added} added, {changed} changed, {removed} removed")
+        if parts:
+            changes.append(
+                DetailsHistoryChange(
+                    version=version,
+                    title=f"Release {version}",
+                    details="; ".join(parts),
+                    tone="changed",
+                )
+            )
+    return changes
+
+
+def build_details_history_page(
+    report: dict[str, Any],
+    *,
+    output_dir: Path,
+    package_docs: list[dict[str, Any]],
+    page_title: str = "Protobuf",
+    page_description: str = "Descriptor-backed protobuf API source details and version history.",
+) -> DetailsHistoryPage:
+    latest = report["latestSnapshot"]
+    details_path = output_dir / "index.mdx"
+    package_cards = [
+        ReferenceCard(
+            title=package["package"],
+            href=page_ref(details_path, package_page_path(output_dir, package["package"])),
+            summary=compact_package_summary(package),
+            badges=package_lifecycle_badges(package, report),
+            meta_items=[
+                ReferenceMetaItem("Services", str(package["serviceCount"])),
+                ReferenceMetaItem("Endpoints", str(package["endpointCount"])),
+                ReferenceMetaItem("Messages", str(package["messageCount"])),
+                ReferenceMetaItem("Enums", str(package["enumCount"])),
+            ],
+        )
+        for package in package_docs
+    ]
+    return DetailsHistoryPage(
+        path="index.mdx",
+        title=f"{page_title} details and history",
+        description=page_description,
+        eyebrow="Details and history",
+        summary="Generated-source metadata, version coverage, package inventory, and per-release changes for this source stream.",
+        badges=[ReferenceBadge("Protobuf", tone="protocol"), ReferenceBadge(str(report["latestRelease"]), tone="neutral")],
+        meta_items=[
+            ReferenceMetaItem("Source stream", page_title),
+            ReferenceMetaItem("Latest release", str(report["latestRelease"])),
+            ReferenceMetaItem("Versions compared", ", ".join(str(release["version"]) for release in report["releases"])),
+        ],
+        source_items=[
+            ReferenceMetaItem("Input family", str(report["sourceName"])),
+            ReferenceMetaItem("Version filter", str(report["versionFilter"])),
+            ReferenceMetaItem("Packages", str(latest["stats"]["packages"])),
+            ReferenceMetaItem("Endpoints", str(latest["stats"]["endpoints"])),
+            ReferenceMetaItem("Messages", str(latest["stats"]["messages"])),
+        ],
+        source_cards=[
+            ReferenceCard(
+                title="Generated reference pages",
+                summary="Package and operation pages are generated from the latest descriptor snapshot, with history calculated across selected release bundles.",
+                meta_items=[
+                    ReferenceMetaItem("Packages", str(len(package_docs))),
+                    ReferenceMetaItem("Operations", str(latest["stats"]["endpoints"])),
+                ],
+            )
+        ],
+        version_rows=release_version_rows(report),
+        inventory_sections=[
+            ReferenceSection(
+                heading="Published packages",
+                body_markdown=safe_markdown_text("These packages are present in the latest selected descriptor snapshot and link to generated package pages."),
+                cards=package_cards,
+            )
+        ],
+        changes=protobuf_details_changes(report),
+        limitations=[
+            "Change detection is structural and compares selected descriptor images; it does not infer behavioral compatibility.",
+            "Endpoint, message, and enum additions, removals, and structural changes are tracked when they are present in the selected snapshots.",
+            "Lifecycle labels and replacement links are included only when the protobuf source or metadata overlay carries that information.",
+        ],
+    )
+
+
 def build_package_page(
     package_doc: dict[str, Any],
     report: dict[str, Any],
@@ -696,7 +836,13 @@ def build_operation_page(
     )
 
 
-def build_pages(report: dict[str, Any], *, output_dir: Path) -> tuple[Path, list[Any]]:
+def build_pages(
+    report: dict[str, Any],
+    *,
+    output_dir: Path,
+    page_title: str = "Protobuf",
+    page_description: str = "Descriptor-backed protobuf API source details and version history.",
+) -> tuple[Path, list[Any]]:
     latest = report["latestSnapshot"]
     ctx = {
         "files": latest["files"],
@@ -711,7 +857,17 @@ def build_pages(report: dict[str, Any], *, output_dir: Path) -> tuple[Path, list
     endpoint_docs = endpoint_snapshot_map(report)
     lifecycle_map = {entry["id"]: entry for entry in report["endpointLifecycle"]}
 
-    pages = [render_collection_page(build_overview_page(report, output_dir=output_dir, package_docs=package_docs))]
+    pages = [
+        render_details_history_page(
+            build_details_history_page(
+                report,
+                output_dir=output_dir,
+                package_docs=package_docs,
+                page_title=page_title,
+                page_description=page_description,
+            )
+        )
+    ]
     for package_doc in package_docs:
         pages.append(
             render_collection_page(

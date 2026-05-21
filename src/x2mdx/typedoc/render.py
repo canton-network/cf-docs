@@ -7,6 +7,16 @@ from pathlib import Path
 from typing import Any
 
 from x2mdx.output import Page
+from x2mdx.reference_pages import (
+    DetailsHistoryChange,
+    DetailsHistoryPage,
+    DetailsHistoryVersionRow,
+    ReferenceBadge,
+    ReferenceCard,
+    ReferenceMetaItem,
+    ReferenceSection,
+    render_details_history_page,
+)
 from x2mdx.templating import markdown_page
 
 
@@ -48,6 +58,158 @@ def version_change_summary_rows(exports: list[dict[str, object]], versions: list
             ]
         )
     return rows
+
+
+def version_rows(exports: list[dict[str, object]], versions: list[str]) -> list[DetailsHistoryVersionRow]:
+    rows: list[DetailsHistoryVersionRow] = []
+    for version in versions:
+        added = sum(1 for export in exports if export["introduced_in"] == version)
+        changed = sum(
+            1
+            for export in exports
+            if any(str(entry["version"]) == version for entry in export["change_details"])
+        )
+        removed = sum(1 for export in exports if export["removed_in"] == version)
+        deprecated = sum(
+            1
+            for export in exports
+            if export["lifecycle_label"] == "Deprecated" and export["introduced_in"] == version
+        )
+        replaced = sum(1 for export in exports if export["replaces"] and export["introduced_in"] == version)
+        rows.append(
+            DetailsHistoryVersionRow(
+                version=version,
+                added=str(added),
+                changed=str(changed),
+                removed=str(removed),
+                deprecated=str(deprecated or "-"),
+                replaced=str(replaced or "-"),
+            )
+        )
+    return rows
+
+
+def build_details_history_page(
+    report,
+    *,
+    output_path: str,
+    page_title: str,
+    page_description: str,
+    reference_href: str,
+) -> Page:
+    exports_by_group: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for export in report.exports:
+        exports_by_group[str(export["group"])].append(export)
+
+    inventory_sections: list[ReferenceSection] = []
+    for group_title in report.export_groups:
+        exports = exports_by_group.get(group_title)
+        if not exports:
+            continue
+        inventory_sections.append(
+            ReferenceSection(
+                heading=group_title,
+                cards=[
+                    ReferenceCard(
+                        title=str(export["name"]),
+                        href=f"{reference_href}#{export['anchor']}",
+                        summary=str(export["summary"] or "-"),
+                        badges=[
+                            ReferenceBadge(f"Since {export['introduced_in']}", tone="added"),
+                            *(
+                                [ReferenceBadge(str(export["lifecycle_label"]), tone="deprecated" if export["lifecycle_label"] == "Deprecated" else "neutral")]
+                                if export["lifecycle_label"]
+                                else []
+                            ),
+                            *(
+                                [ReferenceBadge(f"Changed {export['change_details'][-1]['version']}", tone="changed")]
+                                if export["change_details"]
+                                else []
+                            ),
+                            *(
+                                [ReferenceBadge(f"Removed {export['removed_in']}", tone="removed")]
+                                if export["removed_in"]
+                                else []
+                            ),
+                        ],
+                        meta_items=[
+                            ReferenceMetaItem("Kind", str(export["kind_label"])),
+                            ReferenceMetaItem("Introduced", str(export["introduced_in"])),
+                            ReferenceMetaItem("Removed", str(export["removed_in"] or "-")),
+                        ],
+                    )
+                    for export in exports
+                ],
+            )
+        )
+
+    changes: list[DetailsHistoryChange] = []
+    for export in report.exports:
+        href = f"{reference_href}#{export['anchor']}"
+        if export["introduced_in"] != report.versions[0]:
+            changes.append(
+                DetailsHistoryChange(
+                    version=str(export["introduced_in"]),
+                    title=f"Added {export['name']}",
+                    details=str(export["kind_label"]),
+                    tone="added",
+                    href=href,
+                )
+            )
+        for entry in export["change_details"]:
+            changes.append(
+                DetailsHistoryChange(
+                    version=str(entry["version"]),
+                    title=f"Changed {export['name']}",
+                    details="; ".join(str(change) for change in entry["changes"]),
+                    tone="changed",
+                    href=href,
+                )
+            )
+        if export["removed_in"]:
+            changes.append(
+                DetailsHistoryChange(
+                    version=str(export["removed_in"]),
+                    title=f"Removed {export['name']}",
+                    details=str(export["kind_label"]),
+                    tone="removed",
+                    href=href,
+                )
+            )
+
+    page = DetailsHistoryPage(
+        path=output_path,
+        title=f"{page_title} details and history",
+        description=page_description,
+        eyebrow="Details and history",
+        summary="Generated-source metadata, version coverage, export inventory, and per-version changes for this source stream.",
+        badges=[ReferenceBadge("TypeDoc", tone="protocol"), ReferenceBadge(report.publish_version, tone="neutral")],
+        meta_items=[
+            ReferenceMetaItem("Source stream", report.package_name),
+            ReferenceMetaItem("Publish version", report.publish_version),
+            ReferenceMetaItem("Versions compared", ", ".join(report.versions)),
+        ],
+        source_items=[
+            ReferenceMetaItem("Input family", report.source_name),
+            ReferenceMetaItem("Version filter", report.version_filter),
+            ReferenceMetaItem("Package", report.package_name),
+        ],
+        source_cards=[
+            ReferenceCard(
+                title="Generated reference page",
+                summary="The TypeScript reference page is generated from the publish-version TypeDoc JSON, with history calculated across selected snapshots.",
+                meta_items=[ReferenceMetaItem("Exports", str(len(report.exports)))],
+            )
+        ],
+        version_rows=version_rows(report.exports, report.versions),
+        inventory_sections=inventory_sections,
+        changes=sorted(changes, key=lambda change: (report.versions.index(change.version) if change.version in report.versions else 999, change.title)),
+        limitations=[
+            "Change detection is structural and compares selected TypeDoc JSON inputs; it does not infer behavioral compatibility.",
+            "Lifecycle labels and replacement links are included only when parsed from supported TypeDoc metadata.",
+        ],
+    )
+    return render_details_history_page(page)
 
 
 def _type_parameter_rows(items: list[dict[str, Any]]) -> list[list[str]]:

@@ -10,12 +10,16 @@ from typing import Any
 from x2mdx.daml_json.models import DamlDocsReport
 from x2mdx.output import Page, RawMarkdown
 from x2mdx.reference_pages import (
+    DetailsHistoryChange,
+    DetailsHistoryPage,
+    DetailsHistoryVersionRow,
     ReferenceBadge,
     ReferenceCard,
     ReferenceCollectionPage,
     ReferenceMetaItem,
     ReferenceSection,
     render_collection_page,
+    render_details_history_page,
     safe_markdown_text,
 )
 from x2mdx.templating import markdown_page, render_template
@@ -646,11 +650,69 @@ def module_lifecycle_badges(
 ) -> list[ReferenceBadge]:
     badges = [ReferenceBadge(f"Since {lifecycle.get('introduced_in') or '-'}", tone="added")]
     if deprecation_version:
-        badges.append(ReferenceBadge(f"Deprecated {deprecation_version}", tone="removed"))
+        badges.append(ReferenceBadge(f"Deprecated {deprecation_version}", tone="deprecated"))
     removed_in = lifecycle.get("removed_in")
     if removed_in:
         badges.append(ReferenceBadge(f"Removed {removed_in}", tone="removed"))
     return badges
+
+
+def version_rows(report: DamlDocsReport) -> list[DetailsHistoryVersionRow]:
+    rows: list[DetailsHistoryVersionRow] = []
+    for version in report.versions:
+        rows.append(
+            DetailsHistoryVersionRow(
+                version=version,
+                added=str(sum(1 for lifecycle in report.module_lifecycle.values() if lifecycle.get("introduced_in") == version)),
+                removed=str(sum(1 for lifecycle in report.module_lifecycle.values() if lifecycle.get("removed_in") == version)),
+                deprecated=str(sum(1 for seen in report.module_deprecation_first_seen.values() if seen == version) or "-"),
+            )
+        )
+    return rows
+
+
+def change_list(report: DamlDocsReport, *, module_entries: list[tuple[str, str, str]]) -> list[DetailsHistoryChange]:
+    display_by_name = {source_name: display_name for source_name, display_name, _target in module_entries}
+    href_by_name = {source_name: target for source_name, _display_name, target in module_entries}
+    changes: list[DetailsHistoryChange] = []
+    for source_name, lifecycle in report.module_lifecycle.items():
+        display_name = display_by_name.get(source_name, module_display_name(source_name))
+        href = href_by_name.get(source_name)
+        introduced = lifecycle.get("introduced_in")
+        if introduced and introduced != report.versions[0]:
+            changes.append(
+                DetailsHistoryChange(
+                    version=introduced,
+                    title=f"Added {display_name}",
+                    details="Module added to the generated Daml docs JSON surface.",
+                    tone="added",
+                    href=href,
+                )
+            )
+        deprecated = report.module_deprecation_first_seen.get(source_name)
+        if deprecated:
+            changes.append(
+                DetailsHistoryChange(
+                    version=deprecated,
+                    title=f"Deprecated {display_name}",
+                    details="Module carries source deprecation metadata.",
+                    tone="deprecated",
+                    href=href,
+                )
+            )
+        removed = lifecycle.get("removed_in")
+        if removed:
+            changes.append(
+                DetailsHistoryChange(
+                    version=removed,
+                    title=f"Removed {display_name}",
+                    details="Module is absent from the publish-version snapshot and retained for history.",
+                    tone="removed",
+                    href=href,
+                )
+            )
+    version_order = {version: index for index, version in enumerate(report.versions)}
+    return sorted(changes, key=lambda change: (version_order.get(change.version, 999), change.title))
 
 
 def strip_raw_markdown_trailing_whitespace(page: Page) -> Page:
@@ -678,6 +740,8 @@ def build_pages(
     pages: list[Page] = []
     module_entries: list[tuple[str, str, str]] = []
     module_cards: list[ReferenceCard] = []
+    published_module_cards: list[ReferenceCard] = []
+    removed_module_cards: list[ReferenceCard] = []
     normalized_link_prefix = normalize_link_prefix(link_prefix) if link_prefix else None
     modules_sorted = sorted(
         report.modules,
@@ -715,71 +779,85 @@ def build_pages(
         else:
             module_link = (output_dir / target).relative_to(root).with_suffix("").as_posix()
         module_doc = modules_by_name[source_name]
-        module_cards.append(
-            ReferenceCard(
-                title=display_name,
-                href=module_link,
-                summary=module_summary_preview(module_doc),
-                badges=module_lifecycle_badges(
-                    lifecycle=lifecycle,
-                    deprecation_version=deprecation_version,
-                ),
-                meta_items=[
-                    ReferenceMetaItem("Kind", "Module"),
-                    ReferenceMetaItem("Introduced", lifecycle.get("introduced_in") or "-"),
-                    ReferenceMetaItem("Changed", "-"),
-                    ReferenceMetaItem("Deprecated", deprecation_version or "-"),
-                    ReferenceMetaItem("Removed", lifecycle.get("removed_in") or "-"),
-                ],
-            )
-        )
-    version_cards = [
-        ReferenceCard(
-            title=version,
-            summary="Module changes included in this Daml docs JSON snapshot.",
-            badges=[
-                ReferenceBadge(
-                    f"Added {sum(1 for lifecycle in report.module_lifecycle.values() if lifecycle.get('introduced_in') == version)}",
-                    tone="added",
-                ),
-                ReferenceBadge("Changed 0", tone="changed"),
-                ReferenceBadge(
-                    f"Removed {sum(1 for lifecycle in report.module_lifecycle.values() if lifecycle.get('removed_in') == version)}",
-                    tone="removed",
-                ),
+        module_card = ReferenceCard(
+            title=display_name,
+            href=module_link,
+            summary=module_summary_preview(module_doc),
+            badges=module_lifecycle_badges(
+                lifecycle=lifecycle,
+                deprecation_version=deprecation_version,
+            ),
+            meta_items=[
+                ReferenceMetaItem("Kind", "Module"),
+                ReferenceMetaItem("Introduced", lifecycle.get("introduced_in") or "-"),
+                ReferenceMetaItem("Changed", "-"),
+                ReferenceMetaItem("Deprecated", deprecation_version or "-"),
+                ReferenceMetaItem("Removed", lifecycle.get("removed_in") or "-"),
             ],
         )
-        for version in report.versions
+        module_cards.append(module_card)
+        if lifecycle.get("removed_in"):
+            removed_module_cards.append(module_card)
+        else:
+            published_module_cards.append(module_card)
+    inventory_sections = [
+        ReferenceSection(
+            heading="Published modules",
+            body_markdown=safe_markdown_text(
+                "Open a module page for declarations, type signatures, warnings, and lifecycle details."
+            ),
+            meta_items=[
+                ReferenceMetaItem("Modules", str(len(published_module_cards))),
+                ReferenceMetaItem("Publish version", report.publish_version),
+            ],
+            cards=published_module_cards,
+        )
     ]
-
+    if removed_module_cards:
+        inventory_sections.append(
+            ReferenceSection(
+                heading="Removed modules",
+                body_markdown=safe_markdown_text(
+                    "These modules are retained for history because they appeared in earlier selected inputs."
+                ),
+                meta_items=[ReferenceMetaItem("Modules", str(len(removed_module_cards)))],
+                cards=removed_module_cards,
+            )
+        )
     pages.insert(
         0,
         strip_raw_markdown_trailing_whitespace(
-            render_collection_page(
-                ReferenceCollectionPage(
+            render_details_history_page(
+                DetailsHistoryPage(
                     path=(output_dir / "index.mdx").relative_to(root).as_posix(),
-                    title=overview_title,
-                    description=f"Reference documentation for {overview_title} modules.",
-                    eyebrow="Daml Reference",
-                    summary="Generated module overview for the Daml Standard Library, built from versioned docs JSON snapshots.",
+                    title=f"{overview_title} details and history",
+                    description=f"Generated source details and version history for {overview_title} modules.",
+                    eyebrow="Details and history",
+                    summary="Generated-source metadata, version coverage, module inventory, and module lifecycle changes for this source stream.",
                     badges=[ReferenceBadge("Daml", tone="protocol"), ReferenceBadge(report.publish_version, tone="neutral")],
                     meta_items=[
+                        ReferenceMetaItem("Source stream", overview_title),
                         ReferenceMetaItem("Publish version", report.publish_version),
-                        ReferenceMetaItem("Source", report.source_name),
-                        ReferenceMetaItem("Version filter", report.version_filter),
+                        ReferenceMetaItem("Versions compared", ", ".join(report.versions)),
                     ],
-                    sections=[
-                        ReferenceSection(
-                            heading="Modules",
-                            body_markdown=safe_markdown_text(
-                                "Open a module page for declarations, type signatures, warnings, and lifecycle details."
-                            ),
-                            cards=module_cards,
-                        ),
-                        ReferenceSection(
-                            heading="Version Summary",
-                            cards=version_cards,
-                        ),
+                    source_items=[
+                        ReferenceMetaItem("Input family", report.source_name),
+                        ReferenceMetaItem("Version filter", report.version_filter),
+                        ReferenceMetaItem("Modules", str(len(module_cards))),
+                    ],
+                    source_cards=[
+                        ReferenceCard(
+                            title="Generated reference pages",
+                            summary="Module pages are generated from the publish-version Daml docs JSON, with lifecycle facts calculated across selected snapshots.",
+                            meta_items=[ReferenceMetaItem("Modules", str(len(module_cards)))],
+                        )
+                    ],
+                    version_rows=version_rows(report),
+                    inventory_sections=inventory_sections,
+                    changes=change_list(report, module_entries=module_entries),
+                    limitations=[
+                        "Change detection compares selected Daml docs JSON snapshots; it does not infer behavioral compatibility.",
+                        "Deprecation and replacement metadata are included only when the source docs JSON carries the supported warning or deprecation transport.",
                     ],
                 )
             )

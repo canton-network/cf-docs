@@ -76,7 +76,7 @@ def build_asyncapi_nav_group(
             docs_json_page_ref(path, docs_json_path)
             for path in sorted(
                 operation_dir.glob("*.mdx"),
-                key=lambda path: (path.name == "details.mdx", mdx_title(path)),
+                key=lambda path: (path.name != "details.mdx", mdx_title(path)),
             )
         ]
         channel_groups.append(
@@ -85,10 +85,10 @@ def build_asyncapi_nav_group(
                 "pages": operation_refs,
             }
         )
-    pages.extend(channel_groups)
     details_page = operation_root / "details.mdx"
     if details_page.exists():
         pages.append(docs_json_page_ref(details_page, docs_json_path))
+    pages.extend(channel_groups)
     return {"group": group_label, "pages": pages}
 
 
@@ -115,7 +115,7 @@ def build_openrpc_nav_group(
         ]
         details_page = operation_dir / "details.mdx"
         if details_page.exists():
-            operation_refs.append(docs_json_page_ref(details_page, docs_json_path))
+            operation_refs.insert(0, docs_json_page_ref(details_page, docs_json_path))
         section = spec_group_sections.get(spec_id) if spec_group_sections else None
         if section:
             section_pages.setdefault(section, []).append(
@@ -138,7 +138,7 @@ def build_openrpc_nav_group(
                 pages.append({"group": section, "pages": grouped_pages})
     details_page = output_dir / "operations" / "details.mdx"
     if details_page.exists():
-        pages.append(docs_json_page_ref(details_page, docs_json_path))
+        pages.insert(0, docs_json_page_ref(details_page, docs_json_path))
     return {"group": group_label, "pages": pages}
 
 
@@ -178,12 +178,12 @@ def build_protobuf_nav_group(
         if service_groups:
             package_pages.append({"group": "Services", "pages": service_groups})
         package_groups.append({"group": mdx_title(package_page), "pages": package_pages})
-    if package_groups:
-        pages.append({"group": "Packages", "pages": package_groups})
     details_refs = [details_page_ref] if include_details_page else []
     for page_ref in [*(extra_page_refs or []), *details_refs]:
         if page_ref not in pages:
             pages.append(page_ref)
+    if package_groups:
+        pages.append({"group": "Packages", "pages": package_groups})
     return {"group": group_label, "pages": pages}
 
 
@@ -192,18 +192,24 @@ def replace_group_in_dropdown(*, docs_json_path: Path, dropdown_label: str, grou
     navigation = payload.get("navigation")
     if not isinstance(navigation, dict):
         raise ValueError(f"docs.json missing navigation object: {docs_json_path}")
+    nav_section = None
     dropdowns = navigation.get("dropdowns")
-    if not isinstance(dropdowns, list):
-        raise ValueError(f"docs.json navigation.dropdowns must be a list: {docs_json_path}")
-    dropdown = next(
-        (item for item in dropdowns if isinstance(item, dict) and item.get("dropdown") == dropdown_label),
-        None,
-    )
-    if dropdown is None:
-        raise ValueError(f"Dropdown not found in docs.json: {dropdown_label}")
-    pages = dropdown.get("pages")
+    if isinstance(dropdowns, list):
+        nav_section = next(
+            (item for item in dropdowns if isinstance(item, dict) and item.get("dropdown") == dropdown_label),
+            None,
+        )
+    products = navigation.get("products")
+    if nav_section is None and isinstance(products, list):
+        nav_section = next(
+            (item for item in products if isinstance(item, dict) and item.get("product") == dropdown_label),
+            None,
+        )
+    if nav_section is None:
+        raise ValueError(f"Navigation section not found in docs.json: {dropdown_label}")
+    pages = nav_section.get("pages")
     if not isinstance(pages, list):
-        raise ValueError(f"Dropdown does not expose a pages list: {dropdown_label}")
+        raise ValueError(f"Navigation section does not expose a pages list: {dropdown_label}")
 
     if not _replace_group(pages, group):
         pages.append(group)

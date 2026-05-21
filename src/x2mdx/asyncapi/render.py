@@ -9,6 +9,9 @@ from typing import Any
 
 from x2mdx.asyncapi.models import AsyncApiChannelLifecycle, AsyncApiReport
 from x2mdx.reference_pages import (
+    DetailsHistoryChange,
+    DetailsHistoryPage,
+    DetailsHistoryVersionRow,
     ReferenceBadge,
     ReferenceBreadcrumb,
     ReferenceCard,
@@ -23,6 +26,7 @@ from x2mdx.reference_pages import (
     markdown_page_from_template,
     relative_page_ref,
     render_collection_page,
+    render_details_history_page,
     render_operation_page,
     safe_markdown_text,
     schema_from_sample,
@@ -274,6 +278,169 @@ def build_overview_page(
     )
 
 
+def version_summary_rows(report: AsyncApiReport) -> list[DetailsHistoryVersionRow]:
+    rows: list[DetailsHistoryVersionRow] = []
+    for version in report.versions:
+        deltas = report.per_version_deltas.get(version, {})
+        deprecated_count = sum(
+            1
+            for channel in report.channels
+            if channel.lifecycle_state == "deprecated"
+            and (channel.introduced_version == version or version in channel.changed_in_versions)
+        )
+        replaced_count = sum(
+            1
+            for channel in report.channels
+            if channel.replaces
+            and (channel.introduced_version == version or version in channel.changed_in_versions)
+        )
+        rows.append(
+            DetailsHistoryVersionRow(
+                version=version,
+                added=str(deltas.get("added_count", 0)),
+                changed=str(deltas.get("changed_count", 0)),
+                removed=str(deltas.get("removed_count", 0)),
+                deprecated=str(deprecated_count or "-"),
+                replaced=str(replaced_count or "-"),
+            )
+        )
+    return rows
+
+
+def details_history_changes(report: AsyncApiReport, *, details_path: Path, output_dir: Path) -> list[DetailsHistoryChange]:
+    changes: list[DetailsHistoryChange] = [
+        DetailsHistoryChange(
+            version=report.versions[0],
+            title="Initial selected snapshot",
+            details=f"{sum(1 for channel in report.channels if channel.introduced_version == report.versions[0])} channels were present when this source stream first appears in the selected inputs.",
+            tone="added",
+        )
+    ]
+    for channel in report.channels:
+        href = page_ref(details_path, channel_page_path(output_dir, channel))
+        if channel.introduced_version != report.versions[0]:
+            changes.append(
+                DetailsHistoryChange(
+                    version=channel.introduced_version,
+                    title=f"Added {channel.channel}",
+                    details="Channel added to the published WebSocket surface.",
+                    tone="added",
+                    href=href,
+                )
+            )
+        for entry in channel.change_details:
+            changes.append(
+                DetailsHistoryChange(
+                    version=str(entry["version"]),
+                    title=f"Changed {channel.channel}",
+                    details="; ".join(str(change) for change in entry.get("changes", [])) or "details updated",
+                    tone="changed",
+                    href=href,
+                )
+            )
+        if channel.removed_version:
+            changes.append(
+                DetailsHistoryChange(
+                    version=channel.removed_version,
+                    title=f"Removed {channel.channel}",
+                    details=f"Last seen in {channel.last_seen_in}.",
+                    tone="removed",
+                    href=href,
+                )
+            )
+    version_order = {version: index for index, version in enumerate(report.versions)}
+    tone_order = {"added": 0, "changed": 1, "removed": 2}
+    return sorted(changes, key=lambda change: (version_order.get(change.version, len(version_order)), tone_order.get(change.tone, 9), change.title))
+
+
+def build_details_history_page(
+    report: AsyncApiReport,
+    *,
+    output_dir: Path,
+    overview_name: str,
+    page_title: str,
+    page_description: str,
+) -> DetailsHistoryPage:
+    details_path = output_dir / overview_name
+    active_channels = [channel for channel in report.channels if channel.status != "removed"]
+    removed_channels = [channel for channel in report.channels if channel.status == "removed"]
+
+    def channel_cards(channels: list[AsyncApiChannelLifecycle]) -> list[ReferenceCard]:
+        return [
+            ReferenceCard(
+                title=channel.channel,
+                href=page_ref(details_path, channel_page_path(output_dir, channel)),
+                summary=channel_summary(channel),
+                badges=lifecycle_badges(channel),
+                meta_items=[
+                    ReferenceMetaItem("Actions", ", ".join(channel.latest.get("action_names") or []) or "-"),
+                    ReferenceMetaItem("Last seen", channel.last_seen_in),
+                    *lifecycle_meta_items(channel),
+                ],
+            )
+            for channel in channels
+        ]
+
+    inventory_sections = [
+        ReferenceSection(
+            heading="Published channels",
+            body_markdown=safe_markdown_text("These channels are present in the publish version and link to channel pages for publish and subscribe actions."),
+            meta_items=[
+                ReferenceMetaItem("Channels", str(len(active_channels))),
+                ReferenceMetaItem("Publish version", report.publish_version),
+            ],
+            cards=channel_cards(active_channels),
+        )
+    ]
+    if removed_channels:
+        inventory_sections.append(
+            ReferenceSection(
+                heading="Removed channels",
+                body_markdown=safe_markdown_text("These channels are retained for history because they appeared in earlier selected inputs."),
+                meta_items=[ReferenceMetaItem("Channels", str(len(removed_channels)))],
+                cards=channel_cards(removed_channels),
+            )
+        )
+
+    return DetailsHistoryPage(
+        path=overview_name,
+        title=f"{page_title} details and history",
+        description=page_description,
+        eyebrow="Details and history",
+        summary="Generated-source metadata, version coverage, channel inventory, and per-version changes for this source stream.",
+        badges=[ReferenceBadge("AsyncAPI", tone="protocol"), ReferenceBadge(report.publish_version, tone="neutral")],
+        meta_items=[
+            ReferenceMetaItem("Source stream", page_title),
+            ReferenceMetaItem("Publish version", report.publish_version),
+            ReferenceMetaItem("Versions compared", ", ".join(report.versions)),
+        ],
+        source_items=[
+            ReferenceMetaItem("Input family", report.source_name),
+            ReferenceMetaItem("Version filter", report.version_filter),
+            ReferenceMetaItem("Latest source path", report.latest_source_path),
+            ReferenceMetaItem("AsyncAPI version", report.asyncapi_version or "-"),
+        ],
+        source_cards=[
+            ReferenceCard(
+                title="Generated reference pages",
+                summary="Channel and action pages are generated from the publish-version AsyncAPI document, with history calculated across selected snapshots.",
+                meta_items=[
+                    ReferenceMetaItem("Channels", str(len(report.channels))),
+                    ReferenceMetaItem("Actions", str(sum(len(channel.latest.get("actions", [])) for channel in report.channels))),
+                ],
+            )
+        ],
+        version_rows=version_summary_rows(report),
+        inventory_sections=inventory_sections,
+        changes=details_history_changes(report, details_path=details_path, output_dir=output_dir),
+        limitations=[
+            "Change detection is structural and compares selected generated inputs; it does not infer behavioral compatibility.",
+            "Channel-level additions, removals, and changed message shapes are tracked when they are present in the selected snapshots.",
+            "Lifecycle labels and replacement links are included only when the source document carries that metadata.",
+        ],
+    )
+
+
 def build_channel_page(
     channel: AsyncApiChannelLifecycle,
     *,
@@ -332,8 +499,8 @@ def build_pages(
     page_description: str = "WebSocket AsyncAPI reference and version history.",
 ) -> tuple[Path, list[Any]]:
     pages = [
-        render_collection_page(
-            build_overview_page(
+        render_details_history_page(
+            build_details_history_page(
                 report,
                 output_dir=output_dir,
                 overview_name=overview_name,

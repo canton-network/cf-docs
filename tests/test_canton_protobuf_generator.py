@@ -130,7 +130,7 @@ class CantonProtobufGeneratorTests(unittest.TestCase):
         self.assertFalse(
             any(isinstance(item, dict) and item.get("group") == "Protobufs" for item in admin_grpc["pages"])
         )
-        self.assertEqual(admin_grpc["pages"][-1], "reference/admin-api/protobuf/index")
+        self.assertEqual(admin_grpc["pages"][0], "reference/admin-api/protobuf/index")
 
 
 if __name__ == "__main__":

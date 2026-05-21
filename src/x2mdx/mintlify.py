@@ -133,20 +133,25 @@ def update_docs_json_navigation(
     docs = json.loads(docs_json_path.read_text(encoding="utf-8"))
     page_ref = docs_json_page_ref(output_file, docs_json_path)
     navigation = docs.setdefault("navigation", {})
+    nav_section = None
     dropdowns = navigation.get("dropdowns")
-    if not isinstance(dropdowns, list):
-        raise ValueError("docs.json navigation.dropdowns must be present")
-
-    dropdown = next(
-        (item for item in dropdowns if isinstance(item, dict) and item.get("dropdown") == target.dropdown),
-        None,
-    )
-    if dropdown is None:
-        raise ValueError(f"Dropdown not found in docs.json: {target.dropdown}")
+    if isinstance(dropdowns, list):
+        nav_section = next(
+            (item for item in dropdowns if isinstance(item, dict) and item.get("dropdown") == target.dropdown),
+            None,
+        )
+    products = navigation.get("products")
+    if nav_section is None and isinstance(products, list):
+        nav_section = next(
+            (item for item in products if isinstance(item, dict) and item.get("product") == target.dropdown),
+            None,
+        )
+    if nav_section is None:
+        raise ValueError(f"Navigation section not found in docs.json: {target.dropdown}")
 
     _remove_page_reference(navigation, page_ref)
 
-    versions = dropdown.get("versions")
+    versions = nav_section.get("versions")
     if isinstance(versions, list):
         version_names = target.versions or [
             item.get("version")
@@ -159,12 +164,12 @@ def update_docs_json_navigation(
                 None,
             )
             if version_entry is None:
-                raise ValueError(f"Version not found under dropdown {target.dropdown}: {version_name}")
+                raise ValueError(f"Version not found under navigation section {target.dropdown}: {version_name}")
             pages = _ensure_group_path(version_entry, target.groups)
             if page_ref not in pages:
                 pages.append(page_ref)
     else:
-        pages = _ensure_group_path(dropdown, target.groups)
+        pages = _ensure_group_path(nav_section, target.groups)
         if page_ref not in pages:
             pages.append(page_ref)
 

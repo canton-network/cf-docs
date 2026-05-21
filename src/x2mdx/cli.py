@@ -282,6 +282,16 @@ def build_parser() -> argparse.ArgumentParser:
         "--version-filter",
         help="Optional label describing the selected version set.",
     )
+    build_protobuf.add_argument(
+        "--page-title",
+        default="Protobuf",
+        help="Title prefix to use for the generated details and history page.",
+    )
+    build_protobuf.add_argument(
+        "--page-description",
+        default="Descriptor-backed protobuf API source details and version history.",
+        help="Description to use for the generated details and history page.",
+    )
 
     typedoc = subparsers.add_parser("typedoc", help="TypeDoc-based TypeScript bindings commands")
     typedoc_subparsers = typedoc.add_subparsers(dest="typedoc_command", required=True)
@@ -299,6 +309,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--output-file",
         required=True,
         help="Exact MDX file path to write for the generated TypeScript bindings page",
+    )
+    build_typedoc.add_argument(
+        "--details-output-file",
+        help="Optional MDX file path to write for the generated TypeScript bindings Details and History page.",
     )
     build_typedoc.add_argument(
         "--fixture-root",
@@ -550,14 +564,19 @@ def main(argv: Sequence[str] | None = None) -> int:
             output_dir = Path(args.output_dir)
             if output_dir.exists():
                 shutil.rmtree(output_dir)
-            output_root, pages = build_pages(report, output_dir=output_dir)
+            output_root, pages = build_pages(
+                report,
+                output_dir=output_dir,
+                page_title=args.page_title,
+                page_description=args.page_description,
+            )
             write_pages(pages, output_root)
             return 0
 
     if args.command == "typedoc":
         if args.typedoc_command == "build-api-pages-from-manifest":
             from x2mdx.render import write_page
-            from x2mdx.typedoc.render import build_page
+            from x2mdx.typedoc.render import build_details_history_page, build_page
 
             report = build_typedoc_report_from_manifest_args(args)
             output_file = Path(args.output_file)
@@ -568,6 +587,16 @@ def main(argv: Sequence[str] | None = None) -> int:
                 page_description=args.page_description,
             )
             write_page(page, output_file)
+            if args.details_output_file:
+                details_output_file = Path(args.details_output_file)
+                details_page = build_details_history_page(
+                    report,
+                    output_path=details_output_file.name,
+                    page_title=args.page_title,
+                    page_description=args.page_description,
+                    reference_href=f"./{output_file.with_suffix('').name}",
+                )
+                write_page(details_page, details_output_file)
             return 0
 
     if args.command == "asyncapi":

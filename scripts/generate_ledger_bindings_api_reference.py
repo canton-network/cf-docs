@@ -288,20 +288,25 @@ def update_docs_navigation(
     navigation = docs.get("navigation")
     if not isinstance(navigation, dict):
         raise ValueError(f"docs.json missing navigation object: {docs_json_path}")
+    nav_section = None
     dropdowns = navigation.get("dropdowns")
-    if not isinstance(dropdowns, list):
-        raise ValueError(f"docs.json navigation.dropdowns must be a list: {docs_json_path}")
+    if isinstance(dropdowns, list):
+        nav_section = next(
+            (item for item in dropdowns if isinstance(item, dict) and item.get("dropdown") == dropdown_label),
+            None,
+        )
+    products = navigation.get("products")
+    if nav_section is None and isinstance(products, list):
+        nav_section = next(
+            (item for item in products if isinstance(item, dict) and item.get("product") == dropdown_label),
+            None,
+        )
+    if nav_section is None:
+        raise ValueError(f"Navigation section not found in docs.json: {dropdown_label}")
 
-    dropdown = next(
-        (item for item in dropdowns if isinstance(item, dict) and item.get("dropdown") == dropdown_label),
-        None,
-    )
-    if dropdown is None:
-        raise ValueError(f"Dropdown not found in docs.json: {dropdown_label}")
-
-    pages = dropdown.get("pages")
+    pages = nav_section.get("pages")
     if not isinstance(pages, list):
-        raise ValueError(f"Dropdown does not expose a pages list: {dropdown_label}")
+        raise ValueError(f"Navigation section does not expose a pages list: {dropdown_label}")
 
     jvm_group, generated_refs = build_jvm_nav_group(
         publish_root=publish_root,
@@ -312,13 +317,13 @@ def update_docs_navigation(
     generated_refs.add(overview_ref)
     jvm_pages = jvm_group.setdefault("pages", [])
     if isinstance(jvm_pages, list) and overview_ref not in jvm_pages:
-        jvm_pages.append(overview_ref)
-    dropdown["pages"] = prune_nav_items(
+        jvm_pages.insert(0, overview_ref)
+    nav_section["pages"] = prune_nav_items(
         pages,
         page_refs=generated_refs,
         group_labels={group_label},
     )
-    target_pages = ensure_group_path(dropdown["pages"], parent_groups)
+    target_pages = ensure_group_path(nav_section["pages"], parent_groups)
     target_pages.append(jvm_group)
 
     docs_json_path.write_text(json.dumps(docs, indent=2) + "\n", encoding="utf-8")

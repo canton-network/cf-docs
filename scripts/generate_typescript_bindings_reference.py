@@ -21,6 +21,7 @@ DEFAULT_CACHE_DIR = DEFAULT_CACHE_ROOT / "typescript-bindings"
 DEFAULT_MANIFEST = REPO_ROOT / ".internal" / "generated" / "x2mdx" / "typescript-bindings" / "manifest.json"
 DEFAULT_TYPEDOC_DIR = REPO_ROOT / ".internal" / "generated" / "x2mdx" / "typescript-bindings" / "typedoc"
 DEFAULT_OUTPUT_FILE = REPO_ROOT / "docs-main" / "reference" / "typescript.mdx"
+DEFAULT_DETAILS_OUTPUT_FILE = REPO_ROOT / "docs-main" / "reference" / "typescript-details.mdx"
 LEGACY_OUTPUT_FILE = REPO_ROOT / "docs-main" / "sdks-tools" / "language-bindings" / "typescript.mdx"
 DEFAULT_DOCS_JSON = REPO_ROOT / "docs-main" / "docs.json"
 DEFAULT_NAV_GROUP = "TypeScript"
@@ -40,6 +41,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--typedoc-dir", default=str(DEFAULT_TYPEDOC_DIR))
     parser.add_argument("--manifest-out", default=str(DEFAULT_MANIFEST))
     parser.add_argument("--output-file", default=str(DEFAULT_OUTPUT_FILE))
+    parser.add_argument("--details-output-file", default=str(DEFAULT_DETAILS_OUTPUT_FILE))
     parser.add_argument("--docs-json", default=str(DEFAULT_DOCS_JSON))
     parser.add_argument("--nav-dropdown", default="API Reference")
     parser.add_argument("--nav-group", default=DEFAULT_NAV_GROUP)
@@ -117,28 +119,35 @@ def update_docs_navigation(
     docs_json_path: Path,
     dropdown_label: str,
     output_file: Path,
+    details_output_file: Path,
     nav_group: str,
 ) -> Path:
     docs = load_json(docs_json_path)
-    dropdowns = docs.get("navigation", {}).get("dropdowns")
-    if not isinstance(dropdowns, list):
-        raise ValueError(f"docs.json navigation.dropdowns must be a list: {docs_json_path}")
-    dropdown = next((item for item in dropdowns if isinstance(item, dict) and item.get("dropdown") == dropdown_label), None)
-    if dropdown is None:
-        raise ValueError(f"Dropdown not found in docs.json: {dropdown_label}")
-    pages = dropdown.get("pages")
+    navigation = docs.get("navigation", {})
+    nav_section = None
+    dropdowns = navigation.get("dropdowns") if isinstance(navigation, dict) else None
+    if isinstance(dropdowns, list):
+        nav_section = next((item for item in dropdowns if isinstance(item, dict) and item.get("dropdown") == dropdown_label), None)
+    products = navigation.get("products") if isinstance(navigation, dict) else None
+    if nav_section is None and isinstance(products, list):
+        nav_section = next((item for item in products if isinstance(item, dict) and item.get("product") == dropdown_label), None)
+    if nav_section is None:
+        raise ValueError(f"Navigation section not found in docs.json: {dropdown_label}")
+    pages = nav_section.get("pages")
     if not isinstance(pages, list):
-        raise ValueError(f"Dropdown does not expose a pages list: {dropdown_label}")
+        raise ValueError(f"Navigation section does not expose a pages list: {dropdown_label}")
 
     page_ref = docs_json_page_ref(output_file, docs_json_path)
+    details_page_ref = docs_json_page_ref(details_output_file, docs_json_path)
     existing_index = nav_group_index(pages, group_label=nav_group)
     updated_pages = prune_nav_items(pages, page_ref=page_ref, group_label=nav_group)
-    nav_item = {"group": nav_group, "pages": [page_ref]}
+    updated_pages = prune_nav_items(updated_pages, page_ref=details_page_ref, group_label=nav_group)
+    nav_item = {"group": nav_group, "pages": [details_page_ref, page_ref]}
     if existing_index is None:
         updated_pages.append(nav_item)
     else:
         updated_pages.insert(min(existing_index, len(updated_pages)), nav_item)
-    dropdown["pages"] = updated_pages
+    nav_section["pages"] = updated_pages
 
     docs_json_path.write_text(json.dumps(docs, indent=2) + "\n", encoding="utf-8")
     print(f"Updated docs navigation: {docs_json_path}")
@@ -330,6 +339,8 @@ def main() -> int:
         str(manifest_path),
         "--output-file",
         str(Path(args.output_file).resolve()),
+        "--details-output-file",
+        str(Path(args.details_output_file).resolve()),
         "--publish-version",
         publish_version,
         "--source-name",
@@ -353,6 +364,7 @@ def main() -> int:
         docs_json_path=Path(args.docs_json).resolve(),
         dropdown_label=args.nav_dropdown,
         output_file=Path(args.output_file).resolve(),
+        details_output_file=Path(args.details_output_file).resolve(),
         nav_group=args.nav_group,
     )
     return 0

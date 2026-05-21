@@ -91,15 +91,15 @@ def test_openrpc_nav_uses_wallet_gateway_section_shape(tmp_path: Path) -> None:
                 {
                     "group": "Sync dApp API",
                     "pages": [
-                        "reference/wallet-gateway-json-rpc/operations/dapp-api/connect",
                         "reference/wallet-gateway-json-rpc/operations/dapp-api/details",
+                        "reference/wallet-gateway-json-rpc/operations/dapp-api/connect",
                     ],
                 },
                 {
                     "group": "Async dApp API",
                     "pages": [
-                        "reference/wallet-gateway-json-rpc/operations/dapp-remote-api/connect",
                         "reference/wallet-gateway-json-rpc/operations/dapp-remote-api/details",
+                        "reference/wallet-gateway-json-rpc/operations/dapp-remote-api/connect",
                     ],
                 },
             ],
@@ -107,21 +107,21 @@ def test_openrpc_nav_uses_wallet_gateway_section_shape(tmp_path: Path) -> None:
         {
             "group": "Wallet Gateway",
             "pages": [
+                "reference/wallet-gateway-json-rpc/operations/details",
                 {
                     "group": "User API",
                     "pages": [
-                        "reference/wallet-gateway-json-rpc/operations/user-api/createWallet",
                         "reference/wallet-gateway-json-rpc/operations/user-api/details",
+                        "reference/wallet-gateway-json-rpc/operations/user-api/createWallet",
                     ],
                 },
                 {
                     "group": "Signing API",
                     "pages": [
-                        "reference/wallet-gateway-json-rpc/operations/signing-api/signTransaction",
                         "reference/wallet-gateway-json-rpc/operations/signing-api/details",
+                        "reference/wallet-gateway-json-rpc/operations/signing-api/signTransaction",
                     ],
                 },
-                "reference/wallet-gateway-json-rpc/operations/details",
             ],
         },
         {"group": "Splice APIs", "pages": []},
@@ -173,14 +173,14 @@ def test_openrpc_nav_updates_api_reference_product_shape(tmp_path: Path) -> None
         {
             "group": "Wallet Gateway",
             "pages": [
+                "reference/wallet-gateway-json-rpc/operations/details",
                 {
                     "group": "User API",
                     "pages": [
-                        "reference/wallet-gateway-json-rpc/operations/user-api/createWallet",
                         "reference/wallet-gateway-json-rpc/operations/user-api/details",
+                        "reference/wallet-gateway-json-rpc/operations/user-api/createWallet",
                     ],
                 },
-                "reference/wallet-gateway-json-rpc/operations/details",
             ],
         },
     ]

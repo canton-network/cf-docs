@@ -426,7 +426,12 @@ class AsyncApiTests(unittest.TestCase):
         action = (output_dir / "operations" / "stream" / "subscribe.mdx").read_text(encoding="utf-8")
         docs = json.loads(docs_json.read_text(encoding="utf-8"))
 
-        self.assertIn("## Channels", overview)
+        self.assertIn("AsyncAPI WebSocket Reference details and history", overview)
+        self.assertIn("## Generated from", overview)
+        self.assertIn("## Version summary", overview)
+        self.assertIn("## Current reference inventory", overview)
+        self.assertIn("x2mdx-ref-status-table--inventory", overview)
+        self.assertIn('<a href="./channels/stream">/stream</a>', overview)
         self.assertIn("## Actions", channel)
         self.assertIn("## Outputs", action)
         self.assertIn("wscat", action)

@@ -194,9 +194,15 @@ class DamlJsonTests(unittest.TestCase):
 
         self.assertIn("Utility Credential API", index_text)
         self.assertIn('<div class="x2mdx-ref-hero">', index_text)
-        self.assertIn('<p class="x2mdx-ref-eyebrow">Daml Reference</p>', index_text)
-        self.assertIn('<a class="x2mdx-ref-card" href="daml-standard-library/da-list">', index_text)
+        self.assertIn('<p class="x2mdx-ref-eyebrow">Details and history</p>', index_text)
+        self.assertIn("## Generated from", index_text)
+        self.assertIn("## Version summary", index_text)
+        self.assertIn("## Current reference inventory", index_text)
+        self.assertIn("### Published modules", index_text)
+        self.assertIn("### Removed modules", index_text)
+        self.assertIn('<a href="daml-standard-library/da-list">DA.List</a>', index_text)
         self.assertIn("Removed 1.1.0", index_text)
+        self.assertIn("Deprecated 1.1.0", index_text)
         self.assertIn("Deprecated since: `1.1.0`", list_text)
         self.assertIn("historical reference", legacy_text)
 
@@ -266,4 +272,4 @@ class DamlJsonTests(unittest.TestCase):
 
         self.assertEqual(result, 0)
         index_text = (output_dir / "index.mdx").read_text(encoding="utf-8")
-        self.assertIn('<a class="x2mdx-ref-card" href="/appdev/reference/daml-standard-library/da-list">', index_text)
+        self.assertIn('<a href="/appdev/reference/daml-standard-library/da-list">DA.List</a>', index_text)
