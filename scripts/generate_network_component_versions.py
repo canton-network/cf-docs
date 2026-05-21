@@ -62,6 +62,9 @@ WALLET_GATEWAY_PACKAGE_URL = (
     "https://github.com/digital-asset/wallet-gateway/pkgs/container/"
     "wallet-gateway%2Fdocker%2Fwallet-gateway"
 )
+SPLICE_REPOSITORY_URL = "https://github.com/canton-network/splice"
+SPLICE_RAW_BASE_URL = "https://raw.githubusercontent.com/canton-network/splice"
+CANTON_SOURCES_PATH = "nix/canton-sources.json"
 USER_AGENT = "cf-docs-version-dashboard-generator"
 
 
@@ -116,6 +119,35 @@ def fetch_npm_latest(package_name: str, timeout: float) -> str:
     encoded_name = package_name.replace("/", "%2F")
     data = fetch_json(f"https://registry.npmjs.org/{encoded_name}", timeout)
     return str(data["dist-tags"]["latest"])
+
+
+def splice_release_line_branch(release_version: str) -> str:
+    if not re.fullmatch(r"\d+\.\d+\.\d+", release_version):
+        raise RuntimeError(
+            f"Cannot derive Splice release-line branch from version {release_version!r}"
+        )
+    return f"release-line-{release_version}"
+
+
+def splice_raw_file_url(branch: str, path: str) -> str:
+    return f"{SPLICE_RAW_BASE_URL}/{branch}/{path}"
+
+
+def splice_blob_file_url(branch: str, path: str) -> str:
+    return f"{SPLICE_REPOSITORY_URL}/blob/{branch}/{path}"
+
+
+def fetch_canton_version_from_splice_release_line(
+    splice_version: str,
+    timeout: float,
+) -> tuple[str, str, str]:
+    branch = splice_release_line_branch(splice_version)
+    url = splice_raw_file_url(branch, CANTON_SOURCES_PATH)
+    data = fetch_json(url, timeout)
+    canton_version = str(data.get("version") or "")
+    if not canton_version:
+        raise RuntimeError(f"Missing version in {url}")
+    return canton_version, branch, splice_blob_file_url(branch, CANTON_SOURCES_PATH)
 
 
 def clean_html_text(value: str) -> str:
@@ -243,16 +275,22 @@ def collect_network_snapshot(network_key: str, timeout: float) -> dict:
             f"{network_key}: /info version {observed_release} does not match "
             f"docs index version {docker_image_tag}"
         )
+    canton_version, canton_release_line_branch, canton_sources_url = (
+        fetch_canton_version_from_splice_release_line(observed_release, timeout)
+    )
 
     return {
         "displayName": urls["display_name"],
         "endpoint": urls["endpoint"],
         "spliceVersion": observed_release,
+        "cantonVersion": canton_version,
+        "cantonReleaseLineBranch": canton_release_line_branch,
         "migrationId": migration_id,
         "chainIdSuffix": chain_id_suffix,
         "sources": {
             "infoUrl": urls["info_url"],
             "indexUrl": urls["index_url"],
+            "cantonSourcesUrl": canton_sources_url,
         },
         "checks": {
             "dockerImageTag": docker_image_tag,
@@ -307,6 +345,8 @@ def repository_url(repository_key: str, existing_config: dict) -> str:
     existing = existing_config.get("repositories", {}).get(repository_key, {})
     if repository_key == "splice":
         return "https://github.com/canton-network/splice/releases"
+    if repository_key == "damlSdk":
+        return SPLICE_REPOSITORY_URL
     if repository_key == "walletGateway":
         return WALLET_GATEWAY_PACKAGE_URL
     if repository_key in NPM_PACKAGE_URLS:
@@ -326,6 +366,11 @@ def build_repository_mapping(
             external_version = network["spliceVersion"]
             branch = "main"
             folder_path_repo = "splice-wallet-kernel"
+        elif repository_key == "damlSdk":
+            # Historical config key. The dashboard currently labels this row as "Canton".
+            external_version = network["cantonVersion"]
+            branch = network["cantonReleaseLineBranch"]
+            folder_path_repo = CANTON_SOURCES_PATH
         elif repository_key in NPM_PACKAGE_NAMES:
             external_version = snapshot["npmVersions"][repository_key]
             branch = ""
@@ -373,8 +418,10 @@ def build_source_contract(snapshot: dict) -> dict:
             "the same network's /index.html Docker image tag and Helm chart version."
         ),
         "canton": (
-            "Manual/fallback until an owner-approved public source is confirmed. "
-            "The config key remains damlSdk for compatibility with the existing dashboard component."
+            "Use the observed Splice version from the network /info endpoint, derive the "
+            "matching canton-network/splice release-line branch, then read version from "
+            "nix/canton-sources.json. Release-line branches are used instead of tags "
+            "because branch updates require review while tags can be moved."
         ),
         "damlSdkInstaller": (
             f"DPM installer channel: curl {DPM_INSTALLER_URL} | sh; "
