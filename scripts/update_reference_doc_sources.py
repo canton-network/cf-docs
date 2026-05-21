@@ -596,7 +596,7 @@ def pr_body(summary: dict[str, Any]) -> str:
             "",
             "Validation run by the workflow:",
             "- `npm run generate:all-reference-docs`",
-            "- focused source-updater and generated-reference tests",
+            "- `python3 -m pytest tests`",
             "- `git diff --check`",
         ]
     )
