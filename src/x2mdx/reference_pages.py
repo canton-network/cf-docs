@@ -113,7 +113,7 @@ class DetailsHistoryVersionRow:
     replaced: str = "-"
 
     @property
-    def change_bubbles(self) -> list["DetailsHistoryBubble"]:
+    def status_items(self) -> list["DetailsHistoryStatusItem"]:
         entries = [
             ("added", self.added, "added"),
             ("changed", self.changed, "changed"),
@@ -121,18 +121,25 @@ class DetailsHistoryVersionRow:
             ("deprecated", self.deprecated, "deprecated"),
             ("replaced", self.replaced, "replaced"),
         ]
-        bubbles = [
-            DetailsHistoryBubble(label=label, value=value, tone=tone)
+        items = [
+            DetailsHistoryStatusItem(label=label, value=value, tone=tone)
             for label, value, tone in entries
             if has_meaningful_count(value)
         ]
-        if bubbles:
-            return bubbles
-        return [DetailsHistoryBubble(label="surface changes", value="0", tone="neutral")]
+        if items:
+            return items
+        return [DetailsHistoryStatusItem(label="surface changes", value="0", tone="neutral")]
+
+    @property
+    def summary(self) -> str:
+        items = self.status_items
+        if len(items) == 1 and items[0].tone == "neutral":
+            return "No surface changes detected in the selected inputs."
+        return ", ".join(f"{item.value} {item.label}" for item in items) + "."
 
 
 @dataclass(frozen=True)
-class DetailsHistoryBubble:
+class DetailsHistoryStatusItem:
     label: str
     value: str
     tone: str = "neutral"
