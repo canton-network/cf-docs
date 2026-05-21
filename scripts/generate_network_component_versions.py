@@ -438,7 +438,7 @@ def build_source_contract(snapshot: dict) -> dict:
 
 
 def build_config(existing_config: dict, snapshot: dict) -> dict:
-    return {
+    config = {
         "_generated": {
             "generatedAt": snapshot["generatedAt"],
             "generatorMode": snapshot["generatorMode"],
@@ -450,6 +450,17 @@ def build_config(existing_config: dict, snapshot: dict) -> dict:
         "versions": build_versions(existing_config, snapshot),
         "repositories": build_repositories(existing_config, snapshot),
     }
+    existing_generated = existing_config.get("_generated", {})
+    existing_generated_at = existing_generated.get("generatedAt")
+    if existing_generated_at and generated_content(config) == generated_content(existing_config):
+        config["_generated"]["generatedAt"] = existing_generated_at
+    return config
+
+
+def generated_content(config: dict) -> dict:
+    content = json.loads(json.dumps(config))
+    content.get("_generated", {}).pop("generatedAt", None)
+    return content
 
 
 def write_json(path: Path, payload: dict) -> None:

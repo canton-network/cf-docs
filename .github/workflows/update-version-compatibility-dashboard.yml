@@ -1,0 +1,53 @@
+name: Update version compatibility dashboard
+
+on:
+  schedule:
+    - cron: "23 9 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: update-version-compatibility-dashboard
+  cancel-in-progress: false
+
+jobs:
+  update-version-compatibility-dashboard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+
+      - name: Install direnv
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y direnv
+
+      - name: Trust direnv
+        run: direnv allow .
+
+      - name: Update version dashboard data
+        run: direnv exec . npm run generate:version-compatibility-dashboard
+
+      - name: Check whitespace
+        run: git diff --check
+
+      - name: Create pull request
+        uses: peter-evans/create-pull-request@v8
+        with:
+          token: ${{ secrets.DOCS_PR_TOKEN || github.token }}
+          branch: update-version-compatibility-dashboard
+          base: main
+          title: Update version compatibility dashboard
+          commit-message: Update version compatibility dashboard
+          body: |
+            Updates the checked-in version compatibility dashboard data from the public source generator.
+
+            Validation run by this workflow:
+            - `npm run generate:version-compatibility-dashboard`
+            - `git diff --check`
