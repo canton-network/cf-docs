@@ -2,7 +2,7 @@
 
 A DPM component that converts reStructuredText documents into
 Mintlify-compatible MDX files. Built for the migration from
-`docs-website/docs/replicated/` (RST, Sphinx) to `docs/docs-main/` (MDX,
+`docs-website/docs/replicated/` (RST, Sphinx) to `docs-main/` (MDX,
 Mintlify), but the converter runs against any RST file on disk.
 
 ## Quick start
@@ -39,7 +39,7 @@ that depends on `docs-website/` is **cross-reference resolution**:
 
 | Situation | Cross-reference (`:ref:`, `:doc:`, etc.) behavior |
 |---|---|
-| Input lives somewhere under `docs-website/` | Auto-detected; the label index is built once and refs resolve to `/docs-main/<path>#<anchor>` URLs. |
+| Input lives somewhere under `docs-website/` | Auto-detected; the label index is built once and refs resolve to `/<path>#<anchor>` URLs (Mintlify serves `docs-main/` as site root). |
 | Input lives elsewhere, `--docs-root <path>` passed | Same as above using the explicit root. |
 | Input lives elsewhere, no `--docs-root` | Refs become `[label](#TODO-resolve-…)` markers a human can resolve later. |
 
@@ -82,7 +82,9 @@ rst-to-mdx --batch --input-dir <dir> --output-dir <dir> [flags]
   --docs-root string      root of an RST docs tree for cross-ref resolution
                           (auto-detects `docs-website/` if input lives in one)
   --target-root string    target docs-main/ root for image copy and path
-                          derivation (default "./docs-main")
+                          derivation. Default "./docs-main" resolves
+                          relative to cwd, so invoke from cf-docs/ root
+                          or pass an explicit path.
   --copy-images           copy referenced images into target-root/images/docs_website/
   --strict                fail on unresolved :ref: or missing literalinclude
   --dry-run               print what would be written without touching disk

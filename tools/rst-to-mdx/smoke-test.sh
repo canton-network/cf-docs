@@ -2,13 +2,19 @@
 # =============================================================================
 # smoke-test.sh — End-to-end smoke test for rst-to-mdx.
 #
-# Runs the built binary against a known RST fixture from
-# docs-website/ and compares the output to a reference MDX.
-# Exits non-zero on any mismatch that is NOT expected for the current phase.
+# Self-contained: runs against testdata/fixtures/smoke.rst and compares the
+# converted output byte-for-byte against testdata/fixtures/smoke.expected.mdx.
+# No external corpus dependency — docs-website is being retired and is not
+# guaranteed to exist on contributor machines or in CI.
+#
+# When you change a transform on purpose, regenerate the golden:
+#     ./rst-to-mdx testdata/fixtures/smoke.rst \
+#         testdata/fixtures/smoke.expected.mdx
+# and commit both the code and the new golden in the same change.
 #
 # Usage:
-#   ./smoke-test.sh             # run all smoke cases
-#   ./smoke-test.sh --keep      # keep the temp output for inspection
+#   ./smoke-test.sh           # run all cases
+#   ./smoke-test.sh --keep    # keep the temp output for inspection
 # =============================================================================
 
 set -euo pipefail
@@ -23,21 +29,34 @@ log_success() { echo -e "${GREEN}[OK]${NC}      $1"; }
 log_error()   { echo -e "${RED}[FAIL]${NC}    $1" >&2; }
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+cd "$SCRIPT_DIR"
+
 BIN="$SCRIPT_DIR/rst-to-mdx"
+FIXTURE="testdata/fixtures/smoke.rst"
+GOLDEN="testdata/fixtures/smoke.expected.mdx"
 
 KEEP=false
 [[ "${1:-}" == "--keep" ]] && KEEP=true
 
 if [[ ! -x "$BIN" ]]; then
-    log_info "Binary not found at $BIN — building…"
-    (cd "$SCRIPT_DIR" && go build -o rst-to-mdx ./cmd/rst-to-mdx)
+    log_info "binary not found at $BIN — building…"
+    go build -o rst-to-mdx ./cmd/rst-to-mdx
 fi
 
+for required in "$FIXTURE" "$GOLDEN"; do
+    if [[ ! -f "$required" ]]; then
+        log_error "missing required file: $required"
+        exit 1
+    fi
+done
+
+TMPDIR="$(mktemp -d)"
+trap '[[ "$KEEP" == true ]] && echo "kept: $TMPDIR" || rm -rf "$TMPDIR"' EXIT
+
 # ---------------------------------------------------------------------------
-# Case 1: --version smoke
+# Case 1: --version prints without error
 # ---------------------------------------------------------------------------
-log_info "case 1: --version prints without error"
+log_info "case 1: --version"
 VERSION_OUT="$("$BIN" --version 2>&1)"
 if [[ "$VERSION_OUT" != rst-to-mdx* ]]; then
     log_error "expected 'rst-to-mdx <version>', got: $VERSION_OUT"
@@ -46,58 +65,41 @@ fi
 log_success "version: $VERSION_OUT"
 
 # ---------------------------------------------------------------------------
-# Case 2: convert a known RST fixture and check basic MDX invariants
+# Case 2: structural invariants on a real conversion
 # ---------------------------------------------------------------------------
-RST="$REPO_ROOT/docs-website/docs/replicated/quickstart/3.5/sdk/quickstart/download/cnqs-installation.rst"
-REFERENCE_MDX="$REPO_ROOT/docs/docs-main/appdev/quickstart/prerequisites.mdx"
+log_info "case 2: structural invariants on $FIXTURE"
+OUT="$TMPDIR/out.mdx"
+"$BIN" "$FIXTURE" "$OUT"
 
-if [[ ! -f "$RST" ]]; then
-    log_error "fixture RST missing: $RST"
+[[ -s "$OUT" ]]                                || { log_error "output empty"; exit 1; }
+head -n 1 "$OUT" | grep -q "^---$"             || { log_error "missing opening '---' frontmatter fence"; exit 1; }
+grep -q "COPIED_START" "$OUT"                  || { log_error "missing COPIED_START marker"; exit 1; }
+grep -q "COPIED_END"   "$OUT"                  || { log_error "missing COPIED_END marker"; exit 1; }
+tail -c 1 "$OUT" | xxd | grep -q "0a"          || { log_error "missing trailing newline"; exit 1; }
+
+log_success "structural invariants pass"
+
+# ---------------------------------------------------------------------------
+# Case 3: byte-for-byte diff against the frozen golden
+#
+# If this fails after an intentional transform change, regenerate the
+# golden (see header comment) and commit both files together.
+# ---------------------------------------------------------------------------
+log_info "case 3: diff against $GOLDEN"
+if ! diff -u "$GOLDEN" "$OUT"; then
+    log_error "converter output drifted from golden"
+    log_error "if the change is intentional, regenerate:"
+    log_error "  ./rst-to-mdx $FIXTURE $GOLDEN"
     exit 1
 fi
-log_info "case 2: converting $RST"
-
-TMPDIR="$(mktemp -d)"
-trap '[[ "$KEEP" == true ]] && echo "kept: $TMPDIR" || rm -rf "$TMPDIR"' EXIT
-
-OUT="$TMPDIR/out.mdx"
-"$BIN" "$RST" "$OUT" --verbose
-
-# Basic invariants for a Phase-0 conversion:
-#   - file exists and is non-empty
-#   - starts with YAML frontmatter
-#   - contains the COPIED_START provenance marker
-#   - contains the COPIED_END closer
-#   - closes newline-terminated
-
-[[ -s "$OUT" ]]                          || { log_error "output empty"; exit 1; }
-head -n 1 "$OUT" | grep -q "^---$"        || { log_error "missing opening '---' frontmatter fence"; exit 1; }
-grep -q "COPIED_START"                 "$OUT" || { log_error "missing COPIED_START marker"; exit 1; }
-grep -q "COPIED_END"                   "$OUT" || { log_error "missing COPIED_END marker"; exit 1; }
-tail -c 1 "$OUT" | grep -q "^$"          || { log_error "missing trailing newline"; exit 1; }
-
-log_success "Phase-0 invariants pass"
-
-# ---------------------------------------------------------------------------
-# Case 3: diff summary against the reference migrated MDX
-#
-# This is informational only while the converter is in Phase 0 — the diff
-# WILL be large because transforms aren't wired yet. The point is to surface
-# the gap so we can watch it shrink across phases.
-# ---------------------------------------------------------------------------
-if [[ -f "$REFERENCE_MDX" ]]; then
-    ADDED=$(diff -u "$REFERENCE_MDX" "$OUT" | grep -c '^+[^+]' || true)
-    REMOVED=$(diff -u "$REFERENCE_MDX" "$OUT" | grep -c '^-[^-]' || true)
-    log_info "diff vs. reference ($(basename "$REFERENCE_MDX")): +$ADDED / -$REMOVED lines"
-    log_info "(expected to be large in Phase 0 — tracking metric)"
-fi
+log_success "golden match"
 
 # ---------------------------------------------------------------------------
 # Case 4: --dry-run does not create a file
 # ---------------------------------------------------------------------------
-DRY_OUT="$TMPDIR/dry-run.mdx"
 log_info "case 4: --dry-run leaves disk untouched"
-"$BIN" "$RST" "$DRY_OUT" --dry-run > /dev/null
+DRY_OUT="$TMPDIR/dry-run.mdx"
+"$BIN" "$FIXTURE" "$DRY_OUT" --dry-run > /dev/null
 if [[ -e "$DRY_OUT" ]]; then
     log_error "--dry-run wrote a file"
     exit 1
@@ -116,5 +118,10 @@ if "$BIN" "$EMPTY" "$TMPDIR/empty.mdx" 2>/dev/null; then
 fi
 log_success "empty input rejected as expected"
 
+# Note: a case asserting `--strict` fails on the fixture's unresolved
+# `:ref:` was considered, but `Options.Strict` is not currently wired
+# through `convert/links.go` (tracked as a review-finding follow-up in
+# the Notion ticket). Re-add once that path is hooked.
+
 echo
-log_success "smoke test passed (Phase 0)"
+log_success "smoke test passed"

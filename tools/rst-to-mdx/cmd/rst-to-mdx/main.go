@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Command rst-to-mdx converts reStructuredText files from docs-website/
-// into Mintlify-compatible MDX files for docs/docs-main/.
+// into Mintlify-compatible MDX files for cf-docs/docs-main/.
 //
 // Conversion logic lives in the internal convert/, labelindex/, and
 // pathmap/ packages. This file is the Cobra CLI wrapper: it parses
@@ -281,8 +281,8 @@ func reportUnknownLinks(w io.Writer, body []byte, nav *navindex.Index, opts *run
 
 // reInternalLinkTarget pulls the page slug out of `(/path#anchor)`
 // link targets in the emitted MDX. Captures the slug part before any
-// `#fragment`. Mintlify serves docs-main/ as site root so internal
-// links are root-relative without a docs-main/ prefix.
+// `#fragment`. Mintlify serves the docs-main/ directory as site root
+// so internal links are root-relative without a docs-main/ prefix.
 var reInternalLinkTarget = mustRegex(`\(/([A-Za-z0-9_\-/.]+?)(?:#[^)]*)?\)`)
 
 // isAssetPath returns true for paths that aren't navigation pages —

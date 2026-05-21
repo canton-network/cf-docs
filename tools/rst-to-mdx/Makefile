@@ -1,6 +1,12 @@
-BINARY := rst-to-mdx
-DIST   := dist
-GO     ?= go
+BINARY  := rst-to-mdx
+DIST    := dist
+GO      ?= go
+# Stamp the binary with VERSION via -ldflags so `./rst-to-mdx --version`
+# reports something useful in release builds. Override on the command line
+# (e.g. `make release VERSION=0.1.0-alpha`) or via env. Default keeps the
+# dev sentinel so unstamped local builds remain visibly unreleased.
+VERSION ?= 0.0.1-dev
+LDFLAGS := -ldflags "-X main.version=$(VERSION)"
 OS_ARCHES := darwin/arm64 darwin/amd64 linux/arm64 linux/amd64 windows/amd64
 
 .PHONY: all build test fmt vet tidy smoke release clean
@@ -8,7 +14,7 @@ OS_ARCHES := darwin/arm64 darwin/amd64 linux/arm64 linux/amd64 windows/amd64
 all: build
 
 build:
-	$(GO) build -o $(BINARY) ./cmd/rst-to-mdx
+	$(GO) build $(LDFLAGS) -o $(BINARY) ./cmd/rst-to-mdx
 
 test:
 	$(GO) test ./...
@@ -39,7 +45,7 @@ release:
 	  mkdir -p $$out; \
 	  ext=""; if [ "$$os" = "windows" ]; then ext=".exe"; fi; \
 	  echo ">> $$os/$$arch"; \
-	  GOOS=$$os GOARCH=$$arch $(GO) build -o $$out/$(BINARY)$$ext ./cmd/rst-to-mdx; \
+	  GOOS=$$os GOARCH=$$arch $(GO) build $(LDFLAGS) -o $$out/$(BINARY)$$ext ./cmd/rst-to-mdx; \
 	  if [ "$$os" = "windows" ]; then \
 	    cp component.windows.yaml $$out/component.yaml; \
 	  else \
