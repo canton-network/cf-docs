@@ -1,0 +1,910 @@
+---
+title: "Reference"
+description: "PQS configuration options, schema sharing notes, and operational runbooks."
+---
+
+## Configuration options
+
+{/* COPIED_START source="docs-website:docs/replicated/pqs/3.4/component-howtos/pqs/references/configuration-options.rst" hash="2d45405f" */}
+
+### `./scribe.jar pipeline` parameters
+
+| Parameter | Description |
+| --- | --- |
+| `--config file` | Path to configuration overrides via an external HOCON file (optional) <br/>• Environment variable: `SCRIBE_CONFIG`<br/>• System property: `config` |
+| `--pipeline-datasource enum` | Ledger API service to use as data source (default: `TransactionStream`) <br/>• Environment variable: `SCRIBE_PIPELINE_DATASOURCE`<br/>• System property: `pipeline.datasource`<br/>• Enumeration values: `TransactionStream`, `TransactionTreeStream` |
+| `--pipeline-oauth-clientid string` | Client's identifier (optional) <br/>• Environment variable: `SCRIBE_PIPELINE_OAUTH_CLIENTID`<br/>• System property: `pipeline.oauth.clientId` |
+| `--pipeline-oauth-accesstoken string` | Access token (optional) <br/>• Environment variable: `SCRIBE_PIPELINE_OAUTH_ACCESSTOKEN`<br/>• System property: `pipeline.oauth.accessToken` |
+| `--pipeline-oauth-scope [enum \| string]` | Token scope (default: `Default`) <br/>• Environment variable: `SCRIBE_PIPELINE_OAUTH_SCOPE`<br/>• System property: `pipeline.oauth.scope`<br/>• Enumeration values: `Default`, `None` |
+| `--pipeline-oauth-parameters map` | Custom parameters <br/>• Environment variable: `SCRIBE_PIPELINE_OAUTH_PARAMETERS`<br/>• System property: `pipeline.oauth.parameters` |
+| `--pipeline-oauth-preemptexpiry string` | The duration (ISO 8601) prior to expiry of current, for a new token to be requested (default: `PT1M`) <br/>• Environment variable: `SCRIBE_PIPELINE_OAUTH_PREEMPTEXPIRY`<br/>• System property: `pipeline.oauth.preemptExpiry` |
+| `--pipeline-oauth-cafile file` | Trusted Certificate Authority (CA) certificate (optional) <br/>• Environment variable: `SCRIBE_PIPELINE_OAUTH_CAFILE`<br/>• System property: `pipeline.oauth.cafile` |
+| `--pipeline-oauth-endpoint uri` | Token endpoint URL (optional) <br/>• Environment variable: `SCRIBE_PIPELINE_OAUTH_ENDPOINT`<br/>• System property: `pipeline.oauth.endpoint` |
+| `--pipeline-oauth-issuer uri` | OIDC-compliant issuer URL (optional) <br/>• Environment variable: `SCRIBE_PIPELINE_OAUTH_ISSUER`<br/>• System property: `pipeline.oauth.issuer` |
+| `--pipeline-oauth-clientsecret string` | Client's secret (optional) <br/>• Environment variable: `SCRIBE_PIPELINE_OAUTH_CLIENTSECRET`<br/>• System property: `pipeline.oauth.clientSecret` |
+| `--pipeline-filter-parties string` | Filter expression determining Daml party identifiers to filter on (default: `*`) <br/>• Environment variable: `SCRIBE_PIPELINE_FILTER_PARTIES`<br/>• System property: `pipeline.filter.parties` |
+| `--pipeline-filter-metadata string` | Filter expression determining which templates and interfaces to capture metadata for (default: `!*`) <br/>• Environment variable: `SCRIBE_PIPELINE_FILTER_METADATA`<br/>• System property: `pipeline.filter.metadata` |
+| `--pipeline-filter-contracts string` | Filter expression determining which templates and interfaces to include (default: `*`) <br/>• Environment variable: `SCRIBE_PIPELINE_FILTER_CONTRACTS`<br/>• System property: `pipeline.filter.contracts` |
+| `--pipeline-ledger-start [enum \| string]` | Start offset (default: `Latest`) <br/>• Environment variable: `SCRIBE_PIPELINE_LEDGER_START`<br/>• System property: `pipeline.ledger.start`<br/>• Enumeration values: `Genesis`, `Oldest`, `Latest` |
+| `--pipeline-ledger-stop [enum \| string]` | Stop offset (default: `Never`) <br/>• Environment variable: `SCRIBE_PIPELINE_LEDGER_STOP`<br/>• System property: `pipeline.ledger.stop`<br/>• Enumeration values: `Latest`, `Never` |
+| `--retry-backoff-base string` | Base time (ISO 8601) for backoff retry strategy (default: `PT1S`) <br/>• Environment variable: `SCRIBE_RETRY_BACKOFF_BASE`<br/>• System property: `retry.backoff.base` |
+| `--retry-backoff-cap string` | Max duration (ISO 8601) between attempts (default: `PT1M`) <br/>• Environment variable: `SCRIBE_RETRY_BACKOFF_CAP`<br/>• System property: `retry.backoff.cap` |
+| `--retry-backoff-factor double` | Factor for backoff retry strategy (default: `2.0`) <br/>• Environment variable: `SCRIBE_RETRY_BACKOFF_FACTOR`<br/>• System property: `retry.backoff.factor` |
+| `--retry-counter-attempts int` | Max attempts before giving up (optional) <br/>• Environment variable: `SCRIBE_RETRY_COUNTER_ATTEMPTS`<br/>• System property: `retry.counter.attempts` |
+| `--retry-counter-reset string` | Reset retry counters after period (ISO 8601) of stability (default: `PT10M`) <br/>• Environment variable: `SCRIBE_RETRY_COUNTER_RESET`<br/>• System property: `retry.counter.reset` |
+| `--retry-counter-duration string` | Time limit (ISO 8601) before giving up (optional) <br/>• Environment variable: `SCRIBE_RETRY_COUNTER_DURATION`<br/>• System property: `retry.counter.duration` |
+| `--health-address string` | Hostname or IP to bind HTTP health info service to (default: `127.0.0.1`) <br/>• Environment variable: `SCRIBE_HEALTH_ADDRESS`<br/>• System property: `health.address` |
+| `--health-port int` | HTTP port to use to expose application health info (default: `8080`) <br/>• Environment variable: `SCRIBE_HEALTH_PORT`<br/>• System property: `health.port` |
+| `--logger-level enum` | Log level (default: `Info`) <br/>• Environment variable: `SCRIBE_LOGGER_LEVEL`<br/>• System property: `logger.level`<br/>• Enumeration values: `All`, `Fatal`, `Error`, `Warning`, `Info`, `Debug`, `Trace`, `None` |
+| `--logger-mappings map` | Custom mappings for log levels <br/>• Environment variable: `SCRIBE_LOGGER_MAPPINGS`<br/>• System property: `logger.mappings` |
+| `--logger-format enum` | Log output format (default: `Plain`) <br/>• Environment variable: `SCRIBE_LOGGER_FORMAT`<br/>• System property: `logger.format`<br/>• Enumeration values: `Plain`, `Json` |
+| `--logger-pattern [enum \| string]` | Log pattern (default: `Plain`) <br/>• Environment variable: `SCRIBE_LOGGER_PATTERN`<br/>• System property: `logger.pattern`<br/>• Enumeration values: `Plain`, `Standard`, `Structured` |
+| `--target-postgres-host string` | Postgres host (default: `localhost`) <br/>• Environment variable: `SCRIBE_TARGET_POSTGRES_HOST`<br/>• System property: `target.postgres.host` |
+| `--target-postgres-appname string` | Application name for Postgres connections (default: `scribe`) <br/>• Environment variable: `SCRIBE_TARGET_POSTGRES_APPNAME`<br/>• System property: `target.postgres.appName` |
+| `--target-postgres-buffersize int` | Buffer size for transactions processing (default: `128`) <br/>• Environment variable: `SCRIBE_TARGET_POSTGRES_BUFFERSIZE`<br/>• System property: `target.postgres.bufferSize` |
+| `--target-postgres-tls-mode enum` | SSL mode required for Postgres connectivity (default: `Disable`) <br/>• Environment variable: `SCRIBE_TARGET_POSTGRES_TLS_MODE`<br/>• System property: `target.postgres.tls.mode`<br/>• Enumeration values: `Disable`, `Require`, `VerifyCA`, `VerifyFull` |
+| `--target-postgres-tls-cert file` | Client's certificate (optional) <br/>• Environment variable: `SCRIBE_TARGET_POSTGRES_TLS_CERT`<br/>• System property: `target.postgres.tls.cert` |
+| `--target-postgres-tls-key file` | Client's private key (optional) <br/>• Environment variable: `SCRIBE_TARGET_POSTGRES_TLS_KEY`<br/>• System property: `target.postgres.tls.key` |
+| `--target-postgres-tls-cafile file` | Trusted Certificate Authority (CA) certificate (optional) <br/>• Environment variable: `SCRIBE_TARGET_POSTGRES_TLS_CAFILE`<br/>• System property: `target.postgres.tls.cafile` |
+| `--target-postgres-keepalive boolean` | Enable/disable TCP keep-alive probe (default: `true`) <br/>• Environment variable: `SCRIBE_TARGET_POSTGRES_KEEPALIVE`<br/>• System property: `target.postgres.keepAlive` |
+| `--target-postgres-maxconnections int` | Maximum number of JDBC connections (default: `16`) <br/>• Environment variable: `SCRIBE_TARGET_POSTGRES_MAXCONNECTIONS`<br/>• System property: `target.postgres.maxConnections` |
+| `--target-postgres-password string` | Postgres user password (default: `********`) <br/>• Environment variable: `SCRIBE_TARGET_POSTGRES_PASSWORD`<br/>• System property: `target.postgres.password` |
+| `--target-postgres-username string` | Postgres user name (default: `postgres`) <br/>• Environment variable: `SCRIBE_TARGET_POSTGRES_USERNAME`<br/>• System property: `target.postgres.username` |
+| `--target-postgres-database string` | Postgres database (default: `postgres`) <br/>• Environment variable: `SCRIBE_TARGET_POSTGRES_DATABASE`<br/>• System property: `target.postgres.database` |
+| `--target-postgres-schema string` | Postgres schema (default: `public`) <br/>• Environment variable: `SCRIBE_TARGET_POSTGRES_SCHEMA`<br/>• System property: `target.postgres.schema` |
+| `--target-postgres-port int` | Postgres port (default: `5432`) <br/>• Environment variable: `SCRIBE_TARGET_POSTGRES_PORT`<br/>• System property: `target.postgres.port` |
+| `--target-encoding-numericasstring boolean` | Encode numeric as string instead of JSON number (default: true) <br/>• Environment variable: SCRIBE_TARGET_ENCODING_NUMERICASSTRING<br/>• System property: target.encoding.numericAsString |
+| `--target-encoding-excludenulls boolean` | Omit fields with NULL values from resulting JSON (default: false) <br/>• Environment variable: SCRIBE_TARGET_ENCODING_EXCLUDENULLS<br/>• System property: target.encoding.excludeNulls |
+| `--target-encoding-int64asstring boolean` | Encode int64 as string instead of JSON number (default: true) <br/>• Environment variable: SCRIBE_TARGET_ENCODING_INT64ASSTRING<br/>• System property: target.encoding.int64AsString |
+| `--target-schema-autoapply boolean` | Apply metadata inferred schema on startup (default: `true`) <br/>• Environment variable: `SCRIBE_TARGET_SCHEMA_AUTOAPPLY`<br/>• System property: `target.schema.autoApply` |
+| `--target-schema-baseline boolean` | Baseline existing database schema during apply (default: `false`) <br/>• Environment variable: `SCRIBE_TARGET_SCHEMA_BASELINE`<br/>• System property: `target.schema.baseline` |
+| `--source-ledger-host string` | Ledger API host (default: `localhost`) <br/>• Environment variable: `SCRIBE_SOURCE_LEDGER_HOST`<br/>• System property: `source.ledger.host` |
+| `--source-ledger-cachedir file` | Cache Directory (default: `/tmp/scribe`) <br/>• Environment variable: `SCRIBE_SOURCE_LEDGER_CACHEDIR`<br/>• System property: `source.ledger.cacheDir` |
+| `--source-ledger-buffersize int` | Buffer size for gRPC channel (default: `128`) <br/>• Environment variable: `SCRIBE_SOURCE_LEDGER_BUFFERSIZE`<br/>• System property: `source.ledger.bufferSize` |
+| `--source-ledger-keepalive-time string` | Duration (ISO 8601) of interval between ping frames (PT0S to disable) (default: `PT40S`) <br/>• Environment variable: `SCRIBE_SOURCE_LEDGER_KEEPALIVE_TIME`<br/>• System property: `source.ledger.keepAlive.time` |
+| `--source-ledger-keepalive-timeout string` | Duration (ISO 8601) of timeout for a ping frame to be acknowledged (default: `PT20S`) <br/>• Environment variable: `SCRIBE_SOURCE_LEDGER_KEEPALIVE_TIMEOUT`<br/>• System property: `source.ledger.keepAlive.timeout` |
+| `--source-ledger-auth enum` | Authorisation mode (default: `NoAuth`) <br/>• Environment variable: `SCRIBE_SOURCE_LEDGER_AUTH`<br/>• System property: `source.ledger.auth`<br/>• Enumeration values: `OAuth`, `NoAuth` |
+| `--source-ledger-tls-cafile file` | Trusted Certificate Authority (CA) certificate (optional) <br/>• Environment variable: `SCRIBE_SOURCE_LEDGER_TLS_CAFILE`<br/>• System property: `source.ledger.tls.cafile` |
+| `--source-ledger-tls-cert file` | Client's certificate (leave empty if embedded into private key file) (optional) <br/>• Environment variable: `SCRIBE_SOURCE_LEDGER_TLS_CERT`<br/>• System property: `source.ledger.tls.cert` |
+| `--source-ledger-tls-key file` | Client's private key (leave empty for server-only TLS) (optional) <br/>• Environment variable: `SCRIBE_SOURCE_LEDGER_TLS_KEY`<br/>• System property: `source.ledger.tls.key` |
+| `--source-ledger-port int` | Ledger API port (default: `6865`) <br/>• Environment variable: `SCRIBE_SOURCE_LEDGER_PORT`<br/>• System property: `source.ledger.port` |
+
+
+### `./scribe.jar datastore postgres-document prune` parameters
+
+| Parameter | Description |
+| --- | --- |
+| `--config file` | Path to configuration overrides via an external HOCON file (optional) <br/>• Environment variable: `SCRIBE_CONFIG`<br/>• System property: `config` |
+| `--prune-target string` | Inclusive boundary up to which to prune. Can be an offset, timestamp (ISO 8601) or duration (ISO 8601) <br/>• Environment variable: `SCRIBE_PRUNE_TARGET`<br/>• System property: `prune.target` |
+| `--prune-mode enum` | Precomputes effects of pruning through dry-run, or actually runs it (default: `DryRun`) <br/>• Environment variable: `SCRIBE_PRUNE_MODE`<br/>• System property: `prune.mode`<br/>• Enumeration values: `DryRun`, `Force` |
+| `--logger-destination file` | Log output file (default: `output.log`) <br/>• Environment variable: `SCRIBE_LOGGER_DESTINATION`<br/>• System property: `logger.destination` |
+| `--logger-mappings map` | Custom mappings for log levels <br/>• Environment variable: `SCRIBE_LOGGER_MAPPINGS`<br/>• System property: `logger.mappings` |
+| `--logger-format enum` | Log output format (default: `Plain`) <br/>• Environment variable: `SCRIBE_LOGGER_FORMAT`<br/>• System property: `logger.format`<br/>• Enumeration values: `Plain`, `PlainAsync`, `Json`, `JsonAsync` |
+| `--logger-pattern [enum \| string]` | Log pattern (default: `Plain`) <br/>• Environment variable: `SCRIBE_LOGGER_PATTERN`<br/>• System property: `logger.pattern`<br/>• Enumeration values: `Plain`, `Standard`, `Structured` |
+| `--logger-level enum` | Log level (default: `Info`) <br/>• Environment variable: `SCRIBE_LOGGER_LEVEL`<br/>• System property: `logger.level`<br/>• Enumeration values: `All`, `Fatal`, `Error`, `Warning`, `Info`, `Debug`, `Trace`, `None` |
+| `--postgres-host string` | Postgres host (default: `localhost`) <br/>• Environment variable: `SCRIBE_POSTGRES_HOST`<br/>• System property: `postgres.host` |
+| `--postgres-appname string` | Application name for Postgres connections (default: `scribe`) <br/>• Environment variable: `SCRIBE_POSTGRES_APPNAME`<br/>• System property: `postgres.appName` |
+| `--postgres-buffersize int` | Buffer size for transactions processing (default: `128`) <br/>• Environment variable: `SCRIBE_POSTGRES_BUFFERSIZE`<br/>• System property: `postgres.bufferSize` |
+| `--postgres-tls-mode enum` | SSL mode required for Postgres connectivity (default: `Disable`) <br/>• Environment variable: `SCRIBE_POSTGRES_TLS_MODE`<br/>• System property: `postgres.tls.mode`<br/>• Enumeration values: `Disable`, `Require`, `VerifyCA`, `VerifyFull` |
+| `--postgres-tls-cert file` | Client's certificate (optional) <br/>• Environment variable: `SCRIBE_POSTGRES_TLS_CERT`<br/>• System property: `postgres.tls.cert` |
+| `--postgres-tls-key file` | Client's private key (optional) <br/>• Environment variable: `SCRIBE_POSTGRES_TLS_KEY`<br/>• System property: `postgres.tls.key` |
+| `--postgres-tls-cafile file` | Trusted Certificate Authority (CA) certificate (optional) <br/>• Environment variable: `SCRIBE_POSTGRES_TLS_CAFILE`<br/>• System property: `postgres.tls.cafile` |
+| `--postgres-keepalive boolean` | Enable/disable TCP keep-alive probe (default: `true`) <br/>• Environment variable: `SCRIBE_POSTGRES_KEEPALIVE`<br/>• System property: `postgres.keepAlive` |
+| `--postgres-maxconnections int` | Maximum number of JDBC connections (default: `16`) <br/>• Environment variable: `SCRIBE_POSTGRES_MAXCONNECTIONS`<br/>• System property: `postgres.maxConnections` |
+| `--postgres-password string` | Postgres user password (default: `********`) <br/>• Environment variable: `SCRIBE_POSTGRES_PASSWORD`<br/>• System property: `postgres.password` |
+| `--postgres-username string` | Postgres user name (default: `postgres`) <br/>• Environment variable: `SCRIBE_POSTGRES_USERNAME`<br/>• System property: `postgres.username` |
+| `--postgres-schema string` | Postgres schema (default: `public`) <br/>• Environment variable: `SCRIBE_POSTGRES_SCHEMA`<br/>• System property: `postgres.schema` |
+| `--postgres-database string` | Postgres database (default: `postgres`) <br/>• Environment variable: `SCRIBE_POSTGRES_DATABASE`<br/>• System property: `postgres.database` |
+| `--postgres-port int` | Postgres port (default: `5432`) <br/>• Environment variable: `SCRIBE_POSTGRES_PORT`<br/>• System property: `postgres.port` |
+
+
+### `./scribe.jar datastore postgres-document schema show` parameters
+
+| Parameter | Description |
+| --- | --- |
+| `--config file` | Path to configuration overrides via an external HOCON file (optional) <br/>• Environment variable: `SCRIBE_CONFIG`<br/>• System property: `config` |
+| `--ledger-host string` | Ledger API host (default: `localhost`) <br/>• Environment variable: `SCRIBE_LEDGER_HOST`<br/>• System property: `ledger.host` |
+| `--ledger-cachedir file` | Cache Directory (default: `/tmp/scribe`) <br/>• Environment variable: `SCRIBE_LEDGER_CACHEDIR`<br/>• System property: `ledger.cacheDir` |
+| `--ledger-buffersize int` | Buffer size for gRPC channel (default: `128`) <br/>• Environment variable: `SCRIBE_LEDGER_BUFFERSIZE`<br/>• System property: `ledger.bufferSize` |
+| `--ledger-keepalive-time string` | Duration (ISO 8601) of interval between ping frames (PT0S to disable) (default: `PT40S`) <br/>• Environment variable: `SCRIBE_LEDGER_KEEPALIVE_TIME`<br/>• System property: `ledger.keepAlive.time` |
+| `--ledger-keepalive-timeout string` | Duration (ISO 8601) of timeout for a ping frame to be acknowledged (default: `PT20S`) <br/>• Environment variable: `SCRIBE_LEDGER_KEEPALIVE_TIMEOUT`<br/>• System property: `ledger.keepAlive.timeout` |
+| `--ledger-auth enum` | Authorisation mode (default: `NoAuth`) <br/>• Environment variable: `SCRIBE_LEDGER_AUTH`<br/>• System property: `ledger.auth`<br/>• Enumeration values: `OAuth`, `NoAuth` |
+| `--ledger-tls-cafile file` | Trusted Certificate Authority (CA) certificate (optional) <br/>• Environment variable: `SCRIBE_LEDGER_TLS_CAFILE`<br/>• System property: `ledger.tls.cafile` |
+| `--ledger-tls-cert file` | Client's certificate (leave empty if embedded into private key file) (optional) <br/>• Environment variable: `SCRIBE_LEDGER_TLS_CERT`<br/>• System property: `ledger.tls.cert` |
+| `--ledger-tls-key file` | Client's private key (leave empty for server-only TLS) (optional) <br/>• Environment variable: `SCRIBE_LEDGER_TLS_KEY`<br/>• System property: `ledger.tls.key` |
+| `--ledger-port int` | Ledger API port (default: `6865`) <br/>• Environment variable: `SCRIBE_LEDGER_PORT`<br/>• System property: `ledger.port` |
+| `--logger-destination file` | Log output file (default: `output.log`) <br/>• Environment variable: `SCRIBE_LOGGER_DESTINATION`<br/>• System property: `logger.destination` |
+| `--logger-mappings map` | Custom mappings for log levels <br/>• Environment variable: `SCRIBE_LOGGER_MAPPINGS`<br/>• System property: `logger.mappings` |
+| `--logger-format enum` | Log output format (default: `Plain`) <br/>• Environment variable: `SCRIBE_LOGGER_FORMAT`<br/>• System property: `logger.format`<br/>• Enumeration values: `Plain`, `PlainAsync`, `Json`, `JsonAsync` |
+| `--logger-pattern [enum \| string]` | Log pattern (default: `Plain`) <br/>• Environment variable: `SCRIBE_LOGGER_PATTERN`<br/>• System property: `logger.pattern`<br/>• Enumeration values: `Plain`, `Standard`, `Structured` |
+| `--logger-level enum` | Log level (default: `Info`) <br/>• Environment variable: `SCRIBE_LOGGER_LEVEL`<br/>• System property: `logger.level`<br/>• Enumeration values: `All`, `Fatal`, `Error`, `Warning`, `Info`, `Debug`, `Trace`, `None` |
+| `--filter-contracts string` | Filter expression determining which templates and interfaces to include (default: `*`) <br/>• Environment variable: `SCRIBE_FILTER_CONTRACTS`<br/>• System property: `filter.contracts` |
+| `--oauth-clientid string` | Client's identifier (optional) <br/>• Environment variable: `SCRIBE_OAUTH_CLIENTID`<br/>• System property: `oauth.clientId` |
+| `--oauth-accesstoken string` | Access token (optional) <br/>• Environment variable: `SCRIBE_OAUTH_ACCESSTOKEN`<br/>• System property: `oauth.accessToken` |
+| `--oauth-scope [enum \| string]` | Token scope (default: `Default`) <br/>• Environment variable: `SCRIBE_OAUTH_SCOPE`<br/>• System property: `oauth.scope`<br/>• Enumeration values: `Default`, `None` |
+| `--oauth-parameters map` | Custom parameters <br/>• Environment variable: `SCRIBE_OAUTH_PARAMETERS`<br/>• System property: `oauth.parameters` |
+| `--oauth-preemptexpiry string` | The duration (ISO 8601) prior to expiry of current, for a new token to be requested (default: `PT1M`) <br/>• Environment variable: `SCRIBE_OAUTH_PREEMPTEXPIRY`<br/>• System property: `oauth.preemptExpiry` |
+| `--oauth-cafile file` | Trusted Certificate Authority (CA) certificate (optional) <br/>• Environment variable: `SCRIBE_OAUTH_CAFILE`<br/>• System property: `oauth.cafile` |
+| `--oauth-endpoint uri` | Token endpoint URL (optional) <br/>• Environment variable: `SCRIBE_OAUTH_ENDPOINT`<br/>• System property: `oauth.endpoint` |
+| `--oauth-issuer uri` | OIDC-compliant issuer URL (optional) <br/>• Environment variable: `SCRIBE_OAUTH_ISSUER`<br/>• System property: `oauth.issuer` |
+| `--oauth-clientsecret string` | Client's secret (optional) <br/>• Environment variable: `SCRIBE_OAUTH_CLIENTSECRET`<br/>• System property: `oauth.clientSecret` |
+
+
+### `./scribe.jar datastore postgres-document schema apply` parameters
+
+| Parameter | Description |
+| --- | --- |
+| `--config file` | Path to configuration overrides via an external HOCON file (optional) <br/>• Environment variable: `SCRIBE_CONFIG`<br/>• System property: `config` |
+| `--ledger-host string` | Ledger API host (default: `localhost`) <br/>• Environment variable: `SCRIBE_LEDGER_HOST`<br/>• System property: `ledger.host` |
+| `--ledger-cachedir file` | Cache Directory (default: `/tmp/scribe`) <br/>• Environment variable: `SCRIBE_LEDGER_CACHEDIR`<br/>• System property: `ledger.cacheDir` |
+| `--ledger-buffersize int` | Buffer size for gRPC channel (default: `128`) <br/>• Environment variable: `SCRIBE_LEDGER_BUFFERSIZE`<br/>• System property: `ledger.bufferSize` |
+| `--ledger-keepalive-time string` | Duration (ISO 8601) of interval between ping frames (PT0S to disable) (default: `PT40S`) <br/>• Environment variable: `SCRIBE_LEDGER_KEEPALIVE_TIME`<br/>• System property: `ledger.keepAlive.time` |
+| `--ledger-keepalive-timeout string` | Duration (ISO 8601) of timeout for a ping frame to be acknowledged (default: `PT20S`) <br/>• Environment variable: `SCRIBE_LEDGER_KEEPALIVE_TIMEOUT`<br/>• System property: `ledger.keepAlive.timeout` |
+| `--ledger-auth enum` | Authorisation mode (default: `NoAuth`) <br/>• Environment variable: `SCRIBE_LEDGER_AUTH`<br/>• System property: `ledger.auth`<br/>• Enumeration values: `OAuth`, `NoAuth` |
+| `--ledger-tls-cafile file` | Trusted Certificate Authority (CA) certificate (optional) <br/>• Environment variable: `SCRIBE_LEDGER_TLS_CAFILE`<br/>• System property: `ledger.tls.cafile` |
+| `--ledger-tls-cert file` | Client's certificate (leave empty if embedded into private key file) (optional) <br/>• Environment variable: `SCRIBE_LEDGER_TLS_CERT`<br/>• System property: `ledger.tls.cert` |
+| `--ledger-tls-key file` | Client's private key (leave empty for server-only TLS) (optional) <br/>• Environment variable: `SCRIBE_LEDGER_TLS_KEY`<br/>• System property: `ledger.tls.key` |
+| `--ledger-port int` | Ledger API port (default: `6865`) <br/>• Environment variable: `SCRIBE_LEDGER_PORT`<br/>• System property: `ledger.port` |
+| `--logger-destination file` | Log output file (default: `output.log`) <br/>• Environment variable: `SCRIBE_LOGGER_DESTINATION`<br/>• System property: `logger.destination` |
+| `--logger-mappings map` | Custom mappings for log levels <br/>• Environment variable: `SCRIBE_LOGGER_MAPPINGS`<br/>• System property: `logger.mappings` |
+| `--logger-format enum` | Log output format (default: `Plain`) <br/>• Environment variable: `SCRIBE_LOGGER_FORMAT`<br/>• System property: `logger.format`<br/>• Enumeration values: `Plain`, `PlainAsync`, `Json`, `JsonAsync` |
+| `--logger-pattern [enum \| string]` | Log pattern (default: `Plain`) <br/>• Environment variable: `SCRIBE_LOGGER_PATTERN`<br/>• System property: `logger.pattern`<br/>• Enumeration values: `Plain`, `Standard`, `Structured` |
+| `--logger-level enum` | Log level (default: Info) <br/>• Environment variable: `SCRIBE_LOGGER_LEVEL`<br/>• System property: `logger.level`<br/>• Enumeration values: `All`, `Fatal`, `Error`, `Warning`, `Info`, `Debug`, `Trace`, `None` |
+| `--filter-contracts string` | Filter expression determining which templates and interfaces to include (default: `*`) <br/>• Environment variable: `SCRIBE_FILTER_CONTRACTS`<br/>• System property: `filter.contracts` |
+| `--schema-autoapply boolean` | Apply metadata inferred schema on startup (default: `true`) <br/>• Environment variable: `SCRIBE_SCHEMA_AUTOAPPLY`<br/>• System property: `schema.autoApply` |
+| `--schema-baseline boolean` | Baseline existing database schema during apply (default: `false`) <br/>• Environment variable: `SCRIBE_SCHEMA_BASELINE`<br/>• System property: `schema.baseline` |
+| `--postgres-host string` | Postgres host (default: `localhost`) <br/>• Environment variable: `SCRIBE_POSTGRES_HOST`<br/>• System property: `postgres.host` |
+| `--postgres-appname string` | Application name for Postgres connections (default: `scribe`) <br/>• Environment variable: `SCRIBE_POSTGRES_APPNAME`<br/>• System property: `postgres.appName` |
+| `--postgres-buffersize int` | Buffer size for transactions processing (default: `128`) <br/>• Environment variable: `SCRIBE_POSTGRES_BUFFERSIZE`<br/>• System property: `postgres.bufferSize` |
+| `--postgres-tls-mode enum` | SSL mode required for Postgres connectivity (default: `Disable`) <br/>• Environment variable: `SCRIBE_POSTGRES_TLS_MODE`<br/>• System property: `postgres.tls.mode`<br/>• Enumeration values: `Disable`, `Require`, `VerifyCA`, `VerifyFull` |
+| `--postgres-tls-cert file` | Client's certificate (optional) <br/>• Environment variable: `SCRIBE_POSTGRES_TLS_CERT`<br/>• System property: `postgres.tls.cert` |
+| `--postgres-tls-key file` | Client's private key (optional) <br/>• Environment variable: `SCRIBE_POSTGRES_TLS_KEY`<br/>• System property: `postgres.tls.key` |
+| `--postgres-tls-cafile file` | Trusted Certificate Authority (CA) certificate (optional) <br/>• Environment variable: `SCRIBE_POSTGRES_TLS_CAFILE`<br/>• System property: `postgres.tls.cafile` |
+| `--postgres-keepalive boolean` | Enable/disable TCP keep-alive probe (default: `true`) <br/>• Environment variable: `SCRIBE_POSTGRES_KEEPALIVE`<br/>• System property: `postgres.keepAlive` |
+| `--postgres-maxconnections int` | Maximum number of JDBC connections (default: `16`) <br/>• Environment variable: `SCRIBE_POSTGRES_MAXCONNECTIONS`<br/>• System property: `postgres.maxConnections` |
+| `--postgres-password string` | Postgres user password (default: `********`) <br/>• Environment variable: `SCRIBE_POSTGRES_PASSWORD`<br/>• System property: `postgres.password` |
+| `--postgres-username string` | Postgres user name (default: `postgres`) <br/>• Environment variable: `SCRIBE_POSTGRES_USERNAME`<br/>• System property: `postgres.username` |
+| `--postgres-schema string` | Postgres schema (default: `public`) <br/>• Environment variable: `SCRIBE_POSTGRES_SCHEMA`<br/>• System property: `postgres.schema` |
+| `--postgres-database string` | Postgres database (default: `postgres`) <br/>• Environment variable: `SCRIBE_POSTGRES_DATABASE`<br/>• System property: `postgres.database` |
+| `--postgres-port int` | Postgres port (default: `5432`) <br/>• Environment variable: `SCRIBE_POSTGRES_PORT`<br/>• System property: `postgres.port` |
+| `--oauth-clientid string` | Client's identifier (optional) <br/>• Environment variable: `SCRIBE_OAUTH_CLIENTID`<br/>• System property: `oauth.clientId` |
+| `--oauth-accesstoken string` | Access token (optional) <br/>• Environment variable: `SCRIBE_OAUTH_ACCESSTOKEN`<br/>• System property: `oauth.accessToken` |
+| `--oauth-scope [enum \| string]` | Token scope (default: `Default`) <br/>• Environment variable: `SCRIBE_OAUTH_SCOPE`<br/>• System property: `oauth.scope`<br/>• Enumeration values: `Default`, `None` |
+| `--oauth-parameters map` | Custom parameters <br/>• Environment variable: `SCRIBE_OAUTH_PARAMETERS`<br/>• System property: `oauth.parameters` |
+| `--oauth-preemptexpiry string` | The duration (ISO 8601) prior to expiry of current, for a new token to be requested (default: `PT1M`) <br/>• Environment variable: `SCRIBE_OAUTH_PREEMPTEXPIRY`<br/>• System property: `oauth.preemptExpiry` |
+| `--oauth-cafile file` | Trusted Certificate Authority (CA) certificate (optional) <br/>• Environment variable: `SCRIBE_OAUTH_CAFILE`<br/>• System property: `oauth.cafile` |
+| `--oauth-endpoint uri` | Token endpoint URL (optional) <br/>• Environment variable: `SCRIBE_OAUTH_ENDPOINT`<br/>• System property: `oauth.endpoint` |
+| `--oauth-issuer uri` | OIDC-compliant issuer URL (optional) <br/>• Environment variable: `SCRIBE_OAUTH_ISSUER`<br/>• System property: `oauth.issuer` |
+| `--oauth-clientsecret string` | Client's secret (optional) <br/>• Environment variable: `SCRIBE_OAUTH_CLIENTSECRET`<br/>• System property: `oauth.clientSecret` |
+
+
+{/* COPIED_END */}
+
+## Sharing a database with application tables
+
+{/* COPIED_START source="docs-website:docs/replicated/pqs/3.4/component-howtos/pqs/references/sharing-database.rst" hash="641a04ac" */}
+
+An application making use of the PQS datastore may also manage its own database migrations via Flyway - either embedded, command-line, or other supported means. An example of such a scenario is the creation of application specific indexes.
+
+With default settings, the application's Flyway produces an error similar to the one seen below because its view of available/valid migrations is different from PQS:
+
+``` text
+$ flyway -configFiles=conf/flyway.toml migrate
+Flyway Community Edition 10.12.0 by Redgate
+
+See release notes here: https://rd.gt/416ObMi
+Database: jdbc:postgresql://localhost:5432/postgres (PostgreSQL 15.5)
+ERROR: Validate failed: Migrations have failed validation
+Migration checksum mismatch for migration version 001
+-> Applied to database : -332813992
+-> Resolved locally    : 422692347
+Either revert the changes to the migration, or run repair to update the schema history.
+Need more flexibility with validation rules? Learn more: https://rd.gt/3AbJUZE
+```
+
+<Note>
+Here, the command-line Flyway was used for demonstration purposes. The same applies to other methods of running Flyway.
+</Note>
+
+However, it is trivial to instruct the application's Flyway to use a different, non-default table name to store its versioning information, which allows both Flyways to coexist in the same database.
+
+```sql
+select version, description, script, success from flyway_schema_history;
+```
+
+``` text
+version |                      description                      |                             script                              | success
+---------+-------------------------------------------------------+-----------------------------------------------------------------+---------
+001     | Create initial schema                                 | V001__Create_initial_schema.sql                                 | t
+002     | Make initializecontractimplements function idempotent | V002__Make_initializecontractimplements_function_idempotent.sql | t
+003     | Fix create index for contract                         | V003__Fix_create_index_for_contract.sql                         | t
+004     | Add tmp to tx references cascade constraint           | V004__Add_tmp_to_tx_references_cascade_constraint.sql           | t
+005     | Make watermark progression safer                      | V005__Make_watermark_progression_safer.sql                      | t
+006     | Make checkpoint functions stable                      | V006__Make_checkpoint_functions_stable.sql                      | t
+007     | Expose effective at                                   | V007__Expose_effective_at.sql                                   | t
+(7 rows)
+```
+
+``` text
+$ flyway -configFiles=conf/flyway.toml migrate -table=myapp_version -baselineOnMigrate=true -baselineVersion=0
+Flyway Community Edition 10.12.0 by Redgate
+
+See release notes here: https://rd.gt/416ObMi
+Database: jdbc:postgresql://localhost:5432/postgres (PostgreSQL 15.5)
+Schema history table "public"."myapp_version" does not exist yet
+Successfully validated 1 migration (execution time 00:00.029s)
+Creating Schema History table "public"."myapp_version" with baseline ...
+Successfully baselined schema with version: 0
+Current version of schema "public": 0
+Migrating schema "public" to version "1.0 - Add index on Ping sender"
+Successfully applied 1 migration to schema "public", now at version v1.0 (execution time 00:00.036s)
+```
+
+```sql
+select version, description, script, success from myapp_version;
+```
+
+``` text
+version |       description        |               script               | success
+---------+--------------------------+------------------------------------+---------
+0       | << Flyway Baseline >>    | << Flyway Baseline >>              | t
+1.0     | Add index on Ping sender | V1.0__Add_index_on_Ping_sender.sql | t
+(2 rows)
+```
+
+Now both PQS and the application can manage their own schema versions independently. Assuming the application limits itself to only adding indexes and other non-conflicting changes, the two Flyways can coexist without issues.
+
+``` text
+-- new PQS release applies missing migrations
+org.flywaydb.core.internal.command.DbValidate: Successfully validated 8 migrations (execution time 00:00.018s)  application=scribe
+org.flywaydb.core.internal.command.DbSchemas: Skipping creation of existing schema: "public"  application=scribe
+org.flywaydb.core.internal.command.DbMigrate: Current version of schema "public": 007  application=scribe
+org.flywaydb.core.internal.parser.Parser: Parsing V008__Add_new_table.sql ...  application=scribe
+org.flywaydb.core.internal.sqlscript.ParserSqlScript: Found statement at line 1: create table _foo(value int)  application=scribe
+org.flywaydb.core.internal.command.DbMigrate: Starting migration of schema "public" to version "008 - Add new table" ...  application=scribe
+org.flywaydb.core.internal.command.DbMigrate: Migrating schema "public" to version "008 - Add new table"  application=scribe
+org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor: Executing SQL: create table _foo(value int)  application=scribe
+org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor: 0 rows affected  application=scribe
+org.flywaydb.core.internal.command.DbMigrate: Successfully completed migration of schema "public" to version "008 - Add new table"  application=scribe
+org.flywaydb.core.internal.schemahistory.JdbcTableSchemaHistory: Schema History table "public"."flyway_schema_history" successfully updated to reflect changes  application=scribe
+org.flywaydb.core.internal.command.DbMigrate: Successfully applied 1 migration to schema "public", now at version v008 (execution time 00:00.006s)  application=scribe
+```
+
+``` text
+### the application applies missing migrations
+$ flyway -configFiles=conf/flyway.toml migrate -table=myapp_version
+Flyway Community Edition 10.12.0 by Redgate
+
+See release notes here: https://rd.gt/416ObMi
+Database: jdbc:postgresql://localhost:5432/postgres (PostgreSQL 15.5)
+Successfully validated 3 migrations (execution time 00:00.060s)
+Current version of schema "public": 1.0
+Migrating schema "public" to version "1.1 - Add index on Ping receiver"
+Successfully applied 1 migration to schema "public", now at version v1.1 (execution time 00:00.020s)
+```
+
+As can be observed below, PQS and the application can even opt for different versioning schemes.
+
+```sql
+select version, description, script, success from flyway_schema_history ;
+```
+
+``` text
+version |                      description                      |                             script                              | success
+---------+-------------------------------------------------------+-----------------------------------------------------------------+---------
+001     | Create initial schema                                 | V001__Create_initial_schema.sql                                 | t
+002     | Make initializecontractimplements function idempotent | V002__Make_initializecontractimplements_function_idempotent.sql | t
+003     | Fix create index for contract                         | V003__Fix_create_index_for_contract.sql                         | t
+004     | Add tmp to tx references cascade constraint           | V004__Add_tmp_to_tx_references_cascade_constraint.sql           | t
+005     | Make watermark progression safer                      | V005__Make_watermark_progression_safer.sql                      | t
+006     | Make checkpoint functions stable                      | V006__Make_checkpoint_functions_stable.sql                      | t
+007     | Expose effective at                                   | V007__Expose_effective_at.sql                                   | t
+008     | Add new table                                         | V008__Add_new_table.sql                                         | t
+(8 rows)
+```
+
+```sql
+select version, description, script, success from myapp_version ;
+```
+
+``` text
+version |        description         |                script                | success
+---------+----------------------------+--------------------------------------+---------
+0       | << Flyway Baseline >>      | << Flyway Baseline >>                | t
+1.0     | Add index on Ping sender   | V1.0__Add_index_on_Ping_sender.sql   | t
+1.1     | Add index on Ping receiver | V1.1__Add_index_on_Ping_receiver.sql | t
+(3 rows)
+```
+
+``` text
+postgres=# \di+ __contracts_1_ping_sender_idx
+                                                       List of relations
+ Schema |             Name              | Type  |  Owner   |     Table     | Persistence | Access method | Size  | Description
+--------+-------------------------------+-------+----------+---------------+-------------+---------------+-------+-------------
+ public | __contracts_1_ping_sender_idx | index | postgres | __contracts_1 | permanent   | hash          | 32 kB |
+(1 row)
+
+postgres=# \di+ __contracts_1_ping_receiver_idx
+                                                        List of relations
+ Schema |              Name               | Type  |  Owner   |     Table     | Persistence | Access method | Size  | Description
+--------+---------------------------------+-------+----------+---------------+-------------+---------------+-------+-------------
+ public | __contracts_1_ping_receiver_idx | index | postgres | __contracts_1 | permanent   | hash          | 32 kB |
+(1 row)
+```
+
+``` text
+$ tree .
+.
+├── conf
+│   └── flyway.toml
+└── migrations
+    ├── V1.0__Add_index_on_Ping_sender.sql
+    └── V1.1__Add_index_on_Ping_receiver.sql
+
+$ head migrations/*
+==> migrations/V1.0__Add_index_on_Ping_sender.sql <==
+call create_index_for_contract('ping_sender', 'PingPong:Ping', '(payload->>''sender'')', 'hash');
+
+==> migrations/V1.1__Add_index_on_Ping_receiver.sql <==
+call create_index_for_contract('ping_receiver', 'PingPong:Ping', '(payload->>''receiver'')', 'hash');
+```
+
+{/* COPIED_END */}
+
+## Runbooks
+
+{/* COPIED_START source="docs-website:docs/replicated/pqs/3.4/component-howtos/pqs/troubleshoot/runbooks.rst" hash="258ea6d5" */}
+
+Runbooks are recipes that provide instructions for handling common issues or tasks. They are designed to be easy to follow and should include all necessary steps to resolve an issue.
+
+### PQS does not accept the passed in settings
+
+Check if the argument in question is in the supported list of arguments by re-running the base command with:
+
+- `--help` / `-h` option for command-line arguments
+- `--help-verbose` / `-H` option for command-line arguments, environment variables and Java system properties
+
+Check the settings for spelling and capitalisation.
+
+Check if the argument supplied is applied and quoted in the configuration banner in the logs.
+
+For example,
+
+``` text
+$ ./scribe.jar pipeline ledger postgres-document --source-ledger-host 10.0.0.0
+```
+
+should result in the following banner being displayed in the logs:
+
+``` text
+Applied configuration:
+...
+source {
+    ledger {
+        ...
+        host=10.0.0.0
+        ...
+    }
+}
+```
+
+### Adjusting PQS settings dynamically (at runtime)
+
+PQS does not allow one to adjust any of its settings on the fly. Configuration settings along with the dynamically resolved parameters (party filters, packages, templates, etc) are fixed at the start of pipeline execution. Any change requires a restart, which should be fairly cheap under normal circumstances. You might also want to re-visit the configuration warning.
+
+### There is a suspicion that PQS is stalled
+
+Check for ledger keep-alive output in the logs (frequency configured via `--source-ledger-keepalive` (default 40s)).
+
+You should at least see this line repeated every 40 seconds, even if there is no new activity on the ledger:
+
+``` text
+14:42:28.281 I [zio-fiber-600078685] com.digitalasset.zio.daml.Channel:37 Keep-alive (get ledger version) successful
+```
+
+If you expect data to flow, then check your filter configuration so that it’s not too restrictive (see `pqs-troubleshoot-runbooks-dont-see-expected-templates-in-pqs`).
+
+If all else fails, get your hands on a thread dump (for example, through diagnostics) and analyse it for any deadlocks.
+
+### Why might it take a long time before PQS starts processing streams?
+
+The following phases happen during PQS startup:
+
+- fetching of all DARs from the ledger
+- parsing DARs locally to extract type information (cached locally for subsequent restarts)
+- converting type information into codecs
+- initializing DB tables and partitions corresponding to templates/interfaces and exercises
+- processing ACS if applicable
+- pipeline with ongoing processing starts now
+
+Actual start-up time may be affected by multiple reasons, including, but not limited to:
+
+- slow network
+- excessive number of DARs/packages on ledger (not yet cached by PQS)
+- excessive number of new templates (likely caused by Daml upgrade/migration procedures)
+- the size of ACS (if applicable)
+- processing from early offsets (historical data) on a very lengthy ledger (will influence until PQS catches up to the head for ongoing streaming)
+
+### Don’t see expected templates in PQS
+
+Check that your filter’s configuration is not too restrictive. Sanity check the overall count in `INFO`-level logs
+
+``` text
+Applied configuration:
+...
+pipeline {
+    filter {
+        contracts="*"
+        ...
+    }
+}
+...
+I [zio-fiber-330812857] com.digitalasset.zio.daml.ledgerapi.logFilterContents:12 Contract filter inclusive of 1 templates and 1 interfaces
+```
+
+Running logging at `DEBUG` level (`--logger-level=Debug`) will provide more detailed information about specific templates included in the synchronization pipeline:
+
+``` text
+14:52:40.201 D [zio-fiber-655477872] com.digitalasset.zio.daml.ledgerapi.logFilterContents:13 Including template 5fe0c850054845d95a855650cba76d9d999c3e985ae549bcca01253b17b08b2c:PingPong:Ping
+14:52:40.201 D [zio-fiber-655477872] com.digitalasset.zio.daml.ledgerapi.logFilterContents:13 Including template 5fe0c850054845d95a855650cba76d9d999c3e985ae549bcca01253b17b08b2c:PingPong:PingWithCK
+14:52:40.201 D [zio-fiber-655477872] com.digitalasset.zio.daml.ledgerapi.logFilterContents:13 Including template 5fe0c850054845d95a855650cba76d9d999c3e985ae549bcca01253b17b08b2c:PingPong:Pong
+```
+
+### Is it safe to change PQS `--pipeline-datasource` against the data store with existing data?
+
+You might want to re-visit the configuration warning.
+
+### Debug output is too noisy
+
+To prevent excessive output from Netty when the logging level is set to `DEBUG`, use the following arguments:
+
+``` text
+$ ./scribe.jar pipeline \
+     --logger-level=Debug \
+     --logger-mappings-io.netty=Info \
+     --logger-mappings-io.grpc.netty=Info
+```
+
+### No data for a recently onboarded party
+
+PQS is not notified of new parties, so it needs a restart to acknowledge the new party set.
+
+Note that the best approach when onboarding new parties is to:
+
+- stop PQS from processing the data
+- onboard the new party
+- start PQS processing where it left off
+
+Otherwise, there is a chance of corrupting PQS data for the newly onboarded party if party onboarding happens during the active PQS pipeline.
+
+If a new party was onboarded without stopping the PQS pipeline, it is best to either:
+
+- purge the PQS database and re-ingest the data either from `Genesis` or from `Latest` (see `pqs-ledger-streaming-and-recovery`), or
+- perform a reset from a particular offset (before the offset of the first event with the new party involved) by following the instructions
+
+The list of parties in the current pipeline session is output in the logs on startup:
+
+``` text
+15:01:40.872 I [zio-fiber-950510203] com.digitalasset.zio.daml.ledgerapi.PartiesService:61 2 known parties retrieved
+15:01:40.876 I [zio-fiber-950510203] com.digitalasset.scribe.pipeline.pipeline.Impl:39 Starting pipeline on behalf of 'Alice::12209adab9c5e9d672d7b4515e26f4cd296cc2ec99bdb9787be7e804c49ca52f2686,Bob::12209adab9c5e9d672d7b4515e26f4cd296cc2ec99bdb9787be7e804c49ca52f2686'
+```
+
+### PQS complains it cannot start due to various offset mismatches
+
+PQS may fail to start due to a non-reconcilable gap in the events history (potentially caused by ledger pruning or other factors). Please, refer to these 2 sections for additional insights:
+
+- `pqs-history-slicing`
+- `pqs-ledger-streaming-and-recovery`
+
+In most likelihood, under normal conditions, PQS should be launched with the following arguments, unless there is a strong reason to modify them:
+
+``` text
+$ ./scribe.jar pipeline --pipeline-ledger-start=Oldest --pipeline-ledger-stop=Never
+```
+
+Please, refer to the logs for the steps of determination, which offset is being selected to start the pipeline
+
+``` text
+15:28:12.778 I [zio-fiber-1984883840] com.digitalasset.zio.daml.ledgerapi.StateService:79 Retrieved ledger end offset: 00000000000000000f
+15:28:12.809 I [zio-fiber-1984883840] com.digitalasset.scribe.pipeline.pipeline.Impl:91 Last known checkpoint is at offset '00000000000000000f' and index '9'
+15:28:12.811 I [zio-fiber-1984883840] com.digitalasset.scribe.pipeline.pipeline.Impl:100 Continuing from offset '00000000000000000f' and index '9' until offset 'INFINITY'
+```
+
+### Is it safe to restart PQS? Can data get corrupted?
+
+PQS was designed with failure friendliness - it does not require graceful shutdown or draining of active tasks. It is absolutely fine if the JVM process gets killed. On a restart, PQS will perform a clean-up procedure of data beyond the current watermark and then re-subscribe and continue processing from the watermark’s offset onwards (see `pqs-recover`).
+
+### What happens if multiple PQS instances are launched against the same data store?
+
+In case multiple PQS instances are launched against the same data store, no data corruption happens. However, they will be competing among themselves to become the exclusive writer, so it might affect the throughput of ledger stream consumption. It is **unadvisable** to do so (see also `pqs-high-availability`).
+
+### Which metrics are available? How to integrate them?
+
+PQS Docker images are published with the preconfigured Prometheus endpoint (see `pqs-observe`). By default, it listens on `0.0.0.0:9090`, so it is expected to be hooked into existing monitoring infrastructure.
+
+To that extent, PQS releases are accompanied by dashboards that can be imported into a Grafana instance for convenient visualisation of application health.
+
+It is highly advised to implement an observability platform in your environment. While logs help troubleshoot correctness issues, metrics are much more suitable for performance related troubleshooting.
+
+### PQS processing throughput seems low
+
+PQS had been benchmarked against high throughput scenarios of up to 100K+ events/sec. PQS processing pipeline is just an intermediary between two data systems - ledger (Canton) and relational database (Postgres), so most likely to troubleshoot such a cause, one would need to dig into one of these endpoints.
+
+Suggested areas of attention (see also `pqs-optimize`):
+
+- ledger
+
+  > - host/OS-level metrics - CPU, I/O, RAM, etc (look for resource saturation)
+  > - check with Canton for relevant metrics
+
+- Postgres
+
+  > - check minimum resources requirements for Postgres
+  > - check host/OS-level metrics - CPU, I/O, RAM, etc (look for resource saturation)
+  > - configuration settings and non-default overrides
+  > - metrics according to database (`pg_stat_statements`, `pg_stat_activity`)
+
+- PQS
+
+  > - check minimum resources requirements for PQS to avoid unexpected imbalance
+  >
+  > - check host/OS-level metrics - CPU, I/O, RAM, etc (look for resource saturation)
+  >
+  > - ensure these settings are not set too low (no less than defaults)
+  >
+  >   > - `--source-ledger-buffersize`
+  >   > - `--target-postgres-buffersize`
+  >   > - `--target-postgres-maxconnections` (because parallel processing which affects both throughput and latency is tied to this configuration)
+  >   > - check vital metrics look good (`pqs-troubleshoot-runbooks-pqs-metrics-dashboard-and-how-to-read-it`)
+
+### Dissecting the logs
+
+PQS emits a healthy volume of relevant information while running into `stdout` stream. `INFO` level describes application-level events such as:
+
+- ledger keep-alives
+- lifecycle information
+- authentication events
+- starting conditions - offsets, current watermark, etc
+- ingress of ledger events
+- conversion of payloads
+- watermark advancement
+
+`DEBUG` and `TRACE` levels add supplementary troubleshooting information. Caution needs to be exercised since increasing the log level might affect performance negatively along with exposing sensitive data (contract’s contents, for instance).
+
+### PQS metrics dashboard and how to read it
+
+PQS Dashboard is designed to read from top to bottom. It provides information from general to more specific, so it is good practice to scan through the dashboard as it goes and spot anomalies along the flow.
+
+### `Contracts > Churn`
+
+Per-template activity (creates/archives) on the ledger. This chart may be useful to gauge relative throughputs in business terms.
+
+![image](../../../assets/images/20250408-dashboard-1-contracts-churn.png)
+
+### `Contracts > Active`
+
+Per-template active contracts count. This chart may be useful to gauge composition of ACS
+
+![image](../../../assets/images/20250408-dashboard-1-contracts-active.png)
+
+### `Throughput > Throughputs`
+
+Current throughputs in terms of watermark advancement and stored events
+
+![image](../../../assets/images/20250408-dashboard-2-throughput-throughputs.png)
+
+### `Throughput > Ingested counts`
+
+Total counts (as measured in transactions and events dimensions) since latest PQS start
+
+![image](../../../assets/images/20250408-dashboard-2-throughput-ingested-counts.png)
+
+### `Throughput > Transaction lag`
+
+Tracks lag from ledger (delta between command completion determined by transaction’s `effective_at` attribute and ingestion by PQS pipeline as determined by wall clock). This is latency introduced by upstream processes outside of PQS control (Ledger API, network, etc). This chart indicates, for example, that 100 ms of latency has already been contributed to the overall end-to-end processing latency:
+
+![image](../../../assets/images/20250408-dashboard-2-throughput-tx-lag.png)
+
+### `Throughput > Watermark history`
+
+Time series of watermark progression throughput. This manifests the rate of ledger transactions becoming available for querying with PQS Read API functions. The typical shape of the chart is shown below. For uniform traffic it should represent smooth curves.
+
+![image](../../../assets/images/20250408-dashboard-2-throughput-watermark-history.png)
+
+Anomalies might include torn shapes and zigzag patterns with inactivities followed by spikes.
+
+### `Throughput > Transactions and events`
+
+The shape of ingested traffic in terms of transactions and events dimensions. Provides an idea of the coarseness of transaction sizes.
+
+![image](../../../assets/images/20250408-dashboard-2-throughput-tx-and-events.png)
+
+### `Throughput > Events breakdown`
+
+Provides breakdown of event types inside transactions (contents differs depending on pipeline source - flat transaction vs transaction tree)
+
+![image](../../../assets/images/20250408-dashboard-2-throughput-events-breakdown.png)
+
+### `Throughput > Waitpoints - ACS / streaming`
+
+*ACS = only during seeding from the ActiveContractSet Ledger API service*
+
+*streaming = normal processing pipeline*
+
+The internal pipeline is composed of distinct stages separated by queues (aka wait points). This chart indicates throughputs of items passing through them. Note that items might be distributed and consolidated at various stages, therefore relative throughputs can differ between the stages even for streamlined flow.
+
+![image](../../../assets/images/20250408-dashboard-2-throughput-waitpoints-streaming.png)
+
+Anomalies here might include change in relative throughputs indicating non-uniformity of neighbouring transaction sizes at certain points. This might indicate noisy neighbours potentially causing latency spikes for other transactions.
+
+### `Queue sizes`
+
+Time-series of histograms (vertical slices) that represent queue size of named wait points. Bottom all-green line indicates queue was empty all the time and this represents healthy situation without queueing or back-pressuring:
+
+![image](../../../assets/images/20250408-dashboard-3-queue-sizes-events-1.png)
+
+Below is a case where queueing was present due to downstream backpressure. This should be a matter of interest and suggests further investigation. Queue sizes are arranged cascadingly and the point at which queue size becomes empty points to a bottleneck, because pushback is propagated upstream.
+
+![image](../../../assets/images/20250408-dashboard-3-queue-sizes-events.png)
+
+### `Latency`
+
+Time taken to transfer a unit of work between wait points with different levels of granularity. Provides a percentile-based view as well historical histogram heatmap.
+
+In this chart we can observe from the left panel that the majority of operations take less than 10 ms with some outliers taking up to 30 ms. On the right chart we see more detailed insights, namely, there are two dominating operations with average latencies 1 ms and 5 ms each.
+
+![image](../../../assets/images/20250408-dashboard-4-latency-jdbc-connection.png)
+
+Anomalies might include huge differences between p50 and p95 percentiles. As well as non-uniform spread of latencies in the right part.
+
+Slowly increasing latencies across a lengthy time slice should cause concerns of service degradation.
+
+### `Latency > Total Transaction Handling Latency`
+
+Time taken by the entire PQS pipeline between receipt from Ledger API to being committed to Postgres.
+
+![image](../../../assets/images/20250408-dashboard-4-latency-total-tx-handling.png)
+
+### `JVM Metrics`
+
+Provides a series of metrics that are common across any JVM application in terms of memory management, CPU utilisation and garbage collection activity. The most crucial signals to monitor and interpret are:
+
+![image](../../../assets/images/20250408-dashboard-5-jvm-metrics.png)
+
+Anomalies might include `used` approaching `committed` and never decreasing. At the same time garbage collection frequency and time taken are increasing. These are the symptoms that out of memory conditions are imminent. If these parameters look healthy but PQS still exists with `137` exit code, then most likely a supervisor (Docker, Kubernetes) is terminating PQS forcefully - investigate potential configuration imbalance. Make sure that JVM memory-related settings are applied.
+
+### SQL queries useful for troubleshooting
+
+It is highly recommended that Postgres metrics are captured through appropriate tools (like [postgres-exporter](https://github.com/prometheus-community/postgres_exporter)) and shipped into metrics storage (like [Prometheus](https://prometheus.io/)) for historical trends identification and analysis. The following visualisations useful for analysis would be possible for creation:
+
+![image](../../../assets/images/20250408-dashboard-6-postgres-metrics-1.png)
+
+![image](../../../assets/images/20250408-dashboard-6-postgres-metrics-2.png)
+
+In the absence of integration into metrics storage, one can run the following queries when necessary for point-in-time view.
+
+### Statistics on disk vs index I/O
+
+```sql
+select stat.relname as relname,
+       seq_scan,
+       seq_tup_read,
+       idx_scan,
+       idx_tup_fetch,
+       heap_blks_read,
+       heap_blks_hit,
+       round((100 * heap_blks_hit::float / coalesce(nullif(heap_blks_hit + heap_blks_read, 0), 1))::numeric, 2) as heap_blks_ratio,
+       idx_blks_read,
+       idx_blks_hit,
+       round((100 * idx_blks_hit::float / coalesce(nullif(idx_blks_hit + idx_blks_read, 0), 1))::numeric, 2) as idx_blks_ratio
+from pg_stat_user_tables stat
+  right join pg_statio_user_tables statio on stat.relid = statio.relid;
+```
+
+Look for rows whose heap or index ratio diverge from 100 but the number of reads or scans is significant.
+
+### Currently executing queries
+
+```sql
+select pid,
+       datname,
+       usename,
+       application_name,
+       client_hostname,
+       client_port,
+       backend_start,
+       query_start,
+       (now() - query_start) as exec_time_so_far,
+       query,
+       state
+from pg_stat_activity
+where state = 'active';
+```
+
+### Top 10 queries by run time
+
+This query requires `pg_stat_statements` [extension](https://www.postgresql.org/docs/current/pgstatstatements.html) installed into PostgreSQL.
+
+```sql
+select total_exec_time,
+       calls,
+       query,
+       queryid,
+       toplevel
+from pg_stat_statements
+where not (
+    query ilike 'create %' or
+    query ilike 'alter %' or
+    query ilike 'drop %' or
+    query ilike 'grant %' or
+    query ilike 'revoke %' or
+    query ilike 'set %' or
+    query ilike 'do %' or
+    query like '%pg_stat%' or
+    query like '%pg_database%' or
+    query like '%pg_replication%' or
+    query like '%information_schema%' or
+    query like '%prune_contracts%' or
+    query like 'with deleted_transactions%' or
+    query like 'with deleted_contracts%' or
+    query = 'SELECT version()' or
+    query = 'SELECT $1' or
+    query = 'BEGIN' or
+    query = 'COMMIT' or
+    query = 'ROLLBACK'
+    )
+order by total_exec_time desc
+limit 10;
+```
+
+### All non-empty tables rows count
+
+```sql
+select schemaname, relname, n_live_tup as rows_in_table
+from pg_stat_user_tables
+where n_live_tup > 0
+order by rows_in_table desc, relname;
+```
+
+### Table data in cache per table
+
+```sql
+select *
+from (select relname,
+             heap_blks_read                                                                                           as disk_blocks_read,
+             heap_blks_hit                                                                                            as buffer_hits,
+             round((100 * heap_blks_hit::float / coalesce(nullif(heap_blks_hit + heap_blks_read, 0), 1))::numeric, 2) as cache_hit_ratio
+      from pg_statio_user_tables
+      order by cache_hit_ratio desc) as foo
+where cache_hit_ratio > 0;
+```
+
+### Index data in cache per table
+
+```sql
+select *
+from (select relname,
+             idx_blks_read                                                                                         as disk_blocks_read,
+             idx_blks_hit                                                                                          as buffer_hits,
+             round((100 * idx_blks_hit::float / coalesce(nullif(idx_blks_hit + idx_blks_read, 0), 1))::numeric, 2) as cache_hit_ratio
+      from pg_statio_user_tables
+      order by cache_hit_ratio desc) as foo
+where cache_hit_ratio > 0;
+```
+
+### `bgwriter` frequency
+
+```sql
+select total_checkpoints,
+       seconds_since_start / total_checkpoints / 60                   as minutes_between_checkpoints
+from (select extract(epoch from (now() - pg_postmaster_start_time())) as seconds_since_start,
+             (checkpoints_timed + checkpoints_req)                    as total_checkpoints
+      from pg_stat_bgwriter) as sub;
+```
+
+### Total sizes of tables
+
+```sql
+select n.nspname                                                  as "schema",
+       c.relname                                                  as "name",
+       case c.relkind
+           when 'r' then 'table'
+           when 'v' then 'view'
+           when 'm' then 'materialized view'
+           when 'i' then 'index'
+           when 's' then 'sequence'
+           when 't' then 'toast table'
+           when 'f' then 'foreign table'
+           when 'p' then 'partitioned table'
+           when 'i' then 'partitioned index' end                  as "type",
+       pg_catalog.pg_get_userbyid(c.relowner)                     as "owner",
+       case c.relpersistence
+           when 'p' then 'permanent'
+           when 't' then 'temporary'
+           when 'u' then 'unlogged' end                           as "persistence",
+       am.amname                                                  as "access method",
+       pg_catalog.pg_size_pretty(pg_catalog.pg_table_size(c.oid)) as "size",
+       pg_catalog.obj_description(c.oid, 'pg_class')              as "description"
+from pg_catalog.pg_class c
+  left join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+  left join pg_catalog.pg_am am on am.oid = c.relam
+where c.relkind in ('r', 'p', '')
+  and n.nspname <> 'pg_catalog'
+  and n.nspname !- '-pg_toast'
+  and n.nspname <> 'information_schema'
+  and pg_catalog.pg_table_is_visible(c.oid)
+order by 1, 2;
+```
+
+### Total sizes of indexes
+
+```sql
+select n.nspname                                                  as "schema",
+       c.relname                                                  as "name",
+       case c.relkind
+           when 'r' then 'table'
+           when 'v' then 'view'
+           when 'm' then 'materialized view'
+           when 'i' then 'index'
+           when 's' then 'sequence'
+           when 't' then 'toast table'
+           when 'f' then 'foreign table'
+           when 'p' then 'partitioned table'
+           when 'i' then 'partitioned index' end                  as "type",
+       pg_catalog.pg_get_userbyid(c.relowner)                     as "owner",
+       c2.relname                                                 as "table",
+       case c.relpersistence
+           when 'p' then 'permanent'
+           when 't' then 'temporary'
+           when 'u' then 'unlogged' end                           as "persistence",
+       am.amname                                                  as "access method",
+       pg_catalog.pg_size_pretty(pg_catalog.pg_table_size(c.oid)) as "size",
+       pg_catalog.obj_description(c.oid, 'pg_class')              as "description"
+from pg_catalog.pg_class c
+  left join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+  left join pg_catalog.pg_am am on am.oid = c.relam
+  left join pg_catalog.pg_index i on i.indexrelid = c.oid
+  left join pg_catalog.pg_class c2 on i.indrelid = c2.oid
+where c.relkind in ('i', 'i', '')
+  and n.nspname <> 'pg_catalog'
+  and n.nspname !- '-pg_toast'
+  and n.nspname <> 'information_schema'
+  and pg_catalog.pg_table_is_visible(c.oid)
+order by 1, 2;
+```
+
+### Largest contract instances by payload size
+
+```sql
+select template_fqn,
+       contract_id,
+       octet_length(payload::text)::bigint as size_in_bytes
+from active()
+order by size_in_bytes desc
+limit 10;
+```
+
+### Largest transactions by payload size
+
+```sql
+select created_at_offset,
+       sum(octet_length(payload::text)::bigint) as size_in_bytes
+from creates()
+group by created_at_offset
+order by size_in_bytes desc
+limit 10;
+```
+
+### Largest transactions by events count
+
+```sql
+select "offset",
+       count(*) as events_in_tx
+from __events, __transactions
+where __events.tx_ix = __transactions.ix
+group by "offset"
+order by events_in_tx desc
+limit 10;
+```
+
+{/* COPIED_END */}
