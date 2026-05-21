@@ -92,6 +92,15 @@ def package_prefixes(source_config: dict[str, Any]) -> tuple[str, ...]:
     return tuple(configured)
 
 
+def configured_versions(source_config: dict[str, Any]) -> set[str] | None:
+    configured = source_config.get("versions")
+    if configured is None:
+        return None
+    if not isinstance(configured, list) or not all(isinstance(item, str) and item for item in configured):
+        raise ValueError("Source config versions must be a list of non-empty strings")
+    return set(configured)
+
+
 def package_matches(package_name: str, *, prefixes: tuple[str, ...]) -> bool:
     return any(package_name.startswith(prefix) for prefix in prefixes)
 
@@ -641,7 +650,7 @@ def main() -> int:
     args = parse_args()
     source_config = load_json(Path(args.source_config).resolve())
     prefixes = package_prefixes(source_config)
-    include_versions = set(args.version) if args.version else None
+    include_versions = set(args.version) if args.version else configured_versions(source_config)
     min_version = args.min_version or source_config.get("min_version") or "0.0.0"
     if not isinstance(min_version, str):
         raise ValueError("min_version must be a string")

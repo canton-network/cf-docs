@@ -37,12 +37,16 @@ def version_key(version: str) -> tuple[int, ...]:
 
 
 def github_json(url: str) -> Any:
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "User-Agent": USER_AGENT,
+    }
+    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
     request = urllib.request.Request(
         url,
-        headers={
-            "Accept": "application/vnd.github+json",
-            "User-Agent": USER_AGENT,
-        },
+        headers=headers,
     )
     with urllib.request.urlopen(request, timeout=180) as response:
         return json.loads(response.read().decode("utf-8"))
@@ -127,6 +131,15 @@ def selected_releases(
     if not releases:
         raise ValueError(f"No published releases matched the configured Splice OpenAPI selection for {release_repo}")
     return releases
+
+
+def configured_versions(source_config: dict[str, Any]) -> set[str] | None:
+    configured = source_config.get("versions")
+    if configured is None:
+        return None
+    if not isinstance(configured, list) or not all(isinstance(item, str) and item for item in configured):
+        raise ValueError("Source config versions must be a list of non-empty strings")
+    return set(configured)
 
 
 def resolve_publish_release(
@@ -540,7 +553,7 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     source_config = load_json(Path(args.source_config).resolve())
-    include_versions = set(args.version) if args.version else None
+    include_versions = set(args.version) if args.version else configured_versions(source_config)
     releases = selected_releases(source_config=source_config, include_versions=include_versions)
     publish_release = resolve_publish_release(
         source_config=source_config,

@@ -163,6 +163,15 @@ def stable_release_versions(
     return selected
 
 
+def configured_versions(source_config: dict[str, Any]) -> set[str] | None:
+    configured = source_config.get("versions")
+    if configured is None:
+        return None
+    if not isinstance(configured, list) or not all(isinstance(item, str) and item for item in configured):
+        raise ValueError("Source config versions must be a list of non-empty strings")
+    return set(configured)
+
+
 def docs_json_page_ref(path: Path, docs_json_path: Path) -> str:
     relative = path.resolve().relative_to(docs_json_path.resolve().parent)
     if relative.suffix != ".mdx":
@@ -364,7 +373,7 @@ def main() -> int:
     ensure_repo_direnv(repo_root=REPO_ROOT, script_path=Path(__file__).resolve(), argv=sys.argv[1:])
     args = parse_args()
     source_config = load_json(Path(args.source_config).resolve())
-    include_versions = set(args.version) if args.version else None
+    include_versions = set(args.version) if args.version else configured_versions(source_config)
     remote = str(source_config.get("remote") or "")
     release_repo = str(source_config.get("release_repo") or DEFAULT_RELEASE_REPO)
     tag_prefix = str(source_config.get("tag_prefix") or "")

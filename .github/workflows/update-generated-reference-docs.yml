@@ -1,0 +1,76 @@
+name: Update generated reference docs
+
+on:
+  schedule:
+    - cron: "17 8 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: update-generated-reference-docs
+  cancel-in-progress: false
+
+jobs:
+  update-generated-reference-docs:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_TOKEN: ${{ secrets.EXTERNAL_REPO_TOKEN || github.token }}
+      GH_TOKEN: ${{ secrets.EXTERNAL_REPO_TOKEN || github.token }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+
+      - name: Install direnv
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y direnv
+
+      - name: Trust direnv
+        run: direnv allow .
+
+      - name: Update source pins
+        id: update
+        run: |
+          mkdir -p .internal
+          direnv exec . python3 scripts/update_reference_doc_sources.py \
+            --apply \
+            --summary .internal/reference-doc-update-summary.json
+
+      - name: Regenerate reference docs
+        if: steps.update.outputs.has_updates == 'true'
+        run: direnv exec . npm run generate:all-reference-docs
+
+      - name: Run tests
+        if: steps.update.outputs.has_updates == 'true'
+        run: direnv exec . python3 -m pytest tests
+
+      - name: Check whitespace
+        if: steps.update.outputs.has_updates == 'true'
+        run: git diff --check
+
+      - name: Upload update artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-reference-doc-update
+          if-no-files-found: ignore
+          path: |
+            .internal/reference-doc-update-summary.json
+            .internal/generated/x2mdx/**/*.json
+
+      - name: Create pull request
+        if: steps.update.outputs.has_updates == 'true'
+        uses: peter-evans/create-pull-request@v8
+        with:
+          token: ${{ secrets.DOCS_PR_TOKEN }}
+          branch: generated-reference-docs/update
+          base: main
+          title: Update generated reference docs from upstream releases
+          commit-message: Update generated reference docs from upstream releases
+          body: ${{ steps.update.outputs.pr_body }}

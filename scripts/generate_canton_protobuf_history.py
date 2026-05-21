@@ -122,6 +122,15 @@ def load_excluded_versions(source_config: dict[str, Any]) -> set[str]:
     return set(configured)
 
 
+def configured_versions(source_config: dict[str, Any]) -> set[str] | None:
+    configured = source_config.get("versions")
+    if configured is None:
+        return None
+    if not isinstance(configured, list) or not all(isinstance(item, str) and item for item in configured):
+        raise ValueError("Source config versions must be a list of non-empty strings")
+    return set(configured)
+
+
 def run(args: list[str], *, cwd: Path | None = None, capture: bool = False) -> str:
     kwargs: dict[str, Any] = {
         "cwd": str(cwd) if cwd else None,
@@ -647,7 +656,7 @@ def main() -> int:
     if not isinstance(bundle_proto_dir, str) or not bundle_proto_dir:
         raise ValueError("Source config must define bundle_proto_dir")
 
-    include_versions = set(args.version) if args.version else None
+    include_versions = set(args.version) if args.version else configured_versions(source_config)
     excluded_versions = load_excluded_versions(source_config)
     if include_versions is not None:
         include_versions -= excluded_versions
