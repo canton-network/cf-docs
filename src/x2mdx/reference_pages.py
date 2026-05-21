@@ -112,6 +112,31 @@ class DetailsHistoryVersionRow:
     deprecated: str = "-"
     replaced: str = "-"
 
+    @property
+    def change_bubbles(self) -> list["DetailsHistoryBubble"]:
+        entries = [
+            ("added", self.added, "added"),
+            ("changed", self.changed, "changed"),
+            ("removed", self.removed, "removed"),
+            ("deprecated", self.deprecated, "deprecated"),
+            ("replaced", self.replaced, "replaced"),
+        ]
+        bubbles = [
+            DetailsHistoryBubble(label=label, value=value, tone=tone)
+            for label, value, tone in entries
+            if has_meaningful_count(value)
+        ]
+        if bubbles:
+            return bubbles
+        return [DetailsHistoryBubble(label="surface changes", value="0", tone="neutral")]
+
+
+@dataclass(frozen=True)
+class DetailsHistoryBubble:
+    label: str
+    value: str
+    tone: str = "neutral"
+
 
 @dataclass(frozen=True)
 class DetailsHistoryChange:
@@ -225,6 +250,11 @@ def compact_text(text: str, *, limit: int = 160) -> str:
     if len(normalized) <= limit:
         return normalized
     return normalized[: limit - 3].rstrip() + "..."
+
+
+def has_meaningful_count(value: str) -> bool:
+    normalized = str(value or "").strip()
+    return bool(normalized and normalized not in {"-", "0"})
 
 
 def safe_markdown_text(text: str) -> str:
