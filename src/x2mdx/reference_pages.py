@@ -78,6 +78,47 @@ class ReferenceCard:
     badges: list[ReferenceBadge] = field(default_factory=list)
     meta_items: list[ReferenceMetaItem] = field(default_factory=list)
 
+    @property
+    def status_label(self) -> str:
+        primary = self.status_primary_badge
+        if primary is None:
+            return "Current"
+        return primary.label
+
+    @property
+    def status_tone(self) -> str:
+        primary = self.status_primary_badge
+        if primary is None:
+            return "neutral"
+        if primary.label.lower().startswith("deprecated"):
+            return "deprecated"
+        return primary.tone
+
+    @property
+    def status_chips(self) -> list[ReferenceBadge]:
+        primary = self.status_primary_badge
+        ignored = {"protocol", "neutral"}
+        chips: list[ReferenceBadge] = []
+        for badge in self.badges:
+            if badge == primary or badge.tone in ignored:
+                continue
+            chips.append(badge)
+        return chips
+
+    @property
+    def status_primary_badge(self) -> ReferenceBadge | None:
+        priority = [
+            lambda badge: badge.label.lower().startswith("removed"),
+            lambda badge: badge.label.lower().startswith("since"),
+            lambda badge: badge.label.lower().startswith("changed"),
+            lambda badge: badge.label.lower().startswith("deprecated"),
+        ]
+        for predicate in priority:
+            match = next((badge for badge in self.badges if predicate(badge)), None)
+            if match is not None:
+                return match
+        return next((badge for badge in self.badges if badge.tone not in {"protocol", "neutral"}), None)
+
 
 @dataclass(frozen=True)
 class ReferenceSection:

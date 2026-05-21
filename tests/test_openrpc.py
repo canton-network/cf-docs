@@ -540,6 +540,8 @@ class OpenRpcTests(unittest.TestCase):
         self.assertIn("1 added, 1 changed.", rendered)
         self.assertNotIn("| Added | Changed | Removed | Deprecated | Replaced |", rendered)
         self.assertIn("## Current reference inventory", rendered)
+        self.assertGreaterEqual(rendered.count('class="x2mdx-ref-status-table'), 2)
+        self.assertIn("<th scope=\"col\">TYPE</th>", rendered)
         self.assertIn("## Change details", rendered)
         self.assertIn("Added balance", rendered)
         self.assertIn("Changed status", rendered)
