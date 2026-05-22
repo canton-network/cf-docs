@@ -468,19 +468,19 @@ A common development cycle with `dpm`:
 
 {/* COPIED_START source="docs-website:docs/replicated/daml/3.4/sdk/component-howtos/application-development/dpm-sandbox.rst" hash="5f8df40b" */}
 
-# Sandbox<span id="component-howtos-application-development-daml-sandbox"></span>
+## Sandbox<span id="component-howtos-application-development-daml-sandbox"></span>
 
 Sandbox is a program for running a Canton ledger with your Daml code. The ledger uses the simplest topology possible: a single Participant Node connected to a Synchronizer Node. Use the sandbox when you need access to a Canton ledger running your Daml code and matching the target Participant Node topology is not required.
 
-## Install
+### Install
 
 Install the Sandbox by installing dpm.
 
-## Configure
+### Configure
 
 To configure the Sandbox, use the command line.
 
-### Command line configuration
+#### Command line configuration
 
 To view all available command line configuration options for Sandbox, run `dpm sandbox --help` in your terminal:
 
@@ -512,7 +512,7 @@ Available options:
 
 Any unrecognized command-line arguments will be treated as arguments to be supplied to the underlying Canton JAR. Display these options by running `dpm sandbox --canton-help` in your terminal.
 
-### Canton configuration
+#### Canton configuration
 
 Behind the scenes, Sandbox runs an underlying Canton ledger with a default configuration file to initialize a participant named `sandbox`, a sequencer named `sequencer1`, and a mediator named `mediator1`.
 
@@ -526,7 +526,7 @@ Configure the underlying Canton ledger further in one of two ways:
   dpm sandbox -C canton.participants.sandbox.ledger-api.port=9999
   ```
 
-### Canton Declarative API
+#### Canton Declarative API
 
 The declarative API allows specifying DARs, Parties and Users desired to be present on the Canton ledger. The ledger will automatically take care of uploading the DARs, and creating the parties and users.
 
@@ -541,7 +541,7 @@ canton.participants.sandbox.alpha-dynamic.dars = [
 ]
 ```
 
-## Operate
+### Operate
 
 Start Canton with a single participant:
 
@@ -552,7 +552,7 @@ Listening at port 6865
 Canton sandbox is ready.
 ```
 
-### Interacting with Sandbox's ledger
+#### Interacting with Sandbox's ledger
 
 Once the sandbox is running, you may interact with it the same way you would for any Canton instance. For example, you may upload dars to it, or run scripts against it:
 
@@ -563,7 +563,7 @@ $ dpm script --ledger-host localhost --port 6865 --dar <path to DAR> --script-na
 
 Because `dpm sandbox` is a Canton instance, all documentation for using Canton applies.
 
-### Connecting to Sandbox's console
+#### Connecting to Sandbox's console
 
 Once you have a Sandbox running locally (i.e. after running `dpm sandbox`) you may connect to Sandbox remotely by running the `dpm canton-console` command in a separate terminal:
 
@@ -620,11 +620,11 @@ As such, you can interact with the running Sandbox using the console, just like 
 
 For an in-depth guide on how to use this tool against a production, staging or testing environment, consult the main documentation for the Canton console.
 
-### Testing your Daml contracts
+#### Testing your Daml contracts
 
 Sandbox is primarily used as the first step in testing your Daml contracts in isolation
 
-### Run with authorization
+#### Run with authorization
 
 By default, Sandbox accepts all valid Ledger API requests without performing any request authorization.
 
@@ -681,7 +681,7 @@ Similarly, you can use the following command for ES512 keys:
 openssl req -x509 -nodes -days 3650 -newkey ec:<(openssl ecparam -name secp521r1) -keyout ecdsa512.key -out ecdsa512.crt
 ```
 
-### Run with TLS
+#### Run with TLS
 
 To enable TLS, you need to specify the private key for your server and the certificate chain. This enables TLS for both the gRPC Ledger API and the Canton Admin API. When enabling client authentication, you also need to specify client certificates which can be used by Canton’s internal processes. Note that the identity of the application will not be proven by using this method, i.e. the `application_id` field in the request is not necessarily correlated with the CN (Common Name) in the certificate. Below, you can see an example config. For more details on TLS, refer to Canton’s documentation on TLS configuration.
 
@@ -712,7 +712,7 @@ canton.participants.sandbox.ledger-api {
 }
 ```
 
-### Dev Protocol
+#### Dev Protocol
 
 To enable the canton dev protocol:
 
@@ -729,9 +729,9 @@ EOF > dev-protocol.conf
 CANTON_PROTOCOL_VERSION=dev dpm sandbox -c dev-protocol.conf
 ```
 
-## Troubleshoot
+### Troubleshoot
 
-### Failed to bind to address
+#### Failed to bind to address
 
 By default, Sandbox reserves five ports for its Canton services:
 
@@ -769,7 +769,7 @@ If killing the existing process isn't an option, or if you don't have the permis
 - Use --mediator-admin-port= to override binding to `6869`
 - Use `--json-api-port` to change the port to which the JSON API binds.
 
-### SDK not installed
+#### SDK not installed
 
 If the `daml.yaml` file of the project you are currently in specifies a version of the dpm SDK that is not installed, you may get the following error message:
 
@@ -785,30 +785,53 @@ To fix this, you can:
 
 {/* COPIED_END */}
 
-{/* COPIED_START source="docs-website:docs/replicated/dpm/3.5/manual-install.rst" hash="a0b738c0" */}
+{/* COPIED_START source="docs-website:docs/replicated/dpm/3.5/manual-install.rst" hash="3c8275c7" */}
 
-
-# Manual Installation Instructions
-
-## Manual Mac/Linux Installation
+## Mac/Linux
 
 If you cannot / wish not to use the shell script to install for Linux or OSX, you can alternatively install dpm manually by running this set of commands in your terminal:
 
-The latest stable release version can be found by hitting the following URL:
-
-```shell
+```bash
+#get latest version number
 VERSION="$(curl -sS "https://get.digitalasset.com/install/latest")"
+
+# set your architecture to either amd64 | arm64
+ARCH="$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"
+
+# set your OS to either darwin or linux
+OS="$(uname | tr '[:upper:]' '[:lower:]')"
+
+#pull down appropriate tarball for your OS and architecture
+readonly TARBALL="dpm-${VERSION}-${OS}-${ARCH}.tar.gz"
+
+# determine location of tarball to download
+TARBALL_URL="https://get.digitalasset.com/install/dpm-sdk/${TARBALL}"
+
+# make tmpdir
+TMPDIR="$(mktemp -d)"
+
+# download tarball
+curl -SLf "${TARBALL_URL}" --output "${TMPDIR}/${TARBALL}" --progress-bar "$@"
+
+# create directory to extract into
+extracted="${TMPDIR}/extracted"
+mkdir -p "${extracted}"
+
+# untar to extracted directory
+tar xzf "${TMPDIR}/${TARBALL}" -C "${extracted}" --strip-components 1
+
+# bootstrap dpm
+"${extracted}/bin/dpm" bootstrap "${extracted}"
+
+# cleanup tmpdir
+rm -rf "${TMPDIR}"
 ```
 
-And you can then use this to retrieve the tarball of the full installation, extract, and install, as outlined in the full instructions below.
+## Windows
 
-{/* literalinclude-slice: manual-install.sh (invalid :lines: range "4-") */}
+Download and unpack the latest dpm sdk version's [archive (.zip)](https://get.digitalasset.com/install/latest-windows-archive.html), then:
 
-## Manual Windows Installation
-
-Download and unpack the [windows dpm-sdk archive (.zip)](https://get.digitalasset.com/install/latest-windows-archive.html), then:
-
-```powershell
+``` powershell
 # Extract the downloaded zip ($ZIP_PATH) to temp directory ($EXTRACTED)
 # Avoid using the system's temp directory as the user may not have rights to it
 New-Item -ItemType Directory -Path $EXTRACTED | Out-Null
@@ -822,32 +845,5 @@ $env:DPM_HOME = "<user-owned directory>"
 
 & "$EXTRACTED\windows-amd64\bin\dpm.exe" bootstrap $EXTRACTED\windows-amd64
 ```
-
-## Unstable Version Manual Installation
-
-Preview / unstable versions are also available for experimentation, though it is always recommended to use the stable versions listed above instead.
-
-### Unstable Mac / Linux
-
-Follow the Mac/Linux installation instructions to install an unstable version, but note the differences in VERSION and TARBALL_URL.
-
-The latest unstable release version can be found by hitting the following URL:
-
-```shell
-VERSION="$(curl -sS "https://get.digitalasset.com/unstable/install/latest")"
-```
-
-The unstable tarball can be retrieved from the following URL:
-
-```shell
-# determine location of tarball to download
-TARBALL_URL="https://get.digitalasset.com/unstable/install/dpm-sdk/${TARBALL}"
-```
-
-### Unstable Windows
-
-Download and unpack the latest [windows unstable dpm-sdk archive (.zip)](https://get.digitalasset.com/unstable/install/latest-windows-archive.html),
-then follow [Windows Installation](#manual-windows-installation) instructions.
-
 
 {/* COPIED_END */}

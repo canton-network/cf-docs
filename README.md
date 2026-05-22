@@ -72,6 +72,47 @@ python3 scripts/generate_all_reference_docs.py
 
 Use `--dry-run` to print the exact per-step commands without executing them.
 
+### Generate the Version Compatibility Dashboard
+
+The version dashboard generator collects the public sources that are safe to automate, preserves the fields that still need a manual or owner-approved source, rewrites the dashboard config, and regenerates the published MDX snippet consumed by the version dashboard page.
+
+Run:
+
+```bash
+python3 scripts/generate_network_component_versions.py
+```
+
+or:
+
+```bash
+npm run generate:version-compatibility-dashboard
+```
+
+By default this writes:
+
+- `config/repo-version-config.json`
+- `docs-main/snippets/generated/version-dashboard-data.mdx`
+
+Use `--dry-run` to inspect the generated config without writing files.
+
+Source rules:
+
+| Dashboard entry | Sourcing rule |
+| --- | --- |
+| `Splice` | Read from the network `/info` endpoint: MainNet `https://docs.global.canton.network.sync.global/info`, TestNet `https://docs.test.global.canton.network.sync.global/info`, DevNet `https://docs.dev.global.canton.network.sync.global/info`. Cross-check against the same network's `/index.html` Docker image tag and Helm chart version. |
+| `Canton` | Keep as manual/fallback until an owner-approved public source is confirmed. The config key is still `damlSdk` for compatibility with the existing dashboard component. |
+| `Daml SDK installer` | Do not use legacy `https://get.daml.com/`; that is the old 2.x Daml assistant path. For Daml 3 / DPM, install DPM with `curl https://get.digitalasset.com/install/install.sh | sh`, then use `dpm install latest`. The latest stable SDK version is exposed at `https://get.digitalasset.com/install/latest`. |
+| `PQS` | Keep as manual/fallback for now. A generator can infer a recommendation from PQS docs compatibility tables, but recent updates were Slack-sourced, so this needs owner confirmation before being treated as authoritative. |
+| `Token Standard` | Read from the npm `latest` dist-tag for `@canton-network/core-token-standard`. |
+| `Wallet SDK` | Read from the npm `latest` dist-tag for `@canton-network/wallet-sdk`. |
+| `dApp SDK` | Read from the npm `latest` dist-tag for `@canton-network/dapp-sdk`. |
+| `Wallet Gateway` | Keep as manual/fallback from the Wallet Gateway Docker image package until package API access is confirmed. Wallet team guidance says not to use the npm package for this row. |
+| `Min Protocol Version` | Keep as manual/fallback until a public live source is available. |
+| `Migration ID` | Read from `synchronizer.active.migration_id` on the network's `/info` endpoint and validate against `sv.migration_id`. |
+| `Splice DAR Versions` | Keep as manual/fallback. Release bundles show shipped DARs, but review on the original automation PR noted that they are not necessarily the DAR versions currently in use. |
+| `Release Notes` | Link to the observed Splice release. |
+| `Primary Scan API` | Static canonical `scan.sv-1...` endpoint for each network. |
+
 ### Generate external snippets
 
 External snippet extraction from source repositories is documented in [config/snippet-config/update-workflows.md](config/snippet-config/update-workflows.md). Use that workflow when updating snippet configs under `config/snippet-config/` or regenerating checked-in snippets under `docs-main/snippets/external/`.

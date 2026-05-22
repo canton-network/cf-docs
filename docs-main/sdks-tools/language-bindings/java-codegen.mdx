@@ -3,7 +3,7 @@ title: "Daml Codegen for Java"
 description: "Component how-to: Daml Codegen for Java"
 ---
 
-{/* COPIED_START source="docs-website:docs/replicated/daml/3.4/sdk/component-howtos/application-development/daml-codegen-java.rst" hash="4e4db5d8" */}
+{/* COPIED_START source="docs-website:docs/replicated/daml/3.4/sdk/component-howtos/application-development/daml-codegen-java.rst" hash="bbdcc685" */}
 
 Use the Daml Codegen for Java (`dpm codegen-java`) to generate Java classes representing all Daml data types defined in a Daml Archive (.dar) file. These classes simplify constructing the types required by the Java gRPC bindings for the gRPC Ledger API; for example, `com.daml.ledger.api.v2.CreateCommand` and `com.daml.ledger.api.v2.ExerciseCommand`. They also provide JSON decoding utilities, making it easier to work with JSON when using the JSON Ledger API.
 
@@ -127,8 +127,10 @@ package foo.bar.baz;
 A Daml record is represented by a Java class with fields that have the same name as the Daml record fields. A Daml field having the type of another record is represented as a field having the type of the generated class for that record.
 
 ```daml
--- Code from: ./code-snippets/Com/Acme/ProductTypes.daml
--- [Include actual code example here]
+module Com.Acme.ProductTypes where
+
+data Person = Person with name : Name; age : Decimal
+data Name = Name with firstName : Text; lastName : Text
 ```
 
 A Java file that defines the class for the type `Person` is generated:
@@ -177,12 +179,27 @@ The Daml Codegen generates the following classes for a Daml template:
 > Represents an actual contract on the ledger. It contains a field for the contract ID (of type `TemplateName.ContractId`) and a field for the template data (of type `TemplateName`). With the static method `TemplateName.Contract.fromCreatedEvent`, you can deserialize a CreatedEvent to an instance of `TemplateName.Contract`.
 >
 > ```daml
--- Code from: >
-> ./code-snippets/Com/Acme/Templates.daml
+> module Com.Acme.Templates where
 >
+> data BarKey =
+>   BarKey
+>     with
+>       p : Party
+>       t : Text
 >
--- [Include actual code example here]
-```
+> template Bar
+>   with
+>     owner: Party
+>     name: Text
+>   where
+>     signatory owner
+>
+>     choice Bar_SomeChoice: Bool
+>       with
+>         aName: Text
+>       controller owner
+>       do return True
+> ```
 
 In particular, the codegen generates a file that defines six Java classes and one interface:
 
@@ -255,8 +272,12 @@ public final class Bar extends Template {
 A variant or sum type is a type with multiple constructors, where each constructor wraps a value of another type. The generated code is comprised of an abstract class for the variant type itself and a subclass thereof for each constructor. Classes for variant constructors are similar to classes for records.
 
 ```daml
--- Code from: ./code-snippets/Com/Acme/Variants.daml
--- [Include actual code example here]
+module Com.Acme.Variants where
+
+data BookAttribute = Pages Int
+                   | Authors [Text]
+                   | Title Text
+                   | Published with year: Int; publisher: Text
 ```
 
 The Java code generated for this variant is:
@@ -331,8 +352,9 @@ public class Published extends BookAttribute {
 An enum type is a simplified sum type with multiple constructors but without argument nor type parameters. The generated code is standard java Enum whose constants map enum type constructors.
 
 ```daml
--- Code from: ./code-snippets/Com/Acme/Enum.daml
--- [Include actual code example here]
+module Com.Acme.Enum where
+
+data Color = Red | Blue | Green
 ```
 
 The Java code generated for this variant is:
@@ -362,8 +384,15 @@ The Daml Codegen uses Java Generic types to represent Daml parameterized types.
 This Daml fragment defines the parameterized type `Attribute`, used by the `BookAttribute` type for modeling the characteristics of the book:
 
 ```daml
--- Code from: ./code-snippets/Com/Acme/ParameterizedTypes.daml
--- [Include actual code example here]
+module Com.Acme.ParameterizedTypes where
+
+data Attribute a = Attribute
+    with v : a
+
+data BookAttributes = BookAttributes with
+   pages : (Attribute Int)
+   authors : (Attribute [Text])
+   title : (Attribute Text)
 ```
 
 The Daml Codegen generates a Java file with a generic class for the `Attribute a` data type:
@@ -463,8 +492,37 @@ Attribute<List<String>> authorsAttribute2 =
 From this Daml definition:
 
 ```daml
--- Code from: ./code-snippets/Interfaces.daml
--- [Include actual code example here]
+module Interfaces where
+
+data TIfView = TIfView { name : Text }
+
+interface TIf where
+  viewtype TIfView
+  getOwner: Party
+  dup: Update (ContractId TIf)
+  choice Ham: ContractId TIf with
+    controller getOwner this
+    do dup this
+  choice Useless: ContractId TIf with
+      interfacely: ContractId TIf
+    controller getOwner this
+    do
+      dup this
+
+template Child
+    with
+    party: Party
+  where
+    signatory party
+    choice Bar: () with
+      controller party
+      do
+        return ()
+
+    interface instance TIf for Child where
+      view = TIfView "Child"
+      getOwner = party
+      dup = toInterfaceContractId <$> create this
 ```
 
 The generated file for the interface definition can be seen below. Effectively it is a class that contains only the inner type ContractId because one will always only be able to deal with Interfaces via their ContractId.
