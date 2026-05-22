@@ -13,7 +13,11 @@ RC_VERSION_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)-rc(\d+)$")
 STABLE_VERSION_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
 
 GROUP_KIND_LABELS = {
+    "Classes": "Class",
+    "Enumerations": "Enumeration",
     "Interfaces": "Interface",
+    "Namespaces": "Namespace",
+    "References": "Reference",
     "Type Aliases": "Type Alias",
     "Variables": "Variable",
     "Functions": "Function",
@@ -243,6 +247,25 @@ def render_type(type_obj: Any) -> str:
         if type_arguments:
             name += "<" + ", ".join(render_type(arg) for arg in type_arguments) + ">"
         return name
+    if kind == "query":
+        return f"typeof {render_type(type_obj.get('queryType'))}"
+    if kind == "typeOperator":
+        operator = str(type_obj.get("operator") or "")
+        target = render_type(type_obj.get("target"))
+        return f"{operator} {target}".strip()
+    if kind == "indexedAccess":
+        return f"{render_type(type_obj.get('objectType'))}[{render_type(type_obj.get('indexType'))}]"
+    if kind == "conditional":
+        check_type = render_type(type_obj.get("checkType"))
+        extends_type = render_type(type_obj.get("extendsType"))
+        true_type = render_type(type_obj.get("trueType"))
+        false_type = render_type(type_obj.get("falseType"))
+        return f"{check_type} extends {extends_type} ? {true_type} : {false_type}"
+    if kind == "mapped":
+        parameter = str(type_obj.get("parameter") or "K")
+        parameter_type = render_type(type_obj.get("parameterType"))
+        template_type = render_type(type_obj.get("templateType"))
+        return f"{{ [{parameter} in {parameter_type}]: {template_type} }}"
     if kind == "array":
         return f"{render_type(type_obj.get('elementType'))}[]"
     if kind == "union":
@@ -269,6 +292,17 @@ def render_type(type_obj: Any) -> str:
             return "{ " + "; ".join(members) + " }" if members else "{}"
         return "{}"
     return str(type_obj)
+
+
+def normalize_source_location(file_name: Any, line: Any) -> str:
+    if not file_name:
+        return ""
+    normalized = str(file_name)
+    if "/package/" in normalized:
+        normalized = normalized.split("/package/", 1)[1]
+    if line:
+        return f"{normalized}:{line}"
+    return normalized
 
 
 def build_member_docs(children: list[dict[str, Any]]) -> list[dict[str, str]]:
@@ -481,10 +515,7 @@ def build_export_doc(group_title: str, node: dict[str, Any], *, group_index: int
         if isinstance(first, dict):
             file_name = first.get("fileName")
             line = first.get("line")
-            if file_name and line:
-                source_location = f"{file_name}:{line}"
-            elif file_name:
-                source_location = str(file_name)
+            source_location = normalize_source_location(file_name, line)
 
     export_comment = node.get("comment") if isinstance(node.get("comment"), dict) else None
     lifecycle_comment = export_comment
