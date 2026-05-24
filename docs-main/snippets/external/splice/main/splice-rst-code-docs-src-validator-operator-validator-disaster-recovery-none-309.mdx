@@ -1,33 +1,33 @@
 ```
-   // replace YOUR_PARTY_ID by the ID of your external party
-   val partyId = PartyId.tryFromProtoPrimitive("YOUR_PARTY_ID")
-   val participantId = participant.id
-   val synchronizerId = participant.synchronizers.id_of("global")
+   those from the rejected ``OwnerToKeyMapping`` in your participant logs, and replace the
+   old participant ID with your actual old participant ID:
 
-   // generate topology transaction
-   val partyToParticipant = PartyToParticipant.tryCreate(
-       partyId = partyId,
-       threshold = PositiveInt.one,
-       participants = Seq(
-         HostingParticipant(
-           participantId,
-           ParticipantPermission.Confirmation,
-         )
-       ),
-     )
+   .. code::
 
-   import com.digitalasset.canton.admin.api.client.commands.TopologyAdminCommands.Write.GenerateTransactions
-   val topologyTransaction = participant.topology.transactions.generate(
-     Seq(
-       GenerateTransactions.Proposal(
-         partyToParticipant,
-         TopologyStoreId.Synchronizer(synchronizerId),
-       )
-     )
-   ).head
+      val keys = Seq("<signing-key-id-prefix>", "<encryption-key-id-prefix>").map(prefix =>
+        participant.keys.public.list().filter(_.publicKey.id.toProtoPrimitive.startsWith(prefix)).head.publicKey)
 
-   // Print out the hash that needs to be signed. Note that you need to sign
-   // the actual bytes the hex string represents not the hex string
-   topologyTransaction.hash.hash.toHexString
+      val oldParticipantId = ParticipantId.fromProtoPrimitive("<old-participant-id>", "participant").toOption.get
+      val otk = OwnerToKeyMapping(member = oldParticipantId, keys = NonEmpty.from(keys).get)
+      participant.topology.owner_to_key_mappings.propose(otk, force = ForceFlag.AlienMember)
 
+3. Start the validator app using your original identities dump configuration.
+
+.. _validator_recover_external_party:
+
+Recover the Coin balance of an external party
++++++++++++++++++++++++++++++++++++++++++++++
+
+For a party relying on external signing, a similar procedure can be
+used to recover its coin balance in case the validator originally
+hosting it becomes unusable for whatever reason.
+
+.. warning:: The target validator that you use to host the party after
+             recovery **must** be a **completely new validator**. An existing validator
+             may brick completely due to some limitations around party
+             migrations and there is no way to recover from that at
+             this point. Recovering a validator from an identities backup does not classify
+             as a completely new validator here. You must setup it with a completely new identity
+             and a completely clean database.
+             This limitation is expected to be lifted in
 ```

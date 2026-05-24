@@ -8,9 +8,10 @@
 
 const fs = require('fs')
 const path = require('path')
+const { convertRstIncludeToMdx } = require('./rstIncludeToMdx')
 
 const REPO_ROOT = path.join(__dirname, '..', '..')
-const EXPORT_CONFIG_PATH = path.join(REPO_ROOT, 'docs/config/exportConfig.json')
+const EXPORT_CONFIG_PATH = path.join(__dirname, 'exportConfig.json')
 const OUTPUT_FOLDER_PATH = path.join(REPO_ROOT, 'docs-output')
 
 function readFileContent(filePath) {
@@ -52,13 +53,25 @@ function extractByStringMarker(fileContent, startMarker, endMarker) {
         throw new Error(`Start marker not found: "${startMarker}"`)
     }
 
-    const contentStart = startIndex + startMarker.length
+    // Match Sphinx literalinclude :start-after: / :end-before: — exclude marker lines.
+    let contentStart = fileContent.indexOf('\n', startIndex)
+    if (contentStart === -1) {
+        contentStart = startIndex + startMarker.length
+    } else {
+        contentStart += 1
+    }
+
     const endIndex = fileContent.indexOf(endMarker, contentStart)
     if (endIndex === -1) {
         throw new Error(`End marker not found: "${endMarker}"`)
     }
 
-    return fileContent.substring(contentStart, endIndex).trim()
+    let contentEnd = fileContent.lastIndexOf('\n', endIndex)
+    if (contentEnd < contentStart) {
+        contentEnd = endIndex
+    }
+
+    return fileContent.substring(contentStart, contentEnd).trim()
 }
 
 function extractByRegexWrap(fileContent, startRegex, endRegex) {
@@ -159,25 +172,133 @@ function normalizeIndent(content) {
         }
     }
 
-    if (minIndent === null || minIndent === 0) {
-        return lines
-            .map((line) =>
-                line.trim() === '' ? '' : `  ${line.replace(/^\s*/, '')}`
-            )
-            .join('\n')
-    }
-
+    // Strip the common leading whitespace from every non-blank line and then
+    // re-indent the whole block by two spaces. Using `line.slice(strip)`
+    // (instead of stripping ALL leading whitespace) preserves the relative
+    // indentation between lines — including the case where minIndent is 0,
+    // which would otherwise flatten any source that contains a top-level
+    // line at column 0 (e.g. HOCON config files where a `}` closes at the
+    // start of the line).
+    const strip = minIndent ?? 0
     return lines
         .map((line) => {
             if (line.trim() === '') return ''
-            return `  ${line.slice(minIndent)}`
+            return `  ${line.slice(strip)}`
         })
         .join('\n')
 }
 
-function formatSnippetContent(content, options) {
+/** Strip common leading indent only; first line starts at column 0 (HOCON/config in RST). */
+function baselineIndent(content) {
+    const lines = content.split('\n')
+    let minIndent = null
+    for (const line of lines) {
+        if (line.trim() === '') continue
+        const indent = (line.match(/^(\s*)/) || ['', ''])[1].length
+        if (minIndent === null || indent < minIndent) minIndent = indent
+    }
+    const strip = minIndent ?? 0
+    return lines
+        .map((line) => (line.trim() === '' ? '' : line.slice(strip)))
+        .join('\n')
+}
+
+function applyIndentOption(content, normalizeIndentOption) {
+    if (normalizeIndentOption === false) return content
+    if (normalizeIndentOption === 'baseline') return baselineIndent(content)
+    return normalizeIndent(content)
+}
+
+function trimBlankEdges(content) {
+    return content.replace(/^\s*\n+/, '').replace(/\n+\s*$/, '')
+}
+
+function convertRstBlocksToMarkdown(content, fallbackLanguage = '') {
+    const input = trimBlankEdges(content)
+    const lines = input.split('\n')
+    const out = []
+    let i = 0
+
+    while (i < lines.length) {
+        const m = lines[i].match(/^\s*\.\.\s+code-block::\s*(\S*)\s*$/)
+        if (!m) {
+            i++
+            continue
+        }
+
+        let language = (m[1] || '').trim()
+        if (!language || language.toLowerCase() === 'none') {
+            language = fallbackLanguage || ''
+        }
+
+        i++
+        while (i < lines.length && lines[i].trim() === '') i++
+
+        const block = []
+        while (i < lines.length) {
+            const line = lines[i]
+            if (line.trim() === '') {
+                block.push('')
+                i++
+                continue
+            }
+
+            if (/^( {4}|\t)/.test(line)) {
+                block.push(line.replace(/^( {4}|\t)/, ''))
+                i++
+                continue
+            }
+            break
+        }
+
+        while (block.length > 0 && block[block.length - 1] === '') {
+            block.pop()
+        }
+
+        if (language) {
+            out.push(`\`\`\`${language}`)
+        } else {
+            out.push('```')
+        }
+        out.push(block.join('\n'))
+        out.push('```')
+        out.push('')
+    }
+
+    if (out.length === 0) {
+        // Safety fallback: strip any leftover RST directives and keep only content.
+        const cleaned = input
+            .split('\n')
+            .filter((line) => !/^\s*\.\.\s+code-block::/.test(line))
+            .join('\n')
+        const trimmed = trimBlankEdges(cleaned)
+        const language = fallbackLanguage || ''
+        if (language) {
+            return `\`\`\`${language}\n${trimmed}\n\`\`\``
+        }
+        return `\`\`\`\n${trimmed}\n\`\`\``
+    }
+
+    while (out.length > 0 && out[out.length - 1] === '') out.pop()
+    return out.join('\n')
+}
+
+function formatSnippetContent(content, options, globalOptions = {}) {
+    let body = content
+    if (options && options.unescapeRstQuotes) {
+        body = body.replace(/\\'/g, "'")
+    }
+    if (options && options.transform === 'rstinclude') {
+        return convertRstIncludeToMdx(body, {
+            refTargets: {
+                ...(globalOptions.rstIncludeRefTargets || {}),
+                ...(options.refTargets || {}),
+            },
+        })
+    }
     if (options && options.transform === 'rstjson') {
-        return content
+        const language = options && options.language ? options.language : ''
+        return convertRstBlocksToMarkdown(body, language)
     }
     const displayStyle = (options && options.displayStyle) || 'wrapCode'
     const rawLanguage = options && options.language ? options.language : ''
@@ -187,9 +308,9 @@ function formatSnippetContent(content, options) {
     switch (displayStyle) {
         case 'wrapCode':
             if (language) {
-                return `\`\`\`${language}\n${content}\n\`\`\``
+                return `\`\`\`${language}\n${body}\n\`\`\``
             } else {
-                return `\`\`\`\n${content}\n\`\`\``
+                return `\`\`\`\n${body}\n\`\`\``
             }
 
         default:
@@ -207,9 +328,11 @@ function getSourceFilePath(snippet) {
     }
 }
 
-function processSnippet(snippet) {
+function processSnippet(snippet, verbose, globalOptions = {}) {
     try {
-        console.log(`Processing snippet: ${snippet.snippetName}`)
+        if (verbose) {
+            console.log(`Processing snippet: ${snippet.snippetName}`)
+        }
 
         if (!snippet.snippetName) {
             throw new Error('Snippet missing required field: snippetName')
@@ -229,14 +352,22 @@ function processSnippet(snippet) {
             fileContent,
             snippet.location
         )
-        const normalizedContent =
-            snippet.options && snippet.options.transform === 'rstjson'
-                ? extractedContent
-                : normalizeIndent(extractedContent)
+        const skipTransform =
+            snippet.options &&
+            (snippet.options.transform === 'rstjson' ||
+                snippet.options.transform === 'rstinclude')
+        const indentOpt = snippet.options?.normalizeIndent
+        const normalizedContent = skipTransform
+            ? extractedContent
+            : applyIndentOption(
+                  extractedContent,
+                  indentOpt === undefined ? true : indentOpt
+              )
 
         const formattedContent = formatSnippetContent(
             normalizedContent,
-            snippet.options || {}
+            snippet.options || {},
+            globalOptions
         )
 
         const outputFileName = `${snippet.snippetName}.mdx`
@@ -247,7 +378,9 @@ function processSnippet(snippet) {
 
         fs.writeFileSync(outputPath, formattedContent, 'utf8')
 
-        console.log(`✓ Successfully extracted snippet to: ${outputPath}`)
+        if (verbose) {
+            console.log(`✓ Successfully extracted snippet to: ${outputPath}`)
+        }
     } catch (error) {
         console.error(
             `✗ Error processing snippet "${snippet.snippetName}": ${error.message}`
@@ -262,6 +395,7 @@ function processSnippet(snippet) {
  */
 function main() {
     try {
+        const verbose = process.argv.includes('--verbose')
         const configContent = readFileContent(EXPORT_CONFIG_PATH)
         const config = JSON.parse(configContent)
 
@@ -274,9 +408,13 @@ function main() {
         let successCount = 0
         let errorCount = 0
 
+        const globalOptions = {
+            rstIncludeRefTargets: config.rstIncludeRefTargets || {},
+        }
+
         for (const snippet of config.snippets) {
             try {
-                processSnippet(snippet)
+                processSnippet(snippet, verbose, globalOptions)
                 successCount++
             } catch (error) {
                 errorCount++
