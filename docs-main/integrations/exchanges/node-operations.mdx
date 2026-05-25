@@ -147,89 +147,12 @@ Only upload `.dar` files from token admins that you trust. The uploaded `.dar` f
 
 See the Splice documentation for guidance on
 [how to monitor your validator node](/global-synchronizer/production-operations/splice-metrics-overview).
-Note in particular that it includes
-[Grafana dashboards](/global-synchronizer/production-operations/splice-metrics-overview#grafana-dashboards)
-for monitoring the traffic usage, balances of local parties (e.g., the `exchangeParty`),
-and [many other metrics](/global-synchronizer/reference/splice-metrics).
+It also links to [many other metrics](/global-synchronizer/reference/splice-metrics) that can help monitor traffic usage and balances of local parties, such as the `exchangeParty`.
 
-## Rolling out Major Splice Upgrades
+## Logical Synchronizer Upgrades
 
-For major protocol changes, the global sychronizer undergoes an
-[upgrade procedure](/global-synchronizer/production-operations/validator-upgrades).
-The schedule for these upgrades is published by the [Super Validators](https://docs.google.com/document/d/1QhLL5bL0u8temBL86y957VbWDtZJhH9udH-_C7nBlvc/edit?tab=t.0#heading=h.ripdn5ydglli)
-and also announced in the `#validator-operations` slack channel.
+For protocol changes and network-wide disaster recovery, the Global Synchronizer uses [Logical Synchronizer Upgrades](/global-synchronizer/production-operations/logical-synchronizer-upgrade). The schedule for these upgrades is published by the [Super Validators](https://docs.google.com/document/d/1QhLL5bL0u8temBL86y957VbWDtZJhH9udH-_C7nBlvc/edit?tab=t.0#heading=h.ripdn5ydglli) and also announced in the `#validator-operations` Slack channel.
 
-As part of this procedure, the old synchronizer is paused, all
-validator operators create an export of the state of their validator,
-and deploy a new validator connected to the new synchronizer and
-import their state again. For a more detailed overview, refer to the
-[Splice docs](/global-synchronizer/production-operations/validator-upgrades).
-
-The procedure requires some experience to get it right, so it is highly
-recommended to run nodes on DevNet and TestNet so you can practice the
-procedure before you encounter it on MainNet.
-
-From an integration perspective, there are a few things to keep in mind:
-
-1. A major upgrade only preserves the active contracts but not the
-   update history. In particular, you will not be able to get
-   transactions from before the major upgrade on the update service on
-   the Ledger API of the newly deployed validator node.
-2. Offsets on the upgraded validator node start from `0` again.
-3. The update history will include special import transactions for the
-   contracts imported from the old synchronizer. They all have record time
-   `0001-01-01T00:00:00.000000Z`, and represent the creation of the imported
-   contracts.
-
-### Runbook
-
-We recommend to roll-out the upgrade as follows:
-
-1. Wait for the synchronizer to be paused and your node to have
-   written the migration dump as described in the [Splice
-   docs](/global-synchronizer/production-operations/validator-upgrades).
-2. Open the migration dump and extract the `acs_timestamp` from it, e.g., using `jq .acs_timestamp < /domain-upgrade-dump/domain_migration_dump.json`.
-   This is the timestamp at which the synchronizer was paused.
-3. Wait for your Tx History Ingestion to have caught up to record time
-   `acs_timestamp` or higher. Note that you must consume *offset checkpoints*
-   to guarantee that your Tx History Ingestion advances past `acs_timestamp`.
-4. Stop your Tx History Ingestion component.
-5. Upgrade your validator and connect it to the new synchronizer following the
-   [Splice docs](/global-synchronizer/production-operations/validator-upgrades).
-6. Follow the shortened version below of the
-   [procedure for restoring a validator node from a backup](/global-synchronizer/production-operations/validator-disaster-recovery)
-   to determine the offset from which to restart your Tx History Ingestion:
-
-    1. Retrieve the `synchronizerId` of the last ingested transaction from the Canton Integration DB.
-    2. Log into the [Canton Console of your validator node](/global-synchronizer/canton-console/console-overview) and query the offset `offRecovery` assigned to the ACS import transactions at time `0001-01-01T00:00:00.000000Z` using
-
-       ```scala
-       def parseTimestamp(t: String) = {
-          val isoFormat = java.time.format.DateTimeFormatter.ISO_INSTANT.withZone(java.time.ZoneId.of("Z"))
-          isoFormat.parse(t, java.time.Instant.from(_))
-       }
-       val synchronizerId = SynchronizerId.tryFromString("example::1220b1431ef217342db44d516bb9befde802be7d8899637d290895fa58880f19accc") // example
-       val tRecovery = parseTimestamp("0001-01-01T00:00:00.000000Z")
-       val offRecovery = participant.parties.find_highest_offset_by_timestamp(synchronizerId, tRecovery)
-       ```
-
-       Alternatively, you can use `grpcurl` to query the offset `offRecovery` from the command line as shown in the
-       example below:
-
-       ```bash
-       grpcurl -plaintext -d \
-         '{"synchronizerId" : "example::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
-            "timestamp": "0001-01-01T00:00:00.000000Z"}' \
-         localhost:5002 \
-         com.digitalasset.canton.admin.participant.v30.PartyManagementService.GetHighestOffsetByTimestamp
-       ```
-
-       If you use authentication for the Canton Admin gRPC API, then you need to add the appropriate
-       authentication flags to the `grpcurl` command above.
-
-    3. Configure the Tx History Ingestion component to start ingesting from offset `offRecovery`.
-    4. Restart the Tx History Ingestion component.
-
-Once you have completed these steps, the integration workflows will continue.
+Logical synchronizer upgrades do not use the deleted major-upgrade runbook. Integration operators should follow the current validator-operator communications for each LSU and verify whether their ingestion components need a pause, replay, or catch-up procedure for that specific upgrade.
 
 {/* COPIED_END */}
