@@ -303,6 +303,10 @@ The procedure:
 The provided target offset must be within the bounds of the contiguous history. If the target offset is outside the bounds, it raises an error.
 </Warning>
 
+<Note>
+If the database was previously pruned and the reset target offset is below the stored pruning offset, `reset_to_offset` retreats the pruning offset to the reset target. After such a reset, `pruned_offset()` returns the new target offset. If the reset target is at or above the pruning offset, the pruning state is preserved.
+</Note>
+
 ### Redacting
 
 The redaction feature enables removal of sensitive or personally identifiable information from contracts and exercises within the PQS database. This operation is particularly useful for complying with privacy regulations and data protection laws, as it enables the permanent removal of contract payloads, contract keys, choice arguments, and choice results. Note that redaction is a destructive operation and once redacted, information cannot be restored.
@@ -1019,6 +1023,8 @@ PQS' `pipeline` command is a unidirectional streaming process that heavily relie
   - `INVALID_NAME`
   - `CANNOT_COERCE`
   - `UNEXPECTED_ERROR`
+- Daml packages (retries if):
+  - A transaction references a Daml package that was not present when the pipeline started.
 
 ### Configuration
 
@@ -1038,6 +1044,29 @@ Configuring `--retry-backoff-*` settings control periodicity of retries and the 
 Configuring `--retry-counter-attempts` and `--retry-counter-duration` controls the maximum *instability* tolerance before shutting down.
 
 Configuring `--retry-counter-reset` controls the period of *stability* after which the retry counters are reset across the board.
+
+### Dynamic Daml package reload
+
+When PQS encounters a transaction referencing an unknown Daml package, it does not terminate. Instead:
+
+1. Ingestion pauses.
+2. PQS fetches new packages from the Participant Node.
+3. Type mappings are rebuilt.
+4. Ingestion resumes from the paused offset.
+
+This handles the case where new DARs are deployed to the Participant Node while PQS is running. No restart is needed.
+
+**Log messages** to look for:
+
+```
+Recoverable: unknown Daml package detected.
+```
+
+**Metric**: `app_restarts_total` with label `exception="Recoverable: unknown Daml package detected."` increments each time this occurs.
+
+<Note>
+Dynamic package reload only applies to newly deployed Daml packages. Other configuration changes (parties, templates, interfaces in filters) still require a restart.
+</Note>
 
 ### Logging
 
