@@ -125,6 +125,7 @@ The following functions allow you to control the temporal scope of the ledger. T
 - `validate_offset_exists(offset)`: validates that the datastore has a complete history up to and including the offset provided. Returns an error if the nominated offset is not available (too old, or too new).
 - `set_oldest(offset)`: nominates the offset of the oldest events to include in query scope. If `NULL` then it uses the oldest available. Function returns the actual offset used. If the supplied offset is beyond what is available, an error occurs.
 - `nearest_offset(time)`: a helper function to determine the offset of a given time (or interval prior to now).
+- `pruned_offset()`: returns the offset up to which the database has been pruned, or `NULL` if no pruning has occurred.
 
 ## Accessing contracts and exercises
 
@@ -134,6 +135,10 @@ Under this scope, the following table functions[^1] allow access to the ledger a
 - `creates(name, [from_offset], [to_offset])`: create events of the target template/interface views that occurred between the oldest and latest offset
 - `archives(name, [from_offset], [to_offset])`: archive events of the target template/interface views that occurred between the oldest and latest offset
 - `exercises(name, [from_offset], [to_offset])`: exercise events of the target choice that occurred between the oldest and latest offset
+
+<Note>
+After pruning, `archives()`, `exercises()`, and related summary functions (`summary_archives`, `summary_exercises`, `summary_transients`) default their `from_offset` to the pruned offset when available, avoiding unnecessary scans over pruned ranges. `creates()`, `summary_creates()`, and `summary_updates()` are not affected as they cover both active and archived contracts.
+</Note>
 
 The `name` identifier can be used with or without the package specified:
 
@@ -217,13 +222,22 @@ All functions returning contract data return the following columns:
 | `payload`               | `jsonb`                       | JSONB representation of contract data                                                                                                                  |
 | `metadata`              | `bytea`                       | Explicit contract disclosure metadata (see `stakeholder-contract-share`)                                                                               |
 | `package_name`          | `text`                        | Daml package name                                                                                                                                      |
-| `package_version`       | `text`                        | Daml package version                                                                                                                                   |
-| `package_id`            | `text`                        | Daml package ID                                                                                                                                        |
+| `package_version`       | `text`                        | Version of the representative Daml package                                                                                                             |
+| `package_id`            | `text`                        | Representative package ID. The Daml package used for decoding; guaranteed to be present on the connected Participant Node                               |
+| `creation_package_id`   | `text`                        | Original creation-time package ID from the ledger. May reference a package not present on the connected Participant Node                                |
 | `redaction_id`          | `text`                        | Redaction process reference                                                                                                                            |
 | `signatories`           | `text[]`                      | Parties consenting to the creation of the contract                                                                                                     |
 | `observers`             | `text[]`                      | Additional stakeholders whom the contract is visible to                                                                                                |
 | `witnesses`             | `text[]`                      | Parties that are notified of this event                                                                                                                |
 | `divulged_only`         | `boolean`                     | Indicates whether the contract was only divulged (`true`), or properly disclosed (`false`). Refer to `da-model-divulgence` for background information. |
+
+#### Package ID and Daml upgrades
+
+When Daml packages are upgraded, the Participant Node re-encodes contract data using the latest (representative) package version it knows about. This means:
+
+- `package_id` always references a package that is present on the connected Participant Node, suitable for decoding.
+- `creation_package_id` preserves the original package ID from the creation transaction. It may reference a package that has since been superseded and is no longer present on the Participant Node.
+- `package_version` reflects the version of the representative package, not the original creation-time package.
 
 All functions returning exercise data return the following columns:
 
@@ -242,8 +256,8 @@ All functions returning exercise data return the following columns:
 | `argument`                | `jsonb`                    | JSONB representation of the choice argument type                                                                                                                                                               |
 | `result`                  | `jsonb`                    | JSONB representation of the choice return type                                                                                                                                                                 |
 | `package_name`            | `text`                     | Daml package name                                                                                                                                                                                              |
-| `package_version`         | `text`                     | Daml package version                                                                                                                                                                                           |
-| `package_id`              | `text`                     | Daml package ID                                                                                                                                                                                                |
+| `package_version`         | `text`                     | Version of the representative Daml package                                                                                                                                                                     |
+| `package_id`              | `text`                     | Representative package ID. The Daml package used for decoding; guaranteed to be present on the connected Participant Node                                                                                       |
 | `redaction_id`            | `text`                     | Redaction process reference                                                                                                                                                                                    |
 | `signatories`             | `text[]`                   | Parties that consented to the creation of the contract that choice was exercised on                                                                                                                            |
 | `observers`               | `text[]`                   | Additional stakeholders made aware of the creation of the contract that choice was exercised on                                                                                                                |
@@ -330,6 +344,7 @@ The `transactions` view provides transaction metadata not directly exposed by th
 | `workflow_id` | `text` | Workflow ID used in command submission |
 | `trace_context` | `trace_context` | Ledger API trace context (user-defined type containing `trace_parent` and `trace_state`) |
 | `external_transaction_hash` | `bytea` | Hash of the transaction submitted by the external party |
+| `paid_traffic_cost` | `bigint` | Traffic cost paid by the submitting Participant Node (see first transactions table above for full semantics) |
 
 Join through the `*_at_ix` column to enrich contract or exercise data with transaction metadata:
 
