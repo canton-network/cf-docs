@@ -60,6 +60,54 @@ PQS configuration includes:
 - **Party filter** -- Which parties' contract data to project (reduces storage and processing)
 - **Template filter** -- Which templates to include (optional, projects all by default)
 
+
+## Install and download
+
+{/* COPIED_START source="docs-website:docs/replicated/pqs/3.4/component-howtos/pqs/download.rst" hash="27e38f48" */}
+
+| Source | Location |
+| --- | --- |
+| Browse UI | <a href="https://console.cloud.google.com/artifacts/docker/da-images/europe/public/docker%2Fparticipant-query-store">https://console.cloud.google.com/artifacts/docker/da-images/europe/public/docker%2Fparticipant-query-store</a> |
+| Docker Registry | `europe-docker.pkg.dev/da-images/public/docker/participant-query-store:<version-tag>` |
+
+
+### Daml platform support
+
+PQS `3.4.x` is built against the Daml SDK and Canton versions with the same major and minor versions.
+
+The dpm CLI tool is used to download the `scribe.jar` file, as follows:
+
+> 1.  `dpm install <version>` (e.g., `dpm install 3.4.10`) to get the latest SDK release which includes `scribe.jar`.
+> 2.  To locate the directory where the scribe.jar file is, enter `dpm resolve | grep scribe` which will show the path to the jar file.
+
+Alternatively PQS can be started as a Docker container:
+
+``` text
+docker run -it europe-docker.pkg.dev/da-images/public/docker/participant-query-store:3.4.1 --version
+Picked up JAVA_TOOL_OPTIONS: -javaagent:/open-telemetry.jar
+scribe, version: v3.4.1
+daml-sdk.version: 3.4.9
+postgres-document.schema: 034
+```
+
+<Note>
+The default `workdir`[^1] of the PQS container is `/daml3.4`. This is the location of the `scribe.jar` in the container filesystem.
+</Note>
+
+### Compatibility
+
+PQS is tested for compatibility with multiple versions of dependencies, as follows:
+
+| Dependency              | Versions               |
+|-------------------------|------------------------|
+| Canton Participant Node | 3.4                    |
+| Java Runtime (Temurin)  | 17, 21                 |
+| PostgreSQL              | 13, 14, 15, 16, 17, 18 |
+
+[^1]: [https://docs.docker.com/reference/cli/docker/container/run/#workdir](https://docs.docker.com/reference/cli/docker/container/run/#workdir)
+
+{/* COPIED_END */}
+
 ## SQL Query Examples
 
 ### Active Contracts
@@ -119,12 +167,6 @@ Design your backend to support PQS failover:
 ### Sharing PQS Databases with Application Tables
 
 {/* COPIED_START source="docs-website:pqs/3.5/component-howtos/pqs/references/sharing-database.rst" hash="pqs-sharing" */}
-
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was adapted from existing reviewed documentation.
-**Source:** `replicated/pqs/3.5/component-howtos/pqs/references/sharing-database.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
 
 An application making use of the PQS datastore may also manage its own database migrations via Flyway — either embedded, command-line, or other supported means. An example of such a scenario is the creation of application-specific indexes.
 

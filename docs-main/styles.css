@@ -20,6 +20,9 @@
   --canton-hover-bg: rgba(115, 75, 226, 0.05);
   --canton-inline-highlight-bg: rgba(115, 75, 226, 0.14);
   --canton-inline-highlight-border: rgba(115, 75, 226, 0.26);
+  --canton-product-selector-line: rgba(115, 75, 226, 0.70);
+  --canton-product-selector-line-active: #734BE2;
+  --canton-product-selector-divider: rgba(75, 85, 99, 0.16);
 
   /* Typography */
   --canton-font-family: 'Inter', system-ui, -apple-system, sans-serif;
@@ -34,6 +37,9 @@
   --canton-hover-bg: rgba(169, 133, 255, 0.05);
   --canton-inline-highlight-bg: rgba(169, 133, 255, 0.22);
   --canton-inline-highlight-border: rgba(169, 133, 255, 0.34);
+  --canton-product-selector-line: rgba(169, 133, 255, 0.70);
+  --canton-product-selector-line-active: #A985FF;
+  --canton-product-selector-divider: rgba(255, 255, 255, 0.10);
 }
 
 /* ============================================
@@ -98,6 +104,28 @@ nav a:hover {
   color: #A985FF !important;
 }
 
+/* Product selector in the top nav: make the current docs section stand out. */
+.nav-dropdown-products-selector-trigger {
+  box-shadow: inset 0 0 0 1.5px var(--canton-product-selector-line) !important;
+}
+
+.nav-dropdown-products-selector-trigger:hover,
+.nav-dropdown-products-selector-trigger[aria-expanded="true"] {
+  background-color: var(--canton-hover-bg) !important;
+  box-shadow: inset 0 0 0 2px var(--canton-product-selector-line-active) !important;
+}
+
+/* Product selector dropdown: visually group reference utilities below
+   the primary docs sections. Mintlify renders each product as a direct link. */
+.nav-dropdown-products-selector-content > a[href="/api-reference"] {
+  border-top: 1px solid var(--canton-product-selector-divider);
+  box-sizing: border-box;
+  display: block;
+  margin-top: 0.35rem;
+  padding-top: 0.35rem;
+  width: 100%;
+}
+
 /* ============================================
    Table of Contents (Right Sidebar)
    ============================================ */
@@ -136,6 +164,22 @@ aside[class*="right"] a:hover,
 /* ============================================
    Links
    ============================================ */
+
+/* Compact Mintlify's advanced footer so it does not crowd the right-side TOC
+   when the page is scrolled to the bottom. */
+#footer.advanced-footer > div {
+  gap: 1.25rem !important;
+  padding-top: 2rem !important;
+  padding-bottom: 2rem !important;
+}
+
+@media (max-width: 767px) {
+  #footer.advanced-footer > div {
+    gap: 1rem !important;
+    padding-top: 1.5rem !important;
+    padding-bottom: 1.5rem !important;
+  }
+}
 
 /* Ensure link colors match our palette */
 a:not([class]) {
@@ -200,6 +244,28 @@ a[class*="primary"]:not([class~="card"]):hover {
 /* Table row hover */
 table tbody tr:hover {
   background-color: var(--canton-hover-bg);
+}
+
+/* Network-specific value tabs: make DevNet/TestNet/MainNet controls read
+   as a segmented tab set instead of plain inline buttons. */
+[data-component="network-variables"] [role="tablist"] {
+  gap: 0.35rem !important;
+  padding: 0.35rem !important;
+}
+
+[data-component="network-variables"] [role="tab"] {
+  border: 1px solid transparent !important;
+  border-radius: 0.5rem !important;
+}
+
+[data-component="network-variables"] [role="tab"][aria-selected="false"] {
+  border-color: var(--canton-product-selector-divider) !important;
+}
+
+[data-component="network-variables"] [role="tab"][aria-selected="true"] {
+  border-color: var(--canton-highlight) !important;
+  box-shadow: inset 0 0 0 1px var(--canton-highlight) !important;
+  color: var(--canton-highlight) !important;
 }
 
 /* Stack code-comparison tables vertically so code blocks don't collapse
@@ -318,6 +384,29 @@ button[aria-haspopup="menu"]:not(.nav-dropdown-trigger):not(#page-context-menu *
 .mermaid {
   /* Ensure diagrams use our color scheme where possible */
   --mermaid-primary-color: var(--canton-highlight);
+}
+
+/* Mermaid pan / zoom / reset control overlay.
+   Mintlify positions the controls absolutely over the bottom-right corner of
+   every mermaid diagram. On smaller diagrams the overlay frequently sits on top
+   of meaningful graph content, hiding parts of the figure (see #586).
+
+   The container Mintlify renders looks like:
+       <div class="group relative overflow-hidden">
+         <div class="absolute bottom-2 right-2 z-10 grid ..."> [buttons] </div>
+         <div class="Mermaid"> [rendered SVG] </div>
+       </div>
+
+   `:has(svg)` keeps this rule scoped to mermaid wrappers and away from any
+   other `.group.relative.overflow-hidden` Mintlify uses elsewhere. */
+div.group.relative.overflow-hidden:has(svg) > div.absolute.bottom-2.right-2 {
+  opacity: 0.1;
+  transition: opacity 200ms ease-in-out;
+}
+
+div.group.relative.overflow-hidden:has(svg):hover > div.absolute.bottom-2.right-2,
+div.group.relative.overflow-hidden:has(svg):focus-within > div.absolute.bottom-2.right-2 {
+  opacity: 1;
 }
 
 /* ============================================

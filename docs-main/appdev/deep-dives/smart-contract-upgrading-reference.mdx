@@ -5,12 +5,6 @@ description: "Detailed rules for package validation on upload, and runtime upgra
 
 {/* COPIED_START source="docs-website:docs/replicated/daml/3.4/sdk/reference/smart-contract-upgrades.rst" hash="9f2fcd76" */}
 
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was copied from existing reviewed documentation.
-**Source:** `docs/replicated/daml/3.4/sdk/reference/smart-contract-upgrades.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
-
 This document describes in detail what rules govern package validation upon upload and how contracts, choice arguments and choice results are upgraded or downgraded at runtime. These topics are for a large part covered in Smart Contract Upgrade. This document acts as a thorough reference.
 
 ## Static Checks
@@ -23,7 +17,7 @@ DAR upgrade checks are broken down into package-level checks, which are in turn 
 
 <div id="upgrades-utility-package">
 
-**Definition:** A *utility package* is a package with no template definition, no interface definition, no exception definition, and only [non-serializable]() data type definitions. A utility package typically consists of helper functions and constants, but no type definitions.
+**Definition:** A *utility package* is a package with no template definition, no interface definition, no exception definition, and only non-[serializable](https://github.com/digital-asset/daml/blob/main/sdk/daml-lf/spec/daml-lf-2.rst#serializable-types) data type definitions. A utility package typically consists of helper functions and constants, but no type definitions.
 
 </div>
 
@@ -1152,13 +1146,13 @@ data T =
 
 ### Data Types - Enums
 
-For the purpose of upgrade validation, enums can be treated as a special case of variants. The rules of the section on [variants]() apply, only without constructor arguments.
+For the purpose of upgrade validation, enums can be treated as a special case of variants. The rules of [the section on variants](#data-types-variants) apply, only without constructor arguments.
 
 ### Data Types - Type References
 
 A type reference is an identifier that resolves to a type. For instance, consider the following module definitions, from two different packages:
 
-```daml
+```haskell
 -- In package q
 module Dep where
 
@@ -1166,7 +1160,7 @@ data U = U with x : Int
 type A = U
 ```
 
-```daml
+```haskell
 -- In package p
 module M where
 import qualified Dep
@@ -1446,7 +1440,7 @@ Deleting an interface instance from a template leads to a validation error.
 
 Assume an interface `I` with view type `IView` and a method `m`.
 
-```daml
+```haskell
 data IView = IView { i : Int }
 
 interface I where
@@ -1678,7 +1672,7 @@ data-dependencies:
 
 Package `q` defines a template `S` with a choice that fetches a contract of type `U`.
 
-```daml
+```haskell
 import qualified Dep
 
 template S
@@ -1708,7 +1702,7 @@ When exercising choice `GetU 8765` on contract `4321` with package preference `d
 
 Assume an interface `I` with view type `IView` and a method `m`.
 
-```daml
+```haskell
 data IView = IView {}
 
 interface I where
@@ -1827,7 +1821,7 @@ Then
 
 Assume an interface `I` with a choice `GetInt`
 
-```daml
+```haskell
 data IView = IView {}
 
 interface I where
@@ -1891,7 +1885,7 @@ template Inst
 
 Assume then some package `client` which defines a template whose choice `Go` exercises choice `GetInt` by interface.
 
-```daml
+```haskell
 template Client
   with 
     p : Party
@@ -1995,7 +1989,7 @@ Then:
 
 ### Transformation Rules
 
-Once the target type has been determined, the data transformation rules themselves follow the upgrading rules of protocol [buffers]().
+Once the target type has been determined, the data transformation rules themselves follow the [upgrading rules of protocol buffers](https://protobuf.dev/programming-guides/proto3/#updating).
 
 #### Records and Parameters
 
@@ -2254,7 +2248,7 @@ The view for a given interface instance may change between two versions of a con
 
 Assume an interface `I` with view type `IView` and a method `m`.
 
-```daml
+```haskell
 data IView = IView { i : Int }
 
 interface I where

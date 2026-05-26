@@ -6,6 +6,28 @@ This document describes the external snippet update workflow for this docs repos
 
 The automation to pull the snippet updates into this repository is implemented using GitHub Action workflows
 
+## Local one-command extraction
+
+From this repository, use `generate:external-snippets` to copy the matching helper/config into a local source repository and run extraction there:
+
+```bash
+npm run generate:external-snippets -- canton --source-dir ../canton
+```
+
+The first positional argument selects the snippet repository. Supported names are listed with:
+
+```bash
+npm run generate:external-snippets -- --list
+```
+
+By default, the generated files remain in the source repository's `docs-output/` directory. To also copy the output into this repository's snippet tree, pass `--copy-output` and a version folder:
+
+```bash
+npm run generate:external-snippets -- canton --source-dir ../canton --copy-output --version main
+```
+
+For repositories with generated snippet JSON, the wrapper runs the required preparation step first. For example, `canton` runs `docs-open / reset` and `docs-open / generateSphinxSnippets` before invoking the extraction helper. Use `--skip-prepare` only when those generated inputs already exist.
+
 # Workflow architecture
 
 Changes in the external repository snippet source files are being extracted on the external repository, wrapped into an artifact and then being pulled in from this repository into the appropriate folder in the `snippets/external/` folder.
@@ -21,6 +43,10 @@ In the external repository, three files control the extraction of snippets:
 The location of the script and config file might vary depending on the source repo file structure. In the splice-wallet-kernel repository, these are placed inside the `/docs/` folder:
 * The snippet list json file is located at `/docs/config/exportConfig.json`
 * The helper script is located at `/docs/scripts/generateOutputDocs.js`
+
+### Manual extraction
+
+You can find all configuration files (`xyz-snippet-list-remote.json`) in this folder (`config/snippet-config`). The script to generate the output snippets can be found in `/scripts/generateOutputDocs.js` (in this repository).
 
 The GitHub action file needs to be adjusted accordingly:
 
@@ -153,7 +179,7 @@ import MySnippet from "/shared/my-snippet.mdx";
 The above mentioned files:
 * `config/snippet-config/*-snippet-list-remote.json`
 * `config/snippet-config/update-docs-snippets.yml`
-* `scripts/helpers/generateOutputDocs.js`
+* `scripts/generateOutputDocs.js`
 
 are only added to this repository for reference. They are only used in the external repositories.
 
