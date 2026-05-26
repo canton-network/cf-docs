@@ -1,15 +1,15 @@
 ---
 title: "dApp SDK"
-description: "Connect a Canton Network dApp to user wallets using the dApp SDK — a TypeScript library implementing CIP-103."
+description: "Connect a Canton Network dApp to user wallets using the dApp SDK, a TypeScript library that implements CIP-103."
 ---
 
-The dApp SDK (`@canton-network/dapp-sdk`) is a TypeScript library that lets a dApp connect to user wallets on Canton Network. It implements the dApp API defined by [CIP-103](https://github.com/canton-foundation/cips/blob/main/cip-0103/cip-0103.md) — a vendor-neutral JSON-RPC 2.0 protocol that any compliant wallet can speak — so your dApp interoperates with any Canton-compatible wallet rather than being tied to a single vendor.
+The dApp SDK (`@canton-network/dapp-sdk`) is a TypeScript library that lets a dApp connect to user wallets on Canton Network. It implements [CIP-103](https://github.com/canton-foundation/cips/blob/main/cip-0103/cip-0103.md), a vendor-neutral JSON-RPC 2.0 protocol for the dApp API. Any wallet that implements CIP-103 works with any dApp built on the SDK.
 
-This page introduces what the SDK does, where it fits in a dApp's architecture, and what the typical usage flow looks like. For step-by-step API details and migration notes, see the [dApp SDK integration docs](/integrations/dapp-sdk/overview).
+For step-by-step API details, see the [dApp SDK integration docs](/integrations/dapp-sdk/overview).
 
 ## Where it fits
 
-A typical Canton Network dApp has three external parties to talk to: the user's wallet, a Canton validator (for the Ledger API), and a signing provider that holds the user's keys. The dApp SDK abstracts the first of those three.
+A Canton Network dApp talks to three external systems: the user's wallet, a Canton validator (for the Ledger API), and a signing provider that holds the user's keys. The dApp SDK covers the wallet side.
 
 ```
 ┌─────────────┐      dApp API (CIP-103)     ┌──────────────────┐     Ledger API      ┌──────────────────┐
@@ -23,28 +23,26 @@ A typical Canton Network dApp has three external parties to talk to: the user's 
                                               └──────────────────┘
 ```
 
-- Your dApp uses the dApp SDK to call the **dApp API** (`connect`, `listAccounts`, `prepareExecute`, `signMessage`, `ledgerApi`, etc.).
-- The wallet — typically a [Wallet Gateway](/appdev/modules/m4-wallet-gateway) — implements the dApp API, manages user sessions, and forwards requests to the validator and signing provider.
-- The SDK abstracts the transport (HTTP for remote gateways, `postMessage` for browser-extension wallets) so the same dApp code works against either.
+The dApp uses the SDK to call the dApp API (`connect`, `listAccounts`, `prepareExecute`, `signMessage`, `ledgerApi`, and others). The wallet on the other end is typically a [Wallet Gateway](/appdev/modules/m4-wallet-gateway), which implements the dApp API, manages user sessions, and forwards requests to the validator and signing provider. The SDK abstracts the transport: HTTP for remote gateways, `postMessage` for browser-extension wallets. The same dApp code runs against either.
 
 ## Two levels of API
 
 The SDK exposes two interfaces over the same protocol:
 
-- **High-level dApp SDK** — `sdk.connect()`, `sdk.listAccounts()`, `sdk.prepareExecute(...)`. Recommended for most applications.
-- **Provider API** — Low-level [EIP-1193](https://eips.ethereum.org/EIPS/eip-1193)-style interface: `provider.request({ method, params })`. Useful when you need direct protocol access or are integrating with existing provider-based infrastructure.
+- **High-level dApp SDK**: `sdk.connect()`, `sdk.listAccounts()`, `sdk.prepareExecute(...)`. Recommended for most applications.
+- **Provider API**: low-level [EIP-1193](https://eips.ethereum.org/EIPS/eip-1193)-style interface using `provider.request({ method, params })`. Useful for direct protocol access or for integrating with existing provider-based code.
 
-You can mix the two: `sdk.getConnectedProvider()` returns the active CIP-103 provider so you can drop down to `provider.request(...)` when needed.
+The two can be mixed. `sdk.getConnectedProvider()` returns the active CIP-103 provider, so you can drop down to `provider.request(...)` whenever the high-level API doesn't cover what you need.
 
 ## Provider discovery (`window.canton`)
 
-For browser-extension wallets, the SDK exposes an EIP-1193-style provider at `window.canton`, mirroring the pattern Ethereum dApps use. This is how a dApp running in a browser discovers a wallet that's been installed as an extension. The SDK handles registration, the EIP-1193 events, and the user-facing wallet picker. For details and customization, see [Adapter registration & wallet discovery](/integrations/dapp-sdk/adapters-and-discovery).
+Browser-extension wallets are discovered through `window.canton`, an EIP-1193-style provider that the SDK injects. A dApp running in the browser finds the wallet there. The SDK handles registration, EIP-1193 events, and the user-facing wallet picker. See [Adapter registration & wallet discovery](/integrations/dapp-sdk/adapters-and-discovery) for customization.
 
 ## Typical flow
 
 A common dApp lifecycle:
 
-1. **Initialize** — Call `sdk.init()` once at app startup. This registers adapters and attempts to restore any previously connected session, without opening the picker.
+1. **Initialize.** Call `sdk.init()` once at app startup. This registers adapters and attempts to restore any previously connected session without opening the picker.
 
    ```typescript
    import * as sdk from '@canton-network/dapp-sdk'
@@ -52,7 +50,7 @@ A common dApp lifecycle:
    await sdk.init()
    ```
 
-2. **Connect** — When the user clicks *Connect Wallet*, call `sdk.connect()`. If multiple wallets are registered, the SDK shows the picker; otherwise it proceeds directly. The wallet may redirect the user to its UI to log in (OAuth or self-signed JWT).
+2. **Connect.** When the user clicks *Connect Wallet*, call `sdk.connect()`. If multiple wallets are registered, the SDK shows the picker; otherwise it proceeds directly. The wallet may redirect the user to its UI to log in (OAuth or self-signed JWT).
 
    ```typescript
    const result = await sdk.connect()
@@ -61,14 +59,14 @@ A common dApp lifecycle:
    }
    ```
 
-3. **Read accounts** — List the parties (accounts) the wallet has for this user and find the primary one.
+3. **Read accounts.** List the parties (accounts) the wallet has for this user and find the primary one.
 
    ```typescript
    const accounts = await sdk.listAccounts()
    const primary  = accounts.find(a => a.primary)
    ```
 
-4. **Submit a transaction** — `prepareExecute` runs the full prepare → user-approval → sign → submit lifecycle. The wallet shows the user the transaction details and asks for approval; if granted, the signing provider produces the signature and the wallet submits to the validator.
+4. **Submit a transaction.** `prepareExecute` runs the full prepare → user-approval → sign → submit lifecycle. The wallet shows the user the transaction details and asks for approval; if granted, the signing provider produces the signature and the wallet submits to the validator.
 
    ```typescript
    await sdk.prepareExecute({
@@ -87,7 +85,7 @@ A common dApp lifecycle:
    })
    ```
 
-5. **React to events** — The SDK emits `statusChanged`, `accountsChanged`, and `txChanged` so your UI stays in sync with the wallet's state. Remember to remove listeners when components unmount.
+5. **React to events.** The SDK emits `statusChanged`, `accountsChanged`, and `txChanged` so your UI stays in sync with the wallet. Remove listeners when components unmount.
 
    ```typescript
    sdk.onTxChanged(tx => {
@@ -97,22 +95,18 @@ A common dApp lifecycle:
    })
    ```
 
-For the full method surface — including `signMessage`, `ledgerApi` proxying, `getActiveNetwork`, and the event subscription API — see the [API reference](/integrations/dapp-sdk/api-reference).
+For the full method surface (including `signMessage`, `ledgerApi` proxying, `getActiveNetwork`, and the event subscription API), see the [API reference](/integrations/dapp-sdk/api-reference).
 
 ## When to drop down to the Provider API
 
-You typically reach for `provider.request(...)` directly when:
+Reach for `provider.request(...)` directly when the method you need isn't yet wrapped by the high-level SDK, when you're integrating with existing CIP-103-aware code that expects EIP-1193 semantics, or when you're writing a wallet provider yourself and want a thin client for testing.
 
-- The method you need isn't yet wrapped by the high-level SDK
-- You're integrating with existing CIP-103-aware code that expects EIP-1193 semantics
-- You're writing a wallet provider yourself and want a thin client for testing
-
-The Provider API and the high-level SDK call the same dApp API under the hood — there's no protocol-level difference.
+Both interfaces speak the same protocol, so the choice is ergonomic, not functional.
 
 ## Where to go next
 
-- [Installation](/integrations/dapp-sdk/download) — install the SDK from npm
-- [Usage guide](/integrations/dapp-sdk/usage) — every method shown side-by-side in SDK and Provider API form
-- [Best practices](/integrations/dapp-sdk/best-practices) — recommended patterns for production dApps
-- [Wallet Gateway module](/appdev/modules/m4-wallet-gateway) — the server side of the dApp API
-- [Examples](/integrations/dapp-building-examples) — Ping and Portfolio sample dApps
+- [Installation](/integrations/dapp-sdk/download): install the SDK from npm.
+- [Usage guide](/integrations/dapp-sdk/usage): every method shown side-by-side in SDK and Provider API form.
+- [Best practices](/integrations/dapp-sdk/best-practices): recommended patterns for production dApps.
+- [Wallet Gateway module](/appdev/modules/m4-wallet-gateway): the server side of the dApp API.
+- [Examples](/integrations/dapp-building-examples): Ping and Portfolio sample dApps.
