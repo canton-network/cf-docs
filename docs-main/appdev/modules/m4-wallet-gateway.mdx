@@ -21,16 +21,23 @@ A Gateway can be configured for multiple Canton networks (DevNet, TestNet, MainN
 
 ## Where it fits
 
-```
-┌─────────────┐     dApp API (CIP-103)     ┌──────────────────┐     Ledger API     ┌──────────────────┐
-│   Your dApp │ ◄────────────────────────► │  Wallet Gateway  │ ◄─────────────────► │ Canton Validator │
-│ (dApp SDK)  │    (HTTP / postMessage)    │  ┌────────────┐  │                     │                  │
-└─────────────┘                            │  │  User API  │  │     Signing         └──────────────────┘
-       │                                   │  │  User UI   │  │     ┌──────────────────┐
-       │      User interactions            │  └────────────┘  │ ◄──►│ Signing Provider │
-       └──────────────────────────────────►│                  │     │ (Participant,    │
-            (User UI / User API)           └──────────────────┘     │  Fireblocks, …)  │
-                                                                    └──────────────────┘
+```mermaid
+flowchart LR
+    D["Your dApp<br/>(dApp SDK)"]
+    U[User]
+    subgraph WG[Wallet Gateway]
+        direction TB
+        DA[dApp API]
+        UA[User API]
+        UI[User UI]
+    end
+    V[Canton Validator]
+    S["Signing Provider<br/>(Participant, Fireblocks, …)"]
+    D <-->|CIP-103 over<br/>HTTP / postMessage| DA
+    U -->|browser| UI
+    U -->|programmatic| UA
+    WG <-->|Ledger API| V
+    WG <-->|Signing| S
 ```
 
 - **dApp → Gateway**: CIP-103 JSON-RPC over HTTP or `postMessage`.

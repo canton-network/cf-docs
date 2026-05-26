@@ -11,16 +11,15 @@ For step-by-step API details, see the [dApp SDK integration docs](/integrations/
 
 A Canton Network dApp talks to three external systems: the user's wallet, a Canton validator (for the Ledger API), and a signing provider that holds the user's keys. The dApp SDK covers the wallet side.
 
-```
-┌─────────────┐      dApp API (CIP-103)     ┌──────────────────┐     Ledger API      ┌──────────────────┐
-│   Your dApp │ ◄─────────────────────────► │  Wallet Gateway  │ ◄─────────────────► │ Canton Validator │
-│ (dApp SDK)  │    (HTTP / postMessage)     │                  │                     │                  │
-└─────────────┘                             └──────────────────┘                     └──────────────────┘
-                                                     │
-                                                     ▼
-                                              ┌──────────────────┐
-                                              │ Signing Provider │
-                                              └──────────────────┘
+```mermaid
+flowchart LR
+    D["Your dApp<br/>(dApp SDK)"]
+    G[Wallet Gateway]
+    V[Canton Validator]
+    S[Signing Provider]
+    D <-->|dApp API (CIP-103)<br/>HTTP / postMessage| G
+    G <-->|Ledger API| V
+    G <-->|Signing| S
 ```
 
 The dApp uses the SDK to call the dApp API (`connect`, `listAccounts`, `prepareExecute`, `signMessage`, `ledgerApi`, and others). The wallet on the other end is typically a [Wallet Gateway](/appdev/modules/m4-wallet-gateway), which implements the dApp API, manages user sessions, and forwards requests to the validator and signing provider. The SDK abstracts the transport: HTTP for remote gateways, `postMessage` for browser-extension wallets. The same dApp code runs against either.
