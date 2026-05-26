@@ -233,11 +233,13 @@ All functions returning contract data return the following columns:
 
 #### Package ID and Daml upgrades
 
-When Daml packages are upgraded, the Participant Node re-encodes contract data using the latest (representative) package version it knows about. This means:
+- `package_id` is the representative package ID used for decoding, guaranteed to be present on the connected Participant Node.
+- `creation_package_id` is the original package ID from the creation transaction.
+- `package_version` reflects the version of the representative package.
 
-- `package_id` always references a package that is present on the connected Participant Node, suitable for decoding.
-- `creation_package_id` preserves the original package ID from the creation transaction. It may reference a package that has since been superseded and is no longer present on the Participant Node.
-- `package_version` reflects the version of the representative package, not the original creation-time package.
+For Smart Contract Upgrades (SCU), no re-encoding occurs. The creation package is retained in the package store and remains the representative package, so `package_id` and `creation_package_id` are identical.
+
+For Major Upgrades (MUT), the Participant Node re-encodes contract data using the new package version. In this case `package_id` references the new representative package while `creation_package_id` preserves the original, which may no longer be present on the Participant Node.
 
 All functions returning exercise data return the following columns:
 
