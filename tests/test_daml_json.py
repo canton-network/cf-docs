@@ -7,6 +7,7 @@ from pathlib import Path
 
 from x2mdx.cli import main as cli_main
 from x2mdx.daml_json.lifecycle import build_daml_doc_report_from_sources
+from x2mdx.daml_json.render import render_doc_blocks
 from x2mdx.daml_json.snapshots import load_daml_doc_sources
 
 
@@ -237,6 +238,7 @@ class DamlJsonTests(unittest.TestCase):
         self.assertEqual(result, 0)
         module_text = (output_dir / "utility-credential-v0-credential.mdx").read_text(encoding="utf-8")
         self.assertIn("### `data Claim`", module_text)
+        self.assertIn("- `Claim`\n\n| Field | Type | Description |", module_text)
         self.assertIn("### Template `Credential`", module_text)
         self.assertIn("#### Choice `Get`", module_text)
         self.assertNotIn('"ADTDoc"', module_text)
@@ -267,3 +269,9 @@ class DamlJsonTests(unittest.TestCase):
         self.assertEqual(result, 0)
         index_text = (output_dir / "index.mdx").read_text(encoding="utf-8")
         self.assertIn('<a class="x2mdx-ref-card" href="/appdev/reference/daml-standard-library/da-list">', index_text)
+
+    def test_doc_blocks_normalize_markdown_autolinks_for_mdx(self) -> None:
+        self.assertEqual(
+            render_doc_blocks("See <https://example.com/docs/path/> for details."),
+            "See [https://example.com/docs/path/](https://example.com/docs/path/) for details.",
+        )

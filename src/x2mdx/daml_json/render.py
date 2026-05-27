@@ -34,6 +34,7 @@ ACRONYM_PARTS = {
     "lf": "LF",
 }
 REPLACED_BY_RE = re.compile(r"^Replaced by: (?P<target>[A-Za-z][A-Za-z0-9_.]*[A-Za-z0-9])\.$")
+MARKDOWN_AUTOLINK_RE = re.compile(r"<(https?://[^>\s]+)>")
 
 
 def slugify(text: str) -> str:
@@ -44,11 +45,15 @@ def escape_md_cell(text: str) -> str:
     return text.replace("|", r"\|").replace("\n", "<br/>")
 
 
+def normalize_markdown_autolinks(text: str) -> str:
+    return MARKDOWN_AUTOLINK_RE.sub(lambda match: f"[{match.group(1)}]({match.group(1)})", text)
+
+
 def render_doc_blocks(descr: Any) -> str:
     if not descr:
         return ""
     if isinstance(descr, str):
-        return descr.strip()
+        return normalize_markdown_autolinks(descr.strip())
 
     paragraphs = descr if isinstance(descr, list) else [descr]
     blocks: list[str] = []
@@ -68,7 +73,7 @@ def render_doc_blocks(descr: Any) -> str:
         else:
             raw = str(paragraph).strip()
         if raw:
-            blocks.append(raw)
+            blocks.append(normalize_markdown_autolinks(raw))
     return "\n\n".join(blocks)
 
 
@@ -425,7 +430,7 @@ def render_constructor(constructor: dict[str, Any]) -> str:
     desc = render_doc_blocks(payload.get("ac_descr"))
     if desc:
         parts.append(desc)
-    return "\n".join(parts)
+    return "\n\n".join(parts)
 
 
 def render_adt(adt_union: dict[str, Any]) -> str:
@@ -448,7 +453,7 @@ def render_adt(adt_union: dict[str, Any]) -> str:
         constrs = adt.get("ad_constrs", [])
         if constrs:
             parts.append("Constructors:")
-            parts.append("\n".join(render_constructor(constructor) for constructor in constrs))
+            parts.append("\n\n".join(render_constructor(constructor) for constructor in constrs))
         instances = adt.get("ad_instances", [])
         if instances:
             parts.append("Instances:")
@@ -492,7 +497,7 @@ def render_adt(adt_union: dict[str, Any]) -> str:
         constrs = adt.get("ad_constrs", [])
         if constrs:
             parts.append("Constructors:")
-            parts.append("\n".join(render_constructor(constructor) for constructor in constrs))
+            parts.append("\n\n".join(render_constructor(constructor) for constructor in constrs))
     elif tag == "Synonym":
         rhs = render_type(adt["ad_rhs"])
         parts.append(f"### `type {name} = {rhs}`")
@@ -761,7 +766,7 @@ def build_pages(
                     title=overview_title,
                     description=f"Reference documentation for {overview_title} modules.",
                     eyebrow="Daml Reference",
-                    summary="Generated module overview for the Daml Standard Library, built from versioned docs JSON snapshots.",
+                    summary=f"Generated module overview for {overview_title}, built from versioned docs JSON snapshots.",
                     badges=[ReferenceBadge("Daml", tone="protocol"), ReferenceBadge(report.publish_version, tone="neutral")],
                     meta_items=[
                         ReferenceMetaItem("Publish version", report.publish_version),

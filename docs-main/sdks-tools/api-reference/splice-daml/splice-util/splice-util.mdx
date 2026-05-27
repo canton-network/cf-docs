@@ -1,222 +1,247 @@
 ---
 title: "Splice.Util"
-description: "Documentation for Splice.Util"
+description: "Reference documentation for Daml module Splice.Util."
 ---
 
-{/* COPIED_START source="splice:daml/splice-util/docs/Splice-Util.rst" tag="0.6.4" hash="ad0bba02" */}
+<span id="module-splice-util-50740"></span>
+
+# Splice.Util
 
 Utility functions shared across all splice apps.
 
+## Module Snapshot
+
+<CardGroup cols={2}>
+<Card title="Lifecycle">
+Stable.
+</Card>
+<Card title="Notices">
+Status: `active`
+Introduced in: `0.6.4`
+Removed in: `-`
+Warnings: `0`
+Deprecations: `0`
+Deprecated since: `-`
+</Card>
+</CardGroup>
+
 ## Typeclasses
 
-<div id="class-splice-util-hascheckedfetch-36555">
+<span id="class-splice-util-hascheckedfetch-36555"></span>
 
-**class** ([Show](/appdev/reference/daml-standard-library/prelude#class-ghc-show-show-65360) t, [Eq](/appdev/reference/daml-standard-library/prelude#class-ghc-classes-eq-22713) cgid, [Show](/appdev/reference/daml-standard-library/prelude#class-ghc-show-show-65360) cgid) =\> HasCheckedFetch t cgid **where**
+### `class (Show t, Eq cgid, Show cgid) => HasCheckedFetch t cgid`
 
-</div>
+Contracts typically come in groups. For example, all contracts managed by a specific DSO party.
 
-> Contracts typically come in groups. For example, all contracts managed by a specific DSO party.
->
-> We aim to always fetch with a specific contract group identifier to ensure that we do not mixup contracts from different groups.
->
-> Note that we are not requiring `HasFetch` here, so that we can use this typeclass also for contract groups that are not templates, e.g., interface views.
->
-> <div id="function-splice-util-contractgroupid-63283">
->
-> contractGroupId
-> : t -\> cgid
->
-> </div>
+We aim to always fetch with a specific contract group identifier to ensure that we do not mixup
+contracts from different groups.
 
-<div id="class-splice-util-patchable-41062">
+Note that we are not requiring `HasFetch` here, so that we can use this typeclass also for
+contract groups that are not templates, e.g., interface views.
 
-**class** Patchable a **where**
+Methods:
 
-</div>
+- `contractGroupId : t -> cgid`
 
-> A type class for patching values. Used in particular for changing only a subset of fields in a config value.
->
-> <div id="function-splice-util-patch-72775">
->
-> patch
-> : a -\> a -\> a -\> a
->
-> For records, `patch new base current` should set all fields in `current` to their value in `new` iff their value was changed in `new` compared to `base`. For other kinds of values that have field-like values (e.g. Maps with keys) the implementation should match the one for records by analogy.
->
-> </div>
->
-> **instance** Patchable [Decimal](/appdev/reference/daml-standard-library/prelude#type-ghc-types-decimal-18135)
->
-> **instance** Patchable [Int](/appdev/reference/daml-standard-library/prelude#type-ghc-types-int-37261)
->
-> **instance** Patchable [Text](/appdev/reference/daml-standard-library/prelude#type-ghc-types-text-51952)
->
-> **instance** ([Ord](/appdev/reference/daml-standard-library/prelude#class-ghc-classes-ord-6395) k, Patchable v) =\> Patchable ([Map](/appdev/reference/daml-standard-library/prelude#type-da-internal-lf-map-90052) k v)
->
-> **instance** Patchable [Party](/appdev/reference/daml-standard-library/prelude#type-da-internal-lf-party-57932)
->
-> **instance** Patchable [Time](/appdev/reference/daml-standard-library/prelude#type-da-internal-lf-time-63886)
->
-> **instance** Patchable a =\> Patchable ([Optional](/appdev/reference/daml-standard-library/prelude#type-da-internal-prelude-optional-37153) a)
->
-> **instance** (Patchable a, [Ord](/appdev/reference/daml-standard-library/prelude#class-ghc-classes-ord-6395) a) =\> Patchable (Set a)
->
-> **instance** Patchable [RelTime](/appdev/reference/daml-standard-library/da-time#type-da-time-types-reltime-23082)
+<span id="class-splice-util-patchable-41062"></span>
+
+### `class Patchable a`
+
+A type class for patching values. Used in particular for changing only a subset of
+fields in a config value.
+
+Methods:
+
+- `patch : a -> a -> a -> a`
+  For records, `patch new base current` should set all fields in `current` to their value in `new` iff their value was changed
+  in `new` compared to `base`. For other kinds of values that have field-like values
+  (e.g. Maps with keys) the implementation should match the one for records
+  by analogy.
+
+Instances:
+
+- `instance Patchable Decimal`
+- `instance Patchable Int`
+- `instance Patchable Text`
+- `instance (Ord k, Patchable v) => Patchable (Map k v)`
+- `instance Patchable Party`
+- `instance Patchable Time`
+- `instance Patchable a => Patchable (Optional a)`
+- `instance (Patchable a, Ord a) => Patchable (Set a)`
+- `instance Patchable RelTime`
 
 ## Functions
 
-<div id="function-splice-util-requirematchingcontract-54053">
+<span id="function-splice-util-requirematchingcontract-54053"></span>
 
-requireMatchingContract
-: ([Eq](/appdev/reference/daml-standard-library/prelude#class-ghc-classes-eq-22713) t, [Show](/appdev/reference/daml-standard-library/prelude#class-ghc-show-show-65360) t, [HasFetch](/appdev/reference/daml-standard-library/prelude#class-da-internal-template-functions-hasfetch-52387) t) =\> [ContractId](/appdev/reference/daml-standard-library/prelude#type-da-internal-lf-contractid-95282) t -\> t -\> [Update](/appdev/reference/daml-standard-library/prelude#type-da-internal-lf-update-68072) ()
+### `requireMatchingContract`
+
+```daml
+requireMatchingContract : (Eq t, Show t, HasFetch t) => ContractId t -> t -> Update ()
+```
 
 Require that a contract-id refers to a specific contract.
 
-</div>
+<span id="function-splice-util-require-11486"></span>
 
-<div id="function-splice-util-require-11486">
+### `require`
 
-require
-: [CanAssert](/appdev/reference/daml-standard-library/prelude#class-da-internal-assert-canassert-67323) m =\> [Text](/appdev/reference/daml-standard-library/prelude#type-ghc-types-text-51952) -\> [Bool](/appdev/reference/daml-standard-library/prelude#type-ghc-types-bool-66265) -\> m ()
+```daml
+require : CanAssert m => Text -> Bool -> m ()
+```
 
-Check whether a required condition is true. If it's not, abort the transaction with a message saying that the requirement was not met.
+Check whether a required condition is true. If it's not, abort the
+transaction with a message saying that the requirement was not met.
 
-</div>
+<span id="function-splice-util-fetchchecked-58913"></span>
 
-<div id="function-splice-util-fetchchecked-58913">
+### `fetchChecked`
 
-fetchChecked
-: ([HasFetch](/appdev/reference/daml-standard-library/prelude#class-da-internal-template-functions-hasfetch-52387) t, HasCheckedFetch t cgid) =\> cgid -\> [ContractId](/appdev/reference/daml-standard-library/prelude#type-da-internal-lf-contractid-95282) t -\> [Update](/appdev/reference/daml-standard-library/prelude#type-da-internal-lf-update-68072) t
+```daml
+fetchChecked : (HasFetch t, HasCheckedFetch t cgid) => cgid -> ContractId t -> Update t
+```
 
 Fetch a contract that is part of a specific contract group.
 
 The group is typically chosen by the caller to match its own group, or a more specific group.
 
-</div>
+<span id="function-splice-util-fetchcheckedinterface-8937"></span>
 
-<div id="function-splice-util-fetchcheckedinterface-8937">
+### `fetchCheckedInterface`
 
-fetchCheckedInterface
-: ([HasFetch](/appdev/reference/daml-standard-library/prelude#class-da-internal-template-functions-hasfetch-52387) i, [HasInterfaceView](/appdev/reference/daml-standard-library/prelude#class-da-internal-interface-hasinterfaceview-4492) i v, HasCheckedFetch v cgid) =\> cgid -\> [ContractId](/appdev/reference/daml-standard-library/prelude#type-da-internal-lf-contractid-95282) i -\> [Update](/appdev/reference/daml-standard-library/prelude#type-da-internal-lf-update-68072) i
+```daml
+fetchCheckedInterface : (HasFetch i, HasInterfaceView i v, HasCheckedFetch v cgid) => cgid -> ContractId i -> Update i
+```
 
 Fetch a contract that is part of a specific contract group defined by its interface view.
 
 The group is typically chosen by the caller to match its own group, or a more specific group.
 
-</div>
+<span id="function-splice-util-fetchandarchive-96960"></span>
 
-<div id="function-splice-util-fetchandarchive-96960">
+### `fetchAndArchive`
 
-fetchAndArchive
-: ([HasFetch](/appdev/reference/daml-standard-library/prelude#class-da-internal-template-functions-hasfetch-52387) t, HasCheckedFetch t cgid, [HasArchive](/appdev/reference/daml-standard-library/prelude#class-da-internal-template-functions-hasarchive-7071) t) =\> cgid -\> [ContractId](/appdev/reference/daml-standard-library/prelude#type-da-internal-lf-contractid-95282) t -\> [Update](/appdev/reference/daml-standard-library/prelude#type-da-internal-lf-update-68072) t
+```daml
+fetchAndArchive : (HasFetch t, HasCheckedFetch t cgid, HasArchive t) => cgid -> ContractId t -> Update t
+```
 
 Fetch and archive a contract in one go.
 
-Use this when implementing choices that mutate another contract by fetching, archiving, and then creating the updated contract.
+Use this when implementing choices that mutate another contract by
+fetching, archiving, and then creating the updated contract.
 
-</div>
+<span id="function-splice-util-fetchreferencedata-72475"></span>
 
-<div id="function-splice-util-fetchreferencedata-72475">
+### `fetchReferenceData`
 
-fetchReferenceData
-: ([HasFetch](/appdev/reference/daml-standard-library/prelude#class-da-internal-template-functions-hasfetch-52387) t, HasCheckedFetch t cgid) =\> cgid -\> [ContractId](/appdev/reference/daml-standard-library/prelude#type-da-internal-lf-contractid-95282) t -\> [Update](/appdev/reference/daml-standard-library/prelude#type-da-internal-lf-update-68072) t
+```daml
+fetchReferenceData : (HasFetch t, HasCheckedFetch t cgid) => cgid -> ContractId t -> Update t
+```
 
 Fetch a contract that serves as reference data.
 
 Use this whenever you need to fetch a contract that you do not intend to mutate.
 
-</div>
+<span id="function-splice-util-fetchbutarchivelater-86159"></span>
 
-<div id="function-splice-util-fetchbutarchivelater-86159">
+### `fetchButArchiveLater`
 
-fetchButArchiveLater
-: ([HasFetch](/appdev/reference/daml-standard-library/prelude#class-da-internal-template-functions-hasfetch-52387) t, HasCheckedFetch t cgid) =\> cgid -\> [ContractId](/appdev/reference/daml-standard-library/prelude#type-da-internal-lf-contractid-95282) t -\> [Update](/appdev/reference/daml-standard-library/prelude#type-da-internal-lf-update-68072) t
+```daml
+fetchButArchiveLater : (HasFetch t, HasCheckedFetch t cgid) => cgid -> ContractId t -> Update t
+```
 
 Fetch a contract that is not reference data, and should be archived later in some cases.
 
 Prefer `fetchAndArchive` over this function, as it avoids forgetting to archive the contract.
 
-</div>
+<span id="function-splice-util-fetchpublicreferencedata-76996"></span>
 
-<div id="function-splice-util-fetchpublicreferencedata-76996">
+### `fetchPublicReferenceData`
 
-fetchPublicReferenceData
-: (HasCheckedFetch t cgid, [HasExercise](/appdev/reference/daml-standard-library/prelude#class-da-internal-template-functions-hasexercise-70422) t ch t) =\> cgid -\> [ContractId](/appdev/reference/daml-standard-library/prelude#type-da-internal-lf-contractid-95282) t -\> ch -\> [Update](/appdev/reference/daml-standard-library/prelude#type-da-internal-lf-update-68072) t
+```daml
+fetchPublicReferenceData : (HasCheckedFetch t cgid, HasExercise t ch t) => cgid -> ContractId t -> ch -> Update t
+```
 
 Fetch a contract that offers a choice anybody to be read as reference data.
 
-</div>
+<span id="function-splice-util-fetchuncheckedandarchive-65397"></span>
 
-<div id="function-splice-util-fetchuncheckedandarchive-65397">
+### `fetchUncheckedAndArchive`
 
-fetchUncheckedAndArchive
-: ([HasFetch](/appdev/reference/daml-standard-library/prelude#class-da-internal-template-functions-hasfetch-52387) b, [HasArchive](/appdev/reference/daml-standard-library/prelude#class-da-internal-template-functions-hasarchive-7071) b) =\> [ContractId](/appdev/reference/daml-standard-library/prelude#type-da-internal-lf-contractid-95282) b -\> [Update](/appdev/reference/daml-standard-library/prelude#type-da-internal-lf-update-68072) b
+```daml
+fetchUncheckedAndArchive : (HasFetch b, HasArchive b) => ContractId b -> Update b
+```
 
 Fetch and archive a contract in one go.
 
-Use this when implementing choices that mutate another contract by fetching, archiving, and then creating the updated contract.
+Use this when implementing choices that mutate another contract by
+fetching, archiving, and then creating the updated contract.
 
-</div>
+<span id="function-splice-util-fetchuncheckedreferencedata-5520"></span>
 
-<div id="function-splice-util-fetchuncheckedreferencedata-5520">
+### `fetchUncheckedReferenceData`
 
-fetchUncheckedReferenceData
-: [HasFetch](/appdev/reference/daml-standard-library/prelude#class-da-internal-template-functions-hasfetch-52387) t =\> [ContractId](/appdev/reference/daml-standard-library/prelude#type-da-internal-lf-contractid-95282) t -\> [Update](/appdev/reference/daml-standard-library/prelude#type-da-internal-lf-update-68072) t
+```daml
+fetchUncheckedReferenceData : HasFetch t => ContractId t -> Update t
+```
 
 Fetch a contract that serves as reference data.
 
 Use this whenever you need to fetch a contract that you do not intend to mutate.
 
-</div>
+<span id="function-splice-util-fetchuncheckedbutarchivelater-82900"></span>
 
-<div id="function-splice-util-fetchuncheckedbutarchivelater-82900">
+### `fetchUncheckedButArchiveLater`
 
-fetchUncheckedButArchiveLater
-: [HasFetch](/appdev/reference/daml-standard-library/prelude#class-da-internal-template-functions-hasfetch-52387) t =\> [ContractId](/appdev/reference/daml-standard-library/prelude#type-da-internal-lf-contractid-95282) t -\> [Update](/appdev/reference/daml-standard-library/prelude#type-da-internal-lf-update-68072) t
+```daml
+fetchUncheckedButArchiveLater : HasFetch t => ContractId t -> Update t
+```
 
 Fetch a contract that is not reference data, and should be archived later in some cases.
 
 Prefer `fetchAndArchive` over this function, as it avoids forgetting to archive the contract.
 
-</div>
+<span id="function-splice-util-potentiallyunsafearchive-47027"></span>
 
-<div id="function-splice-util-potentiallyunsafearchive-47027">
+### `potentiallyUnsafeArchive`
 
-potentiallyUnsafeArchive
-: [HasArchive](/appdev/reference/daml-standard-library/prelude#class-da-internal-template-functions-hasarchive-7071) t =\> [ContractId](/appdev/reference/daml-standard-library/prelude#type-da-internal-lf-contractid-95282) t -\> [Update](/appdev/reference/daml-standard-library/prelude#type-da-internal-lf-update-68072) ()
+```daml
+potentiallyUnsafeArchive : HasArchive t => ContractId t -> Update ()
+```
 
 A more appropriately named version of `archive`.
 
-Please justify all its uses, and where possible prefer `fetchAndArchive` so that the contract group identifier is surely performed.
+Please justify all its uses, and where possible prefer `fetchAndArchive`
+so that the contract group identifier is surely performed.
 
-</div>
+<span id="function-splice-util-patchscalar-11117"></span>
 
-<div id="function-splice-util-patchscalar-11117">
+### `patchScalar`
 
-patchScalar
-: [Eq](/appdev/reference/daml-standard-library/prelude#class-ghc-classes-eq-22713) a =\> a -\> a -\> a -\> a
+```daml
+patchScalar : Eq a => a -> a -> a -> a
+```
 
-</div>
+<span id="function-splice-util-patchlistasscalar-47719"></span>
 
-<div id="function-splice-util-patchlistasscalar-47719">
+### `patchListAsScalar`
 
-patchListAsScalar
-: [Eq](/appdev/reference/daml-standard-library/prelude#class-ghc-classes-eq-22713) a =\> \[a\] -\> \[a\] -\> \[a\] -\> \[a\]
+```daml
+patchListAsScalar : Eq a => [a] -> [a] -> [a] -> [a]
+```
 
-</div>
+<span id="function-splice-util-patchlistasset-9274"></span>
 
-<div id="function-splice-util-patchlistasset-9274">
+### `patchListAsSet`
 
-patchListAsSet
-: (Patchable a, [Ord](/appdev/reference/daml-standard-library/prelude#class-ghc-classes-ord-6395) a) =\> \[a\] -\> \[a\] -\> \[a\] -\> \[a\]
+```daml
+patchListAsSet : (Patchable a, Ord a) => [a] -> [a] -> [a] -> [a]
+```
 
-</div>
+<span id="function-splice-util-deprecatedchoice-19928"></span>
 
-<div id="function-splice-util-deprecatedchoice-19928">
+### `deprecatedChoice`
 
-deprecatedChoice
-: [Text](/appdev/reference/daml-standard-library/prelude#type-ghc-types-text-51952) -\> [Text](/appdev/reference/daml-standard-library/prelude#type-ghc-types-text-51952) -\> [Text](/appdev/reference/daml-standard-library/prelude#type-ghc-types-text-51952) -\> [Update](/appdev/reference/daml-standard-library/prelude#type-da-internal-lf-update-68072) a
-
-</div>
-
-{/* COPIED_END */}
+```daml
+deprecatedChoice : Text -> Text -> Text -> Update a
+```

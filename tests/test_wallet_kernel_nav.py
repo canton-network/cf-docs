@@ -208,3 +208,64 @@ def test_aggregate_generation_replaces_legacy_wallet_kernel_group() -> None:
         {"group": "Wallet Gateway", "pages": ["new"]},
         {"group": "Splice APIs", "pages": []},
     ]
+
+
+def test_aggregate_generation_merges_product_nested_group(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    generate_all_reference_docs = load_script("generate_all_reference_docs")
+    docs_json = tmp_path / "docs-main" / "docs.json"
+    scratch_json = tmp_path / "docs-main" / ".generate_splice_daml_reference.docs.json"
+    monkeypatch.setattr(generate_all_reference_docs, "DOCS_JSON_PATH", docs_json)
+
+    final_docs = {
+        "navigation": {
+            "products": [
+                {
+                    "product": "API Reference",
+                    "pages": [
+                        {
+                            "group": "Splice APIs",
+                            "pages": [
+                                {
+                                    "group": "Splice Daml Packages",
+                                    "pages": ["old"],
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ]
+        }
+    }
+    scratch_docs = {
+        "navigation": {
+            "products": [
+                {
+                    "product": "API Reference",
+                    "pages": [
+                        {
+                            "group": "Splice APIs",
+                            "pages": [
+                                {
+                                    "group": "Splice Daml Packages",
+                                    "pages": ["new"],
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ]
+        }
+    }
+
+    generate_all_reference_docs.merge_nav_slice(
+        final_docs=final_docs,
+        scratch_docs=scratch_docs,
+        nav_slice=generate_all_reference_docs.NavSlice(
+            "product_nested_group",
+            ("API Reference", "Splice APIs", "Splice Daml Packages"),
+        ),
+        scratch_path=scratch_json,
+    )
+
+    pages = final_docs["navigation"]["products"][0]["pages"][0]["pages"][0]["pages"]
+    assert pages == ["new"]

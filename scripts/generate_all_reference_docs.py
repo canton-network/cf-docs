@@ -32,7 +32,7 @@ LEGACY_PAGE_REFS = {
 
 @dataclass(frozen=True)
 class NavSlice:
-    kind: Literal["ledger_child", "top_group", "top_groups", "nested_group"]
+    kind: Literal["ledger_child", "top_group", "top_groups", "nested_group", "product_nested_group"]
     labels: tuple[str, ...]
 
 
@@ -86,6 +86,12 @@ SCRIPT_JOBS = [
     ScriptJob(
         script_path=REPO_ROOT / "scripts" / "generate_splice_mintlify_openapi.py",
         nav_slices=(NavSlice("top_group", ("Splice APIs",)),),
+    ),
+    ScriptJob(
+        script_path=REPO_ROOT / "scripts" / "generate_splice_daml_reference.py",
+        nav_slices=(
+            NavSlice("product_nested_group", ("API Reference", "Splice APIs", "Splice Daml Packages")),
+        ),
     ),
     ScriptJob(
         script_path=REPO_ROOT / "scripts" / "generate_typescript_bindings_reference.py",
@@ -168,6 +174,25 @@ def dropdown_pages(docs: dict[str, Any], *, dropdown_label: str) -> list[Any]:
         return pages
 
     raise ValueError(f"docs.json navigation must define dropdowns or products: {DOCS_JSON_PATH}")
+
+
+def product_navigation_items(docs: dict[str, Any], *, product_label: str, source_path: Path) -> list[Any]:
+    navigation = docs.get("navigation")
+    if not isinstance(navigation, dict):
+        raise ValueError(f"docs.json missing navigation object: {source_path}")
+    products = navigation.get("products")
+    if not isinstance(products, list):
+        raise ValueError(f"docs.json navigation.products must be a list: {source_path}")
+    product = next((item for item in products if isinstance(item, dict) and item.get("product") == product_label), None)
+    if product is None:
+        raise ValueError(f"Product not found in docs.json: {product_label}")
+    pages = product.get("pages")
+    if isinstance(pages, list):
+        return pages
+    groups = product.get("groups")
+    if isinstance(groups, list):
+        return groups
+    raise ValueError(f"Product does not expose a pages or groups list: {product_label}")
 
 
 def with_legacy_dropdown_scratch(docs: dict[str, Any]) -> dict[str, Any]:
@@ -308,6 +333,32 @@ def prune_page_refs(node: object, page_refs: set[str]) -> object | None:
 
 
 def merge_nav_slice(*, final_docs: dict[str, Any], scratch_docs: dict[str, Any], nav_slice: NavSlice, scratch_path: Path) -> None:
+    if nav_slice.kind == "product_nested_group":
+        product_label, *path_labels = nav_slice.labels
+        if len(path_labels) < 2:
+            raise ValueError(f"Product nested nav slice needs at least one parent and one child group: {nav_slice}")
+
+        scratch_items = product_navigation_items(
+            scratch_docs,
+            product_label=product_label,
+            source_path=scratch_path,
+        )
+        for parent_label in path_labels[:-1]:
+            scratch_parent = require_group(scratch_items, parent_label, source_path=scratch_path)
+            scratch_items = group_pages(scratch_parent, source_path=scratch_path)
+        child_group = require_group(scratch_items, path_labels[-1], source_path=scratch_path)
+
+        final_items = product_navigation_items(
+            final_docs,
+            product_label=product_label,
+            source_path=DOCS_JSON_PATH,
+        )
+        for parent_label in path_labels[:-1]:
+            final_parent = ensure_group(final_items, parent_label)
+            final_items = group_pages(final_parent, source_path=DOCS_JSON_PATH)
+        replace_group(final_items, child_group)
+        return
+
     final_pages = dropdown_pages(final_docs, dropdown_label=API_REFERENCE_DROPDOWN)
     scratch_pages = dropdown_pages(scratch_docs, dropdown_label=API_REFERENCE_DROPDOWN)
 

@@ -1,474 +1,430 @@
 ---
 title: "Splice.Api.Token.AllocationV1"
-description: "Documentation for Splice.Api.Token.AllocationV1"
+description: "Reference documentation for Daml module Splice.Api.Token.AllocationV1."
 ---
 
-{/* COPIED_START source="splice:token-standard/splice-api-token-allocation-v1/docs/Splice-Api-Token-AllocationV1.rst" hash="d9b34e39" */}
+<span id="module-splice-api-token-allocationv1-39050"></span>
+
+# Splice.Api.Token.AllocationV1
 
 This module defines the `Allocation` interface and supporting types.
 
-Contracts implementing the `Allocation` interface represent a reservation of assets to transfer them as part of an atomic on-ledger settlement requested by an app.
+Contracts implementing the `Allocation` interface represent a reservation of
 
-## Interfaces
+assets to transfer them as part of an atomic on-ledger settlement requested
 
-<div id="type-splice-api-token-allocationv1-allocation-9928">
+by an app.
 
-**interface** Allocation
+## Module Snapshot
 
-</div>
-
-> A contract representing an allocation of some amount of aasset holdings to a specific leg of a settlement.
->
-> **viewtype** AllocationView
->
-> - <div id="type-splice-api-token-allocationv1-allocationcancel-25504">
->
->   **Choice** Allocation_Cancel
->
->   </div>
->
->   Cancel the allocation. Requires authorization from sender, receiver, and executor.
->
->   Typically this authorization is granted by sender and receiver to the executor as part of the contract coordinating the settlement, so that that the executor can release the allocated assets early in case the settlement is aborted or it has definitely failed.
->
->   Controller: allocationControllers (view this)
->
->   Returns: Allocation_CancelResult
->
->   | Field     | Type      | Description                                                  |
->   |-----------|-----------|--------------------------------------------------------------|
->   | extraArgs | ExtraArgs | Additional context required in order to exercise the choice. |
->
-> - <div id="type-splice-api-token-allocationv1-allocationexecutetransfer-74529">
->
->   **Choice** Allocation_ExecuteTransfer
->
->   </div>
->
->   Execute the transfer of the allocated assets. Intended to be used to execute the settlement. This choice SHOULD succeed provided the `settlement.settleBefore` deadline has not yet passed.
->
->   Controller: allocationControllers (view this)
->
->   Returns: Allocation_ExecuteTransferResult
->
->   | Field     | Type      | Description                                                  |
->   |-----------|-----------|--------------------------------------------------------------|
->   | extraArgs | ExtraArgs | Additional context required in order to exercise the choice. |
->
-> - <div id="type-splice-api-token-allocationv1-allocationwithdraw-60458">
->
->   **Choice** Allocation_Withdraw
->
->   </div>
->
->   Withdraw the allocated assets. Used by the sender to withdraw the assets before settlement was completed. This SHOULD not fail settlement if the sender has still time to allocate the assets again; i.e., the `settlement.allocateBefore` deadline has not yet passed.
->
->   Controller: (DA.Internal.Record.getField @"sender" (DA.Internal.Record.getField @"transferLeg" (DA.Internal.Record.getField @"allocation" (view this))))
->
->   Returns: Allocation_WithdrawResult
->
->   | Field     | Type      | Description                                                  |
->   |-----------|-----------|--------------------------------------------------------------|
->   | extraArgs | ExtraArgs | Additional context required in order to exercise the choice. |
->
-> - **Choice** Archive
->
->   Controller: Signatories of implementing template
->
->   Returns: ()
->
->   (no fields)
->
-> - **Method allocation_cancelImpl :** ContractId Allocation -\> Allocation_Cancel -\> Update Allocation_CancelResult
->
-> - **Method allocation_executeTransferImpl :** ContractId Allocation -\> Allocation_ExecuteTransfer -\> Update Allocation_ExecuteTransferResult
->
-> - **Method allocation_withdrawImpl :** ContractId Allocation -\> Allocation_Withdraw -\> Update Allocation_WithdrawResult
+<CardGroup cols={2}>
+<Card title="Lifecycle">
+Stable.
+</Card>
+<Card title="Notices">
+Status: `active`
+Introduced in: `0.6.4`
+Removed in: `-`
+Warnings: `0`
+Deprecations: `0`
+Deprecated since: `-`
+</Card>
+</CardGroup>
 
 ## Data Types
 
-<div id="type-splice-api-token-allocationv1-allocationspecification-94148">
+<span id="type-splice-api-token-allocationv1-allocationspecification-94148"></span>
 
-**data** AllocationSpecification
+### `data AllocationSpecification`
 
-</div>
+The specification of an allocation of assets to a specific leg of a settlement.
 
-> The specification of an allocation of assets to a specific leg of a settlement.
->
-> In contrast to an `AllocationView` this just specifies what should be allocated, but not the holdings that are backing the allocation.
->
-> <div id="constr-splice-api-token-allocationv1-allocationspecification-66543">
->
-> AllocationSpecification
->
-> </div>
->
-> > | Field         | Type                                                                             | Description                                                        |
-> > |---------------|----------------------------------------------------------------------------------|--------------------------------------------------------------------|
-> > | settlement    | SettlementInfo                                                                   | The settlement for whose execution the assets are being allocated. |
-> > | transferLegId | Text | A unique identifer for the transfer leg within the settlement.     |
-> > | transferLeg   | TransferLeg                                                                      | The transfer for which the assets are being allocated.             |
->
-> **instance** Eq AllocationSpecification
->
-> **instance** Show AllocationSpecification
->
-> **instance** GetField "allocation" AllocationView AllocationSpecification
->
-> **instance** GetField "settlement" AllocationSpecification SettlementInfo
->
-> **instance** GetField "transferLeg" AllocationSpecification TransferLeg
->
-> **instance** GetField "transferLegId" AllocationSpecification Text
->
-> **instance** SetField "allocation" AllocationView AllocationSpecification
->
-> **instance** SetField "settlement" AllocationSpecification SettlementInfo
->
-> **instance** SetField "transferLeg" AllocationSpecification TransferLeg
->
-> **instance** SetField "transferLegId" AllocationSpecification Text
+In contrast to an `AllocationView` this just specifies what should be allocated,
+but not the holdings that are backing the allocation.
 
-<div id="type-splice-api-token-allocationv1-allocationview-9103">
+Constructors:
 
-**data** AllocationView
+<span id="constr-splice-api-token-allocationv1-allocationspecification-66543"></span>
 
-</div>
+- `AllocationSpecification`
 
-> View of a funded allocation of assets to a specific leg of a settlement.
->
-> <div id="constr-splice-api-token-allocationv1-allocationview-89090">
->
-> AllocationView
->
-> </div>
->
-> > | Field       | Type                                                                                                          | Description                                                                                                                                                                                              |
-> > |-------------|---------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-> > | allocation  | AllocationSpecification                                                                                       | The settlement for whose execution the assets are being allocated.                                                                                                                                       |
-> > | holdingCids | \[ContractId Holding\] | The holdings that are backing this allocation. Provided so that that wallets can correlate the allocation with the holdings. MAY be empty for registries that do not represent their holdings on-ledger. |
-> > | meta        | Metadata                                                                                                      | Additional metadata specific to the allocation, used for extensibility.                                                                                                                                  |
->
-> **instance** Eq AllocationView
->
-> **instance** Show AllocationView
->
-> **instance** HasFromAnyView Allocation AllocationView
->
-> **instance** HasInterfaceView Allocation AllocationView
->
-> **instance** GetField "allocation" AllocationView AllocationSpecification
->
-> **instance** GetField "holdingCids" AllocationView \[ContractId Holding\]
->
-> **instance** GetField "meta" AllocationView Metadata
->
-> **instance** SetField "allocation" AllocationView AllocationSpecification
->
-> **instance** SetField "holdingCids" AllocationView \[ContractId Holding\]
->
-> **instance** SetField "meta" AllocationView Metadata
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| settlement | SettlementInfo | The settlement for whose execution the assets are being allocated. |
+| transferLegId | Text | A unique identifer for the transfer leg within the settlement. |
+| transferLeg | TransferLeg | The transfer for which the assets are being allocated. |
 
-<div id="type-splice-api-token-allocationv1-allocationcancelresult-26037">
+Instances:
 
-**data** Allocation_CancelResult
+- `instance Eq AllocationSpecification`
+- `instance Show AllocationSpecification`
+- `instance GetField allocation AllocationView AllocationSpecification`
+- `instance GetField settlement AllocationSpecification SettlementInfo`
+- `instance GetField transferLeg AllocationSpecification TransferLeg`
+- `instance GetField transferLegId AllocationSpecification Text`
+- `instance SetField allocation AllocationView AllocationSpecification`
+- `instance SetField settlement AllocationSpecification SettlementInfo`
+- `instance SetField transferLeg AllocationSpecification TransferLeg`
+- `instance SetField transferLegId AllocationSpecification Text`
 
-</div>
+<span id="type-splice-api-token-allocationv1-allocationview-9103"></span>
 
-> The result of the `Allocation_Cancel` choice.
->
-> <div id="constr-splice-api-token-allocationv1-allocationcancelresult-74846">
->
-> Allocation_CancelResult
->
-> </div>
->
-> > | Field             | Type                                                                                                          | Description                                                             |
-> > |-------------------|---------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------|
-> > | senderHoldingCids | \[ContractId Holding\] | The holdings that were released back to the sender.                     |
-> > | meta              | Metadata                                                                                                      | Additional metadata specific to the allocation, used for extensibility. |
->
-> **instance** Eq Allocation_CancelResult
->
-> **instance** Show Allocation_CancelResult
->
-> **instance** HasMethod Allocation "allocation_cancelImpl" (ContractId Allocation -\> Allocation_Cancel -\> Update Allocation_CancelResult)
->
-> **instance** GetField "meta" Allocation_CancelResult Metadata
->
-> **instance** GetField "senderHoldingCids" Allocation_CancelResult \[ContractId Holding\]
->
-> **instance** SetField "meta" Allocation_CancelResult Metadata
->
-> **instance** SetField "senderHoldingCids" Allocation_CancelResult \[ContractId Holding\]
->
-> **instance** HasExercise Allocation Allocation_Cancel Allocation_CancelResult
->
-> **instance** HasExerciseGuarded Allocation Allocation_Cancel Allocation_CancelResult
->
-> **instance** HasFromAnyChoice Allocation Allocation_Cancel Allocation_CancelResult
->
-> **instance** HasToAnyChoice Allocation Allocation_Cancel Allocation_CancelResult
+### `data AllocationView`
 
-<div id="type-splice-api-token-allocationv1-allocationexecutetransferresult-74160">
+View of a funded allocation of assets to a specific leg of a settlement.
 
-**data** Allocation_ExecuteTransferResult
+Constructors:
 
-</div>
+<span id="constr-splice-api-token-allocationv1-allocationview-89090"></span>
 
-> The result of the `Allocation_ExecuteTransfer` choice.
->
-> <div id="constr-splice-api-token-allocationv1-allocationexecutetransferresult-50341">
->
-> Allocation_ExecuteTransferResult
->
-> </div>
->
-> > | Field               | Type                                                                                                          | Description                                                                                              |
-> > |---------------------|---------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------|
-> > | senderHoldingCids   | \[ContractId Holding\] | The holdings that were created for the sender. Can be used to return "change" to the sender if required. |
-> > | receiverHoldingCids | \[ContractId Holding\] | The holdings that were created for the receiver.                                                         |
-> > | meta                | Metadata                                                                                                      | Additional metadata specific to the transfer instruction, used for extensibility.                        |
->
-> **instance** Eq Allocation_ExecuteTransferResult
->
-> **instance** Show Allocation_ExecuteTransferResult
->
-> **instance** HasMethod Allocation "allocation_executeTransferImpl" (ContractId Allocation -\> Allocation_ExecuteTransfer -\> Update Allocation_ExecuteTransferResult)
->
-> **instance** GetField "meta" Allocation_ExecuteTransferResult Metadata
->
-> **instance** GetField "receiverHoldingCids" Allocation_ExecuteTransferResult \[ContractId Holding\]
->
-> **instance** GetField "senderHoldingCids" Allocation_ExecuteTransferResult \[ContractId Holding\]
->
-> **instance** SetField "meta" Allocation_ExecuteTransferResult Metadata
->
-> **instance** SetField "receiverHoldingCids" Allocation_ExecuteTransferResult \[ContractId Holding\]
->
-> **instance** SetField "senderHoldingCids" Allocation_ExecuteTransferResult \[ContractId Holding\]
->
-> **instance** HasExercise Allocation Allocation_ExecuteTransfer Allocation_ExecuteTransferResult
->
-> **instance** HasExerciseGuarded Allocation Allocation_ExecuteTransfer Allocation_ExecuteTransferResult
->
-> **instance** HasFromAnyChoice Allocation Allocation_ExecuteTransfer Allocation_ExecuteTransferResult
->
-> **instance** HasToAnyChoice Allocation Allocation_ExecuteTransfer Allocation_ExecuteTransferResult
+- `AllocationView`
 
-<div id="type-splice-api-token-allocationv1-allocationwithdrawresult-40879">
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| allocation | AllocationSpecification | The settlement for whose execution the assets are being allocated. |
+| holdingCids | [ContractId Holding] | The holdings that are backing this allocation.<br/><br/>Provided so that that wallets can correlate the allocation with the<br/><br/>holdings.<br/><br/>MAY be empty for registries that do not represent their holdings on-ledger. |
+| meta | Metadata | Additional metadata specific to the allocation, used for extensibility. |
 
-**data** Allocation_WithdrawResult
+Instances:
 
-</div>
+- `instance Eq AllocationView`
+- `instance Show AllocationView`
+- `instance HasFromAnyView Allocation AllocationView`
+- `instance HasInterfaceView Allocation AllocationView`
+- `instance GetField allocation AllocationView AllocationSpecification`
+- `instance GetField holdingCids AllocationView [ContractId Holding]`
+- `instance GetField meta AllocationView Metadata`
+- `instance SetField allocation AllocationView AllocationSpecification`
+- `instance SetField holdingCids AllocationView [ContractId Holding]`
+- `instance SetField meta AllocationView Metadata`
 
-> The result of the `Allocation_Withdraw` choice.
->
-> <div id="constr-splice-api-token-allocationv1-allocationwithdrawresult-86620">
->
-> Allocation_WithdrawResult
->
-> </div>
->
-> > | Field             | Type                                                                                                          | Description                                                             |
-> > |-------------------|---------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------|
-> > | senderHoldingCids | \[ContractId Holding\] | The holdings that were released back to the sender.                     |
-> > | meta              | Metadata                                                                                                      | Additional metadata specific to the allocation, used for extensibility. |
->
-> **instance** Eq Allocation_WithdrawResult
->
-> **instance** Show Allocation_WithdrawResult
->
-> **instance** HasMethod Allocation "allocation_withdrawImpl" (ContractId Allocation -\> Allocation_Withdraw -\> Update Allocation_WithdrawResult)
->
-> **instance** GetField "meta" Allocation_WithdrawResult Metadata
->
-> **instance** GetField "senderHoldingCids" Allocation_WithdrawResult \[ContractId Holding\]
->
-> **instance** SetField "meta" Allocation_WithdrawResult Metadata
->
-> **instance** SetField "senderHoldingCids" Allocation_WithdrawResult \[ContractId Holding\]
->
-> **instance** HasExercise Allocation Allocation_Withdraw Allocation_WithdrawResult
->
-> **instance** HasExerciseGuarded Allocation Allocation_Withdraw Allocation_WithdrawResult
->
-> **instance** HasFromAnyChoice Allocation Allocation_Withdraw Allocation_WithdrawResult
->
-> **instance** HasToAnyChoice Allocation Allocation_Withdraw Allocation_WithdrawResult
+<span id="type-splice-api-token-allocationv1-allocationcancelresult-26037"></span>
 
-<div id="type-splice-api-token-allocationv1-reference-53456">
+### `data Allocation_CancelResult`
 
-**data** Reference
+The result of the `Allocation_Cancel` choice.
 
-</div>
+Constructors:
 
-> A generic type to refer to data defined within an app.
->
-> <div id="constr-splice-api-token-allocationv1-reference-11427">
->
-> Reference
->
-> </div>
->
-> > | Field | Type                                                                                                             | Description                                                                                                                                                                                                                                                                |
-> > |-------|------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-> > | id    | Text                                 | The key that identifies the data. Can be set to the empty string if the contract-id is provided and is sufficient.                                                                                                                                                         |
-> > | cid   | Optional AnyContractId | Optional contract-id to use for referring to contracts. This field is there for technical reasons, as contract-ids cannot be converted to text from within Daml, which is due to their full textual representation being only known after transactions have been prepared. |
->
-> **instance** Eq Reference
->
-> **instance** Show Reference
->
-> **instance** GetField "cid" Reference (Optional AnyContractId)
->
-> **instance** GetField "id" Reference Text
->
-> **instance** GetField "settlementRef" SettlementInfo Reference
->
-> **instance** SetField "cid" Reference (Optional AnyContractId)
->
-> **instance** SetField "id" Reference Text
->
-> **instance** SetField "settlementRef" SettlementInfo Reference
+<span id="constr-splice-api-token-allocationv1-allocationcancelresult-74846"></span>
 
-<div id="type-splice-api-token-allocationv1-settlementinfo-4367">
+- `Allocation_CancelResult`
 
-**data** SettlementInfo
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| senderHoldingCids | [ContractId Holding] | The holdings that were released back to the sender. |
+| meta | Metadata | Additional metadata specific to the allocation, used for extensibility. |
 
-</div>
+Instances:
 
-> The minimal set of information about a settlement that an app would like to execute.
->
-> <div id="constr-splice-api-token-allocationv1-settlementinfo-25294">
->
-> SettlementInfo
->
-> </div>
->
-> > | Field          | Type                                                                                    | Description                                                                                                                                                                                                                                                                                                                                      |
-> > |----------------|-----------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-> > | executor       | Party | The party that is responsible for executing the settlement.                                                                                                                                                                                                                                                                                      |
-> > | settlementRef  | Reference                                                                               | Reference to the settlement that app would like to execute.                                                                                                                                                                                                                                                                                      |
-> > | requestedAt    | Time   | When the settlement was requested. Provided for display and debugging purposes, but SHOULD be in the past.                                                                                                                                                                                                                                       |
-> > | allocateBefore | Time   | Until when (exclusive) the senders are given time to allocate their assets. This field has a particular relevance with respect to instrument versioning / corporate actions, in that the settlement pertains to the instrument version resulting from the processing of all corporate actions falling strictly before the `allocateBefore` time. |
-> > | settleBefore   | Time   | Until when (exclusive) the executor is given time to execute the settlement. SHOULD be strictly after `allocateBefore`.                                                                                                                                                                                                                          |
-> > | meta           | Metadata                                                                                | Additional metadata about the settlement, used for extensibility.                                                                                                                                                                                                                                                                                |
->
-> **instance** Eq SettlementInfo
->
-> **instance** Show SettlementInfo
->
-> **instance** GetField "allocateBefore" SettlementInfo Time
->
-> **instance** GetField "executor" SettlementInfo Party
->
-> **instance** GetField "meta" SettlementInfo Metadata
->
-> **instance** GetField "requestedAt" SettlementInfo Time
->
-> **instance** GetField "settleBefore" SettlementInfo Time
->
-> **instance** GetField "settlement" AllocationSpecification SettlementInfo
->
-> **instance** GetField "settlementRef" SettlementInfo Reference
->
-> **instance** SetField "allocateBefore" SettlementInfo Time
->
-> **instance** SetField "executor" SettlementInfo Party
->
-> **instance** SetField "meta" SettlementInfo Metadata
->
-> **instance** SetField "requestedAt" SettlementInfo Time
->
-> **instance** SetField "settleBefore" SettlementInfo Time
->
-> **instance** SetField "settlement" AllocationSpecification SettlementInfo
->
-> **instance** SetField "settlementRef" SettlementInfo Reference
+- `instance Eq Allocation_CancelResult`
+- `instance Show Allocation_CancelResult`
+- `instance HasMethod Allocation allocation_cancelImpl (ContractId Allocation -> Allocation_Cancel -> Update Allocation_CancelResult)`
+- `instance GetField meta Allocation_CancelResult Metadata`
+- `instance GetField senderHoldingCids Allocation_CancelResult [ContractId Holding]`
+- `instance SetField meta Allocation_CancelResult Metadata`
+- `instance SetField senderHoldingCids Allocation_CancelResult [ContractId Holding]`
+- `instance HasExercise Allocation Allocation_Cancel Allocation_CancelResult`
+- `instance HasExerciseGuarded Allocation Allocation_Cancel Allocation_CancelResult`
+- `instance HasFromAnyChoice Allocation Allocation_Cancel Allocation_CancelResult`
+- `instance HasToAnyChoice Allocation Allocation_Cancel Allocation_CancelResult`
 
-<div id="type-splice-api-token-allocationv1-transferleg-71662">
+<span id="type-splice-api-token-allocationv1-allocationexecutetransferresult-74160"></span>
 
-**data** TransferLeg
+### `data Allocation_ExecuteTransferResult`
 
-</div>
+The result of the `Allocation_ExecuteTransfer` choice.
 
-> A specification of a transfer of holdings between two parties for the purpose of a settlement, which often requires the atomic execution of multiple legs.
->
-> <div id="constr-splice-api-token-allocationv1-transferleg-72717">
->
-> TransferLeg
->
-> </div>
->
-> > | Field        | Type                                                                                    | Description                                                         |
-> > |--------------|-----------------------------------------------------------------------------------------|---------------------------------------------------------------------|
-> > | sender       | Party | The sender of the transfer.                                         |
-> > | receiver     | Party | The receiver of the transfer.                                       |
-> > | amount       | Decimal  | The amount to transfer.                                             |
-> > | instrumentId | InstrumentId                                                                            | The instrument identifier.                                          |
-> > | meta         | Metadata                                                                                | Additional metadata about the transfer leg, used for extensibility. |
->
-> **instance** Eq TransferLeg
->
-> **instance** Ord TransferLeg
->
-> **instance** Show TransferLeg
->
-> **instance** GetField "amount" TransferLeg Decimal
->
-> **instance** GetField "instrumentId" TransferLeg InstrumentId
->
-> **instance** GetField "meta" TransferLeg Metadata
->
-> **instance** GetField "receiver" TransferLeg Party
->
-> **instance** GetField "sender" TransferLeg Party
->
-> **instance** GetField "transferLeg" AllocationSpecification TransferLeg
->
-> **instance** SetField "amount" TransferLeg Decimal
->
-> **instance** SetField "instrumentId" TransferLeg InstrumentId
->
-> **instance** SetField "meta" TransferLeg Metadata
->
-> **instance** SetField "receiver" TransferLeg Party
->
-> **instance** SetField "sender" TransferLeg Party
->
-> **instance** SetField "transferLeg" AllocationSpecification TransferLeg
+Constructors:
+
+<span id="constr-splice-api-token-allocationv1-allocationexecutetransferresult-50341"></span>
+
+- `Allocation_ExecuteTransferResult`
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| senderHoldingCids | [ContractId Holding] | The holdings that were created for the sender. Can be used to return<br/><br/>"change" to the sender if required. |
+| receiverHoldingCids | [ContractId Holding] | The holdings that were created for the receiver. |
+| meta | Metadata | Additional metadata specific to the transfer instruction, used for extensibility. |
+
+Instances:
+
+- `instance Eq Allocation_ExecuteTransferResult`
+- `instance Show Allocation_ExecuteTransferResult`
+- `instance HasMethod Allocation allocation_executeTransferImpl (ContractId Allocation -> Allocation_ExecuteTransfer -> Update Allocation_ExecuteTransferResult)`
+- `instance GetField meta Allocation_ExecuteTransferResult Metadata`
+- `instance GetField receiverHoldingCids Allocation_ExecuteTransferResult [ContractId Holding]`
+- `instance GetField senderHoldingCids Allocation_ExecuteTransferResult [ContractId Holding]`
+- `instance SetField meta Allocation_ExecuteTransferResult Metadata`
+- `instance SetField receiverHoldingCids Allocation_ExecuteTransferResult [ContractId Holding]`
+- `instance SetField senderHoldingCids Allocation_ExecuteTransferResult [ContractId Holding]`
+- `instance HasExercise Allocation Allocation_ExecuteTransfer Allocation_ExecuteTransferResult`
+- `instance HasExerciseGuarded Allocation Allocation_ExecuteTransfer Allocation_ExecuteTransferResult`
+- `instance HasFromAnyChoice Allocation Allocation_ExecuteTransfer Allocation_ExecuteTransferResult`
+- `instance HasToAnyChoice Allocation Allocation_ExecuteTransfer Allocation_ExecuteTransferResult`
+
+<span id="type-splice-api-token-allocationv1-allocationwithdrawresult-40879"></span>
+
+### `data Allocation_WithdrawResult`
+
+The result of the `Allocation_Withdraw` choice.
+
+Constructors:
+
+<span id="constr-splice-api-token-allocationv1-allocationwithdrawresult-86620"></span>
+
+- `Allocation_WithdrawResult`
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| senderHoldingCids | [ContractId Holding] | The holdings that were released back to the sender. |
+| meta | Metadata | Additional metadata specific to the allocation, used for extensibility. |
+
+Instances:
+
+- `instance Eq Allocation_WithdrawResult`
+- `instance Show Allocation_WithdrawResult`
+- `instance HasMethod Allocation allocation_withdrawImpl (ContractId Allocation -> Allocation_Withdraw -> Update Allocation_WithdrawResult)`
+- `instance GetField meta Allocation_WithdrawResult Metadata`
+- `instance GetField senderHoldingCids Allocation_WithdrawResult [ContractId Holding]`
+- `instance SetField meta Allocation_WithdrawResult Metadata`
+- `instance SetField senderHoldingCids Allocation_WithdrawResult [ContractId Holding]`
+- `instance HasExercise Allocation Allocation_Withdraw Allocation_WithdrawResult`
+- `instance HasExerciseGuarded Allocation Allocation_Withdraw Allocation_WithdrawResult`
+- `instance HasFromAnyChoice Allocation Allocation_Withdraw Allocation_WithdrawResult`
+- `instance HasToAnyChoice Allocation Allocation_Withdraw Allocation_WithdrawResult`
+
+<span id="type-splice-api-token-allocationv1-reference-53456"></span>
+
+### `data Reference`
+
+A generic type to refer to data defined within an app.
+
+Constructors:
+
+<span id="constr-splice-api-token-allocationv1-reference-11427"></span>
+
+- `Reference`
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| id | Text | The key that identifies the data. Can be set to the empty string if the contract-id is provided and is sufficient. |
+| cid | Optional AnyContractId | Optional contract-id to use for referring to contracts.<br/><br/>This field is there for technical reasons, as contract-ids cannot be converted to text from within Daml,<br/><br/>which is due to their full textual representation being only known after transactions have been prepared. |
+
+Instances:
+
+- `instance Eq Reference`
+- `instance Show Reference`
+- `instance GetField cid Reference (Optional AnyContractId)`
+- `instance GetField id Reference Text`
+- `instance GetField settlementRef SettlementInfo Reference`
+- `instance SetField cid Reference (Optional AnyContractId)`
+- `instance SetField id Reference Text`
+- `instance SetField settlementRef SettlementInfo Reference`
+
+<span id="type-splice-api-token-allocationv1-settlementinfo-4367"></span>
+
+### `data SettlementInfo`
+
+The minimal set of information about a settlement that an app would like to execute.
+
+Constructors:
+
+<span id="constr-splice-api-token-allocationv1-settlementinfo-25294"></span>
+
+- `SettlementInfo`
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| executor | Party | The party that is responsible for executing the settlement. |
+| settlementRef | Reference | Reference to the settlement that app would like to execute. |
+| requestedAt | Time | When the settlement was requested. Provided for display and debugging purposes,<br/><br/>but SHOULD be in the past. |
+| allocateBefore | Time | Until when (exclusive) the senders are given time to allocate their assets.<br/><br/>This field has a particular relevance with respect to instrument versioning / corporate<br/><br/>actions, in that the settlement pertains to the instrument version resulting from the<br/><br/>processing of all corporate actions falling strictly before the `allocateBefore` time. |
+| settleBefore | Time | Until when (exclusive) the executor is given time to execute the settlement.<br/><br/>SHOULD be strictly after `allocateBefore`. |
+| meta | Metadata | Additional metadata about the settlement, used for extensibility. |
+
+Instances:
+
+- `instance Eq SettlementInfo`
+- `instance Show SettlementInfo`
+- `instance GetField allocateBefore SettlementInfo Time`
+- `instance GetField executor SettlementInfo Party`
+- `instance GetField meta SettlementInfo Metadata`
+- `instance GetField requestedAt SettlementInfo Time`
+- `instance GetField settleBefore SettlementInfo Time`
+- `instance GetField settlement AllocationSpecification SettlementInfo`
+- `instance GetField settlementRef SettlementInfo Reference`
+- `instance SetField allocateBefore SettlementInfo Time`
+- `instance SetField executor SettlementInfo Party`
+- `instance SetField meta SettlementInfo Metadata`
+- `instance SetField requestedAt SettlementInfo Time`
+- `instance SetField settleBefore SettlementInfo Time`
+- `instance SetField settlement AllocationSpecification SettlementInfo`
+- `instance SetField settlementRef SettlementInfo Reference`
+
+<span id="type-splice-api-token-allocationv1-transferleg-71662"></span>
+
+### `data TransferLeg`
+
+A specification of a transfer of holdings between two parties for the
+purpose of a settlement, which often requires the atomic execution of multiple legs.
+
+Constructors:
+
+<span id="constr-splice-api-token-allocationv1-transferleg-72717"></span>
+
+- `TransferLeg`
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| sender | Party | The sender of the transfer. |
+| receiver | Party | The receiver of the transfer. |
+| amount | Decimal | The amount to transfer. |
+| instrumentId | InstrumentId | The instrument identifier. |
+| meta | Metadata | Additional metadata about the transfer leg, used for extensibility. |
+
+Instances:
+
+- `instance Eq TransferLeg`
+- `instance Ord TransferLeg`
+- `instance Show TransferLeg`
+- `instance GetField amount TransferLeg Decimal`
+- `instance GetField instrumentId TransferLeg InstrumentId`
+- `instance GetField meta TransferLeg Metadata`
+- `instance GetField receiver TransferLeg Party`
+- `instance GetField sender TransferLeg Party`
+- `instance GetField transferLeg AllocationSpecification TransferLeg`
+- `instance SetField amount TransferLeg Decimal`
+- `instance SetField instrumentId TransferLeg InstrumentId`
+- `instance SetField meta TransferLeg Metadata`
+- `instance SetField receiver TransferLeg Party`
+- `instance SetField sender TransferLeg Party`
+- `instance SetField transferLeg AllocationSpecification TransferLeg`
 
 ## Functions
 
-<div id="function-splice-api-token-allocationv1-allocationcontrollers-10222">
+<span id="function-splice-api-token-allocationv1-allocationcontrollers-10222"></span>
 
-allocationControllers
-: AllocationView -\> \[Party\]
+### `allocationControllers`
 
-Convenience function to refer to the union of sender, receiver, and executor of the settlement, which jointly control the execution of the allocation.
+```daml
+allocationControllers : AllocationView -> [Party]
+```
 
-</div>
+Convenience function to refer to the union of sender, receiver, and
+executor of the settlement, which jointly control the execution of the
+allocation.
 
-<div id="function-splice-api-token-allocationv1-allocationexecutetransferimpl-90251">
+<span id="function-splice-api-token-allocationv1-allocationexecutetransferimpl-90251"></span>
 
-allocation_executeTransferImpl
-: Allocation -\> ContractId Allocation -\> Allocation_ExecuteTransfer -\> Update Allocation_ExecuteTransferResult
+### `allocation_executeTransferImpl`
 
-</div>
+```daml
+allocation_executeTransferImpl : Allocation -> ContractId Allocation -> Allocation_ExecuteTransfer -> Update Allocation_ExecuteTransferResult
+```
 
-<div id="function-splice-api-token-allocationv1-allocationcancelimpl-12334">
+<span id="function-splice-api-token-allocationv1-allocationcancelimpl-12334"></span>
 
-allocation_cancelImpl
-: Allocation -\> ContractId Allocation -\> Allocation_Cancel -\> Update Allocation_CancelResult
+### `allocation_cancelImpl`
 
-</div>
+```daml
+allocation_cancelImpl : Allocation -> ContractId Allocation -> Allocation_Cancel -> Update Allocation_CancelResult
+```
 
-<div id="function-splice-api-token-allocationv1-allocationwithdrawimpl-40108">
+<span id="function-splice-api-token-allocationv1-allocationwithdrawimpl-40108"></span>
 
-allocation_withdrawImpl
-: Allocation -\> ContractId Allocation -\> Allocation_Withdraw -\> Update Allocation_WithdrawResult
+### `allocation_withdrawImpl`
 
-</div>
+```daml
+allocation_withdrawImpl : Allocation -> ContractId Allocation -> Allocation_Withdraw -> Update Allocation_WithdrawResult
+```
 
-{/* COPIED_END */}
+## Interfaces
+
+<span id="type-splice-api-token-allocationv1-allocation-9928"></span>
+
+### Interface `Allocation`
+
+A contract representing an allocation of some amount of aasset holdings to
+a specific leg of a settlement.
+
+View Type: `AllocationView`
+
+Choices:
+
+<span id="type-splice-api-token-allocationv1-allocationcancel-25504"></span>
+
+#### Choice `Allocation_Cancel`
+
+Cancel the allocation. Requires authorization from sender, receiver, and
+executor.
+
+Typically this authorization is granted by sender and receiver to the
+executor as part of the contract coordinating the settlement, so that
+that the executor can release the allocated assets early in case the
+settlement is aborted or it has definitely failed.
+
+Controllers: `allocationControllers (view this)`
+
+Returns: `Allocation_CancelResult`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| extraArgs | ExtraArgs | Additional context required in order to exercise the choice. |
+
+<span id="type-splice-api-token-allocationv1-allocationexecutetransfer-74529"></span>
+
+#### Choice `Allocation_ExecuteTransfer`
+
+Execute the transfer of the allocated assets. Intended to be used to execute the settlement.
+This choice SHOULD succeed provided the `settlement.settleBefore` deadline has not yet passed.
+
+Controllers: `allocationControllers (view this)`
+
+Returns: `Allocation_ExecuteTransferResult`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| extraArgs | ExtraArgs | Additional context required in order to exercise the choice. |
+
+<span id="type-splice-api-token-allocationv1-allocationwithdraw-60458"></span>
+
+#### Choice `Allocation_Withdraw`
+
+Withdraw the allocated assets. Used by the sender to withdraw the assets before settlement
+was completed. This SHOULD not fail settlement if the sender has still time to allocate the
+assets again; i.e., the `settlement.allocateBefore` deadline has not yet passed.
+
+Controllers: `(DA.Internal.Record.getField @"sender" (DA.Internal.Record.getField @"transferLeg" (DA.Internal.Record.getField @"allocation" (view this))))`
+
+Returns: `Allocation_WithdrawResult`
+
+Arguments:
+
+| Field | Type | Description |
+| :---- | :--- | :---------- |
+| extraArgs | ExtraArgs | Additional context required in order to exercise the choice. |
+
+#### Choice `Archive`
+
+Controllers: `Signatories of implementing template`
+
+Returns: `()`
+
+Methods:
+
+#### Method `allocation_cancelImpl`
+
+Type: `ContractId Allocation -> Allocation_Cancel -> Update Allocation_CancelResult`
+
+#### Method `allocation_executeTransferImpl`
+
+Type: `ContractId Allocation -> Allocation_ExecuteTransfer -> Update Allocation_ExecuteTransferResult`
+
+#### Method `allocation_withdrawImpl`
+
+Type: `ContractId Allocation -> Allocation_Withdraw -> Update Allocation_WithdrawResult`
