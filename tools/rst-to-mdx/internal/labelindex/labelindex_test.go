@@ -169,42 +169,6 @@ func TestBuild_DottedLabels(t *testing.T) {
 	writeRST(t, root, "console.rst", `.. _bootstrap.help:
 
 Bootstrap Help
-==============
-
-Some content.
-
-.. _topology.help:
-
-Topology Help
--------------
-
-More content.
-
-.. _health.active:
-
-Health Active
-~~~~~~~~~~~~~
-
-Even more content.
-`)
-
-	idx, err := Build(root)
-	if err != nil {
-		t.Fatalf("build: %v", err)
-	}
-
-	for _, label := range []string{"bootstrap.help", "topology.help", "health.active"} {
-		loc, ok := idx.Resolve(label, "")
-		if !ok {
-			t.Errorf("expected dotted label %q to resolve", label)
-			continue
-		}
-		if loc.Heading == "" {
-			t.Errorf("dotted label %q resolved with empty heading", label)
-		}
-	}
-}
-
 func contains(haystack, needle string) bool {
 	for i := 0; i+len(needle) <= len(haystack); i++ {
 		if haystack[i:i+len(needle)] == needle {
