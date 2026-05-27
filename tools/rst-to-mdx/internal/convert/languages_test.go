@@ -11,7 +11,7 @@ func TestNormalizeLanguages(t *testing.T) {
 	}{
 		{"none to text", "```none\nfoo\n```", "```text\nfoo\n```"},
 		{"console to bash", "```console\n$ ls\n```", "```bash\n$ ls\n```"},
-		{"haskell to daml", "```haskell\ntemplate Foo\n```", "```daml\ntemplate Foo\n```"},
+		{"daml to haskell", "```daml\ntemplate Foo\n```", "```haskell\ntemplate Foo\n```"},
 		{"bash untouched", "```bash\nls\n```", "```bash\nls\n```"},
 	}
 	for _, tc := range cases {

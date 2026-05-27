@@ -39,7 +39,7 @@ var (
 
 	// .. _label-name:
 	reLabel = regexp.MustCompile(
-		`(?m)^\.\.\s+_[A-Za-z0-9][A-Za-z0-9_\- ]*:\s*$\n?`)
+		`(?m)^\.\.\s+_[A-Za-z0-9][A-Za-z0-9._\- ]*:\s*$\n?`)
 
 )
 

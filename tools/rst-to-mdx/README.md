@@ -41,7 +41,7 @@ that depends on `docs-website/` is **cross-reference resolution**:
 |---|---|
 | Input lives somewhere under `docs-website/` | Auto-detected; the label index is built once and refs resolve to `/<path>#<anchor>` URLs (Mintlify serves `docs-main/` as site root). |
 | Input lives elsewhere, `--docs-root <path>` passed | Same as above using the explicit root. |
-| Input lives elsewhere, no `--docs-root` | Refs become `[label](#TODO-resolve-…)` markers a human can resolve later. |
+| Input lives elsewhere, no `--docs-root` | Refs become `[label](#TODO-resolve-…)` markers a manual review can resolve later. |
 
 Every other transform — headings, inline formatting and roles, links
 (named, anonymous, `:doc:`, `:download:`, autolinks like `<https://…>`),

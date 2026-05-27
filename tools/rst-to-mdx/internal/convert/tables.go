@@ -34,6 +34,7 @@ func convertTables(s string, opts Options) string {
 	s = convertListTable(s)
 	s = convertCsvTable(s, opts)
 	s = convertGridTable(s)
+	s = convertSimpleTables(s)
 	return s
 }
 
@@ -598,6 +599,9 @@ func renderMarkdownTable(title string, rows [][]string, headerRows int, _indent 
 	if headerRows == 0 {
 		headerRows = 1
 	}
+	if headerRows > len(rows) {
+		headerRows = len(rows)
+	}
 	// Merge multi-row headers into a single `|`-joined line (markdown
 	// can't express stacked headers directly).
 	headerCells := make([]string, cols)
@@ -623,6 +627,250 @@ func renderMarkdownTable(title string, rows [][]string, headerRows int, _indent 
 	}
 	out = append(out, "")
 	return out
+}
+
+// ---------------------------------------------------------------------
+// RST simple tables (=== === ruler format)
+// ---------------------------------------------------------------------
+
+// reSimpleTableRuler matches a line that is entirely runs of `=`
+// separated by 1+ spaces — the column ruler of an RST simple table.
+var reSimpleTableRuler = regexp.MustCompile(`^(\s*)(=+(?:\s+=+)+)\s*$`)
+
+// convertSimpleTables detects RST simple tables and converts them to
+// markdown tables. A simple table is delimited by ruler lines of `===`
+// segments. The column boundaries are inferred from the ruler.
+//
+// Structure:
+//
+//	======= ============
+//	Header1 Header2         ← header row(s)
+//	======= ============    ← second ruler separates header from body
+//	cell1   cell2           ← body rows
+//	        continuation
+//	cell3   cell4
+//	======= ============    ← closing ruler
+//
+// When there is no second ruler (only open + close), the first content
+// row is promoted to the header (markdown requires one).
+func convertSimpleTables(s string) string {
+	lines := strings.Split(s, "\n")
+	var out []string
+	i := 0
+
+	for i < len(lines) {
+		m := reSimpleTableRuler.FindStringSubmatch(lines[i])
+		if m == nil {
+			out = append(out, lines[i])
+			i++
+			continue
+		}
+
+		indent := m[1]
+		cols := parseRulerColumns(lines[i], len(indent))
+		if len(cols) < 2 {
+			out = append(out, lines[i])
+			i++
+			continue
+		}
+
+		tableLines, consumed := collectSimpleTable(lines[i:])
+		if consumed < 3 {
+			out = append(out, lines[i])
+			i++
+			continue
+		}
+
+		rows, headerRows := parseSimpleTableBody(tableLines, cols)
+		if len(rows) == 0 {
+			out = append(out, lines[i])
+			i++
+			continue
+		}
+
+		out = append(out, renderMarkdownTable("", rows, headerRows, indent)...)
+		i += consumed
+	}
+	return strings.Join(out, "\n")
+}
+
+// rulerCol represents a column span in the ruler: byte offsets [start, end).
+type rulerCol struct {
+	start, end int
+}
+
+// parseRulerColumns extracts column boundaries from a ruler line. Each
+// run of `=` defines a column; gaps of whitespace separate them.
+func parseRulerColumns(ruler string, indentLen int) []rulerCol {
+	var cols []rulerCol
+	j := indentLen
+	for j < len(ruler) {
+		// Skip whitespace between columns.
+		for j < len(ruler) && ruler[j] == ' ' {
+			j++
+		}
+		if j >= len(ruler) {
+			break
+		}
+		start := j
+		for j < len(ruler) && ruler[j] == '=' {
+			j++
+		}
+		if j > start {
+			cols = append(cols, rulerCol{start, j})
+		}
+	}
+	return cols
+}
+
+// collectSimpleTable gathers all lines from the opening ruler through
+// the closing ruler. A simple table has 2 rulers (open + close) or 3
+// (open + header-sep + close). We scan forward and stop at the ruler
+// that is followed by EOF, a blank line, or a line that doesn't look
+// like table content.
+func collectSimpleTable(lines []string) ([]string, int) {
+	if len(lines) < 3 {
+		return nil, 0
+	}
+	var table []string
+	table = append(table, lines[0])
+	for i := 1; i < len(lines); i++ {
+		table = append(table, lines[i])
+		if reSimpleTableRuler.MatchString(lines[i]) {
+			// This ruler is the closing ruler if it's followed by
+			// EOF, a blank line, or a line that doesn't start with
+			// whitespace within the table columns.
+			if i+1 >= len(lines) || strings.TrimSpace(lines[i+1]) == "" {
+				return table, i + 1
+			}
+			// If the next line is another ruler, keep going (shouldn't
+			// happen, but be safe).
+			if reSimpleTableRuler.MatchString(lines[i+1]) {
+				continue
+			}
+			// If the next line has content, this is a header separator
+			// — keep collecting.
+			continue
+		}
+		// Stop if we hit a completely empty line that's followed by
+		// something that doesn't look like it belongs to the table
+		// (a non-indented, non-empty line with no content in the
+		// column range). But blank lines between rows ARE valid in
+		// RST simple tables, so only break on double-blank.
+	}
+	// We ran off the end without finding a closing ruler. Not a valid
+	// simple table.
+	return nil, 0
+}
+
+// parseSimpleTableBody reads the content lines between rulers and
+// splits them into rows and cells using the column boundaries. Returns
+// the rows and the number of header rows.
+func parseSimpleTableBody(tableLines []string, cols []rulerCol) ([][]string, int) {
+	var headerLines, bodyLines []string
+	// Find the ruler positions.
+	var rulerPositions []int
+	for i, line := range tableLines {
+		if reSimpleTableRuler.MatchString(line) {
+			rulerPositions = append(rulerPositions, i)
+		}
+	}
+
+	switch len(rulerPositions) {
+	case 2:
+		// open ruler + close ruler: everything between is body,
+		// first row promoted to header by renderMarkdownTable.
+		bodyLines = tableLines[rulerPositions[0]+1 : rulerPositions[1]]
+		return splitSimpleRows(bodyLines, cols), 0
+	case 3:
+		// open + header-sep + close: content between open and
+		// header-sep is header, between header-sep and close is body.
+		headerLines = tableLines[rulerPositions[0]+1 : rulerPositions[1]]
+		bodyLines = tableLines[rulerPositions[1]+1 : rulerPositions[2]]
+	default:
+		// Unexpected ruler count; try best-effort with first and last.
+		if len(rulerPositions) >= 2 {
+			bodyLines = tableLines[rulerPositions[0]+1 : rulerPositions[len(rulerPositions)-1]]
+			return splitSimpleRows(bodyLines, cols), 0
+		}
+		return nil, 0
+	}
+
+	headerRows := splitSimpleRows(headerLines, cols)
+	bodyRows := splitSimpleRows(bodyLines, cols)
+	all := append(headerRows, bodyRows...)
+	return all, len(headerRows)
+}
+
+// splitSimpleRows groups content lines into logical rows and extracts
+// cell text by column position. A new row starts when a line has
+// non-whitespace in the first column's range. Continuation lines
+// (leading whitespace in the first column) append to the current row.
+func splitSimpleRows(lines []string, cols []rulerCol) [][]string {
+	var rows [][]string
+	var currentCells []string
+
+	for _, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		cells := extractCells(line, cols)
+
+		firstColText := ""
+		if len(cells) > 0 {
+			firstColText = strings.TrimSpace(cells[0])
+		}
+
+		if firstColText != "" && currentCells == nil {
+			// First row.
+			currentCells = cells
+		} else if firstColText != "" {
+			// New row — flush previous.
+			rows = append(rows, currentCells)
+			currentCells = cells
+		} else {
+			// Continuation line — append to current cells.
+			if currentCells == nil {
+				currentCells = make([]string, len(cols))
+			}
+			for c, cell := range cells {
+				text := strings.TrimSpace(cell)
+				if text != "" && c < len(currentCells) {
+					if currentCells[c] != "" {
+						currentCells[c] += " " + text
+					} else {
+						currentCells[c] = text
+					}
+				}
+			}
+		}
+	}
+	if currentCells != nil {
+		rows = append(rows, currentCells)
+	}
+	return rows
+}
+
+// extractCells slices a line into cell strings based on column
+// boundaries. Characters beyond the line length are treated as empty.
+func extractCells(line string, cols []rulerCol) []string {
+	cells := make([]string, len(cols))
+	for i, col := range cols {
+		if col.start >= len(line) {
+			cells[i] = ""
+			continue
+		}
+		end := col.end
+		// For the last column, extend to end of line to capture long values.
+		if i == len(cols)-1 && len(line) > end {
+			end = len(line)
+		}
+		if end > len(line) {
+			end = len(line)
+		}
+		cells[i] = strings.TrimSpace(line[col.start:end])
+	}
+	return cells
 }
 
 // escapeCells replaces `|` inside cell text with `\|` so it doesn't

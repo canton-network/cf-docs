@@ -24,7 +24,7 @@ import (
 
 var (
 	reCodeBlockDirective = regexp.MustCompile(
-		`^(\s*)\.\.\s+(?:code-block|code|sourcecode)::\s*([\w+\-]*)\s*$`)
+		`^(\s*)\.\.\s+(?:code-block|code|sourcecode|parsed-literal)::\s*([\w+\-]*)\s*$`)
 	reDirectiveOption = regexp.MustCompile(
 		`^(\s+):[A-Za-z][A-Za-z0-9_\-]*:[^\n]*$`)
 	// A line ending in `::` (but not a role like `:code:`) introduces
@@ -67,7 +67,7 @@ func convertCodeBlocks(s string) string {
 
 			out = append(out, "")
 			out = append(out, indent+"```"+lang)
-			out = append(out, body...)
+			out = append(out, reindentBlock(body, indent)...)
 			out = append(out, indent+"```")
 			out = append(out, "")
 			continue
@@ -194,6 +194,27 @@ func leadingWS(s string) string {
 	return s
 }
 
+// reindentBlock prefixes every non-blank line in body with indent so
+// that code content sits at the same indentation level as the enclosing
+// fence. CommonMark strips up to the fence indent from content lines,
+// so the rendered code is unaffected — but the raw MDX keeps the
+// content inside the fence boundary, preventing MDX parsers from
+// misinterpreting keywords like `import` as ES module statements.
+func reindentBlock(body []string, indent string) []string {
+	if indent == "" {
+		return body
+	}
+	out := make([]string, len(body))
+	for i, line := range body {
+		if strings.TrimSpace(line) == "" {
+			out[i] = ""
+		} else {
+			out[i] = indent + line
+		}
+	}
+	return out
+}
+
 // emitUnlabeledLiteral chooses an MDX rendering for a `::` literal
 // block (RST didn't tell us what language it is):
 //
@@ -220,7 +241,7 @@ func emitUnlabeledLiteral(indent string, body []string) []string {
 		}
 	}
 	out := []string{"", indent + "```text"}
-	out = append(out, body...)
+	out = append(out, reindentBlock(body, indent)...)
 	out = append(out, indent+"```", "")
 	return out
 }

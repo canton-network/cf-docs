@@ -35,12 +35,12 @@ import (
 // repeats of the same marker character. The marker chars are the ones
 // the Canton/Daml RST style guide uses.
 var reUnderlineOnly = regexp.MustCompile(
-	`(?m)^(\S[^\n]*)\n([#=*\-~^"]{3,})[ \t]*$`)
+	`(?m)^(\S[^\n]*)\n([#+*=\-~^"]{3,})[ \t]*$`)
 
 // reOverline matches an overlined heading where the overline and
 // underline are the same character repeated at least 3 times.
 var reOverline = regexp.MustCompile(
-	`(?m)^([#=*\-~^"]{3,})\n(\S[^\n]*)\n([#=*\-~^"]{3,})[ \t]*$`)
+	`(?m)^([#+*=\-~^"]{3,})\n(\S[^\n]*)\n([#+*=\-~^"]{3,})[ \t]*$`)
 
 // convertHeadings replaces RST underline/overline headings with `#`-style
 // MDX headings. It first converts overlined headings (which can start
@@ -84,12 +84,15 @@ func convertHeadings(s string) string {
 	return s
 }
 
-// sameChar reports whether a string consists entirely of the same byte.
-func sameChar(s, _ string) bool {
-	if len(s) == 0 {
+// sameChar reports whether both strings consist of the same repeated byte.
+func sameChar(s, t string) bool {
+	if len(s) == 0 || len(t) == 0 {
 		return false
 	}
 	c := s[0]
+	if t[0] != c {
+		return false
+	}
 	for i := 1; i < len(s); i++ {
 		if s[i] != c {
 			return false

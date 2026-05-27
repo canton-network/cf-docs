@@ -10,18 +10,17 @@ import "regexp"
 //
 //	none     → text
 //	console  → bash   (treated as shell session)
-//	haskell  → daml   (Daml was historically tagged haskell; the
-//	                   migration guide calls this out as a class of bug)
+//	daml     → haskell (Shiki recognizes haskell but not daml)
 
 var (
 	reLangNone    = regexp.MustCompile("(?m)^(\\s*)```none\\b")
 	reLangConsole = regexp.MustCompile("(?m)^(\\s*)```console\\b")
-	reLangHaskell = regexp.MustCompile("(?m)^(\\s*)```haskell\\b")
+	reLangDaml    = regexp.MustCompile("(?m)^(\\s*)```daml\\b")
 )
 
 func normalizeLanguages(s string) string {
 	s = reLangNone.ReplaceAllString(s, "$1```text")
 	s = reLangConsole.ReplaceAllString(s, "$1```bash")
-	s = reLangHaskell.ReplaceAllString(s, "$1```daml")
+	s = reLangDaml.ReplaceAllString(s, "$1```haskell")
 	return s
 }

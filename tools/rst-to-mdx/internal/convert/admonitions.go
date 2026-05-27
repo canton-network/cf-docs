@@ -81,7 +81,7 @@ func convertAdmonitions(s string) string {
 			i += consumed
 
 			out = append(out, indent+"<"+a.tag+">")
-			out = append(out, body...)
+			out = append(out, reindentAdmonitionBody(body, indent)...)
 			out = append(out, indent+"</"+a.tag+">")
 			matched = true
 			break
@@ -133,6 +133,66 @@ func collectAdmonitionBody(lines []string, parentIndent, arg string, a admonitio
 		body[0] = a.prefix + body[0]
 	}
 	return body, skip + consumed
+}
+
+// reGenericAdmonition matches `.. admonition:: Title text`.
+var reGenericAdmonition = regexp.MustCompile(
+	`^(\s*)\.\.\s+admonition::\s*(.+)$`)
+
+// convertGenericAdmonition handles `.. admonition:: Title` — the
+// catch-all RST admonition that doesn't map to a specific Mintlify
+// component. Emits the title as bold text followed by the body.
+func convertGenericAdmonition(s string) string {
+	lines := strings.Split(s, "\n")
+	var out []string
+	i := 0
+	for i < len(lines) {
+		m := reGenericAdmonition.FindStringSubmatch(lines[i])
+		if m == nil {
+			out = append(out, lines[i])
+			i++
+			continue
+		}
+		indent := m[1]
+		title := strings.TrimSpace(m[2])
+		i++
+
+		skip := 0
+		for skip < len(lines[i:]) && strings.TrimSpace(lines[i+skip]) == "" {
+			skip++
+		}
+		body, consumed := consumeIndentedBlock(lines[i+skip:], indent)
+		i += skip + consumed
+
+		out = append(out, "")
+		out = append(out, indent+"**"+title+"**")
+		if len(body) > 0 {
+			out = append(out, "")
+			out = append(out, body...)
+		}
+		out = append(out, "")
+	}
+	return strings.Join(out, "\n")
+}
+
+// reindentAdmonitionBody prefixes every non-blank body line with
+// indent so the content sits inside the JSX tags at the same
+// indentation level. Without this, an admonition nested inside a list
+// item would have its body at column 0 while the <Note>/<Warning>
+// tags are indented, causing MDX to close the component prematurely.
+func reindentAdmonitionBody(body []string, indent string) []string {
+	if indent == "" {
+		return body
+	}
+	out := make([]string, len(body))
+	for i, line := range body {
+		if strings.TrimSpace(line) == "" {
+			out[i] = ""
+		} else {
+			out[i] = indent + line
+		}
+	}
+	return out
 }
 
 func capitalize(s string) string {

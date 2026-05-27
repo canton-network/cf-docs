@@ -39,6 +39,7 @@ func composeOutput(body string, sourceBytes []byte, opts Options) []byte {
 			opts.SourceLabel, hash8(sourceBytes))
 	}
 
+	body = stripDuplicateTitle(body, title)
 	b.WriteString(strings.TrimRight(body, "\n"))
 	b.WriteString("\n")
 
@@ -47,6 +48,29 @@ func composeOutput(body string, sourceBytes []byte, opts Options) []byte {
 	}
 
 	return []byte(b.String())
+}
+
+// stripDuplicateTitle removes the first heading from the body when it
+// matches the frontmatter title exactly. Mintlify renders the
+// frontmatter title as the page heading, so a duplicate H1 in the body
+// produces the title twice.
+func stripDuplicateTitle(body, title string) string {
+	m := firstHeading.FindStringIndex(body)
+	if m == nil {
+		return body
+	}
+	headingLine := body[m[0]:m[1]]
+	sub := firstHeading.FindStringSubmatch(headingLine)
+	if sub == nil {
+		return body
+	}
+	if strings.EqualFold(strings.TrimSpace(sub[1]), strings.TrimSpace(title)) {
+		// Remove the heading line and any trailing blank line.
+		after := body[m[1]:]
+		after = strings.TrimLeft(after, "\n")
+		return body[:m[0]] + after
+	}
+	return body
 }
 
 // firstHeading matches the first markdown ATX heading at any level.

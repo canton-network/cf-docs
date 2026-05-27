@@ -122,6 +122,7 @@ func Convert(rst []byte, opts Options) (*Result, error) {
 	body = convertHeadings(body)
 	body = convertCodeBlocks(body)
 	body = convertAdmonitions(body)
+	body = convertGenericAdmonition(body)
 	body = convertImages(body)
 	// Everything from here on runs on a document that already contains
 	// fenced code blocks. Wrap each transform so it only touches prose.

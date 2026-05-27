@@ -84,7 +84,7 @@ var (
 	// index drops ~45% of labels in the corpus.
 	reLabel = regexp.MustCompile(`^\.\.\s+_([A-Za-z0-9][A-Za-z0-9._\-]*):\s*$`)
 	// A heading underline is a run of 3+ of =/-/~/^/" chars.
-	reUnderline = regexp.MustCompile(`^[=\-~^"]{3,}\s*$`)
+	reUnderline = regexp.MustCompile(`^[#+*=\-~^"]{3,}\s*$`)
 )
 
 func (i *Index) scan(path string) error {

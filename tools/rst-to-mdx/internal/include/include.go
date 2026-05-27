@@ -263,17 +263,33 @@ func applySliceOptions(body string, opts map[string]string) (string, error) {
 
 	// :start-after: / :end-before: (exclusive markers)
 	if marker := opts["start-after"]; marker != "" {
-		lines = sliceAfter(lines, marker, false)
+		var err error
+		lines, err = sliceAfter(lines, marker, false)
+		if err != nil {
+			return "", fmt.Errorf("start-after: %w", err)
+		}
 	}
 	if marker := opts["end-before"]; marker != "" {
-		lines = sliceBefore(lines, marker, false)
+		var err error
+		lines, err = sliceBefore(lines, marker, false)
+		if err != nil {
+			return "", fmt.Errorf("end-before: %w", err)
+		}
 	}
 	// :start-at: / :end-at: (inclusive markers)
 	if marker := opts["start-at"]; marker != "" {
-		lines = sliceAfter(lines, marker, true)
+		var err error
+		lines, err = sliceAfter(lines, marker, true)
+		if err != nil {
+			return "", fmt.Errorf("start-at: %w", err)
+		}
 	}
 	if marker := opts["end-at"]; marker != "" {
-		lines = sliceBefore(lines, marker, true)
+		var err error
+		lines, err = sliceBefore(lines, marker, true)
+		if err != nil {
+			return "", fmt.Errorf("end-at: %w", err)
+		}
 	}
 
 	// :dedent: (remove common leading whitespace)
@@ -333,30 +349,30 @@ func selectLines(lines []string, spec string) ([]string, error) {
 
 // sliceAfter returns lines AFTER the first occurrence of marker. When
 // inclusive is true, the marker line itself is kept.
-func sliceAfter(lines []string, marker string, inclusive bool) []string {
+func sliceAfter(lines []string, marker string, inclusive bool) ([]string, error) {
 	for i, line := range lines {
 		if strings.Contains(line, marker) {
 			if inclusive {
-				return lines[i:]
+				return lines[i:], nil
 			}
-			return lines[i+1:]
+			return lines[i+1:], nil
 		}
 	}
-	return lines
+	return nil, fmt.Errorf("marker %q not found", marker)
 }
 
 // sliceBefore returns lines BEFORE the first occurrence of marker.
 // When inclusive is true, the marker line itself is kept.
-func sliceBefore(lines []string, marker string, inclusive bool) []string {
+func sliceBefore(lines []string, marker string, inclusive bool) ([]string, error) {
 	for i, line := range lines {
 		if strings.Contains(line, marker) {
 			if inclusive {
-				return lines[:i+1]
+				return lines[:i+1], nil
 			}
-			return lines[:i]
+			return lines[:i], nil
 		}
 	}
-	return lines
+	return nil, fmt.Errorf("marker %q not found", marker)
 }
 
 // dedent strips the common leading-whitespace run from every non-blank
