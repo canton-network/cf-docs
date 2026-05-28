@@ -12,10 +12,23 @@ import ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvOperationsBash507 from 
 import ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvOperationsBash538 from "/snippets/external/splice/main/splice-rst-code-docs-src-sv-operator-sv-operations-bash-538.mdx";
 import ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvOperationsBash564 from "/snippets/external/splice/main/splice-rst-code-docs-src-sv-operator-sv-operations-bash-564.mdx";
 import ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvOperationsBash683 from "/snippets/external/splice/main/splice-rst-code-docs-src-sv-operator-sv-operations-bash-683.mdx";
+import ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvOperationsParsedLiteral222 from "/snippets/external/splice/main/splice-rst-code-docs-src-sv-operator-sv-operations-parsed-literal-222.mdx";
+import ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvOperationsParsedLiteral204 from "/snippets/external/splice/main/splice-rst-code-docs-src-sv-operator-sv-operations-parsed-literal-204.mdx";
+import ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvOperationsParsedLiteral193 from "/snippets/external/splice/main/splice-rst-code-docs-src-sv-operator-sv-operations-parsed-literal-193.mdx";
+import ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvOperationsParsedLiteral171 from "/snippets/external/splice/main/splice-rst-code-docs-src-sv-operator-sv-operations-parsed-literal-171.mdx";
+import ExternalSpliceMainSpliceRstFullDocsSrcCommonSvExtraDarsNotice from '/snippets/external/splice/main/splice-rst-full-docs-src-common-sv-extra-dars-notice.mdx';
+import ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvOperationsYaml821 from "/snippets/external/splice/main/splice-rst-code-docs-src-sv-operator-sv-operations-yaml-821.mdx";
+import ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvOperationsYaml829 from "/snippets/external/splice/main/splice-rst-code-docs-src-sv-operator-sv-operations-yaml-829.mdx";
+import ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvOperationsYaml838 from "/snippets/external/splice/main/splice-rst-code-docs-src-sv-operator-sv-operations-yaml-838.mdx";
+import ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvOperationsYaml846 from "/snippets/external/splice/main/splice-rst-code-docs-src-sv-operator-sv-operations-yaml-846.mdx";
+import ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvOperationsYaml865 from "/snippets/external/splice/main/splice-rst-code-docs-src-sv-operator-sv-operations-yaml-865.mdx";
+import ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvOperationsYaml889 from "/snippets/external/splice/main/splice-rst-code-docs-src-sv-operator-sv-operations-yaml-889.mdx";
 
 {/* COPIED_START source="splice:docs/src/sv_operator/sv_operations.rst" hash="0dfdcb2d" */}
 
 These sections give an overview of some of the functionalities enabled through your SV node as well as general information useful to SV node operators.
+
+<ExternalSpliceMainSpliceRstFullDocsSrcCommonSvExtraDarsNotice />
 
 ## Security Notice
 
@@ -96,42 +109,23 @@ One way to determine the current traffic consumption (in bytes) of a CC transfer
 
     \(b\) had a single coin input. You can confirm both of these conditions by looking at the matching log entry of the form:
 
-    ```bash
-    executing batch AmuletOperationBatch(
-      nonMergeOperations = AmuletOperation(
-        from = tid:80afc8ae63defcb7a636d2cd23e38c0d,
-        op = CO_CompleteAcceptedTransfer(ContractId(00ebc78671f4b5f688d8245a1e0c6c72f378c0c90c7ca574a3c3a615489f3ca15dca1012208d8f9eb3ffe0d0a05b207e2bc3fb3f3e7d31c0b594eaefcfd486411386de775c)),
-        priority = Low
-      ),
-      priority = Low
-    ) with inputs Vector(InputAmulet(ContractId(002ace5687dc7f82cb0ca80d2b349a39b1127ffd01db2cd7172053fef88308e6faca1012202646cd3cbb31c78314c3ef22657d4ba6f7f096e90167dcd0d71eba565fa35844)))
-    ```
+    <ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvOperationsParsedLiteral171 />
 
     Use the `trace-id` from this log enty's metadata (**not** the `tid` in view here but from the dedicated `trace-id` field on the log entry JSON) to confirm that this log entry matches your transfer (by searching your logs by the `trace-id` to find for entries that contain the full `AcceptedTransferOffer`, for example). Note in this example that (a) there is a single operation in the executed bach and (b) the operation has a single input. If this is not true for the transfer you initiated, go back to step 2 and initiate a new transfer, as batching or multi-input transfers will skew the measurement results.
 
 4.  Search your `validator-app` logs on the `sender` for the `trace-id` visible in the previous step. The goal is to tie the action here to a `trace-id` on the Canton side. Search for a log entry of the following form:
 
-    ```bash
-    Request (tid:43fd8ad332ca637b0c7c1509b2bdf715) com.daml.ledger.api.v2.CommandService/SubmitAndWaitForTransactionTree to participant-1:5001: sending request
-    ```
+    <ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvOperationsParsedLiteral193 />
 
     The `tid` in this log entry is the `trace-id` that you're looking for. It will be different from the `trace-id` in the log entry metadata (that you used to link this log entry to the transfer operation visible above).
 
 5.  Search your SV's `sequencer` logs for the `trace-id` from the previous step. You want to use a log filter along the lines of (all rules here should be concatenated with logical "AND"s):
 
-    ```bash
-    resource.labels.container_name="sequencer"
-    jsonPayload.logger_name="c.d.c.s.t.TrafficConsumedManager:sequencer=sequencer"
-    jsonPayload."trace-id"="43fd8ad332ca637b0c7c1509b2bdf715"
-    ```
+    <ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvOperationsParsedLiteral204 />
 
 6.  The resulting log lines contain traffic consumption information about the sender and receiver participants, but also about all SV participants. (SV participants are stakeholders to all CC transfers.) To determine only the traffic consumption of the sender and receiver participants, you must filter for the participant IDs of the sender and receiver. A simple approach to achieve the correct filtering is to filter for parts of the party suffixes of the sender and receiver parties, as the suffix (namespace) of a party will typically be identical to that of the participants hosting the party. Filtering the resulting log lines for the participant IDs corresponding to the sender and receiver, you should get log lines similar to the following:
 
-    ```bash
-    Consumed 16147 for PAR::sender::...
-    Consumed 711 for PAR::receiver::...
-    Consumed 1450 for PAR::sender::...
-    ```
+    <ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvOperationsParsedLiteral222 />
 
 7.  Sum up the numbers in the log lines to get the total traffic consumed for the last leg of a CC transfer. In this example, the total traffic consumed would be 17597 bytes for the sender and 711 bytes for the receiver.
 
@@ -346,17 +340,17 @@ t0                   t1                 t2                     t3
 
     - For `(t0, t1]` remaining portion:
 
-    > ```bash
-    > --begin-record-time=t0 --end-record-time=t1 \
-    > --weight=10000 --already-minted-weight=10000
-    > ```
+    ```bash
+    --begin-record-time=t0 --end-record-time=t1 \
+    --weight=10000 --already-minted-weight=10000
+    ```
 
     - For `(t1, t2]`:
 
-    > ```bash
-    > --begin-record-time=t1 --end-record-time=t2 \
-    > --weight=10000 --already-minted-weight=0
-    > ```
+    ```bash
+    --begin-record-time=t1 --end-record-time=t2 \
+    --weight=10000 --already-minted-weight=0
+    ```
 
   - A vote is initiated for **m₂**.
 
@@ -368,24 +362,24 @@ t0                   t1                 t2                     t3
 
     - For `(t0, t1]` remaining portion:
 
-    > ```bash
-    > --begin-record-time=t0 --end-record-time=t1 \
-    > --weight=20000 --already-minted-weight=20000
-    > ```
+    ```bash
+    --begin-record-time=t0 --end-record-time=t1 \
+    --weight=20000 --already-minted-weight=20000
+    ```
 
     - For `(t1, t2]` remaining portion:
 
-    > ```bash
-    > --begin-record-time=t1 --end-record-time=t2 \
-    > --weight=20000 --already-minted-weight=10000
-    > ```
+    ```bash
+    --begin-record-time=t1 --end-record-time=t2 \
+    --weight=20000 --already-minted-weight=10000
+    ```
 
     - For `(t2, t3]`:
 
-    > ```bash
-    > --begin-record-time=t2 --end-record-time=t3 \
-    > --weight=20000 --already-minted-weight=0
-    > ```
+    ```bash
+    --begin-record-time=t2 --end-record-time=t3 \
+    --weight=20000 --already-minted-weight=0
+    ```
 
   - A vote is initiated for **m₃**.
 
@@ -418,35 +412,34 @@ The `ScanAppBackendConfig` has a field for both the ACS store and the TxLog stor
 
 The helm chart value `acsStoreDescriptorUserVersion` sets the `user version` of the ACS store, which is shown in the example below:
 
-> ```yaml
-> # Example to trigger re-ingestion of the ACS store for the first time
-> persistence:
->   acsStoreDescriptorUserVersion: 1
-> ```
+<ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvOperationsYaml821 />
 
 A subsequent re-ingestion can be triggered by incrementing the value, as shown in the example below:
 
-> ```yaml
-> # Example to trigger re-ingestion of the ACS store for the second time
-> persistence:
->   acsStoreDescriptorUserVersion: 2
-> ```
+<ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvOperationsYaml829 />
 
 The helm chart value `txLogStoreDescriptorUserVersion` sets the `user version` of the TxLog store, which is shown in the example below:
 
-> ```yaml
-> # Example to trigger re-ingestion of the TxLog store for the first time
-> persistence:
->   txLogStoreDescriptorUserVersion: 1
-> ```
+<ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvOperationsYaml838 />
 
 A subsequent re-ingestion can be triggered by incrementing the value, as shown in the example below:
 
-> ```yaml
-> # Example to trigger re-ingestion of the TxLog store for the second time
-> persistence:
->   txLogStoreDescriptorUserVersion: 2
-> ```
+<ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvOperationsYaml846 />
+
+The `activityIngestionUserVersion` field controls the activity record ingestion version. Incrementing this value causes the scan app to record a new app activity record completeness lower bound. Reward accounting excludes rounds before this boundary, even though their activity records are retained. Thus bumping the user version has the same effect as reinitializing the app activity record computation from the time of the bump onwards.
+
+Consequences of incrementing the user version:
+
+- Reward accounting excludes rounds before the new boundary, which may result in the SV node participating in reward computation by asking other SV nodes for the data for the rounds for which the SV node does not have complete activity records.
+- Scan will not serve activity records ingested before bumping the user version. The results of this SV node's `v0/events` Scan API may therefore miss some activity records compared to the responses from other Scan APIs.
+
+This is useful for recovering from unexpected ingestion or reward processing errors without reprocessing historical data.
+
+The user version must never decrease. A lower value than previously stored will cause the scan app to shut down to prevent data corruption.
+
+The HOCON configuration key is `canton.scan-apps.scan-app.activity-ingestion-user-version`. It can be set via an `ADDITIONAL_CONFIG` environment variable:
+
+<ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvOperationsYaml865 />
 
 The `activityIngestionUserVersion` field controls the activity record ingestion version. Incrementing this value causes the Scan app to record a new app activity record completeness lower bound. Reward accounting excludes rounds before this boundary, even though their activity records are retained. Thus bumping the user version has the same effect as reinitializing the app activity record computation from the time of the bump onwards.
 
@@ -480,13 +473,7 @@ To unvet supported packages, SVs (but not regular validators) must set the follo
 
 Here an example of how to unvet specific versions of a package:
 
-> ```yaml
-> additionalEnvVars:
->   - name: ADDITIONAL_CONFIG_ADDITIONAL_PACKAGES_TO_UNVET
->     value: |
->       canton.sv-apps.sv.additional-packages-to-unvet.splice-wallet = ["0.1.16"]
->       canton.sv-apps.sv.additional-packages-to-unvet.splice-amulet = ["0.1.16", "0.1.17"]
-> ```
+<ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvOperationsYaml889 />
 
 <Note>
 Unvetting is only supported for SVs and SV validators and does not unvet dependencies for now.

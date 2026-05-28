@@ -1,20 +1,20 @@
 ```
-    // The detailed output will slightly vary. Make sure that you see the new participant ID though.
-    participant.topology.party_to_participant_mappings.list(synchronizerId, filterParty = partyId.filterString)
-      res36: Seq[topology.ListPartyToParticipantResult] = Vector(
-        ListPartyToParticipantResult(
-          context = BaseResult(
-            storeId = Synchronizer(id = global-domain::122025296c61...),
-            validFrom = 2025-05-14T10:19:33.534074Z,
-            validUntil = None,
-            sequenced = 2025-05-14T10:19:33.534074Z,
-            operation = Replace,
-            transactionHash = <ByteString@2d53bfcc size=34 contents="\022 \320\215d\276\352m)\316 \231\345 \360\252WQB\331\3668\216\362\022\342S\310k\vF\267\347\374">,
-            serial = PositiveNumeric(value = 1),
-            signedBy = Vector(1220b529c1d9...)
-          ),
-          item = PartyToParticipant(YOUR_PARTY_ID, PositiveNumeric(1), Vector(HostingParticipant(YOUR_PARTICIPANT_ID..., Submission)))
-        )
-      )
+   val topologyTransaction = participant.topology.transactions.generate(
+     Seq(
+       GenerateTransactions.Proposal(
+         partyToParticipant,
+         TopologyStoreId.Synchronizer(synchronizerId),
+       )
+     )
+   ).head
+
+   // Print out the hash that needs to be signed. Note that you need to sign
+   // the actual bytes the hex string represents not the hex string
+   topologyTransaction.hash.hash.toHexString
+
+We'll need the topology transaction and the definitions defined here later again. Either keep your Canton console open or save them.
+
+The topology transaction hash needs to be signed externally following the
+`documentation for external signing <https://docs.digitalasset.com/build/3.4/tutorials/app-dev/external_signing_onboarding.html#external-party-onboarding-transactions>`_.
 
 ```
