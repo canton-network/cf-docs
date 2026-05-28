@@ -72,6 +72,28 @@ python3 scripts/generate_all_reference_docs.py
 
 Use `--dry-run` to print the exact per-step commands without executing them.
 
+### Generate the Canton Metrics reference
+
+The Canton Metrics page is generated from the Canton release docs build rather than from protobuf files. The generator resolves the latest `DACH-NY/canton` GitHub release tag, checks out that Canton source tag under `.internal/cache/canton-metrics-reference/`, runs Canton's release bundle plus generated-include tasks, resolves the metrics RST template with the generated metric includes, converts it to MDX, and records the source release in the generated page comment.
+
+Run:
+
+```bash
+python3 scripts/generate_canton_metrics_reference.py
+```
+
+or:
+
+```bash
+npm run generate:canton-metrics-reference
+```
+
+By default this writes:
+
+- `docs-main/global-synchronizer/reference/canton-metrics.mdx`
+
+For a pinned refresh, pass `--canton-ref v3.5.1`.
+
 ### Generate the Version Compatibility Dashboard
 
 The version dashboard generator collects the public sources that are safe to automate, preserves the fields that still need a manual or owner-approved source, rewrites the dashboard config, and regenerates the published MDX snippet consumed by the version dashboard page.
