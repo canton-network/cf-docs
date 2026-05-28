@@ -3,6 +3,12 @@ title: "Minting Delegations"
 description: "How validator operators delegate minting authority for external parties hosted on their node"
 ---
 
+import ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorDelegationsBash309 from "/snippets/external/splice/main/splice-rst-code-docs-src-validator-operator-validator-delegations-bash-309.mdx";
+import ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorDelegationsBash276 from "/snippets/external/splice/main/splice-rst-code-docs-src-validator-operator-validator-delegations-bash-276.mdx";
+import ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorDelegationsBash251 from "/snippets/external/splice/main/splice-rst-code-docs-src-validator-operator-validator-delegations-bash-251.mdx";
+import ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorDelegationsBash215 from "/snippets/external/splice/main/splice-rst-code-docs-src-validator-operator-validator-delegations-bash-215.mdx";
+import ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorDelegationsBash201 from "/snippets/external/splice/main/splice-rst-code-docs-src-validator-operator-validator-delegations-bash-201.mdx";
+
 {/* COPIED_START source="splice:docs/src/validator_operator/validator_delegations.rst" hash="af0084d8" */}
 
 Minting delegations allow a delegate to instruct their validator node to automate the minting of rewards on behalf of an external party (the beneficiary) hosted on the same validator node. The delegate can be any party onboarded to the validator node's wallet (e.g., the validator operator party, but other internal parties are also possible). This is useful to automate the reward collection for external parties.
@@ -131,42 +137,11 @@ To create the proposal, submit a `create` command via the Ledger API [command su
 
 First, set up the required environment variables:
 
-```bash
-export LEDGER_API_URL="https://validator.example.com:5003"
-export TOKEN="your-auth-token"
-export BENEFICIARY_PARTY="beneficiary::1220abcd..."
-export DELEGATE_PARTY="validator_operator::1220efgh..."
-export DSO_PARTY="DSO::1220ijkl..."
-export EXPIRES_AT="2025-12-31T23:59:59Z"
-# This could be created by
-# export EXPIRES_AT="$(date -u -d '+1 year' '+%Y-%m-%dT%H:%M:%SZ')"
-export AMULET_MERGE_LIMIT=10
-```
+<ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorDelegationsBash201 />
 
 Then create the proposal using curl:
 
-```bash
-curl -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
---data-raw '{
-  "commands": [
-    {
-      "CreateCommand": {
-        "templateId": "#splice-wallet:Splice.Wallet.MintingDelegation:MintingDelegationProposal",
-        "createArguments": {
-          "delegation": {
-            "beneficiary": "'"$BENEFICIARY_PARTY"'",
-            "delegate": "'"$DELEGATE_PARTY"'",
-            "dso": "'"$DSO_PARTY"'",
-            "expiresAt": "'"$EXPIRES_AT"'",
-            "amuletMergeLimit": '"$AMULET_MERGE_LIMIT"'
-          }
-        }
-      }
-    }
-  ]
-}' \
-"$LEDGER_API_URL/v2/commands"
-```
+<ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorDelegationsBash215 />
 
 See the [MintingDelegationProposal template source code](https://github.com/canton-network/splice/blob/main/daml/splice-wallet/daml/Splice/Wallet/MintingDelegation.daml) for the complete Daml definition.
 
@@ -176,51 +151,11 @@ The beneficiary can monitor their proposal status by querying for active `Mintin
 
 To query for pending proposals:
 
-```bash
-curl -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
---data-raw '{
-  "filter": {
-    "filtersByParty": {
-      "'"$BENEFICIARY_PARTY"'": {
-        "filters": [
-          {
-            "inclusive": {
-              "templateFilters": [
-                {"templateId": "#splice-wallet:Splice.Wallet.MintingDelegation:MintingDelegationProposal"}
-              ]
-            }
-          }
-        ]
-      }
-    }
-  }
-}' \
-"$LEDGER_API_URL/v2/state/active-contracts"
-```
+<ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorDelegationsBash251 />
 
 Once accepted, query for the active `MintingDelegation` contract to confirm the delegation is active:
 
-```bash
-curl -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
---data-raw '{
-  "filter": {
-    "filtersByParty": {
-      "'"$BENEFICIARY_PARTY"'": {
-        "filters": [
-          {
-            "inclusive": {
-              "templateFilters": [
-                {"templateId": "#splice-wallet:Splice.Wallet.MintingDelegation:MintingDelegation"}
-              ]
-            }
-          }
-        ]
-      }
-    }
-  }
-}' \
-"$LEDGER_API_URL/v2/state/active-contracts"
-```
+<ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorDelegationsBash276 />
 
 #### Withdrawing a Proposal
 
@@ -228,24 +163,7 @@ If the beneficiary wants to withdraw their proposal before it is accepted or rej
 
 First, obtain the contract ID of the proposal from the active contracts query above, then exercise the withdrawal choice:
 
-```bash
-export PROPOSAL_CONTRACT_ID="00abcd1234..."
-
-curl -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
---data-raw '{
-  "commands": [
-    {
-      "ExerciseCommand": {
-        "templateId": "#splice-wallet:Splice.Wallet.MintingDelegation:MintingDelegationProposal",
-        "contractId": "'"$PROPOSAL_CONTRACT_ID"'",
-        "choice": "MintingDelegationProposal_Withdraw",
-        "choiceArgument": {}
-      }
-    }
-  ]
-}' \
-"$LEDGER_API_URL/v2/commands"
-```
+<ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorDelegationsBash309 />
 
 ### Security Considerations
 

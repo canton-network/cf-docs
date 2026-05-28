@@ -19,9 +19,22 @@ import ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorHelmYaml5
 import ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorHelmBash611 from "/snippets/external/splice/main/splice-rst-code-docs-src-validator-operator-validator-helm-bash-611.mdx";
 import ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorHelmYaml771 from "/snippets/external/splice/main/splice-rst-code-docs-src-validator-operator-validator-helm-yaml-771.mdx";
 import ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorHelmYaml797 from "/snippets/external/splice/main/splice-rst-code-docs-src-validator-operator-validator-helm-yaml-797.mdx";
+import ExternalSpliceMainSpliceRstFullDocsSrcCommonBackupSuggestion from '/snippets/external/splice/main/splice-rst-full-docs-src-common-backup-suggestion.mdx';
+import ExternalSpliceMainSpliceRstPartialDocsSrcValidatorOperatorRequiredNetworkParameters9 from '/snippets/external/splice/main/splice-rst-partial-docs-src-validator-operator-required-network-parameters-9.mdx';
+import ExternalSpliceMainSpliceRstFullDocsSrcCommonReloaderRecommendation from '/snippets/external/splice/main/splice-rst-full-docs-src-common-reloader-recommendation.mdx';
+import ExternalSpliceMainSpliceRstFullDocsSrcCommonTrafficTopups from '/snippets/external/splice/main/splice-rst-full-docs-src-common-traffic-topups.mdx';
+import ExternalSpliceMainSpliceRstFullDocsSrcCommonWalletSweeps from '/snippets/external/splice/main/splice-rst-full-docs-src-common-wallet-sweeps.mdx';
+import ExternalSpliceMainSpliceRstLiteralMarkerAppsAppSrcPackExamplesSvHelmStandaloneValidatorValuesConfiguringTopupStart from '/snippets/external/splice/main/splice-literal-marker-apps-app-src-pack-examples-sv-helm-standalone-validator-values-configuring-topup-start.mdx';
+import ExternalSpliceMainSpliceRstLiteralMarkerAppsAppSrcPackExamplesSvHelmStandaloneValidatorValuesScanClientConfigurationStart from '/snippets/external/splice/main/splice-literal-marker-apps-app-src-pack-examples-sv-helm-standalone-validator-values-scan-client-configuration-start.mdx';
+import ExternalSpliceMainSpliceRstLiteralMarkerAppsAppSrcPackExamplesSvHelmStandaloneValidatorValuesSynchronizerConfigurationStart from '/snippets/external/splice/main/splice-literal-marker-apps-app-src-pack-examples-sv-helm-standalone-validator-values-synchronizer-configuration-start.mdx';
+import ExternalSpliceMainSpliceRstLiteralMarkerAppsAppSrcPackExamplesSvHelmValidatorValuesAutoAcceptStart from '/snippets/external/splice/main/splice-literal-marker-apps-app-src-pack-examples-sv-helm-validator-values-auto-accept-start.mdx';
+import ExternalSpliceMainSpliceRstLiteralMarkerAppsAppSrcPackExamplesSvHelmValidatorValuesParticipantPruningScheduleStart from '/snippets/external/splice/main/splice-literal-marker-apps-app-src-pack-examples-sv-helm-validator-values-participant-pruning-schedule-start.mdx';
 
 import { NetworkVariables } from '/snippets/components/version.mdx';
 import { networkData } from '/snippets/generated/version-dashboard-data.mdx';
+import ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorHelmParsedLiteral657 from "/snippets/external/splice/main/splice-rst-code-docs-src-validator-operator-validator-helm-parsed-literal-657.mdx";
+import ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorHelmParsedLiteral472 from "/snippets/external/splice/main/splice-rst-code-docs-src-validator-operator-validator-helm-parsed-literal-472.mdx";
+import ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorHelmYaml127 from "/snippets/external/splice/main/splice-rst-code-docs-src-validator-operator-validator-helm-yaml-127.mdx";
 
 {/* COPIED_START source="splice:docs/src/validator_operator/validator_helm.rst" hash="b0bc851d" */}
 
@@ -45,6 +58,10 @@ This section describes how to deploy a standalone validator node in Kubernetes u
 ```bash
 tar xzvf |version|_splice-node.tar.gz
 ```
+
+<ExternalSpliceMainSpliceRstFullDocsSrcCommonBackupSuggestion />
+
+<ExternalSpliceMainSpliceRstPartialDocsSrcValidatorOperatorRequiredNetworkParameters9 />
 
 - **TRUSTED_SCAN_URL** — The scan URL of an SV that you trust and that is reachable by your validator, often your SV sponsor. This should be of the form <a href="|generic_scan_url|">|generic_scan_url|</a>, e.g., for the Global Synchronizer Foundation SV it is <a href="|gsf_scan_url|">|gsf_scan_url|</a>.
 
@@ -95,12 +112,7 @@ The value is a `|`-separated list of patterns that follows the standard Java `no
 
 Example `additionalJvmOptions` for the validator helm chart that proxies external traffic but bypasses the proxy for `localhost` / `127.0.0.1`, any host in the `.internal` domain, and any IPv4 address whose literal string representation starts with `10.`:
 
-```yaml
-additionalJvmOptions: |
-  -Dhttps.proxyHost=your.proxy.host
-  -Dhttps.proxyPort=your_proxy_port
-  -Dhttp.nonProxyHosts=localhost|127.0.0.1|*.internal|10.*
-```
+<ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorHelmYaml127 />
 
 ## Configuring PostgreSQL authentication
 
@@ -258,6 +270,8 @@ When running without authentication, the username of the validator administrator
 
 ## Installing the Software
 
+<ExternalSpliceMainSpliceRstFullDocsSrcCommonReloaderRecommendation />
+
 ### Configuring the Helm Charts
 
 <NetworkVariables networkData={networkData}>
@@ -284,41 +298,7 @@ Additionally, please modify the file `splice-node/examples/sv-helm/standalone-pa
 
 You need to configure how your validator connects to the network's **scan** services by defining a `scanClient` block in your `standalone-validator-values.yaml`.
 
-```yaml
-scanClient:
-  scanType: "bft"
-  seedUrls: ["TRUSTED_SCAN_URL"] # replace with scan seed url. Supports multiple urls, separated by comma.
-
-# scanClient denotes how the validator makes connections to scan service and supports three modes of operation.
-
-# Mode 1: bft (Byzantine Fault Tolerance)
-# Connects to all available scans in the network. It validates responses by ensuring
-# at least f+1 matching responses are received.
-
-# scanClient:
-#   scanType: "bft"
-#   seedUrls: ["TRUSTED_SCAN_URL"] # replace with scan seed url(s).  Supports multiple urls, separated by comma.
-
-# Mode 2: bft-custom
-# A specialized version of bft where you specify a subset of trusted SVs.
-# The validator connects only to the scans of the SVs listed in 'svNames'.
-# Optional param 'threshold' defines how many identical responses are required to consider the scan responses valid.
-
-# scanClient:
-#   scanType: "bft-custom"
-#   svNames: ["TRUSTED_SV"] # replace with trusted SV names(s)
-#   seedUrls: ["TRUSTED_SCAN_URL"] # replace with actual scan seed urls(s)
-#   threshold: <TRUST_THRESHOLD> # optional integer indicating the number of matching responses required for validation
-
-# Mode 3: trust-single
-# Connects to a single trusted scan address.
-# This means that you depend on that single SV and if it is broken or malicious you will be unable to use the network.
-# Hence, usually you want to default to not enabling this
-
-# scanClient:
-#   scanType: "trust-single"
-#   scanAddress: "TRUSTED_SCAN_URL" # replace with the trusted scan url
-```
+<ExternalSpliceMainSpliceRstLiteralMarkerAppsAppSrcPackExamplesSvHelmStandaloneValidatorValuesScanClientConfigurationStart />
 
 For your selected `scanClient` type, replace `TRUSTED_SCAN_URL` with a URL of a Scan you host or trust that is reachable by your Validator. For example, the GSF scan URL, <a href="|gsf_scan_url|">|gsf_scan_url|</a>. For `bft-custom` and `bft` modes of `scanClient`, you can specify more than one scan seed URL by separating them with commas.
 
@@ -330,37 +310,7 @@ For your selected `scanClient` type, replace `TRUSTED_SCAN_URL` with a URL of a 
 
 You need to configure how your validator's participant connects to **sequencers** by defining a `synchronizer` config in your `standalone-validator-values.yaml`.
 
-```yaml
-synchronizer:
-  connectionType: "bft"
-
-# synchronizer configuration enables to configure how the validator's participant connects to the synchronizer.
-# synchronizer configuration has three modes of operation.
-
-# Mode 1: bft (Byzantine Fault Tolerance)
-# Uses all available synchronizer connections provided by the scan service.
-# Responses are validated against the network's f+1 fault tolerance logic.
-
-# synchronizer:
-#   connectionType: "bft"
-
-# Mode 2: bft-custom
-# Connects only to sequencers operated by the specific SVs listed in 'svNames'.
-# optional param 'threshold' defines the minimum number of matching responses required for validation.
-
-# synchronizer:
-#   connectionType: "bft-custom"
-#   svNames: ["TRUSTED_SV"] # replace with trusted SV name(s)
-#   threshold: <TRUST_THRESHOLD> # optional integer indicating the number of matching responses required for validation
-
-# Mode 3: trust-Single
-# Connects to a single specified sequencer URL.
-# trust-single makes you dependent on a single SV; if it is malicious or down, you will be unable to use the network.
-
-#synchronizer:
-#   connectionType: "trust-single"
-#   url: "TRUSTED_SYNCHRONIZER_SEQUENCER_URL" # replace with the trusted synchronizer sequencer url
-```
+<ExternalSpliceMainSpliceRstLiteralMarkerAppsAppSrcPackExamplesSvHelmStandaloneValidatorValuesSynchronizerConfigurationStart />
 
 Additionally, please modify the file `splice-node/examples/sv-helm/standalone-validator-values.yaml` as follows:
 
@@ -379,11 +329,7 @@ Finally, please download the UI config values file from [https://github.com/glob
 
 With these files in place, you can execute the following helm commands in sequence. It's generally a good idea to wait until each deployment reaches a stable state prior to moving on to the next step.
 
-```bash
-helm install postgres |helm_repo_prefix|/splice-postgres -n validator --version ${CHART_VERSION} -f splice-node/examples/sv-helm/postgres-values-validator-participant.yaml --wait
-helm install participant |helm_repo_prefix|/splice-participant -n validator --version ${CHART_VERSION} -f splice-node/examples/sv-helm/participant-values.yaml -f splice-node/examples/sv-helm/standalone-participant-values.yaml --wait
-helm install validator |helm_repo_prefix|/splice-validator -n validator --version ${CHART_VERSION} -f splice-node/examples/sv-helm/validator-values.yaml -f splice-node/examples/sv-helm/standalone-validator-values.yaml --wait
-```
+<ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorHelmParsedLiteral472 />
 
 Once this is running, you should be able to inspect the state of the cluster and observe pods running in the new namespace. A typical query might look as follows:
 
@@ -463,9 +409,7 @@ This gateway terminates tls using the secret that you configured above, and expo
 
 using:
 
-```bash
-helm install cluster-ingress-validator |helm_repo_prefix|/splice-cluster-ingress-runbook -n validator --version ${CHART_VERSION} -f splice-node/examples/sv-helm/validator-cluster-ingress-values.yaml
-```
+<ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorHelmParsedLiteral657 />
 
 </NetworkVariables>
 
@@ -485,17 +429,9 @@ explain the config sections below in a way that makes them also accessible to th
 
 By default your node will be configured to automatically purchase traffic on a pay-as-you-go basis (see automatically purchase traffic). To disable or tune to your needs, edit the following section in the validator-values.yaml file:
 
-```yaml
-# Configuring a validator's traffic top-up loop;
-# see documentation for more detailed information.
-topup:
-  # set to false in order to disable automatic traffic top-ups
-  enabled: true
-  # target throughput in bytes / second of sequenced traffic; targetThroughput=0 <=> enabled=false
-  targetThroughput: 20000
-  # minTopupInterval - minimum time interval that must elapse before the next top-up
-  minTopupInterval: "1m"
-```
+<ExternalSpliceMainSpliceRstLiteralMarkerAppsAppSrcPackExamplesSvHelmStandaloneValidatorValuesConfiguringTopupStart />
+
+<ExternalSpliceMainSpliceRstFullDocsSrcCommonTrafficTopups />
 
 <div className="todo">
 
@@ -504,6 +440,8 @@ topup:
 </div>
 
 ## Configuring sweeps and auto-accepts of transfer offers
+
+<ExternalSpliceMainSpliceRstFullDocsSrcCommonWalletSweeps />
 
 To do so, uncomment and fill in the following section in the `validator-values.yaml` file:
 
@@ -524,13 +462,7 @@ To do so, uncomment and fill in the following section in the `validator-values.y
 
 Similarly, you can configure the validator to automatically accept transfer offers from certain parties on the network. To do so, uncomment and fill in the following section in the `validator-values.yaml` file:
 
-```yaml
-# To configure the validator to auto-accept transfer offers from specific parties, uncomment and fill in the following:
-#autoAcceptTransfers:
-#  "<receiverPartyId>":
-#    fromParties:
-#      - "<senderPartyId>"
-```
+<ExternalSpliceMainSpliceRstLiteralMarkerAppsAppSrcPackExamplesSvHelmValidatorValuesAutoAcceptStart />
 
 ## Logging into the CNS UI
 
@@ -552,14 +484,7 @@ Note that if your node is down for longer than the pruning window (48 hours in t
 
 Refer to the [pruning guide](/global-synchronizer/production-operations/pruning) for more details on participant pruning.
 
-```yaml
-# To configure participant pruning uncomment the following section.
-# Refer to the documentation for more details.
-# participantPruningSchedule:
-#   cron: 0 /10 * * * ? # Run every 10min
-#   maxDuration: 5m # Run for a max of 5min per iteration
-#   retention: 48h # Retain history that is newer than 48h.
-```
+<ExternalSpliceMainSpliceRstLiteralMarkerAppsAppSrcPackExamplesSvHelmValidatorValuesParticipantPruningScheduleStart />
 
 ## Configuring init containers
 

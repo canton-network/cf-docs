@@ -5,8 +5,11 @@ description: "Upgrade the protocol version of a Global Synchronizer with very li
 
 import { Version, VersionOption } from '/snippets/components/version.mdx';
 import { networkData } from '/snippets/generated/version-dashboard-data.mdx';
+import ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvLogicalSynchronizerUpgradeNone87 from '/snippets/external/splice/main/splice-rst-code-docs-src-sv-operator-sv-logical-synchronizer-upgrade-none-87.mdx';
+import ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvLogicalSynchronizerUpgradeNone118 from '/snippets/external/splice/main/splice-rst-code-docs-src-sv-operator-sv-logical-synchronizer-upgrade-none-118.mdx';
+import ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvLogicalSynchronizerUpgradeNone142 from '/snippets/external/splice/main/splice-rst-code-docs-src-sv-operator-sv-logical-synchronizer-upgrade-none-142.mdx';
 
-{/* COPIED_START source="splice:docs/src/sv_operator/sv_logical_synchronizer_upgrade.rst" hash="687d5313" */}
+{/* COPIED_START source="splice:docs/src/sv_operator/sv_logical_synchronizer_upgrade.rst" hash="62d973d4" */}
 
 <Warning>
 Logical Synchronizer Upgrades (LSU) are still in development and the instructions here are intended as a preview primarily targeted at Super Validators but will likely change in minor ways before the full release.
@@ -79,11 +82,7 @@ Concretely, the procedure is as follows:
 1. The old physical synchronizer is deemed broken and the last sequenced message was at record time R.
 2. Super validators configure this as the max sequencing time on the old sequencer to guarantee that nothing accidentally gets sequenced after that time. This is done by applying the following environment variable to the existing sequencer:
 
-```
-- name: ADDITIONAL_CONFIG_SEQUENCER_LSU_MAX_SEQUENCING_TIME
-  value: |
-    canton.sequencers.sequencer.parameters.lsu-repair.global-max-sequencing-time-exclusive=MAX_SEQUENCING_TIME
-```
+<ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvLogicalSynchronizerUpgradeNone87 />
 
 2. Super validators deploy successor nodes. Depending on the issue,
    the successor nodes may be configured with older image and protocol
@@ -105,7 +104,7 @@ Concretely, the procedure is as follows:
   <VersionOption version="0.5.18" code={`- name: ADDITIONAL_CONFIG_SEQUENCER_LSU_SEQUENCING_BOUNDS
   value: |
     canton.sequencers.sequencer.parameters.parameters.lsu-repair.lsu-sequencing-bounds-override.lower-bound-sequencing-time-exclusive=LOWER_BOUND_SEQUENCING_TIME_EXCLUSIVE
-    canton.sequencers.sequencer.parameters.parameters.lsu-repair.lsu-sequencing-bounds-override.lower-bound-sequencing-time-exclusive=UPGRADE_TIME`} />
+    canton.sequencers.sequencer.parameters.parameters.lsu-repair.lsu-sequencing-bounds-override.upgrade-time=UPGRADE_TIME`} />
   <VersionOption version="0.6.3" code={`- name: ADDITIONAL_CONFIG_SEQUENCER_LSU_SEQUENCING_BOUNDS
   value: |
     canton.sequencers.sequencer.parameters.lsu-repair.lsu-sequencing-bounds-override.lower-bound-sequencing-time-exclusive=LOWER_BOUND_SEQUENCING_TIME_EXCLUSIVE
@@ -117,15 +116,7 @@ Concretely, the procedure is as follows:
 4. Super validators configure their SV app app to transfer the topology and traffic state from the old physical synchronizer to the successor nodes.
    To do so, add the following helm values to the SV app:
 
-```
-rollForwardLsu:
-  newPhysicalSynchronizerSerial: NEW_PHYSICAL_SYNCHRONIZER_SERIAL # Must be agreed between SVs, usually existing (broken) synchronizer serial + 1
-  newPhysicalSynchronizerProtocolVersion: NEW_PHYSICAL_SYNCHRONIZER_PROTOCOL_VERSION # Must be agreed between SVs, usually existing (broken) synchronizer serial + 1
-  exportTimes:
-    topologyExportTime: TOPOLOGY_EXPORT_TIME # Must be agreed between SVs
-    trafficExportTime: TRAFFIC_EXPORT_TIME # Must be agreed between SVs
-    upgradeTime: UPGRADE_TIME # Must be agreed between SVs
-```
+<ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvLogicalSynchronizerUpgradeNone118 />
 
 5. Validators initiate the *procedure* on their side.
 
@@ -140,11 +131,7 @@ To do so, use the following steps:
 
 1. Super validators configure the manual LSU in their scan.
 
-```
-rollForwardLsu:
-   enabled: true
-   upgradeTime: UPGRADE_TIME # Must be agreed between SVs, optional, if not specified it is taken from an existing LSU announcement which should usually be sufficient.
-```
+<ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvLogicalSynchronizerUpgradeNone142 />
 
 2. Validator app automation picks up that configuration and initiates a manual roll-forward LSU to the new synchronizer.
 
@@ -163,7 +150,7 @@ LSU requires deployment changes for super validators. Concretely:
 
 1. Participants are now preserved as part of LSUs. So if you previously assumed participant, sequencer and mediator always come as one unit per migration id, you now need to move the participant out of that.
 2. The `domain` value on the sv app helm chart should be replaced by `synchronizers`. `synchronizers.current` replaces the synchronizer previously configured through `domain`. `synchronizers.successor`
-   should be configured to the successor physical synchronizer when that is deployed. After the upgrade, `synchronizers.current` becomes `synchronizers.legacy` and `synchronizers.successor` becomes `synchronizers.current`. The legacy configuration should be removed together with removing the old physical synchronizer after 30 days.
+   should be configured to the successor physical synchronizer when that is deployed. After the upgrade, `synchronizers.current` becomes `synchronizers.legacy` and `synchronizers.successor` becomes `synchronizers.current`. The legacy configuration should be removed together with removing the old physical synchronizer after 30 days. If you already have a node in `legacy` and it should not yet be decommissioned, move it to `additionalLegacy`, which accepts an array of synchronizers.
    The CometBFT configuration also moves under `synchronizers.(current|successor|legacy)`.
 3. The `sequencerAddress` and `mediatorAddress`values in scan should be replaced by `synchronizers.current.sequencer` and `synchronizers.current.mediator`. The corresponding values under `synchronizers.successor` should be set together with
    the deployment of the successor physical synchronizer. After the upgrade `successor` becomes `current` and `current` is removed.
