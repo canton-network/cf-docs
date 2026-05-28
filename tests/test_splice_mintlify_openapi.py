@@ -53,7 +53,11 @@ paths: {}
     ).decode("utf-8")
 
     assert "https://scan.sv-1.global.canton.network.sync.global/api/scan" in rendered_scan
+    assert "https://scan.sv-1.global.canton.network.digitalasset.com/api/scan" in rendered_scan
+    assert "https://scan.sv-1.global.canton.network.tradeweb.com/api/scan" in rendered_scan
     assert "https://scan.sv-1.global.canton.network.sync.global/api/scan" in rendered_stream
+    assert rendered_scan.count("  - url: https://scan.sv-1.global.canton.network.") == 10
+    assert rendered_stream.count("  - url: https://scan.sv-1.global.canton.network.") == 10
     assert "https://example.com/api/scan" not in rendered_scan
     assert "https://example.com/api/scan" not in rendered_stream
     assert "https://example.com/api/scan" in rendered_wallet

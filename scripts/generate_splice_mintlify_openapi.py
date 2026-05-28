@@ -24,7 +24,18 @@ DEFAULT_CACHE_DIR = REPO_ROOT / ".internal" / "cache" / "mintlify-openapi" / "sp
 DEFAULT_DOCS_JSON = REPO_ROOT / "docs-main" / "docs.json"
 HTTP_METHODS = {"get", "put", "post", "delete", "options", "head", "patch", "trace"}
 SCAN_OPENAPI_PLACEHOLDER_SERVER = "https://example.com/api/scan"
-SCAN_OPENAPI_PUBLIC_SERVER = "https://scan.sv-1.global.canton.network.sync.global/api/scan"
+SCAN_OPENAPI_PUBLIC_SERVERS = [
+    "https://scan.sv-1.global.canton.network.c7.digital/api/scan",
+    "https://scan.sv-1.global.canton.network.cumberland.io/api/scan",
+    "https://scan.sv-1.global.canton.network.digitalasset.com/api/scan",
+    "https://scan.sv-1.global.canton.network.fivenorth.io/api/scan",
+    "https://scan.sv-1.global.canton.network.sync.global/api/scan",
+    "https://scan.sv-1.global.canton.network.lcv.mpch.io/api/scan",
+    "https://scan.sv-1.global.canton.network.mpch.io/api/scan",
+    "https://scan.sv-1.global.canton.network.orb1lp.mpch.io/api/scan",
+    "https://scan.sv-1.global.canton.network.proofgroup.xyz/api/scan",
+    "https://scan.sv-1.global.canton.network.tradeweb.com/api/scan",
+]
 SCAN_OPENAPI_SERVER_REPLACEMENT_SPECS = {"scan.yaml", "scan-stream-server.yaml"}
 
 
@@ -244,13 +255,17 @@ def extract_spec_bytes(
     return extracted
 
 
+def render_scan_openapi_servers() -> str:
+    return "\n".join(f"  - url: {server}" for server in SCAN_OPENAPI_PUBLIC_SERVERS)
+
+
 def render_output_bytes(*, spec_filename: str, spec_bytes: bytes, output_path: Path) -> bytes:
     if output_path.suffix not in {".yaml", ".yml"}:
         return spec_bytes
 
     text = spec_bytes.decode("utf-8")
     if spec_filename in SCAN_OPENAPI_SERVER_REPLACEMENT_SPECS:
-        text = text.replace(SCAN_OPENAPI_PLACEHOLDER_SERVER, SCAN_OPENAPI_PUBLIC_SERVER)
+        text = text.replace(f"  - url: {SCAN_OPENAPI_PLACEHOLDER_SERVER}", render_scan_openapi_servers())
     filtered_lines = [
         line
         for line in text.splitlines()
