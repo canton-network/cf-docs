@@ -30,7 +30,7 @@ For repositories with generated snippet JSON, the wrapper runs the required prep
 
 # Workflow architecture
 
-Changes in the external repository snippet source files are being extracted on the external repository, wrapped into an artifact and then being pulled in from this repository into the appropriate folder in the `snippets/external/` folder.
+Changes in the external repository snippet source files are being extracted on the external repository, wrapped into an artifact and then being pulled in from this repository into the appropriate folder in the `docs-main/snippets/external/` folder.
 
 
 ## Extract snippet files
@@ -82,7 +82,7 @@ In this repository, the [pull-external-snippets](/.github/workflows/pull-externa
 * repo-org: External repo org
 * repo-version: External repo version
 
-It pulls the external artifact and places the files into `snippets/external/{repo_name}/{repo_version}`. Then, a PR is created (if there are any changed files) towards main on this repository. The PR title contains the repo name, version and the last commit hash (short) of the external repo. If another update is pushed on the external repository, the existing PR is being updated automatically.
+It pulls the external artifact and places the files into `docs-main/snippets/external/{repo_name}/{repo_version}`. Then, a PR is created (if there are any changed files) towards main on this repository. The PR title contains the repo name, version and the last commit hash (short) of the external repo. If another update is pushed on the external repository, the existing PR is being updated automatically.
 
 ## Full workflow sequence
 
@@ -106,7 +106,7 @@ sequenceDiagram
 
   ExtWF->>MainWF: Trigger update_snippets<br/>(artifact-id, run-id, repo-name, repo-org, repo-version)
   MainWF->>Artifact: Download external artifact
-  MainWF->>MainRepo: Copy files to snippets/external/REPO_NAME/REPO_VERSION
+  MainWF->>MainRepo: Copy files to docs-main/snippets/external/REPO_NAME/REPO_VERSION
   MainWF->>MainRepo: Detect file changes
   MainWF->>MainRepo: Create/update PR to main<br/>title includes repo/version/short commit hash
 

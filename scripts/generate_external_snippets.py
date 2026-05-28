@@ -130,7 +130,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--copy-output",
         action="store_true",
-        help="Copy docs-output into snippets/external/<repo>/<version> in this cf-docs checkout.",
+        help="Copy docs-output into docs-main/snippets/external/<repo>/<version> in this cf-docs checkout.",
     )
     parser.add_argument(
         "--version",
@@ -140,7 +140,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--replace-output",
         action="store_true",
-        help="With --copy-output, remove the target snippets/external folder before copying.",
+        help="With --copy-output, remove the target docs-main/snippets/external folder before copying.",
     )
     parser.add_argument(
         "--min-free-gb",
@@ -366,7 +366,7 @@ def run_extraction(
 
 def copy_output(repo: SnippetRepo, source_dir: Path, version: str, replace: bool, dry_run: bool) -> Path:
     source_output = source_dir / "docs-output"
-    target = CF_DOCS_ROOT / "snippets" / "external" / repo_label(repo) / version
+    target = CF_DOCS_ROOT / "docs-main" / "snippets" / "external" / repo_label(repo) / version
     if not dry_run and not source_output.is_dir():
         raise SystemExit(f"Expected generated docs-output directory does not exist: {source_output}")
     print(f"Copy output: {source_output} -> {target}")
