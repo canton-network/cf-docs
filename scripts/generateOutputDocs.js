@@ -52,13 +52,34 @@ function extractByStringMarker(fileContent, startMarker, endMarker) {
         throw new Error(`Start marker not found: "${startMarker}"`)
     }
 
-    const contentStart = startIndex + startMarker.length
+    let contentStart = startIndex + startMarker.length
+    const startLineEnd = fileContent.indexOf('\n', startIndex)
+    if (startLineEnd !== -1) {
+        const startLine = fileContent.substring(
+            fileContent.lastIndexOf('\n', startIndex) + 1,
+            startLineEnd
+        )
+        if (startLine.includes(startMarker)) {
+            contentStart = startLineEnd + 1
+        }
+    }
     const endIndex = fileContent.indexOf(endMarker, contentStart)
     if (endIndex === -1) {
         throw new Error(`End marker not found: "${endMarker}"`)
     }
 
-    return fileContent.substring(contentStart, endIndex).trim()
+    let contentEnd = endIndex
+    const endLineStart = fileContent.lastIndexOf('\n', endIndex) + 1
+    const endLineEnd = fileContent.indexOf('\n', endIndex)
+    const endLine = fileContent.substring(
+        endLineStart,
+        endLineEnd === -1 ? fileContent.length : endLineEnd
+    )
+    if (endLine.includes(endMarker)) {
+        contentEnd = endLineStart
+    }
+
+    return fileContent.substring(contentStart, contentEnd).trim()
 }
 
 function extractByRegexWrap(fileContent, startRegex, endRegex) {
@@ -179,20 +200,21 @@ function trimBlankEdges(content) {
     return content.replace(/^\s*\n+/, '').replace(/\n+\s*$/, '')
 }
 
-function convertRstBlocksToMarkdown(content, fallbackLanguage = '') {
+function convertRstBlocksToMarkdown(content, fallbackLanguage = '', preserveIndent = false) {
     const input = trimBlankEdges(content)
     const lines = input.split('\n')
     const out = []
     let i = 0
 
     while (i < lines.length) {
-        const m = lines[i].match(/^\s*\.\.\s+code-block::\s*(\S*)\s*$/)
+        const m = lines[i].match(/^(\s*)\.\.\s+(code-block|code|parsed-literal)::\s*(\S*)\s*$/)
         if (!m) {
             i++
             continue
         }
 
-        let language = (m[1] || '').trim()
+        const directiveIndent = m[1].length
+        let language = (m[3] || '').trim()
         if (!language || language.toLowerCase() === 'none') {
             language = fallbackLanguage || ''
         }
@@ -209,8 +231,9 @@ function convertRstBlocksToMarkdown(content, fallbackLanguage = '') {
                 continue
             }
 
-            if (/^( {4}|\t)/.test(line)) {
-                block.push(line.replace(/^( {4}|\t)/, ''))
+            const indent = line.match(/^\s*/)[0].length
+            if (indent > directiveIndent) {
+                block.push(preserveIndent ? line : line.replace(/^( {4}|\t)/, ''))
                 i++
                 continue
             }
@@ -252,7 +275,7 @@ function convertRstBlocksToMarkdown(content, fallbackLanguage = '') {
 function formatSnippetContent(content, options) {
     if (options && options.transform === 'rstjson') {
         const language = options && options.language ? options.language : ''
-        return convertRstBlocksToMarkdown(content, language)
+        return convertRstBlocksToMarkdown(content, language, options.preserveIndent === true)
     }
     const displayStyle = (options && options.displayStyle) || 'wrapCode'
     const rawLanguage = options && options.language ? options.language : ''
