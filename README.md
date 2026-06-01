@@ -336,6 +336,8 @@ Enabled specs are added under the top-level `API Reference` dropdown as `Splice 
 
 ## Provide Feedback on a Page
 
+![suggest edits and raise issues](images/readme/readme-edits-issues.png)
+
 Every page on docs.canton.network has two feedback buttons in the footer:
 - `Suggest edits`
 - `Raise issue`
