@@ -17,6 +17,8 @@ let
     ps.protobuf
     ps.pytest
     ps.pyyaml
+    ps.types-protobuf
+    ps.types-pyyaml
   ]);
 in
 pkgs.mkShell {
