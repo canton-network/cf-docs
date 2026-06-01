@@ -4,13 +4,21 @@ SPDX-License-Identifier: Apache-2.0 AND CC-BY-4.0
 docs
 ====
 
-This repo manages the contents of the docs.canton.network website.
+This repo manages the contents of the [docs.canton.network](https://docs.canton.network) website.
 
 ## Local Development
 
 ### Prerequisites
 
-- Node.js 20.17 or higher (LTS recommended)
+Either:
+
+- [`direnv`](https://direnv.net/)
+- [`nix`](https://nixos.org/download/)
+
+OR:
+
+- [Node.js 24](https://nodejs.org/en/download) (note that `mintlify` is not currently compatible with Node.js 26)
+- [Python 3.14](https://www.python.org/downloads/) if you are running any of the machinery for syncing snippets or updating generated docs
 
 ### Running the dev server
 
@@ -28,38 +36,12 @@ The site will be available at http://localhost:3000.
 mintlify broken-links
 ```
 
-### Troubleshooting
-
-**Node version error**: If you see "mint dev is not supported on node versions below 20.17", upgrade Node.js:
-
-```bash
-# Using nvm
-nvm install 20
-nvm use 20
-```
-
 ## License
 
 This repository uses a dual-license model:
 
 - **Documentation prose** (`.mdx` files, text content): [Creative Commons Attribution 4.0 International (CC-BY-4.0)](https://creativecommons.org/licenses/by/4.0/) — see [LICENSE-DOCS](LICENSE-DOCS)
 - **Code snippets and configuration** (embedded code examples, scripts, JSON config): [Apache License 2.0](http://www.apache.org/licenses/LICENSE-2.0) — see [LICENSE](LICENSE)
-
-### Direnv + Nix workflow
-
-This repo includes `.envrc` and `shell.nix` for a reproducible local toolchain.
-The Nix package set is pinned by `nix/nixpkgs.src.json`.
-
-Required:
-- `direnv`
-- `nix`
-
-Then run:
-
-```bash
-direnv allow
-cd docs-main && mintlify dev
-```
 
 ### Run all generated reference docs
 
