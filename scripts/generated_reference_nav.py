@@ -3,9 +3,8 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
-from typing import cast
 
-from x2mdx.types import JsonObject, MintlifyNavGroup, MintlifyNavItems
+from x2mdx.types import JsonValue, MintlifyNavGroup, MintlifyNavItems, require_json_object, require_mintlify_nav_items
 
 
 def docs_json_page_ref(path: Path, docs_json_path: Path) -> str:
@@ -15,11 +14,8 @@ def docs_json_page_ref(path: Path, docs_json_path: Path) -> str:
     return relative.with_suffix("").as_posix()
 
 
-def load_json(path: Path) -> JsonObject:
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(payload, dict):
-        raise ValueError(f"Expected JSON object in {path}")
-    return cast(JsonObject, payload)
+def load_json(path: Path) -> dict[str, JsonValue]:
+    return require_json_object(json.loads(path.read_text(encoding="utf-8")), path=str(path))
 
 
 def slugify(value: str) -> str:
@@ -192,7 +188,7 @@ def replace_group_in_dropdown(*, docs_json_path: Path, dropdown_label: str, grou
     if not isinstance(pages, list):
         raise ValueError(f"Dropdown does not expose a pages list: {dropdown_label}")
 
-    nav_pages = cast(MintlifyNavItems, pages)
+    nav_pages = require_mintlify_nav_items(pages, path=f"{docs_json_path}.navigation.dropdowns[{dropdown_label}].pages")
     if not _replace_group(nav_pages, group):
         nav_pages.append(group)
     docs_json_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")

@@ -5,7 +5,6 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from typing import cast
 
 import yaml
 
@@ -19,7 +18,7 @@ from x2mdx.asyncapi.models import (
     AsyncApiReport,
     AsyncApiSourceSnapshot,
 )
-from x2mdx.types import JsonObject, JsonValue
+from x2mdx.types import JsonValue, require_json_object, require_json_value
 
 REQUEST_SAMPLE_MAX_DEPTH = 4
 REQUEST_SAMPLE_MAX_PROPERTIES = 8
@@ -44,12 +43,28 @@ def version_key(version: str) -> tuple[tuple[int, int | str], ...]:
 
 
 def parse_asyncapi(raw_text: str) -> AsyncApiDocument:
-    obj = yaml.safe_load(raw_text)
-    if not isinstance(obj, dict):
-        raise ValueError("AsyncAPI document is not an object")
-    if "asyncapi" not in obj:
+    obj = require_json_object(yaml.safe_load(raw_text))
+    version = obj.get("asyncapi")
+    if not isinstance(version, str) or not version:
         raise ValueError("Document does not contain top-level `asyncapi` key")
-    return cast(AsyncApiDocument, obj)
+
+    document: AsyncApiDocument = {"asyncapi": version}
+    info = obj.get("info")
+    if info is not None:
+        if not isinstance(info, dict):
+            raise ValueError("AsyncAPI document `info` must be an object")
+        document["info"] = info
+    channels = obj.get("channels")
+    if channels is not None:
+        if not isinstance(channels, dict):
+            raise ValueError("AsyncAPI document `channels` must be an object")
+        document["channels"] = channels
+    components = obj.get("components")
+    if components is not None:
+        if not isinstance(components, dict):
+            raise ValueError("AsyncAPI document `components` must be an object")
+        document["components"] = components
+    return document
 
 
 def slugify(value: str) -> str:
@@ -79,7 +94,7 @@ def resolve_local_ref(doc: AsyncApiDocument, node: JsonValue | None, max_depth: 
         ref = current["$ref"]
         if not isinstance(ref, str) or not ref.startswith("#/"):
             break
-        target = cast(JsonValue, doc)
+        target = require_json_value(doc)
         valid = True
         for part in ref[2:].split("/"):
             if isinstance(target, dict) and part in target:
@@ -111,7 +126,7 @@ def object_schema_properties_and_required(
     schema: JsonValue | None,
     *,
     max_depth: int = 6,
-) -> tuple[JsonObject, set[str]]:
+) -> tuple[dict[str, JsonValue], set[str]]:
     if max_depth <= 0:
         return {}, set()
 
@@ -119,7 +134,7 @@ def object_schema_properties_and_required(
     if not isinstance(resolved, dict):
         return {}, set()
 
-    properties: JsonObject = {}
+    properties: dict[str, JsonValue] = {}
     required: set[str] = set()
 
     all_of = resolved.get("allOf")
@@ -273,7 +288,7 @@ def schema_sample_value(
         if not names_to_render and unknown_required_names:
             names_to_render = unknown_required_names
 
-        sample: JsonObject = {}
+        sample: dict[str, JsonValue] = {}
         for name in names_to_render[:max_properties]:
             if name in properties:
                 sample[name] = schema_sample_value(

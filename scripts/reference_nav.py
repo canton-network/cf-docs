@@ -2,9 +2,8 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import cast
 
-from x2mdx.types import JsonObject, MintlifyNavGroup, MintlifyNavItem, MintlifyNavItems
+from x2mdx.types import JsonValue, MintlifyNavGroup, MintlifyNavItem, MintlifyNavItems, require_json_object, require_mintlify_nav_items
 
 
 LEDGER_API_PARENT_GROUP = "Ledger API"
@@ -45,11 +44,8 @@ LANGUAGE_GROUPS = {"Javadocs"}
 JAVADOC_PREFIX = "reference/java/"
 
 
-def load_json(path: Path) -> JsonObject:
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(payload, dict):
-        raise ValueError(f"Expected JSON object in {path}")
-    return cast(JsonObject, payload)
+def load_json(path: Path) -> dict[str, JsonValue]:
+    return require_json_object(json.loads(path.read_text(encoding="utf-8")), path=str(path))
 
 
 def _find_group(items: MintlifyNavItems, label: str) -> MintlifyNavGroup | None:
@@ -299,7 +295,7 @@ def _absorb_known_item(item: MintlifyNavItem, collected: dict[str, MintlifyNavGr
     return False
 
 
-def navigation_pages(docs: JsonObject, *, label: str, docs_json_path: Path) -> MintlifyNavItems:
+def navigation_pages(docs: dict[str, JsonValue], *, label: str, docs_json_path: Path) -> MintlifyNavItems:
     navigation = docs.get("navigation")
     if not isinstance(navigation, dict):
         raise ValueError(f"docs.json missing navigation object: {docs_json_path}")
@@ -315,7 +311,7 @@ def navigation_pages(docs: JsonObject, *, label: str, docs_json_path: Path) -> M
         pages = dropdown.get("pages")
         if not isinstance(pages, list):
             raise ValueError(f"Dropdown does not expose a pages list: {label}")
-        return cast(MintlifyNavItems, pages)
+        return require_mintlify_nav_items(pages, path=f"{docs_json_path}.navigation.dropdowns[{label}].pages")
 
     products = navigation.get("products")
     if isinstance(products, list):
@@ -328,7 +324,7 @@ def navigation_pages(docs: JsonObject, *, label: str, docs_json_path: Path) -> M
         pages = product.get("pages")
         if not isinstance(pages, list):
             raise ValueError(f"Product does not expose a pages list: {label}")
-        return cast(MintlifyNavItems, pages)
+        return require_mintlify_nav_items(pages, path=f"{docs_json_path}.navigation.products[{label}].pages")
 
     raise ValueError(f"docs.json navigation must define dropdowns or products: {docs_json_path}")
 

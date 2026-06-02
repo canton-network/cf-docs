@@ -6,7 +6,6 @@ import hashlib
 import json
 import re
 from pathlib import Path
-from typing import cast
 
 import yaml
 
@@ -20,9 +19,8 @@ from x2mdx.openrpc.models import (
     OpenRpcResultDetail,
     OpenRpcSourceSnapshot,
     OpenRpcSpecLifecycle,
-    OpenRpcValueDetail,
 )
-from x2mdx.types import JsonObject, JsonValue
+from x2mdx.types import JsonValue, require_json_object, require_json_value
 
 REQUEST_SAMPLE_MAX_DEPTH = 4
 REQUEST_SAMPLE_MAX_PROPERTIES = 8
@@ -51,12 +49,28 @@ def version_key(version: str) -> tuple[tuple[int, int | str], ...]:
 
 
 def parse_openrpc(raw_text: str) -> OpenRpcDocument:
-    obj = yaml.safe_load(raw_text)
-    if not isinstance(obj, dict):
-        raise ValueError("OpenRPC document is not an object")
-    if "openrpc" not in obj:
+    obj = require_json_object(yaml.safe_load(raw_text))
+    version = obj.get("openrpc")
+    if not isinstance(version, str) or not version:
         raise ValueError("Document does not contain top-level `openrpc` key")
-    return cast(OpenRpcDocument, obj)
+
+    document: OpenRpcDocument = {"openrpc": version}
+    info = obj.get("info")
+    if info is not None:
+        if not isinstance(info, dict):
+            raise ValueError("OpenRPC document `info` must be an object")
+        document["info"] = info
+    methods = obj.get("methods")
+    if methods is not None:
+        if not isinstance(methods, list) or not all(isinstance(method, dict) for method in methods):
+            raise ValueError("OpenRPC document `methods` must be a list of objects")
+        document["methods"] = [method for method in methods if isinstance(method, dict)]
+    components = obj.get("components")
+    if components is not None:
+        if not isinstance(components, dict):
+            raise ValueError("OpenRPC document `components` must be an object")
+        document["components"] = components
+    return document
 
 
 def slugify(value: str) -> str:
@@ -95,7 +109,7 @@ def build_version_doc_index(snapshots: list[OpenRpcSourceSnapshot]) -> OpenRpcVe
 
 
 def resolve_local_fragment(document: OpenRpcDocument, fragment: str) -> JsonValue | None:
-    target = cast(JsonValue, document)
+    target = require_json_value(document)
     for part in fragment.split("/"):
         if isinstance(target, dict) and part in target:
             target = target[part]
@@ -160,7 +174,7 @@ def object_schema_properties_and_required(
     schema: JsonValue | None,
     *,
     max_depth: int = 6,
-) -> tuple[JsonObject, set[str]]:
+) -> tuple[dict[str, JsonValue], set[str]]:
     if max_depth <= 0:
         return {}, set()
 
@@ -168,7 +182,7 @@ def object_schema_properties_and_required(
     if not isinstance(resolved, dict):
         return {}, set()
 
-    properties: JsonObject = {}
+    properties: dict[str, JsonValue] = {}
     required: set[str] = set()
 
     all_of = resolved.get("allOf")
@@ -307,7 +321,7 @@ def schema_sample_value(
         if not names_to_render and unknown_required_names:
             names_to_render = unknown_required_names
 
-        sample: JsonObject = {}
+        sample: dict[str, JsonValue] = {}
         for name in names_to_render[:max_properties]:
             if name in properties:
                 sample[name] = schema_sample_value(
@@ -348,7 +362,7 @@ def schema_sample_value(
 def extract_param_detail(
     doc_index: OpenRpcDocumentIndex,
     current_source_path: str,
-    param: JsonObject,
+    param: dict[str, JsonValue],
 ) -> OpenRpcParamDetail:
     schema = param.get("schema")
     return {
@@ -435,7 +449,7 @@ def render_name_list(names: list[str]) -> str:
     return ", ".join(f"`{name}`" for name in names)
 
 
-def describe_param_changes(previous: OpenRpcValueDetail, current: OpenRpcValueDetail) -> list[str]:
+def describe_param_changes(previous: OpenRpcParamDetail, current: OpenRpcParamDetail) -> list[str]:
     changes: list[str] = []
     if previous["description"] != current["description"]:
         changes.append("description")
