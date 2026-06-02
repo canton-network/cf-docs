@@ -4,29 +4,30 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import cast
 
 import yaml
 
 from x2mdx.jvm_docs.lifecycle import version_key
 from x2mdx.jvm_docs.models import JvmDocArtifactSource, JvmDocVersionSource, JVM_DOC_OBJECT_STATUSES
+from x2mdx.types import JsonObject, JsonValue
 
 
-def _load_data(path: Path) -> Any:
+def _load_data(path: Path) -> JsonValue:
     raw = path.read_text(encoding="utf-8")
     if path.suffix.lower() == ".json":
-        return json.loads(raw)
-    return yaml.safe_load(raw)
+        return cast(JsonValue, json.loads(raw))
+    return cast(JsonValue, yaml.safe_load(raw))
 
 
-def load_jvm_doc_manifest(path: Path) -> dict[str, Any]:
+def load_jvm_doc_manifest(path: Path) -> JsonObject:
     data = _load_data(path)
     if not isinstance(data, dict):
         raise ValueError("JVM doc manifest must be a JSON/YAML object")
     artifacts = data.get("artifacts")
     if not isinstance(artifacts, list):
         raise ValueError("JVM doc manifest must include an `artifacts` list")
-    return data
+    return cast(JsonObject, data)
 
 
 def load_jvm_doc_status_manifest(path: Path) -> dict[str, str]:
