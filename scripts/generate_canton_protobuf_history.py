@@ -42,6 +42,7 @@ SECTION_TO_REPO_PREFIX = {
     "admin-api": "community/admin-api/src/main/protobuf",
     "community": "community/base/src/main/protobuf",
     "ledger-api": "community/ledger-api/src/main/protobuf",
+    "ledger-api-value": "community/daml-lf/ledger-api-value-proto/src/main/protobuf",
     "participant": "community/participant/src/main/protobuf",
     "synchronizer": "community/synchronizer/src/main/protobuf",
 }
@@ -63,6 +64,7 @@ class ProtobufSelection:
 
 LEDGER_API_SELECTIONS = (
     ProtobufSelection("ledger-api", SECTION_TO_REPO_PREFIX["ledger-api"]),
+    ProtobufSelection("ledger-api-value", SECTION_TO_REPO_PREFIX["ledger-api-value"]),
 )
 ADMIN_API_SELECTIONS = (
     ProtobufSelection("admin-api", SECTION_TO_REPO_PREFIX["admin-api"]),
@@ -412,27 +414,16 @@ def update_docs_navigation(
     legacy_overview_path: Path,
 ) -> None:
     docs = load_json(docs_json_path)
-    navigation = docs.get("navigation")
-    if not isinstance(navigation, dict):
-        raise ValueError(f"docs.json navigation must be an object: {docs_json_path}")
-    dropdowns = navigation.get("dropdowns")
-    if not isinstance(dropdowns, list):
-        raise ValueError(f"docs.json navigation.dropdowns must be a list: {docs_json_path}")
-    dropdown = next((item for item in dropdowns if isinstance(item, dict) and item.get("dropdown") == dropdown_label), None)
-    if dropdown is None:
-        raise ValueError(f"Dropdown not found in docs.json: {dropdown_label}")
-    pages = dropdown.get("pages")
-    if not isinstance(pages, list):
-        raise ValueError(f"Dropdown does not expose a pages list: {dropdown_label}")
+    pages = reference_nav.navigation_pages(docs, label=dropdown_label, docs_json_path=docs_json_path)
 
     page_ref = docs_json_page_ref(output_dir / "index.mdx", docs_json_path)
     legacy_page_ref = docs_json_page_ref(legacy_overview_path, docs_json_path)
-    dropdown["pages"] = prune_nav_items(
+    pages[:] = prune_nav_items(
         pages,
         page_refs={page_ref, legacy_page_ref},
         group_labels=reference_nav.PROTOBUF_GROUP_ALIASES,
     )
-    target_pages = ensure_group_path(dropdown["pages"], parent_groups)
+    target_pages = ensure_group_path(pages, parent_groups)
     target_pages.append({"group": GROUP_LABEL, "pages": [page_ref, legacy_page_ref]})
     docs_json_path.write_text(json.dumps(docs, indent=2) + "\n", encoding="utf-8")
     print(f"Updated docs navigation: {docs_json_path}")
@@ -459,18 +450,7 @@ def update_split_protobuf_navigation(
     admin_output_dir: Path | None,
 ) -> None:
     docs = load_json(docs_json_path)
-    navigation = docs.get("navigation")
-    if not isinstance(navigation, dict):
-        raise ValueError(f"docs.json navigation must be an object: {docs_json_path}")
-    dropdowns = navigation.get("dropdowns")
-    if not isinstance(dropdowns, list):
-        raise ValueError(f"docs.json navigation.dropdowns must be a list: {docs_json_path}")
-    dropdown = next((item for item in dropdowns if isinstance(item, dict) and item.get("dropdown") == dropdown_label), None)
-    if dropdown is None:
-        raise ValueError(f"Dropdown not found in docs.json: {dropdown_label}")
-    pages = dropdown.get("pages")
-    if not isinstance(pages, list):
-        raise ValueError(f"Dropdown does not expose a pages list: {dropdown_label}")
+    pages = reference_nav.navigation_pages(docs, label=dropdown_label, docs_json_path=docs_json_path)
 
     stale_refs = {
         docs_json_page_ref(ledger_output_dir / "index.mdx", docs_json_path),
@@ -478,7 +458,7 @@ def update_split_protobuf_navigation(
     }
     if admin_output_dir is not None:
         stale_refs.add(docs_json_page_ref(admin_output_dir / "index.mdx", docs_json_path))
-    dropdown["pages"] = prune_nav_items(
+    pages[:] = prune_nav_items(
         pages,
         page_refs=stale_refs,
         group_labels=reference_nav.PROTOBUF_GROUP_ALIASES,
@@ -490,7 +470,7 @@ def update_split_protobuf_navigation(
         group_label=reference_nav.PROTOBUF_GROUP,
     )
     replace_group_at_path(
-        dropdown["pages"],
+        pages,
         [reference_nav.LEDGER_API_PARENT_GROUP],
         ledger_group,
     )
@@ -504,7 +484,7 @@ def update_split_protobuf_navigation(
             include_details_page=False,
         )["pages"]
         replace_group_at_path(
-            dropdown["pages"],
+            pages,
             [reference_nav.ADMIN_API_PARENT_GROUP],
             {
                 "group": reference_nav.GRPC_GROUP,
