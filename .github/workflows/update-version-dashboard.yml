@@ -1,0 +1,66 @@
+name: Update version dashboard
+
+on:
+  schedule:
+    - cron: "23 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: update-version-dashboard
+  cancel-in-progress: false
+
+jobs:
+  update-version-dashboard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+
+      - name: Install direnv
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y direnv
+
+      - name: Trust direnv
+        run: direnv allow .
+
+      - name: Update version dashboard
+        run: direnv exec . npm run generate:version-compatibility-dashboard
+
+      - name: Detect changes
+        id: changes
+        run: |
+          if [[ -n "$(git status --porcelain)" ]]; then
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+            git status --short
+            git diff --stat
+          else
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check whitespace
+        if: steps.changes.outputs.has_changes == 'true'
+        run: git diff --check
+
+      - name: Create pull request
+        if: steps.changes.outputs.has_changes == 'true'
+        uses: peter-evans/create-pull-request@v8
+        with:
+          token: ${{ secrets.DOCS_PR_TOKEN || github.token }}
+          branch: version-dashboard/update
+          base: main
+          title: Update version dashboard data
+          commit-message: Update version dashboard data
+          body: |
+            Updates the committed Canton Network version dashboard data from public network, package, and installer sources.
+
+            Validation run by the workflow:
+            - `npm run generate:version-compatibility-dashboard`
+            - `git diff --check`
