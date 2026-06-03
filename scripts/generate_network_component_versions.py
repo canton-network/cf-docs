@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import html
 import json
 import re
@@ -405,6 +406,31 @@ def build_config(existing_config: dict, snapshot: dict) -> dict:
     }
 
 
+def without_generated_at(config: dict) -> dict:
+    comparable = copy.deepcopy(config)
+    generated = comparable.get("_generated")
+    if isinstance(generated, dict):
+        generated.pop("generatedAt", None)
+    return comparable
+
+
+def preserve_generated_at_if_only_timestamp_changed(existing_config: dict, candidate_config: dict) -> dict:
+    existing_generated = existing_config.get("_generated")
+    if not isinstance(existing_generated, dict):
+        return candidate_config
+    existing_generated_at = existing_generated.get("generatedAt")
+    if not isinstance(existing_generated_at, str) or not existing_generated_at:
+        return candidate_config
+    if without_generated_at(existing_config) != without_generated_at(candidate_config):
+        return candidate_config
+
+    stable_config = copy.deepcopy(candidate_config)
+    candidate_generated = stable_config.setdefault("_generated", {})
+    if isinstance(candidate_generated, dict):
+        candidate_generated["generatedAt"] = existing_generated_at
+    return stable_config
+
+
 def write_json(path: Path, payload: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
@@ -418,7 +444,10 @@ def main() -> int:
     args = parse_args()
     existing_config = read_existing_config(DEFAULT_REPO_CONFIG_OUTPUT)
     snapshot = collect_snapshot(args.timeout)
-    repo_version_config = build_config(existing_config, snapshot)
+    repo_version_config = preserve_generated_at_if_only_timestamp_changed(
+        existing_config,
+        build_config(existing_config, snapshot),
+    )
 
     if args.dry_run:
         json.dump(repo_version_config, sys.stdout, indent=2)
