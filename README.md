@@ -122,16 +122,16 @@ Source rules:
 | Dashboard entry | Sourcing rule |
 | --- | --- |
 | `Splice` | Read from the network `/info` endpoint: MainNet `https://docs.global.canton.network.sync.global/info`, TestNet `https://docs.test.global.canton.network.sync.global/info`, DevNet `https://docs.dev.global.canton.network.sync.global/info`. Cross-check against the same network's `/index.html` Docker image tag and Helm chart version. |
-| `Canton` | Keep as manual/fallback until an owner-approved public source is confirmed. The config key is still `damlSdk` for compatibility with the existing dashboard component. |
+| `Canton` | Read the network Splice version from `/info`, derive the matching `canton-network/splice` release-line branch, then read `version` from `nix/canton-sources.json`. The config key is still `damlSdk` for compatibility with the existing dashboard component. |
 | `Daml SDK installer` | Do not use legacy `https://get.daml.com/`; that is the old 2.x Daml assistant path. For Daml 3 / DPM, install DPM with `curl https://get.digitalasset.com/install/install.sh | sh`, then use `dpm install latest`. The latest stable SDK version is exposed at `https://get.digitalasset.com/install/latest`. |
-| `PQS` | Keep as manual/fallback for now. A generator can infer a recommendation from PQS docs compatibility tables, but recent updates were Slack-sourced, so this needs owner confirmation before being treated as authoritative. |
+| `PQS` | Read the latest stable semver tag from the public Artifact Registry image `europe-docker.pkg.dev/da-images/public/docker/participant-query-store`. |
 | `Token Standard` | Read from the npm `latest` dist-tag for `@canton-network/core-token-standard`. |
 | `Wallet SDK` | Read from the npm `latest` dist-tag for `@canton-network/wallet-sdk`. |
 | `dApp SDK` | Read from the npm `latest` dist-tag for `@canton-network/dapp-sdk`. |
-| `Wallet Gateway` | Keep as manual/fallback from the Wallet Gateway Docker image package until package API access is confirmed. Wallet team guidance says not to use the npm package for this row. |
+| `Wallet Gateway` | Read the latest stable `@canton-network/wallet-gateway-remote` release from `hyperledger-labs/splice-wallet-kernel` GitHub releases. |
 | `Min Protocol Version` | Keep as manual/fallback until a public live source is available. |
 | `Migration ID` | Read from `synchronizer.active.migration_id` on the network's `/info` endpoint and validate against `sv.migration_id`. |
-| `Splice DAR Versions` | Keep as manual/fallback. Release bundles show shipped DARs, but review on the original automation PR noted that they are not necessarily the DAR versions currently in use. |
+| `Splice DAR Versions` | Read the latest stable package rows for `splice-amulet`, `splice-wallet`, and `splice-dso-governance` from the observed Splice release-line `daml/dars.lock`. |
 | `Release Notes` | Link to the observed Splice release. |
 | `Primary Scan API` | Static canonical `scan.sv-1...` endpoint for each network. |
 
