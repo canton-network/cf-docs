@@ -142,18 +142,55 @@ def dropdown_pages(docs: dict[str, Any], *, dropdown_label: str) -> list[Any]:
     if not isinstance(navigation, dict):
         raise ValueError(f"docs.json missing navigation object: {DOCS_JSON_PATH}")
     dropdowns = navigation.get("dropdowns")
-    if not isinstance(dropdowns, list):
-        raise ValueError(f"docs.json navigation.dropdowns must be a list: {DOCS_JSON_PATH}")
-    dropdown = next(
-        (item for item in dropdowns if isinstance(item, dict) and item.get("dropdown") == dropdown_label),
+    if isinstance(dropdowns, list):
+        dropdown = next(
+            (item for item in dropdowns if isinstance(item, dict) and item.get("dropdown") == dropdown_label),
+            None,
+        )
+        if dropdown is None:
+            raise ValueError(f"Dropdown not found in docs.json: {dropdown_label}")
+        pages = dropdown.get("pages")
+        if not isinstance(pages, list):
+            raise ValueError(f"Dropdown does not expose a pages list: {dropdown_label}")
+        return pages
+
+    products = navigation.get("products")
+    if isinstance(products, list):
+        product = next(
+            (item for item in products if isinstance(item, dict) and item.get("product") == dropdown_label),
+            None,
+        )
+        if product is None:
+            raise ValueError(f"Product not found in docs.json: {dropdown_label}")
+        pages = product.get("pages")
+        if not isinstance(pages, list):
+            raise ValueError(f"Product does not expose a pages list: {dropdown_label}")
+        return pages
+
+    raise ValueError(f"docs.json navigation must define dropdowns or products: {DOCS_JSON_PATH}")
+
+
+def with_legacy_dropdown_scratch(docs: dict[str, Any]) -> dict[str, Any]:
+    scratch = copy.deepcopy(docs)
+    navigation = scratch.get("navigation")
+    if not isinstance(navigation, dict) or isinstance(navigation.get("dropdowns"), list):
+        return scratch
+    products = navigation.get("products")
+    if not isinstance(products, list):
+        return scratch
+    api_reference = next(
+        (item for item in products if isinstance(item, dict) and item.get("product") == API_REFERENCE_DROPDOWN),
         None,
     )
-    if dropdown is None:
-        raise ValueError(f"Dropdown not found in docs.json: {dropdown_label}")
-    pages = dropdown.get("pages")
-    if not isinstance(pages, list):
-        raise ValueError(f"Dropdown does not expose a pages list: {dropdown_label}")
-    return pages
+    if api_reference is None or not isinstance(api_reference.get("pages"), list):
+        return scratch
+    navigation["dropdowns"] = [
+        {
+            "dropdown": API_REFERENCE_DROPDOWN,
+            "pages": copy.deepcopy(api_reference["pages"]),
+        }
+    ]
+    return scratch
 
 
 def find_group(items: list[Any], label: str) -> dict[str, Any] | None:
@@ -319,10 +356,10 @@ def merge_nav_slice(*, final_docs: dict[str, Any], scratch_docs: dict[str, Any],
 
 
 def prepare_scratch_docs_json_files() -> None:
-    baseline = DOCS_JSON_PATH.read_text(encoding="utf-8")
+    baseline = with_legacy_dropdown_scratch(load_json(DOCS_JSON_PATH))
     for job in SCRIPT_JOBS:
         scratch_path = scratch_docs_json_path(job)
-        scratch_path.write_text(baseline, encoding="utf-8")
+        write_json(scratch_path, baseline)
 
 
 def cleanup_scratch_docs_json_files() -> None:

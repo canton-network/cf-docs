@@ -4,29 +4,30 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import cast
 
 import yaml
 
 from x2mdx.asyncapi.lifecycle import parse_asyncapi, version_key
 from x2mdx.asyncapi.models import AsyncApiSourceSnapshot
+from x2mdx.types import JsonObject, JsonValue
 
 
-def _load_data(path: Path) -> Any:
+def _load_data(path: Path) -> JsonValue:
     raw = path.read_text(encoding="utf-8")
     if path.suffix.lower() == ".json":
-        return json.loads(raw)
-    return yaml.safe_load(raw)
+        return cast(JsonValue, json.loads(raw))
+    return cast(JsonValue, yaml.safe_load(raw))
 
 
-def load_snapshot_manifest(path: Path) -> dict[str, Any]:
+def load_snapshot_manifest(path: Path) -> JsonObject:
     data = _load_data(path)
     if not isinstance(data, dict):
         raise ValueError("Snapshot manifest must be a JSON/YAML object")
     versions = data.get("versions")
     if not isinstance(versions, list):
         raise ValueError("Snapshot manifest must include a `versions` list")
-    return data
+    return cast(JsonObject, data)
 
 
 def load_asyncapi_source_snapshots(
@@ -67,4 +68,3 @@ def load_asyncapi_source_snapshots(
 
     snapshots.sort(key=lambda snapshot: version_key(snapshot.version))
     return snapshots
-

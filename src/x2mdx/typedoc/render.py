@@ -11,7 +11,11 @@ from x2mdx.templating import markdown_page
 
 
 def escape_md_cell(text: str) -> str:
-    return text.replace("|", r"\|").replace("\n", "<br/>")
+    return "<br/>".join(escape_mdx_text(line).replace("|", r"\|") for line in text.splitlines())
+
+
+def escape_mdx_text(text: str) -> str:
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
 def render_change_summary(change_details: list[dict[str, object]]) -> str:
@@ -66,7 +70,7 @@ def _signature_docs(signature_docs: list[dict[str, Any]]) -> list[dict[str, Any]
     return [
         {
             "declaration": str(signature["declaration"]),
-            "summary": signature["summary"],
+            "summary": escape_mdx_text(signature["summary"]),
             "type_parameter_rows": _type_parameter_rows(signature["type_parameters"]),
             "parameter_rows": [
                 [
@@ -91,9 +95,9 @@ def _export_context(export: dict[str, Any]) -> dict[str, Any]:
     if export["lifecycle_label"]:
         lifecycle_bits.append(f"Lifecycle: `{export['lifecycle_label']}`")
     if export["replaces"]:
-        lifecycle_bits.append(f"Replaces: `{export['replaces']}`")
+        lifecycle_bits.append(f"Replaces: `{escape_mdx_text(export['replaces'])}`")
     if export["deprecated_text"]:
-        lifecycle_bits.append(f"Deprecated: {export['deprecated_text']}")
+        lifecycle_bits.append(f"Deprecated: {escape_mdx_text(export['deprecated_text'])}")
     if export["change_details"]:
         lifecycle_bits.append("Changed in: " + ", ".join(f"`{entry['version']}`" for entry in export["change_details"]))
     if export["removed_in"]:
@@ -114,7 +118,7 @@ def _export_context(export: dict[str, Any]) -> dict[str, Any]:
             for entry in export["change_details"]
         ],
         "signature": export["signature"],
-        "summary": export["summary"],
+        "summary": escape_mdx_text(export["summary"]),
         "type_parameter_rows": _type_parameter_rows(export["type_parameters"]),
         "signature_docs": _signature_docs(export["signature_docs"]),
         "member_rows": [
