@@ -5,17 +5,28 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from typing import Any
+from typing import cast
 
 import yaml
 
-from x2mdx.asyncapi.models import AsyncApiChannelLifecycle, AsyncApiReport, AsyncApiSourceSnapshot
+from x2mdx.asyncapi.models import (
+    AsyncApiActionDetail,
+    AsyncApiChannelDetail,
+    AsyncApiChannelHistory,
+    AsyncApiDocument,
+    AsyncApiChannelLifecycle,
+    AsyncApiMessageDetail,
+    AsyncApiReport,
+    AsyncApiSourceSnapshot,
+)
+from x2mdx.types import JsonObject, JsonValue
 
 REQUEST_SAMPLE_MAX_DEPTH = 4
 REQUEST_SAMPLE_MAX_PROPERTIES = 8
+AsyncApiChannelsByName = dict[str, AsyncApiChannelDetail]
 
 
-def sha256_json(value: Any) -> str:
+def sha256_json(value: object) -> str:
     payload = json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
@@ -32,13 +43,13 @@ def version_key(version: str) -> tuple[tuple[int, int | str], ...]:
     return tuple(key)
 
 
-def parse_asyncapi(raw_text: str) -> dict[str, Any]:
+def parse_asyncapi(raw_text: str) -> AsyncApiDocument:
     obj = yaml.safe_load(raw_text)
     if not isinstance(obj, dict):
         raise ValueError("AsyncAPI document is not an object")
     if "asyncapi" not in obj:
         raise ValueError("Document does not contain top-level `asyncapi` key")
-    return obj
+    return cast(AsyncApiDocument, obj)
 
 
 def slugify(value: str) -> str:
@@ -52,7 +63,7 @@ def channel_anchor(channel: str) -> str:
     return f"channel-{slugify(channel)}"
 
 
-def normalize_lifecycle_state(value: Any) -> str | None:
+def normalize_lifecycle_state(value: object) -> str | None:
     if not isinstance(value, str):
         return None
     normalized = value.strip().lower()
@@ -61,14 +72,14 @@ def normalize_lifecycle_state(value: Any) -> str | None:
     return None
 
 
-def resolve_local_ref(doc: dict[str, Any], node: Any, max_depth: int = 8) -> Any:
+def resolve_local_ref(doc: AsyncApiDocument, node: JsonValue | None, max_depth: int = 8) -> JsonValue | None:
     current = node
     depth = 0
     while isinstance(current, dict) and "$ref" in current and depth < max_depth:
         ref = current["$ref"]
         if not isinstance(ref, str) or not ref.startswith("#/"):
             break
-        target: Any = doc
+        target = cast(JsonValue, doc)
         valid = True
         for part in ref[2:].split("/"):
             if isinstance(target, dict) and part in target:
@@ -83,7 +94,7 @@ def resolve_local_ref(doc: dict[str, Any], node: Any, max_depth: int = 8) -> Any
     return current
 
 
-def local_ref_name(node: Any, *, prefix: str) -> str | None:
+def local_ref_name(node: JsonValue | None, *, prefix: str) -> str | None:
     if not isinstance(node, dict):
         return None
     ref = node.get("$ref")
@@ -96,11 +107,11 @@ def local_ref_name(node: Any, *, prefix: str) -> str | None:
 
 
 def object_schema_properties_and_required(
-    doc: dict[str, Any],
-    schema: Any,
+    doc: AsyncApiDocument,
+    schema: JsonValue | None,
     *,
     max_depth: int = 6,
-) -> tuple[dict[str, Any], set[str]]:
+) -> tuple[JsonObject, set[str]]:
     if max_depth <= 0:
         return {}, set()
 
@@ -108,7 +119,7 @@ def object_schema_properties_and_required(
     if not isinstance(resolved, dict):
         return {}, set()
 
-    properties: dict[str, Any] = {}
+    properties: JsonObject = {}
     required: set[str] = set()
 
     all_of = resolved.get("allOf")
@@ -133,7 +144,7 @@ def object_schema_properties_and_required(
     return properties, required
 
 
-def schema_required_field_names(doc: dict[str, Any], schema: Any) -> list[str]:
+def schema_required_field_names(doc: AsyncApiDocument, schema: JsonValue | None) -> list[str]:
     properties, required = object_schema_properties_and_required(doc, schema)
     if not required:
         return []
@@ -143,7 +154,7 @@ def schema_required_field_names(doc: dict[str, Any], schema: Any) -> list[str]:
     return [*known, *unknown]
 
 
-def schema_brief(doc: dict[str, Any], schema: Any) -> str:
+def schema_brief(doc: AsyncApiDocument, schema: JsonValue | None) -> str:
     resolved = resolve_local_ref(doc, schema)
     if not isinstance(resolved, dict):
         return "-"
@@ -165,7 +176,7 @@ def schema_brief(doc: dict[str, Any], schema: Any) -> str:
     return "-"
 
 
-def schema_type_token(doc: dict[str, Any], schema: Any) -> Any:
+def schema_type_token(doc: AsyncApiDocument, schema: JsonValue | None) -> JsonValue:
     resolved = resolve_local_ref(doc, schema)
     if not isinstance(resolved, dict):
         return "<value>"
@@ -198,14 +209,14 @@ def schema_type_token(doc: dict[str, Any], schema: Any) -> Any:
 
 
 def schema_sample_value(
-    doc: dict[str, Any],
-    schema: Any,
+    doc: AsyncApiDocument,
+    schema: JsonValue | None,
     *,
     max_depth: int = REQUEST_SAMPLE_MAX_DEPTH,
     max_properties: int = REQUEST_SAMPLE_MAX_PROPERTIES,
     required_only: bool = True,
     seen_refs: set[str] | None = None,
-) -> Any:
+) -> JsonValue:
     if max_depth <= 0:
         return schema_type_token(doc, schema)
 
@@ -262,7 +273,7 @@ def schema_sample_value(
         if not names_to_render and unknown_required_names:
             names_to_render = unknown_required_names
 
-        sample: dict[str, Any] = {}
+        sample: JsonObject = {}
         for name in names_to_render[:max_properties]:
             if name in properties:
                 sample[name] = schema_sample_value(
@@ -301,7 +312,7 @@ def schema_sample_value(
     return schema_type_token(doc, resolved)
 
 
-def extract_message_detail(doc: dict[str, Any], message_node: Any) -> dict[str, Any]:
+def extract_message_detail(doc: AsyncApiDocument, message_node: JsonValue | None) -> AsyncApiMessageDetail:
     resolved_message = resolve_local_ref(doc, message_node)
     message_name = local_ref_name(message_node, prefix="components/messages")
     if not isinstance(resolved_message, dict):
@@ -323,7 +334,7 @@ def extract_message_detail(doc: dict[str, Any], message_node: Any) -> dict[str, 
     }
 
 
-def extract_action_detail(doc: dict[str, Any], action_name: str, action_node: Any) -> dict[str, Any]:
+def extract_action_detail(doc: AsyncApiDocument, action_name: str, action_node: JsonValue | None) -> AsyncApiActionDetail:
     resolved_action = resolve_local_ref(doc, action_node)
     if not isinstance(resolved_action, dict):
         return {
@@ -350,12 +361,12 @@ def extract_action_detail(doc: dict[str, Any], action_name: str, action_node: An
     }
 
 
-def extract_channel_detail(doc: dict[str, Any], channel_name: str, channel_node: Any) -> dict[str, Any]:
+def extract_channel_detail(doc: AsyncApiDocument, channel_name: str, channel_node: JsonValue | None) -> AsyncApiChannelDetail:
     resolved_channel = resolve_local_ref(doc, channel_node)
     if not isinstance(resolved_channel, dict):
         resolved_channel = {}
 
-    actions: list[dict[str, Any]] = []
+    actions: list[AsyncApiActionDetail] = []
     for action_name in ("publish", "subscribe"):
         if action_name in resolved_channel:
             actions.append(extract_action_detail(doc, action_name, resolved_channel[action_name]))
@@ -375,7 +386,12 @@ def render_name_list(names: list[str]) -> str:
     return ", ".join(f"`{name}`" for name in names)
 
 
-def describe_action_changes(previous: dict[str, Any] | None, current: dict[str, Any] | None, *, action_name: str) -> list[str]:
+def describe_action_changes(
+    previous: AsyncApiActionDetail | None,
+    current: AsyncApiActionDetail | None,
+    *,
+    action_name: str,
+) -> list[str]:
     if previous is None and current is None:
         return []
     label = action_name
@@ -420,7 +436,7 @@ def describe_action_changes(previous: dict[str, Any] | None, current: dict[str, 
     return changes
 
 
-def describe_channel_changes(previous: dict[str, Any], current: dict[str, Any]) -> list[str]:
+def describe_channel_changes(previous: AsyncApiChannelDetail, current: AsyncApiChannelDetail) -> list[str]:
     changes: list[str] = []
     if previous["description"] != current["description"]:
         changes.append("channel description updated")
@@ -442,12 +458,12 @@ def describe_channel_changes(previous: dict[str, Any], current: dict[str, Any]) 
     return changes
 
 
-def collect_snapshot_channels(document: dict[str, Any]) -> dict[str, dict[str, Any]]:
+def collect_snapshot_channels(document: AsyncApiDocument) -> AsyncApiChannelsByName:
     channels = document.get("channels")
     if not isinstance(channels, dict):
         return {}
 
-    details: dict[str, dict[str, Any]] = {}
+    details: AsyncApiChannelsByName = {}
     for channel_name in sorted(channels):
         details[channel_name] = extract_channel_detail(document, channel_name, channels[channel_name])
     return details
@@ -474,11 +490,11 @@ def build_asyncapi_report_from_sources(
     publish_index = ordered_versions.index(selected_publish_version)
     scoped_sources = ordered_sources[: publish_index + 1]
 
-    snapshot_channels: dict[str, dict[str, dict[str, Any]]] = {}
+    snapshot_channels: dict[str, AsyncApiChannelsByName] = {}
     for snapshot in scoped_sources:
         snapshot_channels[snapshot.version] = collect_snapshot_channels(snapshot.document)
 
-    channel_history: dict[str, dict[str, Any]] = {}
+    channel_history: dict[str, AsyncApiChannelHistory] = {}
     for snapshot in scoped_sources:
         current_channels = snapshot_channels[snapshot.version]
         for channel_name, channel_detail in current_channels.items():
