@@ -46,7 +46,7 @@ The Transfer Object can also be serialized into JSON format, as shown in the fol
 
 While gRPC can be used, this guide assumes integration via the [DAML JSON API](/sdks-tools/api-reference/json-api).
 
-To fetch update info from the participant node, query the following endpoint using the transaction's \`UpdateID\`: `GET /v2/updates/update-by-id`
+To fetch update info from the participant node, query the following endpoint using the transaction's `UpdateID`: `GET /v2/updates/update-by-id`
 
 ### Locating the Transfer Object (By Transaction State)
 
@@ -59,19 +59,31 @@ If the update represents the creation of a transfer offer, look for a **Created*
 - **Template:** `Utility.Registry.App.V0.Model.Transfer:TransferOffer`
 - **Location:** Extract the Transfer Object directly from the `createArgument` of this event.
 
-<div className="tabs">
-
-.. group-tab:: JSON .. code:: JSON
-
+```json
 {
-"createdEvent": {
-"templateId": "...:Utility.Registry.App.V0.Model.Transfer:TransferOffer", "createArgument": { "operator": "operator::122...", "provider": "provider::122...", "transfer": { "sender": "issuer::122...", "receiver": "holder::122...", "amount": "2.0000000000", "instrumentId": { "admin": "...", "id": "INST" }, "requestedAt": "2026-03-01T13:58:32.626Z", "executeBefore": "2026-03-04T13:58:27.335Z", "inputHoldingCids": \["005152f0eae9..."\], "meta": { "values": { "splice.lfdecentralizedtrust.org/reason": "" } } } }
-
+  "createdEvent": {
+    "templateId": "...:Utility.Registry.App.V0.Model.Transfer:TransferOffer",
+    "createArgument": {
+      "operator": "operator::122...",
+      "provider": "provider::122...",
+      "transfer": {
+        "sender": "issuer::122...",
+        "receiver": "holder::122...",
+        "amount": "2.0000000000",
+        "instrumentId": { "admin": "...", "id": "INST" },
+        "requestedAt": "2026-03-01T13:58:32.626Z",
+        "executeBefore": "2026-03-04T13:58:27.335Z",
+        "inputHoldingCids": ["005152f0eae9..."],
+        "meta": {
+          "values": {
+            "splice.lfdecentralizedtrust.org/reason": ""
+          }
+        }
+      }
+    }
+  }
 }
-
-}
-
-</div>
+```
 
 **Scenario B: The Transfer is Concluded**
 
@@ -86,19 +98,30 @@ If the update represents a concluded transfer (e.g., an accepted offer or a pre-
 
 - **Location:** Extract the Transfer Object from the `choiceArgument` of this event.
 
-<div className="tabs">
-
-.. group-tab:: JSON .. code:: JSON
-
+```json
 {
-"ExercisedEvent": {
-"templateId": "...:Utility.Registry.V0.Rule.Transfer:TransferRule", "choice": "TransferRule_DirectTransfer", "choiceArgument": { "transfer": { "sender": "[auth0]()...::122...", "receiver": "[auth0]()...::122...", "amount": "12.0000000000", "instrumentId": { "admin": "...", "id": "INST" }, "requestedAt": "2026-02-24T16:27:33.139Z", "executeBefore": "2026-02-27T16:27:31.633Z", "inputHoldingCids": \["0000c37c6..."\], "meta": { "values": { "splice.lfdecentralizedtrust.org/reason": "" } } } }
-
+  "exercisedEvent": {
+    "templateId": "...:Utility.Registry.V0.Rule.Transfer:TransferRule",
+    "choice": "TransferRule_DirectTransfer",
+    "choiceArgument": {
+      "transfer": {
+        "sender": "auth0...::122...",
+        "receiver": "auth0...::122...",
+        "amount": "12.0000000000",
+        "instrumentId": { "admin": "...", "id": "INST" },
+        "requestedAt": "2026-02-24T16:27:33.139Z",
+        "executeBefore": "2026-02-27T16:27:31.633Z",
+        "inputHoldingCids": ["0000c37c6..."],
+        "meta": {
+          "values": {
+            "splice.lfdecentralizedtrust.org/reason": ""
+          }
+        }
+      }
+    }
+  }
 }
-
-}
-
-</div>
+```
 
 **Scenario C: The Transfer Offer is Rejected or Withdrawn**
 
@@ -111,19 +134,31 @@ If the update represents an offer that was ultimately rejected or withdrawn, loc
 3.  **Fetch the Original Offer:** Query the JSON API using the extracted Contract ID: `GET /v2/events/events-by-contract-id`
 4.  **Location:** Extract the Transfer Object from the `createArgument` of the original transfer offer (transfer instruction) returned by this secondary query.
 
-<div className="tabs">
-
-.. group-tab:: JSON .. code:: JSON
-
+```json
 {
-"CreatedEvent": {
-"templateId": "...:Utility.Registry.App.V0.Model.Transfer:TransferOffer", "createArgument": { "operator": "operator::12209b02d...", "provider": "provider::1220c07e7...", "transfer": { "sender": "issuer::1220c07e7...", "receiver": "holder::1220c07e7...", "amount": "2.0000000000", "instrumentId": { "admin": "registrar::1220c07e7...", "id": "INST" }, "requestedAt": "2026-03-01T13:58:32.626Z", "executeBefore": "2026-03-04T13:58:27.335Z", "inputHoldingCids": \["005152f0eae9..."\], "meta": { "values": { "splice.lfdecentralizedtrust.org/reason": "" } } } }
-
+  "createdEvent": {
+    "templateId": "...:Utility.Registry.App.V0.Model.Transfer:TransferOffer",
+    "createArgument": {
+      "operator": "operator::12209b02d...",
+      "provider": "provider::1220c07e7...",
+      "transfer": {
+        "sender": "issuer::1220c07e7...",
+        "receiver": "holder::1220c07e7...",
+        "amount": "2.0000000000",
+        "instrumentId": { "admin": "registrar::1220c07e7...", "id": "INST" },
+        "requestedAt": "2026-03-01T13:58:32.626Z",
+        "executeBefore": "2026-03-04T13:58:32.626Z",
+        "inputHoldingCids": ["005152f0eae9..."],
+        "meta": {
+          "values": {
+            "splice.lfdecentralizedtrust.org/reason": ""
+          }
+        }
+      }
+    }
+  }
 }
-
-}
-
-</div>
+```
 
 ### Data Persistence and Pruning
 

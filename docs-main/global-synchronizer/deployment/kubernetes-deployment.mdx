@@ -3,7 +3,6 @@ title: "Super Validator Helm Deployment"
 description: "Deploying a Super Validator node on Kubernetes using Helm charts"
 ---
 
-import ExternalSpliceMainSpliceRstFullDocsSrcCommonReloaderRecommendation from '/snippets/external/splice/main/splice-rst-full-docs-src-common-reloader-recommendation.mdx';
 import ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvHelmBash1033 from "/snippets/external/splice/main/splice-rst-code-docs-src-sv-operator-sv-helm-bash-1033.mdx";
 
 import ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvHelmParsedLiteral468 from "/snippets/external/splice/main/splice-rst-code-docs-src-sv-operator-sv-helm-parsed-literal-468.mdx";
@@ -58,8 +57,8 @@ tar xzvf 0.6.6_splice-node.tar.gz
 5)  Please inquire the migration id and serial id of the global synchronizer on your target network. The migration ID is frozen at the value after the last major upgrade and is only used for `migration.id` in the helm chart values. The serial ID is 0 for the initial synchronizer deployment and is incremented by 1 for each logical synchronizer upgrade. The serial ID is used for helm release names, DNS entries, database names, and deployment naming.
 
 ```bash
-   export MIGRATION_ID=0
-   export SERIAL_ID=0
+export MIGRATION_ID=0
+export SERIAL_ID=0
 ```
 <Warning>
 
@@ -103,8 +102,8 @@ tar xzvf 0.6.5_splice-node.tar.gz
 5)  Please inquire the migration id and serial id of the global synchronizer on your target network. The migration ID is frozen at the value after the last major upgrade and is only used for `migration.id` in the helm chart values. The serial ID is 0 for the initial synchronizer deployment and is incremented by 1 for each logical synchronizer upgrade. The serial ID is used for helm release names, DNS entries, database names, and deployment naming.
 
 ```bash
-   export MIGRATION_ID=0
-   export SERIAL_ID=0
+export MIGRATION_ID=0
+export SERIAL_ID=0
 ```
 <Warning>
 
@@ -148,8 +147,8 @@ tar xzvf 0.6.4_splice-node.tar.gz
 5)  Please inquire the migration id and serial id of the global synchronizer on your target network. The migration ID is frozen at the value after the last major upgrade and is only used for `migration.id` in the helm chart values. The serial ID is 0 for the initial synchronizer deployment and is incremented by 1 for each logical synchronizer upgrade. The serial ID is used for helm release names, DNS entries, database names, and deployment naming.
 
 ```bash
-   export MIGRATION_ID=0
-   export SERIAL_ID=0
+export MIGRATION_ID=0
+export SERIAL_ID=0
 ```
 <Warning>
 
@@ -561,7 +560,17 @@ Note that the default Helm values files used below assume that the Postgres inst
 
 ## Installing the Software
 
-<ExternalSpliceMainSpliceRstFullDocsSrcCommonReloaderRecommendation />
+<Note>
+
+We recommend installing [Stakater Reloader](https://github.com/stakater/Reloader), which automatically performs rolling restarts of pods when their referenced Secrets or ConfigMaps change.
+
+Splice Helm charts include the `reloader.stakater.com/auto: "true"` annotation by default.
+
+If you do not use Reloader, the annotation is harmless and will be ignored.
+
+To remove it, set `enableReloader: false` in your Helm values file.
+
+</Note>
 
 ### Configuring the Helm Charts
 
@@ -629,9 +638,9 @@ Additionally, please modify the file `splice-node/examples/sv-helm/sv-validator-
 The private and public key for your SV are defined in a K8s secret. If you haven't done so yet, please first follow the instructions in the Generating an SV Identity section to obtain and register a name and keypair for your SV. Replace `YOUR_PUBLIC_KEY` and `YOUR_PRIVATE_KEY` with the `public-key` and `private-key` values obtained as part of generating your SV identity.
 
 ```bash
-    kubectl create secret --namespace sv generic splice-app-sv-key \
-        --from-literal=public=YOUR_PUBLIC_KEY \
-        --from-literal=private=YOUR_PRIVATE_KEY
+kubectl create secret --namespace sv generic splice-app-sv-key \
+    --from-literal=public=YOUR_PUBLIC_KEY \
+    --from-literal=private=YOUR_PRIVATE_KEY
 ```
 For configuring your sv app, please modify the file `splice-node/examples/sv-helm/sv-values.yaml` as follows:
 
@@ -649,15 +658,10 @@ For configuring your sv app, please modify the file `splice-node/examples/sv-hel
 - Optionally, uncomment the line for `initialAmuletPrice` and set it to your desired amulet price. This will create an amulet price vote from your SV with the configured price when onboarded. If not set, no vote will be cast. This can always be done later manually from the SV app UI.
 
 ```yaml
-  # Replace MIGRATION_ID with the migration ID of the global synchronizer.
-  migration:
-    id: "MIGRATION_ID"
-    # Uncomment these when redeploying as part of a migration,
-    # i.e., MIGRATION_ID was incremented and a migration dump was exported to the attached pvc.
-    # migrating: true
-    # This declares that your sequencer with that migration id is still up. You should remove it
-    # once you take down the sequencer for the prior migration id
-    # legacyId: "MIGRATION_ID_BEFORE_INCREMENTED"
+# Replace MIGRATION_ID with the migration ID of the global synchronizer.
+migration:
+  # This should stay constant after the introduction of logical synchronizer upgrades.
+  id: "MIGRATION_ID"
 ```
 Please modify the file `splice-node/examples/sv-helm/info-values.yaml` as follows:
 
@@ -742,9 +746,9 @@ Additionally, please modify the file `splice-node/examples/sv-helm/sv-validator-
 The private and public key for your SV are defined in a K8s secret. If you haven't done so yet, please first follow the instructions in the Generating an SV Identity section to obtain and register a name and keypair for your SV. Replace `YOUR_PUBLIC_KEY` and `YOUR_PRIVATE_KEY` with the `public-key` and `private-key` values obtained as part of generating your SV identity.
 
 ```bash
-    kubectl create secret --namespace sv generic splice-app-sv-key \
-        --from-literal=public=YOUR_PUBLIC_KEY \
-        --from-literal=private=YOUR_PRIVATE_KEY
+kubectl create secret --namespace sv generic splice-app-sv-key \
+    --from-literal=public=YOUR_PUBLIC_KEY \
+    --from-literal=private=YOUR_PRIVATE_KEY
 ```
 For configuring your sv app, please modify the file `splice-node/examples/sv-helm/sv-values.yaml` as follows:
 
@@ -762,15 +766,10 @@ For configuring your sv app, please modify the file `splice-node/examples/sv-hel
 - Optionally, uncomment the line for `initialAmuletPrice` and set it to your desired amulet price. This will create an amulet price vote from your SV with the configured price when onboarded. If not set, no vote will be cast. This can always be done later manually from the SV app UI.
 
 ```yaml
-  # Replace MIGRATION_ID with the migration ID of the global synchronizer.
-  migration:
-    id: "MIGRATION_ID"
-    # Uncomment these when redeploying as part of a migration,
-    # i.e., MIGRATION_ID was incremented and a migration dump was exported to the attached pvc.
-    # migrating: true
-    # This declares that your sequencer with that migration id is still up. You should remove it
-    # once you take down the sequencer for the prior migration id
-    # legacyId: "MIGRATION_ID_BEFORE_INCREMENTED"
+# Replace MIGRATION_ID with the migration ID of the global synchronizer.
+migration:
+  # This should stay constant after the introduction of logical synchronizer upgrades.
+  id: "MIGRATION_ID"
 ```
 Please modify the file `splice-node/examples/sv-helm/info-values.yaml` as follows:
 
@@ -855,9 +854,9 @@ Additionally, please modify the file `splice-node/examples/sv-helm/sv-validator-
 The private and public key for your SV are defined in a K8s secret. If you haven't done so yet, please first follow the instructions in the Generating an SV Identity section to obtain and register a name and keypair for your SV. Replace `YOUR_PUBLIC_KEY` and `YOUR_PRIVATE_KEY` with the `public-key` and `private-key` values obtained as part of generating your SV identity.
 
 ```bash
-    kubectl create secret --namespace sv generic splice-app-sv-key \
-        --from-literal=public=YOUR_PUBLIC_KEY \
-        --from-literal=private=YOUR_PRIVATE_KEY
+kubectl create secret --namespace sv generic splice-app-sv-key \
+    --from-literal=public=YOUR_PUBLIC_KEY \
+    --from-literal=private=YOUR_PRIVATE_KEY
 ```
 For configuring your sv app, please modify the file `splice-node/examples/sv-helm/sv-values.yaml` as follows:
 
@@ -875,15 +874,10 @@ For configuring your sv app, please modify the file `splice-node/examples/sv-hel
 - Optionally, uncomment the line for `initialAmuletPrice` and set it to your desired amulet price. This will create an amulet price vote from your SV with the configured price when onboarded. If not set, no vote will be cast. This can always be done later manually from the SV app UI.
 
 ```yaml
-  # Replace MIGRATION_ID with the migration ID of the global synchronizer.
-  migration:
-    id: "MIGRATION_ID"
-    # Uncomment these when redeploying as part of a migration,
-    # i.e., MIGRATION_ID was incremented and a migration dump was exported to the attached pvc.
-    # migrating: true
-    # This declares that your sequencer with that migration id is still up. You should remove it
-    # once you take down the sequencer for the prior migration id
-    # legacyId: "MIGRATION_ID_BEFORE_INCREMENTED"
+# Replace MIGRATION_ID with the migration ID of the global synchronizer.
+migration:
+  # This should stay constant after the introduction of logical synchronizer upgrades.
+  id: "MIGRATION_ID"
 ```
 Please modify the file `splice-node/examples/sv-helm/info-values.yaml` as follows:
 
@@ -947,24 +941,24 @@ helm install info oci://ghcr.io/digital-asset/decentralized-canton-sync/helm/spl
 Once everything is running, you should be able to inspect the state of the cluster and observe pods running in the new namespace. A typical query might look as follows:
 
 ```bash
-    $ kubectl get pods -n sv
-    NAME                                         READY   STATUS    RESTARTS      AGE
-    apps-pg-0                                    2/2     Running   0             14m
-    ans-web-ui-5cf76bfc98-bh6tw                  2/2     Running   0             10m
-    global-domain-0-cometbft-c584c9468-9r2v5     2/2     Running   2 (14m ago)   14m
-    global-domain-0-mediator-7bfb5f6b6d-ts5zp    2/2     Running   0             13m
-    global-domain-0-sequencer-6c85d98bb6-887c7   2/2     Running   0             13m
-    info-9fb7bc859-27226                         2/2     Running   0             10m
-    mediator-pg-0                                2/2     Running   0             14m
-    participant-0-57579c64ff-wmzk5               2/2     Running   0             14m
-    participant-pg-0                             2/2     Running   0             14m
-    scan-app-b8456cc64-stjm2                     2/2     Running   0             10m
-    scan-web-ui-7c6b5b59dc-fjxjg                 2/2     Running   0             10m
-    sequencer-pg-0                               2/2     Running   0             14m
-    sv-app-7f4b6f468c-sj7ch                      2/2     Running   0             13m
-    sv-web-ui-67bfbdfc77-wwvp9                   2/2     Running   0             13m
-    validator-app-667445fdfc-rcztx               2/2     Running   0             10m
-    wallet-web-ui-648f86f9f9-lffz5               2/2     Running   0             10m
+$ kubectl get pods -n sv
+NAME                                         READY   STATUS    RESTARTS      AGE
+apps-pg-0                                    2/2     Running   0             14m
+ans-web-ui-5cf76bfc98-bh6tw                  2/2     Running   0             10m
+global-domain-0-cometbft-c584c9468-9r2v5     2/2     Running   2 (14m ago)   14m
+global-domain-0-mediator-7bfb5f6b6d-ts5zp    2/2     Running   0             13m
+global-domain-0-sequencer-6c85d98bb6-887c7   2/2     Running   0             13m
+info-9fb7bc859-27226                         2/2     Running   0             10m
+mediator-pg-0                                2/2     Running   0             14m
+participant-0-57579c64ff-wmzk5               2/2     Running   0             14m
+participant-pg-0                             2/2     Running   0             14m
+scan-app-b8456cc64-stjm2                     2/2     Running   0             10m
+scan-web-ui-7c6b5b59dc-fjxjg                 2/2     Running   0             10m
+sequencer-pg-0                               2/2     Running   0             14m
+sv-app-7f4b6f468c-sj7ch                      2/2     Running   0             13m
+sv-web-ui-67bfbdfc77-wwvp9                   2/2     Running   0             13m
+validator-app-667445fdfc-rcztx               2/2     Running   0             10m
+wallet-web-ui-648f86f9f9-lffz5               2/2     Running   0             10m
 ```
 Note also that `Pod` restarts may happen during bringup, particularly if all helm charts are deployed at the same time. The `splice-sv-node` cannot start until `participant` is running and `participant` cannot start until `postgres` is running.
 
@@ -1002,24 +996,24 @@ helm install info oci://ghcr.io/digital-asset/decentralized-canton-sync/helm/spl
 Once everything is running, you should be able to inspect the state of the cluster and observe pods running in the new namespace. A typical query might look as follows:
 
 ```bash
-    $ kubectl get pods -n sv
-    NAME                                         READY   STATUS    RESTARTS      AGE
-    apps-pg-0                                    2/2     Running   0             14m
-    ans-web-ui-5cf76bfc98-bh6tw                  2/2     Running   0             10m
-    global-domain-0-cometbft-c584c9468-9r2v5     2/2     Running   2 (14m ago)   14m
-    global-domain-0-mediator-7bfb5f6b6d-ts5zp    2/2     Running   0             13m
-    global-domain-0-sequencer-6c85d98bb6-887c7   2/2     Running   0             13m
-    info-9fb7bc859-27226                         2/2     Running   0             10m
-    mediator-pg-0                                2/2     Running   0             14m
-    participant-0-57579c64ff-wmzk5               2/2     Running   0             14m
-    participant-pg-0                             2/2     Running   0             14m
-    scan-app-b8456cc64-stjm2                     2/2     Running   0             10m
-    scan-web-ui-7c6b5b59dc-fjxjg                 2/2     Running   0             10m
-    sequencer-pg-0                               2/2     Running   0             14m
-    sv-app-7f4b6f468c-sj7ch                      2/2     Running   0             13m
-    sv-web-ui-67bfbdfc77-wwvp9                   2/2     Running   0             13m
-    validator-app-667445fdfc-rcztx               2/2     Running   0             10m
-    wallet-web-ui-648f86f9f9-lffz5               2/2     Running   0             10m
+$ kubectl get pods -n sv
+NAME                                         READY   STATUS    RESTARTS      AGE
+apps-pg-0                                    2/2     Running   0             14m
+ans-web-ui-5cf76bfc98-bh6tw                  2/2     Running   0             10m
+global-domain-0-cometbft-c584c9468-9r2v5     2/2     Running   2 (14m ago)   14m
+global-domain-0-mediator-7bfb5f6b6d-ts5zp    2/2     Running   0             13m
+global-domain-0-sequencer-6c85d98bb6-887c7   2/2     Running   0             13m
+info-9fb7bc859-27226                         2/2     Running   0             10m
+mediator-pg-0                                2/2     Running   0             14m
+participant-0-57579c64ff-wmzk5               2/2     Running   0             14m
+participant-pg-0                             2/2     Running   0             14m
+scan-app-b8456cc64-stjm2                     2/2     Running   0             10m
+scan-web-ui-7c6b5b59dc-fjxjg                 2/2     Running   0             10m
+sequencer-pg-0                               2/2     Running   0             14m
+sv-app-7f4b6f468c-sj7ch                      2/2     Running   0             13m
+sv-web-ui-67bfbdfc77-wwvp9                   2/2     Running   0             13m
+validator-app-667445fdfc-rcztx               2/2     Running   0             10m
+wallet-web-ui-648f86f9f9-lffz5               2/2     Running   0             10m
 ```
 Note also that `Pod` restarts may happen during bringup, particularly if all helm charts are deployed at the same time. The `splice-sv-node` cannot start until `participant` is running and `participant` cannot start until `postgres` is running.
 
@@ -1057,24 +1051,24 @@ helm install info oci://ghcr.io/digital-asset/decentralized-canton-sync/helm/spl
 Once everything is running, you should be able to inspect the state of the cluster and observe pods running in the new namespace. A typical query might look as follows:
 
 ```bash
-    $ kubectl get pods -n sv
-    NAME                                         READY   STATUS    RESTARTS      AGE
-    apps-pg-0                                    2/2     Running   0             14m
-    ans-web-ui-5cf76bfc98-bh6tw                  2/2     Running   0             10m
-    global-domain-0-cometbft-c584c9468-9r2v5     2/2     Running   2 (14m ago)   14m
-    global-domain-0-mediator-7bfb5f6b6d-ts5zp    2/2     Running   0             13m
-    global-domain-0-sequencer-6c85d98bb6-887c7   2/2     Running   0             13m
-    info-9fb7bc859-27226                         2/2     Running   0             10m
-    mediator-pg-0                                2/2     Running   0             14m
-    participant-0-57579c64ff-wmzk5               2/2     Running   0             14m
-    participant-pg-0                             2/2     Running   0             14m
-    scan-app-b8456cc64-stjm2                     2/2     Running   0             10m
-    scan-web-ui-7c6b5b59dc-fjxjg                 2/2     Running   0             10m
-    sequencer-pg-0                               2/2     Running   0             14m
-    sv-app-7f4b6f468c-sj7ch                      2/2     Running   0             13m
-    sv-web-ui-67bfbdfc77-wwvp9                   2/2     Running   0             13m
-    validator-app-667445fdfc-rcztx               2/2     Running   0             10m
-    wallet-web-ui-648f86f9f9-lffz5               2/2     Running   0             10m
+$ kubectl get pods -n sv
+NAME                                         READY   STATUS    RESTARTS      AGE
+apps-pg-0                                    2/2     Running   0             14m
+ans-web-ui-5cf76bfc98-bh6tw                  2/2     Running   0             10m
+global-domain-0-cometbft-c584c9468-9r2v5     2/2     Running   2 (14m ago)   14m
+global-domain-0-mediator-7bfb5f6b6d-ts5zp    2/2     Running   0             13m
+global-domain-0-sequencer-6c85d98bb6-887c7   2/2     Running   0             13m
+info-9fb7bc859-27226                         2/2     Running   0             10m
+mediator-pg-0                                2/2     Running   0             14m
+participant-0-57579c64ff-wmzk5               2/2     Running   0             14m
+participant-pg-0                             2/2     Running   0             14m
+scan-app-b8456cc64-stjm2                     2/2     Running   0             10m
+scan-web-ui-7c6b5b59dc-fjxjg                 2/2     Running   0             10m
+sequencer-pg-0                               2/2     Running   0             14m
+sv-app-7f4b6f468c-sj7ch                      2/2     Running   0             13m
+sv-web-ui-67bfbdfc77-wwvp9                   2/2     Running   0             13m
+validator-app-667445fdfc-rcztx               2/2     Running   0             10m
+wallet-web-ui-648f86f9f9-lffz5               2/2     Running   0             10m
 ```
 Note also that `Pod` restarts may happen during bringup, particularly if all helm charts are deployed at the same time. The `splice-sv-node` cannot start until `participant` is running and `participant` cannot start until `postgres` is running.
 
@@ -1164,7 +1158,7 @@ In order to install the reference charts, the following must be satisfied in you
 Create a `cluster-ingress` namespace:
 
 ```bash
-    kubectl create ns cluster-ingress
+kubectl create ns cluster-ingress
 ```
 Ensure that there is a cert-manager certificate available in a secret named `cn-net-tls`. An example of a suitable certificate definition:
 
@@ -1195,7 +1189,7 @@ service:
 And install it to your cluster:
 
 ```bash
-    helm install istio-ingress istio/gateway -n cluster-ingress -f istio-gateway-values.yaml
+helm install istio-ingress istio/gateway -n cluster-ingress -f istio-gateway-values.yaml
 ```
 Create Istio Gateway resources in the `cluster-ingress` namespace. Save the following to a file named `gateways.yaml`, with the following modifications:
 
@@ -1266,7 +1260,7 @@ spec:
 And apply them to your cluster:
 
 ```bash
-    kubectl apply -f gateways.yaml -n cluster-ingress
+kubectl apply -f gateways.yaml -n cluster-ingress
 ```
 The http gateway terminates tls using the secret that you configured above, and exposes raw http traffic in its outbound port 443. Istio VirtualServices can now be created to route traffic from there to the required pods within the cluster. A reference Helm chart is provided for that, which can be installed after
 
@@ -1286,7 +1280,7 @@ helm install cluster-ingress-sv oci://ghcr.io/digital-asset/decentralized-canton
 Create a `cluster-ingress` namespace:
 
 ```bash
-    kubectl create ns cluster-ingress
+kubectl create ns cluster-ingress
 ```
 Ensure that there is a cert-manager certificate available in a secret named `cn-net-tls`. An example of a suitable certificate definition:
 
@@ -1317,7 +1311,7 @@ service:
 And install it to your cluster:
 
 ```bash
-    helm install istio-ingress istio/gateway -n cluster-ingress -f istio-gateway-values.yaml
+helm install istio-ingress istio/gateway -n cluster-ingress -f istio-gateway-values.yaml
 ```
 Create Istio Gateway resources in the `cluster-ingress` namespace. Save the following to a file named `gateways.yaml`, with the following modifications:
 
@@ -1388,7 +1382,7 @@ spec:
 And apply them to your cluster:
 
 ```bash
-    kubectl apply -f gateways.yaml -n cluster-ingress
+kubectl apply -f gateways.yaml -n cluster-ingress
 ```
 The http gateway terminates tls using the secret that you configured above, and exposes raw http traffic in its outbound port 443. Istio VirtualServices can now be created to route traffic from there to the required pods within the cluster. A reference Helm chart is provided for that, which can be installed after
 
@@ -1408,7 +1402,7 @@ helm install cluster-ingress-sv oci://ghcr.io/digital-asset/decentralized-canton
 Create a `cluster-ingress` namespace:
 
 ```bash
-    kubectl create ns cluster-ingress
+kubectl create ns cluster-ingress
 ```
 Ensure that there is a cert-manager certificate available in a secret named `cn-net-tls`. An example of a suitable certificate definition:
 
@@ -1439,7 +1433,7 @@ service:
 And install it to your cluster:
 
 ```bash
-    helm install istio-ingress istio/gateway -n cluster-ingress -f istio-gateway-values.yaml
+helm install istio-ingress istio/gateway -n cluster-ingress -f istio-gateway-values.yaml
 ```
 Create Istio Gateway resources in the `cluster-ingress` namespace. Save the following to a file named `gateways.yaml`, with the following modifications:
 
@@ -1510,7 +1504,7 @@ spec:
 And apply them to your cluster:
 
 ```bash
-    kubectl apply -f gateways.yaml -n cluster-ingress
+kubectl apply -f gateways.yaml -n cluster-ingress
 ```
 The http gateway terminates tls using the secret that you configured above, and exposes raw http traffic in its outbound port 443. Istio VirtualServices can now be created to route traffic from there to the required pods within the cluster. A reference Helm chart is provided for that, which can be installed after
 
