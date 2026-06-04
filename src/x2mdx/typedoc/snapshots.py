@@ -4,28 +4,29 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import cast
 
 import yaml
 
-from x2mdx.typedoc.models import TypeDocSnapshot, TypeDocSources
+from x2mdx.typedoc.models import TypeDocDocument, TypeDocSnapshot, TypeDocSources
+from x2mdx.types import JsonObject
 
 
-def _load_manifest(path: Path) -> dict[str, Any]:
+def _load_manifest(path: Path) -> JsonObject:
     if path.suffix.lower() in {".yaml", ".yml"}:
         payload = yaml.safe_load(path.read_text(encoding="utf-8"))
     else:
         payload = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
         raise ValueError(f"Expected object at manifest root: {path}")
-    return payload
+    return cast(JsonObject, payload)
 
 
-def _load_document(path: Path) -> dict[str, Any]:
+def _load_document(path: Path) -> TypeDocDocument:
     payload = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
         raise ValueError(f"Expected top-level JSON object in {path}")
-    return payload
+    return cast(TypeDocDocument, payload)
 
 
 def load_typedoc_sources(
@@ -85,4 +86,3 @@ def load_typedoc_sources(
         source=source,
         package_name=package_name,
     )
-
