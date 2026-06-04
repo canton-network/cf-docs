@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import cast
+
+from x2mdx.types import JsonObject, MintlifyNavGroup, MintlifyNavItem, MintlifyNavItems
 
 
 LEDGER_API_PARENT_GROUP = "Ledger API"
@@ -43,21 +45,45 @@ LANGUAGE_GROUPS = {"Javadocs"}
 JAVADOC_PREFIX = "reference/java/"
 
 
-def load_json(path: Path) -> dict[str, Any]:
+def load_json(path: Path) -> JsonObject:
     payload = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
         raise ValueError(f"Expected JSON object in {path}")
-    return payload
+    return cast(JsonObject, payload)
 
 
-def _find_group(items: list[Any], label: str) -> dict[str, Any] | None:
+def _find_group(items: MintlifyNavItems, label: str) -> MintlifyNavGroup | None:
     for item in items:
         if isinstance(item, dict) and item.get("group") == label:
             return item
     return None
 
 
-def _merge_group_entries(target: dict[str, Any], source: dict[str, Any]) -> None:
+def _nav_group(label: str, pages: MintlifyNavItems | None = None) -> MintlifyNavGroup:
+    group: MintlifyNavGroup = {"group": label}
+    if pages is not None:
+        group["pages"] = pages
+    return group
+
+
+def _copy_group_with_pages(group: MintlifyNavGroup, pages: MintlifyNavItems) -> MintlifyNavGroup:
+    copied: MintlifyNavGroup = {"pages": pages}
+    label = group.get("group")
+    if isinstance(label, str):
+        copied["group"] = label
+    expanded = group.get("expanded")
+    if isinstance(expanded, bool):
+        copied["expanded"] = expanded
+    openapi = group.get("openapi")
+    if isinstance(openapi, str):
+        copied["openapi"] = openapi
+    asyncapi = group.get("asyncapi")
+    if isinstance(asyncapi, str):
+        copied["asyncapi"] = asyncapi
+    return copied
+
+
+def _merge_group_entries(target: MintlifyNavGroup, source: MintlifyNavGroup) -> None:
     for spec_key in ("openapi", "asyncapi"):
         if spec_key in source:
             target[spec_key] = source[spec_key]
@@ -93,10 +119,10 @@ def _merge_group_entries(target: dict[str, Any], source: dict[str, Any]) -> None
         target_pages.append(item)
 
 
-def _upsert_group(collected: dict[str, dict[str, Any]], label: str) -> dict[str, Any]:
+def _upsert_group(collected: dict[str, MintlifyNavGroup], label: str) -> MintlifyNavGroup:
     group = collected.get(label)
     if group is None:
-        group = {"group": label}
+        group = _nav_group(label)
         collected[label] = group
     return group
 
@@ -107,7 +133,7 @@ def _append_unique(items: list[str], values: list[str]) -> None:
             items.append(value)
 
 
-def _java_bindings_nav_item(item: Any) -> Any | None:
+def _java_bindings_nav_item(item: MintlifyNavItem) -> MintlifyNavItem | None:
     if isinstance(item, str):
         if item in {BINDINGS_OVERVIEW_PAGE_REF, LEGACY_BINDINGS_OVERVIEW_PAGE_REF}:
             return BINDINGS_OVERVIEW_PAGE_REF
@@ -126,9 +152,7 @@ def _java_bindings_nav_item(item: Any) -> Any | None:
     ]
     if not filtered_pages:
         return None
-    filtered_item = dict(item)
-    filtered_item["pages"] = filtered_pages
-    return filtered_item
+    return _copy_group_with_pages(item, filtered_pages)
 
 
 def _normalized_grpc_ref(page_ref: str) -> str | None:
@@ -144,8 +168,8 @@ def _normalized_grpc_ref(page_ref: str) -> str | None:
     return None
 
 
-def _absorb_grpc_pages(items: list[Any], collected: dict[str, dict[str, Any]]) -> bool:
-    normalized_items: list[Any] = []
+def _absorb_grpc_pages(items: MintlifyNavItems, collected: dict[str, MintlifyNavGroup]) -> bool:
+    normalized_items: MintlifyNavItems = []
     for item in items:
         normalized = _normalized_grpc_nav_item(item)
         if normalized is not None:
@@ -153,13 +177,13 @@ def _absorb_grpc_pages(items: list[Any], collected: dict[str, dict[str, Any]]) -
     if normalized_items:
         _merge_group_entries(
             _upsert_group(collected, GRPC_GROUP),
-            {"group": GRPC_GROUP, "pages": normalized_items},
+            _nav_group(GRPC_GROUP, normalized_items),
         )
         return True
     return False
 
 
-def _normalized_grpc_nav_item(item: Any) -> Any | None:
+def _normalized_grpc_nav_item(item: MintlifyNavItem) -> MintlifyNavItem | None:
     if isinstance(item, str):
         return _normalized_grpc_ref(item)
     if not isinstance(item, dict):
@@ -174,39 +198,37 @@ def _normalized_grpc_nav_item(item: Any) -> Any | None:
     ]
     if not normalized_pages:
         return None
-    normalized_item = dict(item)
-    normalized_item["pages"] = normalized_pages
-    return normalized_item
+    return _copy_group_with_pages(item, normalized_pages)
 
 
-def _absorb_known_item(item: Any, collected: dict[str, dict[str, Any]]) -> bool:
+def _absorb_known_item(item: MintlifyNavItem, collected: dict[str, MintlifyNavGroup]) -> bool:
     if isinstance(item, str):
         normalized_grpc = _normalized_grpc_ref(item)
         if normalized_grpc is not None:
             _merge_group_entries(
                 _upsert_group(collected, GRPC_GROUP),
-                {"group": GRPC_GROUP, "pages": [normalized_grpc]},
+                _nav_group(GRPC_GROUP, [normalized_grpc]),
             )
             return True
         if item == OPENAPI_PAGE_REF:
-            _merge_group_entries(_upsert_group(collected, OPENAPI_GROUP), {"group": OPENAPI_GROUP, "pages": [item]})
+            _merge_group_entries(_upsert_group(collected, OPENAPI_GROUP), _nav_group(OPENAPI_GROUP, [item]))
             return True
         elif item == ASYNCAPI_PAGE_REF:
-            _merge_group_entries(_upsert_group(collected, ASYNCAPI_GROUP), {"group": ASYNCAPI_GROUP, "pages": [item]})
+            _merge_group_entries(_upsert_group(collected, ASYNCAPI_GROUP), _nav_group(ASYNCAPI_GROUP, [item]))
             return True
         elif item == PROTOBUF_OVERVIEW_PAGE_REF:
-            _merge_group_entries(_upsert_group(collected, PROTOBUF_GROUP), {"group": PROTOBUF_GROUP, "pages": [item]})
+            _merge_group_entries(_upsert_group(collected, PROTOBUF_GROUP), _nav_group(PROTOBUF_GROUP, [item]))
             return True
         elif item in {BINDINGS_OVERVIEW_PAGE_REF, LEGACY_BINDINGS_OVERVIEW_PAGE_REF}:
             _merge_group_entries(
                 _upsert_group(collected, BINDINGS_GROUP),
-                {"group": BINDINGS_GROUP, "pages": [BINDINGS_OVERVIEW_PAGE_REF]},
+                _nav_group(BINDINGS_GROUP, [BINDINGS_OVERVIEW_PAGE_REF]),
             )
             return True
         elif item.startswith(JAVADOC_PREFIX):
             _merge_group_entries(
                 _upsert_group(collected, BINDINGS_GROUP),
-                {"group": BINDINGS_GROUP, "pages": [{"group": "Javadocs", "pages": [item]}]},
+                _nav_group(BINDINGS_GROUP, [_nav_group("Javadocs", [item])]),
             )
             return True
         return False
@@ -247,7 +269,7 @@ def _absorb_known_item(item: Any, collected: dict[str, dict[str, Any]]) -> bool:
         return True
 
     if label in PROTOBUF_GROUP_ALIASES:
-        normalized = {"group": PROTOBUF_GROUP, "pages": []}
+        normalized = _nav_group(PROTOBUF_GROUP, [])
         _merge_group_entries(normalized, item)
         _merge_group_entries(_upsert_group(collected, PROTOBUF_GROUP), normalized)
         return True
@@ -257,8 +279,11 @@ def _absorb_known_item(item: Any, collected: dict[str, dict[str, Any]]) -> bool:
         if normalized_item is None:
             _upsert_group(collected, BINDINGS_GROUP)
         else:
-            normalized = {"group": BINDINGS_GROUP, "pages": []}
-            _merge_group_entries(normalized, normalized_item)
+            normalized = _nav_group(BINDINGS_GROUP, [])
+            if isinstance(normalized_item, dict):
+                _merge_group_entries(normalized, normalized_item)
+            else:
+                _merge_group_entries(normalized, _nav_group(BINDINGS_GROUP, [normalized_item]))
             _merge_group_entries(_upsert_group(collected, BINDINGS_GROUP), normalized)
         return True
 
@@ -268,13 +293,13 @@ def _absorb_known_item(item: Any, collected: dict[str, dict[str, Any]]) -> bool:
             return _absorb_grpc_pages(pages, collected)
 
     if label in LANGUAGE_GROUPS:
-        _merge_group_entries(_upsert_group(collected, BINDINGS_GROUP), {"group": BINDINGS_GROUP, "pages": [item]})
+        _merge_group_entries(_upsert_group(collected, BINDINGS_GROUP), _nav_group(BINDINGS_GROUP, [item]))
         return True
 
     return False
 
 
-def navigation_pages(docs: dict[str, Any], *, label: str, docs_json_path: Path) -> list[Any]:
+def navigation_pages(docs: JsonObject, *, label: str, docs_json_path: Path) -> MintlifyNavItems:
     navigation = docs.get("navigation")
     if not isinstance(navigation, dict):
         raise ValueError(f"docs.json missing navigation object: {docs_json_path}")
@@ -290,7 +315,7 @@ def navigation_pages(docs: dict[str, Any], *, label: str, docs_json_path: Path) 
         pages = dropdown.get("pages")
         if not isinstance(pages, list):
             raise ValueError(f"Dropdown does not expose a pages list: {label}")
-        return pages
+        return cast(MintlifyNavItems, pages)
 
     products = navigation.get("products")
     if isinstance(products, list):
@@ -303,7 +328,7 @@ def navigation_pages(docs: dict[str, Any], *, label: str, docs_json_path: Path) 
         pages = product.get("pages")
         if not isinstance(pages, list):
             raise ValueError(f"Product does not expose a pages list: {label}")
-        return pages
+        return cast(MintlifyNavItems, pages)
 
     raise ValueError(f"docs.json navigation must define dropdowns or products: {docs_json_path}")
 
@@ -319,9 +344,9 @@ def regroup_ledger_api_nav(*, docs_json_path: Path, dropdown_label: str) -> None
         *PROTOBUF_GROUP_ALIASES,
         *BINDINGS_GROUP_ALIASES,
     }
-    collected: dict[str, dict[str, Any]] = {}
-    preserved_ledger_children: list[Any] = []
-    remaining: list[Any] = []
+    collected: dict[str, MintlifyNavGroup] = {}
+    preserved_ledger_children: MintlifyNavItems = []
+    remaining: MintlifyNavItems = []
     insert_at: int | None = None
 
     for index, item in enumerate(pages):
@@ -344,13 +369,11 @@ def regroup_ledger_api_nav(*, docs_json_path: Path, dropdown_label: str) -> None
     if not collected:
         return
 
-    parent_group = {
-        "group": LEDGER_API_PARENT_GROUP,
-        "pages": [
-            *preserved_ledger_children,
-            *[collected[label] for label in LEDGER_API_CHILD_ORDER if label in collected],
-        ],
-    }
+    parent_pages: MintlifyNavItems = [
+        *preserved_ledger_children,
+        *[collected[label] for label in LEDGER_API_CHILD_ORDER if label in collected],
+    ]
+    parent_group = _nav_group(LEDGER_API_PARENT_GROUP, parent_pages)
 
     if insert_at is None:
         remaining.append(parent_group)
