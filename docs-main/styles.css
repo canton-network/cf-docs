@@ -225,15 +225,16 @@ pre code::-moz-selection {
    Buttons
    ============================================ */
 
-/* Primary button styling - use :not(.card) to avoid matching card links
-   whose Tailwind classes contain "primary" (e.g. hover:!border-primary) */
-button[class*="primary"],
-a[class*="primary"]:not([class~="card"]) {
+/* Primary button styling - keep this scoped to explicit background utilities.
+   Mintlify also uses text-primary/focus:outline-primary on tabs and selectors,
+   and those should not receive a filled background. */
+button[class*="bg-primary"],
+a[class*="bg-primary"]:not([class~="card"]) {
   background-color: var(--canton-highlight);
 }
 
-button[class*="primary"]:hover,
-a[class*="primary"]:not([class~="card"]):hover {
+button[class*="bg-primary"]:hover,
+a[class*="bg-primary"]:not([class~="card"]):hover {
   opacity: 0.9;
 }
 
@@ -384,6 +385,29 @@ button[aria-haspopup="menu"]:not(.nav-dropdown-trigger):not(#page-context-menu *
 .mermaid {
   /* Ensure diagrams use our color scheme where possible */
   --mermaid-primary-color: var(--canton-highlight);
+}
+
+/* Mermaid pan / zoom / reset control overlay.
+   Mintlify positions the controls absolutely over the bottom-right corner of
+   every mermaid diagram. On smaller diagrams the overlay frequently sits on top
+   of meaningful graph content, hiding parts of the figure (see #586).
+
+   The container Mintlify renders looks like:
+       <div class="group relative overflow-hidden">
+         <div class="absolute bottom-2 right-2 z-10 grid ..."> [buttons] </div>
+         <div class="Mermaid"> [rendered SVG] </div>
+       </div>
+
+   `:has(svg)` keeps this rule scoped to mermaid wrappers and away from any
+   other `.group.relative.overflow-hidden` Mintlify uses elsewhere. */
+div.group.relative.overflow-hidden:has(svg) > div.absolute.bottom-2.right-2 {
+  opacity: 0.1;
+  transition: opacity 200ms ease-in-out;
+}
+
+div.group.relative.overflow-hidden:has(svg):hover > div.absolute.bottom-2.right-2,
+div.group.relative.overflow-hidden:has(svg):focus-within > div.absolute.bottom-2.right-2 {
+  opacity: 1;
 }
 
 /* ============================================

@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+
+from x2mdx.types import JsonObject
+
+TypeDocDocument = JsonObject
+TypeDocExport = JsonObject
 
 
 @dataclass(frozen=True)
 class TypeDocSnapshot:
     version: str
     json_path: str
-    document: dict[str, Any]
+    document: TypeDocDocument
 
 
 @dataclass(frozen=True)
@@ -29,5 +33,4 @@ class TypeDocReport:
     publish_version: str
     versions: list[str]
     export_groups: list[str]
-    exports: list[dict[str, Any]]
-
+    exports: list[TypeDocExport]

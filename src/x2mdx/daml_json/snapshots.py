@@ -4,33 +4,34 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import cast
 
 import yaml
 
-from x2mdx.daml_json.models import DamlDocsSnapshot, DamlDocsSources
+from x2mdx.daml_json.models import DamlDocsSnapshot, DamlDocsSources, DamlJsonModule
+from x2mdx.types import JsonObject
 
 
-def _load_manifest(path: Path) -> dict[str, Any]:
+def _load_manifest(path: Path) -> JsonObject:
     if path.suffix.lower() in {".yaml", ".yml"}:
         payload = yaml.safe_load(path.read_text(encoding="utf-8"))
     else:
         payload = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
         raise ValueError(f"Expected object at manifest root: {path}")
-    return payload
+    return cast(JsonObject, payload)
 
 
-def _load_modules(path: Path) -> list[dict[str, Any]]:
+def _load_modules(path: Path) -> list[DamlJsonModule]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     if isinstance(payload, dict):
         payload = [payload]
     if not isinstance(payload, list):
         raise ValueError(f"Expected top-level JSON list or object in {path}")
-    modules: list[dict[str, Any]] = []
+    modules: list[DamlJsonModule] = []
     for item in payload:
         if isinstance(item, dict):
-            modules.append(item)
+            modules.append(cast(DamlJsonModule, item))
     return modules
 
 
@@ -81,4 +82,3 @@ def load_daml_doc_sources(
         publish_version=publish_version,
         source=manifest.get("source") if isinstance(manifest.get("source"), str) else None,
     )
-

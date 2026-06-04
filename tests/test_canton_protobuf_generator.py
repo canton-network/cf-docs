@@ -33,6 +33,7 @@ class CantonProtobufGeneratorTests(unittest.TestCase):
     def test_bundle_selection_maps_only_ledger_and_admin_api_inputs(self) -> None:
         protobuf_root = self.root / "protobuf"
         self.write_proto(protobuf_root / "ledger-api", "com/daml/ledger/api/v2/command_service.proto")
+        self.write_proto(protobuf_root / "ledger-api-value", "com/daml/ledger/api/v2/value.proto")
         self.write_proto(protobuf_root / "admin-api", "com/digitalasset/canton/admin/health/v30/status_service.proto")
         self.write_proto(protobuf_root / "community", "com/digitalasset/canton/time/admin/v30/synchronizer_time_service.proto")
         self.write_proto(protobuf_root / "community", "com/digitalasset/canton/crypto/admin/v30/vault_service.proto")
@@ -54,7 +55,10 @@ class CantonProtobufGeneratorTests(unittest.TestCase):
             {
                 "com/daml/ledger/api/v2/command_service.proto": (
                     "community/ledger-api/src/main/protobuf/com/daml/ledger/api/v2/command_service.proto"
-                )
+                ),
+                "com/daml/ledger/api/v2/value.proto": (
+                    "community/daml-lf/ledger-api-value-proto/src/main/protobuf/com/daml/ledger/api/v2/value.proto"
+                ),
             },
         )
         self.assertEqual(
@@ -66,6 +70,7 @@ class CantonProtobufGeneratorTests(unittest.TestCase):
                 "com/digitalasset/canton/topology/admin/v30/topology_manager_read_service.proto",
             },
         )
+        self.assertNotIn("com/daml/ledger/api/v2/value.proto", admin_mapping)
         self.assertNotIn("com/digitalasset/canton/protocol/v30/common.proto", admin_mapping)
         self.assertNotIn("com/digitalasset/canton/participant/foo.proto", admin_mapping)
 
