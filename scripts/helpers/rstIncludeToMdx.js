@@ -169,6 +169,19 @@ function convertRstIncludeToMdx(content, options = {}) {
             continue
         }
 
+        const tip = trimmed.match(/^\.\.\s+tip::\s*$/)
+        if (tip) {
+            const block = readDirectiveBlock(lines, i + 1)
+            const inner = block.body
+                .filter((l) => l.trim() !== '')
+                .map((l) => inlineRstMarkup(l.trim(), refTargets))
+                .join('\n\n')
+            // Mintlify doesn't have a Tip component; render as Note.
+            out.push(`<Note>\n\n${inner}\n\n</Note>`)
+            i = block.next
+            continue
+        }
+
         const admonition = trimmed.match(/^\.\.\s+admonition::\s*(.+)\s*$/)
         if (admonition) {
             const title = admonition[1].trim()

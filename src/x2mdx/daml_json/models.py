@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+
+from x2mdx.types import JsonObject
+
+DamlJsonModule = JsonObject
 
 
 @dataclass(frozen=True)
 class DamlDocsSnapshot:
     version: str
     json_path: str
-    modules: list[dict[str, Any]]
+    modules: list[DamlJsonModule]
 
 
 @dataclass(frozen=True)
@@ -26,7 +29,6 @@ class DamlDocsReport:
     version_filter: str
     publish_version: str
     versions: list[str]
-    modules: list[dict[str, Any]]
+    modules: list[DamlJsonModule]
     module_lifecycle: dict[str, dict[str, str | None]]
     module_deprecation_first_seen: dict[str, str]
-

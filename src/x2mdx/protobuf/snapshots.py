@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import cast
 
 import yaml
 
 from x2mdx.protobuf.models import ProtobufSourceSnapshot, ProtobufSources
+from x2mdx.types import JsonObject
 
 DEFAULT_METADATA_SHAPE = {
     "schemaVersion": 1,
@@ -22,18 +23,18 @@ DEFAULT_METADATA_SHAPE = {
 }
 
 
-def _load_manifest(path: Path) -> dict[str, Any]:
+def _load_manifest(path: Path) -> JsonObject:
     if path.suffix.lower() in {".yaml", ".yml"}:
         payload = yaml.safe_load(path.read_text(encoding="utf-8"))
     else:
         payload = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
         raise ValueError(f"Expected object at manifest root: {path}")
-    return payload
+    return cast(JsonObject, payload)
 
 
-def _load_metadata_overlay(path: Path | None) -> dict[str, Any]:
-    data = json.loads(json.dumps(DEFAULT_METADATA_SHAPE))
+def _load_metadata_overlay(path: Path | None) -> JsonObject:
+    data = cast(JsonObject, json.loads(json.dumps(DEFAULT_METADATA_SHAPE)))
     if path is None or not path.exists():
         return data
     raw = json.loads(path.read_text(encoding="utf-8"))
@@ -103,7 +104,8 @@ def load_protobuf_sources(
         if not resolved_metadata_path.is_absolute():
             resolved_metadata_path = manifest_root / resolved_metadata_path
 
-    repo = manifest.get("repo") if isinstance(manifest.get("repo"), dict) else {}
+    raw_repo = manifest.get("repo")
+    repo: JsonObject = raw_repo if isinstance(raw_repo, dict) else {}
     return ProtobufSources(
         snapshots=snapshots,
         source=manifest.get("source") if isinstance(manifest.get("source"), str) else None,

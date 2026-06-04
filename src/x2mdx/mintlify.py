@@ -5,16 +5,17 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import cast
 
 from x2mdx.output import Page
 from x2mdx.render import write_pages
+from x2mdx.types import JsonArray, JsonObject, JsonValue, MintlifyNavGroup, MintlifyNavItems
 
 
 @dataclass(frozen=True)
 class MintlifyGroup:
     group: str
-    pages: list[Any]
+    pages: MintlifyNavItems | list["MintlifyGroup"]
     expanded: bool | None = None
 
 
@@ -25,8 +26,8 @@ class MintlifyNavTarget:
     versions: list[str] | None = None
 
 
-def _group_to_json(group: MintlifyGroup) -> dict[str, Any]:
-    payload: dict[str, Any] = {
+def _group_to_json(group: MintlifyGroup) -> MintlifyNavGroup:
+    payload: MintlifyNavGroup = {
         "group": group.group,
         "pages": [
             _group_to_json(item) if isinstance(item, MintlifyGroup) else item
@@ -64,12 +65,13 @@ def write_docs_json(
     return target
 
 
-def _remove_page_reference(node: Any, page_ref: str) -> None:
+def _remove_page_reference(node: JsonValue, page_ref: str) -> None:
     if isinstance(node, dict):
         pages = node.get("pages")
         if isinstance(pages, list):
-            node["pages"] = [item for item in pages if item != page_ref]
-            for item in node["pages"]:
+            filtered_pages: JsonArray = [item for item in pages if item != page_ref]
+            node["pages"] = filtered_pages
+            for item in filtered_pages:
                 _remove_page_reference(item, page_ref)
         for value in node.values():
             if value is not pages:
@@ -79,30 +81,39 @@ def _remove_page_reference(node: Any, page_ref: str) -> None:
             _remove_page_reference(item, page_ref)
 
 
-def _find_group(groups: list[dict[str, Any]], label: str) -> dict[str, Any] | None:
+def _find_group(groups: JsonArray, label: str) -> JsonObject | None:
     for item in groups:
         if isinstance(item, dict) and item.get("group") == label:
             return item
     return None
 
 
-def _ensure_group_path(container: dict[str, Any], group_path: list[str]) -> list[Any]:
-    if not group_path:
-        return container.setdefault("pages", [])
+def _ensure_list_field(container: JsonObject, key: str) -> JsonArray:
+    value = container.get(key)
+    if isinstance(value, list):
+        return value
+    value = []
+    container[key] = value
+    return value
 
-    current_groups = container.setdefault("groups", [])
-    current: dict[str, Any] | None = None
+
+def _ensure_group_path(container: JsonObject, group_path: list[str]) -> JsonArray:
+    if not group_path:
+        return _ensure_list_field(container, "pages")
+
+    current_groups = _ensure_list_field(container, "groups")
+    current: JsonObject | None = None
     for index, label in enumerate(group_path):
         current = _find_group(current_groups, label)
         if current is None:
             current = {"group": label, "pages": []}
             current_groups.append(current)
         if index < len(group_path) - 1:
-            current_groups = current.setdefault("groups", [])
-    return current.setdefault("pages", []) if current is not None else container.setdefault("pages", [])
+            current_groups = _ensure_list_field(current, "groups")
+    return _ensure_list_field(current, "pages") if current is not None else _ensure_list_field(container, "pages")
 
 
-def _prune_empty_groups(node: Any) -> None:
+def _prune_empty_groups(node: JsonValue) -> None:
     if isinstance(node, dict):
         for value in list(node.values()):
             _prune_empty_groups(value)
@@ -130,9 +141,12 @@ def update_docs_json_navigation(
     output_file: Path,
     target: MintlifyNavTarget,
 ) -> Path:
-    docs = json.loads(docs_json_path.read_text(encoding="utf-8"))
+    docs = cast(JsonObject, json.loads(docs_json_path.read_text(encoding="utf-8")))
     page_ref = docs_json_page_ref(output_file, docs_json_path)
-    navigation = docs.setdefault("navigation", {})
+    navigation = docs.get("navigation")
+    if not isinstance(navigation, dict):
+        navigation = {}
+        docs["navigation"] = navigation
     dropdowns = navigation.get("dropdowns")
     if not isinstance(dropdowns, list):
         raise ValueError("docs.json navigation.dropdowns must be present")
@@ -149,9 +163,11 @@ def update_docs_json_navigation(
     versions = dropdown.get("versions")
     if isinstance(versions, list):
         version_names = target.versions or [
-            item.get("version")
+            version
             for item in versions
-            if isinstance(item, dict) and item.get("version")
+            if isinstance(item, dict)
+            and isinstance(version := item.get("version"), str)
+            and version
         ]
         for version_name in version_names:
             version_entry = next(
