@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import copy
 import html
 import json
 import re
@@ -63,6 +62,28 @@ WALLET_GATEWAY_PACKAGE_URL = (
     "https://github.com/digital-asset/wallet-gateway/pkgs/container/"
     "wallet-gateway%2Fdocker%2Fwallet-gateway"
 )
+SPLICE_REPOSITORY_URL = "https://github.com/canton-network/splice"
+SPLICE_RAW_BASE_URL = "https://raw.githubusercontent.com/canton-network/splice"
+CANTON_SOURCES_PATH = "nix/canton-sources.json"
+DARS_LOCK_PATH = "daml/dars.lock"
+DASHBOARD_DAR_NAMES = ("splice-amulet", "splice-wallet", "splice-dso-governance")
+WALLET_GATEWAY_RELEASE_REPO = "hyperledger-labs/splice-wallet-kernel"
+WALLET_GATEWAY_RELEASE_TAG_PREFIX = "@canton-network/wallet-gateway-remote@"
+WALLET_GATEWAY_RELEASES_URL = (
+    f"https://api.github.com/repos/{WALLET_GATEWAY_RELEASE_REPO}/releases"
+)
+WALLET_GATEWAY_RELEASES_PAGE_URL = (
+    f"https://github.com/{WALLET_GATEWAY_RELEASE_REPO}/releases"
+    "?q=wallet-gateway-remote"
+)
+PQS_IMAGE_REPOSITORY = (
+    "europe-docker.pkg.dev/da-images/public/docker/participant-query-store"
+)
+PQS_TAGS_URL = (
+    "https://europe-docker.pkg.dev/v2/da-images/public/docker/"
+    "participant-query-store/tags/list"
+)
+STABLE_SEMVER_RE = re.compile(r"\d+\.\d+\.\d+")
 USER_AGENT = "cf-docs-version-dashboard-generator"
 
 
@@ -117,6 +138,118 @@ def fetch_npm_latest(package_name: str, timeout: float) -> str:
     encoded_name = package_name.replace("/", "%2F")
     data = fetch_json(f"https://registry.npmjs.org/{encoded_name}", timeout)
     return str(data["dist-tags"]["latest"])
+
+
+def version_key(version: str) -> tuple[int, int, int]:
+    if not STABLE_SEMVER_RE.fullmatch(version):
+        raise ValueError(f"Expected stable semantic version, got {version!r}")
+    return tuple(int(part) for part in version.split("."))
+
+
+def latest_stable_version(versions: list[str], source: str) -> str:
+    stable_versions = sorted(
+        {version for version in versions if STABLE_SEMVER_RE.fullmatch(version)},
+        key=version_key,
+    )
+    if not stable_versions:
+        raise RuntimeError(f"No stable semantic versions found in {source}")
+    return stable_versions[-1]
+
+
+def splice_release_line_branch(release_version: str) -> str:
+    if not STABLE_SEMVER_RE.fullmatch(release_version):
+        raise RuntimeError(
+            f"Cannot derive Splice release-line branch from version {release_version!r}"
+        )
+    return f"release-line-{release_version}"
+
+
+def splice_raw_file_url(branch: str, path: str) -> str:
+    return f"{SPLICE_RAW_BASE_URL}/{branch}/{path}"
+
+
+def splice_blob_file_url(branch: str, path: str) -> str:
+    return f"{SPLICE_REPOSITORY_URL}/blob/{branch}/{path}"
+
+
+def fetch_canton_version_from_splice_release_line(
+    splice_version: str,
+    timeout: float,
+) -> tuple[str, str, str]:
+    branch = splice_release_line_branch(splice_version)
+    url = splice_raw_file_url(branch, CANTON_SOURCES_PATH)
+    data = fetch_json(url, timeout)
+    canton_version = str(data.get("version") or "")
+    if not canton_version:
+        raise RuntimeError(f"Missing version in {url}")
+    return canton_version, branch, splice_blob_file_url(branch, CANTON_SOURCES_PATH)
+
+
+def parse_dars_lock(dars_lock_text: str, source: str) -> dict[str, str]:
+    versions_by_name: dict[str, list[str]] = {}
+    for line_number, line in enumerate(dars_lock_text.splitlines(), start=1):
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        parts = stripped.split()
+        if len(parts) != 3:
+            raise RuntimeError(f"Malformed dars.lock row in {source}:{line_number}: {line}")
+        name, version, _package_hash = parts
+        versions_by_name.setdefault(name, []).append(version)
+
+    return {
+        name: latest_stable_version(versions_by_name.get(name, []), f"{source} {name}")
+        for name in DASHBOARD_DAR_NAMES
+    }
+
+
+def fetch_dar_versions_from_splice_release_line(
+    branch: str,
+    timeout: float,
+) -> tuple[list[dict[str, str]], str]:
+    url = splice_raw_file_url(branch, DARS_LOCK_PATH)
+    dars_lock_text = fetch_text(url, timeout)
+    dar_versions = parse_dars_lock(dars_lock_text, url)
+    return (
+        [{"name": name, "version": dar_versions[name]} for name in DASHBOARD_DAR_NAMES],
+        splice_blob_file_url(branch, DARS_LOCK_PATH),
+    )
+
+
+def fetch_latest_wallet_gateway_version(timeout: float) -> str:
+    data = fetch_json(f"{WALLET_GATEWAY_RELEASES_URL}?per_page=100", timeout)
+    if not isinstance(data, list):
+        raise RuntimeError(f"Expected release list from {WALLET_GATEWAY_RELEASES_URL}")
+    versions: list[str] = []
+    tag_re = re.compile(
+        rf"^{re.escape(WALLET_GATEWAY_RELEASE_TAG_PREFIX)}(?P<version>\d+\.\d+\.\d+)$"
+    )
+    for release in data:
+        if not isinstance(release, dict):
+            continue
+        tag_name = release.get("tag_name")
+        if not isinstance(tag_name, str):
+            continue
+        match = tag_re.fullmatch(tag_name)
+        if match:
+            versions.append(match.group("version"))
+    return latest_stable_version(versions, WALLET_GATEWAY_RELEASES_URL)
+
+
+def fetch_latest_pqs_version(timeout: float) -> str:
+    data = fetch_json(PQS_TAGS_URL, timeout)
+    tags: list[str] = []
+    manifest = data.get("manifest", {})
+    if not isinstance(manifest, dict):
+        raise RuntimeError(f"Expected Artifact Registry manifest map from {PQS_TAGS_URL}")
+    for entry in manifest.values():
+        if not isinstance(entry, dict):
+            continue
+        entry_tags = entry.get("tag", [])
+        if not isinstance(entry_tags, list):
+            continue
+        tags.extend(tag for tag in entry_tags if isinstance(tag, str))
+    return latest_stable_version(tags, PQS_TAGS_URL)
 
 
 def clean_html_text(value: str) -> str:
@@ -244,16 +377,28 @@ def collect_network_snapshot(network_key: str, timeout: float) -> dict:
             f"{network_key}: /info version {observed_release} does not match "
             f"docs index version {docker_image_tag}"
         )
+    canton_version, canton_release_line_branch, canton_sources_url = (
+        fetch_canton_version_from_splice_release_line(observed_release, timeout)
+    )
+    dar_versions, dar_versions_url = fetch_dar_versions_from_splice_release_line(
+        canton_release_line_branch,
+        timeout,
+    )
 
     return {
         "displayName": urls["display_name"],
         "endpoint": urls["endpoint"],
         "spliceVersion": observed_release,
+        "cantonVersion": canton_version,
+        "cantonReleaseLineBranch": canton_release_line_branch,
+        "darVersions": dar_versions,
         "migrationId": migration_id,
         "chainIdSuffix": chain_id_suffix,
         "sources": {
             "infoUrl": urls["info_url"],
             "indexUrl": urls["index_url"],
+            "cantonSourcesUrl": canton_sources_url,
+            "darVersionsUrl": dar_versions_url,
         },
         "checks": {
             "dockerImageTag": docker_image_tag,
@@ -272,6 +417,8 @@ def collect_snapshot(timeout: float) -> dict:
             for network_key in NETWORK_ORDER
         },
         "latestDpmSdk": fetch_text(DPM_LATEST_URL, timeout).strip(),
+        "latestPqs": fetch_latest_pqs_version(timeout),
+        "latestWalletGateway": fetch_latest_wallet_gateway_version(timeout),
         "npmVersions": {
             key: fetch_npm_latest(package_name, timeout)
             for key, package_name in NPM_PACKAGE_NAMES.items()
@@ -292,7 +439,7 @@ def build_versions(existing_config: dict, snapshot: dict) -> dict:
             "advanced": {
                 "minProtocolVersion": existing_advanced_data.get("minProtocolVersion", ""),
                 "migrationId": network["migrationId"],
-                "darVersions": existing_advanced_data.get("darVersions", []),
+                "darVersions": network["darVersions"],
                 "releaseUrl": updated_release_url(network["spliceVersion"]),
             },
             "endpoint": network["endpoint"],
@@ -308,8 +455,12 @@ def repository_url(repository_key: str, existing_config: dict) -> str:
     existing = existing_config.get("repositories", {}).get(repository_key, {})
     if repository_key == "splice":
         return "https://github.com/canton-network/splice/releases"
+    if repository_key == "damlSdk":
+        return SPLICE_REPOSITORY_URL
+    if repository_key == "pqs":
+        return f"https://{PQS_IMAGE_REPOSITORY}"
     if repository_key == "walletGateway":
-        return WALLET_GATEWAY_PACKAGE_URL
+        return WALLET_GATEWAY_RELEASES_PAGE_URL
     if repository_key in NPM_PACKAGE_URLS:
         return NPM_PACKAGE_URLS[repository_key]
     return str(existing.get("url") or "")
@@ -327,10 +478,23 @@ def build_repository_mapping(
             external_version = network["spliceVersion"]
             branch = "main"
             folder_path_repo = "splice-wallet-kernel"
+        elif repository_key == "damlSdk":
+            # Historical config key. The dashboard currently labels this row as "Canton".
+            external_version = network["cantonVersion"]
+            branch = network["cantonReleaseLineBranch"]
+            folder_path_repo = CANTON_SOURCES_PATH
+        elif repository_key == "pqs":
+            external_version = snapshot["latestPqs"]
+            branch = ""
+            folder_path_repo = PQS_IMAGE_REPOSITORY
         elif repository_key in NPM_PACKAGE_NAMES:
             external_version = snapshot["npmVersions"][repository_key]
             branch = ""
             folder_path_repo = ""
+        elif repository_key == "walletGateway":
+            external_version = snapshot["latestWalletGateway"]
+            branch = ""
+            folder_path_repo = WALLET_GATEWAY_RELEASE_TAG_PREFIX.rstrip("@")
         else:
             external_version = existing_repo_version(existing_config, repository_key, network_key)
             branch = ""
@@ -374,8 +538,10 @@ def build_source_contract(snapshot: dict) -> dict:
             "the same network's /index.html Docker image tag and Helm chart version."
         ),
         "canton": (
-            "Manual/fallback until an owner-approved public source is confirmed. "
-            "The config key remains damlSdk for compatibility with the existing dashboard component."
+            "Use the observed Splice version from the network /info endpoint, derive the "
+            "matching canton-network/splice release-line branch, then read version from "
+            "nix/canton-sources.json. The config key remains damlSdk for compatibility "
+            "with the existing dashboard component."
         ),
         "damlSdkInstaller": (
             f"DPM installer channel: curl {DPM_INSTALLER_URL} | sh; "
@@ -384,15 +550,24 @@ def build_source_contract(snapshot: dict) -> dict:
         "tokenStandard": f"npm latest dist-tag for {NPM_PACKAGE_NAMES['tokenStandard']}.",
         "walletSdk": f"npm latest dist-tag for {NPM_PACKAGE_NAMES['walletSdk']}.",
         "dappSdk": f"npm latest dist-tag for {NPM_PACKAGE_NAMES['dappSdk']}.",
-        "walletGateway": "Manual from Wallet Gateway Docker image package until package API access is confirmed.",
-        "pqs": "Manual/fallback until an owner-approved public source replaces Slack-sourced updates.",
+        "walletGateway": (
+            "Latest stable @canton-network/wallet-gateway-remote GitHub release from "
+            f"{WALLET_GATEWAY_RELEASE_REPO}."
+        ),
+        "pqs": (
+            "Latest stable semver tag from the public Artifact Registry image "
+            f"{PQS_IMAGE_REPOSITORY}."
+        ),
         "minProtocolVersion": "Manual/fallback until a public live source is identified.",
-        "darVersions": "Manual/fallback; release bundles list shipped DARs, not necessarily currently used DARs.",
+        "darVersions": (
+            "Latest stable package rows for splice-amulet, splice-wallet, and "
+            "splice-dso-governance from the observed Splice release-line daml/dars.lock."
+        ),
     }
 
 
 def build_config(existing_config: dict, snapshot: dict) -> dict:
-    return {
+    config = {
         "_generated": {
             "generatedAt": snapshot["generatedAt"],
             "generatorMode": snapshot["generatorMode"],
@@ -404,31 +579,17 @@ def build_config(existing_config: dict, snapshot: dict) -> dict:
         "versions": build_versions(existing_config, snapshot),
         "repositories": build_repositories(existing_config, snapshot),
     }
-
-
-def without_generated_at(config: dict) -> dict:
-    comparable = copy.deepcopy(config)
-    generated = comparable.get("_generated")
-    if isinstance(generated, dict):
-        generated.pop("generatedAt", None)
-    return comparable
-
-
-def preserve_generated_at_if_only_timestamp_changed(existing_config: dict, candidate_config: dict) -> dict:
-    existing_generated = existing_config.get("_generated")
-    if not isinstance(existing_generated, dict):
-        return candidate_config
+    existing_generated = existing_config.get("_generated", {})
     existing_generated_at = existing_generated.get("generatedAt")
-    if not isinstance(existing_generated_at, str) or not existing_generated_at:
-        return candidate_config
-    if without_generated_at(existing_config) != without_generated_at(candidate_config):
-        return candidate_config
+    if existing_generated_at and generated_content(config) == generated_content(existing_config):
+        config["_generated"]["generatedAt"] = existing_generated_at
+    return config
 
-    stable_config = copy.deepcopy(candidate_config)
-    candidate_generated = stable_config.setdefault("_generated", {})
-    if isinstance(candidate_generated, dict):
-        candidate_generated["generatedAt"] = existing_generated_at
-    return stable_config
+
+def generated_content(config: dict) -> dict:
+    content = json.loads(json.dumps(config))
+    content.get("_generated", {}).pop("generatedAt", None)
+    return content
 
 
 def write_json(path: Path, payload: dict) -> None:
@@ -444,10 +605,7 @@ def main() -> int:
     args = parse_args()
     existing_config = read_existing_config(DEFAULT_REPO_CONFIG_OUTPUT)
     snapshot = collect_snapshot(args.timeout)
-    repo_version_config = preserve_generated_at_if_only_timestamp_changed(
-        existing_config,
-        build_config(existing_config, snapshot),
-    )
+    repo_version_config = build_config(existing_config, snapshot)
 
     if args.dry_run:
         json.dump(repo_version_config, sys.stdout, indent=2)
