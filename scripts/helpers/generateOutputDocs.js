@@ -2,17 +2,92 @@
 
 // generateOutputDocs.js
 //
-// - Reads a single export config: docs/config/exportConfig.json
-// - Writes extracted snippets into: docs-output/<snippetName>.mdx
+// - Reads a single export config (default: scripts/docs/exportConfig.json under repo root)
+// - Writes extracted snippets into docs-output/<snippetName>.mdx (default under repo root)
 // - Resolves source files relative to the repo root
+//
+// Optional CLI overrides (defaults shown for docs-staging):
+//   --repo-root <path>
+//   --export-config <path>
+//   --output <path>
+//   --verbose
 
 const fs = require('fs')
 const path = require('path')
 const { convertRstIncludeToMdx } = require('./rstIncludeToMdx')
 
-const REPO_ROOT = path.join(__dirname, '..', '..')
-const EXPORT_CONFIG_PATH = path.join(REPO_ROOT, 'scripts/docs/exportConfig.json')
-const OUTPUT_FOLDER_PATH = path.join(REPO_ROOT, 'docs-output')
+const DEFAULT_REPO_ROOT = path.join(__dirname, '..', '..')
+const DEFAULT_EXPORT_CONFIG_PATH = path.join(
+    DEFAULT_REPO_ROOT,
+    'scripts/docs/exportConfig.json'
+)
+const DEFAULT_OUTPUT_FOLDER_PATH = path.join(DEFAULT_REPO_ROOT, 'docs-output')
+
+function printUsage() {
+    console.log(`Usage: node generateOutputDocs.js [options]
+
+Options:
+  --repo-root <path>       Repository root for resolving snippet source files
+                           (default: ${DEFAULT_REPO_ROOT})
+  --export-config <path>   Export config JSON file
+                           (default: ${DEFAULT_EXPORT_CONFIG_PATH})
+  --output <path>          Output directory for generated .mdx snippets
+                           (default: ${DEFAULT_OUTPUT_FOLDER_PATH})
+  --verbose                Log each snippet as it is processed
+  -h, --help               Show this help message
+`)
+}
+
+function parseCli(argv) {
+    let repoRoot = DEFAULT_REPO_ROOT
+    let exportConfigPath = DEFAULT_EXPORT_CONFIG_PATH
+    let outputFolderPath = DEFAULT_OUTPUT_FOLDER_PATH
+    let verbose = false
+
+    for (let i = 0; i < argv.length; i++) {
+        const arg = argv[i]
+        if (arg === '--verbose') {
+            verbose = true
+            continue
+        }
+        if (arg === '--help' || arg === '-h') {
+            printUsage()
+            process.exit(0)
+        }
+        if (arg === '--repo-root') {
+            const value = argv[++i]
+            if (!value) {
+                throw new Error('--repo-root requires a path argument')
+            }
+            repoRoot = path.resolve(value)
+            continue
+        }
+        if (arg === '--export-config') {
+            const value = argv[++i]
+            if (!value) {
+                throw new Error('--export-config requires a path argument')
+            }
+            exportConfigPath = path.resolve(value)
+            continue
+        }
+        if (arg === '--output') {
+            const value = argv[++i]
+            if (!value) {
+                throw new Error('--output requires a path argument')
+            }
+            outputFolderPath = path.resolve(value)
+            continue
+        }
+        throw new Error(`Unknown argument: ${arg}`)
+    }
+
+    return {
+        repoRoot,
+        exportConfigPath,
+        outputFolderPath,
+        verbose,
+    }
+}
 
 function readFileContent(filePath) {
     try {
@@ -359,9 +434,9 @@ function formatSnippetContent(content, options, globalOptions = {}) {
     }
 }
 
-function getSourceFilePath(snippet) {
+function getSourceFilePath(snippet, repoRoot) {
     if (snippet.sourceFilepath) {
-        return path.join(REPO_ROOT, snippet.sourceFilepath)
+        return path.join(repoRoot, snippet.sourceFilepath)
     } else {
         throw new Error(
             `Snippet "${snippet.snippetName}" has no source file path specified`
@@ -369,7 +444,8 @@ function getSourceFilePath(snippet) {
     }
 }
 
-function processSnippet(snippet, verbose, globalOptions = {}) {
+function processSnippet(snippet, paths, globalOptions = {}) {
+    const { repoRoot, outputFolderPath, verbose } = paths
     try {
         if (verbose) {
             console.log(`Processing snippet: ${snippet.snippetName}`)
@@ -385,7 +461,7 @@ function processSnippet(snippet, verbose, globalOptions = {}) {
             )
         }
 
-        const sourceFilePath = getSourceFilePath(snippet)
+        const sourceFilePath = getSourceFilePath(snippet, repoRoot)
 
         const fileContent = readFileContent(sourceFilePath)
 
@@ -414,7 +490,7 @@ function processSnippet(snippet, verbose, globalOptions = {}) {
         )
 
         const outputFileName = `${snippet.snippetName}.mdx`
-        const outputPath = path.join(OUTPUT_FOLDER_PATH, outputFileName)
+        const outputPath = path.join(outputFolderPath, outputFileName)
         const outputPathDir = path.dirname(outputPath)
 
         fs.mkdirSync(outputPathDir, { recursive: true })
@@ -438,8 +514,8 @@ function processSnippet(snippet, verbose, globalOptions = {}) {
  */
 function main() {
     try {
-        const verbose = process.argv.includes('--verbose')
-        const configContent = readFileContent(EXPORT_CONFIG_PATH)
+        const paths = parseCli(process.argv.slice(2))
+        const configContent = readFileContent(paths.exportConfigPath)
         const config = JSON.parse(configContent)
 
         if (!config.snippets || !Array.isArray(config.snippets)) {
@@ -458,7 +534,7 @@ function main() {
 
         for (const snippet of config.snippets) {
             try {
-                processSnippet(snippet, verbose, globalOptions)
+                processSnippet(snippet, paths, globalOptions)
                 successCount++
             } catch (error) {
                 errorCount++

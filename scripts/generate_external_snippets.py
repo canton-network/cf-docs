@@ -166,7 +166,7 @@ def config_path(repo: SnippetRepo) -> Path:
 
 
 def helper_path() -> Path:
-    return CF_DOCS_ROOT / "scripts" / "generateOutputDocs.js"
+    return CF_DOCS_ROOT / "scripts" / "helpers" / "generateOutputDocs.js"
 
 
 def repo_label(repo: SnippetRepo) -> str:
