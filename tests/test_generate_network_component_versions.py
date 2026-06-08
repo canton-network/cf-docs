@@ -23,7 +23,7 @@ def load_script_module() -> ModuleType:
     return module
 
 
-def dashboard_snapshot(*, generated_at: str, splice_version: str = "0.6.3") -> dict:
+def dashboard_snapshot(*, generated_at: str, splice_version: str) -> dict:
     networks = {}
     for network_key, display_name in [
         ("mainnet", "MainNet"),
@@ -60,12 +60,18 @@ def test_build_config_preserves_generated_at_when_only_timestamp_changes() -> No
     module = load_script_module()
     existing_config = module.build_config(
         {"versions": {}, "repositories": {}},
-        dashboard_snapshot(generated_at="2026-06-01T00:00:00+00:00"),
+        dashboard_snapshot(
+            generated_at="2026-06-01T00:00:00+00:00",
+            splice_version="0.6.3",
+        ),
     )
 
     result = module.build_config(
         existing_config,
-        dashboard_snapshot(generated_at="2026-06-03T12:00:00+00:00"),
+        dashboard_snapshot(
+            generated_at="2026-06-03T12:00:00+00:00",
+            splice_version="0.6.3",
+        ),
     )
 
     assert result["_generated"]["generatedAt"] == "2026-06-01T00:00:00+00:00"
