@@ -11,7 +11,7 @@ const path = require('path')
 const { convertRstIncludeToMdx } = require('./rstIncludeToMdx')
 
 const REPO_ROOT = path.join(__dirname, '..', '..')
-const EXPORT_CONFIG_PATH = path.join(__dirname, 'exportConfig.json')
+const EXPORT_CONFIG_PATH = path.join(REPO_ROOT, 'scripts/docs/exportConfig.json')
 const OUTPUT_FOLDER_PATH = path.join(REPO_ROOT, 'docs-output')
 
 function readFileContent(filePath) {
@@ -209,8 +209,48 @@ function applyIndentOption(content, normalizeIndentOption) {
     return normalizeIndent(content)
 }
 
+/**
+ * Resolve indent mode for a snippet. Crawl configs historically set bash to false
+ * (preserve RST indent); we want column-0 commands via baseline instead.
+ */
+function resolveNormalizeIndent(snippet) {
+    const opt = snippet.options?.normalizeIndent
+    const lang = (snippet.options?.language || '').toLowerCase()
+    if (opt === false && (lang === 'bash' || lang === 'parsed-literal')) {
+        return 'baseline'
+    }
+    if (opt !== undefined) return opt
+    return defaultNormalizeIndent(snippet.location)
+}
+
+/** Default indent mode when options.normalizeIndent is omitted. */
+function defaultNormalizeIndent(location) {
+    switch (location && location.type) {
+        case 'fullFile':
+        case 'stringMarker':
+            return 'baseline'
+        default:
+            return true
+    }
+}
+
 function trimBlankEdges(content) {
     return content.replace(/^\s*\n+/, '').replace(/\n+\s*$/, '')
+}
+
+/** Replace literal substrings (e.g. legacy docs.daml.com URLs in YAML comments). */
+function applyUrlSubstitutions(content, globalSubstitutions, snippetSubstitutions) {
+    const merged = {
+        ...(globalSubstitutions || {}),
+        ...(snippetSubstitutions || {}),
+    }
+    const keys = Object.keys(merged)
+    if (keys.length === 0) return content
+    let result = content
+    for (const from of keys) {
+        result = result.split(from).join(merged[from])
+    }
+    return result
 }
 
 function convertRstBlocksToMarkdown(content, fallbackLanguage = '') {
@@ -307,6 +347,7 @@ function formatSnippetContent(content, options, globalOptions = {}) {
 
     switch (displayStyle) {
         case 'wrapCode':
+            body = trimBlankEdges(body)
             if (language) {
                 return `\`\`\`${language}\n${body}\n\`\`\``
             } else {
@@ -356,16 +397,18 @@ function processSnippet(snippet, verbose, globalOptions = {}) {
             snippet.options &&
             (snippet.options.transform === 'rstjson' ||
                 snippet.options.transform === 'rstinclude')
-        const indentOpt = snippet.options?.normalizeIndent
         const normalizedContent = skipTransform
             ? extractedContent
-            : applyIndentOption(
-                  extractedContent,
-                  indentOpt === undefined ? true : indentOpt
-              )
+            : applyIndentOption(extractedContent, resolveNormalizeIndent(snippet))
+
+        const substitutedContent = applyUrlSubstitutions(
+            normalizedContent,
+            globalOptions.urlSubstitutions,
+            snippet.options && snippet.options.urlSubstitutions
+        )
 
         const formattedContent = formatSnippetContent(
-            normalizedContent,
+            substitutedContent,
             snippet.options || {},
             globalOptions
         )
@@ -410,6 +453,7 @@ function main() {
 
         const globalOptions = {
             rstIncludeRefTargets: config.rstIncludeRefTargets || {},
+            urlSubstitutions: config.urlSubstitutions || {},
         }
 
         for (const snippet of config.snippets) {
