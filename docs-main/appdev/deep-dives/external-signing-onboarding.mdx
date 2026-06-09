@@ -163,8 +163,24 @@ field. This will cause the generated topology transaction to include the additio
 
 The generated topology transactions then just need to be uploaded to the Ledger API of the second participant:
 
-``bash
-ALLOCATE=$(cat:
+```bash
+ALLOCATE=$(cat << EOF
+{
+  "synchronizer" : $SYNCHRONIZER_ID,
+  "onboardingTransactions": $TRANSACTIONS,
+  "multiHashSignatures": [{
+     "format" : "SIGNATURE_FORMAT_CONCAT",
+     "signature": "$SIGNATURE",
+     "signedBy" : "$PUBLIC_KEY_FINGERPRINT",
+     "signingAlgorithmSpec" : "SIGNING_ALGORITHM_SPEC_ED25519"
+  }]
+}
+EOF
+)
+
+RESULT=$(curl -f -s -d "$ALLOCATE" -H "Content-Type: application/json" \
+  -X POST ${PARTICIPANT1}/v2/parties/external/allocate)
+```
 
 You can try this out on the Canton console if you have two participants connected to the same synchronizer. In the following example, you will use the participant1 to create the hosting proposal for an internal party. This way, you don't need to deal with creating signatures for the topology transactions externally. The approval of the proposal will be done using participant2.
 
