@@ -10,7 +10,7 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: update-version-dashboard
+  group: update-version-dashboard-pr-smoke
   cancel-in-progress: false
 
 jobs:
@@ -19,12 +19,31 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
+        with:
+          ref: main
 
       - name: Set up Nix
         uses: cachix/install-nix-action@v31
 
       - name: Update version dashboard
         run: nix-shell --run 'npm run generate:version-compatibility-dashboard'
+
+      - name: Force smoke-test dashboard diff
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          path = Path("config/repo-version-config.json")
+          config = json.loads(path.read_text(encoding="utf-8"))
+          config.setdefault("_generated", {})["smokeTest"] = {
+              "workflow": "version-dashboard-pr-smoke",
+              "runId": os.environ["GITHUB_RUN_ID"],
+              "runAttempt": os.environ["GITHUB_RUN_ATTEMPT"],
+          }
+          path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+          PY
 
       - name: Detect changes
         id: changes
@@ -45,8 +64,8 @@ jobs:
         if: steps.changes.outputs.has_changes == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          PR_BRANCH: version-dashboard/update
-          PR_TITLE: Update version dashboard data
+          PR_BRANCH: version-dashboard/pr-creation-smoke
+          PR_TITLE: Smoke test version dashboard PR creation
         run: |
           set -euo pipefail
 
@@ -65,11 +84,14 @@ jobs:
 
           pr_body="$(mktemp)"
           cat > "$pr_body" <<'EOF'
-          Updates the committed Canton Network version dashboard data from public network, package, and installer sources.
+          Smoke test for the scheduled version dashboard automation's end-to-end PR creation path.
+
+          This PR is intentionally created by a temporary workflow branch and should be closed after verification.
 
           Validation run by the workflow:
           - `npm run generate:version-compatibility-dashboard`
           - `git diff --check`
+          - forced smoke-test diff in `config/repo-version-config.json`
           EOF
 
           existing_pr_number="$(
@@ -89,6 +111,7 @@ jobs:
               --body-file "$pr_body"
           else
             gh pr create \
+              --draft \
               --base main \
               --head "$PR_BRANCH" \
               --repo "$GITHUB_REPOSITORY" \
