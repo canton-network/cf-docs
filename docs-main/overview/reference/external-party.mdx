@@ -3,7 +3,7 @@ title: "Local and External Parties"
 description: "Local and external parties, hosting relationships, and the distinction between native and externally signed parties."
 ---
 
-{/* COPIED_START source="docs-website:docs/replicated/canton/3.4/overview/explanations/canton/external-party.rst" hash="c50cd0e1" */}
+{/* COPIED_START source="canton:docs-open/src/sphinx/overview/explanations/canton/external-party.rst@5f96e9893" hash="f641c3de" */}
 
 # Local and external parties
 
@@ -44,21 +44,64 @@ A node with observation permissions is called an **Observing Participant Node** 
 
 A party which holds and controls its own submission signing keys is a submission key holder. Canton supports the registration of multiple submission signing key pairs along with a threshold. The associated private signing keys are only controlled and usable by the party. The party is responsible for managing and maintaining their private keys. How to do so is left to the party operator or client application and is outside of the scope of Canton. Typically users may use a crypto custody provider or other cryptographic key management service to secure their keys.
 
-In the simplest case, a single key pair with a threshold of `1` enables the submission of transactions through a single signature. More complex processes may require multiple signatures; in that case submission key holders can register several (unique) key pairs with a higher threshold. The Canton protocol guarantees that at least a threshold number of valid signatures from different keys must be provided with the transaction in order to authorize it on the ledger. Those keys and associated threshold are defined in the `PartyToKeyMapping` topology transaction.
+In the simplest case, a single key pair with a threshold of `1` enables the submission of transactions through a single signature. More complex processes may require multiple signatures; in that case submission key holders can register several (unique) key pairs with a higher threshold. The Canton protocol guarantees that at least a threshold number of valid signatures from different keys must be provided with the transaction in order to authorize it on the ledger. Those keys and associated threshold are defined in the `PartyToParticipant` topology transaction.
 
 ``` protobuf
-// mapping a party to a key
-// authorization: whoever controls the party uid
+// Mapping that maps a party to a participant
+// The PartyToParticipant mapping may also specify a list of signing keys for setting up an external party, in which
+// case the keys and the threshold take precedence over any PartyToKeyMapping for the same party.
+// Additionally, the list of signing keys may contain the public key of the party's namespace, which allows this
+// mapping to authorize itself without the need of a NamespaceDelegation root certificate (called self-signed).
+// authorization: the required authorization of the mapping is a union of the authorization for individual changes
+//  - threshold change: party namespace
+//  - adding a signing key: party namespace + all the new signing key
+//  - removing a signing key: party namespace
+//  - changing the signing key threshold: party namespace
+//  - upgrading a participant permission or adding a new participant: namespaces from party and the participant namespace
+//  - downgrading a participant permission or removing a participant: party namespace OR the participant namespace
+//  - setting a participant's onboarding flag from false to true: party namespace
+//  - setting a participant's onboarding flag from true to false: participant namespace
+//  - the removal of a PTP must be authorized just by the party
+// revocation: Revoking a self-signed PTP does not prevent later re-creation of a PTP with the same partyId.
+//  To prevent further usage of the key associated with the party's namespace,
+//  revoke a NamespaceDelegation root certificate for that namespace.
 // UNIQUE(party)
-message PartyToKeyMapping {
-  // the party
-  string party = 1;
-  // the authorization threshold
-  uint32 threshold = 3;
-  // the designated signing keys
-  repeated com.digitalasset.canton.crypto.v30.SigningPublicKey signing_keys = 4;
+message PartyToParticipant {
+  message HostingParticipant {
+    message Onboarding {}
 
-  reserved 2; // was synchronizer_id = 2
+    // the target participant that the party should be mapped to
+    string participant_uid = 1;
+
+    // permission of the participant for this particular party (the actual
+    // will be min of ParticipantSynchronizerPermission.ParticipantPermission and this setting)
+    Enums.ParticipantPermission permission = 2;
+
+    // optional, present iff the party is being onboarded to the participant
+    Onboarding onboarding = 3;
+  }
+
+  // the party that is to be represented by the participants
+  string party = 1;
+
+  // the signatory threshold required by the participants to be able to act on behalf of the party.
+  // a mapping with threshold > 1 is considered a definition of a consortium party
+  uint32 threshold = 2;
+
+  // which participants will host the party.
+  // if threshold > 1, must be Confirmation or Observation.
+  // if all participants have Observation permission, the confirmation treshold is ignored, making the party
+  // a purely observing party.
+  repeated HostingParticipant participants = 3;
+
+  reserved 4; // was group_addressing = 4;
+
+  reserved 5; // was synchronizer = 5;
+
+  // Contains protocol signing keys for the party used to authorize externally signed Daml transactions,
+  // along with a signing threshold.
+  // The max number of keys is 20
+  optional com.digitalasset.canton.crypto.v30.SigningKeysWithThreshold party_signing_keys = 6;
 }
 ```
 
@@ -72,7 +115,7 @@ A local party is defined as a party with one or more SPNs. It shares its namespa
 
 ## External party
 
-An external party is defined as a submission key holder, with **no** SPN, and with its own unique namespace, controlled by its own signing key (as opposed to local parties who exist under their SPN's namespace). The `PartyToKeyMapping` topology transaction allows the party to submit transactions to the ledger using its own keys. Crucially, it does **not** grant **submission permission** to any node. This removes potential regulatory burdens from a Participant Node by removing the Participant Node's ability to act on the ledger without the party's explicit approval. An external party still requires **at least one CPN** to confirm transactions on its behalf and record its ledger state. This keeps the latency of the network reasonable and provides a trusted source for the party to record its activity on the ledger.
+An external party is defined as a submission key holder, with **no** SPN, and with its own unique namespace, controlled by its own signing key (as opposed to local parties who exist under their SPN's namespace). The signing keys in the `PartyToParticipant` topology transaction allows the party to submit transactions to the ledger using its own keys. Crucially, it does **not** grant **submission permission** to any node. This removes potential regulatory burdens from a Participant Node by removing the Participant Node's ability to act on the ledger without the party's explicit approval. An external party still requires **at least one CPN** to confirm transactions on its behalf and record its ledger state. This keeps the latency of the network reasonable and provides a trusted source for the party to record its activity on the ledger.
 
 ## Local vs External party hosting
 
