@@ -5,6 +5,8 @@ import sys
 from pathlib import Path
 from types import ModuleType
 
+import pytest
+
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -90,6 +92,65 @@ def test_build_config_keeps_new_generated_at_when_dashboard_data_changes() -> No
     )
 
     assert result["_generated"]["generatedAt"] == "2026-06-03T12:00:00+00:00"
+
+
+def test_choose_observed_release_accepts_active_synchronizer_payload() -> None:
+    module = load_script_module()
+
+    assert module.choose_observed_release(
+        {
+            "sv": {"migration_id": 4, "version": "0.6.5"},
+            "synchronizer": {
+                "active": {
+                    "chain_id_suffix": "2",
+                    "migration_id": 4,
+                    "version": "0.6.5",
+                }
+            },
+        },
+        "https://example.com/info",
+    ) == ("0.6.5", "4", "2")
+
+
+def test_choose_observed_release_accepts_current_synchronizer_payload() -> None:
+    module = load_script_module()
+
+    assert module.choose_observed_release(
+        {
+            "sv": {"migration_id": 1, "serial_id": 2, "version": "0.6.7"},
+            "synchronizer": {
+                "current": {
+                    "chain_id_suffix": "6",
+                    "serial_id": 2,
+                    "version": "0.6.7",
+                },
+                "legacy": {
+                    "chain_id_suffix": "6",
+                    "serial_id": 1,
+                    "version": "0.6.6",
+                },
+            },
+        },
+        "https://example.com/info",
+    ) == ("0.6.7", "1", "6")
+
+
+def test_choose_observed_release_rejects_version_mismatch() -> None:
+    module = load_script_module()
+
+    with pytest.raises(RuntimeError, match="Version mismatch"):
+        module.choose_observed_release(
+            {
+                "sv": {"migration_id": 1, "version": "0.6.7"},
+                "synchronizer": {
+                    "current": {
+                        "chain_id_suffix": "6",
+                        "version": "0.6.6",
+                    }
+                },
+            },
+            "https://example.com/info",
+        )
 
 
 def test_latest_stable_version_ignores_prerelease_and_debug_tags() -> None:
