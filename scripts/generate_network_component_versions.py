@@ -279,7 +279,12 @@ def require_value(pairs: dict[str, str], label: str, url: str) -> str:
 
 def choose_observed_release(info_payload: dict, info_url: str) -> tuple[str, str, str]:
     sv = info_payload.get("sv", {})
-    synchronizer = info_payload.get("synchronizer", {}).get("active", {})
+    synchronizers = info_payload.get("synchronizer", {})
+    synchronizer_label = "active"
+    synchronizer = synchronizers.get(synchronizer_label, {})
+    if not synchronizer:
+        synchronizer_label = "current"
+        synchronizer = synchronizers.get(synchronizer_label, {})
     sv_version = sv.get("version")
     sync_version = synchronizer.get("version")
     sv_migration_id = sv.get("migration_id")
@@ -291,16 +296,23 @@ def choose_observed_release(info_payload: dict, info_url: str) -> tuple[str, str
     if sv_version != sync_version:
         raise RuntimeError(
             f"Version mismatch in {info_url}: "
-            f"sv.version={sv_version} synchronizer.active.version={sync_version}"
+            f"sv.version={sv_version} synchronizer.{synchronizer_label}.version={sync_version}"
         )
-    if str(sv_migration_id) != str(sync_migration_id):
+    if sv_migration_id is None:
+        raise RuntimeError(f"Missing sv.migration_id in {info_url}")
+    if sync_migration_id is None and synchronizer_label == "active":
+        raise RuntimeError(f"Missing synchronizer.active.migration_id in {info_url}")
+    if sync_migration_id is not None and str(sv_migration_id) != str(sync_migration_id):
         raise RuntimeError(
             f"Migration mismatch in {info_url}: "
-            f"sv.migration_id={sv_migration_id} synchronizer.active.migration_id={sync_migration_id}"
+            f"sv.migration_id={sv_migration_id} "
+            f"synchronizer.{synchronizer_label}.migration_id={sync_migration_id}"
         )
     if chain_id_suffix is None:
-        raise RuntimeError(f"Missing synchronizer.active.chain_id_suffix in {info_url}")
-    return str(sv_version), str(sync_migration_id), str(chain_id_suffix)
+        raise RuntimeError(
+            f"Missing synchronizer.{synchronizer_label}.chain_id_suffix in {info_url}"
+        )
+    return str(sv_version), str(sv_migration_id), str(chain_id_suffix)
 
 
 def read_existing_config(path: Path) -> dict:
