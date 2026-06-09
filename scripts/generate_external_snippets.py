@@ -20,6 +20,8 @@ from pathlib import Path
 
 CF_DOCS_ROOT = Path(__file__).resolve().parents[1]
 GIB = 1024**3
+HELPER_SOURCE_DIR = CF_DOCS_ROOT / "scripts" / "helpers"
+HELPER_DEPENDENCIES = ("rstIncludeToMdx.js",)
 
 
 @dataclass(frozen=True)
@@ -130,7 +132,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--copy-output",
         action="store_true",
-        help="Copy docs-output into snippets/external/<repo>/<version> in this cf-docs checkout.",
+        help="Copy docs-output into docs-main/snippets/external/<repo>/<version> in this cf-docs checkout.",
     )
     parser.add_argument(
         "--version",
@@ -140,7 +142,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--replace-output",
         action="store_true",
-        help="With --copy-output, remove the target snippets/external folder before copying.",
+        help="With --copy-output, remove the target docs-main/snippets/external folder before copying.",
     )
     parser.add_argument(
         "--min-free-gb",
@@ -166,7 +168,11 @@ def config_path(repo: SnippetRepo) -> Path:
 
 
 def helper_path() -> Path:
-    return CF_DOCS_ROOT / "scripts" / "generateOutputDocs.js"
+    return HELPER_SOURCE_DIR / "generateOutputDocs.js"
+
+
+def helper_dependency_paths() -> list[Path]:
+    return [HELPER_SOURCE_DIR / name for name in HELPER_DEPENDENCIES]
 
 
 def repo_label(repo: SnippetRepo) -> str:
@@ -327,12 +333,16 @@ def copy_helper_and_config(repo: SnippetRepo, source_dir: Path, dry_run: bool) -
     target_export = target_scripts / "exportConfig.json"
 
     print(f"Copy helper: {helper_path()} -> {target_helper}")
+    for dependency in helper_dependency_paths():
+        print(f"Copy helper dependency: {dependency} -> {target_scripts / dependency.name}")
     print(f"Copy config: {config_path(repo)} -> {target_export}")
     if dry_run:
         return target_helper
 
     target_scripts.mkdir(parents=True, exist_ok=True)
     shutil.copy2(helper_path(), target_helper)
+    for dependency in helper_dependency_paths():
+        shutil.copy2(dependency, target_scripts / dependency.name)
     shutil.copy2(config_path(repo), target_export)
     return target_helper
 
@@ -366,7 +376,7 @@ def run_extraction(
 
 def copy_output(repo: SnippetRepo, source_dir: Path, version: str, replace: bool, dry_run: bool) -> Path:
     source_output = source_dir / "docs-output"
-    target = CF_DOCS_ROOT / "snippets" / "external" / repo_label(repo) / version
+    target = CF_DOCS_ROOT / "docs-main" / "snippets" / "external" / repo_label(repo) / version
     if not dry_run and not source_output.is_dir():
         raise SystemExit(f"Expected generated docs-output directory does not exist: {source_output}")
     print(f"Copy output: {source_output} -> {target}")
@@ -382,7 +392,7 @@ def copy_output(repo: SnippetRepo, source_dir: Path, version: str, replace: bool
 def validate_inputs(repo: SnippetRepo) -> None:
     missing = [
         path
-        for path in (helper_path(), config_path(repo))
+        for path in (helper_path(), *helper_dependency_paths(), config_path(repo))
         if not path.is_file()
     ]
     if missing:
