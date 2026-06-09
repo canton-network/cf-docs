@@ -19,17 +19,23 @@ A typical setup involves:
 
 ## High-Level Architecture
 
-```
-┌─────────────┐      dApp API        ┌──────────────────┐     Ledger API      ┌─────────────────┐
-│   Your dApp │ ◄──────────────────► │  Wallet Gateway  │ ◄─────────────────► │ Canton Validator│
-│ (dApp SDK)  │   (HTTP / WebSocket) │                  │                     │                 │
-└─────────────┘                      │  ┌────────────┐  │     Signing         └─────────────────┘
-       │                             │  │  User API  │  │
-       │      User interactions      │  │  User UI   │  │     ┌─────────────────┐
-       └────────────────────────────►│  └────────────┘  │ ◄──►│ Signing Provider│
-            (User UI / User API)     │                  │     │ (Participant,   │
-                                     └──────────────────┘     │  Fireblocks…)   │
-                                                              └─────────────────┘
+```mermaid
+flowchart LR
+    D["Your dApp<br/>(dApp SDK)"]
+    U[User]
+    subgraph WG[Wallet Gateway]
+        direction TB
+        DA[dApp API]
+        UA[User API]
+        UI[User UI]
+    end
+    V[Canton Validator]
+    S["Signing Provider<br/>(Participant, Fireblocks, …)"]
+    D <-->|dApp API<br/>HTTP / WebSocket| DA
+    U -->|browser| UI
+    U -->|programmatic| UA
+    WG <-->|Ledger API| V
+    WG <-->|Signing| S
 ```
 
 - **dApp → Wallet Gateway**: Your dApp uses the dApp SDK to call the **dApp API** (connect, list accounts, prepare and execute transactions). The SDK can use HTTP (remote Wallet Gateway) or `postMessage` (browser extension).
@@ -65,3 +71,5 @@ See [Usage](/integrations/wallet-gateway/usage) and [APIs](/integrations/wallet-
 - **Using the User UI or User API?** → See [Usage](/integrations/wallet-gateway/usage) for typical workflows and when to use which interface.
 
 {/* COPIED_END */}
+
+{/* LOCAL_MODIFICATION: the "High-Level Architecture" diagram was converted from ASCII box-drawing to mermaid for consistency with other diagrams in the project. The diagram is the only divergence from the upstream source; the surrounding prose is verbatim. */}
