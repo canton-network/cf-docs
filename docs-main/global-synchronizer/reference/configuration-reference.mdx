@@ -53,17 +53,20 @@ This file defines your validator's identity and network binding:
 
 <CantonDocsGlobalSynchronizerReferenceConfigurationReferenceL35 />
 
+
 ### Helm values: validator-values.yaml
 
 This file covers the validator app behavior, authentication, and wallet settings:
 
 <CantonDocsGlobalSynchronizerReferenceConfigurationReferenceL63 />
 
+
 ### Helm values: participant-values.yaml
 
 This file configures the Canton participant that underlies the validator:
 
 <CantonDocsGlobalSynchronizerReferenceConfigurationReferenceL87 />
+
 
 <Note>
 On Kubernetes versions earlier than 1.24, set `enableHealthProbes` to `false` to disable gRPC liveness and readiness probes.
@@ -83,11 +86,13 @@ To connect to only one trusted Scan instead (accepting the single-point-of-failu
 
 <CantonDocsGlobalSynchronizerReferenceConfigurationReferenceL118 />
 
+
 ### Single trusted sequencer
 
 Similarly, to route through a single sequencer instead of the set discovered from Scan:
 
 <CantonDocsGlobalSynchronizerReferenceConfigurationReferenceL127 />
+
 
 <Warning>
 Both single-trust options mean your validator depends entirely on that one SV. If it is offline or compromised, your validator cannot transact.
@@ -101,9 +106,11 @@ The Helm-deployed PostgreSQL instance and all Splice apps share a password store
 
 <CantonDocsGlobalSynchronizerReferenceConfigurationReferenceL142 />
 
+
 To adjust persistent storage size and storage class, add these to your postgres Helm values file:
 
 <CantonDocsGlobalSynchronizerReferenceConfigurationReferenceL150 />
+
 
 ### PostgreSQL configuration (standalone Canton)
 
@@ -139,9 +146,10 @@ For mutual TLS, add `sslcert` and `sslkey` pointing to the client certificate an
 
 ## Authentication
 
-Validator components authenticate to each other and to external users through JWT tokens issued by an OpenID Connect (OIDC) provider. Full setup instructions are in the [deployment section](/global-synchronizer/deployment/authorization-setup). The key configuration secrets are:
+Validator components authenticate to each other and to external users through JWT tokens issued by an OpenID Connect (OIDC) provider. Full setup instructions are on the [OIDC Providers](/global-synchronizer/deployment/oidc-providers) page. The key configuration secrets are:
 
 <CantonDocsGlobalSynchronizerReferenceConfigurationReferenceL192 />
+
 
 To disable authentication (strongly discouraged for production), set `disableAuth: true` in both `validator-values.yaml` and `participant-values.yaml`.
 
@@ -181,11 +189,13 @@ Your validator automatically purchases traffic (sequencer throughput) using Cant
 
 <CantonDocsGlobalSynchronizerReferenceConfigurationReferenceL251 />
 
+
 Set `enabled: false` or `targetThroughput: 0` to disable automatic top-ups. Current traffic parameters (base rate limits, extra traffic price, minimum top-up amount) are recorded on the `AmuletRules` contract and can be queried from any Scan instance.
 
 For Docker Compose deployments, set these as environment variables instead:
 
 <CantonDocsGlobalSynchronizerReferenceConfigurationReferenceL262 />
+
 
 ## Participant pruning
 
@@ -195,11 +205,12 @@ Add this to `validator-values.yaml`:
 
 <CantonDocsGlobalSynchronizerReferenceConfigurationReferenceL273 />
 
+
 <Warning>
 If your node is offline longer than the pruning retention window, it may become corrupted as apps race to catch up with pruned data. Set the retention to a value that reflects your uptime guarantee -- 30 days is a reasonable starting point, since sequencers are also pruned after 30 days.
 </Warning>
 
-See the Canton documentation on [pruning operations](https://docs.digitalasset.com/operate/3.5/usermanual/pruning.html) for more details.
+See the Canton documentation on [pruning operations](/global-synchronizer/production-operations/pruning#participant-node-pruning) for more details.
 
 ## Monitoring and observability
 
@@ -215,11 +226,13 @@ Metrics are built with OpenTelemetry and exposed as [Prometheus native histogram
 
 <CantonDocsGlobalSynchronizerReferenceConfigurationReferenceL298 />
 
+
 ### Topology metrics
 
 The validator app can export synchronizer topology metrics (prefixed `splice.synchronizer-topology`) by enabling a polling trigger:
 
 <CantonDocsGlobalSynchronizerReferenceConfigurationReferenceL306 />
+
 
 ### Health checks
 
@@ -227,17 +240,19 @@ All Splice apps provide `/readyz` and `/livez` endpoints on port 5003. In Kubern
 
 <CantonDocsGlobalSynchronizerReferenceConfigurationReferenceL314 />
 
+
 A 200 response indicates the validator is healthy.
 
 ### Grafana dashboards
 
-The release bundle includes Grafana dashboards under the `grafana-dashboards` folder. These dashboards assume a Kubernetes deployment and use Prometheus native histogram queries.
+The release bundle includes Grafana dashboards that assume a Kubernetes deployment and use Prometheus native histogram queries. Up to and including Splice `0.6.4`, use the `grafana-dashboards/` folder. Starting with Splice `0.6.5`, Validator operators should use `validator-grafana-dashboards/`, and Super Validator operators should use `sv-grafana-dashboards/`.
 
 ## HTTP proxy configuration
 
 If your environment routes egress through an HTTP forward proxy, set the proxy host and port in your Helm values:
 
 <CantonDocsGlobalSynchronizerReferenceConfigurationReferenceL328 />
+
 
 Apply this to both the validator and participant Helm charts. Use `https.nonProxyHosts` to exclude specific addresses. Proxy authentication is not currently supported.
 
@@ -249,10 +264,12 @@ Automatically sweep funds from a party when its balance exceeds a threshold:
 
 <CantonDocsGlobalSynchronizerReferenceConfigurationReferenceL342 />
 
+
 ### Auto-accept transfers
 
 Automatically accept transfer offers from specific parties:
 
 <CantonDocsGlobalSynchronizerReferenceConfigurationReferenceL355 />
+
 
 Both configurations require party IDs, which are available from the wallet UI after initial deployment.

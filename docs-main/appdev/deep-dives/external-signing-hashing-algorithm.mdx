@@ -3,13 +3,7 @@ title: "External Signing: Hashing Algorithm"
 description: "Deterministic hashing specification for prepared transactions used by external signing."
 ---
 
-{/* COPIED_START source="docs-website:docs/replicated/canton/3.4/sdk/explanations/external-signing/external_signing_hashing_algorithm.rst" hash="bd159eb2" */}
-
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was copied from existing reviewed documentation.
-**Source:** `docs/replicated/canton/3.4/sdk/explanations/external-signing/external_signing_hashing_algorithm.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
+{/* COPIED_START source="canton:docs-open/src/sphinx/sdk/explanations/external-signing/external_signing_hashing_algorithm.rst@5f96e9893" hash="3ba2d9a9" */}
 
 # External Signing Hashing Algorithm
 
@@ -27,12 +21,13 @@ Protobuf serialization is unsuitable for signing cryptographic hashes because it
 
 The hashing algorithm as a whole is versioned. This enables updates to accommodate changes in the underlying Daml format, or, for instance, to the way the protocol verifies signatures. The implementation must respect the specification of the version it implements.
 
-``` none
+``` text
 // The hashing scheme version used when building the hash of the PreparedTransaction
 enum HashingSchemeVersion {
   HASHING_SCHEME_VERSION_UNSPECIFIED = 0;
   reserved 1; // Hashing Scheme V1 - unsupported
   HASHING_SCHEME_VERSION_V2 = 2;
+  HASHING_SCHEME_VERSION_V3 = 3;
 }
 ```
 
@@ -40,26 +35,32 @@ The hashing algorithm is tied to the protocol version of the synchronizer used t
 
 | Protocol Version | Supported Hashing Schemes |
 |------------------|---------------------------|
-| v33              | v2                        |
+| v34              | V2                        |
+| v35              | V2, V3                    |
 
 ### Transaction Nodes
 
 Transaction nodes are additionally individually versioned with a Daml version (also called LF version). The encoding version is decoupled from the LF version and implementations should only focus on the hashing version. However, new LF versions may introduce new fields in nodes or new node types. For that reason, the protobuf representation of a node is versioned to accommodate those future changes. In practice, every new Daml language version results in a new hashing version.
 
-``` none
+``` text
 message Node {
+  // Required
   string node_id = 1;
 
   // Versioned node
+  //
+  // Required
   oneof versioned_node {
     // Start at 1000 so we can add more fields before if necessary
     // When new versions will be added, they will show here
+    //
+    // Required
     interactive.transaction.v1.Node v1 = 1000;
   }
 }
 ```
 
-## V2
+## V3
 
 ### General approach
 
@@ -73,6 +74,10 @@ In Java, unsigned 32-bit and 64-bit integers are represented using their signed 
 
 Additionally, this is the java library used under the hood in Canton to serialize and deserialize protobuf: [https://github.com/protocolbuffers/protobuf/tree/v3.25.5/java](https://github.com/protocolbuffers/protobuf/tree/v3.25.5/java)
 
+### Changes from V2
+
+- Addition of an `max_record_time` field in metadata to make maximum record time explicit in the signed metadata.
+
 ### Changes from V1
 
 - Addition of an `interface_id` field in Fetch nodes for support of Daml interfaces.
@@ -83,9 +88,13 @@ Additionally, this is the java library used under the hood in Canton to serializ
 
   > - These effectively replace a fixed ledger time with time bounds, allowing Daml Models to make assertions based on time without restricting the signing window as was required with a fixed set ledger time.
 
+<Warning>
+V3 introduces support for contract keys. Usage of contract keys in externally signed transactions requires usage of V3. Contract keys will not work on V2. Also note that V3 is only supported on protocol version 35.
+</Warning>
+
 ### Notation and Utility Functions
 
-- `encode`: Function that takes a protobuf message or primitive type `T` and transforms it into an array of bytes: `encode: T =\> byte\[\]`
+- `encode`: Function that takes a protobuf message or primitive type `T` and transforms it into an array of bytes: `encode: T => byte[]`
 
 e.g:
 
@@ -206,7 +215,7 @@ e.g:
 5 (base 10) == 0x00000005
 ```
 
-#### bytes / byte\[\]
+#### bytes / byte[]
 
 ``` 
 fn encode(bytes):
@@ -240,7 +249,7 @@ e.g
 
 #### repeated
 
-`repeated` protobuf fields represent an ordered collection of values of a specific message of type `T``. It is critical that the order of values in the list is not modified, both for the encoding process and in the protobuf itself when submitting the transaction for execution. Below is the pseudocode algorithm encoding a protobuf value ``repeated T list;`\`
+`repeated` protobuf fields represent an ordered collection of values of a specific message of type `T`. It is critical that the order of values in the list is not modified, both for the encoding process and in the protobuf itself when submitting the transaction for execution. Below is the pseudocode algorithm encoding a protobuf value `repeated T list;`
 
 ``` 
 fn encode(list):
@@ -285,7 +294,7 @@ fn encode(unit):
     0X00 # Unit Type Tag
 ```
 
-Protobuf [Definition]()
+[Protobuf Definition](https://github.com/digital-asset/daml/blob/b5698e2327b83f7d9a5619395cd9b2de21509ab3/sdk/daml-lf/ledger-api-value/src/main/protobuf/com/daml/ledger/api/v2/value.proto#L27)
 
 #### Bool
 
@@ -295,7 +304,7 @@ fn encode(bool):
 encode(bool) # Primitive boolean encoding
 ```
 
-Protobuf [Definition]()
+[Protobuf Definition](https://github.com/digital-asset/daml/blob/b5698e2327b83f7d9a5619395cd9b2de21509ab3/sdk/daml-lf/ledger-api-value/src/main/protobuf/com/daml/ledger/api/v2/value.proto#L30)
 
 #### Int64
 
@@ -305,7 +314,7 @@ fn encode(int64):
     encode(int64) # Primitive int64 encoding
 ```
 
-Protobuf [Definition]()
+[Protobuf Definition](https://github.com/digital-asset/daml/blob/b5698e2327b83f7d9a5619395cd9b2de21509ab3/sdk/daml-lf/ledger-api-value/src/main/protobuf/com/daml/ledger/api/v2/value.proto#L32)
 
 #### Numeric
 
@@ -315,7 +324,7 @@ fn encode(numeric):
     encode(numeric) # Primitive string encoding
 ```
 
-Protobuf [Definition]()
+[Protobuf Definition](https://github.com/digital-asset/daml/blob/b5698e2327b83f7d9a5619395cd9b2de21509ab3/sdk/daml-lf/ledger-api-value/src/main/protobuf/com/daml/ledger/api/v2/value.proto#L52)
 
 #### Timestamp
 
@@ -325,7 +334,7 @@ fn encode(timestamp):
     encode(timestamp) # Primitive sfixed64 encoding
 ```
 
-Protobuf [Definition]()
+[Protobuf Definition](https://github.com/digital-asset/daml/blob/b5698e2327b83f7d9a5619395cd9b2de21509ab3/sdk/daml-lf/ledger-api-value/src/main/protobuf/com/daml/ledger/api/v2/value.proto#L45)
 
 #### Date
 
@@ -335,7 +344,7 @@ fn encode(date):
     encode(date) # Primitive int32 encoding
 ```
 
-Protobuf [Definition]()
+[Protobuf Definition](https://github.com/digital-asset/daml/blob/b5698e2327b83f7d9a5619395cd9b2de21509ab3/sdk/daml-lf/ledger-api-value/src/main/protobuf/com/daml/ledger/api/v2/value.proto#L37)
 
 #### Party
 
@@ -345,7 +354,7 @@ fn encode(party):
     encode(party) # Primitive string encoding
 ```
 
-Protobuf [Definition]()
+[Protobuf Definition](https://github.com/digital-asset/daml/blob/b5698e2327b83f7d9a5619395cd9b2de21509ab3/sdk/daml-lf/ledger-api-value/src/main/protobuf/com/daml/ledger/api/v2/value.proto#L56)
 
 #### Text
 
@@ -355,7 +364,7 @@ fn encode(text):
     encode(text) # Primitive string encoding
 ```
 
-Protobuf [Definition]()
+[Protobuf Definition](https://github.com/digital-asset/daml/blob/b5698e2327b83f7d9a5619395cd9b2de21509ab3/sdk/daml-lf/ledger-api-value/src/main/protobuf/com/daml/ledger/api/v2/value.proto#L59)
 
 #### Contract_id
 
@@ -365,7 +374,7 @@ fn encode(contract_id):
     from_hex_string(contract_id) # Contract IDs are hexadecimal strings, so they need to be decoded as such. They should not be encoded as classic strings
 ```
 
-Protobuf [Definition]()
+[Protobuf Definition](https://github.com/digital-asset/daml/blob/b5698e2327b83f7d9a5619395cd9b2de21509ab3/sdk/daml-lf/ledger-api-value/src/main/protobuf/com/daml/ledger/api/v2/value.proto#L63)
 
 #### Optional
 
@@ -380,7 +389,7 @@ fn encode(optional):
       0x00 || # Undefined optional
 ```
 
-Protobuf [Definition]()
+[Protobuf Definition](https://github.com/digital-asset/daml/blob/b5698e2327b83f7d9a5619395cd9b2de21509ab3/sdk/daml-lf/ledger-api-value/src/main/protobuf/com/daml/ledger/api/v2/value.proto#L66)
 
 Note this is conceptually the same as for the primitive `optional` protobuf modifier, with the addition of the type tag prefix.
 
@@ -392,7 +401,7 @@ fn encode(list):
    encode(list.elements)
 ```
 
-Protobuf [Definition]()
+[Protobuf Definition](https://github.com/digital-asset/daml/blob/b5698e2327b83f7d9a5619395cd9b2de21509ab3/sdk/daml-lf/ledger-api-value/src/main/protobuf/com/daml/ledger/api/v2/value.proto#L156-L160)
 
 #### TextMap
 
@@ -402,7 +411,7 @@ fn encode(text_map):
    encode(text_map.entries)
 ```
 
-Protobuf [Definition]()
+[Protobuf Definition](https://github.com/digital-asset/daml/blob/b5698e2327b83f7d9a5619395cd9b2de21509ab3/sdk/daml-lf/ledger-api-value/src/main/protobuf/com/daml/ledger/api/v2/value.proto#L169-L176)
 
 **TextMap.Entry**
 
@@ -411,7 +420,7 @@ fn encode(entry):
    encode(entry.key) || encode(entry.value)
 ```
 
-Protobuf [Definition]()
+[Protobuf Definition](https://github.com/digital-asset/daml/blob/b5698e2327b83f7d9a5619395cd9b2de21509ab3/sdk/daml-lf/ledger-api-value/src/main/protobuf/com/daml/ledger/api/v2/value.proto#L170C3-L173C4)
 
 #### Record
 
@@ -422,7 +431,7 @@ fn encode(record):
    encode(record.fields)
 ```
 
-Protobuf [Definition]()
+[Protobuf Definition](https://github.com/digital-asset/daml/blob/b5698e2327b83f7d9a5619395cd9b2de21509ab3/sdk/daml-lf/ledger-api-value/src/main/protobuf/com/daml/ledger/api/v2/value.proto#L87-L95)
 
 **RecordField**
 
@@ -431,7 +440,7 @@ fn encode(record_field):
    encode(some(record_field.label)) || encode(record_field.value)
 ```
 
-Protobuf [Definition]()
+[Protobuf Definition](https://github.com/digital-asset/daml/blob/b5698e2327b83f7d9a5619395cd9b2de21509ab3/sdk/daml-lf/ledger-api-value/src/main/protobuf/com/daml/ledger/api/v2/value.proto#L98-L109)
 
 #### Variant
 
@@ -442,7 +451,7 @@ fn encode(variant):
    encode(variant.constructor) || encode(variant.value)
 ```
 
-Protobuf [Definition]()
+[Protobuf Definition](https://github.com/digital-asset/daml/blob/b5698e2327b83f7d9a5619395cd9b2de21509ab3/sdk/daml-lf/ledger-api-value/src/main/protobuf/com/daml/ledger/api/v2/value.proto#L79)
 
 #### Enum
 
@@ -453,7 +462,7 @@ fn encode(enum):
    encode(enum.constructor)
 ```
 
-Protobuf [Definition]()
+[Protobuf Definition](https://github.com/digital-asset/daml/blob/b5698e2327b83f7d9a5619395cd9b2de21509ab3/sdk/daml-lf/ledger-api-value/src/main/protobuf/com/daml/ledger/api/v2/value.proto#L82)
 
 #### GenMap
 
@@ -463,7 +472,7 @@ fn encode(gen_map):
    encode(gen_map.entries)
 ```
 
-Protobuf [Definition]()
+[Protobuf Definition](https://github.com/digital-asset/daml/blob/b5698e2327b83f7d9a5619395cd9b2de21509ab3/sdk/daml-lf/ledger-api-value/src/main/protobuf/com/daml/ledger/api/v2/value.proto#L178-L185)
 
 **GenMap.Entry**
 
@@ -472,7 +481,7 @@ fn encode(entry):
    encode(entry.key) || encode(entry.value)
 ```
 
-Protobuf [Definition]()
+[Protobuf Definition](https://github.com/digital-asset/daml/blob/b5698e2327b83f7d9a5619395cd9b2de21509ab3/sdk/daml-lf/ledger-api-value/src/main/protobuf/com/daml/ledger/api/v2/value.proto#L179-L182)
 
 #### Identifier
 
@@ -481,11 +490,11 @@ fn encode(identifier):
    encode(identifier.package_id) || encode(split(identifier.module_name, '.')) || encode(split(identifier.entity_name, '.')))
 ```
 
-Protobuf [Definition]()
+[Protobuf Definition](https://github.com/digital-asset/daml/blob/b5698e2327b83f7d9a5619395cd9b2de21509ab3/sdk/daml-lf/ledger-api-value/src/main/protobuf/com/daml/ledger/api/v2/value.proto#L112-L125)
 
 ## Transaction
 
-A transaction is a forest (list of trees). It is represented with a following protobuf message found here.
+A transaction is a forest (list of trees). It is represented with a following protobuf message found [here](https://github.com/digital-asset/daml/blob/ba14c4430b8345e7f0f8b20c3feead2b88c90fb8/sdk/canton/community/ledger-api-proto/src/main/protobuf/com/daml/ledger/api/v2/interactive/interactive_submission_service.proto#L283-L315).
 
 The encoding function for a transaction is
 
@@ -642,7 +651,8 @@ fn encode(metadata, prepare_submission_request):
     encode(metadata.min_ledger_effective_time) ||
     encode(metadata.max_ledger_effective_time) ||
     encode(metadata.submission_time) ||
-    encode(metadata.disclosed_events)
+    encode(metadata.disclosed_events) ||
+    encode(metadata.max_record_time)
 ```
 
 ### ProcessedDisclosedContract
@@ -672,7 +682,7 @@ Finally, compute the hash that needs to be signed to commit to the ledger change
 ``` 
 fn encode(prepared_transaction):
     0x00000030 || # Hash purpose
-    0x02 || # Hashing Scheme Version
+    0x03 || # Hashing Scheme Version
     hash(transaction) ||
     hash(metadata)
 ```
@@ -686,99 +696,58 @@ This resulting hash must be signed with the protocol signing private key(s) used
 
 ## Example
 
-Example implementation in Python
+Example V3 implementation in Python
 
 <div className="toggle">
 
-``` none
-# Copyright (c) 2025 Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved.
+``` text
+# Copyright (c) 2026 Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-# Implements the transaction hashing specification defined in the README.md at https://github.com/digital-asset/canton/blob/main/community/ledger-api/src/release-line-3.2/protobuf/com/daml/ledger/api/v2/interactive/README.md
+# Implements V3 of the transaction hashing specification.
+# V3 removes node/metadata encoding version prefixes, adds key_opt to Create/Exercise/Fetch,
+# adds by_key to Exercise/Fetch, introduces QueryByKey node type, and adds max_record_time to metadata.
 
 import com.daml.ledger.api.v2.interactive.interactive_submission_service_pb2 as interactive_submission_service_pb2
-import hashlib
-import struct
-
-# Hash purpose reserved for prepared transaction
-PREPARED_TRANSACTION_HASH_PURPOSE = b"\x00\x00\x00\x30"
-# Version of the hashing scheme implemented in this file as a byte
-# Used in the encoding
-HASHING_SCHEME_VERSION_V2 = (
-    interactive_submission_service_pb2.HashingSchemeVersion.HASHING_SCHEME_VERSION_V2
+from daml_transaction_hashing_common import (
+    PREPARED_TRANSACTION_HASH_PURPOSE,
+    encode_bool,
+    encode_hex_string,
+    encode_identifier,
+    encode_int32,
+    encode_int64,
+    encode_node_id,
+    encode_optional,
+    encode_proto_optional,
+    encode_repeated,
+    encode_string,
+    encode_hash,
+    encode_value,
+    encode_transaction,
+    find_seed,
+    sha256,
+    create_nodes_dict,
 )
-# Byte version for the encoding (\x02)
-HASHING_SCHEME_VERSION = HASHING_SCHEME_VERSION_V2.to_bytes(
+
+# Version of the hashing scheme implemented in this file as a byte
+HASHING_SCHEME_VERSION_V3 = (
+    interactive_submission_service_pb2.HashingSchemeVersion.HASHING_SCHEME_VERSION_V3
+)
+# Byte version for the encoding (\x03)
+HASHING_SCHEME_VERSION = HASHING_SCHEME_VERSION_V3.to_bytes(
     length=1, byteorder="big", signed=False
 )
-# Version of the protobuf encoding the transaction nodes
-# See DamlTransaction.Node.versioned_node in the interactive_submission_service.proto file
-NODE_ENCODING_VERSION = b"\x01"
 
 
-def encode_bool(value):
-    return b"\x01" if value else b"\x00"
-
-
-def encode_int32(value):
-    if not (-(2**31) <= value < 2**31):
-        raise ValueError(f"Value {value} out of range for int32")
-    return struct.pack(">i", value)
-
-
-def encode_int64(value):
-    return struct.pack(">q", value)
-
-
-def encode_string(value):
-    utf8_bytes = value.encode("utf-8")
-    return encode_bytes(utf8_bytes)
-
-
-def encode_bytes(value):
-    length = encode_int32(len(value))
-    return length + value
-
-# Like encode_bytes but without the length prefix, as hashes have a fixed size
-def encode_hash(value):
-    return value
-
-
-def encode_hex_string(value):
-    return encode_bytes(bytes.fromhex(value))
-
-
-def encode_optional(value, encode_fn):
-    if value is not None:
-        return b"\x01" + encode_fn(value)
-    else:
-        return b"\x00"
-
-
-def encode_proto_optional(parent_value, field_name, value, encode_fn):
-    if parent_value.HasField(field_name):
-        return b"\x01" + encode_fn(value)
-    else:
-        return b"\x00"
-
-
-def encode_repeated(values, encode_fn):
-    length = encode_int32(len(values))
-    encoded_values = b"".join(encode_fn(v) for v in values)
-    return length + encoded_values
-
-
-def sha256(data):
-    return hashlib.sha256(data).digest()
-
-
-def find_seed(
-    node_id, node_seeds: [interactive_submission_service_pb2.DamlTransaction.NodeSeed]
-):
-    for node_seed in node_seeds:
-        if str(node_seed.node_id) == node_id:
-            return node_seed.seed
-    return None
+def encode_key_with_maintainers(key_with_maintainers):
+    """Encodes a GlobalKeyWithMaintainers composite value."""
+    return (
+        encode_string(key_with_maintainers.key.package_name)
+        + encode_identifier(key_with_maintainers.key.template_id)
+        + encode_value(key_with_maintainers.key.key)
+        + encode_hash(key_with_maintainers.key.hash)
+        + encode_repeated(key_with_maintainers.maintainers, encode_string)
+    )
 
 
 def encode_prepared_transaction(
@@ -799,38 +768,242 @@ def hash_transaction(
     transaction: interactive_submission_service_pb2.DamlTransaction, nodes_dict: dict
 ):
     encoded_transaction = encode_transaction(
-        transaction, nodes_dict, transaction.node_seeds
+        transaction, nodes_dict, transaction.node_seeds, encode_node
     )
     return sha256(PREPARED_TRANSACTION_HASH_PURPOSE + encoded_transaction)
 
 
-def encode_transaction(
-    transaction,
+def encode_node(
+    node,
     nodes_dict: dict,
     node_seeds: [interactive_submission_service_pb2.DamlTransaction.NodeSeed],
 ):
-    version = encode_string(transaction.version)
-    roots = encode_repeated(transaction.roots, encode_node_id(nodes_dict, node_seeds))
-    return version + roots
+    node_id = node.node_id
+    if node.HasField("v1"):
+        return encode_node_v1(node.v1, node_id, nodes_dict, node_seeds)
+    raise ValueError("Unsupported node version")
 
 
-def encode_identifier(identifier):
+def encode_node_v1(
+    node,
+    node_id,
+    nodes_dict: dict,
+    node_seeds: [interactive_submission_service_pb2.DamlTransaction.NodeSeed],
+):
+    if node.HasField("create"):
+        return encode_create_node(node.create, node_id, node_seeds)
+    elif node.HasField("exercise"):
+        return encode_exercise_node(node.exercise, node_id, nodes_dict, node_seeds)
+    elif node.HasField("fetch"):
+        return encode_fetch_node(node.fetch, node_id)
+    elif node.HasField("rollback"):
+        return encode_rollback_node(node.rollback, node_id, nodes_dict, node_seeds)
+    elif node.HasField("query_by_key"):
+        return encode_query_by_key_node(node.query_by_key)
+    raise ValueError("Unsupported node type")
+
+
+def encode_create_node(
+    create,
+    node_id,
+    node_seeds: [interactive_submission_service_pb2.DamlTransaction.NodeSeed],
+):
     return (
-        encode_string(identifier.package_id)
-        + encode_repeated(identifier.module_name.split("."), encode_string)
-        + encode_repeated(identifier.entity_name.split("."), encode_string)
+        encode_string(create.lf_version)
+        + b"\x00"  # Create node tag
+        + encode_optional(find_seed(node_id, node_seeds), encode_hash)
+        + encode_hex_string(create.contract_id)
+        + encode_string(create.package_name)
+        + encode_identifier(create.template_id)
+        + encode_value(create.argument)
+        + encode_repeated(create.signatories, encode_string)
+        + encode_repeated(create.stakeholders, encode_string)
+        + encode_proto_optional(create, "key", create.key, encode_key_with_maintainers)
     )
 
 
-def encode_node_id(
+def encode_exercise_node(
+    exercise,
+    node_id,
     nodes_dict: dict,
     node_seeds: [interactive_submission_service_pb2.DamlTransaction.NodeSeed],
 ):
-    def encode(node_id):
-        node = nodes_dict[node_id]
-        return sha256(encode_node(node, nodes_dict, node_seeds))
+    return (
+        encode_string(exercise.lf_version)
+        + b"\x01"  # Exercise node tag
+        + encode_hash(find_seed(node_id, node_seeds))
+        + encode_hex_string(exercise.contract_id)
+        + encode_string(exercise.package_name)
+        + encode_identifier(exercise.template_id)
+        + encode_repeated(exercise.signatories, encode_string)
+        + encode_repeated(exercise.stakeholders, encode_string)
+        + encode_repeated(exercise.acting_parties, encode_string)
+        + encode_proto_optional(
+            exercise, "interface_id", exercise.interface_id, encode_identifier
+        )
+        + encode_string(exercise.choice_id)
+        + encode_value(exercise.chosen_value)
+        + encode_bool(exercise.consuming)
+        + encode_proto_optional(
+            exercise, "exercise_result", exercise.exercise_result, encode_value
+        )
+        + encode_repeated(exercise.choice_observers, encode_string)
+        + encode_bool(exercise.by_key)
+        + encode_proto_optional(exercise, "key", exercise.key, encode_key_with_maintainers)
+        + encode_repeated(exercise.children, encode_node_id(nodes_dict, node_seeds, encode_node))
+    )
 
-    return encode
+
+def encode_fetch_node(fetch, node_id):
+    return (
+        encode_string(fetch.lf_version)
+        + b"\x02"  # Fetch node tag
+        + encode_hex_string(fetch.contract_id)
+        + encode_string(fetch.package_name)
+        + encode_identifier(fetch.template_id)
+        + encode_repeated(fetch.signatories, encode_string)
+        + encode_repeated(fetch.stakeholders, encode_string)
+        + encode_proto_optional(
+            fetch, "interface_id", fetch.interface_id, encode_identifier
+        )
+        + encode_repeated(fetch.acting_parties, encode_string)
+        + encode_bool(fetch.by_key)
+        + encode_proto_optional(fetch, "key", fetch.key, encode_key_with_maintainers)
+    )
+
+
+def encode_rollback_node(
+    rollback,
+    node_id,
+    nodes_dict: dict,
+    node_seeds: [interactive_submission_service_pb2.DamlTransaction.NodeSeed],
+):
+    return (
+        b"\x03"  # Rollback node tag
+        + encode_repeated(rollback.children, encode_node_id(nodes_dict, node_seeds, encode_node))
+    )
+
+
+def encode_query_by_key_node(query_by_key):
+    return (
+        encode_string(query_by_key.lf_version)
+        + b"\x04"  # QueryByKey node tag
+        + encode_string(query_by_key.package_name)
+        + encode_identifier(query_by_key.template_id)
+        + encode_bool(query_by_key.exhaustive)
+        + encode_key_with_maintainers(query_by_key.key)
+        + encode_repeated(query_by_key.result, encode_hex_string)
+    )
+
+
+def hash_metadata(metadata):
+    encoded_metadata = encode_metadata(metadata)
+    return sha256(PREPARED_TRANSACTION_HASH_PURPOSE + encoded_metadata)
+
+
+def encode_metadata(metadata):
+    return (
+        encode_repeated(metadata.submitter_info.act_as, encode_string)
+        + encode_string(metadata.submitter_info.command_id)
+        + encode_string(metadata.transaction_uuid)
+        + encode_int32(metadata.mediator_group)
+        + encode_string(metadata.synchronizer_id)
+        + encode_proto_optional(
+            metadata,
+            "min_ledger_effective_time",
+            metadata.min_ledger_effective_time,
+            encode_int64,
+        )
+        + encode_proto_optional(
+            metadata,
+            "max_ledger_effective_time",
+            metadata.max_ledger_effective_time,
+            encode_int64,
+        )
+        + encode_int64(metadata.preparation_time)
+        + encode_repeated(metadata.input_contracts, encode_input_contract)
+        + encode_proto_optional(metadata, "max_record_time", metadata.max_record_time, encode_int64)
+    )
+
+
+def encode_disclosed_contract(contract):
+    return encode_int64(contract.created_at) + sha256(
+        encode_create_node(contract.contract, "unused_node_id", [])
+    )
+
+
+def encode_input_contract(contract):
+    return encode_int64(contract.created_at) + sha256(
+        encode_create_node(contract.v1, "unused_node_id", [])
+    )
+```
+
+</div>
+
+Example V2 implementation in Python
+
+<div className="toggle">
+
+``` text
+# Copyright (c) 2026 Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# Implements V2 of the transaction hashing specification defined in the README.md at https://github.com/digital-asset/canton/blob/main/community/ledger-api/src/release-line-3.2/protobuf/com/daml/ledger/api/v2/interactive/README.md
+
+import com.daml.ledger.api.v2.interactive.interactive_submission_service_pb2 as interactive_submission_service_pb2
+from daml_transaction_hashing_common import (
+    PREPARED_TRANSACTION_HASH_PURPOSE,
+    encode_bool,
+    encode_hex_string,
+    encode_identifier,
+    encode_int32,
+    encode_int64,
+    encode_node_id,
+    encode_optional,
+    encode_proto_optional,
+    encode_repeated,
+    encode_string,
+    encode_hash,
+    encode_value,
+    encode_transaction,
+    find_seed,
+    sha256,
+    create_nodes_dict,
+)
+
+# Version of the hashing scheme implemented in this file as a byte
+HASHING_SCHEME_VERSION_V2 = (
+    interactive_submission_service_pb2.HashingSchemeVersion.HASHING_SCHEME_VERSION_V2
+)
+# Byte version for the encoding (\x02)
+HASHING_SCHEME_VERSION = HASHING_SCHEME_VERSION_V2.to_bytes(
+    length=1, byteorder="big", signed=False
+)
+# Version of the protobuf encoding the transaction nodes
+NODE_ENCODING_VERSION = b"\x01"
+
+
+def encode_prepared_transaction(
+    prepared_transaction: interactive_submission_service_pb2.PreparedTransaction,
+    nodes_dict: dict,
+):
+    transaction_hash = hash_transaction(prepared_transaction.transaction, nodes_dict)
+    metadata_hash = hash_metadata(prepared_transaction.metadata)
+    return sha256(
+        PREPARED_TRANSACTION_HASH_PURPOSE
+        + HASHING_SCHEME_VERSION
+        + transaction_hash
+        + metadata_hash
+    )
+
+
+def hash_transaction(
+    transaction: interactive_submission_service_pb2.DamlTransaction, nodes_dict: dict
+):
+    encoded_transaction = encode_transaction(
+        transaction, nodes_dict, transaction.node_seeds, encode_node
+    )
+    return sha256(PREPARED_TRANSACTION_HASH_PURPOSE + encoded_transaction)
 
 
 def encode_node(
@@ -907,7 +1080,7 @@ def encode_exercise_node(
             exercise, "exercise_result", exercise.exercise_result, encode_value
         )
         + encode_repeated(exercise.choice_observers, encode_string)
-        + encode_repeated(exercise.children, encode_node_id(nodes_dict, node_seeds))
+        + encode_repeated(exercise.children, encode_node_id(nodes_dict, node_seeds, encode_node))
     )
 
 
@@ -937,7 +1110,7 @@ def encode_rollback_node(
     return (
         NODE_ENCODING_VERSION
         + b"\x03"  # Rollback node tag
-        + encode_repeated(rollback.children, encode_node_id(nodes_dict, node_seeds))
+        + encode_repeated(rollback.children, encode_node_id(nodes_dict, node_seeds, encode_node))
     )
 
 
@@ -948,7 +1121,7 @@ def hash_metadata(metadata):
 
 def encode_metadata(metadata):
     return (
-        b"\x01"
+        b"\x01"  # Metadata encoding version
         + encode_repeated(metadata.submitter_info.act_as, encode_string)
         + encode_string(metadata.submitter_info.command_id)
         + encode_string(metadata.transaction_uuid)
@@ -975,6 +1148,119 @@ def encode_input_contract(contract):
     return encode_int64(contract.created_at) + sha256(
         encode_create_node(contract.v1, "unused_node_id", [])
     )
+```
+
+</div>
+
+Both versions make use of the following common code:
+
+<div className="toggle">
+
+``` text
+# Copyright (c) 2026 Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# Common encoding utilities shared between hashing scheme versions V2 and V3.
+
+import com.daml.ledger.api.v2.interactive.interactive_submission_service_pb2 as interactive_submission_service_pb2
+import hashlib
+import struct
+
+# Hash purpose reserved for prepared transaction
+PREPARED_TRANSACTION_HASH_PURPOSE = b"\x00\x00\x00\x30"
+
+
+def encode_bool(value):
+    return b"\x01" if value else b"\x00"
+
+
+def encode_int32(value):
+    if not (-(2**31) <= value < 2**31):
+        raise ValueError(f"Value {value} out of range for int32")
+    return struct.pack(">i", value)
+
+
+def encode_int64(value):
+    return struct.pack(">q", value)
+
+
+def encode_string(value):
+    utf8_bytes = value.encode("utf-8")
+    return encode_bytes(utf8_bytes)
+
+
+def encode_bytes(value):
+    length = encode_int32(len(value))
+    return length + value
+
+# Like encode_bytes but without the length prefix, as hashes have a fixed size
+def encode_hash(value):
+    return value
+
+
+def encode_hex_string(value):
+    return encode_bytes(bytes.fromhex(value))
+
+
+def encode_optional(value, encode_fn):
+    if value is not None:
+        return b"\x01" + encode_fn(value)
+    else:
+        return b"\x00"
+
+
+def encode_proto_optional(parent_value, field_name, value, encode_fn):
+    if parent_value.HasField(field_name):
+        return b"\x01" + encode_fn(value)
+    else:
+        return b"\x00"
+
+
+def encode_repeated(values, encode_fn):
+    length = encode_int32(len(values))
+    encoded_values = b"".join(encode_fn(v) for v in values)
+    return length + encoded_values
+
+
+def sha256(data):
+    return hashlib.sha256(data).digest()
+
+
+def find_seed(
+    node_id, node_seeds: [interactive_submission_service_pb2.DamlTransaction.NodeSeed]
+):
+    for node_seed in node_seeds:
+        if str(node_seed.node_id) == node_id:
+            return node_seed.seed
+    return None
+
+
+def encode_identifier(identifier):
+    return (
+        encode_string(identifier.package_id)
+        + encode_repeated(identifier.module_name.split("."), encode_string)
+        + encode_repeated(identifier.entity_name.split("."), encode_string)
+    )
+
+
+def encode_node_id(
+    nodes_dict: dict,
+    node_seeds: [interactive_submission_service_pb2.DamlTransaction.NodeSeed],
+    encode_node_fn,
+):
+    def encode(node_id):
+        node = nodes_dict[node_id]
+        return sha256(encode_node_fn(node, nodes_dict, node_seeds))
+
+    return encode
+
+
+def encode_transaction(transaction, nodes_dict, node_seeds, encode_node_fn):
+    version = encode_string(transaction.version)
+    roots = encode_repeated(
+        transaction.roots, encode_node_id(nodes_dict, node_seeds, encode_node_fn)
+    )
+    return version + roots
 
 
 def encode_value(value):
@@ -1054,6 +1340,5 @@ def create_nodes_dict(prepared_transaction):
 ```
 
 </div>
-
 
 {/* COPIED_END */}

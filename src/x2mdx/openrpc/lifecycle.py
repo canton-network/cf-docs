@@ -6,22 +6,32 @@ import hashlib
 import json
 import re
 from pathlib import Path
-from typing import Any
+from typing import cast
 
 import yaml
 
 from x2mdx.openrpc.models import (
+    OpenRpcDocument,
+    OpenRpcMethodHistory,
     OpenRpcMethodLifecycle,
+    OpenRpcMethodDetail,
+    OpenRpcParamDetail,
     OpenRpcReport,
+    OpenRpcResultDetail,
     OpenRpcSourceSnapshot,
     OpenRpcSpecLifecycle,
+    OpenRpcValueDetail,
 )
+from x2mdx.types import JsonObject, JsonValue
 
 REQUEST_SAMPLE_MAX_DEPTH = 4
 REQUEST_SAMPLE_MAX_PROPERTIES = 8
+OpenRpcDocumentIndex = dict[str, OpenRpcDocument]
+OpenRpcVersionDocumentIndex = dict[str, OpenRpcDocumentIndex]
+OpenRpcMethodDetailsByName = dict[str, OpenRpcMethodDetail]
 
 
-def sha256_json(value: Any) -> str:
+def sha256_json(value: object) -> str:
     payload = json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
@@ -40,13 +50,13 @@ def version_key(version: str) -> tuple[tuple[int, int | str], ...]:
     return tuple(key)
 
 
-def parse_openrpc(raw_text: str) -> dict[str, Any]:
+def parse_openrpc(raw_text: str) -> OpenRpcDocument:
     obj = yaml.safe_load(raw_text)
     if not isinstance(obj, dict):
         raise ValueError("OpenRPC document is not an object")
     if "openrpc" not in obj:
         raise ValueError("Document does not contain top-level `openrpc` key")
-    return obj
+    return cast(OpenRpcDocument, obj)
 
 
 def slugify(value: str) -> str:
@@ -60,7 +70,7 @@ def method_anchor(name: str) -> str:
     return f"method-{slugify(name)}"
 
 
-def normalize_lifecycle_state(value: Any) -> str | None:
+def normalize_lifecycle_state(value: object) -> str | None:
     if not isinstance(value, str):
         return None
     normalized = value.strip().lower()
@@ -73,8 +83,8 @@ def doc_lookup_key(source_path: str) -> str:
     return source_path.replace("\\", "/")
 
 
-def build_version_doc_index(snapshots: list[OpenRpcSourceSnapshot]) -> dict[str, dict[str, dict[str, Any]]]:
-    index: dict[str, dict[str, dict[str, Any]]] = {}
+def build_version_doc_index(snapshots: list[OpenRpcSourceSnapshot]) -> OpenRpcVersionDocumentIndex:
+    index: OpenRpcVersionDocumentIndex = {}
     for snapshot in snapshots:
         version_index = index.setdefault(snapshot.version, {})
         normalized = doc_lookup_key(snapshot.source_path)
@@ -84,8 +94,8 @@ def build_version_doc_index(snapshots: list[OpenRpcSourceSnapshot]) -> dict[str,
     return index
 
 
-def resolve_local_fragment(document: dict[str, Any], fragment: str) -> Any:
-    target: Any = document
+def resolve_local_fragment(document: OpenRpcDocument, fragment: str) -> JsonValue | None:
+    target = cast(JsonValue, document)
     for part in fragment.split("/"):
         if isinstance(target, dict) and part in target:
             target = target[part]
@@ -95,12 +105,12 @@ def resolve_local_fragment(document: dict[str, Any], fragment: str) -> Any:
 
 
 def resolve_ref(
-    doc_index: dict[str, dict[str, Any]],
+    doc_index: OpenRpcDocumentIndex,
     current_source_path: str,
-    node: Any,
+    node: JsonValue | None,
     *,
     max_depth: int = 8,
-) -> Any:
+) -> JsonValue | None:
     current = node
     current_doc_key = doc_lookup_key(current_source_path)
     depth = 0
@@ -133,7 +143,7 @@ def resolve_ref(
     return current
 
 
-def ref_schema_name(node: Any) -> str | None:
+def ref_schema_name(node: JsonValue | None) -> str | None:
     if not isinstance(node, dict):
         return None
     ref = node.get("$ref")
@@ -145,12 +155,12 @@ def ref_schema_name(node: Any) -> str | None:
 
 
 def object_schema_properties_and_required(
-    doc_index: dict[str, dict[str, Any]],
+    doc_index: OpenRpcDocumentIndex,
     current_source_path: str,
-    schema: Any,
+    schema: JsonValue | None,
     *,
     max_depth: int = 6,
-) -> tuple[dict[str, Any], set[str]]:
+) -> tuple[JsonObject, set[str]]:
     if max_depth <= 0:
         return {}, set()
 
@@ -158,7 +168,7 @@ def object_schema_properties_and_required(
     if not isinstance(resolved, dict):
         return {}, set()
 
-    properties: dict[str, Any] = {}
+    properties: JsonObject = {}
     required: set[str] = set()
 
     all_of = resolved.get("allOf")
@@ -184,7 +194,7 @@ def object_schema_properties_and_required(
     return properties, required
 
 
-def schema_required_field_names(doc_index: dict[str, dict[str, Any]], current_source_path: str, schema: Any) -> list[str]:
+def schema_required_field_names(doc_index: OpenRpcDocumentIndex, current_source_path: str, schema: JsonValue | None) -> list[str]:
     properties, required = object_schema_properties_and_required(doc_index, current_source_path, schema)
     if not required:
         return []
@@ -193,7 +203,7 @@ def schema_required_field_names(doc_index: dict[str, dict[str, Any]], current_so
     return [*known, *unknown]
 
 
-def schema_brief(doc_index: dict[str, dict[str, Any]], current_source_path: str, schema: Any) -> str:
+def schema_brief(doc_index: OpenRpcDocumentIndex, current_source_path: str, schema: JsonValue | None) -> str:
     resolved = resolve_ref(doc_index, current_source_path, schema)
     if not isinstance(resolved, dict):
         return "-"
@@ -213,7 +223,7 @@ def schema_brief(doc_index: dict[str, dict[str, Any]], current_source_path: str,
     return "-"
 
 
-def schema_type_token(doc_index: dict[str, dict[str, Any]], current_source_path: str, schema: Any) -> Any:
+def schema_type_token(doc_index: OpenRpcDocumentIndex, current_source_path: str, schema: JsonValue | None) -> JsonValue:
     resolved = resolve_ref(doc_index, current_source_path, schema)
     if not isinstance(resolved, dict):
         return "<value>"
@@ -245,14 +255,14 @@ def schema_type_token(doc_index: dict[str, dict[str, Any]], current_source_path:
 
 
 def schema_sample_value(
-    doc_index: dict[str, dict[str, Any]],
+    doc_index: OpenRpcDocumentIndex,
     current_source_path: str,
-    schema: Any,
+    schema: JsonValue | None,
     *,
     max_depth: int = REQUEST_SAMPLE_MAX_DEPTH,
     max_properties: int = REQUEST_SAMPLE_MAX_PROPERTIES,
     required_only: bool = True,
-) -> Any:
+) -> JsonValue:
     if max_depth <= 0:
         return schema_type_token(doc_index, current_source_path, schema)
 
@@ -297,7 +307,7 @@ def schema_sample_value(
         if not names_to_render and unknown_required_names:
             names_to_render = unknown_required_names
 
-        sample: dict[str, Any] = {}
+        sample: JsonObject = {}
         for name in names_to_render[:max_properties]:
             if name in properties:
                 sample[name] = schema_sample_value(
@@ -336,10 +346,10 @@ def schema_sample_value(
 
 
 def extract_param_detail(
-    doc_index: dict[str, dict[str, Any]],
+    doc_index: OpenRpcDocumentIndex,
     current_source_path: str,
-    param: dict[str, Any],
-) -> dict[str, Any]:
+    param: JsonObject,
+) -> OpenRpcParamDetail:
     schema = param.get("schema")
     return {
         "name": str(param.get("name") or ""),
@@ -352,10 +362,10 @@ def extract_param_detail(
 
 
 def extract_result_detail(
-    doc_index: dict[str, dict[str, Any]],
+    doc_index: OpenRpcDocumentIndex,
     current_source_path: str,
-    result: dict[str, Any] | None,
-) -> dict[str, Any]:
+    result: JsonValue | None,
+) -> OpenRpcResultDetail:
     if not isinstance(result, dict):
         return {
             "name": "",
@@ -377,16 +387,16 @@ def extract_result_detail(
 
 
 def extract_method_detail(
-    document: dict[str, Any],
+    document: OpenRpcDocument,
     *,
-    doc_index: dict[str, dict[str, Any]],
+    doc_index: OpenRpcDocumentIndex,
     current_source_path: str,
-) -> dict[str, dict[str, Any]]:
+) -> OpenRpcMethodDetailsByName:
     methods = document.get("methods")
     if not isinstance(methods, list):
         return {}
 
-    details: dict[str, dict[str, Any]] = {}
+    details: OpenRpcMethodDetailsByName = {}
     for method in methods:
         if not isinstance(method, dict):
             continue
@@ -396,7 +406,7 @@ def extract_method_detail(
         params = method.get("params")
         if not isinstance(params, list):
             params = []
-        detail = {
+        detail: OpenRpcMethodDetail = {
             "name": name,
             "anchor": method_anchor(name),
             "summary": str(method.get("summary") or ""),
@@ -405,6 +415,7 @@ def extract_method_detail(
             "replaces": str(method.get("x-replaces")) if isinstance(method.get("x-replaces"), str) else None,
             "params": [extract_param_detail(doc_index, current_source_path, param) for param in params if isinstance(param, dict)],
             "result": extract_result_detail(doc_index, current_source_path, method.get("result")),
+            "fingerprint": "",
         }
         detail["fingerprint"] = sha256_json(
             {
@@ -424,7 +435,7 @@ def render_name_list(names: list[str]) -> str:
     return ", ".join(f"`{name}`" for name in names)
 
 
-def describe_param_changes(previous: dict[str, Any], current: dict[str, Any]) -> list[str]:
+def describe_param_changes(previous: OpenRpcValueDetail, current: OpenRpcValueDetail) -> list[str]:
     changes: list[str] = []
     if previous["description"] != current["description"]:
         changes.append("description")
@@ -437,7 +448,7 @@ def describe_param_changes(previous: dict[str, Any], current: dict[str, Any]) ->
     return changes
 
 
-def describe_method_changes(previous: dict[str, Any], current: dict[str, Any]) -> list[str]:
+def describe_method_changes(previous: OpenRpcMethodDetail, current: OpenRpcMethodDetail) -> list[str]:
     changes: list[str] = []
     if previous["summary"] != current["summary"]:
         changes.append("summary updated")
@@ -511,7 +522,7 @@ def build_openrpc_report_from_sources(
         versions_present = [snapshot.version for snapshot in spec_snapshots]
         display_name = spec_snapshots[-1].display_name
 
-        per_version_methods: dict[str, dict[str, dict[str, Any]]] = {}
+        per_version_methods: dict[str, OpenRpcMethodDetailsByName] = {}
         for snapshot in spec_snapshots:
             per_version_methods[snapshot.version] = extract_method_detail(
                 snapshot.document,
@@ -519,7 +530,7 @@ def build_openrpc_report_from_sources(
                 current_source_path=snapshot.source_path,
             )
 
-        method_history: dict[str, dict[str, Any]] = {}
+        method_history: dict[str, OpenRpcMethodHistory] = {}
         for snapshot in spec_snapshots:
             current_methods = per_version_methods[snapshot.version]
             for method_name, method_detail in current_methods.items():

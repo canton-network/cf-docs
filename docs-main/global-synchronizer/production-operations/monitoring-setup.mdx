@@ -1,163 +1,39 @@
 ---
 title: "Monitoring Setup"
-description: "Configuring Prometheus metrics collection and Grafana dashboards for Canton Network nodes"
+description: "Canton monitoring example, participant node health, and ACS commitment monitoring"
 ---
 
-Every Canton Network node exposes Prometheus-format metrics on port 10013 at the `/metrics` path. This page covers how to configure metrics scraping, enable optional metric triggers, and set up Grafana dashboards.
+This page covers Canton-side monitoring topics: an example containerised monitoring setup (Prometheus, Grafana, ELK), participant node health endpoints, and how to monitor ACS commitments.
 
-## Components That Expose Metrics
+For Splice / Canton Network metrics specifically — what each component exposes, how to scrape it, and which metrics to watch on validators and Super Validators — see:
 
-{/* COPIED_START source="splice:deployment/observability/metrics.rst" hash="metrics-components" */}
+- [Splice Metrics Overview](/global-synchronizer/production-operations/splice-metrics-overview)
+- [Key Metrics](/global-synchronizer/production-operations/key-metrics)
+- [Metrics Reference](/global-synchronizer/reference/metrics-reference)
 
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was adapted from existing reviewed documentation.
-**Source:** `deployment/observability/metrics.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
-
-For a validator, the following components expose metrics:
-
-- The validator app
-- The participant
-
-For a Super Validator, these additional components also expose metrics:
-
-- The SV app
-- The scan app
-
-{/* COPIED_END */}
-
-## Scraping Metrics
-
-{/* COPIED_START source="splice:deployment/observability/metrics.rst" hash="metrics-scraping" */}
-
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was adapted from existing reviewed documentation.
-**Source:** `deployment/observability/metrics.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
-
-Metrics are built with OpenTelemetry and exposed in Prometheus format. Any Prometheus-compatible server can scrape them.
-
-### Histograms
-
-Histograms are exposed as [exponential histograms](https://opentelemetry.io/docs/specs/otel/metrics/data-model/#exponentialhistogram), which convert to [Prometheus native histograms](https://prometheus.io/docs/specs/native_histograms/).
-
-<Note>
-Prometheus native histogram support must be enabled with the flag `-enable-feature=native-histograms`. Native histograms are only available via the protobuf format, so Prometheus will switch to protobuf collection automatically.
-</Note>
-
-To switch back to regular histograms, add the following environment variable to a node:
-
-```bash
-ADDITIONAL_CONFIG_DISABLE_NATIVE_HISTOGRAMS="canton.monitoring.metrics.histograms=[]"
-```
-
-{/* COPIED_END */}
-
-## Enabling Metrics in Kubernetes
-
-{/* COPIED_START source="splice:deployment/observability/metrics.rst" hash="metrics-helm" */}
-
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was adapted from existing reviewed documentation.
-**Source:** `deployment/observability/metrics.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
-
-Set `metrics.enable` to `true` in your Helm values (default: `false`). This creates a `ServiceMonitor` Kubernetes custom resource, which requires the [Prometheus Operator](https://github.com/prometheus-operator/prometheus-operator) to be installed in your cluster.
-
-Alternatively, add Prometheus scrape annotations to your charts configured to scrape port 10013.
-
-{/* COPIED_END */}
-
-## Enabling Metrics in Docker Compose
-
-{/* COPIED_START source="splice:deployment/observability/metrics.rst" hash="metrics-compose" */}
-
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was adapted from existing reviewed documentation.
-**Source:** `deployment/observability/metrics.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
-
-<Note>
-Docker Compose metrics are for validator nodes only.
-</Note>
-
-Metrics are enabled by default in Docker Compose deployments. Access them at:
-
-- `http://validator.localhost/metrics` — validator app metrics
-- `http://participant.localhost/metrics` — participant metrics
-
-{/* COPIED_END */}
-
-## Enabling Extra Metric Triggers
-
-{/* COPIED_START source="splice:deployment/observability/metrics.rst" hash="metrics-extra-triggers" */}
-
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was adapted from existing reviewed documentation.
-**Source:** `deployment/observability/metrics.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
-
-The validator app can run a trigger that polls topology state and exports metrics summarizing it. These metrics use the `splice.synchronizer-topology` prefix. The trigger is disabled by default.
-
-To enable it with a 5-minute polling interval, add this environment variable:
-
-```bash
-ADDITIONAL_CONFIG_TOPOLOGY_METRICS_EXPORT=canton.validator-apps.validator_backend.automation.topology-metrics-polling-interval = 5m
-```
-
-{/* COPIED_END */}
-
-## Grafana Dashboards
-
-{/* COPIED_START source="splice:deployment/observability/metrics.rst" hash="metrics-grafana" */}
-
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was adapted from existing reviewed documentation.
-**Source:** `deployment/observability/metrics.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
-
-The release bundle contains pre-built Grafana dashboards in the `grafana-dashboards` folder. Import these into your Grafana instance.
-
-The dashboards assume a Kubernetes deployment and may need modification for other deployment types. Dashboard queries use Prometheus native histogram syntax.
-
-{/* COPIED_END */}
-
-## Next Steps
-
-- [Key Metrics](/global-synchronizer/production-operations/key-metrics) — Which metrics to monitor and what they mean
-- [Metrics Reference](/global-synchronizer/reference/metrics-reference) — Complete metrics catalog
-
-{/* COPIED_START source="docs-website:docs/replicated/canton/3.4/participant/tutorials/monitoring/example_monitoring_setup.rst" hash="c78cf431" */}
-
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was copied from existing reviewed documentation.
-**Source:** `docs-website:docs/replicated/canton/3.4/participant/tutorials/monitoring/example_monitoring_setup.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
+{/* COPIED_START source="docs-website:docs/replicated/canton/3.5/participant/tutorials/monitoring/example_monitoring_setup.rst" hash="3c277458" */}
 
 This guide and the scripts/configs are not tested, do they still work? Try to split this up into specific howtos and ensure the configs/scripts move to examples that are tested.
 
 how should this relate to the other observability docs that we have? we have the observability gh stuff plus the observability stuff in the quickstart
 
-# Example Monitoring Setup
+## Example Monitoring Setup
 
-This section provides an example of how Canton can be run inside a connected network of Docker containers. The example also shows how you can monitor network activity. See the [monitoring glossary](https://docs.daml.com/canton/usermanual/monitoring_glossary.html) for an explanation of the terms and the [Monitoring Choices](#monitoring-choices) section for the reasoning behind the example monitoring setup.
+This section provides an example of how Canton can be run inside a connected network of Docker containers. The example also shows how you can monitor network activity. See the [glossary](/overview/understand/glossary) for monitoring term definitions and the [Monitoring Choices](#monitoring-choices) section for the reasoning behind the example monitoring setup.
 
-## Container Setup
+<Note>
+The Canton container image is published at `ghcr.io/digital-asset/decentralized-canton-sync/docker/canton`. The example Docker Compose snippets below use `${CANTON_VERSION}` as a placeholder for the tag — export `CANTON_VERSION` to the value for your target network before running them, or substitute it inline. See the [Version Compatibility Dashboard](/shared/version-compatibility-dashboard) for the current tag on MainNet, TestNet, and DevNet.
+</Note>
+
+### Container Setup
 
 To configure [Docker Compose](https://docs.docker.com/compose/) to spin up the Docker container network shown in the diagram, use the information below. See the `compose` documentation for detailed information concerning the structure of the configuration files.
 
 `compose` allows you to provide the overall configuration across multiple files. Each configuration file is described below, followed by information on how to bring them together in a running network.
 
-<img src="./images/basic-canton-setup.svg" class="align-center" style="width:100.0%" alt="A diagram showing an example Docker network setup" />
+<img src="./images/basic-canton-setup.svg" className="align-center" style={{width: "100%"}} alt="A diagram showing an example Docker network setup" />
 
-### Intended Use
+#### Intended Use
 
 This example is intended to demonstrate how to expose, aggregate, and observe monitoring information from Canton. It is not suitable for production without alterations. Note the following warnings:
 
@@ -186,7 +62,7 @@ The versions of the Docker images used in the example may become outdated. In a 
 </Warning>
 
 
-### Network Configuration
+#### Network Configuration
 
 In this compose file, define the network that will be used to connect all the running containers:
 
@@ -202,7 +78,7 @@ networks:
     external: false
 ```
 
-### Postgres Setup
+#### Postgres Setup
 
 Using only a single Postgres container, create databases for the synchronizer, along with Canton and index databases for each participant. To do this, mount `postgres-init.sql` into the Postgres-initialized directory. Note that in a production environment, passwords must not be inlined inside config.
 
@@ -238,20 +114,20 @@ create database canton2db;
 create database index2db;
 ```
 
-### Synchronizer Setup
+#### Synchronizer Setup
 
 Run the synchronizer with the `--log-profile container` that writes plain text to standard out at debug level.
 
-#\. Add examples here \<[https://github.com/DACH-NY/canton/issues/23872](https://github.com/DACH-NY/canton/issues/23872)\>
+{/* Add examples here \<[https://github.com/DACH-NY/canton/issues/23872](https://github.com/DACH-NY/canton/issues/23872)\> */}
 
-### Participant Setup
+#### Participant Setup
 
 The participant container has two files mapped into it on container creation. The `.conf` file provides details of the synchronizer and database locations. An HTTP metrics endpoint is exposed that returns metrics in the [Prometheus Text Based Format](https://github.com/prometheus/docs/blob/main/content/docs/instrumenting/exposition_formats.md#text-based-format). By default, participants do not connect to remote synchronizers, so a bootstrap script is provided to accomplish that.
 
 ```yaml
 services:
   participant1:
-    image: digitalasset/canton-open-source:2.5.1
+    image: ghcr.io/digital-asset/decentralized-canton-sync/docker/canton:${CANTON_VERSION}
     container_name: participant1
     hostname: participant1
     volumes:
@@ -313,7 +189,7 @@ The setup for participant2 is identical, except that the name and ports are chan
 ```yaml
 services:
   participant2:
-    image: digitalasset/canton-open-source:2.5.1
+    image: ghcr.io/digital-asset/decentralized-canton-sync/docker/canton:${CANTON_VERSION}
     container_name: participant2
     hostname: participant2
     volumes:
@@ -370,7 +246,7 @@ canton {
 }
 ```
 
-### Logstash
+#### Logstash
 
 Docker containers can specify a log driver to automatically export log information from the container to an aggregating service. The example exports log information in GELF, using Logstash as the aggregation point for all GELF streams. You can use Logstash to feed many downstream logging data stores, including Elasticsearch, Loki, and Graylog.
 
@@ -431,7 +307,7 @@ The default Logstash settings are used, with the HTTP port bound to all host IP 
 http.host: "0.0.0.0"
 ```
 
-### Elasticsearch
+#### Elasticsearch
 
 Elasticsearch supports running in a clustered configuration with built-in resiliency. The example runs only a single Elasticsearch node.
 
@@ -462,7 +338,7 @@ services:
       retries: 10
 ```
 
-### Kibana
+#### Kibana
 
 Kibana provides a UI that allows the Elasticsearch log index to be searched.
 
@@ -487,7 +363,7 @@ services:
 
 You must manually configure a data view to view logs. See [Kibana Log Monitoring](#kibana-log-monitoring) for instructions.
 
-### cAdvisor
+#### cAdvisor
 
 cAdvisor exposes container system metrics (CPU, memory, disk, and network) to Prometheus. It also provides a UI to view these metrics.
 
@@ -520,11 +396,11 @@ To view container metrics:
 
 You should now see a UI similar to the one shown.
 
-<img src="./images/c-advisor.png" class="align-center" style="width:100.0%" alt="An example cAdvisor UI" />
+<img src="./images/c-advisor.png" className="align-center" style={{width: "100%"}} alt="An example cAdvisor UI" />
 
 Prometheus-formatted metrics are available by default at [http://localhost:8080/metrics](http://localhost:8080/metrics).
 
-### Prometheus
+#### Prometheus
 
 Configure Prometheus with `prometheus.yml` to provide the endpoints from which metric data should be scraped. By default, port `9090` can query the stored metric data.
 
@@ -566,7 +442,7 @@ scrape_configs:
         action: labeldrop
 ```
 
-### Grafana
+#### Grafana
 
 Grafana is provided with:
 
@@ -643,7 +519,7 @@ providers:
       foldersFromFilesStructure: true
 ```
 
-### Dependencies
+#### Dependencies
 
 There are startup dependencies between the Docker containers. For example, the synchronizer needs to be running before the participant, and the database needs to run before the synchronizer.
 
@@ -699,11 +575,11 @@ services:
         condition: service_started
 ```
 
-### Docker Images
+#### Docker Images
 
 The Docker images need to be pulled down before starting the network:
 
-- digitalasset/canton-open-source:2.5.1
+- `ghcr.io/digital-asset/decentralized-canton-sync/docker/canton:${CANTON_VERSION}`
 - docker.elastic.co/elasticsearch/elasticsearch:8.5.2
 - docker.elastic.co/kibana/kibana:8.5.2
 - docker.elastic.co/logstash/logstash:8.5.1
@@ -712,7 +588,7 @@ The Docker images need to be pulled down before starting the network:
 - postgres:17.5-bullseye
 - prom/prometheus:v2.40.6
 
-### Running Docker Compose
+#### Running Docker Compose
 
 Since running `docker compose` with all the compose files shown above creates a long command line, a helper script `dc.sh` is used.
 
@@ -760,7 +636,7 @@ docker compose \
 ./dc.sh down        # Stops and tears down the network, removing any created containers
 ```
 
-## Connecting to Nodes
+### Connecting to Nodes
 
 To interact with the running network, a Canton console can be used with a remote configuration. For example:
 
@@ -768,7 +644,7 @@ To interact with the running network, a Canton console can be used with a remote
 bin/canton -c etc/remote-participant1.conf
 ```
 
-### Remote Configurations
+#### Remote Configurations
 
 ``` none
 canton {
@@ -807,11 +683,11 @@ canton {
 }  
 ```
 
-### Getting Started
+#### Getting Started
 
 Using the previous scripts, you can follow the examples provided in the Getting Started guide.
 
-## Kibana log monitoring
+### Kibana log monitoring
 
 When Kibana is started for the first time, you must set up a data view to allow view the log data:
 
@@ -826,7 +702,7 @@ When Kibana is started for the first time, you must set up a data view to allow 
 
 You should now see a UI similar to the one shown here:
 
-<img src="./images/kibana.png" class="align-center" style="width:100.0%" alt="An example Kibana UI" />
+<img src="./images/kibana.png" className="align-center" style={{width: "100%"}} alt="An example Kibana UI" />
 
 In the Kibana interface, you can:
 
@@ -838,7 +714,7 @@ In the Kibana interface, you can:
 
 For more details, see the Kibana documentation. Note that querying based on plain text for a wide time window likely results in poor UI performance. See [Logging Improvements](#logging-improvements) for ideas to improve it.
 
-## Grafana Metric Monitoring
+### Grafana Metric Monitoring
 
 You can log into the Grafana UI and set up a dashboard. The example imports a [GrafanaLabs community dashboard](https://grafana.com/grafana/dashboards/) that has graphs for cAdvisor metrics. The [cAdvisor Export dashboard](https://grafana.com/grafana/dashboards/14282-cadvisor-exporter/) imported below has an ID of **14282**.
 
@@ -850,15 +726,15 @@ You can log into the Grafana UI and set up a dashboard. The example imports a [G
 
 You should see a container system metrics dashboard similar to the one shown here:
 
-<img src="./images/grafana-cadvisor.png" class="align-center" style="width:100.0%" alt="An example metrics dashboard" />
+<img src="./images/grafana-cadvisor.png" className="align-center" style={{width: "100%"}} alt="An example metrics dashboard" />
 
 See the [Grafana documentation](https://grafana.com/grafana/) for how to configure dashboards. For information about which metrics are available, see the Metrics documentation in the Monitoring section of this user manual.
 
-## Monitoring Choices
+### Monitoring Choices
 
 This section documents the reasoning behind the technology used in the example monitoring setup.
 
-### Use Docker Log Drivers
+#### Use Docker Log Drivers
 
 **Reasons:**
 
@@ -867,7 +743,7 @@ This section documents the reasoning behind the technology used in the example m
 - No additional dockerfile layers need to be added to install and start log scrapers.
 - There is no need to worry about local file naming, log rotation, and so on.
 
-### Use GELF Docker Log Driver
+#### Use GELF Docker Log Driver
 
 **Reasons:**
 
@@ -876,7 +752,7 @@ This section documents the reasoning behind the technology used in the example m
 - It does not have the size limitations of syslog.
 - A UDP listener can be used to debug problems.
 
-### Use Logstash
+#### Use Logstash
 
 **Reasons:**
 
@@ -888,7 +764,7 @@ This section documents the reasoning behind the technology used in the example m
 - It can be used to feed Elasticsearch, Loki, or Graylog.
 - It has support for the Elastic Common Schema (ECS) if needed.
 
-### Use Elasticsearch/Kibana
+#### Use Elasticsearch/Kibana
 
 **Reasons:**
 
@@ -896,7 +772,7 @@ This section documents the reasoning behind the technology used in the example m
 - Good defaults for these products allow a basic setup to be started with almost zero configuration.
 - The ELK setup acts as a good baseline as compared to other options such as Loki or Graylog.
 
-### Use Prometheus/Grafana
+#### Use Prometheus/Grafana
 
 **Reasons:**
 
@@ -905,7 +781,7 @@ This section documents the reasoning behind the technology used in the example m
 - The Prometheus approach of pulling metrics from the underlying system means that the running containers do not need infrastructure to store and push metric data.
 - Grafana works very well with Prometheus.
 
-## Logging Improvements
+### Logging Improvements
 
 This version of the example only has the logging structure provided via GELF. It is possible to improve this by:
 
@@ -915,20 +791,13 @@ This version of the example only has the logging structure provided via GELF. It
 
 {/* COPIED_END */}
 
+{/* COPIED_START source="docs-website:docs/replicated/canton/3.5/participant/howtos/observe/health.rst" hash="c376ddfa" */}
 
-{/* COPIED_START source="docs-website:docs/replicated/canton/3.4/participant/howtos/observe/health.rst" hash="64490235" */}
-
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was copied from existing reviewed documentation.
-**Source:** `docs-website:docs/replicated/canton/3.4/participant/howtos/observe/health.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
-
-# Participant Node Health
+## Participant Node Health
 
 The participant exposes health status information in several ways, which may be inspected manually when troubleshooting or integrated into larger monitoring and orchestration systems.
 
-## Using gRPC Health Service for Load Balancing and Orchestration
+### Using gRPC Health Service for Load Balancing and Orchestration
 
 The Participant Node provides a `grpc.health.v1.Health` service, implementing the [gRPC Health Checking Protocol](https://github.com/grpc/grpc/blob/master/doc/health-checking.md) protocol.
 
@@ -960,7 +829,7 @@ When multiple Participant replicas are configured, passive nodes return `NOT_SER
 
 In practice, the health of the Participant is composed of the health of the components it depends on. You can query these individually by name, by making a request with the [service](https://github.com/grpc/grpc-proto/blob/6565a1ba38af695ace7c3ce6e6ff837ee87d4c10/grpc/health/v1/health.proto#L29) field set to the name of the component. An empty or unset `service` field returns the aggregate health of all components. An unknown name will result in a gRPC `NOT_FOUND` error.
 
-## Checking health via HTTP
+### Checking health via HTTP
 
 Health checking can also be done via HTTP, which is useful for frameworks that don't support gRPC Health Checking Protocol. Setting monitoring.http-health-server.port= in the configuration for your node will expose health information at the URL `http://<host>:<port>/health`.
 
@@ -978,18 +847,18 @@ readinessProbe:
     port: <port>
     path: /health
 ```
-## Inspection of General Health Status
+### Inspection of General Health Status
 
 General information about the Participant Node, including about unhealthy synchronizers and dependencies, and whether the node is currently Active, can be displayed in the canton console by invoking the `health.status` command on the node.
 
 ``` none
 @ participant1.health.status
     res1: NodeStatus[ParticipantStatus] = Participant id: PAR::participant1::12201ff69b1d24edbf0ee2028a304ea702ee8536790dab1a31e7136e6d90ff6d473c
-    Uptime: 2.069737s
+    Uptime: 2.006305s
     Ports: 
-        ledger: 30183
-        admin: 30184
-        json: 30185
+        ledger: 30145
+        admin: 30146
+        json: 30147
     Connected synchronizers: None
     Unhealthy synchronizers: None
     Active: true
@@ -999,7 +868,7 @@ General information about the Participant Node, including about unhealthy synchr
         sync-ephemeral-state : Not Initialized
         sequencer-client : Not Initialized
         acs-commitment-processor : Not Initialized
-    Version: 3.4.11-SNAPSHOT
+    Version: 3.5.0-SNAPSHOT
     Supported protocol version(s): 34
 ```
 
@@ -1012,10 +881,10 @@ The canton console can also provide information about *all* connected nodes, inc
     res2: CantonStatus = Status for Sequencer 'sequencer1':
     Sequencer id: da::1220a82692abc55c0367abefc4bdbc23df25688230430ddfeef5759845f26d5cc29c
     Synchronizer id: da::1220a82692abc55c0367abefc4bdbc23df25688230430ddfeef5759845f26d5cc29c::34-0
-    Uptime: 5.968597s
+    Uptime: 6.470662s
     Ports: 
-        public: 30187
-        admin: 30188
+        public: 30149
+        admin: 30150
     Connected participants: 
         PAR::participant2::1220a4d7463b...
         PAR::participant1::12201ff69b1d...
@@ -1027,15 +896,15 @@ The canton console can also provide information about *all* connected nodes, inc
         memory_storage : Ok()
         sequencer : Ok()
     Accepts admin changes: true
-    Version: 3.4.11-SNAPSHOT
+    Version: 3.5.0-SNAPSHOT
     Protocol version: 34
 
     Status for Mediator 'mediator1':
     Node uid: mediator1::12200929934059da3e012af672ee8a5d26a7e4b3e5084920be298f791f7619843c78
     Synchronizer id: da::1220a82692abc55c0367abefc4bdbc23df25688230430ddfeef5759845f26d5cc29c::34-0
-    Uptime: 5.920214s
+    Uptime: 6.405066s
     Ports: 
-        admin: 30186
+        admin: 30148
     Active: true
     Components: 
         memory_storage : Ok()
@@ -1044,16 +913,16 @@ The canton console can also provide information about *all* connected nodes, inc
         sequencer-subscription-pool : Ok()
         internal-sequencer-connection-sequencer1-0 : Ok()
         subscription-sequencer-connection-sequencer1-0 : Ok()
-    Version: 3.4.11-SNAPSHOT
+    Version: 3.5.0-SNAPSHOT
     Protocol version: 34
 
     Status for Participant 'participant1':
     Participant id: PAR::participant1::12201ff69b1d24edbf0ee2028a304ea702ee8536790dab1a31e7136e6d90ff6d473c
-    Uptime: 7.954779s
+    Uptime: 8.386186s
     Ports: 
-        ledger: 30183
-        admin: 30184
-        json: 30185
+        ledger: 30145
+        admin: 30146
+        json: 30147
     Connected synchronizers: 
         da::1220a82692ab...::34-0
     Unhealthy synchronizers: None
@@ -1068,7 +937,7 @@ The canton console can also provide information about *all* connected nodes, inc
         sequencer-subscription-pool : Ok()
         internal-sequencer-connection-sequencer1-0 : Ok()
         subscription-sequencer-connection-sequencer1-0 : Ok()
-    Version: 3.4.11-SNAPSHOT
+    Version: 3.5.0-SNAPSHOT
     Supported protocol version(s): 34
 
     Status for Participant 'participant2':
@@ -1092,11 +961,11 @@ The canton console can also provide information about *all* connected nodes, inc
         sequencer-subscription-pool : Ok()
         internal-sequencer-connection-sequencer1-0 : Ok()
         subscription-sequencer-connection-sequencer1-0 : Ok()
-    Version: 3.4.11-SNAPSHOT
+    Version: 3.5.0-SNAPSHOT
     Supported protocol version(s): 34
 ```
 
-## Generating a Node Health Dump for Troubleshooting
+### Generating a Node Health Dump for Troubleshooting
 
 When interacting with support or attempting to troubleshoot an issue, it is often necessary to capture a snapshot of relevant execution state. Canton implements a facility that gathers key system information and bundles it into a ZIP file.
 
@@ -1125,7 +994,7 @@ When packaging large amounts of data, increase the default timeout of the dump c
 
 Health dumps can also be gathered via gRPC on the `Admin API` of the Participant Node via the [StatusService](https://github.com/DACH-NY/canton/blob/release-line-3.3/community/admin-api/src/main/protobuf/com/digitalasset/canton/admin/health/v30/status_service.proto#L10)'s `HealthDump`. This call streams back the bytes of the produced ZIP file.
 
-## Monitoring for Slow or Stuck Tasks
+### Monitoring for Slow or Stuck Tasks
 
 Some operations can report when they are slow, if you enable
 
@@ -1143,7 +1012,7 @@ canton.monitoring.deadlock-detection.enabled = yes
 
 If a problem is detected, a log line containing `Task runner <name> is stuck or overloaded for <duration>` will be emitted. This may indicate that resources such as CPU are overloaded, that the Execution Context is too small, or that too many tasks are otherwise stuck. If the issue resolves itself, a subsequent log message: `Task runner <name> is just overloaded, but operating correctly. Task got executed in the meantime` will be emitted.
 
-## Disabling Restart on Fatal Failures
+### Disabling Restart on Fatal Failures
 
 Processes should be run under a process supervisor, such as `systemd` or Kubernetes, which can monitor them and restart them as needed. By default, the Participant Node process will exit in the event of a fatal failure.
 
@@ -1157,16 +1026,9 @@ which will cause the Node to stay alive and report unhealthy in such cases.
 
 {/* COPIED_END */}
 
+{/* COPIED_START source="docs-website:docs/replicated/canton/3.5/participant/howtos/observe/commitments.rst" hash="d74758f7" */}
 
-{/* COPIED_START source="docs-website:docs/replicated/canton/3.4/participant/howtos/observe/commitments.rst" hash="448aca51" */}
-
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was copied from existing reviewed documentation.
-**Source:** `docs-website:docs/replicated/canton/3.4/participant/howtos/observe/commitments.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
-
-# Monitor ACS Commitments
+## Monitor ACS Commitments
 
 A participant that fails to send commitments in a timely manner is problematic for its counter-participants: Counter-participants cannot prune their state, because they have no proof that their state is the same as the state of the participant. More information on commitments is available in the Pruning overview section.
 
@@ -1174,7 +1036,7 @@ This page describes the monitoring options for ACS commitments. Commitment monit
 
 Second, monitoring provides insights into the status of commitments from counter-participants. This is relevant for the participant node operator because a counter-participant that runs behind in commitment generation, either because it is faulty or because the network is slow, prevents pruning on the participant: The participant does not know whether its state and the counter-participant's state diverged, and cannot prune because it might need to investigate a potential fork. The operator can use the monitoring metrics to identify slow counter-participants and potentially blacklist them.
 
-## Monitoring own commitments
+### Monitoring own commitments
 
 We provide the following metrics for commitment generation, which are described in detail in the Metrics reference section:
 
@@ -1182,7 +1044,7 @@ We provide the following metrics for commitment generation, which are described 
 - `daml.participant.sync.commitments.sequencing-time`: Measures the time between the end of a commitment period, and the time when the sequencer observes the corresponding commitment.
 - `daml.participant.sync.commitments.catchup-mode-enabled`: Measures how many times the catch-up mode has been triggered.
 
-## Monitoring counter-participant commitments
+### Monitoring counter-participant commitments
 
 The operator can monitor the status of commitments from the counter-participants through latency metrics. These metrics can reveal slow counter-participants, which are behind in sending commitments, and enable operators to configure thresholds defining when a counter-participant is considered slow.
 
@@ -1246,48 +1108,5 @@ val update1Config = new SlowCounterParticipantSynchronizerConfig(
 )
 participant1.commitments.set_config_for_slow_counter_participants(Seq(update1Config))
 ```
-
-{/* COPIED_END */}
-
-
-{/* COPIED_START source="splice:docs/src/deployment/observability/validator_health.rst" hash="08633c30" */}
-
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was copied from existing reviewed documentation.
-**Source:** `splice:docs/src/deployment/observability/validator_health.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
-
-# Validator Health
-
-You can check your validator's health using the readiness endpoints. All CN applications provide the `/readyz` and `/livez` endpoints, which are used for readiness and liveness probes.
-
-- **Checking readiness**
-
-  - In Kubernetes: readiness and liveness probes are already configured.
-
-```bash
-You can also manually check validator readiness with the following command:
-
-```yaml
-kubectl exec &lt;pod-name&gt; -n <namespace> -- curl -v https://localhost:5003/api/validator/readyz
-```
-```
-  - In Docker: run for example this command to check validator liveness inside a container:
-
-    ```yaml
-    docker exec &lt;container-name&gt; -- curl -v https://localhost:5003/api/validator/livez
-    ```
-
-  You should expect in both case HTTP status code 200 if the validator is ready and live.
-
-- **Using metrics**
-
-  The `splice_store_last_ingested_record_time_ms` metric represents the last ingested record time in each validator store. It can be used to track general activity of the node:
-
-  - If this value continue to increase over time, your node is active and stays in sync with the network. Note that it only advances if your node actually ingests new transactions. For a validator collecting validator liveness rewards this happens every round so you should expect your lag to never go above 20min.
-  - If it remains static, further investigation may be required.
-
-  For more details and to visualize this metric on its dedicated dashboard `Splice Store Last Ingested Record Time`, refer to the documentation about Metrics.
 
 {/* COPIED_END */}

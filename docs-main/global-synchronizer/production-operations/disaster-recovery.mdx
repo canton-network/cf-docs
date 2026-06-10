@@ -3,128 +3,69 @@ title: "Disaster Recovery"
 description: "Recovery procedures for data corruption, SV re-onboarding, and CometBFT layer loss"
 ---
 
-import CantonDocsGlobalSynchronizerProductionOperationsDisasterRecoveryL30 from "/snippets/canton-docs/global-synchronizer_production-operations_disaster-recovery_L30.mdx";
-import CantonDocsGlobalSynchronizerProductionOperationsDisasterRecoveryL45 from "/snippets/canton-docs/global-synchronizer_production-operations_disaster-recovery_L45.mdx";
-import CantonDocsGlobalSynchronizerProductionOperationsDisasterRecoveryL68 from "/snippets/canton-docs/global-synchronizer_production-operations_disaster-recovery_L68.mdx";
-import CantonDocsGlobalSynchronizerProductionOperationsDisasterRecoveryL126 from "/snippets/canton-docs/global-synchronizer_production-operations_disaster-recovery_L126.mdx";
-import CantonDocsGlobalSynchronizerProductionOperationsDisasterRecoveryL139 from "/snippets/canton-docs/global-synchronizer_production-operations_disaster-recovery_L139.mdx";
-import CantonDocsGlobalSynchronizerProductionOperationsDisasterRecoveryL146 from "/snippets/canton-docs/global-synchronizer_production-operations_disaster-recovery_L146.mdx";
+import ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvRestoreBash102 from "/snippets/internal/splice/main/splice-rst-code-docs-src-sv-operator-sv-restore-bash-102.mdx";
+import ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvRestoreBash74 from "/snippets/internal/splice/main/splice-rst-code-docs-src-sv-operator-sv-restore-bash-74.mdx";
+import ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvRestoreBash57 from "/snippets/internal/splice/main/splice-rst-code-docs-src-sv-operator-sv-restore-bash-57.mdx";
 
+{/* COPIED_START source="splice:docs/src/sv_operator/sv_restore.rst" hash="9e120ae8" */}
 
-There are three ways to recover from disasters, depending on the scope and severity of the failure:
+There are three ways to recover from disasters:
 
-- **Single node affected, network healthy** -- Restore the node from backup.
-- **Full backup unavailable but identities backup exists** -- Re-onboard the SV and recover Amulets through a standalone validator.
-- **Network-wide failure** -- Follow the CometBFT disaster recovery procedure across all SV operators.
+1.  In simple cases where only a single node is affected but the overall network is still healthy, a Restore from backup is usually sufficient.
+2.  If a full backup is unavailable but an identities backup has been created, the balance of the SV can be recovered on a dedicated validator but the SV must be onboarded as a separate node.
 
-<Note>
-Recovery of assets requires at least one of the following: a recent database backup, an up-to-date identities backup, or an external KMS that still retains the participant keys.
-</Note>
+## Restoring From Data Corruption
 
-## Restoring from data corruption
+While all components in the system are designed to be crash-fault-tolerant, there is always a chance of failures from which the system cannot immediately recover, e.g. due to misconfiguration or bugs. In such cases, we will need to restore a component, a full SV node, or even the whole network, from backups or from dumps from components that are still operational.
 
-{/* COPIED_START source="splice:docs/src/sv_operator/sv_restore.rst" */}
-While all components in the system are designed to be crash-fault-tolerant, there is always a chance of failures from which the system cannot immediately recover, e.g. due to misconfiguration or bugs. In such cases, you will need to restore a component, a full SV node, or even the whole network, from backups or from dumps from components that are still operational.
-{/* COPIED_END */}
+### Restoring a single component from backups
+
+If a single component in an SV node is corrupted, it should be recoverable from backups without restoring the whole node. This scenario is not yet tested enough to be advisable for production. Moreover, there are certain dependencies between the components that are not yet documented here.
 
 ### Restoring a full SV node from backups
 
-The backup taken from the apps database instance must be taken at a time strictly earlier than that of the participant backup. This ordering is required for the set of backup snapshots to be consistent.
+Assuming backups have been taken for the storage and DBs of all components per the instructions in `sv_backups`, the entire node can be restored from backups. Recall that in order for a set of backup snapshots to be consistent, the backup taken from the apps database instance must be taken at a time strictly earlier than that of the participant.
 
-Given a consistent set of backups, follow these steps:
+Assuming such a consistent set of backups is available, the following steps can be taken to restore the node:
 
-1. Scale down all components in the SV node to 0 replicas (replace `-0` with the correct migration ID if a migration has already been performed):
+Scale down all components in the SV node to 0 replicas (replace `-0` with the correct serial ID in case a logical synchronizer upgrade has already been performed):
 
-<CantonDocsGlobalSynchronizerProductionOperationsDisasterRecoveryL30 />
+<ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvRestoreBash57 />
 
-2. Restore the storage and databases of all components from the backups. The exact process depends on your storage and database setup.
+Restore the storage and DBs of all components from the backups. The exact process for this depends on the storage and DBs used by the components, and is not documented here.
 
-3. Scale up all components back to 1 replica:
+Once all storage has been restored, scale up all components in the SV node back to 1 replica (replace `-0` with the correct serial ID in case a logical synchronizer upgrade has already been performed):
 
-<CantonDocsGlobalSynchronizerProductionOperationsDisasterRecoveryL45 />
+<ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvRestoreBash74 />
 
-Once all components are healthy, they will start catching up their state from peer SVs and eventually become fully functional again.
+Once all components are healthy again, they should start catching up their state from peer SVs, and eventually become functional again.
 
 ## Re-onboard an SV and recover Amulets with a validator
 
-{/* COPIED_START source="splice:docs/src/sv_operator/sv_restore.rst" */}
 In the case of a catastrophic failure of the SV node, the amulets owned by the SV can be recovered via deploying a standalone validator node with control over the SV's participant keys. The SV node can be re-onboarded with a new identity and the amulets can be transferred from the validator to the new SV node.
+
+In order to be able to recover the amulet, the backup of the identities of your SV node is required. The details of fetching the identities are provided in the Backup of Node Identities section.
+
+From the backup of Node Identities, copy the content of the field `identities.participant` and save it as a separate JSON file. This file will be used as identities bootstrap dump for the validator runbook.
+
+<ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvRestoreBash102 />
+
+Once the failed SV node is offboarded by a majority of SVs (via a governance vote on a `OffboardMember` action), we can deploy a standalone validator node for recovering the SV's amulets.
+
+Repeat the steps described in `helm-validator-install` for installing the validator app and participant,
+
+While doing so, please note the following:
+
+- Modify the file `splice-node/examples/sv-helm/standalone-validator-values.yaml` so that `validatorPartyHint` is set to the name you chose when creating the SV identity.
+- Follow the notes in Restoring from a Participant Identities Dump to restore the validator with the identities from the backup. Use the separate JSON file prepared previously.
+
+Once the validator is up and running, login to the wallet of the validator `https://wallet.validator.YOUR_HOSTNAME` with the validator user account setup in `helm-validator-auth0`. Confirm that the wallet balance is as expected. It should be the same as the amount that the original SV owned.
+
+You can now deploy and onboard a fresh SV node (reusing your SV identity but otherwise starting with a clean slate) by following the steps in `helm-sv-install`.
+
+Login to the wallet of the new SV node, copy the new party ID. Switch to the wallet of the validator, create a new transfer offer sending the amulets to the new SV node with the copied party ID.
+
+Switch to the wallet of the new SV node, accept the transfer offer from the wallet of the new SV node, and verify that the amulets have arrived as expected.
+
+
 {/* COPIED_END */}
-
-### Prerequisites
-
-You need the backup of your SV node identities (see the backup procedures documentation). From that backup, extract the participant identities:
-
-<CantonDocsGlobalSynchronizerProductionOperationsDisasterRecoveryL68 />
-
-### Recovery steps
-
-1. Wait for the failed SV node to be offboarded by a majority of SVs through a governance vote on an `OffboardMember` action.
-
-2. Deploy a standalone validator node following the standard validator installation steps. When doing so:
-   - Set `validatorPartyHint` to the name you chose when creating the SV identity.
-   - Restore the validator with the identities from the backup, using the `dump_identities.json` file prepared above.
-
-3. Log in to the wallet at `https://wallet.validator.YOUR_HOSTNAME` with the validator user account. Confirm that the wallet balance matches what the original SV owned.
-
-4. Deploy and onboard a fresh SV node (reusing your SV identity but otherwise starting from a clean slate).
-
-5. Log in to the wallet of the new SV node and copy the new party ID.
-
-6. In the validator wallet, create a transfer offer sending the amulets to the new SV node using the copied party ID.
-
-7. In the new SV node wallet, accept the transfer offer and verify that the amulets arrived as expected.
-
-## Disaster recovery from loss of CometBFT layer
-
-This procedure applies when the entire CometBFT layer of the network is lost beyond repair. It follows a process similar to migration dumps but is unscheduled, and the recovery timestamp will likely be earlier than the time of the incident. Data loss between the recovery timestamp and the incident is expected.
-
-### High-level steps
-
-1. All SVs agree on a timestamp from which they will recover.
-2. Each SV operator fetches a data dump from their SV app for that timestamp.
-3. Each SV operator creates a migration dump file combining the data dump with their backed-up identities.
-4. SV operators deploy a new synchronizer.
-5. Each SV operator copies the migration dump file to their SV app's PVC and restarts the app to migrate the data.
-
-### Finding a consistent recovery timestamp
-
-{/* COPIED_START source="splice:docs/src/sv_operator/sv_restore.rst" */}
-Unlike the migration process, the synchronizer in case of disaster has not been paused in an orderly manner, therefore you cannot assume that all SVs are caught up to the same point. The SV operators therefore need to agree on a timestamp that many of the SV nodes have reached.
-{/* COPIED_END */}
-
-Search your participant log files for `CommitmentPeriod` to identify the periods for which your participant has committed to the Active Contract Set (ACS). Look for "Commitment correct for sender" messages such as:
-
-```
-Commitment correct for sender PAR::Digital-Asset-Eng-4::12205f1149bc...
-and period CommitmentPeriod(fromExclusive = 2024-04-21T23:24:00Z,
-toInclusive = 2024-04-21T23:25:00Z)
-```
-
-The `toInclusive` time indicates when your participant agreed with another node on the ACS state. SVs should find a period for which most of them have mutually committed.
-
-All transactions after the chosen timestamp will be lost. Any SV that has not committed to the chosen timestamp must either be re-onboarded or copy a data dump from another SV that has reached that timestamp.
-
-It is better to go a bit further back in time than the last agreed-upon ACS commitment -- roughly 15 minutes is a reasonable margin, since most validators have at least two transactions per round.
-
-### Creating a migration dump
-
-Fetch the data dump from the SV app:
-
-<CantonDocsGlobalSynchronizerProductionOperationsDisasterRecoveryL126 />
-
-Replace `<token>` with an OAuth2 Bearer Token and `<timestamp>` with the agreed-upon timestamp in ISO format (e.g., `2024-04-17T19:12:02Z`).
-
-Both the participant and sequencer must still be running for this call to succeed. If the call fails with a 400 error, your participant has been pruned beyond the chosen timestamp. If it fails with a 429, the timestamp is too late for your participant.
-
-Merge the identities dump with the data dump:
-
-<CantonDocsGlobalSynchronizerProductionOperationsDisasterRecoveryL139 />
-
-Copy the merged dump to the SV app PVC:
-
-<CantonDocsGlobalSynchronizerProductionOperationsDisasterRecoveryL146 />
-
-### Migrating the data
-
-Follow the standard migration procedure to update the SV app configuration to consume the migration dump file and seed the new synchronizer.

@@ -3,83 +3,125 @@ title: "Console Overview"
 description: "Accessing and using the Canton Console for validator and SV node operations"
 ---
 
-import CantonGlobalSynchronizerCantonConsoleConsoleOverviewL158 from "/snippets/canton-docs/global-synchronizer_canton-console_console-overview_L158.mdx";
+import ExternalSpliceMainSpliceRstCodeDocsSrcDeploymentConsoleAccessBash166 from "/snippets/internal/splice/main/splice-rst-code-docs-src-deployment-console-access-bash-166.mdx";
+import ExternalSpliceMainSpliceRstCodeDocsSrcDeploymentConsoleAccessBash174 from "/snippets/internal/splice/main/splice-rst-code-docs-src-deployment-console-access-bash-174.mdx";
 
+import ExternalSpliceMainSpliceRstCodeDocsSrcDeploymentConsoleAccessNone40 from "/snippets/internal/splice/main/splice-rst-code-docs-src-deployment-console-access-none-40.mdx";
+import ExternalSpliceMainSpliceRstCodeDocsSrcDeploymentConsoleAccessNone71 from "/snippets/internal/splice/main/splice-rst-code-docs-src-deployment-console-access-none-71.mdx";
 
-The Canton Console provides direct, interactive access to Canton node internals. It's a Scala-based REPL that connects to participant, sequencer, and mediator nodes for debugging, diagnostics, and advanced operations that aren't exposed through the standard APIs.
+{/* COPIED_START source="splice:docs/src/deployment/console_access.rst" hash="bccf3653" */}
 
-## When You Need the Console
+For more involved debugging and disaster recovery, direct access to the console of a Canton node (participant, sequencer, mediator) might be required. Steps to obtain such access:
 
-Most day-to-day operations happen through the Ledger API, Admin API, or web UIs. The Canton Console is for situations that require deeper access:
+Requirements:
 
-- Debugging stuck transactions or unexpected behavior
-- Inspecting topology state (party-to-participant mappings, package vetting)
-- Managing parties and packages at a low level
-- Disaster recovery or repair operations
-- Advanced key management and rotation
+- Direct access to the Canton node process
+- Canton binary
 
-## Starting the Console
-
-{/* COPIED_START source="splice:deployment/console_access.rst" hash="console-access" */}
-
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was adapted from existing reviewed documentation.
-**Source:** `deployment/console_access.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
-
-To access the Canton Console, you need:
-
-- Direct network access to the Canton node process (participant, sequencer, or mediator)
-- The Canton binary (typically via the Canton Docker image)
-
-### Participant Console
-
-1. Obtain an authentication token (see the Canton authentication docs for JWT setup)
-2. Ensure you can access the participant's ports 5001 (Ledger API) and 5002 (Admin API)
-3. Create a configuration file `console.conf`:
+Once you see the following banner for the console you have successfully gained access
 
 ```text
-canton {
-  remote-participants {
-    participant {
-      admin-api {
-        port = 5002
-        address = localhost
-      }
-      ledger-api {
-        port = 5001
-        address = localhost
-      }
-      token = "<auth token>"
-    }
-  }
-  features.enable-preview-commands = yes
-  features.enable-testing-commands = yes
-  features.enable-repair-commands = yes
-}
+      _____            _
+     / ____|          | |
+    | |     __ _ _ __ | |_ ___  _ __
+    | |    / _` | '_ \| __/ _ \| '_ \
+    | |___| (_| | | | | || (_) | | | |
+     \_____\__,_|_| |_|\__\___/|_| |_|
+
+     Welcome to Canton!
 ```
 
-4. Run the Canton Console via Docker:
+## Participant console
+
+1.  Obtain an authentication token as specified in [the Canton authentication docs](/global-synchronizer/reference/security-configuration#configure-api-authentication-and-authorization-with-jwt)
+
+2.  Ensure you can access the participant's ports 5001 and 5002
+
+3.  Add the configuration to a local file `console.conf`
+    <ExternalSpliceMainSpliceRstCodeDocsSrcDeploymentConsoleAccessNone40 />
+
+4.  Run the docker command
+
+{/* NETWORKVARS_START source="/snippets/networkvars/global-synchronizer/canton-console/console-overview-1.mdx" */}
+<Tabs>
+
+<Tab title="DevNet (0.6.7)">
 
 ```bash
-docker run -it --rm --network host \
-  -v $(pwd)/console.conf:/app/app.conf \
-  digitalasset/canton:3.3.0 --console
+docker run -it --rm --network host -v $(pwd)/console.conf:/app/app.conf ghcr.io/digital-asset/decentralized-canton-sync/docker/canton:0.6.7 --console
 ```
 
-Replace `3.3.0` with the Canton version matching your deployment. Check available versions at [Docker Hub](https://hub.docker.com/r/digitalasset/canton/tags).
+</Tab>
 
-<Note>
-If you run the participant using Docker Compose, use the Docker network used by the participant (e.g., `--network splice-validator`) and adjust the address in the config to the container name (e.g., `address = participant`).
-</Note>
+<Tab title="TestNet (0.6.6)">
 
-### Sequencer Console
+```bash
+docker run -it --rm --network host -v $(pwd)/console.conf:/app/app.conf ghcr.io/digital-asset/decentralized-canton-sync/docker/canton:0.6.6 --console
+```
 
-1. Ensure you can access the sequencer's ports 5008 (public API) and 5009 (Admin API)
-2. Create `console.conf`:
+</Tab>
 
-```text
+<Tab title="MainNet (0.6.5)">
+
+```bash
+docker run -it --rm --network host -v $(pwd)/console.conf:/app/app.conf ghcr.io/digital-asset/decentralized-canton-sync/docker/canton:0.6.5 --console
+```
+
+</Tab>
+
+</Tabs>
+{/* NETWORKVARS_END */}
+
+<Warning>
+If you run the participant using the docker compose setup the docker command must be run with the docker network used by the participant. Adjust the configuration to connect to the participant container:
+</Warning>
+
+<ExternalSpliceMainSpliceRstCodeDocsSrcDeploymentConsoleAccessNone71 />
+
+Running docker with the default network (`splice-validator`):
+
+{/* NETWORKVARS_START source="/snippets/networkvars/global-synchronizer/canton-console/console-overview-2.mdx" */}
+<Tabs>
+
+<Tab title="DevNet (0.6.7)">
+
+```bash
+docker run -it --rm --network splice-validator -v $(pwd)/console.conf:/app/app.conf ghcr.io/digital-asset/decentralized-canton-sync/docker/canton:0.6.7 --console
+```
+
+</Tab>
+
+<Tab title="TestNet (0.6.6)">
+
+```bash
+docker run -it --rm --network splice-validator -v $(pwd)/console.conf:/app/app.conf ghcr.io/digital-asset/decentralized-canton-sync/docker/canton:0.6.6 --console
+```
+
+</Tab>
+
+<Tab title="MainNet (0.6.5)">
+
+```bash
+docker run -it --rm --network splice-validator -v $(pwd)/console.conf:/app/app.conf ghcr.io/digital-asset/decentralized-canton-sync/docker/canton:0.6.5 --console
+```
+
+</Tab>
+
+</Tabs>
+{/* NETWORKVARS_END */}
+
+## Sequencer console
+
+{/* NETWORKVARS_START source="/snippets/networkvars/global-synchronizer/canton-console/console-overview-3.mdx" */}
+<Tabs>
+
+<Tab title="DevNet (0.6.7)">
+
+1.  Ensure you can access the sequencer's ports 5008 and 5009
+
+2.  Add the configuration to a local file `console.conf`
+
+```
 canton {
   remote-sequencers {
     sequencer {
@@ -98,15 +140,95 @@ canton {
   features.enable-repair-commands = yes
 }
 ```
+3.  Run the docker command
 
-3. Run the Docker command as shown above for the participant.
+```bash
+docker run -it --rm --network host -v $(pwd)/console.conf:/app/app.conf ghcr.io/digital-asset/decentralized-canton-sync/docker/canton:0.6.7 --console
+```
 
-### Mediator Console
+</Tab>
 
-1. Ensure you can access the mediator's port 5007 (Admin API)
-2. Create `console.conf`:
+<Tab title="TestNet (0.6.6)">
 
-```text
+1.  Ensure you can access the sequencer's ports 5008 and 5009
+
+2.  Add the configuration to a local file `console.conf`
+
+```
+canton {
+  remote-sequencers {
+    sequencer {
+      public-api {
+        port = 5008
+        address = localhost
+      }
+      admin-api {
+        port = 5009
+        address = localhost
+      }
+    }
+  }
+  features.enable-preview-commands = yes
+  features.enable-testing-commands = yes
+  features.enable-repair-commands = yes
+}
+```
+3.  Run the docker command
+
+```bash
+docker run -it --rm --network host -v $(pwd)/console.conf:/app/app.conf ghcr.io/digital-asset/decentralized-canton-sync/docker/canton:0.6.6 --console
+```
+
+</Tab>
+
+<Tab title="MainNet (0.6.5)">
+
+1.  Ensure you can access the sequencer's ports 5008 and 5009
+
+2.  Add the configuration to a local file `console.conf`
+
+```
+canton {
+  remote-sequencers {
+    sequencer {
+      public-api {
+        port = 5008
+        address = localhost
+      }
+      admin-api {
+        port = 5009
+        address = localhost
+      }
+    }
+  }
+  features.enable-preview-commands = yes
+  features.enable-testing-commands = yes
+  features.enable-repair-commands = yes
+}
+```
+3.  Run the docker command
+
+```bash
+docker run -it --rm --network host -v $(pwd)/console.conf:/app/app.conf ghcr.io/digital-asset/decentralized-canton-sync/docker/canton:0.6.5 --console
+```
+
+</Tab>
+
+</Tabs>
+{/* NETWORKVARS_END */}
+
+## Mediator console
+
+{/* NETWORKVARS_START source="/snippets/networkvars/global-synchronizer/canton-console/console-overview-4.mdx" */}
+<Tabs>
+
+<Tab title="DevNet (0.6.7)">
+
+1.  Ensure you can access the mediator's port 5007
+
+2.  Add the configuration to a local file `console.conf`
+
+```
 canton {
   remote-mediators {
     mediator {
@@ -121,46 +243,87 @@ canton {
   features.enable-repair-commands = yes
 }
 ```
-
-3. Run the Docker command as shown above.
-
-### K8s Cluster Access
-
-In a Kubernetes cluster, use a debug pod to access the console directly:
+3.  Run the docker command
 
 ```bash
-kubectl debug "${POD_NAME}" \
-  --image "$(kubectl get pod "${POD_NAME}" -o json | jq -re '.spec.containers[0].image')" \
-  -i -t -- bash
+docker run -it --rm --network host -v $(pwd)/console.conf:/app/app.conf ghcr.io/digital-asset/decentralized-canton-sync/docker/canton:0.6.7 --console
 ```
 
-Where `POD_NAME` is the name of the participant, sequencer, or mediator pod. Inside the pod:
+</Tab>
+
+<Tab title="TestNet (0.6.6)">
+
+1.  Ensure you can access the mediator's port 5007
+
+2.  Add the configuration to a local file `console.conf`
+
+```
+canton {
+  remote-mediators {
+    mediator {
+      admin-api {
+        port = 5007
+        address = localhost
+      }
+    }
+  }
+  features.enable-preview-commands = yes
+  features.enable-testing-commands = yes
+  features.enable-repair-commands = yes
+}
+```
+3.  Run the docker command
 
 ```bash
-apt-get update && apt-get install -y vim
-vim console.conf  # paste in the appropriate config from above
-/app/bin/canton -v -c console.conf
+docker run -it --rm --network host -v $(pwd)/console.conf:/app/app.conf ghcr.io/digital-asset/decentralized-canton-sync/docker/canton:0.6.6 --console
 ```
+
+</Tab>
+
+<Tab title="MainNet (0.6.5)">
+
+1.  Ensure you can access the mediator's port 5007
+
+2.  Add the configuration to a local file `console.conf`
+
+```
+canton {
+  remote-mediators {
+    mediator {
+      admin-api {
+        port = 5007
+        address = localhost
+      }
+    }
+  }
+  features.enable-preview-commands = yes
+  features.enable-testing-commands = yes
+  features.enable-repair-commands = yes
+}
+```
+3.  Run the docker command
+
+```bash
+docker run -it --rm --network host -v $(pwd)/console.conf:/app/app.conf ghcr.io/digital-asset/decentralized-canton-sync/docker/canton:0.6.5 --console
+```
+
+</Tab>
+
+</Tabs>
+{/* NETWORKVARS_END */}
+
+## Access in a K8s cluster
+
+In a K8s cluster you can use a debug pod to access the console directly from the cluster.
+
+First you can create a pod running the right canton version using:
+
+<ExternalSpliceMainSpliceRstCodeDocsSrcDeploymentConsoleAccessBash166 />
+
+where `POD_NAME` is the name of the participant/sequencer/mediator pod.
+
+Once you are inside the running pod you can install a text editor and create the config file `console.conf` that is described above.
+
+<ExternalSpliceMainSpliceRstCodeDocsSrcDeploymentConsoleAccessBash174 />
 
 {/* COPIED_END */}
-
-## Console Structure
-
-Once connected, the console provides access to node-specific objects:
-
-- **`participant`** — For participant consoles: party management, package management, ledger operations
-- **`sequencer`** — For sequencer consoles: synchronizer status, sequencing operations
-- **`mediator`** — For mediator consoles: mediator state inspection
-
-Each object exposes a hierarchy of commands organized by domain: `health`, `topology`, `parties`, `packages`, `domains` (on participants), and more.
-
-### Help System
-
-Use the built-in help to discover available commands:
-
-<CantonGlobalSynchronizerCantonConsoleConsoleOverviewL158 />
-
-## Next Steps
-
-- [Essential Commands](/global-synchronizer/canton-console/essential-commands) — Key commands for health checks, party and package management
-- [Debugging Workflows](/global-synchronizer/canton-console/debugging-workflows) — Step-by-step diagnostic procedures

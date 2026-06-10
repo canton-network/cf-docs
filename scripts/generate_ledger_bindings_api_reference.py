@@ -41,6 +41,7 @@ LANGUAGE_DIRS = {
     "java": "java",
 }
 REMOVED_LANGUAGE_DIRS = {"scala"}
+DETAILS_LABEL = "Details and history"
 ARTIFACT_PAGE_DESCRIPTIONS = {
     "java": "Generated package reference and version summary from local Javadoc snapshots",
 }
@@ -307,7 +308,11 @@ def update_docs_navigation(
         docs_json_path=docs_json_path,
         group_label=group_label,
     )
-    generated_refs.add(docs_json_page_ref(overview_file, docs_json_path))
+    overview_ref = docs_json_page_ref(overview_file, docs_json_path)
+    generated_refs.add(overview_ref)
+    jvm_pages = jvm_group.setdefault("pages", [])
+    if isinstance(jvm_pages, list) and overview_ref not in jvm_pages:
+        jvm_pages.append(overview_ref)
     dropdown["pages"] = prune_nav_items(
         pages,
         page_refs=generated_refs,
@@ -569,6 +574,21 @@ def rewrite_java_only_generated_text(text: str) -> str:
         if line.strip() != "- Scala deprecation is not inferred from Scaladoc indexes in this initial implementation."
     ]
     return "\n".join(filtered_lines).rstrip() + "\n"
+
+
+def rewrite_overview_as_details_page(text: str) -> str:
+    frontmatter, body = split_frontmatter(text)
+    updated_frontmatter: list[str] = []
+    title_written = False
+    for line in frontmatter:
+        if line.startswith("title: "):
+            updated_frontmatter.append(f'title: "{DETAILS_LABEL}"')
+            title_written = True
+        else:
+            updated_frontmatter.append(line)
+    if not title_written:
+        updated_frontmatter.insert(0, f'title: "{DETAILS_LABEL}"')
+    return "\n".join(["---", *updated_frontmatter, "---", "", body.rstrip(), ""])
 
 
 def parse_markdown_table(lines: list[str]) -> tuple[list[str], list[list[str]]]:
@@ -908,6 +928,10 @@ def publish_rendered_pages(
         publish_overview_file,
         replacements=overview_replacements,
         rewrite_java_only_text=True,
+    )
+    publish_overview_file.write_text(
+        rewrite_overview_as_details_page(publish_overview_file.read_text(encoding="utf-8")),
+        encoding="utf-8",
     )
     generated_refs.add(docs_json_page_ref(publish_overview_file, DEFAULT_DOCS_JSON))
     return publish_overview_file, generated_refs

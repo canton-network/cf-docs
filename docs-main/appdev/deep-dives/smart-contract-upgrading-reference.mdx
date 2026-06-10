@@ -5,12 +5,6 @@ description: "Detailed rules for package validation on upload, and runtime upgra
 
 {/* COPIED_START source="docs-website:docs/replicated/daml/3.4/sdk/reference/smart-contract-upgrades.rst" hash="9f2fcd76" */}
 
-<Warning title="Pre-reviewed Content - Do Not Modify">
-This section was copied from existing reviewed documentation.
-**Source:** `docs/replicated/daml/3.4/sdk/reference/smart-contract-upgrades.rst`
-Reviewers: Skip this section. Remove markers after final approval.
-</Warning>
-
 This document describes in detail what rules govern package validation upon upload and how contracts, choice arguments and choice results are upgraded or downgraded at runtime. These topics are for a large part covered in Smart Contract Upgrade. This document acts as a thorough reference.
 
 ## Static Checks
@@ -23,7 +17,7 @@ DAR upgrade checks are broken down into package-level checks, which are in turn 
 
 <div id="upgrades-utility-package">
 
-**Definition:** A *utility package* is a package with no template definition, no interface definition, no exception definition, and only [non-serializable]() data type definitions. A utility package typically consists of helper functions and constants, but no type definitions.
+**Definition:** A *utility package* is a package with no template definition, no interface definition, no exception definition, and only non-[serializable](https://github.com/digital-asset/daml/blob/main/sdk/daml-lf/spec/daml-lf-2.rst#serializable-types) data type definitions. A utility package typically consists of helper functions and constants, but no type definitions.
 
 </div>
 
@@ -47,31 +41,39 @@ The modules of the new version of a package must form a superset of the modules 
 
 In the file tree below, package v2 is a potentially valid upgrade of package v1, assuming `v2/A.daml` is a valid upgrade of `v1/A.daml`.
 
-``` 
-├── v1
-│   ├── daml
-│   │   └── A.daml
-│   └── daml.yaml
-└── v2
-    ├── daml
-    │   ├── A.daml
-    │   └── B.daml
-    └── daml.yaml
-```
+<Tree>
+  <Tree.Folder name="v1" defaultOpen>
+    <Tree.Folder name="daml" defaultOpen>
+      <Tree.File name="A.daml" />
+    </Tree.Folder>
+    <Tree.File name="daml.yaml" />
+  </Tree.Folder>
+  <Tree.Folder name="v2" defaultOpen>
+    <Tree.Folder name="daml" defaultOpen>
+      <Tree.File name="A.daml" />
+      <Tree.File name="B.daml" />
+    </Tree.Folder>
+    <Tree.File name="daml.yaml" />
+  </Tree.Folder>
+</Tree>
 
 In the file tree below, package v2 cannot possibly be a valid upgrade of v1 because it doesn't define module `B`.
 
-``` 
-├── v1
-│   ├── daml
-│   │   ├── A.daml
-│   │   └── B.daml
-│   └── daml.yaml
-└── v2
-    ├── daml
-    │   └── A.daml
-    └── daml.yaml
-```
+<Tree>
+  <Tree.Folder name="v1" defaultOpen>
+    <Tree.Folder name="daml" defaultOpen>
+      <Tree.File name="A.daml" />
+      <Tree.File name="B.daml" />
+    </Tree.Folder>
+    <Tree.File name="daml.yaml" />
+  </Tree.Folder>
+  <Tree.Folder name="v2" defaultOpen>
+    <Tree.Folder name="daml" defaultOpen>
+      <Tree.File name="A.daml" />
+    </Tree.Folder>
+    <Tree.File name="daml.yaml" />
+  </Tree.Folder>
+</Tree>
 
 ### Templates
 
@@ -85,48 +87,37 @@ The templates of the new version of a package must form a superset of the templa
 
 Below, the module on the right is a valid upgrade of the module on the left. But the module on the left is **not** a valid upgrade of the module on the right because it lacks a definition for template `T2`.
 
-<table>
-<colgroup>
-<col style={{width: "50%"}} />
-<col style={{width: "50%"}} />
-</colgroup>
-<tbody>
-<tr className="odd">
-<td>
+<Columns cols={2}>
+  <Column>
+    ```text
+    module M where
 
-```text
-module M where
+    template T1      
+      with           
+        p : Party    
+      where          
+        signatory p
+    ```
+  </Column>
+  <Column>
+    ```text
+    module M where   
 
-template T1      
-  with           
-    p : Party    
-  where          
-    signatory p
-```
+      template T1
+        with
+          p : Party
+        where
+          signatory p
 
-</td>
-<td>
+      template T2
+        with
+          p : Party
+        where
+          signatory p
+    ```
+  </Column>
+</Columns>
 
-```text
-module M where   
-
-  template T1
-    with
-      p : Party
-    where
-      signatory p
-
-  template T2
-    with
-      p : Party
-    where
-      signatory p
-```
-
-</td>
-</tr>
-</tbody>
-</table>
 
 ### Template Parameters
 
@@ -148,148 +139,100 @@ Adding a non-optional parameter at the end of the parameter leads to a validatio
 
 Below, the template on the right is a valid upgrade of the template on the left. It adds an optional parameter `x1` at the end of the parameter sequence.
 
-<table>
-<colgroup>
-<col style={{width: "50%"}} />
-<col style={{width: "50%"}} />
-</colgroup>
-<tbody>
-<tr className="odd">
-<td>
-
-```text
-template T
-    with
-      p : Party
-    where
-      signatory p
-```
-
-</td>
-<td>
-
-```text
-template T
-    with
-      p : Party
-      x1 : Optional Int
-    where
-      signatory p
-```
-
-</td>
-</tr>
-</tbody>
-</table>
+<Columns cols={2}>
+  <Column>
+    ```text
+    template T
+        with
+          p : Party
+        where
+          signatory p
+    ```
+  </Column>
+  <Column>
+    ```text
+    template T
+        with
+          p : Party
+          x1 : Optional Int
+        where
+          signatory p
+    ```
+  </Column>
+</Columns>
 
 Below, the template on the right is **not** a valid upgrade of the template on the left because it adds a new parameter `x1` before `p` instead of adding it at the end of the parameter sequence.
 
-<table>
-<colgroup>
-<col style={{width: "50%"}} />
-<col style={{width: "50%"}} />
-</colgroup>
-<tbody>
-<tr className="odd">
-<td>
-
-```text
-template T
-  with
-    p : Party
-  where
-    signatory p
-```
-
-</td>
-<td>
-
-```text
-template T
-  with
-    x1 : Optional Int
-    p : Party
-  where
-    signatory p
-```
-
-</td>
-</tr>
-</tbody>
-</table>
+<Columns cols={2}>
+  <Column>
+    ```text
+    template T
+      with
+        p : Party
+      where
+        signatory p
+    ```
+  </Column>
+  <Column>
+    ```text
+    template T
+      with
+        x1 : Optional Int
+        p : Party
+      where
+        signatory p
+    ```
+  </Column>
+</Columns>
 
 Below, the template on the right is **not** a valid upgrade of the template on the left because it drops parameter `x1`.
 
-<table>
-<colgroup>
-<col style={{width: "50%"}} />
-<col style={{width: "50%"}} />
-</colgroup>
-<tbody>
-<tr className="odd">
-<td>
-
-```text
-template T
-  with
-    p : Party
-    x1 : Int
-  where
-    signatory p
-```
-
-</td>
-<td>
-
-```text
-template T
-  with
-    p : Party
-  where
-    signatory p
-```
-
-</td>
-</tr>
-</tbody>
-</table>
+<Columns cols={2}>
+  <Column>
+    ```text
+    template T
+      with
+        p : Party
+        x1 : Int
+      where
+        signatory p
+    ```
+  </Column>
+  <Column>
+    ```text
+    template T
+      with
+        p : Party
+      where
+        signatory p
+    ```
+  </Column>
+</Columns>
 
 Below, the template on the right is **not** a valid upgrade of the template on the left because it changes the type of `x1` from `Int` to `Text`. `Text` is not a valid upgrade of `Int`.
 
-<table>
-<colgroup>
-<col style={{width: "50%"}} />
-<col style={{width: "50%"}} />
-</colgroup>
-<tbody>
-<tr className="odd">
-<td>
-
-```text
-template T
-  with
-    p : Party
-    x1 : Int
-  where
-    signatory p
-```
-
-</td>
-<td>
-
-```text
-template T
-  with
-    p : Party
-    x1 : Text
-  where
-    signatory p
-```
-
-</td>
-</tr>
-</tbody>
-</table>
+<Columns cols={2}>
+  <Column>
+    ```text
+    template T
+      with
+        p : Party
+        x1 : Int
+      where
+        signatory p
+    ```
+  </Column>
+  <Column>
+    ```text
+    template T
+      with
+        p : Party
+        x1 : Text
+      where
+        signatory p
+    ```
+  </Column>
+</Columns>
 
 ### Template Choices
 
@@ -303,43 +246,31 @@ The choices of the new version of a template must form a superset of the choices
 
 Below, the template on the right is a valid upgrade of the template on the left. It adds a choice `C` to the previous version of the template. But the template on the left is **not** a valid upgrade of the template on the right as it deletes a choice.
 
-<table>
-<colgroup>
-<col style={{width: "50%"}} />
-<col style={{width: "50%"}} />
-</colgroup>
-<tbody>
-<tr className="odd">
-<td>
+<Columns cols={2}>
+  <Column>
+    ```text
+    template T
+      with
+        p : Party
+      where
+        signatory p
+    ```
+  </Column>
+  <Column>
+    ```text
+    template T
+      with
+        p : Party
+      where
+        signatory p
 
-```text
-template T
-  with
-    p : Party
-  where
-    signatory p
-```
-
-</td>
-<td>
-
-```text
-template T
-  with
-    p : Party
-  where
-    signatory p
-
-    choice C : ()
-      controller p
-      do
-        return ()
-```
-
-</td>
-</tr>
-</tbody>
-</table>
+        choice C : ()
+          controller p
+          do
+            return ()
+    ```
+  </Column>
+</Columns>
 
 ### Template Choices - Parameters
 
@@ -357,189 +288,129 @@ Adding a non-optional parameter at the end of the parameter sequence leads to a 
 
 Below, the choice on the right is a valid upgrade of the choice on the left. It adds an optional parameter `x2` at the end of the parameter sequence.
 
-<table>
-<colgroup>
-<col style={{width: "50%"}} />
-<col style={{width: "50%"}} />
-</colgroup>
-<tbody>
-<tr className="odd">
-<td>
-
-```text
-choice C : ()
-  with
-    x1 : Int
-  controller p
-  do 
-    return ()
-```
-
-</td>
-<td>
-
-```text
-choice C : ()
-  with
-    x1 : Int
-    x2 : Optional Text
-  controller p
-  do 
-    return ()
-```
-
-</td>
-</tr>
-</tbody>
-</table>
+<Columns cols={2}>
+  <Column>
+    ```text
+    choice C : ()
+      with
+        x1 : Int
+      controller p
+      do 
+        return ()
+    ```
+  </Column>
+  <Column>
+    ```text
+    choice C : ()
+      with
+        x1 : Int
+        x2 : Optional Text
+      controller p
+      do 
+        return ()
+    ```
+  </Column>
+</Columns>
 
 Below, the choice on the right is **not** a valid upgrade of the choice on the left because it adds a new parameter `x2` before `x1` instead of adding it at the end of the parameter sequence.
 
-<table>
-<colgroup>
-<col style={{width: "50%"}} />
-<col style={{width: "50%"}} />
-</colgroup>
-<tbody>
-<tr className="odd">
-<td>
-
-```text
-choice C : ()
-  with
-    x1 : Int
-  controller p
-  do 
-    return ()
-```
-
-</td>
-<td>
-
-```text
-choice C : ()
-  with
-    x2 : Optional Text
-    x1 : Int
-  controller p
-  do 
-    return ()
-```
-
-</td>
-</tr>
-</tbody>
-</table>
+<Columns cols={2}>
+  <Column>
+    ```text
+    choice C : ()
+      with
+        x1 : Int
+      controller p
+      do 
+        return ()
+    ```
+  </Column>
+  <Column>
+    ```text
+    choice C : ()
+      with
+        x2 : Optional Text
+        x1 : Int
+      controller p
+      do 
+        return ()
+    ```
+  </Column>
+</Columns>
 
 Below, the choice on the right is **not** a valid upgrade of the choice on the left because it adds a new field `x2` before `x1` instead of adding it at the end of the parameter sequence.
 
-<table>
-<colgroup>
-<col style={{width: "50%"}} />
-<col style={{width: "50%"}} />
-</colgroup>
-<tbody>
-<tr className="odd">
-<td>
-
-```text
-choice C : ()
-  with
-    x1 : Int
-  controller p
-  do 
-    return ()
-```
-
-</td>
-<td>
-
-```text
-choice C : ()
-  with
-    x2 : Optional Text
-    x1 : Int
-  controller p
-  do 
-    return ()
-```
-
-</td>
-</tr>
-</tbody>
-</table>
+<Columns cols={2}>
+  <Column>
+    ```text
+    choice C : ()
+      with
+        x1 : Int
+      controller p
+      do 
+        return ()
+    ```
+  </Column>
+  <Column>
+    ```text
+    choice C : ()
+      with
+        x2 : Optional Text
+        x1 : Int
+      controller p
+      do 
+        return ()
+    ```
+  </Column>
+</Columns>
 
 Below, the choice on the right is **not** a valid upgrade of the choice on the left because it drops parameter `x1`.
 
-<table>
-<colgroup>
-<col style={{width: "50%"}} />
-<col style={{width: "50%"}} />
-</colgroup>
-<tbody>
-<tr className="odd">
-<td>
-
-```text
-choice C : ()
-  with
-    x1 : Int
-  controller p
-  do 
-    return ()
-```
-
-</td>
-<td>
-
-```text
-choice C : ()
-  with
-  controller p
-  do 
-    return ()
-```
-
-</td>
-</tr>
-</tbody>
-</table>
+<Columns cols={2}>
+  <Column>
+    ```text
+    choice C : ()
+      with
+        x1 : Int
+      controller p
+      do 
+        return ()
+    ```
+  </Column>
+  <Column>
+    ```text
+    choice C : ()
+      with
+      controller p
+      do 
+        return ()
+    ```
+  </Column>
+</Columns>
 
 Below, the choice on the right is **not** a valid upgrade of the choice on the left because it changes the type of `x1` from `Int` to `Text`. `Text` is not a valid upgrade of `Int`.
 
-<table>
-<colgroup>
-<col style={{width: "50%"}} />
-<col style={{width: "50%"}} />
-</colgroup>
-<tbody>
-<tr className="odd">
-<td>
-
-```text
-choice C : ()
-  with
-    x1 : Int
-  controller p
-  do 
-    return ()
-```
-
-</td>
-<td>
-
-```text
-choice C : ()
-  with
-  controller p
-  do 
-    return ()
-```
-
-</td>
-</tr>
-</tbody>
-</table>
+<Columns cols={2}>
+  <Column>
+    ```text
+    choice C : ()
+      with
+        x1 : Int
+      controller p
+      do 
+        return ()
+    ```
+  </Column>
+  <Column>
+    ```text
+    choice C : ()
+      with
+      controller p
+      do 
+        return ()
+    ```
+  </Column>
+</Columns>
 
 ### Template Choices - Return Type
 
@@ -555,36 +426,24 @@ Changing the return type of a choice for a non-valid upgrade leads to a validati
 
 Below, the choice on the right is **not** a valid upgrade of the choice on the left because it changes its return type from `()` to `Int`. `Int` is not a valid upgrade of `()`.
 
-<table>
-<colgroup>
-<col style={{width: "50%"}} />
-<col style={{width: "50%"}} />
-</colgroup>
-<tbody>
-<tr className="odd">
-<td>
-
-```text
-choice C : ()
-  controller p
-  do
-    return ()
-```
-
-</td>
-<td>
-
-```text
-choice C : Int
-  controller p
-  do
-    return 1
-```
-
-</td>
-</tr>
-</tbody>
-</table>
+<Columns cols={2}>
+  <Column>
+    ```text
+    choice C : ()
+      controller p
+      do
+        return ()
+    ```
+  </Column>
+  <Column>
+    ```text
+    choice C : Int
+      controller p
+      do
+        return 1
+    ```
+  </Column>
+</Columns>
 
 ### Data Types
 
@@ -602,164 +461,104 @@ Non-serializable data types are inexistent from the point of view of the upgrade
 
 Below, the module on the right is a valid upgrade of the module on the left. It defines an additional serializable data type `B`.
 
-<table>
-<colgroup>
-<col style={{width: "50%"}} />
-<col style={{width: "50%"}} />
-</colgroup>
-<tbody>
-<tr className="odd">
-<td>
+<Columns cols={2}>
+  <Column>
+    ```text
+    module M where
 
-```text
-module M where
+    data A = A
+    ```
+  </Column>
+  <Column>
+    ```text
+    module M where
 
-data A = A
-```
-
-</td>
-<td>
-
-```text
-module M where
-
-data A = A
-data B = B
-```
-
-</td>
-</tr>
-</tbody>
-</table>
+    data A = A
+    data B = B
+    ```
+  </Column>
+</Columns>
 
 Below, the module on the right is a valid upgrade of the module on the left. It turns the non-serializable type `A` into a serializable one. The non-serializable type is invisible to the upgrade validity check so this amounts to adding a new data type to the module on the right.
 
-<table>
-<colgroup>
-<col style={{width: "50%"}} />
-<col style={{width: "50%"}} />
-</colgroup>
-<tbody>
-<tr className="odd">
-<td>
+<Columns cols={2}>
+  <Column>
+    ```text
+    module M where
 
-```text
-module M where
+    data A = A
+      with 
+        x : Int -> Int
+    ```
+  </Column>
+  <Column>
+    ```text
+    module M where
 
-data A = A
-  with 
-    x : Int -> Int
-```
-
-</td>
-<td>
-
-```text
-module M where
-
-data A = A
-  with
-```
-
-</td>
-</tr>
-</tbody>
-</table>
+    data A = A
+      with
+    ```
+  </Column>
+</Columns>
 
 Below, the module on the right is **not** a valid upgrade of the module on the left because it changes the variety of `A` from record type to variant type.
 
-<table>
-<colgroup>
-<col style={{width: "50%"}} />
-<col style={{width: "50%"}} />
-</colgroup>
-<tbody>
-<tr className="odd">
-<td>
+<Columns cols={2}>
+  <Column>
+    ```text
+    module M where
 
-```text
-module M where
+    data A = A
+      with
+    ```
+  </Column>
+  <Column>
+    ```text
+    module M where
 
-data A = A
-  with
-```
-
-</td>
-<td>
-
-```text
-module M where
-
-data A = A | B
-```
-
-</td>
-</tr>
-</tbody>
-</table>
+    data A = A | B
+    ```
+  </Column>
+</Columns>
 
 Below, the module on the right is **not** a valid upgrade of the module on the left because it drops the serializable data type `A`.
 
-<table>
-<colgroup>
-<col style={{width: "50%"}} />
-<col style={{width: "50%"}} />
-</colgroup>
-<tbody>
-<tr className="odd">
-<td>
+<Columns cols={2}>
+  <Column>
+    ```text
+    module M where
 
-```text
-module M where
-
-data A = A
-```
-
-</td>
-<td>
-
-```text
-module M where
-```
-
-</td>
-</tr>
-</tbody>
-</table>
+    data A = A
+    ```
+  </Column>
+  <Column>
+    ```text
+    module M where
+    ```
+  </Column>
+</Columns>
 
 Below, the module on the right is **not** a valid upgrade of the module on the left because although it adds an optional field to the record type `A`, it also turns `A` into a non-serializable type, which amounts to deleting `A` from the point of view of the upgrade validity check.
 
-<table>
-<colgroup>
-<col style={{width: "50%"}} />
-<col style={{width: "50%"}} />
-</colgroup>
-<tbody>
-<tr className="odd">
-<td>
+<Columns cols={2}>
+  <Column>
+    ```text
+    module M where
 
-```text
-module M where
+    data A = A
+      with
+    ```
+  </Column>
+  <Column>
+    ```text
+    module M where
 
-data A = A
-  with
-```
-
-</td>
-<td>
-
-```text
-module M where
-
-data A = A 
-  with 
-    x : Optional (Int -> Int)
-```
-
-</td>
-</tr>
-</tbody>
-</table>
+    data A = A 
+      with 
+        x : Optional (Int -> Int)
+    ```
+  </Column>
+</Columns>
 
 ### Data Types - Records
 
@@ -781,122 +580,74 @@ Adding a non-optional field at the end of the field sequence leads to a validati
 
 Below, the record on the right is a valid upgrade of the module on the left. It adds an optional field `x2` at the end of the field sequence.
 
-<table>
-<colgroup>
-<col style={{width: "50%"}} />
-<col style={{width: "50%"}} />
-</colgroup>
-<tbody>
-<tr className="odd">
-<td>
-
-```text
-data T = T with
-  x1 : Int
-```
-
-</td>
-<td>
-
-```text
-data T = T with
- x1 : Int
- x2 : Optional Text
-```
-
-</td>
-</tr>
-</tbody>
-</table>
+<Columns cols={2}>
+  <Column>
+    ```text
+    data T = T with
+      x1 : Int
+    ```
+  </Column>
+  <Column>
+    ```text
+    data T = T with
+     x1 : Int
+     x2 : Optional Text
+    ```
+  </Column>
+</Columns>
 
 Below, the record on the right is **not** a valid upgrade of the record on the left because it adds a new field `x2` before `x1` instead of adding it at the end of the field sequence.
 
-<table>
-<colgroup>
-<col style={{width: "50%"}} />
-<col style={{width: "50%"}} />
-</colgroup>
-<tbody>
-<tr className="odd">
-<td>
-
-```text
-data T = T with
-  x1 : Int
-```
-
-</td>
-<td>
-
-```text
-data T = T with
-  x2 : Optional Text
-  x1 : Int
-```
-
-</td>
-</tr>
-</tbody>
-</table>
+<Columns cols={2}>
+  <Column>
+    ```text
+    data T = T with
+      x1 : Int
+    ```
+  </Column>
+  <Column>
+    ```text
+    data T = T with
+      x2 : Optional Text
+      x1 : Int
+    ```
+  </Column>
+</Columns>
 
 Below, the record on the right is **not** a valid upgrade of the record on the left because it drops field `x2`.
 
-<table>
-<colgroup>
-<col style={{width: "50%"}} />
-<col style={{width: "50%"}} />
-</colgroup>
-<tbody>
-<tr className="odd">
-<td>
-
-```text
-data T = T with
-  x1 : Int
-  x2 : Text
-```
-
-</td>
-<td>
-
-```text
-data T = T with
-  x1 : Int
-```
-
-</td>
-</tr>
-</tbody>
-</table>
+<Columns cols={2}>
+  <Column>
+    ```text
+    data T = T with
+      x1 : Int
+      x2 : Text
+    ```
+  </Column>
+  <Column>
+    ```text
+    data T = T with
+      x1 : Int
+    ```
+  </Column>
+</Columns>
 
 Below, the record on the right is **not** a valid upgrade of the record on the left because it changes the type of `x1` from `Int` to `Text`. `Text` is not a valid upgrade of `Int`.
 
-<table>
-<colgroup>
-<col style={{width: "50%"}} />
-<col style={{width: "50%"}} />
-</colgroup>
-<tbody>
-<tr className="odd">
-<td>
-
-```text
-data T = T with
-  x1 : Int
-```
-
-</td>
-<td>
-
-```text
-data T = T with
-  x1 : Text
-```
-
-</td>
-</tr>
-</tbody>
-</table>
+<Columns cols={2}>
+  <Column>
+    ```text
+    data T = T with
+      x1 : Int
+    ```
+  </Column>
+  <Column>
+    ```text
+    data T = T with
+      x1 : Text
+    ```
+  </Column>
+</Columns>
 
 ### Data Types - Variants
 
@@ -920,245 +671,149 @@ Enums cannot get upgraded to variants: adding a constructor with an argument at 
 
 Below, the variant on the right is a valid upgrade of the variant on the left. It adds a new constructor `C` at the end of the constructor sequence.
 
-<table>
-<colgroup>
-<col style={{width: "50%"}} />
-<col style={{width: "50%"}} />
-</colgroup>
-<tbody>
-<tr className="odd">
-<td>
-
-```text
-data T =
-  A Int | B Text
-```
-
-</td>
-<td>
-
-```text
-data T = 
-  A Int | B Text | C Bool
-```
-
-</td>
-</tr>
-</tbody>
-</table>
+<Columns cols={2}>
+  <Column>
+    ```text
+    data T =
+      A Int | B Text
+    ```
+  </Column>
+  <Column>
+    ```text
+    data T = 
+      A Int | B Text | C Bool
+    ```
+  </Column>
+</Columns>
 
 Below, the variant on the right is a valid upgrade of the variant on the left. It adds a new optional field to constructor `B`.
 
-<table>
-<colgroup>
-<col style={{width: "50%"}} />
-<col style={{width: "50%"}} />
-</colgroup>
-<tbody>
-<tr className="odd">
-<td>
-
-```text
-data T =
-  A | B { x : Int }
-```
-
-</td>
-<td>
-
-```text
-data T = 
-  A | B { x : Int, y : Optional Text }
-```
-
-</td>
-</tr>
-</tbody>
-</table>
+<Columns cols={2}>
+  <Column>
+    ```text
+    data T =
+      A | B { x : Int }
+    ```
+  </Column>
+  <Column>
+    ```text
+    data T = 
+      A | B { x : Int, y : Optional Text }
+    ```
+  </Column>
+</Columns>
 
 Below, the variant on the right is **not** a valid upgrade of the variant on the left because it adds a new constructor `C` before `B` instead of adding it at the end of the constructor sequence.
 
-<table>
-<colgroup>
-<col style={{width: "50%"}} />
-<col style={{width: "50%"}} />
-</colgroup>
-<tbody>
-<tr className="odd">
-<td>
-
-```text
-data T =
-  A Int | B Text
-```
-
-</td>
-<td>
-
-```text
-data T = 
-  A Int | C Bool | B Text
-```
-
-</td>
-</tr>
-</tbody>
-</table>
+<Columns cols={2}>
+  <Column>
+    ```text
+    data T =
+      A Int | B Text
+    ```
+  </Column>
+  <Column>
+    ```text
+    data T = 
+      A Int | C Bool | B Text
+    ```
+  </Column>
+</Columns>
 
 Below, the variant on the right is **not** a valid upgrade of the variant on the left because it changes the order of its constructors.
 
-<table>
-<colgroup>
-<col style={{width: "50%"}} />
-<col style={{width: "50%"}} />
-</colgroup>
-<tbody>
-<tr className="odd">
-<td>
-
-```text
-data T =
-  A Int | B Text
-```
-
-</td>
-<td>
-
-```text
-data T = 
-  B Text | A Int
-```
-
-</td>
-</tr>
-</tbody>
-</table>
+<Columns cols={2}>
+  <Column>
+    ```text
+    data T =
+      A Int | B Text
+    ```
+  </Column>
+  <Column>
+    ```text
+    data T = 
+      B Text | A Int
+    ```
+  </Column>
+</Columns>
 
 Below, the variant on the right is **not** a valid upgrade of the variant on the left because it drops constructor `B`.
 
-<table>
-<colgroup>
-<col style={{width: "50%"}} />
-<col style={{width: "50%"}} />
-</colgroup>
-<tbody>
-<tr className="odd">
-<td>
-
-```text
-data T =
-  A Int | B Text
-```
-
-</td>
-<td>
-
-```text
-data T = 
-  A Int
-```
-
-</td>
-</tr>
-</tbody>
-</table>
+<Columns cols={2}>
+  <Column>
+    ```text
+    data T =
+      A Int | B Text
+    ```
+  </Column>
+  <Column>
+    ```text
+    data T = 
+      A Int
+    ```
+  </Column>
+</Columns>
 
 Below, the variant on the right is **not** a valid upgrade of the variant on the left because it changes the type of `B`'s argument from `Text` to `Bool`. `Bool` is not a valid upgrade of `Text`.
 
-<table>
-<colgroup>
-<col style={{width: "50%"}} />
-<col style={{width: "50%"}} />
-</colgroup>
-<tbody>
-<tr className="odd">
-<td>
-
-```text
-data T =
-  A Int | B Text
-```
-
-</td>
-<td>
-
-```text
-data T = 
-  A Int | B Bool
-```
-
-</td>
-</tr>
-</tbody>
-</table>
+<Columns cols={2}>
+  <Column>
+    ```text
+    data T =
+      A Int | B Text
+    ```
+  </Column>
+  <Column>
+    ```text
+    data T = 
+      A Int | B Bool
+    ```
+  </Column>
+</Columns>
 
 Below, the variant on the right is **not** a valid upgrade of the variant on the left because it adds an argument to constructor `B` which didn't have one before.
 
-<table>
-<colgroup>
-<col style={{width: "50%"}} />
-<col style={{width: "50%"}} />
-</colgroup>
-<tbody>
-<tr className="odd">
-<td>
-
-```text
-data T =
-  A Int | B
-```
-
-</td>
-<td>
-
-```text
-data T = 
-  A Int | B { x : Optional Text }
-```
-
-</td>
-</tr>
-</tbody>
-</table>
+<Columns cols={2}>
+  <Column>
+    ```text
+    data T =
+      A Int | B
+    ```
+  </Column>
+  <Column>
+    ```text
+    data T = 
+      A Int | B { x : Optional Text }
+    ```
+  </Column>
+</Columns>
 
 Below, the variant on the right is **not** a valid upgrade of the enum on the left. Enums cannot get upgraded to variants and `T` as defined on the left is an enum because none of its constructors have arguments.
 
-<table>
-<colgroup>
-<col style={{width: "50%"}} />
-<col style={{width: "50%"}} />
-</colgroup>
-<tbody>
-<tr className="odd">
-<td>
-
-```text
-data T =
-  A | B
-```
-
-</td>
-<td>
-
-```text
-data T = 
-  A | B | C Int
-```
-
-</td>
-</tr>
-</tbody>
-</table>
+<Columns cols={2}>
+  <Column>
+    ```text
+    data T =
+      A | B
+    ```
+  </Column>
+  <Column>
+    ```text
+    data T = 
+      A | B | C Int
+    ```
+  </Column>
+</Columns>
 
 ### Data Types - Enums
 
-For the purpose of upgrade validation, enums can be treated as a special case of variants. The rules of the section on [variants]() apply, only without constructor arguments.
+For the purpose of upgrade validation, enums can be treated as a special case of variants. The rules of [the section on variants](#data-types-variants) apply, only without constructor arguments.
 
 ### Data Types - Type References
 
 A type reference is an identifier that resolves to a type. For instance, consider the following module definitions, from two different packages:
 
-```daml
+```haskell
 -- In package q
 module Dep where
 
@@ -1166,7 +821,7 @@ data U = U with x : Int
 type A = U
 ```
 
-```daml
+```haskell
 -- In package p
 module M where
 import qualified Dep
@@ -1193,114 +848,78 @@ It is worth noting that even when *t2* upgrades *t1*, *r2* only upgrades *r1* pr
 
 In these examples we assume the existence of packages `q-1.0.0` and `q-2.0.0` and that the latter is a valid upgrade of the former.
 
-<table>
-<colgroup>
-<col style={{width: "50%"}} />
-<col style={{width: "50%"}} />
-</colgroup>
-<tbody>
-<tr className="odd">
-<td>In <code>q-1.0.0</code>:</td>
-<td>In <code>q-2.0.0</code>:</td>
-</tr>
-<tr className="even">
-<td>
+<Columns cols={2}>
+  <Column>
+    In <code>q-1.0.0</code>:
 
-```text
-module Dep where
+    ```text
+    module Dep where
 
-data U = C1
-data V = V
-```
+    data U = C1
+    data V = V
+    ```
+  </Column>
+  <Column>
+    In <code>q-2.0.0</code>:
 
-</td>
-<td>
+    ```text
+    module Dep where
 
-```text
-module Dep where
-
-data U = C1 | C2
-data V = V
-```
-
-</td>
-</tr>
-</tbody>
-</table>
+    data U = C1 | C2
+    data V = V
+    ```
+  </Column>
+</Columns>
 
 Then below, the module on the right is a valid upgrade of the module on the left.
 
-<table>
-<colgroup>
-<col style={{width: "50%"}} />
-<col style={{width: "50%"}} />
-</colgroup>
-<tbody>
-<tr className="odd">
-<td>
+<Columns cols={2}>
+  <Column>
+    ```text
+    module Main where
 
-```text
-module Main where
+    -- imported from q-1.0.0
+    import qualified Dep
 
--- imported from q-1.0.0
-import qualified Dep
+    data T = T Dep.U
+    ```
+  </Column>
+  <Column>
+    ```text
+    module Main where
 
-data T = T Dep.U
-```
+    -- imported from q-2.0.0
+    import qualified Dep
 
-</td>
-<td>
-
-```text
-module Main where
-
--- imported from q-2.0.0
-import qualified Dep
-
-data T = T Dep.U
-```
-
-</td>
-</tr>
-</tbody>
-</table>
+    data T = T Dep.U
+    ```
+  </Column>
+</Columns>
 
 However below, the module on the right is **not** a valid upgrade of the module on the left because `Dep.V` on the right belongs to package `q-1.0.0` which is not a valid upgrade of package `p-2.0.0`, even though the two definitions of `V` are the same.
 
-<table>
-<colgroup>
-<col style={{width: "50%"}} />
-<col style={{width: "50%"}} />
-</colgroup>
-<tbody>
-<tr className="odd">
-<td>
+<Columns cols={2}>
+  <Column>
+    ```text
+    module Main where
 
-```text
-module Main where
+    -- imported from q-2.0.0
+    import qualified Dep
 
--- imported from q-2.0.0
-import qualified Dep
+    data T = T Dep.V
+    ```
+  </Column>
+  <Column>
+    ```text
+    module Main where
 
-data T = T Dep.V
-```
+    -- imported from q-1.0.0
+    import qualified Dep
 
-</td>
-<td>
-
-```text
-module Main where
-
--- imported from q-1.0.0
-import qualified Dep
-
-data T = T Dep.V
-```
-
-</td>
-</tr>
-</tbody>
-</table>
+    data T = T Dep.V
+    ```
+  </Column>
+</Columns>
 
 ### Data Types - Builtin Types
 
@@ -1314,37 +933,25 @@ The upgrade validation for parameterized data types follows the same rules as no
 
 Below, the parameterized data type on the right is a valid upgrade of the parameterized data type on the left. As is valid with any record type, it adds an optional field.
 
-<table>
-<colgroup>
-<col style={{width: "50%"}} />
-<col style={{width: "50%"}} />
-</colgroup>
-<tbody>
-<tr className="odd">
-<td>
-
-```text
-data Tree a = 
-  Tree with 
-    label : a
-    children : [Tree a]
-```
-
-</td>
-<td>
-
-```text
-data Tree b = 
-  Tree with 
-    label : b
-    children : [Tree b]
-    cachedSize : Optional Int
-```
-
-</td>
-</tr>
-</tbody>
-</table>
+<Columns cols={2}>
+  <Column>
+    ```text
+    data Tree a = 
+      Tree with 
+        label : a
+        children : [Tree a]
+    ```
+  </Column>
+  <Column>
+    ```text
+    data Tree b = 
+      Tree with 
+        label : b
+        children : [Tree b]
+        cachedSize : Optional Int
+    ```
+  </Column>
+</Columns>
 
 ### Data Types - Applied Parameterized Data Types
 
@@ -1354,81 +961,57 @@ A type constructor application `T' U1' .. Un'` upgrades `T U1 .. Un` if and only
 
 Below, the module on the right is a valid upgrade of the module on the left. The record type `T` on the right upgrades the record type `T` on the left. As a result, the type constructor application `List T` on the right upgrades the type constructor application `List T` on the left. Same goes for `List` and `Optional`.
 
-<table>
-<colgroup>
-<col style={{width: "50%"}} />
-<col style={{width: "50%"}} />
-</colgroup>
-<tbody>
-<tr className="odd">
-<td>
+<Columns cols={2}>
+  <Column>
+    ```text
+    module M where
 
-```text
-module M where
+    data T = T {}
 
-data T = T {}
+    data Demo = Demo with
+      field1 : List T
+      field2 : Map T T
+      field3 : Optional T
+    ```
+  </Column>
+  <Column>
+    ```text
+    module M where
 
-data Demo = Demo with
-  field1 : List T
-  field2 : Map T T
-  field3 : Optional T
-```
+    data T = T { i : Optional Int }
 
-</td>
-<td>
-
-```text
-module M where
-
-data T = T { i : Optional Int }
-
-data Demo = Demo with
-  field1 : List T
-  field2 : Map T T
-  field3 : Optional T
-```
-
-</td>
-</tr>
-</tbody>
-</table>
+    data Demo = Demo with
+      field1 : List T
+      field2 : Map T T
+      field3 : Optional T
+    ```
+  </Column>
+</Columns>
 
 Below, the module on the right is a valid upgrade of the module on the left. The parameterized type `C` on the right upgrades the parameterized type `C` on the left. As a result, the type constructor application `C Int` on the right upgrades the type constructor application `C Int` on the left.
 
-<table>
-<colgroup>
-<col style={{width: "50%"}} />
-<col style={{width: "50%"}} />
-</colgroup>
-<tbody>
-<tr className="odd">
-<td>
+<Columns cols={2}>
+  <Column>
+    ```text
+    module M where
 
-```text
-module M where
+    data C a = C { x : a }
 
-data C a = C { x : a }
+    data Demo = Demo with
+      field1 : C T
+    ```
+  </Column>
+  <Column>
+    ```text
+    module M where
 
-data Demo = Demo with
-  field1 : C T
-```
+    data C a = C { x : a, y : Optional Int }
 
-</td>
-<td>
-
-```text
-module M where
-
-data C a = C { x : a, y : Optional Int }
-
-data Demo = Demo with
-  field1 : C T
-```
-
-</td>
-</tr>
-</tbody>
-</table>
+    data Demo = Demo with
+      field1 : C T
+    ```
+  </Column>
+</Columns>
 
 ### Interface and Exception Definitions
 
@@ -1446,7 +1029,7 @@ Deleting an interface instance from a template leads to a validation error.
 
 Assume an interface `I` with view type `IView` and a method `m`.
 
-```daml
+```haskell
 data IView = IView { i : Int }
 
 interface I where
@@ -1455,131 +1038,95 @@ interface I where
 
 Then, below, the instance of `I` for template `T` on the right is a valid upgrade of the instance on the left. It changes the `view` expression and the body of method `m`.
 
-<table>
-<colgroup>
-<col style={{width: "50%"}} />
-<col style={{width: "50%"}} />
-</colgroup>
-<tbody>
-<tr className="odd">
-<td>
+<Columns cols={2}>
+  <Column>
+    ```text
+    template T 
+      with
+        p : Party
+        i : Int
+      where
+        signatory p
 
-```text
-template T 
-  with
-    p : Party
-    i : Int
-  where
-    signatory p
+        interface instance I for T where
+          view = IView i
+          m = i
+    ```
+  </Column>
+  <Column>
+    ```text
+    template T 
+      with
+        p : Party
+        i : Int
+        j : Optional Int
+      where
+        signatory p
 
-    interface instance I for T where
-      view = IView i
-      m = i
-```
-
-</td>
-<td>
-
-```text
-template T 
-  with
-    p : Party
-    i : Int
-    j : Optional Int
-  where
-    signatory p
-
-    interface instance I for T where
-      view = IView (fromOptional i j)
-      m = fromOptional i j
-```
-
-</td>
-</tr>
-</tbody>
-</table>
+        interface instance I for T where
+          view = IView (fromOptional i j)
+          m = fromOptional i j
+    ```
+  </Column>
+</Columns>
 
 Below, the template on the right is a valid upgrade of the template on the left. It adds a new instance of `I` for template `T3`.
 
-<table>
-<colgroup>
-<col style={{width: "50%"}} />
-<col style={{width: "50%"}} />
-</colgroup>
-<tbody>
-<tr className="odd">
-<td>
+<Columns cols={2}>
+  <Column>
+    ```text
+    template T3 
+      with
+        p : Party
+        i : Int
+      where
+        signatory p
+    ```
+  </Column>
+  <Column>
+    ```text
+    template T3 
+      with
+        p : Party
+        i : Int
+      where
+        signatory p
 
-```text
-template T3 
-  with
-    p : Party
-    i : Int
-  where
-    signatory p
-```
-
-</td>
-<td>
-
-```text
-template T3 
-  with
-    p : Party
-    i : Int
-  where
-    signatory p
-
-    interface instance I for T3 where
-      view = IView i
-      m = i
-```
-
-</td>
-</tr>
-</tbody>
-</table>
+        interface instance I for T3 where
+          view = IView i
+          m = i
+    ```
+  </Column>
+</Columns>
 
 Below, the template on the right is **not** a valid upgrade of the template on the left because it removes the instance of `I` for template `T2`.
 
-<table>
-<colgroup>
-<col style={{width: "50%"}} />
-<col style={{width: "50%"}} />
-</colgroup>
-<tbody>
-<tr className="odd">
-<td>
+<Columns cols={2}>
+  <Column>
+    ```text
+    template T2 
+      with
+        p : Party
+        i : Int
+      where
+        signatory p
 
-```text
-template T2 
-  with
-    p : Party
-    i : Int
-  where
-    signatory p
-
-    interface instance I for T2 where
-      view = IView i
-      m = i
-```
-
-</td>
-<td>
-
-```text
-template T2 
-  with
-    p : Party
-    i : Int
-  where
-    signatory p
-```
-
-</td>
-</tr>
-</tbody>
-</table>
+        interface instance I for T2 where
+          view = IView i
+          m = i
+    ```
+  </Column>
+  <Column>
+    ```text
+    template T2 
+      with
+        p : Party
+        i : Int
+      where
+        signatory p
+    ```
+  </Column>
+</Columns>
 
 ## Data Transformation: Runtime Semantics
 
@@ -1624,47 +1171,35 @@ Let us assume an interface value `iv` = `(c, T)` and an interface type `I`. Then
 
 Assume two versions of a package called dep, defining a template U and its upgrade.
 
-<table>
-<colgroup>
-<col style={{width: "50%"}} />
-<col style={{width: "50%"}} />
-</colgroup>
-<tbody>
-<tr className="odd">
-<td>In <code>dep-1.0.0</code>:</td>
-<td>In <code>dep-2.0.0</code>:</td>
-</tr>
-<tr className="even">
-<td>
+<Columns cols={2}>
+  <Column>
+    In <code>dep-1.0.0</code>:
 
-```text
-module Dep where
+    ```text
+    module Dep where
 
-template U
-  with
-    p : Party
-  where
-    signatory p
-```
+    template U
+      with
+        p : Party
+      where
+        signatory p
+    ```
+  </Column>
+  <Column>
+    In <code>dep-2.0.0</code>:
 
-</td>
-<td>
+    ```text
+    module Dep where
 
-```text
-module Dep where
-
-template U
-  with
-    p : Party
-    t : Optional Text
-  where
-    signatory p
-```
-
-</td>
-</tr>
-</tbody>
-</table>
+    template U
+      with
+        p : Party
+        t : Optional Text
+      where
+        signatory p
+    ```
+  </Column>
+</Columns>
 
 Assume then some package `q` which depends on version `1.0.0` of `dep`.
 
@@ -1678,7 +1213,7 @@ data-dependencies:
 
 Package `q` defines a template `S` with a choice that fetches a contract of type `U`.
 
-```daml
+```haskell
 import qualified Dep
 
 template S
@@ -1708,7 +1243,7 @@ When exercising choice `GetU 8765` on contract `4321` with package preference `d
 
 Assume an interface `I` with view type `IView` and a method `m`.
 
-```daml
+```haskell
 data IView = IView {}
 
 interface I where
@@ -1717,45 +1252,33 @@ interface I where
 
 Assume then two versions of a template `T` that implements `I`.
 
-<table>
-<colgroup>
-<col style={{width: "50%"}} />
-<col style={{width: "50%"}} />
-</colgroup>
-<tbody>
-<tr className="odd">
-<td>
+<Columns cols={2}>
+  <Column>
+    ```text
+    template T 
+      with
+        p : Party
+      where
+        signatory p
 
-```text
-template T 
-  with
-    p : Party
-  where
-    signatory p
+        interface instance I for T where
+          view = IView {}
+    ```
+  </Column>
+  <Column>
+    ```text
+    template T 
+      with
+        p : Party
+        i : Optional Int
+      where
+        signatory p
 
-    interface instance I for T where
-      view = IView {}
-```
-
-</td>
-<td>
-
-```text
-template T 
-  with
-    p : Party
-    i : Optional Int
-  where
-    signatory p
-
-    interface instance I for T where
-      view = IView {}
-```
-
-</td>
-</tr>
-</tbody>
-</table>
+        interface instance I for T where
+          view = IView {}
+    ```
+  </Column>
+</Columns>
 
 Finally, assume that the module defining the first version of `T` is imported as `V1`, and the module defining the second version of `T` is imported as `V2`. The expression `fromInterface @V2.T (toInterface @I (V1.T 'Alice'))` evaluates as follows:
 
@@ -1771,43 +1294,31 @@ In a top-level exercise triggered by a Ledger API command, or in an interface fe
 
 Assume a package `p` with two versions. The new version adds an optional text field.
 
-<table>
-<colgroup>
-<col style={{width: "50%"}} />
-<col style={{width: "50%"}} />
-</colgroup>
-<tbody>
-<tr className="odd">
-<td>In <code>p-1.0.0</code>:</td>
-<td>In <code>p-2.0.0</code>:</td>
-</tr>
-<tr className="even">
-<td>
+<Columns cols={2}>
+  <Column>
+    In <code>p-1.0.0</code>:
 
-```text
-template T 
-  with
-    p : Party
-  where
-    signatory p
-```
+    ```text
+    template T 
+      with
+        p : Party
+      where
+        signatory p
+    ```
+  </Column>
+  <Column>
+    In <code>p-2.0.0</code>:
 
-</td>
-<td>
-
-```text
-template T 
-  with
-    p : Party
-    t : Optional Text
-  where
-    signatory p
-```
-
-</td>
-</tr>
-</tbody>
-</table>
+    ```text
+    template T 
+      with
+        p : Party
+        t : Optional Text
+      where
+        signatory p
+    ```
+  </Column>
+</Columns>
 
 Also assume a ledger that contains a contract of type `T` written by `p-1.0.0`, and another contract of written by `p-2.0.0`.
 
@@ -1827,7 +1338,7 @@ Then
 
 Assume an interface `I` with a choice `GetInt`
 
-```daml
+```haskell
 data IView = IView {}
 
 interface I where
@@ -1844,54 +1355,42 @@ interface I where
 
 Now, assume two versions of a package called `inst`, defining a template `Inst` and its upgrade. The two versions of the template instantiate interface `I`, but their `getInt` method return different values.
 
-<table>
-<colgroup>
-<col style={{width: "50%"}} />
-<col style={{width: "50%"}} />
-</colgroup>
-<tbody>
-<tr className="odd">
-<td>In <code>inst-1.0.0</code>:</td>
-<td>In <code>inst-2.0.0</code>:</td>
-</tr>
-<tr className="even">
-<td>
+<Columns cols={2}>
+  <Column>
+    In <code>inst-1.0.0</code>:
 
-```text
-template Inst
-  with
-    p : Party
-  where
-    signatory p
+    ```text
+    template Inst
+      with
+        p : Party
+      where
+        signatory p
 
-    interface instance I for T where
-      view = IView
-      getInt = 1
-```
+        interface instance I for T where
+          view = IView
+          getInt = 1
+    ```
+  </Column>
+  <Column>
+    In <code>inst-2.0.0</code>:
 
-</td>
-<td>
+    ```text
+    template Inst
+      with
+        p : Party
+      where
+        signatory p
 
-```text
-template Inst
-  with
-    p : Party
-  where
-    signatory p
-
-    interface instance I for T where
-      view = IView
-      getInt = 2
-```
-
-</td>
-</tr>
-</tbody>
-</table>
+        interface instance I for T where
+          view = IView
+          getInt = 2
+    ```
+  </Column>
+</Columns>
 
 Assume then some package `client` which defines a template whose choice `Go` exercises choice `GetInt` by interface.
 
-```daml
+```haskell
 template Client
   with 
     p : Party
@@ -1921,64 +1420,52 @@ Then:
 
 Assume now a package `r` with two versions. They define a template with a choice, and version `2.0.0` adds an optional field to the parameters of the choice. The return type of the choice is also upgraded.
 
-<table>
-<colgroup>
-<col style={{width: "50%"}} />
-<col style={{width: "50%"}} />
-</colgroup>
-<tbody>
-<tr className="odd">
-<td>In <code>r-1.0.0</code>:</td>
-<td>In <code>r-2.0.0</code>:</td>
-</tr>
-<tr className="even">
-<td>
+<Columns cols={2}>
+  <Column>
+    In <code>r-1.0.0</code>:
 
-```text
-module M where
+    ```text
+    module M where
 
-data Ret = Ret with
+    data Ret = Ret with
 
-template V
-  with
-    p : Party
-  where
-    signatory p
+    template V
+      with
+        p : Party
+      where
+        signatory p
 
-    choice C : Ret
-      with 
-        i : Int
-      controller p
-      do return Ret
-```
+        choice C : Ret
+          with 
+            i : Int
+          controller p
+          do return Ret
+    ```
+  </Column>
+  <Column>
+    In <code>r-2.0.0</code>:
 
-</td>
-<td>
+    ```text
+    module M where
 
-```text
-module M where
+    data Ret = Ret with
+      j : Optional Int
 
-data Ret = Ret with
-  j : Optional Int
+    template V
+      with
+         p : Party
+       where
+         signatory p
 
-template V
-  with
-     p : Party
-   where
-     signatory p
-
-     choice C : Ret
-       with 
-         i : Int
-         j : Optional Int
-       controller p
-       do return Ret with j = j
-```
-
-</td>
-</tr>
-</tbody>
-</table>
+         choice C : Ret
+           with 
+             i : Int
+             j : Optional Int
+           controller p
+           do return Ret with j = j
+    ```
+  </Column>
+</Columns>
 
 Also assume a ledger that contains a contract of type `V` written by `r-1.0.0`.
 
@@ -1995,45 +1482,33 @@ Then:
 
 ### Transformation Rules
 
-Once the target type has been determined, the data transformation rules themselves follow the upgrading rules of protocol [buffers]().
+Once the target type has been determined, the data transformation rules themselves follow the [upgrading rules of protocol buffers](https://protobuf.dev/programming-guides/proto3/#updating).
 
 #### Records and Parameters
 
 Given a record type and its upgrade, referred to respectively as `T-v1` and `T-v2` in the following,
 
-<table>
-<colgroup>
-<col style={{width: "50%"}} />
-<col style={{width: "50%"}} />
-</colgroup>
-<tbody>
-<tr className="odd">
-<td>
-
-```text
-data T = T with
-  x1 : T1
-  ...
-  xn : Tn
-```
-
-</td>
-<td>
-
-```text
-data T = T with
-  x1 : T1'
-  ...
-  xn : Tn'
-  y1 : Optional U1
-  ...
-  ym : Optional Um
-```
-
-</td>
-</tr>
-</tbody>
-</table>
+<Columns cols={2}>
+  <Column>
+    ```text
+    data T = T with
+      x1 : T1
+      ...
+      xn : Tn
+    ```
+  </Column>
+  <Column>
+    ```text
+    data T = T with
+      x1 : T1'
+      ...
+      xn : Tn'
+      y1 : Optional U1
+      ...
+      ym : Optional Um
+    ```
+  </Column>
+</Columns>
 
 - A `T-v1` value `T { x1 = v1, ..., xn = vn }` is upgraded to a `T-v2` value by setting the additional fields to None and upgrading `v1...vn` recursively. The transformation results in a value `T { x1 = v1', ..., xn = vn', y1 = None, ..., ym = None }`, where `v1'... vn'` is the result of upgrading `v1...vn` to `T1' ... Tn'`.
 - A `T-v2` value of the shape `T { x1 = v1, ..., xn = vn, y1 = None, ..., ym = None }` is downgraded to a `T-v1` value by dropping additional fields and downgrading `v1...vn` recursively. The transformation results in a value `T { x1 = v1', ..., xn = vn' }` where `v1'... vn'` is the result of downgrading `v1 ... vn` to `T1 ... Tn`.
@@ -2045,39 +1520,27 @@ The same transformation rules apply to template parameters and choice parameters
 
 Given a variant type and its upgrade, referred to respectively as `V-v1` and `V-v2` in the following,
 
-<table>
-<colgroup>
-<col style={{width: "50%"}} />
-<col style={{width: "50%"}} />
-</colgroup>
-<tbody>
-<tr className="odd">
-<td>
-
-```text
-data V =
-  = C1 T1
-  | ...
-  | Cn Tn
-```
-
-</td>
-<td>
-
-```text
-data V =
-  = C1 T1'
-  | ...
-  | Cn Tn'
-  | D1 U1
-  | ...
-  | Dm Um
-```
-
-</td>
-</tr>
-</tbody>
-</table>
+<Columns cols={2}>
+  <Column>
+    ```text
+    data V =
+      = C1 T1
+      | ...
+      | Cn Tn
+    ```
+  </Column>
+  <Column>
+    ```text
+    data V =
+      = C1 T1'
+      | ...
+      | Cn Tn'
+      | D1 U1
+      | ...
+      | Dm Um
+    ```
+  </Column>
+</Columns>
 
 - A `V-v1` value `Ci vi` is upgraded to a `V-v2` value by upgrading `vi` recursively. The transformation results in a value `Ci vi'` where `vi'` is the result of upgrading `vi` to `Ti'`.
 - A `V-v2` value `Ci vi` is downgraded to a `V-v1` value by downgrading `vi` recursively. The transformation results in a value `Ci vi'` where `vi'` is the result of downgrading `vi` to `Ti`.
@@ -2114,43 +1577,31 @@ Upon retrieval and after conversion, the metadata of a contract is recomputed us
 
 Below the template on the right is a valid upgrade of the template on the left.
 
-<table>
-<colgroup>
-<col style={{width: "50%"}} />
-<col style={{width: "50%"}} />
-</colgroup>
-<tbody>
-<tr className="odd">
-<td>In <code>p-1.0.0</code>:</td>
-<td>In <code>p-2.0.0</code>:</td>
-</tr>
-<tr className="even">
-<td>
+<Columns cols={2}>
+  <Column>
+    In <code>p-1.0.0</code>:
 
-```text
-template T 
-  with
-    sig : Party
-  where
-    signatory sig
-```
+    ```text
+    template T 
+      with
+        sig : Party
+      where
+        signatory sig
+    ```
+  </Column>
+  <Column>
+    In <code>p-2.0.0</code>:
 
-</td>
-<td>
-
-```text
-template T 
-  with
-    sig : Party
-    additionalSig : Optional Party
-  where
-    signatory sig, fromOptional [] additionalSig
-```
-
-</td>
-</tr>
-</tbody>
-</table>
+    ```text
+    template T 
+      with
+        sig : Party
+        additionalSig : Optional Party
+      where
+        signatory sig, fromOptional [] additionalSig
+    ```
+  </Column>
+</Columns>
 
 Assume a ledger that contains a contract of type `T` written by `p-1.0.0`.
 
@@ -2162,42 +1613,30 @@ Fetching contract `1234` with target type `p-2.0.0:T` retrieves the contract and
 
 On the other hand, below, the template on the right is **not** a valid upgrade of the template on the left.
 
-<table>
-<colgroup>
-<col style={{width: "50%"}} />
-<col style={{width: "50%"}} />
-</colgroup>
-<tbody>
-<tr className="odd">
-<td>In <code>p-1.0.0</code>:</td>
-<td>In <code>p-2.0.0</code>:</td>
-</tr>
-<tr className="even">
-<td>
+<Columns cols={2}>
+  <Column>
+    In <code>p-1.0.0</code>:
 
-```text
-template T 
-  with
-    sig : Party
-  where
-    signatory sig
-```
+    ```text
+    template T 
+      with
+        sig : Party
+      where
+        signatory sig
+    ```
+  </Column>
+  <Column>
+    In <code>p-2.0.0</code>:
 
-</td>
-<td>
-
-```text
-template T 
-  with
-    sig : Party
-  where
-    signatory sig, sig
-```
-
-</td>
-</tr>
-</tbody>
-</table>
+    ```text
+    template T 
+      with
+        sig : Party
+      where
+        signatory sig, sig
+    ```
+  </Column>
+</Columns>
 
 Assume the same ledger as above. Fetching contract `1234` with target type `p-2.0.0:T` retrieves the contract and again successfully transforms it into the value `T { sig = 'Alice', additionalSig = None }`. The signatories of this transformed contract are then computed using the expression `sig, sig`, which evaluate to the list `['Alice', 'Alice']`. This list is then compared to signatories of the original contract stored on the ledger: `['Alice']`. They do not match and thus the upgrade is rejected at runtime.
 
@@ -2209,42 +1648,30 @@ Upon retrieval and after conversion, the ensure clause of a contract is recomput
 
 Below, the template on the right is **not** a valid upgrade of the template on the left because its ensure clause will evaluate to `False` for contracts that have been written using the template on the left with `n = 0`.
 
-<table>
-<colgroup>
-<col style={{width: "50%"}} />
-<col style={{width: "50%"}} />
-</colgroup>
-<tbody>
-<tr className="odd">
-<td>
-
-```text
-template T 
-  with
-    sig : Party
-    n : Int
-  where
-    signatory sig
-    ensure n >= 0
-```
-
-</td>
-<td>
-
-```text
-template T 
-  with
-    sig : Party
-    n : Int
-  where
-    signatory sig
-    ensure n > 0
-```
-
-</td>
-</tr>
-</tbody>
-</table>
+<Columns cols={2}>
+  <Column>
+    ```text
+    template T 
+      with
+        sig : Party
+        n : Int
+      where
+        signatory sig
+        ensure n >= 0
+    ```
+  </Column>
+  <Column>
+    ```text
+    template T 
+      with
+        sig : Party
+        n : Int
+      where
+        signatory sig
+        ensure n > 0
+    ```
+  </Column>
+</Columns>
 
 ### Interface Views
 
@@ -2254,7 +1681,7 @@ The view for a given interface instance may change between two versions of a con
 
 Assume an interface `I` with view type `IView` and a method `m`.
 
-```daml
+```haskell
 data IView = IView { i : Int }
 
 interface I where
@@ -2264,52 +1691,40 @@ interface I where
 
 Below, the template on the right is a valid upgrade of the template on the left.
 
-<table>
-<colgroup>
-<col style={{width: "50%"}} />
-<col style={{width: "50%"}} />
-</colgroup>
-<tbody>
-<tr className="odd">
-<td>In <code>p-1.0.0</code>:</td>
-<td>In <code>p-2.0.0</code>:</td>
-</tr>
-<tr className="even">
-<td>
+<Columns cols={2}>
+  <Column>
+    In <code>p-1.0.0</code>:
 
-```text
-template T 
-  with
-    p : Party
-    i : Int
-  where
-    signatory p
+    ```text
+    template T 
+      with
+        p : Party
+        i : Int
+      where
+        signatory p
 
-    interface instance I for T where
-      view = IView i
-      m = i
-```
+        interface instance I for T where
+          view = IView i
+          m = i
+    ```
+  </Column>
+  <Column>
+    In <code>p-2.0.0</code>:
 
-</td>
-<td>
+    ```text
+    template T 
+      with
+        p : Party
+        i : Int
+      where
+        signatory p
 
-```text
-template T 
-  with
-    p : Party
-    i : Int
-  where
-    signatory p
-
-    interface instance I for T where
-      view = IView (i+1)
-      m = i
-```
-
-</td>
-</tr>
-</tbody>
-</table>
+        interface instance I for T where
+          view = IView (i+1)
+          m = i
+    ```
+  </Column>
+</Columns>
 
 Assume a ledger that contains a contract of type `T` written by `p-1.0.0`.
 

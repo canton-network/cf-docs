@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import dataclass
 import gzip
 import importlib.util
 import json
@@ -27,8 +28,10 @@ DEFAULT_SOURCE_CONFIG = REPO_ROOT / "config" / "x2mdx" / "protobuf-history" / "s
 DEFAULT_CACHE_ROOT = Path(os.environ.get("XDG_CACHE_HOME", "~/.cache")).expanduser() / "x2mdx"
 DEFAULT_CACHE_DIR = DEFAULT_CACHE_ROOT / "protobuf-history"
 DEFAULT_MANIFEST = REPO_ROOT / ".internal" / "generated" / "x2mdx" / "protobuf-history" / "manifest.json"
+DEFAULT_ADMIN_MANIFEST = REPO_ROOT / ".internal" / "generated" / "x2mdx" / "admin-api-protobuf-history" / "manifest.json"
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "docs-main" / "appdev" / "reference" / "protobuf-history"
 DEFAULT_LEGACY_OUTPUT_DIR = REPO_ROOT / "docs-main" / "reference" / "protobuf"
+DEFAULT_ADMIN_OUTPUT_DIR = REPO_ROOT / "docs-main" / "reference" / "admin-api" / "protobuf"
 DEFAULT_DOCS_JSON = REPO_ROOT / "docs-main" / "docs.json"
 DEFAULT_REPO_DIR = DEFAULT_CACHE_DIR / "repos" / "canton"
 GROUP_LABEL = "Canton Protobuf History"
@@ -39,11 +42,38 @@ SECTION_TO_REPO_PREFIX = {
     "admin-api": "community/admin-api/src/main/protobuf",
     "community": "community/base/src/main/protobuf",
     "ledger-api": "community/ledger-api/src/main/protobuf",
+    "ledger-api-value": "community/daml-lf/ledger-api-value-proto/src/main/protobuf",
     "participant": "community/participant/src/main/protobuf",
     "synchronizer": "community/synchronizer/src/main/protobuf",
 }
 SUPPORT_SECTION_NAMES = {"lib"}
+ADMIN_API_COMMUNITY_IMPORT_PREFIXES = (
+    "com/digitalasset/canton/time/admin",
+    "com/digitalasset/canton/crypto/admin",
+    "com/digitalasset/canton/topology/admin",
+)
 USER_AGENT = "digital-asset-docs-x2mdx/1.0"
+
+
+@dataclass(frozen=True)
+class ProtobufSelection:
+    section_name: str
+    repo_prefix: str
+    import_prefixes: tuple[str, ...] = ()
+
+
+LEDGER_API_SELECTIONS = (
+    ProtobufSelection("ledger-api", SECTION_TO_REPO_PREFIX["ledger-api"]),
+    ProtobufSelection("ledger-api-value", SECTION_TO_REPO_PREFIX["ledger-api-value"]),
+)
+ADMIN_API_SELECTIONS = (
+    ProtobufSelection("admin-api", SECTION_TO_REPO_PREFIX["admin-api"]),
+    ProtobufSelection(
+        "community",
+        SECTION_TO_REPO_PREFIX["community"],
+        ADMIN_API_COMMUNITY_IMPORT_PREFIXES,
+    ),
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -53,8 +83,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--source-config", default=str(DEFAULT_SOURCE_CONFIG))
     parser.add_argument("--cache-dir", default=str(DEFAULT_CACHE_DIR))
     parser.add_argument("--manifest-out", default=str(DEFAULT_MANIFEST))
+    parser.add_argument("--admin-manifest-out", default=str(DEFAULT_ADMIN_MANIFEST))
     parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
     parser.add_argument("--legacy-output-dir", default=str(DEFAULT_LEGACY_OUTPUT_DIR))
+    parser.add_argument("--admin-output-dir", default=str(DEFAULT_ADMIN_OUTPUT_DIR))
     parser.add_argument("--docs-json", default=str(DEFAULT_DOCS_JSON))
     parser.add_argument("--nav-dropdown", default="API Reference")
     parser.add_argument("--nav-group", action="append")
@@ -63,6 +95,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min-version", help="Minimum stable version to include when auto-discovering tags.")
     parser.add_argument("--skip-fetch", action="store_true", help="Skip fetching tags from origin before generation.")
     parser.add_argument("--force-refresh", action="store_true", help="Refresh cached protobuf bundles and descriptor images.")
+    parser.add_argument("--skip-admin-api", action="store_true", help="Only regenerate the Ledger API protobuf reference.")
     parser.add_argument(
         "--source-name",
         default="Canton protobuf trees from published release bundles",
@@ -175,8 +208,8 @@ def bundle_extract_root(cache_dir: Path, version: str) -> Path:
     return cache_dir / "bundles" / version
 
 
-def descriptor_image_path(cache_dir: Path, version: str) -> Path:
-    return cache_dir / "descriptor-images" / version / DESCRIPTOR_IMAGE_NAME
+def descriptor_image_path(cache_dir: Path, version: str, *, surface: str) -> Path:
+    return cache_dir / "descriptor-images" / surface / version / DESCRIPTOR_IMAGE_NAME
 
 
 def ensure_bundle_archive(
@@ -218,7 +251,21 @@ def ensure_grpc_tools_available() -> None:
         )
 
 
-def compile_descriptor_image(protobuf_root: Path, *, output_path: Path) -> None:
+def matches_selection(import_path: str, selection: ProtobufSelection) -> bool:
+    if not selection.import_prefixes:
+        return True
+    return any(
+        import_path == prefix.rstrip("/") or import_path.startswith(f"{prefix.rstrip('/')}/")
+        for prefix in selection.import_prefixes
+    )
+
+
+def compile_descriptor_image(
+    protobuf_root: Path,
+    *,
+    output_path: Path,
+    selections: tuple[ProtobufSelection, ...],
+) -> None:
     ensure_grpc_tools_available()
     include_roots: list[Path] = []
     for section_name in [*SECTION_TO_REPO_PREFIX, *SUPPORT_SECTION_NAMES]:
@@ -230,9 +277,14 @@ def compile_descriptor_image(protobuf_root: Path, *, output_path: Path) -> None:
 
     rel_files: list[str] = []
     seen: set[str] = set()
-    for include_root in include_roots:
-        for proto_path in sorted(include_root.rglob("*.proto")):
-            rel = proto_path.relative_to(include_root).as_posix()
+    for selection in selections:
+        section_root = protobuf_root / selection.section_name
+        if not section_root.is_dir():
+            continue
+        for proto_path in sorted(section_root.rglob("*.proto")):
+            rel = proto_path.relative_to(section_root).as_posix()
+            if not matches_selection(rel, selection):
+                continue
             if rel in seen:
                 continue
             seen.add(rel)
@@ -252,15 +304,21 @@ def compile_descriptor_image(protobuf_root: Path, *, output_path: Path) -> None:
         output_path.write_bytes(gzip.compress(raw_descriptor.read_bytes()))
 
 
-def import_to_repo_path_from_bundle(protobuf_root: Path) -> dict[str, str]:
+def import_to_repo_path_from_bundle(
+    protobuf_root: Path,
+    *,
+    selections: tuple[ProtobufSelection, ...],
+) -> dict[str, str]:
     mapping: dict[str, str] = {}
-    for section_name, repo_prefix in SECTION_TO_REPO_PREFIX.items():
-        section_root = protobuf_root / section_name
+    for selection in selections:
+        section_root = protobuf_root / selection.section_name
         if not section_root.is_dir():
             continue
         for proto_path in sorted(section_root.rglob("*.proto")):
             import_path = proto_path.relative_to(section_root).as_posix()
-            repo_path = f"{repo_prefix}/{import_path}"
+            if not matches_selection(import_path, selection):
+                continue
+            repo_path = f"{selection.repo_prefix}/{import_path}"
             existing = mapping.get(import_path)
             if existing and existing != repo_path:
                 raise ValueError(f"Duplicate protobuf import path '{import_path}' in published bundle")
@@ -347,30 +405,93 @@ def update_docs_navigation(
     legacy_overview_path: Path,
 ) -> None:
     docs = load_json(docs_json_path)
-    navigation = docs.get("navigation")
-    if not isinstance(navigation, dict):
-        raise ValueError(f"docs.json navigation must be an object: {docs_json_path}")
-    dropdowns = navigation.get("dropdowns")
-    if not isinstance(dropdowns, list):
-        raise ValueError(f"docs.json navigation.dropdowns must be a list: {docs_json_path}")
-    dropdown = next((item for item in dropdowns if isinstance(item, dict) and item.get("dropdown") == dropdown_label), None)
-    if dropdown is None:
-        raise ValueError(f"Dropdown not found in docs.json: {dropdown_label}")
-    pages = dropdown.get("pages")
-    if not isinstance(pages, list):
-        raise ValueError(f"Dropdown does not expose a pages list: {dropdown_label}")
+    pages = reference_nav.navigation_pages(docs, label=dropdown_label, docs_json_path=docs_json_path)
 
     page_ref = docs_json_page_ref(output_dir / "index.mdx", docs_json_path)
     legacy_page_ref = docs_json_page_ref(legacy_overview_path, docs_json_path)
-    dropdown["pages"] = prune_nav_items(
+    pages[:] = prune_nav_items(
         pages,
         page_refs={page_ref, legacy_page_ref},
         group_labels=reference_nav.PROTOBUF_GROUP_ALIASES,
     )
-    target_pages = ensure_group_path(dropdown["pages"], parent_groups)
+    target_pages = ensure_group_path(pages, parent_groups)
     target_pages.append({"group": GROUP_LABEL, "pages": [page_ref, legacy_page_ref]})
     docs_json_path.write_text(json.dumps(docs, indent=2) + "\n", encoding="utf-8")
     print(f"Updated docs navigation: {docs_json_path}")
+
+
+def replace_group_at_path(items: list[Any], group_path: list[str], group: dict[str, Any]) -> None:
+    target_pages = ensure_group_path(items, group_path)
+    group_label = group.get("group")
+    if not isinstance(group_label, str) or not group_label:
+        raise ValueError(f"Expected navigation group label: {group}")
+    for index, item in enumerate(target_pages):
+        if isinstance(item, dict) and item.get("group") == group_label:
+            target_pages[index] = group
+            return
+    target_pages.append(group)
+
+
+def update_split_protobuf_navigation(
+    *,
+    docs_json_path: Path,
+    dropdown_label: str,
+    ledger_output_dir: Path,
+    ledger_legacy_output_dir: Path,
+    admin_output_dir: Path | None,
+) -> None:
+    docs = load_json(docs_json_path)
+    pages = reference_nav.navigation_pages(docs, label=dropdown_label, docs_json_path=docs_json_path)
+
+    stale_refs = {
+        docs_json_page_ref(ledger_output_dir / "index.mdx", docs_json_path),
+        docs_json_page_ref(ledger_legacy_output_dir / "index.mdx", docs_json_path),
+    }
+    if admin_output_dir is not None:
+        stale_refs.add(docs_json_page_ref(admin_output_dir / "index.mdx", docs_json_path))
+    pages[:] = prune_nav_items(
+        pages,
+        page_refs=stale_refs,
+        group_labels=reference_nav.PROTOBUF_GROUP_ALIASES,
+    )
+
+    ledger_group = generated_reference_nav.build_protobuf_nav_group(
+        output_dir=ledger_legacy_output_dir,
+        docs_json_path=docs_json_path,
+        group_label=reference_nav.PROTOBUF_GROUP,
+    )
+    replace_group_at_path(
+        pages,
+        [reference_nav.LEDGER_API_PARENT_GROUP],
+        ledger_group,
+    )
+
+    if admin_output_dir is not None:
+        admin_details_page_ref = docs_json_page_ref(admin_output_dir / "index.mdx", docs_json_path)
+        admin_protobuf_group_pages = generated_reference_nav.build_protobuf_nav_group(
+            output_dir=admin_output_dir,
+            docs_json_path=docs_json_path,
+            group_label=reference_nav.PROTOBUF_GROUP,
+            include_details_page=False,
+        )["pages"]
+        replace_group_at_path(
+            pages,
+            [reference_nav.ADMIN_API_PARENT_GROUP],
+            {
+                "group": reference_nav.GRPC_GROUP,
+                "pages": [
+                    *admin_protobuf_group_pages,
+                    admin_details_page_ref,
+                ],
+            },
+        )
+
+    docs_json_path.write_text(json.dumps(docs, indent=2) + "\n", encoding="utf-8")
+    reference_nav.regroup_ledger_api_nav(
+        docs_json_path=docs_json_path,
+        dropdown_label=dropdown_label,
+    )
+    print(f"Updated split protobuf navigation: {docs_json_path}")
 
 
 def write_manifest(
@@ -378,6 +499,7 @@ def write_manifest(
     source_config: dict[str, Any],
     releases: list[dict[str, Any]],
     manifest_path: Path,
+    source_name: str | None = None,
 ) -> Path:
     metadata_path = source_config.get("metadata_path")
     metadata_ref: str | None = None
@@ -388,7 +510,7 @@ def write_manifest(
         metadata_ref = str(resolved)
 
     manifest = {
-        "source": source_config.get("source") or "Canton protobuf trees from published release bundles",
+        "source": source_name or source_config.get("source") or "Canton protobuf trees from published release bundles",
         "repo": source_config.get("repo") if isinstance(source_config.get("repo"), dict) else {},
         "metadata_path": metadata_ref,
         "versions": releases,
@@ -404,6 +526,93 @@ def sync_output_tree(*, source_dir: Path, target_dir: Path) -> None:
         shutil.rmtree(target_dir)
     shutil.copytree(source_dir, target_dir)
     print(f"Synced output tree: {target_dir}")
+
+
+def strip_trailing_whitespace_tree(root: Path) -> None:
+    for path in root.rglob("*.mdx"):
+        text = path.read_text(encoding="utf-8")
+        cleaned = "\n".join(line.rstrip() for line in text.splitlines())
+        if text.endswith("\n"):
+            cleaned += "\n"
+        if cleaned != text:
+            path.write_text(cleaned, encoding="utf-8")
+
+
+def materialize_releases(
+    *,
+    source_config: dict[str, Any],
+    repo_dir: Path,
+    cache_dir: Path,
+    selected_tags: list[tuple[str, str]],
+    bundle_proto_dir: str,
+    selections: tuple[ProtobufSelection, ...],
+    surface: str,
+    force_refresh: bool,
+) -> list[dict[str, Any]]:
+    releases: list[dict[str, Any]] = []
+    for version, tag in selected_tags:
+        archive_path = ensure_bundle_archive(
+            source_config=source_config,
+            version=version,
+            output_path=bundle_archive_path(cache_dir, version),
+            force_refresh=force_refresh,
+        )
+        protobuf_root = extract_archive(
+            archive_path,
+            extract_root=bundle_extract_root(cache_dir, version),
+            bundle_proto_dir=bundle_proto_dir,
+            force_refresh=force_refresh,
+        )
+        import_to_repo_path = import_to_repo_path_from_bundle(
+            protobuf_root,
+            selections=selections,
+        )
+        if not import_to_repo_path:
+            print(f"Skipping {tag} for {surface}: no published owned protobuf files found")
+            continue
+        image_path = descriptor_image_path(cache_dir, version, surface=surface)
+        if not image_path.exists() or force_refresh:
+            compile_descriptor_image(
+                protobuf_root,
+                output_path=image_path,
+                selections=selections,
+            )
+        releases.append(
+            {
+                "version": version,
+                "tag": tag,
+                "date": release_date(repo_dir, tag),
+                "descriptor_image_path": str(image_path.resolve()),
+                "import_to_repo_path": import_to_repo_path,
+            }
+        )
+    return releases
+
+
+def render_protobuf_reference(
+    *,
+    manifest_path: Path,
+    output_dir: Path,
+    source_name: str,
+    version_filter: str,
+) -> int:
+    command = repo_direnv_command(
+        REPO_ROOT,
+        "x2mdx",
+        "protobuf",
+        "build-api-pages-from-manifest",
+        "--manifest",
+        str(manifest_path),
+        "--output-dir",
+        str(output_dir),
+        "--source-name",
+        source_name,
+        "--version-filter",
+        version_filter,
+    )
+    print("Running:", " ".join(command))
+    completed = subprocess.run(command, cwd=REPO_ROOT)
+    return completed.returncode
 
 
 def main() -> int:
@@ -433,46 +642,6 @@ def main() -> int:
     if not selected_tags:
         raise ValueError("No stable Canton tags selected")
     cache_dir = Path(args.cache_dir).resolve()
-    releases: list[dict[str, Any]] = []
-    for version, tag in selected_tags:
-        archive_path = ensure_bundle_archive(
-            source_config=source_config,
-            version=version,
-            output_path=bundle_archive_path(cache_dir, version),
-            force_refresh=args.force_refresh,
-        )
-        protobuf_root = extract_archive(
-            archive_path,
-            extract_root=bundle_extract_root(cache_dir, version),
-            bundle_proto_dir=bundle_proto_dir,
-            force_refresh=args.force_refresh,
-        )
-        import_to_repo_path = import_to_repo_path_from_bundle(protobuf_root)
-        if not import_to_repo_path:
-            print(f"Skipping {tag}: no published owned protobuf files found")
-            continue
-        image_path = descriptor_image_path(cache_dir, version)
-        if not image_path.exists() or args.force_refresh:
-            compile_descriptor_image(protobuf_root, output_path=image_path)
-        releases.append(
-            {
-                "version": version,
-                "tag": tag,
-                "date": release_date(repo_dir, tag),
-                "descriptor_image_path": str(image_path.resolve()),
-                "import_to_repo_path": import_to_repo_path,
-            }
-        )
-
-    if not releases:
-        raise ValueError("No protobuf releases were materialized")
-
-    manifest_path = write_manifest(
-        source_config=source_config,
-        releases=releases,
-        manifest_path=Path(args.manifest_out).resolve(),
-    )
-
     version_filter = args.version_filter
     if not version_filter:
         if include_versions:
@@ -480,24 +649,34 @@ def main() -> int:
         else:
             version_filter = f"stable Canton release bundles >= {min_version}"
 
-    command = repo_direnv_command(
-        REPO_ROOT,
-        "x2mdx",
-        "protobuf",
-        "build-api-pages-from-manifest",
-        "--manifest",
-        str(manifest_path),
-        "--output-dir",
-        str(Path(args.output_dir).resolve()),
-        "--source-name",
-        args.source_name,
-        "--version-filter",
-        version_filter,
+    ledger_releases = materialize_releases(
+        source_config=source_config,
+        repo_dir=repo_dir,
+        cache_dir=cache_dir,
+        selected_tags=selected_tags,
+        bundle_proto_dir=bundle_proto_dir,
+        selections=LEDGER_API_SELECTIONS,
+        surface="ledger-api",
+        force_refresh=args.force_refresh,
     )
-    print("Running:", " ".join(command))
-    completed = subprocess.run(command, cwd=REPO_ROOT)
-    if completed.returncode != 0:
-        return completed.returncode
+    if not ledger_releases:
+        raise ValueError("No Ledger API protobuf releases were materialized")
+
+    ledger_manifest_path = write_manifest(
+        source_config=source_config,
+        releases=ledger_releases,
+        manifest_path=Path(args.manifest_out).resolve(),
+        source_name=args.source_name,
+    )
+
+    result = render_protobuf_reference(
+        manifest_path=ledger_manifest_path,
+        output_dir=Path(args.output_dir).resolve(),
+        source_name=args.source_name,
+        version_filter=version_filter,
+    )
+    if result != 0:
+        return result
 
     retitle_overview_page(Path(args.output_dir).resolve() / "index.mdx")
     sync_output_tree(
@@ -505,25 +684,45 @@ def main() -> int:
         target_dir=Path(args.legacy_output_dir).resolve(),
     )
 
-    update_docs_navigation(
+    admin_output_dir: Path | None = None
+    if not args.skip_admin_api:
+        admin_source_name = "Canton Admin API protobuf trees from published release bundles"
+        admin_releases = materialize_releases(
+            source_config=source_config,
+            repo_dir=repo_dir,
+            cache_dir=cache_dir,
+            selected_tags=selected_tags,
+            bundle_proto_dir=bundle_proto_dir,
+            selections=ADMIN_API_SELECTIONS,
+            surface="admin-api",
+            force_refresh=args.force_refresh,
+        )
+        if not admin_releases:
+            raise ValueError("No Admin API protobuf releases were materialized")
+        admin_manifest_path = write_manifest(
+            source_config=source_config,
+            releases=admin_releases,
+            manifest_path=Path(args.admin_manifest_out).resolve(),
+            source_name=admin_source_name,
+        )
+        admin_output_dir = Path(args.admin_output_dir).resolve()
+        result = render_protobuf_reference(
+            manifest_path=admin_manifest_path,
+            output_dir=admin_output_dir,
+            source_name=admin_source_name,
+            version_filter=version_filter,
+        )
+        if result != 0:
+            return result
+        retitle_overview_page(admin_output_dir / "index.mdx")
+        strip_trailing_whitespace_tree(admin_output_dir)
+
+    update_split_protobuf_navigation(
         docs_json_path=Path(args.docs_json).resolve(),
         dropdown_label=args.nav_dropdown,
-        parent_groups=args.nav_group or [],
-        output_dir=Path(args.output_dir).resolve(),
-        legacy_overview_path=Path(args.legacy_output_dir).resolve() / "index.mdx",
-    )
-    reference_nav.regroup_ledger_api_nav(
-        docs_json_path=Path(args.docs_json).resolve(),
-        dropdown_label=args.nav_dropdown,
-    )
-    generated_reference_nav.replace_group_in_dropdown(
-        docs_json_path=Path(args.docs_json).resolve(),
-        dropdown_label=args.nav_dropdown,
-        group=generated_reference_nav.build_protobuf_nav_group(
-            output_dir=Path(args.legacy_output_dir).resolve(),
-            docs_json_path=Path(args.docs_json).resolve(),
-            group_label=reference_nav.PROTOBUF_GROUP,
-        ),
+        ledger_output_dir=Path(args.output_dir).resolve(),
+        ledger_legacy_output_dir=Path(args.legacy_output_dir).resolve(),
+        admin_output_dir=admin_output_dir,
     )
     return 0
 

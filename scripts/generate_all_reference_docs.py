@@ -32,29 +32,29 @@ LEGACY_PAGE_REFS = {
 
 @dataclass(frozen=True)
 class NavSlice:
-    kind: Literal["ledger_child", "top_group", "nested_group"]
+    kind: Literal["ledger_child", "top_group", "top_groups", "nested_group"]
     labels: tuple[str, ...]
 
 
 @dataclass(frozen=True)
 class ScriptJob:
     script_path: Path
-    nav_slice: NavSlice
+    nav_slices: tuple[NavSlice, ...]
     extra_args: tuple[str, ...] = ()
 
 
 SCRIPT_JOBS = [
     ScriptJob(
         script_path=REPO_ROOT / "scripts" / "generate_json_api_reference.py",
-        nav_slice=NavSlice("ledger_child", (reference_nav.OPENAPI_GROUP,)),
+        nav_slices=(NavSlice("ledger_child", (reference_nav.OPENAPI_GROUP,)),),
     ),
     ScriptJob(
         script_path=REPO_ROOT / "scripts" / "generate_json_api_asyncapi_reference.py",
-        nav_slice=NavSlice("ledger_child", (reference_nav.ASYNCAPI_GROUP,)),
+        nav_slices=(NavSlice("ledger_child", (reference_nav.ASYNCAPI_GROUP,)),),
     ),
     ScriptJob(
         script_path=REPO_ROOT / "scripts" / "generate_grpc_ledger_api_reference.py",
-        nav_slice=NavSlice("ledger_child", (reference_nav.GRPC_GROUP,)),
+        nav_slices=(NavSlice("ledger_child", (reference_nav.GRPC_GROUP,)),),
         extra_args=(
             # The gRPC and protobuf wrappers both default to the same protobuf-history
             # cache tree, so parallel fanout gives the gRPC wrapper its own cache root.
@@ -66,27 +66,30 @@ SCRIPT_JOBS = [
     ),
     ScriptJob(
         script_path=REPO_ROOT / "scripts" / "generate_ledger_bindings_api_reference.py",
-        nav_slice=NavSlice("ledger_child", (reference_nav.BINDINGS_GROUP,)),
+        nav_slices=(NavSlice("ledger_child", (reference_nav.BINDINGS_GROUP,)),),
     ),
     ScriptJob(
         script_path=REPO_ROOT / "scripts" / "generate_daml_standard_library_reference.py",
-        nav_slice=NavSlice("top_group", ("Daml Standard Library",)),
+        nav_slices=(NavSlice("top_group", ("Daml Standard Library",)),),
     ),
     ScriptJob(
         script_path=REPO_ROOT / "scripts" / "generate_canton_protobuf_history.py",
-        nav_slice=NavSlice("ledger_child", (reference_nav.PROTOBUF_GROUP,)),
+        nav_slices=(
+            NavSlice("ledger_child", (reference_nav.PROTOBUF_GROUP,)),
+            NavSlice("top_group", (reference_nav.ADMIN_API_PARENT_GROUP,)),
+        ),
     ),
     ScriptJob(
         script_path=REPO_ROOT / "scripts" / "generate_wallet_gateway_openrpc_reference.py",
-        nav_slice=NavSlice("top_group", ("Wallet Kernel",)),
+        nav_slices=(NavSlice("top_groups", ("dApp API", "Wallet Gateway")),),
     ),
     ScriptJob(
         script_path=REPO_ROOT / "scripts" / "generate_splice_mintlify_openapi.py",
-        nav_slice=NavSlice("top_group", ("Splice APIs",)),
+        nav_slices=(NavSlice("top_group", ("Splice APIs",)),),
     ),
     ScriptJob(
         script_path=REPO_ROOT / "scripts" / "generate_typescript_bindings_reference.py",
-        nav_slice=NavSlice("top_group", ("TypeScript",)),
+        nav_slices=(NavSlice("top_group", ("TypeScript",)),),
     ),
 ]
 
@@ -139,18 +142,55 @@ def dropdown_pages(docs: dict[str, Any], *, dropdown_label: str) -> list[Any]:
     if not isinstance(navigation, dict):
         raise ValueError(f"docs.json missing navigation object: {DOCS_JSON_PATH}")
     dropdowns = navigation.get("dropdowns")
-    if not isinstance(dropdowns, list):
-        raise ValueError(f"docs.json navigation.dropdowns must be a list: {DOCS_JSON_PATH}")
-    dropdown = next(
-        (item for item in dropdowns if isinstance(item, dict) and item.get("dropdown") == dropdown_label),
+    if isinstance(dropdowns, list):
+        dropdown = next(
+            (item for item in dropdowns if isinstance(item, dict) and item.get("dropdown") == dropdown_label),
+            None,
+        )
+        if dropdown is None:
+            raise ValueError(f"Dropdown not found in docs.json: {dropdown_label}")
+        pages = dropdown.get("pages")
+        if not isinstance(pages, list):
+            raise ValueError(f"Dropdown does not expose a pages list: {dropdown_label}")
+        return pages
+
+    products = navigation.get("products")
+    if isinstance(products, list):
+        product = next(
+            (item for item in products if isinstance(item, dict) and item.get("product") == dropdown_label),
+            None,
+        )
+        if product is None:
+            raise ValueError(f"Product not found in docs.json: {dropdown_label}")
+        pages = product.get("pages")
+        if not isinstance(pages, list):
+            raise ValueError(f"Product does not expose a pages list: {dropdown_label}")
+        return pages
+
+    raise ValueError(f"docs.json navigation must define dropdowns or products: {DOCS_JSON_PATH}")
+
+
+def with_legacy_dropdown_scratch(docs: dict[str, Any]) -> dict[str, Any]:
+    scratch = copy.deepcopy(docs)
+    navigation = scratch.get("navigation")
+    if not isinstance(navigation, dict) or isinstance(navigation.get("dropdowns"), list):
+        return scratch
+    products = navigation.get("products")
+    if not isinstance(products, list):
+        return scratch
+    api_reference = next(
+        (item for item in products if isinstance(item, dict) and item.get("product") == API_REFERENCE_DROPDOWN),
         None,
     )
-    if dropdown is None:
-        raise ValueError(f"Dropdown not found in docs.json: {dropdown_label}")
-    pages = dropdown.get("pages")
-    if not isinstance(pages, list):
-        raise ValueError(f"Dropdown does not expose a pages list: {dropdown_label}")
-    return pages
+    if api_reference is None or not isinstance(api_reference.get("pages"), list):
+        return scratch
+    navigation["dropdowns"] = [
+        {
+            "dropdown": API_REFERENCE_DROPDOWN,
+            "pages": copy.deepcopy(api_reference["pages"]),
+        }
+    ]
+    return scratch
 
 
 def find_group(items: list[Any], label: str) -> dict[str, Any] | None:
@@ -174,20 +214,59 @@ def group_pages(group: dict[str, Any], *, source_path: Path) -> list[Any]:
     return pages
 
 
-def replace_group(items: list[Any], group: dict[str, Any]) -> None:
+def replace_group(items: list[Any], group: dict[str, Any], *, aliases: set[str] | None = None) -> None:
     label = group.get("group")
     if not isinstance(label, str) or not label:
         raise ValueError(f"Expected group label on item: {group}")
+    matching_labels = {label, *(aliases or set())}
+    replacement_index: int | None = None
+    filtered_items: list[Any] = []
     for index, item in enumerate(items):
-        if isinstance(item, dict) and item.get("group") == label:
-            items[index] = copy.deepcopy(group)
-            return
-    items.append(copy.deepcopy(group))
+        if isinstance(item, dict) and item.get("group") in matching_labels:
+            if replacement_index is None:
+                replacement_index = len(filtered_items)
+            continue
+        filtered_items.append(item)
+    if replacement_index is None:
+        filtered_items.append(copy.deepcopy(group))
+    else:
+        filtered_items.insert(replacement_index, copy.deepcopy(group))
+    items[:] = filtered_items
+
+
+def replace_groups(items: list[Any], groups: list[dict[str, Any]]) -> None:
+    if not groups:
+        return
+    matching_labels: set[str] = set()
+    for group in groups:
+        label = group.get("group")
+        if not isinstance(label, str) or not label:
+            raise ValueError(f"Expected group label on item: {group}")
+        matching_labels.update(top_group_aliases(label))
+    replacement_index: int | None = None
+    filtered_items: list[Any] = []
+    for item in items:
+        if isinstance(item, dict) and item.get("group") in matching_labels:
+            if replacement_index is None:
+                replacement_index = len(filtered_items)
+            continue
+        filtered_items.append(item)
+    insert_at = len(filtered_items) if replacement_index is None else replacement_index
+    for offset, group in enumerate(groups):
+        filtered_items.insert(insert_at + offset, copy.deepcopy(group))
+    items[:] = filtered_items
 
 
 TOP_GROUP_ALIAS_SETS = [
-    ("Wallet Kernel", {"Wallet Kernel", "Wallet Kernel SDK", "Wallet Gateway JSON-RPC"}),
+    ("Wallet Gateway", {"Wallet Gateway", "Wallet Kernel", "Wallet Kernel SDK", "Wallet Gateway JSON-RPC"}),
 ]
+
+
+def top_group_aliases(label: str) -> set[str]:
+    for canonical_label, aliases in TOP_GROUP_ALIAS_SETS:
+        if label == canonical_label:
+            return aliases
+    return {label}
 
 
 def assert_no_duplicate_top_group_aliases(docs: dict[str, Any]) -> None:
@@ -251,6 +330,14 @@ def merge_nav_slice(*, final_docs: dict[str, Any], scratch_docs: dict[str, Any],
         replace_group(
             final_pages,
             require_group(scratch_pages, nav_slice.labels[0], source_path=scratch_path),
+            aliases=top_group_aliases(nav_slice.labels[0]),
+        )
+        return
+
+    if nav_slice.kind == "top_groups":
+        replace_groups(
+            final_pages,
+            [require_group(scratch_pages, label, source_path=scratch_path) for label in nav_slice.labels],
         )
         return
 
@@ -269,10 +356,10 @@ def merge_nav_slice(*, final_docs: dict[str, Any], scratch_docs: dict[str, Any],
 
 
 def prepare_scratch_docs_json_files() -> None:
-    baseline = DOCS_JSON_PATH.read_text(encoding="utf-8")
+    baseline = with_legacy_dropdown_scratch(load_json(DOCS_JSON_PATH))
     for job in SCRIPT_JOBS:
         scratch_path = scratch_docs_json_path(job)
-        scratch_path.write_text(baseline, encoding="utf-8")
+        write_json(scratch_path, baseline)
 
 
 def cleanup_scratch_docs_json_files() -> None:
@@ -285,12 +372,14 @@ def cleanup_scratch_docs_json_files() -> None:
 def consolidate_docs_json() -> None:
     final_docs = load_json(DOCS_JSON_PATH)
     for job in SCRIPT_JOBS:
-        merge_nav_slice(
-            final_docs=final_docs,
-            scratch_docs=load_json(scratch_docs_json_path(job)),
-            nav_slice=job.nav_slice,
-            scratch_path=scratch_docs_json_path(job),
-        )
+        scratch_docs = load_json(scratch_docs_json_path(job))
+        for nav_slice in job.nav_slices:
+            merge_nav_slice(
+                final_docs=final_docs,
+                scratch_docs=scratch_docs,
+                nav_slice=nav_slice,
+                scratch_path=scratch_docs_json_path(job),
+            )
 
     cleaned = prune_page_refs(final_docs, LEGACY_PAGE_REFS)
     if not isinstance(cleaned, dict):

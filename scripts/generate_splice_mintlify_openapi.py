@@ -23,6 +23,9 @@ DEFAULT_SOURCE_CONFIG = REPO_ROOT / "config" / "mintlify-openapi" / "splice-open
 DEFAULT_CACHE_DIR = REPO_ROOT / ".internal" / "cache" / "mintlify-openapi" / "splice-openapi"
 DEFAULT_DOCS_JSON = REPO_ROOT / "docs-main" / "docs.json"
 HTTP_METHODS = {"get", "put", "post", "delete", "options", "head", "patch", "trace"}
+SCAN_OPENAPI_PLACEHOLDER_SERVER = "https://example.com/api/scan"
+SCAN_OPENAPI_PUBLIC_SERVER = "https://scan.sv-1.global.canton.network.sync.global/api/scan"
+SCAN_OPENAPI_SERVER_REPLACEMENT_SPECS = {"scan.yaml", "scan-stream-server.yaml"}
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -192,8 +195,7 @@ def normalized_families(source_config: dict[str, Any]) -> list[dict[str, Any]]:
             raise ValueError("Each family must define a non-empty group")
         if not isinstance(specs, list) or not specs:
             raise ValueError(f"Family '{group}' must define a non-empty specs list")
-
-        normalized_specs: list[dict[str, str]] = []
+        normalized_specs: list[dict[str, Any]] = []
         for spec in specs:
             if not isinstance(spec, dict):
                 raise ValueError(f"Spec entries for family '{group}' must be objects")
@@ -242,11 +244,13 @@ def extract_spec_bytes(
     return extracted
 
 
-def render_output_bytes(*, spec_bytes: bytes, output_path: Path) -> bytes:
+def render_output_bytes(*, spec_filename: str, spec_bytes: bytes, output_path: Path) -> bytes:
     if output_path.suffix not in {".yaml", ".yml"}:
         return spec_bytes
 
     text = spec_bytes.decode("utf-8")
+    if spec_filename in SCAN_OPENAPI_SERVER_REPLACEMENT_SPECS:
+        text = text.replace(SCAN_OPENAPI_PLACEHOLDER_SERVER, SCAN_OPENAPI_PUBLIC_SERVER)
     filtered_lines = [
         line
         for line in text.splitlines()
@@ -352,6 +356,7 @@ def write_managed_specs(
             output_path.parent.mkdir(parents=True, exist_ok=True)
             output_path.write_bytes(
                 render_output_bytes(
+                    spec_filename=spec["filename"],
                     spec_bytes=spec_bytes[spec["filename"]],
                     output_path=output_path,
                 )
@@ -406,22 +411,94 @@ def filtered_families_for_navigation(
     return filtered
 
 
-def build_splice_group_pages(families: list[dict[str, Any]]) -> list[Any]:
+def openapi_operation_page_refs(spec: dict[str, Any]) -> list[str]:
+    paths = spec.get("paths")
+    if not isinstance(paths, dict):
+        return []
+
+    refs: list[str] = []
+    for path, path_item in paths.items():
+        if not isinstance(path, str) or not isinstance(path_item, dict):
+            continue
+        for method, operation in path_item.items():
+            if method.lower() not in HTTP_METHODS or not isinstance(operation, dict):
+                continue
+            refs.append(f"{method.upper()} {path}")
+    return refs
+
+
+def build_splice_openapi_nav_entry(*, docs_root: Path, spec: dict[str, Any]) -> dict[str, Any]:
+    openapi_path = docs_root / spec["source"]
+    payload = yaml.safe_load(openapi_path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError(f"Expected OpenAPI spec to parse as an object: {openapi_path}")
+    entry: dict[str, Any] = {
+        "group": spec["nav_label"],
+        "openapi": {
+            "source": spec["source"],
+            "directory": spec["directory"],
+        },
+        "pages": openapi_operation_page_refs(payload),
+    }
+    return entry
+
+
+def build_splice_group_pages(*, docs_root: Path, families: list[dict[str, Any]]) -> list[Any]:
     pages: list[Any] = []
     for family in families:
         family_pages: list[dict[str, Any]] = []
         for spec in family["specs"]:
-            family_pages.append(
-                {
-                    "group": spec["nav_label"],
-                    "openapi": {
-                        "source": spec["source"],
-                        "directory": spec["directory"],
-                    },
-                }
-            )
+            family_pages.append(build_splice_openapi_nav_entry(docs_root=docs_root, spec=spec))
         pages.append({"group": family["group"], "pages": family_pages})
     return pages
+
+
+def navigation_pages(payload: dict[str, Any], dropdown_label: str, docs_json_path: Path) -> list[Any]:
+    navigation = payload.get("navigation")
+    if not isinstance(navigation, dict):
+        raise ValueError(f"docs.json missing navigation object: {docs_json_path}")
+
+    dropdowns = navigation.get("dropdowns")
+    if isinstance(dropdowns, list):
+        dropdown = next(
+            (item for item in dropdowns if isinstance(item, dict) and item.get("dropdown") == dropdown_label),
+            None,
+        )
+        if dropdown is None:
+            raise ValueError(f"Dropdown not found in docs.json: {dropdown_label}")
+        pages = dropdown.get("pages")
+        if not isinstance(pages, list):
+            raise ValueError(f"Dropdown does not expose a pages list: {dropdown_label}")
+        return pages
+
+    products = navigation.get("products")
+    if isinstance(products, list):
+        product = next(
+            (item for item in products if isinstance(item, dict) and item.get("product") == dropdown_label),
+            None,
+        )
+        if product is None:
+            raise ValueError(f"Product not found in docs.json: {dropdown_label}")
+        pages = product.get("pages")
+        if not isinstance(pages, list):
+            raise ValueError(f"Product does not expose a pages list: {dropdown_label}")
+        return pages
+
+    raise ValueError(f"docs.json navigation must define dropdowns or products: {docs_json_path}")
+
+
+def merge_splice_group_pages(*, existing_pages: list[Any], generated_pages: list[Any]) -> list[Any]:
+    generated_group_labels = {
+        item["group"]
+        for item in generated_pages
+        if isinstance(item, dict) and isinstance(item.get("group"), str)
+    }
+    preserved_pages = [
+        item
+        for item in existing_pages
+        if not (isinstance(item, dict) and item.get("group") in generated_group_labels)
+    ]
+    return preserved_pages + generated_pages
 
 
 def update_docs_navigation(
@@ -431,13 +508,6 @@ def update_docs_navigation(
     families: list[dict[str, Any]],
 ) -> None:
     payload = load_json(docs_json_path)
-    navigation = payload.get("navigation")
-    if not isinstance(navigation, dict):
-        raise ValueError(f"docs.json missing navigation object: {docs_json_path}")
-    dropdowns = navigation.get("dropdowns")
-    if not isinstance(dropdowns, list):
-        raise ValueError(f"docs.json navigation.dropdowns must be a list: {docs_json_path}")
-
     dropdown_label = source_config.get("nav_dropdown") or "API Reference"
     if not isinstance(dropdown_label, str):
         raise ValueError("nav_dropdown must be a string")
@@ -450,19 +520,15 @@ def update_docs_navigation(
     enabled_specs = enabled_nav_specs(source_config)
     navigation_families = filtered_families_for_navigation(families=families, enabled_specs=enabled_specs)
 
-    dropdown = next(
-        (item for item in dropdowns if isinstance(item, dict) and item.get("dropdown") == dropdown_label),
-        None,
-    )
-    if dropdown is None:
-        raise ValueError(f"Dropdown not found in docs.json: {dropdown_label}")
-    pages = dropdown.get("pages")
-    if not isinstance(pages, list):
-        raise ValueError(f"Dropdown does not expose a pages list: {dropdown_label}")
+    pages = navigation_pages(payload, dropdown_label, docs_json_path)
 
     deduped_pages: list[Any] = []
+    existing_top_group_pages: list[Any] | None = None
     for item in pages:
         if isinstance(item, dict) and item.get("group") == top_level_group_label:
+            group_pages = item.get("pages")
+            if isinstance(group_pages, list):
+                existing_top_group_pages = group_pages
             continue
         deduped_pages.append(item)
 
@@ -476,14 +542,18 @@ def update_docs_navigation(
                 insert_at = index + 1
                 break
 
+    generated_pages = build_splice_group_pages(docs_root=docs_json_path.parent, families=navigation_families)
+    if existing_top_group_pages is not None:
+        generated_pages = merge_splice_group_pages(
+            existing_pages=existing_top_group_pages,
+            generated_pages=generated_pages,
+        )
+
     deduped_pages.insert(
         insert_at,
-        {
-            "group": top_level_group_label,
-            "pages": build_splice_group_pages(navigation_families),
-        },
+        {"group": top_level_group_label, "pages": generated_pages},
     )
-    dropdown["pages"] = deduped_pages
+    pages[:] = deduped_pages
     docs_json_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
 

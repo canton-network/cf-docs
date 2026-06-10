@@ -1,16 +1,24 @@
-Copyright (c) 2025 Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved.
+Copyright (c) 2026 Canton Network. All rights reserved.
 SPDX-License-Identifier: Apache-2.0 AND CC-BY-4.0
 
 docs
 ====
 
-This repo manages the contents of the docs.canton.network website.
+This repo manages the contents of the [docs.canton.network](https://docs.canton.network) website.
 
 ## Local Development
 
 ### Prerequisites
 
-- Node.js 20.17 or higher (LTS recommended)
+Either:
+
+- [`direnv`](https://direnv.net/)
+- [`nix`](https://nixos.org/download/)
+
+OR:
+
+- [Node.js 24](https://nodejs.org/en/download) (note that `mintlify` is not currently compatible with Node.js 26)
+- [Python 3.14](https://www.python.org/downloads/) if you are running any of the machinery for syncing snippets or updating generated docs
 
 ### Running the dev server
 
@@ -28,38 +36,12 @@ The site will be available at http://localhost:3000.
 mintlify broken-links
 ```
 
-### Troubleshooting
-
-**Node version error**: If you see "mint dev is not supported on node versions below 20.17", upgrade Node.js:
-
-```bash
-# Using nvm
-nvm install 20
-nvm use 20
-```
-
 ## License
 
 This repository uses a dual-license model:
 
 - **Documentation prose** (`.mdx` files, text content): [Creative Commons Attribution 4.0 International (CC-BY-4.0)](https://creativecommons.org/licenses/by/4.0/) — see [LICENSE-DOCS](LICENSE-DOCS)
 - **Code snippets and configuration** (embedded code examples, scripts, JSON config): [Apache License 2.0](http://www.apache.org/licenses/LICENSE-2.0) — see [LICENSE](LICENSE)
-
-### Direnv + Nix workflow
-
-This repo includes `.envrc` and `shell.nix` for a reproducible local toolchain.
-The Nix package set is pinned by `nix/nixpkgs.src.json`.
-
-Required:
-- `direnv`
-- `nix`
-
-Then run:
-
-```bash
-direnv allow
-cd docs-main && mintlify dev
-```
 
 ### Run all generated reference docs
 
@@ -71,6 +53,78 @@ python3 scripts/generate_all_reference_docs.py
 ```
 
 Use `--dry-run` to print the exact per-step commands without executing them.
+
+### Generate the Canton Metrics reference
+
+The Canton Metrics page is generated from the Canton release docs build rather than from protobuf files. The generator resolves the latest `DACH-NY/canton` GitHub release tag, checks out that Canton source tag under `.internal/cache/canton-metrics-reference/`, runs Canton's release bundle plus generated-include tasks, resolves the metrics RST template with the generated metric includes, converts it to MDX, and records the source release in the generated page comment.
+
+Run:
+
+```bash
+python3 scripts/generate_canton_metrics_reference.py
+```
+
+or:
+
+```bash
+npm run generate:canton-metrics-reference
+```
+
+By default this writes:
+
+- `docs-main/global-synchronizer/reference/canton-metrics.mdx`
+
+For a pinned refresh, pass `--canton-ref v3.5.1`.
+
+### Generate the Version Compatibility Dashboard
+
+The version dashboard generator collects the public sources that are safe to automate, preserves the fields that still need a manual or owner-approved source, rewrites the dashboard config, and regenerates the published MDX snippet consumed by the version dashboard page.
+
+Run:
+
+```bash
+python3 scripts/generate_network_component_versions.py
+```
+
+or:
+
+```bash
+npm run generate:version-compatibility-dashboard
+```
+
+By default this writes:
+
+- `config/repo-version-config.json`
+- `docs-main/snippets/generated/version-dashboard-data.mdx`
+
+Use `--dry-run` to inspect the generated config without writing files.
+
+Source rules:
+
+| Dashboard entry | Sourcing rule |
+| --- | --- |
+| `Splice` | Read from the network `/info` endpoint: MainNet `https://docs.global.canton.network.sync.global/info`, TestNet `https://docs.test.global.canton.network.sync.global/info`, DevNet `https://docs.dev.global.canton.network.sync.global/info`. Cross-check against the same network's `/index.html` Docker image tag and Helm chart version. |
+| `Canton` | Read the network Splice version from `/info`, derive the matching `canton-network/splice` release-line branch, then read `version` from `nix/canton-sources.json`. The config key is still `damlSdk` for compatibility with the existing dashboard component. |
+| `Daml SDK installer` | Do not use legacy `https://get.daml.com/`; that is the old 2.x Daml assistant path. For Daml 3 / DPM, install DPM with `curl https://get.digitalasset.com/install/install.sh | sh`, then use `dpm install latest`. The latest stable SDK version is exposed at `https://get.digitalasset.com/install/latest`. |
+| `PQS` | Read the latest stable semver tag from the public Artifact Registry image `europe-docker.pkg.dev/da-images/public/docker/participant-query-store`. |
+| `Token Standard` | Read from the npm `latest` dist-tag for `@canton-network/core-token-standard`. |
+| `Wallet SDK` | Read from the npm `latest` dist-tag for `@canton-network/wallet-sdk`. |
+| `dApp SDK` | Read from the npm `latest` dist-tag for `@canton-network/dapp-sdk`. |
+| `Wallet Gateway` | Read the latest stable `@canton-network/wallet-gateway-remote` release from `hyperledger-labs/splice-wallet-kernel` GitHub releases. |
+| `Min Protocol Version` | Keep as manual/fallback until a public live source is available. |
+| `Migration ID` | Read from `synchronizer.active.migration_id` on the network's `/info` endpoint and validate against `sv.migration_id`. |
+| `Splice DAR Versions` | Read the latest stable package rows for `splice-amulet`, `splice-wallet`, and `splice-dso-governance` from the observed Splice release-line `daml/dars.lock`. |
+| `Release Notes` | Link to the observed Splice release. |
+| `Primary Scan API` | Static canonical `scan.sv-1...` endpoint for each network. |
+
+### Generate external snippets
+
+External snippet extraction from source repositories is documented in [config/snippet-config/update-workflows.md](config/snippet-config/update-workflows.md). Use that workflow when updating snippet configs under `config/snippet-config/` or regenerating checked-in snippets under `docs-main/snippets/external/`.
+
+```bash
+npm run generate:external-snippets -- --list
+npm run generate:external-snippets -- canton --source-dir ../canton
+```
 
 ### Generate the JSON API reference
 
@@ -278,3 +332,32 @@ By default this writes:
 - `docs-main/docs.json` only when one or more specs are enabled in `enabled_nav_specs`
 
 Enabled specs are added under the top-level `API Reference` dropdown as `Splice APIs`, with Mintlify-rendered OpenAPI entries grouped under `Scan APIs`, `Validator APIs`, and `Token Standard APIs`.
+
+
+## Provide Feedback on a Page
+
+![suggest edits and raise issues](images/readme/readme-edits-issues.png)
+
+Every page on docs.canton.network has two feedback buttons in the footer:
+- `Suggest edits`
+- `Raise issue`
+
+### Suggest edits:
+Use this to propose a direct change to the page, fix a typo, update a code sample, improve wording, etc.
+
+**How it works:**
+
+- Click “Suggest edits” in the footer of any page.
+- GitHub opens the source file for that exact page.
+- Fork the repo, make your edits, and open a Pull Request.
+- Canton docs team reviews and merges accepted changes if all checks out.
+
+### Raise Issue:
+Use this to report a problem or request new content without editing the source yourself.
+
+**How it works:**
+
+- Click “Raise Issue” in the footer of any page.
+- A GitHub Issue opens *Pre-filled* with the Path of the page you were on.
+- Describe in detail what's wrong or missing along with the source of information to verify and submit.
+- The team reviews it and responds.

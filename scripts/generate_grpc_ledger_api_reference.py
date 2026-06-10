@@ -530,30 +530,19 @@ def update_docs_navigation(
     page_paths: list[Path],
 ) -> None:
     docs = load_json(docs_json_path)
-    navigation = docs.get("navigation")
-    if not isinstance(navigation, dict):
-        raise ValueError(f"docs.json navigation must be an object: {docs_json_path}")
-    dropdowns = navigation.get("dropdowns")
-    if not isinstance(dropdowns, list):
-        raise ValueError(f"docs.json navigation.dropdowns must be a list: {docs_json_path}")
-    dropdown = next((item for item in dropdowns if isinstance(item, dict) and item.get("dropdown") == dropdown_label), None)
-    if dropdown is None:
-        raise ValueError(f"Dropdown not found in docs.json: {dropdown_label}")
-    pages = dropdown.get("pages")
-    if not isinstance(pages, list):
-        raise ValueError(f"Dropdown does not expose a pages list: {dropdown_label}")
+    pages = reference_nav.navigation_pages(docs, label=dropdown_label, docs_json_path=docs_json_path)
 
     nav_group, generated_refs = build_nav_group(
         docs_json_path=docs_json_path,
         details_path=details_path,
         page_paths=page_paths,
     )
-    dropdown["pages"] = canton_protobuf_history.prune_nav_items(
+    pages[:] = canton_protobuf_history.prune_nav_items(
         pages,
         page_refs=generated_refs,
         group_labels={GROUP_LABEL, LEGACY_GROUP_LABEL},
     )
-    target_pages = canton_protobuf_history.ensure_group_path(dropdown["pages"], parent_groups)
+    target_pages = canton_protobuf_history.ensure_group_path(pages, parent_groups)
     insert_group(target_pages, group=nav_group, after_group=insert_after_group)
     docs_json_path.write_text(json.dumps(docs, indent=2) + "\n", encoding="utf-8")
     print(f"Updated docs navigation: {docs_json_path}")
@@ -601,13 +590,24 @@ def write_manifest(
             bundle_proto_dir=bundle_proto_dir,
             force_refresh=force_refresh,
         )
-        import_to_repo_path = canton_protobuf_history.import_to_repo_path_from_bundle(protobuf_root)
+        import_to_repo_path = canton_protobuf_history.import_to_repo_path_from_bundle(
+            protobuf_root,
+            selections=canton_protobuf_history.LEDGER_API_SELECTIONS,
+        )
         if not import_to_repo_path:
             print(f"Skipping {tag}: no published owned protobuf files found")
             continue
-        image_path = canton_protobuf_history.descriptor_image_path(cache_dir, version)
+        image_path = canton_protobuf_history.descriptor_image_path(
+            cache_dir,
+            version,
+            surface="grpc-ledger-api",
+        )
         if not image_path.exists() or force_refresh:
-            canton_protobuf_history.compile_descriptor_image(protobuf_root, output_path=image_path)
+            canton_protobuf_history.compile_descriptor_image(
+                protobuf_root,
+                output_path=image_path,
+                selections=canton_protobuf_history.LEDGER_API_SELECTIONS,
+            )
         releases.append(
             {
                 "version": version,
