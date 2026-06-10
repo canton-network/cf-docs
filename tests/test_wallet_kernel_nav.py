@@ -128,6 +128,65 @@ def test_openrpc_nav_uses_wallet_gateway_section_shape(tmp_path: Path) -> None:
     ]
 
 
+def test_openrpc_nav_updates_product_navigation(tmp_path: Path) -> None:
+    generate_wallet_gateway_openrpc_reference = load_script("generate_wallet_gateway_openrpc_reference")
+    docs_json = tmp_path / "docs-main" / "docs.json"
+    docs_json.parent.mkdir(parents=True)
+    docs_json.write_text(
+        json.dumps(
+            {
+                "navigation": {
+                    "products": [
+                        {
+                            "product": "API Reference",
+                            "pages": [
+                                {"group": "TypeScript", "pages": []},
+                                {"group": "Wallet Kernel SDK", "pages": ["old-wallet"]},
+                                {"group": "Splice APIs", "pages": []},
+                            ],
+                        }
+                    ]
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    output_dir = docs_json.parent / "reference" / "wallet-gateway-json-rpc"
+
+    write_mdx(output_dir / "index.mdx", "Wallet Gateway")
+    write_mdx(output_dir / "specs" / "user-api.mdx", "User API")
+    write_mdx(output_dir / "operations" / "user-api" / "createWallet.mdx", "createWallet")
+    write_mdx(output_dir / "operations" / "user-api" / "details.mdx", "Details and history")
+    write_mdx(output_dir / "operations" / "details.mdx", "Details and history")
+
+    generate_wallet_gateway_openrpc_reference.update_docs_navigation(
+        docs_json_path=docs_json,
+        dropdown_label="API Reference",
+        output_dir=output_dir,
+        spec_entries=[{"spec_id": "user-api"}],
+    )
+
+    docs = json.loads(docs_json.read_text(encoding="utf-8"))
+    pages = docs["navigation"]["products"][0]["pages"]
+    assert pages == [
+        {"group": "TypeScript", "pages": []},
+        {
+            "group": "Wallet Gateway",
+            "pages": [
+                {
+                    "group": "User API",
+                    "pages": [
+                        "reference/wallet-gateway-json-rpc/operations/user-api/createWallet",
+                        "reference/wallet-gateway-json-rpc/operations/user-api/details",
+                    ],
+                },
+                "reference/wallet-gateway-json-rpc/operations/details",
+            ],
+        },
+        {"group": "Splice APIs", "pages": []},
+    ]
+
+
 def test_openrpc_nav_group_helper_omits_redundant_spec_page_child(tmp_path: Path) -> None:
     generated_reference_nav = load_script("generated_reference_nav")
     docs_json = tmp_path / "docs-main" / "docs.json"

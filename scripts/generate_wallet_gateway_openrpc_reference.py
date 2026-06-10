@@ -237,6 +237,14 @@ def write_details_pages(*, output_dir: Path, spec_entries: list[dict[str, Any]])
         )
 
 
+def normalize_generated_mdx(output_dir: Path) -> None:
+    for path in sorted(output_dir.rglob("*.mdx")):
+        original = path.read_text(encoding="utf-8")
+        normalized = "\n".join(line.rstrip() for line in original.splitlines()) + "\n"
+        if normalized != original:
+            path.write_text(normalized, encoding="utf-8")
+
+
 def prune_nav_items(items: list[Any], *, page_refs: set[str], group_labels: set[str]) -> list[Any]:
     pruned: list[Any] = []
     for item in items:
@@ -269,14 +277,21 @@ def update_docs_navigation(
     if not isinstance(navigation, dict):
         raise ValueError(f"docs.json navigation must be an object: {docs_json_path}")
     dropdowns = navigation.get("dropdowns")
-    if not isinstance(dropdowns, list):
-        raise ValueError(f"docs.json navigation.dropdowns must be a list: {docs_json_path}")
-    dropdown = next((item for item in dropdowns if isinstance(item, dict) and item.get("dropdown") == dropdown_label), None)
-    if dropdown is None:
-        raise ValueError(f"Dropdown not found in docs.json: {dropdown_label}")
-    pages = dropdown.get("pages")
+    if isinstance(dropdowns, list):
+        nav_root = next((item for item in dropdowns if isinstance(item, dict) and item.get("dropdown") == dropdown_label), None)
+        if nav_root is None:
+            raise ValueError(f"Dropdown not found in docs.json: {dropdown_label}")
+    else:
+        products = navigation.get("products")
+        if not isinstance(products, list):
+            raise ValueError(f"docs.json navigation must define dropdowns or products: {docs_json_path}")
+        nav_root = next((item for item in products if isinstance(item, dict) and item.get("product") == dropdown_label), None)
+        if nav_root is None:
+            raise ValueError(f"Product not found in docs.json: {dropdown_label}")
+
+    pages = nav_root.get("pages")
     if not isinstance(pages, list):
-        raise ValueError(f"Dropdown does not expose a pages list: {dropdown_label}")
+        raise ValueError(f"Navigation root does not expose a pages list: {dropdown_label}")
 
     refs = {overview_page_ref(output_dir, docs_json_path), docs_json_page_ref(output_dir / "operations" / "details.mdx", docs_json_path)}
     refs.update(spec_page_ref(output_dir, docs_json_path, spec["spec_id"]) for spec in spec_entries)
@@ -310,7 +325,7 @@ def update_docs_navigation(
             break
     for offset, wallet_group in enumerate(wallet_groups):
         pruned_pages.insert(min(insert_at + offset, len(pruned_pages)), wallet_group)
-    dropdown["pages"] = pruned_pages
+    nav_root["pages"] = pruned_pages
     docs_json_path.write_text(json.dumps(docs, indent=2) + "\n", encoding="utf-8")
     print(f"Updated docs navigation: {docs_json_path}")
 
@@ -453,6 +468,7 @@ def main() -> int:
         output_dir=Path(args.output_dir).resolve(),
         spec_entries=spec_entries,
     )
+    normalize_generated_mdx(Path(args.output_dir).resolve())
     update_docs_navigation(
         docs_json_path=Path(args.docs_json).resolve(),
         dropdown_label=args.nav_dropdown,
