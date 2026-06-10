@@ -3,11 +3,6 @@ title: "Synchronizer Traffic"
 description: "Traffic accounting, fees, and monitoring on the Global Synchronizer"
 ---
 
-import ExternalSpliceMainSpliceRstCodeDocsSrcDeploymentTrafficJson94 from "/snippets/external/splice/main/splice-rst-code-docs-src-deployment-traffic-json-94.mdx";
-
-import { NetworkVariables } from '/snippets/components/version.mdx';
-import { networkData } from '/snippets/generated/version-dashboard-data.mdx';
-
 {/* COPIED_START source="splice:docs/src/deployment/traffic.rst" hash="0e110a7b" */}
 
 Synchronizer usage incurs operational costs for SVs. For amortizing these costs, improving the incentives for operating an SV, and making Denial Of Service attacks on the network unattractive, synchronizer usage beyond a certain free `base rate` level is charged with so-called `synchronizer fees` paid in `Canton Coin`. For supporting this functionality, sequencers keep track of available and consumed traffic for each synchronizer member (most relevantly: for all validator participants). Whenever both the free (base rate) and paid-for (extra) traffic are exhausted for a participant, attempted writes are denied by the sequencer.
@@ -41,18 +36,31 @@ Traffic accounting is "by participant"; all parties hosted on the same participa
 
 ## Traffic parameters
 
-<NetworkVariables networkData={networkData}>
+{/* NETWORKVARS_START source="/snippets/networkvars/global-synchronizer/deployment/synchronizer-traffic-1.mdx" */}
+<Tabs>
+
+<Tab title="DevNet (0.6.7)">
 
 The current synchronizer traffic parameters are recorded on the global `AmuletRules` contract and can be obtained from Scan. You can obtain them via the Scan UI or by querying the Scan API using, for example, this command (requires installing [jq](https://jqlang.org/)):
 
 ```bash
-curl -X POST --header "Content-Type: application/json" -d "{}" |gsf_scan_url|/api/scan/v0/amulet-rules | jq ".amulet_rules_update.contract.payload.configSchedule.initialValue.decentralizedSynchronizer.fees"
+curl -X POST --header "Content-Type: application/json" -d "{}" https://scan.sv-1.dev.global.canton.network.sync.global/api/scan/v0/amulet-rules | jq ".amulet_rules_update.contract.payload.configSchedule.initialValue.decentralizedSynchronizer.fees"
 ```
-
 Above command will return a JSON object similar to the following:
 
-<ExternalSpliceMainSpliceRstCodeDocsSrcDeploymentTrafficJson94 />
-
+```json
+"fees": {
+  "baseRateTrafficLimits": {
+    "burstAmount": "400000",
+    "burstWindow": {
+      "microseconds": "1200000000"
+    }
+  },
+  "extraTrafficPrice": "60.0",
+  "readVsWriteScalingFactor": "4",
+  "minTopupAmount": "200000"
+}
+```
 This represents an encoded instance of the `SynchronizerFeesConfig` Daml data type. See the Daml API docs for detailed information on these fields. To give an overview here:
 
 - `baseRateTrafficLimits`: defines the free tier for synchronizer traffic. Validators can use up to `burstAmount` bytes of traffic within a `burstWindow` time window without incurring fees. The amount of available free traffic is restored periodically and will always reach its maximum (`burstAmount`) after a full `burstWindow` of complete inactivity. Note that even if no ledger submissions are being triggered, however, participants might still consume some traffic as part of normal operations (see `traffic_accounting` above).
@@ -60,16 +68,96 @@ This represents an encoded instance of the `SynchronizerFeesConfig` Daml data ty
 - `extraTrafficPrice`: the price of extra traffic beyond the free tier, denominated in USD per MB. The price is charged in `CC` as per the current USD exchange rate. The exchange rate is determined by SVs via median voting and recorded on current `OpenMiningRound` contracts obtainable from Scan. For querying the current CC price in USD as per the currently open mining round, you can check the Scan UI or use the following command (requires installing [jq](https://jqlang.org/)):
 
   ```bash
-  curl -X POST --header "Content-Type: application/json" -d "{\"cached_open_mining_round_contract_ids\":[], \"cached_issuing_round_contract_ids\":[]}" |gsf_scan_url|/api/scan/v0/open-and-issuing-mining-rounds | jq ".open_mining_rounds | values[] | .contract.payload | {round, amuletPrice}"
+  curl -X POST --header "Content-Type: application/json" -d "{\"cached_open_mining_round_contract_ids\":[], \"cached_issuing_round_contract_ids\":[]}" https://scan.sv-1.dev.global.canton.network.sync.global/api/scan/v0/open-and-issuing-mining-rounds | jq ".open_mining_rounds | values[] | .contract.payload | {round, amuletPrice}"
   ```
-
 - `readVsWriteScalingFactor`: specifies the weight of additional traffic balance subtractions (from a sender's balance) for delivering a synchronizer message to each of its recipients. Delivering messages incurs actual costs for the SVs, even if this cost is much smaller than the cost of ordering and persisting messages. The `readVsWriteScalingFactor` is specified in basis points (parts per 10,000), i.e., a value of 1 means that for each 1000 bytes that need to be delivered to a recipient, 0.1 bytes of traffic will be charged. So for example: At a factor of 4, a 1 MB message with 10 recipients will draw `1,000,000 * (1 + 10 * 0.004) = 1,040,000` bytes from the sending participant's traffic balance.
 
 - `minTopupAmount`: the minimum amount of traffic that must be bought when buying extra traffic. Keeping this value reasonably high ensures that SVs can amortize the cost of performing the top-up operation, i.e., protects them from disproportionate overhead from processing very small top-ups.
 
 Like all parts of the `AmuletRulesConfig`, the `SynchronizerFeesConfig` is set by SVs via on-ledger voting, as part of DSO governance. The SV operations docs contain pointers for determining good values for some of these parameters.
 
-</NetworkVariables>
+</Tab>
+
+<Tab title="TestNet (0.6.6)">
+
+The current synchronizer traffic parameters are recorded on the global `AmuletRules` contract and can be obtained from Scan. You can obtain them via the Scan UI or by querying the Scan API using, for example, this command (requires installing [jq](https://jqlang.org/)):
+
+```bash
+curl -X POST --header "Content-Type: application/json" -d "{}" https://scan.sv-1.test.global.canton.network.sync.global/api/scan/v0/amulet-rules | jq ".amulet_rules_update.contract.payload.configSchedule.initialValue.decentralizedSynchronizer.fees"
+```
+Above command will return a JSON object similar to the following:
+
+```json
+"fees": {
+  "baseRateTrafficLimits": {
+    "burstAmount": "400000",
+    "burstWindow": {
+      "microseconds": "1200000000"
+    }
+  },
+  "extraTrafficPrice": "60.0",
+  "readVsWriteScalingFactor": "4",
+  "minTopupAmount": "200000"
+}
+```
+This represents an encoded instance of the `SynchronizerFeesConfig` Daml data type. See the Daml API docs for detailed information on these fields. To give an overview here:
+
+- `baseRateTrafficLimits`: defines the free tier for synchronizer traffic. Validators can use up to `burstAmount` bytes of traffic within a `burstWindow` time window without incurring fees. The amount of available free traffic is restored periodically and will always reach its maximum (`burstAmount`) after a full `burstWindow` of complete inactivity. Note that even if no ledger submissions are being triggered, however, participants might still consume some traffic as part of normal operations (see `traffic_accounting` above).
+
+- `extraTrafficPrice`: the price of extra traffic beyond the free tier, denominated in USD per MB. The price is charged in `CC` as per the current USD exchange rate. The exchange rate is determined by SVs via median voting and recorded on current `OpenMiningRound` contracts obtainable from Scan. For querying the current CC price in USD as per the currently open mining round, you can check the Scan UI or use the following command (requires installing [jq](https://jqlang.org/)):
+
+  ```bash
+  curl -X POST --header "Content-Type: application/json" -d "{\"cached_open_mining_round_contract_ids\":[], \"cached_issuing_round_contract_ids\":[]}" https://scan.sv-1.test.global.canton.network.sync.global/api/scan/v0/open-and-issuing-mining-rounds | jq ".open_mining_rounds | values[] | .contract.payload | {round, amuletPrice}"
+  ```
+- `readVsWriteScalingFactor`: specifies the weight of additional traffic balance subtractions (from a sender's balance) for delivering a synchronizer message to each of its recipients. Delivering messages incurs actual costs for the SVs, even if this cost is much smaller than the cost of ordering and persisting messages. The `readVsWriteScalingFactor` is specified in basis points (parts per 10,000), i.e., a value of 1 means that for each 1000 bytes that need to be delivered to a recipient, 0.1 bytes of traffic will be charged. So for example: At a factor of 4, a 1 MB message with 10 recipients will draw `1,000,000 * (1 + 10 * 0.004) = 1,040,000` bytes from the sending participant's traffic balance.
+
+- `minTopupAmount`: the minimum amount of traffic that must be bought when buying extra traffic. Keeping this value reasonably high ensures that SVs can amortize the cost of performing the top-up operation, i.e., protects them from disproportionate overhead from processing very small top-ups.
+
+Like all parts of the `AmuletRulesConfig`, the `SynchronizerFeesConfig` is set by SVs via on-ledger voting, as part of DSO governance. The SV operations docs contain pointers for determining good values for some of these parameters.
+
+</Tab>
+
+<Tab title="MainNet (0.6.5)">
+
+The current synchronizer traffic parameters are recorded on the global `AmuletRules` contract and can be obtained from Scan. You can obtain them via the Scan UI or by querying the Scan API using, for example, this command (requires installing [jq](https://jqlang.org/)):
+
+```bash
+curl -X POST --header "Content-Type: application/json" -d "{}" https://scan.sv-1.global.canton.network.sync.global/api/scan/v0/amulet-rules | jq ".amulet_rules_update.contract.payload.configSchedule.initialValue.decentralizedSynchronizer.fees"
+```
+Above command will return a JSON object similar to the following:
+
+```json
+"fees": {
+  "baseRateTrafficLimits": {
+    "burstAmount": "400000",
+    "burstWindow": {
+      "microseconds": "1200000000"
+    }
+  },
+  "extraTrafficPrice": "60.0",
+  "readVsWriteScalingFactor": "4",
+  "minTopupAmount": "200000"
+}
+```
+This represents an encoded instance of the `SynchronizerFeesConfig` Daml data type. See the Daml API docs for detailed information on these fields. To give an overview here:
+
+- `baseRateTrafficLimits`: defines the free tier for synchronizer traffic. Validators can use up to `burstAmount` bytes of traffic within a `burstWindow` time window without incurring fees. The amount of available free traffic is restored periodically and will always reach its maximum (`burstAmount`) after a full `burstWindow` of complete inactivity. Note that even if no ledger submissions are being triggered, however, participants might still consume some traffic as part of normal operations (see `traffic_accounting` above).
+
+- `extraTrafficPrice`: the price of extra traffic beyond the free tier, denominated in USD per MB. The price is charged in `CC` as per the current USD exchange rate. The exchange rate is determined by SVs via median voting and recorded on current `OpenMiningRound` contracts obtainable from Scan. For querying the current CC price in USD as per the currently open mining round, you can check the Scan UI or use the following command (requires installing [jq](https://jqlang.org/)):
+
+  ```bash
+  curl -X POST --header "Content-Type: application/json" -d "{\"cached_open_mining_round_contract_ids\":[], \"cached_issuing_round_contract_ids\":[]}" https://scan.sv-1.global.canton.network.sync.global/api/scan/v0/open-and-issuing-mining-rounds | jq ".open_mining_rounds | values[] | .contract.payload | {round, amuletPrice}"
+  ```
+- `readVsWriteScalingFactor`: specifies the weight of additional traffic balance subtractions (from a sender's balance) for delivering a synchronizer message to each of its recipients. Delivering messages incurs actual costs for the SVs, even if this cost is much smaller than the cost of ordering and persisting messages. The `readVsWriteScalingFactor` is specified in basis points (parts per 10,000), i.e., a value of 1 means that for each 1000 bytes that need to be delivered to a recipient, 0.1 bytes of traffic will be charged. So for example: At a factor of 4, a 1 MB message with 10 recipients will draw `1,000,000 * (1 + 10 * 0.004) = 1,040,000` bytes from the sending participant's traffic balance.
+
+- `minTopupAmount`: the minimum amount of traffic that must be bought when buying extra traffic. Keeping this value reasonably high ensures that SVs can amortize the cost of performing the top-up operation, i.e., protects them from disproportionate overhead from processing very small top-ups.
+
+Like all parts of the `AmuletRulesConfig`, the `SynchronizerFeesConfig` is set by SVs via on-ledger voting, as part of DSO governance. The SV operations docs contain pointers for determining good values for some of these parameters.
+
+</Tab>
+
+</Tabs>
+{/* NETWORKVARS_END */}
 
 ## How traffic balance interacts with transaction submission
 
@@ -122,6 +210,5 @@ The Splice distribution contains a Grafana dashboard about `Synchronizer Fees (v
 SV operators are encouraged to monitor wasted traffic across all synchronizer members, as reported for example by sequencer metrics, to detect cases where wasted traffic increases significantly and/or in a global manner. The Splice distribution contains a Grafana dashboard about `Synchronizer Fees (SV view)` that can be helpful, as well as an alert definition that focuses on validator participants.
 
 Note that wasted traffic is less relevant for SVs themselves, as SV components have unlimited traffic. Note also that SV mediators and sequencers waste traffic as part of their regular operation: They heavily use aggregate submissions where sequencers collect messages from a group of senders and only deliver a single message per recipient once a threshold of individual submissions has been sequenced; sequenced individual submissions beyond the aggregation threshold count as wasted traffic. All that said, should an SV component suddenly exhibit a significant increase in wasted traffic, this likely points to an actual issue that should be investigated.
-
 
 {/* COPIED_END */}

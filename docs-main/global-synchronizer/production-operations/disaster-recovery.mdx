@@ -3,7 +3,9 @@ title: "Disaster Recovery"
 description: "Recovery procedures for data corruption, SV re-onboarding, and CometBFT layer loss"
 ---
 
-import ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvRestoreBash104 from "/snippets/external/splice/main/splice-rst-code-docs-src-sv-operator-sv-restore-bash-104.mdx";
+import ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvRestoreBash102 from "/snippets/internal/splice/main/splice-rst-code-docs-src-sv-operator-sv-restore-bash-102.mdx";
+import ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvRestoreBash74 from "/snippets/internal/splice/main/splice-rst-code-docs-src-sv-operator-sv-restore-bash-74.mdx";
+import ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvRestoreBash57 from "/snippets/internal/splice/main/splice-rst-code-docs-src-sv-operator-sv-restore-bash-57.mdx";
 
 {/* COPIED_START source="splice:docs/src/sv_operator/sv_restore.rst" hash="9e120ae8" */}
 
@@ -28,31 +30,13 @@ Assuming such a consistent set of backups is available, the following steps can 
 
 Scale down all components in the SV node to 0 replicas (replace `-0` with the correct serial ID in case a logical synchronizer upgrade has already been performed):
 
-```bash
-kubectl scale deployment --replicas=0 -n sv \
-  global-domain-0-cometbft \
-  global-domain-0-mediator \
-  global-domain-0-sequencer \
-  participant \
-  scan-app \
-  sv-app \
-  validator-app
-```
+<ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvRestoreBash57 />
 
 Restore the storage and DBs of all components from the backups. The exact process for this depends on the storage and DBs used by the components, and is not documented here.
 
 Once all storage has been restored, scale up all components in the SV node back to 1 replica (replace `-0` with the correct serial ID in case a logical synchronizer upgrade has already been performed):
 
-```bash
-kubectl scale deployment --replicas=1 -n sv \
-  global-domain-0-cometbft \
-  global-domain-0-mediator \
-  global-domain-0-sequencer \
-  participant \
-  scan-app \
-  sv-app \
-  validator-app
-```
+<ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvRestoreBash74 />
 
 Once all components are healthy again, they should start catching up their state from peer SVs, and eventually become functional again.
 
@@ -64,7 +48,7 @@ In order to be able to recover the amulet, the backup of the identities of your 
 
 From the backup of Node Identities, copy the content of the field `identities.participant` and save it as a separate JSON file. This file will be used as identities bootstrap dump for the validator runbook.
 
-<ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvRestoreBash104 />
+<ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvRestoreBash102 />
 
 Once the failed SV node is offboarded by a majority of SVs (via a governance vote on a `OffboardMember` action), we can deploy a standalone validator node for recovering the SV's amulets.
 

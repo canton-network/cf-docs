@@ -1,0 +1,31 @@
+name: Mintlify validate
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mintlify-validate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mintlify-validate:
+    name: mintlify validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Nix
+        uses: cachix/install-nix-action@v31
+
+      - name: Validate external snippet wrapper
+        run: nix-shell --run 'npm run test:external-snippets'
+
+      - name: Run Mintlify validation
+        run: nix-shell --run 'cd docs-main && npx mint validate'
