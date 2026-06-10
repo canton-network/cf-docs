@@ -23,8 +23,14 @@ jobs:
       - name: Set up Nix
         uses: cachix/install-nix-action@v31
 
-      - name: Update version dashboard
-        run: nix-shell --run 'npm run generate:version-compatibility-dashboard'
+      - name: Update version dashboard and Wallet Gateway OpenRPC
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          nix-shell --run 'npm run generate:version-compatibility-dashboard'
+          nix-shell --run 'npm run update:generated-reference-sources -- --source wallet-gateway-openrpc'
+          nix-shell --run 'npm run generate:wallet-gateway-openrpc-reference'
 
       - name: Detect changes
         id: changes
@@ -45,8 +51,9 @@ jobs:
         if: steps.changes.outputs.has_changes == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
+          PR_BASE_BRANCH: ${{ github.ref_name }}
           PR_BRANCH: version-dashboard/update
-          PR_TITLE: Update version dashboard data
+          PR_TITLE: Update version dashboard and generated references
         run: |
           set -euo pipefail
 
@@ -54,7 +61,12 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           git switch -c "$PR_BRANCH"
-          git add config/repo-version-config.json docs-main/snippets/generated/version-dashboard-data.mdx
+          git add \
+            config/repo-version-config.json \
+            config/x2mdx/wallet-gateway-openrpc/source-artifacts.json \
+            docs-main/docs.json \
+            docs-main/reference/wallet-gateway-json-rpc \
+            docs-main/snippets/generated/version-dashboard-data.mdx
           git commit -m "$PR_TITLE"
 
           if remote_sha="$(git ls-remote --heads origin "$PR_BRANCH" | awk '{print $1}')" && [[ -n "$remote_sha" ]]; then
@@ -67,8 +79,12 @@ jobs:
           cat > "$pr_body" <<'EOF'
           Updates the committed Canton Network version dashboard data from public network, package, and installer sources.
 
+          Also updates the Wallet Gateway OpenRPC source pin to the latest stable wallet-gateway-remote release and regenerates the checked-in Wallet Gateway OpenRPC reference pages.
+
           Validation run by the workflow:
           - `npm run generate:version-compatibility-dashboard`
+          - `npm run update:generated-reference-sources -- --source wallet-gateway-openrpc`
+          - `npm run generate:wallet-gateway-openrpc-reference`
           - `git diff --check`
           EOF
 
@@ -76,7 +92,7 @@ jobs:
             gh pr list \
               --repo "$GITHUB_REPOSITORY" \
               --head "$PR_BRANCH" \
-              --base main \
+              --base "$PR_BASE_BRANCH" \
               --state open \
               --json number \
               --jq '.[0].number // empty'
@@ -87,11 +103,15 @@ jobs:
               --repo "$GITHUB_REPOSITORY" \
               --title "$PR_TITLE" \
               --body-file "$pr_body"
+            gh pr ready "$existing_pr_number" \
+              --repo "$GITHUB_REPOSITORY" \
+              --undo
           else
             gh pr create \
-              --base main \
+              --base "$PR_BASE_BRANCH" \
               --head "$PR_BRANCH" \
               --repo "$GITHUB_REPOSITORY" \
+              --draft \
               --title "$PR_TITLE" \
               --body-file "$pr_body"
           fi
