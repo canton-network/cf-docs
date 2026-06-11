@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -24,7 +25,7 @@ def load_script_module(script_name: str) -> ModuleType:
     return module
 
 
-def test_add_missing_operation_summaries_uses_path_only_labels_for_mintlify_nav() -> None:
+def test_add_missing_operation_summaries_uses_method_path_labels_for_mintlify_nav() -> None:
     module = load_script_module("generate_json_api_reference.py")
     source = """  openapi: 3.0.3
   paths:
@@ -42,10 +43,36 @@ def test_add_missing_operation_summaries_uses_path_only_labels_for_mintlify_nav(
 
     rendered = module.add_missing_operation_summaries(source)
 
-    assert '        summary: "/v2/commands/submit-and-wait"' in rendered
+    assert '        summary: "POST /v2/commands/submit-and-wait"' in rendered
     assert "summary: Existing summary" in rendered
-    assert "summary: \"POST /v2/commands/submit-and-wait\"" not in rendered
+    assert "summary: \"/v2/commands/submit-and-wait\"" not in rendered
     assert module.missing_operation_summaries(module.yaml.safe_load(rendered)) == set()
+
+
+def test_add_missing_operation_summaries_disambiguates_methods_on_same_path() -> None:
+    module = load_script_module("generate_json_api_reference.py")
+    source = """openapi: 3.0.3
+paths:
+  /v2/users/{user-id}:
+    get:
+      description: Get user.
+      operationId: getV2UsersUser-id
+    delete:
+      description: Delete user.
+      operationId: deleteV2UsersUser-id
+    patch:
+      description: Update user.
+      operationId: patchV2UsersUser-id
+components: {}
+"""
+
+    rendered = module.add_missing_operation_summaries(source)
+    spec = module.yaml.safe_load(rendered)
+    operations = spec["paths"]["/v2/users/{user-id}"]
+
+    assert operations["get"]["summary"] == "GET /v2/users/:user-id"
+    assert operations["delete"]["summary"] == "DELETE /v2/users/:user-id"
+    assert operations["patch"]["summary"] == "PATCH /v2/users/:user-id"
 
 
 def test_add_missing_operation_summaries_preserves_specs_that_already_have_summaries() -> None:
@@ -83,6 +110,86 @@ def test_openapi_operation_page_refs_lists_endpoint_refs_in_source_order() -> No
         "POST /v2/packages",
         "GET /v2/version",
     ]
+
+
+def test_update_docs_navigation_supports_product_navigation(tmp_path: Path) -> None:
+    module = load_script_module("generate_json_api_reference.py")
+    docs_json = tmp_path / "docs.json"
+    docs_json.write_text(
+        json.dumps(
+            {
+                "navigation": {
+                    "products": [
+                        {
+                            "product": "API Reference",
+                            "pages": [
+                                "api-reference",
+                                {
+                                    "group": "Ledger API",
+                                    "pages": [
+                                        {
+                                            "group": "OpenAPI",
+                                            "openapi": {
+                                                "source": "stale.yaml",
+                                                "directory": "stale-directory",
+                                            },
+                                            "pages": ["stale-page"],
+                                        },
+                                        {"group": "AsyncAPI", "pages": ["reference/asyncapi"]},
+                                    ],
+                                },
+                            ],
+                        }
+                    ]
+                }
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    module.update_docs_navigation(
+        docs_json_path=docs_json,
+        dropdown_label="API Reference",
+        parent_group_label="Ledger API",
+        group_label="OpenAPI",
+        openapi_source_ref="openapi/json-ledger-api/openapi.yaml",
+        openapi_directory="reference/json-api-reference",
+        details_page_ref="reference/json-api-reference/details",
+        openapi_page_refs=["GET /v2/users", "POST /v2/users"],
+    )
+
+    docs = json.loads(docs_json.read_text(encoding="utf-8"))
+    ledger_pages = docs["navigation"]["products"][0]["pages"][1]["pages"]
+
+    assert ledger_pages == [
+        {
+            "group": "OpenAPI",
+            "openapi": {
+                "source": "openapi/json-ledger-api/openapi.yaml",
+                "directory": "reference/json-api-reference",
+            },
+            "pages": ["GET /v2/users", "POST /v2/users", "reference/json-api-reference/details"],
+        },
+        {"group": "AsyncAPI", "pages": ["reference/asyncapi"]},
+    ]
+
+
+def test_operation_summary_uses_descriptions_for_generated_method_path_summaries() -> None:
+    module = load_script_module("generate_json_api_reference.py")
+    path_item = {
+        "get": {
+            "summary": "GET /v2/users/:user-id",
+            "description": "Get user.",
+        },
+        "patch": {
+            "summary": "PATCH /v2/users/:user-id",
+            "description": "Update user.",
+        },
+    }
+
+    assert module.operation_summary("/v2/users/{user-id}", path_item) == "GET: Get user.; PATCH: Update user."
 
 
 def test_build_openapi_details_page_uses_reference_overview_layout() -> None:
