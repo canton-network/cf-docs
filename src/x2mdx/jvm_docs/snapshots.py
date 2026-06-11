@@ -4,30 +4,27 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import cast
 
 import yaml
 
 from x2mdx.jvm_docs.lifecycle import version_key
 from x2mdx.jvm_docs.models import JvmDocArtifactSource, JvmDocVersionSource, JVM_DOC_OBJECT_STATUSES
-from x2mdx.types import JsonObject, JsonValue
+from x2mdx.types import JsonValue, require_json_object, require_json_value
 
 
 def _load_data(path: Path) -> JsonValue:
     raw = path.read_text(encoding="utf-8")
     if path.suffix.lower() == ".json":
-        return cast(JsonValue, json.loads(raw))
-    return cast(JsonValue, yaml.safe_load(raw))
+        return require_json_value(json.loads(raw), path=str(path))
+    return require_json_value(yaml.safe_load(raw), path=str(path))
 
 
-def load_jvm_doc_manifest(path: Path) -> JsonObject:
-    data = _load_data(path)
-    if not isinstance(data, dict):
-        raise ValueError("JVM doc manifest must be a JSON/YAML object")
+def load_jvm_doc_manifest(path: Path) -> dict[str, JsonValue]:
+    data = require_json_object(_load_data(path), path=str(path))
     artifacts = data.get("artifacts")
     if not isinstance(artifacts, list):
         raise ValueError("JVM doc manifest must include an `artifacts` list")
-    return cast(JsonObject, data)
+    return data
 
 
 def load_jvm_doc_status_manifest(path: Path) -> dict[str, str]:
@@ -64,9 +61,12 @@ def load_jvm_doc_sources(
 ) -> list[JvmDocArtifactSource]:
     manifest = load_jvm_doc_manifest(manifest_path)
     root = fixture_root or manifest_path.parent
+    artifacts = manifest.get("artifacts")
+    if not isinstance(artifacts, list):
+        raise ValueError("JVM doc manifest must include an `artifacts` list")
 
     artifact_sources: list[JvmDocArtifactSource] = []
-    for entry in manifest["artifacts"]:
+    for entry in artifacts:
         if not isinstance(entry, dict):
             continue
 
@@ -74,16 +74,18 @@ def load_jvm_doc_sources(
         artifact = entry.get("artifact")
         language = entry.get("language")
         versions = entry.get("versions")
-        include_prefixes = entry.get("include_prefixes") or []
+        include_prefixes = entry.get("include_prefixes")
         status_manifest = entry.get("status_manifest")
         if not isinstance(group, str) or not group:
             continue
         if not isinstance(artifact, str) or not artifact:
             continue
-        if language not in {"java", "scala"}:
+        if not isinstance(language, str) or language not in {"java", "scala"}:
             continue
         if not isinstance(versions, list):
             continue
+        if not isinstance(include_prefixes, list):
+            include_prefixes = []
 
         version_sources: list[JvmDocVersionSource] = []
         for version_entry in versions:

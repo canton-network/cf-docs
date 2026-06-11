@@ -4,29 +4,55 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import cast
 
 import yaml
 
 from x2mdx.typedoc.models import TypeDocDocument, TypeDocSnapshot, TypeDocSources
-from x2mdx.types import JsonObject
+from x2mdx.types import JsonValue, require_json_object
 
 
-def _load_manifest(path: Path) -> JsonObject:
+def _load_manifest(path: Path) -> dict[str, JsonValue]:
     if path.suffix.lower() in {".yaml", ".yml"}:
         payload = yaml.safe_load(path.read_text(encoding="utf-8"))
     else:
         payload = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(payload, dict):
-        raise ValueError(f"Expected object at manifest root: {path}")
-    return cast(JsonObject, payload)
+    return require_json_object(payload, path=str(path))
+
+
+def _optional_string(payload: dict[str, JsonValue], key: str, path: Path) -> str | None:
+    value = payload.get(key)
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ValueError(f"Expected string `{key}` in {path}")
+    return value
+
+
+def _optional_json_list(payload: dict[str, JsonValue], key: str, path: Path) -> list[JsonValue] | None:
+    value = payload.get(key)
+    if value is None:
+        return None
+    if not isinstance(value, list):
+        raise ValueError(f"Expected list `{key}` in {path}")
+    return value
 
 
 def _load_document(path: Path) -> TypeDocDocument:
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(payload, dict):
-        raise ValueError(f"Expected top-level JSON object in {path}")
-    return cast(TypeDocDocument, payload)
+    payload = require_json_object(json.loads(path.read_text(encoding="utf-8")), path=str(path))
+    document: TypeDocDocument = {}
+    package_name = _optional_string(payload, "packageName", path)
+    if package_name is not None:
+        document["packageName"] = package_name
+    name = _optional_string(payload, "name", path)
+    if name is not None:
+        document["name"] = name
+    groups = _optional_json_list(payload, "groups", path)
+    if groups is not None:
+        document["groups"] = groups
+    children = _optional_json_list(payload, "children", path)
+    if children is not None:
+        document["children"] = children
+    return document
 
 
 def load_typedoc_sources(

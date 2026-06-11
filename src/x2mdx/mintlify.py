@@ -5,11 +5,10 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import cast
 
 from x2mdx.output import Page
 from x2mdx.render import write_pages
-from x2mdx.types import JsonArray, JsonObject, JsonValue, MintlifyNavGroup, MintlifyNavItems
+from x2mdx.types import JsonValue, MintlifyNavGroup, MintlifyNavItems, require_json_object
 
 
 @dataclass(frozen=True)
@@ -69,7 +68,7 @@ def _remove_page_reference(node: JsonValue, page_ref: str) -> None:
     if isinstance(node, dict):
         pages = node.get("pages")
         if isinstance(pages, list):
-            filtered_pages: JsonArray = [item for item in pages if item != page_ref]
+            filtered_pages: list[JsonValue] = [item for item in pages if item != page_ref]
             node["pages"] = filtered_pages
             for item in filtered_pages:
                 _remove_page_reference(item, page_ref)
@@ -81,14 +80,14 @@ def _remove_page_reference(node: JsonValue, page_ref: str) -> None:
             _remove_page_reference(item, page_ref)
 
 
-def _find_group(groups: JsonArray, label: str) -> JsonObject | None:
+def _find_group(groups: list[JsonValue], label: str) -> dict[str, JsonValue] | None:
     for item in groups:
         if isinstance(item, dict) and item.get("group") == label:
             return item
     return None
 
 
-def _ensure_list_field(container: JsonObject, key: str) -> JsonArray:
+def _ensure_list_field(container: dict[str, JsonValue], key: str) -> list[JsonValue]:
     value = container.get(key)
     if isinstance(value, list):
         return value
@@ -97,12 +96,12 @@ def _ensure_list_field(container: JsonObject, key: str) -> JsonArray:
     return value
 
 
-def _ensure_group_path(container: JsonObject, group_path: list[str]) -> JsonArray:
+def _ensure_group_path(container: dict[str, JsonValue], group_path: list[str]) -> list[JsonValue]:
     if not group_path:
         return _ensure_list_field(container, "pages")
 
     current_groups = _ensure_list_field(container, "groups")
-    current: JsonObject | None = None
+    current: dict[str, JsonValue] | None = None
     for index, label in enumerate(group_path):
         current = _find_group(current_groups, label)
         if current is None:
@@ -141,7 +140,7 @@ def update_docs_json_navigation(
     output_file: Path,
     target: MintlifyNavTarget,
 ) -> Path:
-    docs = cast(JsonObject, json.loads(docs_json_path.read_text(encoding="utf-8")))
+    docs = require_json_object(json.loads(docs_json_path.read_text(encoding="utf-8")), path=str(docs_json_path))
     page_ref = docs_json_page_ref(output_file, docs_json_path)
     navigation = docs.get("navigation")
     if not isinstance(navigation, dict):

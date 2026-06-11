@@ -4,30 +4,27 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import cast
 
 import yaml
 
 from x2mdx.asyncapi.lifecycle import parse_asyncapi, version_key
 from x2mdx.asyncapi.models import AsyncApiSourceSnapshot
-from x2mdx.types import JsonObject, JsonValue
+from x2mdx.types import JsonValue, require_json_object, require_json_value
 
 
 def _load_data(path: Path) -> JsonValue:
     raw = path.read_text(encoding="utf-8")
     if path.suffix.lower() == ".json":
-        return cast(JsonValue, json.loads(raw))
-    return cast(JsonValue, yaml.safe_load(raw))
+        return require_json_value(json.loads(raw), path=str(path))
+    return require_json_value(yaml.safe_load(raw), path=str(path))
 
 
-def load_snapshot_manifest(path: Path) -> JsonObject:
-    data = _load_data(path)
-    if not isinstance(data, dict):
-        raise ValueError("Snapshot manifest must be a JSON/YAML object")
+def load_snapshot_manifest(path: Path) -> dict[str, JsonValue]:
+    data = require_json_object(_load_data(path), path=str(path))
     versions = data.get("versions")
     if not isinstance(versions, list):
         raise ValueError("Snapshot manifest must include a `versions` list")
-    return cast(JsonObject, data)
+    return data
 
 
 def load_asyncapi_source_snapshots(
@@ -38,9 +35,12 @@ def load_asyncapi_source_snapshots(
 ) -> list[AsyncApiSourceSnapshot]:
     manifest = load_snapshot_manifest(manifest_path)
     root = fixture_root or manifest_path.parent
+    versions = manifest.get("versions")
+    if not isinstance(versions, list):
+        raise ValueError("Snapshot manifest must include a `versions` list")
 
     snapshots: list[AsyncApiSourceSnapshot] = []
-    for entry in manifest["versions"]:
+    for entry in versions:
         if not isinstance(entry, dict):
             continue
         version = entry.get("version")

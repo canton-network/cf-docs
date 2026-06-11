@@ -3,10 +3,22 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TypedDict
 
-from x2mdx.types import JsonObject
+from x2mdx.types import JsonValue
 
-DamlJsonModule = JsonObject
+
+class DamlJsonModule(TypedDict, total=False):
+    md_name: str
+    md_anchor: str
+    md_descr: JsonValue
+    md_warn: JsonValue
+    md_adts: list[JsonValue]
+    md_classes: list[JsonValue]
+    md_functions: list[JsonValue]
+    md_interfaces: list[JsonValue]
+    md_templates: list[JsonValue]
+    md_instances: list[JsonValue]
 
 
 @dataclass(frozen=True)

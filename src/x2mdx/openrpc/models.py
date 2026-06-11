@@ -5,17 +5,17 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TypedDict
 
-from x2mdx.types import JsonObject, JsonValue
+from x2mdx.types import JsonValue
 
 
 class OpenRpcDocument(TypedDict, total=False):
     openrpc: str
-    info: JsonObject
-    methods: list[JsonObject]
-    components: JsonObject
+    info: dict[str, JsonValue]
+    methods: list[dict[str, JsonValue]]
+    components: dict[str, JsonValue]
 
 
-class OpenRpcValueDetail(TypedDict):
+class OpenRpcParamDetail(TypedDict):
     name: str
     description: str
     schema_name: str | None
@@ -24,8 +24,13 @@ class OpenRpcValueDetail(TypedDict):
     sample: JsonValue | None
 
 
-OpenRpcParamDetail = OpenRpcValueDetail
-OpenRpcResultDetail = OpenRpcValueDetail
+class OpenRpcResultDetail(TypedDict):
+    name: str
+    description: str
+    schema_name: str | None
+    schema: str
+    required_fields: list[str]
+    sample: JsonValue | None
 
 
 class OpenRpcMethodDetail(TypedDict):
