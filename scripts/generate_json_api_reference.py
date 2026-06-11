@@ -124,24 +124,7 @@ def update_docs_navigation(
     openapi_page_refs: list[str],
 ) -> None:
     payload = load_json(docs_json_path)
-    navigation = payload.get("navigation")
-    if not isinstance(navigation, dict):
-        raise ValueError(f"docs.json missing navigation object: {docs_json_path}")
-
-    dropdowns = navigation.get("dropdowns")
-    if not isinstance(dropdowns, list):
-        raise ValueError(f"docs.json navigation.dropdowns must be a list: {docs_json_path}")
-
-    dropdown = next(
-        (item for item in dropdowns if isinstance(item, dict) and item.get("dropdown") == dropdown_label),
-        None,
-    )
-    if dropdown is None:
-        raise ValueError(f"Dropdown not found in docs.json: {dropdown_label}")
-
-    pages = dropdown.get("pages")
-    if not isinstance(pages, list):
-        raise ValueError(f"Dropdown does not expose a pages list: {dropdown_label}")
+    pages = reference_nav.navigation_pages(payload, label=dropdown_label, docs_json_path=docs_json_path)
 
     parent_group = _find_group(pages, parent_group_label)
     if parent_group is None:
@@ -206,6 +189,11 @@ def openapi_operation_page_refs(spec: dict[str, Any]) -> list[str]:
     return refs
 
 
+def generated_operation_summary(path: str, method: str) -> str:
+    mintlify_path = re.sub(r"\{([^{}]+)\}", r":\1", path)
+    return f"{method.upper()} {mintlify_path}"
+
+
 def add_missing_operation_summaries(text: str) -> str:
     spec = yaml.safe_load(text)
     if not isinstance(spec, dict):
@@ -261,7 +249,7 @@ def add_missing_operation_summaries(text: str) -> str:
         method = method_match.group("method")
         if (current_path, method) in missing:
             summary_indent = f"{method_match.group('indent')}  "
-            output_lines.append(f'{summary_indent}summary: "{current_path}"')
+            output_lines.append(f'{summary_indent}summary: "{generated_operation_summary(current_path, method)}"')
 
     rendered = "\n".join(output_lines).rstrip() + "\n"
     parsed = yaml.safe_load(rendered)
@@ -301,7 +289,7 @@ def operation_summary(path: str, path_item: dict[str, Any]) -> str:
     for method, operation in operation_items(path_item):
         summary = str(operation.get("summary") or "").strip()
         description = str(operation.get("description") or "").strip()
-        label = summary if summary and summary != path else description
+        label = summary if summary and summary not in {path, generated_operation_summary(path, method)} else description
         if label:
             summaries.append(f"{method.upper()}: {label}")
     if summaries:
