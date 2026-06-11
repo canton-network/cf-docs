@@ -191,57 +191,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GetDecentralizedSynchronizerConnectionConfigResponse'
-  /v0/admin/domain/data-snapshot:
-    get:
-      summary: "/v0/admin/domain/data-snapshot"
-      description: |
-        Returns a snapshot of the global synchronizer data for this validator.
-        The snapshot includes a list of parties, the active contract set (ACS), and node identities.
-
-        Use this endpoint if instructed to do so by an operational manual or support.
-      tags:
-        - validator
-      x-jvm-package: validator_admin
-      operationId: getValidatorDomainDataSnapshot
-      security:
-        - adminAuth: []
-      parameters:
-        - in: query
-          name: timestamp
-          required: true
-          schema:
-            type: string
-          description: |
-            The timestamp as of which the dump (in particular, the ACS) is valid.
-
-            Must in the ISO-8601 format in UTC timezone, e.g.,
-            `yyyy-MM-dd'T'HH:mm:ss.SSS'Z'`.
-        - name: migration_id
-          in: query
-          required: false
-          schema:
-            type: integer
-            format: int64
-          description: |
-            The current migration id.
-        - in: query
-          name: force
-          required: false
-          schema:
-            type: boolean
-          description: |
-            If true, do not check whether the provided timestamp is clean.
-            Not recommended for production,
-            see the `ExportAcs` endpoint of the `ParticipantRepairService` participant gRPC API.
-      responses:
-        '200':
-          description: ok
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GetValidatorDomainDataSnapshotResponse'
-        '500':
-          $ref: '#/components/responses/500'
   /v0/admin/transfer-preapprovals/by-party/{receiver-party}:
     get:
       summary: "/v0/admin/transfer-preapprovals/by-party/{receiver-party}"
@@ -1131,6 +1080,36 @@ components:
           type: string
         version:
           type: string
+    Contract:
+      type: object
+      properties:
+        template_id:
+          type: string
+        contract_id:
+          type: string
+        payload:
+          type: object
+        created_event_blob:
+          type: string
+        created_at:
+          type: string
+      required:
+        - template_id
+        - contract_id
+        - payload
+        - created_event_blob
+        - created_at
+    ContractWithState:
+      type: object
+      properties:
+        contract:
+          $ref: '#/components/schemas/Contract'
+        domain_id:
+          type: string
+      required:
+        - contract
+    ContractId:
+      type: string
     ParticipantIdentityProvider:
       type: object
       required:
@@ -1218,36 +1197,6 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ParticipantUser'
-    Contract:
-      type: object
-      properties:
-        template_id:
-          type: string
-        contract_id:
-          type: string
-        payload:
-          type: object
-        created_event_blob:
-          type: string
-        created_at:
-          type: string
-      required:
-        - template_id
-        - contract_id
-        - payload
-        - created_event_blob
-        - created_at
-    ContractWithState:
-      type: object
-      properties:
-        contract:
-          $ref: '#/components/schemas/Contract'
-        domain_id:
-          type: string
-      required:
-        - contract
-    ContractId:
-      type: string
   responses:
     '400':
       description: bad request
@@ -1263,12 +1212,6 @@ components:
             $ref: '#/components/schemas/ErrorResponse'
     '409':
       description: conflict
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/ErrorResponse'
-    '500':
-      description: internal server error
       content:
         application/json:
           schema:
