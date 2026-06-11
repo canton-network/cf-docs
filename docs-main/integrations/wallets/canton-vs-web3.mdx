@@ -9,8 +9,8 @@ Canton wallets work differently from Web3 wallets like MetaMask. This page expla
 
 | Aspect | Web3 Wallets | Canton Wallets |
 |--------|--------------|----------------|
-| **Data visibility** | Balances public | Balances private |
-| **Transaction privacy** | All transactions public | Only you see your transactions |
+| **Data visibility** | Balances public | CC balances public via scan; private contract data visible only to participants |
+| **Transaction privacy** | All transactions public | CC transactions public via scan; private contract activity visible only to participants |
 | **Network model** | Connect to any RPC | Connect to the validator with your party |
 | **Identity** | Pseudonymous address | Party identifier |
 | **Transfer model** | Single-step send | Single-step or multi-step (pre-approvals, allocations) |
@@ -30,17 +30,17 @@ Anyone can query: 0x123...abc has 45.67 ETH
 Anyone can see: 0x123...abc sent 5 ETH to 0x456...def
 ```
 
-### Canton: Private by Default
+### Canton: Contract Privacy by Default
 
-On Canton, your wallet:
-- Has a party identifier visible only to you
-- Balance visible only to you (and entitled parties)
-- Transactions visible only to participants
-- No public transaction history
+Canton's privacy model depends on the contract type:
+
+- CC balances and transaction history are publicly visible via the network's scan service
+- Private application contract data is visible only to entitled parties
+- There is no global view of all contracts — only CC data is aggregated publicly by the scan service
 
 ```
-Only you can see: Your party has 100 CC
-Only participants see: You transferred 20 CC to another party
+Anyone can query via scan: Your party's CC balance and transfer history
+Only entitled parties see: Your private application contract data
 ```
 
 ## Transfer Capabilities
@@ -55,21 +55,20 @@ Canton supports complex workflows:
 
 | Pattern | Description |
 |---------|-------------|
-| **Pre-approvals** | Authorize future transfers up to a limit |
+| **Pre-approvals** | Recipient pre-approves accepting transfers from a specific sender |
 | **Allocations** | Reserve tokens for specific purposes |
 | **DvP** | Atomic delivery-vs-payment exchanges |
 | **Conditional** | Transfers triggered by conditions |
 
 ### Pre-Approvals
 
-Allow another party to withdraw up to a certain amount:
+Allow a recipient to receive tokens from a specific sender without accepting each incoming transfer:
 
 ```mermaid
 flowchart LR
-    A[Alice] --> |pre-approve 100 CC| B[Bob]
-    B --> |withdraw 50 CC when needed| A
-
-    Note[Bob can withdraw up to 100 CC<br>without Alice's per-transaction approval]
+    B[Bob] -->|"1. creates pre-approval"| P[Pre-approval]
+    A[Alice] -->|"2. sends CC using pre-approval"| B
+    Note["Bob receives automatically — no per-transfer acceptance step"]
 ```
 
 **Use cases:**
@@ -125,10 +124,10 @@ Web3 wallets connect to any compatible RPC endpoint:
 
 ### Canton: Your Validator
 
-Canton wallets connect to a specific validator:
-- The validator hosting your party
+Canton wallets connect to one or more validators:
+- The validator(s) hosting your party
 - Can't freely switch (party is hosted somewhere specific)
-- Only your validator has your data
+- Only your validator(s) have your data
 
 ```mermaid
 flowchart TB
@@ -175,24 +174,20 @@ Block explorers show all network activity:
 - Any address balance
 - Any contract state
 
-### Canton: Personal Explorer
+### Canton: Scan Service for CC, Personal View for Private Contracts
 
-Canton explorers show your activity:
-- Your transactions only
-- Your balances
+For CC, the network's scan service works like a block explorer — anyone can query CC balances and transaction history by party. For private application contracts, you see only your own activity:
+- Your private contract transactions
+- Your private contract balances
 - Your contracts
-
-<Note>
-There's no equivalent of Etherscan showing all network transactions. This is by design—privacy is fundamental.
-</Note>
 
 ## Implications for Users
 
 | If you're used to... | On Canton... |
 |----------------------|--------------|
-| Checking any address balance | You can only check your own |
-| Viewing all transactions | You see only your transactions |
-| Connecting to any RPC | You connect to your validator |
+| Checking any address balance | CC balances queryable via scan; private contract balances require entitlement |
+| Viewing all transactions | CC history public via scan; private contract activity visible only to you |
+| Connecting to any RPC | You connect to your validator(s) |
 | Simple send transactions | You have more transfer options |
 
 ## Implications for Developers
@@ -201,7 +196,7 @@ There's no equivalent of Etherscan showing all network transactions. This is by 
 |----------------------|-------------|
 | Wallet integration | Use Wallet SDK for Canton patterns |
 | Transaction display | Show only user's transactions |
-| Balance queries | Query user's party only |
+| Balance queries | Query via scan for CC; query user's party for private contracts |
 | Multi-step workflows | Leverage pre-approvals and allocations |
 
 ## Next Steps
