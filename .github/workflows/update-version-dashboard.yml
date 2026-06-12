@@ -23,75 +23,8 @@ jobs:
       - name: Set up Nix
         uses: cachix/install-nix-action@v31
 
-      - name: Update version dashboard
-        run: nix-shell --run 'npm run generate:version-compatibility-dashboard'
-
-      - name: Detect changes
-        id: changes
-        run: |
-          if [[ -n "$(git status --porcelain)" ]]; then
-            echo "has_changes=true" >> "$GITHUB_OUTPUT"
-            git status --short
-            git diff --stat
-          else
-            echo "has_changes=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Check whitespace
-        if: steps.changes.outputs.has_changes == 'true'
-        run: git diff --check
-
-      - name: Create or update pull request
-        if: steps.changes.outputs.has_changes == 'true'
+      - name: Generate update pull requests
         env:
           GH_TOKEN: ${{ github.token }}
-          PR_BRANCH: version-dashboard/update
-          PR_TITLE: Update version dashboard data
-        run: |
-          set -euo pipefail
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          git switch -c "$PR_BRANCH"
-          git add config/repo-version-config.json docs-main/snippets/generated/version-dashboard-data.mdx
-          git commit -m "$PR_TITLE"
-
-          if remote_sha="$(git ls-remote --heads origin "$PR_BRANCH" | awk '{print $1}')" && [[ -n "$remote_sha" ]]; then
-            git push --force-with-lease="refs/heads/$PR_BRANCH:$remote_sha" origin "HEAD:$PR_BRANCH"
-          else
-            git push origin "HEAD:$PR_BRANCH"
-          fi
-
-          pr_body="$(mktemp)"
-          cat > "$pr_body" <<'EOF'
-          Updates the committed Canton Network version dashboard data from public network, package, and installer sources.
-
-          Validation run by the workflow:
-          - `npm run generate:version-compatibility-dashboard`
-          - `git diff --check`
-          EOF
-
-          existing_pr_number="$(
-            gh pr list \
-              --repo "$GITHUB_REPOSITORY" \
-              --head "$PR_BRANCH" \
-              --base main \
-              --state open \
-              --json number \
-              --jq '.[0].number // empty'
-          )"
-
-          if [[ -n "$existing_pr_number" ]]; then
-            gh pr edit "$existing_pr_number" \
-              --repo "$GITHUB_REPOSITORY" \
-              --title "$PR_TITLE" \
-              --body-file "$pr_body"
-          else
-            gh pr create \
-              --base main \
-              --head "$PR_BRANCH" \
-              --repo "$GITHUB_REPOSITORY" \
-              --title "$PR_TITLE" \
-              --body-file "$pr_body"
-          fi
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 scripts/update_generated_reference_prs.py --targets all
