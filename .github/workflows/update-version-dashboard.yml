@@ -26,7 +26,9 @@ jobs:
         uses: cachix/install-nix-action@v31
 
       - name: Update version dashboard
-        run: nix-shell --run 'npm run generate:version-compatibility-dashboard'
+        run: |
+          nix-shell --run 'npm run generate:version-compatibility-dashboard'
+          nix-shell --run 'npm run generate:network-variable-tabs'
 
       - name: Detect changes
         id: changes
@@ -57,7 +59,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           git switch -c "$PR_BRANCH"
-          git add config/repo-version-config.json docs-main/snippets/generated/version-dashboard-data.mdx
+          git add config/repo-version-config.json docs-main
           git commit -m "$PR_TITLE"
 
           if remote_sha="$(git ls-remote --heads origin "$PR_BRANCH" | awk '{print $1}')" && [[ -n "$remote_sha" ]]; then
@@ -72,6 +74,7 @@ jobs:
 
           Validation run by the workflow:
           - `npm run generate:version-compatibility-dashboard`
+          - `npm run generate:network-variable-tabs`
           - `git diff --check`
           EOF
 
