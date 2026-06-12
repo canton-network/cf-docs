@@ -19,12 +19,16 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
+        with:
+          ref: main
 
       - name: Set up Nix
         uses: cachix/install-nix-action@v31
 
       - name: Update version dashboard
-        run: nix-shell --run 'npm run generate:version-compatibility-dashboard'
+        run: |
+          nix-shell --run 'npm run generate:version-compatibility-dashboard'
+          nix-shell --run 'npm run generate:network-variable-tabs'
 
       - name: Detect changes
         id: changes
@@ -47,6 +51,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR_BRANCH: version-dashboard/update
           PR_TITLE: Update version dashboard data
+          PR_REVIEWERS: Jatinp26,shreyas-da,hrischuk-da
         run: |
           set -euo pipefail
 
@@ -54,7 +59,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           git switch -c "$PR_BRANCH"
-          git add config/repo-version-config.json docs-main/snippets/generated/version-dashboard-data.mdx
+          git add config/repo-version-config.json docs-main
           git commit -m "$PR_TITLE"
 
           if remote_sha="$(git ls-remote --heads origin "$PR_BRANCH" | awk '{print $1}')" && [[ -n "$remote_sha" ]]; then
@@ -69,6 +74,7 @@ jobs:
 
           Validation run by the workflow:
           - `npm run generate:version-compatibility-dashboard`
+          - `npm run generate:network-variable-tabs`
           - `git diff --check`
           EOF
 
@@ -83,15 +89,22 @@ jobs:
           )"
 
           if [[ -n "$existing_pr_number" ]]; then
+            pr_number="$existing_pr_number"
             gh pr edit "$existing_pr_number" \
               --repo "$GITHUB_REPOSITORY" \
               --title "$PR_TITLE" \
               --body-file "$pr_body"
           else
-            gh pr create \
+            pr_url="$(gh pr create \
               --base main \
               --head "$PR_BRANCH" \
               --repo "$GITHUB_REPOSITORY" \
               --title "$PR_TITLE" \
-              --body-file "$pr_body"
+              --body-file "$pr_body")"
+            pr_number="${pr_url##*/}"
+            echo "$pr_url"
           fi
+
+          gh pr edit "$pr_number" \
+            --repo "$GITHUB_REPOSITORY" \
+            --add-reviewer "$PR_REVIEWERS"
