@@ -49,18 +49,18 @@ import DamlAppdevModulesM3LanguageFundamentalsL96 from "/snippets/daml-docs/appd
 
 ## Introduction
 
-In this chapter, you will learn more about expressing complex logic in a functional language like Daml. Specifically, you'll learn about:
+In this section, you will learn more about expressing complex logic in a functional language like Daml. Specifically, you'll learn about:
 
 - Function signatures and functions
 - Advanced control flow (`if...else`, folds, recursion, `when`)
 
 <Note>
-There is a project template `daml-intro-functional-101` for this chapter, containing the code snippets from this section.
+There is a project template `daml-intro-functional-101` for this section, containing the code snippets from it.
 </Note>
 
 ## The Haskell connection
 
-The previous chapters of this introduction to Daml have mostly covered the structure of templates, and their connection to the Daml Ledger Model. The logic of what happens within the `do` blocks of choices has been kept relatively simple. In this chapter, we will dive deeper into Daml's expression language, the part that allows you to write logic inside those `do` blocks. But we can only scratch the surface here. Daml borrows a lot of its language from [Haskell](https://www.haskell.org). If you want to dive deeper, or learn about specific aspects of the language you can refer to standard literature on Haskell. Some recommendations:
+This section dives deeper into Daml's expression language, the part that allows you to write logic inside `do` blocks and function definitions. We will cover functions, control flow, and functional programming patterns. But we can only scratch the surface here. Daml borrows a lot of its language from [Haskell](https://www.haskell.org). If you want to dive deeper, or learn about specific aspects of the language you can refer to standard literature on Haskell. Some recommendations:
 
 - [Finding Success and Failure in Haskell (Julie Moronuki, Chris Martin)](https://joyofhaskell.com/)
 - [Haskell Programming from first principles (Christopher Allen, Julie Moronuki)](http://haskellbook.com/)
@@ -78,7 +78,7 @@ When comparing Daml to Haskell it's worth noting:
 
 ## Functions
 
-In `data` you learnt about one half of Daml's type system: Data types. It's now time to learn about the other, which are Function types. Function types in Daml can be spotted by looking for `->` which can be read as "maps to".
+In Daml's type system there are two key concepts: Data types (which describe what data looks like) and Function types (which describe how functions transform data). In this section, you'll start with Function types. Function types in Daml can be spotted by looking for `->` which can be read as "maps to".
 
 For example, the function signature `Int -> Int` maps an integer to another integer. There are many such functions, but one would be:
 
@@ -206,7 +206,7 @@ More often it makes sense to define functions locally, inside a `let` clause or 
 
 You can see that the function signature is inferred from the context here. If you look closely (or hover over the function in the IDE), you'll see that it has signature
 
-```bash
+```haskell
 validate : (HasFetch r, Eq r, HasField "observers" r a) => (r, ContractId r) -> Update ()
 ```
 
@@ -226,7 +226,7 @@ In this section, we will cover branches and loops, and look at a few common patt
 
 ### Branches
 
-Until `compose` the only real kind of control flow introduced has been `case`, which is a powerful tool for branching.
+So far we've covered function definitions. Now let's explore control flow—how to direct program execution based on conditions. The simplest form is `case`, which is a powerful tool for branching.
 
 #### If-else expression
 
@@ -309,7 +309,7 @@ Despite `when` looking like a simple function, the compiler does some magic so t
 
 <DamlAppdevModulesM3LanguageFundamentalsL402 />
 
-With `case`, `if ... else`, `void` and `when`, you can express all branching. However, one additional feature you may want to learn is guards. They are not covered here, but can help avoid deeply nested `if ... else` blocks. Here's just one example. The Haskell sources at the beginning of the chapter cover this topic in more depth.
+With `case`, `if ... else`, `void` and `when`, you can express all branching. However, one additional feature you may want to learn is guards. They are not covered here, but can help avoid deeply nested `if ... else` blocks. Here's just one example. The Haskell sources at the beginning of this section cover this topic in more depth.
 
 <DamlAppdevModulesM3LanguageFundamentalsL408 />
 
@@ -418,9 +418,9 @@ To improve your familiarity with these concepts, try implementing `foldlA` in te
 
 Lastly, you'll have noticed that in some cases we used `mapA_`, not `mapA`. The underscore indicates that the result is not used, so `mapA_ fn xs fn == void (mapA fn xs)`. The Daml Linter will alert you if you could use `mapA_` instead of `mapA`, and similarly for `forA_`.
 
-## Next up
+## Data structures for your functions
 
-You now know the basics of functions and control flow, both in pure and Action contexts. The multi-package example shows just how much can be done with just the tools you have encountered here, but there are many more tools at your disposal in the Daml standard library, which provides functions and typeclasses for many common circumstances.
+Now that you understand how to write functions and control their flow, it's time to learn how to structure the data those functions operate on. Daml provides a rich set of data types—from native types like `Party` and `Decimal`, to records, lists, and variants—that let you model complex domains precisely. The sections below show how to define, assemble, and manipulate these data structures.
 
 
 {/* COPIED_END */}
@@ -428,11 +428,9 @@ You now know the basics of functions and control flow, both in pure and Action c
 
 # Data types
 
-In `contracts`, you learnt about contract templates, which specify the types of contracts that can be created on the ledger, and what data those contracts hold in their arguments.
+Contract templates (covered in [Module 3: Contract Templates](/appdev/modules/m3-contract-templates)) specify the types of contracts that can be created on the ledger, and what data those contracts hold in their arguments.
 
-In `daml-scripts`, you learnt about the script view in Daml Studio, which displays the current ledger state. It shows one table per template, with one row per contract of that type and one column per field in the arguments.
-
-This actually provides a useful way of thinking about templates: like tables in databases. Templates specify a data schema for the ledger:
+In Daml Studio's script view, you can see the current ledger state displayed as tables: one table per template, with one row per contract of that type and one column per field in the arguments. This provides a useful way of thinking about templates—like tables in databases, where:
 
 - each template corresponds to a table
 - each field in the `with` block of a template corresponds to a column in that table
@@ -455,7 +453,7 @@ Remember that you can load all the code for this section into a folder called `i
 
 ## Native types
 
-You have already encountered a few native Daml types: `Party` in `contracts`, and `Text` and `ContractId` in `daml-scripts`. Here are those native types and more:
+Throughout this section, you've already seen examples of native Daml types: `Party` for ledger participants, `Text` for strings, and `ContractId` for references to contracts. Here are those native types and more:
 
 - `Party` Stores the identity of an entity that is able to act on the ledger, in the sense that they can sign contracts and submit transactions. In general, `Party` is opaque.
 - `Text` Stores a unicode character string like `"Alice"`.
@@ -471,7 +469,29 @@ The below script instantiates each one of these types, manipulates it where appr
 
 ```haskell
 -- Code from: daml/daml-intro-data/daml/Native.daml
--- [Include actual code example here]
+import Daml.Script
+import DA.Time
+import DA.Date
+
+native_test = script do
+  alice <- allocateParty "Alice"
+  bob <- allocateParty "Bob"
+  let
+    my_int = -123
+    my_dec = 0.001 : Decimal
+    my_text = "Alice"
+    my_bool = False
+    my_date = date 2020 Jan 01
+    my_time = time my_date 00 00 00
+    my_rel_time = hours 24
+
+  assert (alice /= bob)
+  assert (-my_int == 123)
+  assert (1000.0 * my_dec == 1.0)
+  assert (my_text == "Alice")
+  assert (not my_bool)
+  assert (addDays my_date 1 == date 2020 Jan 02)
+  assert (addRelTime my_time my_rel_time == time (addDays my_date 1) 00 00 00)
 ```
 
 Despite its simplicity, there are quite a few things to note in this script:
@@ -496,7 +516,34 @@ With templates and these native types, it's already possible to write a schema a
 
 ```haskell
 -- Code from: daml/daml-intro-data/daml/Native.daml
--- [Include actual code example here]
+template CashBalance
+  with
+    accountant : Party
+    currency : Text
+    amount : Decimal
+    owner : Party
+    account_number : Text
+    bank : Party
+    bank_address : Text
+    bank_telephone : Text
+  where
+    signatory accountant
+
+cash_balance_test = script do
+  accountant <- allocateParty "Bob"
+  alice <- allocateParty "Alice"
+  bob <- allocateParty "Bank of Bob"
+
+  submit accountant do
+    createCmd CashBalance with
+      accountant
+      currency = "USD"
+      amount = 100.0
+      owner = alice
+      account_number = "ABC123"
+      bank = bob
+      bank_address = "High Street"
+      bank_telephone = "012 3456 789"
 ```
 
 ## Assemble types
@@ -509,7 +556,21 @@ A common task is to group values in a generic way. Take, for example, a key-valu
 
 ```haskell
 -- Code from: daml/daml-intro-data/daml/Tuple.daml
--- [Include actual code example here]
+import DA.Tuple
+import Daml.Script
+
+tuple_test = script do
+  let
+    my_key_value = ("Key", 1)
+    my_coordinate = (1.0 : Decimal, 2.0 : Decimal, 3.0 : Decimal)
+
+  assert (fst my_key_value == "Key")
+  assert (snd my_key_value == 1)
+  assert (my_key_value._1 == "Key")
+  assert (my_key_value._2 == 1)
+
+  assert (my_coordinate == (fst3 my_coordinate, snd3 my_coordinate, thd3 my_coordinate))
+  assert (my_coordinate == (my_coordinate._1, my_coordinate._2, my_coordinate._3))
 ```
 
 You can access the data in the tuples using:
@@ -529,7 +590,30 @@ The below script instantiates a few lists of integers and demonstrates the most 
 
 ```haskell
 -- Code from: daml/daml-intro-data/daml/List.daml
--- [Include actual code example here]
+import DA.List
+import Daml.Script
+
+list_test = script do
+  let
+    empty : [Int] = []
+    one = [1]
+    two = [2]
+    many = [3, 4, 5]
+
+  -- `head` gets the first element of a list
+  assert (head one == 1)
+  assert (head many == 3)
+
+  -- `tail` gets the remainder after head
+  assert (tail one == empty)
+  assert (tail many == [4, 5])
+
+  -- `++` concatenates lists
+  assert (one ++ two ++ many == [1, 2, 3, 4, 5])
+  assert (empty ++ many ++ empty == many)
+
+  -- `::` adds an element to the beginning of a list.
+  assert (1 :: 2 :: 3 :: 4 :: 5 :: empty == 1 :: 2 :: many)
 ```
 
 Note the type annotation on `empty : [Int] = []`. It's necessary because `[]` is ambiguous. It could be a list of integers or of strings, but the compiler needs to know which it is.
@@ -540,7 +624,60 @@ You can think of records as named tuples with named fields. Declare them using t
 
 ```haskell
 -- Code from: daml/daml-intro-data/daml/Record.daml
--- [Include actual code example here]
+data MyRecord = MyRecord with
+  my_txt : Text
+  my_int : Int
+  my_dec : Decimal
+  my_list : [Text]
+
+-- Fields of same type can be declared in one line
+data Coordinate = Coordinate with
+  x, y, z : Decimal
+
+-- Custom data types can also have variables
+data KeyValue k v = KeyValue with
+  my_key : k
+  my_val : v
+
+data Nested = Nested with
+  my_coord : Coordinate
+  my_record : MyRecord
+  my_kv : KeyValue Text Int
+
+record_test = script do
+  let
+    my_record = MyRecord with
+      my_txt = "Text"
+      my_int = 2
+      my_dec = 2.5
+      my_list = ["One", "Two", "Three"]
+
+    my_coord = Coordinate with
+      x = 1.0
+      y = 2.0
+      z = 3.0
+
+    -- `my_text_int` has type `KeyValue Text Int`
+    my_text_int = KeyValue with
+      my_key = "Key"
+      my_val = 1
+
+    -- `my_int_decimal` has type `KeyValue Int Decimal`
+    my_int_decimal = KeyValue with
+      my_key = 2
+      my_val = 2.0 : Decimal
+
+    -- If variables are in scope that match field names, we can pick them up
+    -- implicitly, writing just `my_coord` instead of `my_coord = my_coord`.
+    my_nested = Nested with
+      my_coord
+      my_record
+      my_kv = my_text_int
+
+  -- Fields can be accessed with dot syntax
+  assert (my_coord.x == 1.0)
+  assert (my_text_int.my_key == "Key")
+  assert (my_nested.my_record.my_dec == 2.5)
 ```
 
 You'll notice that the syntax to declare records is very similar to the syntax used to declare templates. That's no accident because a template is really just a special record. When you write `template Token with`, one of the things that happens in the background is that this becomes a `data Token = Token with`.
@@ -549,7 +686,32 @@ In the `assert` statements above, we always compared values of in-built types. I
 
 ```haskell
 -- Code from: daml/daml-intro-data/daml/Record.daml
--- [Include actual code example here]
+data EqRecord = EqRecord with
+  my_txt : Text
+  my_int : Int
+  my_dec : Decimal
+  my_list : [Text]
+    deriving (Eq)
+
+data MyContainer a = MyContainer with
+  contents : a
+    deriving (Eq)
+
+eq_test = script do
+  let
+    eq_record = EqRecord with
+      my_txt = "Text"
+      my_int = 2
+      my_dec = 2.5
+      my_list = ["One", "Two", "Three"]
+
+    my_container = MyContainer with
+      contents = eq_record
+    other_container = MyContainer with
+      contents = eq_record
+
+  assert(my_container.contents == eq_record)
+  assert(my_container == other_container)
 ```
 
 `Eq` is what is called a *typeclass*. You can think of a typeclass as being like an interface in other languages: it is the mechanism by which you can define a set of functions (for example, `==` and `/=` in the case of `Eq`) to work on multiple types, with a specific implementation for each type they can apply to.
@@ -562,7 +724,54 @@ Records can give the data on `CashBalance` a bit more structure:
 
 ```haskell
 -- Code from: daml/daml-intro-data/daml/Record.daml
--- [Include actual code example here]
+data Bank = Bank with
+  party : Party
+  address: Text
+  telephone : Text
+    deriving (Eq, Show)
+
+data Account = Account with
+  owner : Party
+  number : Text
+  bank : Bank
+    deriving (Eq, Show)
+
+data Cash = Cash with
+  currency : Text
+  amount : Decimal
+    deriving (Eq, Show)
+
+template CashBalance
+  with
+    accountant : Party
+    cash : Cash
+    account : Account
+  where
+    signatory accountant
+
+cash_balance_test = script do
+  accountant <- allocateParty "Bob"
+  owner <- allocateParty "Alice"
+  bank_party <- allocateParty "Bank"
+  let
+    bank = Bank with
+      party = bank_party
+      address = "High Street"
+      telephone = "012 3456 789"
+    account = Account with
+      owner
+      bank
+      number = "ABC123"
+    cash = Cash with
+      currency = "USD"
+      amount = 100.0
+
+  submit accountant do
+    createCmd CashBalance with
+      accountant
+      cash
+      account
+  pure ()
 ```
 
 If you look at the resulting script view, you'll see that this still gives rise to one table. The records are expanded out into columns using dot notation.
@@ -573,7 +782,65 @@ Suppose now that you also wanted to keep track of cash in hand. Cash in hand doe
 
 ```haskell
 -- Code from: daml/daml-intro-data/daml/Variants.daml
--- [Include actual code example here]
+data Bank = Bank with
+  party : Party
+  address: Text
+  telephone : Text
+    deriving (Eq, Show)
+
+data Account = Account with
+  number : Text
+  bank : Bank
+    deriving (Eq, Show)
+
+data Cash = Cash with
+  currency : Text
+  amount : Decimal
+    deriving (Eq, Show)
+
+data Location
+  = InHand
+  | InAccount Account
+    deriving (Eq, Show)
+
+template CashBalance
+  with
+    accountant : Party
+    owner : Party
+    cash : Cash
+    location : Location
+  where
+    signatory accountant
+
+cash_balance_test = do
+  accountant <- allocateParty "Bob"
+  owner <- allocateParty "Alice"
+  bank_party <- allocateParty "Bank"
+  let
+    bank = Bank with
+      party = bank_party
+      address = "High Street"
+      telephone = "012 3456 789"
+    account = Account with
+      bank
+      number = "ABC123"
+    cash = Cash with
+      currency = "USD"
+      amount = 100.0
+
+  submit accountant do
+    createCmd CashBalance with
+      accountant
+      owner
+      cash
+      location = InHand
+
+  submit accountant do
+    createCmd CashBalance with
+      accountant
+      owner
+      cash
+      location = InAccount account
 ```
 
 The way to read the declaration of `Location` is "*A Location either has value* `InHand` *OR has a value* `InAccount a` *where* `a` *is of type Account*". This is quite an explicit way to say that there may or may not be an `Account` associated with a `CashBalance` and gives both cases suggestive names.
@@ -582,14 +849,25 @@ Another option is to use the built-in `Optional` type. The `None` value of type 
 
 ```haskell
 -- Code from: daml/daml-intro-data/daml/Variants.daml
--- [Include actual code example here]
+data Optional a
+  = None
+  | Some a
+    deriving (Eq, Show)
 ```
 
 Variant types where none of the data constructors take a parameter are called enums:
 
 ```haskell
 -- Code from: daml/daml-intro-data/daml/Variants.daml
--- [Include actual code example here]
+data DayOfWeek
+  = Monday
+  | Tuesday
+  | Wednesday
+  | Thursday
+  | Friday
+  | Saturday
+  | Sunday
+    deriving (Eq, Show)
 ```
 
 To access the data in variants, you need to distinguish the different possible cases. For example, you can no longer access the account number of a `Location` directly, because if it is `InHand`, there may be no account number.
@@ -598,7 +876,50 @@ To do this, you can use *pattern matching* and either throw errors or return com
 
 ```haskell
 -- Code from: daml/daml-intro-data/daml/Variants.daml
--- [Include actual code example here]
+variant_access_test = script do
+  let
+    l : Either Int Text = Left 1
+    r : Either Int Text = Right "r"
+
+    -- If we know that `l` is a `Left`, we can error on the `Right` case.
+    l_value = case l of
+      Left i -> i
+      Right i -> error "Expecting Left"
+    -- Comment out at your own peril
+    {-
+    r_value = case r of
+      Left i -> i
+      Right i -> error "Expecting Left"
+    -}
+
+    -- If we are unsure, we can return an `Optional` in both cases
+    ol_value = case l of
+      Left i -> Some i
+      Right i -> None
+    or_value = case r of
+      Left i -> Some i
+      Right i -> None
+
+    -- If we don't care about values or even constructors, we can use wildcards
+    l_value2 = case l of
+      Left i -> i
+      Right _ -> error "Expecting Left"
+    l_value3 = case l of
+      Left i -> i
+      _ -> error "Expecting Left"
+
+    day = Sunday
+    weekend = case day of
+      Saturday -> True
+      Sunday -> True
+      _ -> False
+
+  assert (l_value == 1)
+  assert (l_value2 == 1)
+  assert (l_value3 == 1)
+  assert (ol_value == Some 1)
+  assert (or_value == None)
+  assert weekend
 ```
 
 ## Manipulate data
@@ -609,7 +930,35 @@ All data in Daml is immutable, meaning once a value is created, it will never ch
 
 ```haskell
 -- Code from: daml/daml-intro-data/daml/Record.daml
--- [Include actual code example here]
+manipulation_demo = script do
+  let
+    eq_record = EqRecord with
+      my_txt = "Text"
+      my_int = 2
+      my_dec = 2.5
+      my_list = ["One", "Two", "Three"]
+
+    -- A verbose way to change `eq_record`
+    changed_record = EqRecord with
+      my_txt = eq_record.my_txt
+      my_int = 3
+      my_dec = eq_record.my_dec
+      my_list = eq_record.my_list
+
+    -- A better way
+    better_changed_record = eq_record with
+      my_int = 3
+
+    record_with_changed_list = eq_record with
+      my_list = "Zero" :: eq_record.my_list
+
+  assert (eq_record.my_int == 2)
+  assert (changed_record == better_changed_record)
+
+  -- The list on `eq_record` can't be changed.
+  assert (eq_record.my_list == ["One", "Two", "Three"])
+  -- The list on `record_with_changed_list` is a new one.
+  assert (record_with_changed_list.my_list == ["Zero", "One", "Two", "Three"])
 ```
 
 `changed_record` and `better_changed_record` are each a copy of `eq_record` with the field `my_int` changed. `better_changed_record` shows the recommended way to change fields on a record. The syntax is almost the same as for a new record, but the record name is replaced with the old value: `eq_record with` instead of `EqRecord with`. The `with` block no longer needs to give values to all fields of `EqRecord`. Any missing fields are taken from `eq_record`.
@@ -622,7 +971,48 @@ Daml's type system allows you to store structured data within Daml contracts. Li
 
 ```haskell
 -- Code from: daml/daml-intro-data/daml/ContractManipulation.daml
--- [Include actual code example here]
+data Bank = Bank with
+  party : Party
+  address: Text
+  telephone : Text
+    deriving (Eq, Show)
+
+template Account
+  with
+    accountant : Party
+    owner : Party
+    number : Text
+    bank : Bank
+  where
+    signatory accountant
+
+contract_manipulation_test = do
+  accountant <- allocateParty "Bob"
+  owner <- allocateParty "Alice"
+  bank_party <- allocateParty "Bank"
+  let
+    bank = Bank with
+      party = bank_party
+      address = "High Street"
+      telephone = "012 3456 789"
+
+  accountCid <- submit accountant do
+     createCmd Account with
+      accountant
+      owner
+      bank
+      number = "ABC123"
+
+  -- Now the accountant updates the telephone number for the bank on the account
+  Some account <- queryContractId accountant accountCid
+  newAccountCid <- submit accountant do
+    archiveCmd accountCid
+    cid <- createCmd account with
+      bank = account.bank with
+        telephone = "098 7654 321"
+    pure cid
+  
+  newAccountCid =/= accountCid
 ```
 
 The script above uses `archiveCmd` and `createCmd` to modify a contract of type `Account` in the same transaction. This process creates a new contract, and a new, distinct contract ID, as shown by `newAccountCid =/= accountCid`
@@ -631,7 +1021,59 @@ When you modify a contract, by archiving it and creating a new one, you generate
 
 ```haskell
 -- Code from: daml/daml-intro-data/daml/ContractManipulation.daml
--- [Include actual code example here]
+data Cash = Cash with
+  currency : Text
+  amount : Decimal
+    deriving (Eq, Show)
+
+template CashBalance
+  with
+    accountant : Party
+    cash : Cash
+    account : ContractId Account
+  where
+    signatory accountant
+
+stale_contract_id_test = do
+  accountant <- allocateParty "Bob"
+  owner <- allocateParty "Alice"
+  bank_party <- allocateParty "Bank"
+  let
+    bank = Bank with
+      party = bank_party
+      address = "High Street"
+      telephone = "012 3456 789"
+    cash = Cash with
+      currency = "USD"
+      amount = 100.0
+
+  accountCid <- submit accountant do
+     createCmd Account with
+      accountant
+      owner
+      bank
+      number = "ABC123"
+
+  balanceCid <- submit accountant do
+    createCmd CashBalance with
+      accountant
+      cash
+      account = accountCid
+
+  -- Now the accountant updates the telephone number for the bank on the account
+  Some account <- queryContractId accountant accountCid
+  _ <- submit accountant do
+    archiveCmd accountCid
+    cid <- createCmd account with
+      bank = account.bank with
+        telephone = "098 7654 321"
+    pure cid
+
+  -- The `account` field on the balance now refers to the archived
+  -- contract, so this returns None.
+  Some balance <- queryContractId accountant balanceCid
+  optAccount <- queryContractId accountant balance.account
+  optAccount === None
 ```
 
 In the script above, the `ContractId` in `balance.account` still refers to the archived contract. Consequently, querying the `balance.account` fails and returns `None`.
