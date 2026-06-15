@@ -51,12 +51,12 @@ def test_targets_to_run_rejects_mixed_all_and_target_keys() -> None:
         raise AssertionError("Expected targets_to_run to reject mixed all and target keys")
 
 
-def test_targets_to_run_accepts_dashboard_target_key() -> None:
+def test_targets_to_run_preserves_declared_target_order_for_target_keys() -> None:
     module = load_script_module()
 
-    targets = module.targets_to_run(["version-dashboard"])
+    targets = module.targets_to_run(["wallet-gateway-openrpc", "version-dashboard"])
 
-    assert [target.key for target in targets] == ["version-dashboard"]
+    assert [target.key for target in targets] == ["version-dashboard", "wallet-gateway-openrpc"]
 
 
 def test_generated_clean_paths_include_target_paths_and_internal_output() -> None:
@@ -65,21 +65,22 @@ def test_generated_clean_paths_include_target_paths_and_internal_output() -> Non
     clean_paths = module.generated_clean_paths()
 
     assert ".internal" in clean_paths
+    assert "docs-main/reference/wallet-gateway-json-rpc" in clean_paths
     assert "docs-main/snippets/generated/version-dashboard-data.mdx" in clean_paths
 
 
 def test_body_markdown_includes_description_changes_and_validation() -> None:
     module = load_script_module()
-    target = next(target for target in module.UPDATE_TARGETS if target.key == "version-dashboard")
+    target = next(target for target in module.UPDATE_TARGETS if target.key == "wallet-gateway-openrpc")
 
     body = module.body_markdown(
         target=target,
-        changes=["- DevNet Splice: 0.6.6 -> 0.6.7"],
+        changes=["- Wallet Gateway OpenRPC publish_version: 0.25.0 -> 1.4.0"],
     )
 
-    assert body.startswith("Updates the committed Canton Network version dashboard data")
-    assert "Version changes:\n- DevNet Splice: 0.6.6 -> 0.6.7" in body
-    assert "- `npm run generate:version-compatibility-dashboard`" in body
+    assert body.startswith("Updates the Wallet Gateway OpenRPC source pin")
+    assert "Version changes:\n- Wallet Gateway OpenRPC publish_version: 0.25.0 -> 1.4.0" in body
+    assert "- `npm run generate:wallet-gateway-openrpc-reference`" in body
 
 
 def test_body_markdown_notes_when_no_versions_changed() -> None:

@@ -53,6 +53,33 @@ UPDATE_TARGETS = (
             "git diff --check",
         ),
     ),
+    UpdateTarget(
+        key="wallet-gateway-openrpc",
+        title="Update Wallet Gateway OpenRPC reference",
+        branch="generated-references/wallet-gateway-openrpc/update",
+        description=(
+            "Updates the Wallet Gateway OpenRPC source pin to the latest stable "
+            "wallet-gateway-remote release and regenerates the checked-in Wallet Gateway "
+            "OpenRPC reference pages."
+        ),
+        generate_commands=(
+            ("nix-shell", "--run", "npm run update:generated-reference-sources -- --source wallet-gateway-openrpc"),
+            ("nix-shell", "--run", "npm run generate:wallet-gateway-openrpc-reference"),
+        ),
+        paths=(
+            "config/x2mdx/wallet-gateway-openrpc/source-artifacts.json",
+            "docs-main/docs.json",
+            "docs-main/reference/wallet-gateway-json-rpc",
+        ),
+        summary_kind="source-config",
+        summary_path="config/x2mdx/wallet-gateway-openrpc/source-artifacts.json",
+        summary_label="Wallet Gateway OpenRPC",
+        validation=(
+            "npm run update:generated-reference-sources -- --source wallet-gateway-openrpc",
+            "npm run generate:wallet-gateway-openrpc-reference",
+            "git diff --check",
+        ),
+    ),
 )
 
 
