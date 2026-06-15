@@ -59,5 +59,13 @@
     setTimeout(installGiscus, 0)
   })
 
+  const observer = new MutationObserver(() => {
+    const iframe = document.querySelector('iframe.giscus-frame')
+    if (iframe) {
+      iframe.contentWindow.postMessage({ giscus: { setConfig: { theme: getActiveTheme() }}}, "https://giscus.app")
+    }
+  })
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
+
   installGiscus()
 })()
