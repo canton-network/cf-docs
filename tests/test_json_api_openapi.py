@@ -75,7 +75,7 @@ components: {}
     assert operations["patch"]["summary"] == "PATCH /v2/users/:user-id"
 
 
-def test_add_missing_operation_summaries_preserves_specs_that_already_have_summaries() -> None:
+def test_add_missing_operation_summaries_normalizes_path_only_summaries() -> None:
     module = load_script_module("generate_json_api_reference.py")
     source = """openapi: 3.0.3
 paths:
@@ -84,10 +84,24 @@ paths:
       summary: /v2/version
       description: Read the version.
       operationId: getV2Version
+  /v2/users/{user-id}:
+    get:
+      summary: GET /v2/users/{user-id}
+      description: Get user.
+      operationId: getV2UsersUser-id
+  /v2/descriptive:
+    get:
+      summary: Descriptive operation label
+      description: Descriptive operation.
+      operationId: getV2Descriptive
 components: {}
 """
 
-    assert module.add_missing_operation_summaries(source) == source
+    rendered = module.add_missing_operation_summaries(source)
+
+    assert '      summary: "GET /v2/version"' in rendered
+    assert '      summary: "GET /v2/users/:user-id"' in rendered
+    assert "      summary: Descriptive operation label" in rendered
 
 
 def test_openapi_operation_page_refs_lists_endpoint_refs_in_source_order() -> None:
