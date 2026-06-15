@@ -37,9 +37,9 @@ def test_openrpc_nav_uses_wallet_gateway_section_shape(tmp_path: Path) -> None:
         json.dumps(
             {
                 "navigation": {
-                    "dropdowns": [
+                    "products": [
                         {
-                            "dropdown": "API Reference",
+                            "product": "API Reference",
                             "pages": [
                                 {"group": "TypeScript", "pages": []},
                                 {"group": "Wallet Kernel SDK", "pages": ["old-wallet"]},
@@ -81,7 +81,7 @@ def test_openrpc_nav_uses_wallet_gateway_section_shape(tmp_path: Path) -> None:
         ],
     )
     docs = json.loads(docs_json.read_text(encoding="utf-8"))
-    pages = docs["navigation"]["dropdowns"][0]["pages"]
+    pages = docs["navigation"]["products"][0]["pages"]
 
     assert pages == [
         {"group": "TypeScript", "pages": []},
@@ -126,7 +126,6 @@ def test_openrpc_nav_uses_wallet_gateway_section_shape(tmp_path: Path) -> None:
         },
         {"group": "Splice APIs", "pages": []},
     ]
-
 
 def test_openrpc_nav_group_helper_omits_redundant_spec_page_child(tmp_path: Path) -> None:
     generated_reference_nav = load_script("generated_reference_nav")
