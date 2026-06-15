@@ -6,12 +6,13 @@ import argparse
 import sys
 from pathlib import Path
 
-from generated_reference_sources import splice_openapi
+from generated_reference_sources import splice_openapi, wallet_gateway_openrpc
 from generated_reference_sources.common import SourceUpdate
 
 
 SOURCE_SPLICE_OPENAPI = splice_openapi.SOURCE_KEY
-ALL_SOURCES = (SOURCE_SPLICE_OPENAPI,)
+SOURCE_WALLET_GATEWAY_OPENRPC = wallet_gateway_openrpc.SOURCE_KEY
+ALL_SOURCES = (SOURCE_SPLICE_OPENAPI, SOURCE_WALLET_GATEWAY_OPENRPC)
 
 
 def parse_args() -> argparse.Namespace:
@@ -23,6 +24,15 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=splice_openapi.DEFAULT_SOURCE_CONFIG,
         help=f"Splice OpenAPI source-artifacts config. Default: {splice_openapi.DEFAULT_SOURCE_CONFIG}",
+    )
+    parser.add_argument(
+        "--wallet-gateway-openrpc-source-config",
+        type=Path,
+        default=wallet_gateway_openrpc.DEFAULT_SOURCE_CONFIG,
+        help=(
+            "Wallet Gateway OpenRPC source-artifacts config. "
+            f"Default: {wallet_gateway_openrpc.DEFAULT_SOURCE_CONFIG}"
+        ),
     )
     parser.add_argument(
         "--source",
@@ -62,6 +72,14 @@ def main() -> int:
         )
         if update is not None:
             updates.append(update)
+    if SOURCE_WALLET_GATEWAY_OPENRPC in sources:
+        update = wallet_gateway_openrpc.update_source(
+            source_config_path=args.wallet_gateway_openrpc_source_config.resolve(),
+            dry_run=args.dry_run or args.check,
+        )
+        if update is not None:
+            updates.append(update)
+
     if not updates:
         print("Generated reference source pins are up to date.")
         return 0
