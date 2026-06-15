@@ -171,6 +171,26 @@ def test_latest_stable_version_ignores_prerelease_and_debug_tags() -> None:
     )
 
 
+def test_request_headers_use_github_token_for_github_api(monkeypatch) -> None:
+    module = load_script_module()
+    monkeypatch.setenv("GITHUB_TOKEN", "test-token")
+
+    assert module.request_headers("https://api.github.com/repos/example/project/releases") == {
+        "User-Agent": module.USER_AGENT,
+        "Authorization": "Bearer test-token",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+
+
+def test_request_headers_do_not_send_github_token_to_other_hosts(monkeypatch) -> None:
+    module = load_script_module()
+    monkeypatch.setenv("GITHUB_TOKEN", "test-token")
+
+    assert module.request_headers("https://registry.npmjs.org/example") == {
+        "User-Agent": module.USER_AGENT,
+    }
+
+
 def test_parse_dars_lock_selects_latest_dashboard_packages_only() -> None:
     module = load_script_module()
     dars_lock = """
