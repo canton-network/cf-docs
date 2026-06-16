@@ -33,7 +33,7 @@ This deployment is useful for:
 {/* NETWORKVARS_START source="/snippets/networkvars/global-synchronizer/deployment/validator-docker-compose-1.mdx" */}
 <Tabs>
 
-<Tab title="DevNet (0.6.7)">
+<Tab title="DevNet (0.6.8)">
 
 1)  A linux/MacOS machine with the following:
 
@@ -57,10 +57,10 @@ Features: alt-svc AsynchDNS brotli GSS-API HSTS HTTP2 HTTPS-proxy IDN IPv6 Kerbe
 jq-1.7.1
 ```
 2)  Your machine should either be connected to a VPN that is whitelisted on the network (contact your sponsor SV to obtain access), or have a static egress IP address. In the latter case, please provide that IP address to your sponsor SV to add it to the firewall rules.
-3)  Please download the release artifacts containing the docker-compose files, from here: <a href="https://github.com/digital-asset/decentralized-canton-sync/releases/download/v0.6.7/0.6.7_splice-node.tar.gz">Download Bundle (DevNet 0.6.7)</a>, and extract the bundle:
+3)  Please download the release artifacts containing the docker-compose files, from here: <a href="https://github.com/digital-asset/decentralized-canton-sync/releases/download/v0.6.8/0.6.8_splice-node.tar.gz">Download Bundle (DevNet 0.6.8)</a>, and extract the bundle:
 
 ```bash
-tar xzvf 0.6.7_splice-node.tar.gz
+tar xzvf 0.6.8_splice-node.tar.gz
 ```
 
 <Warning>
@@ -122,7 +122,7 @@ Additional parameters describing your own setup as opposed to the connection to 
 
 </Tab>
 
-<Tab title="TestNet (0.6.6)">
+<Tab title="TestNet (0.6.7)">
 
 1)  A linux/MacOS machine with the following:
 
@@ -146,10 +146,10 @@ Features: alt-svc AsynchDNS brotli GSS-API HSTS HTTP2 HTTPS-proxy IDN IPv6 Kerbe
 jq-1.7.1
 ```
 2)  Your machine should either be connected to a VPN that is whitelisted on the network (contact your sponsor SV to obtain access), or have a static egress IP address. In the latter case, please provide that IP address to your sponsor SV to add it to the firewall rules.
-3)  Please download the release artifacts containing the docker-compose files, from here: <a href="https://github.com/digital-asset/decentralized-canton-sync/releases/download/v0.6.6/0.6.6_splice-node.tar.gz">Download Bundle (TestNet 0.6.6)</a>, and extract the bundle:
+3)  Please download the release artifacts containing the docker-compose files, from here: <a href="https://github.com/digital-asset/decentralized-canton-sync/releases/download/v0.6.7/0.6.7_splice-node.tar.gz">Download Bundle (TestNet 0.6.7)</a>, and extract the bundle:
 
 ```bash
-tar xzvf 0.6.6_splice-node.tar.gz
+tar xzvf 0.6.7_splice-node.tar.gz
 ```
 
 <Warning>
@@ -190,7 +190,7 @@ Additional parameters describing your own setup as opposed to the connection to 
 
 </Tab>
 
-<Tab title="MainNet (0.6.5)">
+<Tab title="MainNet (0.6.6)">
 
 1)  A linux/MacOS machine with the following:
 
@@ -214,10 +214,10 @@ Features: alt-svc AsynchDNS brotli GSS-API HSTS HTTP2 HTTPS-proxy IDN IPv6 Kerbe
 jq-1.7.1
 ```
 2)  Your machine should either be connected to a VPN that is whitelisted on the network (contact your sponsor SV to obtain access), or have a static egress IP address. In the latter case, please provide that IP address to your sponsor SV to add it to the firewall rules.
-3)  Please download the release artifacts containing the docker-compose files, from here: <a href="https://github.com/digital-asset/decentralized-canton-sync/releases/download/v0.6.5/0.6.5_splice-node.tar.gz">Download Bundle (MainNet 0.6.5)</a>, and extract the bundle:
+3)  Please download the release artifacts containing the docker-compose files, from here: <a href="https://github.com/digital-asset/decentralized-canton-sync/releases/download/v0.6.6/0.6.6_splice-node.tar.gz">Download Bundle (MainNet 0.6.6)</a>, and extract the bundle:
 
 ```bash
-tar xzvf 0.6.5_splice-node.tar.gz
+tar xzvf 0.6.6_splice-node.tar.gz
 ```
 
 <Warning>
@@ -299,7 +299,34 @@ Example that proxies external traffic from the `validator` service but bypasses 
 {/* NETWORKVARS_START source="/snippets/networkvars/global-synchronizer/deployment/validator-docker-compose-2.mdx" */}
 <Tabs>
 
-<Tab title="DevNet (0.6.7)">
+<Tab title="DevNet (0.6.8)">
+
+1)  Change to the `docker-compose` directory inside the extracted bundle:
+
+```bash
+cd splice-node/docker-compose/validator
+```
+2)  Export the current version to an environment variable: export IMAGE_TAG=0.6.8
+3)  Run the following command to start the validator node, and wait for it to become ready (could take a few minutes):
+
+> ```bash
+> ./start.sh -s "<SPONSOR_SV_URL>" -o "<ONBOARDING_SECRET>" -p "<party_hint>" -m "<MIGRATION_ID>" -w
+> ```
+>
+> Where:
+>
+> `<party_hint>` will be used as the prefix of the Party ID of your validator's administrator.
+> This must be of format `<organization>-<function>-<enumerator>`, e.g. `myCompany-myWallet-1`. It cannot be changed over time as it is part of the validator operator party ID.
+
+<Note>
+Since splice `0.6.8` the `-m` flag is optional. For new validator nodes it should be omitted. For existing validator nodes it must still be provided with the last known migration ID value.
+</Note>
+
+Note that the validator may be stopped with the command `./stop.sh` and restarted again with the same `start.sh` command as above. Its data will be retained between invocations. In subseqent invocations, the secret itself may be left empty, but the `-o` is still mandatory, so a `-o ""` argument should be provided.
+
+</Tab>
+
+<Tab title="TestNet (0.6.7)">
 
 1)  Change to the `docker-compose` directory inside the extracted bundle:
 
@@ -318,11 +345,15 @@ cd splice-node/docker-compose/validator
 > `<party_hint>` will be used as the prefix of the Party ID of your validator's administrator.
 > This must be of format `<organization>-<function>-<enumerator>`, e.g. `myCompany-myWallet-1`. It cannot be changed over time as it is part of the validator operator party ID.
 
+<Note>
+Since splice `0.6.8` the `-m` flag is optional. For new validator nodes it should be omitted. For existing validator nodes it must still be provided with the last known migration ID value.
+</Note>
+
 Note that the validator may be stopped with the command `./stop.sh` and restarted again with the same `start.sh` command as above. Its data will be retained between invocations. In subseqent invocations, the secret itself may be left empty, but the `-o` is still mandatory, so a `-o ""` argument should be provided.
 
 </Tab>
 
-<Tab title="TestNet (0.6.6)">
+<Tab title="MainNet (0.6.6)">
 
 1)  Change to the `docker-compose` directory inside the extracted bundle:
 
@@ -341,28 +372,9 @@ cd splice-node/docker-compose/validator
 > `<party_hint>` will be used as the prefix of the Party ID of your validator's administrator.
 > This must be of format `<organization>-<function>-<enumerator>`, e.g. `myCompany-myWallet-1`. It cannot be changed over time as it is part of the validator operator party ID.
 
-Note that the validator may be stopped with the command `./stop.sh` and restarted again with the same `start.sh` command as above. Its data will be retained between invocations. In subseqent invocations, the secret itself may be left empty, but the `-o` is still mandatory, so a `-o ""` argument should be provided.
-
-</Tab>
-
-<Tab title="MainNet (0.6.5)">
-
-1)  Change to the `docker-compose` directory inside the extracted bundle:
-
-```bash
-cd splice-node/docker-compose/validator
-```
-2)  Export the current version to an environment variable: export IMAGE_TAG=0.6.5
-3)  Run the following command to start the validator node, and wait for it to become ready (could take a few minutes):
-
-> ```bash
-> ./start.sh -s "<SPONSOR_SV_URL>" -o "<ONBOARDING_SECRET>" -p "<party_hint>" -m "<MIGRATION_ID>" -w
-> ```
->
-> Where:
->
-> `<party_hint>` will be used as the prefix of the Party ID of your validator's administrator.
-> This must be of format `<organization>-<function>-<enumerator>`, e.g. `myCompany-myWallet-1`. It cannot be changed over time as it is part of the validator operator party ID.
+<Note>
+Since splice `0.6.8` the `-m` flag is optional. For new validator nodes it should be omitted. For existing validator nodes it must still be provided with the last known migration ID value.
+</Note>
 
 Note that the validator may be stopped with the command `./stop.sh` and restarted again with the same `start.sh` command as above. Its data will be retained between invocations. In subseqent invocations, the secret itself may be left empty, but the `-o` is still mandatory, so a `-o ""` argument should be provided.
 
