@@ -61,6 +61,42 @@ def write_wallet_gateway_source_config(path: Path, *, publish_version: str) -> N
     )
 
 
+def write_typescript_bindings_source_config(
+    path: Path,
+    *,
+    daml_types_version: str = "3.4.11",
+    wallet_sdk_version: str = "1.3.1",
+    dapp_sdk_version: str = "1.1.0",
+) -> None:
+    path.write_text(
+        json.dumps(
+            {
+                "typedoc_version": "0.27.9",
+                "packages": [
+                    {
+                        "package_name": "@daml/types",
+                        "publish_version": daml_types_version,
+                        "versions": ["3.4.11"],
+                    },
+                    {
+                        "package_name": "@canton-network/wallet-sdk",
+                        "publish_version": wallet_sdk_version,
+                        "versions": ["1.3.1"],
+                    },
+                    {
+                        "package_name": "@canton-network/dapp-sdk",
+                        "publish_version": dapp_sdk_version,
+                        "versions": ["1.1.0"],
+                    },
+                ],
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
 def test_update_splice_openapi_source_updates_stale_publish_version(tmp_path: Path) -> None:
     module = load_script_module()
     source_config_path = tmp_path / "source-artifacts.json"
@@ -193,6 +229,90 @@ def test_update_wallet_gateway_openrpc_source_dry_run_does_not_write(tmp_path: P
     assert json.loads(source_config_path.read_text(encoding="utf-8"))["publish_version"] == "0.25.0"
 
 
+def test_update_typescript_bindings_source_updates_stale_package_versions(tmp_path: Path) -> None:
+    module = load_script_module()
+    source_config_path = tmp_path / "source-artifacts.json"
+    write_typescript_bindings_source_config(source_config_path)
+    latest_versions = {
+        "@daml/types": "3.5.2",
+        "@canton-network/wallet-sdk": "1.3.1",
+        "@canton-network/dapp-sdk": "1.2.0",
+    }
+    module.typescript_bindings.latest_npm_version = lambda package_name: latest_versions[package_name]
+
+    updates = module.typescript_bindings.update_source(
+        source_config_path=source_config_path,
+        dry_run=False,
+    )
+
+    assert updates == [
+        module.SourceUpdate(
+            source="TypeScript bindings @daml/types",
+            path=source_config_path,
+            field="publish_version",
+            previous="3.4.11",
+            current="3.5.2",
+        ),
+        module.SourceUpdate(
+            source="TypeScript bindings @canton-network/dapp-sdk",
+            path=source_config_path,
+            field="publish_version",
+            previous="1.1.0",
+            current="1.2.0",
+        ),
+    ]
+    packages = json.loads(source_config_path.read_text(encoding="utf-8"))["packages"]
+    assert packages[0]["publish_version"] == "3.5.2"
+    assert packages[0]["versions"] == ["3.4.11", "3.5.2"]
+    assert packages[1]["publish_version"] == "1.3.1"
+    assert packages[1]["versions"] == ["1.3.1"]
+    assert packages[2]["publish_version"] == "1.2.0"
+    assert packages[2]["versions"] == ["1.1.0", "1.2.0"]
+
+
+def test_update_typescript_bindings_source_noops_when_current(tmp_path: Path) -> None:
+    module = load_script_module()
+    source_config_path = tmp_path / "source-artifacts.json"
+    write_typescript_bindings_source_config(
+        source_config_path,
+        daml_types_version="3.5.2",
+        wallet_sdk_version="1.3.1",
+        dapp_sdk_version="1.2.0",
+    )
+    latest_versions = {
+        "@daml/types": "3.5.2",
+        "@canton-network/wallet-sdk": "1.3.1",
+        "@canton-network/dapp-sdk": "1.2.0",
+    }
+    module.typescript_bindings.latest_npm_version = lambda package_name: latest_versions[package_name]
+
+    assert module.typescript_bindings.update_source(
+        source_config_path=source_config_path,
+        dry_run=False,
+    ) == []
+
+
+def test_update_typescript_bindings_source_dry_run_does_not_write(tmp_path: Path) -> None:
+    module = load_script_module()
+    source_config_path = tmp_path / "source-artifacts.json"
+    write_typescript_bindings_source_config(source_config_path)
+    module.typescript_bindings.latest_npm_version = lambda package_name: {
+        "@daml/types": "3.5.2",
+        "@canton-network/wallet-sdk": "1.3.1",
+        "@canton-network/dapp-sdk": "1.2.0",
+    }[package_name]
+
+    updates = module.typescript_bindings.update_source(
+        source_config_path=source_config_path,
+        dry_run=True,
+    )
+
+    assert [update.current for update in updates] == ["3.5.2", "1.2.0"]
+    packages = json.loads(source_config_path.read_text(encoding="utf-8"))["packages"]
+    assert packages[0]["publish_version"] == "3.4.11"
+    assert packages[2]["publish_version"] == "1.1.0"
+
+
 def test_requested_sources_defaults_to_all_sources() -> None:
     module = load_script_module()
 
@@ -209,9 +329,10 @@ def test_requested_sources_preserves_order_and_deduplicates() -> None:
             {
                 "sources": [
                     "wallet-gateway-openrpc",
+                    "typescript-bindings",
                     "splice-openapi",
                     "wallet-gateway-openrpc",
                 ]
             },
         )()
-    ) == ("wallet-gateway-openrpc", "splice-openapi")
+    ) == ("wallet-gateway-openrpc", "typescript-bindings", "splice-openapi")

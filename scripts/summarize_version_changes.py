@@ -141,6 +141,32 @@ def source_config_changes(before_path: Path, after_path: Path, *, label: str) ->
     return changes
 
 
+def package_source_config_changes(before_path: Path, after_path: Path, *, label: str) -> list[str]:
+    before = load_json(before_path)
+    after = load_json(after_path)
+    before_packages = {
+        package["package_name"]: package
+        for package in object_items(before.get("packages"))
+        if isinstance(package.get("package_name"), str)
+    }
+    changes: list[str] = []
+    for package in object_items(after.get("packages")):
+        package_name = package.get("package_name")
+        if not isinstance(package_name, str):
+            continue
+        before_package = before_packages.get(package_name)
+        if before_package is None:
+            continue
+        before_version = before_package.get("publish_version")
+        after_version = package.get("publish_version")
+        if before_version != after_version:
+            changes.append(
+                f"- {label} {package_name} publish_version: "
+                f"{format_value(before_version)} -> {format_value(after_version)}"
+            )
+    return changes
+
+
 def print_changes(changes: list[str]) -> None:
     if changes:
         print("\n".join(changes))
@@ -160,6 +186,13 @@ def parse_args() -> argparse.Namespace:
     source_config.add_argument("before", type=Path)
     source_config.add_argument("after", type=Path)
     source_config.add_argument("--label", required=True)
+    package_source_config = subparsers.add_parser(
+        "package-source-config",
+        help="Summarize package-based generated-reference source config changes.",
+    )
+    package_source_config.add_argument("before", type=Path)
+    package_source_config.add_argument("after", type=Path)
+    package_source_config.add_argument("--label", required=True)
     return parser.parse_args()
 
 
@@ -169,6 +202,8 @@ def main() -> int:
         print_changes(dashboard_changes(args.before, args.after))
     elif args.command == "source-config":
         print_changes(source_config_changes(args.before, args.after, label=args.label))
+    elif args.command == "package-source-config":
+        print_changes(package_source_config_changes(args.before, args.after, label=args.label))
     else:
         raise AssertionError(f"Unhandled command: {args.command}")
     return 0

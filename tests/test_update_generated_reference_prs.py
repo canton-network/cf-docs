@@ -66,6 +66,7 @@ def test_generated_clean_paths_include_target_paths_and_internal_output() -> Non
 
     assert ".internal" in clean_paths
     assert "docs-main/reference/wallet-gateway-json-rpc" in clean_paths
+    assert "docs-main/reference/typescript" in clean_paths
     assert "docs-main/snippets/generated/version-dashboard-data.mdx" in clean_paths
 
 

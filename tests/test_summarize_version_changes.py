@@ -87,3 +87,32 @@ def test_source_config_changes_summarizes_publish_version(tmp_path: Path) -> Non
     assert module.source_config_changes(before, after, label="Wallet Gateway OpenRPC") == [
         "- Wallet Gateway OpenRPC publish_version: 0.25.0 -> 1.4.0"
     ]
+
+
+def test_package_source_config_changes_summarizes_package_publish_versions(tmp_path: Path) -> None:
+    module = load_script_module()
+    before = tmp_path / "before.json"
+    after = tmp_path / "after.json"
+    write_json(
+        before,
+        {
+            "packages": [
+                {"package_name": "@daml/types", "publish_version": "3.4.11"},
+                {"package_name": "@canton-network/dapp-sdk", "publish_version": "1.1.0"},
+            ]
+        },
+    )
+    write_json(
+        after,
+        {
+            "packages": [
+                {"package_name": "@daml/types", "publish_version": "3.5.2"},
+                {"package_name": "@canton-network/dapp-sdk", "publish_version": "1.2.0"},
+            ]
+        },
+    )
+
+    assert module.package_source_config_changes(before, after, label="TypeScript bindings") == [
+        "- TypeScript bindings @daml/types publish_version: 3.4.11 -> 3.5.2",
+        "- TypeScript bindings @canton-network/dapp-sdk publish_version: 1.1.0 -> 1.2.0",
+    ]
