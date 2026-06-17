@@ -228,22 +228,25 @@ def fetch_dar_versions_from_splice_release_line(
 
 
 def fetch_latest_wallet_gateway_version(timeout: float) -> str:
-    data = fetch_json(f"{WALLET_GATEWAY_RELEASES_URL}?per_page=100", timeout)
-    if not isinstance(data, list):
-        raise RuntimeError(f"Expected release list from {WALLET_GATEWAY_RELEASES_URL}")
     versions: list[str] = []
     tag_re = re.compile(
         rf"^{re.escape(WALLET_GATEWAY_RELEASE_TAG_PREFIX)}(?P<version>\d+\.\d+\.\d+)$"
     )
-    for release in data:
-        if not isinstance(release, dict):
-            continue
-        tag_name = release.get("tag_name")
-        if not isinstance(tag_name, str):
-            continue
-        match = tag_re.fullmatch(tag_name)
-        if match:
-            versions.append(match.group("version"))
+    for page in range(1, 11):
+        data = fetch_json(f"{WALLET_GATEWAY_RELEASES_URL}?per_page=100&page={page}", timeout)
+        if not isinstance(data, list):
+            raise RuntimeError(f"Expected release list from {WALLET_GATEWAY_RELEASES_URL}")
+        if not data:
+            break
+        for release in data:
+            if not isinstance(release, dict):
+                continue
+            tag_name = release.get("tag_name")
+            if not isinstance(tag_name, str):
+                continue
+            match = tag_re.fullmatch(tag_name)
+            if match:
+                versions.append(match.group("version"))
     return latest_stable_version(versions, WALLET_GATEWAY_RELEASES_URL)
 
 
