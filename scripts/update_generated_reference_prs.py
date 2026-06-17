@@ -80,6 +80,33 @@ UPDATE_TARGETS = (
             "git diff --check",
         ),
     ),
+    UpdateTarget(
+        key="typescript-bindings",
+        title="Update TypeScript bindings reference",
+        branch="generated-references/typescript-bindings/update",
+        description=(
+            "Updates the TypeScript bindings source pins to the latest stable npm "
+            "releases and regenerates the checked-in TypeScript bindings reference pages."
+        ),
+        generate_commands=(
+            ("nix-shell", "--run", "npm run update:generated-reference-sources -- --source typescript-bindings"),
+            ("nix-shell", "--run", "npm run generate:typescript-bindings-reference"),
+        ),
+        paths=(
+            "config/x2mdx/typescript-bindings/source-artifacts.json",
+            "docs-main/docs.json",
+            "docs-main/reference/typescript.mdx",
+            "docs-main/reference/typescript",
+        ),
+        summary_kind="package-source-config",
+        summary_path="config/x2mdx/typescript-bindings/source-artifacts.json",
+        summary_label="TypeScript bindings",
+        validation=(
+            "npm run update:generated-reference-sources -- --source typescript-bindings",
+            "npm run generate:typescript-bindings-reference",
+            "git diff --check",
+        ),
+    ),
 )
 
 
@@ -120,6 +147,14 @@ def summarize_target_changes(target: UpdateTarget, before_path: Path) -> list[st
         if target.summary_label is None:
             raise ValueError(f"Update target {target.key} must define summary_label")
         return summarize_version_changes.source_config_changes(
+            before_path,
+            after_path,
+            label=target.summary_label,
+        )
+    if target.summary_kind == "package-source-config":
+        if target.summary_label is None:
+            raise ValueError(f"Update target {target.key} must define summary_label")
+        return summarize_version_changes.package_source_config_changes(
             before_path,
             after_path,
             label=target.summary_label,
