@@ -157,6 +157,71 @@ def test_openrpc_nav_group_helper_omits_redundant_spec_page_child(tmp_path: Path
     }
 
 
+def test_generated_reference_nav_replaces_group_in_product_navigation(tmp_path: Path) -> None:
+    generated_reference_nav = load_script("generated_reference_nav")
+    docs_json = tmp_path / "docs-main" / "docs.json"
+    docs_json.parent.mkdir(parents=True)
+    docs_json.write_text(
+        json.dumps(
+            {
+                "navigation": {
+                    "products": [
+                        {
+                            "product": "API Reference",
+                            "pages": [
+                                {"group": "Old", "pages": ["old"]},
+                                {"group": "AsyncAPI", "pages": ["stale"]},
+                            ],
+                        }
+                    ]
+                }
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    generated_reference_nav.replace_group_in_dropdown(
+        docs_json_path=docs_json,
+        dropdown_label="API Reference",
+        group={"group": "AsyncAPI", "pages": ["fresh"]},
+    )
+
+    docs = json.loads(docs_json.read_text(encoding="utf-8"))
+    assert docs["navigation"]["products"][0]["pages"] == [
+        {"group": "Old", "pages": ["old"]},
+        {"group": "AsyncAPI", "pages": ["fresh"]},
+    ]
+
+
+def test_asyncapi_wrapper_builds_legacy_dropdown_scratch_for_product_navigation() -> None:
+    generate_json_api_asyncapi_reference = load_script("generate_json_api_asyncapi_reference")
+    docs = {
+        "navigation": {
+            "products": [
+                {
+                    "product": "API Reference",
+                    "pages": [{"group": "Ledger API", "pages": ["reference/json-api-reference"]}],
+                }
+            ]
+        }
+    }
+
+    scratch = generate_json_api_asyncapi_reference.with_legacy_dropdown_scratch(
+        docs,
+        dropdown_label="API Reference",
+    )
+
+    assert scratch["navigation"]["dropdowns"] == [
+        {
+            "dropdown": "API Reference",
+            "pages": [{"group": "Ledger API", "pages": ["reference/json-api-reference"]}],
+        }
+    ]
+    assert docs["navigation"].get("dropdowns") is None
+
+
 def test_aggregate_generation_rejects_duplicate_wallet_gateway_aliases(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     generate_all_reference_docs = load_script("generate_all_reference_docs")
     docs_json = tmp_path / "docs-main" / "docs.json"

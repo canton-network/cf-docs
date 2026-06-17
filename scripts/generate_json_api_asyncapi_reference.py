@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import html
 import json
 import os
@@ -429,6 +430,23 @@ def normalize_nav_group_into_pages(*, docs_json_path: Path, dropdown_label: str,
 
 
 def build_command(args: argparse.Namespace, manifest_path: Path, publish_version: str, versions: list[str]) -> list[str]:
+    return build_command_with_docs_json(
+        args,
+        manifest_path=manifest_path,
+        publish_version=publish_version,
+        versions=versions,
+        docs_json_path=Path(args.docs_json).resolve(),
+    )
+
+
+def build_command_with_docs_json(
+    args: argparse.Namespace,
+    *,
+    manifest_path: Path,
+    publish_version: str,
+    versions: list[str],
+    docs_json_path: Path,
+) -> list[str]:
     nav_groups = args.nav_group if args.nav_group is not None else [DEFAULT_NAV_GROUP]
     command = repo_direnv_command(
         REPO_ROOT,
@@ -440,7 +458,7 @@ def build_command(args: argparse.Namespace, manifest_path: Path, publish_version
         "--fixture-root",
         str(REPO_ROOT),
         "--docs-json",
-        str(Path(args.docs_json).resolve()),
+        str(docs_json_path),
         "--nav-dropdown",
         args.nav_dropdown,
         "--publish-version",
@@ -470,6 +488,41 @@ def build_command(args: argparse.Namespace, manifest_path: Path, publish_version
     for version in versions:
         command.extend(["--version", version])
     return command
+
+
+def with_legacy_dropdown_scratch(docs: dict[str, object], *, dropdown_label: str) -> dict[str, object]:
+    scratch = copy.deepcopy(docs)
+    navigation = scratch.get("navigation")
+    if not isinstance(navigation, dict) or isinstance(navigation.get("dropdowns"), list):
+        return scratch
+    products = navigation.get("products")
+    if not isinstance(products, list):
+        return scratch
+    product = next(
+        (item for item in products if isinstance(item, dict) and item.get("product") == dropdown_label),
+        None,
+    )
+    if product is None or not isinstance(product.get("pages"), list):
+        return scratch
+    navigation["dropdowns"] = [
+        {
+            "dropdown": dropdown_label,
+            "pages": copy.deepcopy(product["pages"]),
+        }
+    ]
+    return scratch
+
+
+def x2mdx_docs_json_path(*, docs_json_path: Path, baseline_docs: dict[str, object], manifest_path: Path, dropdown_label: str) -> Path:
+    navigation = baseline_docs.get("navigation")
+    if not isinstance(navigation, dict) or isinstance(navigation.get("dropdowns"), list):
+        return docs_json_path
+    scratch_path = manifest_path.with_name("docs-json-scratch.json")
+    scratch_path.write_text(
+        json.dumps(with_legacy_dropdown_scratch(baseline_docs, dropdown_label=dropdown_label), indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return scratch_path
 
 
 def remove_legacy_output(*, output_file: Path | None, output_dir: Path | None) -> None:
@@ -523,14 +576,20 @@ def main() -> int:
         publish_version=publish_version,
     )
 
-    command = build_command(
+    docs_json_path = Path(args.docs_json).resolve()
+    baseline_docs = load_json(docs_json_path)
+    command = build_command_with_docs_json(
         args,
         manifest_path=manifest_path,
         publish_version=publish_version,
         versions=[entry["version"] for entry in selected_version_entries],
+        docs_json_path=x2mdx_docs_json_path(
+            docs_json_path=docs_json_path,
+            baseline_docs=baseline_docs,
+            manifest_path=manifest_path,
+            dropdown_label=args.nav_dropdown,
+        ),
     )
-    docs_json_path = Path(args.docs_json).resolve()
-    baseline_docs = load_json(docs_json_path)
     print("Running:", " ".join(command))
     completed = subprocess.run(command, cwd=REPO_ROOT)
     if completed.returncode == 0:
