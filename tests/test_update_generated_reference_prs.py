@@ -75,6 +75,17 @@ def test_generated_clean_paths_include_target_paths_and_internal_output() -> Non
     assert "docs-main/snippets/generated/version-dashboard-data.mdx" in clean_paths
 
 
+def test_target_paths_exist_in_base_checkout() -> None:
+    module = load_script_module()
+
+    missing_paths = {
+        target.key: [path for path in target.paths if not (REPO_ROOT / path).exists()]
+        for target in module.UPDATE_TARGETS
+    }
+
+    assert {key: paths for key, paths in missing_paths.items() if paths} == {}
+
+
 def test_body_markdown_includes_description_changes_and_validation() -> None:
     module = load_script_module()
     target = next(target for target in module.UPDATE_TARGETS if target.key == "wallet-gateway-openrpc")
