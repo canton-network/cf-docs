@@ -54,6 +54,33 @@ UPDATE_TARGETS = (
         ),
     ),
     UpdateTarget(
+        key="splice-openapi",
+        title="Update Splice OpenAPI reference",
+        branch="generated-references/splice-openapi/update",
+        description=(
+            "Updates the Splice OpenAPI source pin to the latest stable "
+            "decentralized-canton-sync release and regenerates the checked-in "
+            "Splice OpenAPI specifications and navigation."
+        ),
+        generate_commands=(
+            ("nix-shell", "--run", "npm run update:generated-reference-sources -- --source splice-openapi"),
+            ("nix-shell", "--run", "npm run generate:splice-mintlify-openapi"),
+        ),
+        paths=(
+            "config/mintlify-openapi/splice-openapi/source-artifacts.json",
+            "docs-main/docs.json",
+            "docs-main/openapi/splice",
+        ),
+        summary_kind="source-config",
+        summary_path="config/mintlify-openapi/splice-openapi/source-artifacts.json",
+        summary_label="Splice OpenAPI",
+        validation=(
+            "npm run update:generated-reference-sources -- --source splice-openapi",
+            "npm run generate:splice-mintlify-openapi",
+            "git diff --check",
+        ),
+    ),
+    UpdateTarget(
         key="wallet-gateway-openrpc",
         title="Update Wallet Gateway OpenRPC reference",
         branch="generated-references/wallet-gateway-openrpc/update",
@@ -77,6 +104,161 @@ UPDATE_TARGETS = (
         validation=(
             "npm run update:generated-reference-sources -- --source wallet-gateway-openrpc",
             "npm run generate:wallet-gateway-openrpc-reference",
+            "git diff --check",
+        ),
+    ),
+    UpdateTarget(
+        key="json-api-reference",
+        title="Update JSON Ledger API OpenAPI reference",
+        branch="generated-references/json-api-reference/update",
+        description=(
+            "Updates the JSON Ledger API OpenAPI source pin to the latest public "
+            "Canton release bundle for the published docs version and regenerates "
+            "the checked-in OpenAPI reference."
+        ),
+        generate_commands=(
+            ("nix-shell", "--run", "npm run update:generated-reference-sources -- --source ledger-api"),
+            ("nix-shell", "--run", "npm run generate:json-api-reference"),
+        ),
+        paths=(
+            "config/x2mdx/ledger-api/source-artifacts.json",
+            "docs-main/docs.json",
+            "docs-main/openapi/json-ledger-api",
+            "docs-main/reference/json-api-reference",
+            "docs-main/reference/json-api-reference.mdx",
+        ),
+        summary_kind="versioned-source-config",
+        summary_path="config/x2mdx/ledger-api/source-artifacts.json",
+        summary_label="JSON Ledger API OpenAPI",
+        validation=(
+            "npm run update:generated-reference-sources -- --source ledger-api",
+            "npm run generate:json-api-reference",
+            "git diff --check",
+        ),
+    ),
+    UpdateTarget(
+        key="json-api-asyncapi-reference",
+        title="Update JSON Ledger API AsyncAPI reference",
+        branch="generated-references/json-api-asyncapi-reference/update",
+        description=(
+            "Updates the JSON Ledger API AsyncAPI source pin to the latest public "
+            "Canton release bundle for the published docs version and regenerates "
+            "the checked-in AsyncAPI reference."
+        ),
+        generate_commands=(
+            ("nix-shell", "--run", "npm run update:generated-reference-sources -- --source ledger-api-asyncapi"),
+            ("nix-shell", "--run", "npm run generate:json-api-asyncapi-reference"),
+        ),
+        paths=(
+            "config/x2mdx/ledger-api-asyncapi/source-artifacts.json",
+            "docs-main/docs.json",
+            "docs-main/reference/json-api-asyncapi-reference",
+            "docs-main/reference/json-api-asyncapi-reference.mdx",
+        ),
+        summary_kind="versioned-source-config",
+        summary_path="config/x2mdx/ledger-api-asyncapi/source-artifacts.json",
+        summary_label="JSON Ledger API AsyncAPI",
+        validation=(
+            "npm run update:generated-reference-sources -- --source ledger-api-asyncapi",
+            "npm run generate:json-api-asyncapi-reference",
+            "git diff --check",
+        ),
+    ),
+    UpdateTarget(
+        key="grpc-ledger-api-reference",
+        title="Update gRPC Ledger API reference",
+        branch="generated-references/grpc-ledger-api-reference/update",
+        description=(
+            "Regenerates the checked-in gRPC Ledger API reference from the latest "
+            "stable Canton protobuf release bundles selected by the existing source config."
+        ),
+        generate_commands=(("nix-shell", "--run", "npm run generate:grpc-ledger-api-reference"),),
+        paths=(
+            "docs-main/docs.json",
+            "docs-main/reference/grpc-ledger-api-reference",
+        ),
+        summary_kind="source-config",
+        summary_path="config/x2mdx/grpc-ledger-api-reference/source-artifacts.json",
+        summary_label="gRPC Ledger API",
+        validation=(
+            "npm run generate:grpc-ledger-api-reference",
+            "git diff --check",
+        ),
+    ),
+    UpdateTarget(
+        key="canton-protobuf-history",
+        title="Update Canton protobuf history reference",
+        branch="generated-references/canton-protobuf-history/update",
+        description=(
+            "Regenerates the checked-in Canton protobuf history references from the "
+            "latest stable Canton protobuf release bundles selected by the existing source config."
+        ),
+        generate_commands=(("nix-shell", "--run", "npm run generate:canton-protobuf-history"),),
+        paths=(
+            "config/x2mdx/protobuf-history/metadata.json",
+            "docs-main/docs.json",
+            "docs-main/appdev/reference/protobuf-history",
+            "docs-main/reference/admin-api/protobuf",
+            "docs-main/reference/protobuf",
+        ),
+        summary_kind="source-config",
+        summary_path="config/x2mdx/protobuf-history/source-artifacts.json",
+        summary_label="Canton protobuf history",
+        validation=(
+            "npm run generate:canton-protobuf-history",
+            "git diff --check",
+        ),
+    ),
+    UpdateTarget(
+        key="ledger-bindings",
+        title="Update Java ledger bindings reference",
+        branch="generated-references/ledger-bindings/update",
+        description=(
+            "Updates the Java ledger bindings source pins to the latest stable "
+            "Maven artifacts and regenerates the checked-in Java bindings reference pages."
+        ),
+        generate_commands=(
+            ("nix-shell", "--run", "npm run update:generated-reference-sources -- --source ledger-bindings"),
+            ("nix-shell", "--run", "npm run generate:ledger-bindings-api-reference"),
+        ),
+        paths=(
+            "config/x2mdx/ledger-bindings/source-artifacts.json",
+            "docs-main/docs.json",
+            "docs-main/reference/java-bindings.mdx",
+            "docs-main/reference/java",
+        ),
+        summary_kind="artifact-source-config",
+        summary_path="config/x2mdx/ledger-bindings/source-artifacts.json",
+        summary_label="Java ledger bindings",
+        validation=(
+            "npm run update:generated-reference-sources -- --source ledger-bindings",
+            "npm run generate:ledger-bindings-api-reference",
+            "git diff --check",
+        ),
+    ),
+    UpdateTarget(
+        key="daml-standard-library",
+        title="Update Daml Standard Library reference",
+        branch="generated-references/daml-standard-library/update",
+        description=(
+            "Updates the Daml Standard Library source pin to the latest DPM SDK "
+            "version and regenerates the checked-in Daml Standard Library reference pages."
+        ),
+        generate_commands=(
+            ("nix-shell", "--run", "npm run update:generated-reference-sources -- --source daml-standard-library"),
+            ("nix-shell", "--run", "npm run generate:daml-standard-library-reference"),
+        ),
+        paths=(
+            "config/x2mdx/daml-standard-library/source-artifacts.json",
+            "docs-main/docs.json",
+            "docs-main/appdev/reference/daml-standard-library",
+        ),
+        summary_kind="source-config",
+        summary_path="config/x2mdx/daml-standard-library/source-artifacts.json",
+        summary_label="Daml Standard Library",
+        validation=(
+            "npm run update:generated-reference-sources -- --source daml-standard-library",
+            "npm run generate:daml-standard-library-reference",
             "git diff --check",
         ),
     ),
@@ -155,6 +337,22 @@ def summarize_target_changes(target: UpdateTarget, before_path: Path) -> list[st
         if target.summary_label is None:
             raise ValueError(f"Update target {target.key} must define summary_label")
         return summarize_version_changes.package_source_config_changes(
+            before_path,
+            after_path,
+            label=target.summary_label,
+        )
+    if target.summary_kind == "versioned-source-config":
+        if target.summary_label is None:
+            raise ValueError(f"Update target {target.key} must define summary_label")
+        return summarize_version_changes.versioned_source_config_changes(
+            before_path,
+            after_path,
+            label=target.summary_label,
+        )
+    if target.summary_kind == "artifact-source-config":
+        if target.summary_label is None:
+            raise ValueError(f"Update target {target.key} must define summary_label")
+        return summarize_version_changes.artifact_source_config_changes(
             before_path,
             after_path,
             label=target.summary_label,

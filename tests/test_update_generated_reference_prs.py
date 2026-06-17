@@ -65,6 +65,11 @@ def test_generated_clean_paths_include_target_paths_and_internal_output() -> Non
     clean_paths = module.generated_clean_paths()
 
     assert ".internal" in clean_paths
+    assert "docs-main/openapi/splice" in clean_paths
+    assert "docs-main/openapi/json-ledger-api" in clean_paths
+    assert "docs-main/reference/grpc-ledger-api-reference" in clean_paths
+    assert "docs-main/reference/java" in clean_paths
+    assert "docs-main/appdev/reference/daml-standard-library" in clean_paths
     assert "docs-main/reference/wallet-gateway-json-rpc" in clean_paths
     assert "docs-main/reference/typescript" in clean_paths
     assert "docs-main/snippets/generated/version-dashboard-data.mdx" in clean_paths
@@ -91,6 +96,46 @@ def test_body_markdown_notes_when_no_versions_changed() -> None:
     body = module.body_markdown(target=target, changes=[])
 
     assert "Version changes:\n- No version values changed." in body
+
+
+def test_summarize_target_changes_supports_versioned_source_configs(monkeypatch, tmp_path: Path) -> None:
+    module = load_script_module()
+    target = next(target for target in module.UPDATE_TARGETS if target.key == "json-api-reference")
+    before = tmp_path / "before.json"
+    before.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(module, "REPO_ROOT", tmp_path)
+    after = tmp_path / target.summary_path
+    after.parent.mkdir(parents=True)
+    after.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(
+        module.summarize_version_changes,
+        "versioned_source_config_changes",
+        lambda before_path, after_path, *, label: [f"{label}:{before_path.name}:{after_path.name}"],
+    )
+
+    assert module.summarize_target_changes(target, before) == [
+        "JSON Ledger API OpenAPI:before.json:source-artifacts.json"
+    ]
+
+
+def test_summarize_target_changes_supports_artifact_source_configs(monkeypatch, tmp_path: Path) -> None:
+    module = load_script_module()
+    target = next(target for target in module.UPDATE_TARGETS if target.key == "ledger-bindings")
+    before = tmp_path / "before.json"
+    before.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(module, "REPO_ROOT", tmp_path)
+    after = tmp_path / target.summary_path
+    after.parent.mkdir(parents=True)
+    after.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(
+        module.summarize_version_changes,
+        "artifact_source_config_changes",
+        lambda before_path, after_path, *, label: [f"{label}:{before_path.name}:{after_path.name}"],
+    )
+
+    assert module.summarize_target_changes(target, before) == [
+        "Java ledger bindings:before.json:source-artifacts.json"
+    ]
 
 
 def test_parse_args_defaults_base_branch_and_repository_from_local_context(monkeypatch) -> None:
