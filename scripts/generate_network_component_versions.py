@@ -5,11 +5,13 @@ from __future__ import annotations
 import argparse
 import html
 import json
+import os
 import re
 import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
 
@@ -119,8 +121,17 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def request_headers(url: str) -> dict[str, str]:
+    headers = {"User-Agent": USER_AGENT}
+    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    if token and urlparse(url).netloc == "api.github.com":
+        headers["Authorization"] = f"Bearer {token}"
+        headers["X-GitHub-Api-Version"] = "2022-11-28"
+    return headers
+
+
 def request_url(url: str, timeout: float):
-    request = Request(url, headers={"User-Agent": USER_AGENT})
+    request = Request(url, headers=request_headers(url))
     return urlopen(request, timeout=timeout)
 
 

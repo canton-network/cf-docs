@@ -268,15 +268,16 @@ def update_docs_navigation(
     navigation = docs.get("navigation")
     if not isinstance(navigation, dict):
         raise ValueError(f"docs.json navigation must be an object: {docs_json_path}")
-    dropdowns = navigation.get("dropdowns")
-    if not isinstance(dropdowns, list):
-        raise ValueError(f"docs.json navigation.dropdowns must be a list: {docs_json_path}")
-    dropdown = next((item for item in dropdowns if isinstance(item, dict) and item.get("dropdown") == dropdown_label), None)
-    if dropdown is None:
-        raise ValueError(f"Dropdown not found in docs.json: {dropdown_label}")
-    pages = dropdown.get("pages")
+    products = navigation.get("products")
+    if not isinstance(products, list):
+        raise ValueError(f"docs.json navigation.products must be a list: {docs_json_path}")
+    nav_root = next((item for item in products if isinstance(item, dict) and item.get("product") == dropdown_label), None)
+    if nav_root is None:
+        raise ValueError(f"Product not found in docs.json: {dropdown_label}")
+
+    pages = nav_root.get("pages")
     if not isinstance(pages, list):
-        raise ValueError(f"Dropdown does not expose a pages list: {dropdown_label}")
+        raise ValueError(f"Product does not expose a pages list: {dropdown_label}")
 
     refs = {overview_page_ref(output_dir, docs_json_path), docs_json_page_ref(output_dir / "operations" / "details.mdx", docs_json_path)}
     refs.update(spec_page_ref(output_dir, docs_json_path, spec["spec_id"]) for spec in spec_entries)
@@ -310,7 +311,7 @@ def update_docs_navigation(
             break
     for offset, wallet_group in enumerate(wallet_groups):
         pruned_pages.insert(min(insert_at + offset, len(pruned_pages)), wallet_group)
-    dropdown["pages"] = pruned_pages
+    nav_root["pages"] = pruned_pages
     docs_json_path.write_text(json.dumps(docs, indent=2) + "\n", encoding="utf-8")
     print(f"Updated docs navigation: {docs_json_path}")
 
