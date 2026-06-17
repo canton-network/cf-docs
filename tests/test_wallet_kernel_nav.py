@@ -222,6 +222,36 @@ def test_asyncapi_wrapper_builds_legacy_dropdown_scratch_for_product_navigation(
     assert docs["navigation"].get("dropdowns") is None
 
 
+def test_asyncapi_wrapper_places_x2mdx_scratch_docs_under_docs_root(tmp_path: Path) -> None:
+    generate_json_api_asyncapi_reference = load_script("generate_json_api_asyncapi_reference")
+    docs_json = tmp_path / "docs-main" / "docs.json"
+    docs_json.parent.mkdir(parents=True)
+    baseline_docs = {
+        "navigation": {
+            "products": [
+                {
+                    "product": "API Reference",
+                    "pages": ["reference/json-api-asyncapi-reference/index"],
+                }
+            ]
+        }
+    }
+
+    scratch_path = generate_json_api_asyncapi_reference.x2mdx_docs_json_path(
+        docs_json_path=docs_json,
+        baseline_docs=baseline_docs,
+        dropdown_label="API Reference",
+    )
+
+    assert scratch_path == docs_json.parent / ".docs-json-x2mdx-scratch.json"
+    assert json.loads(scratch_path.read_text(encoding="utf-8"))["navigation"]["dropdowns"] == [
+        {
+            "dropdown": "API Reference",
+            "pages": ["reference/json-api-asyncapi-reference/index"],
+        }
+    ]
+
+
 def test_aggregate_generation_rejects_duplicate_wallet_gateway_aliases(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     generate_all_reference_docs = load_script("generate_all_reference_docs")
     docs_json = tmp_path / "docs-main" / "docs.json"

@@ -513,11 +513,11 @@ def with_legacy_dropdown_scratch(docs: dict[str, object], *, dropdown_label: str
     return scratch
 
 
-def x2mdx_docs_json_path(*, docs_json_path: Path, baseline_docs: dict[str, object], manifest_path: Path, dropdown_label: str) -> Path:
+def x2mdx_docs_json_path(*, docs_json_path: Path, baseline_docs: dict[str, object], dropdown_label: str) -> Path:
     navigation = baseline_docs.get("navigation")
     if not isinstance(navigation, dict) or isinstance(navigation.get("dropdowns"), list):
         return docs_json_path
-    scratch_path = manifest_path.with_name("docs-json-scratch.json")
+    scratch_path = docs_json_path.with_name(".docs-json-x2mdx-scratch.json")
     scratch_path.write_text(
         json.dumps(with_legacy_dropdown_scratch(baseline_docs, dropdown_label=dropdown_label), indent=2) + "\n",
         encoding="utf-8",
@@ -578,20 +578,24 @@ def main() -> int:
 
     docs_json_path = Path(args.docs_json).resolve()
     baseline_docs = load_json(docs_json_path)
+    command_docs_json_path = x2mdx_docs_json_path(
+        docs_json_path=docs_json_path,
+        baseline_docs=baseline_docs,
+        dropdown_label=args.nav_dropdown,
+    )
     command = build_command_with_docs_json(
         args,
         manifest_path=manifest_path,
         publish_version=publish_version,
         versions=[entry["version"] for entry in selected_version_entries],
-        docs_json_path=x2mdx_docs_json_path(
-            docs_json_path=docs_json_path,
-            baseline_docs=baseline_docs,
-            manifest_path=manifest_path,
-            dropdown_label=args.nav_dropdown,
-        ),
+        docs_json_path=command_docs_json_path,
     )
     print("Running:", " ".join(command))
-    completed = subprocess.run(command, cwd=REPO_ROOT)
+    try:
+        completed = subprocess.run(command, cwd=REPO_ROOT)
+    finally:
+        if command_docs_json_path != docs_json_path and command_docs_json_path.exists():
+            command_docs_json_path.unlink()
     if completed.returncode == 0:
         nav_groups = args.nav_group if args.nav_group is not None else [DEFAULT_NAV_GROUP]
         if not args.output_file:
