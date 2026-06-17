@@ -34,7 +34,7 @@ class UpdateTarget:
 UPDATE_TARGETS = (
     UpdateTarget(
         key="version-dashboard",
-        title="Update version dashboard data",
+        title="Update generated docs",
         branch="version-dashboard/update",
         description=(
             "Updates the committed Canton Network version dashboard data from public network, "
