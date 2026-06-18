@@ -152,11 +152,12 @@ def run_generation(*, canton_dir: Path, command: list[str], skip_direnv: bool) -
     if generated.exists():
         shutil.rmtree(generated)
     generated.mkdir(parents=True, exist_ok=True)
+    command_without_ci = ["env", "-u", "CI", *command]
     if skip_direnv or not (canton_dir / ".envrc").exists() or not shutil.which("direnv"):
-        run(command, cwd=canton_dir)
+        run(command_without_ci, cwd=canton_dir)
         return
     allow_direnv(canton_dir)
-    run(["direnv", "exec", str(canton_dir), *command], cwd=canton_dir)
+    run(["direnv", "exec", str(canton_dir), *command_without_ci], cwd=canton_dir)
 
 
 def resolve_generated_includes(template: str, *, generated_dir: Path) -> str:
