@@ -29,6 +29,43 @@ def test_targets_to_run_accepts_all() -> None:
     assert module.targets_to_run(["all"]) == module.UPDATE_TARGETS
 
 
+def test_update_targets_cover_all_generated_doc_surfaces() -> None:
+    module = load_script_module()
+
+    assert [target.key for target in module.UPDATE_TARGETS] == [
+        "version-dashboard",
+        "network-variable-tabs",
+        "splice-openapi",
+        "wallet-gateway-openrpc",
+        "json-api-reference",
+        "json-api-asyncapi-reference",
+        "grpc-ledger-api-reference",
+        "canton-protobuf-history",
+        "ledger-bindings",
+        "daml-standard-library",
+        "typescript-bindings",
+        "canton-metrics-reference",
+        "external-snippets-canton",
+        "external-snippets-cn-quickstart",
+        "external-snippets-daml",
+        "external-snippets-daml-shell",
+        "external-snippets-dpm",
+        "external-snippets-scribe",
+        "external-snippets-splice",
+    ]
+
+
+def test_network_variable_tabs_run_after_dashboard_data_generation() -> None:
+    module = load_script_module()
+    target = next(target for target in module.UPDATE_TARGETS if target.key == "network-variable-tabs")
+
+    assert target.generate_commands == (
+        ("nix-shell", "--run", "npm run generate:version-compatibility-dashboard"),
+        ("nix-shell", "--run", "npm run generate:network-variable-tabs"),
+    )
+    assert target.paths == module.NETWORK_VARIABLE_TAB_PAGES
+
+
 def test_targets_to_run_requires_at_least_one_target() -> None:
     module = load_script_module()
 
@@ -73,6 +110,9 @@ def test_generated_clean_paths_include_target_paths_and_internal_output() -> Non
     assert "docs-main/reference/wallet-gateway-json-rpc" in clean_paths
     assert "docs-main/reference/typescript" in clean_paths
     assert "docs-main/snippets/generated/version-dashboard-data.mdx" in clean_paths
+    assert "docs-main/global-synchronizer/deployment/validator-kubernetes.mdx" in clean_paths
+    assert "docs-main/global-synchronizer/reference/canton-metrics.mdx" in clean_paths
+    assert "docs-main/snippets/external/canton/main" in clean_paths
 
 
 def test_target_paths_exist_in_base_checkout() -> None:
@@ -149,6 +189,28 @@ def test_summarize_target_changes_supports_artifact_source_configs(monkeypatch, 
     ]
 
 
+def test_summarize_target_changes_supports_external_snippet_sources(
+    monkeypatch, tmp_path: Path
+) -> None:
+    module = load_script_module()
+    target = next(target for target in module.UPDATE_TARGETS if target.key == "external-snippets-splice")
+    before = tmp_path / "before.json"
+    before.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(module, "REPO_ROOT", tmp_path)
+    after = tmp_path / target.summary_path
+    after.parent.mkdir(parents=True)
+    after.write_text('{"sources":[]}', encoding="utf-8")
+    monkeypatch.setattr(
+        module.summarize_version_changes,
+        "external_snippet_source_changes",
+        lambda config_path, *, target_key, label: [f"{label}:{target_key}:{config_path.name}"],
+    )
+
+    assert module.summarize_target_changes(target, before) == [
+        "Splice external snippets:splice:external-snippet-sources.json"
+    ]
+
+
 def test_parse_args_defaults_base_branch_and_repository_from_local_context(monkeypatch) -> None:
     module = load_script_module()
     monkeypatch.setattr(
@@ -195,6 +257,54 @@ def test_parse_args_accepts_explicit_base_branch_and_repository(monkeypatch) -> 
 
     assert args.base_branch == "main"
     assert args.repository == "canton-network/cf-docs"
+
+
+def test_parse_args_dry_run_does_not_require_repository_context(monkeypatch) -> None:
+    module = load_script_module()
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "update_generated_reference_prs.py",
+            "--targets",
+            "all",
+            "--dry-run",
+        ],
+    )
+    monkeypatch.setattr(
+        module.pr_utils,
+        "current_repository",
+        lambda: (_ for _ in ()).throw(AssertionError("repository should not be resolved")),
+    )
+
+    args = module.parse_args()
+
+    assert args.dry_run is True
+    assert args.repository == ""
+
+
+def test_main_dry_run_lists_targets_without_git_or_gh(monkeypatch, capsys) -> None:
+    module = load_script_module()
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "update_generated_reference_prs.py",
+            "--targets",
+            "network-variable-tabs",
+            "--dry-run",
+        ],
+    )
+    monkeypatch.setattr(
+        module.pr_utils,
+        "git",
+        lambda *args, capture=False: (_ for _ in ()).throw(AssertionError("git should not run")),
+    )
+
+    assert module.main() == 0
+    output = capsys.readouterr().out
+    assert "network-variable-tabs: Update network variable tabs" in output
+    assert "npm run generate:network-variable-tabs" in output
 
 
 def test_current_base_branch_uses_github_ref_name_for_detached_checkout(monkeypatch) -> None:

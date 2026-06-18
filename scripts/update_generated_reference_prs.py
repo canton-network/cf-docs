@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 import tempfile
@@ -15,6 +16,25 @@ import summarize_version_changes
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+EXTERNAL_SNIPPET_CONFIG = REPO_ROOT / "config" / "generated-docs" / "external-snippet-sources.json"
+NETWORK_VARIABLE_TAB_PAGES = (
+    "docs-main/appdev/deep-dives/token-standard.mdx",
+    "docs-main/global-synchronizer/canton-console/console-overview.mdx",
+    "docs-main/global-synchronizer/deployment/kubernetes-deployment.mdx",
+    "docs-main/global-synchronizer/deployment/onboarding-process.mdx",
+    "docs-main/global-synchronizer/deployment/required-network-parameters.mdx",
+    "docs-main/global-synchronizer/deployment/sv-network-resets.mdx",
+    "docs-main/global-synchronizer/deployment/synchronizer-traffic.mdx",
+    "docs-main/global-synchronizer/deployment/validator-docker-compose.mdx",
+    "docs-main/global-synchronizer/deployment/validator-kubernetes.mdx",
+    "docs-main/global-synchronizer/production-operations/validator-disaster-recovery.mdx",
+    "docs-main/global-synchronizer/reference/canton-console-reference.mdx",
+    "docs-main/global-synchronizer/understand/local-testing.mdx",
+    "docs-main/sdks-tools/api-reference/splice-daml-apis.mdx",
+    "docs-main/sdks-tools/api-reference/splice-http-apis.mdx",
+    "docs-main/sdks-tools/api-reference/splice-scan-bulk-data-api.mdx",
+    "docs-main/sdks-tools/api-reference/splice-scan-gs-connectivity-api.mdx",
+)
 
 
 @dataclass(frozen=True)
@@ -26,9 +46,52 @@ class UpdateTarget:
     generate_commands: tuple[tuple[str, ...], ...]
     paths: tuple[str, ...]
     summary_kind: str
-    summary_path: str
+    summary_path: str | None
     summary_label: str | None
     validation: tuple[str, ...]
+
+
+def load_external_snippet_sources() -> tuple[dict[str, object], ...]:
+    payload = json.loads(EXTERNAL_SNIPPET_CONFIG.read_text(encoding="utf-8"))
+    sources = payload.get("sources") if isinstance(payload, dict) else None
+    if not isinstance(sources, list):
+        raise ValueError(f"Expected sources list in {EXTERNAL_SNIPPET_CONFIG}")
+    return tuple(source for source in sources if isinstance(source, dict))
+
+
+def external_snippet_targets() -> tuple[UpdateTarget, ...]:
+    targets: list[UpdateTarget] = []
+    for source in load_external_snippet_sources():
+        key = str(source["key"])
+        label = str(source["label"])
+        output_path = str(source["output_path"])
+        targets.append(
+            UpdateTarget(
+                key=f"external-snippets-{key}",
+                title=f"Update {label}",
+                branch=f"generated-docs/external-snippets-{key}/update",
+                description=(
+                    f"Updates the checked-in {label} from "
+                    f"{source['repository']}@{source['ref']}."
+                ),
+                generate_commands=(
+                    (
+                        "nix-shell",
+                        "--run",
+                        f"python3 scripts/generate_external_snippet_target.py --source-key {key}",
+                    ),
+                ),
+                paths=(output_path,),
+                summary_kind="external-snippet-source",
+                summary_path=str(EXTERNAL_SNIPPET_CONFIG.relative_to(REPO_ROOT)),
+                summary_label=label,
+                validation=(
+                    f"python3 scripts/generate_external_snippet_target.py --source-key {key}",
+                    "git diff --check",
+                ),
+            )
+        )
+    return tuple(targets)
 
 
 UPDATE_TARGETS = (
@@ -50,6 +113,28 @@ UPDATE_TARGETS = (
         summary_label=None,
         validation=(
             "npm run generate:version-compatibility-dashboard",
+            "git diff --check",
+        ),
+    ),
+    UpdateTarget(
+        key="network-variable-tabs",
+        title="Update network variable tabs",
+        branch="generated-docs/network-variable-tabs/update",
+        description=(
+            "Regenerates the checked-in static network-variable tabs from the latest "
+            "version dashboard data."
+        ),
+        generate_commands=(
+            ("nix-shell", "--run", "npm run generate:version-compatibility-dashboard"),
+            ("nix-shell", "--run", "npm run generate:network-variable-tabs"),
+        ),
+        paths=NETWORK_VARIABLE_TAB_PAGES,
+        summary_kind="dashboard",
+        summary_path="config/repo-version-config.json",
+        summary_label=None,
+        validation=(
+            "npm run generate:version-compatibility-dashboard",
+            "npm run generate:network-variable-tabs",
             "git diff --check",
         ),
     ),
@@ -287,6 +372,25 @@ UPDATE_TARGETS = (
             "git diff --check",
         ),
     ),
+    UpdateTarget(
+        key="canton-metrics-reference",
+        title="Update Canton metrics reference",
+        branch="generated-docs/canton-metrics-reference/update",
+        description=(
+            "Regenerates the checked-in Canton Metrics reference page from the latest "
+            "Canton release documentation source."
+        ),
+        generate_commands=(("nix-shell", "--run", "npm run generate:canton-metrics-reference"),),
+        paths=("docs-main/global-synchronizer/reference/canton-metrics.mdx",),
+        summary_kind="static",
+        summary_path=None,
+        summary_label=None,
+        validation=(
+            "npm run generate:canton-metrics-reference",
+            "git diff --check",
+        ),
+    ),
+    *external_snippet_targets(),
 )
 
 
@@ -320,6 +424,8 @@ def body_markdown(*, target: UpdateTarget, changes: list[str]) -> str:
 
 
 def summarize_target_changes(target: UpdateTarget, before_path: Path) -> list[str]:
+    if target.summary_path is None:
+        return []
     after_path = REPO_ROOT / target.summary_path
     if target.summary_kind == "dashboard":
         return summarize_version_changes.dashboard_changes(before_path, after_path)
@@ -355,6 +461,16 @@ def summarize_target_changes(target: UpdateTarget, before_path: Path) -> list[st
             after_path,
             label=target.summary_label,
         )
+    if target.summary_kind == "external-snippet-source":
+        if target.summary_label is None:
+            raise ValueError(f"Update target {target.key} must define summary_label")
+        return summarize_version_changes.external_snippet_source_changes(
+            after_path,
+            target_key=target.key.removeprefix("external-snippets-"),
+            label=target.summary_label,
+        )
+    if target.summary_kind == "static":
+        return []
     raise ValueError(f"Unknown summary kind for {target.key}: {target.summary_kind}")
 
 
@@ -381,12 +497,12 @@ def create_or_update_pull_request(
 
 def process_target(*, target: UpdateTarget, base_sha: str, base_branch: str, repository: str) -> None:
     reset_to_base(base_sha)
-    before_path = pr_utils.write_base_file(base_sha, target.summary_path)
+    before_path = pr_utils.write_base_file(base_sha, target.summary_path) if target.summary_path is not None else None
 
     for command in target.generate_commands:
         pr_utils.run(command)
 
-    changes = summarize_target_changes(target, before_path)
+    changes = summarize_target_changes(target, before_path) if before_path is not None else []
     with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as body_file:
         body_path = Path(body_file.name)
     body_path.write_text(body_markdown(target=target, changes=changes), encoding="utf-8")
@@ -417,11 +533,20 @@ def parse_args() -> argparse.Namespace:
         "--repository",
         help="GitHub repository for generated PRs. Defaults to the current gh repository.",
     )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="List selected generated-doc targets and commands without changing files or opening PRs.",
+    )
     args = parser.parse_args()
     if "all" in args.targets and len(args.targets) > 1:
         parser.error("pass --targets all by itself, or list specific target keys")
-    args.base_branch = args.base_branch or current_base_branch()
-    args.repository = args.repository or pr_utils.current_repository()
+    if args.dry_run:
+        args.base_branch = args.base_branch or ""
+        args.repository = args.repository or ""
+    else:
+        args.base_branch = args.base_branch or current_base_branch()
+        args.repository = args.repository or pr_utils.current_repository()
     return args
 
 
@@ -438,11 +563,19 @@ def targets_to_run(target_keys: Sequence[str]) -> tuple[UpdateTarget, ...]:
 
 def main() -> int:
     args = parse_args()
+    selected_targets = targets_to_run(args.targets)
+    if args.dry_run:
+        for target in selected_targets:
+            print(f"{target.key}: {target.title}")
+            for command in target.generate_commands:
+                print("  $ " + " ".join(command))
+        return 0
+
     pr_utils.git("config", "user.name", "github-actions[bot]")
     pr_utils.git("config", "user.email", "41898282+github-actions[bot]@users.noreply.github.com")
     base_sha = pr_utils.git("rev-parse", "HEAD", capture=True)
 
-    for target in targets_to_run(args.targets):
+    for target in selected_targets:
         process_target(
             target=target,
             base_sha=base_sha,
