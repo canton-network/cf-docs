@@ -1,0 +1,135 @@
+---
+title: "Traffic-Based App Rewards"
+description: "How app rewards are computed from network traffic under CIP-0104"
+---
+
+## Overview
+
+[CIP-0104](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0104/cip-0104.md)
+introduces traffic-based app rewards, replacing the on-ledger
+`Splice.Amulet.FeaturedAppActivityMarker` mechanism with an off-ledger reward
+computation based on actual network traffic. This provides more accurate and
+scalable reward accounting for featured app providers.
+
+The reward computation is split across two components on each SV node:
+
+1. The **Scan app** ingests traffic summaries from the sequencer alongside
+   mediator verdicts. For each transaction, it computes per-party app activity
+   weights — the sum of traffic costs for all transactions where a party was a
+   featured app provider in a given round. When a round closes, the Scan app
+   aggregates activity weights into per-party reward totals, applies the
+   minting allowance and coupon threshold defined in `RewardConfig`, and builds
+   a Merkle tree commitment of the results.
+
+2. The **SV app** drives the on-ledger creation of
+   `Splice.Amulet.RewardCouponV2` contracts based on the data computed by
+   Scan. The `CalculateRewardsTrigger` reads the Merkle tree root hash from
+   Scan and confirms it on-ledger via the action-requiring-confirmation
+   workflow. Once a supermajority of SVs agree on the root hash, a
+   `Splice.Amulet.RewardAccountingV2.ProcessRewardsV2` contract is created.
+   The `ProcessRewardsTrigger` then expands the tree by reading batches from
+   Scan, creating `Splice.Amulet.RewardCouponV2` contracts for each eligible
+   party at the leaf nodes.
+
+## Why Traffic-Based Rewards
+
+The previous reward mechanism relied on `Splice.Amulet.FeaturedAppActivityMarker`
+contracts created on-ledger during transactions. This approach had several
+limitations:
+
+- **Misalignment with actual costs**: activity markers did not correlate
+  directly with the traffic burned by an application, leading to discrepancies
+  between claimed and actual network usage.
+- **Governance burden**: assessing and governing activity markers was complex
+  and time-consuming, creating pressure to centralize governance decisions.
+- **Performance impact**: creating markers involved the DSO party in every
+  transaction, increasing transaction size and reducing throughput available
+  for economically useful activity.
+
+Traffic-based rewards address these by measuring actual traffic costs from
+the sequencer. This creates a level playing field among applications, removes
+the need for app builders to create markers in the right places, and improves
+network throughput by eliminating per-transaction DSO party involvement in
+activity recording.
+
+## Comparison with Featured App Activity Markers
+
+| Aspect | Activity Markers (pre CIP-0104) | Traffic-Based (CIP-0104) |
+|--------|--------------------------------|--------------------------|
+| Reward trigger | `Splice.Amulet.FeaturedAppActivityMarker` created in same transaction | Traffic cost measured by sequencer |
+| Reward contract | `Splice.Amulet.AppRewardCoupon` | `Splice.Amulet.RewardCouponV2` |
+| Timing | Immediate (same transaction) | Computed after round closes |
+| Computation | On-ledger per transaction | Off-ledger per round, batched |
+| Expiry | Round-based | Time-based (default 36 hours, configured via `RewardConfig.rewardCouponTimeToLive`) |
+| Scalability | One contract per transaction | One contract per party per round |
+| Reward sharing | Not supported | Provider can [assign beneficiaries](/global-synchronizer/splice-fundamentals/reward-sharing) before minting |
+
+## Splice.Amulet.RewardCouponV2
+
+`Splice.Amulet.RewardCouponV2` contracts represent traffic-based app rewards
+for a specific party and round. They differ from
+`Splice.Amulet.AppRewardCoupon` in several ways:
+
+- **Time-based expiry**: coupons expire after a configurable TTL
+  (`RewardConfig.rewardCouponTimeToLive`), rather than being tied to round
+  lifecycle. This allows beneficiaries to batch minting to save traffic
+  costs.
+- **One per party per round**: instead of one coupon per transaction, there
+  is one coupon per eligible party per round.
+- **Beneficiary assignment**: coupons support an optional `beneficiary` field
+  for [reward sharing](/global-synchronizer/splice-fundamentals/reward-sharing).
+  The provider can assign beneficiaries to share rewards before minting.
+
+### Minting
+
+`Splice.Amulet.RewardCouponV2` coupons can be minted in two ways:
+
+1. **Automated minting** via the Splice Wallet backend that is part of the
+   validator app. This works for onboarded internal parties and for external
+   parties with a
+   [minting delegation](/global-synchronizer/splice-fundamentals/rewards-minting).
+
+2. **Direct minting** by constructing calls to `AmuletRules_Transfer` that
+   use the coupon as a transfer input. These calls can be made directly
+   against the Ledger API, or indirectly via custom Daml code deployed to
+   the validator node.
+
+## Activation
+
+Traffic-based app rewards are controlled by the `rewardConfig` field in the
+network's `AmuletConfig`. SVs enable the feature by voting to set
+`RewardConfig.mintingVersion` to `RewardVersion_TrafficBasedAppRewards`. A
+dry-run mode is also available for verification before switching. See
+[SV Operations](/global-synchronizer/deployment/sv-operations) for the
+governance procedure.
+
+## Configuration
+
+### Merkle Tree Batch Size
+
+`RewardConfig.batchSize` controls the maximum number of per-party reward
+entries in each leaf node of the Merkle tree (default: 100). The SV apps
+use this tree to confirm reward totals via BFT consensus: the
+`CalculateRewardsTrigger` confirms the root hash, and the
+`ProcessRewardsTrigger` expands the tree level by level, creating
+`Splice.Amulet.RewardCouponV2` contracts at the leaves.
+
+A larger batch size produces a shallower tree with fewer on-ledger
+transactions to expand, but each transaction is larger. A smaller batch
+size produces a deeper tree with more transactions, each processing fewer
+parties. The default of 100 balances transaction size against tree depth
+for typical network conditions.
+
+### Coupon Threshold
+
+`RewardConfig.appRewardCouponThreshold` sets a minimum reward amount in USD
+below which a party does not receive a `Splice.Amulet.RewardCouponV2` for
+that round. This prevents the creation of dust coupons for parties with
+minimal activity. The default threshold is 0.5 USD.
+
+## Further Reading
+
+- [CIP-0104 specification](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0104/cip-0104.md)
+- [Reward Sharing](/global-synchronizer/splice-fundamentals/reward-sharing) — sharing rewards with beneficiaries
+- [Minting Delegations](/global-synchronizer/splice-fundamentals/rewards-minting) — delegating minting authority for external parties
+- [App Rewards](/appdev/app-rewards) — overview of the app rewards system including featured app status

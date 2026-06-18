@@ -1,0 +1,129 @@
+---
+title: "Reward Sharing"
+description: "How app providers share traffic-based app rewards with beneficiaries"
+---
+
+## Overview
+
+When [traffic-based app rewards](/global-synchronizer/splice-fundamentals/traffic-based-app-rewards)
+are enabled, featured app providers receive `Splice.Amulet.RewardCouponV2`
+contracts for each round in which their application generated traffic. Reward
+sharing allows the provider to distribute a portion of these coupons to other
+parties (beneficiaries) before minting, using the `assignBeneficiaries` API
+provided by the `splice-api-reward-assignment-v1` interface package.
+
+The validator node's built-in automation supports reward sharing. The list of
+beneficiaries and their percentages is specified by the validator node operator
+as part of the validator node configuration.
+
+The sharing process depends on how the provider party is hosted:
+
+- **Local party** (onboarded to the validator's wallet): the wallet app's
+  `CollectRewardsAndMergeAmuletsTrigger` performs the assignment and minting
+  automatically.
+
+- **External party** (hosted on the validator node with a minting delegation):
+  the `MintingDelegationCollectRewardsTrigger` performs the assignment and
+  minting. The external party must have an active
+  [minting delegation](/global-synchronizer/splice-fundamentals/rewards-minting).
+
+The validator node configuration format is the same for both cases.
+
+## Configuration
+
+Reward sharing is configured in the validator node's configuration file under
+`canton.validator-apps.validator_backend.reward-sharing-config-by-party`. Each
+entry maps a provider party ID to a `RewardSharingConfig`:
+
+```hocon
+canton.validator-apps.validator_backend {
+  reward-sharing-config-by-party = {
+    # 30% -> charlie, 20% -> dave, remaining 50% stays with alice
+    "alice::1220abc...def" = {
+      # shares coupons when 25h of lifetime remains,
+      # i.e., 11h after creation with the default 36h coupon TTL
+      min-ttl-after-sharing = 25h
+      beneficiaries = [
+        { beneficiary = "charlie::1220111...222", percentage = 0.3 },
+        { beneficiary = "dave::1220333...444", percentage = 0.2 },
+      ]
+    }
+
+    # External party bob sends 100% of rewards to a treasury party
+    "bob::1220bbb...ccc" = {
+      min-ttl-after-sharing = 25h
+      # process at most 50 coupons per trigger run to limit transaction size
+      batch-size = 50
+      beneficiaries = [
+        { beneficiary = "treasury::1220eee...fff", percentage = 1.0 },
+      ]
+    }
+  }
+}
+```
+
+### RewardSharingConfig Properties
+
+| Property | Description | Default |
+|----------|-------------|---------|
+| `min-ttl-after-sharing` | Minimum remaining coupon TTL before sharing is triggered. Sharing is batched: all known coupons are shared when any coupon's remaining lifetime drops below this value. | 30 hours |
+| `beneficiaries` | List of `AppRewardBeneficiaryConfig` entries specifying parties to share rewards with and their percentages. | Empty (no sharing) |
+| `batch-size` | Maximum number of coupons to share or assign per trigger run. | 100 |
+
+### AppRewardBeneficiaryConfig Properties
+
+| Property | Description |
+|----------|-------------|
+| `beneficiary` | The party ID receiving the share. |
+| `percentage` | Fraction of the reward in (0.0, 1.0]. Per-party percentages must sum to at most 1.0. The provider keeps the remainder (1.0 minus the sum of all percentages). |
+
+## Batched Sharing
+
+The automation batches sharing to reduce traffic costs. Rather than sharing
+each `Splice.Amulet.RewardCouponV2` individually as it arrives, the
+automation waits until any coupon's remaining TTL drops below
+`min-ttl-after-sharing`, then shares all accumulated coupons in one
+transaction.
+
+For example, with the default `Splice.Amulet.RewardCouponV2` TTL of 36
+hours (configured via `RewardConfig.rewardCouponTimeToLive`) and
+`min-ttl-after-sharing` set to 30 hours, sharing triggers approximately 6
+hours after the first coupon is created.
+
+The `batch-size` property (default: 100) limits the maximum number of coupons
+processed per trigger run. If more coupons have accumulated than the batch
+size, the automation processes them across multiple runs.
+
+When sharing a batch, each beneficiary receives the same number of coupons
+as the number of input coupons being shared. Each coupon created for a
+beneficiary tracks the round number from the original coupon, allowing
+beneficiaries to identify which round a reward originated from.
+
+## Minting After Sharing
+
+Beneficiaries mint their assigned coupons using the same mechanisms as any
+other `Splice.Amulet.RewardCouponV2` — either via the wallet app automation
+for local parties, or via a
+[minting delegation](/global-synchronizer/splice-fundamentals/rewards-minting)
+for external parties. See
+[Minting](/global-synchronizer/splice-fundamentals/traffic-based-app-rewards#minting)
+for details.
+
+## Limitations
+
+- **No re-sharing**: beneficiaries who receive shared rewards cannot use the
+  `assignBeneficiaries` API to further share them. Only the original provider
+  can assign beneficiaries.
+- **Same expiry**: shared coupons retain the same expiry as the original
+  `Splice.Amulet.RewardCouponV2`. With the default 36-hour TTL, the
+  `min-ttl-after-sharing` value must leave sufficient time for beneficiaries
+  to mint their coupons before expiry.
+- **Maximum 20 beneficiaries** per `Splice.Amulet.RewardCouponV2`.
+- **One-time assignment**: once a coupon's beneficiary is assigned, it cannot
+  be reassigned.
+
+## Further Reading
+
+- [Traffic-Based App Rewards](/global-synchronizer/splice-fundamentals/traffic-based-app-rewards) — how traffic-based rewards are computed
+- [Minting Delegations](/global-synchronizer/splice-fundamentals/rewards-minting) — delegating minting authority for external parties
+- [App Rewards](/appdev/app-rewards) — overview of the app rewards system including featured app status
