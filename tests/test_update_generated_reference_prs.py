@@ -34,7 +34,6 @@ def test_update_targets_cover_all_generated_doc_surfaces() -> None:
 
     assert [target.key for target in module.UPDATE_TARGETS] == [
         "version-dashboard",
-        "network-variable-tabs",
         "splice-openapi",
         "wallet-gateway-openrpc",
         "json-api-reference",
@@ -55,9 +54,9 @@ def test_update_targets_cover_all_generated_doc_surfaces() -> None:
     ]
 
 
-def test_network_variable_tabs_run_after_dashboard_data_generation() -> None:
+def test_dashboard_target_runs_network_variable_tabs_after_dashboard_data_generation() -> None:
     module = load_script_module()
-    target = next(target for target in module.UPDATE_TARGETS if target.key == "network-variable-tabs")
+    target = next(target for target in module.UPDATE_TARGETS if target.key == "version-dashboard")
 
     assert target.source_update_commands == (
         ("nix-shell", "--run", "npm run generate:version-compatibility-dashboard"),
@@ -69,7 +68,11 @@ def test_network_variable_tabs_run_after_dashboard_data_generation() -> None:
         "config/repo-version-config.json",
         "docs-main/snippets/generated/version-dashboard-data.mdx",
     )
-    assert target.paths == module.NETWORK_VARIABLE_TAB_PAGES
+    assert target.paths == (
+        "config/repo-version-config.json",
+        "docs-main/snippets/generated/version-dashboard-data.mdx",
+        *module.NETWORK_VARIABLE_TAB_PAGES,
+    )
 
 
 def test_source_update_targets_skip_generation_when_source_is_unchanged(monkeypatch) -> None:
@@ -363,7 +366,7 @@ def test_main_dry_run_lists_targets_without_git_or_gh(monkeypatch, capsys) -> No
         [
             "update_generated_reference_prs.py",
             "--targets",
-            "network-variable-tabs",
+            "version-dashboard",
             "--dry-run",
         ],
     )
@@ -375,7 +378,8 @@ def test_main_dry_run_lists_targets_without_git_or_gh(monkeypatch, capsys) -> No
 
     assert module.main() == 0
     output = capsys.readouterr().out
-    assert "network-variable-tabs: Update network variable tabs" in output
+    assert "version-dashboard: Update generated docs" in output
+    assert "source $ nix-shell --run npm run generate:version-compatibility-dashboard" in output
     assert "npm run generate:network-variable-tabs" in output
 
 

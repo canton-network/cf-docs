@@ -103,33 +103,15 @@ UPDATE_TARGETS = (
         branch="version-dashboard/update",
         description=(
             "Updates the committed Canton Network version dashboard data from public network, "
-            "package, and installer sources."
+            "package, and installer sources, then refreshes generated pages that render "
+            "network-specific values from that data."
         ),
-        generate_commands=(("nix-shell", "--run", "npm run generate:version-compatibility-dashboard"),),
+        generate_commands=(("nix-shell", "--run", "npm run generate:network-variable-tabs"),),
         paths=(
             "config/repo-version-config.json",
             "docs-main/snippets/generated/version-dashboard-data.mdx",
+            *NETWORK_VARIABLE_TAB_PAGES,
         ),
-        summary_kind="dashboard",
-        summary_path="config/repo-version-config.json",
-        summary_label=None,
-        validation=(
-            "npm run generate:version-compatibility-dashboard",
-            "git diff --check",
-        ),
-    ),
-    UpdateTarget(
-        key="network-variable-tabs",
-        title="Update network variable tabs",
-        branch="generated-docs/network-variable-tabs/update",
-        description=(
-            "Regenerates the checked-in static network-variable tabs from the latest "
-            "version dashboard data."
-        ),
-        generate_commands=(
-            ("nix-shell", "--run", "npm run generate:network-variable-tabs"),
-        ),
-        paths=NETWORK_VARIABLE_TAB_PAGES,
         summary_kind="dashboard",
         summary_path="config/repo-version-config.json",
         summary_label=None,
