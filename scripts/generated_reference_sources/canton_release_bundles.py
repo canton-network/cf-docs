@@ -14,7 +14,7 @@ from generated_reference_sources.common import SourceUpdate, load_json, write_js
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SOURCE_LABEL = "JSON Ledger API release bundle"
-DEFAULT_CANTON_REMOTE = "https://github.com/DACH-NY/canton.git"
+DEFAULT_CANTON_REMOTE = "https://github.com/digital-asset/canton.git"
 DEFAULT_TIMEOUT_SECONDS = 20.0
 USER_AGENT = "cf-docs-generated-reference-source-updater"
 DEFAULT_CACHE_ROOT = Path(os.environ.get("XDG_CACHE_HOME", "~/.cache")).expanduser() / "x2mdx"

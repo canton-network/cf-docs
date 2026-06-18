@@ -14,6 +14,10 @@ from scripts import generate_canton_metrics_reference as generator
 
 
 class CantonMetricsReferenceTests(unittest.TestCase):
+    def test_defaults_use_public_canton_source(self) -> None:
+        self.assertEqual(generator.DEFAULT_RELEASE_REPO, "digital-asset/canton")
+        self.assertEqual(generator.DEFAULT_REMOTE, "https://github.com/digital-asset/canton.git")
+
     def test_resolve_generated_includes(self) -> None:
         with TemporaryDirectory() as tmp:
             generated_dir = Path(tmp)
@@ -52,6 +56,7 @@ class CantonMetricsReferenceTests(unittest.TestCase):
 
         mdx = generator.convert_rst_to_mdx(rst, source_ref="v1.2.3")
 
+        self.assertIn('source="digital-asset/canton"', mdx)
         self.assertIn('ref="v1.2.3"', mdx)
         self.assertIn("# Metrics", mdx)
         self.assertIn("[relevant Prometheus documentation](https://prometheus.io/docs/tutorials/understanding_metric_types/)", mdx)

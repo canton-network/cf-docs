@@ -20,8 +20,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CACHE_DIR = REPO_ROOT / ".internal" / "cache" / "canton-metrics-reference"
 DEFAULT_CANTON_DIR = DEFAULT_CACHE_DIR / "repos" / "canton"
 DEFAULT_OUTPUT = REPO_ROOT / "docs-main" / "global-synchronizer" / "reference" / "canton-metrics.mdx"
-DEFAULT_REMOTE = "https://github.com/DACH-NY/canton.git"
-DEFAULT_RELEASE_REPO = "DACH-NY/canton"
+DEFAULT_REMOTE = "https://github.com/digital-asset/canton.git"
+DEFAULT_RELEASE_REPO = "digital-asset/canton"
 METRICS_RST = Path("docs-open/src/sphinx/participant/reference/metrics.rst")
 GENERATED_INCLUDES_DIR = Path("docs-open/target/generated")
 USER_AGENT = "cf-docs-canton-metrics-reference/1.0"
@@ -193,7 +193,7 @@ def convert_rst_to_mdx(rst: str, *, source_ref: str) -> str:
         "",
         (
             "{/* GENERATED_FROM "
-            f'source="DACH-NY/canton" ref="{source_ref}" '
+            f'source="digital-asset/canton" ref="{source_ref}" '
             f'path="{METRICS_RST.as_posix()}" */}}'
         ),
         "",

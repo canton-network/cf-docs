@@ -372,6 +372,7 @@ def test_update_typescript_bindings_source_dry_run_does_not_write(tmp_path: Path
 
 def test_update_ledger_api_source_updates_publish_version_canton_release(tmp_path: Path) -> None:
     module = load_script_module()
+    assert module.canton_release_bundles.DEFAULT_CANTON_REMOTE == "https://github.com/digital-asset/canton.git"
     source_config_path = tmp_path / "source-artifacts.json"
     write_ledger_api_source_config(source_config_path, canton_version="3.5.0-snapshot.20260405.18555.0.vbee160e5")
     module.canton_release_bundles.latest_public_canton_bundle_version = lambda *_args, **_kwargs: "3.5.5"

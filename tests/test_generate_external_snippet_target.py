@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import subprocess
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -34,8 +35,10 @@ def test_load_sources_reads_external_snippet_manifest() -> None:
         "scribe",
         "splice",
     ]
-    assert sources[0].repository == "DACH-NY/canton"
+    assert sources[0].repository == "digital-asset/canton"
     assert sources[0].requires_docker is True
+    assert next(source for source in sources if source.key == "daml-shell").skip_if_unavailable is True
+    assert next(source for source in sources if source.key == "scribe").skip_if_unavailable is True
 
 
 def test_generate_source_clones_checks_out_and_delegates_to_wrapper(
@@ -75,3 +78,63 @@ def test_generate_source_clones_checks_out_and_delegates_to_wrapper(
         and "--replace-output" in call[0]
         for call in calls
     )
+
+
+def test_generate_source_skips_optional_unavailable_source(monkeypatch, tmp_path: Path) -> None:
+    module = load_script_module()
+    source = module.ExternalSnippetSource(
+        key="internal",
+        label="Internal snippets",
+        repository="example/internal",
+        ref="main",
+        version="main",
+        repo_arg="internal",
+        output_path="docs-main/snippets/external/internal/main",
+        skip_if_unavailable=True,
+    )
+    calls: list[tuple[str, ...]] = []
+
+    def fake_run(command: list[str], *, cwd: Path, dry_run: bool = False) -> str:
+        calls.append(tuple(command))
+        if command[:2] == ["git", "ls-remote"]:
+            raise subprocess.CalledProcessError(returncode=128, cmd=command)
+        raise AssertionError(f"Unexpected command after unavailable source: {command}")
+
+    monkeypatch.setattr(module, "run", fake_run)
+
+    module.generate_source(source, cache_dir=tmp_path, dry_run=False)
+
+    assert calls == [
+        (
+            "git",
+            "ls-remote",
+            "--exit-code",
+            "https://github.com/example/internal.git",
+            "main",
+        )
+    ]
+
+
+def test_generate_source_fails_required_unavailable_source(monkeypatch, tmp_path: Path) -> None:
+    module = load_script_module()
+    source = module.ExternalSnippetSource(
+        key="required",
+        label="Required snippets",
+        repository="example/required",
+        ref="main",
+        version="main",
+        repo_arg="required",
+        output_path="docs-main/snippets/external/required/main",
+    )
+
+    def fake_run(command: list[str], *, cwd: Path, dry_run: bool = False) -> str:
+        raise subprocess.CalledProcessError(returncode=128, cmd=command)
+
+    monkeypatch.setattr(module, "run", fake_run)
+
+    try:
+        module.generate_source(source, cache_dir=tmp_path, dry_run=False)
+    except module.SourceUnavailableError as error:
+        assert "Required snippets source example/required@main is not available" in str(error)
+    else:
+        raise AssertionError("Expected required unavailable source to fail")

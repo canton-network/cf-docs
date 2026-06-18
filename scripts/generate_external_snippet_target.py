@@ -27,6 +27,11 @@ class ExternalSnippetSource:
     repo_arg: str
     output_path: str
     requires_docker: bool = False
+    skip_if_unavailable: bool = False
+
+
+class SourceUnavailableError(RuntimeError):
+    pass
 
 
 def load_sources(config_path: Path) -> tuple[ExternalSnippetSource, ...]:
@@ -49,6 +54,7 @@ def load_sources(config_path: Path) -> tuple[ExternalSnippetSource, ...]:
                     repo_arg=str(item["repo_arg"]),
                     output_path=str(item["output_path"]),
                     requires_docker=bool(item.get("requires_docker", False)),
+                    skip_if_unavailable=bool(item.get("skip_if_unavailable", False)),
                 )
             )
         except KeyError as error:
@@ -87,7 +93,23 @@ def source_dir(cache_dir: Path, source: ExternalSnippetSource) -> Path:
     return cache_dir / source.key / "repo"
 
 
+def ensure_source_available(source: ExternalSnippetSource, *, dry_run: bool) -> None:
+    if dry_run:
+        return
+    try:
+        run(
+            ["git", "ls-remote", "--exit-code", clone_url(source.repository), source.ref],
+            cwd=REPO_ROOT,
+            dry_run=False,
+        )
+    except subprocess.CalledProcessError as error:
+        raise SourceUnavailableError(
+            f"{source.label} source {source.repository}@{source.ref} is not available to this runner"
+        ) from error
+
+
 def ensure_checkout(source: ExternalSnippetSource, *, cache_dir: Path, dry_run: bool) -> Path:
+    ensure_source_available(source, dry_run=dry_run)
     checkout = source_dir(cache_dir, source)
     if not dry_run:
         checkout.parent.mkdir(parents=True, exist_ok=True)
@@ -113,7 +135,13 @@ def check_docker(source: ExternalSnippetSource, *, dry_run: bool) -> None:
 
 
 def generate_source(source: ExternalSnippetSource, *, cache_dir: Path, dry_run: bool) -> None:
-    checkout = ensure_checkout(source, cache_dir=cache_dir, dry_run=dry_run)
+    try:
+        checkout = ensure_checkout(source, cache_dir=cache_dir, dry_run=dry_run)
+    except SourceUnavailableError as error:
+        if source.skip_if_unavailable:
+            print(f"Skipping {source.key}: {error}")
+            return
+        raise
     allow_direnv(checkout, dry_run=dry_run)
     check_docker(source, dry_run=dry_run)
     run(
