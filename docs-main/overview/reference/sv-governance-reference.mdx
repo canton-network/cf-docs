@@ -7,36 +7,7 @@ The Global Synchronizer is governed by its Super Validators (SVs) acting collect
 
 ## DSO Governance Model
 
-{/* COPIED_START source="splice:docs/src/background/architecture.rst" hash="6eba999e" */}
-
-CC, CNS, and Global Synchronizer governance are implemented in a decentralized fashion to tolerate up to `f` faulty or dishonest SV nodes for `f = numSvNodes - t` and confirmation threshold `t = ceiling (numSvNodes * 2.0 / 3.0)`.
-
-The implementation uses three key techniques to achieves this Byzantine fault tolerance:
-
-- **DSO party**: it sets up a decentralized Daml party, called the DSO party, with confirmation threshold `t` and hosted on all SV nodes.
-- **on-ledger confirmations**: it requires explicit on-ledger confirmations from `t` SV nodes for exercising choices with off-ledger input in the name of the DSO party.
-- **decentralized automation**: all SV nodes run automation code that attempts to exercise choices required to be executed by the DSO party. The choices are either executed directly if they do not require off-ledger input, or they are exercised indirectly by creating the corresponding confirmation if they require off-ledger input. The automation exercises choices in a timely fashion, so that the skew between the target time and the actual time is bounded on average.
-- **median-based voting**: agreement on conversion rates and like configuration parameters is achieved using median-based voting, where every SV operator publishes their desired value on-ledger and the DSO party uses the median of these values.
-
-Thus CC and CNS users that are willing to assume that no more than `f` SV nodes are dishonest can rely on the following guarantees:
-
-- **valid transactions**: every transaction that requires confirmation from the DSO party is [valid](/overview/learn/ledger-model).
-- **timely automation**: actions required to be taken by the DSO party are taken in a timely fashion.
-- **predictable fees and configuration values**: fees and configuration values are reasonably predictable as they represent the *aggregate preferences* of ~2/3 of SV operators, which can be assumed to be acting in their own best interest.
-
-The guarantee of valid transactions is particularly important for CC and CNS users, as it is used to decouple the concerns of implementing decentralized automation and governance from the concern of implementing the tokenomics and business logic of CC and CNS.
-
-All code other than `splice-dso-governance` and `splice-validator-lifecycle` is written under the assumption that the DSO party behaves as an honest provider of the CC and CNS applications. We define what this means in the sections below.
-
-This approach of factoring out decentralization concerns using a decentralized party greatly simplifies the code, and enables factoring the code as shown in the package dependency graph:
-
-<img src="./images/daml-package-dependencies.png" class="align-center" alt="Daml package dependency graph" />
-
-###
-
-{/* COPIED_END */}
-
-The DSO is a decentralized party hosted across all SV nodes. It uses a Byzantine Fault Tolerant (BFT) confirmation model where actions require approval from a supermajority of SVs. The system tolerates up to `f` faulty or dishonest nodes, where `f = floor((n - 1) / 3)` and `n` is the total number of SVs.
+The DSO is a decentralized party hosted across all SV nodes. For the full technical architecture — including Daml package structure, DSO party requirements, and code dependency graph — see [Splice Architecture](/sdks-tools/api-reference/splice-architecture). It uses a Byzantine Fault Tolerant (BFT) confirmation model where actions require approval from a supermajority of SVs. The system tolerates up to `f` faulty or dishonest nodes, where `f = floor((n - 1) / 3)` and `n` is the total number of SVs.
 
 The required number of votes for any governance action is:
 
