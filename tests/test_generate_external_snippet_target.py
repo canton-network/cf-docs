@@ -37,6 +37,7 @@ def test_load_sources_reads_external_snippet_manifest() -> None:
     ]
     assert sources[0].repository == "digital-asset/canton"
     assert sources[0].requires_docker is True
+    assert sources[0].requires_heavy_runner is True
     assert next(source for source in sources if source.key == "daml-shell").skip_if_unavailable is True
     assert next(source for source in sources if source.key == "scribe").skip_if_unavailable is True
 
@@ -113,6 +114,66 @@ def test_generate_source_skips_optional_unavailable_source(monkeypatch, tmp_path
             "main",
         )
     ]
+
+
+def test_generate_source_skips_heavy_runner_source_without_opt_in(
+    monkeypatch, tmp_path: Path
+) -> None:
+    module = load_script_module()
+    source = module.ExternalSnippetSource(
+        key="heavy",
+        label="Heavy snippets",
+        repository="example/heavy",
+        ref="main",
+        version="main",
+        repo_arg="heavy",
+        output_path="docs-main/snippets/external/heavy/main",
+        requires_heavy_runner=True,
+    )
+
+    monkeypatch.delenv(module.HEAVY_RUNNER_ENV, raising=False)
+    monkeypatch.setattr(
+        module,
+        "run",
+        lambda command, *, cwd, dry_run=False: (_ for _ in ()).throw(
+            AssertionError(f"Unexpected command for skipped heavy source: {command}")
+        ),
+    )
+
+    module.generate_source(source, cache_dir=tmp_path, dry_run=False)
+
+
+def test_generate_source_runs_heavy_runner_source_with_opt_in(
+    monkeypatch, tmp_path: Path
+) -> None:
+    module = load_script_module()
+    source = module.ExternalSnippetSource(
+        key="heavy",
+        label="Heavy snippets",
+        repository="example/heavy",
+        ref="main",
+        version="main",
+        repo_arg="heavy",
+        output_path="docs-main/snippets/external/heavy/main",
+        requires_heavy_runner=True,
+    )
+    calls: list[tuple[str, ...]] = []
+
+    def fake_run(command: list[str], *, cwd: Path, dry_run: bool = False) -> str:
+        calls.append(tuple(command))
+        if command[:2] == ["git", "clone"]:
+            checkout = Path(command[-1])
+            (checkout / ".git").mkdir(parents=True)
+        return ""
+
+    monkeypatch.setenv(module.HEAVY_RUNNER_ENV, "1")
+    monkeypatch.setattr(module, "run", fake_run)
+    monkeypatch.setattr(module, "allow_direnv", lambda checkout, *, dry_run: None)
+    monkeypatch.setattr(module, "check_docker", lambda source, *, dry_run: None)
+
+    module.generate_source(source, cache_dir=tmp_path, dry_run=False)
+
+    assert any(call[:2] == ("git", "ls-remote") for call in calls)
 
 
 def test_generate_source_fails_required_unavailable_source(monkeypatch, tmp_path: Path) -> None:

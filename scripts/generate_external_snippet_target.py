@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -15,6 +16,7 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG = REPO_ROOT / "config" / "generated-docs" / "external-snippet-sources.json"
 DEFAULT_CACHE_DIR = REPO_ROOT / ".internal" / "cache" / "external-snippets"
+HEAVY_RUNNER_ENV = "GENERATED_DOCS_ENABLE_HEAVY_EXTERNAL_SNIPPETS"
 
 
 @dataclass(frozen=True)
@@ -27,6 +29,7 @@ class ExternalSnippetSource:
     repo_arg: str
     output_path: str
     requires_docker: bool = False
+    requires_heavy_runner: bool = False
     skip_if_unavailable: bool = False
 
 
@@ -54,6 +57,7 @@ def load_sources(config_path: Path) -> tuple[ExternalSnippetSource, ...]:
                     repo_arg=str(item["repo_arg"]),
                     output_path=str(item["output_path"]),
                     requires_docker=bool(item.get("requires_docker", False)),
+                    requires_heavy_runner=bool(item.get("requires_heavy_runner", False)),
                     skip_if_unavailable=bool(item.get("skip_if_unavailable", False)),
                 )
             )
@@ -134,7 +138,18 @@ def check_docker(source: ExternalSnippetSource, *, dry_run: bool) -> None:
     run(["docker", "info", "--format", "{{.ServerVersion}}"], cwd=REPO_ROOT, dry_run=dry_run)
 
 
+def heavy_runner_enabled() -> bool:
+    value = os.environ.get(HEAVY_RUNNER_ENV, "")
+    return value.lower() in {"1", "true", "yes", "on"}
+
+
 def generate_source(source: ExternalSnippetSource, *, cache_dir: Path, dry_run: bool) -> None:
+    if source.requires_heavy_runner and not heavy_runner_enabled():
+        print(
+            f"Skipping {source.key}: requires a heavy runner. "
+            f"Set {HEAVY_RUNNER_ENV}=1 to enable this target."
+        )
+        return
     try:
         checkout = ensure_checkout(source, cache_dir=cache_dir, dry_run=dry_run)
     except SourceUnavailableError as error:

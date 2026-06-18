@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: "*/10 * * * *"
   workflow_dispatch:
+    inputs:
+      include_heavy_external_snippets:
+        description: "Run external snippet targets that require a heavier runner"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -39,4 +44,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GITHUB_TOKEN: ${{ github.token }}
+          GENERATED_DOCS_ENABLE_HEAVY_EXTERNAL_SNIPPETS: ${{ inputs.include_heavy_external_snippets && '1' || '' }}
         run: python3 scripts/update_generated_reference_prs.py --targets all
