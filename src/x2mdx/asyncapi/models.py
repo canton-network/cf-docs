@@ -5,14 +5,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TypedDict
 
-from x2mdx.types import JsonObject, JsonValue
+from x2mdx.types import JsonValue
 
 
 class AsyncApiDocument(TypedDict, total=False):
     asyncapi: str
-    info: JsonObject
+    info: dict[str, JsonValue]
     channels: dict[str, JsonValue]
-    components: JsonObject
+    components: dict[str, JsonValue]
 
 
 class AsyncApiMessageDetail(TypedDict):

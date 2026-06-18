@@ -3,8 +3,20 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TypedDict
 
-from x2mdx.types import JsonObject
+from x2mdx.types import JsonValue
+
+
+class ProtobufMetadataOverlay(TypedDict, total=False):
+    schemaVersion: int
+    files: dict[str, JsonValue]
+    services: dict[str, JsonValue]
+    endpoints: dict[str, JsonValue]
+    messages: dict[str, JsonValue]
+    fields: dict[str, JsonValue]
+    enums: dict[str, JsonValue]
+    enumValues: dict[str, JsonValue]
 
 
 @dataclass(frozen=True)
@@ -22,4 +34,4 @@ class ProtobufSources:
     source: str | None = None
     repo_remote: str | None = None
     repo_web_url: str | None = None
-    metadata_overlay: JsonObject | None = None
+    metadata_overlay: ProtobufMetadataOverlay | None = None
