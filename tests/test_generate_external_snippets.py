@@ -75,6 +75,37 @@ def test_copy_output_targets_docs_main_snippets(
     assert not (fake_root / "snippets").exists()
 
 
+def test_copy_output_strips_generated_mdx_trailing_whitespace(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source_dir = tmp_path / "cn-quickstart"
+    docs_output = source_dir / "docs-output"
+    docs_output.mkdir(parents=True)
+    (docs_output / "example.mdx").write_text(
+        "# Admin users \n```bash\ncurl example\t\n```\n",
+        encoding="utf-8",
+    )
+    (docs_output / "raw.txt").write_text("keep trailing whitespace \n", encoding="utf-8")
+    fake_root = tmp_path / "cf-docs"
+
+    monkeypatch.setattr(generator, "CF_DOCS_ROOT", fake_root)
+
+    target = generator.copy_output(
+        generator.REPOS["cn-quickstart"],
+        source_dir,
+        version="main",
+        replace=False,
+        dry_run=False,
+    )
+
+    assert (target / "example.mdx").read_text(encoding="utf-8") == (
+        "# Admin users\n```bash\ncurl example\n```\n"
+    )
+    assert (target / "raw.txt").read_text(encoding="utf-8") == (
+        "keep trailing whitespace \n"
+    )
+
+
 def test_wrapper_copies_helper_runs_extraction_and_copies_output(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

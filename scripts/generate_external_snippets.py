@@ -376,7 +376,18 @@ def copy_output(repo: SnippetRepo, source_dir: Path, version: str, replace: bool
         shutil.rmtree(target)
     target.mkdir(parents=True, exist_ok=True)
     shutil.copytree(source_output, target, dirs_exist_ok=True)
+    normalize_generated_markdown(target)
     return target
+
+
+def normalize_generated_markdown(path: Path) -> None:
+    for file_path in path.rglob("*.mdx"):
+        text = file_path.read_text(encoding="utf-8")
+        normalized = "\n".join(line.rstrip() for line in text.splitlines())
+        if text.endswith("\n"):
+            normalized += "\n"
+        if normalized != text:
+            file_path.write_text(normalized, encoding="utf-8")
 
 
 def validate_inputs(repo: SnippetRepo) -> None:
