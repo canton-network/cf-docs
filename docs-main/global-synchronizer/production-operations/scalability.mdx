@@ -19,7 +19,7 @@ Concretely, the limit of 200 parties applies to:
 It does not apply to:
 
 1.  Parties not using external signing that have been created through the Ledger API or Canton admin API and have not been onboarded through the validator APIs or have associated `WalletAppInstall` contracts.
-2.  Parties using external signing for which no corresponding `ValidatorRight` exists with the `validator` party set to the validator operator party. Note that `/v0/admin/external-party/setup-proposal` does set up such a `ValidatorRight` contract so this API must be avoided. Using the `ExternalPartySetupProposal` contract directly for setting preapprovals is possible but the `validator` party must be set to a different party than the validator operator party. This also implies that you need to write your own automation to renew the preapproval when it expires. Refer to docs for more details.
+2.  Parties using external signing for which no corresponding `ValidatorRight` exists with the `validator` party set to the validator operator party. Note that `/v0/admin/external-party/setup-proposal` does set up such a `ValidatorRight` contract so this API must be avoided. Using the `ExternalPartySetupProposal` contract directly for setting preapprovals is possible but the `validator` party must be set to a different party than the validator operator party. This also implies that you need to write your own automation to renew the preapproval when it expires. Refer to [docs](/appdev/modules/m7-canton-coin-preapprovals) for more details.
 
 ### Bypassing the Limit
 
@@ -33,10 +33,10 @@ If you do need to create preapprovals, you must ensure that you do not create `V
 
 Note that bypassing the validator limit does mean that the validator app does not process any contracts for that party. Most notably, this means that there is no reward minting automation running for that party including the fact that `ValidatorRewardCoupon` activity records generated for that party cannot be minted by the validator operator as this relies on the `ValidatorRight` contract. If reward minting is required, you have two options:
 
-1.  Use a minting delegation to delegate reward collection to a validator
+1.  Use a [minting delegation](/global-synchronizer/splice-fundamentals/rewards-minting) to delegate reward collection to a validator
 2.  Build your own minting automation.
 
-You also cannot use any of the validator endpoints under `/v0/admin/external-party/` for this party, e.g., to initiate a transfer. Instead, interact with the external party through the token standard over the ledger API.
+You also cannot use any of the validator endpoints under `/v0/admin/external-party/` for this party, e.g., to initiate a transfer. Instead, interact with the external party through the [token standard](/appdev/deep-dives/token-standard) over the ledger API.
 
 ## Topology Batching
 
@@ -44,7 +44,7 @@ By default, topology batching is disabled meaning that every single topology tra
 
 However, after bootstrapping is complete (the validator readiness probe reports as ready and you observe rewards collected), it can be useful to increase the batch size to increase the throughput of topology transactions that can be submitted by your node. This is in particular useful for nodes from wallets that host a lot of different end user parties.
 
-To do so, add the following environment variables to your participant configuration. You can experiment with the batch size but batch sizes above 20 are not recommended as batches that are too large can cause issues.
+To do so, add the following [environment variables](/global-synchronizer/deployment/configuration) to your participant configuration. You can experiment with the batch size but batch sizes above 20 are not recommended as batches that are too large can cause issues.
 
 <ExternalSpliceMainSpliceRstCodeDocsSrcScalabilityScalabilityNone117 />
 
