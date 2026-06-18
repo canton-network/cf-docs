@@ -49,6 +49,8 @@ class UpdateTarget:
     summary_path: str | None
     summary_label: str | None
     validation: tuple[str, ...]
+    source_update_commands: tuple[tuple[str, ...], ...] = ()
+    source_update_paths: tuple[str, ...] = ()
 
 
 def load_external_snippet_sources() -> tuple[dict[str, object], ...]:
@@ -125,7 +127,6 @@ UPDATE_TARGETS = (
             "version dashboard data."
         ),
         generate_commands=(
-            ("nix-shell", "--run", "npm run generate:version-compatibility-dashboard"),
             ("nix-shell", "--run", "npm run generate:network-variable-tabs"),
         ),
         paths=NETWORK_VARIABLE_TAB_PAGES,
@@ -136,6 +137,13 @@ UPDATE_TARGETS = (
             "npm run generate:version-compatibility-dashboard",
             "npm run generate:network-variable-tabs",
             "git diff --check",
+        ),
+        source_update_commands=(
+            ("nix-shell", "--run", "npm run generate:version-compatibility-dashboard"),
+        ),
+        source_update_paths=(
+            "config/repo-version-config.json",
+            "docs-main/snippets/generated/version-dashboard-data.mdx",
         ),
     ),
     UpdateTarget(
@@ -148,7 +156,6 @@ UPDATE_TARGETS = (
             "Splice OpenAPI specifications and navigation."
         ),
         generate_commands=(
-            ("nix-shell", "--run", "npm run update:generated-reference-sources -- --source splice-openapi"),
             ("nix-shell", "--run", "npm run generate:splice-mintlify-openapi"),
         ),
         paths=(
@@ -164,6 +171,10 @@ UPDATE_TARGETS = (
             "npm run generate:splice-mintlify-openapi",
             "git diff --check",
         ),
+        source_update_commands=(
+            ("nix-shell", "--run", "npm run update:generated-reference-sources -- --source splice-openapi"),
+        ),
+        source_update_paths=("config/mintlify-openapi/splice-openapi/source-artifacts.json",),
     ),
     UpdateTarget(
         key="wallet-gateway-openrpc",
@@ -175,7 +186,6 @@ UPDATE_TARGETS = (
             "OpenRPC reference pages."
         ),
         generate_commands=(
-            ("nix-shell", "--run", "npm run update:generated-reference-sources -- --source wallet-gateway-openrpc"),
             ("nix-shell", "--run", "npm run generate:wallet-gateway-openrpc-reference"),
         ),
         paths=(
@@ -191,6 +201,10 @@ UPDATE_TARGETS = (
             "npm run generate:wallet-gateway-openrpc-reference",
             "git diff --check",
         ),
+        source_update_commands=(
+            ("nix-shell", "--run", "npm run update:generated-reference-sources -- --source wallet-gateway-openrpc"),
+        ),
+        source_update_paths=("config/x2mdx/wallet-gateway-openrpc/source-artifacts.json",),
     ),
     UpdateTarget(
         key="json-api-reference",
@@ -202,7 +216,6 @@ UPDATE_TARGETS = (
             "the checked-in OpenAPI reference."
         ),
         generate_commands=(
-            ("nix-shell", "--run", "npm run update:generated-reference-sources -- --source ledger-api"),
             ("nix-shell", "--run", "npm run generate:json-api-reference"),
         ),
         paths=(
@@ -219,6 +232,10 @@ UPDATE_TARGETS = (
             "npm run generate:json-api-reference",
             "git diff --check",
         ),
+        source_update_commands=(
+            ("nix-shell", "--run", "npm run update:generated-reference-sources -- --source ledger-api"),
+        ),
+        source_update_paths=("config/x2mdx/ledger-api/source-artifacts.json",),
     ),
     UpdateTarget(
         key="json-api-asyncapi-reference",
@@ -230,7 +247,6 @@ UPDATE_TARGETS = (
             "the checked-in AsyncAPI reference."
         ),
         generate_commands=(
-            ("nix-shell", "--run", "npm run update:generated-reference-sources -- --source ledger-api-asyncapi"),
             ("nix-shell", "--run", "npm run generate:json-api-asyncapi-reference"),
         ),
         paths=(
@@ -246,6 +262,10 @@ UPDATE_TARGETS = (
             "npm run generate:json-api-asyncapi-reference",
             "git diff --check",
         ),
+        source_update_commands=(
+            ("nix-shell", "--run", "npm run update:generated-reference-sources -- --source ledger-api-asyncapi"),
+        ),
+        source_update_paths=("config/x2mdx/ledger-api-asyncapi/source-artifacts.json",),
     ),
     UpdateTarget(
         key="grpc-ledger-api-reference",
@@ -301,7 +321,6 @@ UPDATE_TARGETS = (
             "Maven artifacts and regenerates the checked-in Java bindings reference pages."
         ),
         generate_commands=(
-            ("nix-shell", "--run", "npm run update:generated-reference-sources -- --source ledger-bindings"),
             ("nix-shell", "--run", "npm run generate:ledger-bindings-api-reference"),
         ),
         paths=(
@@ -318,6 +337,10 @@ UPDATE_TARGETS = (
             "npm run generate:ledger-bindings-api-reference",
             "git diff --check",
         ),
+        source_update_commands=(
+            ("nix-shell", "--run", "npm run update:generated-reference-sources -- --source ledger-bindings"),
+        ),
+        source_update_paths=("config/x2mdx/ledger-bindings/source-artifacts.json",),
     ),
     UpdateTarget(
         key="daml-standard-library",
@@ -328,7 +351,6 @@ UPDATE_TARGETS = (
             "version and regenerates the checked-in Daml Standard Library reference pages."
         ),
         generate_commands=(
-            ("nix-shell", "--run", "npm run update:generated-reference-sources -- --source daml-standard-library"),
             ("nix-shell", "--run", "npm run generate:daml-standard-library-reference"),
         ),
         paths=(
@@ -344,6 +366,10 @@ UPDATE_TARGETS = (
             "npm run generate:daml-standard-library-reference",
             "git diff --check",
         ),
+        source_update_commands=(
+            ("nix-shell", "--run", "npm run update:generated-reference-sources -- --source daml-standard-library"),
+        ),
+        source_update_paths=("config/x2mdx/daml-standard-library/source-artifacts.json",),
     ),
     UpdateTarget(
         key="typescript-bindings",
@@ -354,7 +380,6 @@ UPDATE_TARGETS = (
             "releases and regenerates the checked-in TypeScript bindings reference pages."
         ),
         generate_commands=(
-            ("nix-shell", "--run", "npm run update:generated-reference-sources -- --source typescript-bindings"),
             ("nix-shell", "--run", "npm run generate:typescript-bindings-reference"),
         ),
         paths=(
@@ -371,6 +396,10 @@ UPDATE_TARGETS = (
             "npm run generate:typescript-bindings-reference",
             "git diff --check",
         ),
+        source_update_commands=(
+            ("nix-shell", "--run", "npm run update:generated-reference-sources -- --source typescript-bindings"),
+        ),
+        source_update_paths=("config/x2mdx/typescript-bindings/source-artifacts.json",),
     ),
     UpdateTarget(
         key="canton-metrics-reference",
@@ -499,6 +528,13 @@ def process_target(*, target: UpdateTarget, base_sha: str, base_branch: str, rep
     reset_to_base(base_sha)
     before_path = pr_utils.write_base_file(base_sha, target.summary_path) if target.summary_path is not None else None
 
+    for command in target.source_update_commands:
+        pr_utils.run(command)
+
+    if target.source_update_commands and not pr_utils.has_changes(target.source_update_paths):
+        print(f"Source unchanged for {target.title}; skipping generation")
+        return
+
     for command in target.generate_commands:
         pr_utils.run(command)
 
@@ -567,8 +603,10 @@ def main() -> int:
     if args.dry_run:
         for target in selected_targets:
             print(f"{target.key}: {target.title}")
+            for command in target.source_update_commands:
+                print("  source $ " + " ".join(command))
             for command in target.generate_commands:
-                print("  $ " + " ".join(command))
+                print("  generate $ " + " ".join(command))
         return 0
 
     pr_utils.git("config", "user.name", "github-actions[bot]")

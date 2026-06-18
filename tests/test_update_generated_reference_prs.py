@@ -59,11 +59,83 @@ def test_network_variable_tabs_run_after_dashboard_data_generation() -> None:
     module = load_script_module()
     target = next(target for target in module.UPDATE_TARGETS if target.key == "network-variable-tabs")
 
-    assert target.generate_commands == (
+    assert target.source_update_commands == (
         ("nix-shell", "--run", "npm run generate:version-compatibility-dashboard"),
+    )
+    assert target.generate_commands == (
         ("nix-shell", "--run", "npm run generate:network-variable-tabs"),
     )
+    assert target.source_update_paths == (
+        "config/repo-version-config.json",
+        "docs-main/snippets/generated/version-dashboard-data.mdx",
+    )
     assert target.paths == module.NETWORK_VARIABLE_TAB_PAGES
+
+
+def test_source_update_targets_skip_generation_when_source_is_unchanged(monkeypatch) -> None:
+    module = load_script_module()
+    target = next(target for target in module.UPDATE_TARGETS if target.key == "wallet-gateway-openrpc")
+    calls: list[tuple[str, ...]] = []
+
+    monkeypatch.setattr(module, "reset_to_base", lambda base_sha: calls.append(("reset", base_sha)))
+    monkeypatch.setattr(module.pr_utils, "write_base_file", lambda base_sha, path: Path("/tmp/before.json"))
+    monkeypatch.setattr(module.pr_utils, "has_changes", lambda paths: False)
+    monkeypatch.setattr(module, "create_or_update_pull_request", lambda **kwargs: calls.append(("pr",)))
+
+    def fake_run(command: tuple[str, ...]) -> None:
+        calls.append(command)
+
+    monkeypatch.setattr(module.pr_utils, "run", fake_run)
+
+    module.process_target(
+        target=target,
+        base_sha="base-sha",
+        base_branch="main",
+        repository="canton-network/cf-docs",
+    )
+
+    assert calls == [
+        ("reset", "base-sha"),
+        ("nix-shell", "--run", "npm run update:generated-reference-sources -- --source wallet-gateway-openrpc"),
+    ]
+
+
+def test_source_update_targets_generate_when_source_changed(monkeypatch, tmp_path: Path) -> None:
+    module = load_script_module()
+    target = next(target for target in module.UPDATE_TARGETS if target.key == "wallet-gateway-openrpc")
+    calls: list[tuple[str, ...]] = []
+    body_paths: list[Path] = []
+
+    monkeypatch.setattr(module, "reset_to_base", lambda base_sha: calls.append(("reset", base_sha)))
+    monkeypatch.setattr(module.pr_utils, "write_base_file", lambda base_sha, path: tmp_path / "before.json")
+    monkeypatch.setattr(module.pr_utils, "has_changes", lambda paths: True)
+    monkeypatch.setattr(module, "summarize_target_changes", lambda target, before_path: ["- changed"])
+
+    def fake_pr(**kwargs) -> None:
+        calls.append(("pr", kwargs["target"].key))
+        body_paths.append(kwargs["body_path"])
+
+    monkeypatch.setattr(module, "create_or_update_pull_request", fake_pr)
+
+    def fake_run(command: tuple[str, ...]) -> None:
+        calls.append(command)
+
+    monkeypatch.setattr(module.pr_utils, "run", fake_run)
+
+    module.process_target(
+        target=target,
+        base_sha="base-sha",
+        base_branch="main",
+        repository="canton-network/cf-docs",
+    )
+
+    assert calls == [
+        ("reset", "base-sha"),
+        ("nix-shell", "--run", "npm run update:generated-reference-sources -- --source wallet-gateway-openrpc"),
+        ("nix-shell", "--run", "npm run generate:wallet-gateway-openrpc-reference"),
+        ("pr", "wallet-gateway-openrpc"),
+    ]
+    assert body_paths
 
 
 def test_targets_to_run_requires_at_least_one_target() -> None:
