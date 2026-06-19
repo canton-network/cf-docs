@@ -140,12 +140,12 @@ Once the accrued holding fee on a UTXO exceeds its face value, Super Validators 
 
 ## CN Token Standard (CIP-0056)
 
-[CIP-0056](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0056/cip-0056.md) defines the Canton Network Token Standard, a set of Daml interfaces for token operations including transfers, locks, and metadata queries. The Splice wallet implements CIP-0056 for CC, and applications that handle CC programmatically interact through these standard interfaces.
+[CIP-0056](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0056/cip-0056.md) defines the Canton Network Token Standard, a set of Daml interfaces for token operations including transfers, allocations, and metadata queries. The Splice wallet implements CIP-0056 for CC, and applications that handle CC programmatically interact through these standard interfaces.
 
 CIP-0056-based two-step transfers work as follows:
 
-1. The sender locks the desired CC amount, creating a transfer offer.
-2. The receiver accepts the offer, which unlocks the CC and completes the transfer.
+1. The sender exercises `TransferFactory_Transfer`. The registry creates a `TransferInstruction` contract and holds the funds pending the receiver's acceptance.
+2. The receiver exercises `TransferInstruction_Accept`, which completes the transfer and creates new holdings for the receiver.
 
 This two-step flow does not rely on sender-side automation and works well for external parties. Since CIP-0078, these operations incur no fees and generate no activity records.
 
