@@ -63,175 +63,21 @@ PQS configuration includes:
 
 ## Install and download
 
-### Helm Chart
-We provide a helm chart to install PQS:
+### Jar (as Part of Daml Sdk)
 
-``` text
-helm upgrade --install -n pqs participant-query-store -f values.yaml \
-oci://europe-docker.pkg.dev/da-images/public/charts/participant-query-store:3.5.2
-```
+PQS `3.5.x` is built against the Daml SDK and Canton `3.5.x` releases (same major and minor versions), and is tested for compatibility with multiple Canton Participant Node versions (see Compatibility below).
 
-<details>
-    <summary>Exhaustive `values.yaml`</summary>
+The dpm CLI tool is used to download the `scribe.jar` file, as follows:
 
-    ```` yaml
-    # Defines the container image registry, repository, and tag used for the PQS application
-    image:
-      repo: europe-docker.pkg.dev/da-images/public/docker
-      tag: "3.5.2"
-
-    # Defines the Kubernetes ServiceAccount name and its annotations
-    # (e.g., for workload identity mapping).
-    serviceAccount:
-      name: pqs-sa
-      annotations:
-        iam.gke.io/gcp-service-account: pqs-service-account@my-project.iam.gserviceaccount.com
-
-    # Allows injection of custom initialization containers
-    # that run to completion before the main PQS app starts.
-    initContainers:
-      - name: wait-for-postgres
-        image: busybox:1.28
-        command: ['sh', '-c', 'until nc -z postgres 5432; do echo waiting for db; sleep 2; done;']
-
-    # Allows injection of raw environment variables directly into the PQS container.
-    env:
-      - name: JDK_JAVA_OPTIONS
-        value: " -Dfile.encoding=UTF-8 -Djava.io.tmpdir=/tmp/myapp"
-
-    # Maps existing Kubernetes Secrets to environment variables,
-    # and then bridges those environment variables into the HOCON configuration file.
-    # Secret mappings
-    secrets:
-    - paths:
-      - target.postgres.password
-      secretKeyRef:
-        name: postgres
-        key: postgresPassword
-    - paths:
-      - pipeline.oauth.clientSecret
-      secretKeyRef:
-        name: splice-app-validator-ledger-api-auth
-        key: client-secret
-
-    # Configuration specifically targeted at the Pod level, such as custom annotations.
-    pod:
-      # -- Annotations for pod
-      annotations:
-        prometheus.io/scrape: "true"
-        prometheus.io/port: "8091"
-
-    # Defines container-level specifications of requests, limits, readinessProbe, and livnessProbe
-    # to ensure proper cluster scheduling and prevent resource starvation.containers:
-      resources:
-        requests:
-          memory: 256M
-          cpu: 500m
-        limits:
-          memory: 3G
-          cpu: 1000m
-      readinessProbe:
-        httpGet:
-          path: /livez
-          port: 8091
-        initialDelaySeconds: 60
-        periodSeconds: 15
-      livenessProbe:
-        httpGet:
-          path: /livez
-          port: 8091
-        initialDelaySeconds: 60
-        periodSeconds: 30
-
-    # Raw pqs config
-    pqs:
-      # Configures the data ingestion pipeline, including the
-      # data source type, contract filters, ledger read positions, and OAuth authentication specifics.
-      pipeline:
-        datasource: TransactionStream
-        filter:
-          betterWildcard: "true"
-          contracts: "*"
-          metadata: "*"
-          parties: "*"
-        ledger:
-          start: Latest
-          stop: Never
-        oauth:
-          clientId: splice-oauth-client-id
-          issuer: "https://provider.oauth.com/fakeIssuer"
-          endpoint: "https://provider.oauth.com/fakeIssuer/token"
-          preemptExpiry: PT1M
-          scope: daml_ledger_api
-          parameters:
-            audience: "http://fake.audience.com"
-
-      # Defines the connection parameters to the participant node (Ledger API),
-      # including host, port, authentication type, and connection keep-alive settings.
-      source:
-        ledger:
-          auth: OAuth
-          bufferSize: "128"
-          cacheDir: "/tmp/scribe"
-          host: participant
-          keepAlive:
-            time: PT40S
-            timeout: PT20S
-          port: "5001"
-
-      # Specifies the retry policies and exponential backoff parameters for handling transient failures in the pipeline.
-      retry:
-        backoff:
-          base: PT1S
-          cap: PT1M
-          factor: "2.0"
-        counter:
-          reset: PT10M
-
-      # Configures the destination PostgreSQL database for the data queried from the participant.
-      target:
-        encoding:
-          excludeNulls: "false"
-          int64AsString: "true"
-          numericAsString: "true"
-        postgres:
-          appName: scribe
-          bufferSize: "128"
-          database: public
-          host: postgres
-          keepAlive: "true"
-          maxConnections: "16"
-          username: "postgres"
-          port: "5432"
-          schema: pqs
-          tls:
-            mode: Disable
-        schema:
-          autoApply: "true"
-          baseline: "false"
-
-      # Configures the bind address and port for the application's health check endpoints,
-      # which Kubernetes uses for liveness and readiness probes.
-      health:
-        address: "0.0.0.0"
-        port: "8091"
-
-      # Controls the logging behavior of the application, such as log levels (e.g., Info, Debug)
-      # and output formats (e.g., Plain, JSON).
-      logger:
-        format: Plain
-        level: Info
-        mappings: {}
-        pattern: Plain
-    ```
-</details>
+> 1.  `dpm install <version>` (e.g., `dpm install 3.5.1`) to get the latest SDK release which includes `scribe.jar`.
+> 2.  To locate the directory where the scribe.jar file is, enter `dpm resolve | grep scribe` which will show the path to the jar file.
 
 
 ### Docker Image
 
 | Source | Location |
 | --- | --- |
-| Browse UI | <a href="https://console.cloud.google.com/artifacts/docker/da-images/europe/public/docker%2Fparticipant-query-store">https://console.cloud.google.com/artifacts/docker/da-images/europe/public/docker%2Fparticipant-query-store</a> |
+| Browse UI | <a href="https://console.cloud.google.com/artifacts/docker/da-images/europe/public/docker%2Fparticipant-query-store?project=da-images">Browse available docker versions</a> |
 | Docker Registry | `europe-docker.pkg.dev/da-images/public/docker/participant-query-store:<version-tag>` |
 
 Alternatively, PQS can be started as a Docker container:
@@ -244,21 +90,176 @@ daml-sdk.version: 3.5.1
 postgres-document.schema: 041
 ```
 
+### Helm Chart
 <Note>
-    The default `workdir`[^1] of the PQS container is `/`. This is the location of the `scribe.jar` in the container filesystem.
+    This helm chart is available beginning with version 3.5.x
 </Note>
 
+We provide a helm chart to install PQS:
+
+``` text
+helm upgrade --install -n pqs participant-query-store -f values.yaml \
+oci://europe-docker.pkg.dev/da-images/public/charts/participant-query-store:3.5.2
+```
+
+| Source | Location |
+| --- | --- |
+| Browse UI | <a href="https://console.cloud.google.com/artifacts/docker/da-images/europe/public/charts%2Fparticipant-query-store?project=da-images">Browse available chart images</a> |
+| Helm Registry | `europe-docker.pkg.dev/da-images/public/charts/participant-query-store:<version-tag>` |
+
+#### Exhaustive example `values.yaml`
 
 
-### Jar (as Part of Daml Sdk)
+``` yaml
+# Defines the container image registry, repository, and tag used for the PQS application
+image:
+  repo: europe-docker.pkg.dev/da-images/public/docker
+  tag: "3.5.2"
 
-PQS `3.5.x` is built against the Daml SDK and Canton `3.5.x` releases (same major and minor versions), and is tested for compatibility with multiple Canton Participant Node versions (see Compatibility below).
+# Defines the Kubernetes ServiceAccount name and its annotations
+# (e.g., for workload identity mapping).
+serviceAccount:
+  name: pqs-sa
+  annotations:
+    iam.gke.io/gcp-service-account: pqs-service-account@my-project.iam.gserviceaccount.com
 
-The dpm CLI tool is used to download the `scribe.jar` file, as follows:
+# Allows injection of custom initialization containers
+# that run to completion before the main PQS app starts.
+initContainers:
+  - name: wait-for-postgres
+    image: busybox:1.28
+    command: ['sh', '-c', 'until nc -z postgres 5432; do echo waiting for db; sleep 2; done;']
 
-> 1.  `dpm install <version>` (e.g., `dpm install 3.5.1`) to get the latest SDK release which includes `scribe.jar`.
-> 2.  To locate the directory where the scribe.jar file is, enter `dpm resolve | grep scribe` which will show the path to the jar file.
+# Allows injection of raw environment variables directly into the PQS container.
+env:
+  - name: JDK_JAVA_OPTIONS
+    value: " -Dfile.encoding=UTF-8 -Djava.io.tmpdir=/tmp/myapp"
 
+# Maps existing Kubernetes Secrets to environment variables,
+# and then bridges those environment variables into the HOCON configuration file.
+# Secret mappings
+secrets:
+- paths:
+  - target.postgres.password
+  secretKeyRef:
+    name: postgres
+    key: postgresPassword
+- paths:
+  - pipeline.oauth.clientSecret
+  secretKeyRef:
+    name: splice-app-validator-ledger-api-auth
+    key: client-secret
+
+# Configuration specifically targeted at the Pod level, such as custom annotations.
+pod:
+  # -- Annotations for pod
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8091"
+
+# Defines container-level specifications of requests, limits, readinessProbe, and livnessProbe
+# to ensure proper cluster scheduling and prevent resource starvation.containers:
+  resources:
+    requests:
+      memory: 256M
+      cpu: 500m
+    limits:
+      memory: 3G
+      cpu: 1000m
+  readinessProbe:
+    httpGet:
+      path: /livez
+      port: 8091
+    initialDelaySeconds: 60
+    periodSeconds: 15
+  livenessProbe:
+    httpGet:
+      path: /livez
+      port: 8091
+    initialDelaySeconds: 60
+    periodSeconds: 30
+
+# Raw pqs config
+pqs:
+  # Configures the data ingestion pipeline, including the
+  # data source type, contract filters, ledger read positions, and OAuth authentication specifics.
+  pipeline:
+    datasource: TransactionStream
+    filter:
+      betterWildcard: "true"
+      contracts: "*"
+      metadata: "*"
+      parties: "*"
+    ledger:
+      start: Latest
+      stop: Never
+    oauth:
+      clientId: splice-oauth-client-id
+      issuer: "https://provider.oauth.com/fakeIssuer"
+      endpoint: "https://provider.oauth.com/fakeIssuer/token"
+      preemptExpiry: PT1M
+      scope: daml_ledger_api
+      parameters:
+        audience: "http://fake.audience.com"
+
+  # Defines the connection parameters to the participant node (Ledger API),
+  # including host, port, authentication type, and connection keep-alive settings.
+  source:
+    ledger:
+      auth: OAuth
+      bufferSize: "128"
+      cacheDir: "/tmp/scribe"
+      host: participant
+      keepAlive:
+        time: PT40S
+        timeout: PT20S
+      port: "5001"
+
+  # Specifies the retry policies and exponential backoff parameters for handling transient failures in the pipeline.
+  retry:
+    backoff:
+      base: PT1S
+      cap: PT1M
+      factor: "2.0"
+    counter:
+      reset: PT10M
+
+  # Configures the destination PostgreSQL database for the data queried from the participant.
+  target:
+    encoding:
+      excludeNulls: "false"
+      int64AsString: "true"
+      numericAsString: "true"
+    postgres:
+      appName: scribe
+      bufferSize: "128"
+      database: public
+      host: postgres
+      keepAlive: "true"
+      maxConnections: "16"
+      username: "postgres"
+      port: "5432"
+      schema: pqs
+      tls:
+        mode: Disable
+    schema:
+      autoApply: "true"
+      baseline: "false"
+
+  # Configures the bind address and port for the application's health check endpoints,
+  # which Kubernetes uses for liveness and readiness probes.
+  health:
+    address: "0.0.0.0"
+    port: "8091"
+
+  # Controls the logging behavior of the application, such as log levels (e.g., Info, Debug)
+  # and output formats (e.g., Plain, JSON).
+  logger:
+    format: Plain
+    level: Info
+    mappings: {}
+    pattern: Plain
+```
 
 ### Compatibility
 
