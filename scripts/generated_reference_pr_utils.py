@@ -80,7 +80,6 @@ def create_or_update_pull_request(
         return
 
     git("status", "--short", "--", *paths)
-    git("switch", "-C", branch)
     git("add", "--", *paths)
     git("diff", "--cached", "--stat")
     git("diff", "--cached", "--check")

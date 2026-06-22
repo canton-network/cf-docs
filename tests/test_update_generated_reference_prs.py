@@ -428,4 +428,5 @@ def test_create_or_update_pull_request_signs_generated_commit(monkeypatch, tmp_p
     )
 
     assert ("commit", "--signoff", "-m", "Update generated docs") in git_calls
+    assert not any(call[:1] == ("switch",) for call in git_calls)
     assert any(call[:2] == ("pr", "create") for call in gh_calls)
