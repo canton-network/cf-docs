@@ -14,18 +14,9 @@ provided by the `splice-api-reward-assignment-v1` interface package.
 
 Validator nodes have built-in support for automating this kind of reward sharing, which can be configured by the validator operator as part of the validator node configuration.
 
-The sharing process depends on how the provider party is hosted:
-
-- **Local party** (onboarded to the validator's wallet): the wallet app's
-  `CollectRewardsAndMergeAmuletsTrigger` performs the assignment and minting
-  automatically.
-
-- **External party** (hosted on the validator node with a minting delegation):
-  the `MintingDelegationCollectRewardsTrigger` performs the assignment and
-  minting. The external party must have an active
-  [minting delegation](/global-synchronizer/splice-fundamentals/rewards-minting).
-
-The validator node configuration format is the same for both cases.
+External parties must have an active
+[minting delegation](/global-synchronizer/splice-fundamentals/rewards-minting)
+to participate in reward sharing.
 
 ## Configuration
 
@@ -38,10 +29,11 @@ canton.validator-apps.validator_backend {
   reward-sharing-config-by-party = {
     # 30% -> charlie, 20% -> dave, remaining 50% stays with alice
     "alice::1220abc...def" = {
-      # shares coupons when 25h of lifetime remains,
-      # i.e., 11h after creation with the default 36h coupon TTL
+      # Minimum remaining coupon TTL before sharing is triggered (default: 30h).
+      # With the default 36h coupon TTL, 25h means sharing fires ~11h after creation.
       min-ttl-after-sharing = 25h
       beneficiaries = [
+        # percentage: fraction of reward in (0.0, 1.0]; provider keeps the remainder
         { beneficiary = "charlie::1220111...222", percentage = 0.3 },
         { beneficiary = "dave::1220333...444", percentage = 0.2 },
       ]
@@ -50,7 +42,7 @@ canton.validator-apps.validator_backend {
     # External party bob sends 100% of rewards to a treasury party
     "bob::1220bbb...ccc" = {
       min-ttl-after-sharing = 25h
-      # process at most 50 coupons per trigger run to limit transaction size
+      # Max coupons to share per trigger run (default: 100)
       batch-size = 50
       beneficiaries = [
         { beneficiary = "treasury::1220eee...fff", percentage = 1.0 },
@@ -59,21 +51,6 @@ canton.validator-apps.validator_backend {
   }
 }
 ```
-
-### RewardSharingConfig Properties
-
-| Property | Description | Default |
-|----------|-------------|---------|
-| `min-ttl-after-sharing` | Minimum remaining coupon TTL before sharing is triggered. Sharing is batched: all known coupons are shared when any coupon's remaining lifetime drops below this value. | 30 hours |
-| `beneficiaries` | List of `AppRewardBeneficiaryConfig` entries specifying parties to share rewards with and their percentages. | Empty (no sharing) |
-| `batch-size` | Maximum number of coupons to share or assign per trigger run. | 100 |
-
-### AppRewardBeneficiaryConfig Properties
-
-| Property | Description |
-|----------|-------------|
-| `beneficiary` | The party ID receiving the share. |
-| `percentage` | Fraction of the reward in (0.0, 1.0]. Per-party percentages must sum to at most 1.0. The provider keeps the remainder (1.0 minus the sum of all percentages). |
 
 ## Batched Sharing
 
