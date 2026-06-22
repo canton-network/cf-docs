@@ -11,26 +11,6 @@ introduces traffic-based app rewards, replacing the on-ledger
 computation based on actual network traffic. This provides more accurate and
 scalable reward accounting for featured app providers.
 
-The reward computation is split across two components on each SV node:
-
-1. The **Scan app** ingests traffic summaries from the sequencer alongside
-   mediator verdicts. For each transaction, it computes per-party app activity
-   weights — the sum of traffic costs for all transactions where a party was a
-   featured app provider in a given round. When a round closes, the Scan app
-   aggregates activity weights into per-party reward totals, applies the
-   minting allowance threshold defined in `RewardConfig`, and builds
-   a Merkle tree commitment of this round's app reward minting allowances.
-
-2. The **SV app** drives the on-ledger creation of
-   `Splice.Amulet.RewardCouponV2` contracts based on the data computed by
-   Scan. The `CalculateRewardsTrigger` reads the Merkle tree root hash from
-   Scan and confirms it on-ledger via the action-requiring-confirmation
-   workflow. Once a supermajority of SVs agree on the root hash, a
-   `Splice.Amulet.RewardAccountingV2.ProcessRewardsV2` contract is created.
-   The `ProcessRewardsTrigger` then expands the tree by reading batches from
-   Scan, creating `Splice.Amulet.RewardCouponV2` contracts for each eligible
-   party at the leaf nodes.
-
 ## Why Traffic-Based Rewards
 
 The previous reward mechanism relied on `Splice.Amulet.FeaturedAppActivityMarker`
@@ -93,6 +73,28 @@ for a specific party and round. They differ from
    use the coupon as a transfer input. These calls can be made directly
    against the Ledger API, or indirectly via custom Daml code deployed to
    the validator node.
+
+## How It Works
+
+The reward computation is split across two components on each SV node:
+
+1. The **Scan app** ingests traffic summaries from the sequencer alongside
+   mediator verdicts. For each transaction, it computes per-party app activity
+   weights — the sum of traffic costs for all transactions where a party was a
+   featured app provider in a given round. When a round closes, the Scan app
+   aggregates activity weights into per-party reward totals, applies the
+   minting allowance threshold defined in `RewardConfig`, and builds
+   a Merkle tree commitment of this round's app reward minting allowances.
+
+2. The **SV app** drives the on-ledger creation of
+   `Splice.Amulet.RewardCouponV2` contracts based on the data computed by
+   Scan. The `CalculateRewardsTrigger` reads the Merkle tree root hash from
+   Scan and confirms it on-ledger via the action-requiring-confirmation
+   workflow. Once a supermajority of SVs agree on the root hash, a
+   `Splice.Amulet.RewardAccountingV2.ProcessRewardsV2` contract is created.
+   The `ProcessRewardsTrigger` then expands the tree by reading batches from
+   Scan, creating `Splice.Amulet.RewardCouponV2` contracts for each eligible
+   party at the leaf nodes.
 
 ## Activation
 
