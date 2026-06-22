@@ -40,7 +40,7 @@ activity recording.
 | Reward contract | `Splice.Amulet.AppRewardCoupon` | `Splice.Amulet.RewardCouponV2` |
 | Timing | Immediate (same transaction) | Computed after round closes |
 | Computation | On-ledger per transaction | Off-ledger per round, batched |
-| Expiry | Round-based | Time-based (default 36 hours, configured via `RewardConfig.rewardCouponTimeToLive`) |
+| Expiry | Round-based | Time-based (default 36 hours, configured via `rewardCouponTimeToLive`) |
 | Scalability | One contract per transaction | One contract per party per round |
 | Reward sharing | Provider can create markers for beneficiaries | Provider can [assign beneficiaries](/global-synchronizer/splice-fundamentals/reward-sharing) before minting |
 
@@ -51,7 +51,7 @@ for a specific party and round. They differ from
 `Splice.Amulet.AppRewardCoupon` in several ways:
 
 - **Time-based expiry**: coupons expire after a configurable TTL
-  (`RewardConfig.rewardCouponTimeToLive`), rather than being tied to round
+  (`rewardCouponTimeToLive`), rather than being tied to round
   lifecycle. This allows beneficiaries to batch minting to save traffic
   costs.
 - **One per party per round**: instead of one coupon per transaction, there
@@ -59,6 +59,17 @@ for a specific party and round. They differ from
 - **Beneficiary assignment**: coupons support an optional `beneficiary` field
   for [reward sharing](/global-synchronizer/splice-fundamentals/reward-sharing).
   The provider can assign beneficiaries to share rewards before minting.
+
+### Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `dso` | `Party` | The DSO party. |
+| `provider` | `Party` | The party whose app activity earned the reward. |
+| `round` | `Round` | The round in which the provider's activity was recorded. |
+| `amount` | `Decimal` | The minting allowance for this coupon, denominated in Amulet. |
+| `expiresAt` | `Time` | When the coupon expires and can no longer be minted. |
+| `beneficiary` | `Optional Party` | The party that can mint the reward. If not set, defaults to the provider. |
 
 ### Minting
 
@@ -100,34 +111,24 @@ The reward computation is split across two components on each SV node:
 
 Traffic-based app rewards are controlled by the `rewardConfig` field in the
 network's `AmuletConfig`. SVs enable the feature by voting to set
-`RewardConfig.mintingVersion` to `RewardVersion_TrafficBasedAppRewards`. A
+`rewardConfigMintingVersion` to `RewardVersion_TrafficBasedAppRewards`. A
 dry-run mode is also available for verification before switching. See
-[SV Operations](/global-synchronizer/deployment/sv-operations) for the
-governance procedure.
+[SV Operations](/global-synchronizer/deployment/sv-operations#enabling-traffic-based-app-rewards)
+for the governance procedure.
 
-## Configuration
+## RewardConfig
 
-### Merkle Tree Batch Size
+The on-ledger `RewardConfig` type (defined in `Splice.AmuletConfig`) controls
+the traffic-based reward mechanism. SVs configure these fields via governance
+votes.
 
-`RewardConfig.batchSize` controls the maximum number of per-party reward
-entries in each leaf node of the Merkle tree (default: 100). The SV apps
-use this tree to confirm reward totals via BFT consensus: the
-`CalculateRewardsTrigger` confirms the root hash, and the
-`ProcessRewardsTrigger` expands the tree level by level, creating
-`Splice.Amulet.RewardCouponV2` contracts at the leaves.
-
-A larger batch size produces a shallower tree with fewer on-ledger
-transactions to expand, but each transaction is larger. A smaller batch
-size produces a deeper tree with more transactions, each processing fewer
-parties. The default of 100 balances transaction size against tree depth
-for typical network conditions.
-
-### Coupon Threshold
-
-`RewardConfig.appRewardCouponThreshold` sets a minimum reward amount in USD
-below which a party does not receive a `Splice.Amulet.RewardCouponV2` for
-that round. This prevents the creation of dust coupons for parties with
-minimal activity. The default threshold is 0.5 USD.
+| Field | Type | Description | Default |
+|-------|------|-------------|---------|
+| `mintingVersion` | `RewardVersion` | Which reward scheme to use for minting. Set to `RewardVersion_TrafficBasedAppRewards` to enable traffic-based rewards. | `RewardVersion_FeaturedAppMarkers` |
+| `dryRunVersion` | `Optional RewardVersion` | Which reward scheme to dry-run in parallel without minting. If `None`, dry-runs are disabled. | `None` |
+| `batchSize` | `Int` | Batch size for building the Merkle tree over minting allowances. | 100 |
+| `rewardCouponTimeToLive` | `RelTime` | TTL for `RewardCouponV2` coupons. Supports batching of collection across 12 hours with a 24-hour prepare-submission delay. | 36 hours |
+| `appRewardCouponThreshold` | `Decimal` | Minimum reward amount in USD below which no coupon is created for a party in a given round. Not enforced in Daml; applied when building the Merkle tree. | 0.5 USD |
 
 ## Further Reading
 
