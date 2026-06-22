@@ -53,17 +53,18 @@ def has_changes(paths: Sequence[str]) -> bool:
 
 
 def push_branch(branch: str) -> None:
+    branch_ref = f"refs/heads/{branch}"
     remote_output = git("ls-remote", "--heads", "origin", branch, capture=True)
     remote_sha = remote_output.split()[0] if remote_output else ""
     if remote_sha:
         git(
             "push",
-            f"--force-with-lease=refs/heads/{branch}:{remote_sha}",
+            f"--force-with-lease={branch_ref}:{remote_sha}",
             "origin",
-            f"HEAD:{branch}",
+            f"HEAD:{branch_ref}",
         )
     else:
-        git("push", "origin", f"HEAD:{branch}")
+        git("push", "origin", f"HEAD:{branch_ref}")
 
 
 def create_or_update_pull_request(

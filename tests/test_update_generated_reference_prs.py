@@ -430,3 +430,26 @@ def test_create_or_update_pull_request_signs_generated_commit(monkeypatch, tmp_p
     assert ("commit", "--signoff", "-m", "Update generated docs") in git_calls
     assert not any(call[:1] == ("switch",) for call in git_calls)
     assert any(call[:2] == ("pr", "create") for call in gh_calls)
+
+
+def test_push_branch_uses_full_ref_for_detached_head(monkeypatch) -> None:
+    load_script_module()
+    import generated_reference_pr_utils as pr_utils
+
+    git_calls: list[tuple[str, ...]] = []
+
+    def fake_git(*args: str, capture: bool = False) -> str:
+        git_calls.append(args)
+        if args[:3] == ("ls-remote", "--heads", "origin"):
+            return ""
+        return ""
+
+    monkeypatch.setattr(pr_utils, "git", fake_git)
+
+    pr_utils.push_branch("version-dashboard/update")
+
+    assert (
+        "push",
+        "origin",
+        "HEAD:refs/heads/version-dashboard/update",
+    ) in git_calls
