@@ -1,0 +1,36 @@
+name: Update version dashboard
+
+on:
+  schedule:
+    - cron: "23 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: update-version-dashboard
+  cancel-in-progress: false
+
+jobs:
+  update-version-dashboard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Nix
+        uses: cachix/install-nix-action@v31
+
+      - name: Set up direnv
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y direnv
+          direnv allow .
+
+      - name: Generate update pull requests
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 scripts/update_generated_reference_prs.py --targets all

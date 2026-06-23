@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -176,6 +177,51 @@ def openapi_operation_page_refs(openapi_path: Path) -> list[str]:
     return refs
 
 
+def mintlify_operation_slug(summary: str) -> str:
+    without_braced_params = re.sub(r"\{[^}]+}", "", summary)
+    return re.sub(r"[^A-Za-z0-9]+", "", without_braced_params).lower()
+
+
+def validate_openapi_operation_slug_uniqueness(
+    *,
+    docs_json_path: Path,
+    entries: list[tuple[str, str]],
+) -> None:
+    failures: list[str] = []
+    docs_root = docs_json_path.parent
+    for source, _directory in entries:
+        openapi_path = docs_root / source
+        spec = yaml.safe_load(openapi_path.read_text(encoding="utf-8"))
+        if not isinstance(spec, dict):
+            raise ValueError(f"Expected OpenAPI spec to parse as an object: {openapi_path}")
+        paths = spec.get("paths")
+        if not isinstance(paths, dict):
+            continue
+
+        slugs: dict[str, list[str]] = {}
+        for path, path_item in paths.items():
+            if not isinstance(path, str) or not isinstance(path_item, dict):
+                continue
+            for method, operation in path_item.items():
+                if method.lower() not in HTTP_METHODS or not isinstance(operation, dict):
+                    continue
+                summary = operation.get("summary")
+                if not isinstance(summary, str) or not summary.strip():
+                    continue
+                slug = mintlify_operation_slug(summary)
+                slugs.setdefault(slug, []).append(f"{method.upper()} {path}")
+        for slug, operations in slugs.items():
+            if len(operations) > 1:
+                failures.append(f"{source}: {slug}: {', '.join(operations)}")
+
+    if failures:
+        details = "\n".join(f"- {failure}" for failure in failures)
+        raise ValueError(
+            "Splice OpenAPI specs contain operations that collide under Mintlify operation slugging.\n"
+            f"{details}"
+        )
+
+
 def validate_openapi_operation_summaries(
     *,
     docs_json_path: Path,
@@ -252,6 +298,7 @@ def validate_splice_nav(*, source_config_path: Path = DEFAULT_SOURCE_CONFIG, doc
         details = "\n".join(f"- source={source} directory={directory}" for source, directory in missing)
         raise ValueError(f"Splice OpenAPI nav is missing configured entries:\n{details}")
     validate_openapi_operation_summaries(docs_json_path=docs_json_path, entries=expected_entries)
+    validate_openapi_operation_slug_uniqueness(docs_json_path=docs_json_path, entries=expected_entries)
     validate_explicit_openapi_nav_pages(
         docs_json_path=docs_json_path,
         top_group=top_group,
