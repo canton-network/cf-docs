@@ -44,13 +44,6 @@ def test_update_targets_cover_all_generated_doc_surfaces() -> None:
         "daml-standard-library",
         "typescript-bindings",
         "canton-metrics-reference",
-        "external-snippets-canton",
-        "external-snippets-cn-quickstart",
-        "external-snippets-daml",
-        "external-snippets-daml-shell",
-        "external-snippets-dpm",
-        "external-snippets-scribe",
-        "external-snippets-splice",
     ]
 
 
@@ -193,7 +186,6 @@ def test_generated_clean_paths_include_target_paths_and_internal_output() -> Non
     assert "docs-main/snippets/generated/version-dashboard-data.mdx" in clean_paths
     assert "docs-main/global-synchronizer/deployment/validator-kubernetes.mdx" in clean_paths
     assert "docs-main/global-synchronizer/reference/canton-metrics.mdx" in clean_paths
-    assert "docs-main/snippets/external/canton/main" in clean_paths
 
 
 def test_target_paths_exist_in_base_checkout() -> None:
@@ -267,28 +259,6 @@ def test_summarize_target_changes_supports_artifact_source_configs(monkeypatch, 
 
     assert module.summarize_target_changes(target, before) == [
         "Java ledger bindings:before.json:source-artifacts.json"
-    ]
-
-
-def test_summarize_target_changes_supports_external_snippet_sources(
-    monkeypatch, tmp_path: Path
-) -> None:
-    module = load_script_module()
-    target = next(target for target in module.UPDATE_TARGETS if target.key == "external-snippets-splice")
-    before = tmp_path / "before.json"
-    before.write_text("{}", encoding="utf-8")
-    monkeypatch.setattr(module, "REPO_ROOT", tmp_path)
-    after = tmp_path / target.summary_path
-    after.parent.mkdir(parents=True)
-    after.write_text('{"sources":[]}', encoding="utf-8")
-    monkeypatch.setattr(
-        module.summarize_version_changes,
-        "external_snippet_source_changes",
-        lambda config_path, *, target_key, label: [f"{label}:{target_key}:{config_path.name}"],
-    )
-
-    assert module.summarize_target_changes(target, before) == [
-        "Splice external snippets:splice:external-snippet-sources.json"
     ]
 
 
@@ -459,9 +429,9 @@ def test_create_or_update_pull_request_closes_stale_pr_when_no_changes(
     body_path.write_text("body", encoding="utf-8")
 
     pr_utils.create_or_update_pull_request(
-        title="Update Splice external snippets",
-        branch="generated-docs/external-snippets-splice/update",
-        paths=("docs-main/snippets/external/splice/main",),
+        title="Update generated docs",
+        branch="version-dashboard/update",
+        paths=("docs-main/snippets/generated/version-dashboard-data.mdx",),
         body_path=body_path,
         base_branch="remaining-generated-reference-pr-targets",
         repository="canton-network/cf-docs",

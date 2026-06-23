@@ -136,7 +136,7 @@ The following token permission must be configured on these tokens:
 
 * repository scope: External repositories
   * `hyperledger-labs/splice-wallet-kernel/`
-  * `digital-asset/canton`
+  * `DACH-NY/canton`
   * `digital-asset/daml`
   * `hyperledger-labs/splice`
   * TODO: finalize list

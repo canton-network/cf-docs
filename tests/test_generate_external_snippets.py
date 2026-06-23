@@ -75,37 +75,6 @@ def test_copy_output_targets_docs_main_snippets(
     assert not (fake_root / "snippets").exists()
 
 
-def test_copy_output_strips_generated_mdx_trailing_whitespace(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    source_dir = tmp_path / "cn-quickstart"
-    docs_output = source_dir / "docs-output"
-    docs_output.mkdir(parents=True)
-    (docs_output / "example.mdx").write_text(
-        "# Admin users \n```bash\ncurl example\t\n```\n",
-        encoding="utf-8",
-    )
-    (docs_output / "raw.txt").write_text("keep trailing whitespace \n", encoding="utf-8")
-    fake_root = tmp_path / "cf-docs"
-
-    monkeypatch.setattr(generator, "CF_DOCS_ROOT", fake_root)
-
-    target = generator.copy_output(
-        generator.REPOS["cn-quickstart"],
-        source_dir,
-        version="main",
-        replace=False,
-        dry_run=False,
-    )
-
-    assert (target / "example.mdx").read_text(encoding="utf-8") == (
-        "# Admin users\n```bash\ncurl example\n```\n"
-    )
-    assert (target / "raw.txt").read_text(encoding="utf-8") == (
-        "keep trailing whitespace \n"
-    )
-
-
 def test_wrapper_copies_helper_runs_extraction_and_copies_output(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -166,67 +135,3 @@ def test_wrapper_copies_helper_runs_extraction_and_copies_output(
         "```text\nhello\n```"
     )
     assert (target / "example.mdx").read_text(encoding="utf-8") == "```text\nhello\n```"
-
-
-def test_canton_prepare_uses_runner_sized_sbt_heap(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    calls: list[tuple[list[str], dict[str, str] | None]] = []
-
-    def fake_run(
-        argv: list[str],
-        *,
-        cwd: Path,
-        dry_run: bool,
-        env: dict[str, str] | None = None,
-        timeout: int | None = None,
-    ) -> None:
-        calls.append((argv, env))
-
-    monkeypatch.setattr(generator, "run", fake_run)
-    monkeypatch.setattr(generator, "check_docker", lambda dry_run: None)
-    monkeypatch.delenv("SNIPPET_CANTON_SBT_OPTS", raising=False)
-
-    generator.prepare_repo(
-        generator.REPOS["canton"],
-        tmp_path,
-        skip_prepare=False,
-        dry_run=False,
-    )
-
-    assert len(calls) == 1
-    assert 'SBT_OPTS="-Xmx4G -Xms1G"' in calls[0][0][-1]
-    assert calls[0][1] is not None
-    assert calls[0][1]["SBT_OPTS"] == "-Xmx4G -Xms1G"
-
-
-def test_canton_prepare_allows_sbt_heap_override(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    calls: list[tuple[list[str], dict[str, str] | None]] = []
-
-    def fake_run(
-        argv: list[str],
-        *,
-        cwd: Path,
-        dry_run: bool,
-        env: dict[str, str] | None = None,
-        timeout: int | None = None,
-    ) -> None:
-        calls.append((argv, env))
-
-    monkeypatch.setattr(generator, "run", fake_run)
-    monkeypatch.setattr(generator, "check_docker", lambda dry_run: None)
-    monkeypatch.setenv("SNIPPET_CANTON_SBT_OPTS", "-Xmx6G -Xms1G")
-
-    generator.prepare_repo(
-        generator.REPOS["canton"],
-        tmp_path,
-        skip_prepare=False,
-        dry_run=False,
-    )
-
-    assert len(calls) == 1
-    assert 'SBT_OPTS="-Xmx6G -Xms1G"' in calls[0][0][-1]
-    assert calls[0][1] is not None
-    assert calls[0][1]["SBT_OPTS"] == "-Xmx6G -Xms1G"

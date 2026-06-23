@@ -218,21 +218,6 @@ def artifact_source_config_changes(before_path: Path, after_path: Path, *, label
     return changes
 
 
-def external_snippet_source_changes(config_path: Path, *, target_key: str, label: str) -> list[str]:
-    config = load_json(config_path)
-    sources = object_items(config.get("sources"))
-    source = next((item for item in sources if item.get("key") == target_key), None)
-    if source is None:
-        return []
-    repository = source.get("repository")
-    ref = source.get("ref")
-    version = source.get("version")
-    details = f"{format_value(repository)}@{format_value(ref)}"
-    if version is not None:
-        details += f" -> output version {format_value(version)}"
-    return [f"- {label} source: {details}"]
-
-
 def print_changes(changes: list[str]) -> None:
     if changes:
         print("\n".join(changes))
@@ -273,13 +258,6 @@ def parse_args() -> argparse.Namespace:
     artifact_source_config.add_argument("before", type=Path)
     artifact_source_config.add_argument("after", type=Path)
     artifact_source_config.add_argument("--label", required=True)
-    external_snippet_source = subparsers.add_parser(
-        "external-snippet-source",
-        help="Summarize a configured external snippet source.",
-    )
-    external_snippet_source.add_argument("config", type=Path)
-    external_snippet_source.add_argument("--target-key", required=True)
-    external_snippet_source.add_argument("--label", required=True)
     return parser.parse_args()
 
 
@@ -295,14 +273,6 @@ def main() -> int:
         print_changes(versioned_source_config_changes(args.before, args.after, label=args.label))
     elif args.command == "artifact-source-config":
         print_changes(artifact_source_config_changes(args.before, args.after, label=args.label))
-    elif args.command == "external-snippet-source":
-        print_changes(
-            external_snippet_source_changes(
-                args.config,
-                target_key=args.target_key,
-                label=args.label,
-            )
-        )
     else:
         raise AssertionError(f"Unhandled command: {args.command}")
     return 0
