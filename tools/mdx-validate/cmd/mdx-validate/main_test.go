@@ -54,7 +54,7 @@ func TestRun_NonMDXFileIsDropped(t *testing.T) {
 }
 
 func TestRun_StrictPromotesWarnings(t *testing.T) {
-	// v0.1 has no warning-emitting validators, so this case is exercised
+	// No warning-emitting validators, so this case is exercised
 	// by Counts.HasBlockingErrors directly in runner_test.go. When a
 	// warning-emitting validator lands, expand this to invoke run() with
 	// a fixture that produces only warnings, both with and without

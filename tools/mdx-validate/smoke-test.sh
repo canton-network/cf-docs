@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Minimal smoke test for mdx-validate. Run from this directory after `make build`.
-# Verifies the binary handles the cases that matter for v0.1:
+# Verifies the binary handles:
 #   1. valid frontmatter passes (exit 0)
 #   2. missing title fails (exit 1)
 #   3. --version prints

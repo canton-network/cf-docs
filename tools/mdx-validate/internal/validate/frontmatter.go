@@ -12,13 +12,10 @@ import (
 )
 
 // FrontmatterValidator checks the YAML frontmatter block at the top of an
-// MDX file. v0.1 enforces:
+// MDX file. Enforces:
 //
 //   - The file must open with `---` and have a closing `---`.
 //   - The block must contain a non-empty `title:` value.
-//
-// Other Mintlify-known keys (description, sidebarTitle, icon, …) are not
-// required for v0.1 and may be added when a real docs-main case demands it.
 type FrontmatterValidator struct{}
 
 // Name implements Validator.
@@ -34,8 +31,7 @@ var reTitleLine = regexp.MustCompile(`(?m)^title:[ \t]*(.*?)[ \t]*$`)
 
 // Validate implements Validator.
 //
-// Known regex-parsing limitations (acceptable for v0.1; widen scope only
-// once a real false positive is observed in docs-main):
+// Known regex-parsing limitations:
 //   - Block scalars whose body contains a `title:` line (e.g. `description: |`
 //     followed by an indented `title:`) can match the inner string.
 //   - Duplicate `title:` keys (which YAML rejects as invalid) are accepted;
@@ -103,9 +99,9 @@ type frontmatterBlock struct {
 //   - (*block, nil) when a complete frontmatter block was found.
 //   - (nil, nil)    when no frontmatter is present (legitimate "missing" case).
 //   - (nil, err)    when the scanner fails (e.g. a single line longer than
-//                   the 1 MiB buffer). Callers should report this as a
-//                   distinct, attributable finding rather than confusing it
-//                   with a missing block.
+//     the 1 MiB buffer). Callers should report this as a
+//     distinct, attributable finding rather than confusing it
+//     with a missing block.
 func extractFrontmatterBlock(content []byte) (*frontmatterBlock, error) {
 	scanner := bufio.NewScanner(bytes.NewReader(content))
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)

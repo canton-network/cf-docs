@@ -12,7 +12,6 @@ import (
 	"strings"
 )
 
-// DefaultValidators returns the validators registered for v0.1.
 // New validators are added here as they land.
 func DefaultValidators() []Validator {
 	return []Validator{
@@ -194,7 +193,7 @@ func expandToMDXFiles(paths []string) ([]string, error) {
 
 // SkipPath reports whether a file path should be excluded from validation.
 //
-// v0.1 skips any file under a `snippets/` directory because Mintlify
+// Skips any file under a `snippets/` directory because Mintlify
 // snippets are reusable content fragments that don't have frontmatter by
 // design (they're meant to be embedded into pages with `<Snippet />`).
 // Validating them as standalone pages produces noise without value.

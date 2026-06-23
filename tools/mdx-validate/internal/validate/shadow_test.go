@@ -74,8 +74,6 @@ func TestLocalComponentNames(t *testing.T) {
 			wantPresent: []string{"Tooltip"},
 			wantAbsent:  []string{"networkData"},
 		},
-		// --- Pinned limitations: assert current behavior so a future change
-		// to shadow.go's regexes is a deliberate decision, not an accident. ---
 		{
 			name:       "type-only import is not matched (limitation)",
 			content:    "import type { Foo } from '/snippets/foo.mdx'\n",
