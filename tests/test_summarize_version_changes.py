@@ -171,3 +171,30 @@ def test_artifact_source_config_changes_summarizes_added_versions(tmp_path: Path
     assert module.artifact_source_config_changes(before, after, label="Java ledger bindings") == [
         "- Java ledger bindings com.daml:bindings-java versions: added 3.5.5"
     ]
+
+
+def test_external_snippet_source_changes_reports_configured_source(tmp_path: Path) -> None:
+    module = load_script_module()
+    config = tmp_path / "external-snippet-sources.json"
+    write_json(
+        config,
+        {
+            "sources": [
+                {
+                    "key": "splice",
+                    "label": "Splice external snippets",
+                    "repository": "canton-network/splice",
+                    "ref": "main",
+                    "version": "main",
+                }
+            ]
+        },
+    )
+
+    assert module.external_snippet_source_changes(
+        config,
+        target_key="splice",
+        label="Splice external snippets",
+    ) == [
+        "- Splice external snippets source: canton-network/splice@main -> output version main",
+    ]

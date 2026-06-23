@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 import tempfile
@@ -15,6 +16,7 @@ import summarize_version_changes
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+EXTERNAL_SNIPPET_CONFIG = REPO_ROOT / "config" / "generated-docs" / "external-snippet-sources.json"
 NETWORK_VARIABLE_TAB_PAGES = (
     "docs-main/appdev/deep-dives/token-standard.mdx",
     "docs-main/global-synchronizer/canton-console/console-overview.mdx",
@@ -49,6 +51,49 @@ class UpdateTarget:
     validation: tuple[str, ...]
     source_update_commands: tuple[tuple[str, ...], ...] = ()
     source_update_paths: tuple[str, ...] = ()
+
+
+def load_external_snippet_sources() -> tuple[dict[str, object], ...]:
+    payload = json.loads(EXTERNAL_SNIPPET_CONFIG.read_text(encoding="utf-8"))
+    sources = payload.get("sources") if isinstance(payload, dict) else None
+    if not isinstance(sources, list):
+        raise ValueError(f"Expected sources list in {EXTERNAL_SNIPPET_CONFIG}")
+    return tuple(source for source in sources if isinstance(source, dict))
+
+
+def external_snippet_targets() -> tuple[UpdateTarget, ...]:
+    targets: list[UpdateTarget] = []
+    for source in load_external_snippet_sources():
+        key = str(source["key"])
+        label = str(source["label"])
+        output_path = str(source["output_path"])
+        targets.append(
+            UpdateTarget(
+                key=f"external-snippets-{key}",
+                title=f"Update {label}",
+                branch=f"generated-docs/external-snippets-{key}/update",
+                description=(
+                    f"Updates the checked-in {label} from "
+                    f"{source['repository']}@{source['ref']}."
+                ),
+                generate_commands=(
+                    (
+                        "nix-shell",
+                        "--run",
+                        f"python3 scripts/generate_external_snippet_target.py --source-key {key}",
+                    ),
+                ),
+                paths=(output_path,),
+                summary_kind="external-snippet-source",
+                summary_path=str(EXTERNAL_SNIPPET_CONFIG.relative_to(REPO_ROOT)),
+                summary_label=label,
+                validation=(
+                    f"python3 scripts/generate_external_snippet_target.py --source-key {key}",
+                    "git diff --check",
+                ),
+            )
+        )
+    return tuple(targets)
 
 
 UPDATE_TARGETS = (
@@ -356,6 +401,7 @@ UPDATE_TARGETS = (
             "git diff --check",
         ),
     ),
+    *external_snippet_targets(),
 )
 
 
@@ -424,6 +470,14 @@ def summarize_target_changes(target: UpdateTarget, before_path: Path) -> list[st
         return summarize_version_changes.artifact_source_config_changes(
             before_path,
             after_path,
+            label=target.summary_label,
+        )
+    if target.summary_kind == "external-snippet-source":
+        if target.summary_label is None:
+            raise ValueError(f"Update target {target.key} must define summary_label")
+        return summarize_version_changes.external_snippet_source_changes(
+            after_path,
+            target_key=target.key.removeprefix("external-snippets-"),
             label=target.summary_label,
         )
     if target.summary_kind == "static":
