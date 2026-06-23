@@ -107,6 +107,7 @@ def close_stale_pull_request(
         existing_pr_number,
         "--repo",
         repository,
+        "--delete-branch",
         "--comment",
         f"Closing because the latest generated-docs automation run found no changes for {title}.",
     )

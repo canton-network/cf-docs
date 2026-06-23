@@ -468,6 +468,7 @@ def test_create_or_update_pull_request_closes_stale_pr_when_no_changes(
     )
 
     assert any(call[:2] == ("pr", "close") and call[2] == "825" for call in gh_calls)
+    assert any("--delete-branch" in call for call in gh_calls)
 
 
 def test_push_branch_uses_full_ref_for_detached_head(monkeypatch) -> None:
