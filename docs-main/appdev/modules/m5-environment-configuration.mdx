@@ -112,30 +112,169 @@ On DevNet, TestNet, and MainNet, your validator's auth provider issues tokens. T
 
 For gRPC clients, set the token as a call credential. For HTTP/JSON requests, include it in the `Authorization` header.
 
-## Overriding SDK Components (Advanced)
+{/* COPIED_END */}
 
-<Warning>
-This is an advanced topic. Override SDK components only with guidance from support in the context of a specific incident or compatibility issue.
-</Warning>
+### Dpm Components
 
-{/* COPIED_START source="docs-website:replicated/dpm/3.5/configuration.rst" hash="override-components" */}
+<Note>
+This functionality is available in DPM version 1.0.17 or later (or
+bundled with SDK 3.5.1 or later)
+</Note>
 
-`dpm` supports overriding individual SDK components for a single package or an entire multi-package project. In `daml.yaml`:
+`dpm` supports letting you be explicit about the active components it uses, and lets you specify them in a single and/or a
+multi-package project instead of relying on an sdk-version bundle.
 
-```yaml
-sdk-version: 3.4.9
-override-components:
-  damlc:
-    version: 3.4.0-snapshot.20251007.14274.0.ve2024cd6
+You can use components that are traditionally part of dpm SDKs, or components you create and publish to extend the CLI.  See [Publishing Components](/sdks-tools/cli-tools/dpm#publishing-components) to author your own extensions.
+
+#### SDK components
+
+The following components are available to be used in `components` by default:
+
+| Name | Description |
+| --- | --- |
+| canton-open-source | Canton open source sandbox / JAR |
+| codegen | Java and Typescript codegen |
+| damlc | The Daml compiler |
+| daml-new | Daml new project templates |
+| daml-script | Daml scripting and testing |
+| upgrade-check | Smart Contract Upgrade (SCU) checker |
+| scribe | Participant Query Store |
+| daml-shell | Shell to interact with the Participant Query Store |
+
+You can find out the available versions for each component in the [public da-images registry](https://console.cloud.google.com/artifacts/docker/da-images/europe/public?project=da-images),
+or by running `dpm tags` (see the [Listing tags](/sdks-tools/cli-tools/dpm.mdx#listing-available-tags-and-versions) docs for details)
+
+#### in single-package projects
+
+The following example shows how to specify a custom `foo` component,
+local `codegen-python` component, and a `damlc` default component without relying on an sdk-version:
+
+``` yaml
+# daml.yaml
+
+components:
+  # component "damlc" at version 3.5.2
+  - damlc:3.5.2
+
+  # custom component "foo" from an external registry
+  - oci://example.com/some/path/foo:1.2.3
+
+  # a codegen-python component present locally on the filesystem
+  - name: codegen-python
+    path: ../path/to/component/directory
 ```
 
-In `multi-package.yaml`, the same `override-components` block applies to all packages. When both files specify overrides, `dpm` applies `multi-package.yaml` overrides first, then `daml.yaml` overrides on top (giving `daml.yaml` the highest precedence).
+#### in multi-package projects
 
-Install overridden components with:
+For multi-package projects, you should specify the `components` yaml
+object in `multi-package.yaml`. This applies the specified components to
+all packages.
 
-<ExternalDpmMainDpmRstCodeDocsSrcPublicConfigurationShell223 />
+``` yaml
+# multi-package.yaml
 
-{/* COPIED_END */}
+packages:
+  - ./daml-pkg-1
+  - ./daml-pkg-2
+
+components:
+  - damlc:3.5.2
+
+  # adding component "foo"
+  - oci://example.com/some/path/foo:1.2.3@sha256:a1d6c42f8b80842b71c05152c20fb21e351666b9a07ee0d4e22dfe47ae9a3dbb
+
+  # component present locally on the filesystem
+  - name: codegen-java
+    path: ../path/to/component/directory
+```
+
+In multi-package projects, dpm gives precedence to `daml.yaml` components over the ones specified in `multi-package.yaml`
+
+So you can optionally also specify the `components` field in a package's individual `daml.yaml`, giving you the flexibility to have
+different components for different packages in the multi-package project.
+
+#### Adding and updating components via `dpm add` / `dpm update`
+
+<Note>
+`dpm add`, `dpm update`, and support for `oci://` components that have `@sha256` or rolling tags is available in DPM version 1.0.20 or later (or
+bundled with SDK 3.5.2 or later)
+</Note>
+
+You can add an `oci://` component to your project via:
+```shell
+dpm add component oci://example.com/some/path/foo:latest
+```
+This will install the component, and then add it to `daml.yaml` or `multi-package.yaml` for you:
+
+``` yaml
+components:
+  # added via `dpm add component`
+  - oci://example.com/some/path/foo:latest@sha256:a1d6c42f8b80842b71c05152c20fb21e351666b9a07ee0d4e22dfe47ae9a3dbb
+```
+
+To know what tags are available for a component, see [Listing tags](/sdks-tools/cli-tools/dpm.mdx#listing-available-tags-and-versions).
+
+To update project's components that use rolling tags (e.g. `:latest`), run:
+```shell
+dpm update
+```
+This will similarly install and update your `daml.yaml` / `multi-package.yaml`
+
+Currently, this feature only supports components that use fully-qualified URIs that begin with 'oci://` URIs.
+
+#### Installation
+
+Components specified in `components` must be installed by running
+
+``` shell
+dpm install package
+```
+
+in a directory containing the `daml.yaml` or `multi-package.yaml`
+
+<Warning>
+When using this Dpm Components feature, you should not specify
+`sdk-version` field in either your `multi-package.yaml` or `daml.yaml`
+files. Otherwise, you might get unintended results.
+</Warning>
+
+<Note>
+Beginning with SDK version 3.5, the `override-components` field has been
+removed in favor of the `components` field.
+</Note>
+
+
+### Remote Dars
+
+<Note>
+Support for remote dar dependencies from an OCI repository is available in DPM version `1.0.20` or later (or
+bundled with SDK `3.5.2` or later)
+</Note>
+
+You can add a dependency on a remote dar to your package using the `dpm add dar` command:
+```shell
+dpm add dar --data-dependencies oci://example.com/my/dars/my-package:1.2.3
+```
+or
+```shell
+dpm add dar --dependencies oci://example.com/some/my/dars/my-package:1.2.3
+```
+
+This will pull the dar and update your `daml.yaml`'s `dependencies` or `data-dependencies` field (see the [Building and Packaging](/appdev/modules/m3-building-packaging#how-to-depend-on-daml-packages) docs for details on these two fields)
+
+To know what tags are available for a dar, see [Listing tags](/sdks-tools/cli-tools/dpm.mdx#listing-available-tags-and-versions).
+
+To install any missing remote dars specified in your `daml.yaml`, you can run:
+```shell
+dpm install package
+```
+
+Also, you can update remote dars that have rolling tags (e.g. `:latest`) in your project via:
+```shell
+dpm update
+```
+
+See the docs section on [Publishing Dars](/sdks-tools/cli-tools/dpm#publishing-dars) to learn how to publish your own `oci://` dars
 
 ## Next Steps
 
