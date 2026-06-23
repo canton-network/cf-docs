@@ -7,6 +7,10 @@ from pathlib import Path
 from x2mdx.output import Block, BulletList, Heading, Page, Paragraph, RawMarkdown, Table
 
 
+def strip_trailing_whitespace(text: str) -> str:
+    return "\n".join(line.rstrip() for line in text.splitlines())
+
+
 def frontmatter_escape(value: str) -> str:
     return value.replace("\\", "\\\\").replace('"', '\\"')
 
@@ -40,7 +44,7 @@ def render_page(page: Page) -> str:
     body = "\n\n".join(part for part in body_parts if part)
     if body:
         lines.append(body)
-    return "\n".join(lines).rstrip() + "\n"
+    return strip_trailing_whitespace("\n".join(lines)).rstrip() + "\n"
 
 
 def write_page(page: Page, target: Path) -> Path:
