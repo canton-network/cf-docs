@@ -8,6 +8,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -31,6 +32,7 @@ class ExternalSnippetSource:
     requires_docker: bool = False
     requires_heavy_runner: bool = False
     skip_if_unavailable: bool = False
+    preserve_paths: tuple[str, ...] = ()
 
 
 class SourceUnavailableError(RuntimeError):
@@ -46,6 +48,9 @@ def load_sources(config_path: Path) -> tuple[ExternalSnippetSource, ...]:
     for item in items:
         if not isinstance(item, dict):
             continue
+        preserve_paths = item.get("preserve_paths", [])
+        if not isinstance(preserve_paths, list) or not all(isinstance(path, str) for path in preserve_paths):
+            raise ValueError(f"preserve_paths must be a list of strings for external snippet source: {item}")
         try:
             sources.append(
                 ExternalSnippetSource(
@@ -59,6 +64,7 @@ def load_sources(config_path: Path) -> tuple[ExternalSnippetSource, ...]:
                     requires_docker=bool(item.get("requires_docker", False)),
                     requires_heavy_runner=bool(item.get("requires_heavy_runner", False)),
                     skip_if_unavailable=bool(item.get("skip_if_unavailable", False)),
+                    preserve_paths=tuple(preserve_paths),
                 )
             )
         except KeyError as error:
@@ -159,22 +165,68 @@ def generate_source(source: ExternalSnippetSource, *, cache_dir: Path, dry_run: 
         raise
     allow_direnv(checkout, dry_run=dry_run)
     check_docker(source, dry_run=dry_run)
-    run(
-        [
-            sys.executable,
-            str(REPO_ROOT / "scripts" / "generate_external_snippets.py"),
-            source.repo_arg,
-            "--source-dir",
-            str(checkout),
-            "--copy-output",
-            "--replace-output",
-            "--version",
-            source.version,
-            "--fetch",
-        ],
-        cwd=REPO_ROOT,
-        dry_run=dry_run,
-    )
+    with preserved_output_paths(source, dry_run=dry_run):
+        run(
+            [
+                sys.executable,
+                str(REPO_ROOT / "scripts" / "generate_external_snippets.py"),
+                source.repo_arg,
+                "--source-dir",
+                str(checkout),
+                "--copy-output",
+                "--replace-output",
+                "--version",
+                source.version,
+                "--fetch",
+            ],
+            cwd=REPO_ROOT,
+            dry_run=dry_run,
+        )
+
+
+class preserved_output_paths:
+    def __init__(self, source: ExternalSnippetSource, *, dry_run: bool) -> None:
+        self.source = source
+        self.dry_run = dry_run
+        self.temp_dir: tempfile.TemporaryDirectory[str] | None = None
+        self.saved: list[tuple[Path, Path]] = []
+
+    def __enter__(self) -> None:
+        if self.dry_run or not self.source.preserve_paths:
+            return
+        target_root = REPO_ROOT / self.source.output_path
+        self.temp_dir = tempfile.TemporaryDirectory()
+        backup_root = Path(self.temp_dir.name)
+        for relative in self.source.preserve_paths:
+            if Path(relative).is_absolute() or ".." in Path(relative).parts:
+                raise ValueError(f"Invalid preserve path for {self.source.key}: {relative}")
+            source_path = target_root / relative
+            if not source_path.exists():
+                continue
+            backup_path = backup_root / relative
+            backup_path.parent.mkdir(parents=True, exist_ok=True)
+            if source_path.is_dir():
+                shutil.copytree(source_path, backup_path)
+            else:
+                shutil.copy2(source_path, backup_path)
+            self.saved.append((source_path, backup_path))
+
+    def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
+        try:
+            for source_path, backup_path in self.saved:
+                source_path.parent.mkdir(parents=True, exist_ok=True)
+                if source_path.exists():
+                    if source_path.is_dir():
+                        shutil.rmtree(source_path)
+                    else:
+                        source_path.unlink()
+                if backup_path.is_dir():
+                    shutil.copytree(backup_path, source_path)
+                else:
+                    shutil.copy2(backup_path, source_path)
+        finally:
+            if self.temp_dir is not None:
+                self.temp_dir.cleanup()
 
 
 def parse_args() -> argparse.Namespace:

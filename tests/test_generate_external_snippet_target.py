@@ -40,6 +40,7 @@ def test_load_sources_reads_external_snippet_manifest() -> None:
     assert sources[0].requires_heavy_runner is True
     assert next(source for source in sources if source.key == "daml-shell").skip_if_unavailable is True
     assert next(source for source in sources if source.key == "scribe").skip_if_unavailable is True
+    assert next(source for source in sources if source.key == "splice").preserve_paths == ("common",)
 
 
 def test_generate_source_clones_checks_out_and_delegates_to_wrapper(
@@ -174,6 +175,59 @@ def test_generate_source_runs_heavy_runner_source_with_opt_in(
     module.generate_source(source, cache_dir=tmp_path, dry_run=False)
 
     assert any(call[:2] == ("git", "ls-remote") for call in calls)
+
+
+def test_generate_source_preserves_configured_output_paths(
+    monkeypatch, tmp_path: Path
+) -> None:
+    module = load_script_module()
+    fake_root = tmp_path / "cf-docs"
+    monkeypatch.setattr(module, "REPO_ROOT", fake_root)
+    target = fake_root / "docs-main" / "snippets" / "external" / "splice" / "main"
+    preserved = target / "common" / "kms-config-aws.mdx"
+    stale = target / "stale-generated.mdx"
+    preserved.parent.mkdir(parents=True)
+    preserved.write_text("authored wrapper", encoding="utf-8")
+    stale.write_text("stale", encoding="utf-8")
+
+    source = module.ExternalSnippetSource(
+        key="splice",
+        label="Splice external snippets",
+        repository="canton-network/splice",
+        ref="main",
+        version="main",
+        repo_arg="splice",
+        output_path="docs-main/snippets/external/splice/main",
+        preserve_paths=("common",),
+    )
+    calls: list[tuple[str, ...]] = []
+
+    def fake_run(command: list[str], *, cwd: Path, dry_run: bool = False) -> str:
+        calls.append(tuple(command))
+        if command[:2] == ["git", "clone"]:
+            checkout = Path(command[-1])
+            (checkout / ".git").mkdir(parents=True)
+        if (
+            len(command) >= 3
+            and command[1] == str(fake_root / "scripts" / "generate_external_snippets.py")
+            and command[2] == "splice"
+        ):
+            import shutil
+
+            shutil.rmtree(target)
+            target.mkdir(parents=True)
+            (target / "fresh-generated.mdx").write_text("fresh", encoding="utf-8")
+        return ""
+
+    monkeypatch.setattr(module, "run", fake_run)
+    monkeypatch.setattr(module, "allow_direnv", lambda checkout, *, dry_run: None)
+    monkeypatch.setattr(module, "check_docker", lambda source, *, dry_run: None)
+
+    module.generate_source(source, cache_dir=tmp_path / "cache", dry_run=False)
+
+    assert preserved.read_text(encoding="utf-8") == "authored wrapper"
+    assert (target / "fresh-generated.mdx").read_text(encoding="utf-8") == "fresh"
+    assert not stale.exists()
 
 
 def test_generate_source_fails_required_unavailable_source(monkeypatch, tmp_path: Path) -> None:
