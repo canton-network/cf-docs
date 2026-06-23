@@ -515,6 +515,12 @@ def process_target(*, target: UpdateTarget, base_sha: str, base_branch: str, rep
 
     if target.source_update_commands and not pr_utils.has_changes(target.source_update_paths):
         print(f"Source unchanged for {target.title}; skipping generation")
+        pr_utils.close_stale_pull_request(
+            title=target.title,
+            branch=target.branch,
+            base_branch=base_branch,
+            repository=repository,
+        )
         return
 
     for command in target.generate_commands:

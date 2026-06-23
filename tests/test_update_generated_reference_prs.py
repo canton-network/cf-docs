@@ -83,6 +83,11 @@ def test_source_update_targets_skip_generation_when_source_is_unchanged(monkeypa
     monkeypatch.setattr(module, "reset_to_base", lambda base_sha: calls.append(("reset", base_sha)))
     monkeypatch.setattr(module.pr_utils, "write_base_file", lambda base_sha, path: Path("/tmp/before.json"))
     monkeypatch.setattr(module.pr_utils, "has_changes", lambda paths: False)
+    monkeypatch.setattr(
+        module.pr_utils,
+        "close_stale_pull_request",
+        lambda **kwargs: calls.append(("close", kwargs["branch"])),
+    )
     monkeypatch.setattr(module, "create_or_update_pull_request", lambda **kwargs: calls.append(("pr",)))
 
     def fake_run(command: tuple[str, ...]) -> None:
@@ -100,6 +105,7 @@ def test_source_update_targets_skip_generation_when_source_is_unchanged(monkeypa
     assert calls == [
         ("reset", "base-sha"),
         ("nix-shell", "--run", "npm run update:generated-reference-sources -- --source wallet-gateway-openrpc"),
+        ("close", "generated-references/wallet-gateway-openrpc/update"),
     ]
 
 
@@ -430,6 +436,38 @@ def test_create_or_update_pull_request_signs_generated_commit(monkeypatch, tmp_p
     assert ("commit", "--signoff", "-m", "Update generated docs") in git_calls
     assert not any(call[:1] == ("switch",) for call in git_calls)
     assert any(call[:2] == ("pr", "create") for call in gh_calls)
+
+
+def test_create_or_update_pull_request_closes_stale_pr_when_no_changes(
+    monkeypatch, tmp_path: Path
+) -> None:
+    load_script_module()
+    import generated_reference_pr_utils as pr_utils
+
+    gh_calls: list[tuple[str, ...]] = []
+
+    monkeypatch.setattr(pr_utils, "has_changes", lambda paths: False)
+
+    def fake_gh(*args: str, capture: bool = False) -> str:
+        gh_calls.append(args)
+        if args[:2] == ("pr", "list"):
+            return "825"
+        return ""
+
+    monkeypatch.setattr(pr_utils, "gh", fake_gh)
+    body_path = tmp_path / "body.md"
+    body_path.write_text("body", encoding="utf-8")
+
+    pr_utils.create_or_update_pull_request(
+        title="Update Splice external snippets",
+        branch="generated-docs/external-snippets-splice/update",
+        paths=("docs-main/snippets/external/splice/main",),
+        body_path=body_path,
+        base_branch="remaining-generated-reference-pr-targets",
+        repository="canton-network/cf-docs",
+    )
+
+    assert any(call[:2] == ("pr", "close") and call[2] == "825" for call in gh_calls)
 
 
 def test_push_branch_uses_full_ref_for_detached_head(monkeypatch) -> None:
