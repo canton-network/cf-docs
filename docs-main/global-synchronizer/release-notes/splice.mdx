@@ -3,6 +3,56 @@ title: "Splice"
 description: "Release notes and version history for Global Synchronizer software"
 ---
 
+## 0.6.9
+
+  - Deployment
+
+      - Helm Charts
+
+          - All Helm charts now support overriding full image names.
+            It is possible to override the default image names using new Helm values.
+            This change helps deployments that require specific naming conventions for images.
+
+      - Docker Images
+
+          - All Splice web UI Docker images have been updated to use the latest nginx-unprivileged base image,
+            and switched to the version based on alpine-slim, to improve security and reduce image size.
+
+  - Daml
+
+      - Add a ``transferPreapprovalBaseDuration`` configuration parameter which defines the duration of a ``TransferPreapproval`` that can be requested or renewed for free
+        as the traffic costs already cover the costs sufficiently. This parameter defaults to 90 days. This allows creating a preapproval just using the free traffic rate
+        which allows bootstrapping a new validator by creating a preapproval and then purchasing CC from an exchange.
+
+        See [CIP 119](https://github.com/canton-foundation/cips/blob/main/cip-0119/cip-0119.md) for more details.
+
+      - Set ``sponsor = validator`` in ``ValidatorLicense`` contracts
+        for new validators and ones that report liveness through
+        ``ValidatorLicense_ReportActive``. This change was made to
+        reduce some confusion around the sponsor having a special role
+        for a validator after the initial onboarding.
+
+      - Limit the maximal amount that can be tapped in a single transaction to 100M CC
+        to avoid problems in downstream processing of very large total supply amounts.
+
+      - These changes require a Daml upgrade to the following versions:
+
+
+        | name | version |
+        | :--- | :--- |
+        | amulet | 0.1.20 |
+        | amuletNameService | 0.1.21 |
+        | dsoGovernance | 0.1.26 |
+        | validatorLifecycle | 0.1.7 |
+        | wallet | 0.1.21 |
+        | walletPayments | 0.1.20 |
+
+
+  - Scan and SV UI
+
+      - Remove the ``sponsor`` field from the validator license list as it is redundant with the Daml change to set ``sponsor = validator``.
+
+
 ## 0.6.8
 
   - Deployment
@@ -521,7 +571,7 @@ Note: 0.6.0 was skipped as it introduced a regression where the SV UI governance
   No change is required for apps that build against the `token_standard` or `featured_app_activity_markers_api`.
 
 
-  - Restrict `AmuletConfig` to not allow fees as part of [CIP 107](https://github.com/canton-foundation/cips/blob/main/cip-0107/cip-0107.md). This has no functional effect as [CIP 78](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0078/cip-0078.md) set the fees to zero already.
+  - Restrict `AmuletConfig` to not allow fees as part of [CIP 107](https://github.com/canton-foundation/cips/blob/main/cip-0107/cip-0107.md). This has no functional effect as [CIP 78](https://github.com/canton-foundation/cips/blob/main/cip-0078/cip-0078.md) set the fees to zero already.
 
     This also disables the choice `AmuletRules_ComputeFees` as it always returned 0. Application providers that statically link against `splice-amulet` will need to remove usages of this choice when recompiling against the new `splice-amulet` version.
 
@@ -780,7 +830,7 @@ Validator node operators are not affected by this requirement, as the change onl
   - `canton.scan-apps.scan-app.acs-store-descriptor-user-version` and `canton.scan-apps.scan-app.tx-log-store-descriptor-user-version` configuration settings have been added to set a `user-version`, respectively for the ACS and TxLog store. Modifying the `user-version` wipes the respective store and triggers re-ingestion. See the SV Operations docs for more details.
   - Added a new external endpoint `GET /v0/unclaimed-development-fund-coupons` to retrieve all active unclaimed development fund coupon contracts.
 - Daml
-  - Implement minting delegation described as part of [CIP-0073 - Weighted Validator Liveness Rewards for SV-Chosen Parties](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0073/cip-0073.md). See the minting delegations section for details.
+  - Implement minting delegation described as part of [CIP-0073 - Weighted Validator Liveness Rewards for SV-Chosen Parties](https://github.com/canton-foundation/cips/blob/main/cip-0073/cip-0073.md). See the minting delegations section for details.
 
     - New templates have been added in the `splice-wallet` package:
       - **MintingDelegationProposal**: Represents a proposal from beneficiary to the delegate to create a `MintingDelegation`.
@@ -842,7 +892,7 @@ Daml:
 > - Sequencer connections
 > - Fixed an issue in the sequencer connection logic in splice 0.5.6 that resulted in participants randomly crashing and restarting.
 > - Daml
-> - Implement Daml changes for [CIP-0082 - Establish a 5% Development Fund (Foundation-Governed)](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0082/cip-0082.md):
+> - Implement Daml changes for [CIP-0082 - Establish a 5% Development Fund (Foundation-Governed)](https://github.com/canton-foundation/cips/blob/main/cip-0082/cip-0082.md):
 >
 > > - New templates:
 > >   - **UnclaimedDevelopmentFundCoupon**: Represents unallocated Development Fund entitlements created per issuance round. Coupons are owned by the DSO, have no expiry, and serve as accounting instruments. ACS size is managed through merging rather than expiration.
@@ -961,7 +1011,7 @@ Note: 0.5.2 mistakingly introduced default pruning for Canton participants and s
 ## 0.5.0
 
 <Warning>
-Upgrade to Canton 3.4: This upgrade requires a Synchronizer Migration with Downtime and cannot be applied through a regular upgrade. For details refer to the approved [CIP](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0089/cip-0089.md) as well as the respective documentation pages for validators and SVs.
+Upgrade to Canton 3.4: This upgrade requires a Synchronizer Migration with Downtime and cannot be applied through a regular upgrade. For details refer to the approved [CIP](https://github.com/canton-foundation/cips/blob/main/cip-0089/cip-0089.md) as well as the respective documentation pages for validators and SVs.
 </Warning>
 
 - Deployment
@@ -1010,7 +1060,7 @@ Note: 0.4.24 was published incorrectly and should be skipped in favor of 0.4.25.
 ## 0.4.22
 
 - SV
-  - Improve throughput of `FeaturedAppActivityMarkerTrigger`, which converts `FeaturedAppActivityMarker` contracts to `AppRewardCoupon` contracts as described in [CIP-0047 Featured App Activity Markers](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0047/cip-0047.md). The new implementation uses larger batches (100 markers by default, instead of 5) and parallelizes their execution (by default up to 4x). The work is split between different SVs in a way that completely avoids contention when there are not too many (by default 10k) markers, and that minimizes contention using random sampling of batches when the automation is in catchup mode because there are too many markers. Catchup mode only triggers when one or more of the SVs failed to convert the markers assigned to them for too long.
+  - Improve throughput of `FeaturedAppActivityMarkerTrigger`, which converts `FeaturedAppActivityMarker` contracts to `AppRewardCoupon` contracts as described in [CIP-0047 Featured App Activity Markers](https://github.com/canton-foundation/cips/blob/main/cip-0047/cip-0047.md). The new implementation uses larger batches (100 markers by default, instead of 5) and parallelizes their execution (by default up to 4x). The work is split between different SVs in a way that completely avoids contention when there are not too many (by default 10k) markers, and that minimizes contention using random sampling of batches when the automation is in catchup mode because there are too many markers. Catchup mode only triggers when one or more of the SVs failed to convert the markers assigned to them for too long.
 
 ## 0.4.21
 
@@ -1061,7 +1111,7 @@ Note: 0.4.24 was published incorrectly and should be skipped in favor of 0.4.25.
 >   - Deployment
 >     - Remove CPU limits from the helm charts for `scan`, `mediator` and `sequencer` apps. This should avoid issues with cpu scheduling that might lead to performance degradations.
 >   - UI
->     - When updating the `AmuletRules` config, the UI will omit any transfer fee steps with value zero from the `AmuletRules` config stored on-ledger. Thereby making the `AmuletRules` contract smaller and saving traffic for transactions using it. This is motivated by [CIP-0078 CC Fee Removal](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0078/cip-0078.md) .
+>     - When updating the `AmuletRules` config, the UI will omit any transfer fee steps with value zero from the `AmuletRules` config stored on-ledger. Thereby making the `AmuletRules` contract smaller and saving traffic for transactions using it. This is motivated by [CIP-0078 CC Fee Removal](https://github.com/canton-foundation/cips/blob/main/cip-0078/cip-0078.md) .
 >
 > - Canton and SDK:
 >
@@ -1074,7 +1124,7 @@ Note: 0.4.24 was published incorrectly and should be skipped in favor of 0.4.25.
 > - Daml
 >   - release `splice-util-featured-app-proxies-1.1.0` with support for a `WalletUserProxy`, which simplifies the creation of featured app activity markers for wallet app providers when their users engage in token standard workflows.
 >
->   - Implement Daml changes for [CIP-0079 - Demonstrate Third-Party Price Feed Integration for CC Listing](https://github.com/global-synchronizer-foundation/cips/pull/101/files):
+>   - Implement Daml changes for [CIP-0079 - Demonstrate Third-Party Price Feed Integration for CC Listing](https://github.com/canton-foundation/cips/pull/101/files):
 >
 >     > These Daml changes require an upgrade to the following Daml versions:
 >     >
@@ -1108,7 +1158,7 @@ Note: 0.4.24 was published incorrectly and should be skipped in favor of 0.4.25.
 </Warning>
 
 - Daml
-  - Implement Daml changes for [CIP-0078 - CC Fee Removal](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0078/cip-0078.md):
+  - Implement Daml changes for [CIP-0078 - CC Fee Removal](https://github.com/canton-foundation/cips/blob/main/cip-0078/cip-0078.md):
 
     > - Change all Amulet transfers to not charge holding fees on inputs.
     > - Fix a bug in the `ensure` clause of `AmuletRules` that prevented setting the Amulet transfer fees to zero.
@@ -1239,7 +1289,7 @@ Note: 0.4.24 was published incorrectly and should be skipped in favor of 0.4.25.
 - Daml
   - Deprecate Daml choices related to DSO delegate elections.
 
-  - Implements [CIP-0068 - Bootstrap network from non-zero round](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0068/cip-0068.md) Now the first SV can specify a non-zero initial round that can be used on network initialization or resets.
+  - Implements [CIP-0068 - Bootstrap network from non-zero round](https://github.com/canton-foundation/cips/blob/main/cip-0068/cip-0068.md) Now the first SV can specify a non-zero initial round that can be used on network initialization or resets.
 
     > These Daml changes requires an upgrade to the following Daml versions:
     >
@@ -1386,7 +1436,7 @@ Note: 0.4.6 had a bug and should be skipped in favor of 0.4.7 which fixed a bug 
 
   This release contains two sets of Daml changes that build upon each other:
 
-  1.  Implement [CIP-0064 - Delegateless Automation](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0064/cip-0064.md)
+  1.  Implement [CIP-0064 - Delegateless Automation](https://github.com/canton-foundation/cips/blob/main/cip-0064/cip-0064.md)
 
       These Daml changes requires an upgrade to the following Daml versions:
 
@@ -1399,7 +1449,7 @@ Note: 0.4.6 had a bug and should be skipped in favor of 0.4.7 which fixed a bug 
       | wallet             | 0.1.9   |
       | walletPayments     | 0.1.9   |
 
-  2.  Implement [CIP-0066 - Mint Canton Coin from Unminted/Unclaimed Pool](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0066/cip-0066.md) and fix security issues and suggestions raised by Quantstamp as part of their [audit of the Splice codebase](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0057/cip-0057.md#abstract). Note that the backend and frontend changes from CIP 66 are not yet implemented so we recommend holding off on upgrading to the new Daml models for now.
+  2.  Implement [CIP-0066 - Mint Canton Coin from Unminted/Unclaimed Pool](https://github.com/canton-foundation/cips/blob/main/cip-0066/cip-0066.md) and fix security issues and suggestions raised by Quantstamp as part of their [audit of the Splice codebase](https://github.com/canton-foundation/cips/blob/main/cip-0057/cip-0057.md#abstract). Note that the backend and frontend changes from CIP 66 are not yet implemented so we recommend holding off on upgrading to the new Daml models for now.
 
       > - CC-1 (low severity): addressed by rate limiting every SV wrt casting votes on a `VoteRequest` and updating their `AmuletPriceVote` to defend against them causing undue contention, which would block other SVs from voting, closing the vote, or advancing the mining rounds.
       >
@@ -1517,11 +1567,11 @@ Note: 0.4.6 had a bug and should be skipped in favor of 0.4.7 which fixed a bug 
 ## 0.4.0
 
 <Warning>
-- Upgrade to Canton 3.3: This upgrade requires a Hard Synchronizer migration and cannot be applied through a regular helm upgrade. For details refer to the [CIP draft](https://github.com/global-synchronizer-foundation/cips/pull/66).
+- Upgrade to Canton 3.3: This upgrade requires a Hard Synchronizer migration and cannot be applied through a regular helm upgrade. For details refer to the [CIP draft](https://github.com/canton-foundation/cips/pull/66).
 </Warning>
 
 - Daml
-  - Implement [CIP 47](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0047/cip-0047.md) and [CIP 56](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0056/cip-0056.md).
+  - Implement [CIP 47](https://github.com/canton-foundation/cips/blob/main/cip-0047/cip-0047.md) and [CIP 56](https://github.com/canton-foundation/cips/blob/main/cip-0056/cip-0056.md).
 
     This requires an upgrade to the following Daml versions:
 
@@ -1589,7 +1639,7 @@ Note: 0.4.6 had a bug and should be skipped in favor of 0.4.7 which fixed a bug 
 
   - The `splice-util-lib`\` helm chart is no longer published. The library has always been packaged with every helm chart that uses it, there is no need to pull it separately from the ghcr.io container registry.
 
-- Implement [Canton Improvement Proposal cip-0051](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0051/cip-0051.md)
+- Implement [Canton Improvement Proposal cip-0051](https://github.com/canton-foundation/cips/blob/main/cip-0051/cip-0051.md)
 
   > - Added the optional `targetEffectiveAt` field to the `VoteRequest` template, which allows specifying an effective date and time for the vote request. Additionally, the `DsoRules_CloseVoteRequest` now enforces the new semantics for vote requests that include an effective date and time.
   >
