@@ -20,8 +20,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CACHE_DIR = REPO_ROOT / ".internal" / "cache" / "canton-metrics-reference"
 DEFAULT_CANTON_DIR = DEFAULT_CACHE_DIR / "repos" / "canton"
 DEFAULT_OUTPUT = REPO_ROOT / "docs-main" / "global-synchronizer" / "reference" / "canton-metrics.mdx"
-DEFAULT_REMOTE = "https://github.com/DACH-NY/canton.git"
-DEFAULT_RELEASE_REPO = "DACH-NY/canton"
+DEFAULT_REMOTE = "https://github.com/digital-asset/canton.git"
+DEFAULT_RELEASE_REPO = "digital-asset/canton"
 METRICS_RST = Path("docs-open/src/sphinx/participant/reference/metrics.rst")
 GENERATED_INCLUDES_DIR = Path("docs-open/target/generated")
 USER_AGENT = "cf-docs-canton-metrics-reference/1.0"
@@ -152,11 +152,12 @@ def run_generation(*, canton_dir: Path, command: list[str], skip_direnv: bool) -
     if generated.exists():
         shutil.rmtree(generated)
     generated.mkdir(parents=True, exist_ok=True)
+    command_without_ci = ["env", "-u", "CI", *command]
     if skip_direnv or not (canton_dir / ".envrc").exists() or not shutil.which("direnv"):
-        run(command, cwd=canton_dir)
+        run(command_without_ci, cwd=canton_dir)
         return
     allow_direnv(canton_dir)
-    run(["direnv", "exec", str(canton_dir), *command], cwd=canton_dir)
+    run(["direnv", "exec", str(canton_dir), *command_without_ci], cwd=canton_dir)
 
 
 def resolve_generated_includes(template: str, *, generated_dir: Path) -> str:
@@ -193,7 +194,7 @@ def convert_rst_to_mdx(rst: str, *, source_ref: str) -> str:
         "",
         (
             "{/* GENERATED_FROM "
-            f'source="DACH-NY/canton" ref="{source_ref}" '
+            f'source="digital-asset/canton" ref="{source_ref}" '
             f'path="{METRICS_RST.as_posix()}" */}}'
         ),
         "",

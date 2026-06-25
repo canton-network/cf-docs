@@ -9,7 +9,7 @@ from typing import cast
 import yaml
 
 from x2mdx.jvm_docs.lifecycle import version_key
-from x2mdx.jvm_docs.models import JvmDocArtifactSource, JvmDocVersionSource, JVM_DOC_OBJECT_STATUSES
+from x2mdx.jvm_docs.models import JvmDocArtifactSource, JvmDocVersionSource
 from x2mdx.types import JsonObject, JsonValue
 
 
@@ -28,32 +28,6 @@ def load_jvm_doc_manifest(path: Path) -> JsonObject:
     if not isinstance(artifacts, list):
         raise ValueError("JVM doc manifest must include an `artifacts` list")
     return cast(JsonObject, data)
-
-
-def load_jvm_doc_status_manifest(path: Path) -> dict[str, str]:
-    data = _load_data(path)
-    if not isinstance(data, dict):
-        raise ValueError("JVM doc status manifest must be a JSON/YAML object")
-
-    raw_types = data.get("types")
-    if not isinstance(raw_types, dict):
-        raise ValueError("JVM doc status manifest must include a `types` mapping")
-
-    statuses: dict[str, str] = {}
-    for symbol, payload in raw_types.items():
-        if not isinstance(symbol, str) or not symbol.strip():
-            raise ValueError(f"JVM doc status manifest contains a non-string type key: {path}")
-        if not isinstance(payload, dict):
-            raise ValueError(f"JVM doc status entry must be an object for {symbol}: {path}")
-        status = payload.get("status")
-        if not isinstance(status, str) or status not in JVM_DOC_OBJECT_STATUSES:
-            allowed = ", ".join(sorted(JVM_DOC_OBJECT_STATUSES))
-            raise ValueError(
-                f"JVM doc status for {symbol} must be one of {allowed}: {path}"
-            )
-        statuses[symbol] = status
-
-    return statuses
 
 
 def load_jvm_doc_sources(
@@ -75,7 +49,6 @@ def load_jvm_doc_sources(
         language = entry.get("language")
         versions = entry.get("versions")
         include_prefixes = entry.get("include_prefixes") or []
-        status_manifest = entry.get("status_manifest")
         if not isinstance(group, str) or not group:
             continue
         if not isinstance(artifact, str) or not artifact:
@@ -107,10 +80,6 @@ def load_jvm_doc_sources(
         if not version_sources:
             continue
 
-        type_statuses: dict[str, str] = {}
-        if isinstance(status_manifest, str) and status_manifest:
-            type_statuses = load_jvm_doc_status_manifest((root / status_manifest).resolve())
-
         version_sources.sort(key=lambda source: version_key(source.version))
         artifact_sources.append(
             JvmDocArtifactSource(
@@ -119,7 +88,6 @@ def load_jvm_doc_sources(
                 language=language,
                 include_prefixes=[str(prefix) for prefix in include_prefixes if isinstance(prefix, str)],
                 versions=version_sources,
-                type_statuses=type_statuses,
             )
         )
 
