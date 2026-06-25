@@ -135,6 +135,68 @@ components: {}
     }
 
 
+def test_splice_openapi_normalizes_path_summaries_for_mintlify_operation_slugs(tmp_path: Path) -> None:
+    module = load_script_module("generate_splice_mintlify_openapi.py")
+    source = b"""openapi: 3.0.3
+paths:
+  /registry/metadata:
+    get:
+      summary: /registry/metadata
+  /registry/metadata/{token-id}:
+    post:
+      summary: /registry/metadata/{token-id}
+  /registry/descriptive:
+    get:
+      summary: Descriptive operation label
+  /registry/missing/{token-id}:
+    get:
+      operationId: getMissing
+components: {}
+"""
+
+    rendered = module.render_output_bytes(
+        spec_filename="token.yaml",
+        spec_bytes=source,
+        output_path=tmp_path / "token.yaml",
+    ).decode("utf-8")
+
+    assert '      summary: "GET /registry/metadata"' in rendered
+    assert '      summary: "POST /registry/metadata/:token-id"' in rendered
+    assert "      summary: Descriptive operation label" in rendered
+    assert '      summary: "GET /registry/missing/:token-id"' in rendered
+
+
+def test_splice_openapi_validator_rejects_mintlify_operation_slug_collisions(tmp_path: Path) -> None:
+    module = load_script_module("validate_splice_mintlify_openapi_nav.py")
+    openapi_path = tmp_path / "docs-main" / "openapi" / "splice" / "token-standard" / "token.yaml"
+    openapi_path.parent.mkdir(parents=True, exist_ok=True)
+    openapi_path.write_text(
+        """openapi: 3.0.3
+paths:
+  /registry/metadata:
+    get:
+      summary: /registry/metadata
+  /registry/metadata/{token-id}:
+    post:
+      summary: /registry/metadata/{token-id}
+components: {}
+""",
+        encoding="utf-8",
+    )
+
+    try:
+        module.validate_openapi_operation_slug_uniqueness(
+            docs_json_path=tmp_path / "docs-main" / "docs.json",
+            entries=[("openapi/splice/token-standard/token.yaml", "reference/splice-token")],
+        )
+    except ValueError as error:
+        assert "collide under Mintlify operation slugging" in str(error)
+        assert "GET /registry/metadata" in str(error)
+        assert "POST /registry/metadata/{token-id}" in str(error)
+    else:
+        raise AssertionError("Expected Mintlify slug collision validation to fail")
+
+
 def test_splice_openapi_nav_updates_product_navigation_and_preserves_existing_pages(
     tmp_path: Path,
 ) -> None:
