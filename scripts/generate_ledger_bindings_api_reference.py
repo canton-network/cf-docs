@@ -378,7 +378,6 @@ def build_manifest(
         language = artifact_entry.get("language")
         versions = artifact_entry.get("versions")
         include_prefixes = artifact_entry.get("include_prefixes") or []
-        status_manifest = artifact_entry.get("status_manifest")
         if not isinstance(group, str) or not group:
             continue
         if not isinstance(artifact, str) or not artifact:
@@ -419,11 +418,6 @@ def build_manifest(
                 "artifact": artifact,
                 "language": language,
                 "include_prefixes": [prefix for prefix in include_prefixes if isinstance(prefix, str)],
-                **(
-                    {"status_manifest": str((source_config_path.parent / status_manifest).resolve())}
-                    if isinstance(status_manifest, str) and status_manifest
-                    else {}
-                ),
                 "versions": version_entries,
             }
         )

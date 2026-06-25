@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-JVM_DOC_OBJECT_STATUSES = frozenset({"alpha", "beta", "stable", "deprecated"})
-
 
 @dataclass(frozen=True)
 class JvmDocVersionSource:
@@ -20,7 +18,6 @@ class JvmDocArtifactSource:
     language: str
     include_prefixes: list[str] = field(default_factory=list)
     versions: list[JvmDocVersionSource] = field(default_factory=list)
-    type_statuses: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
