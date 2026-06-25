@@ -14,6 +14,10 @@ from scripts import generate_canton_metrics_reference as generator
 
 
 class CantonMetricsReferenceTests(unittest.TestCase):
+    def test_defaults_use_public_canton_source(self) -> None:
+        self.assertEqual(generator.DEFAULT_RELEASE_REPO, "digital-asset/canton")
+        self.assertEqual(generator.DEFAULT_REMOTE, "https://github.com/digital-asset/canton.git")
+
     def test_resolve_generated_includes(self) -> None:
         with TemporaryDirectory() as tmp:
             generated_dir = Path(tmp)
@@ -52,6 +56,7 @@ class CantonMetricsReferenceTests(unittest.TestCase):
 
         mdx = generator.convert_rst_to_mdx(rst, source_ref="v1.2.3")
 
+        self.assertIn('source="digital-asset/canton"', mdx)
         self.assertIn('ref="v1.2.3"', mdx)
         self.assertIn("# Metrics", mdx)
         self.assertIn("[relevant Prometheus documentation](https://prometheus.io/docs/tutorials/understanding_metric_types/)", mdx)
@@ -63,6 +68,37 @@ class CantonMetricsReferenceTests(unittest.TestCase):
     def test_unresolved_generatedinclude_is_rejected(self) -> None:
         with self.assertRaisesRegex(ValueError, "generatedinclude"):
             generator.convert_rst_to_mdx(".. generatedinclude:: metrics.inc\n", source_ref="v1.2.3")
+
+    def test_run_generation_unsets_ci_for_canton_docs_generator(self) -> None:
+        with TemporaryDirectory() as tmp:
+            canton_dir = Path(tmp)
+            (canton_dir / ".envrc").write_text("use nix\n", encoding="utf-8")
+            calls: list[tuple[list[str], Path | None]] = []
+            original_run = generator.run
+            original_which = generator.shutil.which
+            try:
+                generator.run = lambda command, cwd=None, capture=False: calls.append((command, cwd)) or ""
+                generator.shutil.which = lambda name: "/usr/bin/direnv" if name == "direnv" else None
+
+                generator.run_generation(
+                    canton_dir=canton_dir,
+                    command=["sbt", "docs-open / generateIncludes"],
+                    skip_direnv=False,
+                )
+            finally:
+                generator.run = original_run
+                generator.shutil.which = original_which
+
+        self.assertEqual(
+            calls,
+            [
+                (["direnv", "allow"], canton_dir),
+                (
+                    ["direnv", "exec", str(canton_dir), "env", "-u", "CI", "sbt", "docs-open / generateIncludes"],
+                    canton_dir,
+                ),
+            ],
+        )
 
 
 if __name__ == "__main__":
