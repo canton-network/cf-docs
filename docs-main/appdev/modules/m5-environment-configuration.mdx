@@ -121,12 +121,28 @@ This functionality is available in dpm version 1.0.17 or later (or
 bundled with SDK 3.5.1 or later)
 </Note>
 
-`dpm` supports letting you be explicit about the active components it uses, and lets you specify them in a single and/or a
+`dpm` supports letting you be explicit about the default and optional `dpm` components used, and lets you specify them in a single and/or a
 multi-package project instead of relying on an sdk-version bundle.
 
-You can use components that are traditionally part of dpm SDKs, or components you create and publish to extend the CLI.  See [Publishing Components](/sdks-tools/cli-tools/dpm#publishing-components) to author your own extensions.
+You can use _default components_ that are traditionally part of dpm SDKs, or _optional components_ you create and publish to extend the CLI.  See [Publishing Components](/sdks-tools/cli-tools/dpm#publishing-components) to author your own extensions.
 
-The following is an example illustrating the use of explicit components to use in a single-package project `daml.yaml`:
+You can find out the available versions for components in the [public da-images registry](https://console.cloud.google.com/artifacts/docker/da-images/europe/public?project=da-images),
+or by running `dpm tags` (see the [Listing tags](/sdks-tools/cli-tools/dpm#listing-available-tags-and-versions-in-an-oci-repository) docs for details)
+
+Example of using `dpm tags` to find the avaliable versions of `damlc` in the [public da-images registry](https://console.cloud.google.com/artifacts/docker/da-images/europe/public?project=da-images):
+
+```shell
+dpm tags oci://europe-docker.pkg.dev/da-images/public/components/damlc
+3.5.2
+3.5.2.darwin_amd64
+3.5.2.darwin_arm64
+3.5.2.linux_amd64
+3.5.2.linux_arm64
+3.5.2.windows_amd64
+...
+```
+
+The following is an example illustrating the use of explicitly specifying default components to use in a `daml.yaml` project file which can be used to pin default component:
 ``` yaml
 # daml.yaml
 
@@ -137,7 +153,7 @@ components:
   - daml-script:3.5.2
 ```
 
-The following is an example illustrating the use of explicit components to use in a multi-package project `multi-package.yaml`:
+The following is an example illustrating the use of explicitly specifying default components to use in a multi-package project `multi-package.yaml` which would implicitly be used by all the downstream Daml projects:
 ``` yaml
 # multi-package.yaml
 
@@ -154,7 +170,7 @@ components:
 
 #### SDK components
 
-The following components are available to be used in `components` by default:
+The following components that are bundled by default can be explicitly specified:
 
 | Name | Description |
 | --- | --- |
@@ -167,8 +183,6 @@ The following components are available to be used in `components` by default:
 | scribe | Participant Query Store |
 | daml-shell | Shell to interact with the Participant Query Store |
 
-You can find out the available versions for each component in the [public da-images registry](https://console.cloud.google.com/artifacts/docker/da-images/europe/public?project=da-images),
-or by running `dpm tags` (see the [Listing tags](/sdks-tools/cli-tools/dpm.mdx#listing-available-tags-and-versions) docs for details)
 
 #### in single-package projects
 
@@ -185,7 +199,7 @@ components:
   - daml-script:3.5.2
 ```
 
-- Specifying a component from an external registry
+- Specifying a component from an external OCI registry
 ``` yaml
 # daml.yaml
 
@@ -230,7 +244,29 @@ components:
     path: ../path/to/component/directory
 ```
 
-In multi-package projects, dpm gives precedence to `daml.yaml` components over the ones specified in `multi-package.yaml`
+In multi-package projects, dpm gives precedence to `daml.yaml` components over the ones specified in `multi-package.yaml`. In the following example:
+
+``` yaml
+# multi-package.yaml
+
+packages:
+  - ./daml-pkg-1
+
+components:
+  # adding default components damlc and daml-script
+  - damlc:3.5.1
+  - daml-script:3.5.1
+```
+
+``` yaml
+# ./daml-pkg-1/daml.yaml
+
+components:
+  # adding default components damlc and daml-script
+  - damlc:3.5.2
+```
+The project in the `./daml-pkg-1` directory will use `damlc:3.5.2` instead of the `damlc:3.5.1` specified in the parent `multi-package.yaml`
+
 
 You can optionally also specify the `components` field in a package's individual `daml.yaml`, giving you the flexibility to have
 different components for different packages in the multi-package project.
@@ -267,13 +303,13 @@ components:
   - oci://example.com/some/path/foo:latest@sha256:a1d6c42f8b80842b71c05152c20fb21e351666b9a07ee0d4e22dfe47ae9a3dbb
 ```
 
-To know what tags are available for a component, see [Listing tags](/sdks-tools/cli-tools/dpm.mdx#listing-available-tags-and-versions).
+To know what tags are available for a component, see [Listing tags](/sdks-tools/cli-tools/dpm#listing-available-tags-and-versions-in-an-oci-repository).
 
-To update project's components that use rolling tags (e.g. `:latest`), run:
+To update a project's components that use rolling tags (e.g. `:latest`), run:
 ```shell
 dpm update
 ```
-This will similarly install and update your `daml.yaml` / `multi-package.yaml`
+This will similarly install and update your `daml.yaml` / `multi-package.yaml`, as well as applying/updating SHAs, by making changes to the file and saving the file
 
 Example configuration before running `dpm update` with a rolling tag specified:
 ``` yaml
@@ -320,7 +356,7 @@ or components in your multi-package.yaml or daml.yaml files, but not both simult
 
 <Note>
 Beginning with SDK version 3.5, the `override-components` field has been
-removed in favor of the `components` field.
+deprecated in favor of the `components` field.
 </Note>
 
 
@@ -339,7 +375,7 @@ components:
   - daml-script:3.5.2
 ```
 
-You can add a dependency on a dar stored in an OCI repository using the `dpm add dar` command:
+You can add a dependency on a dar stored in an OCI repository using the `dpm add dar` command using a specified version or rolling tag (ie. my-package:latest):
 ```shell
 dpm add dar --dependencies oci://example.com/my/dars/my-package:1.2.3
 ```
@@ -372,7 +408,7 @@ components:
 
 This will pull the dar and update your `daml.yaml`'s `dependencies` or `data-dependencies` field (see the [Building and Packaging](/appdev/modules/m3-building-packaging#how-to-depend-on-daml-packages) docs for details on these two fields)
 
-To know what tags are available for a dar, see [Listing tags](/sdks-tools/cli-tools/dpm.mdx#listing-available-tags-and-versions).
+To know what version tags are available for a dar, see [Listing tags](/sdks-tools/cli-tools/dpm#listing-available-tags-and-versions-in-an-oci-repository).
 
 To install any missing remote dars specified in your `daml.yaml`, you can run:
 ```shell
@@ -384,7 +420,7 @@ Also, you can update remote dars that have rolling tags (e.g. `:latest`) in your
 dpm update
 ```
 
-See the docs section on [Publishing Dars](/sdks-tools/cli-tools/dpm#publishing-dars) to learn how to publish your own `oci://` dars
+See the docs section on [Publishing Dars](/sdks-tools/cli-tools/dpm#publishing-dars-to-an-oci) to learn how to publish your own `oci://` dars
 
 ## Next Steps
 
