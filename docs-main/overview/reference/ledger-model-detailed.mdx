@@ -10,7 +10,7 @@ import LedgerModelSimpleDvPREVERTPROPOSAL from '/snippets/daml-docs/ledger-model
 
 
 
-{/* COPIED_START source="docs-website:docs/replicated/daml/3.4/overview/explanations/ledger-model/ledger-structure.rst" hash="52f080a2" */}
+{/* COPIED_START source="docs-website:docs/replicated/daml/3.5/overview/explanations/ledger-model/ledger-structure.rst" hash="a180a0ec" */}
 
 # Structure
 
@@ -194,7 +194,7 @@ This workflow gives rise to the ledger shown below with four commits:
 
 - In the first commit, Bank 1 requests the creation of the `SimpleAsset` of `1 EUR` issued to Alice (contract \#1).
 - In the second commit, Bank 2 requests the creation of the `SimpleAsset` of `1 USD` issued to Bob (contract \#2).
-- In the thrid commit, Alice requests the creation of the `SimpleDvpPoposal` (contract \#3).
+- In the third commit, Alice requests the creation of the `SimpleDvpPoposal` (contract \#3).
 - In the forth commit, Bob requests to exercise the `AcceptAndSettle` choice on the DvP proposal.
 
 <img src="/images/docs_website/dvp-ledger.svg" className="align-center" alt="The sequence of commits for the whole DvP workflow. First, banks 1 and 2 issue the assets, then Alice proposes the DvP, and finally Bob accepts and settles it." />
@@ -209,360 +209,711 @@ As the Ledger is a DAG, one can always extend the order into a linear sequence v
 {/* COPIED_END */}
 
 
-{/* COPIED_START source="docs-website:docs/replicated/daml/3.4/overview/explanations/ledger-model/ledger-validity.rst" hash="3710723f" */}
-
-# Valid Ledgers
-
-At the core is the concept of a *valid ledger*; changes are permissible if adding the corresponding commit to the ledger results in a valid ledger. **Valid ledgers** are those that fulfill three conditions:
-
-`da-model-consistency`
-Exercises and fetches on inactive contracts are not allowed, i.e. contracts that have not yet been created or have already been consumed by an exercise. A contract with a contract key can be created only if the key is not associated to another unconsumed contract, and all key assertions hold.
-
-`da-model-conformance`
-Only a restricted set of actions is allowed on a given contract.
-
-`da-model-authorization`
-The parties who may request a particular change are restricted.
-
-Only the last of these conditions depends on the party (or parties) requesting the change; the other two are general.
-
-
-{/* COPIED_END */}
-
-
-{/* COPIED_START source="docs-website:docs/replicated/daml/3.4/overview/explanations/ledger-model/ledger-integrity.rst" hash="c93dba12" */}
+{/* COPIED_START source="docs-website:docs/replicated/daml/3.5/overview/explanations/ledger-model/ledger-integrity.rst" hash="e441af8b" */}
 
 # Integrity
 
-This section addresses the question of who can request which changes.
+The section on the [ledger structure](#structure) section answered the question “What does the Ledger looks like?” by introducing a hierarchical format to record the party interactions as changes to the Ledger.
+The section on [privacy](#privacy) answered the question “Who sees which changes and data?” by introducing projections.
+This section addresses the question "Who can request which changes?" by defining which ledgers are valid.
 
-To answer the next question, "who can request which changes", a precise definition is needed of which ledgers are permissible, and which are not. For example, the above paint offer ledger is intuitively permissible, while all of the following ledgers are not.
+## Overview
 
-<figure>
-<img src="/images/docs_website/double-spend.svg" className="align-center" alt="./images/double-spend.svg" />
-<figcaption>Alice spending her IOU twice ("double spend"), once transferring it to `B` and once to `P`.</figcaption>
-</figure>
+At the core is the concept of a *valid ledger*: a change is permissible if adding the corresponding commit to the ledger results in a valid ledger.
+**Valid ledgers** are those that fulfill three conditions, which are introduced formally below:
 
-<figure>
-<img src="/images/docs_website/non-conformant-action.svg" id="alice-changes-offer" className="align-center" alt="./images/non-conformant-action.svg" />
-<figcaption>Alice changing the offer's outcome by removing the transfer of the `Iou`.</figcaption>
-</figure>
+- [Consistency](#consistency):
+  A consistent Ledger does not allow exercises and fetches on inactive contracts;
+  that is, they cannot act on contracts that have not yet been created or that have already been consumed by an exercise.
 
-<figure>
-<img src="/images/docs_website/invalid-obligation.svg" id="obligation-imposed-on-painter" className="align-center" alt="./images/invalid-obligation.svg" />
-<figcaption>An obligation imposed on the painter without his consent.</figcaption>
-</figure>
+- [Conformance](#conformance):
+  A conformant Ledger contains only actions that are allowed by the smart contract logic of the created or used contract.
+  In Daml, templates define this smart contract logic.
 
-<figure>
-<img src="/images/docs_website/stealing-ious.svg" id="painter-stealing-ious" className="align-center" alt="./images/stealing-ious.svg" />
-<figcaption>Painter stealing Alice's IOU. Note that the ledger would be intuitively permissible if it was Alice performing the last commit.</figcaption>
-</figure>
+- [Authorization](#authorization):
+  In a well-authorized Ledger, the requesters of a change encompass the required authorizers as defined via the controllers and signatories.
 
-<figure>
-<img src="/images/docs_website/failed-key-assertion.svg" id="alice-claiming-retracted-offer" className="align-center" alt="./images/failed-key-assertion.svg" />
-<figcaption>Painter falsely claiming that there is no offer.</figcaption>
-</figure>
+[Validity](#validity) is defined as the conjunction of these three conditions.
+Later sections add further validity conditions as they increase the expressivity of the Ledger Model.
 
-<figure>
-<img src="/images/docs_website/double-key-creation.svg" id="painter-creating-two-offers-with-same-key" className="align-center" alt="./images/double-key-creation.svg" />
-<figcaption>Painter trying to create two different paint offers with the same reference number.</figcaption>
-</figure>
+For example, the [running example of the DvP workflow](#ledger) is a good example for a non-trivial Ledger that satisfies all validity conditions.
+However, it is instructive to look at examples that violate some validity condition,
+to gain intuition for why they are defined as they are.
+
+## Consistency violation example
+In this example, Alice tries to transfer her asset twice ("double spend"): once to Bob and once to Charlie,
+as shown in the following Daml script excerpt.
+This script is expected to fail at runtime, because it violates consistency.
+
+```haskell
+let eurAsset = SimpleAsset with
+      issuer = bank
+      owner = alice
+      asset = "1 EUR"
+aliceEur <- submit bank do createCmd eurAsset
+
+bobEur <- submit alice $ do
+  exerciseCmd aliceEur $ Transfer with
+    newOwner = bob
+
+carolEur <- submit alice $ do
+  exerciseCmd aliceEur $ Transfer with
+    newOwner = carol
+pure ()
+```
+
+The corresponding Canton ledger looks as shown below.
+This ledger violates the consistency condition because contract #1 is the input to two consuming exercise nodes,
+one in `TX 1` and one in `TX 2`.
+
+{/* https://lucid.app/lucidchart/9fb12975-8d57-4f73-9c81-0154879c3cc9/edit */}
+![An inconsistent ledger where Alice double-spends her asset](/images/docs_website/asset-double-spend.svg)
+
+## Conformance violation example
+
+In the example below, the last transaction `TX 4` omits one leg of the [DvP workflow](#running-workflow-example):
+Bob exercises the `Settle` choice, but it has only one subaction, namely Alice transferring her IOU.
+This violates conformance because the `Settle` [choice body](#running-workflow-example) of a `SimpleDvP` specifies via the two `exercise` calls that there are always two consequences.
+(This situation cannot be expressed as a Daml script scenario
+because Daml script ensures that all generated transactions conform to the Daml code.)
+
+{/* https://lucid.app/lucidchart/30be82bc-9d5c-4531-b7ff-3762eaa0a72d/edit */}
+![A non-conformant ledger where one leg of the DvP settlement is missing](/images/docs_website/dvp-ledger-one-leg-only.svg)
+
+## Authorization violation examples
+
+Next, we give three examples that show different kinds of authorization violations.
+
+### Unauthorized transfer
+
+First, Alice attempts to steal Bob's asset by requesting a transfer in his name.
+This results in an authorization failure because for `TX 1` the actor of the exercise root action differs from the requester.
+
+```haskell
+let usdAsset = SimpleAsset with
+      issuer = bank
+      owner = bob
+      asset = "1 USD"
+bobUsd <- submit bank $ do createCmd usdAsset
+
+aliceUsd <- submit alice $ do
+  exerciseCmd bobUsd $ Transfer with
+      newOwner = alice
+```
+
+{/* https://lucid.app/lucidchart/c26ab5f9-b2e2-4ed5-82d4-2af02fec2edc/edit */}
+![A ledger where Alice submits a transaction where Bob exercises the transfer choice on his asset](/images/docs_website/asset-steal.svg)
+
+### Skip the propose-accept workflow
+
+Next, Bob wants to skip the propose-accept workflow for creating the `SimpleDvP` contract and instead creates it out of nowhere and immediately settles it.
+This must be treated as an authorization failure, as Alice did not consent to swapping her EUR asset against Bob's USD asset.
+
+```haskell
+let eurAsset = SimpleAsset with
+      issuer = bank1
+      owner = alice
+      asset = "1 EUR"
+eur <- submit bank1 do createCmd eurAsset
+
+let usdAsset = SimpleAsset with
+      issuer = bank2
+      owner = bob
+      asset = "1 USD"
+usd <- submit bank2 do createCmd usdAsset
+
+let dvp = SimpleDvP with
+      party1 = alice
+      party2 = bob
+      asset1 = eur
+      asset2 = usd
+(newUsd, newEur) <- submit bob $ do
+   createAndExerciseCmd dvp $ Settle with actor = bob
+```
+
+On the ledger, the first root action of `TX 2` is not properly authorized
+because Alice is a signatory of the contract #3 created in the first root action even though she did not request the update.
+
+{/* https://lucid.app/lucidchart/cd2cef11-6f69-4f9c-8e1e-d79488547de2/edit */}
+![A ledger with an authorization violation on the creation of the DvP contract](/images/docs_website/dvp-ledger-create-auth-failure.svg)
+
+### Allocate someone else's asset
+
+The final example shows that authorization failures may not only happen at root actions.
+Here, Alice allocates Carol's CHF asset in the DvP proposal.
+When Bob tries to settle the DvP, the Exercise to transfer Carol's asset in the first leg is not properly authorized
+because Carol did not agree to have her asset transferred away.
+
+```haskell
+let chfAsset = SimpleAsset with
+      issuer = bank1
+      owner = carol
+      asset = "1 CHF"
+chf <- submit bank1 do createCmd chfAsset
+disclosedChf <- fromSome <$> queryDisclosure carol chf
+
+let usdAsset = SimpleAsset with
+      issuer = bank2
+      owner = bob
+      asset = "1 USD"
+usd <- submit bank2 do createCmd usdAsset
+
+proposeDvP <- submit alice $ do
+  createCmd ProposeSimpleDvP with
+     proposer = alice
+     counterparty = bob
+     allocated = chf
+     expected = usdAsset
+
+(newUsd, newEur) <- submit (actAs bob <> disclose disclosedChf) $ do
+    exerciseCmd proposeDvP $ AcceptAndSettle with toBeAllocated = usd
+```
+
+The ledger produced by this script has an authorization failure for the Exercise node on contract #1:
+The transaction structure provides no evidence that the actor Carol has agreed to exercising the `Transfer` choice on her asset.
+
+{/* https://lucid.app/lucidchart/50e2ad7a-ef88-4fb8-bf62-44027034a3dd/edit */}
+![A ledger with an authorization failure where Alice allocates Carol's asset to her DvP with Bob](/images/docs_website/dvp-ledger-nested-auth-error.svg)
+
+## Interaction with projection
+
+Apart from introducing the validity notion, this page also discusses how validity interacts with privacy, which is defined via [projection](#projection).
+To that end, the sections on the different validity conditions analyse the prerequisites under what the following two properties hold:
+
+- **Preservation**: If the Ledger adheres to a condition, then so do the projections.
+  This property ensures that a valid Ledger does not appear as invalid to individual parties,
+  just because they are not privy to all actions on the Ledger.
+
+- **Reflection**: If the projections adhere to a condition, then so does the Ledger from which these projections were obtained.
+  This property ensures that the condition can be implemented by the distributed Canton protocol
+  where nobody sees the Ledger as a whole.
 
 ## Consistency
 
-Consistency consists of two parts:
+Consistency can be summarized in one sentence:
+Contracts must be created before they are used, and they cannot be used after they are consumed.
+This section introduces the notions that are needed to make this precise:
 
-1.  Contract consistency: Contracts must be created before they are used, and they cannot be used once they are consumed.
-2.  Key consistency: Keys are unique and key assertions are satisfied.
+- The [execution order](#execution-order) defines the notions of "before" and "after".
 
-To define this precisely, notions of "before" and "after" are needed. These are given by putting all actions in a sequence. Technically, the sequence is obtained by a pre-order traversal of the ledger's actions, noting that these actions form an (ordered) forest. Intuitively, it is obtained by always picking parent actions before their proper subactions, and otherwise always picking the actions on the left before the actions on the right. The image below depicts the resulting order on the paint offer example:
+- [Internal consistency](#internal-consistency) ensures that all the operations on a contract happen in the expected order of creation, usage, archival,
+  but does not require that all contracts are created; they may be merely referenced as inputs.
 
-<img src="/images/docs_website/consistency-order-on-actions.svg" className="align-center" style={{width: "100.0%"}} alt="The time sequence of commits. In the first commit, Iou Bank A is requested by the bank. In the second, PaintOffer P A P123 is requested by P. In the last commit, requested by A, Exe A (PaintOffer P A P123) leads to Exe A (Iou Bank A) leads to Iou Bank P leads to PaintAgree P A P123" />
+- [(Contract) Consistency](#definition-1) strengthens internal consistency in that all used contracts must also have been created.
 
-In the image, an action `act` happens before action `act'` if there is a (non-empty) path from `act` to `act'`. Then, `act'` happens after `act`.
+## Execution order
 
-### Contract Consistency
+The meaning of "before" and "after" is given by establishing an execution order on the [nodes](#definition) of a ledger.
+The ledger's graph structure already defines a [happens-before order](#ledger) on ledger commits.
+The execution order extends this happens-before order to all the nodes within the commits' transactions
+so that "before" and "after" are also defined for the nodes of a single transaction.
+This is necessary because a contract can be created and used multiple times within a transaction.
+In the `AcceptAndSettle` [action of the DvP example](#subactions), for example,
+contract #3 is used twice (once in the non-consuming exercise at the root and once consumingly in the first consequence)
+and contract #4 is created and consumed in the same action.
 
-Contract consistency ensures that contracts are used after they have been created and before they are consumed.
+**Definition: execution order**
 
-<div id="def-contract-consistency">
+For two distinct nodes n₁ and n₂ within the same action or transaction, n₁ **executes before** n₂
+if n₁ appears before n₂ in the [preorder traversal](https://en.wikipedia.org/wiki/Tree_traversal#Pre-order,_NLR) of the (trans)action, noting that the transaction is an ordered forest.
+For a ledger, every node in commit c₁ **executes before** every node in commit c₂
+if the commit c₁ happens before c₂.
 
-Definition »contract consistency«
-A ledger is **consistent for a contract c** if all of the following holds for all actions `act` on \`c\`:
+Diagrammatically, the execution order is given by traversing the trees from root to leaf and left to right:
+the node of a parent action executes before the nodes in the subactions, and otherwise the nodes on the left precede the nodes on the right.
+For example, the following diagram shows the execution order with bold green arrows for the running DvP example.
+So a node n₁ executes before n₂ if and only if there is a non-empty path of green arrows from n₁ to n₂.
+The diagram grays out the parent-child arrows for clarity.
 
-1.  either `act` is itself **Create c** or a **Create c** happens before `act`
-2.  `act` does not happen before any **Create c** action
-3.  `act` does not happen after any **Exercise** action consuming `c`.
+{/* https://lucid.app/lucidchart/e3e9a609-b5bd-4faf-beb8-cd1166b160f1/edit */}
+![The execution order of the DvP ledger](/images/docs_website/dvp-ledger-execution-order.svg)
 
-</div>
+The execution order is always a strict partial order.
+That is, no node executes before itself (irreflexivity) and whenever node n₁ executes before n₂ and n₂ executes before n₃, then n₁ also executes before n₃ (transitivity).
+This property follows from the ledger being a directed acyclic graph of commits.
 
-The consistency condition rules out the double spend example. As the red path below indicates, the second exercise in the example happens after a consuming exercise on the same contract, violating the contract consistency criteria.
+The execution order extends naturally to actions on the ledger by looking at how the action's root nodes are ordered.
+Accordingly, an action always executes before its subactions.
 
-<img src="/images/docs_website/consistency-banning-double-spends.svg" className="align-center" style={{width: "100.0%"}} alt="Another time sequence of commits. In the first commit, Iou Bank A is requested by the bank. In the second, Exe A (Iou Bank A) leads to Iou Bank B via a red line, indicating contract consistency violations. Iou Bank B leads to Exe A (Iou Bank A) in the third commit, also via a red line, and Exe A (Iou Bank A) leads to Iou Bank P." />
+## Internal consistency
 
-<div id="def-contract-state">
+Internal consistency ensures that if several nodes act on a contract within an action, transaction, or ledger,
+then those nodes execute in an appropriate order, namely creation, usage, archival.
+Internal contract consistency does not require Create nodes for all contracts that are used.
+This way, internal contract consistency is meaningful for pieces of a ledger such as individual transactions or actions,
+which may use as inputs the contracts created outside of the piece.
 
-In addition to the consistency notions, the before-after relation on actions can also be used to define the notion of **contract state** at any point in a given transaction. The contract state is changed by creating the contract and by exercising it consumingly. At any point in a transaction, we can then define the latest state change in the obvious way. Then, given a point in a transaction, the contract state of `c` is:
+**Definition: internal consistency**
 
-</div>
+An action, transaction, or ledger is **internally consistent for a contract** `c`
+if for any two distinct nodes n₁ and n₂ on `c` in the action, transaction, or ledger,
+all of the following hold:
 
-1.  **active**, if the latest state change of `c` was a create;
-2.  **archived**, if the latest state change of `c` was a consuming exercise;
-3.  **inexistent**, if `c` never changed state.
+- If n₁ is a **Create** node, n₁ executes before n₂.
 
-A ledger is consistent for `c` exactly if **Exercise** and **Fetch** actions on `c` happen only when `c` is active, and **Create** actions only when `c` is inexistent. The figures below visualize the state of different contracts at all points in the example ledger.
+- If n₂ is a consuming **Exercise** node, then n₁ executes before n₂.
 
-<figure>
-<img src="/images/docs_website/consistency-paint-offer-activeness.svg" className="align-center" style={{width: "100.0%"}} alt="./images/consistency-paint-offer-activeness.svg" />
-<figcaption>Activeness of the `PaintOffer` contract</figcaption>
-</figure>
+The action, transaction or ledger is **internally consistent for a set of contracts**
+if it is internally consistent for each contract in the set.
+It is **internally consistent** if it is internally consistent for all contracts.
 
-<figure>
-<img src="/images/docs_website/consistency-alice-iou-activeness.svg" className="align-center" style={{width: "100.0%"}} alt="./images/consistency-alice-iou-activeness.svg" />
-<figcaption>Activeness of the `Iou Bank A` contract</figcaption>
-</figure>
+For example, the whole ledger shown above in the [execution order example](#internal-consistency) is internally consistent.
 
-The notion of order can be defined on all the different ledger structures: actions, transactions, lists of transactions, and ledgers. Thus, the notions of consistency, inputs and outputs, and contract state can also all be defined on all these structures. The **active contract set** of a ledger is the set of all contracts that are active on the ledger. For the example above, it consists of contracts `Iou Bank P` and `PaintAgree P A`.
+<Tip>
+To see this, we have to check for pairs of nodes acting on the same contract.
+This hint performs this tedious analysis for the transaction `TX 3`;
+a similar analysis can be done for the other transaction on the Ledger.
+You may want to skip this analysis on a first read.
+The nodes in the transaction involve six contracts #1 to #6.
 
-### Key Consistency
+- Contracts #1, #5, and #6 appear only in one node each, namely ⑨, ⑩, and ⑫, respectively.
+  `TX 3` is therefore trivially consistent for these contracts.
 
-Contract keys introduce a key uniqueness constraint for the ledger. To capture this notion, the contract model must specify for every contract in the system whether the contract has a key and, if so, the key. Every contract can have at most one key.
+- Contract #2 appears in the Fetch node ⑥ and the Exercise node ⑪.
+  So internal consistency holds for #2 because the first condition does not apply and the second one is satisfied
+  as ⑪ is consuming and ⑥ executes before ⑪.
 
-Like contracts, every key has a state. An action `act` is an **action on a key** `k` if
+- Contract #3 appears in the two Exercise nodes ④ and ⑤.
+  Since the consuming ⑤ executes after the non-consuming ④, internal consistency holds also for #3.
 
-- `act` is a **Create**, **Exercise**, or a **Fetch** action on a contract `c` with key `k`, or
-- `act` is the key assertion **NoSuchKey** `k`.
+- Contract #4 is created in ⑦ and consumed in ⑧.
+  So both conditions require that ⑦ executes before ⑧, which is the case here.
+</Tip>
+In contrast, the next diagram shows that the ledger in the [consistency violation example](#consistency-violation-example) is not internally consistent for contract #1.
+This contract appears in nodes ①, ②, and ④.
+The second condition is violated but violated for n₁ = ④ and n₂ = ② as ④ does not execute before ②.
+Note that the second condition is satisfied for n₁ = ② and n₂ = ④, but the definition quantifies over both pairs (②, ④) and (④, ②).
+The first condition is also satisfied because the Create node ① executes before both other nodes ② and ④.
 
-<div id="def-key-state">
+{/* https://lucid.app/lucidchart/8c9a03ef-6ab0-4105-811a-161e5587cf1c/edit */}
+![The execution order of the ledger where Alice double-spends her asset](/images/docs_website/asset-double-spend-execution-order.svg)
 
-Definition »key state«
-The **key state** of a key on a ledger is determined by the last action `act` on the key:
+<Note>
+Internal consistency constrains the order of the commits in a Ledger via the execution order.
+In the running DvP example, `TX 0`, `TX 1`, and `TX 2` all create contracts that `TX 3` uses.
+Internal consistency therefore demands that these create nodes execute before the usage nodes in `TX 3`.
+So by the definition of the execution order, `TX 0`, `TX 1`, and `TX 2` all must happen before `TX 3`
+(although internal consistency does not impose any particular order among `TX 0`, `TX 1`, and `TX 2`).
+</Note>
+## Definition
 
-- If `act` is a **Create**, non-consuming **Exercise**, or **Fetch** action on a contract `c`, then the key state is **assigned** to `c`.
-- If `act` is a consuming **Exercise** action or a **NoSuchKey** assertion, then the key state is **free**.
-- If there is no such action `act`, then the key state is **unknown**.
+Consistency strengthens internal consistency in that used contracts actually have been created within the action, transaction, or ledger.
 
-</div>
+**Definition: consistency**
 
-A key is **unassigned** if its key state is either **free** or **unknown**.
+An action, transaction, or ledger is **consistent for a contract** if all of the following hold:
 
-Key consistency ensures that there is at most one active contract for each key and that all key assertions are satisfied.
+- It is internally consistent for the contract.
 
-<div id="def-key-consistency">
+- If a node uses the contract, then there is also a node that creates the contract.
 
-Definition »key consistency«
-A ledger is **consistent for a key** `k` if for every action `act` on `k`, the key state `s` before `act` satisfies
+It is **consistent for a set of contracts** if it is consistent for all contracts in the set.
+It is **consistent** if it is consistent for all contracts.
 
-- If `act` is a **Create** action or **NoSuchKey** assertion, then `s` is **free** or **unknown**.
-- If `act` is an **Exercise** or **Fetch** action on some contract `c`, then `s` is **assigned** to `c` or **unknown**.
+For example, the [DvP ledger](#ledger) is consistent because it is internally consistent and all used contracts are created.
+In contrast, if the DvP ledger omitted the first commit `TX 0` and thus contains only commits `TX 1` to `TX 3`, it is still internally consistent, but not consistent,
+because `TX 3` uses the contract #1, but there is no create node for #1 in `TX 1` to `TX 3`.
 
-</div>
+## Consistency and projection
 
-Key consistency rules out the problematic examples around key consistency. For example, suppose that the painter `P` has made a paint offer to `A` with reference number `P123`, but `A` has not yet accepted it. When `P` tries to create another paint offer to `David` with the same reference number `P123`, then this creation action would violate key uniqueness. The following ledger violates key uniqueness for the key `(P, P123)`.
+This section looks at the conditions under which projections preserve and reflect (internal) consistency.
 
-<figure>
-<img src="/images/docs_website/double-key-creation-highlighted.svg" id="double-key-creation" className="align-center" alt="./images/double-key-creation-highlighted.svg" />
-</figure>
+### Projections preserve consistency for stakeholders
 
-Key assertions can be used in workflows to evidence the inexistence of a certain kind of contract. For example, suppose that the painter `P` is a member of the union of painters `U`. This union maintains a blacklist of potential customers that its members must not do business with. A customer `A` is considered to be on the blacklist if there is an active contract `Blacklist @U &A`. To make sure that the painter `P` does not make a paint offer if `A` is blacklisted, the painter combines its commit with a **NoSuchKey** assertion on the key `(U, A)`. The following ledger shows the transaction, where `UnionMember U P` represents `P`'s membership in the union `U`. It grants `P` the choice to perform such an assertion, which is needed for authorization.
+For preservation, projections retain the execution order and preserve internal consistency.
+Yet, consistency itself is preserved in general only for contract stakeholders.
+For example, Alice's [projection of the DvP workflow](#divulgence-when-non-stakeholders-see-contracts) is not consistent
+because it lacks `TX 1` and therefore the creation of contract #2 used in `TX 3`.
 
-<figure>
-<img src="/images/docs_website/paint-offer-blacklist.svg" id="paint-offer-blacklist" className="align-center" alt="./images/paint-offer-blacklist.svg" />
-</figure>
+Fortunately, consistency behaves well under projections if we look only at contracts the parties are stakeholders of.
+In detail, if an action, transaction, or ledger is (internally) consistent for a set of contracts `C`
+and `P` is a set of parties such that every contract in `C` has at least one stakeholder in `P`,
+then the projection to `P` is also (internally) consistent for `C`.
 
-Key consistency extends to actions, transactions and lists of transactions just like the other consistency notions.
+To see this, note that the execution order of the projection of an action or transaction to `P`
+is the restriction of the execution order of the unprojected action or transaction to the projection.
+That is, if n₁ and n₂ are two nodes in the projection,
+then n₁ executes before n₂ in the projection if and only if
+n₁ executes before n₂ in the original (trans)action.
+Accordingly, projections preserve internal consistency of an action or transaction too.
+Moreover, the projection to `P` never removes a Create node if one of the stakeholders is in `P`.
+Therefore, consistency is preserved too.
+For ledgers, the same argument applies with the current simplification of totally ordered ledgers.
+The [causality section](/overview/reference/ledger-causality) relaxes the ordering requirement, but makes sure
+that projections continue to preserve (internal) consistency for the parties' contracts.
 
-### Ledger Consistency
+### Signatories check consistency on projections
 
-Definition »ledger consistency«
-A ledger is **consistent** if it is consistent for all contracts and for all keys.
+From Canton's perspective, the reflection property is at least as important:
+If the projection of a (trans)action or ledger to a set of parties `P` is (internally) consistent for a set of contracts `C`
+where each contract has at least one signatory in `P`,
+then so is the (trans)action or ledger itself.
+This statement can be shown with a similar argument.
 
-### Internal Consistency
+Importantly, reflection requires a *signatory* of the contracts in `P`, not just a stakeholder.
+The following example shows that the property does not hold if `P` contains a stakeholder, but no signatory.
+To that end, we extend the `SimpleAsset` template with a non-consuming `Present` choice
+so that the issuer and owner can show the asset to a choice observer `viewer`:
 
-The above consistency requirement is too strong for actions and transactions in isolation. For example, the acceptance transaction from the paint offer example is not consistent as a ledger, because `PaintOffer A P Bank` and the `Iou Bank A` contracts are used without being created before:
+```haskell
+nonconsuming choice Present : SimpleAsset
+  with
+    actor : Party
+    viewer : Party
+  observer viewer
+  controller actor
+  do
+    assert $ actor == issuer || actor == owner
+    pure this
+```
 
-However, the transaction can still be appended to a ledger that creates these contracts and yields a consistent ledger. Such transactions are said to be internally consistent, and contracts such as the `PaintOffer A P Bank P123` and `Iou Bank A` are called input contracts of the transaction. Dually, output contracts of a transaction are the contracts that a transaction creates and does not archive.
+In the following script, Alice transfers her EUR asset to Bob and then later the Bank wants to show Alice's EUR asset to Vivian.
+Such a workflow can happen naturally when Alice submits her transfer concurrently with the Bank submitting the `Present` command,
+and the Synchronizer happens to order Alice's submission first.
 
-<div id="def-internal-consistency">
+```haskell
+let eurAsset = SimpleAsset with
+      issuer = bank
+      owner = alice
+      asset = "1 EUR"
+aliceEur <- submit bank $ do createCmd eurAsset
 
-Definition »internal consistency for a contract«
-A transaction is **internally consistent for a contract c** if the following holds for all of its subactions `act` on the contract `c`
+bobEur <- submit alice $ do
+  exerciseCmd aliceEur $ Transfer with
+      newOwner = bob
 
-1.  `act` does not happen before any **Create c** action
-2.  `act` does not happen after any exercise consuming `c`.
+submit bank $ do
+  exerciseCmd aliceEur $ Present with
+      actor = bank
+      viewer = vivian
+```
 
-A transaction is **internally consistent** if it is internally consistent for all contracts and consistent for all keys.
+The next diagram shows the corresponding ledger and Alice's projection thereof.
+The projection does not include the non-consuming Exercise ④ because Alice is not a signatory of the EUR asset #1 and therefore not an informee of ④.
+Alice's projection is therefore consistent for contract #1.
+In contrast, the original ledger violates internal consistency for #1, namely the second condition:
+for n₂ as ② and n₁ as ④, the consuming exercise ② does not execute after ④.
 
-</div>
+{/* https://lucid.app/lucidchart/d9be439e-ae1b-4226-af8d-76a43222fed0/edit */}
+![An inconsistent ledger where Alice's projection is consistent](/images/docs_website/asset-projection-reflect-consistency.svg)
 
-<div id="def-input-contract">
-
-Definition »input contract«
-For an internally consistent transaction, a contract `c` is an **input contract** of the transaction if the transaction contains an **Exercise** or a **Fetch** action on `c` but not a **Create c** action.
-
-</div>
-
-<div id="def-output-contract">
-
-Definition »output contract«
-For an internally consistent transaction, a contract `c` is an **output contract** of the transaction if the transaction contains a **Create c** action, but not a consuming **Exercise** action on `c`.
-
-</div>
-
-Note that the input and output contracts are undefined for transactions that are not internally consistent. The image below shows some examples of internally consistent and inconsistent transactions.
-
-<figure>
-<img src="/images/docs_website/internal-consistency-examples.svg" className="align-center" style={{width: "100.0%"}} alt="./images/internal-consistency-examples.svg" />
-<figcaption>The first two transactions violate the conditions of internal consistency. The first transaction creates the `Iou` after exercising it consumingly, violating both conditions. The second transaction contains a (non-consuming) exercise on the `Iou` after a consuming one, violating the second condition. The last transaction is internally consistent.</figcaption>
-</figure>
-
-Similar to input contracts, we define the input keys as the set that must be unassigned at the beginning of a transaction.
-
-Definition »input key«
-A key `k` is an **input key** to an internally consistent transaction if the first action `act` on `k` is either a **Create** action or a **NoSuchKey** assertion.
-
-In the blacklisting example, `P`'s transaction has two input keys: `(U, A)` due to the **NoSuchKey** action and `(P, P123)` as it creates a `PaintOffer` contract.
+With signatories instead of stakeholders, this problem does not appear:
+A signatory is an informee of all nodes on the contract and therefore any node relevant for consistency for the contract is present in the signatory's projection.
 
 ## Conformance
 
-The *conformance* condition constrains the actions that may occur on the ledger. This is done by considering a **contract model** `M` (or a **model** for short), which specifies the set of all possible actions. A ledger is **conformant to M** (or conforms to M) if all top-level actions on the ledger are members of `M`. Like consistency, the notion of conformance does not depend on the requesters of a commit, so it can also be applied to transactions and lists of transactions.
+The *conformance* condition constrains the actions that may occur on the ledger.
+The definitions in this section assume a given **contract model** (or a **model** for short) that specifies the set of all possible actions.
+In practice, Daml templates define such a model as follows:
 
-For example, the set of allowed actions on IOU contracts could be described as follows.
+- Choices declare the controller and the choice observers and constrain via their body the valid values in the exercised contract and choice arguments.
+  Their body defines the subactions (by creating, fetching or exercising contracts) and the Exercise result.
 
-<img src="/images/docs_website/models-simple-iou.svg" className="align-center" style={{width: "80.0%"}} alt="A set of create, transfer, and settle actions allowed on IOU contracts, as described in the paragraph immediately below." />
+- The `ensure` clause on the template constrains the valid arguments of a Create node.
 
-The boxes in the image are templates in the sense that the contract parameters in a box (such as obligor or owner) can be instantiated by arbitrary values of the appropriate type. To facilitate understanding, each box includes a label describing the intuitive purpose of the corresponding set of actions. As the image suggests, the transfer box imposes the constraint that the bank must remain the same both in the exercised IOU contract, and in the newly created IOU contract. However, the owner can change arbitrarily. In contrast, in the settle actions, both the bank and the owner must remain the same. Furthermore, to be conformant, the actor of a transfer action must be the same as the owner of the contract.
+With [smart-contract upgrading](/appdev/deep-dives/smart-contract-upgrade), the templates applicable for a given contract may change over time.
+For simplicity, the Ledger Model assumes that it is always clear (to all involved parties) what template defines the set of possible actions for a given contract.
 
-Of course, the constraints on the relationship between the parameters can be arbitrarily complex, and cannot conveniently be reproduced in this graphical representation. This is the role of Daml -- it provides a much more convenient way of representing contract models. The link between Daml and contract models is explained in more detail in a later section.
+**Definition: conformance**
 
-To see the conformance criterion in action, assume that the contract model allows only the following actions on `PaintOffer` and `PaintAgree` contracts.
+An action **conforms** to a model if the model contains it.
+A transaction **conforms** to a model if all the actions of the transaction conform to the model.
+A ledger **conforms** to a model if all top-level transactions of the ledger conform to the model.
 
-<img src="/images/docs_website/models-paint-offer.svg" className="align-center" style={{width: "90.0%"}} alt="The available create and accept actions on the PaintOffer and PaintAgree contracts." />
+The above [example of conformance violation](#consistency-violation-example) shows this definition in action.
+The [choice implementation](#running-workflow-example) of `SimpleDvP.Settle` exercises `Transfer` on two contracts and therefore requires that there are two subactions.
+The action on the ledger however has only one of the two subactions and therefore violates conformance.
+This example demonstrates why the contract model specifies actions instead of nodes:
+a set of acceptable nodes cannot catch when a consequence is missing from an action,
+because nodes ignore the tree structure.
 
-The problem with the example where Alice changes the offer's outcome to avoid transferring the money now becomes apparent.
+## Conformance and projection
 
-<img src="/images/docs_website/non-conformant-action.svg" className="align-center" alt="A time sequence illustrating the problem as described below." />
+Like consistency, conformance to a Daml model behaves well under projections.
+If an action, transaction or ledger conforms to a Daml model, then all their projections also conform to the same Daml model.
 
-`A`'s commit is not conformant to the contract model, as the model does not contain the top-level action she is trying to commit.
+In fact, Daml models enjoy the stronger property that every subaction of a Daml-conformant action conforms itself.
+This essentially follows from two observations:
+
+- The controllers of any choice may jointly exercise it on any contract, and the signatories of a contract may jointly create the contract, without going through some predefined workflow.
+  So contract creations and choices are essentially public.
+
+- The Daml language is referentially transparent.
+  That is, all inputs and outputs of a transaction are explicitly captured in contracts, choice arguments and exercise results.
+
+Not every such projection can be expressed as a set of commands on the Ledger API, though.
+The Ledger Model considers this lack of expressivity artificial, because future versions of the Ledger API may remove such restrictions.
+There are two kinds of cases where ledger API commads are less expressive than the ledger model defined here.
+First, a projection may contain a Fetch node at the root, like the [projection of the DvP](#ledger-projection) `AcceptAndSettle` choice for Bank 2.
+Yet, there is no Ledger API command to fetch a contract, as there are only commands for creating and exercising contracts.
+Second, the Ledger API command language does not support feeding the result of an Exercise as an argument to a subsequent command.
+For example, suppose that the `AcceptAndSettle` choice of `ProposeSimpleDvP` was actually implemented on a helper template `AcceptAndSettleDvP` as shown below.
+
+```haskell
+template AcceptAndSettleDvP with
+    counterparty : Party
+  where
+    signatory counterparty
+
+    choice Execute : (ContractId SimpleAsset, ContractId SimpleAsset)
+      with
+        proposal : ContractId ProposeSimpleDvP
+        toBeAllocated: ContractId SimpleAsset
+      controller counterparty
+      do
+        dvp <- exercise proposal $ Accept with ..
+        exercise dvp $ Settle with actor = counterparty
+```
+
+Bob can then execute accept and settle the DvP in one transaction by creating a helper contract and immediately exercising the `Execute` choice.
+
+```haskell
+(newUsd, newEur) <- submit (actAs bob <> disclose disclosedEur) $ do
+    createAndExerciseCmd (AcceptAndSettleDvP with counterparty = bob) $
+      Execute with
+        proposal = proposeDvP
+        toBeAllocated = usd
+```
+
+The difference to the running example is that Bob is the only stakeholder of this helper contract.
+Accordingly, Alice's projection of this `TX 3` consists of two root actions, where the second exercises a choice on a contract created in a consequence of the first.
+
+{/* https://lucid.app/lucidchart/34c6c342-981d-474b-b05b-ad49e07aa50a/edit */}
+![Bob's transaction accepting and settling the DvP via the helper contract and Alice's projection thereof](/images/docs_website/dvp-accept-and-settle-helper-projection.svg)
+
+Even though such transactions cannot be currently expressed in the language of Ledger API commands,
+they are considered conformant Daml transactions according to the Ledger Model.
+In other words, conformance does not look at how values flow across actions,
+and this is what makes conformance behave well under projections.
+
+<Warning>
+**Important:** A Daml model can restrict the flow of information only within an action.
+Across actions, it is at the discretion of the submitters to ensure the desired flow.
+The Ledger does not validate this.
+</Warning>
+Conformance of an action or transaction depends only on the Daml model of interest,
+which is unambiguously referenced via the package IDs.
+Therefore, witnesses, informees, and third parties can independently check conformance of an action.
+So conformance is common knowledge.
+This makes the reflection property irrelevant for a distributed implementation,
+as non-conformant actions simply can not occur on the Ledger by construction.
 
 ## Authorization
 
-The last criterion rules out the last two problematic examples, an obligation imposed on a painter, and the painter stealing Alice's money. The first of those is visualized below.
+The last validity condition ensures that only the intended parties can request a change,
+and thereby rules out the [authorization violation examples](#authorization-violation-examples).
+Authorization requirements are expressed in Daml using the signatories and observers of a contract and the controllers of choices.
 
-<img src="/images/docs_website/invalid-obligation.svg" className="align-center" style={{width: "100.0%"}} alt="A time sequence showing only one commit, in which PaintAgree P A P123 is requested by A." />
+This section introduces the notions to formalize this:
 
-The reason why the example is intuitively impermissible is that the `PaintAgree` contract is supposed to express that the painter has an obligation to paint Alice's house, but he never agreed to that obligation. On paper contracts, obligations are expressed in the body of the contract, and imposed on the contract's *signatories*.
+- [Required authorizers](#required-authorizers) define the set of parties who must have consented to an action.
 
-### Signatories and Maintainers
+- The [authorization context](#authorization-context) captures the parties who have actually authorized an action.
 
-To capture these elements of real-world contracts, the **contract model** additionally specifies, for each contract in the system:
+- [Well-authorization](#well-authorization) demands that the authorization context includes all the required authorizers.
 
-1.  A non-empty set of **signatories**, the parties bound by the contract.
-2.  If the contract is associated with a key, a non-empty set of **maintainers**, the parties that make sure that at most one unconsumed contract exists for the key. The maintainers must be a subset of the signatories and depend only on the key. This dependence is captured by the function `maintainers` that takes a key and returns the key's maintainers.
+The running example of [Bob skipping the propose-accept workflow](#skip-the-propose-accept-workflow) will be used to show how node ③ requires more authorizers than its authorization context provides, and is thus not well authorized.
+For ease of reference, the ledger diagram is repeated below.
 
-In the example, the contract model specifies that
+{/* https://lucid.app/lucidchart/cd2cef11-6f69-4f9c-8e1e-d79488547de2/edit */}
+![A ledger with an authorization violation on the creation of the DvP contract](/images/docs_website/dvp-ledger-create-auth-failure.svg)
 
-1.  An `Iou obligor owner` contract has only the `obligor` as a signatory.
-2.  A `MustPay obligor owner` contract has both the `obligor` and the `owner` as signatories.
-3.  A `PaintOffer houseOwner painter obligor refNo` contract has only the painter as the signatory. Its associated key consists of the painter and the reference number. The painter is the maintainer.
-4.  A `PaintAgree houseOwner painter refNo` contract has both the house owner and the painter as signat The key consists of the painter and the reference number. The painter is the only maintainer.
+## Required authorizers
 
-In the graphical representation below, signatories of a contract are indicated with a dollar sign (as a mnemonic for an obligation) and use a bold font. Maintainers are marked with `@` (as a mnemonic who enforces uniqueness). Since maintainers are always signatories, parties marked with `@` are implicitly signatories. For example, annotating the paint offer acceptance action with signatories yields the image below.
+Every node defines a non-empty set of parties who must have consented to the action of this node.
+This set is called the **required authorizers** of the node and defined as follows:
+For Create nodes, the required authorizers are the signatories of the contract,
+and for Exercise and Fetch nodes, the required authorizers are the actors of the node.
 
-<img src="/images/docs_website/signatories-paint-offer.svg" className="align-center" style={{width: "60.0%"}} alt="The original paint deal flowchart. P is a maintainer; A and the Bank are signatories." />
+For the running [example where Bob skips the propose-accept workflow](#skip-the-propose-accept-workflow),
+the following table lists for each party the nodes for which they are a required authorizer.
+For example, node ③ has the required authorizers Alice and Bob because they are the signatories of contract #3.
 
-### Authorization Rules
+**Required authorizers in the [example where Bob tries to skip the propose-accept workflow](#skip-the-propose-accept-workflow)**
 
-Signatories allow one to precisely state that the painter has an obligation. The imposed obligation is intuitively invalid because the painter did not agree to this obligation. In other words, the painter did not *authorize* the creation of the obligation.
+| Node | Bank1 | Bank2 | Alice | Bob |
+| --- | --- | --- | --- | --- |
+| ① | signatory |   |   |   |
+| ② |   | signatory |   |   |
+| ③ |   |   | signatory | signatory |
+| ④ |   |   |   | actor |
+| ⑤ |   |   | actor |   |
+| ⑥ | signatory |   |   |   |
+| ⑦ |   |   |   | actor |
+| ⑧ |   | signatory |   |   |
 
-In a Daml ledger, a party can **authorize** a subaction of a commit in either of the following ways:
+## Authorization context
 
-- Every top-level action of the commit is authorized by all requesters of the commit.
-- Every consequence of an exercise action `act` on a contract `c` is authorized by all signatories of `c` and all actors of `act`.
+In a Canton ledger, a party can **authorize** a subaction of a commit in two ways:
 
-The second authorization rule encodes the offer-acceptance pattern, which is a prerequisite for contract formation in contract law. The contract `c` is effectively an offer by its signatories who act as offerers. The exercise is an acceptance of the offer by the actors who are the offerees. The consequences of the exercise can be interpreted as the contract body so the authorization rules of Daml ledgers closely model the rules for contract formation in contract law.
+- The requesters of a commit authorize every top-level action of the commit.
 
-<div id="da-ledgers-def-well-authorized">
+- For an Exercise action, the signatories of the input contract and the actors of the action jointly authorize every consequence of the action.
 
-<div id="da-ledgers-required-authorizers">
+The set of authorizing parties for a given action is called the **authorization context**.
+Continuing the example of the required authorizers, the following table shows the authorization context for each node.
+For instance, the authorization context for nodes ③ and ④'s authorization context consists of Bob because Bob is the sole requester of the commit.
+For node ⑥, the authorization context contains two parties:
 
-A commit is **well-authorized** if every subaction `act` of the commit is authorized by at least all of the **required authorizers** of `act`, where:
+- Bank1 because Bank1 is the signatory of the input contract of the parent node ⑤.
+- Alice because Alice is the actor on the parent node ⑤.
 
-</div>
+Similarly, the authorization context for nodes ⑤ and ⑦ contains both Alice and Bob: Alice is a signatory on the input contract #3 of the parent node ④,
+and Bob is both a signatory on #3 and the actor of ④.
 
-</div>
+**Authorization contexts in the [example where Bob tries to skip the propose-accept workflow](#skip-the-propose-accept-workflow)**
 
-1.  the required authorizers of a **Create** action on a contract `c` are the signatories of `c`.
-2.  the required authorizers of an **Exercise** or a **Fetch** action are its actors.
-3.  the required authorizers of a **NoSuchKey** assertion are the maintainers of the key.
+| Node | Bank1 | Bank2 | Alice | Bob |
+| --- | --- | --- | --- | --- |
+| ① | requester of `TX 0` |   |   |   |
+| ② |   | requester of `TX 1` |   |   |
+| ③ |   |   |   | requester of `TX 2` |
+| ④ |   |   |   | requester of `TX 2` |
+| ⑤ |   |   | signatory on #3 | signatory on #3 + actor of ④ |
+| ⑥ | signatory on #1 |   | actor of ⑤ |   |
+| ⑦ |   |   | signatory on #3 | signatory on #3 + actor of ④ |
+| ⑧ |   | signatory on #2 |   | actor of ⑦ |
 
-We lift this notion to ledgers, whereby a ledger is well-authorized exactly when all of its commits are.
+<Warning>
+**Important:** The authorization context summarizes the *context* (parent action or commit) in which an action happens on the Ledger.
+It cannot be derived from the action itself.
+</Warning>
+## Well-authorization
 
-### Examples
+Well-authorization ensures that the authorizing parties and the required authorizers fit together.
 
-An intuition for how the authorization definitions work is most easily developed by looking at some examples. The main example, the paint offer ledger, is intuitively legitimate. It should therefore also be well-authorized according to our definitions, which it is indeed.
+**Definition: Well-authorization**
 
-In the visualizations below, `Π ✓ act` denotes that the parties `Π` authorize the action `act`. The resulting authorizations are shown below.
+An action is **internally well-authorized** if for every proper subaction, the authorization context contains all the required authorizers of the subaction.
 
-<img src="/images/docs_website/authorization-paint-offer.svg" className="align-center" alt="The original paint deal time sequence, described in depth with respect to authorizations below." />
+An action is **well-authorized** if it is internally well-authorized and the authorization context of the action contains all the required authorizers of the action.
 
-In the first commit, the bank authorizes the creation of the IOU by requesting that commit. As the bank is the sole signatory on the IOU contract, this commit is well-authorized. Similarly, in the second commit, the painter authorizes the creation of the paint offer contract, and painter is the only signatory on that contract, making this commit also well-authorized.
+A commit is **well-authorized** if every root action is well-authorized.
 
-The third commit is more complicated. First, Alice authorizes the exercise on the paint offer by requesting it. She is the only actor on this exercise, so this complies with the authorization requirement. Since the painter is the signatory of the paint offer, and Alice the actor of the exercise, they jointly authorize all consequences of the exercise. The first consequence is an exercise on the IOU, with Alice as the actor, so this is permissible. The second consequence is the creation of the new IOU (for P) by exercising the old IOU (for A). As the IOU was formerly signed by the bank, with Alice as the actor of the exercise, they jointly authorize this creation. This action is permissible as the bank is the sole signatory. The final consequence is creating the paint agreement with Alice and the painter as signatories. Since they both authorize the action, this is also permissible. Thus, the entire third commit is also well-authorized, and so is the ledger.
+In the running example, well-authorization requires that every non-empty cell in the [required authorizers table](#authorization-context)
+is also non-empty in the [authorization context table](#well-authorization).
+For example, the commit `TX 0` is well-authorized because it contains only one subaction ①
+and the required authorizer Bank1 is also the requester of the commit.
+Conversely, the commit `TX 2` is not well-authorized because ③'s required authorizers include Alice who is not in ③'s authorization context.
+This authorization failure captures the problem with this commit `TX 2`:
+The Ledger does not contain any record of Alice consenting to the DvP.
 
-Similarly, the intuitively problematic examples are prohibited by our authorization criterion. In the first example, Alice forced the painter to paint her house. The authorizations for the example are shown below.
+In contrast, the Exercise action at ④ is well-authorized.
+This illustrates how authorization flows from the signatories of a contract to the consequences of the choices.
+Assuming that the signatories Alice and Bob entered the `SimpleDvP` contract #3,
+the authorization rules allow Bob, the one controller of the `Settle` choice, to swap the two assets
+even though Bob does not own one of the assets (#1).
+In other words, Alice **delegates** via the `SimpleDvp` contract #3 to Bob the right to transfer her asset #1.
 
-<img src="/images/docs_website/authorization-invalid-obligation.svg" className="align-center" alt="A time sequence for a scenario where Alice forces the painter to paint her house, described in depth with respect to authorization below." />
+A similar flow of authorization also happens in the propose-accept workflow for the `SimpleDvP` contract in [the correct workflow](#ledger):
+In `TX 2`, Alice proposes the `ProposeSimpleDvP` contract #3 as a signatory.
+When Bob accepts the proposal with the `Accept` choice,
+Alice's authority flows to the creation of the `SimpleDvP` contract #4,
+where both Alice and Bob are signatories.
 
-Alice authorizes the **Create** action on the `PaintAgree` contract by requesting it. However, the painter is also a signatory on the `PaintAgree` contract, but he did not authorize the **Create** action. Thus, this ledger is indeed not well-authorized.
+## Well-authorization with projection
 
-In the second example, the painter steals money from Alice.
+The [example of the wrongly allocated asset](#interaction-with-projection) illustrates the difference between well-authorization and internal well-authorization.
+The action rooted at node ⑨ is internally well-authorized
+because it has only one proper subaction with node ⑩ whose authorization context includes the required authorizer Bank1.
+Yet, the action itself is not well-authorized because the required authorizers of ⑨ include Carol,
+but its authorization context contains only Alice and Bob,
+as they are signatories of the input contract #4 of node ⑧.
 
-<img src="/images/docs_website/authorization-stealing-ious.svg" className="align-center" alt="A time sequence for a scenario where the painter steals Alice&#39;s money, described in depth with respect to authorization below." />
+The authorization failure disappears in the projection to Bank1 though,
+because the projection of a ledger forgets the requesters of the commits.
+So from Bank1's perspective, the asset transfer looks fine.
 
-The bank authorizes the creation of the IOU by requesting this action. Similarly, the painter authorizes the exercise that transfers the IOU to him. However, the actor of this exercise is Alice, who has not authorized the exercise. Thus, this ledger is not well-authorized.
+{/* https://lucid.app/lucidchart/a12ccf62-7acd-45be-896e-588286b517e1/edit */}
+![Bank1's projection of the DvP with Carol's asset](/images/docs_website/dvp-ledger-nested-auth-error-project-bank1.svg)
 
-## Valid Ledgers, Obligations, Offers and Rights
+This example reiterates that well-authorization of an action cannot be determined solely from the action alone,
+and projections do not retain the context for root actions of the projection.
 
-Daml ledgers are designed to mimic real-world interactions between parties, which are governed by contract law. The validity conditions on the ledgers, and the information contained in contract models have several subtle links to the concepts of the contract law that are worth pointing out.
+In contrast, internal well-authorization is a property of an action in isolation, independent of a context.
+For example, the actions rooted at ⑧ and ④ are not internally well-authorized because they contain the action at ⑨ as a sub-action
+and they define the authorization context for ⑨.
+Accordingly, internal well-authorization is common knowledge and therefore interacts with projection similar to conformance:
+projections preserve internal well-authorization; and reflection of internal well-authorization is irrelevant
+because only internally well-authorized actions can be part of the Ledger by construction.
 
-First, contracts specify implicit **on-ledger obligations**, which result from consequences of the exercises on contracts. For example, the `PaintOffer` contains an on-ledger obligation for `A` to transfer her IOU in case she accepts the offer.
+In contrast, well-authorization is not common knowledge and does not behave well under projections.
+The [validity definition](#validity) below therefore deals explicitly with it.
 
-Second, every contract on a Daml ledger can model a real-world offer, whose consequences (both on- and off-ledger) are specified by the **Exercise** actions on the contract allowed by the contract model.
+## Authorization vs. conformance
 
-Third, in Daml ledgers, as in the real world, one person's rights are another person's obligations. For example, `A`'s right to accept the `PaintOffer` is `P`'s obligation to paint her house in case she accepts. In Daml ledgers, a party's rights according to a contract model are the exercise actions the party can perform, based on the authorization and conformance rules.
+Well-authorization and conformance are both necessary to ensure that the Ledger contains only the intended changes.
+To illustrate this, we modify the [example of the wrongly allocated asset](#interaction-with-projection) such that node ⑨ specifies Alice as the actor instead of Carol.
+Then, the action (and the ledger as a whole) is well-authorized.
+Yet, it no longer conforms to the Daml model,
+because the `Transfer` choice defines the `controller` to be the `owner` of the asset #1, which is Carol in this case.
 
-Finally, validity conditions ensure three important properties of the Daml ledger model, that mimic the contract law.
+This conformance failure does show up in Bank 1's projection, unlike corresponding the well-authorization failure from the previous section.
 
-1.  **Obligations need consent**. Daml ledgers follow the offer-acceptance pattern of the contract law, and thus ensures that all ledger contracts are formed voluntarily. For example, the following ledger is not valid.
+## Validity
 
-    <img src="/images/docs_website/authorization-invalid-obligation.svg" className="align-center" style={{width: "100.0%"}} alt="The time sequence for a scenario where Alice forces the painter to paint her house, explained previously in the Authorization Rules Example section." />
+Having formalized the three conditions consistency, conformance and well-authorization, we can now formally define validity.
 
-2.  **Consent is needed to take away on-ledger rights**. As only **Exercise** actions consume contracts, the rights cannot be taken away from the actors; the contract model specifies exactly who the actors are, and the authorization rules require them to approve the contract consumption.
+**Definition: Valid Ledger**
 
-    In the examples, Alice had the right to transfer her IOUs; painter's attempt to take that right away from her, by performing a transfer himself, was not valid.
+A Canton Ledger is **valid for a set of parties `P`** if all of the following hold:
 
-    <img src="/images/docs_website/authorization-stealing-ious.svg" className="align-center" style={{width: "100.0%"}} alt="The time sequence for a scenario where the painter steals Alice&#39;s money, explained previously in the Authorization Rules Example section." />
+- The Ledger is consistent for contracts whose signatories include one of the parties in `P`.
 
-    Parties can still **delegate** their rights to other parties. For example, assume that Alice, instead of accepting painter's offer, decides to make him a counteroffer instead. The painter can then accept this counteroffer, with the consequences as before:
+- The Ledger conforms to the Daml templates.
 
-    <img src="/images/docs_website/counteroffer-acceptance.svg" id="counteroffer-acceptance" className="align-center" style={{width: "60.0%"}} alt="The original PaintAgreement flow chart, but now the topmost contract is the CounterOffer." />
+- Every root action on the Ledger is internally well-authorized and its required authorizers in `P` are requesters of the commit.
 
-    Here, by creating the `CounterOffer` contract, Alice delegates her right to transfer the IOU contract to the painter. In case of delegation, prior to submission, the requester must get informed about the contracts that are part of the requested transaction, but where the requester is not a signatory. In the example above, the painter must learn about the existence of the IOU for Alice before he can request the acceptance of the `CounterOffer`. The concepts of observers and divulgence, introduced in the next section, enable such scenarios.
+A Ledger is **valid** if it is valid for all parties.
 
-3.  **On-ledger obligations cannot be unilaterally escaped**. Once an obligation is recorded on a Daml ledger, it can only be removed in accordance with the contract model. For example, assuming the IOU contract model shown earlier, if the ledger records the creation of a `MustPay` contract, the bank cannot later simply record an action that consumes this contract:
+The restriction to a set of parties `P` comes from privacy.
+As discussed above, consistency and well-authorization are not common knowledge.
+The Canton protocol therefore relies on the relevant parties to check these conditions.
+Accordingly, the protocol only ensures these properties for the parties that follow the protocol.
 
-    <img src="/images/docs_website/validity-no-removal-of-obligations.svg" className="align-center" style={{width: "100.0%"}} alt="A time sequence in which the first commit includes the creation of a MustPay contract and the second commit includes the bank consuming this contract, as described above." />
+## Virtual Global Ledger
 
-    That is, this ledger is invalid, as the action above is not conformant to the contract model.
+The Canton protocol creates a Virtual Global Ledger (VGL) that is valid for the honest parties
+and such that each of these parties sees their projection of VGL.
+Honesty here means that the parties and the nodes they are using correctly follow the Canton protocol
+subject to the Byzantine fault tolerance configured in the topology.
 
+This Virtual Global Ledger is not materialized anywhere due to privacy:
+in general, no node knows the entirety of the ledger.
+In the [DvP ledger](#ledger), for example, if the Banks, Alice, and Bob are hosted on different systems,
+only the [projections to the Banks, to Alice, and to Bob](#divulgence-when-non-stakeholders-see-contracts) materialize on these systems,
+but none of them sees the unprojected Ledger as a whole.
+
+Accordingly, the Canton protocol cannot ensure the validity of the Virtual Global Ledger as a whole.
+For example, if a group of signatories decides to commit a double spend of a contract,
+then this is their decision.
+Since each spend may be witnessed by a different honest party,
+the VGL contains both spends and is therefore inconsistent for this contract.
+
+## Interaction with projection
+
+Preservation and reflection for validity is difficult to formalize because projections discard the requesters of a commit.
+Therefore, we analyze these two properties for a weak validity notion, namely validity without the constraint on the requesters of the commit.
+Then, projection preserves weak validity in the following sense:
+If a Ledger is weakly valid for a set of parties `P`, then its projection to a set of parties `Q` is weakly valid for the parties in both `P` and `Q`.
+The restriction of the parties to the intersection of `P` and `Q` takes care of the problem of the projected-away contract creations discussed in the [consistency section](#consistency-and-projection).
+
+Reflection does not hold for weak validity in general when we look only at projections to sets of honest parties.
+For example, consider a Ledger with a root action that no honest party is allowed to see.
+So none of the projections contains this root action and therefore the projections cannot talk about its conformance or internal well-authorization.
+Fortunately, this is not necessary either, because we care only about the pieces of the Ledger that are visible to some honest party.
+
+More formally, two Ledgers are said to be **equivalent** for a set of parties `Q` if the projections of the two Ledgers to `Q` are the same.
+Then reflection holds in the sense that there is an equivalent weakly valid Ledger.
+Let `F` be a set of sets of parties whose union contains the set of parties `Q`.
+If for every set `P` in `F`, the projection of a Ledger `L` to `P` is weakly valid for `P` intersected with `Q`,
+then the projection of `L` to `Q` is weakly valid.
+Note that this projection of `L` to `Q` is equivalent to `L` for `Q` due to the [absorption property of projection](#transaction-projection).
 
 {/* COPIED_END */}
 
 
-
-
-{/* COPIED_START source="docs-website:docs/replicated/daml/3.4/overview/explanations/ledger-model/ledger-privacy.rst" hash="b3c9457c" */}
+{/* COPIED_START source="docs-website:docs/replicated/daml/3.5/overview/explanations/ledger-model/ledger-privacy.rst" hash="c61c1127" */}
 
 # Privacy
 
@@ -712,7 +1063,7 @@ Via the Ledger API's update service, a user can see the immediately divulged con
 
 Divulgence from the previous section refers to parties learning about contracts they are not a stakeholder of. Disclosure is about such parties using contracts in their own transactions.
 
-Recall from the running example that Bob uses `submitWithDisclosures` for the exercising `Settle` choice. This is because Bob (and its Participant Node) in general does not know about the `SimpleAsset` contract \#2 that Alice has allocated to the proposal. Disclosure means that Alice tells Bob via an off-ledger communication channel about this contract. In the Daml script running example, the script itself is the communication channel. In real-world contexts, Alice would offer an API for Bob to retrieve the relevant data.
+Recall from the running example that Bob uses `submit` with a disclosure for the exercising `Settle` choice. This is because Bob (and its Participant Node) in general does not know about the `SimpleAsset` contract \#2 that Alice has allocated to the proposal. Disclosure means that Alice tells Bob via an off-ledger communication channel about this contract. In the Daml script running example, the script itself is the communication channel. In real-world contexts, Alice would offer an API for Bob to retrieve the relevant data.
 
 It is a design decision that immediate divulgence does not entail disclosure for subsequent transactions. For example, after the DvP has been settled, Alice creates another DvP proposal for Bob to swap the two assets again:
 
@@ -728,6 +1079,69 @@ An alternative approach to disclosure is to replace the original `SimpleAsset` c
 - In contrast, when Alice adds Bob as a contract observer and then subsequently adds Charlie as another observer, Bob as a contract observer is notified about the archival and the creation. Similarly, Charlie learns that Bob is an observer on the contract, too. That is, all stakeholders learn about each other. This created a privacy problem when Alice actually does not want that Bob and Charlie know of each other.
 
 Moveover, adding parties as observers scales poorly to large numbers, because every observer learns about every other observer: A Create event with `N` observers appears in the projection of at least those `N` parties. So the size of all projections together is already quadratic in `N` as an action of size at least `N` appears in `N` different projection. If the observers are added one by one, then `N` archives and creations are needed, which means the size of all projections together is cubic in `N`.
+
+## Shape-revealing projection
+
+As explained above, projections define the pieces of the ledger that a set of parties can see,
+and thereby also the pieces that they can not see.
+For example, the above [transaction projection for Bank 2](#ledger-projection) omits what happens between the Fetch and the Exercise on contract #2
+and thereby implies that Bank 2 has no way of finding this out on their own.
+
+In practice, this strong privacy statement assumes that Bank 2 interacts with the Ledger only via the Ledger API of their Participant Nodes.
+In contrast, if Bank 2 observes the communication patterns between the Participant Nodes, Bank 2 might be able to deduce that Bank 1 was also involved in this transaction.
+Similarly, if Bank 2 can inspect the on-wire data of such communication, as is for example possible to some extent on the Global Synchronizer,
+then Bank 2 can infer some information about the *shape* of the original transaction and the parties involved,
+beyond what is visible in the projection.
+This is because the synchronizer needs this shape information for its two-phase commit protocol.
+
+<Warning>
+**Important:** The contents of the transaction remain confidential even if a party inspects the messages exchanged via the synchronizer.
+The party can at most reconstruct the shape of the transactions on the ledger.
+</Warning>
+
+This section defines the shape that overapproximate the information that can leak via messages exchanged via the synchronizer.
+Overapproximation here means that a curious party may not be able to fully reconstruct the shape of a transaction on the ledger,
+for example due to optimizations in the synchronization protocol.
+
+The synchronization protocol uses a notion of the required confirmers for a node, which are a subset of the informees.
+The required confirmers are therefore part of the shape and defined as follows.
+
+**Definition: required confirmers**
+
+The **required confirmers** for a Create node are the signatories and for an Exercise or Fetch node are the signatories and actors.
+
+The shape of a node is defined as follows:
+
+**Definition: node shape**
+
+The **shape** of a node consists of the following pieces of information:
+
+- The informees of the node.
+
+- The size of the encoding of the node contents and the input contract, if any.
+
+- The **required confirmers** for the node.
+
+The shape-revealing projection extends the projection defined above with the shape of the omitted nodes.
+
+**Definition: shape-revealing projection**
+
+The **shape-revealing projection of a transaction** for a set `P` of parties is obtained as follows for each root action `act` of the transaction:
+
+1. If `P` contains at least one of the informees of `act`, keep `act` as-is, including its consequences.
+
+1. Else, replace the node of `act` with its shape and the shape-revealing projection of the consequences of `act` becomes the children of the node shape.
+
+The **shape-revealing projection of a ledger** `l` for a set `P` of parties is obtained by replacing the transaction in each commit by its shape-revealing projection for `P` while retaining the update ID and the requesters.
+
+For example, the shape-revealing projection of the [above DvP ledger](#divulgence-when-non-stakeholders-see-contracts) for Bank 2 looks as follows.
+Node shapes are shown as empty boxes with a `?` inside and annotated with the informees and the required confirmers (underlined).
+Importantly, the shape-revealing projection retains the requesters and the empty projected transactions, unlike for normal projections.
+Conversely, the node shapes do not show the inputs and outputs.
+Thus despite the shape of individual transactions being visible to all parties,
+the structure of the overall transaction graph remains private.
+
+![Shape-revealing projection for Bank 2](/images/docs_website/dvp-ledger-projection-reveal-shape.svg)
 
 
 {/* COPIED_END */}
@@ -762,10 +1176,9 @@ Interoperability for Daml ledgers is under active development. This document des
 
 Participant Nodes connect to Daml ledgers and parties access projections of these ledgers via the Ledger API. The following picture shows such a setup.
 
-<figure>
-<img src="/images/docs_website/multiple-domains.svg" id="multiple-ledgers" className="align-center" alt="./../images/multiple-domains.svg" />
-<figcaption>Example topology with two interoperable ledgers</figcaption>
-</figure>
+<Frame caption="Example topology with two interoperable ledgers">
+  <img src="/images/docs_website/multiple-domains.svg" id="multiple-ledgers" className="align-center" alt="./../images/multiple-domains.svg" />
+</Frame>
 
 The components in this diagram are the following:
 
@@ -854,10 +1267,9 @@ In the example for Enter and Leave events where the painter exercises three choi
 
 <div id="interoperable-causality-graph-linear">
 
-<figure>
-<img src="/images/docs_website/interoperable-causality-graph-linear.svg" className="align-center" style={{width: "100.0%"}} alt="./../images/interoperable-causality-graph-linear.svg" />
-<figcaption>Multi-Ledger causality graph with transfer actions</figcaption>
-</figure>
+<Frame caption="Multi-Ledger causality graph with transfer actions">
+  <img src="/images/docs_website/interoperable-causality-graph-linear.svg" className="align-center" style={{width: "100.0%"}} alt="./../images/interoperable-causality-graph-linear.svg" />
+</Frame>
 
 </div>
 
@@ -869,10 +1281,9 @@ As an example of a cross-domain transaction, consider the split paint counteroff
 
 <div id="counteroffer-interoperable-causality-graph">
 
-<figure>
-<img src="/images/docs_website/counteroffer-interoperable-causality-graph.svg" className="align-center" style={{width: "100.0%"}} alt="./../images/counteroffer-interoperable-causality-graph.svg" />
-<figcaption>Multi-Ledger causality graph for the split paint counteroffer workflow on two Daml ledgers</figcaption>
-</figure>
+<Frame caption="Multi-Ledger causality graph for the split paint counteroffer workflow on two Daml ledgers">
+  <img src="/images/docs_website/counteroffer-interoperable-causality-graph.svg" className="align-center" style={{width: "100.0%"}} alt="./../images/counteroffer-interoperable-causality-graph.svg" />
+</Frame>
 
 </div>
 
