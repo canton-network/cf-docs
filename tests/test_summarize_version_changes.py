@@ -87,3 +87,87 @@ def test_source_config_changes_summarizes_publish_version(tmp_path: Path) -> Non
     assert module.source_config_changes(before, after, label="Wallet Gateway OpenRPC") == [
         "- Wallet Gateway OpenRPC publish_version: 0.25.0 -> 1.4.0"
     ]
+
+
+def test_package_source_config_changes_summarizes_package_publish_versions(tmp_path: Path) -> None:
+    module = load_script_module()
+    before = tmp_path / "before.json"
+    after = tmp_path / "after.json"
+    write_json(
+        before,
+        {
+            "packages": [
+                {"package_name": "@daml/types", "publish_version": "3.4.11"},
+                {"package_name": "@canton-network/dapp-sdk", "publish_version": "1.1.0"},
+            ]
+        },
+    )
+    write_json(
+        after,
+        {
+            "packages": [
+                {"package_name": "@daml/types", "publish_version": "3.5.2"},
+                {"package_name": "@canton-network/dapp-sdk", "publish_version": "1.2.0"},
+            ]
+        },
+    )
+
+    assert module.package_source_config_changes(before, after, label="TypeScript bindings") == [
+        "- TypeScript bindings @daml/types publish_version: 3.4.11 -> 3.5.2",
+        "- TypeScript bindings @canton-network/dapp-sdk publish_version: 1.1.0 -> 1.2.0",
+    ]
+
+
+def test_versioned_source_config_changes_summarizes_canton_release_versions(tmp_path: Path) -> None:
+    module = load_script_module()
+    before = tmp_path / "before.json"
+    after = tmp_path / "after.json"
+    write_json(
+        before,
+        {
+            "versions": [
+                {"version": "3.4", "canton_version": "3.4.11"},
+                {"version": "3.5", "canton_version": "3.5.0-snapshot.20260405.18555.0.vbee160e5"},
+            ]
+        },
+    )
+    write_json(
+        after,
+        {
+            "versions": [
+                {"version": "3.4", "canton_version": "3.4.11"},
+                {"version": "3.5", "canton_version": "3.5.5"},
+            ]
+        },
+    )
+
+    assert module.versioned_source_config_changes(before, after, label="JSON Ledger API OpenAPI") == [
+        "- JSON Ledger API OpenAPI 3.5 canton_version: "
+        "3.5.0-snapshot.20260405.18555.0.vbee160e5 -> 3.5.5"
+    ]
+
+
+def test_artifact_source_config_changes_summarizes_added_versions(tmp_path: Path) -> None:
+    module = load_script_module()
+    before = tmp_path / "before.json"
+    after = tmp_path / "after.json"
+    write_json(
+        before,
+        {
+            "artifacts": [
+                {"group": "com.daml", "artifact": "bindings-java", "versions": ["3.4.11"]},
+            ]
+        },
+    )
+    write_json(
+        after,
+        {
+            "artifacts": [
+                {"group": "com.daml", "artifact": "bindings-java", "versions": ["3.4.11", "3.5.5"]},
+            ]
+        },
+    )
+
+    assert module.artifact_source_config_changes(before, after, label="Java ledger bindings") == [
+        "- Java ledger bindings com.daml:bindings-java versions: added 3.5.5"
+    ]
