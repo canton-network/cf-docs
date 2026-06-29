@@ -45,7 +45,7 @@ pkgs.mkShell {
         ;;
     esac
 
-    if [ -f package.json ] && [ ! -d node_modules ]; then
+    if [ "''${SKIP_NPM_INSTALL:-}" != "1" ] && [ -f package.json ] && [ ! -d node_modules ]; then
       echo "Installing npm dependencies..."
       if [ -f package-lock.json ]; then
         npm ci
