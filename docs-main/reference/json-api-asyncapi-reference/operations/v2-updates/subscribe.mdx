@@ -105,6 +105,44 @@ title: "Subscribe updates"
 
 ## Outputs
 
+The server streams a sequence of `Either_JsCantonError_JsGetUpdatesResponse` messages. Each message is one of:
+
+**Success** — a `JsGetUpdatesResponse` containing a single update:
+
+```json
+{
+  "update": <Update>
+}
+```
+
+where `<Update>` is one of:
+
+| Variant | Key | Description |
+|---------|-----|-------------|
+| Transaction | `"Transaction"` | A committed ledger transaction |
+| OffsetCheckpoint | `"OffsetCheckpoint"` | An offset checkpoint (no transaction, used to track progress) |
+| Reassignment | `"Reassignment"` | A contract reassignment between synchronizers |
+| TopologyTransaction | `"TopologyTransaction"` | A topology change (party or key update) |
+
+Example success message:
+```json
+{
+  "update": {
+    "Transaction": {
+      "updateId": "<string>",
+      "commandId": "<string>",
+      "workflowId": "<string>",
+      "effectiveAt": "<timestamp>",
+      "offset": "<string>",
+      "events": [],
+      "synchronizerId": "<string>",
+      "traceContext": {}
+    }
+  }
+}
+```
+
+**Error** — a `JsCantonError` with fields `code`, `cause`, `context`, and `errorCategory` (documented below).
 
 <div class="x2mdx-ref-panel">
   <div class="x2mdx-ref-panel-head">
