@@ -124,8 +124,8 @@ def summary_preview(text: str, *, max_length: int = 72) -> str:
     return md_text(f"{clipped}...")
 
 
-def status_cell(status: str) -> str:
-    return f"`{md_code(status)}`"
+def status_cell(status: str | None) -> str:
+    return f"`{md_code(status)}`" if status else "-"
 
 
 def package_toc_legend() -> str:
@@ -342,8 +342,8 @@ def build_type_entries(
             {
                 "object_name": object_name,
                 "package": package_name,
-                "status": type_symbol.status or "stable",
-                "status_cell": status_cell(type_symbol.status or "stable"),
+                "status": type_symbol.status,
+                "status_cell": status_cell(type_symbol.status),
                 "summary_preview": summary_preview(summary_text) or "-",
                 "description": object_page_description(type_symbol, object_name),
                 "removed_notice": f"Removed in `{md_code(type_symbol.removed_version)}`." if type_symbol.removed_version else "",
@@ -427,7 +427,11 @@ def build_package_rows_and_pages(
                     title=str(entry["object_name"]),
                     description=str(entry["description"]),
                     template_name="jvm_docs/object.md.j2",
-                    object_heading=f"{entry['object_name']} - {entry['status']}",
+                    object_heading=(
+                        f"{entry['object_name']} - {entry['status']}"
+                        if entry["status"]
+                        else str(entry["object_name"])
+                    ),
                     docs_link=str(entry["upstream"]),
                     removed_notice=str(entry["removed_notice"]),
                     signature=symbol.latest_signature or "",
