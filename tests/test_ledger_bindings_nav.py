@@ -85,6 +85,117 @@ def test_java_bindings_nav_includes_details_and_history_page(tmp_path: Path) -> 
     }
 
 
+def test_java_bindings_nav_supports_product_navigation(tmp_path: Path) -> None:
+    generate_ledger_bindings_api_reference = load_script("generate_ledger_bindings_api_reference")
+    docs_json = tmp_path / "docs-main" / "docs.json"
+    docs_json.parent.mkdir(parents=True)
+    docs_json.write_text(
+        json.dumps(
+            {
+                "navigation": {
+                    "products": [
+                        {
+                            "product": "API Reference",
+                            "pages": [{"group": "Ledger API", "pages": []}],
+                        }
+                    ]
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    publish_root = docs_json.parent / "reference"
+    overview_file = publish_root / "java-bindings.mdx"
+    write_mdx(overview_file, "Details and history")
+    write_mdx(
+        publish_root / "java" / "com-example" / "index.mdx",
+        "com.example",
+        "## Package `com.example`\n",
+    )
+    write_mdx(publish_root / "java" / "com-example" / "Client.mdx", "Client")
+
+    generate_ledger_bindings_api_reference.update_docs_navigation(
+        docs_json_path=docs_json,
+        dropdown_label="API Reference",
+        parent_groups=["Ledger API"],
+        group_label="Java Bindings",
+        overview_file=overview_file,
+        publish_root=publish_root,
+    )
+
+    docs = json.loads(docs_json.read_text(encoding="utf-8"))
+    assert docs["navigation"]["products"][0]["pages"] == [
+        {
+            "group": "Ledger API",
+            "pages": [
+                {
+                    "group": "Java Bindings",
+                    "pages": [
+                        {
+                            "group": "Javadocs",
+                            "pages": [{"group": "com.example", "pages": ["reference/java/com-example/Client"]}],
+                        },
+                        "reference/java-bindings",
+                    ],
+                }
+            ],
+        }
+    ]
+
+
+def test_daml_standard_library_nav_supports_product_navigation(tmp_path: Path) -> None:
+    generate_daml_standard_library_reference = load_script("generate_daml_standard_library_reference")
+    docs_json = tmp_path / "docs-main" / "docs.json"
+    docs_json.parent.mkdir(parents=True)
+    docs_json.write_text(
+        json.dumps(
+            {
+                "navigation": {
+                    "products": [
+                        {
+                            "product": "API Reference",
+                            "pages": [{"group": "Daml APIs", "pages": []}],
+                        }
+                    ]
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    output_dir = docs_json.parent / "appdev" / "reference" / "daml-standard-library"
+    write_mdx(output_dir / "index.mdx", "Daml Standard Library")
+    write_mdx(output_dir / "da-list.mdx", "DA.List")
+
+    generate_daml_standard_library_reference.update_docs_navigation(
+        docs_json_path=docs_json,
+        dropdown_label="API Reference",
+        parent_groups=["Daml APIs"],
+        output_dir=output_dir,
+    )
+
+    docs = json.loads(docs_json.read_text(encoding="utf-8"))
+    assert docs["navigation"]["products"][0]["pages"] == [
+        {
+            "group": "Daml APIs",
+            "pages": [
+                {
+                    "group": "Daml Standard Library",
+                    "pages": [
+                        {
+                            "group": "Modules",
+                            "pages": ["appdev/reference/daml-standard-library/da-list"],
+                        },
+                        "appdev/reference/daml-standard-library/index",
+                    ],
+                }
+            ],
+        }
+    ]
+    assert (output_dir / "index.mdx").read_text(encoding="utf-8").startswith(
+        '---\ntitle: "Details and history"\n---'
+    )
+
+
 def test_java_bindings_overview_is_published_as_details_and_history() -> None:
     generate_ledger_bindings_api_reference = load_script("generate_ledger_bindings_api_reference")
 
