@@ -71,7 +71,7 @@ def write_javadoc_jar(root: Path, version: str, sources: dict[str, str]) -> Path
     return jar_path
 
 
-def build_java_manifest(root: Path, *, include_replacement: bool = False) -> Path:
+def build_java_manifest(root: Path) -> Path:
     write_javadoc_jar(
         root,
         "1.0.0",
@@ -167,25 +167,6 @@ def build_java_manifest(root: Path, *, include_replacement: bool = False) -> Pat
         },
     )
 
-    replacement_line = "            replaces: com.example.Legacy\n" if include_replacement else ""
-    write_text(
-        root / "status" / "bindings-java.yaml",
-        f"""
-        types:
-          com.example.Foo:
-            status: stable
-          com.example.Foo.Inner:
-            status: beta
-          com.example.Legacy:
-            status: alpha
-          com.example.Added:
-            status: stable
-{replacement_line}
-          com.example.ManualDeprecated:
-            status: deprecated
-        """,
-    )
-
     manifest = {
         "source": "minimal Java Javadoc characterization",
         "artifacts": [
@@ -194,7 +175,6 @@ def build_java_manifest(root: Path, *, include_replacement: bool = False) -> Pat
                 "artifact": "bindings-java",
                 "language": "java",
                 "include_prefixes": ["com.example"],
-                "status_manifest": "status/bindings-java.yaml",
                 "versions": [
                     {"version": "1.0.0", "jar_path": "jars/bindings-java/1.0.0/bindings-java-1.0.0-javadoc.jar"},
                     {"version": "1.1.0", "jar_path": "jars/bindings-java/1.1.0/bindings-java-1.1.0-javadoc.jar"},
@@ -216,8 +196,8 @@ class JvmDocsMinimalLifecycleTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temp_dir.cleanup()
 
-    def _render_pages(self, *, include_replacement: bool = False, relative_site_root: str = "site") -> Path:
-        manifest_path = build_java_manifest(self.root, include_replacement=include_replacement)
+    def _render_pages(self, *, relative_site_root: str = "site") -> Path:
+        manifest_path = build_java_manifest(self.root)
         site_root = self.root / relative_site_root
         overview = site_root / "reference" / "jvm-api" / "index.mdx"
         details_dir = site_root / "reference" / "jvm-api" / "details"
@@ -288,7 +268,7 @@ class JvmDocsMinimalLifecycleTests(unittest.TestCase):
         assert_contains_all(artifact_text, ["## Table of Contents", "## Version Change Summary", "## Reference"])
         assert_contains_all(foo_text, ['title: "Foo"', 'description: "Foo summary v1.2.0."', "**Members**"])
 
-    def test_cli_renders_explicit_lifecycle_states(self) -> None:
+    def test_cli_renders_deprecated_lifecycle_state(self) -> None:
         site_root = self._render_pages(relative_site_root="site-lifecycle")
 
         assert_text_tree_matches_fixture(site_root, "jvm_docs/default")
@@ -298,18 +278,9 @@ class JvmDocsMinimalLifecycleTests(unittest.TestCase):
             site_root,
             "reference/jvm-api/details/bindings-java-packages/com-example/nativedeprecated.mdx",
         )
-        assert_contains_all(package_text, ["`alpha`", "`beta`", "`stable`", "`deprecated`"])
-        assert_contains_all(legacy_text, ["## Legacy - alpha", "Removed in `1.1.0`."])
+        assert_contains_all(package_text, ["`deprecated`"])
+        assert_contains_all(legacy_text, ["## Legacy", "Removed in `1.1.0`."])
         assert_contains_all(native_deprecated_text, ["## NativeDeprecated - deprecated"])
-
-    def test_cli_renders_replacement_metadata(self) -> None:
-        # TODO(https://github.com/digital-asset/docs/issues/341): define the
-        # JVM status-manifest contract for successor-side replacement metadata.
-        site_root = self._render_pages(include_replacement=True, relative_site_root="site-replacements")
-
-        assert_text_tree_matches_fixture(site_root, "jvm_docs/replacements")
-        added_text = read_mdx(site_root, "reference/jvm-api/details/bindings-java-packages/com-example/added.mdx")
-        assert_contains_all(added_text, ["Replaces", "com.example.Legacy"])
 
     def test_cli_prunes_stale_output(self) -> None:
         manifest_path = build_java_manifest(self.root)
