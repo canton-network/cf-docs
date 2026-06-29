@@ -1,20 +1,25 @@
-name: Update version dashboard
+name: Update generated docs
 
 on:
   schedule:
-    - cron: "23 */6 * * *"
+    - cron: "*/30 * * * *"
   workflow_dispatch:
+    inputs:
+      targets:
+        description: "Generated-doc targets to run"
+        type: string
+        default: "all"
 
 permissions:
   contents: write
   pull-requests: write
 
 concurrency:
-  group: update-version-dashboard
+  group: update-generated-docs
   cancel-in-progress: false
 
 jobs:
-  update-version-dashboard:
+  update-generated-docs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -27,10 +32,20 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y direnv
-          direnv allow .
+          SKIP_NPM_INSTALL=1 direnv allow .
+
+      - name: Install npm dependencies
+        run: SKIP_NPM_INSTALL=1 direnv exec . npm ci
+
+      - name: Set up Daml tooling
+        run: |
+          curl -fsSL https://get.digitalasset.com/install/install.sh | sh
+          echo "$HOME/.dpm/bin" >> "$GITHUB_PATH"
+          echo "$HOME/.daml/bin" >> "$GITHUB_PATH"
 
       - name: Generate update pull requests
         env:
           GH_TOKEN: ${{ github.token }}
           GITHUB_TOKEN: ${{ github.token }}
-        run: python3 scripts/update_generated_reference_prs.py --targets all
+          GENERATED_DOCS_TARGETS: ${{ inputs.targets || 'all' }}
+        run: python3 scripts/update_generated_reference_prs.py --targets $GENERATED_DOCS_TARGETS

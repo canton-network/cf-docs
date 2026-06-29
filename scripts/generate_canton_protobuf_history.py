@@ -145,8 +145,10 @@ def ensure_repo(repo_dir: Path, *, remote: str, fetch: bool) -> Path:
     repo_dir.parent.mkdir(parents=True, exist_ok=True)
     if not repo_dir.exists():
         run(["git", "clone", "--bare", remote, str(repo_dir)])
+    else:
+        git(["remote", "set-url", "origin", remote], cwd=repo_dir)
     if fetch:
-        git(["fetch", "origin", "--tags", "--prune"], cwd=repo_dir)
+        git(["fetch", "origin", "--tags", "--prune", "--force"], cwd=repo_dir)
     return repo_dir
 
 
