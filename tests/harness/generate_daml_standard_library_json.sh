@@ -112,6 +112,10 @@ dpm_pkg_db_root() {
   printf '%s\n' "$DPM_HOME_DIR/cache/components/damlc/$SDK_VERSION/damlc-dist-dpm/resources/pkg-db_dir"
 }
 
+dpm_damlc_bin() {
+  printf '%s\n' "$DPM_HOME_DIR/cache/components/damlc/$SDK_VERSION/damlc-dist-dpm/damlc"
+}
+
 ensure_daml_sdk() {
   local pkg_db_root
   pkg_db_root="$(daml_pkg_db_root)"
@@ -164,7 +168,12 @@ configure_daml_source() {
 configure_dpm_source() {
   ensure_dpm_sdk
   PKG_DB_ROOT="$(dpm_pkg_db_root)"
-  DOCS_CMD=("dpm" "damlc" "docs")
+  DPM_DAMLC_BIN="$(dpm_damlc_bin)"
+  if [[ ! -x "$DPM_DAMLC_BIN" ]]; then
+    echo "DPM damlc binary not found: $DPM_DAMLC_BIN" >&2
+    return 1
+  fi
+  DOCS_CMD=("$DPM_DAMLC_BIN" "docs")
 }
 
 case "$SDK_SOURCE" in

@@ -392,15 +392,8 @@ def consolidate_lifecycle(
 
         latest_present = present[-1]
         status: str | None = None
-        if record["kind"] == "type":
-            status = artifact_source.type_statuses.get(record["symbol"])
-            if status is None and deprecated_version is not None:
-                status = "deprecated"
-            if status is None:
-                raise ValueError(
-                    "Missing status for JVM doc type "
-                    f"{record['symbol']} in {artifact_source.group}:{artifact_source.artifact}"
-                )
+        if record["kind"] == "type" and deprecated_version is not None:
+            status = "deprecated"
         lifecycle.append(
             JvmDocSymbolLifecycle(
                 symbol_key=symbol_key,
@@ -562,7 +555,6 @@ def build_jvm_doc_lifecycle_report_from_sources(
     total_members = sum(artifact.member_count for artifact in artifacts)
     notes = [
         "Input acquisition stays outside x2mdx; this report is built from supplied local Javadoc/Scaladoc jars.",
-        "Object statuses must come from per-artifact status manifests unless Java deprecation metadata provides a deprecated fallback.",
         "Java deprecation metadata is best-effort from deprecated-list.html when present.",
         "Scala deprecation is not inferred from Scaladoc indexes in this initial implementation.",
         "Removed means the first configured version after the last observed presence.",

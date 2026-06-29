@@ -15,6 +15,24 @@ import summarize_version_changes
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+NETWORK_VARIABLE_TAB_PAGES = (
+    "docs-main/appdev/deep-dives/token-standard.mdx",
+    "docs-main/global-synchronizer/canton-console/console-overview.mdx",
+    "docs-main/global-synchronizer/deployment/kubernetes-deployment.mdx",
+    "docs-main/global-synchronizer/deployment/onboarding-process.mdx",
+    "docs-main/global-synchronizer/deployment/required-network-parameters.mdx",
+    "docs-main/global-synchronizer/deployment/sv-network-resets.mdx",
+    "docs-main/global-synchronizer/deployment/synchronizer-traffic.mdx",
+    "docs-main/global-synchronizer/deployment/validator-docker-compose.mdx",
+    "docs-main/global-synchronizer/deployment/validator-kubernetes.mdx",
+    "docs-main/global-synchronizer/production-operations/validator-disaster-recovery.mdx",
+    "docs-main/global-synchronizer/reference/canton-console-reference.mdx",
+    "docs-main/global-synchronizer/understand/local-testing.mdx",
+    "docs-main/sdks-tools/api-reference/splice-daml-apis.mdx",
+    "docs-main/sdks-tools/api-reference/splice-http-apis.mdx",
+    "docs-main/sdks-tools/api-reference/splice-scan-bulk-data-api.mdx",
+    "docs-main/sdks-tools/api-reference/splice-scan-gs-connectivity-api.mdx",
+)
 
 
 @dataclass(frozen=True)
@@ -26,9 +44,11 @@ class UpdateTarget:
     generate_commands: tuple[tuple[str, ...], ...]
     paths: tuple[str, ...]
     summary_kind: str
-    summary_path: str
+    summary_path: str | None
     summary_label: str | None
     validation: tuple[str, ...]
+    source_update_commands: tuple[tuple[str, ...], ...] = ()
+    source_update_paths: tuple[str, ...] = ()
 
 
 UPDATE_TARGETS = (
@@ -38,20 +58,60 @@ UPDATE_TARGETS = (
         branch="version-dashboard/update",
         description=(
             "Updates the committed Canton Network version dashboard data from public network, "
-            "package, and installer sources."
+            "package, and installer sources, then refreshes generated pages that render "
+            "network-specific values from that data."
         ),
-        generate_commands=(("nix-shell", "--run", "npm run generate:version-compatibility-dashboard"),),
+        generate_commands=(("nix-shell", "--run", "npm run generate:network-variable-tabs"),),
         paths=(
             "config/repo-version-config.json",
             "docs-main/snippets/generated/version-dashboard-data.mdx",
+            *NETWORK_VARIABLE_TAB_PAGES,
         ),
         summary_kind="dashboard",
         summary_path="config/repo-version-config.json",
         summary_label=None,
         validation=(
             "npm run generate:version-compatibility-dashboard",
+            "npm run generate:network-variable-tabs",
             "git diff --check",
         ),
+        source_update_commands=(
+            ("nix-shell", "--run", "npm run generate:version-compatibility-dashboard"),
+        ),
+        source_update_paths=(
+            "config/repo-version-config.json",
+            "docs-main/snippets/generated/version-dashboard-data.mdx",
+        ),
+    ),
+    UpdateTarget(
+        key="splice-openapi",
+        title="Update Splice OpenAPI reference",
+        branch="generated-references/splice-openapi/update",
+        description=(
+            "Updates the Splice OpenAPI source pin to the latest stable "
+            "decentralized-canton-sync release and regenerates the checked-in "
+            "Splice OpenAPI specifications and navigation."
+        ),
+        generate_commands=(
+            ("nix-shell", "--run", "npm run generate:splice-mintlify-openapi"),
+        ),
+        paths=(
+            "config/mintlify-openapi/splice-openapi/source-artifacts.json",
+            "docs-main/docs.json",
+            "docs-main/openapi/splice",
+        ),
+        summary_kind="source-config",
+        summary_path="config/mintlify-openapi/splice-openapi/source-artifacts.json",
+        summary_label="Splice OpenAPI",
+        validation=(
+            "npm run update:generated-reference-sources -- --source splice-openapi",
+            "npm run generate:splice-mintlify-openapi",
+            "git diff --check",
+        ),
+        source_update_commands=(
+            ("nix-shell", "--run", "npm run update:generated-reference-sources -- --source splice-openapi"),
+        ),
+        source_update_paths=("config/mintlify-openapi/splice-openapi/source-artifacts.json",),
     ),
     UpdateTarget(
         key="wallet-gateway-openrpc",
@@ -63,7 +123,6 @@ UPDATE_TARGETS = (
             "OpenRPC reference pages."
         ),
         generate_commands=(
-            ("nix-shell", "--run", "npm run update:generated-reference-sources -- --source wallet-gateway-openrpc"),
             ("nix-shell", "--run", "npm run generate:wallet-gateway-openrpc-reference"),
         ),
         paths=(
@@ -77,6 +136,223 @@ UPDATE_TARGETS = (
         validation=(
             "npm run update:generated-reference-sources -- --source wallet-gateway-openrpc",
             "npm run generate:wallet-gateway-openrpc-reference",
+            "git diff --check",
+        ),
+        source_update_commands=(
+            ("nix-shell", "--run", "npm run update:generated-reference-sources -- --source wallet-gateway-openrpc"),
+        ),
+        source_update_paths=("config/x2mdx/wallet-gateway-openrpc/source-artifacts.json",),
+    ),
+    UpdateTarget(
+        key="json-api-reference",
+        title="Update JSON Ledger API OpenAPI reference",
+        branch="generated-references/json-api-reference/update",
+        description=(
+            "Updates the JSON Ledger API OpenAPI source pin to the latest public "
+            "Canton release bundle for the published docs version and regenerates "
+            "the checked-in OpenAPI reference."
+        ),
+        generate_commands=(
+            ("nix-shell", "--run", "npm run generate:json-api-reference"),
+        ),
+        paths=(
+            "config/x2mdx/ledger-api/source-artifacts.json",
+            "docs-main/docs.json",
+            "docs-main/openapi/json-ledger-api",
+            "docs-main/reference/json-api-reference",
+        ),
+        summary_kind="versioned-source-config",
+        summary_path="config/x2mdx/ledger-api/source-artifacts.json",
+        summary_label="JSON Ledger API OpenAPI",
+        validation=(
+            "npm run update:generated-reference-sources -- --source ledger-api",
+            "npm run generate:json-api-reference",
+            "git diff --check",
+        ),
+        source_update_commands=(
+            ("nix-shell", "--run", "npm run update:generated-reference-sources -- --source ledger-api"),
+        ),
+        source_update_paths=("config/x2mdx/ledger-api/source-artifacts.json",),
+    ),
+    UpdateTarget(
+        key="json-api-asyncapi-reference",
+        title="Update JSON Ledger API AsyncAPI reference",
+        branch="generated-references/json-api-asyncapi-reference/update",
+        description=(
+            "Updates the JSON Ledger API AsyncAPI source pin to the latest public "
+            "Canton release bundle for the published docs version and regenerates "
+            "the checked-in AsyncAPI reference."
+        ),
+        generate_commands=(
+            ("nix-shell", "--run", "npm run generate:json-api-asyncapi-reference"),
+        ),
+        paths=(
+            "config/x2mdx/ledger-api-asyncapi/source-artifacts.json",
+            "docs-main/docs.json",
+            "docs-main/reference/json-api-asyncapi-reference",
+        ),
+        summary_kind="versioned-source-config",
+        summary_path="config/x2mdx/ledger-api-asyncapi/source-artifacts.json",
+        summary_label="JSON Ledger API AsyncAPI",
+        validation=(
+            "npm run update:generated-reference-sources -- --source ledger-api-asyncapi",
+            "npm run generate:json-api-asyncapi-reference",
+            "git diff --check",
+        ),
+        source_update_commands=(
+            ("nix-shell", "--run", "npm run update:generated-reference-sources -- --source ledger-api-asyncapi"),
+        ),
+        source_update_paths=("config/x2mdx/ledger-api-asyncapi/source-artifacts.json",),
+    ),
+    UpdateTarget(
+        key="grpc-ledger-api-reference",
+        title="Update gRPC Ledger API reference",
+        branch="generated-references/grpc-ledger-api-reference/update",
+        description=(
+            "Regenerates the checked-in gRPC Ledger API reference from the latest "
+            "stable Canton protobuf release bundles selected by the existing source config."
+        ),
+        generate_commands=(("nix-shell", "--run", "npm run generate:grpc-ledger-api-reference"),),
+        paths=(
+            "docs-main/docs.json",
+            "docs-main/reference/grpc-ledger-api-reference",
+        ),
+        summary_kind="source-config",
+        summary_path="config/x2mdx/grpc-ledger-api-reference/source-artifacts.json",
+        summary_label="gRPC Ledger API",
+        validation=(
+            "npm run generate:grpc-ledger-api-reference",
+            "git diff --check",
+        ),
+    ),
+    UpdateTarget(
+        key="canton-protobuf-history",
+        title="Update Canton protobuf history reference",
+        branch="generated-references/canton-protobuf-history/update",
+        description=(
+            "Regenerates the checked-in Canton protobuf history references from the "
+            "latest stable Canton protobuf release bundles selected by the existing source config."
+        ),
+        generate_commands=(("nix-shell", "--run", "npm run generate:canton-protobuf-history"),),
+        paths=(
+            "config/x2mdx/protobuf-history/metadata.json",
+            "docs-main/docs.json",
+            "docs-main/appdev/reference/protobuf-history",
+            "docs-main/reference/admin-api/protobuf",
+            "docs-main/reference/protobuf",
+        ),
+        summary_kind="source-config",
+        summary_path="config/x2mdx/protobuf-history/source-artifacts.json",
+        summary_label="Canton protobuf history",
+        validation=(
+            "npm run generate:canton-protobuf-history",
+            "git diff --check",
+        ),
+    ),
+    UpdateTarget(
+        key="ledger-bindings",
+        title="Update Java ledger bindings reference",
+        branch="generated-references/ledger-bindings/update",
+        description=(
+            "Updates the Java ledger bindings source pins to the latest stable "
+            "Maven artifacts and regenerates the checked-in Java bindings reference pages."
+        ),
+        generate_commands=(
+            ("nix-shell", "--run", "npm run generate:ledger-bindings-api-reference"),
+        ),
+        paths=(
+            "config/x2mdx/ledger-bindings/source-artifacts.json",
+            "docs-main/docs.json",
+            "docs-main/reference/java-bindings.mdx",
+            "docs-main/reference/java",
+        ),
+        summary_kind="artifact-source-config",
+        summary_path="config/x2mdx/ledger-bindings/source-artifacts.json",
+        summary_label="Java ledger bindings",
+        validation=(
+            "npm run update:generated-reference-sources -- --source ledger-bindings",
+            "npm run generate:ledger-bindings-api-reference",
+            "git diff --check",
+        ),
+        source_update_commands=(
+            ("nix-shell", "--run", "npm run update:generated-reference-sources -- --source ledger-bindings"),
+        ),
+        source_update_paths=("config/x2mdx/ledger-bindings/source-artifacts.json",),
+    ),
+    UpdateTarget(
+        key="daml-standard-library",
+        title="Update Daml Standard Library reference",
+        branch="generated-references/daml-standard-library/update",
+        description=(
+            "Updates the Daml Standard Library source pin to the latest DPM SDK "
+            "version and regenerates the checked-in Daml Standard Library reference pages."
+        ),
+        generate_commands=(
+            ("nix-shell", "--run", "npm run generate:daml-standard-library-reference"),
+        ),
+        paths=(
+            "config/x2mdx/daml-standard-library/source-artifacts.json",
+            "docs-main/docs.json",
+            "docs-main/appdev/reference/daml-standard-library",
+        ),
+        summary_kind="source-config",
+        summary_path="config/x2mdx/daml-standard-library/source-artifacts.json",
+        summary_label="Daml Standard Library",
+        validation=(
+            "npm run update:generated-reference-sources -- --source daml-standard-library",
+            "npm run generate:daml-standard-library-reference",
+            "git diff --check",
+        ),
+        source_update_commands=(
+            ("nix-shell", "--run", "npm run update:generated-reference-sources -- --source daml-standard-library"),
+        ),
+        source_update_paths=("config/x2mdx/daml-standard-library/source-artifacts.json",),
+    ),
+    UpdateTarget(
+        key="typescript-bindings",
+        title="Update TypeScript bindings reference",
+        branch="generated-references/typescript-bindings/update",
+        description=(
+            "Updates the TypeScript bindings source pins to the latest stable npm "
+            "releases and regenerates the checked-in TypeScript bindings reference pages."
+        ),
+        generate_commands=(
+            ("nix-shell", "--run", "npm run generate:typescript-bindings-reference"),
+        ),
+        paths=(
+            "config/x2mdx/typescript-bindings/source-artifacts.json",
+            "docs-main/docs.json",
+            "docs-main/reference/typescript.mdx",
+            "docs-main/reference/typescript",
+        ),
+        summary_kind="package-source-config",
+        summary_path="config/x2mdx/typescript-bindings/source-artifacts.json",
+        summary_label="TypeScript bindings",
+        validation=(
+            "npm run update:generated-reference-sources -- --source typescript-bindings",
+            "npm run generate:typescript-bindings-reference",
+            "git diff --check",
+        ),
+        source_update_commands=(
+            ("nix-shell", "--run", "npm run update:generated-reference-sources -- --source typescript-bindings"),
+        ),
+        source_update_paths=("config/x2mdx/typescript-bindings/source-artifacts.json",),
+    ),
+    UpdateTarget(
+        key="canton-metrics-reference",
+        title="Update Canton metrics reference",
+        branch="generated-docs/canton-metrics-reference/update",
+        description=(
+            "Regenerates the checked-in Canton Metrics reference page from the latest "
+            "Canton release documentation source."
+        ),
+        generate_commands=(("nix-shell", "--run", "npm run generate:canton-metrics-reference"),),
+        paths=("docs-main/global-synchronizer/reference/canton-metrics.mdx",),
+        summary_kind="static",
+        summary_path=None,
+        summary_label=None,
+        validation=(
+            "npm run generate:canton-metrics-reference",
             "git diff --check",
         ),
     ),
@@ -113,6 +389,8 @@ def body_markdown(*, target: UpdateTarget, changes: list[str]) -> str:
 
 
 def summarize_target_changes(target: UpdateTarget, before_path: Path) -> list[str]:
+    if target.summary_path is None:
+        return []
     after_path = REPO_ROOT / target.summary_path
     if target.summary_kind == "dashboard":
         return summarize_version_changes.dashboard_changes(before_path, after_path)
@@ -124,6 +402,32 @@ def summarize_target_changes(target: UpdateTarget, before_path: Path) -> list[st
             after_path,
             label=target.summary_label,
         )
+    if target.summary_kind == "package-source-config":
+        if target.summary_label is None:
+            raise ValueError(f"Update target {target.key} must define summary_label")
+        return summarize_version_changes.package_source_config_changes(
+            before_path,
+            after_path,
+            label=target.summary_label,
+        )
+    if target.summary_kind == "versioned-source-config":
+        if target.summary_label is None:
+            raise ValueError(f"Update target {target.key} must define summary_label")
+        return summarize_version_changes.versioned_source_config_changes(
+            before_path,
+            after_path,
+            label=target.summary_label,
+        )
+    if target.summary_kind == "artifact-source-config":
+        if target.summary_label is None:
+            raise ValueError(f"Update target {target.key} must define summary_label")
+        return summarize_version_changes.artifact_source_config_changes(
+            before_path,
+            after_path,
+            label=target.summary_label,
+        )
+    if target.summary_kind == "static":
+        return []
     raise ValueError(f"Unknown summary kind for {target.key}: {target.summary_kind}")
 
 
@@ -150,12 +454,25 @@ def create_or_update_pull_request(
 
 def process_target(*, target: UpdateTarget, base_sha: str, base_branch: str, repository: str) -> None:
     reset_to_base(base_sha)
-    before_path = pr_utils.write_base_file(base_sha, target.summary_path)
+    before_path = pr_utils.write_base_file(base_sha, target.summary_path) if target.summary_path is not None else None
+
+    for command in target.source_update_commands:
+        pr_utils.run(command)
+
+    if target.source_update_commands and not pr_utils.has_changes(target.source_update_paths):
+        print(f"Source unchanged for {target.title}; skipping generation")
+        pr_utils.close_stale_pull_request(
+            title=target.title,
+            branch=target.branch,
+            base_branch=base_branch,
+            repository=repository,
+        )
+        return
 
     for command in target.generate_commands:
         pr_utils.run(command)
 
-    changes = summarize_target_changes(target, before_path)
+    changes = summarize_target_changes(target, before_path) if before_path is not None else []
     with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as body_file:
         body_path = Path(body_file.name)
     body_path.write_text(body_markdown(target=target, changes=changes), encoding="utf-8")
@@ -186,11 +503,20 @@ def parse_args() -> argparse.Namespace:
         "--repository",
         help="GitHub repository for generated PRs. Defaults to the current gh repository.",
     )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="List selected generated-doc targets and commands without changing files or opening PRs.",
+    )
     args = parser.parse_args()
     if "all" in args.targets and len(args.targets) > 1:
         parser.error("pass --targets all by itself, or list specific target keys")
-    args.base_branch = args.base_branch or current_base_branch()
-    args.repository = args.repository or pr_utils.current_repository()
+    if args.dry_run:
+        args.base_branch = args.base_branch or ""
+        args.repository = args.repository or ""
+    else:
+        args.base_branch = args.base_branch or current_base_branch()
+        args.repository = args.repository or pr_utils.current_repository()
     return args
 
 
@@ -207,11 +533,21 @@ def targets_to_run(target_keys: Sequence[str]) -> tuple[UpdateTarget, ...]:
 
 def main() -> int:
     args = parse_args()
+    selected_targets = targets_to_run(args.targets)
+    if args.dry_run:
+        for target in selected_targets:
+            print(f"{target.key}: {target.title}")
+            for command in target.source_update_commands:
+                print("  source $ " + " ".join(command))
+            for command in target.generate_commands:
+                print("  generate $ " + " ".join(command))
+        return 0
+
     pr_utils.git("config", "user.name", "github-actions[bot]")
     pr_utils.git("config", "user.email", "41898282+github-actions[bot]@users.noreply.github.com")
     base_sha = pr_utils.git("rev-parse", "HEAD", capture=True)
 
-    for target in targets_to_run(args.targets):
+    for target in selected_targets:
         process_target(
             target=target,
             base_sha=base_sha,
