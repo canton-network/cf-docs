@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from docs_env import ensure_repo_direnv, repo_direnv_command
+import reference_nav
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CACHE_ROOT = Path(os.environ.get("XDG_CACHE_HOME", "~/.cache")).expanduser() / "x2mdx"
@@ -229,15 +230,7 @@ def update_docs_navigation(
     output_dir: Path,
 ) -> Path:
     docs = load_json(docs_json_path)
-    dropdowns = docs.get("navigation", {}).get("dropdowns")
-    if not isinstance(dropdowns, list):
-        raise ValueError(f"docs.json navigation.dropdowns must be a list: {docs_json_path}")
-    dropdown = next((item for item in dropdowns if isinstance(item, dict) and item.get("dropdown") == dropdown_label), None)
-    if dropdown is None:
-        raise ValueError(f"Dropdown not found in docs.json: {dropdown_label}")
-    pages = dropdown.get("pages")
-    if not isinstance(pages, list):
-        raise ValueError(f"Dropdown does not expose a pages list: {dropdown_label}")
+    pages = reference_nav.navigation_pages(docs, label=dropdown_label, docs_json_path=docs_json_path)
 
     page_entries: list[tuple[str, str, Path]] = []
     for page in sorted(output_dir.glob("*.mdx")):
@@ -247,8 +240,10 @@ def update_docs_navigation(
     page_refs = {page_ref for _title, page_ref, _path in page_entries}
 
     existing_group_index = find_group_index(find_group_path(pages, parent_groups), GROUP_LABEL)
-    dropdown["pages"] = prune_nav_items(pages, page_refs=page_refs, group_labels={GROUP_LABEL})
-    target_pages = ensure_group_path(dropdown["pages"], parent_groups)
+    pruned_pages = prune_nav_items(pages, page_refs=page_refs, group_labels={GROUP_LABEL})
+    pages.clear()
+    pages.extend(pruned_pages)
+    target_pages = ensure_group_path(pages, parent_groups)
     overview_entry = next(((page_ref, path) for _title, page_ref, path in page_entries if path.name == "index.mdx"), None)
     module_refs = [page_ref for _title, page_ref, path in page_entries if path.name != "index.mdx"]
     group_pages: list[Any] = []

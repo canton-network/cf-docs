@@ -30,6 +30,33 @@ class CantonProtobufGeneratorTests(unittest.TestCase):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(f'---\ntitle: "{title}"\n---\n', encoding="utf-8")
 
+    def test_ensure_repo_updates_cached_origin_remote_before_fetch(self) -> None:
+        repo_dir = self.root / "cached.git"
+        repo_dir.mkdir()
+        calls: list[tuple[tuple[str, ...], Path | None]] = []
+        original_run = generator.run
+        try:
+            generator.run = lambda args, cwd=None, capture=False: calls.append((tuple(args), cwd)) or ""
+
+            generator.ensure_repo(
+                repo_dir,
+                remote="https://github.com/digital-asset/canton.git",
+                fetch=True,
+            )
+        finally:
+            generator.run = original_run
+
+        self.assertEqual(
+            calls,
+            [
+                (
+                    ("git", "remote", "set-url", "origin", "https://github.com/digital-asset/canton.git"),
+                    repo_dir,
+                ),
+                (("git", "fetch", "origin", "--tags", "--prune", "--force"), repo_dir),
+            ],
+        )
+
     def test_bundle_selection_maps_only_ledger_and_admin_api_inputs(self) -> None:
         protobuf_root = self.root / "protobuf"
         self.write_proto(protobuf_root / "ledger-api", "com/daml/ledger/api/v2/command_service.proto")
