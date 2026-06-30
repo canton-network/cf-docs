@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import shutil
 from pathlib import Path
 
@@ -73,6 +74,25 @@ def test_copy_output_targets_docs_main_snippets(
     assert target == fake_root / "docs-main" / "snippets" / "external" / "splice" / "main"
     assert (target / "example.mdx").read_text(encoding="utf-8") == "content"
     assert not (fake_root / "snippets").exists()
+
+
+def test_splice_snippets_are_yaml_string_markers() -> None:
+    config = json.loads(
+        (
+            generator.CF_DOCS_ROOT
+            / "config"
+            / "snippet-config"
+            / "splice-snippet-list-remote.json"
+        ).read_text(encoding="utf-8")
+    )
+
+    for snippet in config["snippets"]:
+        assert snippet["sourceRepo"] == "splice"
+        assert Path(snippet["sourceFilepath"]).suffix in {".yaml", ".yml"}
+        assert snippet["location"]["type"] == "stringMarker"
+        assert snippet["location"]["start"]
+        assert snippet["location"]["end"]
+        assert snippet["options"]["language"] == "yaml"
 
 
 def test_wrapper_copies_helper_runs_extraction_and_copies_output(
