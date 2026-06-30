@@ -1,0 +1,134 @@
+---
+title: "x402 HTTP Payments"
+description: "Gate any HTTP endpoint behind Canton Coin payments using the x402 protocol and the exact scheme."
+---
+
+The [x402 protocol](https://x402.org) is an HTTP payment standard built around the `402 Payment Required` status code. A server responds with payment requirements; the client pays on-chain and retries. There are no API keys and no billing accounts; the payment itself is the credential.
+
+On Canton Network, x402 uses the `exact` scheme with the `allocation-direct` settlement method (a CIP-56 delivery-versus-payment flow). The client LOCKs Canton Coin in an allocation naming the merchant as receiver and the facilitator as executor; the facilitator then settles directly to the merchant in a single sponsored-gas transaction. There is no escrow, no facilitator custody, and no per-merchant preapproval.
+
+## How It Works
+
+This is a two-transaction DVP: the payer's **allocate** (lock) and the facilitator's **execute** (settle).
+
+```mermaid
+sequenceDiagram
+    participant C as Client / Agent
+    participant R as Resource Server
+    participant F as Facilitator
+    participant L as Canton Ledger
+
+    C->>R: GET /resource
+    R->>C: 402 Payment Required<br/>(PAYMENT-REQUIRED header)
+    C->>L: AllocationFactory_Allocate<br/>(lock funds; receiver = merchant,<br/>executor = facilitator)
+    C->>R: GET /resource + PAYMENT-SIGNATURE
+    R->>F: POST /verify
+    F-->>R: VerifyResponse (valid)
+    R->>F: POST /settle
+    F->>L: DirectSettlementConsent_Execute<br/>(1 tx, CC lands on merchant directly)
+    L-->>F: updateId
+    F-->>R: SettlementResponse (updateId)
+    R->>C: 200 + PAYMENT-RESPONSE
+```
+
+The allocation's `executor` is the facilitator, so only the facilitator can exercise the settlement. The funds are locked the moment the allocation is created. The facilitator never holds custody and never advances its own funds; it pays only the sequencer traffic (gas) as executor.
+
+## Scheme: `exact`
+
+| Field | Value |
+|---|---|
+| `scheme` | `exact` |
+| `asset` | `CC` |
+| `assetTransferMethod` | `allocation-direct` |
+| Networks | `canton:mainnet`, `canton:testnet` |
+
+### PaymentRequirements structure
+
+```json
+{
+  "scheme": "exact",
+  "network": "canton:mainnet",
+  "amount": "10000000000",
+  "asset": "CC",
+  "payTo": "<receiver-party>::1220...",
+  "maxTimeoutSeconds": 60,
+  "extra": {
+    "assetTransferMethod": "allocation-direct",
+    "feePayer": "<facilitator-party>::1220...",
+    "synchronizerId": "global-domain::1220...",
+    "instrumentId": { "admin": "<DSO-party>::1220...", "id": "Amulet" },
+    "allocateBeforeSeconds": 30,
+    "settleBeforeSeconds": 60,
+    "memo": "invoice-2024-001"
+  }
+}
+```
+
+- `amount` is an integer string of **atomic units** (1 CC = 10^10 units), so `"10000000000"` = 1 CC. The facilitator compares by value (BigInt atomic units), so a 10×/0.1× error provably never folds, but the form must be a valid integer string.
+- `feePayer` is the facilitator party; it becomes `settlement.executor` in the allocation. Clients MUST NOT alter it.
+- `instrumentId` is the Canton Coin instrument `{ admin: "<DSO-party>", id: "Amulet" }`. The direct path settles Amulet/CC only.
+- `allocateBeforeSeconds` / `settleBeforeSeconds` are relative deadlines (seconds from request time) the client uses to compute the absolute `allocateBefore` / `settleBefore`. `settleBeforeSeconds` MUST be strictly greater than `allocateBeforeSeconds`.
+- `memo` (optional) is a seller-defined string the client stamps into the allocation's settlement metadata; the facilitator does not validate it.
+
+> `feePayer`, `synchronizerId`, and `instrumentId.admin` (the DSO party) are deployment values. Get `feePayer` and `synchronizerId` from `GET /supported` on your facilitator; get the DSO party id from your Canton Scan API.
+
+## The Facilitator
+
+A facilitator is a service that bridges x402 and the Canton ledger. It holds a Canton party, reads the locked `Allocation` from its ACS, resolves or mints the standing `DirectSettlementConsent` for the `{sender, merchant}` pair, and exercises `DirectSettlementConsent_Execute` alone, paying the merchant directly in one transaction. The facilitator sponsors sequencer traffic fees; the merchant pays nothing per-request.
+
+The facilitator exposes two endpoints that the resource server calls:
+
+- `POST /verify` validates the locked `Allocation` against `PaymentRequirements`
+- `POST /settle` exercises `DirectSettlementConsent_Execute` and returns the ledger `updateId`
+
+Use `GET /supported` on any facilitator to discover its party ID, advertised method, and the networks it serves:
+
+```json
+{
+  "kinds": [{
+    "x402Version": 2,
+    "scheme": "exact",
+    "network": "canton:mainnet",
+    "extra": {
+      "transferMethods": ["allocation-direct"],
+      "synchronizerId": "global-domain::1220..."
+    }
+  }],
+  "signers": {
+    "canton:*": ["<facilitator-party>::1220..."]
+  }
+}
+```
+
+Because `/supported` advertises `synchronizerId`, a 402 `extra` MAY omit it and clients will fall back to this value.
+
+> Hosted-party merchants must upload + vet the [`x402-direct` DAR](https://github.com/Denend/x402-dar) on their own participant; external (relay-hosted) parties don't.
+
+## Replay Protection
+
+Canton provides native replay protection. `DirectSettlementConsent_Execute` runs `Allocation_ExecuteTransfer`, which archives the `AmuletAllocation`; a second execute on the same `allocationCid` fails at the ledger. The facilitator also records each settled allocation in a single-use store, so a repeat `/settle` for the same allocation is rejected with `invalid_exact_canton_payment_already_settled` before any submit. Treat that code as confirmation that the original settlement succeeded.
+
+## Error Codes
+
+| Code | Meaning |
+|---|---|
+| `invalid_exact_canton_missing_proof` | Payload carried neither `allocationCid` nor `allocationInstructionCid` |
+| `invalid_exact_canton_allocation_pending` | Only an `allocationInstructionCid` was supplied; funds are not yet in an executable lock |
+| `invalid_exact_canton_allocation_not_found` | `allocationCid` is not in the facilitator's ACS: never created, already settled, or wrong cid |
+| `invalid_exact_canton_amount_mismatch` | `Allocation.transferLeg.amount` ≠ `PaymentRequirements.amount` (by value) |
+| `invalid_exact_canton_merchant_mismatch` | Allocation receiver ≠ `payTo` |
+| `invalid_exact_canton_instrument_id_mismatch` | Allocation instrument ≠ `extra.instrumentId` (or a non-Amulet instrument was locked) |
+| `invalid_exact_canton_executor_mismatch` | Allocation executor ≠ `feePayer` (the facilitator) |
+| `invalid_exact_canton_expired` | `settleBefore` is past or within the 5-second safety margin, or `allocateBefore` ≥ `settleBefore` |
+| `invalid_exact_canton_holding_locked` | The backing lock is held by a party other than the instrument admin (DSO) |
+| `invalid_exact_canton_self_payment` | The proven payer is the facilitator / fee payer; the facilitator must never move its own funds |
+| `invalid_exact_canton_execute_failed` | `DirectSettlementConsent_Execute` rolled back, or committed without moving funds to the merchant |
+| `invalid_exact_canton_payment_already_settled` | This allocation was already settled (replay) |
+| `invalid_exact_canton_insufficient_balance` | Optional balance check: the proven payer's holdings are below the required amount |
+| `unexpected_canton_ledger_error` | Network mismatch, missing onboarding/consent, or a Scan/ledger error not covered above |
+
+## Related Pages
+
+- [x402 Merchant Integration](/sdks-tools/development-tools/x402-merchant) -- Add x402 to your Express or Next.js API
+- [x402 Agent Integration](/sdks-tools/development-tools/x402-agent) -- Make x402 payments from an automated agent
+- [Wallet Gateway](/integrations/wallet-gateway/download) -- Canton wallet integration for end users

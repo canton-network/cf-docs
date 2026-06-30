@@ -1,0 +1,155 @@
+---
+title: "x402 Agent Integration"
+description: "Make automated Canton Coin payments from an agent or backend service using the canton-agent-wallet CLI and SDK."
+---
+
+An **agent** (or payer) is any client that calls x402-gated endpoints. When the server returns `402 Payment Required`, the agent LOCKs Canton Coin in an allocation on the ledger (naming the merchant as receiver and the facilitator as executor), attaches the payment proof, and retries automatically. The facilitator then settles the locked funds directly to the merchant.
+
+## Install
+
+```bash
+npm i -g @ftptech/canton-agent-wallet@latest
+```
+
+<Note>
+These examples target **mainnet** via the `facilitator.ftptech.xyz` relay. The CLI defaults to `canton:testnet`, so select mainnet first, otherwise a testnet wallet hits the mainnet facilitator and payments fail with a network mismatch:
+
+```bash
+export CANTON_AGENT_NETWORK=canton:mainnet
+```
+</Note>
+
+## CLI Commands
+
+### Create a wallet
+
+Generates an Ed25519 key pair, allocates a Canton party, and saves the wallet to `~/.canton-agent/wallet.json`.
+
+```bash
+canton-agent-wallet create --relay-url https://facilitator.ftptech.xyz
+# wallet ready (canton:mainnet)
+#   party:   my-agent::1220...
+#   fund me: send CC to that party id, then run: canton-agent-wallet claim
+#   keyfile: ~/.canton-agent/wallet.json  <- back it up
+```
+
+### Address
+
+Print the party ID. Use this to receive CC from a wallet or another agent.
+
+```bash
+canton-agent-wallet address
+# my-agent::1220...
+```
+
+### Balance
+
+```bash
+canton-agent-wallet balance --relay-url https://facilitator.ftptech.xyz
+# <amount> CC  (<n> holdings)
+```
+
+### Claim
+
+Accept incoming CC transfers (e.g. the initial funding from a wallet):
+
+```bash
+canton-agent-wallet claim --relay-url https://facilitator.ftptech.xyz
+# claimed 1 incoming transfer(s)
+```
+
+### Pay
+
+Fetch a URL, automatically paying any x402 `402` challenge:
+
+```bash
+canton-agent-wallet pay --relay-url https://facilitator.ftptech.xyz https://api.example.com/resource
+```
+
+For POST endpoints (e.g. LLM inference with a request body), use `makePayingFetch` from the SDK instead.
+
+### Withdraw
+
+Send CC to any Canton party:
+
+```bash
+# Partial amount
+canton-agent-wallet withdraw --relay-url https://facilitator.ftptech.xyz --to "recipient::1220..." --amount 5.0000000000
+
+# Full balance
+canton-agent-wallet withdraw --relay-url https://facilitator.ftptech.xyz --to "recipient::1220..."
+```
+
+`--amount` is in **CC (decimal)**, so `5.0` = 5 CC. This differs from `PaymentRequirements.amount` in the 402 challenge, which is in **atomic units** (10^10 per CC).
+
+### Export / Import
+
+Back up and restore the wallet key:
+
+```bash
+# Export (prints private key; store securely)
+canton-agent-wallet export > my-agent.pem
+
+# Restore on a new machine
+canton-agent-wallet import --relay-url https://facilitator.ftptech.xyz --key-file my-agent.pem
+```
+
+## Environment Variables
+
+| Variable | Description |
+|---|---|
+| `CANTON_AGENT_RELAY_URL` | Facilitator URL (alternative to `--relay-url` on every command) |
+| `CANTON_AGENT_NETWORK` | Canton network (default: `canton:testnet`; set to `canton:mainnet` for mainnet) |
+| `CANTON_AGENT_API_KEY` | API key if the facilitator requires one |
+| `HTTPS_PROXY` | HTTP proxy for outbound requests |
+
+<Warning>
+`CANTON_AGENT_NETWORK` defaults to `canton:testnet`. Always set it to `canton:mainnet` when connecting to mainnet.
+</Warning>
+
+## SDK Usage
+
+For programmatic use (e.g. embedding payments in a backend service):
+
+```typescript
+import { makePayingFetch } from "@ftptech/canton-agent-wallet";
+
+// Creates or loads wallet, resolves Canton party
+const payFetch = await makePayingFetch({
+  relayUrl: "https://facilitator.ftptech.xyz",
+  network:  "canton:mainnet",
+});
+
+// Drop-in fetch replacement; 402 is detected, paid, and retried automatically
+const res = await payFetch("https://api.example.com/resource", {
+  method:  "POST",
+  headers: { "Content-Type": "application/json" },
+  body:    JSON.stringify({ prompt: "hello" }),
+});
+const data = await res.json();
+```
+
+## Wallet File
+
+The wallet is stored at `~/.canton-agent/wallet.json` with permissions `0600`. It contains the Ed25519 private key and the allocated Canton party ID. **Back it up; losing the file loses access to the funds it holds.**
+
+## How Payment Works
+
+Payment is a two-transaction delivery-versus-payment (DVP). When the agent pays an x402-gated URL, it first LOCKs funds by exercising `AllocationFactory_Allocate` on the Canton ledger (receiver = merchant, executor = facilitator):
+
+1. `POST /v2/interactive-submission/prepare` → gets `preparedTransactionHash`
+2. Agent signs the hash with its Ed25519 key
+3. `POST /v2/interactive-submission/execute` with the signature
+4. Agent resolves the `allocationCid` from the resulting `updateId`
+5. Retries the original request with `PAYMENT-SIGNATURE: <base64 PaymentPayload>`
+
+That is the **allocate** leg. The merchant's server then calls the facilitator's `/verify` and `/settle`, and the facilitator performs the **execute** leg: `DirectSettlementConsent_Execute`, a single sponsored-gas transaction that moves the locked CC directly to the merchant and archives the allocation. The agent never pays gas and the facilitator never holds custody.
+
+## First-Request Latency
+
+The first payment after a cold start is slower than subsequent ones. SV Scan caches `AmuletRules` (5 min TTL) and `OpenMiningRound` (30 s TTL); these caches are empty on startup, so the first request warms them. Subsequent payments typically complete in 10 to 25 seconds on Canton mainnet.
+
+## Related Pages
+
+- [x402 HTTP Payments](/sdks-tools/development-tools/x402-payments) -- Protocol overview and error codes
+- [x402 Merchant Integration](/sdks-tools/development-tools/x402-merchant) -- How to gate your own API endpoints
