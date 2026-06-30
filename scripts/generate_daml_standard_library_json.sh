@@ -11,7 +11,7 @@ Usage: generate_daml_standard_library_json.sh --output-json PATH [options]
 Generate Daml Standard Library docs JSON using installed SDK artifacts.
 
 SDK source selection:
-- dpm (default): use DPM cache + `dpm damlc docs`.
+- dpm (default): use DPM cache + cached damlc binary.
 - auto: prefer DPM cache under ~/.dpm, fallback to DAML SDK installation
   under ~/.daml/sdk/<version>.
 - daml: use DAML SDK layout + damlc binary.
@@ -147,6 +147,10 @@ dpm_pkg_db_root() {
   printf '%s\n' "$DPM_HOME_DIR/cache/components/damlc/$SDK_VERSION/damlc-dist-dpm/resources/pkg-db_dir"
 }
 
+dpm_damlc_bin() {
+  printf '%s\n' "$DPM_HOME_DIR/cache/components/damlc/$SDK_VERSION/damlc-dist-dpm/damlc"
+}
+
 ensure_daml_sdk() {
   local pkg_db_root
   pkg_db_root="$(daml_pkg_db_root)"
@@ -237,11 +241,12 @@ configure_dpm_source() {
     return 1
   fi
   PKG_DB_ROOT="$(dpm_pkg_db_root)"
-  if ! command -v dpm >/dev/null 2>&1; then
-    echo "dpm not found in PATH." >&2
+  DPM_DAMLC_BIN="$(dpm_damlc_bin)"
+  if [[ ! -x "$DPM_DAMLC_BIN" ]]; then
+    echo "DPM damlc binary not found: $DPM_DAMLC_BIN" >&2
     return 1
   fi
-  DOCS_CMD=("dpm" "damlc" "docs")
+  DOCS_CMD=("$DPM_DAMLC_BIN" "docs")
   SDK_SOURCE="dpm"
   return 0
 }
