@@ -372,18 +372,24 @@ Networks is an array, so you can define multiple networks in a single configurat
 - _identityProviderId_ (required): Must match the `id` of an IDP defined in the `idps` section
 - _ledgerApi_ (required): Configuration object for the Ledger API:
     - _baseUrl_ (required): The base URL of the Canton validator's Ledger API (e.g., `"http://localhost:2975"` or `"https://ledger.example.com"`)
-- _auth_ (required): Authentication configuration for normal ledger operations
-- _adminAuth_ (optional): Authentication configuration for admin operations. Only needed for operations requiring elevated privileges
+- _auth_ (required): Authentication configuration for normal ledger operations. This controls the login method presented to users in the UI, and should use **authorization_code** for interactive (user-facing) flows.
+- _adminAuth_ (optional): Authentication configuration for admin operations. Only needed for operations requiring elevated privileges. This is used for backend machine-to-machine communication and should use **client_credentials** when the identity provider supports it.
 
 **Authentication Methods:**
 
 The Wallet Gateway supports three authentication methods for network access: **authorization_code**, **client_credentials**, and **self_signed**.
 
+> [!IMPORTANT]
+> **`auth` vs `adminAuth`**: The `auth` field determines the login method the user sees in the Wallet Gateway UI. The `adminAuth` field is used only for backend operations and is never presented to end users. This means:
+> - For `auth` (user-facing): use **authorization_code** (interactive browser login) or **self_signed** (development)
+> - For `adminAuth` (backend-only): use **client_credentials** (machine-to-machine) or **self_signed** (development)
+
 **Recommendations:**
 
-- **Production**: Use **client_credentials** for machine-to-machine authentication
-- **Interactive/User-facing**: Use **authorization_code** for user-initiated flows
-- **Development/Testing**: Use **self_signed** for local development
+| Context | `auth` (user-facing) | `adminAuth` (backend) |
+|---|---|---|
+| **Production** | `authorization_code` | `client_credentials` |
+| **Development/Testing** | `self_signed` | `self_signed` |
 
 **Authorization Code:**
 
