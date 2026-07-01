@@ -17,7 +17,6 @@ import summarize_version_changes
 REPO_ROOT = Path(__file__).resolve().parents[1]
 NETWORK_VARIABLE_TAB_PAGES = (
     "docs-main/appdev/deep-dives/token-standard.mdx",
-    "docs-main/global-synchronizer/canton-console/console-overview.mdx",
     "docs-main/global-synchronizer/deployment/kubernetes-deployment.mdx",
     "docs-main/global-synchronizer/deployment/onboarding-process.mdx",
     "docs-main/global-synchronizer/deployment/required-network-parameters.mdx",
@@ -27,7 +26,6 @@ NETWORK_VARIABLE_TAB_PAGES = (
     "docs-main/global-synchronizer/deployment/validator-kubernetes.mdx",
     "docs-main/global-synchronizer/production-operations/validator-disaster-recovery.mdx",
     "docs-main/global-synchronizer/reference/canton-console-reference.mdx",
-    "docs-main/global-synchronizer/understand/local-testing.mdx",
     "docs-main/sdks-tools/api-reference/splice-daml-apis.mdx",
     "docs-main/sdks-tools/api-reference/splice-http-apis.mdx",
     "docs-main/sdks-tools/api-reference/splice-scan-bulk-data-api.mdx",
@@ -356,6 +354,27 @@ UPDATE_TARGETS = (
             "git diff --check",
         ),
     ),
+    UpdateTarget(
+        key="canton-release-notes",
+        title="Update Canton release notes",
+        branch="release-notes/canton/update",
+        description=(
+            "Updates the published Canton release-note page from the latest stable "
+            "digital-asset/canton release note in `release-notes/*.md`."
+        ),
+        generate_commands=(("nix-shell", "--run", "npm run update:canton-release-notes"),),
+        paths=(
+            "docs-main/docs.json",
+            "docs-main/global-synchronizer/release-notes",
+        ),
+        summary_kind="static",
+        summary_path=None,
+        summary_label=None,
+        validation=(
+            "npm run update:canton-release-notes",
+            "git diff --check",
+        ),
+    ),
 )
 
 
@@ -428,6 +447,14 @@ def summarize_target_changes(target: UpdateTarget, before_path: Path) -> list[st
         )
     if target.summary_kind == "static":
         return []
+    if target.summary_kind == "canton-release-notes":
+        if target.summary_label is None:
+            raise ValueError(f"Update target {target.key} must define summary_label")
+        return summarize_version_changes.canton_release_note_changes(
+            before_path,
+            after_path,
+            label=target.summary_label,
+        )
     raise ValueError(f"Unknown summary kind for {target.key}: {target.summary_kind}")
 
 

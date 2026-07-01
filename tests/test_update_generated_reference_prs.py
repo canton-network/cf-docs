@@ -44,6 +44,7 @@ def test_update_targets_cover_all_generated_doc_surfaces() -> None:
         "daml-standard-library",
         "typescript-bindings",
         "canton-metrics-reference",
+        "canton-release-notes",
     ]
 
 
@@ -186,6 +187,7 @@ def test_generated_clean_paths_include_target_paths_and_internal_output() -> Non
     assert "docs-main/snippets/generated/version-dashboard-data.mdx" in clean_paths
     assert "docs-main/global-synchronizer/deployment/validator-kubernetes.mdx" in clean_paths
     assert "docs-main/global-synchronizer/reference/canton-metrics.mdx" in clean_paths
+    assert "docs-main/global-synchronizer/release-notes" in clean_paths
 
 
 def test_target_paths_exist_in_base_checkout() -> None:
