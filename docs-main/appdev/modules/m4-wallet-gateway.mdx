@@ -1,0 +1,96 @@
+---
+title: "Wallet Gateway"
+description: "The server that mediates between Canton Network dApps, validator nodes, and signing providers, and how to think about it when building a dApp."
+---
+
+The Wallet Gateway is a JavaScript/TypeScript server that sits between a dApp and the Canton Network. It implements the dApp API (the CIP-103 JSON-RPC protocol the [dApp SDK](/appdev/modules/m4-dapp-sdk) speaks) and translates the calls into Ledger API requests against a Canton validator and signing requests to a configured signing provider.
+
+For setup, configuration, and operational details, see the [Wallet Gateway integration docs](/integrations/wallet-gateway/overview).
+
+## Why a mediator exists
+
+Canton's privacy model means a validator node only sees the subset of ledger state relevant to its parties. There is no single global state shared across all nodes. A dApp can't just "talk to the chain"; it has to find a validator that hosts the user's party, and the validator has to accept commands signed by the right key.
+
+The Wallet Gateway centralizes that responsibility. To the dApp, the Gateway looks like a wallet: a single JSON-RPC endpoint that knows the user's accounts, signs on their behalf via the configured signing provider, and submits transactions to the right validator. To the validator, the Gateway is an authenticated Ledger API client.
+
+## What it provides
+
+The Gateway exposes two JSON-RPC surfaces. The **dApp API** is what dApps call (`connect`, `listAccounts`, `prepareExecute`, `signMessage`, and a `ledgerApi` proxy). The **User API** is for users and automation: session management, identity-provider configuration, wallet creation, network configuration, and direct signing. A web **User UI** built on top of the User API handles the human-facing flows (login, wallet management, transaction approval). Custom integrations can call the User API directly instead.
+
+A Gateway can be configured for multiple Canton networks (DevNet, TestNet, MainNet, or a custom synchronizer); users pick a network when they create a wallet. Signing is delegated to a pluggable backend: a Canton participant, the Gateway itself (test only), Fireblocks, Blockdaemon, or a similar provider. Sessions, wallet metadata, and transaction history live in one of the supported storage backends (in-memory for dev, SQLite, or PostgreSQL).
+
+## Where it fits
+
+```mermaid
+flowchart LR
+    D["Your dApp<br/>(dApp SDK)"]
+    U[User]
+    subgraph WG[Wallet Gateway]
+        direction TB
+        DA[dApp API]
+        UA[User API]
+        UI[User UI]
+    end
+    V[Canton Validator]
+    S["Signing Provider<br/>(Participant, Fireblocks, …)"]
+    D <-->|CIP-103 over<br/>HTTP / postMessage| DA
+    U -->|browser| UI
+    U -->|programmatic| UA
+    WG <-->|Ledger API| V
+    WG <-->|Signing| S
+```
+
+- **dApp → Gateway**: CIP-103 JSON-RPC over HTTP or `postMessage`.
+- **User → Gateway**: User UI (browser) or User API (programmatic).
+- **Gateway → Canton**: authenticated requests to a validator's Ledger API.
+- **Gateway → Signing Provider**: signing requests to whichever provider the user's wallet is configured for.
+
+## Discovery and connection flow
+
+A typical user-facing flow:
+
+1. **Discovery.** A dApp finds available Wallet Gateways via well-known URLs, a registry, or a browser extension that injects `window.canton`. Each Gateway publishes its base URL and supported networks.
+2. **Connect.** The user picks a Gateway. The dApp calls `sdk.connect()`. The Gateway redirects the user to its User UI to log in if they don't have a session yet (OAuth or self-signed JWT).
+3. **Session.** After login the Gateway returns a JWT. The dApp SDK uses it to authenticate subsequent dApp API calls.
+4. **Transaction.** When the dApp calls `prepareExecute`, the Gateway prepares the transaction with the validator, shows the user the details in the User UI for approval, asks the signing provider to sign, then submits to the validator. The dApp receives the result and `txChanged` events.
+
+## Do you need to run one?
+
+For most dApps the answer is no; users bring their own Wallet Gateway. Typical scenarios:
+
+| Scenario | Who runs the Gateway |
+|---|---|
+| Public dApp, retail users | Users connect via a browser-extension wallet or a hosted Gateway run by a wallet provider. |
+| Enterprise dApp, known users | The dApp operator or a partner runs a Gateway shared by all users. |
+| Internal tools and automation | The team runs a Gateway in their own infrastructure, often paired with an internal signing provider. |
+| Development | You run a local Gateway alongside the validator, typically with the in-Gateway signing provider for testing. |
+
+If you're building a dApp, you mainly care about the client-facing dApp API. That's what the dApp SDK calls; the Gateway is the production target on the other end of those calls.
+
+If you're operating Canton infrastructure or running a dApp at scale, you'll likely run a Gateway too. The [Getting Started](/integrations/wallet-gateway/download) guide walks through standing one up.
+
+## Signing providers
+
+The Wallet Gateway does not sign transactions itself in production. It delegates to a configured provider.
+
+A **Canton participant** signs in-band: the participant node holds the party's key in its key store, and the Gateway requests signatures over the participant's admin API. This is the default for SV-operated and enterprise deployments. **Internal** signing means the Gateway generates and stores the key itself; that mode is for test and development only. **Fireblocks** and **Blockdaemon** are external providers that hold the key in their own MPC or HSM infrastructure and produce signatures via API.
+
+A single Gateway can host wallets across different signing providers; the provider is configured per wallet. See [Signing Providers](/integrations/wallet-gateway/signing-providers) for configuration.
+
+## What a dApp developer should know
+
+Two operational realities affect how a dApp behaves, even if you'll never operate a Gateway.
+
+The user picks the network at the Gateway level, so your dApp should not assume `da-mainnet`. Call `sdk.getActiveNetwork()` and react to `accountsChanged`.
+
+The signing provider determines transaction latency. A local participant signs in milliseconds; an external HSM-backed provider can take seconds. Don't lock the UI on `prepareExecute`; subscribe to `txChanged` and let the user keep working.
+
+## Where to go next
+
+- [Wallet Gateway overview](/integrations/wallet-gateway/overview): what it is, what it provides, and what's in the integration docs.
+- [Getting Started](/integrations/wallet-gateway/download): install and run a Gateway.
+- [Configuration](/integrations/wallet-gateway/configuration): full config-file reference.
+- [APIs](/integrations/wallet-gateway/apis): dApp API and User API method reference.
+- [Signing Providers](/integrations/wallet-gateway/signing-providers): how to wire up each backend.
+- [dApp SDK module](/appdev/modules/m4-dapp-sdk): the client side of the dApp API.
+- [Examples](/integrations/dapp-building-examples): Ping and Portfolio sample dApps that talk to a Wallet Gateway.
