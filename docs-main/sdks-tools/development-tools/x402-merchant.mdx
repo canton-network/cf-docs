@@ -1,0 +1,229 @@
+---
+title: "x402 Merchant Integration"
+description: "Gate your Express or Next.js API endpoints behind Canton Coin payments with x402 middleware."
+---
+
+You are a **merchant** if you have an HTTP API and want to charge Canton Coin (CC) per request. Your callers (agents, wallets, or any x402-compatible client) pay before your handler runs.
+
+**You do not need a CC balance.** You are receiving, not sending. Settlement uses the `allocation-direct` method: the payer LOCKs funds in an allocation naming you as receiver, and the facilitator settles it directly to your party in a single transaction.
+
+## Before You Start
+
+You need:
+
+- A Canton party ID (your receiver identity on Canton mainnet)
+- A one-time `MerchantConsent` onboarded for your facilitator (see Step 1); the `allocation-direct` path has no `TransferPreapproval`
+- A facilitator URL, party ID, and synchronizer ID (Step 2)
+
+## Step 1: Onboard for Direct Settlement
+
+Before any agent can pay you, your party needs a standing `MerchantConsent` for your facilitator. This is a once-total authorization; it **moves no funds** and is not per-request. Without it, `/settle` returns `success:false` at the consent-resolution step (the `{sender, merchant}` pair isn't onboarded) and the middleware answers your callers with a 402 instead of the resource.
+
+Install the CLI:
+
+```bash
+npm i -g @ftptech/canton-agent-wallet   # provides the `canton-agent-wallet` binary
+```
+
+Pick the mode that matches how your party is hosted.
+
+### Mode A: external-party merchant
+
+Your party is an Ed25519 self-custody wallet managed through the relay.
+
+```bash
+# 1. create the wallet once (idempotent)
+canton-agent-wallet create --relay-url https://facilitator.ftptech.xyz
+
+# 2. sign your standing MerchantConsent
+canton-agent-wallet merchant-onboard \
+  --facilitator "<facilitator-party>::1220..." \
+  --synchronizer "global-domain::1220..."
+# → prints: MerchantConsent updateId: <...>
+```
+
+`--facilitator` / `--synchronizer` also read from `CANTON_X402_FACILITATOR` / `CANTON_SYNCHRONIZER_ID`.
+
+### Mode B: hosted-party merchant
+
+Your party lives on your OWN Canton node and authorizes directly on its JSON Ledger API (`actAs:[merchant]`), with no wallet, relay, or Ed25519 key.
+
+> One-time: upload + vet the [`x402-direct` DAR](https://github.com/Denend/x402-dar) on your participant first (the `MerchantConsent` template lives there). External (Mode A) parties don't need this.
+
+```bash
+# OIDC secrets come from ENV ONLY (never on argv, which is visible in `ps`/shell history)
+export OIDC_TOKEN_ENDPOINT=...
+export OIDC_CLIENT_ID=...
+export OIDC_CLIENT_SECRET=...
+export LEDGER_API_AUDIENCE=...
+# optional: export OIDC_SCOPE=...
+
+canton-agent-wallet merchant-onboard-hosted \
+  --party           "<your-party>::1220..." \
+  --facilitator     "<facilitator-party>::1220..." \
+  --participant-url https://your-node:7575 \
+  --synchronizer    "global-domain::1220..." \
+  --user-id         your-ledger-user
+# → "MerchantConsent created (cid ...)"
+#   idempotent: re-run → "already onboarded, nothing to do"
+```
+
+`--participant-url` / `--synchronizer` / `--user-id` fall back to `CANTON_PARTICIPANT_URL` / `CANTON_SYNCHRONIZER_ID` / `CANTON_USER_ID`. OIDC values are read from ENV only, never as flags.
+
+## Step 2: Get Facilitator Parameters
+
+Call `GET /supported` on your facilitator to get the values you need:
+
+```bash
+curl https://facilitator.ftptech.xyz/supported
+```
+
+```json
+{
+  "kinds": [{
+    "x402Version": 2,
+    "scheme": "exact",
+    "network": "canton:mainnet",
+    "extra": {
+      "transferMethods": ["allocation-direct"],
+      "synchronizerId": "global-domain::1220..."
+    }
+  }],
+  "signers": {
+    "canton:*": ["<facilitator-party>::1220..."]
+  }
+}
+```
+
+From this response: `signers["canton:*"][0]` is your `feePayer`, and `extra.synchronizerId` is your synchronizer. Get the DSO party id (for `instrumentId.admin`) from your Canton Scan API.
+
+## Step 3: Install
+
+```bash
+# Express
+npm i @ftptech/x402-canton-core @ftptech/x402-canton-express
+
+# Next.js App Router
+npm i @ftptech/x402-canton-core @ftptech/x402-canton-next
+```
+
+## Step 4: Define PaymentRequirements
+
+```typescript
+import type { PaymentRequirements } from "@ftptech/x402-canton-core";
+
+const paymentReq: PaymentRequirements = {
+  scheme: "exact",
+  network: "canton:mainnet",
+  amount: "10000000000",            // atomic units (1 CC = 10^10 units)
+  asset: "CC",
+  payTo: "<YOUR_PARTY>::1220...",   // your Canton party id; CC lands here
+  maxTimeoutSeconds: 120,
+  extra: {
+    assetTransferMethod: "allocation-direct",
+    feePayer: "<facilitator-party>::1220...",
+    synchronizerId: "global-domain::1220...",
+    instrumentId: { admin: "<DSO-party>::1220...", id: "Amulet" },
+    allocateBeforeSeconds: 30,
+    settleBeforeSeconds: 60,
+    // memo: "invoice-2024-001"      // optional reconciliation tag (not validated)
+  },
+};
+```
+
+**Amount format:** an integer string of atomic units (1 CC = 10^10 units). The facilitator compares by value (BigInt atomic units), so `"10000000000"` = 1 CC and `"100000000"` = 0.01 CC; a mismatch returns `invalid_exact_canton_amount_mismatch`.
+
+**Field notes:**
+
+- `feePayer`: the facilitator party (== `settlement.executor` in the allocation). Clients MUST NOT alter it.
+- `instrumentId`: Canton Coin is `{ admin: "<DSO-party>", id: "Amulet" }`. The direct path settles Amulet/CC only.
+- `allocateBeforeSeconds` / `settleBeforeSeconds`: relative deadlines (seconds from request time). `settleBeforeSeconds` MUST be strictly greater than `allocateBeforeSeconds`.
+- `memo` (optional): a string the client stamps into the allocation's settlement metadata; the facilitator does not validate it.
+
+> These field names follow the x402-ENVELOPE convention. `synchronizerId` may be omitted; clients fall back to the value advertised by `GET /supported`.
+
+## Step 5: Add Middleware
+
+### Express
+
+```typescript
+import express from "express";
+import { cantonPaymentMiddleware } from "@ftptech/x402-canton-express";
+
+const app = express();
+app.use(express.json());
+
+app.use(
+  cantonPaymentMiddleware({
+    facilitatorUrl: "https://facilitator.ftptech.xyz",
+    routes: {
+      "POST /api/data": {
+        accepts:     [paymentReq],
+        description: "Access to premium data",  // shown to clients in 402 body
+        mimeType:    "application/json",
+      },
+      "GET /api/data": { accepts: [paymentReq] },
+    },
+  })
+);
+
+// Handler runs only after payment is verified and settled
+app.post("/api/data", (req, res) => {
+  res.json({ result: "..." });
+});
+
+app.listen(3000);
+```
+
+Route keys use `"METHOD /path"` format, matched exactly against `${req.method} ${req.path}`. Unregistered routes pass through ungated.
+
+### Next.js App Router
+
+```typescript
+// app/api/data/route.ts
+import { withCantonPayment } from "@ftptech/x402-canton-next";
+
+export const POST = withCantonPayment(
+  async (req) => Response.json({ result: "..." }),
+  {
+    accepts: [paymentReq],
+    facilitatorUrl: "https://facilitator.ftptech.xyz",
+  }
+);
+```
+
+## Step 6: Verify It Works
+
+Call your gated endpoint without payment:
+
+```bash
+curl -si https://your-api.com/api/data \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+Expected:
+```
+HTTP/2 402
+payment-required: <base64>
+```
+
+Decode to confirm your requirements are correct:
+
+```bash
+echo "<base64-value>" | base64 -d | jq '.accepts[0]'
+```
+
+You should see your `amount`, `payTo`, and `feePayer` values.
+
+## Security Notes
+
+- **Your `accepts[]` is authoritative.** The middleware ignores any amount the client claims. A client cannot request a 1 CC resource for 0.01 CC by tampering with the payment payload.
+- **The proven payer is on-ledger.** The facilitator binds the payer to the allocation's `transferLeg.sender`, not to anything the client puts in the payload, so a spoofed `payer` field cannot impersonate.
+- **Settlement happens before your handler.** If your handler throws after a successful `/settle`, the payer already paid. Handle errors gracefully; do not retry settlement.
+- **Keep `payTo` correct.** CC goes to whatever `payTo` says. If your party ID changes, update `paymentReq` AND re-run onboarding (Step 1) for the new party.
+
+## Related Pages
+
+- [x402 HTTP Payments](/sdks-tools/development-tools/x402-payments) -- Protocol overview and facilitator setup
+- [x402 Agent Integration](/sdks-tools/development-tools/x402-agent) -- How your callers pay (the payer side)
