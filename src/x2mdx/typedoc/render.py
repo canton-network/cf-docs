@@ -14,6 +14,14 @@ def escape_md_cell(text: str) -> str:
     return "<br/>".join(escape_mdx_text(line).replace("|", r"\|") for line in text.splitlines())
 
 
+def escape_md_code(text: str) -> str:
+    return str(text).replace("`", r"\`").replace("|", r"\|").replace("\n", " ").strip()
+
+
+def code_span(text: str) -> str:
+    return f"`{escape_md_code(text)}`"
+
+
 def escape_mdx_text(text: str) -> str:
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
@@ -57,9 +65,9 @@ def version_change_summary_rows(exports: list[dict[str, object]], versions: list
 def _type_parameter_rows(items: list[dict[str, Any]]) -> list[list[str]]:
     return [
         [
-            f"`{escape_md_cell(item['name'])}`",
-            f"`{escape_md_cell(item['constraint'])}`" if item["constraint"] else "-",
-            f"`{escape_md_cell(item['default'])}`" if item["default"] else "-",
+            code_span(item["name"]),
+            code_span(item["constraint"]) if item["constraint"] else "-",
+            code_span(item["default"]) if item["default"] else "-",
             escape_md_cell(item["description"]) if item["description"] else "-",
         ]
         for item in items
@@ -74,14 +82,14 @@ def _signature_docs(signature_docs: list[dict[str, Any]]) -> list[dict[str, Any]
             "type_parameter_rows": _type_parameter_rows(signature["type_parameters"]),
             "parameter_rows": [
                 [
-                    f"`{escape_md_cell(item['name'])}`",
-                    f"`{escape_md_cell(item['type'])}`",
+                    code_span(item["name"]),
+                    code_span(item["type"]),
                     item["required"],
                     escape_md_cell(item["description"]) if item["description"] else "-",
                 ]
                 for item in signature["parameters"]
             ],
-            "returns": str(signature["returns"]),
+            "returns": escape_md_code(str(signature["returns"])),
         }
         for signature in signature_docs
     ]
@@ -112,7 +120,7 @@ def _export_context(export: dict[str, Any]) -> dict[str, Any]:
         "lifecycle_bits": lifecycle_bits,
         "change_rows": [
             [
-                f"`{escape_md_cell(str(entry['version']))}`",
+                code_span(str(entry["version"])),
                 escape_md_cell("; ".join(str(change) for change in entry["changes"])),
             ]
             for entry in export["change_details"]
@@ -123,8 +131,8 @@ def _export_context(export: dict[str, Any]) -> dict[str, Any]:
         "signature_docs": _signature_docs(export["signature_docs"]),
         "member_rows": [
             [
-                f"`{escape_md_cell(item['name'])}`",
-                f"`{escape_md_cell(item['type'])}`",
+                code_span(item["name"]),
+                code_span(item["type"]),
                 escape_md_cell(item["summary"]) if item["summary"] else "-",
             ]
             for item in export["members"]
@@ -157,13 +165,13 @@ def build_page(
         report=report,
         toc_rows=[
             [
-                f"[`{escape_md_cell(export['name'])}`](#{export['anchor']})",
+                f"[{code_span(export['name'])}](#{export['anchor']})",
                 escape_md_cell(export["kind_label"]),
                 render_summary_cell(str(export["summary"])),
-                f"`{export['introduced_in']}`",
+                code_span(export["introduced_in"]),
                 escape_md_cell(render_change_summary(export["change_details"])),
-                f"`{export['lifecycle_label']}`" if export["lifecycle_label"] == "Deprecated" else "-",
-                f"`{export['removed_in']}`" if export["removed_in"] else "-",
+                code_span(export["lifecycle_label"]) if export["lifecycle_label"] == "Deprecated" else "-",
+                code_span(export["removed_in"]) if export["removed_in"] else "-",
             ]
             for export in report.exports
         ],
