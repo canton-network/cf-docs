@@ -239,3 +239,74 @@ def test_build_openapi_details_page_uses_reference_overview_layout() -> None:
     assert '<div class="x2mdx-ref-card x2mdx-ref-card--static">' in rendered
     assert "Changed 3.5" in rendered
     assert "## Endpoint Reference (Latest)" not in rendered
+
+
+def test_enrich_mintlify_operation_history_writes_visible_endpoint_notes(tmp_path: Path) -> None:
+    module = load_script_module("generate_json_api_reference.py")
+    openapi_path = tmp_path / "openapi.yaml"
+    openapi_path.write_text(
+        """openapi: 3.0.3
+paths:
+  /livez:
+    get:
+      summary: GET /livez
+      operationId: getLivez
+      responses:
+        '200':
+          description: OK
+  /v2/version:
+    get:
+      summary: GET /v2/version
+      description: Current version.
+      operationId: getV2Version
+      responses:
+        '200':
+          description: OK
+components: {}
+""",
+        encoding="utf-8",
+    )
+    specs = {
+        "3.4": {
+            "paths": {
+                "/v2/version": {
+                    "get": {
+                        "summary": "GET /v2/version",
+                        "description": "Old version.",
+                        "operationId": "getV2Version",
+                        "responses": {"200": {"description": "OK"}},
+                    }
+                }
+            }
+        },
+        "3.5": {
+            "paths": {
+                "/livez": {
+                    "get": {
+                        "summary": "GET /livez",
+                        "operationId": "getLivez",
+                        "responses": {"200": {"description": "OK"}},
+                    }
+                },
+                "/v2/version": {
+                    "get": {
+                        "summary": "GET /v2/version",
+                        "description": "Current version.",
+                        "operationId": "getV2Version",
+                        "responses": {"200": {"description": "OK"}},
+                    }
+                },
+            }
+        },
+    }
+
+    module.enrich_mintlify_operation_history(
+        openapi_path=openapi_path,
+        specs_by_version=specs,
+        versions=["3.4", "3.5"],
+    )
+
+    rendered = openapi_path.read_text(encoding="utf-8")
+    assert "**Endpoint history**: Added in 3.5." in rendered
+    assert "**Endpoint history**: Added in 3.4. Modified in 3.5: description updated." in rendered
+    assert rendered.count("x-mint:") == 2
