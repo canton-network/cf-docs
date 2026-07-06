@@ -17,7 +17,6 @@ import summarize_version_changes
 REPO_ROOT = Path(__file__).resolve().parents[1]
 NETWORK_VARIABLE_TAB_PAGES = (
     "docs-main/appdev/deep-dives/token-standard.mdx",
-    "docs-main/global-synchronizer/canton-console/console-overview.mdx",
     "docs-main/global-synchronizer/deployment/kubernetes-deployment.mdx",
     "docs-main/global-synchronizer/deployment/onboarding-process.mdx",
     "docs-main/global-synchronizer/deployment/required-network-parameters.mdx",
@@ -27,7 +26,6 @@ NETWORK_VARIABLE_TAB_PAGES = (
     "docs-main/global-synchronizer/deployment/validator-kubernetes.mdx",
     "docs-main/global-synchronizer/production-operations/validator-disaster-recovery.mdx",
     "docs-main/global-synchronizer/reference/canton-console-reference.mdx",
-    "docs-main/global-synchronizer/understand/local-testing.mdx",
     "docs-main/sdks-tools/api-reference/splice-daml-apis.mdx",
     "docs-main/sdks-tools/api-reference/splice-http-apis.mdx",
     "docs-main/sdks-tools/api-reference/splice-scan-bulk-data-api.mdx",
