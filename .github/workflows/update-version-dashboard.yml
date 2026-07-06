@@ -43,9 +43,30 @@ jobs:
           echo "$HOME/.dpm/bin" >> "$GITHUB_PATH"
           echo "$HOME/.daml/bin" >> "$GITHUB_PATH"
 
+      - name: Check generated-docs merger app configuration
+        id: merger-app
+        env:
+          GENERATED_DOCS_MERGER_APP_ID: ${{ secrets.GENERATED_DOCS_MERGER_APP_ID }}
+          GENERATED_DOCS_MERGER_PRIVATE_KEY: ${{ secrets.GENERATED_DOCS_MERGER_PRIVATE_KEY }}
+        run: |
+          if [[ -n "$GENERATED_DOCS_MERGER_APP_ID" && -n "$GENERATED_DOCS_MERGER_PRIVATE_KEY" ]]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Generate generated-docs merger app token
+        id: merger-token
+        if: ${{ steps.merger-app.outputs.configured == 'true' }}
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.GENERATED_DOCS_MERGER_APP_ID }}
+          private-key: ${{ secrets.GENERATED_DOCS_MERGER_PRIVATE_KEY }}
+
       - name: Generate update pull requests
         env:
           GH_TOKEN: ${{ github.token }}
           GITHUB_TOKEN: ${{ github.token }}
+          GENERATED_DOCS_MERGER_TOKEN: ${{ steps.merger-token.outputs.token }}
           GENERATED_DOCS_TARGETS: ${{ inputs.targets || 'all' }}
         run: python3 scripts/update_generated_reference_prs.py --targets $GENERATED_DOCS_TARGETS
