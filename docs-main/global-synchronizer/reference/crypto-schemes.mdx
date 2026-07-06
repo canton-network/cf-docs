@@ -9,6 +9,10 @@ description: "Reference of supported cryptographic schemes and key formats for C
 
 Within Canton, we use the cryptographic primitives of signing, symmetric encryption, and asymmetric encryption, with the following supported cryptographic schemes and formats. For asymmetric signing and encryption, each scheme is divided into a key and an algorithm specification.
 
+<Warning>
+  The schemes for KMS in the following table are only valid for our internal KMS implementations using AWS and GCP. If you are using a different KMS via a driver, please refer to the documentation for that KMS, noting that only schemes supported by JCE can be used.
+</Warning>
+
 <Note>
 **Legend for the following tables:**
 
@@ -20,7 +24,7 @@ Within Canton, we use the cryptographic primitives of signing, symmetric encrypt
 
 **Supported Asymmetric Encryption and Signing Key Specifications**
 
-| Key Spec | JCE | KMS | Purpose |
+| Key Spec | JCE | AWS/GCP KMS | Purpose |
 | --- | --- | --- | --- |
 | EC-Curve25519 `[ec-curve-25519]` | S | P¹ | Signing |
 | EC-P256 `[ec-p-256]` | S | S | Signing, Encryption |
@@ -30,7 +34,7 @@ Within Canton, we use the cryptographic primitives of signing, symmetric encrypt
 
 **Supported Signing Algorithm Specifications**
 
-| Algorithm | JCE | KMS | Supported Key Specs |
+| Algorithm | JCE | AWS/GCP KMS | Supported Key Specs |
 | --- | --- | --- | --- |
 | Ed25519 `[ed-25519]` | S | P¹ | EC-Curve25519 |
 | EC-DSA-SHA256 `[ec-dsa-sha-256]` | S | S | EC-P256, EC-Secp256k1 |
@@ -38,20 +42,20 @@ Within Canton, we use the cryptographic primitives of signing, symmetric encrypt
 
 **Supported Asymmetric Encryption Algorithm Specifications**
 
-| Algorithm | JCE | KMS | Supported Key Specs |
+| Algorithm | JCE | AWS/GCP KMS | Supported Key Specs |
 | --- | --- | --- | --- |
 | ECIES-HMAC-SHA256-AES128-CBC `[ecies-hkdf-hmac-sha-256-aes-128-cbc]` | S | P² | EC-P256 |
 | RSA-OAEP-SHA256 `[rsa-oaep-sha-256]` | S | S | RSA-2048 |
 
-| **Crypto provider**                     | JCE Default Scheme                    | KMS Default Scheme        |
-|-----------------------------------------|---------------------------------------|---------------------------|
-| Signing key specification               | EC-Curve25519                         | EC-P256                   |
-| Signing algorithm specification         | Ed25519                               | EC-DSA-SHA256             |
-| Asymmetric encryption key specification | EC-P256                               | RSA-2048                  |
-| Asymmetric encryption algorithm         | ECIES with HMAC-SHA256 and AES128-CBC | RSA with OAEP and SHA-256 |
-| Symmetric encryption scheme[^1]         | AES128-GCM                            | Same as JCE               |
-| Hash Algorithm[^2]                      | SHA-256                               | Same as JCE               |
-| PBKDF[^3]                               | Argon2id                              | Same as JCE               |
+| **Crypto provider**                     | JCE Default Scheme                    | AWS/GCP KMS Default Scheme |
+|-----------------------------------------|---------------------------------------|------------------------------|
+| Signing key specification               | EC-Curve25519                         | EC-P256                      |
+| Signing algorithm specification         | Ed25519                               | EC-DSA-SHA256                |
+| Asymmetric encryption key specification | EC-P256                               | RSA-2048                     |
+| Asymmetric encryption algorithm         | ECIES with HMAC-SHA256 and AES128-CBC | RSA with OAEP and SHA-256    |
+| Symmetric encryption scheme[^1]         | AES128-GCM                            | Same as JCE                  |
+| Hash Algorithm[^2]                      | SHA-256                               | Same as JCE                  |
+| PBKDF[^3]                               | Argon2id                              | Same as JCE                  |
 
 Default Cryptographic Schemes
 
@@ -61,7 +65,7 @@ Default Cryptographic Schemes
 | --- | --- | --- |
 | AWS | **Key Purpose:** `SIGN_VERIFY`<br/>**Key Algorithms:** `ECC_NIST_P256` or `ECC_NIST_P384` | **Key Purpose:** `ENCRYPT_DECRYPT`<br/>**Key Algorithm:** `RSA_2048` |
 | GCP | **Key Purpose:** `ASYMMETRIC_SIGN`<br/>**Key Algorithms:** `EC_SIGN_P256_SHA256` or `EC_SIGN_P384_SHA384` | **Key Purpose:** `ASYMMETRIC_DECRYPT`<br/>**Key Algorithm:** `RSA_DECRYPT_OAEP_2048_SHA256` |
-| Driver | Must be compatible with `EC_P256_SHA256` or `EC_P384_SHA384` | Must be compatible with `RSA_OAEP_2048_SHA256` |
+| Driver | Must be compatible with at least one JCE key signing scheme | Must be compatible with at least one JCE key encryption scheme |
 
 | **Key Type**      | Format (Config)                               | Format (gRPC / Protobuf)                                                          |
 |-------------------|-----------------------------------------------|-----------------------------------------------------------------------------------|
@@ -73,7 +77,7 @@ Supported Cryptographic Key Formats by Key Type
 
 **Commands and Flags to Export Keys in Supported Formats**
 
-| Key Type | Supported Format | OpenSSL | GCP KMS | AWS KMS | Java.security | Python (cryptography) |
+| Key Type | Supported Format | OpenSSL | AWS KMS | GCP KMS | Java.security | Python (cryptography) |
 | --- | --- | --- | --- | --- | --- | --- |
 | Public Key | DER SPKI (X.509 SubjectPublicKeyInfo) | `-outform DER` | keys default to DER SPKI | keys default to DER SPKI | keys default to DER SPKI | `public_bytes(Encoding.DER, PublicFormat.SubjectPublicKeyInfo)` |
 | Private Key | DER PKCS#8 PrivateKeyInfo | `-outform DER` | n/a | n/a | keys default to DER PKCS#8 | `private_bytes(Encoding.DER, PrivateFormat.PKCS8)` |
