@@ -43,6 +43,8 @@ import DamlAppdevModulesM3LanguageFundamentalsL569 from "/snippets/daml-docs/app
 import DamlAppdevModulesM3LanguageFundamentalsL69 from "/snippets/daml-docs/appdev_modules_m3-language-fundamentals_L69.mdx";
 import DamlAppdevModulesM3LanguageFundamentalsL84 from "/snippets/daml-docs/appdev_modules_m3-language-fundamentals_L84.mdx";
 import DamlAppdevModulesM3LanguageFundamentalsL96 from "/snippets/daml-docs/appdev_modules_m3-language-fundamentals_L96.mdx";
+import SmartContractsNativeNATIVETEST from '/snippets/daml-docs/smart-contracts_Native_NATIVE_TEST.mdx';
+import SmartContractsNativeCASHBALANCE from '/snippets/daml-docs/smart-contracts_Native_CASH_BALANCE.mdx';
 
 
 {/* COPIED_START source="docs-website:docs/replicated/daml/3.4/sdk/tutorials/smart-contracts/functional-101.rst" hash="57479f7e" */}
@@ -467,32 +469,7 @@ Throughout this section, you've already seen examples of native Daml types: `Par
 
 The below script instantiates each one of these types, manipulates it where appropriate, and tests the result:
 
-```haskell
--- Code from: daml/daml-intro-data/daml/Native.daml
-import Daml.Script
-import DA.Time
-import DA.Date
-
-native_test = script do
-  alice <- allocateParty "Alice"
-  bob <- allocateParty "Bob"
-  let
-    my_int = -123
-    my_dec = 0.001 : Decimal
-    my_text = "Alice"
-    my_bool = False
-    my_date = date 2020 Jan 01
-    my_time = time my_date 00 00 00
-    my_rel_time = hours 24
-
-  assert (alice /= bob)
-  assert (-my_int == 123)
-  assert (1000.0 * my_dec == 1.0)
-  assert (my_text == "Alice")
-  assert (not my_bool)
-  assert (addDays my_date 1 == date 2020 Jan 02)
-  assert (addRelTime my_time my_rel_time == time (addDays my_date 1) 00 00 00)
-```
+<SmartContractsNativeNATIVETEST />
 
 Despite its simplicity, there are quite a few things to note in this script:
 
@@ -514,37 +491,7 @@ Despite its simplicity, there are quite a few things to note in this script:
 
 With templates and these native types, it's already possible to write a schema akin to a table in a relational database. Below, `Token` is extended into a simple `CashBalance`, administered by a party in the role of an accountant:
 
-```haskell
--- Code from: daml/daml-intro-data/daml/Native.daml
-template CashBalance
-  with
-    accountant : Party
-    currency : Text
-    amount : Decimal
-    owner : Party
-    account_number : Text
-    bank : Party
-    bank_address : Text
-    bank_telephone : Text
-  where
-    signatory accountant
-
-cash_balance_test = script do
-  accountant <- allocateParty "Bob"
-  alice <- allocateParty "Alice"
-  bob <- allocateParty "Bank of Bob"
-
-  submit accountant do
-    createCmd CashBalance with
-      accountant
-      currency = "USD"
-      amount = 100.0
-      owner = alice
-      account_number = "ABC123"
-      bank = bob
-      bank_address = "High Street"
-      bank_telephone = "012 3456 789"
-```
+<SmartContractsNativeCASHBALANCE />
 
 ## Assemble types
 

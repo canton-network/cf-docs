@@ -28,6 +28,18 @@ def write_json(path: Path, payload: object) -> None:
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
 
+def test_splice_openapi_release_requests_use_github_token(monkeypatch) -> None:
+    module = load_script_module("generate_splice_mintlify_openapi.py")
+    monkeypatch.setenv("GITHUB_TOKEN", "test-token")
+
+    assert module.request_headers("https://api.github.com/repos/example/project/releases") == {
+        "Accept": "application/vnd.github+json",
+        "User-Agent": module.USER_AGENT,
+        "Authorization": "Bearer test-token",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+
+
 def test_splice_openapi_rewrites_scan_server_examples(tmp_path: Path) -> None:
     module = load_script_module("generate_splice_mintlify_openapi.py")
     spec_bytes = b"""openapi: 3.0.0
