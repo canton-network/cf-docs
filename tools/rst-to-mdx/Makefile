@@ -32,7 +32,7 @@ smoke: build
 	./smoke-test.sh
 
 # Cross-compile to dist/<os>-<arch>/ for publishing via
-# `dpm artifacts publish component`.
+# `dpm publish component` (dpm 3.5.1+; see README "Publishing").
 #
 # Each platform directory gets a component.yaml whose `path:` matches the
 # platform's binary name. Windows uses component.windows.yaml (`.exe`
