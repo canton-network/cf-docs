@@ -111,7 +111,8 @@ rst-to-mdx --batch --input-dir <dir> --output-dir <dir> [flags]
 tools/rst-to-mdx/
 ├── component.yaml             # Unix DPM component manifest
 ├── component.windows.yaml     # Windows manifest (.exe path)
-├── daml.yaml                  # local override-components for `dpm --help`
+├── daml.yaml                  # local components: registration for `dpm`
+├── .gitignore                 # ignores the compiled binary and dist/
 ├── LICENSE                    # required at every published artifact root
 ├── cmd/rst-to-mdx/main.go     # Cobra CLI entrypoint
 ├── internal/
@@ -132,39 +133,81 @@ Running `dpm --help` from inside `tools/rst-to-mdx/` picks up the
 local `daml.yaml` and surfaces `rst-to-mdx` under "Dpm-SDK Commands"
 without any install step. Useful for iterative development.
 
-## Packaging and publishing
+## Publishing & installing as an OCI component
 
-Cross-compile to all five supported platforms:
+dpm components are distributed as OCI artifacts (Open Container Initiative —
+the same artifact format container registries use), one manifest per
+`<os>/<arch>`. The commands below require **dpm 3.5.1+** (`dpm publish` and
+`dpm tags` do not exist in 3.4.x).
 
-```
-make release
-```
+### 1. Publish to an OCI registry
 
-That writes `dist/<os>-<arch>/` directories, each containing the
-platform binary, a matching `component.yaml`, and a `LICENSE` file
-(both required by the DPM publish validator).
+```sh
+make release VERSION=<version>   # cross-compile + stamp the binary
 
-Publish (DPM 1.0.12+ / SDK 3.5+):
-
-```
-dpm artifacts publish component \
-  --name rst-to-mdx \
-  --version 0.1.0-alpha \
-  --platform darwin/arm64=./dist/darwin-arm64 \
-  --platform darwin/amd64=./dist/darwin-amd64 \
-  --platform linux/arm64=./dist/linux-arm64 \
-  --platform linux/amd64=./dist/linux-amd64 \
-  --platform windows/amd64=./dist/windows-amd64 \
-  --registry oci://<target registry>
+dpm publish component oci://<registry>/rst-to-mdx:<version> \
+  -p darwin/arm64=dist/darwin-arm64 \
+  -p darwin/amd64=dist/darwin-amd64 \
+  -p linux/arm64=dist/linux-arm64 \
+  -p linux/amd64=dist/linux-amd64 \
+  -p windows/amd64=dist/windows-amd64
 ```
 
-DPM 1.0.10 — 1.0.11 use the older form with the same flags:
+`make release` writes one `dist/<os>-<arch>/` directory per platform, each
+containing the platform binary, a matching `component.yaml` (Windows gets
+`component.windows.yaml`), and a `LICENSE` — all required by the publish
+validator.
 
-```
-dpm repo publish-component rst-to-mdx 0.1.0-alpha \
-  -p darwin/arm64=./dist/darwin-arm64 \
-  ... \
-  --registry oci://<target registry>
+- The docs tooling registry is `europe-docker.pkg.dev/da-images/public`.
+- `--dry-run` validates every per-platform manifest and the required
+  `LICENSE` **without pushing** — run this first.
+- Auth defaults to Docker's `~/.docker/config.json`; override with
+  `--auth <file>`. `--extra-tags`/`-t` adds tags beyond the semver;
+  `--include-git-info`/`-g` stamps git provenance annotations.
+- Promotion from the `*-unstable` registry to the public one is a gated
+  step owned by the dpm/release team (`dpm repo promote-components …`).
+
+### 2. Declare it in a project
+
+Add the component to the project's `daml.yaml` under `components:`. An entry
+is one of three forms:
+
+```yaml
+components:
+  # published component pulled from the configured registry
+  - rst-to-mdx:0.1.0
+  # …or a full OCI reference
+  - oci://europe-docker.pkg.dev/da-images/public/rst-to-mdx:0.1.0
+  # …or a local checkout, for development
+  - name: rst-to-mdx
+    path: ./tools/rst-to-mdx
 ```
 
-Add `--dry-run` to validate without pushing.
+> The older `override-components:` key still works but is **deprecated** in
+> dpm 3.5.1 — prefer `components:`.
+
+### 3. Use it (and confirm it installed)
+
+```sh
+dpm --help                    # rst-to-mdx appears under Dpm-SDK Commands
+dpm rst-to-mdx --version      # confirms the resolved binary runs
+dpm rst-to-mdx in.rst out.mdx # real run
+```
+
+dpm pulls and caches the resolved platform under
+`~/.dpm/cache/components/rst-to-mdx/<version>/`. To run a published
+component once without declaring it in a project:
+
+```sh
+dpm component run rst-to-mdx <version> [args]
+dpm tags oci://<registry>/rst-to-mdx     # list published versions
+```
+
+### 4. Remove it from a project
+
+Delete the component's entry from `daml.yaml` `components:`; it stops
+appearing in `dpm`. To also drop the cached download:
+
+```sh
+rm -rf ~/.dpm/cache/components/rst-to-mdx
+```
