@@ -1530,8 +1530,8 @@ Note: 0.4.6 had a bug and should be skipped in favor of 0.4.7 which fixed a bug 
 - Info (new)
   - *important* This release contains a new helm chart "splice-info" which is supposed to be installed on all SV nodes and made publicly accessible. The new `info` endpoint provides:
 
-    - Static information about network, sv, synchronizers, config digests of ip ranges and identities under `https://info.sv.&lt;YOUR_HOSTNAME&gt;`.
-    - Regularly updated (every minute) copy of DSO information under `https://info.sv.&lt;YOUR_HOSTNAME&gt;/runtime/dso.json`.
+    - Static information about network, sv, synchronizers, config digests of ip ranges and identities under `https://info.sv.<YOUR_HOSTNAME>`.
+    - Regularly updated (every minute) copy of DSO information under `https://info.sv.<YOUR_HOSTNAME>/runtime/dso.json`.
 
     The relevant documentation is updated at `sv-helm`.
 - Scan
@@ -1774,7 +1774,7 @@ Note: 0.4.6 had a bug and should be skipped in favor of 0.4.7 which fixed a bug 
     - It is now possible to force the recovery attempt for a party that was skipped during the fully automated recovery flow.
   - Improve the error message when trying to use the wallet outside of localhost or https. Thanks to Stephane Loeuillet for contributing this in [https://github.com/canton-network/splice/pull/322](https://github.com/canton-network/splice/pull/322).
 - Scan
-  - Scan now implements some Token Standard endpoints that are under the `/registry` path. `https://scan.sv.&lt;YOUR_HOSTNAME&gt;/registry` should be routed to `/registry` at port 5012 in service `scan-app` in the `sv` namespace, the same way that `/api/scan` already is.
+  - Scan now implements some Token Standard endpoints that are under the `/registry` path. `https://scan.sv.<YOUR_HOSTNAME>/registry` should be routed to `/registry` at port 5012 in service `scan-app` in the `sv` namespace, the same way that `/api/scan` already is.
 
 ## 0.3.21
 
@@ -2670,7 +2670,7 @@ Note: 0.1.5 resulted in the issue mentioned below so both SVs and validators sho
   - Global Domain (whenever it refers to the more generic concept) -\> Decentralized Synchronizer
   - Note that for technical reasons the URLs for networks still include the term "svc" for now; e.g., `https://wallet.sv.svc.YOUR_HOSTNAME`.
 - Added an option to disable the Validator apps' wallet. This can be done by setting `enableWallet` to `false` in the `validator-values.yaml` file.
-- Added ANS name resolution (formally known as CNS) for `dso.ans` to the DSO party and `&lt;sv-name&gt;.sv.ans` to all SV members parties.
+- Added ANS name resolution (formally known as CNS) for `dso.ans` to the DSO party and `<sv-name>.sv.ans` to all SV members parties.
 - CometBFT pruning duration has been increased to 30 days. No configuration changes are required.
 - Sequencer pruning period has been adjusted to 30 days and pruning interval has been reduced to 1 hour. Adjust `sequencerPruningConfig.pruningInterval` and `sequencerPruningConfig.retentionPeriod` in your `sv-values.yaml` to match the example `sv-values.yaml`.
 - The sequencer URL of the Digital Asset 2 node `https://sequencer.sv-1.svc.CLUSTER.network.canton.global` is no longer exposed. Instead use `https://sequencer-MIGRATION_ID.sv-1.svc.CLUSTER.network.canton.global` where `MIGRATION_ID` is the current migration id of the cluster.
@@ -2824,7 +2824,7 @@ Note: 0.1.5 resulted in the issue mentioned below so both SVs and validators sho
 
 - Minor SV UI tweaks. Among other things, it is now mandatory to supply a textual proposal summary when submitting a vote request.
 - Renamed `directory` to `CNS` across the system
-  - Renamed ingress rule from `https://directory.sv.svc.&lt;YOUR_HOSTNAME&gt;*` to `https://cns.sv.svc.&lt;YOUR_HOSTNAME&gt;*`. Please note that this is now a requirement for this UI to continue working properly.
+  - Renamed ingress rule from `https://directory.sv.svc.<YOUR_HOSTNAME>*` to `https://cns.sv.svc.<YOUR_HOSTNAME>*`. Please note that this is now a requirement for this UI to continue working properly.
 
 ## 2023-12-11
 
@@ -2863,7 +2863,7 @@ Note: 0.1.5 resulted in the issue mentioned below so both SVs and validators sho
 - Removing the adjustment of SVC governance thresholds for DevNet, aligning it with the one used in TestNet.
 - Deployment updates:
   - The URL of the global domain sequencer hosted by the Canton Foundation has changed to `https://sequencer.sv-1.svc.\<TARGET_CLUSTER\>.network.canton.global`. This change is reflected in the values specified in `participant-values.yaml`, `validator-values.yaml` and `sv-values.yaml`.
-  - The requirement for URL rewriting in the rules for Scan and SV apps has been removed: `https://scan.sv.svc.&lt;YOUR_HOSTNAME&gt;/api/scan` and `https://sv.sv.svc.&lt;YOUR_HOSTNAME&gt;/api/sv` no longer requires rewriting (and also has been modified from `/api/v0/scan` to `/api/scan` and from `/api/v0/sv` to `/api/sv`). For example, `https://scan.sv.svc.&lt;YOUR_HOSTNAME&gt;/api/scan/foobar` should be forwarded to `http://validator-app:5012/api/scan/foobar`. Note that URL rewriting is now required only in the ingress rule of the JSON API used by the directory frontend. This rule will be completely removed in the future.
+  - The requirement for URL rewriting in the rules for Scan and SV apps has been removed: `https://scan.sv.svc.<YOUR_HOSTNAME>/api/scan` and `https://sv.sv.svc.<YOUR_HOSTNAME>/api/sv` no longer requires rewriting (and also has been modified from `/api/v0/scan` to `/api/scan` and from `/api/v0/sv` to `/api/sv`). For example, `https://scan.sv.svc.<YOUR_HOSTNAME>/api/scan/foobar` should be forwarded to `http://validator-app:5012/api/scan/foobar`. Note that URL rewriting is now required only in the ingress rule of the JSON API used by the directory frontend. This rule will be completely removed in the future.
   - Note that the readiness and liveness endpoints of Validator, Scan and SV apps have all been moved to `/api/\<app\>/readyz` and `/api/\<app\>/livez`, with `\<app\>` being `validator`, `scan` or `sv`, respectively. The corresponding Helm charts have been updated to reflect this change.
   - The URL configuration for the foundation's Scan app in `validator-values.yaml` has been updated to be `https://scan.sv-1.svc.TARGET_CLUSTER.network.canton.global`. Similarly, in the config files in the self-hosted validator section.
   - The `isDevNet` flag has been removed from the `cn-cometbft` helm chart in order to eliminate its potential for accidental misconfiguration. Instead, the chart now relies on the value of `genesis.chainId` in `cometbft-values.yaml` to determine whether it is a TestNet or DevNet deployment.
@@ -2886,7 +2886,7 @@ Note: 0.1.5 resulted in the issue mentioned below so both SVs and validators sho
 - Add a hidden page to the SV UI (`/leader`) that allows SVs to manually trigger a reelection of the SvcRules leader, as an additional safety mechanism and measure of last resort.
 - Deployment updates:
   - Add documentation for Kubernetes-Based Deployment of a Validator node
-  - The requirement for url rewriting in one of the rules has been removed: `https://wallet.sv.svc.&lt;YOUR_HOSTNAME&gt;/api/validator` no longer requires rewriting (and also has been modified from `/api/v0/validator` to `/api/validator`). For example, `https://wallet.sv.svc.&lt;YOUR_HOSTNAME&gt;/api/validator/foobar` should be forwarded to `http://validator-app:5003/api/validator/foobar`. In the future, the other rewrite requirements will also be removed.
+  - The requirement for url rewriting in one of the rules has been removed: `https://wallet.sv.svc.<YOUR_HOSTNAME>/api/validator` no longer requires rewriting (and also has been modified from `/api/v0/validator` to `/api/validator`). For example, `https://wallet.sv.svc.<YOUR_HOSTNAME>/api/validator/foobar` should be forwarded to `http://validator-app:5003/api/validator/foobar`. In the future, the other rewrite requirements will also be removed.
   - Renamed `SV_WALLET_USER_ID` placeholder in `validator-values.yaml` to `OPERATOR_WALLET_USER_ID` to better reflect that this value is the operator's user in the deployment for both SVs and standalone validator nodes
 - Bugfixes:
   - Fixed an issue with fees in Scan recent activity and transaction history API where some sender and receiver fees were not reported. If a party transfers to themself, it will now be included in the Transfer receivers property in API responses (this was previously filtered out).
@@ -3143,7 +3143,7 @@ Note: 0.1.5 resulted in the issue mentioned below so both SVs and validators sho
 ## 2023-06-04
 
 - Deployment updates:
-  - Docker images now use the same versioning scheme as helm charts: `<major>.<minor>.<patch>-snapshot.&lt;commit_date&gt;.&lt;number_of_commits&gt;.0.v&lt;commit_sha_8&gt;`
+  - Docker images now use the same versioning scheme as helm charts: `<major>.<minor>.<patch>-snapshot.<commit_date>.<number_of_commits>.0.v<commit_sha_8>`
 - Frontend updates:
   - Reorganized the information tab in SV UI and included rules governing canton coin (e.g. fees) in SV UI.
   - Added support for displaying details of governance vote requests, casting a vote, and updating a casted vote.
