@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 
 from x2mdx.cli import main as cli_main
-from x2mdx.typedoc.render import escape_md_cell
+from x2mdx.typedoc.render import code_span, escape_md_cell
 from x2mdx.typedoc.lifecycle import build_typedoc_report_from_sources, normalize_source_location, render_type
 from x2mdx.typedoc.snapshots import load_typedoc_sources
 
@@ -350,4 +350,10 @@ class TypeDocTests(unittest.TestCase):
         self.assertEqual(
             escape_md_cell("Provider<DappRpcTypes>\nleft|right"),
             "Provider&lt;DappRpcTypes&gt;<br/>left\\|right",
+        )
+
+    def test_code_spans_keep_typescript_generics_literal(self) -> None:
+        self.assertEqual(
+            code_span("() => Promise<ConnectResult> | null"),
+            "`() => Promise<ConnectResult> \\| null`",
         )

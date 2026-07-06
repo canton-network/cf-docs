@@ -6,7 +6,7 @@ To install the Helm charts needed to start an SV node connected to the cluster, 
 |chart_version_set|
 ```
 
-An SV node includes a CometBFT node so you also need to configure that. Please modify the file `splice-node/examples/sv-helm/cometbft-values.yaml` as follows:
+Unless CantonBFT is being used, you also need to configure a CometBFT node for your SV. Please modify the file `splice-node/examples/sv-helm/cometbft-values.yaml` as follows:
 
 - Replace all instances of `TARGET_CLUSTER` with |splice_cluster|, per the cluster to which you are connecting.
 - Replace all instances of `TARGET_HOSTNAME` with |da_hostname|, per the cluster to which you are connecting.
@@ -34,11 +34,22 @@ Please modify the file `splice-node/examples/sv-helm/global-domain-values.yaml` 
 
 - Replace all instances of `SERIAL_ID` with the serial ID of the global synchronizer on your target cluster.
 - Replace `YOUR_SV_NAME` with the name you chose when creating the SV identity.
+- When using CantonBFT instead of CometBFT
+    - Replace `sequencer.driver.type: cometbft` by `sequencer.driver.type: cantonbft` and remove the host and port configuration.
+    - Set `sequencer.driver.externalPort: 443` and set `sequencer.driver.externalAddress: sequencer-p2p-SERIAL_ID.sv.YOUR_HOSTNAME`
+    - Configure the database through
+      `sequencer.driver.persistence.(host|port|databaseName|secretName)`. It is
+      strongly recommended to use a separate database from the
+      sequencer. For production-grade deployments, a fully separate postgres instance is
+      recommended for resource isolation between the sequencer and
+      CantonBFT, both of which put significant load on the
+      database.
 
 Please modify the file `splice-node/examples/sv-helm/scan-values.yaml` as follows:
 
 - No longer needed since splice `0.6.8`: Replace all instances of `MIGRATION_ID` with the migration ID of the global synchronizer on your target cluster.
 - Replace all instances of `SERIAL_ID` with the serial ID of the global synchronizer on your target cluster.
+- When using CantonBFT set `synchronizers.(current|legacy|successor).cantonBft.p2pUrl: https://sequencer-p2p-SERIAL_ID.sv.YOUR_HOSTNAME`
 
 An SV node includes a validator app so you also need to configure that. Please modify the file `splice-node/examples/sv-helm/validator-values.yaml` as follows:
 
@@ -74,6 +85,11 @@ For configuring your sv app, please modify the file `splice-node/examples/sv-hel
 - Replace `YOUR_CONTACT_POINT` by a slack user name or email address that can be used by node operators to contact you in case there are issues with your node. If you do not want to share this, set it to an empty string.
 - If you would like to redistribute all or part of the SV rewards with other parties, you can fill up the `extraBeneficiaries` section with the desired parties and the percentage of the reward that corresponds to them. Note that the party you register must be known on the network for the reward coupon issuance to succeed. Furthermore, that party must be hosted on a validator node for its wallet to collect the SV reward coupons. That collection will happen automatically if the wallet is running. If it is not running during the time that the reward coupon can be collected, the corresponding reward is marked as unclaimed, and stored in an DSO-wide unclaimed reward pool. The `extraBeneficiaries` can be changed with just a restart of the SV app.
 - Optionally, uncomment the line for `initialAmuletPrice` and set it to your desired amulet price. This will create an amulet price vote from your SV with the configured price when onboarded. If not set, no vote will be cast. This can always be done later manually from the SV app UI.
+- When using CantonBFT instead of CometBFT, remove
+  `synchronizers.(current|legacy|successor).cometBFT` and instead set
+  `synchronizers.(current|legacy|successor).enableBftSequencer: true`.
+  When migrating from CometBFT to CantonBFT only set it for the `synchronizers` that actually use CantonBFT while
+  keeping the CometBFT config for the existing physical synchronizers.
 
 Please modify the file `splice-node/examples/sv-helm/info-values.yaml` as follows:
 
