@@ -157,19 +157,6 @@ def create_or_update_pull_request(
             "--body-file",
             str(body_path),
         )
-        subprocess.run(
-            [
-                "gh",
-                "pr",
-                "ready",
-                existing_pr_number,
-                "--repo",
-                repository,
-                "--undo",
-            ],
-            cwd=REPO_ROOT,
-            check=False,
-        )
         return
 
     gh(
@@ -181,7 +168,6 @@ def create_or_update_pull_request(
         branch,
         "--repo",
         repository,
-        "--draft",
         "--title",
         title,
         "--body-file",
