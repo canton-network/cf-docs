@@ -1,0 +1,58 @@
+---
+title: "0.1.18"
+description: "Splice 0.1.18 release notes."
+---
+
+{/* GENERATED_RELEASE_NOTES target="splice" format="split-release" version="0.1.18" source="cf-docs-existing" */}
+
+# 0.1.18
+
+- SV apps
+
+  - Fix a rare race condition where the SV app uses the wrong
+    timestamp to export the topology state on a hard domain migration
+    resulting in the sequencer failing to initialize after the
+    migration. We recommend upgrading before the next hard domain migration.
+
+  - Enable SV to retain pre-migration sequencer URLs in `SvNodeState`. This is done through a new `migration.legacyId` configuration in the SV values.
+    If set, the SV will keep exposing its sequencer URL for that migration id.
+    Once you undeploy the old sequencer node, remove this option as well to stop Scan from advertising your old sequencer.
+    This allows validators that have been lagging behind to catchup easier.
+
+- Dashboards
+
+  - Added a new CometBFT Network Status dashboard that displays how much data is being exchanged with each peer on the CometBFT P2P network.
+    This should should make it easier to diagnose connectivity problems between network peers.
+
+- Scan API
+
+  - Added the `getUpdateById` API in `scan-internal.yaml`.
+    The `getUpdateById` API can be used to retrieve an update by its update ID.
+
+  - Added the `getAcsSnapshotAt`, `getHoldingsStateAt` and `getHoldingsSummaryAt` APIs in `scan-internal.yaml`.
+    A snapshot of the active contract set (ACS) is now computed and stored periodically to serve these endpoints.
+
+  - Modified `listDsoSequencers` Scan API to also expose pre migration sequencer urls, allowing pre-migration validators to catch up.
+
+- UI
+
+  - Gzip compression has been enabled for the Scan, Wallet, SV and CNS UIs.
+
+- Deployment
+
+  - Updated the Cometbft Helm chart to not accept integer values for the `chainIdSuffix`.
+  - The `disableAutoInit` Helm value now defaults to `true` wherever it is used and must be explicitly set to `false` when onboarding fresh validators or SVs. The installing instructions for validators and SVs have been updated accordingly.
+  - Added `helm.sh/resource-policy: keep` to validator and SV app domain migration PVCs
+    to ensure they don't accidentally get deleted by a `helm uninstall`. You can
+    still fully delete them with a `kubectl delete pvc`.
+  - `validatorPartyHint` is now mandatory for non-SV validators. For an existing validator, it should be set to the current party hint
+    (otherwise, the value will be ignored, and a warning will be printed to log).
+    For new validators, it should be of format `<organization>-<function>-<enumerator>`.
+  - In `cometbft-values.yaml`, the top-level label `founder` is now `sv1`.  The
+    example has been updated to match, and this change must be made to your own copy.
+  - The download link for the release bundle has changed to a new URL format: `<version>_splice-node.tar.gz`.
+    Its content has been renamed accordingly as well.
+
+- Documentation
+
+  - Simplified `jq`-based data dump post-processing examples in disaster recovery documentation for SVs and validators.

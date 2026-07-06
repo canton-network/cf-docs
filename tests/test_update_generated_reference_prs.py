@@ -59,6 +59,10 @@ def test_update_targets_cover_all_generated_doc_surfaces() -> None:
         "typescript-bindings",
         "canton-metrics-reference",
         "canton-release-notes",
+        "splice-release-notes",
+        "wallet-gateway-release-notes",
+        "wallet-sdk-release-notes",
+        "dapp-sdk-release-notes",
     ]
 
 
@@ -209,6 +213,14 @@ def test_generated_clean_paths_include_target_paths_and_internal_output() -> Non
     assert "docs-main/global-synchronizer/deployment/validator-kubernetes.mdx" in clean_paths
     assert "docs-main/global-synchronizer/reference/canton-metrics.mdx" in clean_paths
     assert "docs-main/global-synchronizer/release-notes" in clean_paths
+    assert "docs-main/global-synchronizer/release-notes/splice.mdx" in clean_paths
+    assert "docs-main/global-synchronizer/release-notes/splice-releases" in clean_paths
+    assert "docs-main/integrations/release-notes/wallet-gateway.mdx" in clean_paths
+    assert "docs-main/integrations/release-notes/wallet-gateway-releases" in clean_paths
+    assert "docs-main/integrations/release-notes/wallet-sdk.mdx" in clean_paths
+    assert "docs-main/integrations/release-notes/wallet-sdk-releases" in clean_paths
+    assert "docs-main/integrations/release-notes/dapp-sdk.mdx" in clean_paths
+    assert "docs-main/integrations/release-notes/dapp-sdk-releases" in clean_paths
 
 
 def test_target_paths_exist_in_base_checkout() -> None:
@@ -296,6 +308,26 @@ def test_summarize_target_changes_supports_artifact_source_configs(monkeypatch, 
 
     assert module.summarize_target_changes(target, before) == [
         "Java ledger bindings:before.json:source-artifacts.json"
+    ]
+
+
+def test_summarize_target_changes_supports_release_note_pages(monkeypatch, tmp_path: Path) -> None:
+    module = load_script_module()
+    target = next(target for target in module.UPDATE_TARGETS if target.key == "wallet-gateway-release-notes")
+    before = tmp_path / "before.mdx"
+    before.write_text("## 1.3.0\n", encoding="utf-8")
+    monkeypatch.setattr(module, "REPO_ROOT", tmp_path)
+    after = tmp_path / target.summary_path
+    after.parent.mkdir(parents=True)
+    after.write_text("## 1.5.0\n", encoding="utf-8")
+    monkeypatch.setattr(
+        module.summarize_version_changes,
+        "release_note_page_changes",
+        lambda before_path, after_path, *, label: [f"{label}:{before_path.name}:{after_path.name}"],
+    )
+
+    assert module.summarize_target_changes(target, before) == [
+        "Wallet Gateway release notes:before.mdx:wallet-gateway.mdx"
     ]
 
 
