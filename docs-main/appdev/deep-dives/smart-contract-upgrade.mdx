@@ -74,8 +74,8 @@ The Java and TypeScript codegen allow the use of package name and package ID (if
 
 PQS supports using package-name (specified in `daml.yaml`) instead of package-id. When specifying a template/interface/choice name, simply substitute any package-id with the package-name (eg. now `register:DA.Register:Token`) instead of the old `deadbeefpackageidhex:DA.Register:Token` format. This applies to template filters and SQL queries (eg. via the `active()` function). These functions will always return all versions of a given identifier. Qualified name can be:
 
-- fully qualified, e.g. `&lt;package-name&gt;:&lt;module-path&gt;:&lt;template-name&gt;`
-- partially qualified, e.g. `&lt;module-path&gt;:&lt;template-name&gt;`
+- fully qualified, e.g. `<package-name>:<module-path>:<template-name>`
+- partially qualified, e.g. `<module-path>:<template-name>`
 
 Qualified names cannot be ambiguous.
 
@@ -1366,9 +1366,9 @@ You can find the in-depth upgrading model, which can be used as a reference for 
 
 ## Package Selection in the Ledger API
 
-Until the introduction of SCU, template IDs in requests to the Ledger API were all of the form `&lt;package-id&gt;:&lt;module-name&gt;:&lt;template-name&gt;`. For disambiguation, going forward, we refer to this format as **by-package-id template IDs**.
+Until the introduction of SCU, template IDs in requests to the Ledger API were all of the form `<package-id>:<module-name>:<template-name>`. For disambiguation, going forward, we refer to this format as **by-package-id template IDs**.
 
-With SCU, we introduce a more generic template reference of the format `#&lt;package-name&gt;:&lt;module-name&gt;:&lt;template-name&gt;` (**by-package-name template ID**) that scopes templates by package-name, allowing version-agnostic addressing of templates on the Ledger API. It serves as a reference to all template IDs with the qualified name `&lt;module-name&gt;:&lt;template-name&gt;` from all packages with the name `package-name` known to the Ledger API server.
+With SCU, we introduce a more generic template reference of the format `#<package-name>:<module-name>:<template-name>` (**by-package-name template ID**) that scopes templates by package-name, allowing version-agnostic addressing of templates on the Ledger API. It serves as a reference to all template IDs with the qualified name `<module-name>:<template-name>` from all packages with the name `package-name` known to the Ledger API server.
 
 `By-package-name template ID` addressing is supported for all packages and is possible on both the write path (command submission) and read path (Ledger API queries).
 
@@ -1876,7 +1876,7 @@ Package ID selection preference: preferences apply to JSON Ledger API where you 
 
 ### PQS
 
-To match the package-name changes to the Ledger API, PQS has changed how packages are selected for queries. All queries that take a Daml identity in the form `&lt;package-id&gt;:&lt;module-name&gt;:&lt;template-name&gt;` now take a package name in place of package ID. Note that this differs from the Ledger API in that the `\#` prefix is not required for PQS, as PQS has dropped direct package ID queries. Queries for package names return all versions of a given contract, alongside the package version and package ID for each contract.
+To match the package-name changes to the Ledger API, PQS has changed how packages are selected for queries. All queries that take a Daml identity in the form `<package-id>:<module-name>:<template-name>` now take a package name in place of package ID. Note that this differs from the Ledger API in that the `\#` prefix is not required for PQS, as PQS has dropped direct package ID queries. Queries for package names return all versions of a given contract, alongside the package version and package ID for each contract.
 
 <Note>
 If you still need to perform a query with an explicit package ID, you can either use a previous version of PQS or add the following filter predicate to your query: `SELECT \* FROM active('my_package:My.App:MyTemplate') WHERE package_id = 'my_package_id'`
