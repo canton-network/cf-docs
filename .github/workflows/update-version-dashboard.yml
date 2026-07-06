@@ -1,20 +1,25 @@
-name: Update version dashboard
+name: Update generated docs
 
 on:
   schedule:
-    - cron: "23 */6 * * *"
+    - cron: "*/30 * * * *"
   workflow_dispatch:
+    inputs:
+      targets:
+        description: "Generated-doc targets to run"
+        type: string
+        default: "all"
 
 permissions:
   contents: write
   pull-requests: write
 
 concurrency:
-  group: update-version-dashboard
+  group: update-generated-docs
   cancel-in-progress: false
 
 jobs:
-  update-version-dashboard:
+  update-generated-docs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -23,83 +28,24 @@ jobs:
       - name: Set up Nix
         uses: cachix/install-nix-action@v31
 
-      - name: Update version dashboard
-        run: nix-shell --run 'npm run generate:version-compatibility-dashboard'
-
-      - name: Detect changes
-        id: changes
+      - name: Set up direnv
         run: |
-          if [[ -n "$(git status --porcelain)" ]]; then
-            echo "has_changes=true" >> "$GITHUB_OUTPUT"
-            git status --short
-            git diff --stat
-          else
-            echo "has_changes=false" >> "$GITHUB_OUTPUT"
-          fi
+          sudo apt-get update
+          sudo apt-get install -y direnv
+          SKIP_NPM_INSTALL=1 direnv allow .
 
-      - name: Check whitespace
-        if: steps.changes.outputs.has_changes == 'true'
-        run: git diff --check
+      - name: Install npm dependencies
+        run: SKIP_NPM_INSTALL=1 direnv exec . npm ci
 
-      - name: Create or update pull request
-        if: steps.changes.outputs.has_changes == 'true'
+      - name: Set up Daml tooling
+        run: |
+          curl -fsSL https://get.digitalasset.com/install/install.sh | sh
+          echo "$HOME/.dpm/bin" >> "$GITHUB_PATH"
+          echo "$HOME/.daml/bin" >> "$GITHUB_PATH"
+
+      - name: Generate update pull requests
         env:
           GH_TOKEN: ${{ github.token }}
-          PR_BRANCH: version-dashboard/update
-          PR_TITLE: Update version dashboard data
-          PR_REVIEWERS: Jatinp26,shreyas-da,hrischuk-da
-        run: |
-          set -euo pipefail
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          git switch -c "$PR_BRANCH"
-          git add config/repo-version-config.json docs-main/snippets/generated/version-dashboard-data.mdx
-          git commit -m "$PR_TITLE"
-
-          if remote_sha="$(git ls-remote --heads origin "$PR_BRANCH" | awk '{print $1}')" && [[ -n "$remote_sha" ]]; then
-            git push --force-with-lease="refs/heads/$PR_BRANCH:$remote_sha" origin "HEAD:$PR_BRANCH"
-          else
-            git push origin "HEAD:$PR_BRANCH"
-          fi
-
-          pr_body="$(mktemp)"
-          cat > "$pr_body" <<'EOF'
-          Updates the committed Canton Network version dashboard data from public network, package, and installer sources.
-
-          Validation run by the workflow:
-          - `npm run generate:version-compatibility-dashboard`
-          - `git diff --check`
-          EOF
-
-          existing_pr_number="$(
-            gh pr list \
-              --repo "$GITHUB_REPOSITORY" \
-              --head "$PR_BRANCH" \
-              --base main \
-              --state open \
-              --json number \
-              --jq '.[0].number // empty'
-          )"
-
-          if [[ -n "$existing_pr_number" ]]; then
-            pr_number="$existing_pr_number"
-            gh pr edit "$existing_pr_number" \
-              --repo "$GITHUB_REPOSITORY" \
-              --title "$PR_TITLE" \
-              --body-file "$pr_body"
-          else
-            pr_url="$(gh pr create \
-              --base main \
-              --head "$PR_BRANCH" \
-              --repo "$GITHUB_REPOSITORY" \
-              --title "$PR_TITLE" \
-              --body-file "$pr_body")"
-            pr_number="${pr_url##*/}"
-            echo "$pr_url"
-          fi
-
-          gh pr edit "$pr_number" \
-            --repo "$GITHUB_REPOSITORY" \
-            --add-reviewer "$PR_REVIEWERS"
+          GITHUB_TOKEN: ${{ github.token }}
+          GENERATED_DOCS_TARGETS: ${{ inputs.targets || 'all' }}
+        run: python3 scripts/update_generated_reference_prs.py --targets $GENERATED_DOCS_TARGETS

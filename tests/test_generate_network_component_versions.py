@@ -4,6 +4,7 @@ import importlib.util
 import sys
 from pathlib import Path
 from types import ModuleType
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 
@@ -169,6 +170,49 @@ def test_latest_stable_version_ignores_prerelease_and_debug_tags() -> None:
         )
         == "3.5.1"
     )
+
+
+def test_request_headers_use_github_token_for_github_api(monkeypatch) -> None:
+    module = load_script_module()
+    monkeypatch.setenv("GITHUB_TOKEN", "test-token")
+
+    assert module.request_headers("https://api.github.com/repos/example/project/releases") == {
+        "User-Agent": module.USER_AGENT,
+        "Authorization": "Bearer test-token",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+
+
+def test_request_headers_do_not_send_github_token_to_other_hosts(monkeypatch) -> None:
+    module = load_script_module()
+    monkeypatch.setenv("GITHUB_TOKEN", "test-token")
+
+    assert module.request_headers("https://registry.npmjs.org/example") == {
+        "User-Agent": module.USER_AGENT,
+    }
+
+
+def test_fetch_latest_wallet_gateway_version_paginates_releases(monkeypatch) -> None:
+    module = load_script_module()
+    requested_urls: list[str] = []
+
+    def fake_fetch_json(url: str, timeout: float) -> list[dict[str, str]]:
+        requested_urls.append(url)
+        page = parse_qs(urlparse(url).query).get("page", ["1"])[0]
+        if page == "1":
+            return [{"tag_name": "@canton-network/core-wallet-store@1.7.0"}]
+        if page == "2":
+            return [{"tag_name": "@canton-network/wallet-gateway-remote@1.4.0"}]
+        return []
+
+    monkeypatch.setattr(module, "fetch_json", fake_fetch_json)
+
+    assert module.fetch_latest_wallet_gateway_version(timeout=1.0) == "1.4.0"
+    assert requested_urls == [
+        f"{module.WALLET_GATEWAY_RELEASES_URL}?per_page=100&page=1",
+        f"{module.WALLET_GATEWAY_RELEASES_URL}?per_page=100&page=2",
+        f"{module.WALLET_GATEWAY_RELEASES_URL}?per_page=100&page=3",
+    ]
 
 
 def test_parse_dars_lock_selects_latest_dashboard_packages_only() -> None:

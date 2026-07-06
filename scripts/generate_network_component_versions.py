@@ -5,11 +5,13 @@ from __future__ import annotations
 import argparse
 import html
 import json
+import os
 import re
 import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
 
@@ -119,8 +121,17 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def request_headers(url: str) -> dict[str, str]:
+    headers = {"User-Agent": USER_AGENT}
+    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    if token and urlparse(url).netloc == "api.github.com":
+        headers["Authorization"] = f"Bearer {token}"
+        headers["X-GitHub-Api-Version"] = "2022-11-28"
+    return headers
+
+
 def request_url(url: str, timeout: float):
-    request = Request(url, headers={"User-Agent": USER_AGENT})
+    request = Request(url, headers=request_headers(url))
     return urlopen(request, timeout=timeout)
 
 
@@ -217,22 +228,25 @@ def fetch_dar_versions_from_splice_release_line(
 
 
 def fetch_latest_wallet_gateway_version(timeout: float) -> str:
-    data = fetch_json(f"{WALLET_GATEWAY_RELEASES_URL}?per_page=100", timeout)
-    if not isinstance(data, list):
-        raise RuntimeError(f"Expected release list from {WALLET_GATEWAY_RELEASES_URL}")
     versions: list[str] = []
     tag_re = re.compile(
         rf"^{re.escape(WALLET_GATEWAY_RELEASE_TAG_PREFIX)}(?P<version>\d+\.\d+\.\d+)$"
     )
-    for release in data:
-        if not isinstance(release, dict):
-            continue
-        tag_name = release.get("tag_name")
-        if not isinstance(tag_name, str):
-            continue
-        match = tag_re.fullmatch(tag_name)
-        if match:
-            versions.append(match.group("version"))
+    for page in range(1, 11):
+        data = fetch_json(f"{WALLET_GATEWAY_RELEASES_URL}?per_page=100&page={page}", timeout)
+        if not isinstance(data, list):
+            raise RuntimeError(f"Expected release list from {WALLET_GATEWAY_RELEASES_URL}")
+        if not data:
+            break
+        for release in data:
+            if not isinstance(release, dict):
+                continue
+            tag_name = release.get("tag_name")
+            if not isinstance(tag_name, str):
+                continue
+            match = tag_re.fullmatch(tag_name)
+            if match:
+                versions.append(match.group("version"))
     return latest_stable_version(versions, WALLET_GATEWAY_RELEASES_URL)
 
 

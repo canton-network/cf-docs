@@ -3,73 +3,41 @@
 from __future__ import annotations
 
 import argparse
-import json
 import sys
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
-import generate_splice_mintlify_openapi as splice_openapi
+from generated_reference_sources import (
+    canton_release_bundles,
+    daml_standard_library,
+    ledger_bindings,
+    splice_openapi,
+    typescript_bindings,
+    wallet_gateway_openrpc,
+)
+from generated_reference_sources.common import SourceUpdate
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_SPLICE_OPENAPI_SOURCE_CONFIG = (
-    REPO_ROOT / "config" / "mintlify-openapi" / "splice-openapi" / "source-artifacts.json"
+SOURCE_DAML_STANDARD_LIBRARY = daml_standard_library.SOURCE_KEY
+SOURCE_LEDGER_API = "ledger-api"
+SOURCE_LEDGER_API_ASYNCAPI = "ledger-api-asyncapi"
+SOURCE_LEDGER_BINDINGS = ledger_bindings.SOURCE_KEY
+SOURCE_SPLICE_OPENAPI = splice_openapi.SOURCE_KEY
+SOURCE_WALLET_GATEWAY_OPENRPC = wallet_gateway_openrpc.SOURCE_KEY
+SOURCE_TYPESCRIPT_BINDINGS = typescript_bindings.SOURCE_KEY
+DEFAULT_LEDGER_API_SOURCE_CONFIG = REPO_ROOT / "config" / "x2mdx" / "ledger-api" / "source-artifacts.json"
+DEFAULT_LEDGER_API_ASYNCAPI_SOURCE_CONFIG = (
+    REPO_ROOT / "config" / "x2mdx" / "ledger-api-asyncapi" / "source-artifacts.json"
 )
-
-
-@dataclass(frozen=True)
-class SourceUpdate:
-    source: str
-    path: Path
-    field: str
-    previous: str
-    current: str
-
-
-def load_json(path: Path) -> dict[str, Any]:
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(payload, dict):
-        raise ValueError(f"Expected JSON object in {path}")
-    return payload
-
-
-def write_json(path: Path, payload: dict[str, Any]) -> None:
-    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
-
-
-def latest_splice_openapi_version(source_config: dict[str, Any]) -> str:
-    releases = splice_openapi.selected_releases(
-        source_config=source_config,
-        include_versions=None,
-    )
-    return releases[-1]["version"]
-
-
-def update_splice_openapi_source(
-    *,
-    source_config_path: Path,
-    dry_run: bool,
-) -> SourceUpdate | None:
-    source_config = load_json(source_config_path)
-    latest_version = latest_splice_openapi_version(source_config)
-    configured_version = source_config.get("publish_version")
-    if not isinstance(configured_version, str) or not configured_version:
-        raise ValueError(f"{source_config_path} must define non-empty publish_version")
-    if configured_version == latest_version:
-        return None
-
-    update = SourceUpdate(
-        source="Splice OpenAPI",
-        path=source_config_path,
-        field="publish_version",
-        previous=configured_version,
-        current=latest_version,
-    )
-    if not dry_run:
-        source_config["publish_version"] = latest_version
-        write_json(source_config_path, source_config)
-    return update
+ALL_SOURCES = (
+    SOURCE_SPLICE_OPENAPI,
+    SOURCE_WALLET_GATEWAY_OPENRPC,
+    SOURCE_TYPESCRIPT_BINDINGS,
+    SOURCE_LEDGER_API,
+    SOURCE_LEDGER_API_ASYNCAPI,
+    SOURCE_LEDGER_BINDINGS,
+    SOURCE_DAML_STANDARD_LIBRARY,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -79,8 +47,66 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--splice-openapi-source-config",
         type=Path,
-        default=DEFAULT_SPLICE_OPENAPI_SOURCE_CONFIG,
-        help=f"Splice OpenAPI source-artifacts config. Default: {DEFAULT_SPLICE_OPENAPI_SOURCE_CONFIG}",
+        default=splice_openapi.DEFAULT_SOURCE_CONFIG,
+        help=f"Splice OpenAPI source-artifacts config. Default: {splice_openapi.DEFAULT_SOURCE_CONFIG}",
+    )
+    parser.add_argument(
+        "--wallet-gateway-openrpc-source-config",
+        type=Path,
+        default=wallet_gateway_openrpc.DEFAULT_SOURCE_CONFIG,
+        help=(
+            "Wallet Gateway OpenRPC source-artifacts config. "
+            f"Default: {wallet_gateway_openrpc.DEFAULT_SOURCE_CONFIG}"
+        ),
+    )
+    parser.add_argument(
+        "--typescript-bindings-source-config",
+        type=Path,
+        default=typescript_bindings.DEFAULT_SOURCE_CONFIG,
+        help=(
+            "TypeScript bindings source-artifacts config. "
+            f"Default: {typescript_bindings.DEFAULT_SOURCE_CONFIG}"
+        ),
+    )
+    parser.add_argument(
+        "--ledger-api-source-config",
+        type=Path,
+        default=DEFAULT_LEDGER_API_SOURCE_CONFIG,
+        help=f"JSON Ledger API OpenAPI source-artifacts config. Default: {DEFAULT_LEDGER_API_SOURCE_CONFIG}",
+    )
+    parser.add_argument(
+        "--ledger-api-asyncapi-source-config",
+        type=Path,
+        default=DEFAULT_LEDGER_API_ASYNCAPI_SOURCE_CONFIG,
+        help=(
+            "JSON Ledger API AsyncAPI source-artifacts config. "
+            f"Default: {DEFAULT_LEDGER_API_ASYNCAPI_SOURCE_CONFIG}"
+        ),
+    )
+    parser.add_argument(
+        "--ledger-bindings-source-config",
+        type=Path,
+        default=ledger_bindings.DEFAULT_SOURCE_CONFIG,
+        help=f"Ledger bindings source-artifacts config. Default: {ledger_bindings.DEFAULT_SOURCE_CONFIG}",
+    )
+    parser.add_argument(
+        "--daml-standard-library-source-config",
+        type=Path,
+        default=daml_standard_library.DEFAULT_SOURCE_CONFIG,
+        help=(
+            "Daml Standard Library source-artifacts config. "
+            f"Default: {daml_standard_library.DEFAULT_SOURCE_CONFIG}"
+        ),
+    )
+    parser.add_argument(
+        "--source",
+        action="append",
+        choices=ALL_SOURCES,
+        dest="sources",
+        help=(
+            "Limit updates to one source. Repeat to update multiple sources. "
+            "By default, all generated-reference sources are checked."
+        ),
     )
     parser.add_argument(
         "--dry-run",
@@ -95,18 +121,63 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def requested_sources(args: argparse.Namespace) -> tuple[str, ...]:
+    return tuple(dict.fromkeys(args.sources or ALL_SOURCES))
+
+
 def main() -> int:
     args = parse_args()
-    updates = [
-        update
-        for update in [
-            update_splice_openapi_source(
-                source_config_path=args.splice_openapi_source_config.resolve(),
+    sources = requested_sources(args)
+    updates: list[SourceUpdate] = []
+    if SOURCE_SPLICE_OPENAPI in sources:
+        update = splice_openapi.update_source(
+            source_config_path=args.splice_openapi_source_config.resolve(),
+            dry_run=args.dry_run or args.check,
+        )
+        if update is not None:
+            updates.append(update)
+    if SOURCE_WALLET_GATEWAY_OPENRPC in sources:
+        update = wallet_gateway_openrpc.update_source(
+            source_config_path=args.wallet_gateway_openrpc_source_config.resolve(),
+            dry_run=args.dry_run or args.check,
+        )
+        if update is not None:
+            updates.append(update)
+    if SOURCE_TYPESCRIPT_BINDINGS in sources:
+        updates.extend(
+            typescript_bindings.update_source(
+                source_config_path=args.typescript_bindings_source_config.resolve(),
                 dry_run=args.dry_run or args.check,
             )
-        ]
-        if update is not None
-    ]
+        )
+    if SOURCE_LEDGER_API in sources:
+        update = canton_release_bundles.update_source(
+            source_config_path=args.ledger_api_source_config.resolve(),
+            dry_run=args.dry_run or args.check,
+        )
+        if update is not None:
+            updates.append(update)
+    if SOURCE_LEDGER_API_ASYNCAPI in sources:
+        update = canton_release_bundles.update_source(
+            source_config_path=args.ledger_api_asyncapi_source_config.resolve(),
+            dry_run=args.dry_run or args.check,
+        )
+        if update is not None:
+            updates.append(update)
+    if SOURCE_LEDGER_BINDINGS in sources:
+        updates.extend(
+            ledger_bindings.update_source(
+                source_config_path=args.ledger_bindings_source_config.resolve(),
+                dry_run=args.dry_run or args.check,
+            )
+        )
+    if SOURCE_DAML_STANDARD_LIBRARY in sources:
+        update = daml_standard_library.update_source(
+            source_config_path=args.daml_standard_library_source_config.resolve(),
+            dry_run=args.dry_run or args.check,
+        )
+        if update is not None:
+            updates.append(update)
 
     if not updates:
         print("Generated reference source pins are up to date.")

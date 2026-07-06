@@ -37,9 +37,9 @@ def test_openrpc_nav_uses_wallet_gateway_section_shape(tmp_path: Path) -> None:
         json.dumps(
             {
                 "navigation": {
-                    "dropdowns": [
+                    "products": [
                         {
-                            "dropdown": "API Reference",
+                            "product": "API Reference",
                             "pages": [
                                 {"group": "TypeScript", "pages": []},
                                 {"group": "Wallet Kernel SDK", "pages": ["old-wallet"]},
@@ -81,7 +81,7 @@ def test_openrpc_nav_uses_wallet_gateway_section_shape(tmp_path: Path) -> None:
         ],
     )
     docs = json.loads(docs_json.read_text(encoding="utf-8"))
-    pages = docs["navigation"]["dropdowns"][0]["pages"]
+    pages = docs["navigation"]["products"][0]["pages"]
 
     assert pages == [
         {"group": "TypeScript", "pages": []},
@@ -127,7 +127,6 @@ def test_openrpc_nav_uses_wallet_gateway_section_shape(tmp_path: Path) -> None:
         {"group": "Splice APIs", "pages": []},
     ]
 
-
 def test_openrpc_nav_group_helper_omits_redundant_spec_page_child(tmp_path: Path) -> None:
     generated_reference_nav = load_script("generated_reference_nav")
     docs_json = tmp_path / "docs-main" / "docs.json"
@@ -156,6 +155,101 @@ def test_openrpc_nav_group_helper_omits_redundant_spec_page_child(tmp_path: Path
             },
         ],
     }
+
+
+def test_generated_reference_nav_replaces_group_in_product_navigation(tmp_path: Path) -> None:
+    generated_reference_nav = load_script("generated_reference_nav")
+    docs_json = tmp_path / "docs-main" / "docs.json"
+    docs_json.parent.mkdir(parents=True)
+    docs_json.write_text(
+        json.dumps(
+            {
+                "navigation": {
+                    "products": [
+                        {
+                            "product": "API Reference",
+                            "pages": [
+                                {"group": "Old", "pages": ["old"]},
+                                {"group": "AsyncAPI", "pages": ["stale"]},
+                            ],
+                        }
+                    ]
+                }
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    generated_reference_nav.replace_group_in_dropdown(
+        docs_json_path=docs_json,
+        dropdown_label="API Reference",
+        group={"group": "AsyncAPI", "pages": ["fresh"]},
+    )
+
+    docs = json.loads(docs_json.read_text(encoding="utf-8"))
+    assert docs["navigation"]["products"][0]["pages"] == [
+        {"group": "Old", "pages": ["old"]},
+        {"group": "AsyncAPI", "pages": ["fresh"]},
+    ]
+
+
+def test_asyncapi_wrapper_builds_legacy_dropdown_scratch_for_product_navigation() -> None:
+    generate_json_api_asyncapi_reference = load_script("generate_json_api_asyncapi_reference")
+    docs = {
+        "navigation": {
+            "products": [
+                {
+                    "product": "API Reference",
+                    "pages": [{"group": "Ledger API", "pages": ["reference/json-api-reference"]}],
+                }
+            ]
+        }
+    }
+
+    scratch = generate_json_api_asyncapi_reference.with_legacy_dropdown_scratch(
+        docs,
+        dropdown_label="API Reference",
+    )
+
+    assert scratch["navigation"]["dropdowns"] == [
+        {
+            "dropdown": "API Reference",
+            "pages": [{"group": "Ledger API", "pages": ["reference/json-api-reference"]}],
+        }
+    ]
+    assert docs["navigation"].get("dropdowns") is None
+
+
+def test_asyncapi_wrapper_places_x2mdx_scratch_docs_under_docs_root(tmp_path: Path) -> None:
+    generate_json_api_asyncapi_reference = load_script("generate_json_api_asyncapi_reference")
+    docs_json = tmp_path / "docs-main" / "docs.json"
+    docs_json.parent.mkdir(parents=True)
+    baseline_docs = {
+        "navigation": {
+            "products": [
+                {
+                    "product": "API Reference",
+                    "pages": ["reference/json-api-asyncapi-reference/index"],
+                }
+            ]
+        }
+    }
+
+    scratch_path = generate_json_api_asyncapi_reference.x2mdx_docs_json_path(
+        docs_json_path=docs_json,
+        baseline_docs=baseline_docs,
+        dropdown_label="API Reference",
+    )
+
+    assert scratch_path == docs_json.parent / ".docs-json-x2mdx-scratch.json"
+    assert json.loads(scratch_path.read_text(encoding="utf-8"))["navigation"]["dropdowns"] == [
+        {
+            "dropdown": "API Reference",
+            "pages": ["reference/json-api-asyncapi-reference/index"],
+        }
+    ]
 
 
 def test_aggregate_generation_rejects_duplicate_wallet_gateway_aliases(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

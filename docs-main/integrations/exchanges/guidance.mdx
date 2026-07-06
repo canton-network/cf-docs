@@ -513,13 +513,13 @@ In this case, we query a single transaction. The format is identical to the tran
 curl -sSL --fail-with-body http://json-api-url/v2/updates/update-by-id \
     -H 'Authorization: Bearer <authtoken>' \
       -d '{
-            "updateId": "&lt;update-id&gt;",
+            "updateId": "<update-id>",
             "updateFormat": {
               "includeTransactions": {
                 "transactionShape": "TRANSACTION_SHAPE_LEDGER_EFFECTS",
                 "eventFormat": {
                   "filtersByParty": {
-                    "&lt;treasury-party&gt;": {
+                    "<treasury-party>": {
                       "cumulative": [
                         {"identifierFilter": {"WildcardFilter": {"value": {"includeCreatedEventBlob": false}}}},
                         {"identifierFilter": {"InterfaceFilter": {"value": {"interfaceId": "#splice-api-token-transfer-instruction-v1:Splice.Api.Token.TransferInstructionV1:TransferFactory", "includeInterfaceView": true, "includeCreatedEventBlob": false}}}},
@@ -547,9 +547,9 @@ You can parse such transactions using the token standard history parser provided
 
 4.  Go over all events whose `nodeId` is larger than the `nodeId` of the transfer (4 in the example here) and smaller than the `lastDescendantNodeId` of the transfer (12 in the example here).
 
-5.  Find all `CreatedEvents` in that range that create a `Holding` with `"owner": "&lt;treasury-party&gt;"` and sum up the amounts for each `instrumentId`. In this example, we have two events that create holdings, `nodeId` 11 and 12. However, only 12 has `"owner": "&lt;treasury-party&gt;"`. Therefore, we extract that the transfer created `200.0000000000` for the token with instrument id `{"admin": "DSO::12204b8b621ec1dedd51ee2510085f8164cad194953496494d32f541f3f2c170e962", "id": "Amulet"}`.
+5.  Find all `CreatedEvents` in that range that create a `Holding` with `"owner": "<treasury-party>"` and sum up the amounts for each `instrumentId`. In this example, we have two events that create holdings, `nodeId` 11 and 12. However, only 12 has `"owner": "<treasury-party>"`. Therefore, we extract that the transfer created `200.0000000000` for the token with instrument id `{"admin": "DSO::12204b8b621ec1dedd51ee2510085f8164cad194953496494d32f541f3f2c170e962", "id": "Amulet"}`.
 
-6.  Find all `ExercisedEvents` with `implementedInterfaces` containing the `Holding` interface and `consuming: true`. In the example here, this is the event with `nodeId:: 8`. For each of them get the `contractId` and lookup the contract payload through the event query service as shown below. If you get a 404, it's a holding for a different party so you can ignore it. If you get back an event, check if `"owner": "&lt;treasury-party&gt;"`. If so, sum up all events for which this is the case. In the example here, we get a 404 as it is a holding of the sender not treasury-party.
+6.  Find all `ExercisedEvents` with `implementedInterfaces` containing the `Holding` interface and `consuming: true`. In the example here, this is the event with `nodeId:: 8`. For each of them get the `contractId` and lookup the contract payload through the event query service as shown below. If you get a 404, it's a holding for a different party so you can ignore it. If you get back an event, check if `"owner": "<treasury-party>"`. If so, sum up all events for which this is the case. In the example here, we get a 404 as it is a holding of the sender not treasury-party.
 
     ```bash
     curl -sSL --fail-with-body http://json-api-url/v2/events/events-by-contract-id \
@@ -558,7 +558,7 @@ You can parse such transactions using the token standard history parser provided
           "contractId": "009b939ae451ef1a0cb81d1606391406690e055b5be301fd2f51efb6be5675577eca1112200f58604ac538224f73bdc57117d73830ed1e3167f956d66f9e3ecdacbf2359a7",
           "eventFormat": {
             "filtersByParty": {
-              "&lt;treasury-party&gt;": {
+              "<treasury-party>": {
                 "cumulative": [
                   {"identifierFilter": {"InterfaceFilter": {"value": {"interfaceId": "#splice-api-token-holding-v1:Splice.Api.Token.HoldingV1:Holding", "includeInterfaceView": true, "includeCreatedEventBlob": false}}}}
                 ]
@@ -589,13 +589,13 @@ In this case, we query a single transaction. The format is identical to the tran
 curl -sSL --fail-with-body http://json-api-url/v2/updates/update-by-id \
     -H 'Authorization: Bearer <authtoken>' \
       -d '{
-            "updateId": "&lt;update-id&gt;",
+            "updateId": "<update-id>",
             "updateFormat": {
               "includeTransactions": {
                 "transactionShape": "TRANSACTION_SHAPE_LEDGER_EFFECTS",
                 "eventFormat": {
                   "filtersByParty": {
-                    "&lt;treasury-party&gt;": {
+                    "<treasury-party>": {
                       "cumulative": [
                         {"identifierFilter": {"WildcardFilter": {"value": {"includeCreatedEventBlob": false}}}},
                         {"identifierFilter": {"InterfaceFilter": {"value": {"interfaceId": "#splice-api-token-transfer-instruction-v1:Splice.Api.Token.TransferInstructionV1:TransferFactory", "includeInterfaceView": true, "includeCreatedEventBlob": false}}}},
@@ -616,7 +616,7 @@ curl -sSL --fail-with-body http://json-api-url/v2/updates/update-by-id \
 You can parse such transactions using the token standard history parser provided in the wallet SDK to extract the deposit amount, account and holding contract ids. If you prefer implementing your own implementation, you can parse this as follows:
 
 1.  Go over the list of events ordered by `nodeId` that you see in the transaction.
-2.  Look for all `CreatedEvents` of the `TransferInstruction` interface with `"receiver": "&lt;treasury-party&gt;"`. Each of these represents a deposit offer that can be accepted or rejected. In the example this is only one event with node id `0`. Extract the `instrument`, the `amount` and the `splice.lfdecentralizedtrust.org/reason` field from the `interfaceView` and the contract id of the `TransferInstruction`. Note that one transaction can contain multiple deposits including mixing 1 and 2-step deposits in the same transaction.
+2.  Look for all `CreatedEvents` of the `TransferInstruction` interface with `"receiver": "<treasury-party>"`. Each of these represents a deposit offer that can be accepted or rejected. In the example this is only one event with node id `0`. Extract the `instrument`, the `amount` and the `splice.lfdecentralizedtrust.org/reason` field from the `interfaceView` and the contract id of the `TransferInstruction`. Note that one transaction can contain multiple deposits including mixing 1 and 2-step deposits in the same transaction.
 
 After accepting the deposit offer through your automation, Tx History Ingestion can then observe and process acceptance. An example of such a transaction can be seen below.
 
@@ -635,7 +635,7 @@ To parse this proceed as follows:
           "contractId": "009b939ae451ef1a0cb81d1606391406690e055b5be301fd2f51efb6be5675577eca1112200f58604ac538224f73bdc57117d73830ed1e3167f956d66f9e3ecdacbf2359a7",
           "eventFormat": {
             "filtersByParty": {
-              "&lt;treasury-party&gt;": {
+              "<treasury-party>": {
                 "cumulative": [
                   {"identifierFilter": {"InterfaceFilter": {"value": {"interfaceId": "#splice-api-token-transfer-instruction-v1:Splice.Api.Token.TransferInstructionV1:TransferInstruction", "includeInterfaceView": true, "includeCreatedEventBlob": false}}}}
                 ]
@@ -839,17 +839,17 @@ Only upload `.dar` files from token admins that you trust. The uploaded `.dar` f
 
 See the Splice documentation for guidance on how to monitor your validator [node](). Note in particular that it includes Grafana [dashboards]() for monitoring the traffic usage, balances of local parties (e.g., the `exchangeParty`), and many other [metrics]().
 
-## Rolling out Major Splice Upgrades
+## Rolling out Protocol Upgrades
 
-For major protocol changes, the global sychronizer undergoes a Major Upgrade Procedure. The schedule for these upgrades is published by the Super Validators and also announced in the `#validator-operations` slack channel.
+For non-compatible protocol changes, the global synchronizer undergoes a Logical Synchronizer Upgrade (LSU). The schedule for these upgrades is published by the Super Validators and also announced in the `#validator-operations` slack channel.
 
-As part of this procedure, the old synchronizer is paused, all validator operators create an export of the state of their validator, and deploy a new validator connected to the new synchronizer and import their state again. For a more detailed overview, refer to the Splice [docs]().
+As part of an LSU, the synchronizer is upgraded in a coordinated way that preserves state. For a more detailed overview, refer to the [validator upgrade docs](/global-synchronizer/production-operations/logical-synchronizer-upgrade).
 
-The procedure requires some experience to get it right, so it is highly recommended to run nodes on DevNet and TestNet so you can practice the procedure before you encounter it on MainNet.
+We recommend running nodes on DevNet and TestNet so you can observe the procedure before you encounter it on MainNet.
 
 From an integration perspective, there are a few things to keep in mind:
 
-1.  A major upgrade only preserves the active contracts but not the update history. In particular, you will not be able to get transactions from before the major upgrade on the update service on the Ledger API of the newly deployed validator node.
+1.  A protocol upgrade only preserves the active contracts but not the full update history. In particular, you will not be able to get transactions from before the upgrade on the update service on the Ledger API.
 2.  Offsets on the upgraded validator node start from `0` again.
 3.  The update history will include special import transactions for the contracts imported from the old synchronizer. They all have record time `0001-01-01T00:00:00.000000Z`, and represent the creation of the imported contracts.
 

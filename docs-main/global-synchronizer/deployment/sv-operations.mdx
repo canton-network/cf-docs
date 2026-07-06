@@ -32,7 +32,7 @@ These sections give an overview of some of the functionalities enabled through y
 
 ## Security Notice
 
-For more information on hardening your SV node, see `sv-security`.
+For more information on hardening your SV node, see [sv-security](/global-synchronizer/production-operations/sv-security).
 
 ## Generate a validator onboarding secret
 
@@ -40,11 +40,11 @@ If you want to onboard a new validator, you can obtain a one-time use onboarding
 
 The onboarding secret expires after 48 hours.
 
-To generate this key you need to login into the SV web UI and navigate to the `Validator Onboarding` tab. In that tab, click on the button to create the secret and copy the last generated `onboarding secret`.
+To generate this key you need to [login into the SV web UI](/global-synchronizer/deployment/kubernetes-deployment) and navigate to the `Validator Onboarding` tab. In that tab, click on the button to create the secret and copy the last generated `onboarding secret`.
 
 <img src="/images/splice/create-onboarding-secret.png" width="600" alt="Generate an onboarding secret in the SV UI." />
 
-Using the secret, the validator operator can follow this instruction to prepare for validator onboarding.
+Using the secret, the validator operator can follow [this instruction to prepare for validator onboarding](/global-synchronizer/deployment/validator-kubernetes).
 
 ## Identities used by SV nodes on different layers
 
@@ -54,7 +54,7 @@ Each identity is relevant on different layers, or within different subsystems, o
 
 ### SV identity
 
-- Used for identifying your node *before* it was onboarded to the system. See `sv-identity`.
+- Used for identifying your node *before* it was onboarded to the system. See [sv-identity](/global-synchronizer/deployment/kubernetes-deployment).
 - Established SVs will confirm onboarding requests by SVs that can authenticate themselves with regards to an approved SV identity.
 - An SV identity can be reused for multiple onboardings, as long as it's approved by a quorum of established SVs and, for non-DevNet clusters, no SV with the same name is already onboarded.
 - An operator that has lost control over their SV identity will not be able to onboard SVs until a quorum of established SV operators have approved a new identity under the control of that operator.
@@ -71,7 +71,7 @@ Each identity is relevant on different layers, or within different subsystems, o
 
 ### CometBFT node identities
 
-- Used within the CometBFT network spanned by SVs for operating the global synchronizer. See `cometbft-identity`.
+- Used within the CometBFT network spanned by SVs for operating the global synchronizer. See [cometbft-identity](/global-synchronizer/deployment/kubernetes-deployment).
 - The CometBFT validator key is used in CometBFT quorums (\>⅔ of SVs), which are required for advancing the CometBFT blockchain and changing the CometBFT configuration and validator set.
 - Reusing CometBFT node identities can cause (transient) instability in the CometBFT network and is therefore not recommended.
 - Compromise of CometBFT key material constitutes an SV failure and reduces the overall fault tolerance buffer. For recovering, it is sufficient for an SV operator to set up a new CometBFT node (with a fresh identity) and make sure that it is correctly registered by their SV app backend (e.g., by amending the configuration of their SV app backend and restarting it).
@@ -81,7 +81,7 @@ Each identity is relevant on different layers, or within different subsystems, o
 The following steps are required to update the reward weight of an SV:
 
 1.  Receive from the SV owners an agreed-upon update to the SV weights.
-2.  If the SV whose weight is being adjusted defined `extraBeneficiaries` (as described in `sv-helm`), they will have to update them accordingly. Namely:
+2.  If the SV whose weight is being adjusted defined `extraBeneficiaries` (as described in [sv-helm](/global-synchronizer/deployment/kubernetes-deployment)), they will have to update them accordingly. Namely:
     - On weight increases they should add a new entry with the extra weight, as otherwise any leftovers will go to the SV party.
     - On weight decreases, the last extra beneficiary will have their weight capped.
 3.  Note that you can and usually should update the extra-beneficiaries config before the weight change takes effect. The extra entries at the end will just be ignored.
@@ -89,15 +89,70 @@ The following steps are required to update the reward weight of an SV:
 5.  Wait for the vote request to get approved and executed. Once that happens, the DSO info tab will show the updated reward weight, and the SV will earn rewards according to the new weight moving forward.
 6.  Make sure that the changed reward is also reflected on [the configs repository](https://github.com/global-synchronizer-foundation/configs). Otherwise, the old value would become effective again in the event of an onboarding and reonboarding.
 
-## Determining good synchronizer traffic parameters
+## Enabling Traffic-Based App Rewards
+
+Traffic-based app rewards are controlled by the `rewardConfig` field in the
+network's `AmuletConfig`. The SVs vote to change the reward configuration
+using the standard governance process.
+
+The switch from `RewardVersion_FeaturedAppMarkers` to
+`RewardVersion_TrafficBasedAppRewards` is intended as a one-time migration
+per network. Once enabled, traffic-based rewards replace the
+on-ledger activity marker mechanism permanently.
+
+### Recommended Migration Procedure
+
+To mitigate the risk of unforeseen problems with the reward computations on a live network, SVs
+can use the dry-run mode before enabling traffic-based app rewards:
+
+1. **Enable dry-run**: vote to set `rewardConfigDryRunVersion` to
+   `RewardVersion_TrafficBasedAppRewards` while keeping `rewardConfigMintingVersion` at
+   `RewardVersion_FeaturedAppMarkers`. This runs the traffic-based
+   computation in parallel through all steps except for the final coupon creation.
+   The existing activity marker mechanism continues to produce actual rewards.
+
+2. **Verify**: monitor the dry-run to confirm that the traffic-based
+   computation completes successfully across all SV nodes.
+
+3. **Switch to traffic-based app rewards for real**: once satisfied, vote to set `rewardConfigMintingVersion`
+   to `RewardVersion_TrafficBasedAppRewards`. Optionally disable the dry-run
+   by clearing `rewardConfigDryRunVersion`.
+
+For a full description of all configurable fields, see
+[RewardConfig](/global-synchronizer/splice-fundamentals/traffic-based-app-rewards#rewardconfig).
+
+### Effect of Enabling
+
+Once `rewardConfigMintingVersion` is set to `RewardVersion_TrafficBasedAppRewards`:
+
+- CC transfers stop creating `Splice.Amulet.FeaturedAppActivityMarker`
+  contracts. Any existing markers from the transition period are automatically
+  archived by SV automation.
+- The Scan app computes activity records and reward totals from traffic data
+  ingested from the sequencer and mediator nodes for each round.
+- `Splice.Amulet.RewardCouponV2` contracts are created each round for
+  eligible featured app providers.
+
+<Note>
+Due to the propagation delay of updating the external party configuration
+state, there is a brief transition phase where token standard CC transfers
+may still create `Splice.Amulet.FeaturedAppActivityMarker` contracts. These
+are automatically archived once traffic-based rewards take effect. No
+double-minting of rewards occurs.
+</Note>
+
+For details on how traffic-based rewards work, see
+[Traffic-Based App Rewards](/global-synchronizer/splice-fundamentals/traffic-based-app-rewards).
+
+## Determining good [synchronizer traffic parameters](/global-synchronizer/deployment/synchronizer-traffic)
 
 SVs are responsible for deciding on suitable synchronizer traffic parameters. In the following we describe ways for determining good values for some of these parameters.
 
 ### Determining the cost of a single CC transfer
 
-As per Canton Improvement Proposal [cip-0042](https://github.com/global-synchronizer-foundation/cips), the `extraTrafficPrice` should be set so that the cost of a standard CC transfer is 1 USD. Actual traffic costs change depending on factors such as the size of the DSO (number of SVs) and the Canton protocol version (so can change also on protocol upgrades). It is therefore recommended for SVs to measure current costs periodically and adjust traffic parameters accordingly.
+As per Canton Improvement Proposal [cip-0042](https://github.com/canton-foundation/cips), the `extraTrafficPrice` should be set so that the cost of a standard CC transfer is 1 USD. Actual traffic costs change depending on factors such as the size of the DSO (number of SVs) and the Canton protocol version (so can change also on protocol upgrades). It is therefore recommended for SVs to measure current costs periodically and adjust traffic parameters accordingly.
 
-One way to determine the current traffic consumption (in bytes) of a CC transfer is to initiate a CC transfer and observe sequencer logs corresponding to it. Based on the assumption that TestNet has the same configuration and DSO size as MainNet, it is sufficient to conduct this measurement on TestNet. The suggested specific steps are as follows:
+One way to determine the current [traffic consumption](/global-synchronizer/deployment/synchronizer-traffic) (in bytes) of a CC transfer is to initiate a CC transfer and observe sequencer logs corresponding to it. Based on the assumption that TestNet has the same configuration and DSO size as MainNet, it is sufficient to conduct this measurement on TestNet. The suggested specific steps are as follows:
 
 1.  Pick two non-SV validators that you control - one will host the sending party the other the receiving party. They must be different to not skew the measurement results. Control of the recipient is required only to accept the transfer.
 
@@ -168,7 +223,7 @@ In a nutshell, the expiry automation will fail to expire rewards in such a scena
 
     <ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvOperationsYaml296 />
 
-2.  Shortly after the Daml upgrade becomes effective: One SV operator constructs a party exclusion config, confirms its correctness and shares it with the group of all operators.
+2.  Shortly after the Daml upgrade becomes effective: One SV operator [constructs a party exclusion config](/global-synchronizer/deployment/sv-operations), confirms its correctness and shares it with the group of all operators.
 
 3.  Each SV operator adopts the party exclusion config and resume the `ExpireRewardCouponsTrigger` trigger by reverting the change from step 1. If `.additionalEnvVars` in `sv-values.yaml` was empty before step 1, it is now expected to look similar to the following:
 
@@ -209,7 +264,7 @@ Based on that:
 
 ## Determining expired SV rewards for CIP-66 flows
 
-SVs need, in the context of [CIP-0066 - Mint Canton Coin from Unminted/Unclaimed Pool](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0066/cip-0066.md), to determine the total amount of SV rewards that were never claimed and therefore expired within a specific time range. These expired rewards form the basis for the amount that may later be minted from the unclaimed rewards pool through the CIP-66 governance process.
+SVs need, in the context of [CIP-0066 - Mint Canton Coin from Unminted/Unclaimed Pool](https://github.com/canton-foundation/cips/blob/main/cip-0066/cip-0066.md), to determine the total amount of SV rewards that were never claimed and therefore expired within a specific time range. These expired rewards form the basis for the amount that may later be minted from the unclaimed rewards pool through the CIP-66 governance process.
 
 The `unclaimed_sv_rewards.py` utility analyzes the transaction log exposed through the Splice Scan API and identifies all reward coupons issued for a beneficiary that subsequently expired within the configured interval. It then aggregates the corresponding reward amounts to produce the total expired amount relevant for CIP-66 calculations.
 
@@ -272,7 +327,7 @@ To rebuild the cache:
 
 <ExternalSpliceMainSpliceRstCodeDocsSrcSvOperatorSvOperationsBash564 />
 
-For operational details regarding cache behavior, see Cache mechanism
+For operational details regarding cache behavior, see [Cache mechanism](/global-synchronizer/deployment/sv-operations)
 
 ### Output
 

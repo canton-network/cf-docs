@@ -44,6 +44,7 @@ LEGACY_GROUP_LABEL = "gRPC Ledger API Reference"
 DETAILS_LABEL = "Details and history"
 DEFAULT_INSERT_AFTER_GROUP = "Ledger API Endpoints"
 DEFAULT_SOURCE_NAME = "Canton Ledger API protobuf release bundles"
+DEFAULT_NAV_GROUP = ["Ledger API"]
 LEDGER_API_PACKAGE_PREFIX = "com.daml.ledger.api."
 
 
@@ -73,7 +74,10 @@ def parse_args() -> argparse.Namespace:
         "--version-filter",
         help="Version-filter label embedded in generated content.",
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.nav_group is None:
+        args.nav_group = DEFAULT_NAV_GROUP
+    return args
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -537,12 +541,12 @@ def update_docs_navigation(
         details_path=details_path,
         page_paths=page_paths,
     )
-    pages[:] = canton_protobuf_history.prune_nav_items(
-        pages,
+    target_pages = canton_protobuf_history.ensure_group_path(pages, parent_groups)
+    target_pages[:] = canton_protobuf_history.prune_nav_items(
+        target_pages,
         page_refs=generated_refs,
         group_labels={GROUP_LABEL, LEGACY_GROUP_LABEL},
     )
-    target_pages = canton_protobuf_history.ensure_group_path(pages, parent_groups)
     insert_group(target_pages, group=nav_group, after_group=insert_after_group)
     docs_json_path.write_text(json.dumps(docs, indent=2) + "\n", encoding="utf-8")
     print(f"Updated docs navigation: {docs_json_path}")
