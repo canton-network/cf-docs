@@ -9,10 +9,6 @@ on:
         description: "Generated-doc targets to run"
         type: string
         default: "all"
-      base_branch:
-        description: "Optional generated PR base branch override"
-        type: string
-        default: ""
 
 permissions:
   contents: write
@@ -74,10 +70,4 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           GENERATED_DOCS_MERGER_TOKEN: ${{ steps.merger-token.outputs.token }}
           GENERATED_DOCS_TARGETS: ${{ inputs.targets || 'all' }}
-          GENERATED_DOCS_BASE_BRANCH: ${{ inputs.base_branch || '' }}
-        run: |
-          args=(--targets $GENERATED_DOCS_TARGETS)
-          if [[ -n "$GENERATED_DOCS_BASE_BRANCH" ]]; then
-            args+=(--base-branch "$GENERATED_DOCS_BASE_BRANCH")
-          fi
-          python3 scripts/update_generated_reference_prs.py "${args[@]}"
+        run: python3 scripts/update_generated_reference_prs.py --targets $GENERATED_DOCS_TARGETS
