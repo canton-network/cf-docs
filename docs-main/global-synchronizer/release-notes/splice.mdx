@@ -3,6 +3,116 @@ title: "Splice"
 description: "Release notes and version history for Global Synchronizer software"
 ---
 
+## 0.6.11
+
+    This release includes the Token Standard V2 APIs ([CIP-112](https://github.com/canton-foundation/cips/blob/main/cip-0112/cip-0112.md))
+    and their implementation for Amulet.
+
+    **CC holders**: ensure your validator node (or your wallet provider's
+    validator node) is running a version of the validator that supports the
+    Token Standard V2 APIs, so that you and your counter-parties can use the new
+    allocation and transfer workflows when sending or receiving CC.
+
+    **Wallet providers**: consider adding support for the Token Standard V2 APIs in your wallet.
+    Adding support for the V2 allocation workflows unlocks valuable new functionality for
+    your users. Using the V2 tx history events simplifies presenting the transaction
+    history to your users. Furthermore, adding support for accounts in your UIs enables
+    interacting with assets with rich account structures, which are commonly used in the TradFi world.
+
+    **Registry providers**: consider implementing support for the Token Standard V2 APIs for your tokens,
+    so they can be used by apps and wallets that rely on the V2 token standard.
+
+    **App providers**: review the V2 APIs and consider where their use allows you to improve your app's UX
+    and/or reduce its traffic cost. Trading apps in particular can benefit from the improved
+    functionality of the V2 allocation APIs.
+
+  - Wallet
+
+    - Support token standard V2 allocations and transfers of Amulet in the Splice Amulet Wallet UI.
+
+      Creating all requested allocations in a single transaction
+      [as documented in CIP-112](https://github.com/canton-foundation/cips/blob/main/cip-0112/cip-0112.md#423-traders-accept-allocation-requests-and-create-allocations)
+      is not supported by the Splice Amulet Wallet UI, as it only works for Amulet allocations.
+      It therefore also does not call ``V2.AllocationRequest_Accept`` on the allocation request,
+      to avoid archiving the allocation request while it is still required to create allocations
+      of other assets using their registry-specific UIs.
+
+  - Validator
+
+    - Upload and vet the ``splice-util-token-standard-wallet.dar`` by default, so that
+      wallets can make use of the new batching functionality (see below) on all validator
+      nodes.
+
+    - Fix an issue where calling ``external-party/topology/submit``
+      during topology freeze time resulted in retries for the same
+      party after freeze time failing with
+      ``TOPOLOGY_NO_APPROPRIATE_SIGNING_KEY_IN_STORE``.
+
+  - Daml
+
+    - Release the Token Standard V2 APIs ([CIP-112](https://github.com/canton-foundation/cips/blob/main/cip-0112/cip-0112.md)).
+      Their definitions and ``.dar`` files are available from
+      the Splice GitHub repository
+      (see here for [definitions](https://github.com/canton-network/splice/tree/main/token-standard) and [.dar files](https://github.com/canton-network/splice/tree/main/daml/dars).
+
+      Tokens wanting to support the V2 token standard MUST implement both the Daml interfaces and the OpenAPI
+      specifications. They can choose whether to implement both the allocation and transfer APIs, or only one of them.
+
+    - Implement all Token Standard V2 APIs for Amulet, which adds the following new features to Amulet:
+
+      - Add support for committed Amulet allocations that lock their funds until the settlement deadline.
+
+      - Add support for iterated Amulet allocations, which allow executors to specify the actual
+        funds transferred post-hoc as part of settlement, provided the allocated funds cover the actual transfer.
+        See the [discussion on the mailing list](https://lists.sync.global/g/cip-discuss/message/743) for more information.
+
+      - Support creating Amulet allocations for burn. This prepares for the option of using
+        allocations to pay for ANS entries, traffic purchases, or other future use-cases.
+
+      - Allow executing single-step transfers using the V2 transfer factory interface for
+        cases where both sender and receiver authorization is available.
+
+      - Greatly simplify the parsing of Amulet transaction history for wallets
+        and explorers by reporting all holding changes as
+        [V2.EventLog_HoldingsChange](#type-splice-api-token-transfereventsv2-eventlogholdingschange-79855) events.
+
+        Note that this required adding a **meta** (*Optional Metadata*) field to the ``AmuletRules.TransferOutput`` type and
+        the ``TransferPreapproval_SendV2`` choice to properly propagate metadata from transfer creation to
+        its actual execution and event reporting.
+
+      - Introduce the new ``AmuletConfig.tokenStandardMaxTTL`` config parameter, which restricts
+        the maximum lifetime of transfer instructions and amulet allocations,
+        with a default value of 90 days. This is a Denial-of-Service protection against filling
+        the SVs' active contract store with long-lived allocations and transfer instructions.
+        The DSO party can expire both V1 and V2 amulet allocations older than
+        ``tokenStandardMaxTTL``, even if the settlement deadline has not yet passed.
+
+      - Properly classify the burn of Amulet for ANS entries in the V2 token standard transaction history.
+
+    - Extend the ``splice-util-token-standard-wallet.dar`` with the
+      ``Splice.Util.Token.Wallet.BatchingUtilityV2`` template for batching
+      multiple token standard V1 or V2 actions in a single transaction.
+
+    - Switch to Daml SDK 3.5.2 for all non-API packages and the token standard V2 APIs,
+      which is the reason for why the version of ``splice-*`` packages unrelated to Token Standard V2
+      implementation was bumped as well.
+
+    - These changes require a Daml upgrade to the following versions:
+
+        | name | version |
+        | :--- | :--- |
+        | amulet | 0.1.21 |
+        | amuletNameService | 0.1.22 |
+        | dsoGovernance | 0.1.27 |
+        | validatorLifecycle | 0.1.8 |
+        | wallet | 0.1.22 |
+        | walletPayments | 0.1.21 |
+
+  - Scan app
+
+    - Add a new endpoint ``/v0/lsu`` to the internal API which exposes information like topology freeze time,
+      upgrade time and successor synchronizer ID for the most recent LSU
+
 ## 0.6.10
 
   - Deployment
@@ -1420,8 +1530,8 @@ Note: 0.4.6 had a bug and should be skipped in favor of 0.4.7 which fixed a bug 
 - Info (new)
   - *important* This release contains a new helm chart "splice-info" which is supposed to be installed on all SV nodes and made publicly accessible. The new `info` endpoint provides:
 
-    - Static information about network, sv, synchronizers, config digests of ip ranges and identities under `https://info.sv.&lt;YOUR_HOSTNAME&gt;`.
-    - Regularly updated (every minute) copy of DSO information under `https://info.sv.&lt;YOUR_HOSTNAME&gt;/runtime/dso.json`.
+    - Static information about network, sv, synchronizers, config digests of ip ranges and identities under `https://info.sv.<YOUR_HOSTNAME>`.
+    - Regularly updated (every minute) copy of DSO information under `https://info.sv.<YOUR_HOSTNAME>/runtime/dso.json`.
 
     The relevant documentation is updated at `sv-helm`.
 - Scan
@@ -1664,7 +1774,7 @@ Note: 0.4.6 had a bug and should be skipped in favor of 0.4.7 which fixed a bug 
     - It is now possible to force the recovery attempt for a party that was skipped during the fully automated recovery flow.
   - Improve the error message when trying to use the wallet outside of localhost or https. Thanks to Stephane Loeuillet for contributing this in [https://github.com/canton-network/splice/pull/322](https://github.com/canton-network/splice/pull/322).
 - Scan
-  - Scan now implements some Token Standard endpoints that are under the `/registry` path. `https://scan.sv.&lt;YOUR_HOSTNAME&gt;/registry` should be routed to `/registry` at port 5012 in service `scan-app` in the `sv` namespace, the same way that `/api/scan` already is.
+  - Scan now implements some Token Standard endpoints that are under the `/registry` path. `https://scan.sv.<YOUR_HOSTNAME>/registry` should be routed to `/registry` at port 5012 in service `scan-app` in the `sv` namespace, the same way that `/api/scan` already is.
 
 ## 0.3.21
 
@@ -2560,7 +2670,7 @@ Note: 0.1.5 resulted in the issue mentioned below so both SVs and validators sho
   - Global Domain (whenever it refers to the more generic concept) -\> Decentralized Synchronizer
   - Note that for technical reasons the URLs for networks still include the term "svc" for now; e.g., `https://wallet.sv.svc.YOUR_HOSTNAME`.
 - Added an option to disable the Validator apps' wallet. This can be done by setting `enableWallet` to `false` in the `validator-values.yaml` file.
-- Added ANS name resolution (formally known as CNS) for `dso.ans` to the DSO party and `&lt;sv-name&gt;.sv.ans` to all SV members parties.
+- Added ANS name resolution (formally known as CNS) for `dso.ans` to the DSO party and `<sv-name>.sv.ans` to all SV members parties.
 - CometBFT pruning duration has been increased to 30 days. No configuration changes are required.
 - Sequencer pruning period has been adjusted to 30 days and pruning interval has been reduced to 1 hour. Adjust `sequencerPruningConfig.pruningInterval` and `sequencerPruningConfig.retentionPeriod` in your `sv-values.yaml` to match the example `sv-values.yaml`.
 - The sequencer URL of the Digital Asset 2 node `https://sequencer.sv-1.svc.CLUSTER.network.canton.global` is no longer exposed. Instead use `https://sequencer-MIGRATION_ID.sv-1.svc.CLUSTER.network.canton.global` where `MIGRATION_ID` is the current migration id of the cluster.
@@ -2714,7 +2824,7 @@ Note: 0.1.5 resulted in the issue mentioned below so both SVs and validators sho
 
 - Minor SV UI tweaks. Among other things, it is now mandatory to supply a textual proposal summary when submitting a vote request.
 - Renamed `directory` to `CNS` across the system
-  - Renamed ingress rule from `https://directory.sv.svc.&lt;YOUR_HOSTNAME&gt;*` to `https://cns.sv.svc.&lt;YOUR_HOSTNAME&gt;*`. Please note that this is now a requirement for this UI to continue working properly.
+  - Renamed ingress rule from `https://directory.sv.svc.<YOUR_HOSTNAME>*` to `https://cns.sv.svc.<YOUR_HOSTNAME>*`. Please note that this is now a requirement for this UI to continue working properly.
 
 ## 2023-12-11
 
@@ -2753,7 +2863,7 @@ Note: 0.1.5 resulted in the issue mentioned below so both SVs and validators sho
 - Removing the adjustment of SVC governance thresholds for DevNet, aligning it with the one used in TestNet.
 - Deployment updates:
   - The URL of the global domain sequencer hosted by the Canton Foundation has changed to `https://sequencer.sv-1.svc.\<TARGET_CLUSTER\>.network.canton.global`. This change is reflected in the values specified in `participant-values.yaml`, `validator-values.yaml` and `sv-values.yaml`.
-  - The requirement for URL rewriting in the rules for Scan and SV apps has been removed: `https://scan.sv.svc.&lt;YOUR_HOSTNAME&gt;/api/scan` and `https://sv.sv.svc.&lt;YOUR_HOSTNAME&gt;/api/sv` no longer requires rewriting (and also has been modified from `/api/v0/scan` to `/api/scan` and from `/api/v0/sv` to `/api/sv`). For example, `https://scan.sv.svc.&lt;YOUR_HOSTNAME&gt;/api/scan/foobar` should be forwarded to `http://validator-app:5012/api/scan/foobar`. Note that URL rewriting is now required only in the ingress rule of the JSON API used by the directory frontend. This rule will be completely removed in the future.
+  - The requirement for URL rewriting in the rules for Scan and SV apps has been removed: `https://scan.sv.svc.<YOUR_HOSTNAME>/api/scan` and `https://sv.sv.svc.<YOUR_HOSTNAME>/api/sv` no longer requires rewriting (and also has been modified from `/api/v0/scan` to `/api/scan` and from `/api/v0/sv` to `/api/sv`). For example, `https://scan.sv.svc.<YOUR_HOSTNAME>/api/scan/foobar` should be forwarded to `http://validator-app:5012/api/scan/foobar`. Note that URL rewriting is now required only in the ingress rule of the JSON API used by the directory frontend. This rule will be completely removed in the future.
   - Note that the readiness and liveness endpoints of Validator, Scan and SV apps have all been moved to `/api/\<app\>/readyz` and `/api/\<app\>/livez`, with `\<app\>` being `validator`, `scan` or `sv`, respectively. The corresponding Helm charts have been updated to reflect this change.
   - The URL configuration for the foundation's Scan app in `validator-values.yaml` has been updated to be `https://scan.sv-1.svc.TARGET_CLUSTER.network.canton.global`. Similarly, in the config files in the self-hosted validator section.
   - The `isDevNet` flag has been removed from the `cn-cometbft` helm chart in order to eliminate its potential for accidental misconfiguration. Instead, the chart now relies on the value of `genesis.chainId` in `cometbft-values.yaml` to determine whether it is a TestNet or DevNet deployment.
@@ -2776,7 +2886,7 @@ Note: 0.1.5 resulted in the issue mentioned below so both SVs and validators sho
 - Add a hidden page to the SV UI (`/leader`) that allows SVs to manually trigger a reelection of the SvcRules leader, as an additional safety mechanism and measure of last resort.
 - Deployment updates:
   - Add documentation for Kubernetes-Based Deployment of a Validator node
-  - The requirement for url rewriting in one of the rules has been removed: `https://wallet.sv.svc.&lt;YOUR_HOSTNAME&gt;/api/validator` no longer requires rewriting (and also has been modified from `/api/v0/validator` to `/api/validator`). For example, `https://wallet.sv.svc.&lt;YOUR_HOSTNAME&gt;/api/validator/foobar` should be forwarded to `http://validator-app:5003/api/validator/foobar`. In the future, the other rewrite requirements will also be removed.
+  - The requirement for url rewriting in one of the rules has been removed: `https://wallet.sv.svc.<YOUR_HOSTNAME>/api/validator` no longer requires rewriting (and also has been modified from `/api/v0/validator` to `/api/validator`). For example, `https://wallet.sv.svc.<YOUR_HOSTNAME>/api/validator/foobar` should be forwarded to `http://validator-app:5003/api/validator/foobar`. In the future, the other rewrite requirements will also be removed.
   - Renamed `SV_WALLET_USER_ID` placeholder in `validator-values.yaml` to `OPERATOR_WALLET_USER_ID` to better reflect that this value is the operator's user in the deployment for both SVs and standalone validator nodes
 - Bugfixes:
   - Fixed an issue with fees in Scan recent activity and transaction history API where some sender and receiver fees were not reported. If a party transfers to themself, it will now be included in the Transfer receivers property in API responses (this was previously filtered out).
@@ -3033,7 +3143,7 @@ Note: 0.1.5 resulted in the issue mentioned below so both SVs and validators sho
 ## 2023-06-04
 
 - Deployment updates:
-  - Docker images now use the same versioning scheme as helm charts: `<major>.<minor>.<patch>-snapshot.&lt;commit_date&gt;.&lt;number_of_commits&gt;.0.v&lt;commit_sha_8&gt;`
+  - Docker images now use the same versioning scheme as helm charts: `<major>.<minor>.<patch>-snapshot.<commit_date>.<number_of_commits>.0.v<commit_sha_8>`
 - Frontend updates:
   - Reorganized the information tab in SV UI and included rules governing canton coin (e.g. fees) in SV UI.
   - Added support for displaying details of governance vote requests, casting a vote, and updating a casted vote.

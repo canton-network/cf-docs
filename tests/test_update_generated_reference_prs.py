@@ -44,6 +44,7 @@ def test_update_targets_cover_all_generated_doc_surfaces() -> None:
         "daml-standard-library",
         "typescript-bindings",
         "canton-metrics-reference",
+        "canton-release-notes",
     ]
 
 
@@ -186,6 +187,7 @@ def test_generated_clean_paths_include_target_paths_and_internal_output() -> Non
     assert "docs-main/snippets/generated/version-dashboard-data.mdx" in clean_paths
     assert "docs-main/global-synchronizer/deployment/validator-kubernetes.mdx" in clean_paths
     assert "docs-main/global-synchronizer/reference/canton-metrics.mdx" in clean_paths
+    assert "docs-main/global-synchronizer/release-notes" in clean_paths
 
 
 def test_target_paths_exist_in_base_checkout() -> None:
@@ -197,6 +199,20 @@ def test_target_paths_exist_in_base_checkout() -> None:
     }
 
     assert {key: paths for key, paths in missing_paths.items() if paths} == {}
+
+
+def test_network_variable_tab_target_pages_match_generated_blocks() -> None:
+    module = load_script_module()
+
+    generated_block_pages = tuple(
+        sorted(
+            path.relative_to(REPO_ROOT).as_posix()
+            for path in (REPO_ROOT / "docs-main").rglob("*.mdx")
+            if "{/* NETWORKVARS_START" in path.read_text(encoding="utf-8")
+        )
+    )
+
+    assert module.NETWORK_VARIABLE_TAB_PAGES == generated_block_pages
 
 
 def test_body_markdown_includes_description_changes_and_validation() -> None:
@@ -406,6 +422,48 @@ def test_create_or_update_pull_request_signs_generated_commit(monkeypatch, tmp_p
     assert ("commit", "--signoff", "-m", "Update generated docs") in git_calls
     assert not any(call[:1] == ("switch",) for call in git_calls)
     assert any(call[:2] == ("pr", "create") for call in gh_calls)
+    create_call = next(call for call in gh_calls if call[:2] == ("pr", "create"))
+    assert "--draft" not in create_call
+
+
+def test_create_or_update_pull_request_keeps_existing_pr_ready(monkeypatch, tmp_path: Path) -> None:
+    load_script_module()
+    import generated_reference_pr_utils as pr_utils
+
+    gh_calls: list[tuple[str, ...]] = []
+
+    def fake_git(*args: str, capture: bool = False) -> str:
+        if args[:2] == ("status", "--porcelain"):
+            return " M generated.mdx"
+        return ""
+
+    def fake_gh(*args: str, capture: bool = False) -> str:
+        gh_calls.append(args)
+        if args[:2] == ("pr", "list"):
+            return "933"
+        return ""
+
+    def fail_subprocess_run(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("generated PR updates must not call gh pr ready --undo")
+
+    monkeypatch.setattr(pr_utils, "git", fake_git)
+    monkeypatch.setattr(pr_utils, "gh", fake_gh)
+    monkeypatch.setattr(pr_utils, "push_branch", lambda branch: None)
+    monkeypatch.setattr(pr_utils.subprocess, "run", fail_subprocess_run)
+    body_path = tmp_path / "body.md"
+    body_path.write_text("body", encoding="utf-8")
+
+    pr_utils.create_or_update_pull_request(
+        title="Update generated docs",
+        branch="generated/update",
+        paths=("generated.mdx",),
+        body_path=body_path,
+        base_branch="main",
+        repository="canton-network/cf-docs",
+    )
+
+    assert any(call[:2] == ("pr", "edit") and call[2] == "933" for call in gh_calls)
+    assert not any(call[:2] == ("pr", "ready") for call in gh_calls)
 
 
 def test_create_or_update_pull_request_closes_stale_pr_when_no_changes(
