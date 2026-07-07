@@ -384,7 +384,7 @@ UPDATE_TARGETS = (
         description=(
             "Updates the published Wallet Gateway release-note page from the latest "
             "`@canton-network/wallet-gateway-remote` GitHub releases in "
-            "`hyperledger-labs/splice-wallet-kernel`."
+            "`canton-network/wallet`."
         ),
         generate_commands=(("nix-shell", "--run", "npm run update:release-notes -- --target wallet-gateway"),),
         paths=(
@@ -430,7 +430,7 @@ UPDATE_TARGETS = (
         description=(
             "Updates the published dApp SDK release-note page from the latest "
             "`@canton-network/dapp-sdk` GitHub releases in "
-            "`hyperledger-labs/splice-wallet-kernel`."
+            "`canton-network/wallet`."
         ),
         generate_commands=(("nix-shell", "--run", "npm run update:release-notes -- --target dapp-sdk"),),
         paths=(

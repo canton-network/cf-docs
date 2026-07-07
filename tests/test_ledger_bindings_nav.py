@@ -196,6 +196,63 @@ def test_daml_standard_library_nav_supports_product_navigation(tmp_path: Path) -
     )
 
 
+def test_daml_script_nav_is_top_level_in_api_reference(tmp_path: Path) -> None:
+    generate_daml_script_reference = load_script("generate_daml_script_reference")
+    docs_json = tmp_path / "docs-main" / "docs.json"
+    docs_json.parent.mkdir(parents=True)
+    docs_json.write_text(
+        json.dumps(
+            {
+                "navigation": {
+                    "products": [
+                        {
+                            "product": "API Reference",
+                            "pages": [
+                                {
+                                    "group": "Daml Standard Library",
+                                    "pages": [{"group": "Modules", "pages": ["appdev/reference/daml-standard-library/da-list"]}],
+                                }
+                            ],
+                        }
+                    ]
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    output_dir = docs_json.parent / "appdev" / "reference" / "daml-script"
+    write_mdx(output_dir / "index.mdx", "Daml Script")
+    write_mdx(output_dir / "daml-script.mdx", "Daml.Script")
+    write_mdx(output_dir / "daml-script-internal.mdx", "Daml.Script.Internal")
+
+    generate_daml_script_reference.update_docs_navigation(
+        docs_json_path=docs_json,
+        dropdown_label="API Reference",
+        parent_groups=[],
+        output_dir=output_dir,
+    )
+
+    docs = json.loads(docs_json.read_text(encoding="utf-8"))
+    assert docs["navigation"]["products"][0]["pages"] == [
+        {
+            "group": "Daml Standard Library",
+            "pages": [{"group": "Modules", "pages": ["appdev/reference/daml-standard-library/da-list"]}],
+        },
+        {
+            "group": "Daml Script",
+            "pages": [
+                {
+                    "group": "Modules",
+                    "pages": [
+                        "appdev/reference/daml-script/daml-script",
+                        "appdev/reference/daml-script/daml-script-internal",
+                    ],
+                },
+            ],
+        },
+    ]
+
+
 def test_java_bindings_overview_is_published_as_details_and_history() -> None:
     generate_ledger_bindings_api_reference = load_script("generate_ledger_bindings_api_reference")
 
