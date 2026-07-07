@@ -17,6 +17,7 @@ from x2mdx.asyncapi.models import (
     AsyncApiChannelLifecycle,
     AsyncApiMessageDetail,
     AsyncApiReport,
+    AsyncApiSchemaVariantDetail,
     AsyncApiSourceSnapshot,
 )
 from x2mdx.types import JsonObject, JsonValue
@@ -312,6 +313,113 @@ def schema_sample_value(
     return schema_type_token(doc, resolved)
 
 
+def schema_variant_name(doc: AsyncApiDocument, schema: JsonValue | None, *, index: int) -> str:
+    ref_name = local_ref_name(schema, prefix="components/schemas")
+    if ref_name:
+        return ref_name
+
+    resolved = resolve_local_ref(doc, schema)
+    if not isinstance(resolved, dict):
+        return f"Variant {index + 1}"
+
+    title = resolved.get("title")
+    if isinstance(title, str) and title.strip():
+        return title.strip()
+
+    properties = resolved.get("properties")
+    if isinstance(properties, dict) and len(properties) == 1:
+        return str(next(iter(properties)))
+
+    required = resolved.get("required")
+    if isinstance(required, list) and len(required) == 1:
+        return str(required[0])
+
+    return f"Variant {index + 1}"
+
+
+def schema_variants(
+    doc: AsyncApiDocument,
+    schema: JsonValue | None,
+    *,
+    max_depth: int = REQUEST_SAMPLE_MAX_DEPTH,
+    seen_refs: set[str] | None = None,
+) -> list[AsyncApiSchemaVariantDetail]:
+    if max_depth <= 0:
+        return []
+
+    if seen_refs is None:
+        seen_refs = set()
+
+    if isinstance(schema, dict):
+        ref = schema.get("$ref")
+        if isinstance(ref, str):
+            if ref in seen_refs:
+                return []
+            return schema_variants(
+                doc,
+                resolve_local_ref(doc, schema),
+                max_depth=max_depth,
+                seen_refs=seen_refs | {ref},
+            )
+
+    resolved = resolve_local_ref(doc, schema)
+    if not isinstance(resolved, dict):
+        return []
+
+    raw_variants = resolved.get("oneOf")
+    if not isinstance(raw_variants, list):
+        raw_variants = resolved.get("anyOf")
+    if not isinstance(raw_variants, list):
+        property_variants: list[AsyncApiSchemaVariantDetail] = []
+        properties, required = object_schema_properties_and_required(doc, resolved, max_depth=max_depth)
+        for property_name, property_schema in properties.items():
+            nested_variants = schema_variants(
+                doc,
+                property_schema,
+                max_depth=max_depth - 1,
+                seen_refs=seen_refs,
+            )
+            if nested_variants:
+                property_variants.append(
+                    {
+                        "name": property_name,
+                        "payload_schema": schema_brief(doc, property_schema),
+                        "required_fields": [property_name] if property_name in required else [],
+                        "sample": schema_sample_value(
+                            doc,
+                            property_schema,
+                            max_depth=max_depth,
+                            seen_refs=seen_refs,
+                        ),
+                        "variants": nested_variants,
+                    }
+                )
+        return property_variants
+
+    variants: list[AsyncApiSchemaVariantDetail] = []
+    for index, variant_schema in enumerate(raw_variants):
+        variants.append(
+            {
+                "name": schema_variant_name(doc, variant_schema, index=index),
+                "payload_schema": schema_brief(doc, variant_schema),
+                "required_fields": schema_required_field_names(doc, variant_schema),
+                "sample": schema_sample_value(
+                    doc,
+                    variant_schema,
+                    max_depth=max_depth,
+                    seen_refs=seen_refs,
+                ),
+                "variants": schema_variants(
+                    doc,
+                    variant_schema,
+                    max_depth=max_depth - 1,
+                    seen_refs=seen_refs,
+                ),
+            }
+        )
+    return variants
+
+
 def extract_message_detail(doc: AsyncApiDocument, message_node: JsonValue | None) -> AsyncApiMessageDetail:
     resolved_message = resolve_local_ref(doc, message_node)
     message_name = local_ref_name(message_node, prefix="components/messages")
@@ -322,6 +430,7 @@ def extract_message_detail(doc: AsyncApiDocument, message_node: JsonValue | None
             "payload_schema": "-",
             "required_fields": [],
             "sample": None,
+            "variants": [],
         }
 
     payload = resolved_message.get("payload")
@@ -331,6 +440,7 @@ def extract_message_detail(doc: AsyncApiDocument, message_node: JsonValue | None
         "payload_schema": schema_brief(doc, payload) if payload is not None else "-",
         "required_fields": schema_required_field_names(doc, payload) if payload is not None else [],
         "sample": schema_sample_value(doc, payload) if payload is not None else None,
+        "variants": schema_variants(doc, payload) if payload is not None else [],
     }
 
 
