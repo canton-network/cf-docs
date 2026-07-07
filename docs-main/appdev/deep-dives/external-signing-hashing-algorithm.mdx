@@ -61,17 +61,8 @@ message Node {
 }
 ```
 
-## V4
-
-### General approach
-
-V4 follows the same general hashing approach as V3. The V3 section below defines the common encoding used by V4 unless a V4-specific difference is stated.
-
-### Changes from V3
-
-- Exercise nodes with version dev include `external_call_results` in the prepared transaction hash. This binds the recorded external-call result payloads shown in prepared transaction review to the external party's signature.
-
-## V3
+Specification
+=============
 
 ### General approach
 
@@ -85,19 +76,27 @@ In Java, unsigned 32-bit and 64-bit integers are represented using their signed 
 
 Additionally, this is the java library used under the hood in Canton to serialize and deserialize protobuf: [https://github.com/protocolbuffers/protobuf/tree/v3.25.5/java](https://github.com/protocolbuffers/protobuf/tree/v3.25.5/java)
 
-### Changes from V2
+Summary of differences between V3 and V4
+-----------------------------------------
 
-- Addition of an `max_record_time` field in metadata to make maximum record time explicit in the signed metadata.
+<Note>
+V4 is currently unstable and subject to changes. For this reason it targets Protocol Version ``Dev`` only.
+</Note>
 
-### Changes from V1
+- **New fields**: Exercise nodes with version ``dev`` include a new `external_call_results` field. This binds the recorded external-call result payloads shown in prepared transaction review to the external party's signature.
+- **Final hash**: The hashing scheme version byte changes from ``0x03`` (V3) to ``0x04`` (V4).
 
-- Addition of an `interface_id` field in Fetch nodes for support of Daml interfaces.
+Summary of differences between V2 and V3
+-----------------------------------------
 
-- Addition of the hashing scheme version in the final hash to make the hash more robust to cross version collisions.
+The following is a summary of the differences between V2 and V3. The full specification for each version is provided in the sections below,
+where version-specific details are shown using tabs.
 
-- Replace `ledger_effective_time` in the metadata with `min_ledger_effective_time` and `max_ledger_effective_time`.
-
-  > - These effectively replace a fixed ledger time with time bounds, allowing Daml Models to make assertions based on time without restricting the signing window as was required with a fixed set ledger time.
+- **Removed prefixes**: V3 removes the ``0x01`` "Node encoding version" byte prefix from all node encodings, and the ``0x01`` "Metadata encoding version" prefix from the metadata encoding.
+- **New fields**: ``key_opt`` (optional, composite) is added to Create, Exercise, and Fetch nodes. ``by_key`` (boolean) is added to Exercise and Fetch nodes.
+- **New node type**: ``QueryByKey`` is introduced in V3.
+- **Metadata**: ``max_record_time`` is added to the metadata encoding.
+- **Final hash**: The hashing scheme version byte changes from ``0x02`` (V2) to ``0x03`` (V3).
 
 <Warning>
 V3 introduces support for contract keys. Usage of contract keys in externally signed transactions requires usage of V3. Contract keys will not work on V2. Also note that V3 is supported from protocol version 35 onwards.
@@ -171,6 +170,28 @@ encode(some(5)) = 0x01 || encode(5)
 ```
 
 See encoding of optional values below for details.
+
+- ``encode_key_with_maintainers`` *(from V3 only)*: Function encoding a ``GlobalKeyWithMaintainers`` composite value. This is used for the ``key`` field in Create, Exercise, Fetch, and QueryByKey nodes.
+
+```
+fn encode_key_with_maintainers(key_with_maintainers):
+    encode(key_with_maintainers.key.package_name) ||
+    encode(key_with_maintainers.key.template_id) ||
+    encode(key_with_maintainers.key.key) ||
+    encode(key_with_maintainers.key.hash) ||
+    encode(key_with_maintainers.maintainers)
+```
+
+- ``encode_external_call_result``: Function encoding an `ExternalCallResult` composite value. This is used for the `external_call_results` field in Exercise nodes.
+
+```
+fn encode_external_call_result(result):
+    return encode(result.extension_id) ||
+        encode(result.function_id) ||
+        encode(result.config) ||
+        encode(result.input) ||
+        encode(result.output)
+```
 
 ### Primitive Types
 
@@ -561,19 +582,62 @@ fn encode_optional_seed(optional_seed):
 
 #### Create
 
-``` 
-fn encode_node(create):
-    0x01 || # Node encoding version
-    encode(create.lf_version) || # Node LF version
-    0x00 || # Create node tag
-    encode_optional_seed(find_seed(node.node_id)) ||
-    encode(create.contract_id) ||
-    encode(create.package_name) ||
-    encode(create.template_id) ||
-    encode(create.argument) ||
-    encode(create.signatories) ||
-    encode(create.stakeholders)
-```
+<Tabs>
+  <Tab title="V4">
+
+    ```
+    fn encode_node(create):
+      encode(create.lf_version) || # Node LF version
+      0x00 || # Create node tag
+      encode_optional_seed(find_seed(node.node_id)) ||
+      encode(create.contract_id) ||
+      encode(create.package_name) ||
+      encode(create.template_id) ||
+      encode(create.argument) ||
+      encode(create.signatories) ||
+      encode(create.stakeholders) ||
+      encode_key_with_maintainers(create.key)
+    ```
+
+  </Tab>
+
+  <Tab title="V3">
+
+    ```
+    fn encode_node(create):
+        encode(create.lf_version) || # Node LF version
+        0x00 || # Create node tag
+        encode_optional_seed(find_seed(node.node_id)) ||
+        encode(create.contract_id) ||
+        encode(create.package_name) ||
+        encode(create.template_id) ||
+        encode(create.argument) ||
+        encode(create.signatories) ||
+        encode(create.stakeholders) ||
+        encode_key_with_maintainers(create.key) # new in V3
+    ```
+
+  </Tab>
+
+  <Tab title="V2">
+
+    ```
+    fn encode_node(create):
+        0x01 || # Node encoding version
+        encode(create.lf_version) || # Node LF version
+        0x00 || # Create node tag
+        encode_optional_seed(find_seed(node.node_id)) ||
+        encode(create.contract_id) ||
+        encode(create.package_name) ||
+        encode(create.template_id) ||
+        encode(create.argument) ||
+        encode(create.signatories) ||
+        encode(create.stakeholders)
+    ```
+
+  </Tab>
+
+</Tabs>
 
 #### Exercise
 
@@ -599,7 +663,8 @@ fn encode_node(create):
         encode(exercise.choice_observers) ||
         encode(exercise.by_key) ||
         encode(exercise.key) ||
-        encode(exercise.external_call_results) || # new in V4
+        encode_key_with_maintainers(exercise.key) ||
+        encode_external_call_result(exercise.external_call_results) || # new in V4
         encode(exercise.children)
     ```
 
@@ -623,8 +688,32 @@ fn encode_node(create):
         encode(exercise.consuming) ||
         encode(exercise.exercise_result) ||
         encode(exercise.choice_observers) ||
-        encode(exercise.by_key) ||
-        encode(exercise.key) ||
+        encode(exercise.by_key)  || # new in V3
+        encode_key_with_maintainers(exercise.key) || # new in V3
+        encode(exercise.children)
+    ```
+
+  </Tab>
+  <Tab title="V2">
+
+    ```
+    fn encode_node(exercise):
+        0x01 || # Node encoding version
+        encode(exercise.lf_version) || # Node LF version
+        0x01 || # Exercise node tag
+        encode_seed(find_seed(node.node_id).get) ||
+        encode(exercise.contract_id) ||
+        encode(exercise.package_name) ||
+        encode(exercise.template_id) ||
+        encode(exercise.signatories) ||
+        encode(exercise.stakeholders) ||
+        encode(exercise.acting_parties) ||
+        encode(exercise.interface_id) ||
+        encode(exercise.choice_id) ||
+        encode(exercise.chosen_value) ||
+        encode(exercise.consuming) ||
+        encode(exercise.exercise_result) ||
+        encode(exercise.choice_observers) ||
         encode(exercise.children)
     ```
 
@@ -635,47 +724,133 @@ fn encode_node(create):
 For Exercise nodes, the node seed **MUST** be defined. Therefore it is encoded as a **non** optional field, as noted via the `.get` in `find_seed(node.node_id).get`. If the seed of an exercise node cannot be found in the list of `node_seeds`, encoding must be stopped and it should be reported as a bug.
 </Warning>
 
-#### External call result
-
-When V4 encodes an `external_call_results` element, the element is encoded as follows:
-
-``` 
-fn encode_external_call_result(result):
-    return encode(result.extension_id) ||
-        encode(result.function_id) ||
-        encode(result.config) ||
-        encode(result.input) ||
-        encode(result.output)
-```
-
 #### Fetch
 
-``` 
-fn encode_node(fetch):
-    0x01 || # Node encoding version
-    encode(fetch.lf_version) || # Node LF version
-    0x02 || # Fetch node tag
-    encode(fetch.contract_id) ||
-    encode(fetch.package_name) ||
-    encode(fetch.template_id) ||
-    encode(fetch.signatories) ||
-    encode(fetch.stakeholders) ||
-    encode(fetch.interface_id) ||
-    encode(fetch.acting_parties)
-```
+<Tabs>
+
+  <Tab title="V4">
+
+    ```
+    fn encode_node(fetch):
+        encode(fetch.lf_version) || # Node LF version
+        0x02 || # Fetch node tag
+        encode(fetch.contract_id) ||
+        encode(fetch.package_name) ||
+        encode(fetch.template_id) ||
+        encode(fetch.signatories) ||
+        encode(fetch.stakeholders) ||
+        encode(fetch.interface_id) ||
+        encode(fetch.acting_parties) ||
+        encode(exercise.by_key) ||
+        encode_key_with_maintainers(exercise.key)
+    ```
+  </Tab>
+
+  <Tab title="V3">
+
+    ```
+    fn encode_node(fetch):
+        encode(fetch.lf_version) || # Node LF version
+        0x02 || # Fetch node tag
+        encode(fetch.contract_id) ||
+        encode(fetch.package_name) ||
+        encode(fetch.template_id) ||
+        encode(fetch.signatories) ||
+        encode(fetch.stakeholders) ||
+        encode(fetch.interface_id) ||
+        encode(fetch.acting_parties) ||
+        encode(exercise.by_key)  || # new in V3
+        encode_key_with_maintainers(exercise.key) # new in V3
+    ```
+  </Tab>
+
+  <Tab title="V2">
+
+    ```
+    fn encode_node(fetch):
+        0x01 || # Node encoding version
+        encode(fetch.lf_version) || # Node LF version
+        0x02 || # Fetch node tag
+        encode(fetch.contract_id) ||
+        encode(fetch.package_name) ||
+        encode(fetch.template_id) ||
+        encode(fetch.signatories) ||
+        encode(fetch.stakeholders) ||
+        encode(fetch.interface_id) ||
+        encode(fetch.acting_parties)
+    ```
+  </Tab>
+</Tabs>
 
 #### Rollback
+<Tabs>
+  <Tab title="V4">
 
-``` 
-fn encode_node(rollback):
-   0x01 || # Node encoding version
-   0x03 || # Rollback node tag
-   encode(rollback.children)
-```
+    ```
+    fn encode_node(rollback):
+       0x03 || # Rollback node tag
+       encode(rollback.children)
+    ```
+
+  </Tab>
+  <Tab title="V3">
+
+    ```
+    fn encode_node(rollback):
+       0x03 || # Rollback node tag
+       encode(rollback.children)
+    ```
+
+  </Tab>
+  <Tab title="V2">
+
+    ```
+    fn encode_node(rollback):
+       0x01 || # Node encoding version
+       0x03 || # Rollback node tag
+       encode(rollback.children)
+    ```
+
+  </Tab>
+</Tabs>
 
 <Note>
 Rollback nodes do not have an lf version.
 </Note>
+
+#### QueryByKey
+
+This node type is only present in hashing scheme V3 and higher.
+<Tabs>
+  <Tab title="V4">
+
+    ```
+        fn encode_node(query_by_key):
+            encode(query_by_key.lf_version) || # Node LF version
+            0x04 || # QueryByKey node tag
+            encode(query_by_key.package_name) ||
+            encode(query_by_key.template_id) ||
+            encode(query_by_key.exhaustive) ||
+            encode_key_with_maintainers(query_by_key.key) ||
+            encode(query_by_key.result)
+    ```
+
+  </Tab>
+  <Tab title="V3">
+
+    ```
+        fn encode_node(query_by_key):
+            encode(query_by_key.lf_version) || # Node LF version
+            0x04 || # QueryByKey node tag
+            encode(query_by_key.package_name) ||
+            encode(query_by_key.template_id) ||
+            encode(query_by_key.exhaustive) ||
+            encode_key_with_maintainers(query_by_key.key) ||
+            encode(query_by_key.result)
+    ```
+
+  </Tab>
+</Tabs>
 
 #### Transaction Hash
 
@@ -693,20 +868,60 @@ fn hash(transaction):
 
 The final part of `PreparedTransaction` is metadata. Note that all fields of the metadata need to be signed. Only some fields contribute to the ledger change triggered by the transaction. The rest of the fields are required by the Canton protocol but either have no impact on the ledger change, or have already been signed indirectly by signing the transaction itself.
 
-``` 
-fn encode(metadata, prepare_submission_request):
-    0x01 || # Metadata Encoding Version
-    encode(metadata.submitter_info.act_as) ||
-    encode(metadata.submitter_info.command_id) ||
-    encode(metadata.transaction_uuid) ||
-    encode(metadata.mediator_group) ||
-    encode(metadata.synchronizer_id) ||
-    encode(metadata.min_ledger_effective_time) ||
-    encode(metadata.max_ledger_effective_time) ||
-    encode(metadata.submission_time) ||
-    encode(metadata.disclosed_events) ||
-    encode(metadata.max_record_time)
-```
+<Tabs>
+  <Tab title="V4">
+
+    ```
+    fn encode(metadata, prepare_submission_request):
+        encode(metadata.submitter_info.act_as) ||
+        encode(metadata.submitter_info.command_id) ||
+        encode(metadata.transaction_uuid) ||
+        encode(metadata.mediator_group) ||
+        encode(metadata.synchronizer_id) ||
+        encode(metadata.min_ledger_effective_time) ||
+        encode(metadata.max_ledger_effective_time) ||
+        encode(metadata.submission_time) ||
+        encode(metadata.disclosed_events) ||
+        encode(metadata.max_record_time)
+    ```
+
+  </Tab>
+  <Tab title="V3">
+
+    ```
+    fn encode(metadata, prepare_submission_request):
+        encode(metadata.submitter_info.act_as) ||
+        encode(metadata.submitter_info.command_id) ||
+        encode(metadata.transaction_uuid) ||
+        encode(metadata.mediator_group) ||
+        encode(metadata.synchronizer_id) ||
+        encode(metadata.min_ledger_effective_time) ||
+        encode(metadata.max_ledger_effective_time) ||
+        encode(metadata.submission_time) ||
+        encode(metadata.disclosed_events) ||
+        encode(metadata.max_record_time)
+    ```
+
+    </Tab>
+    <Tab title="V2">
+
+        ```
+        fn encode(metadata, prepare_submission_request):
+            0x01 || # Metadata Encoding Version
+            encode(metadata.submitter_info.act_as) ||
+            encode(metadata.submitter_info.command_id) ||
+            encode(metadata.transaction_uuid) ||
+            encode(metadata.mediator_group) ||
+            encode(metadata.synchronizer_id) ||
+            encode(metadata.min_ledger_effective_time) ||
+            encode(metadata.max_ledger_effective_time) ||
+            encode(metadata.submission_time) ||
+            encode(metadata.disclosed_events) ||
+            encode(metadata.max_record_time)
+        ```
+
+    </Tab>
+</Tabs>
 
 ### ProcessedDisclosedContract
 
@@ -732,13 +947,35 @@ fn hash(metadata):
 
 Finally, compute the hash that needs to be signed to commit to the ledger changes.
 
-``` 
-fn encode(prepared_transaction):
-    0x00000030 || # Hash purpose
-    hashing_scheme_version_byte || # e.g. 0x03 for V3, 0x04 for V4
-    hash(transaction) ||
-    hash(metadata)
-```
+<Tabs>
+  <Tab title="V4">
+    ```
+    fn encode(prepared_transaction):
+        0x00000030 || # Hash purpose
+        0x04 || # Hashing Scheme Version
+        hash(transaction) ||
+        hash(metadata)
+    ```
+  </Tab>
+  <Tab title="V3">
+      ```
+      fn encode(prepared_transaction):
+          0x00000030 || # Hash purpose
+          0x03 || # Hashing Scheme Version
+          hash(transaction) ||
+          hash(metadata)
+      ```
+    </Tab>
+    <Tab title="V2">
+        ```
+        fn encode(prepared_transaction):
+            0x00000030 || # Hash purpose
+            0x02 || # Hashing Scheme Version
+            hash(transaction) ||
+            hash(metadata)
+        ```
+      </Tab>
+</Tabs>
 
 ``` 
 fn hash(prepared_transaction):
