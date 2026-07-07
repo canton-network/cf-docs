@@ -39,31 +39,10 @@ class JvmDocsTests(unittest.TestCase):
         jar_path.parent.mkdir(parents=True, exist_ok=True)
         with zipfile.ZipFile(jar_path, "w") as archive:
             for member_path, contents in files.items():
-                archive.writestr(member_path, textwrap.dedent(contents).lstrip())
+                info = zipfile.ZipInfo(member_path, date_time=(2020, 1, 1, 0, 0, 0))
+                archive.writestr(info, textwrap.dedent(contents).lstrip())
 
     def _write_manifest(self) -> Path:
-        write_text(
-            self.root / "status" / "bindings-java.yaml",
-            """
-            types:
-              com.example.Foo:
-                status: stable
-              com.example.Foo.Inner:
-                status: beta
-              com.example.Legacy:
-                status: stable
-            """,
-        )
-        write_text(
-            self.root / "status" / "bindings-scala.yaml",
-            """
-            types:
-              com.example.scala.Baz:
-                status: alpha
-              com.example.scala.Qux:
-                status: stable
-            """,
-        )
         self._build_jar(
             "jars/bindings-java/1.0.0/bindings-java-1.0.0-javadoc.jar",
             {
@@ -260,7 +239,6 @@ class JvmDocsTests(unittest.TestCase):
                     "artifact": "bindings-java",
                     "language": "java",
                     "include_prefixes": ["com.example"],
-                    "status_manifest": "status/bindings-java.yaml",
                     "versions": [
                         {"version": "1.0.0", "jar_path": "jars/bindings-java/1.0.0/bindings-java-1.0.0-javadoc.jar"},
                         {"version": "1.1.0", "jar_path": "jars/bindings-java/1.1.0/bindings-java-1.1.0-javadoc.jar"},
@@ -272,7 +250,6 @@ class JvmDocsTests(unittest.TestCase):
                     "artifact": "bindings-scala_2.13",
                     "language": "scala",
                     "include_prefixes": ["com.example.scala"],
-                    "status_manifest": "status/bindings-scala.yaml",
                     "versions": [
                         {"version": "2.0.0", "jar_path": "jars/bindings-scala_2.13/2.0.0/bindings-scala_2.13-2.0.0-javadoc.jar"},
                         {"version": "2.1.0", "jar_path": "jars/bindings-scala_2.13/2.1.0/bindings-scala_2.13-2.1.0-javadoc.jar"},
@@ -298,9 +275,9 @@ class JvmDocsTests(unittest.TestCase):
         scala_artifact = next(artifact for artifact in report.artifacts if artifact.artifact == "bindings-scala_2.13")
 
         java_symbols = {symbol.symbol: symbol for symbol in java_artifact.symbols}
-        self.assertEqual(java_symbols["com.example.Foo"].status, "stable")
+        self.assertIsNone(java_symbols["com.example.Foo"].status)
         self.assertEqual(java_symbols["com.example.Foo"].latest_summary, "Foo summary v1.2.0")
-        self.assertEqual(java_symbols["com.example.Foo.Inner"].status, "beta")
+        self.assertIsNone(java_symbols["com.example.Foo.Inner"].status)
         self.assertEqual(java_symbols["com.example.Foo.Inner"].latest_summary, "Foo.Inner summary v1.2.0")
         self.assertEqual(java_symbols["com.example.Bar"].introduced_version, "1.2.0")
         self.assertEqual(java_symbols["com.example.Bar"].status, "deprecated")
@@ -314,36 +291,12 @@ class JvmDocsTests(unittest.TestCase):
         self.assertIn("newMethod", old_method.deprecation_note or "")
 
         scala_symbols = {symbol.symbol: symbol for symbol in scala_artifact.symbols}
-        self.assertEqual(scala_symbols["com.example.scala.Baz"].status, "alpha")
+        self.assertIsNone(scala_symbols["com.example.scala.Baz"].status)
         self.assertEqual(scala_symbols["com.example.scala.Baz"].latest_signature, "final class Baz")
         self.assertEqual(scala_symbols["com.example.scala.Baz"].latest_summary, "Baz summary v2.1.0")
-        self.assertEqual(scala_symbols["com.example.scala.Qux"].status, "stable")
+        self.assertIsNone(scala_symbols["com.example.scala.Qux"].status)
         self.assertEqual(scala_symbols["com.example.scala.Qux"].introduced_version, "2.1.0")
         self.assertEqual(scala_symbols["com.example.scala.Baz.stop()"].introduced_version, "2.1.0")
-
-    def test_build_report_requires_status_for_non_deprecated_types(self) -> None:
-        manifest_path = self._write_manifest()
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        manifest["artifacts"][0]["status_manifest"] = "status/missing-foo.yaml"
-        write_text(
-            self.root / "status" / "missing-foo.yaml",
-            """
-            types:
-              com.example.Foo.Inner:
-                status: beta
-              com.example.Legacy:
-                status: stable
-            """,
-        )
-        manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
-
-        sources = load_jvm_doc_sources(manifest_path)
-        with self.assertRaisesRegex(ValueError, r"Missing status for JVM doc type com\.example\.Foo"):
-            build_jvm_doc_lifecycle_report_from_sources(
-                sources,
-                source_name="unit test jars",
-                version_filter="unit test versions",
-            )
 
     def test_render_escapes_mdx_sensitive_summary_text_and_encodes_doc_links(self) -> None:
         report = JvmDocLifecycleReport(
@@ -529,14 +482,14 @@ class JvmDocsTests(unittest.TestCase):
         self.assertNotIn("## Lifecycle Summary", java_text)
         self.assertNotIn("## Package Reference", java_text)
         self.assertIn("## Package `com.example`", java_package_text)
-        self.assertIn("[`Foo`](foo)", java_package_text)
-        self.assertIn("[`Foo.Inner`](foo-inner)", java_package_text)
-        self.assertIn("[`Bar`](bar)", java_package_text)
-        self.assertIn("[`Legacy`](legacy)", java_package_text)
+        self.assertIn("[`Foo`](./foo)", java_package_text)
+        self.assertIn("[`Foo.Inner`](./foo-inner)", java_package_text)
+        self.assertIn("[`Bar`](./bar)", java_package_text)
+        self.assertIn("[`Legacy`](./legacy)", java_package_text)
         self.assertIn("## Table of Contents", java_package_text)
         self.assertIn("| NAME | STATUS | SUMMARY |", java_package_text)
-        self.assertIn("`stable`", java_package_text)
-        self.assertIn("`beta`", java_package_text)
+        self.assertIn("| [`Foo`](./foo) | - |", java_package_text)
+        self.assertIn("| [`Foo.Inner`](./foo-inner) | - |", java_package_text)
         self.assertIn("`deprecated`", java_package_text)
         self.assertIn("Removed in 1.1.0.", java_package_text)
         self.assertNotIn("## Reference", java_package_text)
@@ -544,17 +497,20 @@ class JvmDocsTests(unittest.TestCase):
         self.assertNotIn("**Members**", java_package_text)
         self.assertIn("title: \"Foo\"", java_object_text)
         self.assertIn("description: \"Foo summary v1.2.0\"", java_object_text)
-        self.assertIn("## Foo - stable", java_object_text)
+        self.assertIn("## Foo", java_object_text)
+        self.assertNotIn("## Foo - stable", java_object_text)
         self.assertIn("Upstream docs: [Open](", java_object_text)
         self.assertIn("**Signature**", java_object_text)
         self.assertIn("**Members**", java_object_text)
         self.assertNotIn("**Summary**", java_object_text)
         self.assertIn("`newMethod`", java_object_text)
         self.assertIn("title: \"Foo.Inner\"", nested_object_text)
-        self.assertIn("## Foo.Inner - beta", nested_object_text)
+        self.assertIn("## Foo.Inner", nested_object_text)
+        self.assertNotIn("## Foo.Inner - beta", nested_object_text)
         self.assertIn("title: \"Legacy\"", removed_object_text)
         self.assertIn("description: \"Legacy summary v1.0.0\"", removed_object_text)
-        self.assertIn("## Legacy - stable", removed_object_text)
+        self.assertIn("## Legacy", removed_object_text)
+        self.assertNotIn("## Legacy - stable", removed_object_text)
         self.assertIn("Removed in `1.1.0`.", removed_object_text)
         self.assertIn("title: \"Bar\"", deprecated_object_text)
         self.assertIn("## Bar - deprecated", deprecated_object_text)

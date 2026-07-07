@@ -53,41 +53,22 @@ def has_changes(paths: Sequence[str]) -> bool:
 
 
 def push_branch(branch: str) -> None:
+    branch_ref = f"refs/heads/{branch}"
     remote_output = git("ls-remote", "--heads", "origin", branch, capture=True)
     remote_sha = remote_output.split()[0] if remote_output else ""
     if remote_sha:
         git(
             "push",
-            f"--force-with-lease=refs/heads/{branch}:{remote_sha}",
+            f"--force-with-lease={branch_ref}:{remote_sha}",
             "origin",
-            f"HEAD:{branch}",
+            f"HEAD:{branch_ref}",
         )
     else:
-        git("push", "origin", f"HEAD:{branch}")
+        git("push", "origin", f"HEAD:{branch_ref}")
 
 
-def create_or_update_pull_request(
-    *,
-    title: str,
-    branch: str,
-    paths: Sequence[str],
-    body_path: Path,
-    base_branch: str,
-    repository: str,
-) -> None:
-    if not has_changes(paths):
-        print(f"No changes for {title}")
-        return
-
-    git("status", "--short", "--", *paths)
-    git("switch", "-C", branch)
-    git("add", "--", *paths)
-    git("diff", "--cached", "--stat")
-    git("diff", "--cached", "--check")
-    git("commit", "--signoff", "-m", title)
-    push_branch(branch)
-
-    existing_pr_number = gh(
+def open_pull_request_number(*, branch: str, base_branch: str, repository: str) -> str:
+    return gh(
         "pr",
         "list",
         "--repo",
@@ -104,6 +85,66 @@ def create_or_update_pull_request(
         ".[0].number // empty",
         capture=True,
     )
+
+
+def close_stale_pull_request(
+    *,
+    title: str,
+    branch: str,
+    base_branch: str,
+    repository: str,
+) -> None:
+    existing_pr_number = open_pull_request_number(
+        branch=branch,
+        base_branch=base_branch,
+        repository=repository,
+    )
+    if not existing_pr_number:
+        return
+    gh(
+        "pr",
+        "close",
+        existing_pr_number,
+        "--repo",
+        repository,
+        "--delete-branch",
+        "--comment",
+        f"Closing because the latest generated-docs automation run found no changes for {title}.",
+    )
+    print(f"Closed stale PR #{existing_pr_number} for {title}")
+
+
+def create_or_update_pull_request(
+    *,
+    title: str,
+    branch: str,
+    paths: Sequence[str],
+    body_path: Path,
+    base_branch: str,
+    repository: str,
+) -> None:
+    if not has_changes(paths):
+        print(f"No changes for {title}")
+        close_stale_pull_request(
+            title=title,
+            branch=branch,
+            base_branch=base_branch,
+            repository=repository,
+        )
+        return
+
+    git("status", "--short", "--", *paths)
+    git("add", "--", *paths)
+    git("diff", "--cached", "--stat")
+    git("diff", "--cached", "--check")
+    git("commit", "--signoff", "-m", title)
+    push_branch(branch)
+
+    existing_pr_number = open_pull_request_number(
+        branch=branch,
+        base_branch=base_branch,
+        repository=repository,
+    )
     if existing_pr_number:
         gh(
             "pr",
@@ -116,19 +157,6 @@ def create_or_update_pull_request(
             "--body-file",
             str(body_path),
         )
-        subprocess.run(
-            [
-                "gh",
-                "pr",
-                "ready",
-                existing_pr_number,
-                "--repo",
-                repository,
-                "--undo",
-            ],
-            cwd=REPO_ROOT,
-            check=False,
-        )
         return
 
     gh(
@@ -140,7 +168,6 @@ def create_or_update_pull_request(
         branch,
         "--repo",
         repository,
-        "--draft",
         "--title",
         title,
         "--body-file",
