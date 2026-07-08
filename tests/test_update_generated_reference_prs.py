@@ -523,7 +523,7 @@ def test_create_or_update_pull_request_can_disable_auto_merge(
     monkeypatch.setattr(pr_utils, "mark_pull_request_ready", lambda **kwargs: None)
     monkeypatch.setattr(
         pr_utils,
-        "maybe_request_auto_merge",
+        "maybe_merge_generated_pr",
         lambda **kwargs: auto_merge_calls.append(kwargs),
     )
     body_path = tmp_path / "body.md"
@@ -607,7 +607,7 @@ def test_push_branch_uses_full_ref_for_detached_head(monkeypatch) -> None:
     ) in git_calls
 
 
-def test_maybe_request_auto_merge_skips_without_merger_token(monkeypatch) -> None:
+def test_maybe_merge_generated_pr_skips_without_merger_token(monkeypatch) -> None:
     load_script_module()
     import generated_reference_pr_utils as pr_utils
 
@@ -615,7 +615,7 @@ def test_maybe_request_auto_merge_skips_without_merger_token(monkeypatch) -> Non
     calls: list[tuple[str, ...]] = []
     monkeypatch.setattr(pr_utils, "run", lambda command, **kwargs: calls.append(tuple(command)))
 
-    pr_utils.maybe_request_auto_merge(
+    pr_utils.maybe_merge_generated_pr(
         pr_number="932",
         repository="canton-network/cf-docs",
         base_branch="main",
@@ -626,7 +626,7 @@ def test_maybe_request_auto_merge_skips_without_merger_token(monkeypatch) -> Non
     assert calls == []
 
 
-def test_maybe_request_auto_merge_skips_when_disabled(monkeypatch) -> None:
+def test_maybe_merge_generated_pr_skips_when_disabled(monkeypatch) -> None:
     load_script_module()
     import generated_reference_pr_utils as pr_utils
 
@@ -634,7 +634,7 @@ def test_maybe_request_auto_merge_skips_when_disabled(monkeypatch) -> None:
     calls: list[tuple[str, ...]] = []
     monkeypatch.setattr(pr_utils, "run", lambda command, **kwargs: calls.append(tuple(command)))
 
-    pr_utils.maybe_request_auto_merge(
+    pr_utils.maybe_merge_generated_pr(
         pr_number="977",
         repository="canton-network/cf-docs",
         base_branch="main",
@@ -646,20 +646,100 @@ def test_maybe_request_auto_merge_skips_when_disabled(monkeypatch) -> None:
     assert calls == []
 
 
-def test_maybe_request_auto_merge_validates_then_requests_auto_merge(monkeypatch) -> None:
+def test_dispatch_mintlify_validation_runs_workflow_on_generated_branch(monkeypatch) -> None:
+    load_script_module()
+    import generated_reference_pr_utils as pr_utils
+
+    calls: list[tuple[str, ...]] = []
+
+    monkeypatch.setattr(pr_utils, "gh", lambda *args, capture=False: calls.append(args) or "")
+
+    pr_utils.dispatch_mintlify_validation(
+        repository="canton-network/cf-docs",
+        branch="version-dashboard/update",
+    )
+
+    assert calls == [
+        (
+            "workflow",
+            "run",
+            "mintlify-validate.yml",
+            "--repo",
+            "canton-network/cf-docs",
+            "--ref",
+            "version-dashboard/update",
+        )
+    ]
+
+
+def test_wait_for_check_success_accepts_successful_check(monkeypatch) -> None:
+    load_script_module()
+    import generated_reference_pr_utils as pr_utils
+
+    monkeypatch.setattr(
+        pr_utils,
+        "check_runs_for_sha",
+        lambda **kwargs: [{"name": "mintlify validate", "status": "completed", "conclusion": "success"}],
+    )
+    monkeypatch.setattr(
+        pr_utils.time,
+        "sleep",
+        lambda seconds: (_ for _ in ()).throw(AssertionError("sleep should not run")),
+    )
+
+    pr_utils.wait_for_check_success(
+        repository="canton-network/cf-docs",
+        head_sha="abc123",
+        check_name="mintlify validate",
+    )
+
+
+def test_wait_for_check_success_rejects_failed_check(monkeypatch) -> None:
+    load_script_module()
+    import generated_reference_pr_utils as pr_utils
+
+    monkeypatch.setattr(
+        pr_utils,
+        "check_runs_for_sha",
+        lambda **kwargs: [{"name": "mintlify validate", "status": "completed", "conclusion": "failure"}],
+    )
+
+    try:
+        pr_utils.wait_for_check_success(
+            repository="canton-network/cf-docs",
+            head_sha="abc123",
+            check_name="mintlify validate",
+        )
+    except RuntimeError as error:
+        assert "Required check 'mintlify validate' failed for abc123: failure" == str(error)
+    else:
+        raise AssertionError("Expected failed required check to raise")
+
+
+def test_maybe_merge_generated_pr_validates_waits_then_direct_merges(monkeypatch) -> None:
     load_script_module()
     import generated_reference_pr_utils as pr_utils
 
     monkeypatch.setenv("GENERATED_DOCS_MERGER_TOKEN", "token")
-    calls: list[tuple[tuple[str, ...], dict[str, str]]] = []
+    events: list[tuple[object, ...]] = []
 
     def fake_run(command, **kwargs):
-        calls.append((tuple(command), kwargs["env"]))
+        events.append(("run", tuple(command), kwargs["env"]))
         return ""
 
     monkeypatch.setattr(pr_utils, "run", fake_run)
+    monkeypatch.setattr(
+        pr_utils,
+        "dispatch_mintlify_validation",
+        lambda **kwargs: events.append(("dispatch", kwargs)),
+    )
+    monkeypatch.setattr(
+        pr_utils,
+        "wait_for_check_success",
+        lambda **kwargs: events.append(("wait", kwargs)),
+    )
 
-    pr_utils.maybe_request_auto_merge(
+    pr_utils.maybe_merge_generated_pr(
         pr_number="932",
         repository="canton-network/cf-docs",
         base_branch="main",
@@ -667,8 +747,9 @@ def test_maybe_request_auto_merge_validates_then_requests_auto_merge(monkeypatch
         head_sha="abc123",
     )
 
-    assert calls == [
+    assert events == [
         (
+            "run",
             (
                 "python3",
                 "scripts/validate_generated_pr_policy.py",
@@ -685,6 +766,19 @@ def test_maybe_request_auto_merge_validates_then_requests_auto_merge(monkeypatch
             {"GH_TOKEN": "token", "GITHUB_TOKEN": "token"},
         ),
         (
+            "dispatch",
+            {"repository": "canton-network/cf-docs", "branch": "version-dashboard/update"},
+        ),
+        (
+            "wait",
+            {
+                "repository": "canton-network/cf-docs",
+                "head_sha": "abc123",
+                "check_name": "mintlify validate",
+            },
+        ),
+        (
+            "run",
             (
                 "gh",
                 "pr",
@@ -692,7 +786,6 @@ def test_maybe_request_auto_merge_validates_then_requests_auto_merge(monkeypatch
                 "932",
                 "--repo",
                 "canton-network/cf-docs",
-                "--auto",
                 "--squash",
                 "--delete-branch",
                 "--match-head-commit",
