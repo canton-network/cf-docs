@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from collections.abc import Iterable, Mapping
 from pathlib import Path
@@ -14,6 +15,9 @@ NETWORK_LABELS = {
     "testnet": "TestNet",
     "devnet": "DevNet",
 }
+
+RELEASE_HEADING_RE = re.compile(r"^# Release of Canton (?P<version>\d+\.\d+\.\d+)\s*$", re.MULTILINE)
+CANTON_RELEASE_LINK_RE = re.compile(r"/global-synchronizer/release-notes/canton/(?P<slug>\d+-\d+-\d+)")
 
 COMPONENT_LABELS = {
     "splice": "Splice",
@@ -215,6 +219,25 @@ def artifact_source_config_changes(before_path: Path, after_path: Path, *, label
         added_versions = [version for version in after_versions if version not in before_versions]
         if added_versions:
             changes.append(f"- {label} {artifact_key} versions: added {', '.join(added_versions)}")
+    return changes
+
+
+def canton_release_note_changes(before_path: Path, after_path: Path, *, label: str) -> list[str]:
+    before = before_path.read_text(encoding="utf-8")
+    after = after_path.read_text(encoding="utf-8")
+    before_versions = set(RELEASE_HEADING_RE.findall(before))
+    before_versions.update(match.group("slug").replace("-", ".") for match in CANTON_RELEASE_LINK_RE.finditer(before))
+    after_versions = set(RELEASE_HEADING_RE.findall(after))
+    after_versions.update(match.group("slug").replace("-", ".") for match in CANTON_RELEASE_LINK_RE.finditer(after))
+    added = sorted(after_versions - before_versions)
+    removed = sorted(before_versions - after_versions)
+    changes = []
+    if added:
+        changes.append(f"- {label}: added {', '.join(added)}")
+    if removed:
+        changes.append(f"- {label}: removed {', '.join(removed)}")
+    if not changes and before_versions != after_versions:
+        changes.append(f"- {label}: refreshed release index")
     return changes
 
 
