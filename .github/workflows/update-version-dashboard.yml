@@ -9,10 +9,6 @@ on:
         description: "Generated-doc targets to run"
         type: string
         default: "all"
-      test_main_overlay:
-        description: "Temporary test hook: run from main with this branch's automation scripts"
-        type: boolean
-        default: false
 
 permissions:
   actions: write
@@ -31,17 +27,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
-        with:
-          ref: ${{ inputs.test_main_overlay && 'main' || github.ref }}
-
-      - name: Overlay test automation scripts
-        if: ${{ inputs.test_main_overlay }}
-        run: |
-          git fetch origin "$GITHUB_REF_NAME"
-          git checkout "origin/$GITHUB_REF_NAME" -- \
-            scripts/generated_reference_pr_utils.py \
-            scripts/update_generated_reference_prs.py \
-            scripts/validate_generated_pr_policy.py
 
       - name: Set up Nix
         uses: cachix/install-nix-action@v31
