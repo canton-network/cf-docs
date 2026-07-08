@@ -194,14 +194,46 @@ def generated_operation_summary(path: str, method: str) -> str:
     return f"{method.upper()} {mintlify_path}"
 
 
+def path_only_operation_summary(path: str, method: str, summary: str) -> bool:
+    normalized = summary.strip()
+    if normalized == generated_operation_summary(path, method):
+        return False
+    return normalized in {
+        path,
+        re.sub(r"\{([^{}]+)\}", r":\1", path),
+        f"{method.upper()} {path}",
+    }
+
+
+def operation_summary_rewrites(spec: dict[str, Any]) -> dict[tuple[str, str], str]:
+    paths = spec.get("paths")
+    if not isinstance(paths, dict):
+        return {}
+
+    rewrites: dict[tuple[str, str], str] = {}
+    for path, path_item in paths.items():
+        if not isinstance(path, str) or not isinstance(path_item, dict):
+            continue
+        for method, operation in path_item.items():
+            if method.lower() not in HTTP_METHODS or not isinstance(operation, dict):
+                continue
+            summary = operation.get("summary")
+            if not isinstance(summary, str) or not summary.strip():
+                rewrites[(path, method.lower())] = generated_operation_summary(path, method)
+            elif path_only_operation_summary(path, method, summary):
+                rewrites[(path, method.lower())] = generated_operation_summary(path, method)
+    return rewrites
+
+
 def add_missing_operation_summaries(text: str) -> str:
     spec = yaml.safe_load(text)
     if not isinstance(spec, dict):
         raise ValueError("Expected generated OpenAPI YAML to parse as an object")
 
-    missing = missing_operation_summaries(spec)
-    if not missing:
+    rewrites = operation_summary_rewrites(spec)
+    if not rewrites:
         return text
+    missing = missing_operation_summaries(spec)
 
     lines = text.splitlines()
     output_lines: list[str] = []
@@ -209,8 +241,19 @@ def add_missing_operation_summaries(text: str) -> str:
     paths_indent = ""
     current_path: str | None = None
     current_path_indent: str | None = None
+    current_method: str | None = None
+    current_method_indent: str | None = None
 
     for line in lines:
+        if current_path is not None and current_method is not None and current_method_indent is not None:
+            summary_match = re.fullmatch(rf"{re.escape(current_method_indent)}\s{{2}}summary:\s*.*", line)
+            if summary_match and (current_path, current_method) in rewrites:
+                summary_indent = f"{current_method_indent}  "
+                output_lines.append(f'{summary_indent}summary: "{rewrites[(current_path, current_method)]}"')
+                current_method = None
+                current_method_indent = None
+                continue
+
         output_lines.append(line)
 
         paths_match = re.fullmatch(r"(?P<indent>\s*)paths:\s*", line)
@@ -219,6 +262,8 @@ def add_missing_operation_summaries(text: str) -> str:
             paths_indent = paths_match.group("indent")
             current_path = None
             current_path_indent = None
+            current_method = None
+            current_method_indent = None
             continue
 
         if not in_paths:
@@ -228,12 +273,16 @@ def add_missing_operation_summaries(text: str) -> str:
             in_paths = False
             current_path = None
             current_path_indent = None
+            current_method = None
+            current_method_indent = None
             continue
 
         path_match = re.fullmatch(rf"(?P<indent>{re.escape(paths_indent)}\s{{2}})(?P<path>/.*):\s*", line)
         if path_match:
             current_path = path_match.group("path")
             current_path_indent = path_match.group("indent")
+            current_method = None
+            current_method_indent = None
             continue
 
         if current_path is None or current_path_indent is None:
@@ -247,18 +296,22 @@ def add_missing_operation_summaries(text: str) -> str:
             continue
 
         method = method_match.group("method")
+        current_method = method
+        current_method_indent = method_match.group("indent")
         if (current_path, method) in missing:
             summary_indent = f"{method_match.group('indent')}  "
-            output_lines.append(f'{summary_indent}summary: "{generated_operation_summary(current_path, method)}"')
+            output_lines.append(f'{summary_indent}summary: "{rewrites[(current_path, method)]}"')
+            current_method = None
+            current_method_indent = None
 
     rendered = "\n".join(output_lines).rstrip() + "\n"
     parsed = yaml.safe_load(rendered)
     if not isinstance(parsed, dict):
         raise ValueError("Generated OpenAPI YAML stopped parsing after summary insertion")
-    remaining = missing_operation_summaries(parsed)
+    remaining = operation_summary_rewrites(parsed)
     if remaining:
         details = ", ".join(f"{method.upper()} {path}" for path, method in sorted(remaining))
-        raise ValueError(f"Failed to insert generated summaries for OpenAPI operations: {details}")
+        raise ValueError(f"Failed to normalize generated summaries for OpenAPI operations: {details}")
     return rendered
 
 
