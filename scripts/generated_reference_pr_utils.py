@@ -266,6 +266,7 @@ def maybe_merge_generated_pr(
             pr_number,
             "--repo",
             repository,
+            "--admin",
             "--squash",
             "--delete-branch",
             "--match-head-commit",

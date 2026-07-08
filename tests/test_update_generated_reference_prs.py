@@ -786,6 +786,7 @@ def test_maybe_merge_generated_pr_validates_waits_then_direct_merges(monkeypatch
                 "932",
                 "--repo",
                 "canton-network/cf-docs",
+                "--admin",
                 "--squash",
                 "--delete-branch",
                 "--match-head-commit",
