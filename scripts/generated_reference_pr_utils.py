@@ -150,7 +150,12 @@ def maybe_request_auto_merge(
     base_branch: str,
     branch: str,
     head_sha: str,
+    enabled: bool = True,
 ) -> None:
+    if not enabled:
+        print(f"Generated-docs auto-merge disabled for PR #{pr_number}; leaving PR open.")
+        return
+
     if base_branch != "main":
         print(f"Skipping generated-docs auto-merge for PR #{pr_number}: base branch is {base_branch!r}.")
         return
@@ -204,6 +209,7 @@ def create_or_update_pull_request(
     body_path: Path,
     base_branch: str,
     repository: str,
+    auto_merge: bool = True,
 ) -> str | None:
     if not has_changes(paths):
         print(f"No changes for {title}")
@@ -247,6 +253,7 @@ def create_or_update_pull_request(
             base_branch=base_branch,
             branch=branch,
             head_sha=head_sha,
+            enabled=auto_merge,
         )
         return existing_pr_number
 
@@ -277,5 +284,6 @@ def create_or_update_pull_request(
         base_branch=base_branch,
         branch=branch,
         head_sha=head_sha,
+        enabled=auto_merge,
     )
     return pr_number

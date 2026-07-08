@@ -47,6 +47,7 @@ class UpdateTarget:
     validation: tuple[str, ...]
     source_update_commands: tuple[tuple[str, ...], ...] = ()
     source_update_paths: tuple[str, ...] = ()
+    auto_merge: bool = True
 
 
 UPDATE_TARGETS = (
@@ -276,6 +277,7 @@ UPDATE_TARGETS = (
             ("nix-shell", "--run", "npm run update:generated-reference-sources -- --source ledger-bindings"),
         ),
         source_update_paths=("config/x2mdx/ledger-bindings/source-artifacts.json",),
+        auto_merge=False,
     ),
     UpdateTarget(
         key="daml-standard-library",
@@ -447,6 +449,7 @@ def create_or_update_pull_request(
         body_path=body_path,
         base_branch=base_branch,
         repository=repository,
+        auto_merge=target.auto_merge,
     )
 
 

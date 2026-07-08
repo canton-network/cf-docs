@@ -82,6 +82,13 @@ def test_dashboard_target_runs_network_variable_tabs_after_dashboard_data_genera
     )
 
 
+def test_java_ledger_bindings_target_does_not_auto_merge() -> None:
+    module = load_script_module()
+    target = next(target for target in module.UPDATE_TARGETS if target.key == "ledger-bindings")
+
+    assert target.auto_merge is False
+
+
 def test_source_update_targets_skip_generation_when_source_is_unchanged(monkeypatch) -> None:
     module = load_script_module()
     target = next(target for target in module.UPDATE_TARGETS if target.key == "wallet-gateway-openrpc")
@@ -487,6 +494,60 @@ def test_create_or_update_pull_request_marks_existing_pr_ready(monkeypatch, tmp_
     assert not any("--undo" in call for call in gh_calls)
 
 
+def test_create_or_update_pull_request_can_disable_auto_merge(
+    monkeypatch, tmp_path: Path
+) -> None:
+    load_script_module()
+    import generated_reference_pr_utils as pr_utils
+
+    auto_merge_calls: list[dict[str, object]] = []
+
+    def fake_git(*args: str, capture: bool = False) -> str:
+        if args[:2] == ("status", "--porcelain"):
+            return " M generated.mdx"
+        if args == ("rev-parse", "HEAD"):
+            return "abc123"
+        return ""
+
+    def fake_gh(*args: str, capture: bool = False) -> str:
+        if args[:2] == ("pr", "list"):
+            return "977"
+        return ""
+
+    monkeypatch.setattr(pr_utils, "git", fake_git)
+    monkeypatch.setattr(pr_utils, "gh", fake_gh)
+    monkeypatch.setattr(pr_utils, "push_branch", lambda branch: None)
+    monkeypatch.setattr(pr_utils, "mark_pull_request_ready", lambda **kwargs: None)
+    monkeypatch.setattr(
+        pr_utils,
+        "maybe_request_auto_merge",
+        lambda **kwargs: auto_merge_calls.append(kwargs),
+    )
+    body_path = tmp_path / "body.md"
+    body_path.write_text("body", encoding="utf-8")
+
+    pr_utils.create_or_update_pull_request(
+        title="Update Java ledger bindings reference",
+        branch="generated-references/ledger-bindings/update",
+        paths=("docs-main/reference/java-bindings.mdx",),
+        body_path=body_path,
+        base_branch="main",
+        repository="canton-network/cf-docs",
+        auto_merge=False,
+    )
+
+    assert auto_merge_calls == [
+        {
+            "pr_number": "977",
+            "repository": "canton-network/cf-docs",
+            "base_branch": "main",
+            "branch": "generated-references/ledger-bindings/update",
+            "head_sha": "abc123",
+            "enabled": False,
+        }
+    ]
+
+
 def test_create_or_update_pull_request_closes_stale_pr_when_no_changes(
     monkeypatch, tmp_path: Path
 ) -> None:
@@ -557,6 +618,26 @@ def test_maybe_request_auto_merge_skips_without_merger_token(monkeypatch) -> Non
         base_branch="main",
         branch="version-dashboard/update",
         head_sha="abc123",
+    )
+
+    assert calls == []
+
+
+def test_maybe_request_auto_merge_skips_when_disabled(monkeypatch) -> None:
+    load_script_module()
+    import generated_reference_pr_utils as pr_utils
+
+    monkeypatch.setenv("GENERATED_DOCS_MERGER_TOKEN", "token")
+    calls: list[tuple[str, ...]] = []
+    monkeypatch.setattr(pr_utils, "run", lambda command, **kwargs: calls.append(tuple(command)))
+
+    pr_utils.maybe_request_auto_merge(
+        pr_number="977",
+        repository="canton-network/cf-docs",
+        base_branch="main",
+        branch="generated-references/ledger-bindings/update",
+        head_sha="abc123",
+        enabled=False,
     )
 
     assert calls == []
