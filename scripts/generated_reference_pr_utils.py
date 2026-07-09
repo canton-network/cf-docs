@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 from typing import Mapping, Sequence
 
@@ -143,7 +145,75 @@ def mark_pull_request_ready(*, pr_number: str, repository: str) -> None:
     )
 
 
-def maybe_request_auto_merge(
+def dispatch_mintlify_validation(*, repository: str, branch: str) -> None:
+    gh(
+        "workflow",
+        "run",
+        "mintlify-validate.yml",
+        "--repo",
+        repository,
+        "--ref",
+        branch,
+    )
+    print(f"Dispatched Mintlify validation for {branch}")
+
+
+def check_runs_for_sha(*, repository: str, head_sha: str) -> list[dict[str, object]]:
+    payload = gh(
+        "api",
+        f"repos/{repository}/commits/{head_sha}/check-runs",
+        capture=True,
+    )
+    data = json.loads(payload)
+    check_runs = data.get("check_runs", [])
+    if not isinstance(check_runs, list):
+        raise RuntimeError("GitHub check-runs response did not contain a list")
+    return [check_run for check_run in check_runs if isinstance(check_run, dict)]
+
+
+def wait_for_check_success(
+    *,
+    repository: str,
+    head_sha: str,
+    check_name: str,
+    timeout_seconds: int = 1800,
+    poll_seconds: int = 15,
+) -> None:
+    deadline = time.monotonic() + timeout_seconds
+    failed_conclusions = {"action_required", "cancelled", "failure", "skipped", "timed_out"}
+
+    while True:
+        matching_runs = [
+            check_run
+            for check_run in check_runs_for_sha(repository=repository, head_sha=head_sha)
+            if check_run.get("name") == check_name
+        ]
+        if any(check_run.get("conclusion") == "success" for check_run in matching_runs):
+            print(f"Required check {check_name!r} succeeded for {head_sha}")
+            return
+
+        failed_runs = [
+            check_run
+            for check_run in matching_runs
+            if check_run.get("conclusion") in failed_conclusions
+        ]
+        if failed_runs:
+            conclusions = ", ".join(str(check_run.get("conclusion")) for check_run in failed_runs)
+            raise RuntimeError(f"Required check {check_name!r} failed for {head_sha}: {conclusions}")
+
+        if time.monotonic() >= deadline:
+            states = ", ".join(
+                f"{check_run.get('status')}/{check_run.get('conclusion')}" for check_run in matching_runs
+            )
+            raise TimeoutError(
+                f"Timed out waiting for required check {check_name!r} on {head_sha}; latest states: {states or 'none'}"
+            )
+
+        print(f"Waiting for required check {check_name!r} on {head_sha}")
+        time.sleep(poll_seconds)
+
+
+def maybe_merge_generated_pr(
     *,
     pr_number: str,
     repository: str,
@@ -182,6 +252,12 @@ def maybe_request_auto_merge(
         ),
         env=token_env,
     )
+    dispatch_mintlify_validation(repository=repository, branch=branch)
+    wait_for_check_success(
+        repository=repository,
+        head_sha=head_sha,
+        check_name="mintlify validate",
+    )
     run(
         (
             "gh",
@@ -190,7 +266,7 @@ def maybe_request_auto_merge(
             pr_number,
             "--repo",
             repository,
-            "--auto",
+            "--admin",
             "--squash",
             "--delete-branch",
             "--match-head-commit",
@@ -198,7 +274,7 @@ def maybe_request_auto_merge(
         ),
         env=token_env,
     )
-    print(f"Requested auto-merge for PR #{pr_number}")
+    print(f"Merged generated-docs PR #{pr_number}")
 
 
 def create_or_update_pull_request(
@@ -247,7 +323,7 @@ def create_or_update_pull_request(
             str(body_path),
         )
         mark_pull_request_ready(pr_number=existing_pr_number, repository=repository)
-        maybe_request_auto_merge(
+        maybe_merge_generated_pr(
             pr_number=existing_pr_number,
             repository=repository,
             base_branch=base_branch,
@@ -278,7 +354,7 @@ def create_or_update_pull_request(
     )
     if not pr_number:
         raise RuntimeError(f"Could not find generated PR for branch {branch}")
-    maybe_request_auto_merge(
+    maybe_merge_generated_pr(
         pr_number=pr_number,
         repository=repository,
         base_branch=base_branch,
