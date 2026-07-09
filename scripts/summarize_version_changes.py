@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from collections.abc import Iterable, Mapping
 from pathlib import Path
@@ -14,6 +15,9 @@ NETWORK_LABELS = {
     "testnet": "TestNet",
     "devnet": "DevNet",
 }
+
+RELEASE_HEADING_RE = re.compile(r"^# Release of Canton (?P<version>\d+\.\d+\.\d+)\s*$", re.MULTILINE)
+CANTON_RELEASE_LINK_RE = re.compile(r"/global-synchronizer/release-notes/canton/(?P<slug>\d+-\d+-\d+)")
 
 COMPONENT_LABELS = {
     "splice": "Splice",
@@ -141,6 +145,102 @@ def source_config_changes(before_path: Path, after_path: Path, *, label: str) ->
     return changes
 
 
+def package_source_config_changes(before_path: Path, after_path: Path, *, label: str) -> list[str]:
+    before = load_json(before_path)
+    after = load_json(after_path)
+    before_packages = {
+        package["package_name"]: package
+        for package in object_items(before.get("packages"))
+        if isinstance(package.get("package_name"), str)
+    }
+    changes: list[str] = []
+    for package in object_items(after.get("packages")):
+        package_name = package.get("package_name")
+        if not isinstance(package_name, str):
+            continue
+        before_package = before_packages.get(package_name)
+        if before_package is None:
+            continue
+        before_version = before_package.get("publish_version")
+        after_version = package.get("publish_version")
+        if before_version != after_version:
+            changes.append(
+                f"- {label} {package_name} publish_version: "
+                f"{format_value(before_version)} -> {format_value(after_version)}"
+            )
+    return changes
+
+
+def versioned_source_config_changes(before_path: Path, after_path: Path, *, label: str) -> list[str]:
+    before = load_json(before_path)
+    after = load_json(after_path)
+    before_versions = {
+        item["version"]: item
+        for item in object_items(before.get("versions"))
+        if isinstance(item.get("version"), str)
+    }
+    changes: list[str] = []
+    for item in object_items(after.get("versions")):
+        version = item.get("version")
+        if not isinstance(version, str):
+            continue
+        before_item = before_versions.get(version)
+        if before_item is None:
+            continue
+        for field in ("canton_version",):
+            if before_item.get(field) != item.get(field):
+                changes.append(
+                    f"- {label} {version} {field}: "
+                    f"{format_value(before_item.get(field))} -> {format_value(item.get(field))}"
+                )
+    return changes
+
+
+def artifact_source_config_changes(before_path: Path, after_path: Path, *, label: str) -> list[str]:
+    before = load_json(before_path)
+    after = load_json(after_path)
+    before_artifacts = {
+        f"{item.get('group')}:{item.get('artifact')}": item
+        for item in object_items(before.get("artifacts"))
+        if isinstance(item.get("group"), str) and isinstance(item.get("artifact"), str)
+    }
+    changes: list[str] = []
+    for item in object_items(after.get("artifacts")):
+        group = item.get("group")
+        artifact = item.get("artifact")
+        if not isinstance(group, str) or not isinstance(artifact, str):
+            continue
+        artifact_key = f"{group}:{artifact}"
+        before_item = before_artifacts.get(artifact_key)
+        if before_item is None:
+            continue
+        before_versions = tuple(version for version in before_item.get("versions", []) if isinstance(version, str))
+        after_versions = tuple(version for version in item.get("versions", []) if isinstance(version, str))
+        added_versions = [version for version in after_versions if version not in before_versions]
+        if added_versions:
+            changes.append(f"- {label} {artifact_key} versions: added {', '.join(added_versions)}")
+    return changes
+
+
+def canton_release_note_changes(before_path: Path, after_path: Path, *, label: str) -> list[str]:
+    before = before_path.read_text(encoding="utf-8")
+    after = after_path.read_text(encoding="utf-8")
+    before_versions = set(RELEASE_HEADING_RE.findall(before))
+    before_versions.update(match.group("slug").replace("-", ".") for match in CANTON_RELEASE_LINK_RE.finditer(before))
+    after_versions = set(RELEASE_HEADING_RE.findall(after))
+    after_versions.update(match.group("slug").replace("-", ".") for match in CANTON_RELEASE_LINK_RE.finditer(after))
+    added = sorted(after_versions - before_versions)
+    removed = sorted(before_versions - after_versions)
+    changes = []
+    if added:
+        changes.append(f"- {label}: added {', '.join(added)}")
+    if removed:
+        changes.append(f"- {label}: removed {', '.join(removed)}")
+    if not changes and before_versions != after_versions:
+        changes.append(f"- {label}: refreshed release index")
+    return changes
+
+
 def print_changes(changes: list[str]) -> None:
     if changes:
         print("\n".join(changes))
@@ -160,6 +260,27 @@ def parse_args() -> argparse.Namespace:
     source_config.add_argument("before", type=Path)
     source_config.add_argument("after", type=Path)
     source_config.add_argument("--label", required=True)
+    package_source_config = subparsers.add_parser(
+        "package-source-config",
+        help="Summarize package-based generated-reference source config changes.",
+    )
+    package_source_config.add_argument("before", type=Path)
+    package_source_config.add_argument("after", type=Path)
+    package_source_config.add_argument("--label", required=True)
+    versioned_source_config = subparsers.add_parser(
+        "versioned-source-config",
+        help="Summarize generated-reference source config entries keyed by docs version.",
+    )
+    versioned_source_config.add_argument("before", type=Path)
+    versioned_source_config.add_argument("after", type=Path)
+    versioned_source_config.add_argument("--label", required=True)
+    artifact_source_config = subparsers.add_parser(
+        "artifact-source-config",
+        help="Summarize artifact-based generated-reference source config changes.",
+    )
+    artifact_source_config.add_argument("before", type=Path)
+    artifact_source_config.add_argument("after", type=Path)
+    artifact_source_config.add_argument("--label", required=True)
     return parser.parse_args()
 
 
@@ -169,6 +290,12 @@ def main() -> int:
         print_changes(dashboard_changes(args.before, args.after))
     elif args.command == "source-config":
         print_changes(source_config_changes(args.before, args.after, label=args.label))
+    elif args.command == "package-source-config":
+        print_changes(package_source_config_changes(args.before, args.after, label=args.label))
+    elif args.command == "versioned-source-config":
+        print_changes(versioned_source_config_changes(args.before, args.after, label=args.label))
+    elif args.command == "artifact-source-config":
+        print_changes(artifact_source_config_changes(args.before, args.after, label=args.label))
     else:
         raise AssertionError(f"Unhandled command: {args.command}")
     return 0

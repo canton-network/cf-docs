@@ -108,111 +108,14 @@ The bound `B` should be at most the configured maximum deduplication duration. O
 
 Error handling is needed when the status code of the command submission RPC call or in the completion event is not `OK`. The following table lists appropriate reactions by status code (written as `STATUS_CODE`) and error code (written in capital letters with a link to the error code documentation). Fields in the error metadata are written as `field` in lowercase letters.
 
-<table>
-  <caption>Command deduplication error handling with known processing time bound</caption>
-  <colgroup>
-    <col style={{ width: "16%" }} />
-    <col style={{ width: "83%" }} />
-  </colgroup>
-  <thead>
-    <tr className="header">
-      <th>Error condition</th>
-      <th>Reaction</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr className="odd">
-      <td>
-        <code>DEADLINE_EXCEEDED</code>
-      </td>
-      <td>
-        <p>Consider the submission lost.</p>
-        <p>
-          Retry from <code>Step 2 &lt;dedup-bounded-step-offset&gt;</code>, obtaining the
-          completion offset <code>OFF1</code>, and possibly increase the timeout.
-        </p>
-      </td>
-    </tr>
-    <tr className="even">
-      <td>Application crashed</td>
-      <td>
-        Retry from <code>Step 2 &lt;dedup-bounded-step-offset&gt;</code>, obtaining the
-        completion offset <code>OFF1</code>.
-      </td>
-    </tr>
-    <tr className="odd">
-      <td>
-        <code>ALREADY_EXISTS</code> / <code>DUPLICATE_COMMAND &lt;error_code_DUPLICATE_COMMAND&gt;</code>
-      </td>
-      <td>
-        The change ID has already been accepted by the ledger within the reported deduplication
-        period. The optional field <code>completion_offset</code> contains the precise offset. The
-        optional field <code>existing_submission_id</code> contains the submission ID of the
-        successful submission. Report success for the ledger change.
-      </td>
-    </tr>
-    <tr className="odd">
-      <td>
-        <code>FAILED_PRECONDITION</code> /{" "}
-        <code>PARTICIPANT_PRUNED_DATA_ACCESSED &lt;error_code_PARTICIPANT_PRUNED_DATA_ACCESSED&gt;</code>
-      </td>
-      <td>
-        <p>
-          The specified deduplication offset has been pruned by the participant.{" "}
-          <code>earliest_offset</code> contains the last pruned offset.
-        </p>
-        <p>
-          Use the <code>Command Completion Service &lt;command-completion-service&gt;</code> by
-          asking for the{" "}
-          <code>completions &lt;com.daml.ledger.api.v2.CompletionStreamRequest&gt;</code>,
-          starting from the last pruned offset by setting{" "}
-          <code>offset &lt;com.daml.ledger.api.v2.CompletionStreamRequest.begin_exclusive&gt;</code>{" "}
-          to the value of <code>earliest_offset</code>, and use the first received{" "}
-          <code>completion offset &lt;com.daml.ledger.api.v2.Completion.offset&gt;</code> or{" "}
-          <code>checkpoint offset &lt;com.daml.ledger.api.v2.OffsetCheckpoint.offset&gt;</code> as
-          a deduplication offset.
-        </p>
-      </td>
-    </tr>
-    <tr className="odd">
-      <td>
-        <code>ABORTED</code> / other error codes
-      </td>
-      <td>
-        Wait a bit and retry from <code>Step 2 &lt;dedup-bounded-step-offset&gt;</code>,
-        obtaining the completion offset <code>OFF1</code>.
-      </td>
-    </tr>
-    <tr className="even">
-      <td>Other error conditions</td>
-      <td>
-        <p>
-          Use background knowledge about the business workflow and the current ledger state to
-          decide whether earlier submissions might still get accepted.
-        </p>
-        <ul>
-          <li>
-            If you conclude that it cannot be accepted any more, stop retrying and report that the
-            ledger change failed.
-          </li>
-          <li>
-            Otherwise, retry from <code>Step 2 &lt;dedup-bounded-step-offset&gt;</code>, obtaining
-            a completion offset <code>OFF1</code>, or give up without knowing for sure that the
-            ledger change will not happen.
-          </li>
-        </ul>
-        <p>
-          For example, if the ledger change only creates a contract instance of a template, you can
-          never be sure, as any outstanding submission might still be accepted on the ledger. In
-          particular, you must not draw any conclusions from not having received a{" "}
-          <code>SUBMISSION_ALREADY_IN_FLIGHT &lt;error_code_SUBMISSION_ALREADY_IN_FLIGHT&gt;</code>{" "}
-          error, because the outstanding submission may be queued somewhere and will reach the
-          relevant processing point only later.
-        </p>
-      </td>
-    </tr>
-  </tbody>
-</table>
+| Error condition | Reaction |
+|-----------------|----------|
+| `DEADLINE_EXCEEDED` | Consider the submission lost.<br/><br/>Retry from `Step 2 <dedup-bounded-step-offset>`, obtaining the completion offset `OFF1`, and possibly increase the timeout. |
+| Application crashed | Retry from `Step 2 <dedup-bounded-step-offset>`, obtaining the completion offset `OFF1`. |
+| `ALREADY_EXISTS` / `DUPLICATE_COMMAND <error_code_DUPLICATE_COMMAND>` | The change ID has already been accepted by the ledger within the reported deduplication period. The optional field `completion_offset` contains the precise offset. The optional field `existing_submission_id` contains the submission ID of the successful submission. Report success for the ledger change. |
+| `FAILED_PRECONDITION` / `PARTICIPANT_PRUNED_DATA_ACCESSED <error_code_PARTICIPANT_PRUNED_DATA_ACCESSED>` | The specified deduplication offset has been pruned by the participant. `earliest_offset` contains the last pruned offset.<br/><br/>Use the `Command Completion Service <command-completion-service>` by asking for the `completions <com.daml.ledger.api.v2.CompletionStreamRequest>`, starting from the last pruned offset by setting `offset <com.daml.ledger.api.v2.CompletionStreamRequest.begin_exclusive>` to the value of `earliest_offset`, and use the first received `completion offset <com.daml.ledger.api.v2.Completion.offset>` or `checkpoint offset <com.daml.ledger.api.v2.OffsetCheckpoint.offset>` as a deduplication offset. |
+| `ABORTED` / other error codes | Wait a bit and retry from `Step 2 <dedup-bounded-step-offset>`, obtaining the completion offset `OFF1`. |
+| Other error conditions | Use background knowledge about the business workflow and the current ledger state to decide whether earlier submissions might still get accepted.<br/><br/>If you conclude that it cannot be accepted any more, stop retrying and report that the ledger change failed.<br/>Otherwise, retry from `Step 2 <dedup-bounded-step-offset>`, obtaining a completion offset `OFF1`, or give up without knowing for sure that the ledger change will not happen.<br/><br/>For example, if the ledger change only creates a contract instance of a template, you can never be sure, as any outstanding submission might still be accepted on the ledger. In particular, you must not draw any conclusions from not having received a `SUBMISSION_ALREADY_IN_FLIGHT <error_code_SUBMISSION_ALREADY_IN_FLIGHT>` error, because the outstanding submission may be queued somewhere and will reach the relevant processing point only later. |
 
 Command deduplication error handling with known processing time bound
 

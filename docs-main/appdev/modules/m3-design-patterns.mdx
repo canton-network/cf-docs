@@ -24,6 +24,12 @@ import DamlAppdevModulesM3DesignPatternsL74 from "/snippets/daml-docs/appdev_mod
 import DamlAppdevModulesM3DesignPatternsL80 from "/snippets/daml-docs/appdev_modules_m3-design-patterns_L80.mdx";
 import DamlAppdevModulesM3DesignPatternsL86 from "/snippets/daml-docs/appdev_modules_m3-design-patterns_L86.mdx";
 import DamlAppdevModulesM3DesignPatternsL92 from "/snippets/daml-docs/appdev_modules_m3-design-patterns_L92.mdx";
+import DamlAppdevModulesM3DesignPatternsL454 from "/snippets/daml-docs/appdev_modules_m3-design-patterns_L454.mdx";
+import DamlAppdevModulesM3DesignPatternsL461 from "/snippets/daml-docs/appdev_modules_m3-design-patterns_L461.mdx";
+import DamlAppdevModulesM3DesignPatternsL498 from "/snippets/daml-docs/appdev_modules_m3-design-patterns_L498.mdx";
+import DamlAppdevModulesM3DesignPatternsL599 from "/snippets/daml-docs/appdev_modules_m3-design-patterns_L599.mdx";
+import DamlAppdevModulesM3DesignPatternsL673 from "/snippets/daml-docs/appdev_modules_m3-design-patterns_L673.mdx";
+
 
 
 {/* COPIED_START source="docs-website:docs/replicated/daml/3.4/sdk/tutorials/smart-contracts/compose.rst" hash="f782af8e" */}
@@ -410,8 +416,14 @@ You can start a new project with a skeleton structure using `dpm new project-nam
 > Take a look at the `daml.yaml` for the this chapter's project:
 
 ```yaml
--- Code from: daml/daml-intro-compose/daml.yaml.template
--- [Include actual code example here]
+sdk-version: __VERSION__
+name: __PROJECT_NAME__
+source: daml
+version: 1.0.0
+dependencies:
+  - daml-prim
+  - daml-stdlib
+  - daml-script
 ```
 
 You can generally set `name` and `version` freely to describe your project. `dependencies` does what the name suggests: it includes dependencies. You should always include `daml-prim` and `daml-stdlib`. The former contains internals of the compiler and the Daml Runtime, the latter gives access to the Daml standard library. `daml-script` contains the types and functions for Daml Script.
@@ -445,17 +457,11 @@ All but the last `.`-separated segment in module names correspond to paths relat
 
 Each file contains a module header. For example, `daml/Intro/Asset/Role.daml`:
 
-```haskell
--- Code from: daml/daml-intro-compose/daml/Intro/Asset/Role.daml
--- [Include actual code example here]
-```
+<DamlAppdevModulesM3DesignPatternsL454 />
 
 You can import one module into another using the `import` keyword. The `LibraryModules` module imports all six modules:
 
-```haskell
--- Code from: daml/daml-intro-compose/daml/Intro/Asset/Role.daml
--- [Include actual code example here]
-```
+<DamlAppdevModulesM3DesignPatternsL461 />
 
 Imports always have to appear just below the module declaration. You can optionally add a list of names after the import to import only the selected names:
 
@@ -484,19 +490,13 @@ This project showcases how you can put the `Update` and `Script` actions you lea
 - Two create actions in case of `Split`
 - One create and one archive action in case of `Merge`
 
-```haskell
--- Code from: daml/daml-intro-compose/daml/Intro/Asset.daml
--- [Include actual code example here]
-```
+<DamlAppdevModulesM3DesignPatternsL115 />
 
 The `return` function used in `Split` is available in any `Action` context. The result of `return x` is a no-op containing the value `x`. It has an alias `pure`, indicating that it's a pure value, as opposed to a value with side-effects. The `return` name makes sense when it's used as the last statement in a `do` block as its argument is indeed the "return"-value of the `do` block in that case.
 
 Taking transaction composition a step further, the `Trade_Settle` choice on `Trade` composes two `exercise` actions:
 
-```haskell
--- Code from: daml/daml-intro-compose/daml/Intro/Asset/Trade.daml
--- [Include actual code example here]
-```
+<DamlAppdevModulesM3DesignPatternsL498 />
 
 The resulting transaction, with its two nested levels of consequences, can be seen in the `test_trade` script in `Test.Intro.Asset.Trade`:
 
@@ -568,10 +568,7 @@ TX 14 1970-01-01T00:00:00Z (Test.Intro.Asset.Trade:79:23)
 
 Similar to choices, you can see how the scripts in this project are built up from each other:
 
-```haskell
--- Code from: daml/daml-intro-compose/daml/Test/Intro/Asset/Role.daml
--- [Include actual code example here]
-```
+<DamlAppdevModulesM3DesignPatternsL599 />
 
 In the above, the `test_issuance` script in `Test.Intro.Asset.Role` uses the output of the `setupRoles` script in the same module.
 
@@ -621,17 +618,11 @@ That's also important in the context of `Trade`. In order to allow Bob to interp
 
 *Observers* are Daml's mechanism to disclose contracts to other parties. They are declared just like signatories, but using the `observer` keyword, as shown in the `Asset` template:
 
-```haskell
--- Code from: daml/daml-intro-compose/daml/Intro/Asset.daml
--- [Include actual code example here]
-```
+<DamlAppdevModulesM3DesignPatternsL330 />
 
 The `Asset` template also gives the `owner` a choice to set the observers, and you can see how Alice uses it to show her `Asset` to Bob just before proposing the trade. You can try out what happens if she didn't do that by removing that transaction:
 
-```haskell
--- Code from: daml/daml-intro-compose/daml/Test/Intro/Asset/Trade.daml
--- [Include actual code example here]
-```
+<DamlAppdevModulesM3DesignPatternsL673 />
 
 Observers have guarantees in Daml. In particular, they are guaranteed to see actions that create and archive the contract on which they are an observer.
 
@@ -669,9 +660,7 @@ Other implementations, in particular those on public blockchains, may have weake
 
 Note that principle 2 of the privacy model means that sometimes parties see contracts that they are not signatories or observers on. If you look at the final ledger state of the `test_trade` script, for example, you may notice that both Alice and Bob now see both assets, as indicated by the Xs in their respective columns:
 
-<figure>
-<img src="./images/compose/divulgence.png" alt="images/compose/divulgence.png" />
-</figure>
+![images/compose/divulgence.png](./images/compose/divulgence.png)
 
 This is because the `create` action of these contracts are in the transitive consequences of the `Trade_Settle` action both of them have a stake in. This kind of disclosure is often called "divulgence" and needs to be considered when designing Daml models for privacy sensitive applications.
 

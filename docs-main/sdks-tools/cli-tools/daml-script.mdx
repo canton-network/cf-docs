@@ -11,9 +11,15 @@ import DamlSdksToolsCliToolsDamlScriptL72 from "/snippets/daml-docs/sdks-tools_c
 import DamlSdksToolsCliToolsDamlScriptL83 from "/snippets/daml-docs/sdks-tools_cli-tools_daml-script_L83.mdx";
 import DamlSdksToolsCliToolsDamlScriptL95 from "/snippets/daml-docs/sdks-tools_cli-tools_daml-script_L95.mdx";
 import DamlSdksToolsCliToolsDpmL56 from "/snippets/daml-docs/sdks-tools_cli-tools_dpm_L56.mdx";
+import DamlSdksToolsCliToolsDamlScriptL144 from "/snippets/daml-docs/sdks-tools_cli-tools_daml-script_L144.mdx";
+import DamlSdksToolsCliToolsDamlScriptL201 from "/snippets/daml-docs/sdks-tools_cli-tools_daml-script_L201.mdx";
+import DamlSdksToolsCliToolsDamlScriptL219 from "/snippets/daml-docs/sdks-tools_cli-tools_daml-script_L219.mdx";
+import DamlSdksToolsCliToolsDamlScriptL257 from "/snippets/daml-docs/sdks-tools_cli-tools_daml-script_L257.mdx";
 
 
 Daml Script is the primary testing tool for Daml contracts. You write test scenarios as `Script ()` values in Daml source files, then run them with `dpm test`. Scripts execute on a fresh, empty ledger and can allocate parties, submit commands, query state, and assert expected outcomes.
+
+For the complete function and type reference, see [Daml.Script API Reference](/appdev/reference/daml-script/daml-script).
 
 ## Writing a Test Script
 
@@ -141,10 +147,7 @@ A `Script` is like a recipe for a test, letting you create a scenario where diff
 
 Below is a basic script that creates a `Token` for a party called "Alice":
 
-```haskell
--- Code from: daml/daml-intro-daml-scripts/daml/Token_Test.daml
--- [Include actual code example here]
-```
+<DamlSdksToolsCliToolsDamlScriptL144 />
 
 You declare a `Script` as a top-level variable and introduce it using `script do`. `do` always starts a block, so the rest of the script is indented.
 
@@ -176,15 +179,11 @@ There are a few ways to run Daml Scripts:
 
 In Daml Studio, you should see the text "Script results" just above the line `token_test_1 = do`. Click on that text to display the outcome of the script.
 
-<figure>
-<img src="./images/daml-scripts/scenario_results1.png" alt="images/daml-scripts/scenario_results1.png" />
-</figure>
+![images/daml-scripts/scenario_results1.png](./images/daml-scripts/scenario_results1.png)
 
 This opens the script view in a separate column in VS Code. The default view is a tabular representation of the final state of the ledger:
 
-<figure>
-<img src="./images/daml-scripts/tabular_view1.png" alt="images/daml-scripts/tabular_view1.png" />
-</figure>
+![images/daml-scripts/tabular_view1.png](./images/daml-scripts/tabular_view1.png)
 
 What this display means:
 
@@ -200,31 +199,21 @@ To run the same test from the command line, save your module in a file `Token_Te
 
 In `contracts` you learned that creating a `Token` requires the authority of its owner. In other words, it should not be possible for Alice to create a token for another party, e.g. Bob, or vice versa. A reasonable attempt to test that would be:
 
-```haskell
--- Code from: daml/daml-intro-daml-scripts/daml/Token_Test.daml
--- [Include actual code example here]
-```
+<DamlSdksToolsCliToolsDamlScriptL201 />
 
 However, if you open the script view for that script, you see the following message:
 
-<figure>
-<img src="./images/daml-scripts/failure.png" alt="images/daml-scripts/failure.png" />
-</figure>
+![images/daml-scripts/failure.png](./images/daml-scripts/failure.png)
 
 The script failed, as expected, but scripts abort at the first failure. This means that it only tested that Alice cannot create a token for Bob; the second `submit` statement was never reached.
 
 To test for failing submits and keep the script running thereafter, or fail if the submission succeeds, you can use the `submitMustFail` function:
 
-```haskell
--- Code from: daml/daml-intro-daml-scripts/daml/Token_Test.daml
--- [Include actual code example here]
-```
+<DamlSdksToolsCliToolsDamlScriptL219 />
 
 `submitMustFail` never has an impact on the ledger, so the resulting tabular script view only shows the two tokens resulting from the successful `submit` statements. Note the new column for Bob as well as the visibilities. Alice and Bob cannot see each others' tokens.
 
-<figure>
-<img src="./images/daml-scripts/failuretable.png" alt="images/daml-scripts/failuretable.png" />
-</figure>
+![images/daml-scripts/failuretable.png](./images/daml-scripts/failuretable.png)
 
 ## Archive contracts
 
@@ -244,26 +233,19 @@ To `archiveCmd` the token Alice has created, you need the contract id. Retrieve 
 
 This script first checks that Bob cannot archive Alice's token. Then Alice successfully archives it:
 
-```haskell
--- Code from: daml/daml-intro-daml-scripts/daml/Token_Test.daml
--- [Include actual code example here]
-```
+<DamlSdksToolsCliToolsDamlScriptL257 />
 
 ## View the ledger and its history
 
 Once you archive the contract the resulting script view is empty; there are no contracts left on the ledger. If you want to see the history of the ledger, e.g. to see how you got to that state, tick the "Show archived" box at the top of the ledger view:
 
-<figure>
-<img src="./images/daml-scripts/archived.png" alt="images/daml-scripts/archived.png" />
-</figure>
+![images/daml-scripts/archived.png](./images/daml-scripts/archived.png)
 
 You can see that there was a `Token` contract, which is now archived, indicated both by the "archived" value in the `status` column as well as by a strikethrough.
 
 Click on the adjacent "Show transaction view" button to see the entire transaction graph:
 
-<figure>
-<img src="./images/daml-scripts/tx_graph.png" alt="images/daml-scripts/tx_graph.png" />
-</figure>
+![images/daml-scripts/tx_graph.png](./images/daml-scripts/tx_graph.png)
 
 In the Daml Studio script runner, committed transactions are numbered sequentially. In the image above, the lines starting with `TX` indicate that there are three committed transactions, with ids `#0`, `#1`, and `#2`. These correspond to the three `submit` and `submitMustFail` statements in the script.
 
