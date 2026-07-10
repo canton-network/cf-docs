@@ -1,0 +1,195 @@
+---
+title: "Splice.Api.RewardAssignmentV1"
+description: "Documentation for Splice.Api.RewardAssignmentV1"
+---
+
+{/* COPIED_START source="splice:daml/splice-api-reward-assignment-v1/docs/Splice-Api-RewardAssignmentV1.rst" hash="d233352e" */}
+
+An API for app providers and other service providers to assign reward coupons for their activity to their beneficiaries.
+
+## Interfaces
+
+<div id="type-splice-api-rewardassignmentv1-rewardcoupon-91850">
+
+**interface** RewardCoupon
+
+</div>
+
+> A coupon representing the right to mint a certain amount of rewards.
+>
+> **viewtype** RewardCouponView
+>
+> - **Choice** Archive
+>
+>   Controller: Signatories of implementing template
+>
+>   Returns: ()
+>
+>   (no fields)
+>
+> - <div id="type-splice-api-rewardassignmentv1-rewardcouponassignbeneficiaries-91237">
+>
+>   **Choice** RewardCoupon_AssignBeneficiaries
+>
+>   </div>
+>
+>   Assign ultimate beneficiaries to the coupon. Useful for apps where the party that earns the minting right (the provider) is just an operational party and the actual beneficiaries are different parties.
+>
+>   The coupon MUST NOT already have an assigned beneficiary.
+>
+>   Controller: (DA.Internal.Record.getField @"provider" (view this))
+>
+>   Returns: RewardCoupon_AssignBeneficiariesResult
+>
+>   | Field             | Type                                                                                                                                           | Description                                                                                                                                                                                                                                                                                                                                                                                                                                |
+>   |-------------------|------------------------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+>   | additionalCoupons | \[ContractId RewardCoupon\] | Additional coupons of the provider to share in the same transaction. These MUST NOT already have any assigned beneficiary.                                                                                                                                                                                                                                                                                                                 |
+>   | newBeneficiaries  | \[RewardBeneficiary\]                                                                                                                          | The new beneficiaries to whom to assign part of the minting amount of the coupon. The percentages MUST be between 0.0 and 1.0, add up to 1.0, and there MUST NOT be duplicate beneficiaries. There MUST be at most `(view this).maxNumNewBeneficiaries` new beneficiaries in the list. The purpose of this limit is to ensure that traffic cost of creating coupons guards the overhead of tracking the created coupons for the DSO party. |
+>   | extraArgs         | ExtraArgs                                                                                                                                      | Extra arguments for extensibility. Set to empty, unless needed for specific implementations.                                                                                                                                                                                                                                                                                                                                               |
+>
+> - **Method rewardCoupon_assignBeneficiariesImpl :** ContractId RewardCoupon -\> RewardCoupon_AssignBeneficiaries -\> Update RewardCoupon_AssignBeneficiariesResult
+
+## Data Types
+
+<div id="type-splice-api-rewardassignmentv1-rewardbeneficiary-10184">
+
+**data** RewardBeneficiary
+
+</div>
+
+> Specification of a beneficiary of rewards.
+>
+> <div id="constr-splice-api-rewardassignmentv1-rewardbeneficiary-42059">
+>
+> RewardBeneficiary
+>
+> </div>
+>
+> > | Field       | Type                                                                                                                | Description                                                                                                            |
+> > |-------------|---------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------|
+> > | beneficiary | Party | The party that is granted the right to mint amulet for this activity.                                                  |
+> > | percentage  | Decimal  | Percentage (specified as a number between 0.0 and 1.0) of the reward minting allowance to assign to this beneficiary . |
+>
+> **instance** Eq RewardBeneficiary
+>
+> **instance** Ord RewardBeneficiary
+>
+> **instance** Show RewardBeneficiary
+>
+> **instance** GetField "beneficiary" RewardBeneficiary Party
+>
+> **instance** GetField "newBeneficiaries" RewardCoupon_AssignBeneficiaries \[RewardBeneficiary\]
+>
+> **instance** GetField "percentage" RewardBeneficiary Decimal
+>
+> **instance** SetField "beneficiary" RewardBeneficiary Party
+>
+> **instance** SetField "newBeneficiaries" RewardCoupon_AssignBeneficiaries \[RewardBeneficiary\]
+>
+> **instance** SetField "percentage" RewardBeneficiary Decimal
+
+<div id="type-splice-api-rewardassignmentv1-rewardcouponview-77665">
+
+**data** RewardCouponView
+
+</div>
+
+> View on a coupon representing the right to mint a certain amount of rewards.
+>
+> <div id="constr-splice-api-rewardassignmentv1-rewardcouponview-34344">
+>
+> RewardCouponView
+>
+> </div>
+>
+> > | Field                  | Type                                                                                                                                                                                                                                               | Description                                                                                                                             |
+> > |------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------|
+> > | dso                    | Party                                                                                                                                | The DSO party.                                                                                                                          |
+> > | provider               | Party                                                                                                                                | The party that provided the service for whose activity the minting right was granted.                                                   |
+> > | beneficiary            | Optional Party | The beneficiary that can mint the amount specified in the coupon. If not set assignment via this interface is possible by the provider. |
+> > | amount                 | Decimal                                                                                                                                 | Amulet amount that can be minted with this coupon.                                                                                      |
+> > | expiresAt              | Time                                                                                                                                  | Expiration time of the coupon. The minting right granted by the coupon can only be exercised before this time.                          |
+> > | maxNumNewBeneficiaries | Int                                                                                                                                         | The maximum number of new beneficiaries that can be assigned to the coupon in a single assignment.                                      |
+> > | meta                   | Metadata                                                                                                                                                                                                                                           | Metadata associated with this coupon. Provided for extensibility.                                                                       |
+>
+> **instance** Eq RewardCouponView
+>
+> **instance** Show RewardCouponView
+>
+> **instance** HasFromAnyView RewardCoupon RewardCouponView
+>
+> **instance** HasInterfaceView RewardCoupon RewardCouponView
+>
+> **instance** GetField "amount" RewardCouponView Decimal
+>
+> **instance** GetField "beneficiary" RewardCouponView (Optional Party)
+>
+> **instance** GetField "dso" RewardCouponView Party
+>
+> **instance** GetField "expiresAt" RewardCouponView Time
+>
+> **instance** GetField "maxNumNewBeneficiaries" RewardCouponView Int
+>
+> **instance** GetField "meta" RewardCouponView Metadata
+>
+> **instance** GetField "provider" RewardCouponView Party
+>
+> **instance** SetField "amount" RewardCouponView Decimal
+>
+> **instance** SetField "beneficiary" RewardCouponView (Optional Party)
+>
+> **instance** SetField "dso" RewardCouponView Party
+>
+> **instance** SetField "expiresAt" RewardCouponView Time
+>
+> **instance** SetField "maxNumNewBeneficiaries" RewardCouponView Int
+>
+> **instance** SetField "meta" RewardCouponView Metadata
+>
+> **instance** SetField "provider" RewardCouponView Party
+
+<div id="type-splice-api-rewardassignmentv1-rewardcouponassignbeneficiariesresult-6056">
+
+**data** RewardCoupon_AssignBeneficiariesResult
+
+</div>
+
+> <div id="constr-splice-api-rewardassignmentv1-rewardcouponassignbeneficiariesresult-3545">
+>
+> RewardCoupon_AssignBeneficiariesResult
+>
+> </div>
+>
+> > | Field                      | Type                                                                                                                                                                                                                                                                      | Description                                               |
+> > |----------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------|
+> > | newBeneficiariesCouponCids | \([Party, \[ContractId RewardCoupon\])\] | The coupons created for the newly assigned beneficiaries. |
+>
+> **instance** Eq RewardCoupon_AssignBeneficiariesResult
+>
+> **instance** Show RewardCoupon_AssignBeneficiariesResult
+>
+> **instance** HasMethod RewardCoupon "rewardCoupon_assignBeneficiariesImpl" (ContractId RewardCoupon -\> RewardCoupon_AssignBeneficiaries -\> Update RewardCoupon_AssignBeneficiariesResult)
+>
+> **instance** GetField "newBeneficiariesCouponCids" RewardCoupon_AssignBeneficiariesResult \([Party, \[ContractId RewardCoupon\])\]
+>
+> **instance** SetField "newBeneficiariesCouponCids" RewardCoupon_AssignBeneficiariesResult \([Party, \[ContractId RewardCoupon\])\]
+>
+> **instance** HasExercise RewardCoupon RewardCoupon_AssignBeneficiaries RewardCoupon_AssignBeneficiariesResult
+>
+> **instance** HasExerciseGuarded RewardCoupon RewardCoupon_AssignBeneficiaries RewardCoupon_AssignBeneficiariesResult
+>
+> **instance** HasFromAnyChoice RewardCoupon RewardCoupon_AssignBeneficiaries RewardCoupon_AssignBeneficiariesResult
+>
+> **instance** HasToAnyChoice RewardCoupon RewardCoupon_AssignBeneficiaries RewardCoupon_AssignBeneficiariesResult
+
+## Functions
+
+<div id="function-splice-api-rewardassignmentv1-rewardcouponassignbeneficiariesimpl-26627">
+
+rewardCoupon_assignBeneficiariesImpl
+: RewardCoupon -\> ContractId RewardCoupon -\> RewardCoupon_AssignBeneficiaries -\> Update RewardCoupon_AssignBeneficiariesResult
+
+</div>
+
+
+{/* COPIED_END */}
