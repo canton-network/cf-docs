@@ -121,11 +121,30 @@ function extractByLines(fileContent, start, end) {
     return lines.slice(startLine - 1, endLine).join('\n')
 }
 
-function extractByStringMarker(fileContent, startMarker, endMarker) {
-    const startIndex = fileContent.indexOf(startMarker)
-    if (startIndex === -1) {
-        throw new Error(`Start marker not found: "${startMarker}"`)
+function countMarkerOccurrences(fileContent, marker) {
+    let count = 0
+    let index = fileContent.indexOf(marker)
+    while (index !== -1) {
+        count++
+        index = fileContent.indexOf(marker, index + marker.length)
     }
+    return count
+}
+
+function extractByStringMarker(fileContent, startMarker, endMarker) {
+    for (const marker of [startMarker, endMarker]) {
+        const occurrences = countMarkerOccurrences(fileContent, marker)
+        if (occurrences === 0) {
+            throw new Error(`Marker not found: "${marker}"`)
+        }
+        if (occurrences > 1) {
+            throw new Error(
+                `Marker must appear exactly once, found ${occurrences}: "${marker}"`
+            )
+        }
+    }
+
+    const startIndex = fileContent.indexOf(startMarker)
 
     // Match Sphinx literalinclude :start-after: / :end-before: — exclude marker lines.
     let contentStart = fileContent.indexOf('\n', startIndex)
@@ -137,7 +156,9 @@ function extractByStringMarker(fileContent, startMarker, endMarker) {
 
     const endIndex = fileContent.indexOf(endMarker, contentStart)
     if (endIndex === -1) {
-        throw new Error(`End marker not found: "${endMarker}"`)
+        throw new Error(
+            `End marker not found after start marker: "${endMarker}"`
+        )
     }
 
     let contentEnd = fileContent.lastIndexOf('\n', endIndex)
@@ -145,7 +166,10 @@ function extractByStringMarker(fileContent, startMarker, endMarker) {
         contentEnd = endIndex
     }
 
-    return fileContent.substring(contentStart, contentEnd).trim()
+    // Trim blank edge lines only, preserving the indentation of the first
+    // content line so indented sources (e.g. RST literal blocks) keep their
+    // relative alignment — again matching Sphinx literalinclude semantics.
+    return trimBlankEdges(fileContent.substring(contentStart, contentEnd))
 }
 
 function extractByRegexWrap(fileContent, startRegex, endRegex) {
