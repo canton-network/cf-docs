@@ -27,8 +27,6 @@ on:
     types: [update_snippets]
 
 env: 
-  external_token: ${{ secrets.EXTERNAL_REPO_TOKEN }}
-  docs_pr_token: ${{ secrets.DOCS_PR_TOKEN }}
   artifact_id: ${{ inputs.artifact-id || github.event.client_payload.artifact-id }}
   run_id: ${{ inputs.run-id || github.event.client_payload.run-id }}
   repo_name: ${{ inputs.repo-name || github.event.client_payload.repo-name }}
@@ -47,22 +45,35 @@ jobs:
           echo "external repo name: ${{ env.repo_name }}"
           echo "external repo org: ${{ env.repo_org }}"
           echo "external repo version: ${{ env.repo_version }}"
-          echo "Token is set: ${{ env.external_token != '' }}"
       - name: Checkout repository
         uses: actions/checkout@v5
-      - name: pull artifacts
+      - name: Generate snippet reader app token
+        id: reader-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.CF_DOCS_SNIPPET_READER_APP_ID }}
+          private-key: ${{ secrets.CF_DOCS_SNIPPET_READER_PRIVATE_KEY }}
+          owner: ${{ env.repo_org }}
+          repositories: ${{ env.repo_name }}
+      - name: Pull artifacts
         uses: actions/download-artifact@v5
         with:
           artifact-ids: ${{ env.artifact_id }}
-          path: snippets/external/${{ env.repo_name }}/${{ env.repo_version }}
-          github-token: ${{ env.external_token }}
+          path: docs-main/snippets/external/${{ env.repo_name }}/${{ env.repo_version }}
+          github-token: ${{ steps.reader-token.outputs.token }}
           repository: ${{ env.repo_org }}/${{ env.repo_name }}
           run-id: ${{ env.run_id }}
+      - name: Generate snippet writer app token
+        id: writer-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.CF_DOCS_SNIPPET_WRITER_APP_ID }}
+          private-key: ${{ secrets.CF_DOCS_SNIPPET_WRITER_PRIVATE_KEY }}
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v8
         with:
           branch: external-snippet-update-${{ env.repo_name }}-${{ env.repo_version }}
           base: main
-          token: ${{ secrets.DOCS_PR_TOKEN }}
+          token: ${{ steps.writer-token.outputs.token }}
           title: External Snippet updates ${{ env.repo_name }} (${{ env.repo_version }}) [${{ env.trigger_sha_short }}]
           commit-message: External Snippet updates ${{ env.repo_name }} (${{ env.repo_version }}) [${{ env.trigger_sha_short }}]

@@ -1,0 +1,128 @@
+name: Publish CF Docs Snippets
+
+# Template for Canton (CircleCI + GHA bridge). Copy to:
+#   .github/workflows/publish-cfdocs-snippets.yml
+# on DACH-NY/canton.
+
+on:
+  repository_dispatch:
+    types: [publish_cfdocs_snippets]
+  workflow_dispatch:
+    inputs:
+      job_number:
+        description: CircleCI job number for export_mintlify_snippets
+        required: true
+        type: string
+      sha:
+        description: Full commit SHA (CIRCLE_SHA1)
+        required: true
+        type: string
+      branch:
+        description: Branch name (expected main)
+        required: true
+        type: string
+        default: main
+      project_slug:
+        description: CircleCI project slug (e.g. gh/DACH-NY/canton)
+        required: false
+        type: string
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  publish_cfdocs_snippets:
+    if: vars.ENABLE_CFDOCS_SNIPPET_SYNC == 'true'
+    runs-on: ubuntu-latest
+    env:
+      job_number: ${{ github.event.client_payload.job_number || inputs.job_number }}
+      sha: ${{ github.event.client_payload.sha || inputs.sha }}
+      branch: ${{ github.event.client_payload.branch || inputs.branch }}
+      project_slug: ${{ github.event.client_payload.project_slug || inputs.project_slug || format('gh/{0}/{1}', github.repository_owner, github.event.repository.name) }}
+      artifact_prefix: cfdocs-snippets-${{ github.event.client_payload.sha || inputs.sha }}
+    steps:
+      - name: Validate inputs
+        run: |
+          set -euo pipefail
+          test -n "${job_number}"
+          test -n "${sha}"
+          test -n "${branch}"
+          test -n "${project_slug}"
+          if [ "${branch}" != "main" ]; then
+            echo "Snippet sync only runs for main builds (branch=${branch})"
+            exit 1
+          fi
+
+      - name: Download CircleCI snippet artifacts
+        env:
+          CIRCLECI_API_TOKEN: ${{ secrets.CIRCLECI_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          artifacts_json="$(mktemp)"
+          curl -sS --fail-with-body \
+            -H "Circle-Token: ${CIRCLECI_API_TOKEN}" \
+            "https://circleci.com/api/v2/project/${project_slug}/job/${job_number}/artifacts" \
+            > "${artifacts_json}"
+
+          mkdir -p docs-output
+          matched=0
+          while IFS=$'\t' read -r artifact_path artifact_url; do
+            [ -z "${artifact_path}" ] && continue
+            rel_path="${artifact_path#${artifact_prefix}/}"
+            if [ "${rel_path}" = "${artifact_path}" ]; then
+              continue
+            fi
+            matched=$((matched + 1))
+            target="docs-output/${rel_path}"
+            mkdir -p "$(dirname "${target}")"
+            curl -sS --fail-with-body -o "${target}" "${artifact_url}"
+          done < <(jq -r --arg prefix "${artifact_prefix}/" \
+            '.items[] | select(.path | startswith($prefix)) | [.path, .url] | @tsv' \
+            "${artifacts_json}")
+
+          if [ "${matched}" -eq 0 ]; then
+            echo "No CircleCI artifacts found with prefix ${artifact_prefix}/"
+            jq -r '.items[].path' "${artifacts_json}" | head -20 || true
+            exit 1
+          fi
+
+          snippet_count="$(find docs-output -name '*.mdx' | wc -l | tr -d ' ')"
+          echo "Downloaded ${snippet_count} snippet files from CircleCI"
+          test "${snippet_count}" -gt 0
+
+      - name: Store artifact output
+        id: store-artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: cfdocs-snippets-${{ env.sha }}
+          path: docs-output/
+
+      - name: Prepare additional params
+        id: additional-params
+        run: echo "short_sha=${sha:0:7}" >> "$GITHUB_OUTPUT"
+        env:
+          sha: ${{ env.sha }}
+
+      - name: Generate snippet writer app token
+        id: writer-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.CF_DOCS_SNIPPET_WRITER_APP_ID }}
+          private-key: ${{ secrets.CF_DOCS_SNIPPET_WRITER_PRIVATE_KEY }}
+          owner: ${{ vars.MAIN_REPO_ORG }}
+          repositories: ${{ vars.MAIN_REPO_NAME }}
+
+      - name: Update main docs repo
+        uses: passeidireto/trigger-external-workflow-action@main
+        env:
+          PAYLOAD_run-id: ${{ github.run_id }}
+          PAYLOAD_artifact-id: ${{ steps.store-artifact.outputs.artifact-id }}
+          PAYLOAD_repo-name: ${{ github.event.repository.name }}
+          PAYLOAD_repo-org: ${{ github.repository_owner }}
+          PAYLOAD_repo-version: ${{ env.branch }}
+          PAYLOAD_trigger_sha_short: ${{ steps.additional-params.outputs.short_sha }}
+        with:
+          repository: ${{ vars.MAIN_REPO_ORG }}/${{ vars.MAIN_REPO_NAME }}
+          event: update_snippets
+          github_pat: ${{ steps.writer-token.outputs.token }}

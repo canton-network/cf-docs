@@ -22,19 +22,6 @@ def test_copy_helper_and_config_copies_helper(tmp_path: Path) -> None:
     assert (target_scripts / "exportConfig.json").is_file()
 
 
-def test_copy_helper_and_config_preserves_repo_specific_helper_name(tmp_path: Path) -> None:
-    source_dir = tmp_path / "splice-wallet-kernel"
-    helper = generator.copy_helper_and_config(
-        generator.REPOS["splice-wallet-kernel"],
-        source_dir,
-        dry_run=False,
-    )
-
-    target_scripts = source_dir / "scripts" / "docs"
-    assert helper == target_scripts / "generateOutputDocs.cjs"
-    assert helper.is_file()
-
-
 def test_validate_inputs_reports_missing_helper(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

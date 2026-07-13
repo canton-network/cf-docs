@@ -1,0 +1,76 @@
+name: Publish CF Docs Snippets
+
+# Template for GHA source repositories (splice, daml, cn-quickstart, …).
+# Copy to .github/workflows/publish-cfdocs-snippets.yml on the source repo.
+#
+# Before copying, adjust for THIS source repo (required):
+#   - on.push.paths: every path that affects snippet content or extraction
+#   - run: path to generateOutputDocs.js in the source repo
+#
+# Artifact upload stores files in this repo's GHA artifact storage (not cf-docs).
+# cf-docs downloads via dispatch payload and merges into docs-main/snippets/external/…
+#
+# See config/snippet-config/source-repo-workflow-readme.md for setup details.
+
+on:
+  workflow_dispatch:
+
+  push:
+    branches:
+      - main
+    paths:
+      # REQUIRED: replace with paths for this source repo (see source-repo-workflow-readme.md).
+      - docs/**
+      - scripts/docs/**
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  publish_cfdocs_snippets:
+    # Set repository variable ENABLE_SYNC_PROCESS=true to activate (see source-repo-workflow-readme.md).
+    if: vars.ENABLE_SYNC_PROCESS == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Extract snippet data
+        # Adjust script path per repo layout (e.g. gha-scripts/cf-docs/generateOutputDocs.js).
+        run: node scripts/docs/generateOutputDocs.js
+
+      - name: Store artifact output
+        id: store-artifact
+        # Artifact is stored on this workflow run (source repo Actions storage), not in cf-docs.
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ github.event.repository.name }}-snippets
+          path: docs-output/
+
+      - name: Prepare additional params
+        id: additional-params
+        run: echo "short_sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Generate snippet writer app token
+        id: writer-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.CF_DOCS_SNIPPET_WRITER_APP_ID }}
+          private-key: ${{ secrets.CF_DOCS_SNIPPET_WRITER_PRIVATE_KEY }}
+          owner: ${{ vars.MAIN_REPO_ORG }}
+          repositories: ${{ vars.MAIN_REPO_NAME }}
+
+      - name: Update main docs repo
+        uses: passeidireto/trigger-external-workflow-action@main
+        env:
+          PAYLOAD_run-id: ${{ github.run_id }}
+          PAYLOAD_artifact-id: ${{ steps.store-artifact.outputs.artifact-id }}
+          PAYLOAD_repo-name: ${{ github.event.repository.name }}
+          PAYLOAD_repo-org: ${{ github.repository_owner }}
+          PAYLOAD_repo-version: main
+          PAYLOAD_trigger_sha_short: ${{ steps.additional-params.outputs.short_sha }}
+        with:
+          repository: ${{ vars.MAIN_REPO_ORG }}/${{ vars.MAIN_REPO_NAME }}
+          event: update_snippets
+          github_pat: ${{ steps.writer-token.outputs.token }}
