@@ -26,10 +26,6 @@ PACKAGE_HEADING_RE = re.compile(
 )
 VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
 ANGLE_PLACEHOLDER_RE = re.compile(r"<([^>\n]+)>")
-SPLICE_RELEASE_DIRECTIVE_RE = re.compile(
-    r"^\.\.\s+release-notes::\s+(?P<title>(?P<version>\d+\.\d+\.\d+|Upcoming).*)\s*$",
-    re.MULTILINE,
-)
 
 
 @dataclass(frozen=True, order=True)
@@ -102,21 +98,8 @@ class ReleaseNoteTarget:
 PACKAGE_RELEASE_REPO = "hyperledger-labs/splice-wallet-kernel"
 WALLET_SDK_REPO = "canton-network/wallet"
 WALLET_SDK_SOURCE_PATH = "docs/wallet-integration-guide/src/release-notes/index.rst"
-SPLICE_REPO = "canton-network/splice"
-SPLICE_RELEASE_NOTES_SOURCE_PATH = "docs/src/release_notes.rst"
 DEFAULT_DOCS_JSON = DOCS_MAIN / "docs.json"
 RELEASE_NOTES_ROOT = "integrations/release-notes"
-SPLICE_RELEASE_TARGET = ReleaseNoteTarget(
-    key="splice",
-    title="Splice",
-    description="Release notes and version history for Global Synchronizer software",
-    source_description=f"`{SPLICE_RELEASE_NOTES_SOURCE_PATH}` in `canton-network/splice`",
-    source_url=f"https://github.com/{SPLICE_REPO}/blob/main/{SPLICE_RELEASE_NOTES_SOURCE_PATH}",
-    index_path=DOCS_MAIN / "global-synchronizer" / "release-notes" / "splice.mdx",
-    release_dir=DOCS_MAIN / "global-synchronizer" / "release-notes" / "splice-releases",
-    page_ref="global-synchronizer/release-notes/splice",
-    release_page_root="global-synchronizer/release-notes/splice-releases",
-)
 WALLET_RELEASE_TARGETS = {
     "wallet-gateway": ReleaseNoteTarget(
         key="wallet-gateway",
@@ -514,144 +497,12 @@ def split_release_sections(markdown: str, *, source_id: str, source_url: str) ->
     return intro, tuple(sections)
 
 
-def split_version_heading_sections(
-    markdown: str,
-    *,
-    source_id: str,
-    source_url: str,
-) -> tuple[str, tuple[ReleaseNoteSection, ...]]:
-    heading_matches = tuple(
-        re.finditer(r"^## (?P<title>(?P<version>\d+\.\d+\.\d+)[^\n]*)\s*$", markdown, re.MULTILINE)
-    )
-    if not heading_matches:
-        raise RuntimeError("Could not find release-note version sections")
-
-    intro = markdown[: heading_matches[0].start()].strip()
-    sections_by_version: dict[Version, ReleaseNoteSection] = {}
-    order: list[Version] = []
-    for index, match in enumerate(heading_matches):
-        next_start = heading_matches[index + 1].start() if index + 1 < len(heading_matches) else len(markdown)
-        version = Version.parse(match.group("version"))
-        body = markdown[match.start() : next_start].strip()
-        title = str(version)
-        section = ReleaseNoteSection(
-            version=version,
-            title=title,
-            body=body,
-            source_id=source_id,
-            source_url=source_url,
-        )
-        if version in sections_by_version:
-            previous = sections_by_version[version]
-            sections_by_version[version] = ReleaseNoteSection(
-                version=version,
-                title=title,
-                body=f"{previous.body}\n\n{body}",
-                source_id=source_id,
-                source_url=source_url,
-            )
-            continue
-        sections_by_version[version] = section
-        order.append(version)
-    return intro, tuple(sections_by_version[version] for version in order)
-
-
 def wallet_sdk_sections(source: GithubContent) -> tuple[str, tuple[ReleaseNoteSection, ...]]:
     body = rst_to_mdx(source.text, source_repo=WALLET_SDK_REPO, source_ref=source.sha)
     return split_release_sections(
         body,
         source_id=source.sha,
         source_url=source.html_url,
-    )
-
-
-def dedent_rst_block(block: str) -> str:
-    lines = block.splitlines()
-    while lines and lines[0].strip() == "":
-        lines.pop(0)
-    while lines and lines[-1].strip() == "":
-        lines.pop()
-    indents = [
-        len(line) - len(line.lstrip())
-        for line in lines
-        if line.strip()
-    ]
-    common_indent = min(indents) if indents else 0
-    return "\n".join(line[common_indent:] if len(line) >= common_indent else line for line in lines)
-
-
-def splice_sections_from_source(source: GithubContent) -> tuple[ReleaseNoteSection, ...]:
-    directive_matches = tuple(SPLICE_RELEASE_DIRECTIVE_RE.finditer(source.text))
-    if not directive_matches:
-        raise RuntimeError("Could not find Splice release-note directives")
-
-    sections: list[ReleaseNoteSection] = []
-    for index, match in enumerate(directive_matches):
-        version_text = match.group("version")
-        if version_text == "Upcoming":
-            continue
-        next_start = directive_matches[index + 1].start() if index + 1 < len(directive_matches) else len(source.text)
-        version = Version.parse(version_text)
-        body = rst_to_mdx(
-            f"{version}\n{'-' * len(str(version))}\n\n{dedent_rst_block(source.text[match.end() : next_start])}",
-            source_repo=SPLICE_REPO,
-            source_ref=source.sha,
-            doc_base_path=SPLICE_RELEASE_NOTES_SOURCE_PATH,
-        )
-        sections.append(
-            ReleaseNoteSection(
-                version=version,
-                title=str(version),
-                body=body,
-                source_id=source.sha,
-                source_url=source.html_url,
-            )
-        )
-    if not sections:
-        raise RuntimeError("Could not find published Splice release-note sections")
-    return tuple(sorted(sections, key=lambda section: section.version, reverse=True))
-
-
-def existing_splice_sections(target: ReleaseNoteTarget = SPLICE_RELEASE_TARGET) -> tuple[ReleaseNoteSection, ...]:
-    if target.release_dir.exists():
-        sections: list[ReleaseNoteSection] = []
-        for release_file in sorted(target.release_dir.glob("*.mdx")):
-            text = release_file.read_text(encoding="utf-8")
-            frontmatter_match = re.match(r"---\n.*?\n---\n\n", text, re.DOTALL)
-            body = text[frontmatter_match.end() :] if frontmatter_match else text
-            body = re.sub(r"^\{/\* GENERATED_RELEASE_NOTES .+? \*/\}\n\n", "", body, count=1)
-            body = re.sub(r"^# ", "## ", body.strip(), count=1, flags=re.MULTILINE)
-            _intro, release_sections = split_version_heading_sections(
-                body,
-                source_id="cf-docs-existing",
-                source_url=target.index_path.as_posix(),
-            )
-            sections.extend(release_sections)
-        return tuple(sorted(sections, key=lambda section: section.version, reverse=True))
-
-    if not target.index_path.exists():
-        return ()
-    _intro, sections = split_version_heading_sections(
-        target.index_path.read_text(encoding="utf-8"),
-        source_id="cf-docs-existing",
-        source_url=target.index_path.as_posix(),
-    )
-    return tuple(sorted(sections, key=lambda section: section.version, reverse=True))
-
-
-def merge_release_sections(
-    primary_sections: Sequence[ReleaseNoteSection],
-    fallback_sections: Sequence[ReleaseNoteSection],
-) -> tuple[ReleaseNoteSection, ...]:
-    merged: dict[Version, ReleaseNoteSection] = {section.version: section for section in fallback_sections}
-    merged.update({section.version: section for section in primary_sections})
-    return tuple(sorted(merged.values(), key=lambda section: section.version, reverse=True))
-
-
-def splice_sections(source: GithubContent) -> tuple[ReleaseNoteSection, ...]:
-    return merge_release_sections(
-        splice_sections_from_source(source),
-        existing_splice_sections(),
     )
 
 
@@ -699,24 +550,6 @@ def update_docs_json(
     for product in products:
         if not isinstance(product, dict):
             continue
-        if target.key == "splice" and product.get("product") == "Global Synchronizer":
-            groups = product.get("groups")
-            if isinstance(groups, list):
-                for group in groups:
-                    if isinstance(group, dict) and group.get("group") == "Release Notes":
-                        pages = group.get("pages")
-                        if isinstance(pages, list):
-                            replace_release_nav_entry(pages, target=target, sections=sections)
-            continue
-        if target.key == "splice" and product.get("product") == "Release Notes":
-            pages = product.get("pages")
-            if isinstance(pages, list):
-                for group in pages:
-                    if isinstance(group, dict) and group.get("group") == "Canton Network":
-                        group_pages = group.get("pages")
-                        if isinstance(group_pages, list):
-                            replace_release_nav_entry(group_pages, target=target, sections=sections)
-            continue
         if product.get("product") == "Integrations":
             groups = product.get("groups")
             if isinstance(groups, list):
@@ -760,17 +593,9 @@ def update_wallet_sdk_release_notes(*, source_ref: str) -> bool:
     return changed_pages or changed_nav
 
 
-def update_splice_release_notes(*, source_ref: str) -> bool:
-    source = github_content(SPLICE_REPO, SPLICE_RELEASE_NOTES_SOURCE_PATH, source_ref=source_ref)
-    sections = splice_sections(source)
-    changed_pages = write_release_pages(SPLICE_RELEASE_TARGET, sections)
-    changed_nav = update_docs_json(target=SPLICE_RELEASE_TARGET, sections=sections)
-    return changed_pages or changed_nav
-
-
 def targets_to_run(requested: str) -> tuple[str, ...]:
     if requested == "all":
-        return ("splice", "wallet-gateway", "wallet-sdk", "dapp-sdk")
+        return ("wallet-gateway", "wallet-sdk", "dapp-sdk")
     return (requested,)
 
 
@@ -780,7 +605,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--target",
-        choices=("all", "wallet-gateway", "wallet-sdk", "dapp-sdk", "splice"),
+        choices=("all", "wallet-gateway", "wallet-sdk", "dapp-sdk"),
         default="all",
         help="Release-note target to refresh.",
     )
@@ -788,11 +613,6 @@ def parse_args() -> argparse.Namespace:
         "--wallet-sdk-ref",
         default="main",
         help="Git ref to use for the Wallet SDK release-note source.",
-    )
-    parser.add_argument(
-        "--splice-ref",
-        default="main",
-        help="Git ref to use for the Splice release-note source.",
     )
     return parser.parse_args()
 
@@ -806,9 +626,6 @@ def main() -> int:
             continue
         if target == "wallet-sdk":
             changed = update_wallet_sdk_release_notes(source_ref=args.wallet_sdk_ref) or changed
-            continue
-        if target == "splice":
-            changed = update_splice_release_notes(source_ref=args.splice_ref) or changed
             continue
         raise ValueError(f"Unknown release-note target: {target}")
     print("Release notes updated." if changed else "Release notes already up to date.")

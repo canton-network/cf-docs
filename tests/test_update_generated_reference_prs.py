@@ -59,7 +59,6 @@ def test_update_targets_cover_all_generated_doc_surfaces() -> None:
         "typescript-bindings",
         "canton-metrics-reference",
         "canton-release-notes",
-        "splice-release-notes",
         "wallet-gateway-release-notes",
         "wallet-sdk-release-notes",
         "dapp-sdk-release-notes",
@@ -213,8 +212,6 @@ def test_generated_clean_paths_include_target_paths_and_internal_output() -> Non
     assert "docs-main/global-synchronizer/deployment/validator-kubernetes.mdx" in clean_paths
     assert "docs-main/global-synchronizer/reference/canton-metrics.mdx" in clean_paths
     assert "docs-main/global-synchronizer/release-notes" in clean_paths
-    assert "docs-main/global-synchronizer/release-notes/splice.mdx" in clean_paths
-    assert "docs-main/global-synchronizer/release-notes/splice-releases" in clean_paths
     assert "docs-main/integrations/release-notes/wallet-gateway.mdx" in clean_paths
     assert "docs-main/integrations/release-notes/wallet-gateway-releases" in clean_paths
     assert "docs-main/integrations/release-notes/wallet-sdk.mdx" in clean_paths

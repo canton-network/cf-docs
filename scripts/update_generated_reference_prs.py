@@ -378,29 +378,6 @@ UPDATE_TARGETS = (
         ),
     ),
     UpdateTarget(
-        key="splice-release-notes",
-        title="Update Splice release notes",
-        branch="release-notes/splice/update",
-        description=(
-            "Updates the published Splice/Canton Network release-note pages from "
-            "`docs/src/release_notes.rst` in `canton-network/splice`, preserving "
-            "existing cf-docs-only release sections until the upstream source catches up."
-        ),
-        generate_commands=(("nix-shell", "--run", "npm run update:release-notes -- --target splice"),),
-        paths=(
-            "docs-main/docs.json",
-            "docs-main/global-synchronizer/release-notes/splice.mdx",
-            "docs-main/global-synchronizer/release-notes/splice-releases",
-        ),
-        summary_kind="release-notes-page",
-        summary_path="docs-main/global-synchronizer/release-notes/splice.mdx",
-        summary_label="Splice release notes",
-        validation=(
-            "npm run update:release-notes -- --target splice",
-            "git diff --check",
-        ),
-    ),
-    UpdateTarget(
         key="wallet-gateway-release-notes",
         title="Update Wallet Gateway release notes",
         branch="release-notes/wallet-gateway/update",
