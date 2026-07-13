@@ -18,6 +18,9 @@ NETWORK_LABELS = {
 
 RELEASE_HEADING_RE = re.compile(r"^# Release of Canton (?P<version>\d+\.\d+\.\d+)\s*$", re.MULTILINE)
 CANTON_RELEASE_LINK_RE = re.compile(r"/global-synchronizer/release-notes/canton/(?P<slug>\d+-\d+-\d+)")
+RELEASE_NOTE_SECTION_RE = re.compile(r"^## (?P<section>.+?)\s*$", re.MULTILINE)
+RELEASE_NOTE_SOURCE_RE = re.compile(r"\{/\* GENERATED_RELEASE_NOTES (?P<attrs>[^*]+)\*/\}")
+SOURCE_ATTR_RE = re.compile(r'(?P<key>[a-zA-Z0-9_-]+)="(?P<value>[^"]*)"')
 
 COMPONENT_LABELS = {
     "splice": "Splice",
@@ -238,6 +241,44 @@ def canton_release_note_changes(before_path: Path, after_path: Path, *, label: s
         changes.append(f"- {label}: removed {', '.join(removed)}")
     if not changes and before_versions != after_versions:
         changes.append(f"- {label}: refreshed release index")
+    return changes
+
+
+def release_note_source_attrs(page_text: str) -> dict[str, str]:
+    match = RELEASE_NOTE_SOURCE_RE.search(page_text)
+    if match is None:
+        return {}
+    return {attr.group("key"): attr.group("value") for attr in SOURCE_ATTR_RE.finditer(match.group("attrs"))}
+
+
+def release_note_sections(page_text: str) -> tuple[str, ...]:
+    return tuple(match.group("section") for match in RELEASE_NOTE_SECTION_RE.finditer(page_text))
+
+
+def release_note_page_changes(before_path: Path, after_path: Path, *, label: str) -> list[str]:
+    before = before_path.read_text(encoding="utf-8")
+    after = after_path.read_text(encoding="utf-8")
+    before_attrs = release_note_source_attrs(before)
+    after_attrs = release_note_source_attrs(after)
+    before_sections = release_note_sections(before)
+    after_sections = release_note_sections(after)
+
+    changes: list[str] = []
+    before_latest = before_attrs.get("latest_version") or (before_sections[0] if before_sections else None)
+    after_latest = after_attrs.get("latest_version") or (after_sections[0] if after_sections else None)
+    if before_latest != after_latest:
+        source = after_attrs.get("latest_source") or after_attrs.get("source_sha") or after_attrs.get("source_ref")
+        source_text = f" from {source}" if source else ""
+        changes.append(f"- {label}: latest {format_value(before_latest)} -> {format_value(after_latest)}{source_text}")
+
+    added_sections = [section for section in after_sections if section not in before_sections]
+    removed_sections = [section for section in before_sections if section not in after_sections]
+    if added_sections:
+        changes.append(f"- {label}: added sections {', '.join(added_sections)}")
+    if removed_sections:
+        changes.append(f"- {label}: removed sections {', '.join(removed_sections)}")
+    if not changes and before_attrs != after_attrs:
+        changes.append(f"- {label}: refreshed upstream source metadata")
     return changes
 
 
