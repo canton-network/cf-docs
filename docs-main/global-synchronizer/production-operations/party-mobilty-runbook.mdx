@@ -1,0 +1,649 @@
+# Party Mobility How-To
+
+Canton supports hosting a single party across multiple participant nodes. This runbook covers 3 workflows: simple party replication, offline party replication, and decentralized party setup. Additional details can be found in subsequent documents in this section.
+
+Each workflow in this document is a step-by-step procedure with decision points, prerequisites, and error conditions called out explicitly.
+
+Party migration (replicating a party and then removing it from its original host) isn't supported yet, because party offboarding is not yet reliable in Canton today. So for now, all paths lead to multi-hosting: your party ends up on 2 or more participants.
+
+## Before you start
+
+You'll need to know a few things about your situation before picking a workflow.
+
+**Question 1: Has the party already been used in any Daml transaction?**
+
+If the party has never been a stakeholder on any contract (no creates, no exercises, nothing), you can use Simple Party Replication. This is the fast path.
+
+If the party has participated in even a single transaction, you must use Offline Party Replication. There's no shortcut here.
+
+**Question 2: Is this a local party or an external party?**
+
+Local parties have their signing keys managed by the participant node. External parties hold their own private keys and sign transactions independently.
+
+The authorization steps differ between these 2 types. The runbook calls out those differences where they matter.
+
+**Question 3: Is the party owned by a single entity or by multiple owners (decentralized namespace)?**
+
+Parties owned through a decentralized namespace require a threshold of owner authorizations for topology changes. If you're working with a party with a decentralized namespace, the authorization steps require coordination among multiple owners.
+
+**Question 4: What permission level should the target participant have?**
+
+Canton defines 3 levels:
+
+- **Submission**: Can submit and confirm transactions on behalf of the party.
+- **Confirmation**: Can confirm transactions but can't submit them.
+- **Observation**: Read-only. Can't confirm or submit.
+
+For external parties being multi-hosted, the target participant must use either Confirmation or Observation (not Submission).
+
+## Quick decision guide
+
+```text
+Has the party participated in any Daml transaction?
+├── No  → Party Multi-Hosting (Simple Party Replication / Workflow 1)
+└── Yes → Is the party owned by a single entity?
+    ├── Yes → Offline Party Replication (Workflow 2)
+    └── No  → Offline Party Replication (Workflow 2)
+              with decentralized namespace authorization
+              (threshold of owner authorizations required at Steps 3 and 6)
+```
+
+```text
+Do you need to set up a brand new decentralized party?
+├── Yes → Decentralized Party Setup (Workflow 3)
+│         Then, if you need to add members later:
+│         └── Offline Party Replication (Workflow 2) for ACS transfer
+└── No  → Use Workflow 1 or 2 based on transaction history
+```
+
+---
+
+## Workflow 1: Party Multi-Hosting (Simple Party Replication)
+
+Use this when the party has never participated in any Daml transaction. If you're not 100% certain the party is "clean," use Offline Party Replication instead.
+
+### Prerequisites
+
+- The source participant already hosts the party.
+- The target participant is connected to the same synchronizer as the source.
+- The party has zero contracts. No creates, no exercises, no stakeholder involvement of any kind.
+
+### Steps
+
+**Step 1: Create the party (if it doesn't exist yet).**
+
+On the source participant, identify the party to be multi-hosted.
+
+The party can live in the participant's namespace, a dedicated namespace, or be an external party. The namespace choice affects who can authorize topology changes later.
+
+**Step 2: Vet packages on the target participant.**
+
+Every Daml package the party will use must be vetted on the target before you proceed. If you skip this, the target participant won't be able to process contracts involving those packages.
+
+```text
+target.dars.upload("dars/YourApplication.dar")
+```
+
+Verify the vetting took effect:
+
+```text
+target.topology.vetted_packages.list()
+```
+
+**Step 3: Authorize the target participant to host the party.**
+
+This requires mutual consent: the party must agree to be hosted on the target, and the target must agree to host the party. A single topology transaction, signed by both sides.
+
+**On the source participant** (where the party's namespace key lives, for local parties):
+
+```text
+source.topology.party_to_participant_mappings
+  .propose_delta(
+    party = alice,
+    adds = Seq(target.id -> ParticipantPermission.Submission),
+    store = synchronizerId,
+  )
+```
+
+**On the target participant:**
+
+```text
+target.topology.party_to_participant_mappings
+  .propose_delta(
+    party = alice,
+    adds = Seq(target.id -> ParticipantPermission.Submission),
+    store = synchronizerId,
+  )
+```
+
+The participant permission on both sides must match. For external parties, use `Confirmation` or `Observation` only. (The above transaction, granting submission rights, would fail for an external party).
+
+For external parties, the party's namespace key must sign the topology transaction. See the external party authorization section below.
+
+**Step 4: Verify the mapping is active.**
+
+```text
+source.topology.party_to_participant_mappings.is_known(
+  synchronizerId,
+  alice,
+  Seq(source.id, target.id),
+  Some(ParticipantPermission.Submission)
+)
+```
+
+Once this returns `true`, the party is multi-hosted. You can now use it on either participant.
+
+### Variant: Changing the confirmation threshold simultaneously
+
+If you want to replicate the party and raise the confirmation threshold in one operation, use `propose` instead of `propose_delta`. This lets you specify the full participant list and the new threshold together:
+
+```text
+source.topology.party_to_participant_mappings
+  .propose(
+    alice,
+    newParticipants = Seq(
+      source.id -> ParticipantPermission.Confirmation,
+      target.id -> ParticipantPermission.Confirmation,
+      newTarget.id -> ParticipantPermission.Confirmation,
+    ),
+    threshold = PositiveInt.three,
+    store = synchronizerId,
+  )
+```
+
+Each new participant must also issue its own matching `propose` transaction. The threshold only takes effect once all required authorizations land.
+
+### Error conditions
+
+| Symptom | Likely Cause | Fix |
+| :-- | :-- | :-- |
+| Topology transaction rejected | Permission mismatch between source and target proposals | Ensure both sides propose the same permission level |
+| Target can't process contracts | Packages not vetted on target | Upload and vet all required DARs before authorizing |
+| External party authorization fails | Missing namespace key authorization | Sign the topology transaction with the external party's namespace key |
+
+---
+
+## Workflow 2: Offline Party Replication
+
+Use this when the party has already participated in Daml transactions. This is the more complex path: it involves exporting the party's Active Contract Set (ACS) from the source and importing it into the target.
+
+The name "offline" comes from the requirement that the target participant must be disconnected from all synchronizers during the ACS import.
+
+### Prerequisites
+
+- The source participant hosts the party and the party has active contracts.
+- The target participant is connected to the same synchronizer.
+- You have console access to both participants (ideally from a single Canton console, so you can transfer the ACS file without manual copying).
+- You know the synchronizer alias (e.g., `"mysynchronizer"`).
+
+### Critical warnings
+
+- **Follow these steps in exact order.** Deviating from the sequence can cause errors that require significant manual correction.
+- **Back up the target participant before importing the ACS.** If the import gets interrupted (crash, restart, operator error), you'll need this backup to recover.
+- **Don't restore from pre-replication backups after completion.** Doing so causes silent ledger forks. The participant will appear to work but its state will diverge from the rest of the network.
+- **ACS commitment mismatches are expected during onboarding.** You'll see these in the logs. They resolve on their own. Don't panic.
+
+### Steps
+
+**Step 1: Vet packages on the target participant.**
+
+Same as simple replication: every Daml package the party uses must be vetted on the target.
+
+```text
+// Check what packages the source has
+val mainPackageId = source.dars.list(filterName = "YourApp").head.mainPackageId
+
+// Upload to target
+target.dars.upload("dars/YourApp.dar")
+
+// Verify
+target.topology.vetted_packages.list()
+  .filter(_.item.packages.exists(_.packageId == mainPackageId))
+```
+
+**Step 2: Disable automatic pruning on the source participant.**
+
+The source participant must retain enough data to cover the window between the topology transaction becoming effective and the ACS export completing. If automatic pruning runs during this window, the export could fail.
+
+```text
+// Record current schedule so you can restore it later
+val pruningSchedule = source.pruning.get_schedule()
+
+// Disable automatic pruning
+source.pruning.clear_schedule()
+```
+
+Also coordinate with anyone who might trigger manual pruning. No pruning on the source until the ACS export finishes.
+
+**Step 3: Authorize the target participant to host the party (with onboarding flag).**
+
+The target participant proposes the hosting arrangement. The `requiresPartyToBeOnboarded = true` flag is critical: it tells Canton that this participant is still receiving its ACS and shouldn't be treated as fully operational yet.
+
+```text
+val proposal = target.topology.party_to_participant_mappings
+  .propose_delta(
+    party = alice,
+    adds = Seq((target.id, ParticipantPermission.Observation)),
+    store = synchronizerId,
+    requiresPartyToBeOnboarded = true
+  )
+```
+
+If the target participant will confirm (not just observe) transactions, set the hosting rights to Confirmation:
+
+```text
+val proposal = target.topology.party_to_participant_mappings
+  .propose_delta(
+    party = alice,
+    adds = Seq((target.id, ParticipantPermission.Confirmation)),
+    store = synchronizerId,
+    requiresPartyToBeOnboarded = true
+  )
+```
+
+**Step 4: Disconnect the target participant from all synchronizers.**
+
+```text
+target.synchronizers.disconnect_all()
+```
+
+**Step 5: Disable auto-reconnect on the target participant.**
+
+This prevents the target from reconnecting to the synchronizer if it restarts during the import.
+
+```text
+target.synchronizers.modify("mysynchronizer", _.copy(manualConnect = true))
+```
+
+**Step 6: Authorize the party to be hosted on the target (party-side authorization).**
+
+This step happens on the source participant (for local parties) or requires the external party's authorization.
+
+First, capture the current ledger offset. You'll need this later for the ACS export:
+
+```text
+val beforeActivationOffset = source.ledger_api.state.end()
+```
+
+**For a local party:**
+
+```text
+source.topology.party_to_participant_mappings
+  .propose_delta(
+    party = alice,
+    adds = Seq((target.id, ParticipantPermission.Observation)),
+    store = synchronizerId,
+    requiresPartyToBeOnboarded = true
+  )
+```
+
+**For an external party:**
+
+You need to sign the topology transaction hash with the external party's namespace key. The flow:
+
+1. Write the proposal hash to a file.
+2. Sign it with the external party's private key (using your KMS, HSM, or `openssl` for testing).
+3. Load the signed transaction back into Canton.
+
+```text
+// Write hash
+val tmpDir = better.files.File("/tmp/canton/party_replication").createDirectories()
+(tmpDir / "proposal.hash").outputStream.apply(proposal.hash.hash.getCryptographicEvidence.writeTo(_))
+```
+
+```shell
+# Sign with external key (testing only; use KMS in production)
+openssl pkeyutl -sign -inkey private_key.der -rawin \
+  -in /tmp/canton/party_replication/proposal.hash \
+  -out /tmp/canton/party_replication/proposal.sig -keyform DER
+```
+
+```text
+// Load signed transaction
+val aliceSignature = Signature.fromExternalSigning(
+  format = SignatureFormat.Concat,
+  signature = (tmpDir / "proposal.sig").inputStream()(com.google.protobuf.ByteString.readFrom),
+  signedBy = alice.fingerprint,
+  signingAlgorithmSpec = SigningAlgorithmSpec.Ed25519,
+)
+val proposalSignedByAlice = proposal.addSingleSignature(aliceSignature)
+source.topology.transactions.load(
+  transactions = Seq(proposalSignedByAlice),
+  store = synchronizerId,
+)
+```
+
+**Step 7: Export the ACS from the source participant.**
+
+This command finds the ledger offset where the party was activated on the target, then exports the ACS at that exact point.
+
+```text
+source.parties
+  .export_party_acs(
+    party = alice,
+    synchronizerId = synchronizerId,
+    targetParticipantId = target.id,
+    beginOffsetExclusive = beforeActivationOffset,
+    exportFilePath = "party_replication.alice.acs.gz",
+  )
+```
+
+If the source and target aren't on the same console, you'll need to securely transfer the `.acs.gz` file to the target's machine.
+
+**Step 8: Re-enable automatic pruning on the source (optional).**
+
+If you disabled pruning in Step 2, restore it now:
+
+```text
+source.pruning.set_schedule("0 0 20 * * ?", 2.hours, 30.days) // Use your original parameters
+```
+
+**Step 9: Back up the target participant.**
+
+Do this now, before importing the ACS. This is your recovery point if anything goes wrong during import.
+
+**Step 10: Import the ACS on the target participant.**
+
+```text
+target.parties.import_party_acs("party_replication.alice.acs.gz")
+```
+
+**Step 11: Reconnect the target participant.**
+
+Capture the ledger end offset first (you'll need it for the onboarding flag clearance):
+
+```text
+val targetLedgerEnd = target.ledger_api.state.end()
+```
+
+Then reconnect:
+
+```text
+target.synchronizers.reconnect_local("mysynchronizer")
+```
+
+**Step 12: Re-enable auto-reconnect (optional).**
+
+If the target was originally configured to reconnect automatically:
+
+```text
+target.synchronizers.modify("mysynchronizer", _.copy(manualConnect = false))
+```
+
+**Step 13: Clear the onboarding flag.**
+
+This is the final step. It signals that the target participant is fully operational and can participate in confirmations.
+
+```text
+val flagStatus = target.parties
+  .clear_party_onboarding_flag(alice, synchronizerId, targetLedgerEnd)
+```
+
+The command returns one of:
+
+- **`FlagNotSet`**: The flag is already cleared. You're done.
+- **`FlagSet`**: The flag is still set. The command has scheduled automatic clearance at the appropriate time.
+
+You can poll until it clears:
+
+```text
+utils.retry_until_true(timeout = 2.minutes, maxWaitPeriod = 1.minutes) {
+  val flagStatus = target.parties
+    .clear_party_onboarding_flag(alice, synchronizerId, targetLedgerEnd)
+  flagStatus match {
+    case FlagSet(_) => false
+    case FlagNotSet => true
+  }
+}
+```
+
+The default decision timeout is 1 minute, so a 2-minute polling timeout gives comfortable headroom.
+
+### Error conditions
+
+| Symptom | Cause | Fix |
+| :-- | :-- | :-- |
+| ACS export fails with "data not available" | Source participant pruned data during the replication window | Start over; ensure pruning is disabled before beginning |
+| ACS import fails or is interrupted | Crash, restart, or network issue during import | Restore from the backup taken in Step 9, then retry from Step 10 |
+| ACS commitment mismatches in logs | Normal during onboarding | Ignore. These resolve automatically |
+| Onboarding flag won't clear | Called too early, before the topology transaction is effective | Wait and retry. The command is idempotent |
+| Silent ledger fork after restoring backup | Restored from a pre-replication backup | Don't do this. Only restore from the backup taken after replication completes |
+| Target participant reconnects prematurely | Auto-reconnect wasn't disabled | Disconnect again, re-disable auto-reconnect, and ensure ACS import completed before reconnecting |
+
+---
+
+## Workflow 3: Decentralized Party Setup
+
+A decentralized party distributes control across multiple independent owners. It combines 3 mechanisms:
+
+- A **decentralized namespace** that requires a threshold of owner authorizations for any topology change.
+- A **PartyToParticipant mapping** with multiple confirming participants and a confirmation threshold.
+- An optional **PartyToKey mapping** that lets the party submit transactions signed directly with a threshold of keys.
+
+### Prerequisites
+
+- 3 or more participants, each controlled by an independent entity.
+- All participants connected to the same synchronizer.
+- Agreement on the threshold (e.g., 2-of-3 for Byzantine fault tolerance).
+
+### Steps
+
+**Step 1: Generate namespace keys on each participant.**
+
+Each owner generates a signing key dedicated to the decentralized namespace:
+
+```text
+// On participant1 (Alice's node)
+val aliceNamespaceKey = participant1.keys.secret
+  .generate_signing_key("decentralized-party-namespace", SigningKeyUsage.NamespaceOnly)
+val aliceNamespace = Namespace(aliceNamespaceKey.fingerprint)
+
+// On participant2 (Bob's node)
+val bobNamespaceKey = participant2.keys.secret
+  .generate_signing_key("decentralized-party-namespace", SigningKeyUsage.NamespaceOnly)
+val bobNamespace = Namespace(bobNamespaceKey.fingerprint)
+
+// On participant3 (Charlie's node)
+val charlieNamespaceKey = participant3.keys.secret
+  .generate_signing_key("decentralized-party-namespace", SigningKeyUsage.NamespaceOnly)
+val charlieNamespace = Namespace(charlieNamespaceKey.fingerprint)
+```
+
+**Step 2: Publish namespace delegations to the synchronizer.**
+
+Each participant publishes its namespace delegation so all nodes can see and use the key:
+
+```text
+val synchronizerId = participant1.synchronizers.id_of("global")
+
+participant1.topology.namespace_delegations
+  .propose_delegation(aliceNamespace, aliceNamespaceKey,
+    DelegationRestriction.CanSignAllMappings, store = synchronizerId)
+
+participant2.topology.namespace_delegations
+  .propose_delegation(bobNamespace, bobNamespaceKey,
+    DelegationRestriction.CanSignAllMappings, store = synchronizerId)
+
+participant3.topology.namespace_delegations
+  .propose_delegation(charlieNamespace, charlieNamespaceKey,
+    DelegationRestriction.CanSignAllMappings, store = synchronizerId)
+```
+
+**Step 3: Create the decentralized namespace definition.**
+
+All owners must sign and publish the same topology transaction. The initial creation requires authorizations from every owner (not just the threshold). After creation, the threshold applies to subsequent changes.
+
+```text
+val namespaceDef = DecentralizedNamespaceDefinition.tryCreate(
+  DecentralizedNamespaceDefinition.computeNamespace(
+    Set(aliceNamespace, bobNamespace, charlieNamespace)
+  ),
+  PositiveInt.tryCreate(2), // threshold of 2
+  NonEmpty(Set, aliceNamespace, bobNamespace, charlieNamespace)
+)
+
+// Each participant publishes independently
+participant1.topology.decentralized_namespaces.propose(namespaceDef, store = synchronizerId)
+participant2.topology.decentralized_namespaces.propose(namespaceDef, store = synchronizerId)
+participant3.topology.decentralized_namespaces.propose(namespaceDef, store = synchronizerId)
+
+// Verify
+utils.retry_until_true(
+  participant1.topology.decentralized_namespaces
+    .list(synchronizerId, filterNamespace = namespaceDef.namespace.filterString)
+    .nonEmpty
+)
+```
+
+**Step 4: Create the PartyToParticipant mapping.**
+
+Choose a party prefix. The full party ID becomes `prefix::decentralized-namespace`. Set the confirmation threshold and permissions:
+
+```text
+val partyId = PartyId(UniqueIdentifier.tryCreate("decentralized-party", namespaceDef.namespace))
+
+// Each participant publishes independently
+participant1.topology.party_to_participant_mappings.propose(
+  partyId,
+  Seq(
+    (participant1, ParticipantPermission.Confirmation),
+    (participant2, ParticipantPermission.Confirmation),
+    (participant3, ParticipantPermission.Confirmation),
+  ),
+  PositiveInt.tryCreate(2), // 2-of-3 confirmations
+  store = synchronizerId,
+)
+
+participant2.topology.party_to_participant_mappings.propose(
+  partyId,
+  Seq(
+    (participant1, ParticipantPermission.Confirmation),
+    (participant2, ParticipantPermission.Confirmation),
+    (participant3, ParticipantPermission.Confirmation),
+  ),
+  PositiveInt.tryCreate(2),
+  store = synchronizerId,
+)
+
+participant3.topology.party_to_participant_mappings.propose(
+  partyId,
+  Seq(
+    (participant1, ParticipantPermission.Confirmation),
+    (participant2, ParticipantPermission.Confirmation),
+    (participant3, ParticipantPermission.Confirmation),
+  ),
+  PositiveInt.tryCreate(2),
+  store = synchronizerId,
+)
+
+// Verify
+utils.retry_until_true(
+  participant3.topology.party_to_participant_mappings
+    .list(synchronizerId, filterParty = partyId.filterString)
+    .nonEmpty
+)
+```
+
+**Step 5 (Optional – will be deprecated Canton 3.5): Create a PartyToKey mapping for direct transaction submission.**
+
+This lets the decentralized party sign and submit transactions using a threshold of protocol keys, without requiring a participant with Submission permission.
+
+Generate protocol keys on each participant:
+
+```text
+val aliceDamlKey = participant1.keys.secret
+  .generate_signing_key("decentralized-party-daml-transactions", SigningKeyUsage.ProtocolOnly)
+val bobDamlKey = participant2.keys.secret
+  .generate_signing_key("decentralized-party-daml-transactions", SigningKeyUsage.ProtocolOnly)
+val charlieDamlKey = participant3.keys.secret
+  .generate_signing_key("decentralized-party-daml-transactions", SigningKeyUsage.ProtocolOnly)
+```
+
+Create the mapping:
+
+```text
+participant1.topology.party_to_key_mappings.propose(
+  partyId, PositiveInt.tryCreate(2),
+  NonEmpty(Seq, aliceDamlKey, bobDamlKey, charlieDamlKey),
+  store = synchronizerId, mustFullyAuthorize = false
+)
+participant2.topology.party_to_key_mappings.propose(
+  partyId, PositiveInt.tryCreate(2),
+  NonEmpty(Seq, aliceDamlKey, bobDamlKey, charlieDamlKey),
+  store = synchronizerId, mustFullyAuthorize = false
+)
+participant3.topology.party_to_key_mappings.propose(
+  partyId, PositiveInt.tryCreate(2),
+  NonEmpty(Seq, aliceDamlKey, bobDamlKey, charlieDamlKey),
+  store = synchronizerId, mustFullyAuthorize = false
+)
+
+// Verify
+utils.retry_until_true(
+  participant3.topology.party_to_key_mappings
+    .list(store = synchronizerId, filterParty = partyId.filterString)
+    .nonEmpty
+)
+```
+
+### Changing membership later
+
+Adding or removing members requires a threshold of existing members (plus any new members) to sign the updated topology transactions for all 3 mappings (namespace, PartyToParticipant, PartyToKey).
+
+Adding a member to the PartyToParticipant mapping when the party already has active contracts requires a full offline party replication (ACS export/import), not just a topology transaction.
+
+### Error conditions
+
+| Symptom | Cause | Fix |
+| :-- | :-- | :-- |
+| Decentralized namespace doesn't appear in `list` | Not all owners have signed | Ensure every owner publishes the same topology transaction |
+| PartyToParticipant mapping rejected | Threshold of namespace authorizations not met | Collect enough owner authorizations to meet the threshold |
+| Can't submit transactions as decentralized party | No PartyToKey mapping and no participant with Submission permission | Either add a PartyToKey mapping or grant one participant Submission permission |
+
+---
+
+## Topology authorization rules (reference)
+
+These rules govern who can change what in a PartyToParticipant mapping. Understanding them helps you troubleshoot rejected topology transactions.
+
+**Adding a hosting participant**: Requires authorizations from both the party's namespace and the new participant's namespace.
+
+**Removing a hosting participant**: Requires authorization from either the party's namespace or the removed participant's namespace.
+
+**Upgrading a participant's permission** (e.g., Observation to Confirmation): Requires authorization from both the party's namespace and the participant's namespace.
+
+**Downgrading a participant's permission** (e.g., Confirmation to Observation): Requires authorization from either the party's namespace or the participant's namespace.
+
+**Setting the onboarding flag**: Requires the party's namespace authorization.
+
+**Clearing the onboarding flag**: Requires authorization from the participant's namespace.
+
+**Changing the confirmation threshold**: Requires authorization by the party’s namespace key(s).
+
+---
+
+## Online party replication (alpha experimental)
+
+Canton also has an **alpha-stage** online party replication feature that eliminates the need to disconnect the target participant. It uses sequencer channels to stream the ACS directly from source to target while both remain connected.
+
+The protocol works through Daml contracts (`PartyReplicationProposal` and `PartyReplicationAgreement`) that coordinate the negotiation between source and target participants. The target sends flow-control messages (`Initialize`, `SendAcsUpTo`), and the source responds with `AcsBatch` messages followed by `EndOfACS`.
+
+This feature requires the `unsafe_sequencer_channel_support` configuration flag and is gated behind the `AlphaOnlinePartyReplicationConfig` setting. It's available for testing but should be considered experimental. The offline procedure described above remains the production-supported path.
+
+**Please note that this alpha solution may never reach general availability.** Alternate solutions are being considered, including file-based replication initiated by a dedicated dApp. The existing solution should be considered only in emergency cases, or for experimentation.
+
+---
+
+## Sources
+
+- Canton codebase: `community/participant/src/main/daml/.../PartyReplication.daml`
+- Canton codebase: `community/base/src/main/scala/.../TopologyMapping.scala` (PartyToParticipant, authorization rules)
+- Canton codebase: `community/participant/src/main/scala/.../PartyReplicator.scala`
+- Canton codebase: `community/participant/src/main/scala/.../PartyReplicationTargetParticipantProcessor.scala`
+- Canton codebase: `docs-open/src/sphinx/participant/howtos/operate/parties/party_replication.rst`
+- Canton codebase: `docs-open/src/sphinx/participant/howtos/operate/parties/decentralized_parties.rst`
+- [Party Replication docs](https://docs.digitalasset.com/operate/3.3/howtos/operate/parties/party_replication.html)
+- [Decentralized Parties docs](https://docs.digitalasset.com/operate/3.3/howtos/operate/parties/decentralized_parties.html)
+- [Multi-hosted External Party Onboarding](https://docs.digitalasset.com/build/3.4/tutorials/app-dev/external_signing_onboarding_multihosted.html)
+- [Topology Management](https://docs.digitalasset.com/overview/3.4/explanations/canton/topology.html)
+- [External Parties](https://docs.digitalasset.com/overview/3.4/explanations/canton/external-party.html)
