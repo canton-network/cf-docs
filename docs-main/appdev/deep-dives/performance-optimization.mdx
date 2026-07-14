@@ -11,6 +11,7 @@ import DamlAppdevModulesM7PerformanceL36 from "/snippets/daml-docs/appdev_module
 import DamlAppdevModulesM7PerformanceL45 from "/snippets/daml-docs/appdev_modules_m7-performance_L45.mdx";
 
 {/* COPIED_START source="docs-website:docs/replicated/canton/3.5/participant/howtos/optimize/performance.rst" hash="f10483e4" */}
+{/* DIVERGES FROM SOURCE: removed stale "enterprise edition" claims for pruning and node scaling; the referenced console commands live in the community/open-source codebase (see the snippet imports on this page). Related to github.com/canton-network/cf-docs/issues/1027 */}
 
 # Scaling and Performance
 
@@ -35,10 +36,10 @@ The bottom line is that a Canton system can scale out horizontally if commands i
 
 ## Node Scaling
 
-The Daml Enterprise edition of Canton supports the following scaling of nodes:
+Canton supports the following scaling of nodes:
 
 - The database-backed drivers (Postgres and Oracle) can run in an active-active setup with parallel processing, supporting multiple writer and reader processes. Thus, such nodes can scale horizontally.
-- The enterprise participant node processes transactions in parallel (except the process of conflict detection which by definition must be sequential), allowing much higher throughput than the community version. The community version processes each transaction sequentially. Canton processes make use of multiple CPUs and will detect the number of available CPUs automatically. The number of parallel threads can be controlled by setting the JVM properties `scala.concurrent.context.numThreads` to the desired value.
+- Canton processes make use of multiple CPUs and will detect the number of available CPUs automatically (conflict detection between transactions must run sequentially, but interpretation of each transaction can run in parallel). The number of parallel threads can be controlled by setting the JVM properties `scala.concurrent.context.numThreads` to the desired value.
 
 Generally, the performance of Canton nodes is currently storage I/O bound. Therefore, their performance depends on the scaling behavior and throughput performance of the underlying storage layer, which can be a database or a distributed ledger for some drivers. Therefore, appropriately sizing the database is key to achieving the necessary performance.
 
@@ -88,7 +89,7 @@ Additionally to this, some indexes have to be built by the database to serve the
 Please note that we do have plans to remove the storage duplication between the sync service and the indexer. Ideally, will be able to reduce the storage on the participant for this example from `5\*Y` down to \`3\*Y\`: once for the unencrypted created contract and twice for the two encrypted transaction views.
 </Note>
 
-Generally, to recover used storage, a participant and a synchronizer can be pruned. Pruning is available on Canton Enterprise through a set of console commands and allows removal of past events and archived contracts based on a timestamp. The storage usage of a Canton deployment can be kept constant by continuously removing obsolete data. Non-repudiation and auditability of the unpruned history are preserved due to the bilateral commitments.
+Generally, to recover used storage, a participant and a synchronizer can be pruned. Pruning is available through a set of console commands and allows removal of past events and archived contracts based on a timestamp. The storage usage of a Canton deployment can be kept constant by continuously removing obsolete data. Non-repudiation and auditability of the unpruned history are preserved due to the bilateral commitments.
 
 ## Set Up Canton to Get the Best Performance
 
@@ -96,7 +97,7 @@ In this section, the findings from internal performance tests are outlined to he
 
 ### System Design / Architecture
 
-We recommend the version of Canton included in the Daml Enterprise edition, which is heavily optimized when compared with the community edition.
+We recommend running the latest supported Canton release for optimal performance.
 
 Plan your topology such that your Daml parties can be partitioned into independent blocks. That means most of your Daml commands involve parties of a single block only. It is ok if some commands involve parties of several (or all) blocks, as long as this happens only very rarely. In particular, avoid having a single master party that is involved in every command, because that party bottlenecks the system.
 
