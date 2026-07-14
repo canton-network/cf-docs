@@ -18,10 +18,6 @@ import DamlDocsSdksToolsCliToolsDpmL98 from "/snippets/daml-docs/sdks-tools_cli-
 import DamlDocsSdksToolsCliToolsDpmL111 from "/snippets/daml-docs/sdks-tools_cli-tools_dpm_L111.mdx";
 import DamlDocsSdksToolsCliToolsDpmL135 from "/snippets/daml-docs/sdks-tools_cli-tools_dpm_L135.mdx";
 import DamlDocsSdksToolsCliToolsDpmL152 from "/snippets/daml-docs/sdks-tools_cli-tools_dpm_L152.mdx";
-import ExternalDpmMainDpmRstCodeDocsSrcPublicDpmComponentsShell14 from "/snippets/external/dpm/main/dpm-rst-code-docs-src-public-dpm-components-shell-14.mdx";
-import ExternalDpmMainDpmRstCodeDocsSrcPublicDpmComponentsShell22 from "/snippets/external/dpm/main/dpm-rst-code-docs-src-public-dpm-components-shell-22.mdx";
-import ExternalDpmMainDpmRstCodeDocsSrcPublicDpmComponentsShell32 from "/snippets/external/dpm/main/dpm-rst-code-docs-src-public-dpm-components-shell-32.mdx";
-
 
 `dpm` is the command-line interface for Canton development. It manages SDK installation, project scaffolding, compilation, testing, code generation, and local development environments. Most Canton development workflows start with a `dpm` command.
 
@@ -421,33 +417,51 @@ Replace with `dpm sandbox` combined with `dpm build`. Use the Declarative API or
 See `dpm sandbox` for details on running a local Canton installation.
 
 
+{/* COPIED_START source="docs-website:docs/replicated/dpm/3.4/dpm-components.rst" hash="fe1634fe" */}
+
+
 ## Publishing Components
 
-{/* COPIED_START source="docs-website:docs/replicated/dpm/3.4/dpm-components.rst" hash="a8899270" */}
-
 <Note>
-This functionality is available in DPM version 1.0.13 or later (or bundled with SDK 3.5 or later).
+This functionality is available in DPM version 1.0.14 or later (or bundled with SDK 3.5 or later)
 </Note>
 
-To share or use your Component in various projects, you can publish it to a repository:
+To share or use your Component in various projects, you can publish it to a repository.
 
-<ExternalDpmMainDpmRstCodeDocsSrcPublicDpmComponentsShell14 />
+```bash
+dpm publish component oci://<destination>:<strict semantic version> \
+    --platform generic="/path/to/component/directory"
+```
 
-For example:
+for example:
 
-<ExternalDpmMainDpmRstCodeDocsSrcPublicDpmComponentsShell22 />
+```bash
+dpm publish component oci://example.com/my/components/foo:1.0.0 \
+    --platform generic="~/component-foo"
+```
 
-This publishes version `1.0.0` of `foo` as OCI to `example.com/my/components/foo:1.0.0`.
+This will publish version `1.0.0` of `foo` as OCI to `example.com/my/components/foo:1.0.0`
 
-For multi-platform components, provide a directory for each platform:
+For multi-platform components, you can instead provide a directory for each platform. For example:
 
-<ExternalDpmMainDpmRstCodeDocsSrcPublicDpmComponentsShell32 />
+```bash
+dpm publish component oci://example.com/my/components/foo:1.0.0 \
+    --platform linux/arm64="/some/directory" \
+    --platform windows/amd64="/another/directory"
+```
 
 See the `dpm publish component --help` command for more available options.
 
-You can also view the published versions and tags of a component via `dpm tags` (see the [Listing tags](/sdks-tools/cli-tools/dpm#listing-available-tags-and-versions-in-an-oci-repository) docs section).
+Also, you can view the published versions (and tags) of a component
 
-See the [Dpm Components](/appdev/modules/m5-environment-configuration#dpm-components) docs section to learn how to use these components in your project.
+```bash
+dpm tags oci://example.com/my/components/foo
+```
+
+For information on how to use the published component in your project, see the section on using components
+
+
+{/* COPIED_END */}
 
 ## Publishing Dars to an OCI Repository
 
@@ -466,8 +480,6 @@ dpm publish dar oci://example.com/my/dars/foo:1.0.0 \
 You should now be able to see the published version via `dpm tags` see the [Listing tags](/sdks-tools/cli-tools/dpm#listing-available-tags-and-versions) docs section.
 
 See the [Remote Dars](/appdev/modules/m5-environment-configuration#remote-dars) docs section to learn how to install `oci://` dars in your project.
-
-{/* COPIED_END */}
 
 ## Typical Workflow
 
@@ -494,16 +506,27 @@ latest
 - [Daml Studio](/sdks-tools/development-tools/daml-studio) -- VS Code extension launched by `dpm studio`
 - [Daml Script](/sdks-tools/cli-tools/daml-script) -- Writing and running tests with `dpm test`
 
-{/* COPIED_START source="docs-website:docs/replicated/dpm/3.5/manual-install.rst" hash="3c8275c7" */}
+{/* COPIED_START source="docs-website:docs/replicated/dpm/3.5/manual-install.rst" hash="ed6c5b3c" */}
 
 # Manual Installation Instructions
 
-## Mac/Linux
+## Mac/Linux Installation
 
 If you cannot / wish not to use the shell script to install for Linux or OSX, you can alternatively install dpm manually by running this set of commands in your terminal:
 
+The latest stable release version can be found by hitting the following URL:
+
 ```bash
-#get latest version number
+VERSION="$(curl -sS "https://get.digitalasset.com/install/latest")"
+```
+
+And you can then use this to retrieve the tarball of the full installation, extract, and install, as outlined in the full instructions below.
+
+```bash
+#! /usr/bin/env bash
+set -xeuo pipefail
+
+# get latest version number
 VERSION="$(curl -sS "https://get.digitalasset.com/install/latest")"
 
 # set your architecture to either amd64 | arm64
@@ -512,7 +535,7 @@ ARCH="$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"
 # set your OS to either darwin or linux
 OS="$(uname | tr '[:upper:]' '[:lower:]')"
 
-#pull down appropriate tarball for your OS and architecture
+# pull down appropriate tarball for your OS and architecture
 readonly TARBALL="dpm-${VERSION}-${OS}-${ARCH}.tar.gz"
 
 # determine location of tarball to download
@@ -534,13 +557,19 @@ tar xzf "${TMPDIR}/${TARBALL}" -C "${extracted}" --strip-components 1
 # bootstrap dpm
 "${extracted}/bin/dpm" bootstrap "${extracted}"
 
+# verify dpm version runs and does not return an error
+if ! "${extracted}/bin/dpm" version; then
+  echo "dpm version failed" >&2
+  exit 1
+fi
+
 # cleanup tmpdir
 rm -rf "${TMPDIR}"
 ```
 
-## Windows
+## Windows Installation
 
-Download and unpack the latest dpm sdk version's [archive (.zip)](https://get.digitalasset.com/install/latest-windows-archive.html), then:
+Download and unpack the [windows dpm-sdk archive (.zip)](https://get.digitalasset.com/install/latest-windows-archive.html), then:
 
 ``` powershell
 # Extract the downloaded zip ($ZIP_PATH) to temp directory ($EXTRACTED)
@@ -556,5 +585,31 @@ $env:DPM_HOME = "<user-owned directory>"
 
 & "$EXTRACTED\windows-amd64\bin\dpm.exe" bootstrap $EXTRACTED\windows-amd64
 ```
+
+## Unstable Version Manual Installation
+
+Preview / unstable versions are also available for experimentation, though it is always recommended to use the stable versions listed above instead.
+
+## Unstable Mac / Linux
+
+Follow the `dpm-manual-installation-mac-linux` instructions to install an unstable version, but note the differences in VERSION and TARBALL_URL.
+
+The latest unstable release version can be found by hitting the following URL:
+
+```bash
+VERSION="$(curl -sS "https://get.digitalasset.com/unstable/install/latest")"
+```
+
+The unstable tarball can be retrieved from the following URL:
+
+```bash
+# determine location of tarball to download
+TARBALL_URL="https://get.digitalasset.com/unstable/install/dpm-sdk/${TARBALL}"
+```
+
+## Unstable Windows
+
+Download and unpack the latest [windows unstable dpm-sdk archive (.zip)](https://get.digitalasset.com/unstable/install/latest-windows-archive.html), then follow `dpm-manual-installation-windows` instructions.
+
 
 {/* COPIED_END */}

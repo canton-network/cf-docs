@@ -490,3 +490,88 @@ class AsyncApiTests(unittest.TestCase):
         self.assertEqual(operation.outputs[0].schema.name, "-")
         self.assertEqual(operation.examples[0].title, "wscat")
         self.assertIn("npx wscat -c <WEBSOCKET_URL>", operation.examples[0].body)
+
+    def test_action_adapter_preserves_oneof_response_variants(self) -> None:
+        channel = build_asyncapi_report_from_sources(
+            [
+                self._snapshot(
+                    "1.1.0",
+                    "published/1.1.0/asyncapi.yaml",
+                    """
+                    asyncapi: 2.6.0
+                    info:
+                      title: Sample WebSocket API
+                      version: 1.1.0
+                    channels:
+                      /updates:
+                        subscribe:
+                          operationId: onUpdates
+                          bindings:
+                            ws:
+                              method: GET
+                          message:
+                            $ref: '#/components/messages/Either_Error_UpdateResponse'
+                    components:
+                      schemas:
+                        Either_Error_UpdateResponse:
+                          title: Either_Error_UpdateResponse
+                          oneOf:
+                            - $ref: '#/components/schemas/Error'
+                            - $ref: '#/components/schemas/UpdateResponse'
+                        Error:
+                          type: object
+                          required: [code]
+                          properties:
+                            code:
+                              type: string
+                        UpdateResponse:
+                          type: object
+                          properties:
+                            update:
+                              $ref: '#/components/schemas/Update'
+                        Update:
+                          title: Update
+                          oneOf:
+                            - type: object
+                              required: [Checkpoint]
+                              properties:
+                                Checkpoint:
+                                  type: object
+                                  required: [offset]
+                                  properties:
+                                    offset:
+                                      type: string
+                            - type: object
+                              required: [Transaction]
+                              properties:
+                                Transaction:
+                                  type: object
+                                  required: [updateId]
+                                  properties:
+                                    updateId:
+                                      type: string
+                      messages:
+                        Either_Error_UpdateResponse:
+                          contentType: application/json
+                          payload:
+                            $ref: '#/components/schemas/Either_Error_UpdateResponse'
+                    """,
+                )
+            ],
+            source_name="unit test fixtures",
+            version_filter="unit test versions",
+            publish_version="1.1.0",
+        ).channels[0]
+
+        action = channel.latest["actions"][0]
+        operation = build_action_operation(channel, action, output_dir=None)
+        schema = operation.outputs[0].schema
+
+        self.assertIsNotNone(schema)
+        assert schema is not None
+        self.assertEqual([variant.name for variant in schema.variants], ["Error", "UpdateResponse"])
+        self.assertEqual(schema.variants[0].fields[0].name, "code")
+        self.assertEqual(schema.variants[1].fields[0].name, "update")
+        nested_groups = schema.variants[1].variants
+        self.assertEqual([variant.name for variant in nested_groups], ["update"])
+        self.assertEqual([variant.name for variant in nested_groups[0].variants], ["Checkpoint", "Transaction"])

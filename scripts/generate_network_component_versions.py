@@ -81,9 +81,21 @@ WALLET_GATEWAY_RELEASES_PAGE_URL = (
 PQS_IMAGE_REPOSITORY = (
     "europe-docker.pkg.dev/da-images/public/docker/participant-query-store"
 )
-PQS_TAGS_URL = (
-    "https://europe-docker.pkg.dev/v2/da-images/public/docker/"
-    "participant-query-store/tags/list"
+PQS_SCRIBE_COMPONENT_REPOSITORY = (
+    "europe-docker.pkg.dev/da-images/public/components/scribe"
+)
+PQS_SCRIBE_RELEASE_LINE_TAG = "3.5"
+PQS_SCRIBE_MANIFEST_URL = (
+    "https://europe-docker.pkg.dev/v2/da-images/public/components/"
+    f"scribe/manifests/{PQS_SCRIBE_RELEASE_LINE_TAG}"
+)
+OCI_MANIFEST_ACCEPT = ", ".join(
+    [
+        "application/vnd.oci.image.index.v1+json",
+        "application/vnd.oci.image.manifest.v1+json",
+        "application/vnd.docker.distribution.manifest.list.v2+json",
+        "application/vnd.docker.distribution.manifest.v2+json",
+    ]
 )
 STABLE_SEMVER_RE = re.compile(r"\d+\.\d+\.\d+")
 USER_AGENT = "cf-docs-version-dashboard-generator"
@@ -137,6 +149,14 @@ def request_url(url: str, timeout: float):
 
 def fetch_json(url: str, timeout: float) -> dict:
     with request_url(url, timeout) as response:
+        return json.load(response)
+
+
+def fetch_manifest_json(url: str, timeout: float) -> dict:
+    headers = request_headers(url)
+    headers["Accept"] = OCI_MANIFEST_ACCEPT
+    request = Request(url, headers=headers)
+    with urlopen(request, timeout=timeout) as response:
         return json.load(response)
 
 
@@ -250,20 +270,33 @@ def fetch_latest_wallet_gateway_version(timeout: float) -> str:
     return latest_stable_version(versions, WALLET_GATEWAY_RELEASES_URL)
 
 
-def fetch_latest_pqs_version(timeout: float) -> str:
-    data = fetch_json(PQS_TAGS_URL, timeout)
-    tags: list[str] = []
-    manifest = data.get("manifest", {})
-    if not isinstance(manifest, dict):
-        raise RuntimeError(f"Expected Artifact Registry manifest map from {PQS_TAGS_URL}")
-    for entry in manifest.values():
-        if not isinstance(entry, dict):
-            continue
-        entry_tags = entry.get("tag", [])
-        if not isinstance(entry_tags, list):
-            continue
-        tags.extend(tag for tag in entry_tags if isinstance(tag, str))
-    return latest_stable_version(tags, PQS_TAGS_URL)
+def previous_stable_pqs_version(existing_config: dict) -> str:
+    versions = [
+        existing_repo_version(existing_config, "pqs", network_key)
+        for network_key in NETWORK_ORDER
+    ]
+    return latest_stable_version(versions, "existing PQS dashboard config")
+
+
+def fetch_pqs_version_from_scribe_component(
+    timeout: float,
+    *,
+    previous_stable_version: str,
+) -> str:
+    data = fetch_manifest_json(PQS_SCRIBE_MANIFEST_URL, timeout)
+    annotations = data.get("annotations", {})
+    if not isinstance(annotations, dict):
+        raise RuntimeError(f"Expected manifest annotations from {PQS_SCRIBE_MANIFEST_URL}")
+    version = str(
+        annotations.get("org.opencontainers.image.version")
+        or annotations.get("com.digitalasset.version")
+        or ""
+    )
+    if not version:
+        raise RuntimeError(f"Missing Scribe image version annotation in {PQS_SCRIBE_MANIFEST_URL}")
+    if STABLE_SEMVER_RE.fullmatch(version):
+        return version
+    return previous_stable_version
 
 
 def clean_html_text(value: str) -> str:
@@ -433,8 +466,10 @@ def collect_network_snapshot(network_key: str, timeout: float) -> dict:
     }
 
 
-def collect_snapshot(timeout: float) -> dict:
+def collect_snapshot(timeout: float, existing_config: dict) -> dict:
     generated_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    latest_dpm_sdk = fetch_text(DPM_LATEST_URL, timeout).strip()
+    previous_pqs = previous_stable_pqs_version(existing_config)
     return {
         "generatedAt": generated_at,
         "generatorMode": "public_source_collection_with_manual_fallbacks",
@@ -442,8 +477,11 @@ def collect_snapshot(timeout: float) -> dict:
             network_key: collect_network_snapshot(network_key, timeout)
             for network_key in NETWORK_ORDER
         },
-        "latestDpmSdk": fetch_text(DPM_LATEST_URL, timeout).strip(),
-        "latestPqs": fetch_latest_pqs_version(timeout),
+        "latestDpmSdk": latest_dpm_sdk,
+        "latestPqs": fetch_pqs_version_from_scribe_component(
+            timeout,
+            previous_stable_version=previous_pqs,
+        ),
         "latestWalletGateway": fetch_latest_wallet_gateway_version(timeout),
         "npmVersions": {
             key: fetch_npm_latest(package_name, timeout)
@@ -484,7 +522,7 @@ def repository_url(repository_key: str, existing_config: dict) -> str:
     if repository_key == "damlSdk":
         return SPLICE_REPOSITORY_URL
     if repository_key == "pqs":
-        return f"https://{PQS_IMAGE_REPOSITORY}"
+        return f"https://{PQS_SCRIBE_COMPONENT_REPOSITORY}"
     if repository_key == "walletGateway":
         return WALLET_GATEWAY_RELEASES_PAGE_URL
     if repository_key in NPM_PACKAGE_URLS:
@@ -512,7 +550,7 @@ def build_repository_mapping(
         elif repository_key == "pqs":
             external_version = snapshot["latestPqs"]
             branch = ""
-            folder_path_repo = PQS_IMAGE_REPOSITORY
+            folder_path_repo = f"{PQS_SCRIBE_COMPONENT_REPOSITORY}:{PQS_SCRIBE_RELEASE_LINE_TAG}"
         elif repository_key in NPM_PACKAGE_NAMES:
             external_version = snapshot["npmVersions"][repository_key]
             branch = ""
@@ -581,8 +619,10 @@ def build_source_contract(snapshot: dict) -> dict:
             f"{WALLET_GATEWAY_RELEASE_REPO}."
         ),
         "pqs": (
-            "Latest stable semver tag from the public Artifact Registry image "
-            f"{PQS_IMAGE_REPOSITORY}."
+            "Read org.opencontainers.image.version from the public Artifact Registry "
+            f"Scribe component image {PQS_SCRIBE_COMPONENT_REPOSITORY}:"
+            f"{PQS_SCRIBE_RELEASE_LINE_TAG}. If the floating release-line tag resolves "
+            "to a prerelease, retain the previous stable dashboard value."
         ),
         "minProtocolVersion": "Manual/fallback until a public live source is identified.",
         "darVersions": (
@@ -630,7 +670,7 @@ def run_helper() -> None:
 def main() -> int:
     args = parse_args()
     existing_config = read_existing_config(DEFAULT_REPO_CONFIG_OUTPUT)
-    snapshot = collect_snapshot(args.timeout)
+    snapshot = collect_snapshot(args.timeout, existing_config)
     repo_version_config = build_config(existing_config, snapshot)
 
     if args.dry_run:
