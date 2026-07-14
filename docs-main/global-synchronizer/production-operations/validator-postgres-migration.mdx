@@ -136,9 +136,13 @@ requires tolerations or service-mesh annotations for pods to run, add them with
      kubectl run pg-client --rm -i --restart=Never -n validator \
        --image=postgres:17 --env=PGPASSWORD=${TARGET_PASSWORD} -- \
        psql -h ${TARGET_HOST} -U cnadmin -d cantonnet \
-       -c "CREATE DATABASE \"${db}\""
+       -c "CREATE DATABASE \"${db}\"" < /dev/null
    done < dbs.txt
    ```
+
+   The `< /dev/null` matters here and in the next step: an attached
+   `kubectl run` pod otherwise consumes the loop's input and silently skips
+   databases.
 
 4. **Copy each database.** Stream the dump directly into the target to avoid
    intermediate storage:
@@ -151,7 +155,7 @@ requires tolerations or service-mesh annotations for pods to run, add them with
        --env=TARGET_PGPASSWORD=${TARGET_PASSWORD} -- \
        bash -c "PGPASSWORD=\$SOURCE_PGPASSWORD pg_dump -h postgres -U cnadmin -Fc '${db}' \
          | PGPASSWORD=\$TARGET_PGPASSWORD pg_restore -h ${TARGET_HOST} -U cnadmin \
-             --no-owner --no-privileges --exit-on-error -d '${db}'" \
+             --no-owner --no-privileges --exit-on-error -d '${db}'" < /dev/null \
        || { echo "copy failed: ${db}"; break; }
    done < dbs.txt
    ```
@@ -190,7 +194,9 @@ requires tolerations or service-mesh annotations for pods to run, add them with
 
    List the application releases with `helm list -n validator`; if the original
    values files are not at hand, recover each release's current values with
-   `helm get values \<release\> -n validator`.
+   `helm get values \<release\> -n validator`. The recovered values may show the
+host as a cluster-internal FQDN such as `postgres.validator.svc.cluster.local`;
+any host that resolves to the source instance qualifies for the change below.
 
    In every values file that contains a `persistence` section referencing the old
    instance, set the target connection:
@@ -410,7 +416,7 @@ docker compose --env-file $LOCALNET_DIR/compose.env \
 LocalNet data is disposable, so tearing the environment down with `down -v` and
 starting fresh on the new version is usually simpler. An executable end-to-end
 version of the LocalNet migration, including verification, is maintained at
-`scripts/test-postgres-migration.sh` in the Splice repository.
+`scripts/test-postgres-migration.py` in the Splice repository.
 
 ## Notes for managed database services
 
