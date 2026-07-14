@@ -377,6 +377,75 @@ UPDATE_TARGETS = (
             "git diff --check",
         ),
     ),
+    UpdateTarget(
+        key="wallet-gateway-release-notes",
+        title="Update Wallet Gateway release notes",
+        branch="release-notes/wallet-gateway/update",
+        description=(
+            "Updates the published Wallet Gateway release-note page from the latest "
+            "`@canton-network/wallet-gateway-remote` GitHub releases in "
+            "`hyperledger-labs/splice-wallet-kernel`."
+        ),
+        generate_commands=(("nix-shell", "--run", "npm run update:release-notes -- --target wallet-gateway"),),
+        paths=(
+            "docs-main/docs.json",
+            "docs-main/integrations/release-notes/wallet-gateway.mdx",
+            "docs-main/integrations/release-notes/wallet-gateway-releases",
+        ),
+        summary_kind="release-notes-page",
+        summary_path="docs-main/integrations/release-notes/wallet-gateway.mdx",
+        summary_label="Wallet Gateway release notes",
+        validation=(
+            "npm run update:release-notes -- --target wallet-gateway",
+            "git diff --check",
+        ),
+    ),
+    UpdateTarget(
+        key="wallet-sdk-release-notes",
+        title="Update Wallet SDK release notes",
+        branch="release-notes/wallet-sdk/update",
+        description=(
+            "Updates the published Wallet SDK release-note page from "
+            "`docs/wallet-integration-guide/src/release-notes/index.rst` in "
+            "`canton-network/wallet`."
+        ),
+        generate_commands=(("nix-shell", "--run", "npm run update:release-notes -- --target wallet-sdk"),),
+        paths=(
+            "docs-main/docs.json",
+            "docs-main/integrations/release-notes/wallet-sdk.mdx",
+            "docs-main/integrations/release-notes/wallet-sdk-releases",
+        ),
+        summary_kind="release-notes-page",
+        summary_path="docs-main/integrations/release-notes/wallet-sdk.mdx",
+        summary_label="Wallet SDK release notes",
+        validation=(
+            "npm run update:release-notes -- --target wallet-sdk",
+            "git diff --check",
+        ),
+    ),
+    UpdateTarget(
+        key="dapp-sdk-release-notes",
+        title="Update dApp SDK release notes",
+        branch="release-notes/dapp-sdk/update",
+        description=(
+            "Updates the published dApp SDK release-note page from the latest "
+            "`@canton-network/dapp-sdk` GitHub releases in "
+            "`hyperledger-labs/splice-wallet-kernel`."
+        ),
+        generate_commands=(("nix-shell", "--run", "npm run update:release-notes -- --target dapp-sdk"),),
+        paths=(
+            "docs-main/docs.json",
+            "docs-main/integrations/release-notes/dapp-sdk.mdx",
+            "docs-main/integrations/release-notes/dapp-sdk-releases",
+        ),
+        summary_kind="release-notes-page",
+        summary_path="docs-main/integrations/release-notes/dapp-sdk.mdx",
+        summary_label="dApp SDK release notes",
+        validation=(
+            "npm run update:release-notes -- --target dapp-sdk",
+            "git diff --check",
+        ),
+    ),
 )
 
 
@@ -453,6 +522,14 @@ def summarize_target_changes(target: UpdateTarget, before_path: Path) -> list[st
         if target.summary_label is None:
             raise ValueError(f"Update target {target.key} must define summary_label")
         return summarize_version_changes.canton_release_note_changes(
+            before_path,
+            after_path,
+            label=target.summary_label,
+        )
+    if target.summary_kind == "release-notes-page":
+        if target.summary_label is None:
+            raise ValueError(f"Update target {target.key} must define summary_label")
+        return summarize_version_changes.release_note_page_changes(
             before_path,
             after_path,
             label=target.summary_label,
