@@ -55,6 +55,7 @@ class ReferenceSchema:
     description: str = ""
     anchor: str | None = None
     fields: list[ReferenceField] = field(default_factory=list)
+    variants: list["ReferenceSchema"] = field(default_factory=list)
     enum_values: list[str] = field(default_factory=list)
     example: ReferenceExample | None = None
 
@@ -233,6 +234,7 @@ def schema_from_sample(
     description: str = "",
     summary: str = "",
     anchor: str | None = None,
+    variants: list[ReferenceSchema] | None = None,
 ) -> ReferenceSchema:
     required = set(required_fields or [])
     fields: list[ReferenceField] = []
@@ -261,5 +263,6 @@ def schema_from_sample(
         description=description,
         anchor=anchor,
         fields=fields,
+        variants=variants or [],
         example=example,
     )
