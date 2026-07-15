@@ -1,0 +1,67 @@
+---
+title: "Events"
+description: "Subscribe to connection, account, and transaction events."
+---
+
+The dApp SDK emits events so your UI can stay in sync with the wallet's state. Subscribe
+with the `on*` functions and always unsubscribe with the matching `off*` function when your
+component unmounts.
+
+## `onStatusChanged(handler)` / `offStatusChanged(handler)`
+
+Fires when the connection status or session state changes.
+
+```typescript
+const handler = (status) => {
+  console.log('Connected:', status.connection.isConnected)
+}
+
+sdk.onStatusChanged(handler)
+// Later:
+sdk.offStatusChanged(handler)
+```
+
+| Payload field | Type | Description |
+| --- | --- | --- |
+| `connection.isConnected` | `boolean` | Whether a session is currently active. |
+
+## `onAccountsChanged(handler)` / `offAccountsChanged(handler)`
+
+Fires when accounts are added or removed, or the primary account changes.
+
+```typescript
+sdk.onAccountsChanged((accounts) => {
+  const primary = accounts.find((a) => a.primary)
+})
+```
+
+| Payload | Type | Description |
+| --- | --- | --- |
+| `accounts` | `Account[]` | The current set of parties. |
+
+## `onTxChanged(handler)` / `offTxChanged(handler)`
+
+Fires as a transaction submitted via `prepareExecute` moves through its lifecycle.
+
+```typescript
+sdk.onTxChanged((tx) => {
+  if (tx.status === 'executed') {
+    console.log('Update ID:', tx.payload.updateId)
+  }
+})
+```
+
+| Payload field | Type | Description |
+| --- | --- | --- |
+| `status` | `'pending' \| 'signed' \| 'executed' \| 'failed'` | Current transaction state. |
+| `payload.updateId` | `string` | Ledger update ID (present when `executed`). |
+
+<Warning>
+Remove every listener on unmount. Leaked listeners cause memory leaks and stale UI updates.
+</Warning>
+
+## Related
+
+<Card title="SDK functions" href="/sdks-tools/sdks/dapp-sdk/reference/sdk-functions">
+  The functions that trigger these events.
+</Card>
