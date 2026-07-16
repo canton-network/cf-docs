@@ -33,7 +33,7 @@ This deployment is useful for:
 {/* NETWORKVARS_START source="/snippets/networkvars/global-synchronizer/deployment/validator-docker-compose-1.mdx" */}
 <Tabs>
 
-<Tab title="DevNet (0.6.11)">
+<Tab title="DevNet (0.6.12)">
 
 1)  A linux/MacOS machine with the following:
 
@@ -57,7 +57,66 @@ Features: alt-svc AsynchDNS brotli GSS-API HSTS HTTP2 HTTPS-proxy IDN IPv6 Kerbe
 jq-1.7.1
 ```
 2)  Your machine should either be connected to a VPN that is whitelisted on the network (contact your sponsor SV to obtain access), or have a static egress IP address. In the latter case, please provide that IP address to your sponsor SV to add it to the firewall rules.
-3)  Please download the release artifacts containing the docker-compose files, from here: <a href="https://github.com/digital-asset/decentralized-canton-sync/releases/download/v0.6.11/0.6.11_splice-node.tar.gz">Download Bundle (DevNet 0.6.11)</a>, and extract the bundle:
+3)  Please download the release artifacts containing the docker-compose files, from here: <a href="https://github.com/digital-asset/decentralized-canton-sync/releases/download/v0.6.12/0.6.12_splice-node.tar.gz">Download Bundle (DevNet 0.6.12)</a>, and extract the bundle:
+
+```bash
+tar xzvf 0.6.12_splice-node.tar.gz
+```
+
+<Warning>
+
+**If you lose your keys, you lose access to your coins**. While regular backups are not necessary to run your node,
+
+they are **strongly** recommended for recovery purposes.
+
+You should regularly back up all databases in your deployment and ensure you always have an up-to-date identities backup.
+
+Super Validators retain the information necessary to allow you to recover your Canton Coin from an identities backup.
+
+On the other hand, Super Validators **do not** retain transaction details from applications they are not involved in.
+
+This means that if you have other applications installed, the Super Validators cannot help you recover data from those apps;
+
+you can only rely on your own backups.
+
+(More information in [Backups section for Validators](/global-synchronizer/production-operations/validator-backups) or [Backups section for SVs](/global-synchronizer/production-operations/sv-backup))
+
+</Warning>
+### Required Network Parameters
+
+See [Required Network Parameters](/global-synchronizer/deployment/required-network-parameters) for what `MIGRATION_ID`, `SPONSOR_SV_URL`, and `ONBOARDING_SECRET` mean and where to find them.
+
+That page also covers how to obtain a DevNet onboarding secret automatically.
+
+Additional parameters describing your own setup as opposed to the connection to the network are described below.
+
+</Tab>
+
+<Tab title="TestNet (0.6.11)">
+
+1)  A linux/MacOS machine with the following:
+
+    1.  [docker compose](https://docs.docker.com/compose/install/) - at least version 2.26.0 or newer
+    2.  [curl](https://curl.se/)
+    3.  [jq](https://jqlang.org/)
+
+    Note that both AMD64 and ARM64 architectures are supported.
+
+To validate that the dependencies are set up correctly, run the following commands. All commands should succeed and print out the version. Note that the exact versions you see may be different from the example here. As long as you have docker-compose 2.26.0 or newer you should be fine.
+
+```bash
+> docker compose version
+Docker Compose version 2.32.1
+> curl --version
+curl 8.11.0 (x86_64-pc-linux-gnu) libcurl/8.11.0 OpenSSL/3.3.2 zlib/1.3.1 brotli/1.1.0 zstd/1.5.6 libidn2/2.3.7 libpsl/0.21.5 libssh2/1.11.1 nghttp2/1.64.0
+Release-Date: 2024-11-06
+Protocols: dict file ftp ftps gopher gophers http https imap imaps ipfs ipns mqtt pop3 pop3s rtsp scp sftp smb smbs smtp smtps telnet tftp
+Features: alt-svc AsynchDNS brotli GSS-API HSTS HTTP2 HTTPS-proxy IDN IPv6 Kerberos Largefile libz NTLM PSL SPNEGO SSL threadsafe TLS-SRP UnixSockets zstd
+> jq --version
+jq-1.7.1
+```
+2)  Your machine should either be connected to a VPN that is whitelisted on the network (contact your sponsor SV to obtain access), or have a static egress IP address. In the latter case, please provide that IP address to your sponsor SV to add it to the firewall rules.
+3)  Please download the release artifacts containing the docker-compose files, from here: <a href="https://github.com/digital-asset/decentralized-canton-sync/releases/download/v0.6.11/0.6.11_splice-node.tar.gz">Download Bundle (TestNet 0.6.11)</a>, and extract the bundle:
 
 ```bash
 tar xzvf 0.6.11_splice-node.tar.gz
@@ -84,45 +143,13 @@ you can only rely on your own backups.
 </Warning>
 ### Required Network Parameters
 
-<p>To initialize your validator node, you need the following parameters that define the network you're onboarding to and the secret required for doing so.</p>
+See [Required Network Parameters](/global-synchronizer/deployment/required-network-parameters) for what `MIGRATION_ID`, `SPONSOR_SV_URL`, and `ONBOARDING_SECRET` mean and where to find them.
 
-<ul>
-
-<li>**MIGRATION_ID** — The current migration id of the network (dev/test/mainnet) you are trying to connect to. This value is frozen and must not be changed from the last value. You can find this on https://sync.global/sv-network/.</li>
-
-<li>**SPONSOR_SV_URL** — The URL of the SV app of your SV sponsor. This should be of the form <a href="https://sv.sv-1.dev.global.canton.network.YOUR_SV_SPONSOR">https://sv.sv-1.dev.global.canton.network.YOUR_SV_SPONSOR</a>, e.g., if the Global Synchronizer Foundation is your sponsor use <a href="https://sv.sv-1.dev.global.canton.network.sync.global">https://sv.sv-1.dev.global.canton.network.sync.global</a>.</li>
-
-</ul>
-
-<p>**ONBOARDING_SECRET**<br />
-The onboarding secret provided by your sponsor. If you don't already have one, ask your sponsor. Note that onboarding secrets are one-time use and expire after 48 hours. If you don't join before it expires, you need to request a new secret from your SV sponsor.</p>
-
-<Note>
-
-On DevNet, you can obtain an onboarding secret automatically by calling the following endpoint on any SV (replace `SPONSOR_SV_URL` with the SV app URL defined above):
-
-</Note>
-
-```bash
-curl -X POST SPONSOR_SV_URL/api/sv/v0/devnet/onboard/validator/prepare
-```
-
-<Note>
-
-Make sure to use the **SV app URL** (starting with `sv.`), not the Scan URL (starting with `scan.`).
-
-</Note>
-
-<Note>
-
-Note that this self-served secret is only valid for 1 hour.
-
-</Note>
 Additional parameters describing your own setup as opposed to the connection to the network are described below.
 
 </Tab>
 
-<Tab title="TestNet (0.6.10)">
+<Tab title="MainNet (0.6.10)">
 
 1)  A linux/MacOS machine with the following:
 
@@ -146,7 +173,7 @@ Features: alt-svc AsynchDNS brotli GSS-API HSTS HTTP2 HTTPS-proxy IDN IPv6 Kerbe
 jq-1.7.1
 ```
 2)  Your machine should either be connected to a VPN that is whitelisted on the network (contact your sponsor SV to obtain access), or have a static egress IP address. In the latter case, please provide that IP address to your sponsor SV to add it to the firewall rules.
-3)  Please download the release artifacts containing the docker-compose files, from here: <a href="https://github.com/digital-asset/decentralized-canton-sync/releases/download/v0.6.10/0.6.10_splice-node.tar.gz">Download Bundle (TestNet 0.6.10)</a>, and extract the bundle:
+3)  Please download the release artifacts containing the docker-compose files, from here: <a href="https://github.com/digital-asset/decentralized-canton-sync/releases/download/v0.6.10/0.6.10_splice-node.tar.gz">Download Bundle (MainNet 0.6.10)</a>, and extract the bundle:
 
 ```bash
 tar xzvf 0.6.10_splice-node.tar.gz
@@ -173,86 +200,7 @@ you can only rely on your own backups.
 </Warning>
 ### Required Network Parameters
 
-<p>To initialize your validator node, you need the following parameters that define the network you're onboarding to and the secret required for doing so.</p>
-
-<ul>
-
-<li>**MIGRATION_ID** — The current migration id of the network (dev/test/mainnet) you are trying to connect to. This value is frozen and must not be changed from the last value. You can find this on https://sync.global/sv-network/.</li>
-
-<li>**SPONSOR_SV_URL** — The URL of the SV app of your SV sponsor. This should be of the form <a href="https://sv.sv-1.test.global.canton.network.YOUR_SV_SPONSOR">https://sv.sv-1.test.global.canton.network.YOUR_SV_SPONSOR</a>, e.g., if the Global Synchronizer Foundation is your sponsor use <a href="https://sv.sv-1.test.global.canton.network.sync.global">https://sv.sv-1.test.global.canton.network.sync.global</a>.</li>
-
-</ul>
-
-<p>**ONBOARDING_SECRET**<br />
-The onboarding secret provided by your sponsor. If you don't already have one, ask your sponsor. Note that onboarding secrets are one-time use and expire after 48 hours. If you don't join before it expires, you need to request a new secret from your SV sponsor.</p>
-
-Additional parameters describing your own setup as opposed to the connection to the network are described below.
-
-</Tab>
-
-<Tab title="MainNet (0.6.9)">
-
-1)  A linux/MacOS machine with the following:
-
-    1.  [docker compose](https://docs.docker.com/compose/install/) - at least version 2.26.0 or newer
-    2.  [curl](https://curl.se/)
-    3.  [jq](https://jqlang.org/)
-
-    Note that both AMD64 and ARM64 architectures are supported.
-
-To validate that the dependencies are set up correctly, run the following commands. All commands should succeed and print out the version. Note that the exact versions you see may be different from the example here. As long as you have docker-compose 2.26.0 or newer you should be fine.
-
-```bash
-> docker compose version
-Docker Compose version 2.32.1
-> curl --version
-curl 8.11.0 (x86_64-pc-linux-gnu) libcurl/8.11.0 OpenSSL/3.3.2 zlib/1.3.1 brotli/1.1.0 zstd/1.5.6 libidn2/2.3.7 libpsl/0.21.5 libssh2/1.11.1 nghttp2/1.64.0
-Release-Date: 2024-11-06
-Protocols: dict file ftp ftps gopher gophers http https imap imaps ipfs ipns mqtt pop3 pop3s rtsp scp sftp smb smbs smtp smtps telnet tftp
-Features: alt-svc AsynchDNS brotli GSS-API HSTS HTTP2 HTTPS-proxy IDN IPv6 Kerberos Largefile libz NTLM PSL SPNEGO SSL threadsafe TLS-SRP UnixSockets zstd
-> jq --version
-jq-1.7.1
-```
-2)  Your machine should either be connected to a VPN that is whitelisted on the network (contact your sponsor SV to obtain access), or have a static egress IP address. In the latter case, please provide that IP address to your sponsor SV to add it to the firewall rules.
-3)  Please download the release artifacts containing the docker-compose files, from here: <a href="https://github.com/digital-asset/decentralized-canton-sync/releases/download/v0.6.9/0.6.9_splice-node.tar.gz">Download Bundle (MainNet 0.6.9)</a>, and extract the bundle:
-
-```bash
-tar xzvf 0.6.9_splice-node.tar.gz
-```
-
-<Warning>
-
-**If you lose your keys, you lose access to your coins**. While regular backups are not necessary to run your node,
-
-they are **strongly** recommended for recovery purposes.
-
-You should regularly back up all databases in your deployment and ensure you always have an up-to-date identities backup.
-
-Super Validators retain the information necessary to allow you to recover your Canton Coin from an identities backup.
-
-On the other hand, Super Validators **do not** retain transaction details from applications they are not involved in.
-
-This means that if you have other applications installed, the Super Validators cannot help you recover data from those apps;
-
-you can only rely on your own backups.
-
-(More information in [Backups section for Validators](/global-synchronizer/production-operations/validator-backups) or [Backups section for SVs](/global-synchronizer/production-operations/sv-backup))
-
-</Warning>
-### Required Network Parameters
-
-<p>To initialize your validator node, you need the following parameters that define the network you're onboarding to and the secret required for doing so.</p>
-
-<ul>
-
-<li>**MIGRATION_ID** — The current migration id of the network (dev/test/mainnet) you are trying to connect to. This value is frozen and must not be changed from the last value. You can find this on https://sync.global/sv-network/.</li>
-
-<li>**SPONSOR_SV_URL** — The URL of the SV app of your SV sponsor. This should be of the form <a href="https://sv.sv-1.global.canton.network.YOUR_SV_SPONSOR">https://sv.sv-1.global.canton.network.YOUR_SV_SPONSOR</a>, e.g., if the Global Synchronizer Foundation is your sponsor use <a href="https://sv.sv-1.global.canton.network.sync.global">https://sv.sv-1.global.canton.network.sync.global</a>.</li>
-
-</ul>
-
-<p>**ONBOARDING_SECRET**<br />
-The onboarding secret provided by your sponsor. If you don't already have one, ask your sponsor. Note that onboarding secrets are one-time use and expire after 48 hours. If you don't join before it expires, you need to request a new secret from your SV sponsor.</p>
+See [Required Network Parameters](/global-synchronizer/deployment/required-network-parameters) for what `MIGRATION_ID`, `SPONSOR_SV_URL`, and `ONBOARDING_SECRET` mean and where to find them.
 
 Additional parameters describing your own setup as opposed to the connection to the network are described below.
 
@@ -299,7 +247,34 @@ Example that proxies external [traffic](/global-synchronizer/deployment/synchron
 {/* NETWORKVARS_START source="/snippets/networkvars/global-synchronizer/deployment/validator-docker-compose-2.mdx" */}
 <Tabs>
 
-<Tab title="DevNet (0.6.11)">
+<Tab title="DevNet (0.6.12)">
+
+1)  Change to the `docker-compose` directory inside the extracted bundle:
+
+```bash
+cd splice-node/docker-compose/validator
+```
+2)  Export the current version to an environment variable: export IMAGE_TAG=0.6.12
+3)  Run the following command to start the validator node, and wait for it to become ready (could take a few minutes):
+
+> ```bash
+> ./start.sh -s "<SPONSOR_SV_URL>" -o "<ONBOARDING_SECRET>" -p "<party_hint>" -m "<MIGRATION_ID>" -w
+> ```
+>
+> Where:
+>
+> `<party_hint>` will be used as the prefix of the Party ID of your validator's administrator.
+> This must be of format `<organization>-<function>-<enumerator>`, e.g. `myCompany-myWallet-1`. It cannot be changed over time as it is part of the validator operator party ID.
+
+<Note>
+Since splice `0.6.8` the `-m` flag is optional. For new validator nodes it should be omitted. For existing validator nodes it must still be provided with the last known migration ID value.
+</Note>
+
+Note that the validator may be stopped with the command `./stop.sh` and restarted again with the same `start.sh` command as above. Its data will be retained between invocations. In subseqent invocations, the secret itself may be left empty, but the `-o` is still mandatory, so a `-o ""` argument should be provided.
+
+</Tab>
+
+<Tab title="TestNet (0.6.11)">
 
 1)  Change to the `docker-compose` directory inside the extracted bundle:
 
@@ -326,7 +301,7 @@ Note that the validator may be stopped with the command `./stop.sh` and restarte
 
 </Tab>
 
-<Tab title="TestNet (0.6.10)">
+<Tab title="MainNet (0.6.10)">
 
 1)  Change to the `docker-compose` directory inside the extracted bundle:
 
@@ -334,33 +309,6 @@ Note that the validator may be stopped with the command `./stop.sh` and restarte
 cd splice-node/docker-compose/validator
 ```
 2)  Export the current version to an environment variable: export IMAGE_TAG=0.6.10
-3)  Run the following command to start the validator node, and wait for it to become ready (could take a few minutes):
-
-> ```bash
-> ./start.sh -s "<SPONSOR_SV_URL>" -o "<ONBOARDING_SECRET>" -p "<party_hint>" -m "<MIGRATION_ID>" -w
-> ```
->
-> Where:
->
-> `<party_hint>` will be used as the prefix of the Party ID of your validator's administrator.
-> This must be of format `<organization>-<function>-<enumerator>`, e.g. `myCompany-myWallet-1`. It cannot be changed over time as it is part of the validator operator party ID.
-
-<Note>
-Since splice `0.6.8` the `-m` flag is optional. For new validator nodes it should be omitted. For existing validator nodes it must still be provided with the last known migration ID value.
-</Note>
-
-Note that the validator may be stopped with the command `./stop.sh` and restarted again with the same `start.sh` command as above. Its data will be retained between invocations. In subseqent invocations, the secret itself may be left empty, but the `-o` is still mandatory, so a `-o ""` argument should be provided.
-
-</Tab>
-
-<Tab title="MainNet (0.6.9)">
-
-1)  Change to the `docker-compose` directory inside the extracted bundle:
-
-```bash
-cd splice-node/docker-compose/validator
-```
-2)  Export the current version to an environment variable: export IMAGE_TAG=0.6.9
 3)  Run the following command to start the validator node, and wait for it to become ready (could take a few minutes):
 
 > ```bash
@@ -445,7 +393,7 @@ Note that by default client id and secret will be passed in the request body. If
 the environment variable through [Ad-Hoc Configuration](./configuration). This option is only available in splice >= 0.6.10:
 
 ```
-ADDITIONAL_CONFIG_HTTP_BASIC_AUTH=canton.validator-apps.sv.participant-client.ledger-api.auth-config.http-basic-auth = true
+ADDITIONAL_CONFIG_HTTP_BASIC_AUTH=canton.validator-apps.validator_backend.participant-client.ledger-api.auth-config.http-basic-auth = true
 ```
 
 If you have already deployed a non-authenticated validator on your machine, you can migrate it to an authenticated one by stopping the validator with `./stop.sh` and restarting it with the `-a` flag as above. The validator operator user will be automatically migrated, and the user indicated by the `WALLET_ADMIN_USER` variable will be associated with the validator operator party. If you have also onboarded other users onto your validator, those will not be automatically migrated, and you need to manually associate the OAuth users with their corresponding parties. In order to do that, first take note of the party IDs of all relevant users (do this before stopping the unauthenticated validator), e.g. by copying them from the top-right corner of their wallet UIs. Now for every user that you wish to migrate, follow the instructions for associating a user with a party in the [Users, Parties and Wallets in the Splice Wallet section](/global-synchronizer/deployment/validator-users), but replace the admin party ID with the party ID which you wish to associate with each user.
