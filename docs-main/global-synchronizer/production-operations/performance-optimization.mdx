@@ -143,11 +143,9 @@ Larger batches improve throughput at the cost of slightly higher per-command lat
 
 Track these metrics to identify bottlenecks: `canton_participant_command_completion_latency` (end-to-end command time), `canton_sequencer_send_latency` (sequencer throughput), `canton_participant_db_query_latency` (database health), `hikaricp_connections_active` (connection pool saturation), and JVM heap/GC metrics. Set up dashboards and alert when values exceed your baseline — performance degradation is usually gradual, and early detection prevents outages.
 
-{/* COPIED_START source="docs-website:docs/replicated/canton/3.5/participant/howtos/operate/ha/ha.rst" hash="2beef6c6" */}
+{/* DIVERGENCE: removed an editorial TODO that gated replication docs behind "enterprise nodes"; upstream docs-website source (docs/replicated/canton/3.5/participant/howtos/operate/ha/ha.rst, hash 2beef6c6) still has it. Related to issue #615 (no more enterprise license as of Canton 3.5). */}
 
-<div className="todo">
-Document howto enable replication (on by default) on enterprise nodes with supported storage. Document health check configuration and fail-over times. Document admin commands to work with multiple replicas (find active replica), document commands to inspect activeness. For participant: load balancer configuration in front of gRPC Ledger API to route to active instance. Link to explanation on HA architecture.
-</div>
+{/* COPIED_START source="docs-website:docs/replicated/canton/3.5/participant/howtos/operate/ha/ha.rst" hash="2beef6c6" */}
 
 ## High Availability Usage
 
@@ -250,6 +248,8 @@ To use a load balancer it must support http/1 health checks for routing requests
 {/* COPIED_END */}
 
 
+{/* DIVERGENCE: reworked the connection-pool table to split by "with/without replication" instead of "Enterprise Edition"/"Community Edition", since there's no more edition distinction as of Canton 3.5; upstream docs-website source (docs/replicated/canton/3.5/participant/howtos/optimize/storage.rst, hash 9a5ee104) still uses the edition axis. Related to issue #615. */}
+
 {/* COPIED_START source="docs-website:docs/replicated/canton/3.5/participant/howtos/optimize/storage.rst" hash="9a5ee104" */}
 
 Add query cost logging.
@@ -290,14 +290,16 @@ The number `X` represents an upper bound of permanent connections and is divided
 
 The following table summarizes the detailed split of the connection pools in different Canton nodes. `R` signifies a *Read* pool, `W` a *Write* pool, `A` a *Ledger API* pool, `I` an *Indexer* pool, `RW` a combined *Read/Write* pool, and `M` the *Main* pool.
 
-| Node Type | Enterprise Edition with Replication | Enterprise Edition | Community Edition |
-| --- | --- | --- | --- |
-| Participant | A = X / 2<br/>R = X / 4<br/>W = X / 4 - 1<br/>M = 1<br/>I = Y | A = X / 2<br/>R = X / 4<br/>W = X / 4 - 1<br/>M = 1<br/>I = Y | A = X / 2<br/>RW = X / 2<br/>I = Y |
-| Mediator | R = X / 2<br/>W = X / 2 - 1<br/>M = 1 | N/A | N/A |
-| Sequencer | RW = X | N/A | N/A |
-| Sequencer writer | R = X / 2<br/>W = X / 2 - 1<br/>M = 1 | N/A | N/A |
-| Sequencer exclusive writer | R = Z / 2<br/>W = Z / 2 | N/A | N/A |
-| Synchronizer | N/A | RW = X | RW = X |
+The split depends on whether the node runs with replication enabled. A replicated node maintains separate *Read* and *Write* pools plus a *Main* connection for the locking mechanism; a node without replication uses a single combined *Read/Write* pool.
+
+| Node Type | With replication | Without replication |
+| --- | --- | --- |
+| Participant | A = X / 2<br/>R = X / 4<br/>W = X / 4 - 1<br/>M = 1<br/>I = Y | A = X / 2<br/>RW = X / 2<br/>I = Y |
+| Mediator | R = X / 2<br/>W = X / 2 - 1<br/>M = 1 | N/A |
+| Sequencer | RW = X | N/A |
+| Sequencer writer | R = X / 2<br/>W = X / 2 - 1<br/>M = 1 | N/A |
+| Sequencer exclusive writer | R = Z / 2<br/>W = Z / 2 | N/A |
+| Synchronizer | N/A | RW = X |
 
 The results of the divisions are always rounded down unless they yield a zero. In that case, a minimal pool size of 1 is ascertained.
 
