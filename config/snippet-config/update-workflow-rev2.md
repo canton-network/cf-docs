@@ -352,7 +352,7 @@ Track rollout per repository. Update as apps are installed and workflows merged.
 | Snippet key | GitHub repository | Path | Snippet config | Workflow | Status | Notes |
 |-------------|-------------------|------|----------------|----------|--------|-------|
 | `canton` | [DACH-NY/canton](https://github.com/DACH-NY/canton) | CCI bridge | [canton-snippet-list-remote.json](./canton-snippet-list-remote.json) | `publish-cfdocs-snippets.yml` + CCI | WIP | ~335 snippets. `FAIL_ON_CF_DOCS_ERROR` unset during rollout. Cross-org reader install. |
-| `splice` | [canton-network/splice](https://github.com/canton-network/splice) | GHA | [splice-snippet-list-remote.json](./splice-snippet-list-remote.json) | `publish-cfdocs-snippets.yml` | WIP | Scripts in `gha-scripts/cf-docs/`. ~172 snippets. |
+| `splice` | [canton-network/splice](https://github.com/canton-network/splice) | GHA | [splice-snippet-list-remote.json](./splice-snippet-list-remote.json) | `publish-cfdocs-snippets.yml` | WIP | Scripts in `gha-scripts/cf-docs/`. ~12 snippets. |
 | `daml` | [digital-asset/daml](https://github.com/digital-asset/daml) | GHA | [daml-snippet-list-remote.json](./daml-snippet-list-remote.json) | TBC | — | |
 | `cn-quickstart` | [digital-asset/cn-quickstart](https://github.com/digital-asset/cn-quickstart) | GHA | [cn-quickstart-snippet-list-remote.json](./cn-quickstart-snippet-list-remote.json) | TBC | — | |
 | `daml-shell` | [DACH-NY/daml-shell](https://github.com/DACH-NY/daml-shell) | GHA | [daml-shell-snippet-list-remote.json](./daml-shell-snippet-list-remote.json) | TBC | — | |
