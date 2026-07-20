@@ -6,12 +6,11 @@ This repo is the **home for Canton Network documentation** and content here shou
 
 ## Before you start
 
-- **Every change should create real value for a reader.** Fix something that's wrong, unclear, missing, or outdated but changes with cosmetic edits, reformatting for its own sake, or restructuring that doesn't improve clarity will be closed without merging.
-
-- **Check it against the current release.** This is unified documentation. Before writing or editing a page, confirm the behavior, APIs, config, and defaults you're describing match the latest Canton and Splice releases.
-If you're documenting something version specific, say so explicitly rather than leaving it ambiguous.
-
 - **Search existing [issues](https://github.com/canton-network/cf-docs/issues) and [PRs](https://github.com/canton-network/cf-docs/pulls) first** to avoid duplicate work.
+
+- We prioritize PRs that fix inaccuracies, clarify confusing concepts, or add missing information. To minimize merge conflicts, PRs consisting solely of cosmetic reformatting may be closed.
+
+- **Check the information in your PR against the current release** before writing or editing a page, confirm the behavior, APIs, config, and defaults you're describing match the latest Canton and Splice releases. If you're documenting something version specific, say so explicitly rather than leaving it ambiguous.
 
 - **Verify every technical claim:** an AI-generated draft makes API signatures, CLI flags, config keys, version numbers, code samples against the actual current Canton/Splice/Daml behavior or source docs. Do not assume the model's output reflects the current release and make sure to review it all before hitting a PR. Models are frequently behind or simply wrong on fast-moving specifics.
 
@@ -48,6 +47,8 @@ Use this to report a problem or request new content without editing the source y
 - Describe in detail what's wrong or missing along with the source of information to verify, and submit.
 - The team reviews it and responds.
 
+> **Alternatively, you can file an issue directly in the github repo here: https://github.com/canton-network/cf-docs/issues**
+
 ### Larger changes: PR from a local checkout
 
 For new pages, restructuring, or anything touching multiple files, set up a local checkout, preview your changes with `mintlify dev`, and run `mintlify broken-links` before opening a PR.
@@ -81,7 +82,7 @@ mintlify broken-links
 
 ### Missing developer tooling
 
-**This repo is for documentation, not a tooling directory.** If you want to list a wallet, SDK, indexer, explorer, or other third party developer/Partner tool that isn't represented yet, that will be at [Canton Developer Hub](https://dev-hub.canton.foundation/).
+**This repository is strictly for core network documentation, not a tooling directory.*** If you want to add a third-party wallet, SDK, indexer, explorer, or partner tool, please submit it to the [Canton Developer Hub](https://dev-hub.canton.foundation/). All external tooling is maintained in that repository to ensure it is properly reviewed and tagged.
 
 Open a PR there to add it and all external/partner tooling is maintained in that repo so it can be reviewed, tagged, and it's also currently added in new docs overview page.
 
@@ -99,11 +100,13 @@ Open a PR there to add it and all external/partner tooling is maintained in that
 
 ## Licensing
 
-By contributing, you agree your changes are licensed under this repo's license model, for more info see the [README](/cf-docs/README.md) for details.
+By contributing, you agree your changes are licensed under this repo's license model, for more info see the [README](https://github.com/canton-network/cf-docs/blob/main/README.md) for details.
 
 ## Review process
 
-- A member of the Canton docs team will review your PR for accuracy, value, and fit with existing content within a week of when open PR is submitted.
+- A member of the Canton docs team will review your PR for accuracy, value, and fit with existing content. We aim to do this within a week, but appreciate your patience if there are slight delays depending on the team's workload.
+  
+  If you have been collaborating with someone from the Canton team, please @mention them in your PR description so we can assign the right SME and make the review faster.
 
 - Expect feedback if a change is out of date with the current release, etc.
 
