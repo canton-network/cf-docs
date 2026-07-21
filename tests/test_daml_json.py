@@ -201,7 +201,7 @@ class DamlJsonTests(unittest.TestCase):
         self.assertIn("DA.NonEmpty", module_names)
 
     def test_percent_function_heading_uses_mdx_safe_form(self) -> None:
-        self.assertEqual(mdx_function_heading("%"), "### <code>{'\\u0025'}</code>")
+        self.assertEqual(mdx_function_heading("%"), "### modulo")
         self.assertEqual(mdx_function_heading("$"), "### `$`")
         self.assertEqual(mdx_function_heading("&&"), "### `&&`")
 
@@ -231,11 +231,13 @@ class DamlJsonTests(unittest.TestCase):
                 "fct_descr": [["remainder"]],
             }
         )
-        self.assertIn("### <code>{'\\u0025'}</code>", rendered)
+        self.assertIn("### modulo", rendered)
+        self.assertNotIn("### Modulo", rendered)
         self.assertNotIn("### `%`", rendered)
         self.assertNotIn("### `\\%`", rendered)
+        self.assertNotIn("<code>{'\\u0025'}</code>", rendered)
         self.assertIn(
-            "<code>{'\\u0025'}</code> : [`Int`](#type-ghc-types-int-37261) -> [`Int`](#type-ghc-types-int-37261)",
+            "% : [`Int`](#type-ghc-types-int-37261) -> [`Int`](#type-ghc-types-int-37261)",
             rendered,
         )
         self.assertNotIn("```daml", rendered)

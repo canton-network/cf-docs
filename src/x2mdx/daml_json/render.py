@@ -316,9 +316,13 @@ def render_instance_line(inst: dict[str, Any]) -> str:
 
 
 def mdx_inline_code(name: str) -> str:
-    """Inline code for a function/operator name, with Mintlify-safe `%`."""
+    """Inline code for a function/operator name.
+
+    Mintlify breaks on `` `%` ``, so the remainder operator is emitted as a
+    plain ``%`` outside of code spans.
+    """
     if name == "%":
-        return "<code>{'\\u0025'}</code>"
+        return "%"
     return f"`{name}`"
 
 
@@ -326,9 +330,11 @@ def mdx_function_heading(name: str) -> str:
     """Render a function name as an MDX heading.
 
     Mintlify breaks on ``### `%`` (and the ``\\%`` variant), so the remainder
-    operator is emitted as an HTML/MDX-safe heading instead. Other operators
-    keep the normal inline-code heading form.
+    operator uses a plain-text heading instead. Other operators keep the normal
+    inline-code heading form.
     """
+    if name == "%":
+        return "### modulo"
     return f"### {mdx_inline_code(name)}"
 
 
