@@ -82,7 +82,7 @@ mintlify broken-links
 
 ### Missing developer tooling
 
-**This repository is strictly for core network documentation, not a tooling directory.*** If you want to add a third-party wallet, SDK, indexer, explorer, or partner tool, please submit it to the [Canton Developer Hub](https://dev-hub.canton.foundation/). All external tooling is maintained in that repository to ensure it is properly reviewed and tagged.
+**This repository is strictly for core network documentation, not a tooling directory.** If you want to add a third-party wallet, SDK, indexer, explorer, or partner tool, please submit it to the [Canton Developer Hub](https://dev-hub.canton.foundation/). All external tooling is maintained in that repository to ensure it is properly reviewed and tagged.
 
 Open a PR there to add it and all external/partner tooling is maintained in that repo so it can be reviewed, tagged, and it's also currently added in new docs overview page.
 
