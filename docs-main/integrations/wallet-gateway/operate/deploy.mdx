@@ -1,0 +1,56 @@
+---
+title: "Deploy"
+description: "Run the Wallet Gateway in a container with Docker or Helm."
+---
+
+For anything beyond local development, run the Wallet Gateway as a container. This guide
+covers what to get right when deploying, and points to the deployment manifests. The Wallet Gateway
+is a Node.js server that reads a single configuration file and exposes its User UI, User API,
+and dApp API on one port.
+
+## Before you deploy
+
+Make production choices in your configuration file before packaging it. See
+[Configure the Wallet Gateway](/integrations/wallet-gateway/guides/configure) and the
+[Configuration reference](/integrations/wallet-gateway/reference/configuration-reference).
+
+- **Use a persistent store.** Prefer `postgres`. The `memory` store loses all data when a
+  container or pod is recreated, and `sqlite` persists only if its file is on a persistent
+  volume.
+- **Set `kernel.publicUrl`.** Behind a reverse proxy or load balancer, set it to the external
+  URL so client redirects work.
+- **Restrict CORS.** Set `server.allowedOrigins` to your known dApp origins instead of `"*"`.
+- **Keep secrets out of the image.** Supply `clientSecret`, `adminAuth`, and provider API keys
+  through environment variables or a secret manager, not the baked-in config file. See
+  [Secrets and environments](/integrations/wallet-gateway/reference/configuration-reference#secrets-and-environments).
+
+## Docker
+
+Provide the configuration file and any required secrets to the container, and expose the
+Gateway's port. Mount the config (and, for `sqlite`, a persistent volume for the database
+file), then start the Wallet Gateway pointing at the mounted config.
+
+<Warning>
+If you use the internal signing provider, its `signingStore` holds private keys. Put it on
+durable, access-controlled storage, or use a participant node or external custody provider
+instead. See [Signing providers](/integrations/wallet-gateway/signing-providers).
+</Warning>
+
+## Helm
+
+For Kubernetes, deploy with Helm and back the Wallet Gateway with a managed PostgreSQL instance.
+Supply the configuration through a ConfigMap and secrets through a Kubernetes Secret so
+sensitive values never live in the chart.
+
+## Deployment manifests
+
+The Wallet Gateway repository maintains the reference Docker and Helm manifests and the
+step-by-step deployment guide:
+
+- [Deployment guide](https://github.com/canton-network/wallet-gateway/blob/82ec39c9/docs/dapp-building/wallet-gateway/deployment/index.md)
+
+## After deploying
+
+- Confirm the three endpoints respond (User UI, `/api/v0/dapp`, `/api/v0/user`).
+- Review the [Security checklist](/integrations/wallet-gateway/operate/security).
+- If something fails to start, see [Troubleshooting](/integrations/wallet-gateway/operate/troubleshooting).

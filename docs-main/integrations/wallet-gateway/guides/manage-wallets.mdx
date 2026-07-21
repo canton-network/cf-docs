@@ -1,0 +1,69 @@
+---
+title: "Manage wallets"
+description: "Create and manage wallets through the Wallet Gateway's User UI or User API."
+---
+
+Users interact with the Wallet Gateway in two ways: the **User UI** for people, and the
+**User API** for scripts, custom UIs, and backend automation. Both manage the same wallets,
+networks, identity providers, and sessions. This guide covers the User UI, common workflows,
+and when to reach for the User API instead.
+
+The **dApp API** is separate: dApps call it (through the dApp SDK) when a user connects a
+wallet. See [dApp API](/integrations/wallet-gateway/reference/dapp-api).
+
+## User UI
+
+The Wallet Gateway serves a web UI at its root URL (for example `http://localhost:3030`). Its main
+pages are:
+
+| Page | Path | What it does |
+| --- | --- | --- |
+| **Login** | `/login` | Choose a network and IDP, then sign in (OAuth redirect or self-signed). |
+| **Wallets** | `/wallets` | List, create, and remove wallets, and set the primary wallet. Default landing page. |
+| **Transactions** | `/transactions` | List transactions and view status and details. |
+| **Approve** | `/approve` | Review and sign or reject a transaction a dApp requested. |
+| **Settings** | `/settings` | Manage networks and IDPs, view sessions, and see version info. |
+| **Callback** | `/callback` | Internal OAuth redirect target after login. |
+
+Users log out from the layout control. Logout calls `removeSession`, clears local auth state,
+and returns to `/login` (or closes the window if the UI was opened as an approval popup).
+
+## When to use which interface
+
+- **User UI**: best for end users. They log in, create and manage wallets, view transactions,
+  and approve dApp requests. No code required.
+- **User API**: use it to drive wallet setup from scripts or a backend, build a custom wallet
+  UI embedded in your app, or automate session, network, IDP, and wallet operations.
+
+## Common workflows
+
+### Set up a wallet (User UI)
+
+1. Open the User UI and go to **Login**.
+2. Select a network and IDP, then complete login (for example, OAuth).
+3. On **Wallets**, create a wallet by choosing a network, signing provider, and party ID.
+   Optionally set it as primary.
+4. Add networks or IDPs under **Settings** if needed (admin only).
+
+### Approve a dApp transaction
+
+1. A dApp calls `prepareExecute` through the dApp SDK.
+2. The user is taken to **Approve** to review the transaction.
+3. The user signs or rejects it, and the dApp is notified of the result.
+
+### Automate wallet setup (User API)
+
+1. Call `addSession()`, then complete your auth flow to obtain a JWT.
+2. Call `listNetworks()` and `listIdps()` to discover available options.
+3. Call `createWallet()` with the desired network and signing provider.
+4. Use `listWallets()`, `sign()`, `execute()`, and related methods as your use case requires.
+
+See the [User API](/integrations/wallet-gateway/reference/user-api) for the full method list.
+
+## Sessions
+
+Users authenticate through an IDP, and the Wallet Gateway issues a **session** (a JWT) that the User
+and dApp APIs use to authorize later calls. `addSession()` starts the connection, your auth
+flow supplies the JWT, and `removeSession()` (or logging out) ends it. Sessions are stored in
+the Wallet Gateway's database, so back it up to avoid invalidating active sessions. See
+[Networks & identity providers](/integrations/wallet-gateway/guides/networks-and-identity).
