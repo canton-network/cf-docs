@@ -27,7 +27,7 @@ DAPP_GROUP_LABEL = "dApp API"
 LEGACY_GROUP_LABELS = {"Wallet Kernel", "Wallet Gateway JSON-RPC", "Wallet Kernel SDK"}
 DETAILS_LABEL = "Details and history"
 SPEC_DIR_NAME = "specs"
-DEFAULT_RELEASE_REPO = "hyperledger-labs/splice-wallet-kernel"
+DEFAULT_RELEASE_REPO = "canton-network/wallet"
 NAV_SECTION_BY_SPEC_ID = {
     "dapp-api": DAPP_GROUP_LABEL,
     "dapp-remote-api": DAPP_GROUP_LABEL,
