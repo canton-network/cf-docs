@@ -56,6 +56,7 @@ def test_update_targets_cover_all_generated_doc_surfaces() -> None:
         "canton-protobuf-history",
         "ledger-bindings",
         "daml-standard-library",
+        "daml-script",
         "typescript-bindings",
         "canton-metrics-reference",
         "canton-release-notes",
@@ -91,6 +92,65 @@ def test_java_ledger_bindings_target_does_not_auto_merge() -> None:
     target = next(target for target in module.UPDATE_TARGETS if target.key == "ledger-bindings")
 
     assert target.auto_merge is False
+
+
+def test_daml_script_target_wires_source_pin_and_generated_paths() -> None:
+    module = load_script_module()
+    target = next(target for target in module.UPDATE_TARGETS if target.key == "daml-script")
+
+    assert target.branch == "generated-references/daml-script/update"
+    assert target.source_update_commands == (
+        ("nix-shell", "--run", "npm run update:generated-reference-sources -- --source daml-script"),
+    )
+    assert target.source_update_paths == ("config/x2mdx/daml-script/source-artifacts.json",)
+    assert target.generate_commands == (
+        ("nix-shell", "--run", "npm run generate:daml-script-reference"),
+    )
+    assert target.paths == (
+        "config/x2mdx/daml-script/source-artifacts.json",
+        "docs-main/docs.json",
+        "docs-main/appdev/reference/daml-script",
+    )
+    assert target.validation == (
+        "npm run update:generated-reference-sources -- --source daml-script",
+        "npm run generate:daml-script-reference",
+        "git diff --check",
+    )
+
+
+def test_daml_script_target_skips_generation_when_source_is_unchanged(monkeypatch) -> None:
+    module = load_script_module()
+    target = next(target for target in module.UPDATE_TARGETS if target.key == "daml-script")
+    calls: list[tuple[str, ...]] = []
+
+    monkeypatch.setattr(module, "reset_to_base", lambda base_sha: calls.append(("reset", base_sha)))
+    monkeypatch.setattr(module.pr_utils, "write_base_file", lambda base_sha, path: Path("/tmp/before.json"))
+    monkeypatch.setattr(module.pr_utils, "has_changes", lambda paths: False)
+    monkeypatch.setattr(
+        module.pr_utils,
+        "close_stale_pull_request",
+        lambda **kwargs: calls.append(("close", kwargs["branch"])),
+    )
+    monkeypatch.setattr(module, "create_or_update_pull_request", lambda **kwargs: calls.append(("pr",)))
+
+    def fake_run(command: tuple[str, ...]) -> None:
+        calls.append(command)
+
+    monkeypatch.setattr(module.pr_utils, "run", fake_run)
+
+    module.process_target(
+        target=target,
+        base_sha="base-sha",
+        base_branch="main",
+        repository="canton-network/cf-docs",
+    )
+
+    assert calls == [
+        ("reset", "base-sha"),
+        ("nix-shell", "--run", "npm run update:generated-reference-sources -- --source daml-script"),
+        ("close", "generated-references/daml-script/update"),
+    ]
+    assert not any("generate:daml-script-reference" in " ".join(call) for call in calls if isinstance(call, tuple))
 
 
 def test_source_update_targets_skip_generation_when_source_is_unchanged(monkeypatch) -> None:
@@ -206,6 +266,7 @@ def test_generated_clean_paths_include_target_paths_and_internal_output() -> Non
     assert "docs-main/reference/grpc-ledger-api-reference" in clean_paths
     assert "docs-main/reference/java" in clean_paths
     assert "docs-main/appdev/reference/daml-standard-library" in clean_paths
+    assert "docs-main/appdev/reference/daml-script" in clean_paths
     assert "docs-main/reference/wallet-gateway-json-rpc" in clean_paths
     assert "docs-main/reference/typescript" in clean_paths
     assert "docs-main/snippets/generated/version-dashboard-data.mdx" in clean_paths
