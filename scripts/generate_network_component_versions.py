@@ -69,7 +69,7 @@ SPLICE_RAW_BASE_URL = "https://raw.githubusercontent.com/canton-network/splice"
 CANTON_SOURCES_PATH = "nix/canton-sources.json"
 DARS_LOCK_PATH = "daml/dars.lock"
 DASHBOARD_DAR_NAMES = ("splice-amulet", "splice-wallet", "splice-dso-governance")
-WALLET_GATEWAY_RELEASE_REPO = "hyperledger-labs/splice-wallet-kernel"
+WALLET_GATEWAY_RELEASE_REPO = "canton-network/wallet"
 WALLET_GATEWAY_RELEASE_TAG_PREFIX = "@canton-network/wallet-gateway-remote@"
 WALLET_GATEWAY_RELEASES_URL = (
     f"https://api.github.com/repos/{WALLET_GATEWAY_RELEASE_REPO}/releases"
