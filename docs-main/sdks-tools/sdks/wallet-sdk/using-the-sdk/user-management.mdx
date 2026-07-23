@@ -1,0 +1,296 @@
+---
+title: 'User Management'
+description: 'Create users and configure ledger read/act rights, including canReadAsAnyParty and canExecuteAsAnyParty.'
+---
+
+The Wallet SDK has functionality for creating and managing user rights, by default when you are connecting it uses whichever user is defined in your auth-controller. If the user is an admin user on the ledger api they can be used to create other users and grant them rights.
+
+## How do I quickly setup canReadAsAnyParty and canExecuteAsAnyParty?
+
+This script sets up three users `alice`, `bob` and `master`. `master` is given canReadAsAnyParty and canExecuteAsAnyParty and it shows proper access control by creating parties and ensuring that `alice` and `bob` can not see each others parties.
+
+``` typescript
+import { localNetStaticConfig, SDK } from '@canton-network/wallet-sdk'
+import { pino } from 'pino'
+import { TOKEN_PROVIDER_CONFIG_DEFAULT } from './utils/index.js'
+const logger = pino({ name: 'v1-multi-user-setup', level: 'info' })
+
+logger.info('Operator sets up users and primary parties')
+
+const operatorSdk = await SDK.create({
+    auth: TOKEN_PROVIDER_CONFIG_DEFAULT,
+    ledgerClientUrl: localNetStaticConfig.LOCALNET_APP_USER_LEDGER_URL,
+})
+
+const aliceInternal = await operatorSdk.party.internal.allocate({
+    partyHint: 'v1-09-alice',
+})
+
+const bobInternal = await operatorSdk.party.internal.allocate({
+    partyHint: 'v1-09-bob',
+})
+
+const masterPartyInternal = await operatorSdk.party.internal.allocate({
+    partyHint: 'v1-09-master',
+})
+
+logger.info('Created the internal parties')
+
+const aliceUser = await operatorSdk.user.create({
+    userId: 'alice-user',
+    primaryParty: aliceInternal,
+    userRights: {
+        participantAdmin: true,
+    },
+})
+
+const bobUser = await operatorSdk.user.create({
+    userId: 'bob-user',
+    primaryParty: bobInternal,
+    userRights: {
+        participantAdmin: true,
+    },
+})
+
+const masterUser = await operatorSdk.user.create({
+    userId: 'master-user',
+    primaryParty: masterPartyInternal,
+    userRights: {
+        participantAdmin: true,
+    },
+})
+
+logger.info('created the users')
+
+if (!(aliceUser || bobUser || masterUser)) {
+    throw new Error(`One of the users was not created correctly`)
+}
+
+await operatorSdk.user.rights.grant({
+    userId: masterUser.id!,
+    userRights: {
+        canExecuteAsAnyParty: true,
+        canReadAsAnyParty: true,
+    },
+})
+
+logger.info(
+    `Created alice user: ${aliceUser.id} with primary party (internal) ${aliceUser.primaryParty}`
+)
+logger.info(
+    `Created bob user: ${bobUser.id} with primary party (internal) ${bobUser.primaryParty}`
+)
+logger.info(
+    `Created master user: ${masterUser.id} with primary party (internal) ${masterUser.primaryParty}, with read as and execute as rights`
+)
+
+const aliceSdk = await SDK.create({
+    auth: {
+        method: 'self_signed',
+        issuer: 'unsafe-auth',
+        credentials: {
+            clientId: aliceUser.id,
+            clientSecret: 'unsafe',
+            audience: 'https://canton.network.global',
+            scope: '',
+        },
+    },
+    ledgerClientUrl: localNetStaticConfig.LOCALNET_APP_USER_LEDGER_URL,
+})
+
+const aliceKeyPair = aliceSdk.keys.generate()
+const aliceExternal = await aliceSdk.party.external
+    .create(aliceKeyPair.publicKey, {
+        partyHint: 'v1-09-alice',
+    })
+    .sign(aliceKeyPair.privateKey)
+    .execute()
+
+logger.info(`alice created external party`)
+
+const bobSdk = await SDK.create({
+    auth: {
+        method: 'self_signed',
+        issuer: 'unsafe-auth',
+        credentials: {
+            clientId: bobUser.id,
+            clientSecret: 'unsafe',
+            audience: 'https://canton.network.global',
+            scope: '',
+        },
+    },
+    ledgerClientUrl: localNetStaticConfig.LOCALNET_APP_USER_LEDGER_URL,
+})
+
+const bobKeyPair = bobSdk.keys.generate()
+const bobExternal = await bobSdk.party.external
+    .create(bobKeyPair.publicKey, {
+        partyHint: 'v1-09-bob',
+    })
+    .sign(bobKeyPair.privateKey)
+    .execute()
+logger.info(`bob created external party`)
+
+const masterUserSdk = await SDK.create({
+    auth: {
+        method: 'self_signed',
+        issuer: 'unsafe-auth',
+        credentials: {
+            clientId: masterUser.id,
+            clientSecret: 'unsafe',
+            audience: 'https://canton.network.global',
+            scope: '',
+        },
+    },
+    ledgerClientUrl: localNetStaticConfig.LOCALNET_APP_USER_LEDGER_URL,
+})
+
+const masterWalletView = await masterUserSdk.party.list()
+
+if (!masterWalletView?.find((p) => p === aliceExternal.partyId)) {
+    throw new Error('master user cannot see alice party')
+}
+if (!masterWalletView?.find((p) => p === bobExternal.partyId)) {
+    throw new Error('master user cannot see bob party')
+}
+
+const aliceWalletView = await aliceSdk.party.list()
+logger.info(aliceWalletView)
+
+if (aliceWalletView?.find((p) => p === bobExternal.partyId)) {
+    throw new Error('alice user can see bob party')
+}
+
+const bobWalletView = await bobSdk.party.list()
+
+if (bobWalletView?.find((p) => p === aliceExternal.partyId)) {
+    throw new Error('bob user can see alice party')
+}
+
+logger.info(
+    'alice and bob have proper isolation and cannot see each others external parties'
+)
+
+//user management test
+await bobSdk.user.rights.grant({
+    userRights: {
+        readAs: [aliceExternal.partyId],
+    },
+})
+
+const bobWalletViewAfterGrantRights = await bobSdk.party.list()
+
+if (!bobWalletViewAfterGrantRights?.find((p) => p === aliceExternal.partyId)) {
+    throw new Error('bob user cannot see alice party even with ReadAs rights')
+}
+
+const bobRightsAfterGrantRights = await bobSdk.user.rights.list()
+
+logger.info(bobRightsAfterGrantRights, 'Bob user rights')
+
+await bobSdk.user.rights.revoke({
+    userRights: {
+        readAs: [aliceExternal.partyId],
+    },
+})
+
+const bobWalletViewAfterRevokeRights = await bobSdk.party.list()
+
+if (bobWalletViewAfterRevokeRights?.find((p) => p === aliceExternal.partyId)) {
+    throw new Error('bob user can see alice party even after revoking rights')
+}
+```
+
+## Creating a new user
+
+Creating a new user can be done using the adminLedger, this new user can then be granted rights or can create new parties as needed.
+
+``` typescript
+import { SDK, localNetStaticConfig } from '@canton-network/wallet-sdk'
+
+export default async function () {
+    // it is important to configure the SDK correctly else you might run into connectivity or authentication issues
+    const sdk = await SDK.create({
+        auth: global.TOKEN_PROVIDER_CONFIG_DEFAULT,
+        ledgerClientUrl: localNetStaticConfig.LOCALNET_APP_USER_LEDGER_URL,
+    })
+
+    await sdk.user.create({
+        userId: 'alice-user',
+        primaryParty: global.EXISTING_PARTY_1,
+    })
+}
+```
+
+## ReadAs and ActAs limitations
+
+Currently when allocating a new party we also grant ReadAs and ActAs rights for that party for the submitting user. This allows the user to do the normal flows involved like preparing transactions and executing those. There are performance issues if too many of these rights are assigned to the same user, in the case of a `master` user that is interacting on behalf of a client, then it might be more convenient to use `CanReadAsAnyParty` and `CanExecuteAsAnyParty` as described below.
+
+Here is how the method changes if you need to allocate a party without granting rights:
+
+``` typescript
+import { SDK, localNetStaticConfig } from '@canton-network/wallet-sdk'
+
+export default async function () {
+    // it is important to configure the SDK correctly else you might run into connectivity or authentication issues
+    const sdk = await SDK.create({
+        auth: global.TOKEN_PROVIDER_CONFIG_DEFAULT,
+        ledgerClientUrl: localNetStaticConfig.LOCALNET_APP_USER_LEDGER_URL,
+    })
+    const key = sdk.keys.generate()
+
+    const party = await sdk.party.external
+        .create(key.publicKey, { partyHint: 'my-party-without-rights' })
+        .sign(key.privateKey)
+        .execute({ grantUserRights: false }) //do not grant user actAs and readAs for the party
+}
+```
+
+## CanReadAsAnyParty
+
+CanReadAsAnyParty gives a user full information about any party on the ledger, if a user is set up with this they will see: 1. All parties hosted on the ledger (multi-hosted and single hosted) 2. All transaction happening involving a party on the ledger 3. Prepare transactions on behalf of any party
+
+This will not grant information about parties hosted on other ledgers or their transactions.
+
+``` typescript
+import { SDK, localNetStaticConfig } from '@canton-network/wallet-sdk'
+
+export default async function () {
+    // it is important to configure the SDK correctly else you might run into connectivity or authentication issues
+    const sdk = await SDK.create({
+        auth: global.TOKEN_PROVIDER_CONFIG_DEFAULT,
+        ledgerClientUrl: localNetStaticConfig.LOCALNET_APP_USER_LEDGER_URL,
+    })
+
+    await sdk.user.rights.grant({
+        userRights: { canReadAsAnyParty: true },
+    })
+}
+```
+
+The SDK automatically leverages this elevated permission for certain endpoints like `listWallets`.
+
+## CanExecuteAsAnyParty
+
+CanExecuteAsAnyParty gives full execution rights for a party, this means that a user with these rights can submit transaction on behalf of a party hosted on the ledger.
+
+**This does not give the user rights to move funds without a valid signature!**
+
+The setup is similar to the \`CanReadAsAnyParty\`:
+
+``` typescript
+import { SDK, localNetStaticConfig } from '@canton-network/wallet-sdk'
+
+export default async function () {
+    // it is important to configure the SDK correctly else you might run into connectivity or authentication issues
+    const sdk = await SDK.create({
+        auth: global.TOKEN_PROVIDER_CONFIG_DEFAULT,
+        ledgerClientUrl: localNetStaticConfig.LOCALNET_APP_USER_LEDGER_URL,
+    })
+
+    //optional arguments are idp and userId; if not provided, will use the default idp and extract the userId from the auth token
+    await sdk.user.rights.grant({
+        userRights: { canExecuteAsAnyParty: true },
+    })
+}
+```
