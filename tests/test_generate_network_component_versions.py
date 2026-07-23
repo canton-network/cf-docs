@@ -49,6 +49,7 @@ def dashboard_snapshot(*, generated_at: str, splice_version: str) -> dict:
         "generatorMode": "public_source_collection_with_manual_fallbacks",
         "networks": networks,
         "latestDpmSdk": "3.5.1",
+        "latestDpm": "1.0.21",
         "latestPqs": "3.5.1",
         "latestWalletGateway": "1.4.0",
         "npmVersions": {
@@ -307,6 +308,48 @@ def test_fetch_latest_wallet_gateway_version_paginates_releases(monkeypatch) -> 
         f"{module.WALLET_GATEWAY_RELEASES_URL}?per_page=100&page=2",
         f"{module.WALLET_GATEWAY_RELEASES_URL}?per_page=100&page=3",
     ]
+
+
+def test_fetch_latest_dpm_version_reads_github_latest_release_tag(monkeypatch) -> None:
+    module = load_script_module()
+
+    def fake_fetch_json(url: str, timeout: float) -> dict:
+        assert url == module.DPM_LATEST_RELEASE_URL
+        return {"tag_name": "1.0.21"}
+
+    monkeypatch.setattr(module, "fetch_json", fake_fetch_json)
+
+    assert module.fetch_latest_dpm_version(timeout=1.0) == "1.0.21"
+
+
+def test_build_config_records_dpm_github_release_source() -> None:
+    module = load_script_module()
+
+    config = module.build_config(
+        {
+            "versions": {},
+            "repositories": {
+                "damlSdk": {
+                    "url": "https://github.com/digital-asset/daml/releases",
+                    "versionMapping": {
+                        "mainnet": {"externalVersion": "3.5.2"},
+                        "testnet": {"externalVersion": "3.5.2"},
+                        "devnet": {"externalVersion": "3.5.2"},
+                    },
+                }
+            },
+        },
+        dashboard_snapshot(
+            generated_at="2026-06-03T12:00:00+00:00",
+            splice_version="0.6.3",
+        ),
+    )
+
+    assert config["repositories"]["dpm"]["url"] == module.DPM_RELEASES_PAGE_URL
+    assert config["repositories"]["dpm"]["versionMapping"]["mainnet"]["externalVersion"] == "1.0.21"
+    assert module.DPM_LATEST_RELEASE_URL in config["_generated"]["sourceContract"]["dpm"]
+    assert config["repositories"]["damlSdk"]["versionMapping"]["mainnet"]["externalVersion"] == "3.5.2"
+    assert config["repositories"]["canton"]["versionMapping"]["mainnet"]["externalVersion"] == "3.5.1"
 
 
 def test_parse_dars_lock_selects_latest_dashboard_packages_only() -> None:

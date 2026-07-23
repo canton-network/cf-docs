@@ -63,6 +63,7 @@ import ExternalCantonMainDocsOpenTargetSnippetJsonDataSynchronizerHowtosOperateB
 import ExternalCantonMainDocsOpenTargetSnippetJsonDataSynchronizerHowtosOperateBootstrap58 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/synchronizer/howtos/operate/bootstrap-58.mdx";
 import ExternalCantonMainDocsOpenTargetSnippetJsonDataSynchronizerHowtosOperateBootstrap59 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/synchronizer/howtos/operate/bootstrap-59.mdx";
 import ExternalCantonMainDocsOpenTargetSnippetJsonDataSynchronizerHowtosOperateBootstrap60 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/synchronizer/howtos/operate/bootstrap-60.mdx";
+import ExternalCantonMainDocsOpenTargetSnippetJsonDataSynchronizerHowtosOperateBootstrap61 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/synchronizer/howtos/operate/bootstrap-61.mdx";
 import ExternalCantonMainDocsOpenTargetSnippetJsonDataSynchronizerHowtosOperateBootstrap62 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/synchronizer/howtos/operate/bootstrap-62.mdx";
 import ExternalCantonMainDocsOpenTargetSnippetJsonDataSynchronizerHowtosOperateBootstrap63 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/synchronizer/howtos/operate/bootstrap-63.mdx";
 import ExternalCantonMainDocsOpenTargetSnippetJsonDataSynchronizerHowtosOperateBootstrap64 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/synchronizer/howtos/operate/bootstrap-64.mdx";
@@ -78,8 +79,11 @@ import ExternalCantonMainDocsOpenTargetSnippetJsonDataSynchronizerHowtosOperateT
 import ExternalCantonMainDocsOpenTargetSnippetJsonDataSynchronizerHowtosOperateTraffic6 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/synchronizer/howtos/operate/traffic-6.mdx";
 import ExternalCantonMainDocsOpenTargetSnippetJsonDataSynchronizerHowtosOperateTraffic7 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/synchronizer/howtos/operate/traffic-7.mdx";
 import ExternalCantonMainDocsOpenTargetSnippetJsonDataSynchronizerHowtosOperateTraffic8 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/synchronizer/howtos/operate/traffic-8.mdx";
+
+import ExternalCantonMainDocsOpenTargetSnippetJsonDataSynchronizerHowtosOperateOffboarding1 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/synchronizer/howtos/operate/offboarding-1.mdx";
+
 import ExternalCantonMainCommunityAppSrcTestResourcesExternalHaSequencersRemoteAdminParsing from "/snippets/external/canton/main/community/app/src/test/resources/external-ha-sequencers-remote-admin-parsing.mdx";
-import ExternalCantonMainDocsOpenTargetSnippetJsonDataSynchronizerHowtosOperateBootstrap61 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/synchronizer/howtos/operate/bootstrap-61.mdx";
+
 
 {/* COPIED_START source="docs-website:docs/replicated/canton/3.5/synchronizer/howtos/operate/bootstrap.rst" hash="42ffbcca" */}
 
@@ -1400,27 +1404,17 @@ After that, the sequencer can be decommissioned by removing it from the synchron
 
 Sequencers are part of the synchronizer by virtue of having their node ID equal to the synchronizer id, which also means they all have the same node ID. Since a sequencer’s identity is the same as the synchronizer’s identity, you should leave identity and namespace mappings intact.
 
-However, a sequencer may use its own cryptographic material distinct from other sequencers. In that case, owner-to-key mappings must be removed for the keys it exclusively owns:
+However, a sequencer may use its own cryptographic material distinct from other sequencers. In that case, the owner-to-key mappings that lists the keys that pertain to the decommissioned sequencer should be removed:
 
-1.  Find the keys on the sequencer to be decommissioned using the keys.secret.list command.
-2.  Among those keys, find the ones not shared by other sequencers. You can do this by issuing the keys.secret.list command on each of them: the fingerprints that appear only on the sequencer node to be decommissioned correspond to its exclusively-owned keys.
+1.  Find the correct owner-to-key mappings that pertain to the sequencer by filtering using `filterKeyOwnerUid` and the UID of the sequencer to be decommissioned.
+2.  The remaining synchronizer owners should issue a `owner.topology.transactions.propose` command to remove those mappings.
 
-<div className="todo">
-
-\#22917: Fix broken ref \#. Remove the mappings for its exclusively owned keys using the ref:topology.owner_to_key_mappings.authorize command.
-
-</div>
-
-<div className="todo">
-
-\#22917: Fix broken literalinclude literalinclude:: CANTON/enterprise/app/src/test/scala/com/digitalasset/canton/integration/tests/offboarding/SequencerOffboardingIntegrationTest.scala language: scala start-after: user-manual-entry-begin: SequencerOffboardingRemoveExclusiveKeys end-before: user-manual-entry-end: SequencerOffboardingRemoveExclusiveKeys dedent:
-
-</div>
+<ExternalCantonMainDocsOpenTargetSnippetJsonDataSynchronizerHowtosOperateOffboarding1 />
 
 Finally, the cryptographic material exclusively owned by a decommissioned sequencer must also be disposed of:
 
 - If it was stored only on the decommissioned sequencer, it must be disposed of together with the decommissioned sequencer node.
-- However, if a decommissioned sequencer’s cryptographic material is managed via a KMS system, it must be disposed of through the KMS; refer to your KMS’ documentation and internal procedures to handle this. KMS-managed cryptographic material of sequencer nodes.
+- However, if a decommissioned sequencer’s cryptographic material is managed via a KMS system, it must be disposed of through the KMS; refer to your KMS’ documentation and internal procedures to handle this.
 
 ## Decommissioning a Mediator
 
