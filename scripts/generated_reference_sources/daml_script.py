@@ -13,27 +13,26 @@ from generated_reference_sources.common import (
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SOURCE_KEY = "daml-standard-library"
-SOURCE_LABEL = "Daml Standard Library"
-DEFAULT_SOURCE_CONFIG = REPO_ROOT / "config" / "x2mdx" / "daml-standard-library" / "source-artifacts.json"
+SOURCE_KEY = "daml-script"
+SOURCE_LABEL = "Daml Script"
+DEFAULT_SOURCE_CONFIG = REPO_ROOT / "config" / "x2mdx" / "daml-script" / "source-artifacts.json"
 
 
-class DamlStandardLibrarySourceConfigPayload(TypedDict, total=False):
+class DamlScriptSourceConfigPayload(TypedDict, total=False):
     source: str
     publish_version: Required[str]
-    package_set: str
     sdk_source: str
     versions: Required[list[str]]
 
 
 @dataclass(frozen=True)
-class DamlStandardLibrarySourceConfig:
-    raw: DamlStandardLibrarySourceConfigPayload
+class DamlScriptSourceConfig:
+    raw: DamlScriptSourceConfigPayload
     publish_version: str
     versions: tuple[str, ...]
 
 
-def parse_source_config(path: Path) -> DamlStandardLibrarySourceConfig:
+def parse_source_config(path: Path) -> DamlScriptSourceConfig:
     raw_json = load_json(path)
     publish_version = raw_json.get("publish_version")
     versions = raw_json.get("versions")
@@ -41,9 +40,9 @@ def parse_source_config(path: Path) -> DamlStandardLibrarySourceConfig:
         raise ValueError(f"{path} must define non-empty publish_version")
     if not isinstance(versions, list) or not all(isinstance(version, str) and version for version in versions):
         raise ValueError(f"{path} must define a non-empty versions string list")
-    raw: DamlStandardLibrarySourceConfigPayload = {}
+    raw: DamlScriptSourceConfigPayload = {}
     raw.update(raw_json)
-    return DamlStandardLibrarySourceConfig(raw=raw, publish_version=publish_version, versions=tuple(versions))
+    return DamlScriptSourceConfig(raw=raw, publish_version=publish_version, versions=tuple(versions))
 
 
 def update_source(
