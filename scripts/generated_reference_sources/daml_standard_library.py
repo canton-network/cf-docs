@@ -1,20 +1,21 @@
 from __future__ import annotations
 
-import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Required, TypedDict
 
-from generated_reference_sources.common import SourceUpdate, load_json, write_json
+from generated_reference_sources.common import (
+    SourceUpdate,
+    latest_dpm_version,
+    load_json,
+    write_json,
+)
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SOURCE_KEY = "daml-standard-library"
 SOURCE_LABEL = "Daml Standard Library"
 DEFAULT_SOURCE_CONFIG = REPO_ROOT / "config" / "x2mdx" / "daml-standard-library" / "source-artifacts.json"
-DEFAULT_TIMEOUT_SECONDS = 20.0
-DPM_LATEST_URL = "https://get.digitalasset.com/install/latest"
-USER_AGENT = "cf-docs-generated-reference-source-updater"
 
 
 class DamlStandardLibrarySourceConfigPayload(TypedDict, total=False):
@@ -43,15 +44,6 @@ def parse_source_config(path: Path) -> DamlStandardLibrarySourceConfig:
     raw: DamlStandardLibrarySourceConfigPayload = {}
     raw.update(raw_json)
     return DamlStandardLibrarySourceConfig(raw=raw, publish_version=publish_version, versions=tuple(versions))
-
-
-def latest_dpm_version(*, timeout: float = DEFAULT_TIMEOUT_SECONDS) -> str:
-    request = urllib.request.Request(DPM_LATEST_URL, headers={"User-Agent": USER_AGENT})
-    with urllib.request.urlopen(request, timeout=timeout) as response:
-        version = response.read().decode("utf-8").strip()
-    if not version:
-        raise ValueError(f"{DPM_LATEST_URL} returned an empty latest version")
-    return version
 
 
 def update_source(

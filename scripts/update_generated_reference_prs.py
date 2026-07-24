@@ -309,6 +309,35 @@ UPDATE_TARGETS = (
         source_update_paths=("config/x2mdx/daml-standard-library/source-artifacts.json",),
     ),
     UpdateTarget(
+        key="daml-script",
+        title="Update Daml Script reference",
+        branch="generated-references/daml-script/update",
+        description=(
+            "Updates the Daml Script source pin to the latest DPM SDK version and "
+            "regenerates the checked-in Daml Script reference pages."
+        ),
+        generate_commands=(
+            ("nix-shell", "--run", "npm run generate:daml-script-reference"),
+        ),
+        paths=(
+            "config/x2mdx/daml-script/source-artifacts.json",
+            "docs-main/docs.json",
+            "docs-main/appdev/reference/daml-script",
+        ),
+        summary_kind="source-config",
+        summary_path="config/x2mdx/daml-script/source-artifacts.json",
+        summary_label="Daml Script",
+        validation=(
+            "npm run update:generated-reference-sources -- --source daml-script",
+            "npm run generate:daml-script-reference",
+            "git diff --check",
+        ),
+        source_update_commands=(
+            ("nix-shell", "--run", "npm run update:generated-reference-sources -- --source daml-script"),
+        ),
+        source_update_paths=("config/x2mdx/daml-script/source-artifacts.json",),
+    ),
+    UpdateTarget(
         key="typescript-bindings",
         title="Update TypeScript bindings reference",
         branch="generated-references/typescript-bindings/update",
@@ -384,7 +413,7 @@ UPDATE_TARGETS = (
         description=(
             "Updates the published Wallet Gateway release-note page from the latest "
             "`@canton-network/wallet-gateway-remote` GitHub releases in "
-            "`hyperledger-labs/splice-wallet-kernel`."
+            "`canton-network/wallet`."
         ),
         generate_commands=(("nix-shell", "--run", "npm run update:release-notes -- --target wallet-gateway"),),
         paths=(
@@ -430,7 +459,7 @@ UPDATE_TARGETS = (
         description=(
             "Updates the published dApp SDK release-note page from the latest "
             "`@canton-network/dapp-sdk` GitHub releases in "
-            "`hyperledger-labs/splice-wallet-kernel`."
+            "`canton-network/wallet`."
         ),
         generate_commands=(("nix-shell", "--run", "npm run update:release-notes -- --target dapp-sdk"),),
         paths=(
