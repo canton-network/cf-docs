@@ -178,17 +178,34 @@ Canton treats multi-party coordination as a first-class concern. Where Ethereum 
 ```solidity
 // Solidity: Manual signature collection
 contract MultiSig {
-    mapping(address => bool) public approved;
-    uint256 public approvalCount;
-    
+    address public partyA;
+    address public partyB;
+    string public terms;
+
+    bool public approvedPartyA;
+    bool public approvedPartyB;
+
+    constructor(address partyA_, address partyB_, string memory terms_) {
+        partyA = partyA_;
+        partyB = partyB_;
+        terms = terms_;
+    }
+
     function approve() public {
-        require(!approved[msg.sender], "Already approved");
-        approved[msg.sender] = true;
-        approvalCount++;
+        require(msg.sender == partyA || msg.sender == partyB, "Not a signatory");
+
+        if (msg.sender == partyA) {
+            require(!approvedPartyA, "Already approved");
+            approvedPartyA = true;
+        } else {
+            require(!approvedPartyB, "Already approved");
+            approvedPartyB = true;
+        }
     }
     
     function execute() public {
-        require(approvalCount >= 2, "Need 2 approvals");
+        require(approvedPartyA, "Party A didn't approve");
+        require(approvedPartyB, "Party B didn't approve");
         // ... execute action
     }
 }
