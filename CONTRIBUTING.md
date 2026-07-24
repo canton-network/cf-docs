@@ -110,6 +110,8 @@ By contributing, you agree your changes are licensed under this repo's license m
 
 - Expect feedback if a change is out of date with the current release, etc.
 
+  Note: If any further queries or review questions in a PR gets no response for more than a week, that PR will be closed immediately.
+
 - Once approved and checks pass, the docs team merges.
 
 Questions about where something belongs, or whether a change is worth making? Open a [Discussion](https://github.com/canton-network/cf-docs/discussions) before doing the work.
