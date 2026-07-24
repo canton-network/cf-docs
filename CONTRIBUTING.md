@@ -12,7 +12,7 @@ This repo is the **home for Canton Network documentation** and content here shou
 
 - **Check the information in your PR against the current release** before writing or editing a page, confirm the behavior, APIs, config, and defaults you're describing match the latest Canton and Splice releases. If you're documenting something version specific, say so explicitly rather than leaving it ambiguous.
 
-- **Verify every technical claim:** an AI-generated draft makes API signatures, CLI flags, config keys, version numbers, code samples against the actual current Canton/Splice/Daml behavior or source docs. Do not assume the model's output reflects the current release and make sure to review it all before hitting a PR. Models are frequently behind or simply wrong on fast-moving specifics.
+- **Verify every technical claim:** an AI-generated draft might hallucinate or invent details. Always check API signatures, CLI flags, config keys, version numbers, and code samples against the Actual Current Canton/Splice/Daml Release or source docs. Do not assume the model's output reflects the current release, and make sure to review everything before opening a PR.
 
 ## Ways to contribute
 
@@ -84,7 +84,7 @@ mintlify broken-links
 
 **This repository is strictly for core network documentation, not a tooling directory.** If you want to add a third-party wallet, SDK, indexer, explorer, or partner tool, please submit it to the [Canton Developer Hub](https://dev-hub.canton.foundation/). All external tooling is maintained in that repository to ensure it is properly reviewed and tagged.
 
-Open a PR there to add it and all external/partner tooling is maintained in that repo so it can be reviewed, tagged, and it's also currently added in new docs overview page.
+Open a PR there to add your tool. Maintaining external tooling in the Dev Hub ensures it can be properly reviewed, tagged, and featured on the new docs overview page.
 
 ## Content and style guidelines
 
@@ -94,7 +94,7 @@ Open a PR there to add it and all external/partner tooling is maintained in that
 
 - Keep code samples runnable and tested against current SDK/CLI versions.
 
-- If a page is generated or synced from an external source then see Generate external snippets from `cf-docs/README.md`, don't hand edit the generated output & update the source or the snippet config in `config/snippet-config/` instead.
+- If a page is generated or synced from an external source, refer to the 'Generate external snippets' section in `cf-docs/README.md`. Do not hand-edit the generated output. Instead, update the source or the snippet config in `config/snippet-config/`.
 
 - Links should be relative and verified with `mintlify broken-links`.
 
@@ -110,7 +110,7 @@ By contributing, you agree your changes are licensed under this repo's license m
 
 - Expect feedback if a change is out of date with the current release, etc.
 
-  Note: If any further queries or review questions in a PR gets no response for more than a week, that PR will be closed immediately.
+  Note: If any further queries or review questions in a PR get no response for more than a week, that PR will be closed immediately.
 
 - Once approved and checks pass, the docs team merges.
 
