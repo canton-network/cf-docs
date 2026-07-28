@@ -22,7 +22,9 @@ HELPER_SCRIPT = REPO_ROOT / "scripts" / "helpers" / "updateVersionDashboardData.
 NETWORK_ORDER = ["mainnet", "testnet", "devnet"]
 RENDERED_REPOSITORY_ORDER = [
     "splice",
+    "canton",
     "damlSdk",
+    "dpm",
     "pqs",
     "tokenStandard",
     "walletSdk",
@@ -60,6 +62,9 @@ NPM_PACKAGE_URLS = {
 }
 DPM_INSTALLER_URL = "https://get.digitalasset.com/install/install.sh"
 DPM_LATEST_URL = "https://get.digitalasset.com/install/latest"
+DPM_RELEASE_REPO = "digital-asset/dpm"
+DPM_LATEST_RELEASE_URL = f"https://api.github.com/repos/{DPM_RELEASE_REPO}/releases/latest"
+DPM_RELEASES_PAGE_URL = f"https://github.com/{DPM_RELEASE_REPO}/releases"
 WALLET_GATEWAY_PACKAGE_URL = (
     "https://github.com/digital-asset/wallet-gateway/pkgs/container/"
     "wallet-gateway%2Fdocker%2Fwallet-gateway"
@@ -245,6 +250,16 @@ def fetch_dar_versions_from_splice_release_line(
         [{"name": name, "version": dar_versions[name]} for name in DASHBOARD_DAR_NAMES],
         splice_blob_file_url(branch, DARS_LOCK_PATH),
     )
+
+
+def fetch_latest_dpm_version(timeout: float) -> str:
+    data = fetch_json(DPM_LATEST_RELEASE_URL, timeout)
+    if data.get("prerelease"):
+        raise RuntimeError(f"Latest GitHub release at {DPM_LATEST_RELEASE_URL} is a prerelease")
+    tag_name = data.get("tag_name")
+    if not isinstance(tag_name, str) or not STABLE_SEMVER_RE.fullmatch(tag_name):
+        raise RuntimeError(f"Expected stable tag_name from {DPM_LATEST_RELEASE_URL}")
+    return tag_name
 
 
 def fetch_latest_wallet_gateway_version(timeout: float) -> str:
@@ -478,6 +493,7 @@ def collect_snapshot(timeout: float, existing_config: dict) -> dict:
             for network_key in NETWORK_ORDER
         },
         "latestDpmSdk": latest_dpm_sdk,
+        "latestDpm": fetch_latest_dpm_version(timeout),
         "latestPqs": fetch_pqs_version_from_scribe_component(
             timeout,
             previous_stable_version=previous_pqs,
@@ -519,8 +535,12 @@ def repository_url(repository_key: str, existing_config: dict) -> str:
     existing = existing_config.get("repositories", {}).get(repository_key, {})
     if repository_key == "splice":
         return "https://github.com/canton-network/splice/releases"
-    if repository_key == "damlSdk":
+    if repository_key == "canton":
         return SPLICE_REPOSITORY_URL
+    if repository_key == "damlSdk":
+        return str(existing.get("url") or "https://github.com/digital-asset/daml/releases")
+    if repository_key == "dpm":
+        return DPM_RELEASES_PAGE_URL
     if repository_key == "pqs":
         return f"https://{PQS_SCRIBE_COMPONENT_REPOSITORY}"
     if repository_key == "walletGateway":
@@ -542,11 +562,22 @@ def build_repository_mapping(
             external_version = network["spliceVersion"]
             branch = "main"
             folder_path_repo = "splice-wallet-kernel"
-        elif repository_key == "damlSdk":
-            # Historical config key. The dashboard currently labels this row as "Canton".
+        elif repository_key == "canton":
             external_version = network["cantonVersion"]
             branch = network["cantonReleaseLineBranch"]
             folder_path_repo = CANTON_SOURCES_PATH
+        elif repository_key == "damlSdk":
+            external_version = existing_repo_version(
+                existing_config,
+                repository_key,
+                network_key,
+            )
+            branch = ""
+            folder_path_repo = ""
+        elif repository_key == "dpm":
+            external_version = snapshot["latestDpm"]
+            branch = ""
+            folder_path_repo = ""
         elif repository_key == "pqs":
             external_version = snapshot["latestPqs"]
             branch = ""
@@ -604,8 +635,15 @@ def build_source_contract(snapshot: dict) -> dict:
         "canton": (
             "Use the observed Splice version from the network /info endpoint, derive the "
             "matching canton-network/splice release-line branch, then read version from "
-            "nix/canton-sources.json. The config key remains damlSdk for compatibility "
-            "with the existing dashboard component."
+            "nix/canton-sources.json."
+        ),
+        "damlSdk": (
+            "Manual/preserved in dashboard config. Intended source: latest stable Daml SDK from "
+            f"{DPM_LATEST_URL} (currently {snapshot['latestDpmSdk']})."
+        ),
+        "dpm": (
+            f"Latest stable dpm CLI release tag from {DPM_LATEST_RELEASE_URL} "
+            f"(currently {snapshot['latestDpm']})."
         ),
         "damlSdkInstaller": (
             f"DPM installer channel: curl {DPM_INSTALLER_URL} | sh; "
