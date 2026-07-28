@@ -615,8 +615,15 @@ canton.participants.participant1 {
 }
 ```
 
-### Increase session **signing** keys lifetime
-When using external KMS (Key Management Service) provider you can control how long a session signing key remains active by adjusting the `key-validity-duration` and the `key-eviction-period`. The `key-eviction-period` should always be longer than the `key-validity-duration` and at least as long as the sum of `confirmation_response_timeout` and `mediator_reaction_timeout`, as configured in the dynamic Synchronizer parameters.
+Enable session **signing** keys
+-------------------------------
+
+Much like session encryption keys, enabling session signing keys introduces a trade-off: short-lived keys are kept in
+memory and therefore outside of direct protection by the KMS. Therefore, operators should evaluate this performance
+and cost benefit against their security requirements and threat model before enabling this feature.
+
+When using :ref:`external KMS (Key Management Service) provider <external_key_storage>` you can enable session signing
+keys by setting:
 
 ```scala
 canton.participants.participant1.crypto.kms {
@@ -631,6 +638,32 @@ canton.participants.participant1.crypto.kms {
   }
 }
 ```
+
+Increase session **signing** keys lifetime
+------------------------------------------
+
+Increasing the lifetime of session signing keys is also a trade-off: longer lifetimes improves performance and reduce KMS
+load, but extends the time window during which key material remains in memory.
+Security best practice guidance (e.g. OWASP) recommends using short-lived sensitive key material, typically on the order
+of around 5 minutes: `OWASP (Token Lifetime / Access Tokens) <https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/05-Authorization_Testing/05.1-Testing_for_OAuth_Authorization_Server_Weaknesses>`_
+This is also the current default value.
+
+You can increase the lifetime of session signing keys via the ``key-validity-duration`` config parameter:
+
+.. literalinclude:: CANTON/community/app/src/test/resources/session-key-cache.conf
+   :language: scala
+   :start-after: user-manual-entry-begin: ConfigureSessionSigningKeyConfig
+   :end-before: user-manual-entry-end: ConfigureSessionSigningKeyConfig
+   :dedent:
+
+The ``key-validity-duration`` **must always** be shorter than the ``key-eviction-period``.
+The ``key-validity-duration`` should also be at least as long as the ``defaultMaxSequencingTimeOffset``, as well as
+the sum of ``confirmation_response_timeout`` and ``mediator_reaction_timeout``, as configured in
+the :externalref:`dynamic Synchronizer parameters <dynamic_synchronizer_parameters>`.
+
+If you want to know more about each configurable parameter and the factors to consider when modifying them,
+you can refer to the session signing keys' :externalref:`Configurable Parameters <parametrization_session_signing_keys>`
+section.
 
 {/* COPIED_END */}
 
