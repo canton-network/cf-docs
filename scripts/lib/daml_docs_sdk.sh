@@ -28,12 +28,31 @@ daml_docs_daml_pkg_db_root() {
   printf '%s\n' "$DAML_DOCS_DAML_HOME/sdk/$DAML_DOCS_SDK_VERSION/damlc/resources/pkg-db_dir"
 }
 
+daml_docs_dpm_component_version() {
+  local component="$1"
+  python3 "$DAML_DOCS_SCRIPT_DIR/resolve_dpm_sdk_component.py" \
+    --dpm-home "$DAML_DOCS_DPM_HOME" \
+    --sdk-version "$DAML_DOCS_SDK_VERSION" \
+    --component "$component"
+}
+
+daml_docs_dpm_component_root() {
+  local component="$1"
+  local component_version
+  component_version="$(daml_docs_dpm_component_version "$component")"
+  printf '%s\n' "$DAML_DOCS_DPM_HOME/cache/components/$component/$component_version"
+}
+
 daml_docs_dpm_pkg_db_root() {
-  printf '%s\n' "$DAML_DOCS_DPM_HOME/cache/components/damlc/$DAML_DOCS_SDK_VERSION/damlc-dist-dpm/resources/pkg-db_dir"
+  local component_root
+  component_root="$(daml_docs_dpm_component_root "damlc")"
+  printf '%s\n' "$component_root/damlc-dist-dpm/resources/pkg-db_dir"
 }
 
 daml_docs_dpm_damlc_bin() {
-  printf '%s\n' "$DAML_DOCS_DPM_HOME/cache/components/damlc/$DAML_DOCS_SDK_VERSION/damlc-dist-dpm/damlc"
+  local component_root
+  component_root="$(daml_docs_dpm_component_root "damlc")"
+  printf '%s\n' "$component_root/damlc-dist-dpm/damlc"
 }
 
 daml_docs_ensure_daml_sdk() {
@@ -63,12 +82,14 @@ daml_docs_ensure_daml_sdk() {
 }
 
 daml_docs_ensure_dpm_sdk() {
-  local pkg_db_root
-  pkg_db_root="$(daml_docs_dpm_pkg_db_root)"
-  if [[ -d "$pkg_db_root" ]]; then
+  local pkg_db_root=""
+  if pkg_db_root="$(daml_docs_dpm_pkg_db_root 2>/dev/null)" && [[ -d "$pkg_db_root" ]]; then
     return 0
   fi
   if [[ "$DAML_DOCS_SKIP_INSTALL" == true ]]; then
+    if ! pkg_db_root="$(daml_docs_dpm_pkg_db_root)"; then
+      return 1
+    fi
     echo "DPM SDK cache not found at $pkg_db_root and --skip-install was set." >&2
     return 1
   fi
@@ -79,6 +100,9 @@ daml_docs_ensure_dpm_sdk() {
   daml_docs_log "Installing SDK ${DAML_DOCS_SDK_VERSION} via dpm"
   if ! dpm install "$DAML_DOCS_SDK_VERSION"; then
     echo "Failed to install SDK ${DAML_DOCS_SDK_VERSION} via dpm." >&2
+    return 1
+  fi
+  if ! pkg_db_root="$(daml_docs_dpm_pkg_db_root)"; then
     return 1
   fi
   if [[ ! -d "$pkg_db_root" ]]; then
@@ -120,6 +144,8 @@ daml_docs_configure_dpm_source() {
 }
 
 daml_docs_sdk_configure() {
+  local dpm_pkg_db_root=""
+
   if [[ "$DAML_DOCS_SDK_VERSION" == "latest" ]]; then
     DAML_DOCS_SDK_VERSION="$(daml_docs_latest_sdk_version)"
   fi
@@ -128,7 +154,7 @@ daml_docs_sdk_configure() {
   fi
 
   if [[ "$DAML_DOCS_SDK_SOURCE" == "auto" ]]; then
-    if [[ -d "$(daml_docs_dpm_pkg_db_root)" ]]; then
+    if dpm_pkg_db_root="$(daml_docs_dpm_pkg_db_root 2>/dev/null)" && [[ -d "$dpm_pkg_db_root" ]]; then
       DAML_DOCS_SDK_SOURCE="dpm"
     elif [[ -d "$(daml_docs_daml_pkg_db_root)" ]]; then
       DAML_DOCS_SDK_SOURCE="daml"
