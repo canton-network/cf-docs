@@ -15,6 +15,18 @@ const REPO_VERSION_CONFIG_PATH = path.join(PROJECT_ROOT, 'config/repo-version-co
 const VERSION_DASHBOARD_META_PATH = path.join(PROJECT_ROOT, 'config/version-dashboard-meta.json');
 const OUTPUT_PATH = path.join(PROJECT_ROOT, 'docs-main/snippets/generated/version-dashboard-data.mdx');
 
+const VERSION_ORDER = [
+  'splice',
+  'canton',
+  'damlSdk',
+  'pqs',
+  'tokenStandard',
+  'walletSdk',
+  'dappSdk',
+  'walletGateway',
+  'dpm',
+];
+
 /**
  * Format helper for MDX output
  */
@@ -52,6 +64,32 @@ function formatValue(value, indent = 0) {
   return String(value);
 }
 
+function formatLastUpdatedLabel(isoString) {
+  const date = new Date(isoString);
+  if (Number.isNaN(date.getTime())) {
+    throw new Error(`Invalid generatedAt timestamp: ${isoString}`);
+  }
+
+  return date.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
+function buildDashboardMetadata(repoConfig) {
+  const generatedAt = repoConfig?._generated?.generatedAt;
+  if (!generatedAt) {
+    throw new Error('Missing _generated.generatedAt in repo-version-config.json');
+  }
+
+  return {
+    lastUpdatedAt: generatedAt,
+    lastUpdatedLabel: formatLastUpdatedLabel(generatedAt),
+  };
+}
+
 function buildNetworkData(repoConfig, metaConfig) {
   const networkData = {};
   
@@ -69,14 +107,26 @@ function buildNetworkData(repoConfig, metaConfig) {
       continue;
     }
     
-    // Each repository's externalVersion for this network becomes a version entry
-    const versions = {};
+    // Each repository's externalVersion for this network becomes a version entry.
+    const versionsByRepo = {};
     if (repoConfig.repositories) {
       for (const [repoName, repo] of Object.entries(repoConfig.repositories)) {
         const versionMapping = repo.versionMapping[networkKey];
         if (versionMapping && versionMapping.externalVersion) {
-          versions[repoName] = versionMapping.externalVersion;
+          versionsByRepo[repoName] = versionMapping.externalVersion;
         }
+      }
+    }
+
+    const versions = {};
+    for (const repoName of VERSION_ORDER) {
+      if (versionsByRepo[repoName] !== undefined) {
+        versions[repoName] = versionsByRepo[repoName];
+      }
+    }
+    for (const [repoName, externalVersion] of Object.entries(versionsByRepo)) {
+      if (versions[repoName] === undefined) {
+        versions[repoName] = externalVersion;
       }
     }
     
@@ -101,8 +151,13 @@ function buildNetworkData(repoConfig, metaConfig) {
   return networkData;
 }
 
-function generateMDX(networkData) {
-  const lines = ['export const networkData = {'];
+function generateMDX(dashboardMetadata, networkData) {
+  const lines = [
+    `export const lastUpdatedAt = ${formatValue(dashboardMetadata.lastUpdatedAt, 0)};`,
+    `export const lastUpdatedLabel = ${formatValue(dashboardMetadata.lastUpdatedLabel, 0)};`,
+    '',
+    'export const networkData = {',
+  ];
   
   for (const [networkKey, network] of Object.entries(networkData)) {
     lines.push(`  ${networkKey}: {`);
@@ -168,8 +223,9 @@ function main() {
     }
     
     const networkData = buildNetworkData(repoConfig, metaConfig);
+    const dashboardMetadata = buildDashboardMetadata(repoConfig);
     
-    const mdxContent = generateMDX(networkData);
+    const mdxContent = generateMDX(dashboardMetadata, networkData);
     
     const outputDir = path.dirname(OUTPUT_PATH);
     fs.mkdirSync(outputDir, { recursive: true });
