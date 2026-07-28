@@ -51,6 +51,33 @@ def sample_network_data() -> dict[str, object]:
     }
 
 
+def test_load_network_data_preserves_export_in_substitution_strings(tmp_path: Path) -> None:
+    module = load_script_module()
+    network_data = tmp_path / "version-dashboard-data.mdx"
+    network_data.write_text(
+        """export const lastUpdatedAt = '2026-07-28T08:35:56+00:00';
+export const lastUpdatedLabel = 'July 28, 2026';
+
+export const networkData = {
+  mainnet: {
+    name: 'MainNet',
+    versions: { splice: '0.6.12' },
+    substitutions: {
+      image_tag_set: 'export IMAGE_TAG=0.6.12',
+      chart_version_set: 'export CHART_VERSION=0.6.12',
+    },
+  },
+};
+""",
+        encoding="utf-8",
+    )
+
+    loaded = module.load_network_data(network_data)
+
+    assert loaded["mainnet"]["substitutions"]["image_tag_set"] == "export IMAGE_TAG=0.6.12"
+    assert loaded["mainnet"]["substitutions"]["chart_version_set"] == "export CHART_VERSION=0.6.12"
+
+
 def test_render_generated_block_inlines_imported_snippets_and_substitutes_tokens(tmp_path: Path) -> None:
     module = load_script_module()
     docs_main = tmp_path / "docs-main"
