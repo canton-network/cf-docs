@@ -53,7 +53,9 @@ def load_network_data(path: Path = NETWORK_DATA_PATH) -> dict[str, Any]:
     node_script = """
 const fs = require('fs');
 const source = fs.readFileSync(process.argv[1], 'utf8');
-const body = source.replace(/export\\s+const\\s+networkData\\s*=\\s*/, 'const networkData = ');
+// Strip only top-level export declarations (e.g. `export const networkData`),
+// not the word "export" inside string substitution values.
+const body = source.replace(/^export\\s+/gm, '');
 const networkData = Function(`${body}; return networkData;`)();
 process.stdout.write(JSON.stringify(networkData));
 """
