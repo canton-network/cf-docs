@@ -47,6 +47,7 @@ class UpdateTarget:
     validation: tuple[str, ...]
     source_update_commands: tuple[tuple[str, ...], ...] = ()
     source_update_paths: tuple[str, ...] = ()
+    require_summary_changes: bool = False
     auto_merge: bool = True
 
 
@@ -81,6 +82,7 @@ UPDATE_TARGETS = (
             "config/repo-version-config.json",
             "docs-main/snippets/generated/version-dashboard-data.mdx",
         ),
+        require_summary_changes=True,
     ),
     UpdateTarget(
         key="splice-openapi",
@@ -605,10 +607,26 @@ def process_target(*, target: UpdateTarget, base_sha: str, base_branch: str, rep
         )
         return
 
+    changes: list[str] | None = None
+    if target.require_summary_changes:
+        if before_path is None:
+            raise ValueError(f"Update target {target.key} requires a summary path")
+        changes = summarize_target_changes(target, before_path)
+        if not changes:
+            print(f"No material changes for {target.title}; skipping generation")
+            pr_utils.close_stale_pull_request(
+                title=target.title,
+                branch=target.branch,
+                base_branch=base_branch,
+                repository=repository,
+            )
+            return
+
     for command in target.generate_commands:
         pr_utils.run(command)
 
-    changes = summarize_target_changes(target, before_path) if before_path is not None else []
+    if changes is None:
+        changes = summarize_target_changes(target, before_path) if before_path is not None else []
     with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as body_file:
         body_path = Path(body_file.name)
     body_path.write_text(body_markdown(target=target, changes=changes), encoding="utf-8")
