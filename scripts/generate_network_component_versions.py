@@ -70,6 +70,8 @@ WALLET_GATEWAY_PACKAGE_URL = (
     "wallet-gateway%2Fdocker%2Fwallet-gateway"
 )
 SPLICE_REPOSITORY_URL = "https://github.com/canton-network/splice"
+# Canton dashboard versions are pinned in nix/canton-sources.json on Splice release-line branches.
+CANTON_VERSION_SOURCE_REPO_URL = SPLICE_REPOSITORY_URL
 SPLICE_RAW_BASE_URL = "https://raw.githubusercontent.com/canton-network/splice"
 CANTON_SOURCES_PATH = "nix/canton-sources.json"
 DARS_LOCK_PATH = "daml/dars.lock"
@@ -536,7 +538,7 @@ def repository_url(repository_key: str, existing_config: dict) -> str:
     if repository_key == "splice":
         return "https://github.com/canton-network/splice/releases"
     if repository_key == "canton":
-        return SPLICE_REPOSITORY_URL
+        return CANTON_VERSION_SOURCE_REPO_URL
     if repository_key == "damlSdk":
         return str(existing.get("url") or "https://github.com/digital-asset/daml/releases")
     if repository_key == "dpm":
