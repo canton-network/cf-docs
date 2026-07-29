@@ -7,6 +7,18 @@ from pathlib import Path
 
 from x2mdx.cli import main as cli_main
 from x2mdx.daml_json.lifecycle import build_daml_doc_report_from_sources
+from x2mdx.daml_json.render import (
+    TypeLinkContext,
+    _TYPE_LINK_CONTEXT,
+    mdx_function_heading,
+    render_adt,
+    render_fields_response_fields,
+    render_function,
+    render_instance_line,
+    render_type,
+    render_type_name,
+    resolve_anchor_href,
+)
 from x2mdx.daml_json.snapshots import load_daml_doc_sources
 
 
@@ -108,6 +120,28 @@ def utilities_style_module(name: str) -> dict[str, object]:
 
 
 class DamlJsonTests(unittest.TestCase):
+    def test_render_fields_response_fields_uses_mintlify_component(self) -> None:
+        rendered = render_fields_response_fields(
+            [
+                {
+                    "fd_name": "owner",
+                    "fd_type": {"TypeApp": [{}, "Party", []]},
+                    "fd_descr": ["Owner party"],
+                },
+                {
+                    "fd_name": "amount",
+                    "fd_type": {"TypeLit": "Int"},
+                    "fd_descr": [],
+                },
+            ]
+        )
+
+        self.assertIn('<ResponseField name="owner" type="Party">', rendered)
+        self.assertIn("Owner party", rendered)
+        self.assertIn("</ResponseField>", rendered)
+        self.assertIn('<ResponseField name="amount" type="Int" />', rendered)
+        self.assertNotIn("| Field | Type | Description |", rendered)
+
     def setUp(self) -> None:
         self.temp_dir = tempfile.TemporaryDirectory()
         self.root = Path(self.temp_dir.name)
@@ -165,6 +199,155 @@ class DamlJsonTests(unittest.TestCase):
         self.assertIn("DA.Legacy", module_names)
         self.assertIn("DA.List", module_names)
         self.assertIn("DA.NonEmpty", module_names)
+
+    def test_percent_function_heading_uses_mdx_safe_form(self) -> None:
+        self.assertEqual(mdx_function_heading("%"), "### modulo")
+        self.assertEqual(mdx_function_heading("$"), "### `$`")
+        self.assertEqual(mdx_function_heading("&&"), "### `&&`")
+
+        rendered = render_function(
+            {
+                "fct_name": "%",
+                "fct_anchor": "function-ghc-num-x-53920",
+                "fct_type": {
+                    "TypeFun": [
+                        {
+                            "TypeApp": [
+                                {"referenceAnchor": "type-ghc-types-int-37261"},
+                                "Int",
+                                [],
+                            ]
+                        },
+                        {
+                            "TypeApp": [
+                                {"referenceAnchor": "type-ghc-types-int-37261"},
+                                "Int",
+                                [],
+                            ]
+                        },
+                    ]
+                },
+                "fct_context": [],
+                "fct_descr": [["remainder"]],
+            }
+        )
+        self.assertIn("### modulo", rendered)
+        self.assertNotIn("### Modulo", rendered)
+        self.assertNotIn("### `%`", rendered)
+        self.assertNotIn("### `\\%`", rendered)
+        self.assertNotIn("<code>{'\\u0025'}</code>", rendered)
+        self.assertIn(
+            "% : [`Int`](#type-ghc-types-int-37261) -> [`Int`](#type-ghc-types-int-37261)",
+            rendered,
+        )
+        self.assertNotIn("```daml", rendered)
+
+    def test_type_synonym_heading_keeps_rhs_below_title(self) -> None:
+        rendered = render_adt(
+            {
+                "TypeSynDoc": {
+                    "ad_anchor": "type-ghc-types-decimal-18135",
+                    "ad_name": "Decimal",
+                    "ad_args": [],
+                    "ad_descr": [],
+                    "ad_rhs": {
+                        "TypeApp": [
+                            {"referenceAnchor": "type-ghc-types-numeric-891"},
+                            "Numeric",
+                            [{"TypeLit": "10"}],
+                        ]
+                    },
+                    "ad_warns": [],
+                    "ad_instances": [],
+                }
+            }
+        )
+        self.assertIn("### `type Decimal`", rendered)
+        self.assertIn("= [`Numeric`](#type-ghc-types-numeric-891) `10`", rendered)
+        self.assertNotIn("### `type Decimal =", rendered)
+
+    def test_instance_lines_link_reference_anchors(self) -> None:
+        line = render_instance_line(
+            {
+                "id_context": [],
+                "id_type": {
+                    "TypeApp": [
+                        {"referenceAnchor": "class-ghc-num-number-53664"},
+                        "Number",
+                        [
+                            {
+                                "TypeApp": [
+                                    {"referenceAnchor": "type-ghc-types-int-37261"},
+                                    "Int",
+                                    [],
+                                ]
+                            }
+                        ],
+                    ]
+                },
+            }
+        )
+        self.assertEqual(
+            line,
+            "- instance [`Number`](#class-ghc-num-number-53664) [`Int`](#type-ghc-types-int-37261)",
+        )
+        self.assertEqual(render_type({"TypeLit": "Int"}, link=False), "Int")
+
+    def test_type_links_resolve_cross_page_via_anchor_index(self) -> None:
+        ctx = TypeLinkContext(
+            current_page="da-action-state",
+            link_prefix="/appdev/reference/daml-standard-library",
+            anchor_to_page={
+                "type-da-action-state-type-state-76783": "da-action-state",
+                "class-da-internal-prelude-action-68790": "prelude",
+                "class-da-internal-record-getfield-53979": "da-record",
+                "class-da-action-state-class-actionstate-80467": "da-action-state-class",
+            },
+        )
+        self.assertEqual(
+            resolve_anchor_href("type-da-action-state-type-state-76783", ctx),
+            "#type-da-action-state-type-state-76783",
+        )
+        self.assertEqual(
+            resolve_anchor_href("class-da-internal-prelude-action-68790", ctx),
+            "/appdev/reference/daml-standard-library/prelude#class-da-internal-prelude-action-68790",
+        )
+        self.assertEqual(
+            resolve_anchor_href("class-da-action-state-class-actionstate-80467", ctx),
+            "/appdev/reference/daml-standard-library/da-action-state-class"
+            "#class-da-action-state-class-actionstate-80467",
+        )
+        self.assertIsNone(resolve_anchor_href("missing-anchor", ctx))
+
+        token = _TYPE_LINK_CONTEXT.set(ctx)
+        try:
+            self.assertEqual(
+                render_type_name(
+                    "Action",
+                    {"referenceAnchor": "class-da-internal-prelude-action-68790"},
+                    link=True,
+                ),
+                "[`Action`](/appdev/reference/daml-standard-library/prelude"
+                "#class-da-internal-prelude-action-68790)",
+            )
+            self.assertEqual(
+                render_type_name(
+                    "State",
+                    {"referenceAnchor": "type-da-action-state-type-state-76783"},
+                    link=True,
+                ),
+                "[`State`](#type-da-action-state-type-state-76783)",
+            )
+            self.assertEqual(
+                render_type_name(
+                    "Serializable",
+                    {"referenceAnchor": "class-da-internal-serializable-serializable-25694"},
+                    link=True,
+                ),
+                "`Serializable`",
+            )
+        finally:
+            _TYPE_LINK_CONTEXT.reset(token)
 
     def test_cli_builds_index_and_module_pages(self) -> None:
         manifest_path = self._write_manifest()

@@ -22,7 +22,9 @@ HELPER_SCRIPT = REPO_ROOT / "scripts" / "helpers" / "updateVersionDashboardData.
 NETWORK_ORDER = ["mainnet", "testnet", "devnet"]
 RENDERED_REPOSITORY_ORDER = [
     "splice",
+    "canton",
     "damlSdk",
+    "dpm",
     "pqs",
     "tokenStandard",
     "walletSdk",
@@ -60,16 +62,21 @@ NPM_PACKAGE_URLS = {
 }
 DPM_INSTALLER_URL = "https://get.digitalasset.com/install/install.sh"
 DPM_LATEST_URL = "https://get.digitalasset.com/install/latest"
+DPM_RELEASE_REPO = "digital-asset/dpm"
+DPM_LATEST_RELEASE_URL = f"https://api.github.com/repos/{DPM_RELEASE_REPO}/releases/latest"
+DPM_RELEASES_PAGE_URL = f"https://github.com/{DPM_RELEASE_REPO}/releases"
 WALLET_GATEWAY_PACKAGE_URL = (
     "https://github.com/digital-asset/wallet-gateway/pkgs/container/"
     "wallet-gateway%2Fdocker%2Fwallet-gateway"
 )
 SPLICE_REPOSITORY_URL = "https://github.com/canton-network/splice"
+# Canton dashboard versions are pinned in nix/canton-sources.json on Splice release-line branches.
+CANTON_VERSION_SOURCE_REPO_URL = SPLICE_REPOSITORY_URL
 SPLICE_RAW_BASE_URL = "https://raw.githubusercontent.com/canton-network/splice"
 CANTON_SOURCES_PATH = "nix/canton-sources.json"
 DARS_LOCK_PATH = "daml/dars.lock"
 DASHBOARD_DAR_NAMES = ("splice-amulet", "splice-wallet", "splice-dso-governance")
-WALLET_GATEWAY_RELEASE_REPO = "hyperledger-labs/splice-wallet-kernel"
+WALLET_GATEWAY_RELEASE_REPO = "canton-network/wallet"
 WALLET_GATEWAY_RELEASE_TAG_PREFIX = "@canton-network/wallet-gateway-remote@"
 WALLET_GATEWAY_RELEASES_URL = (
     f"https://api.github.com/repos/{WALLET_GATEWAY_RELEASE_REPO}/releases"
@@ -81,9 +88,21 @@ WALLET_GATEWAY_RELEASES_PAGE_URL = (
 PQS_IMAGE_REPOSITORY = (
     "europe-docker.pkg.dev/da-images/public/docker/participant-query-store"
 )
-PQS_TAGS_URL = (
-    "https://europe-docker.pkg.dev/v2/da-images/public/docker/"
-    "participant-query-store/tags/list"
+PQS_SCRIBE_COMPONENT_REPOSITORY = (
+    "europe-docker.pkg.dev/da-images/public/components/scribe"
+)
+PQS_SCRIBE_RELEASE_LINE_TAG = "3.5"
+PQS_SCRIBE_MANIFEST_URL = (
+    "https://europe-docker.pkg.dev/v2/da-images/public/components/"
+    f"scribe/manifests/{PQS_SCRIBE_RELEASE_LINE_TAG}"
+)
+OCI_MANIFEST_ACCEPT = ", ".join(
+    [
+        "application/vnd.oci.image.index.v1+json",
+        "application/vnd.oci.image.manifest.v1+json",
+        "application/vnd.docker.distribution.manifest.list.v2+json",
+        "application/vnd.docker.distribution.manifest.v2+json",
+    ]
 )
 STABLE_SEMVER_RE = re.compile(r"\d+\.\d+\.\d+")
 USER_AGENT = "cf-docs-version-dashboard-generator"
@@ -137,6 +156,14 @@ def request_url(url: str, timeout: float):
 
 def fetch_json(url: str, timeout: float) -> dict:
     with request_url(url, timeout) as response:
+        return json.load(response)
+
+
+def fetch_manifest_json(url: str, timeout: float) -> dict:
+    headers = request_headers(url)
+    headers["Accept"] = OCI_MANIFEST_ACCEPT
+    request = Request(url, headers=headers)
+    with urlopen(request, timeout=timeout) as response:
         return json.load(response)
 
 
@@ -227,6 +254,16 @@ def fetch_dar_versions_from_splice_release_line(
     )
 
 
+def fetch_latest_dpm_version(timeout: float) -> str:
+    data = fetch_json(DPM_LATEST_RELEASE_URL, timeout)
+    if data.get("prerelease"):
+        raise RuntimeError(f"Latest GitHub release at {DPM_LATEST_RELEASE_URL} is a prerelease")
+    tag_name = data.get("tag_name")
+    if not isinstance(tag_name, str) or not STABLE_SEMVER_RE.fullmatch(tag_name):
+        raise RuntimeError(f"Expected stable tag_name from {DPM_LATEST_RELEASE_URL}")
+    return tag_name
+
+
 def fetch_latest_wallet_gateway_version(timeout: float) -> str:
     versions: list[str] = []
     tag_re = re.compile(
@@ -250,20 +287,33 @@ def fetch_latest_wallet_gateway_version(timeout: float) -> str:
     return latest_stable_version(versions, WALLET_GATEWAY_RELEASES_URL)
 
 
-def fetch_latest_pqs_version(timeout: float) -> str:
-    data = fetch_json(PQS_TAGS_URL, timeout)
-    tags: list[str] = []
-    manifest = data.get("manifest", {})
-    if not isinstance(manifest, dict):
-        raise RuntimeError(f"Expected Artifact Registry manifest map from {PQS_TAGS_URL}")
-    for entry in manifest.values():
-        if not isinstance(entry, dict):
-            continue
-        entry_tags = entry.get("tag", [])
-        if not isinstance(entry_tags, list):
-            continue
-        tags.extend(tag for tag in entry_tags if isinstance(tag, str))
-    return latest_stable_version(tags, PQS_TAGS_URL)
+def previous_stable_pqs_version(existing_config: dict) -> str:
+    versions = [
+        existing_repo_version(existing_config, "pqs", network_key)
+        for network_key in NETWORK_ORDER
+    ]
+    return latest_stable_version(versions, "existing PQS dashboard config")
+
+
+def fetch_pqs_version_from_scribe_component(
+    timeout: float,
+    *,
+    previous_stable_version: str,
+) -> str:
+    data = fetch_manifest_json(PQS_SCRIBE_MANIFEST_URL, timeout)
+    annotations = data.get("annotations", {})
+    if not isinstance(annotations, dict):
+        raise RuntimeError(f"Expected manifest annotations from {PQS_SCRIBE_MANIFEST_URL}")
+    version = str(
+        annotations.get("org.opencontainers.image.version")
+        or annotations.get("com.digitalasset.version")
+        or ""
+    )
+    if not version:
+        raise RuntimeError(f"Missing Scribe image version annotation in {PQS_SCRIBE_MANIFEST_URL}")
+    if STABLE_SEMVER_RE.fullmatch(version):
+        return version
+    return previous_stable_version
 
 
 def clean_html_text(value: str) -> str:
@@ -433,8 +483,10 @@ def collect_network_snapshot(network_key: str, timeout: float) -> dict:
     }
 
 
-def collect_snapshot(timeout: float) -> dict:
+def collect_snapshot(timeout: float, existing_config: dict) -> dict:
     generated_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    latest_dpm_sdk = fetch_text(DPM_LATEST_URL, timeout).strip()
+    previous_pqs = previous_stable_pqs_version(existing_config)
     return {
         "generatedAt": generated_at,
         "generatorMode": "public_source_collection_with_manual_fallbacks",
@@ -442,8 +494,12 @@ def collect_snapshot(timeout: float) -> dict:
             network_key: collect_network_snapshot(network_key, timeout)
             for network_key in NETWORK_ORDER
         },
-        "latestDpmSdk": fetch_text(DPM_LATEST_URL, timeout).strip(),
-        "latestPqs": fetch_latest_pqs_version(timeout),
+        "latestDpmSdk": latest_dpm_sdk,
+        "latestDpm": fetch_latest_dpm_version(timeout),
+        "latestPqs": fetch_pqs_version_from_scribe_component(
+            timeout,
+            previous_stable_version=previous_pqs,
+        ),
         "latestWalletGateway": fetch_latest_wallet_gateway_version(timeout),
         "npmVersions": {
             key: fetch_npm_latest(package_name, timeout)
@@ -481,10 +537,14 @@ def repository_url(repository_key: str, existing_config: dict) -> str:
     existing = existing_config.get("repositories", {}).get(repository_key, {})
     if repository_key == "splice":
         return "https://github.com/canton-network/splice/releases"
+    if repository_key == "canton":
+        return CANTON_VERSION_SOURCE_REPO_URL
     if repository_key == "damlSdk":
-        return SPLICE_REPOSITORY_URL
+        return str(existing.get("url") or "https://github.com/digital-asset/daml/releases")
+    if repository_key == "dpm":
+        return DPM_RELEASES_PAGE_URL
     if repository_key == "pqs":
-        return f"https://{PQS_IMAGE_REPOSITORY}"
+        return f"https://{PQS_SCRIBE_COMPONENT_REPOSITORY}"
     if repository_key == "walletGateway":
         return WALLET_GATEWAY_RELEASES_PAGE_URL
     if repository_key in NPM_PACKAGE_URLS:
@@ -504,15 +564,26 @@ def build_repository_mapping(
             external_version = network["spliceVersion"]
             branch = "main"
             folder_path_repo = "splice-wallet-kernel"
-        elif repository_key == "damlSdk":
-            # Historical config key. The dashboard currently labels this row as "Canton".
+        elif repository_key == "canton":
             external_version = network["cantonVersion"]
             branch = network["cantonReleaseLineBranch"]
             folder_path_repo = CANTON_SOURCES_PATH
+        elif repository_key == "damlSdk":
+            external_version = existing_repo_version(
+                existing_config,
+                repository_key,
+                network_key,
+            )
+            branch = ""
+            folder_path_repo = ""
+        elif repository_key == "dpm":
+            external_version = snapshot["latestDpm"]
+            branch = ""
+            folder_path_repo = ""
         elif repository_key == "pqs":
             external_version = snapshot["latestPqs"]
             branch = ""
-            folder_path_repo = PQS_IMAGE_REPOSITORY
+            folder_path_repo = f"{PQS_SCRIBE_COMPONENT_REPOSITORY}:{PQS_SCRIBE_RELEASE_LINE_TAG}"
         elif repository_key in NPM_PACKAGE_NAMES:
             external_version = snapshot["npmVersions"][repository_key]
             branch = ""
@@ -566,8 +637,15 @@ def build_source_contract(snapshot: dict) -> dict:
         "canton": (
             "Use the observed Splice version from the network /info endpoint, derive the "
             "matching canton-network/splice release-line branch, then read version from "
-            "nix/canton-sources.json. The config key remains damlSdk for compatibility "
-            "with the existing dashboard component."
+            "nix/canton-sources.json."
+        ),
+        "damlSdk": (
+            "Manual/preserved in dashboard config. Intended source: latest stable Daml SDK from "
+            f"{DPM_LATEST_URL} (currently {snapshot['latestDpmSdk']})."
+        ),
+        "dpm": (
+            f"Latest stable dpm CLI release tag from {DPM_LATEST_RELEASE_URL} "
+            f"(currently {snapshot['latestDpm']})."
         ),
         "damlSdkInstaller": (
             f"DPM installer channel: curl {DPM_INSTALLER_URL} | sh; "
@@ -581,8 +659,10 @@ def build_source_contract(snapshot: dict) -> dict:
             f"{WALLET_GATEWAY_RELEASE_REPO}."
         ),
         "pqs": (
-            "Latest stable semver tag from the public Artifact Registry image "
-            f"{PQS_IMAGE_REPOSITORY}."
+            "Read org.opencontainers.image.version from the public Artifact Registry "
+            f"Scribe component image {PQS_SCRIBE_COMPONENT_REPOSITORY}:"
+            f"{PQS_SCRIBE_RELEASE_LINE_TAG}. If the floating release-line tag resolves "
+            "to a prerelease, retain the previous stable dashboard value."
         ),
         "minProtocolVersion": "Manual/fallback until a public live source is identified.",
         "darVersions": (
@@ -630,7 +710,7 @@ def run_helper() -> None:
 def main() -> int:
     args = parse_args()
     existing_config = read_existing_config(DEFAULT_REPO_CONFIG_OUTPUT)
-    snapshot = collect_snapshot(args.timeout)
+    snapshot = collect_snapshot(args.timeout, existing_config)
     repo_version_config = build_config(existing_config, snapshot)
 
     if args.dry_run:

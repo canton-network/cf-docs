@@ -18,6 +18,7 @@ from x2mdx.reference_pages import (
     ReferenceMetaItem,
     ReferenceOperationPage,
     ReferencePanel,
+    ReferenceSchema,
     ReferenceSection,
     compact_text,
     markdown_page_from_template,
@@ -109,8 +110,17 @@ def action_schema(action: dict[str, Any], *, anchor: str):
     message = dict(action.get("message") or {})
     sample = message.get("sample")
     required_fields = list(message.get("required_fields") or [])
-    if sample is None and not required_fields:
+    variant_schemas = [schema_from_variant(variant) for variant in message.get("variants") or []]
+    if sample is None and not required_fields and not variant_schemas:
         return None
+    if variant_schemas:
+        return ReferenceSchema(
+            name=str(message.get("name") or action["action"]),
+            summary=str(message.get("payload_schema") or "-"),
+            description=str(action.get("description") or ""),
+            anchor=anchor,
+            variants=variant_schemas,
+        )
     return schema_from_sample(
         name=str(message.get("name") or action["action"]),
         sample=sample,
@@ -118,6 +128,16 @@ def action_schema(action: dict[str, Any], *, anchor: str):
         summary=str(message.get("payload_schema") or "-"),
         description=str(action.get("description") or ""),
         anchor=anchor,
+    )
+
+
+def schema_from_variant(variant: dict[str, Any]) -> ReferenceSchema:
+    return schema_from_sample(
+        name=str(variant.get("name") or "Variant"),
+        sample=variant.get("sample"),
+        required_fields=list(variant.get("required_fields") or []),
+        summary=str(variant.get("payload_schema") or "-"),
+        variants=[schema_from_variant(child) for child in variant.get("variants") or []],
     )
 
 

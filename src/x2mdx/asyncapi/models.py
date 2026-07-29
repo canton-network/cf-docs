@@ -15,12 +15,21 @@ class AsyncApiDocument(TypedDict, total=False):
     components: JsonObject
 
 
+class AsyncApiSchemaVariantDetail(TypedDict):
+    name: str
+    payload_schema: str
+    required_fields: list[str]
+    sample: JsonValue | None
+    variants: list["AsyncApiSchemaVariantDetail"]
+
+
 class AsyncApiMessageDetail(TypedDict):
     name: str
     content_type: str
     payload_schema: str
     required_fields: list[str]
     sample: JsonValue | None
+    variants: list[AsyncApiSchemaVariantDetail]
 
 
 class AsyncApiActionDetail(TypedDict):

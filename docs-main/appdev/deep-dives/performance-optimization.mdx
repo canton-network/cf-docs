@@ -11,6 +11,7 @@ import DamlAppdevModulesM7PerformanceL36 from "/snippets/daml-docs/appdev_module
 import DamlAppdevModulesM7PerformanceL45 from "/snippets/daml-docs/appdev_modules_m7-performance_L45.mdx";
 
 {/* COPIED_START source="docs-website:docs/replicated/canton/3.5/participant/howtos/optimize/performance.rst" hash="f10483e4" */}
+{/* DIVERGES FROM SOURCE: removed stale "enterprise edition" claims for pruning and node scaling; the referenced console commands live in the community/open-source codebase (see the snippet imports on this page). Related to github.com/canton-network/cf-docs/issues/1027 */}
 
 # Scaling and Performance
 
@@ -35,10 +36,10 @@ The bottom line is that a Canton system can scale out horizontally if commands i
 
 ## Node Scaling
 
-The Daml Enterprise edition of Canton supports the following scaling of nodes:
+Canton supports the following scaling of nodes:
 
 - The database-backed drivers (Postgres and Oracle) can run in an active-active setup with parallel processing, supporting multiple writer and reader processes. Thus, such nodes can scale horizontally.
-- The enterprise participant node processes transactions in parallel (except the process of conflict detection which by definition must be sequential), allowing much higher throughput than the community version. The community version processes each transaction sequentially. Canton processes make use of multiple CPUs and will detect the number of available CPUs automatically. The number of parallel threads can be controlled by setting the JVM properties `scala.concurrent.context.numThreads` to the desired value.
+- Canton processes make use of multiple CPUs and will detect the number of available CPUs automatically (conflict detection between transactions must run sequentially, but interpretation of each transaction can run in parallel). The number of parallel threads can be controlled by setting the JVM properties `scala.concurrent.context.numThreads` to the desired value.
 
 Generally, the performance of Canton nodes is currently storage I/O bound. Therefore, their performance depends on the scaling behavior and throughput performance of the underlying storage layer, which can be a database or a distributed ledger for some drivers. Therefore, appropriately sizing the database is key to achieving the necessary performance.
 
@@ -88,7 +89,7 @@ Additionally to this, some indexes have to be built by the database to serve the
 Please note that we do have plans to remove the storage duplication between the sync service and the indexer. Ideally, will be able to reduce the storage on the participant for this example from `5\*Y` down to \`3\*Y\`: once for the unencrypted created contract and twice for the two encrypted transaction views.
 </Note>
 
-Generally, to recover used storage, a participant and a synchronizer can be pruned. Pruning is available on Canton Enterprise through a set of console commands and allows removal of past events and archived contracts based on a timestamp. The storage usage of a Canton deployment can be kept constant by continuously removing obsolete data. Non-repudiation and auditability of the unpruned history are preserved due to the bilateral commitments.
+Generally, to recover used storage, a participant and a synchronizer can be pruned. Pruning is available through a set of console commands and allows removal of past events and archived contracts based on a timestamp. The storage usage of a Canton deployment can be kept constant by continuously removing obsolete data. Non-repudiation and auditability of the unpruned history are preserved due to the bilateral commitments.
 
 ## Set Up Canton to Get the Best Performance
 
@@ -96,7 +97,7 @@ In this section, the findings from internal performance tests are outlined to he
 
 ### System Design / Architecture
 
-We recommend the version of Canton included in the Daml Enterprise edition, which is heavily optimized when compared with the community edition.
+We recommend running the latest supported Canton release for optimal performance.
 
 Plan your topology such that your Daml parties can be partitioned into independent blocks. That means most of your Daml commands involve parties of a single block only. It is ok if some commands involve parties of several (or all) blocks, as long as this happens only very rarely. In particular, avoid having a single master party that is involved in every command, because that party bottlenecks the system.
 
@@ -427,144 +428,16 @@ Each Daml business transaction kicks off when a Ledger API client sends the comm
 
 Refer to the [Daml execution model](/appdev/modules/m3-design-patterns#daml’s-execution-model) that describes a ledger transaction processed by the Canton ledger. The table below highlights potential resource-intensive activities at each step.
 
-<table>
-<colgroup>
-<col style={{width: "10%"}} />
-<col style={{width: "25%"}} />
-<col style={{width: "35%"}} />
-<col style={{width: "30%"}} />
-</colgroup>
-<thead>
-<tr className="header">
-<th>Step</th>
-<th>Participant</th>
-<th>Resources used</th>
-<th>Possible bottleneck drivers</th>
-</tr>
-</thead>
-<tbody>
-<tr className="odd">
-<td>Interpretation</td>
-<td><ul>
-<li>Submitting participant node</li>
-</ul></td>
-<td><ol>
-<li>CPU</li>
-<li>Memory</li>
-<li>DB read access</li>
-</ol></td>
-<td><ol>
-<li>Calculation complexity</li>
-<li>Size and number of variables</li>
-<li>Number of contract fetches</li>
-</ol></td>
-</tr>
-<tr className="even">
-<td>Blinding</td>
-<td><ul>
-<li>Submitting participant node</li>
-</ul></td>
-<td><ul>
-<li>CPU/memory</li>
-</ul></td>
-<td><ul>
-<li>Number and size of views</li>
-</ul></td>
-</tr>
-<tr className="odd">
-<td>Submission</td>
-<td><ul>
-<li>Submitting participant node</li>
-<li>Sequencer</li>
-</ul></td>
-<td><ol>
-<li>CPU</li>
-<li>Memory</li>
-</ol></td>
-<td><ol>
-<li>Serialization/deserialization</li>
-<li>Transaction size/number of views</li>
-</ol></td>
-</tr>
-<tr className="even">
-<td>Sequencing</td>
-<td><ul>
-<li>Sequencer</li>
-</ul></td>
-<td><ol>
-<li>Backend storage</li>
-<li>Network bandwidth</li>
-</ol></td>
-<td><ol>
-<li>Transaction size</li>
-<li>Transaction size/number of views</li>
-</ol></td>
-</tr>
-<tr className="odd">
-<td>Validation</td>
-<td><ul>
-<li>Receiving participant nodes</li>
-</ul></td>
-<td><ol>
-<li>Network bandwidth</li>
-<li>CPU</li>
-<li>Memory</li>
-<li>DB read throughput</li>
-</ol></td>
-<td><ol>
-<li>Transaction size -&gt; download, deserialization, storage costs</li>
-<li>Computation complexity</li>
-<li>Number of contract fetch reads</li>
-<li>Number and size of variables</li>
-</ol></td>
-</tr>
-<tr className="even">
-<td>Confirmation</td>
-<td><ul>
-<li>Validating participant nodes</li>
-<li>Sequencer</li>
-</ul></td>
-<td><ol>
-<li>Network bandwidth</li>
-<li>Sequencer network</li>
-<li>Backend write throughput</li>
-</ol></td>
-<td><ul>
-<li>Number of confirming parties</li>
-</ul></td>
-</tr>
-<tr className="odd">
-<td>Mediation</td>
-<td><ul>
-<li>Mediator nodes</li>
-</ul></td>
-<td><ol>
-<li>Network throughput</li>
-<li>CPU</li>
-<li>Memory</li>
-</ol></td>
-<td><ul>
-<li>Number of confirming parties</li>
-</ul></td>
-</tr>
-<tr className="even">
-<td>Commit</td>
-<td><ul>
-<li>Mediator nodes</li>
-<li>Sequencer</li>
-</ul></td>
-<td><ol>
-<li>CPU</li>
-<li>Memory</li>
-<li>DB</li>
-<li>Network bandwidth</li>
-</ol></td>
-<td><ul>
-<li>Number of confirming parties</li>
-</ul></td>
-</tr>
-</tbody>
-</table>
+| Step | Participant | Resources used | Possible bottleneck drivers |
+|------|-------------|----------------|-----------------------------|
+| Interpretation | Submitting participant node | CPU<br/>Memory<br/>DB read access | Calculation complexity<br/>Size and number of variables<br/>Number of contract fetches |
+| Blinding | Submitting participant node | CPU/memory | Number and size of views |
+| Submission | Submitting participant node<br/>Sequencer | CPU<br/>Memory | Serialization/deserialization<br/>Transaction size/number of views |
+| Sequencing | Sequencer | Backend storage<br/>Network bandwidth | Transaction size<br/>Transaction size/number of views |
+| Validation | Receiving participant nodes | Network bandwidth<br/>CPU<br/>Memory<br/>DB read throughput | Transaction size -> download, deserialization, storage costs<br/>Computation complexity<br/>Number of contract fetch reads<br/>Number and size of variables |
+| Confirmation | Validating participant nodes<br/>Sequencer | Network bandwidth<br/>Sequencer network<br/>Backend write throughput | Number of confirming parties |
+| Mediation | Mediator nodes | Network throughput<br/>CPU<br/>Memory | Number of confirming parties |
+| Commit | Mediator nodes<br/>Sequencer | CPU<br/>Memory<br/>DB<br/>Network bandwidth | Number of confirming parties |
 
 ### Possible Throughput Bottlenecks in Order of Likelihood
 

@@ -3,7 +3,7 @@
 
 Examples:
   python3 scripts/generate_external_snippets.py canton --source-dir ../canton
-  python3 scripts/generate_external_snippets.py wallet-gateway --source-dir ../wallet-gateway
+  python3 scripts/generate_external_snippets.py daml-shell --source-dir ../daml-shell
   python3 scripts/generate_external_snippets.py canton --copy-output --version main
 """
 
@@ -29,6 +29,7 @@ class SnippetRepo:
     aliases: tuple[str, ...]
     output_repo_name: str | None = None
     helper_name: str = "generateOutputDocs.js"
+    scripts_subdir: str = "scripts/docs"
     prepare: tuple[str, ...] = ()
     needs_docker: bool = False
 
@@ -63,11 +64,6 @@ REPOS: dict[str, SnippetRepo] = {
         config_name="daml-shell-snippet-list-remote.json",
         aliases=("daml-shell",),
     ),
-    "daml-finance": SnippetRepo(
-        name="daml-finance",
-        config_name="daml-finance-snippet-list-remote.json",
-        aliases=("daml-finance",),
-    ),
     "scribe": SnippetRepo(
         name="scribe",
         config_name="scribe-snippet-list-remote.json",
@@ -77,19 +73,7 @@ REPOS: dict[str, SnippetRepo] = {
         name="splice",
         config_name="splice-snippet-list-remote.json",
         aliases=("splice",),
-    ),
-    "wallet-gateway": SnippetRepo(
-        name="wallet-gateway",
-        config_name="splice-wallet-kernel-snippet-list-remote.json",
-        aliases=("wallet-gateway", "splice-wallet-kernel"),
-        helper_name="generateOutputDocs.cjs",
-    ),
-    "splice-wallet-kernel": SnippetRepo(
-        name="splice-wallet-kernel",
-        config_name="splice-wallet-kernel-snippet-list-remote.json",
-        aliases=("splice-wallet-kernel", "wallet-gateway"),
-        output_repo_name="wallet-gateway",
-        helper_name="generateOutputDocs.cjs",
+        scripts_subdir="gha-scripts/cf-docs",
     ),
 }
 
@@ -322,7 +306,7 @@ def checkout_ref(source_dir: Path, ref: str | None, fetch: bool, dry_run: bool) 
 
 
 def copy_helper_and_config(repo: SnippetRepo, source_dir: Path, dry_run: bool) -> Path:
-    target_scripts = source_dir / "scripts" / "docs"
+    target_scripts = source_dir / repo.scripts_subdir
     target_helper = target_scripts / repo.helper_name
     target_export = target_scripts / "exportConfig.json"
 

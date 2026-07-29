@@ -172,6 +172,100 @@ def test_latest_stable_version_ignores_prerelease_and_debug_tags() -> None:
     )
 
 
+def test_previous_stable_pqs_version_uses_existing_dashboard_config() -> None:
+    module = load_script_module()
+
+    assert (
+        module.previous_stable_pqs_version(
+            {
+                "repositories": {
+                    "pqs": {
+                        "versionMapping": {
+                            "mainnet": {"externalVersion": "3.5.1"},
+                            "testnet": {"externalVersion": "3.5.2"},
+                            "devnet": {"externalVersion": "3.5.2-rc1"},
+                        }
+                    }
+                }
+            }
+        )
+        == "3.5.2"
+    )
+
+
+def test_fetch_pqs_version_from_scribe_component_uses_stable_annotation(monkeypatch) -> None:
+    module = load_script_module()
+
+    def fake_fetch_manifest_json(url: str, timeout: float) -> dict:
+        assert url == module.PQS_SCRIBE_MANIFEST_URL
+        return {
+            "annotations": {
+                "org.opencontainers.image.version": "3.5.3",
+                "com.digitalasset.version": "3.5.3",
+            }
+        }
+
+    monkeypatch.setattr(module, "fetch_manifest_json", fake_fetch_manifest_json)
+
+    assert (
+        module.fetch_pqs_version_from_scribe_component(
+            timeout=1.0,
+            previous_stable_version="3.5.2",
+        )
+        == "3.5.3"
+    )
+
+
+def test_fetch_pqs_version_from_scribe_component_keeps_previous_stable_for_prerelease(
+    monkeypatch,
+) -> None:
+    module = load_script_module()
+
+    def fake_fetch_manifest_json(url: str, timeout: float) -> dict:
+        assert url == module.PQS_SCRIBE_MANIFEST_URL
+        return {
+            "annotations": {
+                "org.opencontainers.image.version": "3.5.3-rc2",
+                "com.digitalasset.version": "3.5.3-rc2",
+            }
+        }
+
+    monkeypatch.setattr(module, "fetch_manifest_json", fake_fetch_manifest_json)
+
+    assert (
+        module.fetch_pqs_version_from_scribe_component(
+            timeout=1.0,
+            previous_stable_version="3.5.2",
+        )
+        == "3.5.2"
+    )
+
+
+def test_build_config_records_pqs_scribe_component_source() -> None:
+    module = load_script_module()
+
+    config = module.build_config(
+        {"versions": {}, "repositories": {}},
+        dashboard_snapshot(
+            generated_at="2026-06-03T12:00:00+00:00",
+            splice_version="0.6.3",
+        ),
+    )
+
+    assert config["repositories"]["pqs"]["url"] == (
+        f"https://{module.PQS_SCRIBE_COMPONENT_REPOSITORY}"
+    )
+    assert config["repositories"]["pqs"]["versionMapping"]["mainnet"] == {
+        "branch": "",
+        "externalVersion": "3.5.1",
+        "folderPathRepo": (
+            f"{module.PQS_SCRIBE_COMPONENT_REPOSITORY}:"
+            f"{module.PQS_SCRIBE_RELEASE_LINE_TAG}"
+        ),
+    }
+    assert "org.opencontainers.image.version" in config["_generated"]["sourceContract"]["pqs"]
+
+
 def test_request_headers_use_github_token_for_github_api(monkeypatch) -> None:
     module = load_script_module()
     monkeypatch.setenv("GITHUB_TOKEN", "test-token")

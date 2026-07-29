@@ -1364,10 +1364,12 @@ The error categories allow you to group errors such that application logic can b
 - **Category**: InvalidGivenCurrentSystemStateOther
 - **Conveyance**: This error is logged with log-level INFO on the server side and exposed on the API with grpc-status FAILED_PRECONDITION including a detailed error message.
 
+{/* DIVERGENCE: removed a stale "(enterprise only)" gate on resource limits -- resource limits are available in the community/open-source codebase, same fix as already applied to canton-console-commands.mdx under issue #1027; upstream docs-website source (manual/build/3.5/reference/app-dev/error-codes.rst, hash b2118eac) still has it. Related to issue #615. */}
+
 #### PARTICIPANT_OVERLOADED
 
 - **Explanation**: The participant has rejected all incoming commands during a configurable grace period.
-- **Resolution**: Configure more restrictive resource limits (enterprise only). Change applications to submit commands at a lower rate. Configure a higher value for <span class="title-ref">myParticipant.parameters.warnIfOverloadedFor</span>.
+- **Resolution**: Configure more restrictive resource limits. Change applications to submit commands at a lower rate. Configure a higher value for <span class="title-ref">myParticipant.parameters.warnIfOverloadedFor</span>.
 - **Category**: ContentionOnSharedResources
 - **Conveyance**: This error is logged with log-level WARN on the server side and exposed on the API with grpc-status ABORTED including a detailed error message.
 
@@ -2979,7 +2981,9 @@ These errors are specific to Splice validator and SV app operation on the Canton
 
 <ExternalSpliceMainSpliceRstCodeDocsSrcDeploymentTroubleshootingText89 />
 
-**Insufficient funds to buy configured traffic amount** -- The validator attempted to purchase traffic but does not have enough Canton Coin. New nodes on TestNet and MainNet start with a zero balance and accrue CC through validator liveness rewards over time. You can also receive a CC transfer from another node. If you only want free traffic, remove the validator top-up configuration.
+{/* DIVERGENCE: updated locally to reflect CIP-0096 (validator liveness rewards discontinued, $0 cap effective 2026-04-30); upstream docs-website source (manual/build/3.5/reference/app-dev/error-codes.rst, hash b2118eac) still describes liveness rewards as an active mechanism. See cf-docs issue #1049. */}
+
+**Insufficient funds to buy configured traffic amount** -- The validator attempted to purchase traffic but does not have enough Canton Coin. New nodes on TestNet and MainNet start with a zero balance. Since CIP-0096 discontinued validator liveness rewards effective 2026-04-30, a new node no longer accrues CC passively -- you need an existing node to transfer CC to you, or your validator needs to earn activity rewards through transactions. If you only want free traffic, remove the validator top-up configuration.
 
 **Node identity mismatch** -- You changed the participant identifier after initialization. For validators, the node identifier defaults to `validatorPartyHint`, so changing that also triggers this error. On a fresh node, you can reset by dropping the databases and restarting. On an established node, revert to the original identifier.
 

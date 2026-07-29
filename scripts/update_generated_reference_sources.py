@@ -8,6 +8,7 @@ from pathlib import Path
 
 from generated_reference_sources import (
     canton_release_bundles,
+    daml_script,
     daml_standard_library,
     ledger_bindings,
     splice_openapi,
@@ -18,6 +19,7 @@ from generated_reference_sources.common import SourceUpdate
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+SOURCE_DAML_SCRIPT = daml_script.SOURCE_KEY
 SOURCE_DAML_STANDARD_LIBRARY = daml_standard_library.SOURCE_KEY
 SOURCE_LEDGER_API = "ledger-api"
 SOURCE_LEDGER_API_ASYNCAPI = "ledger-api-asyncapi"
@@ -37,6 +39,7 @@ ALL_SOURCES = (
     SOURCE_LEDGER_API_ASYNCAPI,
     SOURCE_LEDGER_BINDINGS,
     SOURCE_DAML_STANDARD_LIBRARY,
+    SOURCE_DAML_SCRIPT,
 )
 
 
@@ -97,6 +100,12 @@ def parse_args() -> argparse.Namespace:
             "Daml Standard Library source-artifacts config. "
             f"Default: {daml_standard_library.DEFAULT_SOURCE_CONFIG}"
         ),
+    )
+    parser.add_argument(
+        "--daml-script-source-config",
+        type=Path,
+        default=daml_script.DEFAULT_SOURCE_CONFIG,
+        help=f"Daml Script source-artifacts config. Default: {daml_script.DEFAULT_SOURCE_CONFIG}",
     )
     parser.add_argument(
         "--source",
@@ -174,6 +183,13 @@ def main() -> int:
     if SOURCE_DAML_STANDARD_LIBRARY in sources:
         update = daml_standard_library.update_source(
             source_config_path=args.daml_standard_library_source_config.resolve(),
+            dry_run=args.dry_run or args.check,
+        )
+        if update is not None:
+            updates.append(update)
+    if SOURCE_DAML_SCRIPT in sources:
+        update = daml_script.update_source(
+            source_config_path=args.daml_script_source_config.resolve(),
             dry_run=args.dry_run or args.check,
         )
         if update is not None:

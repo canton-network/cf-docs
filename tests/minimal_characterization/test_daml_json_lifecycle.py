@@ -210,7 +210,8 @@ class DamlJsonMinimalLifecycleTests(unittest.TestCase):
         beta = read_mdx(output_dir, "da-beta.mdx")
         stable = read_mdx(output_dir, "da-stable.mdx")
         assert_text_tree_matches_fixture(output_dir, "daml_json/beta_stable")
-        assert_contains_all(beta, ["Lifecycle", "Beta (preview).", "Beta: preview module."])
+        # Until beta gets a dedicated lifecycle label, beta warnings render as Warning.
+        assert_contains_all(beta, ["Lifecycle", "Warning.", "Beta: preview module."])
         assert_contains_all(stable, ["Lifecycle", "Stable.", "Stable: supported module."])
 
     def test_cli_renders_replacement_metadata(self) -> None:

@@ -9,9 +9,9 @@ from scripts import generate_external_snippets as generator
 
 
 def test_copy_helper_and_config_copies_helper(tmp_path: Path) -> None:
-    source_dir = tmp_path / "splice"
+    source_dir = tmp_path / "daml-shell"
     helper = generator.copy_helper_and_config(
-        generator.REPOS["splice"],
+        generator.REPOS["daml-shell"],
         source_dir,
         dry_run=False,
     )
@@ -22,17 +22,18 @@ def test_copy_helper_and_config_copies_helper(tmp_path: Path) -> None:
     assert (target_scripts / "exportConfig.json").is_file()
 
 
-def test_copy_helper_and_config_preserves_repo_specific_helper_name(tmp_path: Path) -> None:
-    source_dir = tmp_path / "splice-wallet-kernel"
+def test_copy_helper_and_config_uses_repo_scripts_subdir(tmp_path: Path) -> None:
+    source_dir = tmp_path / "splice"
     helper = generator.copy_helper_and_config(
-        generator.REPOS["splice-wallet-kernel"],
+        generator.REPOS["splice"],
         source_dir,
         dry_run=False,
     )
 
-    target_scripts = source_dir / "scripts" / "docs"
-    assert helper == target_scripts / "generateOutputDocs.cjs"
+    target_scripts = source_dir / "gha-scripts" / "cf-docs"
+    assert helper == target_scripts / "generateOutputDocs.js"
     assert helper.is_file()
+    assert (target_scripts / "exportConfig.json").is_file()
 
 
 def test_validate_inputs_reports_missing_helper(

@@ -61,13 +61,15 @@ canton.participants.participant4.ledger-api.tls.ciphers =
   ]
 // architecture-handbook-entry-end: ParticipantTLSApiRestrict
 
+{/* DIVERGENCE: simplified the example cert path from a leftover "./enterprise/app/src/test/resources/tls/..." to match every other cert-chain-file/private-key-file example on this page ("./tls/..."); upstream docs-website source (docs/replicated/canton/3.5/participant/howtos/secure/apis/tls.rst, hash 13141191) still has the "enterprise/" prefix. Related to issue #615. */}
+
 canton.participants.participant4 {
   admin-api {
     address = "localhost"
     port= 5042
     tls {
-      cert-chain-file = "./enterprise/app/src/test/resources/tls/admin-api.crt"
-      private-key-file = "./enterprise/app/src/test/resources/tls/admin-api.pem"
+      cert-chain-file = "./tls/admin-api.crt"
+      private-key-file = "./tls/admin-api.pem"
     }
   }
 
@@ -279,6 +281,11 @@ canton.participants.participant.ledger-api.jwks-cache-config {
 ```
 
 Similar parameter can also be set on the `admin-api`.
+
+You can also enable background refresh of cached keys by setting ``auto-refresh-after`` to a positive duration
+(less than ``cache-expiration``). When enabled, the cache asynchronously refreshes keys in the background
+on first access after this duration has elapsed, so that clients never experience latency from a cache miss. If a background refresh fails,
+the previously cached verifier continues to be served until hard eviction at ``cache-expiration``.
 
 ## Configure maximum time-to-live of JWT tokens
 

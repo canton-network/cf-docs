@@ -4,6 +4,7 @@ description: "Canton admin console command reference: participant, mediator, seq
 ---
 
 {/* COPIED_START source="docs-website:docs/replicated/canton/3.5/participant/reference/console.rst" hash="7388210c" */}
+{/* DIVERGES FROM SOURCE at "resources.set_resource_limits": removed stale "enterprise only" gating on resource limits (setResourceLimits lives in the community/open-source codebase). Related to github.com/canton-network/cf-docs/issues/1027 */}
 
 <div id="canton_console_reference">
 
@@ -386,7 +387,17 @@ A process logger that forwards process logs to the canton logs.
 
 Create a participants config for Daml script.
 
-The generated config can be passed to `daml script` via the `participant-config` parameter. More information about the file format can be found in the documentation: It takes three arguments:
+The generated config can be passed to `daml script` via the `--participant-config` flag. The output is a JSON file with the following structure:
+
+```json
+{
+  "default_participant": {"host": "<host>", "port": <port>},
+  "participants": {},
+  "party_participants": {}
+}
+```
+
+It takes three arguments:
 
 - file (default to "participant-config.json")
 - useParticipantAlias (default to true): participant aliases are used instead of UIDs
@@ -1403,7 +1414,7 @@ Macro to connect a participant to a synchronizer that supports connecting via ma
 
 Synchronizers can provide many endpoints to connect to for availability and performance benefits. This version of connect allows specifying multiple endpoints for a single synchronizer connection: connect_multi("mysynchronizer", Seq(sequencer1, sequencer2)) or: connect_multi("mysynchronizer", Seq("https://host1.mysynchronizer.net", "https://host2.mysynchronizer.net", "https://host3.mysynchronizer.net"))
 
-To create a more advanced connection config use synchronizers.to_config with a single host, then use config.addConnection to add additional connections before connecting: config = myparticipaint.synchronizers.to_config("mysynchronizer", "https://host1.mysynchronizer.net", ...otherArguments) config = config.addConnection("https://host2.mysynchronizer.net", "https://host3.mysynchronizer.net") myparticipant.synchronizers.connect(config)
+To create a more advanced connection config use synchronizers.to_config with a single host, then use config.addConnection to add additional connections before connecting: config = myparticipant.synchronizers.to_config("mysynchronizer", "https://host1.mysynchronizer.net", ...otherArguments) config = config.addConnection("https://host2.mysynchronizer.net", "https://host3.mysynchronizer.net") myparticipant.synchronizers.connect(config)
 
 The arguments are:
 
@@ -5396,7 +5407,7 @@ The `maxSubmissionBurstFactor` parameter (positive, default 0.5) allows to confi
 
 For the sake of illustration, let's assume the configured rate limit is `100 commands/s` with a burst ratio of 0.5. If an application submits 100 commands within a single second, waiting exactly 10 milliseconds between consecutive commands, then the participant will accept all commands. With a `maxSubmissionBurstFactor` of 0.5, the participant will accept the first 50 commands and reject the remaining 50. If the application then waits another 500 ms, it may submit another burst of 50 commands. If it waits 250 ms, it may submit only a burst of 25 commands.
 
-Resource limits can only be changed, if the server runs Canton enterprise. In the community edition, the server uses fixed limits that cannot be changed.
+Resource limits can be changed at runtime using this command.
 
 **Arguments**
 
