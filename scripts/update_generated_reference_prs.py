@@ -590,6 +590,8 @@ def create_or_update_pull_request(
 
 
 def process_target(*, target: UpdateTarget, base_sha: str, base_branch: str, repository: str) -> None:
+    if target.key == "version-dashboard":
+        raise RuntimeError("Intentional failure for matrix isolation validation")
     reset_to_base(base_sha)
     before_path = pr_utils.write_base_file(base_sha, target.summary_path) if target.summary_path is not None else None
 
