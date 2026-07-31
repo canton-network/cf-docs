@@ -1,13 +1,13 @@
 ---
 title: "Overview"
-description: "Connect your own validator and signing provider to any dApp on Canton Network."
+description: "Run a self-hosted Wallet Gateway that lets dApps connect to your own validator and signing provider."
 ---
 
-The Wallet Gateway is a self-hosted component that connects your Canton validator to dApps on
-Canton Network. You run it in your own environment, next to a validator you already operate,
-so you can connect to any [CIP-0103](https://github.com/canton-foundation/cips/blob/main/cip-0103/cip-0103.md)
-dApp using **your** validator and **your** signing or custody provider, without moving signing
-away from infrastructure you already trust.
+The Wallet Gateway is a self-hosted component that lets dApps connect to your infrastructure on
+Canton Network. You run it in your own environment, next to a validator you already operate, so
+any [CIP-0103](https://github.com/canton-foundation/cips/blob/main/cip-0103/cip-0103.md) dApp can
+connect to the Wallet Gateway while it talks to **your** validator and signs through **your**
+signing or custody provider, without moving signing away from infrastructure you already trust.
 
 Run the Wallet Gateway to:
 
@@ -24,8 +24,9 @@ Run the Wallet Gateway to:
 
 <Note>
 The Wallet Gateway is for teams that operate their own infrastructure: validator operators,
-builders, and organizations that want to connect a validator and signing provider they control
-to dApps. If you are building a dApp frontend instead, use the [dApp SDK](/sdks-tools/sdks/dapp-sdk/overview).
+builders, and organizations that want to let dApps connect to a Wallet Gateway backed by a
+validator and signing provider they control. If you are building a dApp frontend instead, use
+the [dApp SDK](/sdks-tools/sdks/dapp-sdk/overview).
 </Note>
 
 ## How it fits together
@@ -61,8 +62,8 @@ JWT used to authenticate against the validator. The Wallet Gateway supports **OA
 providers (recommended for production) and **self-signed** tokens (development only).
 
 **Sessions.** Users authenticate through an IDP, and the Wallet Gateway issues a session (a JWT)
-that the User and dApp APIs use to authorize later calls. Sessions are created on login and
-ended on logout.
+that authorizes later calls. Sessions are bound to the connecting dApp: each dApp gets its own
+session with its own JWT, created when it connects and ended on disconnect or logout.
 
 **Wallets and parties.** A wallet is a Canton party the Wallet Gateway manages for a user. Each
 wallet is tied to a network and a signing provider, and a user can mark one wallet as
@@ -76,7 +77,7 @@ testing. See [Signing providers](/integrations/wallet-gateway/operate/signing-pr
 ## Transaction lifecycle
 
 Once a dApp is connected, transactions flow through the Wallet Gateway so that approval and
-signing stay under your control. A dApp asks the Wallet Gateway to run a transaction, the
+signing stay under your control. A dApp asks the Wallet Gateway to execute a transaction, the
 Wallet Gateway prepares it against your validator, the user reviews and approves it in the
 User UI, your signing provider signs it, and the Wallet Gateway submits it to the ledger and
 returns the result. Preparation and submission happen on your validator's Ledger API, approval
