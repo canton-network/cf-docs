@@ -104,14 +104,13 @@ def test_choose_observed_release_accepts_active_synchronizer_payload() -> None:
             "sv": {"migration_id": 4, "version": "0.6.5"},
             "synchronizer": {
                 "active": {
-                    "chain_id_suffix": "2",
                     "migration_id": 4,
                     "version": "0.6.5",
                 }
             },
         },
         "https://example.com/info",
-    ) == ("0.6.5", "4", "2")
+    ) == ("0.6.5", "4")
 
 
 def test_choose_observed_release_accepts_current_synchronizer_payload() -> None:
@@ -122,43 +121,17 @@ def test_choose_observed_release_accepts_current_synchronizer_payload() -> None:
             "sv": {"migration_id": 1, "serial_id": 2, "version": "0.6.7"},
             "synchronizer": {
                 "current": {
-                    "chain_id_suffix": "6",
                     "serial_id": 2,
                     "version": "0.6.7",
                 },
                 "legacy": {
-                    "chain_id_suffix": "6",
                     "serial_id": 1,
                     "version": "0.6.6",
                 },
             },
         },
         "https://example.com/info",
-    ) == ("0.6.7", "1", "6")
-
-
-def test_choose_observed_release_allows_null_chain_id_suffix() -> None:
-    module = load_script_module()
-
-    assert module.choose_observed_release(
-        {
-            "sv": {"migration_id": 1, "serial_id": 5, "version": "0.7.0"},
-            "synchronizer": {
-                "current": {
-                    "chain_id_suffix": None,
-                    "serial_id": 5,
-                    "version": "0.7.0",
-                },
-                "legacy": {
-                    "chain_id_suffix": "6",
-                    "serial_id": 3,
-                    "version": "0.6.14",
-                },
-            },
-        },
-        "https://example.com/info",
-        index_version="0.7.0",
-    ) == ("0.7.0", "1", None)
+    ) == ("0.6.7", "1")
 
 
 def test_choose_observed_release_prefers_sv_version_matching_index() -> None:
@@ -169,14 +142,13 @@ def test_choose_observed_release_prefers_sv_version_matching_index() -> None:
             "sv": {"migration_id": 1, "version": "0.7.0"},
             "synchronizer": {
                 "current": {
-                    "chain_id_suffix": "6",
                     "version": "0.6.14",
                 }
             },
         },
         "https://example.com/info",
         index_version="0.7.0",
-    ) == ("0.7.0", "1", "6")
+    ) == ("0.7.0", "1")
 
 
 def test_choose_observed_release_prefers_sync_version_matching_index() -> None:
@@ -187,14 +159,13 @@ def test_choose_observed_release_prefers_sync_version_matching_index() -> None:
             "sv": {"migration_id": 1, "version": "0.7.0"},
             "synchronizer": {
                 "current": {
-                    "chain_id_suffix": "6",
                     "version": "0.6.14",
                 }
             },
         },
         "https://example.com/info",
         index_version="0.6.14",
-    ) == ("0.6.14", "1", "6")
+    ) == ("0.6.14", "1")
 
 
 def test_choose_observed_release_rejects_mismatch_when_neither_matches_index() -> None:
@@ -206,7 +177,6 @@ def test_choose_observed_release_rejects_mismatch_when_neither_matches_index() -
                 "sv": {"migration_id": 1, "version": "0.7.0"},
                 "synchronizer": {
                     "current": {
-                        "chain_id_suffix": "6",
                         "version": "0.6.14",
                     }
                 },
@@ -225,7 +195,6 @@ def test_choose_observed_release_rejects_mismatch_without_index_version() -> Non
                 "sv": {"migration_id": 1, "version": "0.7.0"},
                 "synchronizer": {
                     "current": {
-                        "chain_id_suffix": "6",
                         "version": "0.6.14",
                     }
                 },
@@ -282,6 +251,7 @@ def test_network_snapshot_from_existing_rebuilds_required_fields() -> None:
     assert snapshot["cantonVersion"] == "3.5.10"
     assert snapshot["cantonReleaseLineBranch"] == "release-line-0.6.14"
     assert snapshot["migrationId"] == "1"
+    assert "chainIdSuffix" not in snapshot
     assert snapshot["preservedFromPrevious"] is True
     assert snapshot["sources"]["preservedFromPrevious"] is True
 
@@ -349,7 +319,6 @@ def test_collect_snapshot_preserves_previous_network_on_failure(monkeypatch) -> 
             "cantonReleaseLineBranch": "release-line-x",
             "darVersions": [],
             "migrationId": existing_config["versions"][network_key]["advanced"]["migrationId"],
-            "chainIdSuffix": "1",
             "sources": {
                 "infoUrl": f"https://docs.{network_key}.example/info",
                 "indexUrl": f"https://docs.{network_key}.example/index.html",
