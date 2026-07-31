@@ -346,7 +346,7 @@ def choose_observed_release(
     info_url: str,
     *,
     index_version: str | None = None,
-) -> tuple[str, str, str | None]:
+) -> tuple[str, str]:
     sv = info_payload.get("sv", {})
     synchronizers = info_payload.get("synchronizer", {})
     synchronizer_label = "active"
@@ -358,7 +358,6 @@ def choose_observed_release(
     sync_version = synchronizer.get("version")
     sv_migration_id = sv.get("migration_id")
     sync_migration_id = synchronizer.get("migration_id")
-    chain_id_suffix = synchronizer.get("chain_id_suffix")
 
     if not sv_version or not sync_version:
         raise RuntimeError(f"Missing release version in {info_url}")
@@ -382,10 +381,7 @@ def choose_observed_release(
             f"sv.migration_id={sv_migration_id} "
             f"synchronizer.{synchronizer_label}.migration_id={sync_migration_id}"
         )
-    # chain_id_suffix may be null during network resets / LSU cutovers; it is not
-    # currently published into the dashboard config, so treat it as optional.
-    normalized_suffix = None if chain_id_suffix is None else str(chain_id_suffix)
-    return observed_version, str(sv_migration_id), normalized_suffix
+    return observed_version, str(sv_migration_id)
 
 
 def resolve_mismatched_info_version(
@@ -488,7 +484,7 @@ def collect_network_snapshot(network_key: str, timeout: float) -> dict:
         )
 
     info_payload = fetch_json(urls["info_url"], timeout)
-    observed_release, migration_id, chain_id_suffix = choose_observed_release(
+    observed_release, migration_id = choose_observed_release(
         info_payload,
         urls["info_url"],
         index_version=docker_image_tag,
@@ -514,7 +510,6 @@ def collect_network_snapshot(network_key: str, timeout: float) -> dict:
         "cantonReleaseLineBranch": canton_release_line_branch,
         "darVersions": dar_versions,
         "migrationId": migration_id,
-        "chainIdSuffix": chain_id_suffix,
         "sources": {
             "infoUrl": urls["info_url"],
             "indexUrl": urls["index_url"],
@@ -573,7 +568,6 @@ def network_snapshot_from_existing(existing_config: dict, network_key: str) -> d
         "cantonReleaseLineBranch": canton_release_line_branch,
         "darVersions": dar_versions,
         "migrationId": migration_id,
-        "chainIdSuffix": None,
         "sources": sources,
         "checks": {
             "dockerImageTag": splice_version,
