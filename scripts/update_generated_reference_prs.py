@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 import tempfile
@@ -644,10 +645,15 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="List selected generated-doc targets and commands without changing files or opening PRs.",
     )
+    parser.add_argument(
+        "--print-targets-json",
+        action="store_true",
+        help="Print the selected target keys as JSON without running them.",
+    )
     args = parser.parse_args()
     if "all" in args.targets and len(args.targets) > 1:
         parser.error("pass --targets all by itself, or list specific target keys")
-    if args.dry_run:
+    if args.dry_run or args.print_targets_json:
         args.base_branch = args.base_branch or ""
         args.repository = args.repository or ""
     else:
@@ -670,6 +676,9 @@ def targets_to_run(target_keys: Sequence[str]) -> tuple[UpdateTarget, ...]:
 def main() -> int:
     args = parse_args()
     selected_targets = targets_to_run(args.targets)
+    if args.print_targets_json:
+        print(json.dumps([target.key for target in selected_targets]))
+        return 0
     if args.dry_run:
         for target in selected_targets:
             print(f"{target.key}: {target.title}")
