@@ -83,6 +83,26 @@ def push_branch(branch: str) -> None:
         git("push", "origin", f"HEAD:{branch_ref}")
 
 
+def matching_remote_branch_sha(*, branch: str, paths: Sequence[str]) -> str:
+    branch_ref = f"refs/heads/{branch}"
+    remote_output = git("ls-remote", "--heads", "origin", branch, capture=True)
+    if not remote_output:
+        return ""
+
+    remote_sha = remote_output.split()[0]
+    git("fetch", "--no-tags", "origin", branch_ref)
+    changed_paths = git(
+        "diff",
+        "--cached",
+        "--name-only",
+        remote_sha,
+        "--",
+        *paths,
+        capture=True,
+    )
+    return remote_sha if not changed_paths else ""
+
+
 def open_pull_request_number(*, branch: str, base_branch: str, repository: str) -> str:
     return gh(
         "pr",
@@ -146,7 +166,8 @@ def mark_pull_request_ready(*, pr_number: str, repository: str) -> None:
 
 
 def dispatch_mintlify_validation(*, repository: str, branch: str) -> None:
-    gh(
+    command = (
+        "gh",
         "workflow",
         "run",
         "mintlify-validate.yml",
@@ -155,6 +176,8 @@ def dispatch_mintlify_validation(*, repository: str, branch: str) -> None:
         "--ref",
         branch,
     )
+    workflow_token = os.environ.get("GENERATED_DOCS_WORKFLOW_TOKEN", "")
+    run(command, env=env_for_token(workflow_token) if workflow_token else None)
     print(f"Dispatched Mintlify validation for {branch}")
 
 
@@ -301,15 +324,31 @@ def create_or_update_pull_request(
     git("add", "--", *paths)
     git("diff", "--cached", "--stat")
     git("diff", "--cached", "--check")
-    git("commit", "--signoff", "-m", title)
-    head_sha = git("rev-parse", "HEAD", capture=True)
-    push_branch(branch)
 
     existing_pr_number = open_pull_request_number(
         branch=branch,
         base_branch=base_branch,
         repository=repository,
     )
+    matching_head_sha = (
+        matching_remote_branch_sha(branch=branch, paths=paths) if existing_pr_number else ""
+    )
+    if matching_head_sha:
+        print(f"Generated paths already match PR #{existing_pr_number}; leaving branch unchanged")
+        maybe_merge_generated_pr(
+            pr_number=existing_pr_number,
+            repository=repository,
+            base_branch=base_branch,
+            branch=branch,
+            head_sha=matching_head_sha,
+            enabled=auto_merge,
+        )
+        return existing_pr_number
+
+    git("commit", "--signoff", "-m", title)
+    head_sha = git("rev-parse", "HEAD", capture=True)
+    push_branch(branch)
+
     if existing_pr_number:
         gh(
             "pr",
