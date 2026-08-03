@@ -116,7 +116,7 @@ fi
 daml_docs_sdk_configure
 
 dpm_daml_script_component_root() {
-  printf '%s\n' "$DAML_DOCS_DPM_HOME/cache/components/daml-script/$DAML_DOCS_SDK_VERSION"
+  daml_docs_dpm_component_root "daml-script"
 }
 
 daml_daml_script_component_root() {

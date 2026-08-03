@@ -22,7 +22,9 @@ HELPER_SCRIPT = REPO_ROOT / "scripts" / "helpers" / "updateVersionDashboardData.
 NETWORK_ORDER = ["mainnet", "testnet", "devnet"]
 RENDERED_REPOSITORY_ORDER = [
     "splice",
+    "canton",
     "damlSdk",
+    "dpm",
     "pqs",
     "tokenStandard",
     "walletSdk",
@@ -60,11 +62,16 @@ NPM_PACKAGE_URLS = {
 }
 DPM_INSTALLER_URL = "https://get.digitalasset.com/install/install.sh"
 DPM_LATEST_URL = "https://get.digitalasset.com/install/latest"
+DPM_RELEASE_REPO = "digital-asset/dpm"
+DPM_LATEST_RELEASE_URL = f"https://api.github.com/repos/{DPM_RELEASE_REPO}/releases/latest"
+DPM_RELEASES_PAGE_URL = f"https://github.com/{DPM_RELEASE_REPO}/releases"
 WALLET_GATEWAY_PACKAGE_URL = (
     "https://github.com/digital-asset/wallet-gateway/pkgs/container/"
     "wallet-gateway%2Fdocker%2Fwallet-gateway"
 )
 SPLICE_REPOSITORY_URL = "https://github.com/canton-network/splice"
+# Canton dashboard versions are pinned in nix/canton-sources.json on Splice release-line branches.
+CANTON_VERSION_SOURCE_REPO_URL = SPLICE_REPOSITORY_URL
 SPLICE_RAW_BASE_URL = "https://raw.githubusercontent.com/canton-network/splice"
 CANTON_SOURCES_PATH = "nix/canton-sources.json"
 DARS_LOCK_PATH = "daml/dars.lock"
@@ -247,6 +254,16 @@ def fetch_dar_versions_from_splice_release_line(
     )
 
 
+def fetch_latest_dpm_version(timeout: float) -> str:
+    data = fetch_json(DPM_LATEST_RELEASE_URL, timeout)
+    if data.get("prerelease"):
+        raise RuntimeError(f"Latest GitHub release at {DPM_LATEST_RELEASE_URL} is a prerelease")
+    tag_name = data.get("tag_name")
+    if not isinstance(tag_name, str) or not STABLE_SEMVER_RE.fullmatch(tag_name):
+        raise RuntimeError(f"Expected stable tag_name from {DPM_LATEST_RELEASE_URL}")
+    return tag_name
+
+
 def fetch_latest_wallet_gateway_version(timeout: float) -> str:
     versions: list[str] = []
     tag_re = re.compile(
@@ -324,7 +341,12 @@ def require_value(pairs: dict[str, str], label: str, url: str) -> str:
         raise RuntimeError(f"Could not find table row {label!r} in {url}") from exc
 
 
-def choose_observed_release(info_payload: dict, info_url: str) -> tuple[str, str, str]:
+def choose_observed_release(
+    info_payload: dict,
+    info_url: str,
+    *,
+    index_version: str | None = None,
+) -> tuple[str, str]:
     sv = info_payload.get("sv", {})
     synchronizers = info_payload.get("synchronizer", {})
     synchronizer_label = "active"
@@ -336,15 +358,19 @@ def choose_observed_release(info_payload: dict, info_url: str) -> tuple[str, str
     sync_version = synchronizer.get("version")
     sv_migration_id = sv.get("migration_id")
     sync_migration_id = synchronizer.get("migration_id")
-    chain_id_suffix = synchronizer.get("chain_id_suffix")
 
     if not sv_version or not sync_version:
         raise RuntimeError(f"Missing release version in {info_url}")
     if sv_version != sync_version:
-        raise RuntimeError(
-            f"Version mismatch in {info_url}: "
-            f"sv.version={sv_version} synchronizer.{synchronizer_label}.version={sync_version}"
+        observed_version = resolve_mismatched_info_version(
+            sv_version=str(sv_version),
+            sync_version=str(sync_version),
+            synchronizer_label=synchronizer_label,
+            info_url=info_url,
+            index_version=index_version,
         )
+    else:
+        observed_version = str(sv_version)
     if sv_migration_id is None:
         raise RuntimeError(f"Missing sv.migration_id in {info_url}")
     if sync_migration_id is None and synchronizer_label == "active":
@@ -355,11 +381,41 @@ def choose_observed_release(info_payload: dict, info_url: str) -> tuple[str, str
             f"sv.migration_id={sv_migration_id} "
             f"synchronizer.{synchronizer_label}.migration_id={sync_migration_id}"
         )
-    if chain_id_suffix is None:
-        raise RuntimeError(
-            f"Missing synchronizer.{synchronizer_label}.chain_id_suffix in {info_url}"
+    return observed_version, str(sv_migration_id)
+
+
+def resolve_mismatched_info_version(
+    *,
+    sv_version: str,
+    sync_version: str,
+    synchronizer_label: str,
+    info_url: str,
+    index_version: str | None,
+) -> str:
+    """Pick an /info version during upgrade windows using the docs index as authority."""
+    mismatch = (
+        f"Version mismatch in {info_url}: "
+        f"sv.version={sv_version} synchronizer.{synchronizer_label}.version={sync_version}"
+    )
+    if index_version is None:
+        raise RuntimeError(mismatch)
+    if sv_version == index_version:
+        print(
+            f"WARNING: {mismatch}; using sv.version={sv_version} because it matches "
+            f"docs index version {index_version}",
+            file=sys.stderr,
         )
-    return str(sv_version), str(sv_migration_id), str(chain_id_suffix)
+        return sv_version
+    if sync_version == index_version:
+        print(
+            f"WARNING: {mismatch}; using synchronizer.{synchronizer_label}.version="
+            f"{sync_version} because it matches docs index version {index_version}",
+            file=sys.stderr,
+        )
+        return sync_version
+    raise RuntimeError(
+        f"{mismatch}; neither matches docs index version {index_version}"
+    )
 
 
 def read_existing_config(path: Path) -> dict:
@@ -418,11 +474,6 @@ def update_substitutions(existing: dict, release_version: str) -> dict:
 
 def collect_network_snapshot(network_key: str, timeout: float) -> dict:
     urls = NETWORKS[network_key]
-    info_payload = fetch_json(urls["info_url"], timeout)
-    observed_release, migration_id, chain_id_suffix = choose_observed_release(
-        info_payload, urls["info_url"]
-    )
-
     index_pairs = parse_table_pairs(fetch_text(urls["index_url"], timeout))
     docker_image_tag = require_value(index_pairs, "Docker Image Tag:", urls["index_url"])
     helm_chart_version = require_value(index_pairs, "Helm Chart Version:", urls["index_url"])
@@ -431,6 +482,13 @@ def collect_network_snapshot(network_key: str, timeout: float) -> dict:
             f"{network_key}: index page mismatch docker_image_tag={docker_image_tag} "
             f"helm_chart_version={helm_chart_version}"
         )
+
+    info_payload = fetch_json(urls["info_url"], timeout)
+    observed_release, migration_id = choose_observed_release(
+        info_payload,
+        urls["info_url"],
+        index_version=docker_image_tag,
+    )
     if docker_image_tag != observed_release:
         raise RuntimeError(
             f"{network_key}: /info version {observed_release} does not match "
@@ -452,7 +510,6 @@ def collect_network_snapshot(network_key: str, timeout: float) -> dict:
         "cantonReleaseLineBranch": canton_release_line_branch,
         "darVersions": dar_versions,
         "migrationId": migration_id,
-        "chainIdSuffix": chain_id_suffix,
         "sources": {
             "infoUrl": urls["info_url"],
             "indexUrl": urls["index_url"],
@@ -466,18 +523,89 @@ def collect_network_snapshot(network_key: str, timeout: float) -> dict:
     }
 
 
+def network_snapshot_from_existing(existing_config: dict, network_key: str) -> dict | None:
+    """Rebuild a network snapshot from the previous dashboard config, if available."""
+    existing = existing_network(existing_config, network_key)
+    if not existing:
+        return None
+
+    urls = NETWORKS[network_key]
+    advanced = existing_advanced(existing_config, network_key)
+    substitutions = existing.get("substitutions", {})
+    splice_version = str(
+        substitutions.get("version")
+        or existing_repo_version(existing_config, "splice", network_key)
+        or ""
+    )
+    canton_mapping = (
+        existing_config.get("repositories", {})
+        .get("canton", {})
+        .get("versionMapping", {})
+        .get(network_key, {})
+    )
+    canton_version = str(canton_mapping.get("externalVersion") or "")
+    canton_release_line_branch = str(canton_mapping.get("branch") or "")
+    migration_id = str(advanced.get("migrationId") or "")
+    dar_versions = list(advanced.get("darVersions") or [])
+    if not splice_version or not migration_id:
+        return None
+
+    existing_sources = (
+        existing_config.get("_generated", {}).get("networkSources", {}).get(network_key, {})
+    )
+    sources = {
+        "infoUrl": existing_sources.get("infoUrl", urls["info_url"]),
+        "indexUrl": existing_sources.get("indexUrl", urls["index_url"]),
+        "cantonSourcesUrl": existing_sources.get("cantonSourcesUrl", ""),
+        "darVersionsUrl": existing_sources.get("darVersionsUrl", ""),
+        "preservedFromPrevious": True,
+    }
+    return {
+        "displayName": existing.get("name") or urls["display_name"],
+        "endpoint": existing.get("endpoint") or urls["endpoint"],
+        "spliceVersion": splice_version,
+        "cantonVersion": canton_version,
+        "cantonReleaseLineBranch": canton_release_line_branch,
+        "darVersions": dar_versions,
+        "migrationId": migration_id,
+        "sources": sources,
+        "checks": {
+            "dockerImageTag": splice_version,
+            "helmChartVersion": splice_version,
+        },
+        "preservedFromPrevious": True,
+    }
+
+
 def collect_snapshot(timeout: float, existing_config: dict) -> dict:
     generated_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
     latest_dpm_sdk = fetch_text(DPM_LATEST_URL, timeout).strip()
     previous_pqs = previous_stable_pqs_version(existing_config)
+    networks: dict[str, dict] = {}
+    for network_key in NETWORK_ORDER:
+        try:
+            networks[network_key] = collect_network_snapshot(network_key, timeout)
+        except Exception as exc:
+            preserved = network_snapshot_from_existing(existing_config, network_key)
+            if preserved is None:
+                raise RuntimeError(
+                    f"{network_key}: failed to collect network snapshot and no previous "
+                    f"dashboard config is available to preserve: {exc}"
+                ) from exc
+            print(
+                f"WARNING: {network_key}: failed to collect network snapshot "
+                f"({exc}); preserving previous dashboard values "
+                f"(splice={preserved['spliceVersion']}, migrationId={preserved['migrationId']})",
+                file=sys.stderr,
+            )
+            preserved["sources"]["preserveReason"] = str(exc)
+            networks[network_key] = preserved
     return {
         "generatedAt": generated_at,
         "generatorMode": "public_source_collection_with_manual_fallbacks",
-        "networks": {
-            network_key: collect_network_snapshot(network_key, timeout)
-            for network_key in NETWORK_ORDER
-        },
+        "networks": networks,
         "latestDpmSdk": latest_dpm_sdk,
+        "latestDpm": fetch_latest_dpm_version(timeout),
         "latestPqs": fetch_pqs_version_from_scribe_component(
             timeout,
             previous_stable_version=previous_pqs,
@@ -519,8 +647,12 @@ def repository_url(repository_key: str, existing_config: dict) -> str:
     existing = existing_config.get("repositories", {}).get(repository_key, {})
     if repository_key == "splice":
         return "https://github.com/canton-network/splice/releases"
+    if repository_key == "canton":
+        return CANTON_VERSION_SOURCE_REPO_URL
     if repository_key == "damlSdk":
-        return SPLICE_REPOSITORY_URL
+        return str(existing.get("url") or "https://github.com/digital-asset/daml/releases")
+    if repository_key == "dpm":
+        return DPM_RELEASES_PAGE_URL
     if repository_key == "pqs":
         return f"https://{PQS_SCRIBE_COMPONENT_REPOSITORY}"
     if repository_key == "walletGateway":
@@ -542,11 +674,22 @@ def build_repository_mapping(
             external_version = network["spliceVersion"]
             branch = "main"
             folder_path_repo = "splice-wallet-kernel"
-        elif repository_key == "damlSdk":
-            # Historical config key. The dashboard currently labels this row as "Canton".
+        elif repository_key == "canton":
             external_version = network["cantonVersion"]
             branch = network["cantonReleaseLineBranch"]
             folder_path_repo = CANTON_SOURCES_PATH
+        elif repository_key == "damlSdk":
+            external_version = existing_repo_version(
+                existing_config,
+                repository_key,
+                network_key,
+            )
+            branch = ""
+            folder_path_repo = ""
+        elif repository_key == "dpm":
+            external_version = snapshot["latestDpm"]
+            branch = ""
+            folder_path_repo = ""
         elif repository_key == "pqs":
             external_version = snapshot["latestPqs"]
             branch = ""
@@ -604,8 +747,15 @@ def build_source_contract(snapshot: dict) -> dict:
         "canton": (
             "Use the observed Splice version from the network /info endpoint, derive the "
             "matching canton-network/splice release-line branch, then read version from "
-            "nix/canton-sources.json. The config key remains damlSdk for compatibility "
-            "with the existing dashboard component."
+            "nix/canton-sources.json."
+        ),
+        "damlSdk": (
+            "Manual/preserved in dashboard config. Intended source: latest stable Daml SDK from "
+            f"{DPM_LATEST_URL} (currently {snapshot['latestDpmSdk']})."
+        ),
+        "dpm": (
+            f"Latest stable dpm CLI release tag from {DPM_LATEST_RELEASE_URL} "
+            f"(currently {snapshot['latestDpm']})."
         ),
         "damlSdkInstaller": (
             f"DPM installer channel: curl {DPM_INSTALLER_URL} | sh; "
