@@ -252,7 +252,7 @@ UPDATE_TARGETS = (
     UpdateTarget(
         key="ledger-bindings",
         title="Update Java ledger bindings reference",
-        branch="generated-references/ledger-bindings/update",
+        branch="generated-references/ledger-bindings/app-auth-validation",
         description=(
             "Updates the Java ledger bindings source pins to the latest stable "
             "Maven artifacts and regenerates the checked-in Java bindings reference pages."
