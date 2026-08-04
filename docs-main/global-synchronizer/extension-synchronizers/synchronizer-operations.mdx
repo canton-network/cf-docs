@@ -1,6 +1,6 @@
 ---
 title: "Synchronizer Operations"
-description: "Bootstrap, configure, and operate Canton synchronizer nodes."
+description: "Configure, bootstrap, and operate Canton synchronizer nodes."
 ---
 
 import ExternalCantonMainDocsOpenTargetSnippetJsonDataSynchronizerHowtosOperateBootstrap0 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/synchronizer/howtos/operate/bootstrap-0.mdx";
@@ -85,9 +85,308 @@ import ExternalCantonMainDocsOpenTargetSnippetJsonDataSynchronizerHowtosOperateO
 import ExternalCantonMainCommunityAppSrcTestResourcesExternalHaSequencersRemoteAdminParsing from "/snippets/external/canton/main/community/app/src/test/resources/external-ha-sequencers-remote-admin-parsing.mdx";
 
 
+This page is a reference for configuring, bootstrapping, and operating synchronizer nodes. For a step-by-step private synchronizer walkthrough (Helm, databases, initialize, connect validators), see [Deploying a Private Synchronizer](/global-synchronizer/extension-synchronizers/deployment).
+
+<Info>
+**Setup order**
+
+1. **Configure** — Write Canton configs for sequencer/mediator APIs, sequencer backend, and TLS (sections below).
+2. **Start** — Start the synchronizer nodes with those configs.
+3. **Bootstrap** — Initialize the synchronizer topology (see [Bootstrap a Synchronizer](#bootstrap-a-synchronizer)).
+4. **Connect** — Connect participants/validators and verify.
+5. **Operate** — Day-2 tasks such as adding nodes, traffic, pruning, HA, and backups.
+
+</Info>
+
+{/* COPIED_START source="docs-website:docs/replicated/canton/3.5/synchronizer/howtos/configure/apis.rst" hash="b9b16858" */}
+
+# Configure Synchronizer APIs
+
+A Synchronizer exposes two main APIs, the Admin API and the Public API, while the Participant Node exposes the Ledger API and the Admin API. In this section, we explain what the APIs do and how they can be configured.
+
+For details on how to configure endpoints and their addresses, ports, keep alive, and so on, see the general API documentation.
+
+## Configure Sequencer Public API
+
+The Sequencer Public API provides the services to other nodes to connect, authenticate, and exchange messages with a Synchronizer. To learn more about the Sequencer's role, visit the Sequencer overview page.
+
+Configure the Public API `public-api` under a Sequencer node configuration:
+
+```scala
+sequencers {
+  sequencer1 {
+    storage.type = memory
+    public-api.port = 5001
+    admin-api.port = 5002
+    sequencer.type = BFT
+  }
+}
+```
+
+<div className="todo">
+
+{/* Link the reference documentation. \<[https://github.com/DACH-NY/canton/issues/26126](https://github.com/DACH-NY/canton/issues/26126)\> */}
+
+</div>
+
+All Sequencer Public API configuration parameters have defaults. For example, the default address to listen on is `127.0.0.1`. To find out more about the parameters, check the reference documentation.
+
+## Configure Sequencer Admin API
+
+The Sequencer Admin API can be configured in the standard way under the Sequencer node configuration (at the same level as the Public API).
+
+## Configure Mediator Admin API
+
+The Mediator Admin API can be configured in the standard way under the Mediator node configuration:
+
+```scala
+mediators {
+  mediator1 {
+    storage.type = memory
+    admin-api.port = 5202
+  }
+}
+```
+
+
+{/* COPIED_END */}
+
+
+{/* COPIED_START source="docs-website:docs/replicated/canton/3.5/synchronizer/howtos/configure/sequencer_backend.rst" hash="a0176aae" */}
+
+# Configure Sequencer Backend
+
+The following page describes the basics of configuring Sequencer backends. For more advanced configuration, refer to the following sections:
+
+> - High availability
+> - Pruning
+> - Optimization
+
+## Database Sequencer
+
+The Database Sequencer is currently unsupported and should not be configured.
+
+## BFT Sequencer
+
+### Minimal BFT Sequencer backend configuration
+
+To use the Byzantine Fault Tolerant (BFT) Sequencer, set the `type` parameter to `BFT` under \`sequencer\`:
+
+```scala
+sequencers {
+  sequencer1 {
+    sequencer.type = BFT
+    public-api.port = 5001
+    admin-api.port = 5002
+  }
+}
+```
+
+Note that this configuration is for single-node networks; you cannot add peers. For multi-node networks, refer to the next section.
+
+### Configure initial peers (optional)
+
+If the network contains more than one node, configure the server endpoint under `initial-network`. There, you can also configure peer endpoints, or do so using admin commands later. Pre-configuring the peer endpoints reduces the number of manual configuration steps, which saves time, reduces errors, and accelerates the deployment process.
+
+```scala
+server-endpoint {
+  address = "0.0.0.0"
+  port = 31030
+  external-address = "127.0.0.1"
+  external-port = 31030
+  external-tls-config.enabled = false
+}
+peer-endpoints = [
+  {
+    address = "127.0.0.1"
+    port = 31031
+    tls-config.enabled = false
+  }
+]
+```
+
+The `address` and `port` pair under `server-endpoint` make up an endpoint where the BFT Sequencer's gRPC server listens. If the `port` is not specified, the operating system chooses one for you. The `external-address` and `external-port` form an externally available endpoint that other peers can connect to. Usually, the `external-address` is the domain name of a reverse proxy that points to the listening endpoint. The external endpoint must be configured correctly for clients to successfully authenticate the server.
+
+Transport Layer Security (TLS) is enabled by default for the external endpoint and peer endpoints. For simplicity, it is disabled in the config example. However, it is recommended to configure it in the standard way with:
+
+> - `tls` under `server-endpoint` for the internal server endpoint
+> - `external-tls-config` under `server-endpoint` for the external endpoint
+> - `tls-config` under `peer-endpoints` for peer endpoints
+
+<div className="todo">
+
+{/* Link the reference documentation. \<[https://github.com/DACH-NY/canton/issues/26126](https://github.com/DACH-NY/canton/issues/26126)\> */}
+
+</div>
+
+For more details on the `initial-network` configuration, check the reference documentation.
+
+### Configure authentication (optional)
+
+Authentication is enabled by default. It can be configured with `endpoint-authentication` under `initial-network` (at the same level as `server-endpoint`):
+
+```scala
+endpoint-authentication {
+  auth-token = {}
+}
+```
+
+For more details on authentication, visit the secure Synchronizer page.
+
+### Configure dedicated storage (optional)
+
+To use dedicated storage, configure `storage` under `config` as for the top-level Sequencer storage configuration.
+
+While the BFT Sequencer defaults to using the top-level Sequencer storage, configuring dedicated storage offers greater flexibility. It allows you to:
+
+> - Support distinct data read and write patterns with different database backends and settings
+> - Separate backups
+
+### Configure network-wide parameters
+
+If you change the defaults, keep the following parameters in sync across the network:
+
+> - \`epoch-length\`: a length of all epochs
+> - \`max-requests-in-batch\`: a maximum number of requests in a batch, validated at runtime
+> - \`max-batches-per-block-proposal\`: a maximum number of batches per block proposal, validated at runtime
+
+All the above parameters reside under `config` and must be the same across all BFT Orderer nodes.
+
+For details on the related concepts, check the BFT Orderer explanation page.
+
+### Configure other (local) parameters
+
+There are other (local) configuration parameters under `config` that can be changed.
+
+<div className="todo">
+
+{/* Link the reference documentation. \<[https://github.com/DACH-NY/canton/issues/26126](https://github.com/DACH-NY/canton/issues/26126)\> */}
+
+</div>
+
+For details, check the reference documentation.
+
+## External Sequencer
+
+To use an external Sequencer (for example, CometBFT), configure the underlying Sequencer `type` under `config` in the `sequencer` configuration:
+
+```scala
+sequencer {
+    config {
+        cometbft-node-host = "127.0.0.1"
+        cometbft-node-port = 26627
+    }
+    type = CometBFT
+}
+```
+
+Every external Sequencer requires a corresponding Sequencer Driver on the classpath.
+
+
+{/* COPIED_END */}
+
+
+{/* COPIED_START source="docs-website:docs/replicated/canton/3.5/synchronizer/howtos/secure/apis.rst" hash="ca814e1d" */}
+
+# Secure Synchronizer APIs
+
+## Sequencer Public API
+
+### Public API
+
+The synchronizer configuration requires the same configuration of the `Admin API` as the participant. Next to the `Admin API`, we need to configure the `Public API`, which is the API where all participants connect.
+
+#### TLS Encryption
+
+As with the Admin API, network traffic can (and should) be encrypted using TLS. This is particularly crucial for the Public API.
+
+An example configuration section which enables TLS encryption and server-side TLS authentication is given by:
+
+``` none
+canton.synchronizer.acme.public-api {
+  port = 5028
+  address = localhost // defaults to 127.0.0.1
+  tls {
+    cert-chain-file = "./tls/public-api.crt"
+    private-key-file = "./tls/public-api.pem"
+    // minimum-server-protocol-version = TLSv1.3, optional argument
+    // ciphers = null // use null to default to JVM ciphers
+  }
+}
+```
+
+If TLS is used on the server side with a self-signed certificate, we need to pass the certificate chain during the connect call of the participant. Otherwise, the default root certificates of the Java runtime will be used. An example would be:
+
+<div className="todo">
+
+\#22917: Fix broken literalinclude literalinclude:: CANTON/enterprise/app/src/test/scala/com/digitalasset/canton/integration/tests/MultiSynchronizerIntegrationTests.scala start-after: architecture-handbook-entry-begin: TlsConnect end-before: architecture-handbook-entry-end: TlsConnect dedent:
+
+</div>
+
+#### Server Authentication
+
+Canton has two ways to perform server authentication to protect from man-in-the-middle attacks: TLS and the synchronizer id.
+
+If TLS is used on the Public API as described above, TLS also takes care of server authentication. This is one of the core functions of TLS.
+
+Server authentication can also be performed by the synchronizer operator passing their synchronizer identity to the participant node operator, and checking that the identity matches that reported by the synchronizer to the participant node. Like all nodes, the synchronizer has an identity that corresponds to the fingerprint of its namespace root key. It reports its identity to connecting participant nodes and signs all its messages with keys authorized by that namespace root key on the topology ledger. Assuming no key compromises, this gives participants a guarantee that the reported identity is authentic. The synchronizer id of the sole connected synchronizer can be read out using console commands like:
+
+``` none
+participant1.synchronizers.list_connected.last.synchronizerId.filterString
+```
+
+#### Client Authentication
+
+Unlike the ledger or Admin API, the Public API uses Canton's cryptography and topology state for client authentication rather than mutual TLS (mTLS). Clients need to connect to the Public API in several steps:
+
+1.  The client calls the `SequencerConnectService` to align on Canton Protocol versions and obtain the synchronizer id.
+2.  During the first connection, the client registers by sending its minimal topology state (identity, key delegations, public keys) to the sequencer.
+3.  The client calls the `SequencerAuthenticationService` to authenticate using a challenge-response protocol and get an access token for the other sequencer services.
+4.  The client connects to the main `SequencerService` using the access token from 3.
+
+The information the client provides in step 2 is verifiable since it is a certificate chain of keys. The synchronizer rejects this if the namespace root key fingerprint included is not permissioned (see `permissioned-synchronizer`) or if the topology state provided is invalid.
+
+During step 3, the client claims an identity, which is the fingerprint of a namespace root key. If that identity is registered (as done in step 2), the sequencer responds with a challenge consisting of a nonce and all fingerprints of signing keys authorized for that member as per the topology ledger. If the challenge is met successfully by signing the nonce appropriately with a key matching one of the authorized keys, the `SequencerAuthenticationService` responds with a time-limited token which can be used to authenticate more cheaply on the other Public API services.
+
+This authentication mechanism for the restricted services is built into the public sequencer API. You don't need to do anything to set this up; it is enforced automatically and can't be turned off.
+
+The expiration of the token generated in step 2 is valid for one hour by default. The nodes automatically renew the token in the background before it expires. The lifetime of the tokens and of the nonce can be reconfigured using
+
+``` none
+canton.sequencers.sequencer1.public-api {
+    max-token-expiration-interval = 60m
+    nonce-expiration-interval = 1m
+}
+```
+
+However, we suggest keeping the default values.
+
+As mentioned above, an issued token allows the member that provides it during a call to authenticate on public sequencer API services. Therefore, these tokens are sensitive information that must not be disclosed. If an operator suspects that the authentication token for a member has been leaked or somehow compromised, they should use the `logout` console command to immediately revoke all valid tokens of that member and close the sequencer connections. The legitimate member automatically reconnects and obtains new tokens through the challenge-response protocol described above.
+
+The command is slightly different depending on whether the member is a participant or a mediator, for example:
+
+<div className="todo">
+
+Replace with references to the commands. \#22919
+
+</div>
+
+``` text
+participant1.synchronizers.logout(mySynchronizerAlias)
+mediator1.sequencer_connections.logout()
+```
+
+
+{/* COPIED_END */}
+
+
 {/* COPIED_START source="docs-website:docs/replicated/canton/3.5/synchronizer/howtos/operate/bootstrap.rst" hash="42ffbcca" */}
 
 # Bootstrap a Synchronizer
+
+<Note>
+Complete [API](#configure-synchronizer-apis), [sequencer backend](#configure-sequencer-backend), and [TLS](#secure-synchronizer-apis) configuration, then start the nodes, before bootstrapping. For an end-to-end private synchronizer path, use [Deploying a Private Synchronizer](/global-synchronizer/extension-synchronizers/deployment).
+</Note>
 
 This howto assumes familiarity with general Synchronizer concepts. Refer to the Canton overview for more information.
 
@@ -1024,288 +1323,6 @@ myparticipant.synchronizers.connect_multi(
 ```
 
 See the sequencer connectivity documentation for more details on how to add many sequencer URLs when combined with other synchronizer connection options. The synchronizer connection configuration can also be changed at runtime to add or replace configured sequencer connections. Note the synchronizer will have to be disconnected and reconnected at the participant for the updated configuration to be used.
-
-
-{/* COPIED_END */}
-
-
-{/* COPIED_START source="docs-website:docs/replicated/canton/3.5/synchronizer/howtos/configure/apis.rst" hash="b9b16858" */}
-
-# Configure Synchronizer APIs
-
-A Synchronizer exposes two main APIs, the Admin API and the Public API, while the Participant Node exposes the Ledger API and the Admin API. In this section, we explain what the APIs do and how they can be configured.
-
-For details on how to configure endpoints and their addresses, ports, keep alive, and so on, see the general API documentation.
-
-## Configure Sequencer Public API
-
-The Sequencer Public API provides the services to other nodes to connect, authenticate, and exchange messages with a Synchronizer. To learn more about the Sequencer's role, visit the Sequencer overview page.
-
-Configure the Public API `public-api` under a Sequencer node configuration:
-
-```scala
-sequencers {
-  sequencer1 {
-    storage.type = memory
-    public-api.port = 5001
-    admin-api.port = 5002
-    sequencer.type = BFT
-  }
-}
-```
-
-<div className="todo">
-
-{/* Link the reference documentation. \<[https://github.com/DACH-NY/canton/issues/26126](https://github.com/DACH-NY/canton/issues/26126)\> */}
-
-</div>
-
-All Sequencer Public API configuration parameters have defaults. For example, the default address to listen on is `127.0.0.1`. To find out more about the parameters, check the reference documentation.
-
-## Configure Sequencer Admin API
-
-The Sequencer Admin API can be configured in the standard way under the Sequencer node configuration (at the same level as the Public API).
-
-## Configure Mediator Admin API
-
-The Mediator Admin API can be configured in the standard way under the Mediator node configuration:
-
-```scala
-mediators {
-  mediator1 {
-    storage.type = memory
-    admin-api.port = 5202
-  }
-}
-```
-
-
-{/* COPIED_END */}
-
-
-{/* COPIED_START source="docs-website:docs/replicated/canton/3.5/synchronizer/howtos/configure/sequencer_backend.rst" hash="a0176aae" */}
-
-# Configure Sequencer Backend
-
-The following page describes the basics of configuring Sequencer backends. For more advanced configuration, refer to the following sections:
-
-> - High availability
-> - Pruning
-> - Optimization
-
-## Database Sequencer
-
-The Database Sequencer is currently unsupported and should not be configured.
-
-## BFT Sequencer
-
-### Minimal BFT Sequencer backend configuration
-
-To use the Byzantine Fault Tolerant (BFT) Sequencer, set the `type` parameter to `BFT` under \`sequencer\`:
-
-```scala
-sequencers {
-  sequencer1 {
-    sequencer.type = BFT
-    public-api.port = 5001
-    admin-api.port = 5002
-  }
-}
-```
-
-Note that this configuration is for single-node networks; you cannot add peers. For multi-node networks, refer to the next section.
-
-### Configure initial peers (optional)
-
-If the network contains more than one node, configure the server endpoint under `initial-network`. There, you can also configure peer endpoints, or do so using admin commands later. Pre-configuring the peer endpoints reduces the number of manual configuration steps, which saves time, reduces errors, and accelerates the deployment process.
-
-```scala
-server-endpoint {
-  address = "0.0.0.0"
-  port = 31030
-  external-address = "127.0.0.1"
-  external-port = 31030
-  external-tls-config.enabled = false
-}
-peer-endpoints = [
-  {
-    address = "127.0.0.1"
-    port = 31031
-    tls-config.enabled = false
-  }
-]
-```
-
-The `address` and `port` pair under `server-endpoint` make up an endpoint where the BFT Sequencer's gRPC server listens. If the `port` is not specified, the operating system chooses one for you. The `external-address` and `external-port` form an externally available endpoint that other peers can connect to. Usually, the `external-address` is the domain name of a reverse proxy that points to the listening endpoint. The external endpoint must be configured correctly for clients to successfully authenticate the server.
-
-Transport Layer Security (TLS) is enabled by default for the external endpoint and peer endpoints. For simplicity, it is disabled in the config example. However, it is recommended to configure it in the standard way with:
-
-> - `tls` under `server-endpoint` for the internal server endpoint
-> - `external-tls-config` under `server-endpoint` for the external endpoint
-> - `tls-config` under `peer-endpoints` for peer endpoints
-
-<div className="todo">
-
-{/* Link the reference documentation. \<[https://github.com/DACH-NY/canton/issues/26126](https://github.com/DACH-NY/canton/issues/26126)\> */}
-
-</div>
-
-For more details on the `initial-network` configuration, check the reference documentation.
-
-### Configure authentication (optional)
-
-Authentication is enabled by default. It can be configured with `endpoint-authentication` under `initial-network` (at the same level as `server-endpoint`):
-
-```scala
-endpoint-authentication {
-  auth-token = {}
-}
-```
-
-For more details on authentication, visit the secure Synchronizer page.
-
-### Configure dedicated storage (optional)
-
-To use dedicated storage, configure `storage` under `config` as for the top-level Sequencer storage configuration.
-
-While the BFT Sequencer defaults to using the top-level Sequencer storage, configuring dedicated storage offers greater flexibility. It allows you to:
-
-> - Support distinct data read and write patterns with different database backends and settings
-> - Separate backups
-
-### Configure network-wide parameters
-
-If you change the defaults, keep the following parameters in sync across the network:
-
-> - \`epoch-length\`: a length of all epochs
-> - \`max-requests-in-batch\`: a maximum number of requests in a batch, validated at runtime
-> - \`max-batches-per-block-proposal\`: a maximum number of batches per block proposal, validated at runtime
-
-All the above parameters reside under `config` and must be the same across all BFT Orderer nodes.
-
-For details on the related concepts, check the BFT Orderer explanation page.
-
-### Configure other (local) parameters
-
-There are other (local) configuration parameters under `config` that can be changed.
-
-<div className="todo">
-
-{/* Link the reference documentation. \<[https://github.com/DACH-NY/canton/issues/26126](https://github.com/DACH-NY/canton/issues/26126)\> */}
-
-</div>
-
-For details, check the reference documentation.
-
-## External Sequencer
-
-To use an external Sequencer (for example, CometBFT), configure the underlying Sequencer `type` under `config` in the `sequencer` configuration:
-
-```scala
-sequencer {
-    config {
-        cometbft-node-host = "127.0.0.1"
-        cometbft-node-port = 26627
-    }
-    type = CometBFT
-}
-```
-
-Every external Sequencer requires a corresponding Sequencer Driver on the classpath.
-
-
-{/* COPIED_END */}
-
-
-{/* COPIED_START source="docs-website:docs/replicated/canton/3.5/synchronizer/howtos/secure/apis.rst" hash="ca814e1d" */}
-
-# Secure Synchronizer APIs
-
-## Sequencer Public API
-
-### Public API
-
-The synchronizer configuration requires the same configuration of the `Admin API` as the participant. Next to the `Admin API`, we need to configure the `Public API`, which is the API where all participants connect.
-
-#### TLS Encryption
-
-As with the Admin API, network traffic can (and should) be encrypted using TLS. This is particularly crucial for the Public API.
-
-An example configuration section which enables TLS encryption and server-side TLS authentication is given by:
-
-``` none
-canton.synchronizer.acme.public-api {
-  port = 5028
-  address = localhost // defaults to 127.0.0.1
-  tls {
-    cert-chain-file = "./tls/public-api.crt"
-    private-key-file = "./tls/public-api.pem"
-    // minimum-server-protocol-version = TLSv1.3, optional argument
-    // ciphers = null // use null to default to JVM ciphers
-  }
-}
-```
-
-If TLS is used on the server side with a self-signed certificate, we need to pass the certificate chain during the connect call of the participant. Otherwise, the default root certificates of the Java runtime will be used. An example would be:
-
-<div className="todo">
-
-\#22917: Fix broken literalinclude literalinclude:: CANTON/enterprise/app/src/test/scala/com/digitalasset/canton/integration/tests/MultiSynchronizerIntegrationTests.scala start-after: architecture-handbook-entry-begin: TlsConnect end-before: architecture-handbook-entry-end: TlsConnect dedent:
-
-</div>
-
-#### Server Authentication
-
-Canton has two ways to perform server authentication to protect from man-in-the-middle attacks: TLS and the synchronizer id.
-
-If TLS is used on the Public API as described above, TLS also takes care of server authentication. This is one of the core functions of TLS.
-
-Server authentication can also be performed by the synchronizer operator passing their synchronizer identity to the participant node operator, and checking that the identity matches that reported by the synchronizer to the participant node. Like all nodes, the synchronizer has an identity that corresponds to the fingerprint of its namespace root key. It reports its identity to connecting participant nodes and signs all its messages with keys authorized by that namespace root key on the topology ledger. Assuming no key compromises, this gives participants a guarantee that the reported identity is authentic. The synchronizer id of the sole connected synchronizer can be read out using console commands like:
-
-``` none
-participant1.synchronizers.list_connected.last.synchronizerId.filterString
-```
-
-#### Client Authentication
-
-Unlike the ledger or Admin API, the Public API uses Canton's cryptography and topology state for client authentication rather than mutual TLS (mTLS). Clients need to connect to the Public API in several steps:
-
-1.  The client calls the `SequencerConnectService` to align on Canton Protocol versions and obtain the synchronizer id.
-2.  During the first connection, the client registers by sending its minimal topology state (identity, key delegations, public keys) to the sequencer.
-3.  The client calls the `SequencerAuthenticationService` to authenticate using a challenge-response protocol and get an access token for the other sequencer services.
-4.  The client connects to the main `SequencerService` using the access token from 3.
-
-The information the client provides in step 2 is verifiable since it is a certificate chain of keys. The synchronizer rejects this if the namespace root key fingerprint included is not permissioned (see `permissioned-synchronizer`) or if the topology state provided is invalid.
-
-During step 3, the client claims an identity, which is the fingerprint of a namespace root key. If that identity is registered (as done in step 2), the sequencer responds with a challenge consisting of a nonce and all fingerprints of signing keys authorized for that member as per the topology ledger. If the challenge is met successfully by signing the nonce appropriately with a key matching one of the authorized keys, the `SequencerAuthenticationService` responds with a time-limited token which can be used to authenticate more cheaply on the other Public API services.
-
-This authentication mechanism for the restricted services is built into the public sequencer API. You don't need to do anything to set this up; it is enforced automatically and can't be turned off.
-
-The expiration of the token generated in step 2 is valid for one hour by default. The nodes automatically renew the token in the background before it expires. The lifetime of the tokens and of the nonce can be reconfigured using
-
-``` none
-canton.sequencers.sequencer1.public-api {
-    max-token-expiration-interval = 60m
-    nonce-expiration-interval = 1m
-}
-```
-
-However, we suggest keeping the default values.
-
-As mentioned above, an issued token allows the member that provides it during a call to authenticate on public sequencer API services. Therefore, these tokens are sensitive information that must not be disclosed. If an operator suspects that the authentication token for a member has been leaked or somehow compromised, they should use the `logout` console command to immediately revoke all valid tokens of that member and close the sequencer connections. The legitimate member automatically reconnects and obtains new tokens through the challenge-response protocol described above.
-
-The command is slightly different depending on whether the member is a participant or a mediator, for example:
-
-<div className="todo">
-
-Replace with references to the commands. \#22919
-
-</div>
-
-``` text
-participant1.synchronizers.logout(mySynchronizerAlias)
-mediator1.sequencer_connections.logout()
-```
 
 
 {/* COPIED_END */}
