@@ -405,25 +405,20 @@ def run_x2mdx(
     )
     print("Running:", " ".join(command))
     subprocess.run(command, cwd=str(REPO_ROOT), check=True)
-    index_path = output_dir / "index.mdx"
-    index_text = index_path.read_text(encoding="utf-8")
-    index_text = index_text.replace(
-        "Generated module overview for the Daml Standard Library, built from versioned docs JSON snapshots.",
-        f"Generated module overview for {overview_title}, built from the published DAR artifact.",
-    )
-    index_path.write_text(index_text, encoding="utf-8")
+    # Each Token Standard DAR exposes one module, so the generated package-level
+    # overview duplicates the only substantive module page.
+    (output_dir / "index.mdx").unlink()
 
 
 def family_group(*, family_dir: Path, docs_json_path: Path) -> dict[str, Any]:
-    index_path = family_dir / "index.mdx"
-    if not index_path.exists():
-        raise FileNotFoundError(f"Missing generated family index: {index_path}")
+    module_pages = sorted(family_dir.glob("*.mdx"))
+    if not module_pages:
+        raise FileNotFoundError(f"Missing generated module pages in: {family_dir}")
     page_entries = []
-    for page in sorted(family_dir.glob("*.mdx")):
+    for page in module_pages:
         title = read_mdx_title(page)
         page_entries.append(
             (
-                0 if page.name == "index.mdx" else 1,
                 title.lower(),
                 docs_json_page_ref(page, docs_json_path),
             )
@@ -431,7 +426,7 @@ def family_group(*, family_dir: Path, docs_json_path: Path) -> dict[str, Any]:
     page_entries.sort()
     return {
         "group": family_dir.name,
-        "pages": [page_ref for _sort, _title, page_ref in page_entries],
+        "pages": [page_ref for _title, page_ref in page_entries],
     }
 
 
@@ -582,7 +577,7 @@ def update_docs_navigation(
     generated_groups = [
         family_group(family_dir=output_root / family, docs_json_path=docs_json_path)
         for family in family_order
-        if (output_root / family / "index.mdx").exists()
+        if (output_root / family).is_dir()
     ]
     if not generated_groups:
         raise FileNotFoundError(

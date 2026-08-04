@@ -159,10 +159,6 @@ def test_navigation_merge_groups_token_standard_packages_by_version(
         encoding="utf-8",
     )
     write_mdx(
-        output_root / "splice-api-token-holding-v2" / "index.mdx",
-        "splice-api-token-holding-v2",
-    )
-    write_mdx(
         output_root / "splice-api-token-holding-v2" / "splice-api-token-holdingv2.mdx",
         "Splice.Api.Token.HoldingV2",
     )
@@ -207,7 +203,6 @@ def test_navigation_merge_groups_token_standard_packages_by_version(
                 {
                     "group": "splice-api-token-holding-v2",
                     "pages": [
-                        "sdks-tools/api-reference/splice-daml/splice-api-token-holding-v2/index",
                         "sdks-tools/api-reference/splice-daml/splice-api-token-holding-v2/splice-api-token-holdingv2",
                     ],
                 }
@@ -218,12 +213,22 @@ def test_navigation_merge_groups_token_standard_packages_by_version(
     assert docs_json.read_text(encoding="utf-8") == first_render
 
 
-def test_generated_overviews_do_not_describe_token_packages_as_the_standard_library() -> (
-    None
-):
+def test_generated_packages_publish_module_pages_without_overviews() -> None:
     output_root = (
         REPO_ROOT / "docs-main" / "sdks-tools" / "api-reference" / "splice-daml"
     )
 
-    for index_path in output_root.glob("splice-api-token-*v2/index.mdx"):
-        assert "Daml Standard Library" not in index_path.read_text(encoding="utf-8")
+    config = token_v2_reference.load_json(
+        REPO_ROOT
+        / "config"
+        / "x2mdx"
+        / "splice-token-standard-v2"
+        / "source-artifacts.json"
+    )
+    for dar_filename in config["published_dars"]:
+        family = token_v2_reference.dar_family(
+            dar_filename, package_version=config["publish_version"]
+        )
+        family_dir = output_root / family
+        assert not (family_dir / "index.mdx").exists()
+        assert len(list(family_dir.glob("*.mdx"))) == 1
