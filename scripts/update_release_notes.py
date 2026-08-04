@@ -95,7 +95,7 @@ class ReleaseNoteTarget:
     release_page_root: str
 
 
-PACKAGE_RELEASE_REPO = "hyperledger-labs/splice-wallet-kernel"
+PACKAGE_RELEASE_REPO = "canton-network/wallet"
 WALLET_SDK_REPO = "canton-network/wallet"
 WALLET_SDK_SOURCE_PATH = "docs/wallet-integration-guide/src/release-notes/index.rst"
 DEFAULT_DOCS_JSON = DOCS_MAIN / "docs.json"

@@ -35,13 +35,28 @@ softwareupdate --install-rosetta
 
 ## Installation
 
-Install `dpm` usually involves downloading a single binary and adding it to your `PATH`.
+Installing `dpm` usually involves downloading a single binary and adding it to your `PATH`.
 
-When installing `dpm`, you can set the `DPM_HOME` environment variable to change the location where the SDK and any future updates are installed. The default is:
+{/* COPIED_START source="dpm:docs-internal/src/install-sdk.rst" hash="d1fc5b02" */}
+
+When installing `dpm` (any edition, on any platform), you can set the `DPM_HOME` environment variable to change the location where the SDK and any future updates are installed. The default is:
 
 - `${HOME}/.dpm/` on Mac and Linux
 - `%APPDATA%/.dpm/` on Windows
 
+You should then add `${HOME}/.dpm/bin` to your `PATH`:
+
+```shell
+export PATH="${HOME}/.dpm/bin:${PATH}"
+```
+
+or, if you used a custom install location:
+
+```shell
+export PATH="${DPM_HOME}/bin:${PATH}"
+```
+
+{/* COPIED_END */}
 
 To install the latest version:
 
@@ -61,14 +76,135 @@ If you prefer a more manual installation process, see [Manual Installation Instr
 
 ### Installing dpm without an SDK
 
-You can download the `dpm` binary which doesn't have any SDK bundled with it from the [releases page](https://github.com/digital-asset/dpm/releases).
-You can then run `dpm install` or `dpm install package` described in the [next section](#project-management).
+{/* COPIED_START source="dpm:docs-internal/src/getting-started.rst" hash="18775123" */}
+
+You can obtain the bare `dpm` binary — which does not have any SDK bundled with it — in two ways.
+
+Download it from the [releases page](https://github.com/digital-asset/dpm/releases).
+
+Or pull it directly from the public OCI repository using `oras` (or a similar tool):
+
+```shell
+## use the oras CLI to pull the correct platform image:
+oras pull --platform darwin/arm64 europe-docker.pkg.dev/da-images/public/components/dpm:latest
+
+## make the binary executable:
+chmod +x dpm
+```
+
+{/* COPIED_END */}
+
+The example above pulls the macOS Apple-silicon image. Substitute the `--platform` value for your machine: `linux/amd64`, `linux/arm64`, `darwin/amd64`, `darwin/arm64`, or `windows/amd64`.
+
+Once you have the bare binary, you can run `dpm install` as described in [Project Management](#project-management): with no arguments it is an alias for `dpm install package`, installing the current project's dependencies; with a version argument (`dpm install <version>`) it installs that SDK version. Because the bare binary is not bundled with an SDK, you must set the registry manually — see [Registry and Edition](#registry-and-edition).
+
+{/* COPIED_START source="dpm:docs-internal/src/install-sdk.rst" hash="d1fc5b02" */}
+
+### Upgrading the SDK
+
+You can upgrade to the latest version of an SDK by running:
+
+```shell
+dpm install latest
+```
+
+This installs the latest SDK of the same edition you already have installed. You will not be required to provide credentials again, since you should already be configured from installing the SDK the first time.
+
+You can also install a specific version of the SDK in a similar way:
+
+```shell
+dpm install <version>
+```
+
+Note that outside of a Daml project, the active SDK is the latest version that is installed.
+
+{/* COPIED_END */}
 
 ### Verifying the Installation
 
 Once installed, verify the installation:
 
 <DamlDocsSdksToolsCliToolsDpmL14 />
+
+## Configuration Files
+
+### daml.yaml
+
+Every Daml project has a `daml.yaml` file at its root. If a `daml.yaml` file doesn't exist in your project, you can create one with:
+
+```shell
+dpm init
+```
+
+It specifies the SDK version, project metadata, source directory, and dependencies.
+
+<DamlDocsSdksToolsCliToolsDpmL111 />
+
+Key fields:
+
+- `sdk-version` -- The Daml SDK version to use. `dpm install` downloads this version.
+- `name` -- The package name, used in the output DAR filename
+- `source` -- Directory containing Daml source files (typically `daml`)
+- `dependencies` -- List of Daml library dependencies
+- `build-options` -- Compiler flags (e.g., target LF version)
+
+### multi-package.yaml
+
+For projects with multiple Daml packages, a `multi-package.yaml` at the project root lists all sub-packages:
+
+<DamlDocsSdksToolsCliToolsDpmL135 />
+
+Running `dpm build --all` from the root builds all listed packages in dependency order.
+
+### dpm-config.yaml
+
+The `dpm-config.yaml` file stores global `dpm` configuration such as SDK installation paths and registry settings. It is stored at `${DPM_HOME}/dpm-config.yaml` (where `${DPM_HOME}` is usually `~/.dpm`), is optional, and rarely needs manual editing.
+
+{/* COPIED_START source="dpm:docs-internal/src/configuration.rst" hash="346dd1d3" */}
+
+`dpm` can be configured through this config file and through environment variables simultaneously. Environment variables take precedence over the corresponding fields in `dpm-config.yaml`, so they can be used to override configured values.
+
+{/* COPIED_END */}
+
+Typical uses include:
+
+- **Registry URL** — Override the default OCI registry for SDK components.
+- **Authentication** — Point to registry credentials.
+- **Insecure registry** — Allow HTTP connections to a registry.
+
+{/* COPIED_START source="dpm:docs-internal/src/configuration.rst" hash="346dd1d3" */}
+
+### Registry and Edition
+
+For many of its built-in commands, `dpm` needs to know which OCI registry is in effect. If `dpm` was obtained as part of an SDK, the registry is set automatically in `${DPM_HOME}/dpm-config.yaml` (where `${DPM_HOME}` is usually `~/.dpm`).
+
+However, if you are using the bare binary obtained directly from its OCI repository, this configuration might not be known. You can set it manually in `${DPM_HOME}/dpm-config.yaml`:
+
+```yaml
+registry: europe-docker.pkg.dev/da-images/public # or your desired OCI registry
+```
+
+or using the `DPM_REGISTRY` environment variable.
+
+### Authentication
+
+Authentication for pulling from and pushing to OCI registries is based on a file similar to `~/.docker/config.json`, though a Docker installation on the system isn't necessary.
+
+`dpm` defaults to using Docker's auth. You can configure Docker to authenticate to the OCI registry (Google Artifact Registry), and `dpm` will use that:
+
+```shell
+gcloud auth login
+```
+
+```shell
+gcloud auth configure-docker europe-docker.pkg.dev
+```
+
+{/* COPIED_END */}
+
+### Variable interpolation
+
+Both `daml.yaml` and `dpm-config.yaml` support variable interpolation, which lets you avoid hardcoded values (such as registry URLs or credentials paths) and reference environment variables or other dynamic values.
 
 ## Command Reference
 
@@ -82,10 +218,10 @@ You can manage SDK versions manually by using `dpm install`.  To install the SDK
 dpm install
 ```
 
-To install a specific SDK version, for example version `3.4.11`, run:
+To install a specific SDK version, for example version `3.5.2`, run:
 
 ```shell
-dpm install 3.4.11
+dpm install 3.5.2
 ```
 
 To see the active SDK version:
@@ -95,7 +231,7 @@ dpm version --active
 ```
 
 ```shell
-3.4.11
+3.5.2
 ```
 
 To list the installed SDK versions, including the currently active one (marked with `*`):
@@ -105,8 +241,8 @@ dpm version
 ```
 
 ```shell
-  3.4.10
-* 3.4.11
+  3.5.1
+* 3.5.2
 ```
 
 To additionally list all the SDK versions that can be installed, as well as the installed versions:
@@ -124,19 +260,27 @@ dpm version --all -o json
 ```json
  [
     {
-        "version": "3.4.9",
-        "remote": true
-    },
-    {
-        "version": "3.4.10",
+        "version": "3.4.11",
         "installed": true,
         "remote": true
     },
     {
-        "version": "3.4.11",
+        "version": "3.5.1-rc3",
+        "remote": true
+    },
+    {
+        "version": "3.5.1-rc5",
+        "remote": true
+    },
+    {
+        "version": "3.5.1",
         "installed": true,
         "remote": true,
         "active": true
+    },
+    {
+        "version": "3.5.2",
+        "remote": true
     }
 ]
 ```
@@ -214,80 +358,322 @@ Use `--help` on any command to see available options:
 
   This removes any Daml artifact files created in your package during a daml build, including DARs.
 
-- `dpm add`:                      Add components and dars to project
-- `dpm update`:                   Update components and dars in project
-- `dpm codegen-java`:             Daml to Java compiler
-- `dpm codegen-js`:               Daml to JavaScript compiler
-- `dpm canton-console`:           Canton console client
-- `dpm daml-shell`:               Daml-shell client for PQS
-- `dpm damlc`:                    Compiler and IDE backend for the Daml programming language
-- `dpm docs`:                     Generate documentation for a daml package from its documentation comments
-- `dpm init`:                     Initialize a `daml.yaml` project configuration file in the current directory
-- `dpm install`:                  Install project's dependencies or specific dpm-sdk version
-- `dpm install package`:          Install the SDK(s), components and dars used by current project
-- `dpm inspect-dar`:              Inspect a DAR archive
-- `dpm new`:                      Create a new Daml package
-- `dpm publish`:                  Commands for publishing artifacts
-- `dpm pqs`:                      Participant query store
-- `dpm sandbox`:                  Run full Canton installation in a single process
-- `dpm script`:                   Daml Script Binary
-- `dpm studio`:                   Launch Daml Studio
-- `dpm upgrade-check`:            Check upgrade validity between package versions
+| Command | Description |
+| --- | --- |
+| `dpm add` | Add components and dars to project |
+| `dpm add component` | Add a component to project |
+| `dpm add dar` | Add or update a dar in the project |
+| `dpm component init` | Initialize a component in the current directory |
+| `dpm component run` | Pull down and run a remote component |
+| `dpm update` | Update project dependencies |
+| `dpm codegen-java` | Daml to Java compiler |
+| `dpm codegen-js` | Daml to JavaScript compiler |
+| `dpm canton-console` | Canton console client |
+| `dpm daml-shell` | Daml-shell client for PQS |
+| `dpm damlc` | Compiler and IDE backend for the Daml programming language |
+| `dpm docs` | Generate documentation for a daml package from its documentation comments |
+| `dpm init` | Initialize a `daml.yaml` project configuration file in the current directory |
+| `dpm install` | Install project's dependencies or specific dpm-sdk version |
+| `dpm install package` | Install the SDK(s), components and dars used by current project |
+| `dpm uninstall` | Uninstall a dpm-sdk version |
+| `dpm version` | Show installed sdk versions |
+| `dpm inspect-dar` | Inspect a DAR archive |
+| `dpm new` | Create a new Daml package |
+| `dpm publish` | Commands for publishing artifacts |
+| `dpm publish component` | Publish a component to an OCI registry |
+| `dpm publish dar` | Publish a dar to an OCI registry |
+| `dpm pqs` | Participant query store |
+| `dpm sandbox` | Run full Canton installation in a single process |
+| `dpm script` | Daml Script Binary |
+| `dpm studio` | Launch Daml Studio |
+| `dpm tags` | List published tags of an artifact |
+| `dpm upgrade-check` | Check upgrade validity between package versions |
+| `dpm validate-dar` | Validate a DAR archive |
 
-{/* You can disable the HTTP JSON API by passing `--json-api-port none` to `daml start`. */}
-  To specify additional options for sandbox/navigator/the HTTP JSON API you can use
-  `--sandbox-option=opt`, `--navigator-option=opt` and `--json-api-option=opt`.
+Note: after installing a specific SDK version with `dpm install <version>`, update your [project config file](#project-management) to use the new version.
 
-- `dpm validate-dar`              Validate a DAR archive
+## Components
 
-  Note that you need to update your [project config file](#project-management) to use the new version.
+{/* COPIED_START source="dpm:docs-internal/src/components/components.rst" hash="a65f125e" */}
 
+Components are artifacts that `dpm` (being primarily a *launcher*) wraps. Examples of components are `sandbox` and `scribe`. A component defines the commands it wants `dpm` to expose, as well as the binaries that back those commands.
 
-## Configuration Files
+A component is a directory that contains:
 
-### daml.yaml
+- a `component.yaml` file at its root. Its main purpose is to tell `dpm` how to import the component's commands and `exec` them.
+- the binary or binaries (or JARs) that back the commands defined in `component.yaml`.
+- optionally, additional arbitrary files and directories (if needed for the operation of the component, for example `lib` directories). When the component is published, `dpm` includes these in the artifact (see [Publishing Components to an OCI Repository](#publishing-components-to-an-oci-repository)).
 
-Every Daml project has a `daml.yaml` file at its root. If a `daml.yaml` file doesn't exist in your project, you can create one with:
+Components — or rather the commands in them — can be backed by native binaries and/or JARs. This is a sample `component.yaml` defining two commands (`foo` and `bar`) backed by the same native binary:
 
-```shell
-dpm init
+```yaml
+spec:
+  commands:
+    - path: ./foo-binary
+      name: foo
+      aliases: ["f"]
+      desc: a command for foo'ing!
+    - path: ./foo-binary
+      name: bar
+      aliases: ["b"]
+      desc: a command for bar'ing!
+      exec-args: ["--should-bar-instead-of-foo"]
 ```
 
-It specifies the SDK version, project metadata, source directory, and dependencies.
+When running `dpm --help`, you'll see the following in the help message:
 
-<DamlDocsSdksToolsCliToolsDpmL111 />
+```shell
+Usage:
+  dpm [command]
+...
+...
+Dpm-SDK Commands
+  foo    a command for foo'ing!
+  bar    a command for bar'ing!
+...
+```
 
-Key fields:
+The `exec-args` on the `bar` command tells `dpm` to supply additional args when running the binary backing the command, so it is executed as `./foo-binary --should-bar-instead-of-foo`.
 
-- `sdk-version` -- The Daml SDK version to use. `dpm install` downloads this version.
-- `name` -- The package name, used in the output DAR filename
-- `source` -- Directory containing Daml source files (typically `daml`)
-- `dependencies` -- List of Daml library dependencies
-- `build-options` -- Compiler flags (e.g., target LF version)
+### Dependency on other components
 
-### multi-package.yaml
+You can optionally declare dependencies of your component on other components:
 
-For projects with multiple Daml packages, a `multi-package.yaml` at the project root lists all sub-packages:
+```yaml
+# component.yaml
 
-<DamlDocsSdksToolsCliToolsDpmL135 />
+dependency-paths:
+  foo: CUSTOM_FOO_PATH
+spec:
+  commands:
+    ...
+```
 
-Running `dpm build --all` from the root builds all listed packages in dependency order.
+In this example, the component expects a component named `foo` to be present when running `dpm`. `dpm` injects an environment variable named `CUSTOM_FOO_PATH` into this component's environment, pointing to the path of `foo` on the filesystem.
 
-### dpm-config.yaml
+The dependency components must be present either as part of the installed SDK, or declared in `daml.yaml` or `multi-package.yaml`.
 
-The `dpm-config.yaml` file stores global `dpm` configuration such as SDK installation paths and registry settings. It is typically located in your home directory and rarely needs manual editing.
+### component.yaml schema
 
-### `dpm` Global configuration (`dpm-config.yaml`)
+See the [JSON schema](https://raw.githubusercontent.com/digital-asset/dpm/refs/heads/main/schema/component.v1.schema.json).
 
-Global configuration is stored at `${DPM_HOME}/dpm-config.yaml` and is optional. It can be used for purposes such as:
+{/* COPIED_END */}
 
-- **Registry URL** — Override the default OCI registry for SDK components.
-- **Authentication** — Point to registry credentials.
-- **Insecure registry** — Allow HTTP connections to a registry.
+## Working with Components
 
-### Variable interpolation
+### Initializing a component
 
-Both `daml.yaml` and `dpm-config.yaml` support variable interpolation, which lets you avoid hardcoded values (such as registry URLs or credentials paths) and reference environment variables or other dynamic values.
+{/* COPIED_START source="dpm:docs-internal/src/cli/dpm_component_init.rst" hash="b574cce5" */}
+
+Use `dpm component init` to scaffold a new component in the current directory:
+
+```shell
+dpm component init
+```
+
+This creates a starter `component.yaml` (and a `daml.yaml`) in the current directory. Pass `--force` to overwrite existing `component.yaml` and `daml.yaml` files:
+
+```shell
+dpm component init --force
+```
+
+{/* COPIED_END */}
+
+### Running a remote component
+
+{/* COPIED_START source="dpm:docs-internal/src/cli/dpm_component_run.rst" hash="7af80ff0" */}
+
+Once a component has been published, you can pull it down and test-run it with `dpm component run`:
+
+```shell
+dpm component run <component name> <component version> [command] [args]
+```
+
+{/* COPIED_END */}
+
+{/* COPIED_START source="dpm:docs-internal/src/faq.rst" hash="4696f289" */}
+
+The registry to pull from is the one configured via the `DPM_REGISTRY` environment variable or `${DPM_HOME}/dpm-config.yaml`. This is handy for quickly sanity-checking a published component:
+
+```shell
+export DPM_REGISTRY=europe-docker.pkg.dev/da-images/public
+dpm component run canton-open-source 3.3.0-snapshot.20250429.15795.0.v6b2dcccb
+```
+
+`dpm` pulls the component into `~/.dpm/cache/components/`, and then runs the specified command of your component.
+
+{/* COPIED_END */}
+
+### Adding components and DARs to a project
+
+{/* COPIED_START source="dpm:docs-internal/src/cli/dpm_add_component.rst" hash="3b6ee0ff" */}
+
+Use `dpm add component` to add a published component to your project:
+
+```shell
+dpm add component <oci-uri>
+```
+
+| Option | Description |
+| --- | --- |
+| `--insecure` | Use HTTP instead of HTTPS for the OCI registry |
+
+{/* COPIED_END */}
+
+{/* COPIED_START source="dpm:docs-internal/src/cli/dpm_add_dar.rst" hash="9c6c12b4" */}
+
+Use `dpm add dar` to add or update a DAR in your project. You must specify whether the DAR is a dependency or a data-dependency:
+
+```shell
+dpm add dar <oci-uri> <--dependencies | --data-dependencies>
+```
+
+| Option | Description |
+| --- | --- |
+| `--dependencies` | Add the DAR to the `dependencies` field |
+| `--data-dependencies` | Add the DAR to the `data-dependencies` field |
+| `--insecure` | Use HTTP instead of HTTPS for the OCI registry |
+
+{/* COPIED_END */}
+
+## Publishing
+
+### Publishing Components to an OCI Repository
+
+<Note>
+This functionality is available in DPM version 1.0.14 or later (or bundled with SDK 3.5 or later).
+</Note>
+
+{/* COPIED_START source="dpm:docs-internal/src/components/publishing-components.rst" hash="5c3c35f8" */}
+
+`dpm` fully handles packaging and publishing [components](#components). Components are published as [OCI](https://opencontainers.org/) artifacts to an OCI registry.
+
+As a component developer, you can use the `dpm publish component` command to publish a component. Publishing is platform-aware, and the command requires the target platform(s) to be specified with `-p`/`--platform`:
+
+```shell
+--platform darwin/arm64=<path to prepared directory containing the component for this platform>
+```
+
+Multiple platforms can be published in a single command by providing multiple `--platform` flags. For JAR components, you can use `--platform generic=<path to dir>`.
+
+Here's a sample component `foo` laid out with one directory per platform:
+
+```text
+./
+  darwin-arm64/
+        component.yaml
+        foo              # darwin/arm64 binary
+        foo2             # another binary
+        lib/...          # directory
+        somefile.txt
+  linux-amd64/
+        component.yaml
+        foo
+        lib/...
+```
+
+The `component.yaml` file is required, and must be present at the root of each platform directory.
+
+Publish it like this:
+
+```shell
+dpm publish component \
+  oci://<full destination URI>:<version> \
+  --platform darwin/arm64=./darwin-arm64 \
+  --platform linux/amd64=./linux-amd64 \
+  --extra-tags latest    # also push a 'latest' tag for this version of the component
+```
+
+This runs some validations, then publishes two [OCI images](https://specs.opencontainers.org/image-spec/manifest/#image-manifest) corresponding to the two platforms, and an [OCI index](https://specs.opencontainers.org/image-spec/image-index/?v=v1.0.1), plus the `latest` tag.
+
+The published artifact for a given platform includes everything present in the given directory for that platform — all files and subdirectories (for example `lib`). You don't have to pre-bundle or zip up anything; just provide the raw directory. When pulling a component, `dpm` restores the artifact exactly as it was at publish time.
+
+The component can now be imported (pulled) and run by `dpm`. See [Running a remote component](#running-a-remote-component) for how to pull components.
+
+{/* COPIED_END */}
+
+{/* COPIED_START source="dpm:docs-internal/src/cli/dpm_publish_component.rst" hash="cdc719f9" */}
+
+#### Options
+
+| Option | Description |
+| --- | --- |
+| `-p, --platform` | **REQUIRED.** `<os>/<arch>=<path-to-component>` or `generic=<path-to-component>`. May be given multiple times. |
+| `-t, --extra-tags` | Publish extra tags besides the semver. |
+| `-a, --annotations` | Annotations to include in the published OCI artifact (key/value pairs, may be given multiple times). |
+| `-g, --include-git-info` | Include git info as annotations on the published manifest. |
+| `--auth` | Path to a config file similar to Docker's `config.json` for authenticating to the OCI registry. Defaults to Docker's `config.json`. |
+| `-d, --dry-run` | Don't actually push to the registry. |
+| `--insecure` | Use HTTP instead of HTTPS for the OCI registry. |
+
+{/* COPIED_END */}
+
+{/* COPIED_START source="dpm:docs-internal/src/components/publishing-components.rst" hash="5c3c35f8" */}
+
+When publishing build artifacts you can also apply annotations to the entire image. The `-a`/`--annotations` flag can be used with a key/value pair multiple times to add annotations to the image being published. This is useful for attaching metadata such as the branch the build artifacts were built from, or the commit SHA related to the artifacts.
+
+{/* COPIED_END */}
+
+### Publishing DARs to an OCI Repository
+
+<Note>
+This functionality is available in DPM version 1.0.20 or later (or bundled with SDK 3.5.2 or later).
+</Note>
+
+Similarly to components, you can publish DARs to an OCI repository for distribution:
+
+```shell
+dpm publish dar oci://example.com/my/dars/foo:1.0.0 \
+    -f ./foo.dar \
+    --extra-tags devnet    # optional
+```
+
+You should now be able to see the published version via `dpm tags`; see [Listing available tags and versions](#listing-available-tags-and-versions-in-an-oci-repository) below.
+
+See the [Remote Dars](/appdev/modules/m5-environment-configuration#remote-dars) docs section to learn how to install `oci://` DARs in your project.
+
+{/* COPIED_START source="dpm:docs-internal/src/cli/dpm_publish_dar.rst" hash="83823bec" */}
+
+#### Options
+
+| Option | Description |
+| --- | --- |
+| `-f, --dar` | **REQUIRED.** Path to the DAR file to publish. May be given multiple times. |
+| `-l, --license` | Path to the LICENSE file. A license file is required when publishing a DAR. |
+| `--exclude-license` | **For non-production use only.** Disable the license file requirement for DAR publishing. |
+| `-t, --extra-tags` | Publish extra tags besides the semver. |
+| `-a, --annotations` | Annotations to include in the published OCI artifact (key/value pairs, may be given multiple times). |
+| `-g, --include-git-info` | Include git info as annotations on the published manifest. |
+| `--auth` | Path to a config file similar to Docker's `config.json` for authenticating to the OCI registry. Defaults to Docker's `config.json`. |
+| `-d, --dry-run` | Don't actually push to the registry. |
+| `--insecure` | Use HTTP instead of HTTPS for the OCI registry. |
+
+{/* COPIED_END */}
+
+### Listing available tags and versions in an OCI repository
+
+You can use the `dpm tags` command to view published versions and tags for a *specific* component or DAR:
+
+```shell
+dpm tags oci://example.com/my/dars/my-package
+1.0.0
+1.2.3
+latest
+```
+
+{/* COPIED_START source="dpm:docs-internal/src/cli/dpm_tags.rst" hash="b6da0a8c" */}
+
+| Option | Description |
+| --- | --- |
+| `--registry-auth` | Path to a config file similar to Docker's `config.json` for authenticating to the OCI registry. Defaults to Docker's `config.json`. |
+
+{/* COPIED_END */}
+
+## Typical Workflow
+
+A common development cycle with `dpm`:
+
+<DamlDocsSdksToolsCliToolsDpmL152 />
 
 ## `daml` assistant to `dpm` migration steps
 
@@ -358,12 +744,12 @@ dpm init
 | daml damlc | dpm damlc | Invoke the daml compiler |
 | daml studio | dpm studio | Open project in Visual Studio |
 | daml sandbox | dpm sandbox | Launch a Daml Sandbox |
-| `daml ledger allocate-parties`_ | Use Declarative API – OR – JSON / gRPC API | Allocate parties on a ledger |
-| `daml ledger list-parties`_ | JSON / gRPC API | list parties on a ledger |
-| `daml ledger upload-dar`_ | Use Declarative API – OR – JSON / gRPC API | Upload (and vet) dars on a ledger |
-| `daml ledger fetch-dar`_ | gRPC API | Fetch a Dar from a ledger. |
-| `daml packages`_ | JSON / gRPC API | Package a Daml project |
-| `daml start`_ | dpm sandbox dpm build Use Declarative API – OR – JSON / gRPC to upload/allocate | Start a local Daml Ledger |
+| `daml ledger allocate-parties` | Use Declarative API – OR – JSON / gRPC API | Allocate parties on a ledger |
+| `daml ledger list-parties` | JSON / gRPC API | list parties on a ledger |
+| `daml ledger upload-dar` | Use Declarative API – OR – JSON / gRPC API | Upload (and vet) dars on a ledger |
+| `daml ledger fetch-dar` | gRPC API | Fetch a Dar from a ledger. |
+| `daml packages` | JSON / gRPC API | Package a Daml project |
+| `daml start` | `dpm sandbox` + `dpm build`; use Declarative API – OR – JSON / gRPC to upload/allocate | Start a local Daml Ledger |
 
 ## Removed command replacements
 
@@ -415,89 +801,6 @@ The following `daml` commands have no direct `dpm` equivalent. Use the Declarati
 Replace with `dpm sandbox` combined with `dpm build`. Use the Declarative API or JSON/gRPC API to upload DARs and allocate parties as needed.
 
 See `dpm sandbox` for details on running a local Canton installation.
-
-
-{/* COPIED_START source="docs-website:docs/replicated/dpm/3.4/dpm-components.rst" hash="fe1634fe" */}
-
-
-## Publishing Components
-
-<Note>
-This functionality is available in DPM version 1.0.14 or later (or bundled with SDK 3.5 or later)
-</Note>
-
-To share or use your Component in various projects, you can publish it to a repository.
-
-```bash
-dpm publish component oci://<destination>:<strict semantic version> \
-    --platform generic="/path/to/component/directory"
-```
-
-for example:
-
-```bash
-dpm publish component oci://example.com/my/components/foo:1.0.0 \
-    --platform generic="~/component-foo"
-```
-
-This will publish version `1.0.0` of `foo` as OCI to `example.com/my/components/foo:1.0.0`
-
-For multi-platform components, you can instead provide a directory for each platform. For example:
-
-```bash
-dpm publish component oci://example.com/my/components/foo:1.0.0 \
-    --platform linux/arm64="/some/directory" \
-    --platform windows/amd64="/another/directory"
-```
-
-See the `dpm publish component --help` command for more available options.
-
-Also, you can view the published versions (and tags) of a component
-
-```bash
-dpm tags oci://example.com/my/components/foo
-```
-
-For information on how to use the published component in your project, see the section on using components
-
-
-{/* COPIED_END */}
-
-## Publishing Dars to an OCI Repository
-
-<Note>
-This functionality is available in DPM version 1.0.20 or later (or bundled with SDK 3.5.2 or later).
-</Note>
-
-Similarly to components, you can publish dars to an OCI repository for distribution:
-
-```shell
-dpm publish dar oci://example.com/my/dars/foo:1.0.0 \
-    -f ./foo.dar \
-    --extra-tags devnet    # optional
-```
-
-You should now be able to see the published version via `dpm tags` see the [Listing tags](/sdks-tools/cli-tools/dpm#listing-available-tags-and-versions) docs section.
-
-See the [Remote Dars](/appdev/modules/m5-environment-configuration#remote-dars) docs section to learn how to install `oci://` dars in your project.
-
-## Typical Workflow
-
-A common development cycle with `dpm`:
-
-<DamlDocsSdksToolsCliToolsDpmL152 />
-
-
-## Listing available tags and versions in an OCI repository
-
-You can use the `dpm tags` command to view published versions and tags for a _specific_ component or dar.
-
-```shell
-dpm tags oci://example.com/my/dars/my-package
-1.0.0
-1.2.3
-latest
-```
 
 ## Related Pages
 

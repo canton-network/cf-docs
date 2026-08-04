@@ -190,6 +190,27 @@
     }
   }
 
+  function shouldIgnoreNavigationClick(event, link) {
+    // Do not trigger navigation transition for cmd/ctrl/alt/shift clicks or other non-primary clicks
+    if (event.defaultPrevented) {
+      return true;
+    }
+    if (typeof event.button === "number" && event.button !== 0) {
+      return true;
+    }
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+      return true;
+    }
+    if (link.hasAttribute("download")) {
+      return true;
+    }
+    var target = (link.getAttribute("target") || "").toLowerCase();
+    if (target && target !== "_self") {
+      return true;
+    }
+    return false;
+  }
+
   function afterNavigationRender(callback) {
     requestAnimationFrame(function () {
       requestAnimationFrame(callback);
@@ -208,6 +229,10 @@
     function (event) {
       var link = event.target.closest("a[href]");
       if (!link) {
+        return;
+      }
+
+      if (shouldIgnoreNavigationClick(event, link)) {
         return;
       }
 

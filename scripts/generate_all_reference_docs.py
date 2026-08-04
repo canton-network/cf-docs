@@ -73,6 +73,10 @@ SCRIPT_JOBS = [
         nav_slices=(NavSlice("top_group", ("Daml Standard Library",)),),
     ),
     ScriptJob(
+        script_path=REPO_ROOT / "scripts" / "generate_daml_script_reference.py",
+        nav_slices=(NavSlice("top_group", ("Daml Script",)),),
+    ),
+    ScriptJob(
         script_path=REPO_ROOT / "scripts" / "generate_canton_protobuf_history.py",
         nav_slices=(
             NavSlice("ledger_child", (reference_nav.PROTOBUF_GROUP,)),

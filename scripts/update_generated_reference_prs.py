@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 import tempfile
@@ -309,6 +310,35 @@ UPDATE_TARGETS = (
         source_update_paths=("config/x2mdx/daml-standard-library/source-artifacts.json",),
     ),
     UpdateTarget(
+        key="daml-script",
+        title="Update Daml Script reference",
+        branch="generated-references/daml-script/update",
+        description=(
+            "Updates the Daml Script source pin to the latest DPM SDK version and "
+            "regenerates the checked-in Daml Script reference pages."
+        ),
+        generate_commands=(
+            ("nix-shell", "--run", "npm run generate:daml-script-reference"),
+        ),
+        paths=(
+            "config/x2mdx/daml-script/source-artifacts.json",
+            "docs-main/docs.json",
+            "docs-main/appdev/reference/daml-script",
+        ),
+        summary_kind="source-config",
+        summary_path="config/x2mdx/daml-script/source-artifacts.json",
+        summary_label="Daml Script",
+        validation=(
+            "npm run update:generated-reference-sources -- --source daml-script",
+            "npm run generate:daml-script-reference",
+            "git diff --check",
+        ),
+        source_update_commands=(
+            ("nix-shell", "--run", "npm run update:generated-reference-sources -- --source daml-script"),
+        ),
+        source_update_paths=("config/x2mdx/daml-script/source-artifacts.json",),
+    ),
+    UpdateTarget(
         key="typescript-bindings",
         title="Update TypeScript bindings reference",
         branch="generated-references/typescript-bindings/update",
@@ -384,7 +414,7 @@ UPDATE_TARGETS = (
         description=(
             "Updates the published Wallet Gateway release-note page from the latest "
             "`@canton-network/wallet-gateway-remote` GitHub releases in "
-            "`hyperledger-labs/splice-wallet-kernel`."
+            "`canton-network/wallet`."
         ),
         generate_commands=(("nix-shell", "--run", "npm run update:release-notes -- --target wallet-gateway"),),
         paths=(
@@ -430,7 +460,7 @@ UPDATE_TARGETS = (
         description=(
             "Updates the published dApp SDK release-note page from the latest "
             "`@canton-network/dapp-sdk` GitHub releases in "
-            "`hyperledger-labs/splice-wallet-kernel`."
+            "`canton-network/wallet`."
         ),
         generate_commands=(("nix-shell", "--run", "npm run update:release-notes -- --target dapp-sdk"),),
         paths=(
@@ -615,10 +645,15 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="List selected generated-doc targets and commands without changing files or opening PRs.",
     )
+    parser.add_argument(
+        "--print-targets-json",
+        action="store_true",
+        help="Print the selected target keys as JSON without running them.",
+    )
     args = parser.parse_args()
     if "all" in args.targets and len(args.targets) > 1:
         parser.error("pass --targets all by itself, or list specific target keys")
-    if args.dry_run:
+    if args.dry_run or args.print_targets_json:
         args.base_branch = args.base_branch or ""
         args.repository = args.repository or ""
     else:
@@ -641,6 +676,9 @@ def targets_to_run(target_keys: Sequence[str]) -> tuple[UpdateTarget, ...]:
 def main() -> int:
     args = parse_args()
     selected_targets = targets_to_run(args.targets)
+    if args.print_targets_json:
+        print(json.dumps([target.key for target in selected_targets]))
+        return 0
     if args.dry_run:
         for target in selected_targets:
             print(f"{target.key}: {target.title}")
