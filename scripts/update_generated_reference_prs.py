@@ -114,6 +114,35 @@ UPDATE_TARGETS = (
         source_update_paths=("config/mintlify-openapi/splice-openapi/source-artifacts.json",),
     ),
     UpdateTarget(
+        key="splice-token-standard-v2",
+        title="Update Token Standard v2 Daml reference",
+        branch="generated-references/splice-token-standard-v2/update",
+        description=(
+            "Regenerates the checked-in Canton Network Token Standard v2 Daml package "
+            "reference pages from the pinned DAR artifacts in canton-network/splice."
+        ),
+        generate_commands=(
+            ("nix-shell", "--run", "npm run generate:splice-token-standard-v2-reference"),
+        ),
+        paths=(
+            "config/x2mdx/splice-token-standard-v2/source-artifacts.json",
+            "docs-main/docs.json",
+            "docs-main/sdks-tools/api-reference/splice-daml/splice-api-token-allocation-instruction-v2",
+            "docs-main/sdks-tools/api-reference/splice-daml/splice-api-token-allocation-request-v2",
+            "docs-main/sdks-tools/api-reference/splice-daml/splice-api-token-allocation-v2",
+            "docs-main/sdks-tools/api-reference/splice-daml/splice-api-token-holding-v2",
+            "docs-main/sdks-tools/api-reference/splice-daml/splice-api-token-transfer-events-v2",
+            "docs-main/sdks-tools/api-reference/splice-daml/splice-api-token-transfer-instruction-v2",
+        ),
+        summary_kind="static",
+        summary_path=None,
+        summary_label=None,
+        validation=(
+            "npm run generate:splice-token-standard-v2-reference",
+            "git diff --check",
+        ),
+    ),
+    UpdateTarget(
         key="wallet-gateway-openrpc",
         title="Update Wallet Gateway OpenRPC reference",
         branch="generated-references/wallet-gateway-openrpc/update",
