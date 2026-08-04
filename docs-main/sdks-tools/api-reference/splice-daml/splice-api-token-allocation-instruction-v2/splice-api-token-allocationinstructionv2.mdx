@@ -9,21 +9,209 @@ description: "Reference documentation for Daml module Splice.Api.Token.Allocatio
 
 V2 interfaces to enable wallets to instruct the registry to create allocations.
 
-## Module Snapshot
+## Interfaces
 
-<CardGroup cols={2}>
-<Card title="Lifecycle">
-Stable.
-</Card>
-<Card title="Notices">
-Status: `active`
-Introduced in: `1.0.0`
-Removed in: `-`
-Warnings: `0`
-Deprecations: `0`
-Deprecated since: `-`
-</Card>
-</CardGroup>
+<span id="type-splice-api-token-allocationinstructionv2-allocationfactory-48435"></span>
+
+### Interface `AllocationFactory`
+
+Contracts implementing `AllocationFactory` are retrieved from the registry app and are
+used by the wallet to create allocation instructions (or allocations directly).
+
+View Type: [`AllocationFactoryView`](#type-splice-api-token-allocationinstructionv2-allocationfactoryview-38300)
+
+Choices:
+
+<span id="type-splice-api-token-allocationinstructionv2-allocationfactoryallocate-94480"></span>
+
+#### Choice `AllocationFactory_Allocate`
+
+Request the creation of an allocation for a particular settlement.
+
+It depends on the registry whether this results in the allocation being
+created directly or in an allocation instruction being created instead.
+
+Controllers: `actors`
+
+Returns: [`AllocationInstructionResult`](#type-splice-api-token-allocationinstructionv2-allocationinstructionresult-99488)
+
+Arguments:
+
+<ResponseField name="settlement" type="SettlementInfo">
+The settlement for which this allocation is made.
+</ResponseField>
+
+<ResponseField name="allocation" type="AllocationSpecification">
+The allocation which should be created.
+
+Implementations MUST validate that the allocation's admin party
+
+matches the admin of the factory.
+</ResponseField>
+
+<ResponseField name="requestedAt" type="Time">
+The time at which the allocation was requested.
+</ResponseField>
+
+<ResponseField name="inputHoldingCids" type="[ContractId Holding]">
+The holdings to use to fund the allocation.
+
+Implementations MUST return change and all input holdings not used for funding
+
+in the `authorizerChangeCids` field of the `AllocationInstructionResult`.
+</ResponseField>
+
+<ResponseField name="extraArgs" type="ExtraArgs">
+Additional choice arguments.
+</ResponseField>
+
+<ResponseField name="actors" type="[Party]">
+Set of parties executing the allocation.
+
+Implementations MUST check their concrete values to avoid unauthorized allocation creation.
+
+Implementations SHOULD allow the initiation of the allocation if the `actors`
+
+is equal to the `authorizer` of the allocation. Likewise, for accounts
+
+where the account provider has the right to allocate funds, the registry
+
+SHOULD allow the initiation of the allocation if the `actors` are
+
+equal to the account provider.
+</ResponseField>
+
+<span id="type-splice-api-token-allocationinstructionv2-allocationfactorypublicfetch-46919"></span>
+
+#### Choice `AllocationFactory_PublicFetch`
+
+Controllers: `actors`
+
+Returns: [`AllocationFactoryView`](#type-splice-api-token-allocationinstructionv2-allocationfactoryview-38300)
+
+Arguments:
+
+<ResponseField name="actors" type="[Party]">
+Set of parties executing the fetch.
+</ResponseField>
+
+#### Choice `Archive`
+
+Controllers: `Signatories of implementing template`
+
+Returns: ()
+
+Methods:
+
+#### Method `allocationFactory_allocateExtraObservers`
+
+Type: [`AllocationFactory_Allocate`](#type-splice-api-token-allocationinstructionv2-allocationfactoryallocate-94480) -> [`Party`]
+
+#### Method `allocationFactory_allocateImpl`
+
+Type: `ContractId` [`AllocationFactory`](#type-splice-api-token-allocationinstructionv2-allocationfactory-48435) -> [`AllocationFactory_Allocate`](#type-splice-api-token-allocationinstructionv2-allocationfactoryallocate-94480) -> `Update` [`AllocationInstructionResult`](#type-splice-api-token-allocationinstructionv2-allocationinstructionresult-99488)
+
+#### Method `allocationFactory_publicFetchImpl`
+
+Type: `ContractId` [`AllocationFactory`](#type-splice-api-token-allocationinstructionv2-allocationfactory-48435) -> [`AllocationFactory_PublicFetch`](#type-splice-api-token-allocationinstructionv2-allocationfactorypublicfetch-46919) -> `Update` [`AllocationFactoryView`](#type-splice-api-token-allocationinstructionv2-allocationfactoryview-38300)
+
+<span id="type-splice-api-token-allocationinstructionv2-allocationinstruction-46357"></span>
+
+### Interface `AllocationInstruction`
+
+An interface for tracking the status of an allocation instruction,
+i.e., a request to a registry app to create an allocation.
+
+Registries MAY evolve the allocation instruction in multiple steps. They SHOULD
+do so using only the choices on this interface, so that wallets can reliably
+parse the transaction history and determine whether the creation of the allocation ultimately
+succeeded or failed.
+
+View Type: [`AllocationInstructionView`](#type-splice-api-token-allocationinstructionv2-allocationinstructionview-35894)
+
+Choices:
+
+<span id="type-splice-api-token-allocationinstructionv2-allocationinstructionaccept-19413"></span>
+
+#### Choice `AllocationInstruction_Accept`
+
+Accept the allocation instruction as someone that needs to authorize it.
+
+Controllers: `actors`
+
+Returns: [`AllocationInstructionResult`](#type-splice-api-token-allocationinstructionv2-allocationinstructionresult-99488)
+
+Arguments:
+
+<ResponseField name="actors" type="[Party]">
+Set of parties executing the acceptance.
+
+Registries are free to decide on the required authorization for
+
+acceptance. They MUST however report the parties that can accept
+
+unilaterally via the `AllocationInstructionView.availableActions`
+
+field, so that wallets can show the accept option to the user.
+</ResponseField>
+
+<ResponseField name="extraArgs" type="ExtraArgs">
+Additional context required in order to exercise the choice.
+</ResponseField>
+
+<span id="type-splice-api-token-allocationinstructionv2-allocationinstructionwithdraw-61449"></span>
+
+#### Choice `AllocationInstruction_Withdraw`
+
+Withdraw the allocation instruction.
+
+Controllers: `actors`
+
+Returns: [`AllocationInstructionResult`](#type-splice-api-token-allocationinstructionv2-allocationinstructionresult-99488)
+
+Arguments:
+
+<ResponseField name="actors" type="[Party]">
+Set of parties executing the withdrawal.
+
+Implementations MUST check these parties to avoid unauthorized withdrawal.
+
+Registries are free to decide on the required authorization for
+
+withdrawal. They MUST however report the parties that can withdraw
+
+unilaterally via the `AllocationInstructionView.availableActions`
+
+field, so that wallets can show the withdrawal option to the user.
+</ResponseField>
+
+<ResponseField name="extraArgs" type="ExtraArgs">
+Additional context required in order to exercise the choice.
+</ResponseField>
+
+#### Choice `Archive`
+
+Controllers: `Signatories of implementing template`
+
+Returns: ()
+
+Methods:
+
+#### Method `allocationInstruction_acceptExtraObservers`
+
+Type: [`AllocationInstruction_Accept`](#type-splice-api-token-allocationinstructionv2-allocationinstructionaccept-19413) -> [`Party`]
+
+#### Method `allocationInstruction_acceptImpl`
+
+Type: `ContractId` [`AllocationInstruction`](#type-splice-api-token-allocationinstructionv2-allocationinstruction-46357) -> [`AllocationInstruction_Accept`](#type-splice-api-token-allocationinstructionv2-allocationinstructionaccept-19413) -> `Update` [`AllocationInstructionResult`](#type-splice-api-token-allocationinstructionv2-allocationinstructionresult-99488)
+
+#### Method `allocationInstruction_withdrawExtraObservers`
+
+Type: [`AllocationInstruction_Withdraw`](#type-splice-api-token-allocationinstructionv2-allocationinstructionwithdraw-61449) -> [`Party`]
+
+#### Method `allocationInstruction_withdrawImpl`
+
+Type: `ContractId` [`AllocationInstruction`](#type-splice-api-token-allocationinstructionv2-allocationinstruction-46357) -> [`AllocationInstruction_Withdraw`](#type-splice-api-token-allocationinstructionv2-allocationinstructionwithdraw-61449) -> `Update` [`AllocationInstructionResult`](#type-splice-api-token-allocationinstructionv2-allocationinstructionresult-99488)
 
 ## Data Types
 
@@ -341,207 +529,3 @@ Instances:
 ### `allocationFactory_publicFetchImpl`
 
 `allocationFactory_publicFetchImpl` : [`AllocationFactory`](#type-splice-api-token-allocationinstructionv2-allocationfactory-48435) -> `ContractId` [`AllocationFactory`](#type-splice-api-token-allocationinstructionv2-allocationfactory-48435) -> [`AllocationFactory_PublicFetch`](#type-splice-api-token-allocationinstructionv2-allocationfactorypublicfetch-46919) -> `Update` [`AllocationFactoryView`](#type-splice-api-token-allocationinstructionv2-allocationfactoryview-38300)
-
-## Interfaces
-
-<span id="type-splice-api-token-allocationinstructionv2-allocationfactory-48435"></span>
-
-### Interface `AllocationFactory`
-
-Contracts implementing `AllocationFactory` are retrieved from the registry app and are
-used by the wallet to create allocation instructions (or allocations directly).
-
-View Type: [`AllocationFactoryView`](#type-splice-api-token-allocationinstructionv2-allocationfactoryview-38300)
-
-Choices:
-
-<span id="type-splice-api-token-allocationinstructionv2-allocationfactoryallocate-94480"></span>
-
-#### Choice `AllocationFactory_Allocate`
-
-Request the creation of an allocation for a particular settlement.
-
-It depends on the registry whether this results in the allocation being
-created directly or in an allocation instruction being created instead.
-
-Controllers: `actors`
-
-Returns: [`AllocationInstructionResult`](#type-splice-api-token-allocationinstructionv2-allocationinstructionresult-99488)
-
-Arguments:
-
-<ResponseField name="settlement" type="SettlementInfo">
-The settlement for which this allocation is made.
-</ResponseField>
-
-<ResponseField name="allocation" type="AllocationSpecification">
-The allocation which should be created.
-
-Implementations MUST validate that the allocation's admin party
-
-matches the admin of the factory.
-</ResponseField>
-
-<ResponseField name="requestedAt" type="Time">
-The time at which the allocation was requested.
-</ResponseField>
-
-<ResponseField name="inputHoldingCids" type="[ContractId Holding]">
-The holdings to use to fund the allocation.
-
-Implementations MUST return change and all input holdings not used for funding
-
-in the `authorizerChangeCids` field of the `AllocationInstructionResult`.
-</ResponseField>
-
-<ResponseField name="extraArgs" type="ExtraArgs">
-Additional choice arguments.
-</ResponseField>
-
-<ResponseField name="actors" type="[Party]">
-Set of parties executing the allocation.
-
-Implementations MUST check their concrete values to avoid unauthorized allocation creation.
-
-Implementations SHOULD allow the initiation of the allocation if the `actors`
-
-is equal to the `authorizer` of the allocation. Likewise, for accounts
-
-where the account provider has the right to allocate funds, the registry
-
-SHOULD allow the initiation of the allocation if the `actors` are
-
-equal to the account provider.
-</ResponseField>
-
-<span id="type-splice-api-token-allocationinstructionv2-allocationfactorypublicfetch-46919"></span>
-
-#### Choice `AllocationFactory_PublicFetch`
-
-Controllers: `actors`
-
-Returns: [`AllocationFactoryView`](#type-splice-api-token-allocationinstructionv2-allocationfactoryview-38300)
-
-Arguments:
-
-<ResponseField name="actors" type="[Party]">
-Set of parties executing the fetch.
-</ResponseField>
-
-#### Choice `Archive`
-
-Controllers: `Signatories of implementing template`
-
-Returns: ()
-
-Methods:
-
-#### Method `allocationFactory_allocateExtraObservers`
-
-Type: [`AllocationFactory_Allocate`](#type-splice-api-token-allocationinstructionv2-allocationfactoryallocate-94480) -> [`Party`]
-
-#### Method `allocationFactory_allocateImpl`
-
-Type: `ContractId` [`AllocationFactory`](#type-splice-api-token-allocationinstructionv2-allocationfactory-48435) -> [`AllocationFactory_Allocate`](#type-splice-api-token-allocationinstructionv2-allocationfactoryallocate-94480) -> `Update` [`AllocationInstructionResult`](#type-splice-api-token-allocationinstructionv2-allocationinstructionresult-99488)
-
-#### Method `allocationFactory_publicFetchImpl`
-
-Type: `ContractId` [`AllocationFactory`](#type-splice-api-token-allocationinstructionv2-allocationfactory-48435) -> [`AllocationFactory_PublicFetch`](#type-splice-api-token-allocationinstructionv2-allocationfactorypublicfetch-46919) -> `Update` [`AllocationFactoryView`](#type-splice-api-token-allocationinstructionv2-allocationfactoryview-38300)
-
-<span id="type-splice-api-token-allocationinstructionv2-allocationinstruction-46357"></span>
-
-### Interface `AllocationInstruction`
-
-An interface for tracking the status of an allocation instruction,
-i.e., a request to a registry app to create an allocation.
-
-Registries MAY evolve the allocation instruction in multiple steps. They SHOULD
-do so using only the choices on this interface, so that wallets can reliably
-parse the transaction history and determine whether the creation of the allocation ultimately
-succeeded or failed.
-
-View Type: [`AllocationInstructionView`](#type-splice-api-token-allocationinstructionv2-allocationinstructionview-35894)
-
-Choices:
-
-<span id="type-splice-api-token-allocationinstructionv2-allocationinstructionaccept-19413"></span>
-
-#### Choice `AllocationInstruction_Accept`
-
-Accept the allocation instruction as someone that needs to authorize it.
-
-Controllers: `actors`
-
-Returns: [`AllocationInstructionResult`](#type-splice-api-token-allocationinstructionv2-allocationinstructionresult-99488)
-
-Arguments:
-
-<ResponseField name="actors" type="[Party]">
-Set of parties executing the acceptance.
-
-Registries are free to decide on the required authorization for
-
-acceptance. They MUST however report the parties that can accept
-
-unilaterally via the `AllocationInstructionView.availableActions`
-
-field, so that wallets can show the accept option to the user.
-</ResponseField>
-
-<ResponseField name="extraArgs" type="ExtraArgs">
-Additional context required in order to exercise the choice.
-</ResponseField>
-
-<span id="type-splice-api-token-allocationinstructionv2-allocationinstructionwithdraw-61449"></span>
-
-#### Choice `AllocationInstruction_Withdraw`
-
-Withdraw the allocation instruction.
-
-Controllers: `actors`
-
-Returns: [`AllocationInstructionResult`](#type-splice-api-token-allocationinstructionv2-allocationinstructionresult-99488)
-
-Arguments:
-
-<ResponseField name="actors" type="[Party]">
-Set of parties executing the withdrawal.
-
-Implementations MUST check these parties to avoid unauthorized withdrawal.
-
-Registries are free to decide on the required authorization for
-
-withdrawal. They MUST however report the parties that can withdraw
-
-unilaterally via the `AllocationInstructionView.availableActions`
-
-field, so that wallets can show the withdrawal option to the user.
-</ResponseField>
-
-<ResponseField name="extraArgs" type="ExtraArgs">
-Additional context required in order to exercise the choice.
-</ResponseField>
-
-#### Choice `Archive`
-
-Controllers: `Signatories of implementing template`
-
-Returns: ()
-
-Methods:
-
-#### Method `allocationInstruction_acceptExtraObservers`
-
-Type: [`AllocationInstruction_Accept`](#type-splice-api-token-allocationinstructionv2-allocationinstructionaccept-19413) -> [`Party`]
-
-#### Method `allocationInstruction_acceptImpl`
-
-Type: `ContractId` [`AllocationInstruction`](#type-splice-api-token-allocationinstructionv2-allocationinstruction-46357) -> [`AllocationInstruction_Accept`](#type-splice-api-token-allocationinstructionv2-allocationinstructionaccept-19413) -> `Update` [`AllocationInstructionResult`](#type-splice-api-token-allocationinstructionv2-allocationinstructionresult-99488)
-
-#### Method `allocationInstruction_withdrawExtraObservers`
-
-Type: [`AllocationInstruction_Withdraw`](#type-splice-api-token-allocationinstructionv2-allocationinstructionwithdraw-61449) -> [`Party`]
-
-#### Method `allocationInstruction_withdrawImpl`
-
-Type: `ContractId` [`AllocationInstruction`](#type-splice-api-token-allocationinstructionv2-allocationinstruction-46357) -> [`AllocationInstruction_Withdraw`](#type-splice-api-token-allocationinstructionv2-allocationinstructionwithdraw-61449) -> `Update` [`AllocationInstructionResult`](#type-splice-api-token-allocationinstructionv2-allocationinstructionresult-99488)

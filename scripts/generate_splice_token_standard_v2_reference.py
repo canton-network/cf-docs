@@ -402,6 +402,8 @@ def run_x2mdx(
         version_filter,
         "--link-prefix",
         route_prefix,
+        "--omit-module-snapshot",
+        "--interfaces-first",
     )
     print("Running:", " ".join(command))
     subprocess.run(command, cwd=str(REPO_ROOT), check=True)

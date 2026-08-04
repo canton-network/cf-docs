@@ -33,21 +33,297 @@ It also removes the need to specify the `expectedAdmin` party, as its value
 
 is already specified in other choice arguments or not relevant (for `_PublicFetch` choices).
 
-## Module Snapshot
+## Interfaces
 
-<CardGroup cols={2}>
-<Card title="Lifecycle">
-Stable.
-</Card>
-<Card title="Notices">
-Status: `active`
-Introduced in: `1.0.0`
-Removed in: `-`
-Warnings: `0`
-Deprecations: `0`
-Deprecated since: `-`
-</Card>
-</CardGroup>
+<span id="type-splice-api-token-allocationv2-allocation-27217"></span>
+
+### Interface `Allocation`
+
+A contract representing the approval of the authorizer to send or receive
+the net amount of assets of the transfer legs as part of a settlement where
+the executors and instrument admin check that every transfer leg has a matching
+authorization from the otherside.
+
+View Type: [`AllocationView`](#type-splice-api-token-allocationv2-allocationview-63318)
+
+Choices:
+
+<span id="type-splice-api-token-allocationv2-allocationcancel-98587"></span>
+
+#### Choice `Allocation_Cancel`
+
+Cancel the allocation to release the funds and invalidate the approval
+to execute the settlement.
+
+Typically called by
+  - the executors once it is clear that the settlement will not be executed
+  - the admin to cancel an expired allocation
+
+The choice is nonconsuming to support alternative consumption patterns,
+e.g., by calling the consuming V1.Allocation_Cancel choice for
+transaction parsing compatibility.
+
+IMPORTANT: implementations MUST ensure that the allocation is consumed by
+the body of this choice.
+
+Controllers: `actors`
+
+Returns: [`AllocationResult`](#type-splice-api-token-allocationv2-allocationresult-19648)
+
+Arguments:
+
+<ResponseField name="actors" type="[Party]">
+Set of parties executing the cancellation.
+
+Implementations MUST check these parties to avoid unauthorized cancellation.
+
+By default, they SHOULD require them to be equal to the allocation `executors`.
+</ResponseField>
+
+<ResponseField name="extraArgs" type="ExtraArgs">
+Additional context required in order to exercise the choice.
+</ResponseField>
+
+<span id="type-splice-api-token-allocationv2-allocationsettle-31244"></span>
+
+#### Choice `Allocation_Settle`
+
+Settle the allocation by moving the net amount of the transfer legs.
+
+If a settlement deadline is set, implementations MUST NOT allow calling
+this choice after the settlement deadline has passed.
+
+The choice is nonconsuming to support alternative consumption patterns,
+e.g., by calling the consuming V1.Allocation_ExecuteTransfer choice for
+transaction parsing compatibility.
+
+IMPORTANT: implementations MUST ensure that the allocation is consumed by
+the body of this choice.
+
+Controllers: `actors`
+
+Returns: [`AllocationResult`](#type-splice-api-token-allocationv2-allocationresult-19648)
+
+Arguments:
+
+<ResponseField name="actors" type="[Party]">
+Set of parties executing the settlement.
+
+Implementations MUST check these parties to avoid unauthorized settlement execution.
+
+By default, they SHOULD require them to be equal to the allocation
+
+`admin` and the `executors`, so that they can jointly guarantee
+
+atomic settlement.
+
+This authorization is typically provided as part of the
+
+`SettlementFactory_SettleBatch` choice, which should be used by the
+
+`executors` to settle V2 allocations.
+</ResponseField>
+
+<ResponseField name="extraTransferLegSides" type="[TransferLegSide]">
+Extra transfer leg sides to settle as part of settlement.
+
+They MUST NOT be set unless iterated settlement was enabled by the
+
+allocation's authorizer.
+</ResponseField>
+
+<ResponseField name="nextIterationFunding" type="Optional (TextMap Decimal)">
+The funds to reserve for the next settlement iteration, if there is any.
+
+This MUST NOT be set unless iterated settlement was enabled by the
+
+allocation's authorizer.
+
+Setting this to `None` indicates that no further settlement
+
+iterations will be executed after this one.
+</ResponseField>
+
+<ResponseField name="extraArgs" type="ExtraArgs">
+Additional context required in order to exercise the choice.
+</ResponseField>
+
+<span id="type-splice-api-token-allocationv2-allocationwithdraw-18681"></span>
+
+#### Choice `Allocation_Withdraw`
+
+Allow the authorizer to withdraw the allocation to release the funds
+and invalidate the approval to execute the settlement. This can for
+example be used by the authorizer to undo a mistakenly created
+allocation.
+
+For committed allocations (i.e., `committed` set to `True`), this
+choice can only be exercised once the settlement deadline has passed.
+
+The choice is nonconsuming to support alternative consumption patterns,
+e.g., by calling the consuming V1.Allocation_Withdraw choice for
+transaction parsing compatibility.
+
+IMPORTANT: implementations MUST ensure that the allocation is consumed by
+the body of this choice.
+
+Controllers: `actors`
+
+Returns: [`AllocationResult`](#type-splice-api-token-allocationv2-allocationresult-19648)
+
+Arguments:
+
+<ResponseField name="actors" type="[Party]">
+Set of parties executing the withdrawal.
+
+Implementations MUST check these parties to avoid unauthorized withdrawal.
+
+By default they SHOULD allow the account parties of the authorizer to
+
+withdraw the allocation.
+</ResponseField>
+
+<ResponseField name="extraArgs" type="ExtraArgs">
+Additional context required in order to exercise the choice.
+</ResponseField>
+
+#### Choice `Archive`
+
+Controllers: `Signatories of implementing template`
+
+Returns: ()
+
+Methods:
+
+#### Method `allocation_cancelExtraObservers`
+
+Type: [`Allocation_Cancel`](#type-splice-api-token-allocationv2-allocationcancel-98587) -> [`Party`]
+
+#### Method `allocation_cancelImpl`
+
+Type: `ContractId` [`Allocation`](#type-splice-api-token-allocationv2-allocation-27217) -> [`Allocation_Cancel`](#type-splice-api-token-allocationv2-allocationcancel-98587) -> `Update` [`AllocationResult`](#type-splice-api-token-allocationv2-allocationresult-19648)
+
+#### Method `allocation_settleExtraObservers`
+
+Type: [`Allocation_Settle`](#type-splice-api-token-allocationv2-allocationsettle-31244) -> [`Party`]
+
+#### Method `allocation_settleImpl`
+
+Type: `ContractId` [`Allocation`](#type-splice-api-token-allocationv2-allocation-27217) -> [`Allocation_Settle`](#type-splice-api-token-allocationv2-allocationsettle-31244) -> `Update` [`AllocationResult`](#type-splice-api-token-allocationv2-allocationresult-19648)
+
+#### Method `allocation_withdrawExtraObservers`
+
+Type: [`Allocation_Withdraw`](#type-splice-api-token-allocationv2-allocationwithdraw-18681) -> [`Party`]
+
+#### Method `allocation_withdrawImpl`
+
+Type: `ContractId` [`Allocation`](#type-splice-api-token-allocationv2-allocation-27217) -> [`Allocation_Withdraw`](#type-splice-api-token-allocationv2-allocationwithdraw-18681) -> `Update` [`AllocationResult`](#type-splice-api-token-allocationv2-allocationresult-19648)
+
+<span id="type-splice-api-token-allocationv2-settlementfactory-64321"></span>
+
+### Interface `SettlementFactory`
+
+A settlement factory enables the net settlement of a batch of allocations
+for the same instrument admin.
+
+View Type: [`SettlementFactoryView`](#type-splice-api-token-allocationv2-settlementfactoryview-93858)
+
+Choices:
+
+#### Choice `Archive`
+
+Controllers: `Signatories of implementing template`
+
+Returns: ()
+
+<span id="type-splice-api-token-allocationv2-settlementfactorypublicfetch-69193"></span>
+
+#### Choice `SettlementFactory_PublicFetch`
+
+Controllers: `actors`
+
+Returns: [`SettlementFactoryView`](#type-splice-api-token-allocationv2-settlementfactoryview-93858)
+
+Arguments:
+
+<ResponseField name="actors" type="[Party]">
+Set of parties executing the fetch.
+</ResponseField>
+
+<span id="type-splice-api-token-allocationv2-settlementfactorysettlebatch-65399"></span>
+
+#### Choice `SettlementFactory_SettleBatch`
+
+Settle a batch of allocations for instruments with the same instrument admin.
+
+The choice is structured in this form for efficiency and privacy. It
+enables the instrument admin to only perform net debits and credits for
+each account across all transfers being settled; and restrict visibility of
+each credit or debit to executors, admin, and affected account parties only.
+
+Controllers: `actors`
+
+Returns: [`SettlementFactory_SettleBatchResult`](#type-splice-api-token-allocationv2-settlementfactorysettlebatchresult-32414)
+
+Arguments:
+
+<ResponseField name="settlement" type="SettlementInfo">
+The settlement for which the allocations are settled.
+</ResponseField>
+
+<ResponseField name="transferLegs" type="[TransferLeg]">
+The transfers that are to be executed as part of the settlement.
+
+There MUST be at least one transfer leg. All transfer legs MUST have the
+
+same instrument admin as the one of the factory.
+</ResponseField>
+
+<ResponseField name="allocations" type="[FinalizedAllocation]">
+Allocations to settle.
+
+They serve as proof that all transfers executed as part of settlement
+
+were authorized by both sender and receiver.
+
+The implementation of this choice determines the validation performed
+
+by the instrument admin when settling an allocation created by an
+
+instrument holder.
+</ResponseField>
+
+<ResponseField name="actors" type="[Party]">
+Allows setting non-default controllers for settling the batch, which
+
+can be used for implementation specific authorization patterns.
+
+Set of parties executing the settlement.
+
+Implementations MUST check this value to avoid unauthorized settlement execution.
+
+By default they SHOULD check that they are equal to
+
+`settlement.executors` to provide maximal compatibility with apps.
+</ResponseField>
+
+<ResponseField name="extraArgs" type="ExtraArgs">
+Additional choice arguments.
+</ResponseField>
+
+Methods:
+
+#### Method `settlementFactory_publicFetchImpl`
+
+Type: `ContractId` [`SettlementFactory`](#type-splice-api-token-allocationv2-settlementfactory-64321) -> [`SettlementFactory_PublicFetch`](#type-splice-api-token-allocationv2-settlementfactorypublicfetch-69193) -> `Update` [`SettlementFactoryView`](#type-splice-api-token-allocationv2-settlementfactoryview-93858)
+
+#### Method `settlementFactory_settleBatchExtraObservers`
+
+Type: [`SettlementFactory_SettleBatch`](#type-splice-api-token-allocationv2-settlementfactorysettlebatch-65399) -> [`Party`]
+
+#### Method `settlementFactory_settleBatchImpl`
+
+Type: `ContractId` [`SettlementFactory`](#type-splice-api-token-allocationv2-settlementfactory-64321) -> [`SettlementFactory_SettleBatch`](#type-splice-api-token-allocationv2-settlementfactorysettlebatch-65399) -> `Update` [`SettlementFactory_SettleBatchResult`](#type-splice-api-token-allocationv2-settlementfactorysettlebatchresult-32414)
 
 ## Data Types
 
@@ -761,295 +1037,3 @@ Instances:
 ### `settlementFactory_settleBatchExtraObservers`
 
 `settlementFactory_settleBatchExtraObservers` : [`SettlementFactory`](#type-splice-api-token-allocationv2-settlementfactory-64321) -> [`SettlementFactory_SettleBatch`](#type-splice-api-token-allocationv2-settlementfactorysettlebatch-65399) -> [`Party`]
-
-## Interfaces
-
-<span id="type-splice-api-token-allocationv2-allocation-27217"></span>
-
-### Interface `Allocation`
-
-A contract representing the approval of the authorizer to send or receive
-the net amount of assets of the transfer legs as part of a settlement where
-the executors and instrument admin check that every transfer leg has a matching
-authorization from the otherside.
-
-View Type: [`AllocationView`](#type-splice-api-token-allocationv2-allocationview-63318)
-
-Choices:
-
-<span id="type-splice-api-token-allocationv2-allocationcancel-98587"></span>
-
-#### Choice `Allocation_Cancel`
-
-Cancel the allocation to release the funds and invalidate the approval
-to execute the settlement.
-
-Typically called by
-  - the executors once it is clear that the settlement will not be executed
-  - the admin to cancel an expired allocation
-
-The choice is nonconsuming to support alternative consumption patterns,
-e.g., by calling the consuming V1.Allocation_Cancel choice for
-transaction parsing compatibility.
-
-IMPORTANT: implementations MUST ensure that the allocation is consumed by
-the body of this choice.
-
-Controllers: `actors`
-
-Returns: [`AllocationResult`](#type-splice-api-token-allocationv2-allocationresult-19648)
-
-Arguments:
-
-<ResponseField name="actors" type="[Party]">
-Set of parties executing the cancellation.
-
-Implementations MUST check these parties to avoid unauthorized cancellation.
-
-By default, they SHOULD require them to be equal to the allocation `executors`.
-</ResponseField>
-
-<ResponseField name="extraArgs" type="ExtraArgs">
-Additional context required in order to exercise the choice.
-</ResponseField>
-
-<span id="type-splice-api-token-allocationv2-allocationsettle-31244"></span>
-
-#### Choice `Allocation_Settle`
-
-Settle the allocation by moving the net amount of the transfer legs.
-
-If a settlement deadline is set, implementations MUST NOT allow calling
-this choice after the settlement deadline has passed.
-
-The choice is nonconsuming to support alternative consumption patterns,
-e.g., by calling the consuming V1.Allocation_ExecuteTransfer choice for
-transaction parsing compatibility.
-
-IMPORTANT: implementations MUST ensure that the allocation is consumed by
-the body of this choice.
-
-Controllers: `actors`
-
-Returns: [`AllocationResult`](#type-splice-api-token-allocationv2-allocationresult-19648)
-
-Arguments:
-
-<ResponseField name="actors" type="[Party]">
-Set of parties executing the settlement.
-
-Implementations MUST check these parties to avoid unauthorized settlement execution.
-
-By default, they SHOULD require them to be equal to the allocation
-
-`admin` and the `executors`, so that they can jointly guarantee
-
-atomic settlement.
-
-This authorization is typically provided as part of the
-
-`SettlementFactory_SettleBatch` choice, which should be used by the
-
-`executors` to settle V2 allocations.
-</ResponseField>
-
-<ResponseField name="extraTransferLegSides" type="[TransferLegSide]">
-Extra transfer leg sides to settle as part of settlement.
-
-They MUST NOT be set unless iterated settlement was enabled by the
-
-allocation's authorizer.
-</ResponseField>
-
-<ResponseField name="nextIterationFunding" type="Optional (TextMap Decimal)">
-The funds to reserve for the next settlement iteration, if there is any.
-
-This MUST NOT be set unless iterated settlement was enabled by the
-
-allocation's authorizer.
-
-Setting this to `None` indicates that no further settlement
-
-iterations will be executed after this one.
-</ResponseField>
-
-<ResponseField name="extraArgs" type="ExtraArgs">
-Additional context required in order to exercise the choice.
-</ResponseField>
-
-<span id="type-splice-api-token-allocationv2-allocationwithdraw-18681"></span>
-
-#### Choice `Allocation_Withdraw`
-
-Allow the authorizer to withdraw the allocation to release the funds
-and invalidate the approval to execute the settlement. This can for
-example be used by the authorizer to undo a mistakenly created
-allocation.
-
-For committed allocations (i.e., `committed` set to `True`), this
-choice can only be exercised once the settlement deadline has passed.
-
-The choice is nonconsuming to support alternative consumption patterns,
-e.g., by calling the consuming V1.Allocation_Withdraw choice for
-transaction parsing compatibility.
-
-IMPORTANT: implementations MUST ensure that the allocation is consumed by
-the body of this choice.
-
-Controllers: `actors`
-
-Returns: [`AllocationResult`](#type-splice-api-token-allocationv2-allocationresult-19648)
-
-Arguments:
-
-<ResponseField name="actors" type="[Party]">
-Set of parties executing the withdrawal.
-
-Implementations MUST check these parties to avoid unauthorized withdrawal.
-
-By default they SHOULD allow the account parties of the authorizer to
-
-withdraw the allocation.
-</ResponseField>
-
-<ResponseField name="extraArgs" type="ExtraArgs">
-Additional context required in order to exercise the choice.
-</ResponseField>
-
-#### Choice `Archive`
-
-Controllers: `Signatories of implementing template`
-
-Returns: ()
-
-Methods:
-
-#### Method `allocation_cancelExtraObservers`
-
-Type: [`Allocation_Cancel`](#type-splice-api-token-allocationv2-allocationcancel-98587) -> [`Party`]
-
-#### Method `allocation_cancelImpl`
-
-Type: `ContractId` [`Allocation`](#type-splice-api-token-allocationv2-allocation-27217) -> [`Allocation_Cancel`](#type-splice-api-token-allocationv2-allocationcancel-98587) -> `Update` [`AllocationResult`](#type-splice-api-token-allocationv2-allocationresult-19648)
-
-#### Method `allocation_settleExtraObservers`
-
-Type: [`Allocation_Settle`](#type-splice-api-token-allocationv2-allocationsettle-31244) -> [`Party`]
-
-#### Method `allocation_settleImpl`
-
-Type: `ContractId` [`Allocation`](#type-splice-api-token-allocationv2-allocation-27217) -> [`Allocation_Settle`](#type-splice-api-token-allocationv2-allocationsettle-31244) -> `Update` [`AllocationResult`](#type-splice-api-token-allocationv2-allocationresult-19648)
-
-#### Method `allocation_withdrawExtraObservers`
-
-Type: [`Allocation_Withdraw`](#type-splice-api-token-allocationv2-allocationwithdraw-18681) -> [`Party`]
-
-#### Method `allocation_withdrawImpl`
-
-Type: `ContractId` [`Allocation`](#type-splice-api-token-allocationv2-allocation-27217) -> [`Allocation_Withdraw`](#type-splice-api-token-allocationv2-allocationwithdraw-18681) -> `Update` [`AllocationResult`](#type-splice-api-token-allocationv2-allocationresult-19648)
-
-<span id="type-splice-api-token-allocationv2-settlementfactory-64321"></span>
-
-### Interface `SettlementFactory`
-
-A settlement factory enables the net settlement of a batch of allocations
-for the same instrument admin.
-
-View Type: [`SettlementFactoryView`](#type-splice-api-token-allocationv2-settlementfactoryview-93858)
-
-Choices:
-
-#### Choice `Archive`
-
-Controllers: `Signatories of implementing template`
-
-Returns: ()
-
-<span id="type-splice-api-token-allocationv2-settlementfactorypublicfetch-69193"></span>
-
-#### Choice `SettlementFactory_PublicFetch`
-
-Controllers: `actors`
-
-Returns: [`SettlementFactoryView`](#type-splice-api-token-allocationv2-settlementfactoryview-93858)
-
-Arguments:
-
-<ResponseField name="actors" type="[Party]">
-Set of parties executing the fetch.
-</ResponseField>
-
-<span id="type-splice-api-token-allocationv2-settlementfactorysettlebatch-65399"></span>
-
-#### Choice `SettlementFactory_SettleBatch`
-
-Settle a batch of allocations for instruments with the same instrument admin.
-
-The choice is structured in this form for efficiency and privacy. It
-enables the instrument admin to only perform net debits and credits for
-each account across all transfers being settled; and restrict visibility of
-each credit or debit to executors, admin, and affected account parties only.
-
-Controllers: `actors`
-
-Returns: [`SettlementFactory_SettleBatchResult`](#type-splice-api-token-allocationv2-settlementfactorysettlebatchresult-32414)
-
-Arguments:
-
-<ResponseField name="settlement" type="SettlementInfo">
-The settlement for which the allocations are settled.
-</ResponseField>
-
-<ResponseField name="transferLegs" type="[TransferLeg]">
-The transfers that are to be executed as part of the settlement.
-
-There MUST be at least one transfer leg. All transfer legs MUST have the
-
-same instrument admin as the one of the factory.
-</ResponseField>
-
-<ResponseField name="allocations" type="[FinalizedAllocation]">
-Allocations to settle.
-
-They serve as proof that all transfers executed as part of settlement
-
-were authorized by both sender and receiver.
-
-The implementation of this choice determines the validation performed
-
-by the instrument admin when settling an allocation created by an
-
-instrument holder.
-</ResponseField>
-
-<ResponseField name="actors" type="[Party]">
-Allows setting non-default controllers for settling the batch, which
-
-can be used for implementation specific authorization patterns.
-
-Set of parties executing the settlement.
-
-Implementations MUST check this value to avoid unauthorized settlement execution.
-
-By default they SHOULD check that they are equal to
-
-`settlement.executors` to provide maximal compatibility with apps.
-</ResponseField>
-
-<ResponseField name="extraArgs" type="ExtraArgs">
-Additional choice arguments.
-</ResponseField>
-
-Methods:
-
-#### Method `settlementFactory_publicFetchImpl`
-
-Type: `ContractId` [`SettlementFactory`](#type-splice-api-token-allocationv2-settlementfactory-64321) -> [`SettlementFactory_PublicFetch`](#type-splice-api-token-allocationv2-settlementfactorypublicfetch-69193) -> `Update` [`SettlementFactoryView`](#type-splice-api-token-allocationv2-settlementfactoryview-93858)
-
-#### Method `settlementFactory_settleBatchExtraObservers`
-
-Type: [`SettlementFactory_SettleBatch`](#type-splice-api-token-allocationv2-settlementfactorysettlebatch-65399) -> [`Party`]
-
-#### Method `settlementFactory_settleBatchImpl`
-
-Type: `ContractId` [`SettlementFactory`](#type-splice-api-token-allocationv2-settlementfactory-64321) -> [`SettlementFactory_SettleBatch`](#type-splice-api-token-allocationv2-settlementfactorysettlebatch-65399) -> `Update` [`SettlementFactory_SettleBatchResult`](#type-splice-api-token-allocationv2-settlementfactorysettlebatchresult-32414)

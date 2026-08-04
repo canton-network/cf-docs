@@ -9,21 +9,232 @@ description: "Reference documentation for Daml module Splice.Api.Token.TransferI
 
 V2 API to instruct transfers of holdings between accounts.
 
-## Module Snapshot
+## Interfaces
 
-<CardGroup cols={2}>
-<Card title="Lifecycle">
-Stable.
-</Card>
-<Card title="Notices">
-Status: `active`
-Introduced in: `1.0.0`
-Removed in: `-`
-Warnings: `0`
-Deprecations: `0`
-Deprecated since: `-`
-</Card>
-</CardGroup>
+<span id="type-splice-api-token-transferinstructionv2-transferfactory-72147"></span>
+
+### Interface `TransferFactory`
+
+A factory contract to instruct transfers of holdings between parties.
+
+View Type: [`TransferFactoryView`](#type-splice-api-token-transferinstructionv2-transferfactoryview-8084)
+
+Choices:
+
+#### Choice `Archive`
+
+Controllers: `Signatories of implementing template`
+
+Returns: ()
+
+<span id="type-splice-api-token-transferinstructionv2-transferfactorypublicfetch-11963"></span>
+
+#### Choice `TransferFactory_PublicFetch`
+
+Fetch the view of the factory contract.
+
+Controllers: `actors`
+
+Returns: [`TransferFactoryView`](#type-splice-api-token-transferinstructionv2-transferfactoryview-8084)
+
+Arguments:
+
+<ResponseField name="actors" type="[Party]">
+Set of parties executing the fetch.
+</ResponseField>
+
+<span id="type-splice-api-token-transferinstructionv2-transferfactorytransfer-54000"></span>
+
+#### Choice `TransferFactory_Transfer`
+
+Instruct the registry to execute a transfer.
+Implementations MUST ensure that this choice fails if `transfer.executeBefore` is in the past.
+
+Controllers: `actors`
+
+Returns: [`TransferInstructionResult`](#type-splice-api-token-transferinstructionv2-transferinstructionresult-97952)
+
+Arguments:
+
+<ResponseField name="transfer" type="Transfer">
+The transfer to execute.
+
+Implementations MUST validate that the admin of the transferred instrument
+
+matches the admin of the factory.
+</ResponseField>
+
+<ResponseField name="actors" type="[Party]">
+Set of parties executing the transfer.
+
+Implementations MUST check these parties to avoid unauthorized transfer instructions.
+
+Implementations SHOULD
+
+- complete the transfer in a single-step if the actors include all
+
+parties required to authorize the transfer
+
+- allow all the sender's account parties to call this choice, so they
+
+can all initiate a transfer on their own
+</ResponseField>
+
+<ResponseField name="extraArgs" type="ExtraArgs">
+The extra arguments to pass to the transfer implementation.
+</ResponseField>
+
+Methods:
+
+#### Method `transferFactory_publicFetchImpl`
+
+Type: `ContractId` [`TransferFactory`](#type-splice-api-token-transferinstructionv2-transferfactory-72147) -> [`TransferFactory_PublicFetch`](#type-splice-api-token-transferinstructionv2-transferfactorypublicfetch-11963) -> `Update` [`TransferFactoryView`](#type-splice-api-token-transferinstructionv2-transferfactoryview-8084)
+
+#### Method `transferFactory_transferExtraObservers`
+
+Type: [`TransferFactory_Transfer`](#type-splice-api-token-transferinstructionv2-transferfactorytransfer-54000) -> [`Party`]
+
+#### Method `transferFactory_transferImpl`
+
+Type: `ContractId` [`TransferFactory`](#type-splice-api-token-transferinstructionv2-transferfactory-72147) -> [`TransferFactory_Transfer`](#type-splice-api-token-transferinstructionv2-transferfactorytransfer-54000) -> `Update` [`TransferInstructionResult`](#type-splice-api-token-transferinstructionv2-transferinstructionresult-97952)
+
+<span id="type-splice-api-token-transferinstructionv2-transferinstruction-61129"></span>
+
+### Interface `TransferInstruction`
+
+An interface for tracking the status of a transfer instruction,
+i.e., a request to a registry app to execute a transfer.
+
+View Type: [`TransferInstructionView`](#type-splice-api-token-transferinstructionv2-transferinstructionview-64402)
+
+Choices:
+
+#### Choice `Archive`
+
+Controllers: `Signatories of implementing template`
+
+Returns: ()
+
+<span id="type-splice-api-token-transferinstructionv2-transferinstructionaccept-24017"></span>
+
+#### Choice `TransferInstruction_Accept`
+
+Accept the transfer instruction as someone that needs to authorize it, either on the
+sending or receiving side.
+
+Implementations MUST ensure that the transfer instruction is archived upon acceptance.
+They SHOULD do so by calling `TransferInstructionV1.TransferInstruction_Accept`
+where possible to maximize compatibility with v1 transaction parsers.
+
+Note that while implementations will typically return `TransferInstructionResult_Completed`,
+this is not guaranteed. The result of the choice is implementation-specific and MAY
+be any of the three possible results.
+
+Controllers: `actors`
+
+Returns: [`TransferInstructionResult`](#type-splice-api-token-transferinstructionv2-transferinstructionresult-97952)
+
+Arguments:
+
+<ResponseField name="actors" type="[Party]">
+Set of parties executing the acceptance.
+
+Implementations MUST check these parties to avoid unauthorized acceptance.
+
+Implementations SHOULD allow the owner and the provider of the recipient
+
+account to call this choice.
+</ResponseField>
+
+<ResponseField name="extraArgs" type="ExtraArgs">
+Additional context required in order to exercise the choice.
+</ResponseField>
+
+<span id="type-splice-api-token-transferinstructionv2-transferinstructionreject-12876"></span>
+
+#### Choice `TransferInstruction_Reject`
+
+Reject the transfer offer represented by the transfer instruction.
+
+Implementations MUST ensure that the transfer instruction is archived upon rejection.
+They SHOULD do so by calling `TransferInstructionV1.TransferInstruction_Reject`
+where possible to maximize compatibility with v1 transaction parsers.
+
+Controllers: `actors`
+
+Returns: [`TransferInstructionResult`](#type-splice-api-token-transferinstructionv2-transferinstructionresult-97952)
+
+Arguments:
+
+<ResponseField name="actors" type="[Party]">
+Set of parties executing the rejection.
+
+Implementations MUST check these parties to avoid unauthorized rejection.
+
+Implementations SHOULD allow the owner and the provider of the recipient
+
+account to call this choice.
+</ResponseField>
+
+<ResponseField name="extraArgs" type="ExtraArgs">
+Additional context required in order to exercise the choice.
+</ResponseField>
+
+<span id="type-splice-api-token-transferinstructionv2-transferinstructionwithdraw-30201"></span>
+
+#### Choice `TransferInstruction_Withdraw`
+
+Withdraw the transfer offer represented by the transfer instruction.
+
+Implementations MUST ensure that the transfer instruction is archived upon withdrawal.
+They SHOULD do so by calling `TransferInstructionV1.TransferInstruction_Withdraw`
+where possible to maximize compatibility with v1 transaction parsers.
+
+Controllers: `actors`
+
+Returns: [`TransferInstructionResult`](#type-splice-api-token-transferinstructionv2-transferinstructionresult-97952)
+
+Arguments:
+
+<ResponseField name="actors" type="[Party]">
+Set of parties executing the withdrawal.
+
+Implementations MUST check these parties to avoid unauthorized withdrawal.
+
+Implementations SHOULD allow the owner and the provider of the sender
+
+account to call this choice.
+</ResponseField>
+
+<ResponseField name="extraArgs" type="ExtraArgs">
+Additional context required in order to exercise the choice.
+</ResponseField>
+
+Methods:
+
+#### Method `transferInstruction_acceptExtraObservers`
+
+Type: [`TransferInstruction_Accept`](#type-splice-api-token-transferinstructionv2-transferinstructionaccept-24017) -> [`Party`]
+
+#### Method `transferInstruction_acceptImpl`
+
+Type: `ContractId` [`TransferInstruction`](#type-splice-api-token-transferinstructionv2-transferinstruction-61129) -> [`TransferInstruction_Accept`](#type-splice-api-token-transferinstructionv2-transferinstructionaccept-24017) -> `Update` [`TransferInstructionResult`](#type-splice-api-token-transferinstructionv2-transferinstructionresult-97952)
+
+#### Method `transferInstruction_rejectExtraObservers`
+
+Type: [`TransferInstruction_Reject`](#type-splice-api-token-transferinstructionv2-transferinstructionreject-12876) -> [`Party`]
+
+#### Method `transferInstruction_rejectImpl`
+
+Type: `ContractId` [`TransferInstruction`](#type-splice-api-token-transferinstructionv2-transferinstruction-61129) -> [`TransferInstruction_Reject`](#type-splice-api-token-transferinstructionv2-transferinstructionreject-12876) -> `Update` [`TransferInstructionResult`](#type-splice-api-token-transferinstructionv2-transferinstructionresult-97952)
+
+#### Method `transferInstruction_withdrawExtraObservers`
+
+Type: [`TransferInstruction_Withdraw`](#type-splice-api-token-transferinstructionv2-transferinstructionwithdraw-30201) -> [`Party`]
+
+#### Method `transferInstruction_withdrawImpl`
+
+Type: `ContractId` [`TransferInstruction`](#type-splice-api-token-transferinstructionv2-transferinstruction-61129) -> [`TransferInstruction_Withdraw`](#type-splice-api-token-transferinstructionv2-transferinstructionwithdraw-30201) -> `Update` [`TransferInstructionResult`](#type-splice-api-token-transferinstructionv2-transferinstructionresult-97952)
 
 ## Data Types
 
@@ -435,230 +646,3 @@ Instances:
 ### `transferFactory_publicFetchImpl`
 
 `transferFactory_publicFetchImpl` : [`TransferFactory`](#type-splice-api-token-transferinstructionv2-transferfactory-72147) -> `ContractId` [`TransferFactory`](#type-splice-api-token-transferinstructionv2-transferfactory-72147) -> [`TransferFactory_PublicFetch`](#type-splice-api-token-transferinstructionv2-transferfactorypublicfetch-11963) -> `Update` [`TransferFactoryView`](#type-splice-api-token-transferinstructionv2-transferfactoryview-8084)
-
-## Interfaces
-
-<span id="type-splice-api-token-transferinstructionv2-transferfactory-72147"></span>
-
-### Interface `TransferFactory`
-
-A factory contract to instruct transfers of holdings between parties.
-
-View Type: [`TransferFactoryView`](#type-splice-api-token-transferinstructionv2-transferfactoryview-8084)
-
-Choices:
-
-#### Choice `Archive`
-
-Controllers: `Signatories of implementing template`
-
-Returns: ()
-
-<span id="type-splice-api-token-transferinstructionv2-transferfactorypublicfetch-11963"></span>
-
-#### Choice `TransferFactory_PublicFetch`
-
-Fetch the view of the factory contract.
-
-Controllers: `actors`
-
-Returns: [`TransferFactoryView`](#type-splice-api-token-transferinstructionv2-transferfactoryview-8084)
-
-Arguments:
-
-<ResponseField name="actors" type="[Party]">
-Set of parties executing the fetch.
-</ResponseField>
-
-<span id="type-splice-api-token-transferinstructionv2-transferfactorytransfer-54000"></span>
-
-#### Choice `TransferFactory_Transfer`
-
-Instruct the registry to execute a transfer.
-Implementations MUST ensure that this choice fails if `transfer.executeBefore` is in the past.
-
-Controllers: `actors`
-
-Returns: [`TransferInstructionResult`](#type-splice-api-token-transferinstructionv2-transferinstructionresult-97952)
-
-Arguments:
-
-<ResponseField name="transfer" type="Transfer">
-The transfer to execute.
-
-Implementations MUST validate that the admin of the transferred instrument
-
-matches the admin of the factory.
-</ResponseField>
-
-<ResponseField name="actors" type="[Party]">
-Set of parties executing the transfer.
-
-Implementations MUST check these parties to avoid unauthorized transfer instructions.
-
-Implementations SHOULD
-
-- complete the transfer in a single-step if the actors include all
-
-parties required to authorize the transfer
-
-- allow all the sender's account parties to call this choice, so they
-
-can all initiate a transfer on their own
-</ResponseField>
-
-<ResponseField name="extraArgs" type="ExtraArgs">
-The extra arguments to pass to the transfer implementation.
-</ResponseField>
-
-Methods:
-
-#### Method `transferFactory_publicFetchImpl`
-
-Type: `ContractId` [`TransferFactory`](#type-splice-api-token-transferinstructionv2-transferfactory-72147) -> [`TransferFactory_PublicFetch`](#type-splice-api-token-transferinstructionv2-transferfactorypublicfetch-11963) -> `Update` [`TransferFactoryView`](#type-splice-api-token-transferinstructionv2-transferfactoryview-8084)
-
-#### Method `transferFactory_transferExtraObservers`
-
-Type: [`TransferFactory_Transfer`](#type-splice-api-token-transferinstructionv2-transferfactorytransfer-54000) -> [`Party`]
-
-#### Method `transferFactory_transferImpl`
-
-Type: `ContractId` [`TransferFactory`](#type-splice-api-token-transferinstructionv2-transferfactory-72147) -> [`TransferFactory_Transfer`](#type-splice-api-token-transferinstructionv2-transferfactorytransfer-54000) -> `Update` [`TransferInstructionResult`](#type-splice-api-token-transferinstructionv2-transferinstructionresult-97952)
-
-<span id="type-splice-api-token-transferinstructionv2-transferinstruction-61129"></span>
-
-### Interface `TransferInstruction`
-
-An interface for tracking the status of a transfer instruction,
-i.e., a request to a registry app to execute a transfer.
-
-View Type: [`TransferInstructionView`](#type-splice-api-token-transferinstructionv2-transferinstructionview-64402)
-
-Choices:
-
-#### Choice `Archive`
-
-Controllers: `Signatories of implementing template`
-
-Returns: ()
-
-<span id="type-splice-api-token-transferinstructionv2-transferinstructionaccept-24017"></span>
-
-#### Choice `TransferInstruction_Accept`
-
-Accept the transfer instruction as someone that needs to authorize it, either on the
-sending or receiving side.
-
-Implementations MUST ensure that the transfer instruction is archived upon acceptance.
-They SHOULD do so by calling `TransferInstructionV1.TransferInstruction_Accept`
-where possible to maximize compatibility with v1 transaction parsers.
-
-Note that while implementations will typically return `TransferInstructionResult_Completed`,
-this is not guaranteed. The result of the choice is implementation-specific and MAY
-be any of the three possible results.
-
-Controllers: `actors`
-
-Returns: [`TransferInstructionResult`](#type-splice-api-token-transferinstructionv2-transferinstructionresult-97952)
-
-Arguments:
-
-<ResponseField name="actors" type="[Party]">
-Set of parties executing the acceptance.
-
-Implementations MUST check these parties to avoid unauthorized acceptance.
-
-Implementations SHOULD allow the owner and the provider of the recipient
-
-account to call this choice.
-</ResponseField>
-
-<ResponseField name="extraArgs" type="ExtraArgs">
-Additional context required in order to exercise the choice.
-</ResponseField>
-
-<span id="type-splice-api-token-transferinstructionv2-transferinstructionreject-12876"></span>
-
-#### Choice `TransferInstruction_Reject`
-
-Reject the transfer offer represented by the transfer instruction.
-
-Implementations MUST ensure that the transfer instruction is archived upon rejection.
-They SHOULD do so by calling `TransferInstructionV1.TransferInstruction_Reject`
-where possible to maximize compatibility with v1 transaction parsers.
-
-Controllers: `actors`
-
-Returns: [`TransferInstructionResult`](#type-splice-api-token-transferinstructionv2-transferinstructionresult-97952)
-
-Arguments:
-
-<ResponseField name="actors" type="[Party]">
-Set of parties executing the rejection.
-
-Implementations MUST check these parties to avoid unauthorized rejection.
-
-Implementations SHOULD allow the owner and the provider of the recipient
-
-account to call this choice.
-</ResponseField>
-
-<ResponseField name="extraArgs" type="ExtraArgs">
-Additional context required in order to exercise the choice.
-</ResponseField>
-
-<span id="type-splice-api-token-transferinstructionv2-transferinstructionwithdraw-30201"></span>
-
-#### Choice `TransferInstruction_Withdraw`
-
-Withdraw the transfer offer represented by the transfer instruction.
-
-Implementations MUST ensure that the transfer instruction is archived upon withdrawal.
-They SHOULD do so by calling `TransferInstructionV1.TransferInstruction_Withdraw`
-where possible to maximize compatibility with v1 transaction parsers.
-
-Controllers: `actors`
-
-Returns: [`TransferInstructionResult`](#type-splice-api-token-transferinstructionv2-transferinstructionresult-97952)
-
-Arguments:
-
-<ResponseField name="actors" type="[Party]">
-Set of parties executing the withdrawal.
-
-Implementations MUST check these parties to avoid unauthorized withdrawal.
-
-Implementations SHOULD allow the owner and the provider of the sender
-
-account to call this choice.
-</ResponseField>
-
-<ResponseField name="extraArgs" type="ExtraArgs">
-Additional context required in order to exercise the choice.
-</ResponseField>
-
-Methods:
-
-#### Method `transferInstruction_acceptExtraObservers`
-
-Type: [`TransferInstruction_Accept`](#type-splice-api-token-transferinstructionv2-transferinstructionaccept-24017) -> [`Party`]
-
-#### Method `transferInstruction_acceptImpl`
-
-Type: `ContractId` [`TransferInstruction`](#type-splice-api-token-transferinstructionv2-transferinstruction-61129) -> [`TransferInstruction_Accept`](#type-splice-api-token-transferinstructionv2-transferinstructionaccept-24017) -> `Update` [`TransferInstructionResult`](#type-splice-api-token-transferinstructionv2-transferinstructionresult-97952)
-
-#### Method `transferInstruction_rejectExtraObservers`
-
-Type: [`TransferInstruction_Reject`](#type-splice-api-token-transferinstructionv2-transferinstructionreject-12876) -> [`Party`]
-
-#### Method `transferInstruction_rejectImpl`
-
-Type: `ContractId` [`TransferInstruction`](#type-splice-api-token-transferinstructionv2-transferinstruction-61129) -> [`TransferInstruction_Reject`](#type-splice-api-token-transferinstructionv2-transferinstructionreject-12876) -> `Update` [`TransferInstructionResult`](#type-splice-api-token-transferinstructionv2-transferinstructionresult-97952)
-
-#### Method `transferInstruction_withdrawExtraObservers`
-
-Type: [`TransferInstruction_Withdraw`](#type-splice-api-token-transferinstructionv2-transferinstructionwithdraw-30201) -> [`Party`]
-
-#### Method `transferInstruction_withdrawImpl`
-
-Type: `ContractId` [`TransferInstruction`](#type-splice-api-token-transferinstructionv2-transferinstruction-61129) -> [`TransferInstruction_Withdraw`](#type-splice-api-token-transferinstructionv2-transferinstructionwithdraw-30201) -> `Update` [`TransferInstructionResult`](#type-splice-api-token-transferinstructionv2-transferinstructionresult-97952)

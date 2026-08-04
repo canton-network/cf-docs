@@ -112,6 +112,40 @@ def test_dependency_include_dirs_resolves_token_package_names(tmp_path: Path) ->
     ) == [holding.package_root, metadata.package_root]
 
 
+def test_x2mdx_render_omits_snapshot_and_prioritizes_interfaces(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    docs_json = tmp_path / "docs-main" / "docs.json"
+    output_dir = tmp_path / "docs-main" / "reference" / "token-v2"
+    manifest = tmp_path / "manifest.json"
+    docs_json.parent.mkdir(parents=True)
+    output_dir.mkdir(parents=True)
+    docs_json.write_text("{}\n", encoding="utf-8")
+    manifest.write_text("{}\n", encoding="utf-8")
+    (output_dir / "index.mdx").write_text("overview\n", encoding="utf-8")
+    commands: list[list[str]] = []
+
+    def capture_command(command: list[str], **_kwargs: object) -> None:
+        commands.append(command)
+
+    monkeypatch.setattr(token_v2_reference.subprocess, "run", capture_command)
+
+    token_v2_reference.run_x2mdx(
+        manifest_path=manifest,
+        output_dir=output_dir,
+        publish_version="1.0.0",
+        overview_title="token-v2",
+        source_name="unit test",
+        version_filter="unit test",
+        docs_json_path=docs_json,
+    )
+
+    assert len(commands) == 1
+    assert "--omit-module-snapshot" in commands[0]
+    assert "--interfaces-first" in commands[0]
+    assert not (output_dir / "index.mdx").exists()
+
+
 def test_navigation_merge_groups_token_standard_packages_by_version(
     tmp_path: Path,
 ) -> None:
@@ -231,4 +265,10 @@ def test_generated_packages_publish_module_pages_without_overviews() -> None:
         )
         family_dir = output_root / family
         assert not (family_dir / "index.mdx").exists()
-        assert len(list(family_dir.glob("*.mdx"))) == 1
+        module_pages = list(family_dir.glob("*.mdx"))
+        assert len(module_pages) == 1
+        module_text = module_pages[0].read_text(encoding="utf-8")
+        assert "## Module Snapshot" not in module_text
+        assert '<Card title="Lifecycle">' not in module_text
+        assert '<Card title="Notices">' not in module_text
+        assert module_text.index("## Interfaces") < module_text.index("## Data Types")
