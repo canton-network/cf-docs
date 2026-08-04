@@ -71,6 +71,32 @@ paths: {}
     assert "https://example.com/api/scan" in rendered_wallet
 
 
+def test_splice_openapi_removes_unpublished_security_scheme_links(tmp_path: Path) -> None:
+    module = load_script_module("generate_splice_mintlify_openapi.py")
+    spec_bytes = b'''openapi: 3.0.0
+paths:
+  /example:
+    get:
+      summary: Example
+      description: >-
+        JWT token as described in [spliceAppBearerAuth](../../../../common/src/main/openapi/common-external.yaml#/components/securitySchemes/spliceAppBearerAuth).
+  /quoted-example:
+    get:
+      summary: Quoted example
+      description: >-
+        JWT token as described in [spliceAppBearerAuth]("../../../../common/src/main/openapi/common-external.yaml#/components/securitySchemes/spliceAppBearerAuth").
+'''
+
+    rendered = module.render_output_bytes(
+        spec_filename="validator-internal.yaml",
+        spec_bytes=spec_bytes,
+        output_path=tmp_path / "validator-internal.yaml",
+    ).decode("utf-8")
+
+    assert "common-external.yaml" not in rendered
+    assert rendered.count("JWT token as described by the `spliceAppBearerAuth` security scheme.") == 2
+
+
 def test_splice_openapi_nav_emits_explicit_pages_for_every_spec(tmp_path: Path) -> None:
     module = load_script_module("generate_splice_mintlify_openapi.py")
     docs_json = tmp_path / "docs-main" / "docs.json"
