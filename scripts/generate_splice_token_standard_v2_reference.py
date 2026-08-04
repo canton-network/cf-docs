@@ -43,6 +43,11 @@ DEFAULT_OUTPUT_ROOT = (
     REPO_ROOT / "docs-main" / "sdks-tools" / "api-reference" / "splice-daml"
 )
 DEFAULT_DOCS_JSON = REPO_ROOT / "docs-main" / "docs.json"
+TOKEN_STANDARD_PACKAGE_PREFIX = "splice-api-token-"
+TOKEN_STANDARD_VERSION_GROUPS = (
+    ("v1", "Token Standard v1"),
+    ("v2", "Token Standard v2"),
+)
 
 
 @dataclass(frozen=True)
@@ -501,6 +506,65 @@ def replace_group(items: list[Any], group: dict[str, Any]) -> None:
     items[:] = filtered
 
 
+def token_standard_version(group_label: str) -> str | None:
+    if not group_label.startswith(TOKEN_STANDARD_PACKAGE_PREFIX):
+        return None
+    return next(
+        (
+            version
+            for version, _group_label in TOKEN_STANDARD_VERSION_GROUPS
+            if group_label.endswith(f"-{version}")
+        ),
+        None,
+    )
+
+
+def flatten_token_standard_version_groups(items: list[Any]) -> list[Any]:
+    version_group_labels = {
+        group_label for _version, group_label in TOKEN_STANDARD_VERSION_GROUPS
+    }
+    flattened: list[Any] = []
+    for item in items:
+        label = item.get("group") if isinstance(item, dict) else None
+        nested_pages = item.get("pages") if isinstance(item, dict) else None
+        if label in version_group_labels and isinstance(nested_pages, list):
+            flattened.extend(nested_pages)
+        else:
+            flattened.append(item)
+    return flattened
+
+
+def group_token_standard_package_versions(
+    group_items: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    packages_by_version: dict[str, list[dict[str, Any]]] = {
+        version: [] for version, _group_label in TOKEN_STANDARD_VERSION_GROUPS
+    }
+    ungrouped: list[dict[str, Any]] = []
+    insertion_index: int | None = None
+    for item in group_items:
+        version = token_standard_version(str(item["group"]))
+        if version is None:
+            ungrouped.append(item)
+            continue
+        if insertion_index is None:
+            insertion_index = len(ungrouped)
+        packages_by_version[version].append(item)
+
+    version_groups = [
+        {"group": group_label, "pages": packages_by_version[version]}
+        for version, group_label in TOKEN_STANDARD_VERSION_GROUPS
+        if packages_by_version[version]
+    ]
+    if insertion_index is None:
+        return ungrouped
+    return [
+        *ungrouped[:insertion_index],
+        *version_groups,
+        *ungrouped[insertion_index:],
+    ]
+
+
 def update_docs_navigation(
     *,
     docs_json_path: Path,
@@ -537,6 +601,7 @@ def update_docs_navigation(
     )
     if not isinstance(existing_pages, list):
         existing_pages = []
+    existing_pages = flatten_token_standard_version_groups(existing_pages)
     generated_by_label = {str(group["group"]): group for group in generated_groups}
     merged_groups: list[Any] = []
     for item in existing_pages:
@@ -553,6 +618,7 @@ def update_docs_navigation(
     ]
     other_items = [item for item in merged_groups if item not in group_items]
     group_items.sort(key=lambda item: str(item["group"]).lower())
+    group_items = group_token_standard_package_versions(group_items)
     replace_group(
         target_pages, {"group": nav_group_label, "pages": [*other_items, *group_items]}
     )

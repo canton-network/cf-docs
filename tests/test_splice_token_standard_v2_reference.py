@@ -112,7 +112,7 @@ def test_dependency_include_dirs_resolves_token_package_names(tmp_path: Path) ->
     ) == [holding.package_root, metadata.package_root]
 
 
-def test_navigation_merge_preserves_v1_groups_and_adds_v2_groups(
+def test_navigation_merge_groups_token_standard_packages_by_version(
     tmp_path: Path,
 ) -> None:
     docs_json = tmp_path / "docs-main" / "docs.json"
@@ -135,9 +135,17 @@ def test_navigation_merge_preserves_v1_groups_and_adds_v2_groups(
                                             "group": "Splice Daml Packages",
                                             "pages": [
                                                 {
+                                                    "group": "splice-api-reward-assignment-v1",
+                                                    "pages": ["existing/reward"],
+                                                },
+                                                {
                                                     "group": "splice-api-token-holding-v1",
                                                     "pages": ["existing/v1"],
-                                                }
+                                                },
+                                                {
+                                                    "group": "splice-dso-governance",
+                                                    "pages": ["existing/governance"],
+                                                },
                                             ],
                                         }
                                     ],
@@ -167,21 +175,47 @@ def test_navigation_merge_preserves_v1_groups_and_adds_v2_groups(
         output_root=output_root,
         family_order=["splice-api-token-holding-v2"],
     )
+    first_render = docs_json.read_text(encoding="utf-8")
+
+    token_v2_reference.update_docs_navigation(
+        docs_json_path=docs_json,
+        product_label="API Reference",
+        parent_groups=["Splice APIs"],
+        nav_group_label="Splice Daml Packages",
+        output_root=output_root,
+        family_order=["splice-api-token-holding-v2"],
+    )
 
     payload = token_v2_reference.load_json(docs_json)
     package_groups = payload["navigation"]["products"][0]["pages"][0]["pages"][0][
         "pages"
     ]
     assert package_groups == [
-        {"group": "splice-api-token-holding-v1", "pages": ["existing/v1"]},
         {
-            "group": "splice-api-token-holding-v2",
+            "group": "splice-api-reward-assignment-v1",
+            "pages": ["existing/reward"],
+        },
+        {
+            "group": "Token Standard v1",
             "pages": [
-                "sdks-tools/api-reference/splice-daml/splice-api-token-holding-v2/index",
-                "sdks-tools/api-reference/splice-daml/splice-api-token-holding-v2/splice-api-token-holdingv2",
+                {"group": "splice-api-token-holding-v1", "pages": ["existing/v1"]}
             ],
         },
+        {
+            "group": "Token Standard v2",
+            "pages": [
+                {
+                    "group": "splice-api-token-holding-v2",
+                    "pages": [
+                        "sdks-tools/api-reference/splice-daml/splice-api-token-holding-v2/index",
+                        "sdks-tools/api-reference/splice-daml/splice-api-token-holding-v2/splice-api-token-holdingv2",
+                    ],
+                }
+            ],
+        },
+        {"group": "splice-dso-governance", "pages": ["existing/governance"]},
     ]
+    assert docs_json.read_text(encoding="utf-8") == first_render
 
 
 def test_generated_overviews_do_not_describe_token_packages_as_the_standard_library() -> (
