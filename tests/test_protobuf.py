@@ -187,7 +187,11 @@ class ProtobufTests(unittest.TestCase):
         self.assertIn("Canton Protobuf Reference", overview_text)
         self.assertIn("## Release Summary", overview_text)
         self.assertIn("com.example.v1", overview_text)
-        self.assertIn('href="packages/com-example-v1"', overview_text)
+        self.assertIn(
+            '<a class="x2mdx-ref-card-title" href="./packages/com-example-v1">com.example.v1</a>',
+            overview_text,
+        )
+        self.assertNotIn('<a class="x2mdx-ref-card"', overview_text)
         self.assertIn("## ExampleService", package_text)
         self.assertIn("ExampleService.GetFoo", package_text)
         self.assertIn("## Protocol Details", operation_text)
