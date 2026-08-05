@@ -371,6 +371,8 @@ class OpenRpcTests(unittest.TestCase):
 
         self.assertIn("Wallet Gateway OpenRPC", overview)
         self.assertIn('class="x2mdx-ref-card"', overview)
+        self.assertIn('class="x2mdx-ref-card-title"', overview)
+        self.assertNotIn('<a class="x2mdx-ref-card"', overview)
         self.assertIn("## Specs", overview)
         self.assertIn("## Methods", dapp_page)
         self.assertIn("Method pages are the primary reference surface", dapp_page)
