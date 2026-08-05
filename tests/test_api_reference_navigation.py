@@ -36,12 +36,24 @@ def test_splice_daml_package_nav_lives_under_api_reference_splice_apis() -> None
     products = docs["navigation"]["products"]
     api_reference = find_product(products, "API Reference")
     api_splice = find_group(api_reference["pages"], "Splice APIs")
+    splice_packages = find_group(api_splice["pages"], "Splice Daml Packages")
+    splice_amulet = find_group(splice_packages["pages"], "splice-amulet")
+    splice_amulet_root = "sdks-tools/api-reference/splice-daml/splice-amulet"
 
     assert api_splice["pages"][:3] == [
         "sdks-tools/api-reference/splice-daml-apis",
         "sdks-tools/api-reference/splice-daml-models",
         find_group(api_splice["pages"], "Splice Daml Packages"),
     ]
+    assert f"{splice_amulet_root}/index" not in splice_amulet["pages"]
+    assert f"{splice_amulet_root}/splice-amulet" in splice_amulet["pages"]
+    index_page = REPO_ROOT / "docs-main" / splice_amulet_root / "index.mdx"
+    assert not index_page.exists()
+
+    models_page = (
+        REPO_ROOT / "docs-main" / "sdks-tools" / "api-reference" / "splice-daml-models.mdx"
+    ).read_text(encoding="utf-8")
+    assert f"](/{splice_amulet_root})" not in models_page
 
     sdks_tools = find_product(products, "SDKs and Tools")
     api_overview = find_group(sdks_tools["groups"], "API Overview")

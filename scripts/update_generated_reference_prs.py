@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 import tempfile
@@ -113,6 +114,35 @@ UPDATE_TARGETS = (
             ("nix-shell", "--run", "npm run update:generated-reference-sources -- --source splice-openapi"),
         ),
         source_update_paths=("config/mintlify-openapi/splice-openapi/source-artifacts.json",),
+    ),
+    UpdateTarget(
+        key="splice-token-standard-v2",
+        title="Update Token Standard v2 Daml reference",
+        branch="generated-references/splice-token-standard-v2/update",
+        description=(
+            "Regenerates the checked-in Canton Network Token Standard v2 Daml package "
+            "reference pages from the pinned DAR artifacts in canton-network/splice."
+        ),
+        generate_commands=(
+            ("nix-shell", "--run", "npm run generate:splice-token-standard-v2-reference"),
+        ),
+        paths=(
+            "config/x2mdx/splice-token-standard-v2/source-artifacts.json",
+            "docs-main/docs.json",
+            "docs-main/sdks-tools/api-reference/splice-daml/splice-api-token-allocation-instruction-v2",
+            "docs-main/sdks-tools/api-reference/splice-daml/splice-api-token-allocation-request-v2",
+            "docs-main/sdks-tools/api-reference/splice-daml/splice-api-token-allocation-v2",
+            "docs-main/sdks-tools/api-reference/splice-daml/splice-api-token-holding-v2",
+            "docs-main/sdks-tools/api-reference/splice-daml/splice-api-token-transfer-events-v2",
+            "docs-main/sdks-tools/api-reference/splice-daml/splice-api-token-transfer-instruction-v2",
+        ),
+        summary_kind="static",
+        summary_path=None,
+        summary_label=None,
+        validation=(
+            "npm run generate:splice-token-standard-v2-reference",
+            "git diff --check",
+        ),
     ),
     UpdateTarget(
         key="wallet-gateway-openrpc",
@@ -662,10 +692,15 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="List selected generated-doc targets and commands without changing files or opening PRs.",
     )
+    parser.add_argument(
+        "--print-targets-json",
+        action="store_true",
+        help="Print the selected target keys as JSON without running them.",
+    )
     args = parser.parse_args()
     if "all" in args.targets and len(args.targets) > 1:
         parser.error("pass --targets all by itself, or list specific target keys")
-    if args.dry_run:
+    if args.dry_run or args.print_targets_json:
         args.base_branch = args.base_branch or ""
         args.repository = args.repository or ""
     else:
@@ -688,6 +723,9 @@ def targets_to_run(target_keys: Sequence[str]) -> tuple[UpdateTarget, ...]:
 def main() -> int:
     args = parse_args()
     selected_targets = targets_to_run(args.targets)
+    if args.print_targets_json:
+        print(json.dumps([target.key for target in selected_targets]))
+        return 0
     if args.dry_run:
         for target in selected_targets:
             print(f"{target.key}: {target.title}")
