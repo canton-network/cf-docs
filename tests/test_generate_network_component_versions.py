@@ -48,11 +48,7 @@ def dashboard_snapshot(*, generated_at: str, splice_version: str) -> dict:
         "generatedAt": generated_at,
         "generatorMode": "public_source_collection_with_manual_fallbacks",
         "networks": networks,
-        "damlSdkVersions": {
-            "mainnet": "3.5.1",
-            "testnet": "3.5.2",
-            "devnet": "3.5.3",
-        },
+        "latestDamlSdk": "3.5.3",
         "latestDpm": "1.0.21",
         "latestPqs": "3.5.1",
         "latestWalletGateway": "1.4.0",
@@ -382,12 +378,8 @@ def test_collect_snapshot_preserves_previous_network_on_failure(monkeypatch) -> 
     monkeypatch.setattr(module, "previous_stable_pqs_version", lambda existing_config: "3.5.1")
     monkeypatch.setattr(
         module,
-        "collect_daml_sdk_versions",
-        lambda timeout, existing_config: {
-            "mainnet": "3.5.1",
-            "testnet": "3.5.1",
-            "devnet": "3.5.1",
-        },
+        "collect_latest_daml_sdk_version",
+        lambda timeout, existing_config: "3.5.1",
     )
     monkeypatch.setattr(module, "fetch_latest_dpm_version", lambda timeout: "1.0.21")
     monkeypatch.setattr(
@@ -438,76 +430,81 @@ def test_latest_stable_version_ignores_prerelease_and_debug_tags() -> None:
     )
 
 
-def test_fetch_network_daml_sdk_version_uses_network_tag_annotations(monkeypatch) -> None:
+def test_fetch_latest_daml_sdk_version_uses_highest_stable_tag(monkeypatch) -> None:
     module = load_script_module()
+
+    def fake_fetch_json(url: str, timeout: float) -> dict:
+        assert url == module.DAML_SDK_TAGS_URL
+        return {
+            "tags": [
+                "mainnet",
+                "testnet",
+                "devnet",
+                "3.5",
+                "3.5.3",
+                "3.5.4-rc1",
+                "3.5.4.linux_amd64",
+                "3.5.4",
+            ]
+        }
 
     def fake_fetch_manifest_json(url: str, timeout: float) -> dict:
         assert url == (
             "https://europe-docker.pkg.dev/v2/da-images/public/"
-            "sdk-manifests/open-source/manifests/testnet"
+            "sdk-manifests/open-source/manifests/3.5.4"
         )
-        return daml_sdk_manifest("3.5.3")
+        return daml_sdk_manifest("3.5.4")
 
+    monkeypatch.setattr(module, "fetch_json", fake_fetch_json)
     monkeypatch.setattr(module, "fetch_manifest_json", fake_fetch_manifest_json)
 
-    assert module.fetch_network_daml_sdk_version("testnet", timeout=1.0) == "3.5.3"
+    assert module.fetch_latest_daml_sdk_version(timeout=1.0) == "3.5.4"
 
 
-def test_fetch_network_daml_sdk_version_rejects_annotation_mismatch(monkeypatch) -> None:
+def test_fetch_daml_sdk_manifest_version_rejects_annotation_mismatch(monkeypatch) -> None:
     module = load_script_module()
     manifest = daml_sdk_manifest("3.5.3")
     manifest["annotations"]["com.digitalasset.version"] = "3.5.2"
     monkeypatch.setattr(module, "fetch_manifest_json", lambda url, timeout: manifest)
 
     with pytest.raises(RuntimeError, match="version annotation mismatch"):
-        module.fetch_network_daml_sdk_version("devnet", timeout=1.0)
+        module.fetch_daml_sdk_manifest_version("3.5.3", timeout=1.0)
 
 
-def test_fetch_network_daml_sdk_version_rejects_prerelease(monkeypatch) -> None:
+def test_daml_sdk_manifest_url_rejects_prerelease() -> None:
     module = load_script_module()
-    monkeypatch.setattr(
-        module,
-        "fetch_manifest_json",
-        lambda url, timeout: daml_sdk_manifest("3.5.4-rc1"),
-    )
 
-    with pytest.raises(RuntimeError, match="Expected stable"):
-        module.fetch_network_daml_sdk_version("devnet", timeout=1.0)
+    with pytest.raises(ValueError, match="Expected stable"):
+        module.daml_sdk_manifest_url("3.5.4-rc1")
 
 
-def test_collect_daml_sdk_versions_preserves_previous_network_value(monkeypatch) -> None:
+def test_collect_latest_daml_sdk_version_preserves_previous_latest_value(monkeypatch) -> None:
     module = load_script_module()
     existing_config = {
         "repositories": {
             "damlSdk": {
                 "versionMapping": {
-                    "mainnet": {"externalVersion": "3.5.2"},
+                    "mainnet": {"externalVersion": "3.5.1"},
                     "testnet": {"externalVersion": "3.5.2"},
-                    "devnet": {"externalVersion": "3.5.2"},
+                    "devnet": {"externalVersion": "3.5.2-rc1"},
                 }
             }
         }
     }
 
-    def fake_fetch_network_daml_sdk_version(network_key: str, timeout: float) -> str:
-        if network_key == "testnet":
-            raise RuntimeError("registry unavailable")
-        return "3.5.3"
+    def fail_fetch_latest_daml_sdk_version(timeout: float) -> str:
+        raise RuntimeError("registry unavailable")
 
     monkeypatch.setattr(
         module,
-        "fetch_network_daml_sdk_version",
-        fake_fetch_network_daml_sdk_version,
+        "fetch_latest_daml_sdk_version",
+        fail_fetch_latest_daml_sdk_version,
     )
 
-    assert module.collect_daml_sdk_versions(1.0, existing_config) == {
-        "mainnet": "3.5.3",
-        "testnet": "3.5.2",
-        "devnet": "3.5.3",
-    }
+    assert module.collect_latest_daml_sdk_version(1.0, existing_config) == "3.5.2"
 
 
-def test_build_config_records_network_daml_sdk_manifest_source() -> None:
+def test_build_config_records_latest_daml_sdk_manifest_source() -> None:
     module = load_script_module()
 
     config = module.build_config(
@@ -523,13 +520,14 @@ def test_build_config_records_network_daml_sdk_manifest_source() -> None:
     )
     assert config["repositories"]["damlSdk"]["versionMapping"]["testnet"] == {
         "branch": "",
-        "externalVersion": "3.5.2",
+        "externalVersion": "3.5.3",
         "folderPathRepo": "",
     }
     assert (
         module.DAML_SDK_VERSION_ANNOTATION
         in config["_generated"]["sourceContract"]["damlSdk"]
     )
+    assert "ignoring moving network tags" in config["_generated"]["sourceContract"]["damlSdk"]
 
 
 def test_previous_stable_pqs_version_uses_existing_dashboard_config() -> None:

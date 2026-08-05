@@ -70,6 +70,10 @@ DAML_SDK_MANIFEST_BASE_URL = (
     "https://europe-docker.pkg.dev/v2/da-images/public/"
     "sdk-manifests/open-source/manifests"
 )
+DAML_SDK_TAGS_URL = (
+    "https://europe-docker.pkg.dev/v2/da-images/public/"
+    "sdk-manifests/open-source/tags/list"
+)
 DAML_SDK_VERSION_ANNOTATION = "org.opencontainers.image.version"
 DAML_SDK_VENDOR_VERSION_ANNOTATION = "com.digitalasset.version"
 WALLET_GATEWAY_PACKAGE_URL = (
@@ -185,14 +189,14 @@ def fetch_npm_latest(package_name: str, timeout: float) -> str:
     return str(data["dist-tags"]["latest"])
 
 
-def daml_sdk_manifest_url(network_key: str) -> str:
-    if network_key not in NETWORKS:
-        raise ValueError(f"Unknown network key {network_key!r}")
-    return f"{DAML_SDK_MANIFEST_BASE_URL}/{network_key}"
+def daml_sdk_manifest_url(version: str) -> str:
+    if not STABLE_SEMVER_RE.fullmatch(version):
+        raise ValueError(f"Expected stable Daml SDK version tag, got {version!r}")
+    return f"{DAML_SDK_MANIFEST_BASE_URL}/{version}"
 
 
-def fetch_network_daml_sdk_version(network_key: str, timeout: float) -> str:
-    url = daml_sdk_manifest_url(network_key)
+def fetch_daml_sdk_manifest_version(version_tag: str, timeout: float) -> str:
+    url = daml_sdk_manifest_url(version_tag)
     data = fetch_manifest_json(url, timeout)
     if data.get("mediaType") != "application/vnd.oci.image.index.v1+json":
         raise RuntimeError(f"Expected OCI image index from {url}")
@@ -243,29 +247,38 @@ def fetch_network_daml_sdk_version(network_key: str, timeout: float) -> str:
     return version
 
 
-def collect_daml_sdk_versions(timeout: float, existing_config: dict) -> dict[str, str]:
-    versions: dict[str, str] = {}
-    for network_key in NETWORK_ORDER:
-        try:
-            versions[network_key] = fetch_network_daml_sdk_version(network_key, timeout)
-        except Exception as exc:
-            previous_version = existing_repo_version(
-                existing_config,
-                "damlSdk",
-                network_key,
-            )
-            if not STABLE_SEMVER_RE.fullmatch(previous_version):
-                raise RuntimeError(
-                    f"{network_key}: failed to collect Daml SDK version and no previous "
-                    f"stable dashboard value is available to preserve: {exc}"
-                ) from exc
-            print(
-                f"WARNING: {network_key}: failed to collect Daml SDK version ({exc}); "
-                f"preserving previous dashboard value {previous_version}",
-                file=sys.stderr,
-            )
-            versions[network_key] = previous_version
-    return versions
+def fetch_latest_daml_sdk_version(timeout: float) -> str:
+    data = fetch_json(DAML_SDK_TAGS_URL, timeout)
+    tags = data.get("tags")
+    if not isinstance(tags, list) or not all(isinstance(tag, str) for tag in tags):
+        raise RuntimeError(f"Expected string tags from {DAML_SDK_TAGS_URL}")
+    version = latest_stable_version(tags, DAML_SDK_TAGS_URL)
+    manifest_version = fetch_daml_sdk_manifest_version(version, timeout)
+    if manifest_version != version:
+        raise RuntimeError(
+            f"Daml SDK tag/manifest version mismatch: tag={version} "
+            f"manifest={manifest_version}"
+        )
+    return version
+
+
+def collect_latest_daml_sdk_version(timeout: float, existing_config: dict) -> str:
+    try:
+        return fetch_latest_daml_sdk_version(timeout)
+    except Exception as exc:
+        previous_version = latest_stable_version(
+            [
+                existing_repo_version(existing_config, "damlSdk", network_key)
+                for network_key in NETWORK_ORDER
+            ],
+            "existing Daml SDK dashboard config",
+        )
+        print(
+            f"WARNING: failed to collect latest Daml SDK version ({exc}); "
+            f"preserving previous latest dashboard value {previous_version}",
+            file=sys.stderr,
+        )
+        return previous_version
 
 
 def version_key(version: str) -> tuple[int, int, int]:
@@ -693,7 +706,7 @@ def collect_snapshot(timeout: float, existing_config: dict) -> dict:
         "generatedAt": generated_at,
         "generatorMode": "public_source_collection_with_manual_fallbacks",
         "networks": networks,
-        "damlSdkVersions": collect_daml_sdk_versions(timeout, existing_config),
+        "latestDamlSdk": collect_latest_daml_sdk_version(timeout, existing_config),
         "latestDpm": fetch_latest_dpm_version(timeout),
         "latestPqs": fetch_pqs_version_from_scribe_component(
             timeout,
@@ -768,7 +781,7 @@ def build_repository_mapping(
             branch = network["cantonReleaseLineBranch"]
             folder_path_repo = CANTON_SOURCES_PATH
         elif repository_key == "damlSdk":
-            external_version = snapshot["damlSdkVersions"][network_key]
+            external_version = snapshot["latestDamlSdk"]
             branch = ""
             folder_path_repo = ""
         elif repository_key == "dpm":
@@ -835,11 +848,12 @@ def build_source_contract(snapshot: dict) -> dict:
             "nix/canton-sources.json."
         ),
         "damlSdk": (
-            f"Read {DAML_SDK_VERSION_ANNOTATION} from the public Artifact Registry OCI "
-            f"index {DAML_SDK_MANIFEST_REPOSITORY}:<network>, where <network> is mainnet, "
-            "testnet, or devnet. Cross-check the Digital Asset and per-platform version "
-            "annotations; preserve that network's previous stable dashboard value if the "
-            "registry is temporarily unavailable."
+            f"Select the highest stable semantic-version tag from {DAML_SDK_TAGS_URL}, "
+            "ignoring moving network tags, prereleases, and platform-specific tags. Read "
+            f"{DAML_SDK_VERSION_ANNOTATION} from that public Artifact Registry OCI index "
+            "and cross-check the Digital Asset and per-platform version annotations. Apply "
+            "the resulting latest version to every network; preserve the previous latest "
+            "stable dashboard value if the registry is temporarily unavailable."
         ),
         "dpm": (
             f"Latest stable dpm CLI release tag from {DPM_LATEST_RELEASE_URL} "
