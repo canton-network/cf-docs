@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import argparse
+import shutil
 from collections.abc import Sequence
 from pathlib import Path
-import shutil
 
 
 def build_jvm_doc_report_from_manifest_args(args: argparse.Namespace):
@@ -245,6 +245,16 @@ def build_parser() -> argparse.ArgumentParser:
     build_daml_json.add_argument(
         "--link-prefix",
         help="Optional root-relative URL prefix to use for overview-page module links.",
+    )
+    build_daml_json.add_argument(
+        "--omit-module-snapshot",
+        action="store_true",
+        help="Omit the generated Lifecycle and Notices snapshot from module pages.",
+    )
+    build_daml_json.add_argument(
+        "--interfaces-first",
+        action="store_true",
+        help="Render Interfaces before other declaration sections on module pages.",
     )
 
     protobuf = subparsers.add_parser("protobuf", help="Descriptor-backed protobuf commands")
@@ -537,6 +547,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 output_dir=output_dir,
                 overview_title=args.overview_title,
                 link_prefix=args.link_prefix,
+                include_module_snapshot=not args.omit_module_snapshot,
+                interfaces_first=args.interfaces_first,
             )
             write_pages(pages, output_root)
             return 0

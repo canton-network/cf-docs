@@ -682,6 +682,8 @@ def module_template_context(
     module_deprecation_introduced_in: str | None,
     module_lifecycle: dict[str, str | None] | None,
     type_links: TypeLinkContext | None = None,
+    include_module_snapshot: bool = True,
+    interfaces_first: bool = False,
 ) -> dict[str, Any]:
     name = str(module_doc["md_name"])
     display_name = module_display_name(name)
@@ -737,6 +739,14 @@ def module_template_context(
     token = _TYPE_LINK_CONTEXT.set(type_links) if type_links is not None else None
     try:
         sections: list[dict[str, Any]] = []
+        interface_section = None
+        if module_doc.get("md_interfaces"):
+            interface_section = {
+                "title": "Interfaces",
+                "bodies": [render_interface(item) for item in module_doc["md_interfaces"]],
+            }
+        if interfaces_first and interface_section:
+            sections.append(interface_section)
         if module_doc.get("md_adts"):
             sections.append({"title": "Data Types", "bodies": [render_adt(item) for item in module_doc["md_adts"]]})
         if module_doc.get("md_classes"):
@@ -745,10 +755,8 @@ def module_template_context(
             sections.append(
                 {"title": "Functions", "bodies": [render_function(item) for item in module_doc["md_functions"]]}
             )
-        if module_doc.get("md_interfaces"):
-            sections.append(
-                {"title": "Interfaces", "bodies": [render_interface(item) for item in module_doc["md_interfaces"]]}
-            )
+        if not interfaces_first and interface_section:
+            sections.append(interface_section)
         if module_doc.get("md_templates"):
             sections.append(
                 {"title": "Templates", "bodies": [render_template_doc(item) for item in module_doc["md_templates"]]}
@@ -781,13 +789,17 @@ def module_template_context(
         "anchor_id": str(anchor) if anchor else "",
         "module_title": display_name,
         "module_description": descr,
-        "snapshot_cards": [
-            {"title": "Lifecycle", "body": lifecycle},
-            {
-                "title": "Notices",
-                "body": "\n".join(notice_lines),
-            },
-        ],
+        "snapshot_cards": (
+            [
+                {"title": "Lifecycle", "body": lifecycle},
+                {
+                    "title": "Notices",
+                    "body": "\n".join(notice_lines),
+                },
+            ]
+            if include_module_snapshot
+            else []
+        ),
         "primary_warning": primary_warning,
         "warning_items": module_warnings,
         "deprecation_items": module_deprecations,
@@ -845,6 +857,8 @@ def build_pages(
     output_dir: Path,
     overview_title: str = "Daml Standard Library",
     link_prefix: str | None = None,
+    include_module_snapshot: bool = True,
+    interfaces_first: bool = False,
 ) -> tuple[Path, list[Page]]:
     root = output_dir.parent
     pages: list[Page] = []
@@ -881,6 +895,8 @@ def build_pages(
                         link_prefix=normalized_link_prefix,
                         anchor_to_page=anchor_to_page,
                     ),
+                    include_module_snapshot=include_module_snapshot,
+                    interfaces_first=interfaces_first,
                 ),
             )
         )
