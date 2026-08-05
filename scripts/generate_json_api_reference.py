@@ -19,6 +19,7 @@ from ledger_api_release_bundles import (
     read_bundle_spec_text,
     selected_versions,
 )
+import openapi_history
 import reference_nav
 from x2mdx.output import Page, RawMarkdown
 from x2mdx.reference_pages import (
@@ -269,6 +270,23 @@ def normalize_mintlify_operation_summaries(openapi_path: Path) -> None:
         openapi_path.write_text(normalized, encoding="utf-8")
 
 
+def enrich_mintlify_operation_history(
+    *,
+    openapi_path: Path,
+    specs_by_version: dict[str, dict[str, Any]],
+    versions: list[str],
+) -> None:
+    histories = openapi_history.build_operation_histories(specs_by_version, versions)
+    original = openapi_path.read_text(encoding="utf-8")
+    enriched = openapi_history.enrich_openapi_text_with_history(
+        original,
+        histories,
+        first_version=versions[0],
+    )
+    if enriched != original:
+        openapi_path.write_text(enriched, encoding="utf-8")
+
+
 def mintlify_openapi_page_refs(openapi_path: Path) -> list[str]:
     spec = yaml.safe_load(openapi_path.read_text(encoding="utf-8"))
     if not isinstance(spec, dict):
@@ -497,6 +515,18 @@ def main() -> int:
         force_refresh=args.force_refresh,
     )
     normalize_mintlify_operation_summaries(output_spec)
+    specs_by_version = versioned_openapi_specs(
+        source_config=source_config,
+        cache_dir=cache_dir,
+        versions=versions,
+        spec_filename="openapi.yaml",
+        force_refresh=args.force_refresh,
+    )
+    enrich_mintlify_operation_history(
+        openapi_path=output_spec,
+        specs_by_version=specs_by_version,
+        versions=[entry["version"] for entry in versions],
+    )
     print(f"Published Mintlify OpenAPI source: {output_spec}")
 
     docs_json_path = Path(args.docs_json).resolve()
@@ -513,13 +543,6 @@ def main() -> int:
         openapi_directory=args.openapi_directory,
         details_page_ref=args.details_page_ref,
         openapi_page_refs=mintlify_openapi_page_refs(output_spec),
-    )
-    specs_by_version = versioned_openapi_specs(
-        source_config=source_config,
-        cache_dir=cache_dir,
-        versions=versions,
-        spec_filename="openapi.yaml",
-        force_refresh=args.force_refresh,
     )
     write_openapi_details_page(
         docs_json_path=docs_json_path,
