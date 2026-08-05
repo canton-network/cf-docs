@@ -49,6 +49,7 @@ def test_update_targets_cover_all_generated_doc_surfaces() -> None:
     assert [target.key for target in module.UPDATE_TARGETS] == [
         "version-dashboard",
         "splice-openapi",
+        "splice-token-standard-v2",
         "wallet-gateway-openrpc",
         "json-api-reference",
         "json-api-asyncapi-reference",
@@ -274,6 +275,7 @@ def test_generated_clean_paths_include_target_paths_and_internal_output() -> Non
 
     assert ".internal" in clean_paths
     assert "docs-main/openapi/splice" in clean_paths
+    assert "docs-main/sdks-tools/api-reference/splice-daml/splice-api-token-holding-v2" in clean_paths
     assert "docs-main/openapi/json-ledger-api" in clean_paths
     assert "docs-main/reference/grpc-ledger-api-reference" in clean_paths
     assert "docs-main/reference/java" in clean_paths
