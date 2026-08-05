@@ -48,7 +48,11 @@ def dashboard_snapshot(*, generated_at: str, splice_version: str) -> dict:
         "generatedAt": generated_at,
         "generatorMode": "public_source_collection_with_manual_fallbacks",
         "networks": networks,
-        "latestDpmSdk": "3.5.1",
+        "damlSdkVersions": {
+            "mainnet": "3.5.1",
+            "testnet": "3.5.2",
+            "devnet": "3.5.3",
+        },
         "latestDpm": "1.0.21",
         "latestPqs": "3.5.1",
         "latestWalletGateway": "1.4.0",
@@ -57,6 +61,24 @@ def dashboard_snapshot(*, generated_at: str, splice_version: str) -> dict:
             "walletSdk": "1.4.0",
             "dappSdk": "1.1.0",
         },
+    }
+
+
+def daml_sdk_manifest(version: str) -> dict:
+    annotations = {
+        "org.opencontainers.image.version": version,
+        "com.digitalasset.version": version,
+    }
+    return {
+        "mediaType": "application/vnd.oci.image.index.v1+json",
+        "annotations": annotations,
+        "manifests": [
+            {
+                "mediaType": "application/vnd.oci.image.manifest.v1+json",
+                "annotations": annotations,
+                "platform": {"architecture": "amd64", "os": "linux"},
+            }
+        ],
     }
 
 
@@ -95,7 +117,7 @@ def test_build_config_preserves_generated_metadata_when_dashboard_values_do_not_
         generated_at="2026-06-03T12:00:00+00:00",
         splice_version="0.6.3",
     )
-    candidate_snapshot["latestDpmSdk"] = "3.5.2"
+    candidate_snapshot["unpublishedProbe"] = "changed"
 
     result = module.build_config(existing_config, candidate_snapshot)
 
@@ -357,8 +379,16 @@ def test_collect_snapshot_preserves_previous_network_on_failure(monkeypatch) -> 
         }
 
     monkeypatch.setattr(module, "collect_network_snapshot", fake_collect_network_snapshot)
-    monkeypatch.setattr(module, "fetch_text", lambda url, timeout: "3.5.1")
     monkeypatch.setattr(module, "previous_stable_pqs_version", lambda existing_config: "3.5.1")
+    monkeypatch.setattr(
+        module,
+        "collect_daml_sdk_versions",
+        lambda timeout, existing_config: {
+            "mainnet": "3.5.1",
+            "testnet": "3.5.1",
+            "devnet": "3.5.1",
+        },
+    )
     monkeypatch.setattr(module, "fetch_latest_dpm_version", lambda timeout: "1.0.21")
     monkeypatch.setattr(
         module,
@@ -384,7 +414,6 @@ def test_collect_snapshot_raises_when_failed_network_has_no_previous(monkeypatch
         raise RuntimeError(f"{network_key} boom")
 
     monkeypatch.setattr(module, "collect_network_snapshot", fake_collect_network_snapshot)
-    monkeypatch.setattr(module, "fetch_text", lambda url, timeout: "3.5.1")
     monkeypatch.setattr(module, "previous_stable_pqs_version", lambda existing_config: "3.5.1")
 
     with pytest.raises(RuntimeError, match="no previous dashboard config"):
@@ -406,6 +435,100 @@ def test_latest_stable_version_ignores_prerelease_and_debug_tags() -> None:
             "test",
         )
         == "3.5.1"
+    )
+
+
+def test_fetch_network_daml_sdk_version_uses_network_tag_annotations(monkeypatch) -> None:
+    module = load_script_module()
+
+    def fake_fetch_manifest_json(url: str, timeout: float) -> dict:
+        assert url == (
+            "https://europe-docker.pkg.dev/v2/da-images/public/"
+            "sdk-manifests/open-source/manifests/testnet"
+        )
+        return daml_sdk_manifest("3.5.3")
+
+    monkeypatch.setattr(module, "fetch_manifest_json", fake_fetch_manifest_json)
+
+    assert module.fetch_network_daml_sdk_version("testnet", timeout=1.0) == "3.5.3"
+
+
+def test_fetch_network_daml_sdk_version_rejects_annotation_mismatch(monkeypatch) -> None:
+    module = load_script_module()
+    manifest = daml_sdk_manifest("3.5.3")
+    manifest["annotations"]["com.digitalasset.version"] = "3.5.2"
+    monkeypatch.setattr(module, "fetch_manifest_json", lambda url, timeout: manifest)
+
+    with pytest.raises(RuntimeError, match="version annotation mismatch"):
+        module.fetch_network_daml_sdk_version("devnet", timeout=1.0)
+
+
+def test_fetch_network_daml_sdk_version_rejects_prerelease(monkeypatch) -> None:
+    module = load_script_module()
+    monkeypatch.setattr(
+        module,
+        "fetch_manifest_json",
+        lambda url, timeout: daml_sdk_manifest("3.5.4-rc1"),
+    )
+
+    with pytest.raises(RuntimeError, match="Expected stable"):
+        module.fetch_network_daml_sdk_version("devnet", timeout=1.0)
+
+
+def test_collect_daml_sdk_versions_preserves_previous_network_value(monkeypatch) -> None:
+    module = load_script_module()
+    existing_config = {
+        "repositories": {
+            "damlSdk": {
+                "versionMapping": {
+                    "mainnet": {"externalVersion": "3.5.2"},
+                    "testnet": {"externalVersion": "3.5.2"},
+                    "devnet": {"externalVersion": "3.5.2"},
+                }
+            }
+        }
+    }
+
+    def fake_fetch_network_daml_sdk_version(network_key: str, timeout: float) -> str:
+        if network_key == "testnet":
+            raise RuntimeError("registry unavailable")
+        return "3.5.3"
+
+    monkeypatch.setattr(
+        module,
+        "fetch_network_daml_sdk_version",
+        fake_fetch_network_daml_sdk_version,
+    )
+
+    assert module.collect_daml_sdk_versions(1.0, existing_config) == {
+        "mainnet": "3.5.3",
+        "testnet": "3.5.2",
+        "devnet": "3.5.3",
+    }
+
+
+def test_build_config_records_network_daml_sdk_manifest_source() -> None:
+    module = load_script_module()
+
+    config = module.build_config(
+        {"versions": {}, "repositories": {}},
+        dashboard_snapshot(
+            generated_at="2026-08-05T12:00:00+00:00",
+            splice_version="0.7.0",
+        ),
+    )
+
+    assert config["repositories"]["damlSdk"]["url"] == (
+        f"https://{module.DAML_SDK_MANIFEST_REPOSITORY}"
+    )
+    assert config["repositories"]["damlSdk"]["versionMapping"]["testnet"] == {
+        "branch": "",
+        "externalVersion": "3.5.2",
+        "folderPathRepo": "",
+    }
+    assert (
+        module.DAML_SDK_VERSION_ANNOTATION
+        in config["_generated"]["sourceContract"]["damlSdk"]
     )
 
 
