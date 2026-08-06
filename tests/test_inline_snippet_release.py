@@ -71,6 +71,14 @@ class FakeGitHub:
         assert (repository, ancestor, descendant) == (REPOSITORY, MERGE, RELEASE)
         return self.ancestor
 
+    def list_tags(self, repository: str) -> list[str]:
+        assert repository == REPOSITORY
+        return ["0.6.13", "0.6.14", "0.7.0", "0.7.1-rc1", "0.8.0"]
+
+    def list_release_tags(self, repository: str) -> list[str]:
+        assert repository == "digital-asset/decentralized-canton-sync"
+        return ["v0.6.13", "v0.6.14", "v0.7.0", "v0.8.0"]
+
 
 def test_release_requires_ancestry_and_matching_public_artifact() -> None:
     evaluator = ReleaseEvaluator(FakeGitHub(), REPOSITORIES)
@@ -157,6 +165,16 @@ def test_loads_deployed_splice_targets_in_dev_test_main_order(tmp_path: Path) ->
         ("TestNet", "0.6.14"),
         ("MainNet", "0.6.13"),
     ]
+
+
+def test_expands_inclusive_range_to_jointly_published_releases() -> None:
+    evaluator = ReleaseEvaluator(FakeGitHub(), REPOSITORIES)
+
+    targets = evaluator.published_targets_between(
+        REPOSITORY, Version.parse("0.6.14"), Version.parse("0.7.0")
+    )
+
+    assert [str(target.version) for target in targets] == ["0.6.14", "0.7.0"]
 
 
 def test_rejects_deployed_lookup_for_unconfigured_repository(tmp_path: Path) -> None:

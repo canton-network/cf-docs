@@ -114,6 +114,23 @@ class GitHubClient:
             )
         return payload
 
+    def _json_list(self, url: str) -> list[dict[str, Any]]:
+        content = self._request(url, accept="application/vnd.github+json")
+        assert content is not None
+        try:
+            payload = json.loads(content)
+        except json.JSONDecodeError as error:
+            raise SourceResolutionError(
+                f"GitHub returned invalid JSON for {url}"
+            ) from error
+        if not isinstance(payload, list) or not all(
+            isinstance(item, dict) for item in payload
+        ):
+            raise SourceResolutionError(
+                f"GitHub returned an unexpected response for {url}"
+            )
+        return payload
+
     def resolve_pull_request(
         self, repository: str, pull_request: int
     ) -> PullRequestResolution:
@@ -191,6 +208,38 @@ class GitHubClient:
             )
         return status in {"ahead", "identical"}
 
+    def list_release_tags(self, repository: str) -> list[str]:
+        tags: list[str] = []
+        for page in range(1, 101):
+            payload = self._json_list(
+                f"https://api.github.com/repos/{repository}/releases?per_page=100&page={page}"
+            )
+            for release in payload:
+                tag = release.get("tag_name")
+                if isinstance(tag, str) and not release.get("draft"):
+                    tags.append(tag)
+            if len(payload) < 100:
+                return tags
+        raise SourceResolutionError(
+            f"Refusing to paginate more than 10,000 releases for {repository}"
+        )
+
+    def list_tags(self, repository: str) -> list[str]:
+        tags: list[str] = []
+        for page in range(1, 101):
+            payload = self._json_list(
+                f"https://api.github.com/repos/{repository}/tags?per_page=100&page={page}"
+            )
+            for tag_data in payload:
+                tag = tag_data.get("name")
+                if isinstance(tag, str):
+                    tags.append(tag)
+            if len(payload) < 100:
+                return tags
+        raise SourceResolutionError(
+            f"Refusing to paginate more than 10,000 tags for {repository}"
+        )
+
 
 def repository_from_remote(remote: str) -> str | None:
     for pattern in REMOTE_PATTERNS:
@@ -208,11 +257,13 @@ class SourceResolver:
         repositories: set[str],
         local_checkouts: dict[str, Path] | None = None,
         max_source_bytes: int = DEFAULT_MAX_SOURCE_BYTES,
+        allow_local: bool = False,
     ) -> None:
         self.github = github
         self.repositories = repositories
         self.local_checkouts = local_checkouts or {}
         self.max_source_bytes = max_source_bytes
+        self.allow_local = allow_local
 
     def resolve(
         self, reference: SourceReference, *, production: bool = False
@@ -244,7 +295,7 @@ class SourceResolver:
                 reference.repository, commit, reference.path
             )
             return self._bounded(reference, commit, content)
-        if production:
+        if production and not self.allow_local:
             raise SourceResolutionError("Local snippet references are preview-only")
         return self._resolve_local(reference)
 

@@ -5,9 +5,11 @@ from pathlib import Path
 import pytest
 
 from scripts.snippets.compiler import (
+    CompilationTarget,
     GeneratedOutputDrift,
     assert_generated_output,
     compile_page,
+    compile_page_variants,
     generated_path,
     write_generated_output,
 )
@@ -110,6 +112,31 @@ def test_compiles_only_existing_prose_and_immutable_snippet_otherwise() -> None:
     assert "new: true" not in rendered
     assert len(resolver.references) == 1
     assert resolver.references[0].commit == COMMIT
+
+
+def test_multiple_releases_render_each_condition_as_one_tabbed_instruction_unit() -> (
+    None
+):
+    resolver = FakeResolver()
+    rendered = compile_page_variants(
+        source_page(),
+        page_path=PAGE,
+        repositories=REPOSITORIES,
+        source_resolver=resolver,  # type: ignore[arg-type]
+        targets=(
+            CompilationTarget("DevNet (0.7.0)", lambda _: True, True),
+            CompilationTarget("TestNet (0.6.14)", lambda _: False, True),
+            CompilationTarget("MainNet (0.6.13)", lambda _: False, True),
+        ),
+    )
+
+    assert rendered.count("---\ntitle: Validator\n---") == 1
+    assert rendered.count("<Tabs>") == 1
+    assert '<Tab title="DevNet (0.7.0)">' in rendered
+    assert '<Tab title="TestNet (0.6.14)">' in rendered
+    assert '<Tab title="MainNet (0.6.13)">' in rendered
+    assert rendered.count("Use the new setting.") == 1
+    assert rendered.count("Use the existing setting.") == 2
 
 
 def test_uses_a_longer_fence_when_source_contains_backticks() -> None:

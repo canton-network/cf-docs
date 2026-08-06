@@ -31,6 +31,10 @@ class ReleaseGitHubClient(Protocol):
 
     def is_ancestor(self, repository: str, ancestor: str, descendant: str) -> bool: ...
 
+    def list_release_tags(self, repository: str) -> list[str]: ...
+
+    def list_tags(self, repository: str) -> list[str]: ...
+
 
 @dataclass(frozen=True, order=True)
 class Version:
@@ -192,6 +196,70 @@ class ReleaseEvaluator:
 
     def contains(self, condition: IfVersionDirective, target: ReleaseTarget) -> bool:
         return self.evaluate(condition, target).contains_change
+
+    @property
+    def evidence(self) -> tuple[ReleaseEvidence, ...]:
+        return tuple(self._evidence.values())
+
+    def published_targets_between(
+        self,
+        repository_name: str,
+        start: Version,
+        end: Version,
+    ) -> list[ReleaseTarget]:
+        if end < start:
+            raise ReleaseResolutionError(
+                f"Release range start {start} is after end {end}"
+            )
+        repository = self.repositories.get(repository_name)
+        release = repository.get("release") if repository else None
+        if not isinstance(release, dict):
+            raise ReleaseResolutionError(
+                f"Repository {repository_name!r} has no release resolver"
+            )
+        try:
+            source_template = str(release["sourceTag"])
+            artifact_repository = str(release["artifactRepository"])
+            artifact_template = str(release["artifactTag"])
+        except KeyError as error:
+            raise ReleaseResolutionError(
+                f"Incomplete release resolver for {repository_name}: missing {error.args[0]}"
+            ) from error
+        source_versions = self._versions_from_tags(
+            self.github.list_tags(repository_name), source_template
+        )
+        artifact_versions = self._versions_from_tags(
+            self.github.list_release_tags(artifact_repository), artifact_template
+        )
+        versions = sorted(
+            version
+            for version in source_versions & artifact_versions
+            if start <= version <= end
+        )
+        if not versions:
+            raise ReleaseResolutionError(
+                f"No jointly published {repository_name} releases in {start}..{end}"
+            )
+        return [ReleaseTarget(version, str(version)) for version in versions]
+
+    @staticmethod
+    def _versions_from_tags(tags: list[str], template: str) -> set[Version]:
+        if template.count("{version}") != 1:
+            raise ReleaseResolutionError(
+                f"Release tag template must contain one {{version}}: {template!r}"
+            )
+        prefix, suffix = template.split("{version}")
+        versions: set[Version] = set()
+        for tag in tags:
+            if not tag.startswith(prefix) or (suffix and not tag.endswith(suffix)):
+                continue
+            end = len(tag) - len(suffix) if suffix else len(tag)
+            candidate = tag[len(prefix) : end]
+            try:
+                versions.add(Version.parse(candidate))
+            except ReleaseResolutionError:
+                continue
+        return versions
 
     def _resolve_pull_request(
         self, condition: IfVersionDirective

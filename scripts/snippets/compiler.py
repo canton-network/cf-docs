@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 import urllib.parse
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +17,13 @@ class GeneratedOutputDrift(Exception):
 
 
 ConditionPredicate = Callable[[IfVersionDirective], bool]
+
+
+@dataclass(frozen=True)
+class CompilationTarget:
+    label: str
+    condition_contains: ConditionPredicate
+    production: bool
 
 
 def generated_path(source_path: Path) -> Path:
@@ -71,6 +79,33 @@ def compile_page(
     production: bool,
     allow_local: bool = False,
 ) -> str:
+    return compile_page_variants(
+        text,
+        page_path=page_path,
+        repositories=repositories,
+        source_resolver=source_resolver,
+        targets=(
+            CompilationTarget(
+                label="selected release",
+                condition_contains=condition_contains,
+                production=production,
+            ),
+        ),
+        allow_local=allow_local,
+    )
+
+
+def compile_page_variants(
+    text: str,
+    *,
+    page_path: Path,
+    repositories: dict[str, dict[str, Any]],
+    source_resolver: SourceResolver,
+    targets: tuple[CompilationTarget, ...],
+    allow_local: bool = False,
+) -> str:
+    if not targets:
+        raise ValueError("At least one compilation target is required")
     parsed = parse_page(
         text,
         path=page_path,
@@ -101,7 +136,30 @@ def compile_page(
                     else_open = index
         raise AssertionError("Validated IfVersion has no closing token")
 
-    def render_range(start: int, end: int) -> str:
+    def selected_branch(
+        token: re.Match[str],
+        close_token: re.Match[str],
+        else_open: int | None,
+        else_close: int | None,
+        target: CompilationTarget,
+        directive: IfVersionDirective,
+    ) -> str:
+        if target.condition_contains(directive):
+            branch_end = (
+                tokens[else_open].start()
+                if else_open is not None
+                else close_token.start()
+            )
+            return render_range(token.end(), branch_end, target)
+        if else_open is not None and else_close is not None:
+            return render_range(
+                tokens[else_open].end(), tokens[else_close].start(), target
+            )
+        return ""
+
+    def render_range(
+        start: int, end: int, active_target: CompilationTarget | None
+    ) -> str:
         output: list[str] = []
         position = start
         index = 0
@@ -120,7 +178,8 @@ def compile_page(
             if name == "Snippet":
                 directive = snippets[token.start()]
                 resolved = source_resolver.resolve(
-                    directive.source, production=production
+                    directive.source,
+                    production=(active_target or targets[0]).production,
                 )
                 output.append(render_snippet(directive, resolved, page_path=page_path))
                 position = token.end()
@@ -130,19 +189,48 @@ def compile_page(
                 directive = conditions[token.start()]
                 else_open, else_close, close_index = condition_block(index)
                 close_token = tokens[close_index]
-                if condition_contains(directive):
-                    branch_end = (
-                        tokens[else_open].start()
-                        if else_open is not None
-                        else close_token.start()
-                    )
-                    output.append(render_range(token.end(), branch_end))
-                elif else_open is not None and else_close is not None:
+                if active_target is not None:
                     output.append(
-                        render_range(
-                            tokens[else_open].end(), tokens[else_close].start()
+                        selected_branch(
+                            token,
+                            close_token,
+                            else_open,
+                            else_close,
+                            active_target,
+                            directive,
                         )
                     )
+                elif len(targets) == 1:
+                    output.append(
+                        selected_branch(
+                            token,
+                            close_token,
+                            else_open,
+                            else_close,
+                            targets[0],
+                            directive,
+                        )
+                    )
+                else:
+                    variants = ["<Tabs>"]
+                    for target in targets:
+                        label = target.label.replace("&", "&amp;").replace(
+                            '"', "&quot;"
+                        )
+                        variants.append(f'<Tab title="{label}">')
+                        variants.append(
+                            selected_branch(
+                                token,
+                                close_token,
+                                else_open,
+                                else_close,
+                                target,
+                                directive,
+                            )
+                        )
+                        variants.append("</Tab>")
+                    variants.append("</Tabs>")
+                    output.append("\n".join(variants))
                 position = close_token.end()
                 index = close_index + 1
                 continue
@@ -152,7 +240,7 @@ def compile_page(
         output.append(text[position:end])
         return "".join(output)
 
-    compiled = render_range(0, len(text))
+    compiled = render_range(0, len(text), None)
     header = (
         f"{{/* Generated from {page_path.name}. "
         f"Edit {page_path.name}, then run npm run snippets:generate. */}}\n"

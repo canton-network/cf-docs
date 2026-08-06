@@ -114,9 +114,9 @@ def test_local_source_requires_matching_git_remote(tmp_path: Path) -> None:
     source.parent.mkdir()
     source.write_text("local\n", encoding="utf-8")
 
-    resolved = resolver(FakeGitHub(), local_checkouts={REPOSITORY: checkout}).resolve(
-        reference(SourceKind.LOCAL)
-    )
+    resolved = resolver(
+        FakeGitHub(), local_checkouts={REPOSITORY: checkout}, allow_local=True
+    ).resolve(reference(SourceKind.LOCAL))
 
     assert resolved.content == b"local\n"
     assert resolved.commit is None
@@ -140,9 +140,9 @@ def test_local_source_rejects_checkout_identity_mismatch(tmp_path: Path) -> None
     )
 
     with pytest.raises(SourceResolutionError, match="not 'canton-network/splice'"):
-        resolver(FakeGitHub(), local_checkouts={REPOSITORY: checkout}).resolve(
-            reference(SourceKind.LOCAL)
-        )
+        resolver(
+            FakeGitHub(), local_checkouts={REPOSITORY: checkout}, allow_local=True
+        ).resolve(reference(SourceKind.LOCAL))
 
 
 def test_size_limit_applies_to_all_clients() -> None:
