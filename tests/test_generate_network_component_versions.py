@@ -81,6 +81,27 @@ def test_build_config_preserves_generated_at_when_only_timestamp_changes() -> No
     assert result["_generated"]["generatedAt"] == "2026-06-01T00:00:00+00:00"
 
 
+def test_build_config_preserves_generated_metadata_when_dashboard_values_do_not_change() -> None:
+    module = load_script_module()
+    existing_snapshot = dashboard_snapshot(
+        generated_at="2026-06-01T00:00:00+00:00",
+        splice_version="0.6.3",
+    )
+    existing_config = module.build_config(
+        {"versions": {}, "repositories": {}},
+        existing_snapshot,
+    )
+    candidate_snapshot = dashboard_snapshot(
+        generated_at="2026-06-03T12:00:00+00:00",
+        splice_version="0.6.3",
+    )
+    candidate_snapshot["latestDpmSdk"] = "3.5.2"
+
+    result = module.build_config(existing_config, candidate_snapshot)
+
+    assert result == existing_config
+
+
 def test_build_config_keeps_new_generated_at_when_dashboard_data_changes() -> None:
     module = load_script_module()
     existing_config = module.build_config(

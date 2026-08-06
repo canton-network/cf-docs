@@ -49,6 +49,7 @@ def test_update_targets_cover_all_generated_doc_surfaces() -> None:
     assert [target.key for target in module.UPDATE_TARGETS] == [
         "version-dashboard",
         "splice-openapi",
+        "splice-token-standard-v2",
         "wallet-gateway-openrpc",
         "json-api-reference",
         "json-api-asyncapi-reference",
@@ -199,6 +200,38 @@ def test_source_update_targets_skip_generation_when_source_is_unchanged(monkeypa
     ]
 
 
+def test_version_dashboard_skips_timestamp_only_source_changes(monkeypatch, tmp_path: Path) -> None:
+    module = load_script_module()
+    target = next(target for target in module.UPDATE_TARGETS if target.key == "version-dashboard")
+    calls: list[tuple[str, ...]] = []
+
+    monkeypatch.setattr(module, "reset_to_base", lambda base_sha: calls.append(("reset", base_sha)))
+    monkeypatch.setattr(module.pr_utils, "write_base_file", lambda base_sha, path: tmp_path / "before.json")
+    monkeypatch.setattr(module.pr_utils, "has_changes", lambda paths: True)
+    monkeypatch.setattr(module, "summarize_target_changes", lambda target, before_path: [])
+    monkeypatch.setattr(
+        module.pr_utils,
+        "close_stale_pull_request",
+        lambda **kwargs: calls.append(("close", kwargs["branch"])),
+    )
+    monkeypatch.setattr(module, "create_or_update_pull_request", lambda **kwargs: calls.append(("pr",)))
+    monkeypatch.setattr(module.pr_utils, "run", lambda command: calls.append(command))
+
+    module.process_target(
+        target=target,
+        base_sha="base-sha",
+        base_branch="main",
+        repository="canton-network/cf-docs",
+    )
+
+    assert calls == [
+        ("reset", "base-sha"),
+        ("nix-shell", "--run", "npm run generate:version-compatibility-dashboard"),
+        ("close", "version-dashboard/update"),
+    ]
+    assert not any("generate:network-variable-tabs" in " ".join(call) for call in calls)
+
+
 def test_source_update_targets_generate_when_source_changed(monkeypatch, tmp_path: Path) -> None:
     module = load_script_module()
     target = next(target for target in module.UPDATE_TARGETS if target.key == "wallet-gateway-openrpc")
@@ -274,6 +307,7 @@ def test_generated_clean_paths_include_target_paths_and_internal_output() -> Non
 
     assert ".internal" in clean_paths
     assert "docs-main/openapi/splice" in clean_paths
+    assert "docs-main/sdks-tools/api-reference/splice-daml/splice-api-token-holding-v2" in clean_paths
     assert "docs-main/openapi/json-ledger-api" in clean_paths
     assert "docs-main/reference/grpc-ledger-api-reference" in clean_paths
     assert "docs-main/reference/java" in clean_paths
@@ -1031,7 +1065,7 @@ def test_generated_pr_policy_accepts_configured_generated_paths() -> None:
             head_sha="abc123",
         ),
         pr_metadata={
-            "author": {"login": "app/github-actions"},
+            "author": {"login": "app/cf-docs-generated-docs-merger"},
             "state": "OPEN",
             "isDraft": False,
             "baseRefName": "main",
@@ -1081,8 +1115,38 @@ def test_generated_pr_policy_rejects_unexpected_author_and_paths() -> None:
         },
     )
 
-    assert "expected PR author 'app/github-actions', found 'danielporterda'" in errors
+    assert "expected PR author 'app/cf-docs-generated-docs-merger', found 'danielporterda'" in errors
     assert (
         "changed files outside configured generated paths: .github/workflows/update-version-dashboard.yml"
         in errors
     )
+
+
+def test_generated_pr_policy_rejects_legacy_github_actions_author() -> None:
+    policy = load_policy_module()
+
+    errors = policy.validate_policy(
+        policy_input=policy.PolicyInput(
+            pr_number="932",
+            repository="canton-network/cf-docs",
+            base_branch="main",
+            head_branch="version-dashboard/update",
+            head_sha="abc123",
+        ),
+        pr_metadata={
+            "author": {"login": "app/github-actions"},
+            "state": "OPEN",
+            "isDraft": False,
+            "baseRefName": "main",
+            "headRefName": "version-dashboard/update",
+            "headRefOid": "abc123",
+        },
+        changed_files=("config/repo-version-config.json",),
+        branch_paths={
+            "version-dashboard/update": ("config/repo-version-config.json",),
+        },
+    )
+
+    assert errors == [
+        "expected PR author 'app/cf-docs-generated-docs-merger', found 'app/github-actions'"
+    ]

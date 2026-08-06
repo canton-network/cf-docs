@@ -796,16 +796,20 @@ def build_config(existing_config: dict, snapshot: dict) -> dict:
         "repositories": build_repositories(existing_config, snapshot),
     }
     existing_generated = existing_config.get("_generated", {})
-    existing_generated_at = existing_generated.get("generatedAt")
-    if existing_generated_at and generated_content(config) == generated_content(existing_config):
-        config["_generated"]["generatedAt"] = existing_generated_at
+    if (
+        isinstance(existing_generated, dict)
+        and existing_generated
+        and dashboard_content(config) == dashboard_content(existing_config)
+    ):
+        config["_generated"] = json.loads(json.dumps(existing_generated))
     return config
 
 
-def generated_content(config: dict) -> dict:
-    content = json.loads(json.dumps(config))
-    content.get("_generated", {}).pop("generatedAt", None)
-    return content
+def dashboard_content(config: dict) -> dict:
+    return {
+        "versions": config.get("versions"),
+        "repositories": config.get("repositories"),
+    }
 
 
 def write_json(path: Path, payload: dict) -> None:
