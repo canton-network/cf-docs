@@ -427,7 +427,11 @@ class AsyncApiTests(unittest.TestCase):
         docs = json.loads(docs_json.read_text(encoding="utf-8"))
 
         self.assertIn("## Channels", overview)
+        self.assertIn('class="x2mdx-ref-card-title"', overview)
+        self.assertNotIn('<a class="x2mdx-ref-card"', overview)
         self.assertIn("## Actions", channel)
+        self.assertIn('class="x2mdx-ref-card-title"', channel)
+        self.assertNotIn('<a class="x2mdx-ref-card"', channel)
         self.assertIn("## Outputs", action)
         self.assertIn("wscat", action)
         self.assertIn("x2mdx-ref-right-rail", action)

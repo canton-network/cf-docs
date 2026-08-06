@@ -35,6 +35,12 @@ import ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosOperatePa
 import ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosOperatePartiesPartyReplication15 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/participant/howtos/operate/parties/party_replication-15.mdx";
 import ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosOperatePartiesPartyReplication20 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/participant/howtos/operate/parties/party_replication-20.mdx";
 import ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosOperatePartiesPartyReplication21 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/participant/howtos/operate/parties/party_replication-21.mdx";
+import ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosOperatePartiesPartyReplication22 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/participant/howtos/operate/parties/party_replication-22.mdx";
+import ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosOperatePartiesPartyReplication23 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/participant/howtos/operate/parties/party_replication-23.mdx";
+import ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosOperatePartiesPartyReplication24 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/participant/howtos/operate/parties/party_replication-24.mdx";
+import ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosOperatePartiesPartyReplication25 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/participant/howtos/operate/parties/party_replication-25.mdx";
+import ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosOperatePartiesPartyReplication26 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/participant/howtos/operate/parties/party_replication-26.mdx";
+import ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosOperatePartiesPartyReplication27 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/participant/howtos/operate/parties/party_replication-27.mdx";
 
 {/* COPIED_START source="docs-website:docs/replicated/canton/3.5/participant/howtos/operate/parties/parties.rst" hash="5dabde1e" */}
 
@@ -460,66 +466,62 @@ Run the following command using the original configuration parameters you record
 
 ### 10. Import ACS
 
-Import Alice's ACS in the `target` participant:
+Import Alice's ACS on the `target` participant:
 
-``` none
-@ target.parties.import_party_acs("party_replication.alice.acs.gz")
-```
+<ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosOperatePartiesPartyReplication22 />
+
+<Note>
+Providing the party ID is optional for backward compatibility. However, omitting it prevents automatic onboarding flag clearance, requiring you to [clear the flag manually](#13-complete-the-onboarding-of-the-party).
+</Note>
 
 ### 11. Reconnect target participant to synchronizer
 
-To later *find* the ledger offset of the topology transaction where the new hosting arrangement on the `target` participant has been authorized, take the current ledger end offset:
+To later find the topology transaction that authorized the new hosting arrangement on the `target` participant, record the current ledger end offset:
 
-``` none
-@ val targetLedgerEnd = target.ledger_api.state.end()
-    targetLedgerEnd : Long = 17L
-```
+<ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosOperatePartiesPartyReplication23 />
 
 Now, reconnect that `target` participant to the synchronizer.
 
-``` none
-@ target.synchronizers.reconnect_local("mysynchronizer")
-    res22: Boolean = true
-```
+<ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosOperatePartiesPartyReplication24 />
 
 ### 12. Optional: Re-enable auto-reconnect on target participant
 
-If you previously disabled auto-reconnect following the earlier step, you may now re-enable it. This is only necessary if the target participant was originally configured to reconnect automatically upon restart.
+If you previously disabled auto-reconnect following the [earlier step](#5-disable-auto-reconnect-on-target-participant), you may now re-enable it. This is only necessary if the target participant was originally configured to reconnect automatically upon restart.
 
-``` none
-@ target.synchronizers.modify("mysynchronizer", _.copy(manualConnect=false))
-```
+<ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosOperatePartiesPartyReplication25 />
 
-### 13. Clear the participant's onboarding flag
+### 13. Complete the onboarding of the party
 
-After the `target` participant has completed the ACS import and reconnected to the synchronizer, you must clear the onboarding flag. This signals that the participant is fully ready to host the party.
+To complete the replication, you must clear the [previously set onboarding flag](#3-authorize-new-hosting-on-the-target-participant) using the `target` participant. This signals that the participant is fully ready to host the party.
 
-There is a dedicated command to accomplish the onboarding flag clearance. It will issue the topology transaction to clear the flag for you, but only when it is safe to do so.
+If you run protocol version 35 or later and provided the party ID during the [ACS import](#10-import-acs), this clearance is scheduled automatically in the background upon reconnecting to the synchronizer. It executes as soon as it is safe to do so.
 
-The following command uses the `targetLedgerEnd` captured in the previous step as the starting point to internally locate the effective party-to-participant mapping transaction that has activated `alice` on the `target` participant.
+<Note>
+Background flag clearance execution is observable in the participant logs.
+</Note>
 
-``` none
-@ val (onboarded, minimalSafeClearingTs) = target.parties
-    .clear_party_onboarding_flag(alice, synchronizerId, targetLedgerEnd)
-    (onboarded, minimalSafeClearingTs) : (Boolean, Option[com.digitalasset.canton.data.CantonTimestamp]) = (false, Some(value = 2026-01-26T22:32:51.738792Z))
-```
+#### Optional: Manual onboarding flag clearance
 
-The command returns a tuple indicating the status:
+If automatic clearance does not apply, or if there are issues with the background clearance, you must clear the flag manually.
 
-- `(true, None)`: The onboarding flag is cleared. Proceed to the next step.
-- `(false, Some(CantonTimestamp))`: The onboarding flag is still set. Removal is safe only after the indicated timestamp.
+Use the dedicated command below, which safely issues the required topology transaction. It uses the `targetLedgerEnd` captured earlier to locate the transaction that activated the party on the `target` participant:
 
-If the onboarding flag is still set, you must wait at least until the indicated timestamp (`minimalSafeClearingTs`). Only then will calling this command actually result in a topology transaction to clear the onboarding flag, which becomes effective thereafter.
+<ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosOperatePartiesPartyReplication26 />
 
-Because this command is idempotent, you can call it repeatedly. Thus, you may also poll this command until it confirms that the onboarding flag has been cleared. The following snippet demonstrates how this command can be polled.
+<Note>
+The `targetLedgerEnd` is a ledger offset on the `target` participant from where this command starts searching for the effective topology transaction that states that party `alice` is onboarding on the `target` participant.
+</Note>
 
-``` none
-@ utils.retry_until_true(timeout = 2.minutes, maxWaitPeriod = 30.seconds) {
-      val (onboarded, _) = target.parties
-        .clear_party_onboarding_flag(alice, synchronizerId, targetLedgerEnd)
-      onboarded
-    }
-```
+The command returns the onboarding flag clearance status:
+
+- `FlagNotSet`: The onboarding flag is cleared.
+- `FlagSet`: The onboarding flag is still set. Removal is safe only after the indicated timestamp.
+
+If the onboarding flag is still set, the command has internally created a schedule to trigger the onboarding flag clearance at the appropriate time. This happens in the background.
+
+However, because this command is idempotent, you *may* call it repeatedly. Thus, you *may* also poll this command until it confirms that the onboarding flag has been cleared. The following snippet demonstrates how this command can be polled.
+
+<ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosOperatePartiesPartyReplication27 />
 
 <Note>
 The `timeout` is based on the default *decision timeout* of 1 minute.

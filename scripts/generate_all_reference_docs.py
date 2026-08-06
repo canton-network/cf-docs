@@ -92,6 +92,10 @@ SCRIPT_JOBS = [
         nav_slices=(NavSlice("top_group", ("Splice APIs",)),),
     ),
     ScriptJob(
+        script_path=REPO_ROOT / "scripts" / "generate_splice_token_standard_v2_reference.py",
+        nav_slices=(NavSlice("nested_group", ("Splice APIs", "Splice Daml Packages")),),
+    ),
+    ScriptJob(
         script_path=REPO_ROOT / "scripts" / "generate_typescript_bindings_reference.py",
         nav_slices=(NavSlice("top_group", ("TypeScript",)),),
     ),
