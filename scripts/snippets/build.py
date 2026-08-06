@@ -9,11 +9,13 @@ from typing import Any
 
 from .compiler import (
     CompilationTarget,
+    ConditionPredicate,
     GeneratedOutputDrift,
     assert_generated_output,
     compile_page_variants,
     write_generated_output,
 )
+from .model import IfVersionDirective
 from .parser import load_registry, parse_page
 from .release import (
     ReleaseEvaluator,
@@ -59,6 +61,13 @@ def _page_repositories(
         allow_local=True,
     )
     return {condition.repository for condition in parsed.conditions}
+
+
+def _display_page(page: Path) -> Path:
+    try:
+        return page.resolve().relative_to(CF_DOCS_ROOT.resolve())
+    except ValueError:
+        return page
 
 
 def _condition_repository(condition_repositories: set[str]) -> str:
@@ -116,12 +125,16 @@ def _target_label(target: ReleaseTarget) -> str:
 def _compilation_targets(
     targets: list[ReleaseTarget], evaluator: ReleaseEvaluator
 ) -> tuple[CompilationTarget, ...]:
+    def predicate(target: ReleaseTarget) -> ConditionPredicate:
+        def contains(condition: IfVersionDirective) -> bool:
+            return evaluator.contains(condition, target)
+
+        return contains
+
     return tuple(
         CompilationTarget(
             label=_target_label(target),
-            condition_contains=lambda condition, target=target: evaluator.contains(
-                condition, target
-            ),
+            condition_contains=predicate(target),
             production=not target.candidate,
         )
         for target in targets
@@ -241,15 +254,16 @@ def main(argv: list[str] | None = None) -> int:
             local_checkouts=checkouts,
             allow_local=args.command == "preview",
         )
+        display_page = _display_page(page)
         compiled = compile_page_variants(
             text,
-            page_path=page,
+            page_path=display_page,
             repositories=repositories,
             source_resolver=source_resolver,
             targets=_compilation_targets(targets, evaluator),
             allow_local=args.command == "preview",
         )
-        evidence = _evidence_payload(page, evaluator.evidence)
+        evidence = _evidence_payload(display_page, evaluator.evidence)
         if args.command == "preview":
             output = args.output or DEFAULT_PREVIEW_ROOT / f"{page.stem}.mdx"
             output.parent.mkdir(parents=True, exist_ok=True)

@@ -61,3 +61,15 @@ def test_preview_requires_an_explicit_release_selection(tmp_path: Path, capsys) 
 
     assert result == 1
     assert "Select at least one" in capsys.readouterr().err
+
+
+def test_checked_in_page_uses_repository_relative_provenance(
+    tmp_path: Path, monkeypatch
+) -> None:
+    root = tmp_path / "cf-docs"
+    page = root / "docs-main" / "validator.source.mdx"
+    page.parent.mkdir(parents=True)
+    page.write_text("prose", encoding="utf-8")
+    monkeypatch.setattr(build, "CF_DOCS_ROOT", root)
+
+    assert build._display_page(page) == Path("docs-main/validator.source.mdx")

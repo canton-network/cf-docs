@@ -176,17 +176,19 @@ def compile_page_variants(
                 continue
             output.append(text[position : token.start()])
             if name == "Snippet":
-                directive = snippets[token.start()]
+                snippet_directive = snippets[token.start()]
                 resolved = source_resolver.resolve(
-                    directive.source,
+                    snippet_directive.source,
                     production=(active_target or targets[0]).production,
                 )
-                output.append(render_snippet(directive, resolved, page_path=page_path))
+                output.append(
+                    render_snippet(snippet_directive, resolved, page_path=page_path)
+                )
                 position = token.end()
                 index += 1
                 continue
             if name == "IfVersion":
-                directive = conditions[token.start()]
+                condition_directive = conditions[token.start()]
                 else_open, else_close, close_index = condition_block(index)
                 close_token = tokens[close_index]
                 if active_target is not None:
@@ -197,7 +199,7 @@ def compile_page_variants(
                             else_open,
                             else_close,
                             active_target,
-                            directive,
+                            condition_directive,
                         )
                     )
                 elif len(targets) == 1:
@@ -208,7 +210,7 @@ def compile_page_variants(
                             else_open,
                             else_close,
                             targets[0],
-                            directive,
+                            condition_directive,
                         )
                     )
                 else:
@@ -225,7 +227,7 @@ def compile_page_variants(
                                 else_open,
                                 else_close,
                                 target,
-                                directive,
+                                condition_directive,
                             )
                         )
                         variants.append("</Tab>")

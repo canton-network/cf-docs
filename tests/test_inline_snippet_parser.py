@@ -73,10 +73,11 @@ def test_parses_candidate_inside_release_condition() -> None:
 
 def test_ignores_examples_in_fenced_code_and_comments() -> None:
     page = parse(
-        """```mdx
+        """````mdx
 <Snippet source="not-a-ref" />
-```
+````
 {/* <IfVersion bogus> */}
+`<Snippet source="also-not-a-ref" />`
 """
     )
 
@@ -126,6 +127,14 @@ def test_local_reference_is_preview_only() -> None:
             "SNIP028",
         ),
         ("<Else>orphan</Else>", "SNIP025"),
+        (
+            """<IfVersion repository="https://github.com/canton-network/splice" containsPullRequest={6123}>
+new
+<Else>old</Else>
+silently dropped
+</IfVersion>""",
+            "SNIP030",
+        ),
     ],
 )
 def test_rejects_invalid_contract(text: str, code: str) -> None:

@@ -53,14 +53,37 @@ def load_registry(path: Path) -> dict[str, dict[str, Any]]:
 
 
 def _masked_source(text: str) -> str:
-    """Mask fenced code and MDX comments while preserving offsets and newlines."""
+    """Mask code and MDX comments while preserving offsets and newlines."""
 
     chars = list(text)
     ranges: list[tuple[int, int]] = []
-    ranges.extend(
-        (match.start(), match.end())
-        for match in re.finditer(r"(?ms)^(```|~~~).*?^\1\s*$", text)
-    )
+    fence_start: int | None = None
+    fence_character: str | None = None
+    fence_length = 0
+    offset = 0
+    for line in text.splitlines(keepends=True):
+        stripped = line.lstrip(" \t")
+        fence = re.match(r"(?P<fence>`{3,}|~{3,})", stripped)
+        if fence_start is None and fence:
+            marker = fence.group("fence")
+            fence_start = offset
+            fence_character = marker[0]
+            fence_length = len(marker)
+        elif fence_start is not None and fence:
+            marker = fence.group("fence")
+            remainder = stripped[len(marker) :].strip()
+            if (
+                marker[0] == fence_character
+                and len(marker) >= fence_length
+                and not remainder
+            ):
+                ranges.append((fence_start, offset + len(line)))
+                fence_start = None
+                fence_character = None
+                fence_length = 0
+        offset += len(line)
+    if fence_start is not None:
+        ranges.append((fence_start, len(text)))
     ranges.extend(
         (match.start(), match.end())
         for match in re.finditer(r"(?s)\{?/\*.*?\*/\}?", text)
@@ -69,6 +92,28 @@ def _masked_source(text: str) -> str:
         for index in range(start, end):
             if chars[index] != "\n":
                 chars[index] = " "
+
+    masked = "".join(chars)
+    offset = 0
+    for line in masked.splitlines(keepends=True):
+        index = 0
+        while index < len(line):
+            if line[index] != "`":
+                index += 1
+                continue
+            run_end = index + 1
+            while run_end < len(line) and line[run_end] == "`":
+                run_end += 1
+            marker = line[index:run_end]
+            close = line.find(marker, run_end)
+            if close < 0:
+                index = run_end
+                continue
+            for position in range(offset + index, offset + close + len(marker)):
+                if chars[position] != "\n":
+                    chars[position] = " "
+            index = close + len(marker)
+        offset += len(line)
     return "".join(chars)
 
 
@@ -245,6 +290,7 @@ def parse_page(
     stack: list[str] = []
     condition_context: list[tuple[str, int] | None] = []
     else_counts: list[int] = []
+    else_end_positions: list[int | None] = []
     masked = _masked_source(text)
 
     for match in TAG_RE.finditer(masked):
@@ -272,11 +318,28 @@ def parse_page(
                 )
             else:
                 stack.pop()
-                if name == "IfVersion":
+                if name == "Else" and else_end_positions:
+                    else_end_positions[-1] = match.end()
+                elif name == "IfVersion":
+                    if (
+                        else_end_positions
+                        and else_end_positions[-1] is not None
+                        and text[else_end_positions[-1] : match.start()].strip()
+                    ):
+                        diagnostics.append(
+                            _diagnostic(
+                                path,
+                                span,
+                                "SNIP030",
+                                "Else must be the final content in IfVersion",
+                            )
+                        )
                     if condition_context:
                         condition_context.pop()
                     if else_counts:
                         else_counts.pop()
+                    if else_end_positions:
+                        else_end_positions.pop()
             continue
 
         attributes, malformed = _attributes(body)
@@ -454,6 +517,7 @@ def parse_page(
             condition_context.append(context)
             stack.append(name)
             else_counts.append(0)
+            else_end_positions.append(None)
         else:
             if self_closing or attributes:
                 diagnostics.append(
