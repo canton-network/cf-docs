@@ -68,6 +68,8 @@ mintlify broken-links
 
 External snippet extraction from source repositories is documented in [config/snippet-config/update-workflows.md](config/snippet-config/update-workflows.md). Use that workflow when updating snippet configs under `config/snippet-config/` or regenerating checked-in snippets under `docs-main/snippets/external/`.
 
+New release-aware pages use complete inline source references instead of adding another manifest entry. The authored page is a sibling `*.source.mdx` file; cf-docs compiles it to ordinary `*.mdx` before Mintlify sees it. See [Inline release-aware snippets](config/snippet-config/inline-release-aware.md) for the syntax, add/local workflow, release preview, generation, and validation commands.
+
 Run this whenever you add, remove, or update a snippet source in `config/snippet-config/`, or when you need to pull in changes from an upstream repo (such as Canton or Splice) that are referenced by existing snippets.
 
 ```bash
