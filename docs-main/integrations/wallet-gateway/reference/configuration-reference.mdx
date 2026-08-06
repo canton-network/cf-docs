@@ -9,6 +9,17 @@ secrets across environments. For the config file's overall shape, see
 [Configure the Wallet Gateway](/integrations/wallet-gateway/operate/configure). For networks and
 authentication, see [Networks & identity providers](/integrations/wallet-gateway/operate/networks-and-identity).
 
+## Full configuration schema
+
+For the complete JSON Schema of the configuration file, including every field and type, run:
+
+```bash
+wallet-gateway --config-schema
+```
+
+Use the output for validation and IDE autocompletion; the generated schema is the authoritative
+source for all configuration options.
+
 ## Store backends
 
 The `store.connection` object selects one of three backends.
@@ -25,6 +36,7 @@ Recommended for production for its robustness, concurrent access, and backup sup
 | `user` | yes | Database user to connect with. |
 | `password` | yes | Password for the database user. |
 | `database` | yes | Name of the database to use (must exist). |
+| `ssl` | no | TLS settings, passed through to the Node.js `pg` driver. See [PostgreSQL over TLS/SSL](#postgresql-over-tls-ssl). |
 
 ```json
 {
@@ -40,6 +52,55 @@ Recommended for production for its robustness, concurrent access, and backup sup
     }
 }
 ```
+
+### PostgreSQL over TLS/SSL
+
+If your PostgreSQL server requires TLS (common in managed databases and hardened deployments),
+add an `ssl` object under `store.connection` and, if used, `signingStore.connection`. The Wallet
+Gateway only configures client-side TLS; it never needs the server's private key.
+
+**Local testing** (self-signed server cert, encryption only): set `rejectUnauthorized: false`.
+
+```json
+{
+    "store": {
+        "connection": {
+            "type": "postgres",
+            "host": "localhost",
+            "port": 5432,
+            "user": "postgres",
+            "password": "postgres",
+            "database": "app_db",
+            "ssl": { "rejectUnauthorized": false }
+        }
+    }
+}
+```
+
+**Production** (verify the server certificate): set `rejectUnauthorized: true` and provide the CA
+certificate PEM that signed the server certificate via `ssl.ca`.
+
+```json
+{
+    "store": {
+        "connection": {
+            "type": "postgres",
+            "host": "db.example.com",
+            "port": 5432,
+            "user": "wallet_gateway",
+            "password": "secure-password",
+            "database": "wallet_gateway_db",
+            "ssl": {
+                "rejectUnauthorized": true,
+                "ca": "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----\n"
+            }
+        }
+    }
+}
+```
+
+For a local Docker-based Postgres-over-TLS walkthrough, see
+[Deploy](/integrations/wallet-gateway/operate/deploy#local-postgresql-over-tls-docker).
 
 ### SQLite
 

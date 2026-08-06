@@ -1065,7 +1065,7 @@ def test_generated_pr_policy_accepts_configured_generated_paths() -> None:
             head_sha="abc123",
         ),
         pr_metadata={
-            "author": {"login": "app/github-actions"},
+            "author": {"login": "app/cf-docs-generated-docs-merger"},
             "state": "OPEN",
             "isDraft": False,
             "baseRefName": "main",
@@ -1115,8 +1115,38 @@ def test_generated_pr_policy_rejects_unexpected_author_and_paths() -> None:
         },
     )
 
-    assert "expected PR author 'app/github-actions', found 'danielporterda'" in errors
+    assert "expected PR author 'app/cf-docs-generated-docs-merger', found 'danielporterda'" in errors
     assert (
         "changed files outside configured generated paths: .github/workflows/update-version-dashboard.yml"
         in errors
     )
+
+
+def test_generated_pr_policy_rejects_legacy_github_actions_author() -> None:
+    policy = load_policy_module()
+
+    errors = policy.validate_policy(
+        policy_input=policy.PolicyInput(
+            pr_number="932",
+            repository="canton-network/cf-docs",
+            base_branch="main",
+            head_branch="version-dashboard/update",
+            head_sha="abc123",
+        ),
+        pr_metadata={
+            "author": {"login": "app/github-actions"},
+            "state": "OPEN",
+            "isDraft": False,
+            "baseRefName": "main",
+            "headRefName": "version-dashboard/update",
+            "headRefOid": "abc123",
+        },
+        changed_files=("config/repo-version-config.json",),
+        branch_paths={
+            "version-dashboard/update": ("config/repo-version-config.json",),
+        },
+    )
+
+    assert errors == [
+        "expected PR author 'app/cf-docs-generated-docs-merger', found 'app/github-actions'"
+    ]
