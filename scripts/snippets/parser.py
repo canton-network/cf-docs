@@ -307,13 +307,17 @@ def parse_page(
                     )
                 )
             language = attributes.get("language")
-            if not isinstance(language, str) or not language:
+            if (
+                not isinstance(language, str)
+                or not language
+                or not re.fullmatch(r"[A-Za-z0-9_+.-]+", language)
+            ):
                 diagnostics.append(
                     _diagnostic(
                         path,
                         span,
                         "SNIP016",
-                        "Snippet requires a quoted language attribute",
+                        "Snippet requires a safe quoted language attribute",
                     )
                 )
             start_after = attributes.get("startAfter")
