@@ -341,7 +341,12 @@ def require_value(pairs: dict[str, str], label: str, url: str) -> str:
         raise RuntimeError(f"Could not find table row {label!r} in {url}") from exc
 
 
-def choose_observed_release(info_payload: dict, info_url: str) -> tuple[str, str, str]:
+def choose_observed_release(
+    info_payload: dict,
+    info_url: str,
+    *,
+    index_version: str | None = None,
+) -> tuple[str, str]:
     sv = info_payload.get("sv", {})
     synchronizers = info_payload.get("synchronizer", {})
     synchronizer_label = "active"
@@ -353,15 +358,19 @@ def choose_observed_release(info_payload: dict, info_url: str) -> tuple[str, str
     sync_version = synchronizer.get("version")
     sv_migration_id = sv.get("migration_id")
     sync_migration_id = synchronizer.get("migration_id")
-    chain_id_suffix = synchronizer.get("chain_id_suffix")
 
     if not sv_version or not sync_version:
         raise RuntimeError(f"Missing release version in {info_url}")
     if sv_version != sync_version:
-        raise RuntimeError(
-            f"Version mismatch in {info_url}: "
-            f"sv.version={sv_version} synchronizer.{synchronizer_label}.version={sync_version}"
+        observed_version = resolve_mismatched_info_version(
+            sv_version=str(sv_version),
+            sync_version=str(sync_version),
+            synchronizer_label=synchronizer_label,
+            info_url=info_url,
+            index_version=index_version,
         )
+    else:
+        observed_version = str(sv_version)
     if sv_migration_id is None:
         raise RuntimeError(f"Missing sv.migration_id in {info_url}")
     if sync_migration_id is None and synchronizer_label == "active":
@@ -372,11 +381,41 @@ def choose_observed_release(info_payload: dict, info_url: str) -> tuple[str, str
             f"sv.migration_id={sv_migration_id} "
             f"synchronizer.{synchronizer_label}.migration_id={sync_migration_id}"
         )
-    if chain_id_suffix is None:
-        raise RuntimeError(
-            f"Missing synchronizer.{synchronizer_label}.chain_id_suffix in {info_url}"
+    return observed_version, str(sv_migration_id)
+
+
+def resolve_mismatched_info_version(
+    *,
+    sv_version: str,
+    sync_version: str,
+    synchronizer_label: str,
+    info_url: str,
+    index_version: str | None,
+) -> str:
+    """Pick an /info version during upgrade windows using the docs index as authority."""
+    mismatch = (
+        f"Version mismatch in {info_url}: "
+        f"sv.version={sv_version} synchronizer.{synchronizer_label}.version={sync_version}"
+    )
+    if index_version is None:
+        raise RuntimeError(mismatch)
+    if sv_version == index_version:
+        print(
+            f"WARNING: {mismatch}; using sv.version={sv_version} because it matches "
+            f"docs index version {index_version}",
+            file=sys.stderr,
         )
-    return str(sv_version), str(sv_migration_id), str(chain_id_suffix)
+        return sv_version
+    if sync_version == index_version:
+        print(
+            f"WARNING: {mismatch}; using synchronizer.{synchronizer_label}.version="
+            f"{sync_version} because it matches docs index version {index_version}",
+            file=sys.stderr,
+        )
+        return sync_version
+    raise RuntimeError(
+        f"{mismatch}; neither matches docs index version {index_version}"
+    )
 
 
 def read_existing_config(path: Path) -> dict:
@@ -435,11 +474,6 @@ def update_substitutions(existing: dict, release_version: str) -> dict:
 
 def collect_network_snapshot(network_key: str, timeout: float) -> dict:
     urls = NETWORKS[network_key]
-    info_payload = fetch_json(urls["info_url"], timeout)
-    observed_release, migration_id, chain_id_suffix = choose_observed_release(
-        info_payload, urls["info_url"]
-    )
-
     index_pairs = parse_table_pairs(fetch_text(urls["index_url"], timeout))
     docker_image_tag = require_value(index_pairs, "Docker Image Tag:", urls["index_url"])
     helm_chart_version = require_value(index_pairs, "Helm Chart Version:", urls["index_url"])
@@ -448,6 +482,13 @@ def collect_network_snapshot(network_key: str, timeout: float) -> dict:
             f"{network_key}: index page mismatch docker_image_tag={docker_image_tag} "
             f"helm_chart_version={helm_chart_version}"
         )
+
+    info_payload = fetch_json(urls["info_url"], timeout)
+    observed_release, migration_id = choose_observed_release(
+        info_payload,
+        urls["info_url"],
+        index_version=docker_image_tag,
+    )
     if docker_image_tag != observed_release:
         raise RuntimeError(
             f"{network_key}: /info version {observed_release} does not match "
@@ -469,7 +510,6 @@ def collect_network_snapshot(network_key: str, timeout: float) -> dict:
         "cantonReleaseLineBranch": canton_release_line_branch,
         "darVersions": dar_versions,
         "migrationId": migration_id,
-        "chainIdSuffix": chain_id_suffix,
         "sources": {
             "infoUrl": urls["info_url"],
             "indexUrl": urls["index_url"],
@@ -483,17 +523,87 @@ def collect_network_snapshot(network_key: str, timeout: float) -> dict:
     }
 
 
+def network_snapshot_from_existing(existing_config: dict, network_key: str) -> dict | None:
+    """Rebuild a network snapshot from the previous dashboard config, if available."""
+    existing = existing_network(existing_config, network_key)
+    if not existing:
+        return None
+
+    urls = NETWORKS[network_key]
+    advanced = existing_advanced(existing_config, network_key)
+    substitutions = existing.get("substitutions", {})
+    splice_version = str(
+        substitutions.get("version")
+        or existing_repo_version(existing_config, "splice", network_key)
+        or ""
+    )
+    canton_mapping = (
+        existing_config.get("repositories", {})
+        .get("canton", {})
+        .get("versionMapping", {})
+        .get(network_key, {})
+    )
+    canton_version = str(canton_mapping.get("externalVersion") or "")
+    canton_release_line_branch = str(canton_mapping.get("branch") or "")
+    migration_id = str(advanced.get("migrationId") or "")
+    dar_versions = list(advanced.get("darVersions") or [])
+    if not splice_version or not migration_id:
+        return None
+
+    existing_sources = (
+        existing_config.get("_generated", {}).get("networkSources", {}).get(network_key, {})
+    )
+    sources = {
+        "infoUrl": existing_sources.get("infoUrl", urls["info_url"]),
+        "indexUrl": existing_sources.get("indexUrl", urls["index_url"]),
+        "cantonSourcesUrl": existing_sources.get("cantonSourcesUrl", ""),
+        "darVersionsUrl": existing_sources.get("darVersionsUrl", ""),
+        "preservedFromPrevious": True,
+    }
+    return {
+        "displayName": existing.get("name") or urls["display_name"],
+        "endpoint": existing.get("endpoint") or urls["endpoint"],
+        "spliceVersion": splice_version,
+        "cantonVersion": canton_version,
+        "cantonReleaseLineBranch": canton_release_line_branch,
+        "darVersions": dar_versions,
+        "migrationId": migration_id,
+        "sources": sources,
+        "checks": {
+            "dockerImageTag": splice_version,
+            "helmChartVersion": splice_version,
+        },
+        "preservedFromPrevious": True,
+    }
+
+
 def collect_snapshot(timeout: float, existing_config: dict) -> dict:
     generated_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
     latest_dpm_sdk = fetch_text(DPM_LATEST_URL, timeout).strip()
     previous_pqs = previous_stable_pqs_version(existing_config)
+    networks: dict[str, dict] = {}
+    for network_key in NETWORK_ORDER:
+        try:
+            networks[network_key] = collect_network_snapshot(network_key, timeout)
+        except Exception as exc:
+            preserved = network_snapshot_from_existing(existing_config, network_key)
+            if preserved is None:
+                raise RuntimeError(
+                    f"{network_key}: failed to collect network snapshot and no previous "
+                    f"dashboard config is available to preserve: {exc}"
+                ) from exc
+            print(
+                f"WARNING: {network_key}: failed to collect network snapshot "
+                f"({exc}); preserving previous dashboard values "
+                f"(splice={preserved['spliceVersion']}, migrationId={preserved['migrationId']})",
+                file=sys.stderr,
+            )
+            preserved["sources"]["preserveReason"] = str(exc)
+            networks[network_key] = preserved
     return {
         "generatedAt": generated_at,
         "generatorMode": "public_source_collection_with_manual_fallbacks",
-        "networks": {
-            network_key: collect_network_snapshot(network_key, timeout)
-            for network_key in NETWORK_ORDER
-        },
+        "networks": networks,
         "latestDpmSdk": latest_dpm_sdk,
         "latestDpm": fetch_latest_dpm_version(timeout),
         "latestPqs": fetch_pqs_version_from_scribe_component(
@@ -686,16 +796,20 @@ def build_config(existing_config: dict, snapshot: dict) -> dict:
         "repositories": build_repositories(existing_config, snapshot),
     }
     existing_generated = existing_config.get("_generated", {})
-    existing_generated_at = existing_generated.get("generatedAt")
-    if existing_generated_at and generated_content(config) == generated_content(existing_config):
-        config["_generated"]["generatedAt"] = existing_generated_at
+    if (
+        isinstance(existing_generated, dict)
+        and existing_generated
+        and dashboard_content(config) == dashboard_content(existing_config)
+    ):
+        config["_generated"] = json.loads(json.dumps(existing_generated))
     return config
 
 
-def generated_content(config: dict) -> dict:
-    content = json.loads(json.dumps(config))
-    content.get("_generated", {}).pop("generatedAt", None)
-    return content
+def dashboard_content(config: dict) -> dict:
+    return {
+        "versions": config.get("versions"),
+        "repositories": config.get("repositories"),
+    }
 
 
 def write_json(path: Path, payload: dict) -> None:
