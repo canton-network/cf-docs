@@ -26,6 +26,10 @@ HTTP_METHODS = {"get", "put", "post", "delete", "options", "head", "patch", "tra
 SCAN_OPENAPI_PLACEHOLDER_SERVER = "https://example.com/api/scan"
 SCAN_OPENAPI_PUBLIC_SERVER = "https://scan.sv-1.global.canton.network.sync.global/api/scan"
 SCAN_OPENAPI_SERVER_REPLACEMENT_SPECS = {"scan.yaml", "scan-stream-server.yaml"}
+UNPUBLISHED_SECURITY_SCHEME_LINK_RE = re.compile(
+    r"as described in \[spliceAppBearerAuth\]\(\"?(?:\.\./)+common/src/main/openapi/"
+    r"common-external\.yaml#/components/securitySchemes/spliceAppBearerAuth\"?\)"
+)
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -260,6 +264,10 @@ def render_output_bytes(*, spec_filename: str, spec_bytes: bytes, output_path: P
     text = spec_bytes.decode("utf-8")
     if spec_filename in SCAN_OPENAPI_SERVER_REPLACEMENT_SPECS:
         text = text.replace(SCAN_OPENAPI_PLACEHOLDER_SERVER, SCAN_OPENAPI_PUBLIC_SERVER)
+    text = UNPUBLISHED_SECURITY_SCHEME_LINK_RE.sub(
+        "as described by the `spliceAppBearerAuth` security scheme",
+        text,
+    )
     filtered_lines = [
         line
         for line in text.splitlines()

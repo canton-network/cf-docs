@@ -47,6 +47,9 @@ DEFAULT_OPENAPI_DIRECTORY = "reference/json-api-reference"
 DEFAULT_DETAILS_PAGE_REF = "reference/json-api-reference/details"
 LEGACY_OUTPUT_FILE = REPO_ROOT / "docs-main" / "reference" / "json-api-reference.mdx"
 HTTP_METHODS = {"get", "put", "post", "delete", "options", "head", "patch", "trace"}
+INTERNAL_TODO_LINE_RE = re.compile(
+    r"(?m)^[ \t]*TODO\([^\r\n)]+\)[^\r\n]*(?:\r?\n|$)"
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -262,9 +265,17 @@ def add_missing_operation_summaries(text: str) -> str:
     return rendered
 
 
-def normalize_mintlify_operation_summaries(openapi_path: Path) -> None:
+def sanitize_internal_todos(text: str) -> str:
+    return INTERNAL_TODO_LINE_RE.sub("", text)
+
+
+def normalize_mintlify_openapi_text(text: str) -> str:
+    return add_missing_operation_summaries(sanitize_internal_todos(text))
+
+
+def normalize_mintlify_openapi(openapi_path: Path) -> None:
     original = openapi_path.read_text(encoding="utf-8")
-    normalized = add_missing_operation_summaries(original)
+    normalized = normalize_mintlify_openapi_text(original)
     if normalized != original:
         openapi_path.write_text(normalized, encoding="utf-8")
 
@@ -322,7 +333,7 @@ def versioned_openapi_specs(
             force_refresh=force_refresh,
         )
         spec = yaml.safe_load(
-            add_missing_operation_summaries(
+            normalize_mintlify_openapi_text(
                 read_bundle_spec_text(
                     archive_path,
                     source_config=source_config,
@@ -496,7 +507,7 @@ def main() -> int:
         output_path=output_spec,
         force_refresh=args.force_refresh,
     )
-    normalize_mintlify_operation_summaries(output_spec)
+    normalize_mintlify_openapi(output_spec)
     print(f"Published Mintlify OpenAPI source: {output_spec}")
 
     docs_json_path = Path(args.docs_json).resolve()

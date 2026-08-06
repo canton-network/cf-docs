@@ -28,6 +28,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
+        with:
+          persist-credentials: false
 
       - name: Select generated-doc targets
         id: select-targets
@@ -50,6 +52,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
+        with:
+          persist-credentials: false
 
       - name: Set up Nix
         uses: cachix/install-nix-action@v31
@@ -89,9 +93,15 @@ jobs:
           app-id: ${{ secrets.GENERATED_DOCS_MERGER_APP_ID }}
           private-key: ${{ secrets.GENERATED_DOCS_MERGER_PRIVATE_KEY }}
 
+      - name: Configure generated-docs PR authentication
+        env:
+          GH_TOKEN: ${{ steps.merger-token.outputs.token || github.token }}
+        run: gh auth setup-git
+
       - name: Generate update pull requests
         env:
-          GH_TOKEN: ${{ github.token }}
-          GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.merger-token.outputs.token || github.token }}
+          GITHUB_TOKEN: ${{ steps.merger-token.outputs.token || github.token }}
           GENERATED_DOCS_MERGER_TOKEN: ${{ steps.merger-token.outputs.token }}
+          GENERATED_DOCS_WORKFLOW_TOKEN: ${{ github.token }}
         run: python3 scripts/update_generated_reference_prs.py --targets ${{ matrix.target }}

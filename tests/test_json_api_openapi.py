@@ -90,6 +90,55 @@ components: {}
     assert module.add_missing_operation_summaries(source) == source
 
 
+def test_sanitize_internal_todos_removes_only_standalone_tracker_lines() -> None:
+    module = load_script_module("generate_json_api_reference.py")
+    source = """openapi: 3.0.3
+paths:
+  /v2/parties:
+    post:
+      summary: Allocate a party
+      description: |-
+        TODO(#27670) support synchronizer aliases
+        Synchronizer ID on which to onboard the party.
+
+        Required
+      example: TODO(#12345) remains because it is not a standalone line
+components: {}
+"""
+
+    assert module.sanitize_internal_todos(source) == """openapi: 3.0.3
+paths:
+  /v2/parties:
+    post:
+      summary: Allocate a party
+      description: |-
+        Synchronizer ID on which to onboard the party.
+
+        Required
+      example: TODO(#12345) remains because it is not a standalone line
+components: {}
+"""
+
+
+def test_normalize_mintlify_openapi_text_sanitizes_todos_and_adds_summaries() -> None:
+    module = load_script_module("generate_json_api_reference.py")
+    source = """openapi: 3.0.3
+paths:
+  /v2/parties:
+    post:
+      description: |-
+        TODO(#27670) support synchronizer aliases
+        Allocate a party.
+components: {}
+"""
+
+    rendered = module.normalize_mintlify_openapi_text(source)
+
+    assert "TODO(#27670)" not in rendered
+    assert '      summary: "POST /v2/parties"' in rendered
+    assert module.missing_operation_summaries(module.yaml.safe_load(rendered)) == set()
+
+
 def test_openapi_operation_page_refs_lists_endpoint_refs_in_source_order() -> None:
     module = load_script_module("generate_json_api_reference.py")
     spec = {
