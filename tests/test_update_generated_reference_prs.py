@@ -49,6 +49,7 @@ def test_update_targets_cover_all_generated_doc_surfaces() -> None:
     assert [target.key for target in module.UPDATE_TARGETS] == [
         "version-dashboard",
         "splice-openapi",
+        "splice-token-standard-v2",
         "wallet-gateway-openrpc",
         "json-api-reference",
         "json-api-asyncapi-reference",
@@ -92,6 +93,18 @@ def test_java_ledger_bindings_target_does_not_auto_merge() -> None:
     target = next(target for target in module.UPDATE_TARGETS if target.key == "ledger-bindings")
 
     assert target.auto_merge is False
+
+
+def test_generated_docs_workflow_uses_merger_app_for_pr_mutations() -> None:
+    workflow = (REPO_ROOT / ".github" / "workflows" / "update-version-dashboard.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert workflow.count("persist-credentials: false") == 2
+    assert "GH_TOKEN: ${{ steps.merger-token.outputs.token || github.token }}" in workflow
+    assert "GITHUB_TOKEN: ${{ steps.merger-token.outputs.token || github.token }}" in workflow
+    assert "GENERATED_DOCS_WORKFLOW_TOKEN: ${{ github.token }}" in workflow
+    assert "run: gh auth setup-git" in workflow
 
 
 def test_daml_script_target_wires_source_pin_and_generated_paths() -> None:
@@ -187,6 +200,38 @@ def test_source_update_targets_skip_generation_when_source_is_unchanged(monkeypa
     ]
 
 
+def test_version_dashboard_skips_timestamp_only_source_changes(monkeypatch, tmp_path: Path) -> None:
+    module = load_script_module()
+    target = next(target for target in module.UPDATE_TARGETS if target.key == "version-dashboard")
+    calls: list[tuple[str, ...]] = []
+
+    monkeypatch.setattr(module, "reset_to_base", lambda base_sha: calls.append(("reset", base_sha)))
+    monkeypatch.setattr(module.pr_utils, "write_base_file", lambda base_sha, path: tmp_path / "before.json")
+    monkeypatch.setattr(module.pr_utils, "has_changes", lambda paths: True)
+    monkeypatch.setattr(module, "summarize_target_changes", lambda target, before_path: [])
+    monkeypatch.setattr(
+        module.pr_utils,
+        "close_stale_pull_request",
+        lambda **kwargs: calls.append(("close", kwargs["branch"])),
+    )
+    monkeypatch.setattr(module, "create_or_update_pull_request", lambda **kwargs: calls.append(("pr",)))
+    monkeypatch.setattr(module.pr_utils, "run", lambda command: calls.append(command))
+
+    module.process_target(
+        target=target,
+        base_sha="base-sha",
+        base_branch="main",
+        repository="canton-network/cf-docs",
+    )
+
+    assert calls == [
+        ("reset", "base-sha"),
+        ("nix-shell", "--run", "npm run generate:version-compatibility-dashboard"),
+        ("close", "version-dashboard/update"),
+    ]
+    assert not any("generate:network-variable-tabs" in " ".join(call) for call in calls)
+
+
 def test_source_update_targets_generate_when_source_changed(monkeypatch, tmp_path: Path) -> None:
     module = load_script_module()
     target = next(target for target in module.UPDATE_TARGETS if target.key == "wallet-gateway-openrpc")
@@ -262,6 +307,7 @@ def test_generated_clean_paths_include_target_paths_and_internal_output() -> Non
 
     assert ".internal" in clean_paths
     assert "docs-main/openapi/splice" in clean_paths
+    assert "docs-main/sdks-tools/api-reference/splice-daml/splice-api-token-holding-v2" in clean_paths
     assert "docs-main/openapi/json-ledger-api" in clean_paths
     assert "docs-main/reference/grpc-ledger-api-reference" in clean_paths
     assert "docs-main/reference/java" in clean_paths
@@ -587,6 +633,117 @@ def test_create_or_update_pull_request_marks_existing_pr_ready(monkeypatch, tmp_
     assert any(call[:2] == ("pr", "edit") and call[2] == "932" for call in gh_calls)
 
 
+def test_create_or_update_pull_request_keeps_matching_existing_branch(
+    monkeypatch, tmp_path: Path
+) -> None:
+    load_script_module()
+    import generated_reference_pr_utils as pr_utils
+
+    git_calls: list[tuple[str, ...]] = []
+    gh_calls: list[tuple[str, ...]] = []
+    auto_merge_calls: list[dict[str, object]] = []
+
+    def fake_git(*args: str, capture: bool = False) -> str:
+        git_calls.append(args)
+        if args[:2] == ("status", "--porcelain"):
+            return " M generated.mdx"
+        return ""
+
+    def fake_gh(*args: str, capture: bool = False) -> str:
+        gh_calls.append(args)
+        if args[:2] == ("pr", "list"):
+            return "932"
+        return ""
+
+    monkeypatch.setattr(pr_utils, "git", fake_git)
+    monkeypatch.setattr(pr_utils, "gh", fake_gh)
+    monkeypatch.setattr(
+        pr_utils,
+        "matching_remote_branch_sha",
+        lambda **kwargs: "existing123",
+    )
+    monkeypatch.setattr(
+        pr_utils,
+        "push_branch",
+        lambda branch: (_ for _ in ()).throw(AssertionError("branch must not be pushed")),
+    )
+    monkeypatch.setattr(pr_utils, "mark_pull_request_ready", lambda **kwargs: None)
+    monkeypatch.setattr(
+        pr_utils,
+        "maybe_merge_generated_pr",
+        lambda **kwargs: auto_merge_calls.append(kwargs),
+    )
+    body_path = tmp_path / "body.md"
+    body_path.write_text("body", encoding="utf-8")
+
+    pr_number = pr_utils.create_or_update_pull_request(
+        title="Update Java ledger bindings reference",
+        branch="generated-references/ledger-bindings/update",
+        paths=("generated.mdx",),
+        body_path=body_path,
+        base_branch="main",
+        repository="canton-network/cf-docs",
+        auto_merge=False,
+    )
+
+    assert pr_number == "932"
+    assert not any(call[:1] == ("commit",) for call in git_calls)
+    assert gh_calls == [
+        (
+            "pr",
+            "list",
+            "--repo",
+            "canton-network/cf-docs",
+            "--head",
+            "generated-references/ledger-bindings/update",
+            "--base",
+            "main",
+            "--state",
+            "open",
+            "--json",
+            "number",
+            "--jq",
+            ".[0].number // empty",
+        )
+    ]
+    assert auto_merge_calls[0]["head_sha"] == "existing123"
+
+
+def test_matching_remote_branch_sha_compares_staged_target_paths(monkeypatch) -> None:
+    load_script_module()
+    import generated_reference_pr_utils as pr_utils
+
+    git_calls: list[tuple[str, ...]] = []
+
+    def fake_git(*args: str, capture: bool = False) -> str:
+        git_calls.append(args)
+        if args[:3] == ("ls-remote", "--heads", "origin"):
+            return "abc123\trefs/heads/generated/update"
+        if args[:3] == ("diff", "--cached", "--name-only"):
+            return ""
+        return ""
+
+    monkeypatch.setattr(pr_utils, "git", fake_git)
+
+    assert (
+        pr_utils.matching_remote_branch_sha(
+            branch="generated/update",
+            paths=("generated.mdx", "generated/"),
+        )
+        == "abc123"
+    )
+    assert ("fetch", "--no-tags", "origin", "refs/heads/generated/update") in git_calls
+    assert (
+        "diff",
+        "--cached",
+        "--name-only",
+        "abc123",
+        "--",
+        "generated.mdx",
+        "generated/",
+    ) in git_calls
+
+
 def test_create_or_update_pull_request_can_disable_auto_merge(
     monkeypatch, tmp_path: Path
 ) -> None:
@@ -740,9 +897,14 @@ def test_dispatch_mintlify_validation_runs_workflow_on_generated_branch(monkeypa
     load_script_module()
     import generated_reference_pr_utils as pr_utils
 
-    calls: list[tuple[str, ...]] = []
+    calls: list[tuple[tuple[str, ...], dict[str, str] | None]] = []
 
-    monkeypatch.setattr(pr_utils, "gh", lambda *args, capture=False: calls.append(args) or "")
+    monkeypatch.setenv("GENERATED_DOCS_WORKFLOW_TOKEN", "workflow-token")
+    monkeypatch.setattr(
+        pr_utils,
+        "run",
+        lambda command, **kwargs: calls.append((tuple(command), kwargs.get("env"))) or "",
+    )
 
     pr_utils.dispatch_mintlify_validation(
         repository="canton-network/cf-docs",
@@ -751,13 +913,17 @@ def test_dispatch_mintlify_validation_runs_workflow_on_generated_branch(monkeypa
 
     assert calls == [
         (
-            "workflow",
-            "run",
-            "mintlify-validate.yml",
-            "--repo",
-            "canton-network/cf-docs",
-            "--ref",
-            "version-dashboard/update",
+            (
+                "gh",
+                "workflow",
+                "run",
+                "mintlify-validate.yml",
+                "--repo",
+                "canton-network/cf-docs",
+                "--ref",
+                "version-dashboard/update",
+            ),
+            {"GH_TOKEN": "workflow-token", "GITHUB_TOKEN": "workflow-token"},
         )
     ]
 
@@ -899,7 +1065,7 @@ def test_generated_pr_policy_accepts_configured_generated_paths() -> None:
             head_sha="abc123",
         ),
         pr_metadata={
-            "author": {"login": "app/github-actions"},
+            "author": {"login": "app/cf-docs-generated-docs-merger"},
             "state": "OPEN",
             "isDraft": False,
             "baseRefName": "main",
@@ -949,8 +1115,38 @@ def test_generated_pr_policy_rejects_unexpected_author_and_paths() -> None:
         },
     )
 
-    assert "expected PR author 'app/github-actions', found 'danielporterda'" in errors
+    assert "expected PR author 'app/cf-docs-generated-docs-merger', found 'danielporterda'" in errors
     assert (
         "changed files outside configured generated paths: .github/workflows/update-version-dashboard.yml"
         in errors
     )
+
+
+def test_generated_pr_policy_rejects_legacy_github_actions_author() -> None:
+    policy = load_policy_module()
+
+    errors = policy.validate_policy(
+        policy_input=policy.PolicyInput(
+            pr_number="932",
+            repository="canton-network/cf-docs",
+            base_branch="main",
+            head_branch="version-dashboard/update",
+            head_sha="abc123",
+        ),
+        pr_metadata={
+            "author": {"login": "app/github-actions"},
+            "state": "OPEN",
+            "isDraft": False,
+            "baseRefName": "main",
+            "headRefName": "version-dashboard/update",
+            "headRefOid": "abc123",
+        },
+        changed_files=("config/repo-version-config.json",),
+        branch_paths={
+            "version-dashboard/update": ("config/repo-version-config.json",),
+        },
+    )
+
+    assert errors == [
+        "expected PR author 'app/cf-docs-generated-docs-merger', found 'app/github-actions'"
+    ]

@@ -48,6 +48,7 @@ class UpdateTarget:
     validation: tuple[str, ...]
     source_update_commands: tuple[tuple[str, ...], ...] = ()
     source_update_paths: tuple[str, ...] = ()
+    require_summary_changes: bool = False
     auto_merge: bool = True
 
 
@@ -82,6 +83,7 @@ UPDATE_TARGETS = (
             "config/repo-version-config.json",
             "docs-main/snippets/generated/version-dashboard-data.mdx",
         ),
+        require_summary_changes=True,
     ),
     UpdateTarget(
         key="splice-openapi",
@@ -112,6 +114,35 @@ UPDATE_TARGETS = (
             ("nix-shell", "--run", "npm run update:generated-reference-sources -- --source splice-openapi"),
         ),
         source_update_paths=("config/mintlify-openapi/splice-openapi/source-artifacts.json",),
+    ),
+    UpdateTarget(
+        key="splice-token-standard-v2",
+        title="Update Token Standard v2 Daml reference",
+        branch="generated-references/splice-token-standard-v2/update",
+        description=(
+            "Regenerates the checked-in Canton Network Token Standard v2 Daml package "
+            "reference pages from the pinned DAR artifacts in canton-network/splice."
+        ),
+        generate_commands=(
+            ("nix-shell", "--run", "npm run generate:splice-token-standard-v2-reference"),
+        ),
+        paths=(
+            "config/x2mdx/splice-token-standard-v2/source-artifacts.json",
+            "docs-main/docs.json",
+            "docs-main/sdks-tools/api-reference/splice-daml/splice-api-token-allocation-instruction-v2",
+            "docs-main/sdks-tools/api-reference/splice-daml/splice-api-token-allocation-request-v2",
+            "docs-main/sdks-tools/api-reference/splice-daml/splice-api-token-allocation-v2",
+            "docs-main/sdks-tools/api-reference/splice-daml/splice-api-token-holding-v2",
+            "docs-main/sdks-tools/api-reference/splice-daml/splice-api-token-transfer-events-v2",
+            "docs-main/sdks-tools/api-reference/splice-daml/splice-api-token-transfer-instruction-v2",
+        ),
+        summary_kind="static",
+        summary_path=None,
+        summary_label=None,
+        validation=(
+            "npm run generate:splice-token-standard-v2-reference",
+            "git diff --check",
+        ),
     ),
     UpdateTarget(
         key="wallet-gateway-openrpc",
@@ -606,10 +637,26 @@ def process_target(*, target: UpdateTarget, base_sha: str, base_branch: str, rep
         )
         return
 
+    changes: list[str] | None = None
+    if target.require_summary_changes:
+        if before_path is None:
+            raise ValueError(f"Update target {target.key} requires a summary path")
+        changes = summarize_target_changes(target, before_path)
+        if not changes:
+            print(f"No material changes for {target.title}; skipping generation")
+            pr_utils.close_stale_pull_request(
+                title=target.title,
+                branch=target.branch,
+                base_branch=base_branch,
+                repository=repository,
+            )
+            return
+
     for command in target.generate_commands:
         pr_utils.run(command)
 
-    changes = summarize_target_changes(target, before_path) if before_path is not None else []
+    if changes is None:
+        changes = summarize_target_changes(target, before_path) if before_path is not None else []
     with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as body_file:
         body_path = Path(body_file.name)
     body_path.write_text(body_markdown(target=target, changes=changes), encoding="utf-8")
