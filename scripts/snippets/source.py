@@ -60,7 +60,9 @@ class GitHubClient:
         )
         self.max_source_bytes = max_source_bytes
 
-    def _request(self, url: str, *, accept: str) -> bytes:
+    def _request(
+        self, url: str, *, accept: str, allow_not_found: bool = False
+    ) -> bytes | None:
         request = urllib.request.Request(
             url,
             headers={
@@ -75,6 +77,8 @@ class GitHubClient:
             with urllib.request.urlopen(request, timeout=30) as response:
                 content = response.read(self.max_source_bytes + 1)
         except urllib.error.HTTPError as error:
+            if error.code == 404 and allow_not_found:
+                return None
             raise SourceResolutionError(
                 f"GitHub returned HTTP {error.code} for {url}"
             ) from error
@@ -88,8 +92,16 @@ class GitHubClient:
             )
         return content
 
-    def _json(self, url: str) -> dict[str, Any]:
-        content = self._request(url, accept="application/vnd.github+json")
+    def _json(
+        self, url: str, *, allow_not_found: bool = False
+    ) -> dict[str, Any] | None:
+        content = self._request(
+            url,
+            accept="application/vnd.github+json",
+            allow_not_found=allow_not_found,
+        )
+        if content is None:
+            return None
         try:
             payload = json.loads(content)
         except json.JSONDecodeError as error:
@@ -108,6 +120,7 @@ class GitHubClient:
         payload = self._json(
             f"https://api.github.com/repos/{repository}/pulls/{pull_request}"
         )
+        assert payload is not None
         try:
             head_commit = payload["head"]["sha"]
         except (KeyError, TypeError) as error:
@@ -136,10 +149,47 @@ class GitHubClient:
     def read_file(self, repository: str, commit: str, path: str) -> bytes:
         encoded_path = urllib.parse.quote(path, safe="/")
         encoded_ref = urllib.parse.quote(commit, safe="")
-        return self._request(
+        content = self._request(
             f"https://api.github.com/repos/{repository}/contents/{encoded_path}?ref={encoded_ref}",
             accept="application/vnd.github.raw+json",
         )
+        assert content is not None
+        return content
+
+    def resolve_commit(self, repository: str, ref: str) -> str:
+        encoded_ref = urllib.parse.quote(ref, safe="")
+        payload = self._json(
+            f"https://api.github.com/repos/{repository}/commits/{encoded_ref}"
+        )
+        assert payload is not None
+        commit = payload.get("sha")
+        if not isinstance(commit, str) or not re.fullmatch(r"[0-9a-fA-F]{40}", commit):
+            raise SourceResolutionError(
+                f"GitHub returned an invalid commit for {repository}@{ref}"
+            )
+        return commit.lower()
+
+    def release_exists(self, repository: str, tag: str) -> bool:
+        encoded_tag = urllib.parse.quote(tag, safe="")
+        return (
+            self._json(
+                f"https://api.github.com/repos/{repository}/releases/tags/{encoded_tag}",
+                allow_not_found=True,
+            )
+            is not None
+        )
+
+    def is_ancestor(self, repository: str, ancestor: str, descendant: str) -> bool:
+        payload = self._json(
+            f"https://api.github.com/repos/{repository}/compare/{ancestor}...{descendant}"
+        )
+        assert payload is not None
+        status = payload.get("status")
+        if status not in {"ahead", "behind", "diverged", "identical"}:
+            raise SourceResolutionError(
+                f"GitHub returned an invalid comparison for {repository}: {ancestor}...{descendant}"
+            )
+        return status in {"ahead", "identical"}
 
 
 def repository_from_remote(remote: str) -> str | None:
