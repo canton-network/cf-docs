@@ -44,11 +44,11 @@ DEFAULT_NAV_PAGE_ORDER = [
 ]
 DETAILS_TITLE = "Details and history"
 CARD_LINK_RE = re.compile(
-    r'(?P<open><a class="x2mdx-ref-card" href="(?P<href>[^"]+)">)(?P<body>.*?)(?P<close>\n\s*</a>)',
+    r'(?P<open><div class="x2mdx-ref-card">\s*<div class="x2mdx-ref-card-head">\s*<a class="x2mdx-ref-card-title" href="(?P<href>[^"]+)">.*?</a>)(?P<body>.*?)(?P<close>\n  </div>)(?=\s*(?:<div class="x2mdx-ref-card(?: |")|</div>))',
     flags=re.DOTALL,
 )
 CARD_HEAD_BADGES_RE = re.compile(
-    r'(?P<head><div class="x2mdx-ref-card-head">\s*<h3>.*?</h3>)(?P<badges>\s*<div class="x2mdx-ref-badges">.*?</div>\s*)(?P<tail>\s*</div>)',
+    r'(?P<head><div class="x2mdx-ref-card-head">\s*(?:<a class="x2mdx-ref-card-title" href="[^"]+">.*?</a>|<span class="x2mdx-ref-card-title">.*?</span>))(?P<badges>\s*<div class="x2mdx-ref-badges">.*?</div>\s*)(?P<tail>\s*</div>)',
     flags=re.DOTALL,
 )
 CARD_SUMMARY_RE = re.compile(

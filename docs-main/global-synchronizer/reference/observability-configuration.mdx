@@ -35,14 +35,14 @@ The Canton Observability [Example]() GitHub repository provides a complete refer
 
 ## Golden Signals and Key Metrics Quick Start
 
-The best practice for monitoring a microservices [application]() is an approach known as the Golden [Signals](), or the RED [method](). In this approach, metric monitoring determines whether the application is healthy and, if not healthy, which service is the root cause of the issue. The Golden Signals for HTTP and gRPC endpoints are supported for all endpoints. Key metrics specific to Canton are also available. These are described below.
+The best practice for monitoring a microservices [application](https://sre.google/sre-book/monitoring-distributed-systems) is an approach known as the Golden [Signals](https://www.blameless.com/blog/4-sre-golden-signals-what-they-are-and-why-they-matter), or the RED [method](https://www.waferwire.com/blog/red-metrics-use-microservices-monitoring). In this approach, metric monitoring determines whether the application is healthy and, if not healthy, which service is the root cause of the issue. The Golden Signals for HTTP and gRPC endpoints are supported for all endpoints. Key metrics specific to Canton are also available. These are described below.
 
 The following Golden Signal metrics for each HTTP and gRPC API are available:
 
 - Input request rate, as a counter
 - Error rate, as a counter (discussed below)
 - Latency (the time to process a request), as a histogram
-- Size of the payload, as a counter, following the Apache HTTP [precedent]()
+- Size of the payload, as a counter, following the Apache HTTP [precedent](https://github.com/Lusitaniae/apache_exporter)
 
 You can filter or aggregate each metric using its accompanying labels. The instrumentation labels added to each HTTP API metric are as follows:
 
@@ -57,7 +57,7 @@ The gRPC protocol is layered on top of HTTP/2, so certain labels (such as the `d
 
 - `canton_version`: the Canton protocol [version]()
 - `grpc_code`: the human-readable status code for gRPC (for example: `OK`, `CANCELLED`, `DEADLINE_EXCEEDED`)
-- The type of the client/server gRPC [request](), under the labels `grpc_client_type` and `grpc_server_type`
+- The type of the client/server gRPC [request](http://www.grpc.io/docs/guides/concepts.html#rpc-life-cycle), under the labels `grpc_client_type` and `grpc_server_type`
 - The protobuf package and service names, under the labels `grpc_service_name` and `grpc_method_name`
 
 The following other key metrics are monitored:
@@ -76,7 +76,7 @@ This list is not exhaustive. It highlights the most important metrics.
 
 ### Enable the Prometheus Reporter
 
-[Prometheus]() is recommended for metrics reporting. Other reporters (jmx, graphite, and csv) are supported, but they are deprecated. Any such reporter should be migrated to Prometheus.
+[Prometheus](https://prometheus.io) is recommended for metrics reporting. Other reporters (jmx, graphite, and csv) are supported, but they are deprecated. Any such reporter should be migrated to Prometheus.
 
 Prometheus can be enabled using:
 
@@ -89,7 +89,7 @@ canton.monitoring.metrics.reporters = [{
 ```
 ### Prometheus-Only Metrics
 
-Some metrics are available only when using the Prometheus reporter. These metrics include common gRPC and HTTP metrics (which help you to measure the four golden [signals]()), and JVM GC and memory usage metrics (if enabled). The metrics are documented in detail below.
+Some metrics are available only when using the Prometheus reporter. These metrics include common gRPC and HTTP metrics (which help you to measure the four golden [signals](https://sre.google/sre-book/monitoring-distributed-systems/#xref_monitoring_golden-signals)), and JVM GC and memory usage metrics (if enabled). The metrics are documented in detail below.
 
 Any metric marked with `*` is available only when using the Prometheus reporter.
 
@@ -140,7 +140,7 @@ The full Canton metrics inventory — including Participant Metrics, Sequencer M
 
 ## Logging
 
-Canton uses [Logback]() as the logging library. All Canton logs derive from the logger `com.digitalasset.canton`. By default, Canton will write a log to the file `log/canton.log` using the `INFO` log-level and will also log `WARN` and `ERROR` to stdout.
+Canton uses [Logback](https://logback.qos.ch) as the logging library. All Canton logs derive from the logger `com.digitalasset.canton`. By default, Canton will write a log to the file `log/canton.log` using the `INFO` log-level and will also log `WARN` and `ERROR` to stdout.
 
 How Canton produces log files can be configured extensively on the command line using the following options:
 
@@ -161,7 +161,7 @@ Note that if you use `--log-profile`, the order of the command line arguments ma
 
 Canton supports the normal log4j logging levels: `TRACE`, `DEBUG`, `INFO`, `WARN`, and `ERROR`.
 
-For further customization, a custom logback [configuration]() can be provided using `JAVA_OPTS`.
+For further customization, a custom logback [configuration](https://logback.qos.ch/manual/configuration.html) can be provided using `JAVA_OPTS`.
 
 ```bash
 JAVA_OPTS="-Dlogback.configurationFile=./path-to-file.xml" ./bin/canton --config ...
@@ -175,16 +175,16 @@ A log file viewer such as [lnav](#lnav) is recommended to view Canton logs and r
 
 The following features are especially useful when using `lnav`:
 
-- Viewing log files of different Canton components in a single [view](), merged according to timestamps (`lnav <log1> <log2> ...`).
-- [Filtering]() specific log messages in (`:filter-in <regex>`) or out (`:filter-out <regex>`). When filtering messages (for example, with a given trace-id), a transaction can be traced across different components, especially when using the single-view-feature described earlier.
-- [Searching]() for specific log messages (`/<regex>`) and jumping between them (`n` and `N`).
+- Viewing log files of different Canton components in a single [view](https://lnav.org/features#single-log-view), merged according to timestamps (`lnav <log1> <log2> ...`).
+- [Filtering](https://docs.lnav.org/en/latest/usage.html#filtering) specific log messages in (`:filter-in <regex>`) or out (`:filter-out <regex>`). When filtering messages (for example, with a given trace-id), a transaction can be traced across different components, especially when using the single-view-feature described earlier.
+- [Searching](https://docs.lnav.org/en/latest/usage.html#searching) for specific log messages (`/<regex>`) and jumping between them (`n` and `N`).
 - Automatic syntax highlighting of parts of log messages (such as timestamps) and log messages themselves (for example, `WARN` log messages are yellow).
-- [Jumping]() between error (`e` and `E`) and warn messages (`w` and `W`).
+- Jumping between error (`e` and `E`) and warn messages (`w` and `W`).
 - Selectively activating and deactivating different filters and files (`TAB` and `SPACE` to activate/deactivate a filter).
 - Marking lines (`m`) and jumping back and forth between marked lines (`u` and `U`).
 - Jumping back and forth between lines that have the same trace-id (`o` and `O`).
 
-The custom lnav log format [file]() for Canton logs `canton.lnav.json` is bundled in any Canton release. You can install it with `lnav -i canton.lnav.json`. JSON-based log files (which need to use the file suffix `.clog`) can be viewed using the `canton-json.lnav.json` format file.
+The custom lnav log format [file](https://docs.lnav.org/en/latest/formats.html) for Canton logs `canton.lnav.json` is bundled in any Canton release. You can install it with `lnav -i canton.lnav.json`. JSON-based log files (which need to use the file suffix `.clog`) can be viewed using the `canton-json.lnav.json` format file.
 
 ### Detailed Logging
 
@@ -368,7 +368,7 @@ Additionally, all nodes also return a `components` field detailing the health st
 
 ### gRPC Health Check Service
 
-Each Canton node can optionally be configured to start a gRPC server exposing the gRPC Health [Service](). Passive nodes (see High Availability for more information on active/passive states) return `NOT_SERVING`. Consider this when configuring liveness and readiness probes in a Kubernetes [environment]().
+Each Canton node can optionally be configured to start a gRPC server exposing the gRPC Health [Service](https://github.com/grpc/grpc/blob/master/doc/health-checking.md#service-definition). Passive nodes (see High Availability for more information on active/passive states) return `NOT_SERVING`. Consider this when configuring liveness and readiness probes in a Kubernetes [environment](https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes).
 
 The precise way the state is computed is subject to change.
 
@@ -386,12 +386,12 @@ The gRPC health server is configured per Canton node, not per process, as is the
 </Note>
 
 <Note>
-To support usage as a Kubernetes liveness probe, the health server exposes a service named `liveness` that should be targeted when configuring a gRPC [probe](). The latter service always returns `SERVING`.
+To support usage as a Kubernetes liveness probe, the health server exposes a service named `liveness` that should be targeted when configuring a gRPC [probe](https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/#define-a-grpc-liveness-probe). The latter service always returns `SERVING`.
 </Note>
 
 ### HTTP Health Check
 
-Optionally, the `canton` process can expose an HTTP endpoint indicating whether the process believes it is healthy. This may be used as an uptime check or as a Kubernetes liveness [probe](). If enabled, the `/health` endpoint will respond to a `GET` HTTP request with a 200 HTTP status code (if healthy) or 500 (if unhealthy, along with a plain text description of why it is unhealthy).
+Optionally, the `canton` process can expose an HTTP endpoint indicating whether the process believes it is healthy. This may be used as an uptime check or as a Kubernetes liveness [probe](https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes). If enabled, the `/health` endpoint will respond to a `GET` HTTP request with a 200 HTTP status code (if healthy) or 500 (if unhealthy, along with a plain text description of why it is unhealthy).
 
 To enable this health endpoint, add a `monitoring` section to the Canton configuration. Since this health check is for the whole process, add it directly to the `canton` configuration rather than for a specific node.
 
@@ -446,9 +446,9 @@ When packaging large amounts of data, increase the default timeout of the dump c
 
 # Configure Metrics
 
-Metrics provide quantitative information about the internal state of a running system, which is key for [monitoring]() of its health and performance and [observability]() of its operating behavior.
+Metrics provide quantitative information about the internal state of a running system, which is key for [monitoring](https://sre.google/sre-book/monitoring-distributed-systems) of its health and performance and [observability](https://medium.com/honeycombio/observability-101-terminology-and-concepts-honeycomb-821f17fde452) of its operating behavior.
 
-Participant Nodes can report these metrics on an HTTP endpoint. This should then be periodically scraped by a separate monitoring system such as [Prometheus](), which can store it as time-series data for querying, alerting, dashboards, etc.
+Participant Nodes can report these metrics on an HTTP endpoint. This should then be periodically scraped by a separate monitoring system such as [Prometheus](https://prometheus.io), which can store it as time-series data for querying, alerting, dashboards, etc.
 
 ## Export Metrics for Scraping
 
@@ -478,7 +478,7 @@ See the metrics reference for the full list of metrics exported.
 
 ## Deprecated Reporters
 
-Other reporters (jmx, graphite, and csv) are supported, but they are deprecated. Any such reporter should be migrated to [Prometheus]().
+Other reporters (jmx, graphite, and csv) are supported, but they are deprecated. Any such reporter should be migrated to [Prometheus](https://prometheus.io).
 
 JMX-based reporting (for testing purposes only) can be enabled using:
 
