@@ -15,6 +15,7 @@ from .diagnostics import (
 from .model import (
     ConditionPageValidation,
     IfVersionTag,
+    PageValidation,
     SnippetPageValidation,
     ValidatedSnippet,
 )
@@ -139,4 +140,36 @@ def validate_snippet_page(
             )
     return SnippetPageValidation(
         snippets=tuple(snippets), diagnostics=tuple(diagnostics)
+    )
+
+
+def validate_authored_page(
+    text: str,
+    *,
+    path: Path,
+    registry: RepositoryRegistry,
+    allow_local: bool = False,
+) -> PageValidation:
+    """Validate all release-aware declarations in one authored source page."""
+
+    condition_result = validate_condition_page(
+        text, path=path, registry=registry
+    )
+    snippet_result = validate_snippet_page(
+        text,
+        path=path,
+        registry=registry,
+        conditions=condition_result,
+        allow_local=allow_local,
+    )
+    diagnostics = tuple(
+        sorted(
+            (*condition_result.diagnostics, *snippet_result.diagnostics),
+            key=lambda diagnostic: (diagnostic.span.start, diagnostic.code),
+        )
+    )
+    return PageValidation(
+        snippets=snippet_result.snippets if not diagnostics else (),
+        conditions=condition_result.conditions if not diagnostics else (),
+        diagnostics=diagnostics,
     )

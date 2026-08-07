@@ -244,3 +244,10 @@ class ValidatedSnippet:
 class SnippetPageValidation:
     snippets: tuple[ValidatedSnippet, ...]
     diagnostics: tuple[Diagnostic, ...]
+
+
+@dataclass(frozen=True)
+class PageValidation:
+    snippets: tuple[ValidatedSnippet, ...]
+    conditions: tuple[IfVersionCondition, ...]
+    diagnostics: tuple[Diagnostic, ...]
