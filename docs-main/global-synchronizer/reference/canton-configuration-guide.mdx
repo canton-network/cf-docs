@@ -5,8 +5,6 @@ description: "Configure Canton nodes using HOCON files, command-line options, an
 
 {/* Generated from canton-configuration-guide.source.mdx. Edit canton-configuration-guide.source.mdx, then run npm run snippets:generate. */}
 
-import ExternalCantonMainCommunityAppSrcPackExampleSimpleTopology from "//snippets/external/canton/main/community/app/src/pack/examples/01-simple-topology/simple-topology.mdx";
-
 {/* COPIED_START source="docs-website:docs/replicated/canton/3.5/participant/howtos/configure/general/conf_file.rst" hash="b4ada566" */}
 
 Explain the difference between static and dynamic configuration. Move out specific configuration parts from here to their howto sections, such as multi-synchronizer below.
@@ -25,7 +23,48 @@ Canton does not run one node, but any number of nodes, be it synchronizers or pa
 
 A sample configuration file for two participant nodes and a single synchronizer can be seen below.
 
-<ExternalCantonMainCommunityAppSrcPackExampleSimpleTopology />
+{/* snippet-source: https://github.com/digital-asset/canton/blob/eaa9e7a4bf48793acb35aba270b85a970afe6006/community/app/src/pack/examples/01-simple-topology/simple-topology.conf; authored-at: docs-main/global-synchronizer/reference/canton-configuration-guide.source.mdx:24 */}
+```conf
+  canton {
+    // user-manual-entry-begin: SimpleSequencerNodeConfig
+    sequencers {
+      sequencer1 {
+        storage.type = memory
+        public-api.port = 5001
+        admin-api.port = 5002
+        sequencer.type = BFT
+      }
+    }
+    // user-manual-entry-end: SimpleSequencerNodeConfig
+
+    // user-manual-entry-begin: SimpleMediatorNodeConfig
+    mediators {
+      mediator1 {
+        storage.type = memory
+        admin-api.port = 5202
+      }
+    }
+    // user-manual-entry-end: SimpleMediatorNodeConfig
+
+    participants {
+      // user-manual-entry-begin: port configuration
+      participant1 {
+        storage.type = memory
+        admin-api.port = 5012
+        ledger-api.port = 5011
+        http-ledger-api.port = 5013
+      }
+      // user-manual-entry-end: port configuration
+      participant2 {
+        storage.type = memory
+        admin-api.port = 5022
+        ledger-api.port = 5021
+        http-ledger-api.port = 5023
+      }
+    }
+  }
+
+```
 
 ## Configuration reference
 
@@ -140,7 +179,7 @@ In particular, contract key uniqueness cannot be enforced over multiple synchron
 
 By default, Canton will fail to start if it cannot access some external dependency such as the database. This is preferable during initial deployment and development, as it provides instantaneous feedback, but can cause problems in production. As an example, if Canton is started with a database in parallel, the Canton process would fail if the database is not ready before the Canton process attempts to access it. To avoid this problem, you can configure a node to wait indefinitely for an external dependency such as a database to start. The config option below will disable the "fail fast" behavior for `participant1`.
 
-{/* snippet-source: https://github.com/digital-asset/canton/blob/eaa9e7a4bf48793acb35aba270b85a970afe6006/community/app/src/test/resources/documentation-snippets/no-fail-fast.conf; authored-at: docs-main/global-synchronizer/reference/canton-configuration-guide.source.mdx:141 */}
+{/* snippet-source: https://github.com/digital-asset/canton/blob/eaa9e7a4bf48793acb35aba270b85a970afe6006/community/app/src/test/resources/documentation-snippets/no-fail-fast.conf; authored-at: docs-main/global-synchronizer/reference/canton-configuration-guide.source.mdx:139 */}
 ```conf
   canton.participants.participant1.storage.parameters.fail-fast-on-startup = "no"
 
@@ -216,7 +255,7 @@ All configured entities will be automatically started and will resume operation.
 
 A failure to connect to the database storage will lead the process to exit with a non-zero exit code. This can be turned off using:
 
-{/* snippet-source: https://github.com/digital-asset/canton/blob/eaa9e7a4bf48793acb35aba270b85a970afe6006/community/app/src/test/resources/documentation-snippets/no-fail-fast.conf; authored-at: docs-main/global-synchronizer/reference/canton-configuration-guide.source.mdx:213 */}
+{/* snippet-source: https://github.com/digital-asset/canton/blob/eaa9e7a4bf48793acb35aba270b85a970afe6006/community/app/src/test/resources/documentation-snippets/no-fail-fast.conf; authored-at: docs-main/global-synchronizer/reference/canton-configuration-guide.source.mdx:211 */}
 ```conf
   canton.participants.participant1.storage.parameters.fail-fast-on-startup = "no"
 
@@ -726,7 +765,7 @@ When running Canton inside a test environment, it can be useful to detect when C
 
 To instruct Canton to write a file containing details of the running ports when initialized, configure a ports-file:
 
-{/* snippet-source: https://github.com/digital-asset/canton/blob/eaa9e7a4bf48793acb35aba270b85a970afe6006/community/app/src/test/resources/documentation-snippets/ports-file.conf; authored-at: docs-main/global-synchronizer/reference/canton-configuration-guide.source.mdx:719 */}
+{/* snippet-source: https://github.com/digital-asset/canton/blob/eaa9e7a4bf48793acb35aba270b85a970afe6006/community/app/src/test/resources/documentation-snippets/ports-file.conf; authored-at: docs-main/global-synchronizer/reference/canton-configuration-guide.source.mdx:717 */}
 ```conf
   canton.parameters.ports-file=ports.json
 
@@ -754,7 +793,7 @@ To enable preview commands, set the `enable-preview-commands` parameter to `yes`
 Preview commands are not guaranteed to be stable and may change in future releases.
 </Warning>
 
-{/* snippet-source: https://github.com/digital-asset/canton/blob/eaa9e7a4bf48793acb35aba270b85a970afe6006/community/app/src/test/resources/documentation-snippets/preview-commands.conf; authored-at: docs-main/global-synchronizer/reference/canton-configuration-guide.source.mdx:743 */}
+{/* snippet-source: https://github.com/digital-asset/canton/blob/eaa9e7a4bf48793acb35aba270b85a970afe6006/community/app/src/test/resources/documentation-snippets/preview-commands.conf; authored-at: docs-main/global-synchronizer/reference/canton-configuration-guide.source.mdx:741 */}
 ```conf
   canton.features.enable-preview-commands=yes
 

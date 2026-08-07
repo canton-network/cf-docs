@@ -19,7 +19,7 @@ DEFAULT_PLAN = CONFIG_ROOT / "legacy-inline-migration.json"
 LIST_INDEX = CONFIG_ROOT / "remote-snippet-lists.json"
 IMPORT_RE = re.compile(
     r"^import\s+(?P<name>[A-Za-z_$][A-Za-z0-9_$]*)\s+from\s+"
-    r'(?P<quote>["\'])(?P<source>/snippets/external/(?P<repo>[^/]+)/main/'
+    r'(?P<quote>["\'])(?P<source>/{1,2}snippets/external/(?P<repo>[^/]+)/main/'
     r"(?P<snippet>.+)\.mdx)(?P=quote);?\s*$"
 )
 
@@ -378,10 +378,16 @@ def migrate_pages(
                 )
             declaration_text = declarations[key]
             before_replacement = rewritten
+
+            def replace_component(
+                match: re.Match[str],
+                page_text: str = before_replacement,
+                replacement: str = declaration_text,
+            ) -> str:
+                return _container_safe_declaration(page_text, match, replacement)
+
             rewritten = component.sub(
-                lambda match, page_text=before_replacement, replacement=declaration_text: (
-                    _container_safe_declaration(page_text, match, replacement)
-                ),
+                replace_component,
                 rewritten,
             )
             import_end = line_match.end()

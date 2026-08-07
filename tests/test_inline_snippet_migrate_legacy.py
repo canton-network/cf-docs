@@ -296,3 +296,28 @@ def test_page_migration_collapses_declaration_inside_a_markdown_container(
 
     source = (docs / "page.source.mdx").read_text(encoding="utf-8")
     assert '  <Snippet source="ref" normalize="preserve" language="yaml" />' in source
+
+
+def test_page_migration_accepts_a_legacy_double_slash_import(
+    tmp_path: Path, monkeypatch
+) -> None:
+    docs = tmp_path / "docs-main"
+    docs.mkdir()
+    page = docs / "page.mdx"
+    page.write_text(
+        """import Example from "//snippets/external/canton/main/example.mdx";
+
+<Example />
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(migrate_legacy, "DOCS_ROOT", docs)
+
+    used, _ = migrate_legacy.migrate_pages(
+        {("canton", "example"): '<Snippet source="ref" language="conf" />'}
+    )
+
+    source = (docs / "page.source.mdx").read_text(encoding="utf-8")
+    assert "import Example" not in source
+    assert '<Snippet source="ref" language="conf" />' in source
+    assert used == {("canton", "example")}
