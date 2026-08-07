@@ -2,11 +2,24 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .model import Diagnostic, LocalSourcePolicyIssue
+from .model import (
+    Diagnostic,
+    LocalSourcePolicyIssue,
+    SnippetSourceAttributeIssue,
+    SnippetSourceAttributeRule,
+)
 
 LOCAL_SOURCE_REMEDIATION = (
     "Run `npm run snippets:resolve-local -- --page <page.source.mdx>` before pushing."
 )
+SOURCE_ATTRIBUTE_CODES = {
+    SnippetSourceAttributeRule.SOURCE_REQUIRED: "SNIP002",
+    SnippetSourceAttributeRule.PATH_MUST_BE_QUOTED: "SNIP003",
+    SnippetSourceAttributeRule.IMMUTABLE_PATH_FORBIDDEN: "SNIP004",
+    SnippetSourceAttributeRule.PULL_REQUEST_PATH_REQUIRED: "SNIP005",
+    SnippetSourceAttributeRule.LOCAL_PATH_FORBIDDEN: "SNIP006",
+    SnippetSourceAttributeRule.UNSUPPORTED_SOURCE: "SNIP008",
+}
 
 
 def local_source_policy_diagnostic(
@@ -20,4 +33,20 @@ def local_source_policy_diagnostic(
         code="SNIP007",
         message=issue.message,
         remediation=LOCAL_SOURCE_REMEDIATION,
+    )
+
+
+def snippet_source_attribute_diagnostics(
+    path: Path, issues: tuple[SnippetSourceAttributeIssue, ...]
+) -> tuple[Diagnostic, ...]:
+    """Assign stable diagnostic codes to source/path attribute failures."""
+
+    return tuple(
+        Diagnostic(
+            path=path,
+            span=issue.span,
+            code=SOURCE_ATTRIBUTE_CODES[issue.rule],
+            message=issue.message,
+        )
+        for issue in issues
     )
