@@ -4,6 +4,8 @@ from pathlib import Path
 
 from .model import (
     Diagnostic,
+    IfVersionAttributeIssue,
+    IfVersionAttributeRule,
     LocalSourcePolicyIssue,
     SnippetAttributeIssue,
     SnippetAttributeRule,
@@ -32,6 +34,12 @@ SNIPPET_ATTRIBUTE_CODES = {
     SnippetAttributeRule.UNKNOWN_ATTRIBUTE: "SNIP015",
     SnippetAttributeRule.INVALID_LANGUAGE: "SNIP016",
     SnippetAttributeRule.INVALID_MARKERS: "SNIP017",
+}
+IF_VERSION_ATTRIBUTE_CODES = {
+    IfVersionAttributeRule.UNKNOWN_ATTRIBUTE: "SNIP020",
+    IfVersionAttributeRule.INVALID_REPOSITORY: "SNIP021",
+    IfVersionAttributeRule.UNREGISTERED_REPOSITORY: "SNIP022",
+    IfVersionAttributeRule.INVALID_PULL_REQUEST: "SNIP023",
 }
 
 
@@ -91,6 +99,22 @@ def snippet_attribute_diagnostics(
             path=path,
             span=issue.span,
             code=SNIPPET_ATTRIBUTE_CODES[issue.rule],
+            message=issue.message,
+        )
+        for issue in issues
+    )
+
+
+def if_version_attribute_diagnostics(
+    path: Path, issues: tuple[IfVersionAttributeIssue, ...]
+) -> tuple[Diagnostic, ...]:
+    """Assign stable diagnostic codes to IfVersion attribute failures."""
+
+    return tuple(
+        Diagnostic(
+            path=path,
+            span=issue.span,
+            code=IF_VERSION_ATTRIBUTE_CODES[issue.rule],
             message=issue.message,
         )
         for issue in issues
