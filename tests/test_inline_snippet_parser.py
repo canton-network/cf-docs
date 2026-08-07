@@ -71,6 +71,17 @@ def test_parses_candidate_inside_release_condition() -> None:
     assert page.snippets[0].source.pull_request == 6123
 
 
+def test_parses_legacy_line_range_compatibility() -> None:
+    page = parse(
+        f'''<Snippet source="https://github.com/canton-network/splice/blob/{COMMIT}/a.rst"
+  lines="10..14" normalize="preserve" language="none" />'''
+    )
+
+    snippet = page.snippets[0]
+    assert (snippet.line_start, snippet.line_end) == (10, 14)
+    assert snippet.normalization == "preserve"
+
+
 def test_ignores_examples_in_fenced_code_and_comments() -> None:
     page = parse(
         """````mdx

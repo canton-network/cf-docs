@@ -122,6 +122,18 @@ npm run snippets:validate
 npm run snippets:check -- --page docs-main/path/validator.source.mdx --deployed
 ```
 
-The evidence records the PR/head or merge commit, release commit, source tag, artifact tag, publication result, ancestry result, and decision for every network/release condition.
+The evidence records the PR/head or merge commit, release commit, source tag, artifact tag, publication result, ancestry result, and decision for every network/release condition. A page containing only immutable snippets needs no release selector:
+
+```bash
+npm run snippets:generate -- --page docs-main/path/example.source.mdx
+```
+
+## Legacy migration compatibility
+
+The migration of existing manifest-backed snippets preserves old output while moving the complete source reference into the page. Old positional mappings can use an inclusive `lines="START..END"` selector. `normalize="baseline"` removes common indentation; `normalize="preserve"` retains it. These attributes exist only so current content can move without changing what readers see. New snippets must use complete files or named markers.
+
+The two historical Splice KMS examples also declare their old URL substitution directly with paired `replaceFrom` and `replaceWith` attributes. There is no hidden repository-wide transform registry.
+
+Each migrated page is checked in twice: the authored `*.source.mdx` and its generated `*.mdx`. Compilation caches repeated reads of the same immutable file, so a page with many snippets from one source fetches that source only once.
 
 There are no move or delete commands. Move a source by editing its complete inline reference. Delete a snippet by deleting its declaration and related prose. Regenerate afterward; validation catches unresolved references and stale output.

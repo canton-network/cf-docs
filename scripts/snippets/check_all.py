@@ -4,7 +4,8 @@ import argparse
 from pathlib import Path
 
 from . import build
-from .validate import discover_pages
+from .parser import load_registry, parse_page
+from .validate import DEFAULT_REGISTRY, discover_pages
 
 
 CF_DOCS_ROOT = Path(__file__).resolve().parents[2]
@@ -23,9 +24,18 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     pages = discover_pages(args.paths)
+    repositories = load_registry(DEFAULT_REGISTRY)
     failures = 0
     for page in pages:
-        failures += build.main(["check", "--page", str(page), "--deployed"])
+        parsed = parse_page(
+            page.read_text(encoding="utf-8"),
+            path=page,
+            repositories=repositories,
+        )
+        command = ["check", "--page", str(page)]
+        if parsed.conditions:
+            command.append("--deployed")
+        failures += build.main(command)
     if failures:
         print(f"{failures} of {len(pages)} generated snippet page(s) are stale")
         return 1

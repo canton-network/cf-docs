@@ -105,6 +105,8 @@ def _release_targets(
     if args.candidate:
         targets.append(ReleaseTarget.candidate_preview())
     if not targets:
+        if not condition_repositories:
+            return []
         raise ReleaseResolutionError(
             "Select at least one --release, --releases START..END, --deployed, or --candidate"
         )
@@ -255,12 +257,21 @@ def main(argv: list[str] | None = None) -> int:
             allow_local=args.command == "preview",
         )
         display_page = _display_page(page)
+        compilation_targets = _compilation_targets(targets, evaluator)
+        if not compilation_targets:
+            compilation_targets = (
+                CompilationTarget(
+                    label="Pinned sources",
+                    condition_contains=lambda _: False,
+                    production=True,
+                ),
+            )
         compiled = compile_page_variants(
             text,
             page_path=display_page,
             repositories=repositories,
             source_resolver=source_resolver,
-            targets=_compilation_targets(targets, evaluator),
+            targets=compilation_targets,
             allow_local=args.command == "preview",
         )
         evidence = _evidence_payload(display_page, evaluator.evidence)

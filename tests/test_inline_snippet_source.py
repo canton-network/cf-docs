@@ -53,6 +53,11 @@ def directive(
         language="yaml",
         start_after=start_after,
         end_before=end_before,
+        line_start=None,
+        line_end=None,
+        normalization=None,
+        replace_from=None,
+        replace_with=None,
         span=Span(0, 1, 1, 1),
     )
 
@@ -69,6 +74,17 @@ def test_resolves_immutable_source_without_ref_lookup() -> None:
     )
 
     assert resolved.commit == COMMIT
+    assert github.read_calls == [(REPOSITORY, COMMIT, "apps/example.yaml")]
+
+
+def test_reuses_one_remote_read_for_repeated_immutable_source() -> None:
+    github = FakeGitHub()
+    source_resolver = resolver(github)
+    immutable = reference(SourceKind.IMMUTABLE, commit=COMMIT)
+
+    source_resolver.resolve(immutable, production=True)
+    source_resolver.resolve(immutable, production=True)
+
     assert github.read_calls == [(REPOSITORY, COMMIT, "apps/example.yaml")]
 
 
@@ -168,6 +184,27 @@ def test_extracts_content_strictly_between_unique_marker_lines() -> None:
         == "value: true\n"
     )
 
+
+def test_extracts_legacy_lines_with_baseline_normalization_and_replacement() -> None:
+    source = ResolvedSource(
+        reference(SourceKind.IMMUTABLE, commit=COMMIT),
+        COMMIT,
+        b"ignored\n    old: true\n      nested: true\nignored\n",
+    )
+    item = SnippetDirective(
+        source=reference(SourceKind.IMMUTABLE, commit=COMMIT),
+        language="yaml",
+        start_after=None,
+        end_before=None,
+        line_start=2,
+        line_end=3,
+        normalization="baseline",
+        replace_from="old",
+        replace_with="new",
+        span=Span(0, 1, 1, 1),
+    )
+
+    assert extract_snippet(item, source) == "new: true\n  nested: true"
 
 @pytest.mark.parametrize(
     "content",

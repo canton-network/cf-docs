@@ -34,6 +34,11 @@ class SnippetDirective:
     language: str
     start_after: str | None
     end_before: str | None
+    line_start: int | None
+    line_end: int | None
+    normalization: str | None
+    replace_from: str | None
+    replace_with: str | None
     span: Span
 
 

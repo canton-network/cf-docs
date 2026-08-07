@@ -33,7 +33,17 @@ PULL_REQUEST_RE = re.compile(
 REPOSITORY_RE = re.compile(r"https://github\.com/(?P<repo>[^/]+/[^/]+)/?")
 LOCAL_RE = re.compile(r"local://(?P<repo>[^/]+/[^/]+)/(?P<path>.+)")
 
-SNIPPET_ATTRIBUTES = {"source", "path", "startAfter", "endBefore", "language"}
+SNIPPET_ATTRIBUTES = {
+    "source",
+    "path",
+    "startAfter",
+    "endBefore",
+    "lines",
+    "normalize",
+    "replaceFrom",
+    "replaceWith",
+    "language",
+}
 CONDITION_ATTRIBUTES = {"repository", "containsPullRequest"}
 
 
@@ -385,6 +395,7 @@ def parse_page(
                 )
             start_after = attributes.get("startAfter")
             end_before = attributes.get("endBefore")
+            line_range = attributes.get("lines")
             if (start_after is None) != (end_before is None):
                 diagnostics.append(
                     _diagnostic(
@@ -394,7 +405,75 @@ def parse_page(
                         "Marker extraction requires both startAfter and endBefore",
                     )
                 )
-            elif start_after is not None and (
+            line_start: int | None = None
+            line_end: int | None = None
+            if line_range is not None:
+                line_match = (
+                    re.fullmatch(r"([1-9][0-9]*)\.\.([1-9][0-9]*)", line_range)
+                    if isinstance(line_range, str)
+                    else None
+                )
+                if not line_match or int(line_match.group(1)) > int(
+                    line_match.group(2)
+                ):
+                    diagnostics.append(
+                        _diagnostic(
+                            path,
+                            span,
+                            "SNIP031",
+                            "Legacy lines must be a quoted inclusive START..END range",
+                        )
+                    )
+                elif start_after is not None:
+                    diagnostics.append(
+                        _diagnostic(
+                            path,
+                            span,
+                            "SNIP032",
+                            "Snippet cannot combine marker and line-range extraction",
+                        )
+                    )
+                else:
+                    line_start = int(line_match.group(1))
+                    line_end = int(line_match.group(2))
+            normalization = attributes.get("normalize")
+            if normalization is not None and normalization not in {
+                "baseline",
+                "preserve",
+            }:
+                diagnostics.append(
+                    _diagnostic(
+                        path,
+                        span,
+                        "SNIP033",
+                        "Legacy normalize must be either 'baseline' or 'preserve'",
+                    )
+                )
+            replace_from = attributes.get("replaceFrom")
+            replace_with = attributes.get("replaceWith")
+            if (replace_from is None) != (replace_with is None):
+                diagnostics.append(
+                    _diagnostic(
+                        path,
+                        span,
+                        "SNIP034",
+                        "Legacy replacement requires both replaceFrom and replaceWith",
+                    )
+                )
+            elif replace_from is not None and (
+                not isinstance(replace_from, str)
+                or not isinstance(replace_with, str)
+                or not replace_from
+            ):
+                diagnostics.append(
+                    _diagnostic(
+                        path,
+                        span,
+                        "SNIP035",
+                        "Legacy replacement values must be quoted and replaceFrom cannot be empty",
+                    )
+                )
+            if start_after is not None and (
                 not isinstance(start_after, str)
                 or not isinstance(end_before, str)
                 or not start_after
@@ -455,6 +534,17 @@ def parse_page(
                         if isinstance(start_after, str)
                         else None,
                         end_before=end_before if isinstance(end_before, str) else None,
+                        line_start=line_start,
+                        line_end=line_end,
+                        normalization=(
+                            normalization if isinstance(normalization, str) else None
+                        ),
+                        replace_from=(
+                            replace_from if isinstance(replace_from, str) else None
+                        ),
+                        replace_with=(
+                            replace_with if isinstance(replace_with, str) else None
+                        ),
                         span=span,
                     )
                 )

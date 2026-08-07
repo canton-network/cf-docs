@@ -264,6 +264,7 @@ class SourceResolver:
         self.local_checkouts = local_checkouts or {}
         self.max_source_bytes = max_source_bytes
         self.allow_local = allow_local
+        self._remote_cache: dict[tuple[str, str, str], bytes] = {}
 
     def resolve(
         self, reference: SourceReference, *, production: bool = False
@@ -274,7 +275,7 @@ class SourceResolver:
             )
         if reference.kind is SourceKind.IMMUTABLE:
             assert reference.commit is not None
-            content = self.github.read_file(
+            content = self._read_remote(
                 reference.repository, reference.commit, reference.path
             )
             return self._bounded(reference, reference.commit, content)
@@ -291,13 +292,17 @@ class SourceResolver:
                 commit = pull_request.merge_commit
             else:
                 commit = pull_request.head_commit
-            content = self.github.read_file(
-                reference.repository, commit, reference.path
-            )
+            content = self._read_remote(reference.repository, commit, reference.path)
             return self._bounded(reference, commit, content)
         if production and not self.allow_local:
             raise SourceResolutionError("Local snippet references are preview-only")
         return self._resolve_local(reference)
+
+    def _read_remote(self, repository: str, commit: str, path: str) -> bytes:
+        key = (repository, commit, path)
+        if key not in self._remote_cache:
+            self._remote_cache[key] = self.github.read_file(repository, commit, path)
+        return self._remote_cache[key]
 
     def _bounded(
         self, reference: SourceReference, commit: str | None, content: bytes
@@ -356,23 +361,53 @@ def extract_snippet(directive: SnippetDirective, source: ResolvedSource) -> str:
         raise SourceResolutionError(
             f"Snippet source contains a NUL byte: {directive.source.path}"
         )
-    if directive.start_after is None:
-        return text
+    if directive.line_start is not None:
+        assert directive.line_end is not None
+        lines = text.splitlines()
+        if directive.line_end > len(lines):
+            raise SourceResolutionError(
+                f"Line range {directive.line_start}..{directive.line_end} exceeds "
+                f"the {len(lines)} lines in {directive.source.path}"
+            )
+        selected = "\n".join(lines[directive.line_start - 1 : directive.line_end])
+    elif directive.start_after is not None:
+        assert directive.end_before is not None
+        lines = text.splitlines(keepends=True)
+        starts = [
+            index for index, line in enumerate(lines) if directive.start_after in line
+        ]
+        ends = [
+            index for index, line in enumerate(lines) if directive.end_before in line
+        ]
+        if len(starts) != 1 or len(ends) != 1:
+            raise SourceResolutionError(
+                f"Expected exactly one {directive.start_after!r} and one {directive.end_before!r} "
+                f"in {directive.source.path}; found {len(starts)} and {len(ends)}"
+            )
+        if starts[0] >= ends[0]:
+            raise SourceResolutionError(
+                f"Marker {directive.start_after!r} must occur before {directive.end_before!r} "
+                f"in {directive.source.path}"
+            )
+        selected = "".join(lines[starts[0] + 1 : ends[0]])
+    else:
+        selected = text
 
-    assert directive.end_before is not None
-    lines = text.splitlines(keepends=True)
-    starts = [
-        index for index, line in enumerate(lines) if directive.start_after in line
-    ]
-    ends = [index for index, line in enumerate(lines) if directive.end_before in line]
-    if len(starts) != 1 or len(ends) != 1:
-        raise SourceResolutionError(
-            f"Expected exactly one {directive.start_after!r} and one {directive.end_before!r} "
-            f"in {directive.source.path}; found {len(starts)} and {len(ends)}"
+    if directive.normalization == "baseline":
+        selected_lines = selected.split("\n")
+        indents = [
+            len(line) - len(line.lstrip())
+            for line in selected_lines
+            if line.strip()
+        ]
+        strip = min(indents, default=0)
+        selected = "\n".join(
+            "" if not line.strip() else line[strip:] for line in selected_lines
         )
-    if starts[0] >= ends[0]:
-        raise SourceResolutionError(
-            f"Marker {directive.start_after!r} must occur before {directive.end_before!r} "
-            f"in {directive.source.path}"
-        )
-    return "".join(lines[starts[0] + 1 : ends[0]])
+    if directive.normalization is not None:
+        selected = re.sub(r"^\s*\n+", "", selected)
+        selected = re.sub(r"\n+\s*$", "", selected)
+    if directive.replace_from is not None:
+        assert directive.replace_with is not None
+        selected = selected.replace(directive.replace_from, directive.replace_with)
+    return selected

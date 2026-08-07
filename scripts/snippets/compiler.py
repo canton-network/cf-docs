@@ -62,10 +62,11 @@ def render_snippet(
     if content and not content.endswith("\n"):
         content += "\n"
     provenance = _provenance(directive, source)
+    language = "" if directive.language.lower() == "none" else directive.language
     return (
         f"{{/* snippet-source: {provenance}; "
         f"authored-at: {page_path.as_posix()}:{directive.span.line} */}}\n"
-        f"{fence}{directive.language}\n{content}{fence}"
+        f"{fence}{language}\n{content}{fence}"
     )
 
 
