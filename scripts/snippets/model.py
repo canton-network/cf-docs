@@ -220,3 +220,10 @@ class DirectiveSyntaxRule(str, Enum):
     ELSE_SELF_CLOSING = "else_self_closing"
     CLOSING_ATTRIBUTES = "closing_attributes"
     ELSE_ATTRIBUTES = "else_attributes"
+
+
+@dataclass(frozen=True)
+class ConditionPageValidation:
+    tags: tuple[IfVersionTag | ElseTag, ...]
+    conditions: tuple[IfVersionCondition, ...]
+    diagnostics: tuple[Diagnostic, ...]
