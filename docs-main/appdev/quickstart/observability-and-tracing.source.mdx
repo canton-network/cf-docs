@@ -3,8 +3,6 @@ title: "Observability and Tracing"
 description: "Observe and trace requests across Canton quickstart components."
 ---
 
-{/* Generated from observability-and-tracing.source.mdx. Edit observability-and-tracing.source.mdx, then run npm run snippets:generate. */}
-
 
 {/* COPIED_START source="docs-website:docs/replicated/quickstart/3.4/sdk/quickstart/observe/observability-troubleshooting-overview.rst" hash="57ec2d59" */}
 
@@ -79,11 +77,12 @@ There is additional access configured into the Quickstart that can assist with d
 
 All persistent state in the example application is stored in one or more postgres databases. You can use the postgres configuration in `.env` to connect directly to these instances.
 
-{/* snippet-source: https://github.com/digital-asset/cn-quickstart/blob/77e46ee7ddbe8bf1b921111778e33eb399e33ad3/sdk/docs/sharable/sdk/quickstart/observe/observability-troubleshooting-overview.rst; authored-at: docs-main/appdev/quickstart/observability-and-tracing.source.mdx:80 */}
-```
-   $ docker exec -it <postgres container> psql -v --username <.env username> --dbname <.env dbname> --password
-
-```
+<Snippet
+  source="https://github.com/digital-asset/cn-quickstart/blob/77e46ee7ddbe8bf1b921111778e33eb399e33ad3/sdk/docs/sharable/sdk/quickstart/observe/observability-troubleshooting-overview.rst"
+  lines="164..165"
+  normalize="preserve"
+  language="none"
+/>
 
 For example: if you connect to the `postgres-splice-app-provider` container (default username `cnadmin`, dbname `scribe`, and password `supersafe`; then you can use the SQL interface to PQS to examine the app-provider’s participant’s local ledger. The SQL API to PQS is documented in the [PQS SQL reference](/appdev/reference/pqs-sql-reference).
 
@@ -91,15 +90,12 @@ For example: if you connect to the `postgres-splice-app-provider` container (def
 
 The remote-debug configuration for backend-service lives in `docker/backend-service/debug.yaml`, which is only applied to the deployment when `DEBUG_ENABLED=true` is set (for example, in `.env.local`). If you review that file you will see the lines:
 
-{/* snippet-source: https://github.com/digital-asset/cn-quickstart/blob/41f2d75cd16eff28aedfaf2e9a2278a881b1c71a/quickstart/docker/backend-service/debug.yaml; authored-at: docs-main/appdev/quickstart/observability-and-tracing.source.mdx:93 */}
-```yaml
-services:
-  backend-service:
-    ports:
-      - "5005:5005"  # Expose the debug port
-    environment:
-      - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005
-```
+<Snippet
+  source="https://github.com/digital-asset/cn-quickstart/blob/41f2d75cd16eff28aedfaf2e9a2278a881b1c71a/quickstart/docker/backend-service/debug.yaml"
+  normalize="baseline"
+  trim="true"
+  language="yaml"
+/>
 
 This enables remote debugging of the Java component backend in the user application (backend-service). You can use this to connect an IDE Debugger to the service at runtime if required. We recommend Grafana as your first resort, along with inspecting consolidated logs with [lnav](/appdev/quickstart/lnav). This keeps the system debuggable in production.
 
@@ -139,60 +135,19 @@ Navigation is enabled by the use of structured logs from as many components as p
 
 Starting from `$ make stop clean-all && make build start`, we proceed with initiating the example application app-user onboarding:
 
-{/* snippet-source: https://github.com/digital-asset/cn-quickstart/blob/77e46ee7ddbe8bf1b921111778e33eb399e33ad3/sdk/docs/sharable/sdk/quickstart/observe/observability-troubleshooting-overview.rst; authored-at: docs-main/appdev/quickstart/observability-and-tracing.source.mdx:138 */}
-```
-   $ make create-app-install-request | cat -n
+<Snippet
+  source="https://github.com/digital-asset/cn-quickstart/blob/77e46ee7ddbe8bf1b921111778e33eb399e33ad3/sdk/docs/sharable/sdk/quickstart/observe/observability-troubleshooting-overview.rst"
+  lines="271..272"
+  normalize="preserve"
+  language="none"
+/>
 
-```
-
-{/* snippet-source: https://github.com/digital-asset/cn-quickstart/blob/77e46ee7ddbe8bf1b921111778e33eb399e33ad3/sdk/docs/sharable/sdk/quickstart/observe/observability-troubleshooting-overview.rst; authored-at: docs-main/appdev/quickstart/observability-and-tracing.source.mdx:145 */}
-```
-   docker compose -f docker/app-user-shell/compose.yaml --env-file .env run --rm create-app-install-request || true
-   get_token ledger-api-user AppProvider
-   get_user_party AppProvider participant-app-provider
-   http://participant-app-provider:7575/v2/users/AppProvider
-   get_token ledger-api-user Org1
-   get_user_party Org1 participant-app-user
-   http://participant-app-user:7575/v2/users/Org1
-   get_token administrator Org1
-   http://validator-app-user:5003/api/validator/v0/scan-proxy/dso-party-id
-   http://participant-app-user:7575/v2/commands/submit-and-wait
-   --data-raw {
-     "commands" : [
-        {
-           "CreateCommand" : {
-             "template_id":
-             "#quickstart-licensing:Licensing.AppInstall:AppInstallRequest",
-             "create_arguments": {
-                "dso":
-                "DSO::1220015e721c8ec5c1a5868b418442f064530e367c2587a9b43bd66f58c7bfddfec4",
-                "provider":
-                "AppProvider::12202fe7b2bf950dca3858b880d9ee0dd58249af8821ff2330ea1b80420852e816ff",
-                "user":
-                "Org1::122072b20a515d939910f9412f915cff8c1a7a427ddde76c6d0b7646d0022d4d4551",
-                "meta": {"values": []}
-             }
-           }
-        }
-     ],
-     "workflow_id" : "create-app-install-request",
-     "application_id": "ledger-api-user",
-     "command_id": "create-app-install-request",
-     "deduplication_period": { "Empty": {} },
-     "act_as":
-     ["Org1::122072b20a515d939910f9412f915cff8c1a7a427ddde76c6d0b7646d0022d4d4551"],
-     "read_as":
-     ["Org1::122072b20a515d939910f9412f915cff8c1a7a427ddde76c6d0b7646d0022d4d4551"],
-     "submission_id": "create-app-install-request",
-     "disclosed_contracts": [],
-     "domain_id": "",
-     "package_id_selection_preference": []
-   }
-   {"update_id":
-   "1220e48d6d59af99a1b61eca414fe25766c342bb4e7d8d485e049a11a7f2267ed5c0",
-    "completion_offset":73}
-
-```
+<Snippet
+  source="https://github.com/digital-asset/cn-quickstart/blob/77e46ee7ddbe8bf1b921111778e33eb399e33ad3/sdk/docs/sharable/sdk/quickstart/observe/observability-troubleshooting-overview.rst"
+  lines="275..319"
+  normalize="preserve"
+  language="none"
+/>
 
 This is the output of a script submitting a create command to the app-user’s participant node, it already contains number of the correlation ids mentioned above:
 
@@ -208,20 +163,12 @@ This is the output of a script submitting a create command to the app-user’s p
 
 We can immediately use the transaction id in Daml Shell to view the associated ledger transaction:
 
-{/* snippet-source: https://github.com/digital-asset/cn-quickstart/blob/77e46ee7ddbe8bf1b921111778e33eb399e33ad3/sdk/docs/sharable/sdk/quickstart/observe/observability-troubleshooting-overview.rst; authored-at: docs-main/appdev/quickstart/observability-and-tracing.source.mdx:166 */}
-```
-   $ make shell
-    docker compose -f docker/daml-shell/compose.yaml --env-file .env run --rm daml-shell || true
-    Connecting to jdbc:postgresql://postgres-splice-app-provider:5432/scribe...
-    Connected to jdbc:postgresql://postgres-splice-app-provider:5432/scribe
-    postgres-splice-app-provider:5432/scribe> transaction 1220e48d6d59af99a1b61eca414fe25766c342bb4e7d8d485e049a11a7f2267ed5c0
-    transactionId: 1220e48d6d59af99a1b61eca414fe25766c342bb4e7d8d485e049a11a7f2267ed5c0, offset: 48, workflowId: create-app-install-request - Feb 17, 2025, 5:26:09 AM
-    + #1220e48d6d59af99a1b61eca414fe25766c342bb4e7d8d485e049a11a7f2267ed5c0:0
-    quickstart-licensing:Licensing.AppInstall:AppInstallRequest (005c17f89b7fd1d5fde9c548740c32924edeeddacc6320256892636b4e3b7d66aaca1)
-    {"dso": "DSO::1220015e721c8ec5c1a5868b418442f064530e367c2587a9b43bd66f58c7bfddfec4", "meta": {"values": []}, "user": "Org1::122072b20a515d939910f9412f915cff8c1a7a427ddde76c6d0b7646d0022d4d4551", "provider": "AppProvider::12202fe7b2bf950dca3858b880d9ee0dd58249af8821ff2330ea1b80420852e816ff"}
-    postgres-splice-app-provider:5432/scribe 3f → 48>
-
-```
+<Snippet
+  source="https://github.com/digital-asset/cn-quickstart/blob/77e46ee7ddbe8bf1b921111778e33eb399e33ad3/sdk/docs/sharable/sdk/quickstart/observe/observability-troubleshooting-overview.rst"
+  lines="356..366"
+  normalize="preserve"
+  language="none"
+/>
 
 From here we can get more identifiers:
 
@@ -233,26 +180,12 @@ From here we can get more identifiers:
 
 The Workflow Id, Template Id, and Party Ids are also visible here. The ledger offset can be very useful if you are going to query PQS or the Ledger API directly for more information. The Contract Id can be used to immediately display the contract in Daml Shell:
 
-{/* snippet-source: https://github.com/digital-asset/cn-quickstart/blob/77e46ee7ddbe8bf1b921111778e33eb399e33ad3/sdk/docs/sharable/sdk/quickstart/observe/observability-troubleshooting-overview.rst; authored-at: docs-main/appdev/quickstart/observability-and-tracing.source.mdx:183 */}
-```
-   postgres-splice-app-provider:5432/scribe 3f → 48> contract 005c17f89b7fd1d5fde9c548740c32924edeeddacc6320256892636b4e3b7d66aaca101220777c5420863adb012c4f38847049346014c44eba7cd54bf58950dd6a18679053
-   ╓───────────────────────────────────────────────────────────────────────────╖
-   | identifier: quickstart-licensing:Licensing.AppInstall:AppInstallRequest   |
-   | Type: Template                                                            |
-   | Created at: 48 (not yet active)                                           |
-   | Archived at: <active>                                                     |
-   | Contract ID: 005c17f89b7fd1d5fde9c548740c32924edeeddacc6320256892636b...  |
-   | Event ID: #1220e48d6d59af99a1b61eca414fe25766c342bb4e7d8d485e049a11a7...  |
-   | Contract Key:                                                             |
-   | Payload: dso:1220015e721c8ec5c1a5868b418442f064530e367c2587a9b43bd66f5... |
-   | meta:                                                                     |
-   |    values: []                                                             |
-   | user: Org1:122072b20a515d939910f9412f915cff8c1a7a427ddde76c6d0b7646d00... |
-   | provider: AppProvider:12202fe7b2bf950dca3858b880d9ee0dd58249af8821ff23... |
-   ╙───────────────────────────────────────────────────────────────────────────╜
-   postgres-splice-app-provider:5432/scribe 3f → 48>
-
-```
+<Snippet
+  source="https://github.com/digital-asset/cn-quickstart/blob/77e46ee7ddbe8bf1b921111778e33eb399e33ad3/sdk/docs/sharable/sdk/quickstart/observe/observability-troubleshooting-overview.rst"
+  lines="387..403"
+  normalize="preserve"
+  language="none"
+/>
 
 If the problem is a bug in your smart contract, then exploring the transaction and related provenance within Daml Shell and using the Daml IDE to synthesize and rerun the relevant transactions will normally identify the issue. However, if only due to the comparative lines of code, the root cause of most issues will be off ledger. Consequently, significant value in these identifiers derives from correlating these identifiers with the consolidated logs and other information collected through Open Telemetry.
 
