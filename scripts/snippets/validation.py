@@ -13,12 +13,26 @@ from .model import (
     IfVersionAttributeValidation,
     IfVersionCondition,
     IfVersionTag,
+    SnippetTag,
 )
 from .references import parse_github_repository_url
 from .registry import RepositoryRegistry
 
 SAFE_LANGUAGE_RE = re.compile(r"[A-Za-z0-9_+.-]+")
 IF_VERSION_ATTRIBUTES = {"repository", "containsPullRequest"}
+SNIPPET_ATTRIBUTES = {
+    "source",
+    "path",
+    "startAfter",
+    "endBefore",
+    "lines",
+    "normalize",
+    "trim",
+    "stripTrailingWhitespace",
+    "replaceFrom",
+    "replaceWith",
+    "language",
+}
 
 
 def is_safe_source_path(value: str) -> bool:
@@ -228,4 +242,16 @@ def validate_if_version_attributes(
         )
     return IfVersionAttributeValidation(
         condition=condition, issues=tuple(issues)
+    )
+
+
+def unknown_snippet_attributes(tag: SnippetTag) -> tuple[str, ...]:
+    """Return unsupported Snippet attribute names in deterministic order."""
+
+    return tuple(
+        sorted(
+            attribute.name
+            for attribute in tag.attributes
+            if attribute.name not in SNIPPET_ATTRIBUTES
+        )
     )
