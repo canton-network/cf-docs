@@ -18,10 +18,7 @@ import ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorHelmYaml8
 
 import ExternalSpliceMainSpliceRstFullDocsSrcCommonTrafficTopups from '/snippets/internal/splice/main/splice-rst-full-docs-src-common-traffic-topups.mdx';
 import ExternalSpliceMainSpliceRstFullDocsSrcCommonWalletSweeps from '/snippets/internal/splice/main/splice-rst-full-docs-src-common-wallet-sweeps.mdx';
-import ExternalSpliceMainSpliceRstLiteralMarkerAppsAppSrcPackExamplesSvHelmStandaloneValidatorValuesConfiguringTopupStart from '/snippets/external/splice/main/splice-literal-marker-apps-app-src-pack-examples-sv-helm-standalone-validator-values-configuring-topup-start.mdx';
 
-import ExternalSpliceMainSpliceRstLiteralMarkerAppsAppSrcPackExamplesSvHelmValidatorValuesAutoAcceptStart from '/snippets/external/splice/main/splice-literal-marker-apps-app-src-pack-examples-sv-helm-validator-values-auto-accept-start.mdx';
-import ExternalSpliceMainSpliceRstLiteralMarkerAppsAppSrcPackExamplesSvHelmValidatorValuesParticipantPruningScheduleStart from '/snippets/external/splice/main/splice-literal-marker-apps-app-src-pack-examples-sv-helm-validator-values-participant-pruning-schedule-start.mdx';
 
 import ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorHelmYaml127 from "/snippets/internal/splice/main/splice-rst-code-docs-src-validator-operator-validator-helm-yaml-127.mdx";
 
@@ -1144,7 +1141,18 @@ explain the config sections below in a way that makes them also accessible to th
 
 By default your node will be configured to [automatically purchase traffic](/global-synchronizer/deployment/synchronizer-traffic) on a pay-as-you-go basis (see automatically purchase traffic). To disable or tune to your needs, edit the following section in the validator-values.yaml file:
 
-<ExternalSpliceMainSpliceRstLiteralMarkerAppsAppSrcPackExamplesSvHelmStandaloneValidatorValuesConfiguringTopupStart />
+{/* snippet-source: https://github.com/canton-network/splice/blob/4c670142843c198ed93f106824d8e33d9dec5c8c/apps/app/src/pack/examples/sv-helm/standalone-validator-values.yaml; authored-at: docs-main/global-synchronizer/deployment/validator-kubernetes.source.mdx:1142 */}
+```yaml
+# Configuring a validator's traffic top-up loop;
+# see documentation for more detailed information.
+topup:
+  # set to false in order to disable automatic traffic top-ups
+  enabled: true
+  # target throughput in bytes / second of sequenced traffic; targetThroughput=0 <=> enabled=false
+  targetThroughput: 20000
+  # minTopupInterval - minimum time interval that must elapse before the next top-up
+  minTopupInterval: "1m"
+```
 
 <ExternalSpliceMainSpliceRstFullDocsSrcCommonTrafficTopups />
 
@@ -1160,7 +1168,7 @@ By default your node will be configured to [automatically purchase traffic](/glo
 
 To do so, uncomment and fill in the following section in the `validator-values.yaml` file:
 
-{/* snippet-source: https://github.com/canton-network/splice/blob/4c670142843c198ed93f106824d8e33d9dec5c8c/apps/app/src/pack/examples/sv-helm/validator-values.yaml; authored-at: docs-main/global-synchronizer/deployment/validator-kubernetes.source.mdx:1161 */}
+{/* snippet-source: https://github.com/canton-network/splice/blob/4c670142843c198ed93f106824d8e33d9dec5c8c/apps/app/src/pack/examples/sv-helm/validator-values.yaml; authored-at: docs-main/global-synchronizer/deployment/validator-kubernetes.source.mdx:1164 */}
 ```yaml
 # If you want funds sweeped out of parties in this validator, uncomment and fill in the following:
 #walletSweep:
@@ -1178,7 +1186,14 @@ To do so, uncomment and fill in the following section in the `validator-values.y
 
 Similarly, you can configure the validator to automatically accept transfer offers from certain parties on the network. To do so, uncomment and fill in the following section in the `validator-values.yaml` file:
 
-<ExternalSpliceMainSpliceRstLiteralMarkerAppsAppSrcPackExamplesSvHelmValidatorValuesAutoAcceptStart />
+{/* snippet-source: https://github.com/canton-network/splice/blob/4c670142843c198ed93f106824d8e33d9dec5c8c/apps/app/src/pack/examples/sv-helm/validator-values.yaml; authored-at: docs-main/global-synchronizer/deployment/validator-kubernetes.source.mdx:1174 */}
+```yaml
+# To configure the validator to auto-accept transfer offers from specific parties, uncomment and fill in the following:
+#autoAcceptTransfers:
+#  "<receiverPartyId>":
+#    fromParties:
+#      - "<senderPartyId>"
+```
 
 ## Logging into the CNS UI
 
@@ -1200,7 +1215,15 @@ Note that if your node is down for longer than the pruning window (48 hours in t
 
 Refer to the [pruning guide](/global-synchronizer/production-operations/pruning) for more details on participant pruning.
 
-<ExternalSpliceMainSpliceRstLiteralMarkerAppsAppSrcPackExamplesSvHelmValidatorValuesParticipantPruningScheduleStart />
+{/* snippet-source: https://github.com/canton-network/splice/blob/4c670142843c198ed93f106824d8e33d9dec5c8c/apps/app/src/pack/examples/sv-helm/validator-values.yaml; authored-at: docs-main/global-synchronizer/deployment/validator-kubernetes.source.mdx:1202 */}
+```yaml
+# To configure participant pruning uncomment the following section.
+# Refer to the documentation for more details.
+# participantPruningSchedule:
+#   cron: 0 /10 * * * ? # Run every 10min
+#   maxDuration: 5m # Run for a max of 5min per iteration
+#   retention: 48h # Retain history that is newer than 48h.
+```
 
 ## Configuring init containers
 
