@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from .model import (
+    ConditionStructureIssue,
+    ConditionStructureRule,
     Diagnostic,
     IfVersionAttributeIssue,
     IfVersionAttributeRule,
@@ -40,6 +42,13 @@ IF_VERSION_ATTRIBUTE_CODES = {
     IfVersionAttributeRule.INVALID_REPOSITORY: "SNIP021",
     IfVersionAttributeRule.UNREGISTERED_REPOSITORY: "SNIP022",
     IfVersionAttributeRule.INVALID_PULL_REQUEST: "SNIP023",
+}
+IF_VERSION_STRUCTURE_CODES = {
+    ConditionStructureRule.UNEXPECTED_CLOSE: "SNIP012",
+    ConditionStructureRule.ELSE_NOT_DIRECT_CHILD: "SNIP025",
+    ConditionStructureRule.UNCLOSED_TAG: "SNIP026",
+    ConditionStructureRule.MULTIPLE_ELSE: "SNIP029",
+    ConditionStructureRule.ELSE_NOT_FINAL: "SNIP030",
 }
 
 
@@ -115,6 +124,22 @@ def if_version_attribute_diagnostics(
             path=path,
             span=issue.span,
             code=IF_VERSION_ATTRIBUTE_CODES[issue.rule],
+            message=issue.message,
+        )
+        for issue in issues
+    )
+
+
+def if_version_structure_diagnostics(
+    path: Path, issues: tuple[ConditionStructureIssue, ...]
+) -> tuple[Diagnostic, ...]:
+    """Assign stable diagnostic codes to conditional structure failures."""
+
+    return tuple(
+        Diagnostic(
+            path=path,
+            span=issue.span,
+            code=IF_VERSION_STRUCTURE_CODES[issue.rule],
             message=issue.message,
         )
         for issue in issues
