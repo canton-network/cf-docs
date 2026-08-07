@@ -7,6 +7,8 @@ from .model import (
     LocalSourcePolicyIssue,
     SnippetSourceAttributeIssue,
     SnippetSourceAttributeRule,
+    SnippetSourceSafetyIssue,
+    SnippetSourceSafetyRule,
 )
 
 LOCAL_SOURCE_REMEDIATION = (
@@ -19,6 +21,10 @@ SOURCE_ATTRIBUTE_CODES = {
     SnippetSourceAttributeRule.PULL_REQUEST_PATH_REQUIRED: "SNIP005",
     SnippetSourceAttributeRule.LOCAL_PATH_FORBIDDEN: "SNIP006",
     SnippetSourceAttributeRule.UNSUPPORTED_SOURCE: "SNIP008",
+}
+SOURCE_SAFETY_CODES = {
+    SnippetSourceSafetyRule.UNREGISTERED_REPOSITORY: "SNIP009",
+    SnippetSourceSafetyRule.UNSAFE_PATH: "SNIP010",
 }
 
 
@@ -46,6 +52,22 @@ def snippet_source_attribute_diagnostics(
             path=path,
             span=issue.span,
             code=SOURCE_ATTRIBUTE_CODES[issue.rule],
+            message=issue.message,
+        )
+        for issue in issues
+    )
+
+
+def snippet_source_safety_diagnostics(
+    path: Path, issues: tuple[SnippetSourceSafetyIssue, ...]
+) -> tuple[Diagnostic, ...]:
+    """Assign stable diagnostic codes to source-safety failures."""
+
+    return tuple(
+        Diagnostic(
+            path=path,
+            span=issue.span,
+            code=SOURCE_SAFETY_CODES[issue.rule],
             message=issue.message,
         )
         for issue in issues
