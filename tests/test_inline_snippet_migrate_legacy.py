@@ -76,6 +76,29 @@ def test_declares_legacy_url_substitution_in_the_page() -> None:
     assert 'trim="true"' not in rendered
 
 
+def test_declares_trailing_whitespace_cleanup_only_when_legacy_output_needs_it() -> (
+    None
+):
+    item = snippet(
+        {
+            "snippetName": "example",
+            "sourceRepo": "daml-shell",
+            "sourceFilepath": "docs/example.rst",
+            "location": {"type": "lines", "start": 1, "end": 2},
+            "options": {"language": "shell"},
+        }
+    )
+    pin = SourcePin(
+        "daml-shell",
+        "DACH-NY/daml-shell",
+        "b4e42bef9f2fe1dbbb88633d733b06f79cd9ccd3",
+    )
+
+    rendered = declaration(item, pin, "source", "line with space \n")
+
+    assert 'stripTrailingWhitespace="true"' in rendered
+
+
 def test_page_migration_preserves_frontmatter_and_other_imports(
     tmp_path: Path, monkeypatch
 ) -> None:

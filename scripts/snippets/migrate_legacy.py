@@ -175,7 +175,20 @@ def _quoted(value: str) -> str:
     return json.dumps(value)
 
 
-def declaration(snippet: LegacySnippet, pin: SourcePin, source_text: str) -> str:
+def _has_trailing_whitespace(text: str) -> bool:
+    return any(line.rstrip(" \t") != line for line in text.splitlines())
+
+
+def _strip_trailing_whitespace(text: str) -> str:
+    return re.sub(r"[ \t]+(?=\r?$)", "", text, flags=re.MULTILINE)
+
+
+def declaration(
+    snippet: LegacySnippet,
+    pin: SourcePin,
+    source_text: str,
+    existing_text: str | None = None,
+) -> str:
     location = snippet.location
     options = snippet.options
     language = options.get("language")
@@ -206,6 +219,8 @@ def declaration(snippet: LegacySnippet, pin: SourcePin, source_text: str) -> str
     attributes.append(f"normalize={_quoted(normalization)}")
     if snippet.alias == "splice" and "kms-participant-" in snippet.name:
         attributes.append('trim="true"')
+    if existing_text is not None and _has_trailing_whitespace(existing_text):
+        attributes.append('stripTrailingWhitespace="true"')
     matching_substitutions = [
         (source, target)
         for source, target in snippet.global_substitutions.items()
@@ -288,18 +303,23 @@ def audit(
         except UnicodeDecodeError:
             failures.append(f"{snippet.alias}:{snippet.name}: source is not UTF-8")
             continue
-        declaration_text = declaration(snippet, pin, source_text)
         try:
+            existing = snippet.output_path.read_text(encoding="utf-8")
+            declaration_text = declaration(snippet, pin, source_text, existing)
             rendered = _render_without_provenance(
                 declaration_text,
                 repositories=registry,
                 resolver=resolver,
             )
-            existing = snippet.output_path.read_text(encoding="utf-8")
         except (OSError, SourceResolutionError, ValueError) as error:
             failures.append(f"{snippet.alias}:{snippet.name}: {error}")
             continue
-        if rendered != existing:
+        expected = (
+            _strip_trailing_whitespace(existing)
+            if _has_trailing_whitespace(existing)
+            else existing
+        )
+        if rendered != expected:
             failures.append(f"{snippet.alias}:{snippet.name}: rendered content differs")
             continue
         declarations[(snippet.alias, snippet.name)] = declaration_text

@@ -411,4 +411,6 @@ def extract_snippet(directive: SnippetDirective, source: ResolvedSource) -> str:
     if directive.replace_from is not None:
         assert directive.replace_with is not None
         selected = selected.replace(directive.replace_from, directive.replace_with)
+    if directive.strip_trailing_whitespace:
+        selected = re.sub(r"[ \t]+(?=\r?$)", "", selected, flags=re.MULTILINE)
     return selected

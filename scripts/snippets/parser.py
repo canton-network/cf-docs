@@ -40,6 +40,7 @@ SNIPPET_ATTRIBUTES = {
     "lines",
     "normalize",
     "trim",
+    "stripTrailingWhitespace",
     "replaceFrom",
     "replaceWith",
     "language",
@@ -460,6 +461,17 @@ def parse_page(
                         "Legacy trim, when present, must be the quoted value 'true'",
                     )
                 )
+            strip_trailing_value = attributes.get("stripTrailingWhitespace")
+            if strip_trailing_value not in {None, "true"}:
+                diagnostics.append(
+                    _diagnostic(
+                        path,
+                        span,
+                        "SNIP037",
+                        "Legacy stripTrailingWhitespace, when present, must be the "
+                        "quoted value 'true'",
+                    )
+                )
             replace_from = attributes.get("replaceFrom")
             replace_with = attributes.get("replaceWith")
             if (replace_from is None) != (replace_with is None):
@@ -551,6 +563,7 @@ def parse_page(
                             normalization if isinstance(normalization, str) else None
                         ),
                         trim=trim_value == "true",
+                        strip_trailing_whitespace=strip_trailing_value == "true",
                         replace_from=(
                             replace_from if isinstance(replace_from, str) else None
                         ),

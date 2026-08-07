@@ -56,6 +56,7 @@ def directive(
         line_end=None,
         normalization=None,
         trim=False,
+        strip_trailing_whitespace=False,
         replace_from=None,
         replace_with=None,
         span=Span(0, 1, 1, 1),
@@ -200,12 +201,37 @@ def test_extracts_legacy_lines_with_baseline_normalization_and_replacement() -> 
         line_end=3,
         normalization="baseline",
         trim=False,
+        strip_trailing_whitespace=False,
         replace_from="old",
         replace_with="new",
         span=Span(0, 1, 1, 1),
     )
 
     assert extract_snippet(item, source) == "new: true\n  nested: true"
+
+
+def test_strips_legacy_trailing_whitespace_when_explicitly_requested() -> None:
+    source = ResolvedSource(
+        reference(SourceKind.IMMUTABLE, commit=COMMIT),
+        COMMIT,
+        b"command  \nnext\t\n",
+    )
+    item = SnippetDirective(
+        source=reference(SourceKind.IMMUTABLE, commit=COMMIT),
+        language="shell",
+        start_after=None,
+        end_before=None,
+        line_start=None,
+        line_end=None,
+        normalization=None,
+        trim=False,
+        strip_trailing_whitespace=True,
+        replace_from=None,
+        replace_with=None,
+        span=Span(0, 1, 1, 1),
+    )
+
+    assert extract_snippet(item, source) == "command\nnext\n"
 
 
 @pytest.mark.parametrize(
