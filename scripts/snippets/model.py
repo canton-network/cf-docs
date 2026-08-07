@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
 
 
 @dataclass(frozen=True)
@@ -65,3 +66,18 @@ class PullRequestSourceReference:
 class LocalSourceReference:
     repository: str
     path: str
+
+
+class ConditionStructureRule(str, Enum):
+    UNEXPECTED_CLOSE = "unexpected_close"
+    ELSE_NOT_DIRECT_CHILD = "else_not_direct_child"
+    MULTIPLE_ELSE = "multiple_else"
+    ELSE_NOT_FINAL = "else_not_final"
+    UNCLOSED_TAG = "unclosed_tag"
+
+
+@dataclass(frozen=True)
+class ConditionStructureIssue:
+    rule: ConditionStructureRule
+    span: Span
+    message: str
