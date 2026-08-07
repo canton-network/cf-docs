@@ -5,12 +5,19 @@ from .model import (
     LocalSourceReference,
     PullRequestSnippetSource,
     PullRequestSourceReference,
+    SnippetAttributeIssue,
+    SnippetAttributeRule,
     SnippetSourceAttributeIssue,
     SnippetSourceAttributeRule,
     SnippetSourceAttributeValidation,
     SnippetTag,
 )
 from .references import parse_source_reference
+from .validation import (
+    has_valid_marker_pair,
+    is_safe_language,
+    unknown_snippet_attributes,
+)
 
 
 def resolve_snippet_source_attributes(
@@ -90,3 +97,42 @@ def resolve_snippet_source_attributes(
                 )
             )
     return SnippetSourceAttributeValidation(source, tuple(issues))
+
+
+def validate_snippet_basic_attributes(
+    tag: SnippetTag,
+) -> tuple[SnippetAttributeIssue, ...]:
+    """Validate names, language, and marker pairing without resolving source."""
+
+    issues: list[SnippetAttributeIssue] = []
+    unknown = unknown_snippet_attributes(tag)
+    if unknown:
+        issues.append(
+            SnippetAttributeIssue(
+                rule=SnippetAttributeRule.UNKNOWN_ATTRIBUTE,
+                span=tag.span,
+                message=f"Unknown Snippet attribute(s): {', '.join(unknown)}",
+            )
+        )
+    if not is_safe_language(tag.attribute("language")):
+        issues.append(
+            SnippetAttributeIssue(
+                rule=SnippetAttributeRule.INVALID_LANGUAGE,
+                span=tag.span,
+                message="Snippet requires a safe quoted language attribute",
+            )
+        )
+    if not has_valid_marker_pair(
+        tag.attribute("startAfter"), tag.attribute("endBefore")
+    ):
+        issues.append(
+            SnippetAttributeIssue(
+                rule=SnippetAttributeRule.INVALID_MARKERS,
+                span=tag.span,
+                message=(
+                    "Snippet markers must be distinct, non-empty quoted strings, "
+                    "and marker extraction requires both startAfter and endBefore"
+                ),
+            )
+        )
+    return tuple(issues)

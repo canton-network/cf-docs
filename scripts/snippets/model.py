@@ -160,3 +160,16 @@ class SnippetSourceSafetyIssue:
 class LocalSourcePolicyIssue:
     span: Span
     message: str
+
+
+class SnippetAttributeRule(str, Enum):
+    UNKNOWN_ATTRIBUTE = "unknown_attribute"
+    INVALID_LANGUAGE = "invalid_language"
+    INVALID_MARKERS = "invalid_markers"
+
+
+@dataclass(frozen=True)
+class SnippetAttributeIssue:
+    rule: SnippetAttributeRule
+    span: Span
+    message: str
