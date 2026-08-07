@@ -142,3 +142,15 @@ class SnippetSourceAttributeValidation:
         | None
     )
     issues: tuple[SnippetSourceAttributeIssue, ...]
+
+
+class SnippetSourceSafetyRule(str, Enum):
+    UNREGISTERED_REPOSITORY = "unregistered_repository"
+    UNSAFE_PATH = "unsafe_path"
+
+
+@dataclass(frozen=True)
+class SnippetSourceSafetyIssue:
+    rule: SnippetSourceSafetyRule
+    span: Span
+    message: str

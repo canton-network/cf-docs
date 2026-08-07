@@ -13,7 +13,13 @@ from .model import (
     IfVersionAttributeValidation,
     IfVersionCondition,
     IfVersionTag,
+    ImmutableSourceReference,
+    LocalSourceReference,
+    PullRequestSnippetSource,
+    SnippetSourceSafetyIssue,
+    SnippetSourceSafetyRule,
     SnippetTag,
+    Span,
 )
 from .references import parse_github_repository_url
 from .registry import RepositoryRegistry
@@ -255,3 +261,33 @@ def unknown_snippet_attributes(tag: SnippetTag) -> tuple[str, ...]:
             if attribute.name not in SNIPPET_ATTRIBUTES
         )
     )
+
+
+def validate_snippet_source_safety(
+    source: (
+        ImmutableSourceReference | PullRequestSnippetSource | LocalSourceReference
+    ),
+    *,
+    span: Span,
+    registry: RepositoryRegistry,
+) -> tuple[SnippetSourceSafetyIssue, ...]:
+    """Apply repository allowlist and path-safety policy to a resolved source."""
+
+    issues: list[SnippetSourceSafetyIssue] = []
+    if not is_registered_repository(source.repository, registry):
+        issues.append(
+            SnippetSourceSafetyIssue(
+                rule=SnippetSourceSafetyRule.UNREGISTERED_REPOSITORY,
+                span=span,
+                message=f"Repository {source.repository!r} is not allowlisted",
+            )
+        )
+    if not is_safe_source_path(source.path):
+        issues.append(
+            SnippetSourceSafetyIssue(
+                rule=SnippetSourceSafetyRule.UNSAFE_PATH,
+                span=span,
+                message=f"Unsafe source path {source.path!r}",
+            )
+        )
+    return tuple(issues)
