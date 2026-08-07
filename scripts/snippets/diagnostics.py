@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from .model import (
+    CandidateConditionIssue,
+    CandidateConditionRule,
     ConditionStructureIssue,
     ConditionStructureRule,
     Diagnostic,
@@ -49,6 +51,10 @@ IF_VERSION_STRUCTURE_CODES = {
     ConditionStructureRule.UNCLOSED_TAG: "SNIP026",
     ConditionStructureRule.MULTIPLE_ELSE: "SNIP029",
     ConditionStructureRule.ELSE_NOT_FINAL: "SNIP030",
+}
+CANDIDATE_CONDITION_CODES = {
+    CandidateConditionRule.CONDITION_REQUIRED: "SNIP027",
+    CandidateConditionRule.IDENTITY_MISMATCH: "SNIP028",
 }
 
 
@@ -140,6 +146,22 @@ def if_version_structure_diagnostics(
             path=path,
             span=issue.span,
             code=IF_VERSION_STRUCTURE_CODES[issue.rule],
+            message=issue.message,
+        )
+        for issue in issues
+    )
+
+
+def candidate_condition_diagnostics(
+    path: Path, issues: tuple[CandidateConditionIssue, ...]
+) -> tuple[Diagnostic, ...]:
+    """Assign stable diagnostic codes to candidate-condition failures."""
+
+    return tuple(
+        Diagnostic(
+            path=path,
+            span=issue.span,
+            code=CANDIDATE_CONDITION_CODES[issue.rule],
             message=issue.message,
         )
         for issue in issues
