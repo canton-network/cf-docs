@@ -32,3 +32,19 @@ def is_safe_language(value: str | int | None) -> bool:
     """Return whether a language is a non-empty safe fence identifier."""
 
     return isinstance(value, str) and SAFE_LANGUAGE_RE.fullmatch(value) is not None
+
+
+def has_valid_marker_pair(
+    start_after: str | int | None, end_before: str | int | None
+) -> bool:
+    """Return whether marker extraction is absent or a valid complete pair."""
+
+    if start_after is None and end_before is None:
+        return True
+    return (
+        isinstance(start_after, str)
+        and isinstance(end_before, str)
+        and bool(start_after)
+        and bool(end_before)
+        and start_after != end_before
+    )
