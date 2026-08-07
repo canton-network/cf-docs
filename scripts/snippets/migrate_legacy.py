@@ -321,18 +321,18 @@ def migrate_pages(
         if page.name.endswith(".source.mdx") or "snippets" in page.parts:
             continue
         original = page.read_text(encoding="utf-8")
-        imports: list[tuple[re.Match[str], tuple[str, str]]] = []
-        for match in re.finditer(r"(?m)^.*$", original):
-            import_match = IMPORT_RE.fullmatch(match.group(0))
+        imports: list[tuple[re.Match[str], re.Match[str], tuple[str, str]]] = []
+        for line_match in re.finditer(r"(?m)^.*$", original):
+            import_match = IMPORT_RE.fullmatch(line_match.group(0))
             if not import_match:
                 continue
             key = (import_match.group("repo"), import_match.group("snippet"))
             if key in declarations:
-                imports.append((import_match, key))
+                imports.append((line_match, import_match, key))
         if not imports:
             continue
         rewritten = original
-        for import_match, key in reversed(imports):
+        for line_match, import_match, key in reversed(imports):
             identifier = import_match.group("name")
             component = _component_pattern(identifier)
             matches = list(component.finditer(rewritten))
@@ -341,9 +341,7 @@ def migrate_pages(
                     f"{page}: imported {identifier} has no self-closing component use"
                 )
             rewritten = component.sub(declarations[key], rewritten)
-            rewritten = (
-                rewritten[: import_match.start()] + rewritten[import_match.end() :]
-            )
+            rewritten = rewritten[: line_match.start()] + rewritten[line_match.end() :]
             used.add(key)
         source_page = page.with_name(f"{page.stem}.source.mdx")
         source_page.write_text(rewritten, encoding="utf-8")

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from scripts.snippets import migrate_legacy
 from scripts.snippets.migrate_legacy import LegacySnippet, SourcePin, declaration
 
 
@@ -73,3 +74,37 @@ def test_declares_legacy_url_substitution_in_the_page() -> None:
     assert f'replaceFrom="{old}"' in rendered
     assert 'replaceWith="[current docs](/current)"' in rendered
     assert 'trim="true"' not in rendered
+
+
+def test_page_migration_preserves_frontmatter_and_other_imports(
+    tmp_path: Path, monkeypatch
+) -> None:
+    docs = tmp_path / "docs-main"
+    page = docs / "page.mdx"
+    docs.mkdir()
+    page.write_text(
+        """---
+title: Pilot
+---
+import Other from "/other.mdx";
+import Example from "/snippets/external/splice/main/example.mdx";
+
+<Other />
+<Example />
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(migrate_legacy, "DOCS_ROOT", docs)
+
+    used, pages = migrate_legacy.migrate_pages(
+        {("splice", "example"): '<Snippet source="ref" language="yaml" />'}
+    )
+
+    source = docs / "page.source.mdx"
+    rendered = source.read_text(encoding="utf-8")
+    assert rendered.startswith("---\ntitle: Pilot\n---")
+    assert 'import Other from "/other.mdx";' in rendered
+    assert "import Example" not in rendered
+    assert '<Snippet source="ref" language="yaml" />' in rendered
+    assert used == {("splice", "example")}
+    assert pages == {source}
