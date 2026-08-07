@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
+from pathlib import Path
 
 
 @dataclass(frozen=True)
@@ -191,3 +192,21 @@ class CandidateConditionIssue:
     rule: CandidateConditionRule
     span: Span
     message: str
+
+
+@dataclass(frozen=True)
+class Diagnostic:
+    path: Path
+    span: Span
+    code: str
+    message: str
+    remediation: str | None = None
+
+    def format(self) -> str:
+        rendered = (
+            f"{self.path}:{self.span.line}:{self.span.column}: "
+            f"{self.code}: {self.message}"
+        )
+        if self.remediation is not None:
+            rendered += f"\n  remediation: {self.remediation}"
+        return rendered
