@@ -2,7 +2,14 @@ from __future__ import annotations
 
 import re
 
-from .model import DirectiveAttribute, ElseTag, IfVersionTag, SnippetTag, Span
+from .model import (
+    DirectiveAttribute,
+    DirectiveSyntaxRule,
+    ElseTag,
+    IfVersionTag,
+    SnippetTag,
+    Span,
+)
 
 SNIPPET_TAG_RE = re.compile(
     r"<(?P<closing>/)?Snippet\b"
@@ -23,7 +30,10 @@ CONDITION_TAG_RE = re.compile(
 
 
 class DirectiveSyntaxError(ValueError):
-    def __init__(self, message: str, span: Span) -> None:
+    def __init__(
+        self, rule: DirectiveSyntaxRule, message: str, span: Span
+    ) -> None:
+        self.rule = rule
         self.span = span
         super().__init__(message)
 
@@ -113,12 +123,16 @@ def _parse_attributes(
         malformed = body[position : match.start()].strip()
         if malformed:
             raise DirectiveSyntaxError(
-                f"Malformed {tag_name} attributes near {malformed!r}", span
+                DirectiveSyntaxRule.MALFORMED_ATTRIBUTES,
+                f"Malformed {tag_name} attributes near {malformed!r}",
+                span,
             )
         name = match.group("name")
         if name in names:
             raise DirectiveSyntaxError(
-                f"Duplicate {tag_name} attribute {name!r}", span
+                DirectiveSyntaxRule.DUPLICATE_ATTRIBUTE,
+                f"Duplicate {tag_name} attribute {name!r}",
+                span,
             )
         names.add(name)
         if match.group("number") is not None:
@@ -132,7 +146,9 @@ def _parse_attributes(
     malformed = body[position:].strip()
     if malformed:
         raise DirectiveSyntaxError(
-            f"Malformed {tag_name} attributes near {malformed!r}", span
+            DirectiveSyntaxRule.MALFORMED_ATTRIBUTES,
+            f"Malformed {tag_name} attributes near {malformed!r}",
+            span,
         )
     return tuple(attributes)
 
@@ -145,7 +161,11 @@ def parse_snippet_tags(text: str) -> tuple[SnippetTag, ...]:
     for match in SNIPPET_TAG_RE.finditer(masked):
         span = _span(text, match.start(), match.end())
         if match.group("closing") or not match.group("self_closing"):
-            raise DirectiveSyntaxError("Snippet must be self-closing", span)
+            raise DirectiveSyntaxError(
+                DirectiveSyntaxRule.SNIPPET_NOT_SELF_CLOSING,
+                "Snippet must be self-closing",
+                span,
+            )
         snippets.append(
             SnippetTag(
                 attributes=_parse_attributes(
@@ -169,14 +189,28 @@ def parse_if_version_tags(text: str) -> tuple[IfVersionTag | ElseTag, ...]:
         self_closing = bool(match.group("self_closing"))
         body = match.group("body")
         if self_closing:
-            raise DirectiveSyntaxError(f"{name} cannot be self-closing", span)
+            raise DirectiveSyntaxError(
+                (
+                    DirectiveSyntaxRule.ELSE_SELF_CLOSING
+                    if name == "Else"
+                    else DirectiveSyntaxRule.IF_VERSION_SELF_CLOSING
+                ),
+                f"{name} cannot be self-closing",
+                span,
+            )
         if closing and body.strip():
             raise DirectiveSyntaxError(
-                f"Closing {name} tag cannot have attributes", span
+                DirectiveSyntaxRule.CLOSING_ATTRIBUTES,
+                f"Closing {name} tag cannot have attributes",
+                span,
             )
         if name == "Else":
             if body.strip():
-                raise DirectiveSyntaxError("Else cannot have attributes", span)
+                raise DirectiveSyntaxError(
+                    DirectiveSyntaxRule.ELSE_ATTRIBUTES,
+                    "Else cannot have attributes",
+                    span,
+                )
             tags.append(ElseTag(span=span, closing=closing))
             continue
         attributes = (

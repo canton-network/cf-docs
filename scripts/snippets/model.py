@@ -210,3 +210,13 @@ class Diagnostic:
         if self.remediation is not None:
             rendered += f"\n  remediation: {self.remediation}"
         return rendered
+
+
+class DirectiveSyntaxRule(str, Enum):
+    MALFORMED_ATTRIBUTES = "malformed_attributes"
+    DUPLICATE_ATTRIBUTE = "duplicate_attribute"
+    SNIPPET_NOT_SELF_CLOSING = "snippet_not_self_closing"
+    IF_VERSION_SELF_CLOSING = "if_version_self_closing"
+    ELSE_SELF_CLOSING = "else_self_closing"
+    CLOSING_ATTRIBUTES = "closing_attributes"
+    ELSE_ATTRIBUTES = "else_attributes"
