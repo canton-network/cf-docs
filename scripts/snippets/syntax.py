@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 
-from .model import DirectiveAttribute, SnippetTag, Span
+from .model import DirectiveAttribute, ElseTag, IfVersionTag, SnippetTag, Span
 
 SNIPPET_TAG_RE = re.compile(
     r"<(?P<closing>/)?Snippet\b"
@@ -13,6 +13,12 @@ SNIPPET_TAG_RE = re.compile(
 ATTRIBUTE_RE = re.compile(
     r"\s+(?P<name>[A-Za-z][A-Za-z0-9]*)\s*=\s*"
     r"(?:\"(?P<double>[^\"]*)\"|'(?P<single>[^']*)'|\{(?P<number>[0-9]+)\})"
+)
+CONDITION_TAG_RE = re.compile(
+    r"<(?P<closing>/)?(?P<name>IfVersion|Else)\b"
+    r"(?P<body>(?:[^\"'>]|\"[^\"]*\"|'[^']*')*?)"
+    r"(?P<self_closing>/)?>",
+    re.DOTALL,
 )
 
 
@@ -149,3 +155,36 @@ def parse_snippet_tags(text: str) -> tuple[SnippetTag, ...]:
             )
         )
     return tuple(snippets)
+
+
+def parse_if_version_tags(text: str) -> tuple[IfVersionTag | ElseTag, ...]:
+    """Parse conditional tags without validating their nesting or attributes."""
+
+    tags: list[IfVersionTag | ElseTag] = []
+    masked = _masked_source(text)
+    for match in CONDITION_TAG_RE.finditer(masked):
+        span = _span(text, match.start(), match.end())
+        name = match.group("name")
+        closing = bool(match.group("closing"))
+        self_closing = bool(match.group("self_closing"))
+        body = match.group("body")
+        if self_closing:
+            raise DirectiveSyntaxError(f"{name} cannot be self-closing", span)
+        if closing and body.strip():
+            raise DirectiveSyntaxError(
+                f"Closing {name} tag cannot have attributes", span
+            )
+        if name == "Else":
+            if body.strip():
+                raise DirectiveSyntaxError("Else cannot have attributes", span)
+            tags.append(ElseTag(span=span, closing=closing))
+            continue
+        attributes = (
+            ()
+            if closing
+            else _parse_attributes(body, span, tag_name="IfVersion")
+        )
+        tags.append(
+            IfVersionTag(attributes=attributes, span=span, closing=closing)
+        )
+    return tuple(tags)

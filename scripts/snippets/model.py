@@ -27,3 +27,22 @@ class SnippetTag:
             (attribute.value for attribute in self.attributes if attribute.name == name),
             None,
         )
+
+
+@dataclass(frozen=True)
+class IfVersionTag:
+    attributes: tuple[DirectiveAttribute, ...]
+    span: Span
+    closing: bool
+
+    def attribute(self, name: str) -> str | int | None:
+        return next(
+            (attribute.value for attribute in self.attributes if attribute.name == name),
+            None,
+        )
+
+
+@dataclass(frozen=True)
+class ElseTag:
+    span: Span
+    closing: bool
