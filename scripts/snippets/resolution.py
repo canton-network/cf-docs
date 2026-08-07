@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
 
-from .model import ImmutableSourceReference
+from .model import ImmutableSourceReference, PullRequestSnippetSource
 
 DEFAULT_MAX_SOURCE_BYTES = 1024 * 1024
 
@@ -14,13 +14,26 @@ class SourceResolutionError(Exception):
 
 @dataclass(frozen=True)
 class ResolvedSource:
-    reference: ImmutableSourceReference
+    reference: ImmutableSourceReference | PullRequestSnippetSource
     commit: str
     content: bytes
 
 
 class GitHubFileClient(Protocol):
     def read_file(self, repository: str, commit: str, path: str) -> bytes: ...
+
+
+@dataclass(frozen=True)
+class PullRequestResolution:
+    head_commit: str
+    merged: bool
+    merge_commit: str | None
+
+
+class GitHubPullRequestClient(GitHubFileClient, Protocol):
+    def resolve_pull_request(
+        self, repository: str, pull_request: int
+    ) -> PullRequestResolution: ...
 
 
 def resolve_immutable_source(
@@ -37,3 +50,24 @@ def resolve_immutable_source(
             f"Source exceeds the {max_source_bytes}-byte size limit"
         )
     return ResolvedSource(reference, reference.commit, content)
+
+
+def resolve_candidate_preview(
+    reference: PullRequestSnippetSource,
+    github: GitHubPullRequestClient,
+    *,
+    max_source_bytes: int = DEFAULT_MAX_SOURCE_BYTES,
+) -> ResolvedSource:
+    """Read a candidate source at its pull request's current head commit."""
+
+    pull_request = github.resolve_pull_request(
+        reference.repository, reference.pull_request
+    )
+    content = github.read_file(
+        reference.repository, pull_request.head_commit, reference.path
+    )
+    if len(content) > max_source_bytes:
+        raise SourceResolutionError(
+            f"Source exceeds the {max_source_bytes}-byte size limit"
+        )
+    return ResolvedSource(reference, pull_request.head_commit, content)
