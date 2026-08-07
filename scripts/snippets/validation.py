@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import re
 from pathlib import PurePosixPath
 
 from .registry import RepositoryRegistry
+
+SAFE_LANGUAGE_RE = re.compile(r"[A-Za-z0-9_+.-]+")
 
 
 def is_safe_source_path(value: str) -> bool:
@@ -23,3 +26,9 @@ def is_registered_repository(
     """Return whether a source repository appears in the explicit allowlist."""
 
     return registry.get(repository) is not None
+
+
+def is_safe_language(value: str | int | None) -> bool:
+    """Return whether a language is a non-empty safe fence identifier."""
+
+    return isinstance(value, str) and SAFE_LANGUAGE_RE.fullmatch(value) is not None
