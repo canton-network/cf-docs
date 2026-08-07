@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Required, TypedDict
@@ -16,6 +17,7 @@ SOURCE_LABEL = "TypeScript bindings"
 DEFAULT_SOURCE_CONFIG = REPO_ROOT / "config" / "x2mdx" / "typescript-bindings" / "source-artifacts.json"
 DEFAULT_TIMEOUT_SECONDS = 20.0
 USER_AGENT = "cf-docs-generated-reference-source-updater"
+STABLE_SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+$")
 
 
 class TypeScriptPackageConfigPayload(TypedDict, total=False):
@@ -79,7 +81,14 @@ def parse_source_config(path: Path) -> TypeScriptBindingsSourceConfig:
     return TypeScriptBindingsSourceConfig(raw=raw_json, packages=tuple(packages))
 
 
-def latest_npm_version(package_name: str, *, timeout: float = DEFAULT_TIMEOUT_SECONDS) -> str:
+def version_key(version: str) -> tuple[int, int, int]:
+    if not STABLE_SEMVER_RE.fullmatch(version):
+        raise ValueError(f"Expected stable semantic version, got {version!r}")
+    major, minor, patch = version.split(".")
+    return (int(major), int(minor), int(patch))
+
+
+def highest_stable_npm_version(package_name: str, *, timeout: float = DEFAULT_TIMEOUT_SECONDS) -> str:
     encoded_name = quote(package_name, safe="")
     request = Request(
         f"https://registry.npmjs.org/{encoded_name}",
@@ -87,10 +96,18 @@ def latest_npm_version(package_name: str, *, timeout: float = DEFAULT_TIMEOUT_SE
     )
     with urlopen(request, timeout=timeout) as response:
         payload = json.loads(response.read().decode("utf-8"))
-    latest = payload.get("dist-tags", {}).get("latest")
-    if not isinstance(latest, str) or not latest:
-        raise ValueError(f"npm package {package_name} does not define a latest dist-tag")
-    return latest
+    # npm's latest tag follows publication order and can move to an older maintained major line.
+    versions = payload.get("versions")
+    if not isinstance(versions, dict):
+        raise ValueError(f"npm package {package_name} does not define a versions object")
+    stable_versions = [
+        version
+        for version in versions
+        if isinstance(version, str) and STABLE_SEMVER_RE.fullmatch(version)
+    ]
+    if not stable_versions:
+        raise ValueError(f"npm package {package_name} does not define any stable semantic versions")
+    return max(stable_versions, key=version_key)
 
 
 def update_source(
@@ -103,7 +120,7 @@ def update_source(
     updated_packages: list[dict[str, object]] = []
 
     for package in source_config.packages:
-        current_version = latest_npm_version(package.package_name)
+        current_version = highest_stable_npm_version(package.package_name)
         updated_package = dict(package.raw)
         if package.publish_version != current_version:
             updates.append(
