@@ -314,9 +314,9 @@ def migrate_pages(
     declarations: dict[tuple[str, str], str],
 ) -> tuple[set[tuple[str, str]], set[Path]]:
     used: set[tuple[str, str]] = set()
-    changed_pages: set[Path] = set()
+    rewrites: dict[Path, str] = {}
     for page in sorted(DOCS_ROOT.rglob("*.mdx")):
-        if page.name.endswith(".source.mdx") or "snippets" in page.parts:
+        if page.name.endswith(".source.mdx"):
             continue
         source_page = page.with_name(f"{page.stem}.source.mdx")
         authoring_page = source_page if source_page.is_file() else page
@@ -347,9 +347,16 @@ def migrate_pages(
                 import_end += 1
             rewritten = rewritten[: line_match.start()] + rewritten[import_end:]
             used.add(key)
+        rewrites[source_page] = rewritten
+    unused = set(declarations) - used
+    if unused:
+        rendered = ", ".join(f"{repo}:{name}" for repo, name in sorted(unused))
+        raise LegacyMigrationError(
+            f"Refusing to remove {len(unused)} unreferenced snippet(s): {rendered}"
+        )
+    for source_page, rewritten in rewrites.items():
         source_page.write_text(rewritten, encoding="utf-8")
-        changed_pages.add(source_page)
-    return used, changed_pages
+    return used, set(rewrites)
 
 
 def remove_migrated_entries(
@@ -458,12 +465,6 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         if args.apply:
             used, pages = migrate_pages(declarations)
-            unused = set(declarations) - used
-            if unused:
-                rendered = ", ".join(f"{repo}:{name}" for repo, name in sorted(unused))
-                raise LegacyMigrationError(
-                    f"Refusing to remove {len(unused)} unreferenced snippet(s): {rendered}"
-                )
             remove_migrated_entries(snippets, used)
             print(f"Migrated {len(used)} snippet(s) across {len(pages)} page(s)")
         return 0

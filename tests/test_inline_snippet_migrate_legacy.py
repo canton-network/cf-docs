@@ -156,3 +156,62 @@ import Second from "/snippets/external/splice/main/second.mdx";
     assert "import Second" not in rewritten
     assert used == {("splice", "second")}
     assert pages == {source}
+
+
+def test_page_migration_includes_reusable_and_generated_partials(
+    tmp_path: Path, monkeypatch
+) -> None:
+    docs = tmp_path / "docs-main"
+    wrapper = docs / "snippets" / "external" / "splice" / "main" / "common.mdx"
+    wrapper.parent.mkdir(parents=True)
+    wrapper.write_text(
+        """import Example from "/snippets/external/splice/main/example.mdx";
+
+Before
+<Example />
+After
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(migrate_legacy, "DOCS_ROOT", docs)
+
+    used, pages = migrate_legacy.migrate_pages(
+        {("splice", "example"): '<Snippet source="ref" language="yaml" />'}
+    )
+
+    source = wrapper.with_name("common.source.mdx")
+    assert source.is_file()
+    assert '<Snippet source="ref" language="yaml" />' in source.read_text(
+        encoding="utf-8"
+    )
+    assert used == {("splice", "example")}
+    assert pages == {source}
+
+
+def test_page_migration_is_transactional_when_a_reference_is_missing(
+    tmp_path: Path, monkeypatch
+) -> None:
+    docs = tmp_path / "docs-main"
+    docs.mkdir()
+    page = docs / "page.mdx"
+    original = """import Example from "/snippets/external/splice/main/example.mdx";
+
+<Example />
+"""
+    page.write_text(original, encoding="utf-8")
+    monkeypatch.setattr(migrate_legacy, "DOCS_ROOT", docs)
+
+    try:
+        migrate_legacy.migrate_pages(
+            {
+                ("splice", "example"): '<Snippet source="one" language="yaml" />',
+                ("splice", "missing"): '<Snippet source="two" language="yaml" />',
+            }
+        )
+    except migrate_legacy.LegacyMigrationError as error:
+        assert "splice:missing" in str(error)
+    else:
+        raise AssertionError("missing reference should abort migration")
+
+    assert page.read_text(encoding="utf-8") == original
+    assert not (docs / "page.source.mdx").exists()
