@@ -8,6 +8,7 @@ from .model import (
     ConditionStructureIssue,
     ConditionStructureRule,
     Diagnostic,
+    DirectiveSyntaxRule,
     IfVersionAttributeIssue,
     IfVersionAttributeRule,
     LocalSourcePolicyIssue,
@@ -18,6 +19,7 @@ from .model import (
     SnippetSourceSafetyIssue,
     SnippetSourceSafetyRule,
 )
+from .syntax import DirectiveSyntaxError
 
 LOCAL_SOURCE_REMEDIATION = (
     "Run `npm run snippets:resolve-local -- --page <page.source.mdx>` before pushing."
@@ -55,6 +57,15 @@ IF_VERSION_STRUCTURE_CODES = {
 CANDIDATE_CONDITION_CODES = {
     CandidateConditionRule.CONDITION_REQUIRED: "SNIP027",
     CandidateConditionRule.IDENTITY_MISMATCH: "SNIP028",
+}
+DIRECTIVE_SYNTAX_CODES = {
+    DirectiveSyntaxRule.CLOSING_ATTRIBUTES: "SNIP011",
+    DirectiveSyntaxRule.MALFORMED_ATTRIBUTES: "SNIP013",
+    DirectiveSyntaxRule.DUPLICATE_ATTRIBUTE: "SNIP013",
+    DirectiveSyntaxRule.SNIPPET_NOT_SELF_CLOSING: "SNIP014",
+    DirectiveSyntaxRule.IF_VERSION_SELF_CLOSING: "SNIP019",
+    DirectiveSyntaxRule.ELSE_SELF_CLOSING: "SNIP024",
+    DirectiveSyntaxRule.ELSE_ATTRIBUTES: "SNIP024",
 }
 
 
@@ -165,4 +176,17 @@ def candidate_condition_diagnostics(
             message=issue.message,
         )
         for issue in issues
+    )
+
+
+def directive_syntax_diagnostic(
+    path: Path, error: DirectiveSyntaxError
+) -> Diagnostic:
+    """Assign a stable diagnostic code to one directive parser failure."""
+
+    return Diagnostic(
+        path=path,
+        span=error.span,
+        code=DIRECTIVE_SYNTAX_CODES[error.rule],
+        message=str(error),
     )
