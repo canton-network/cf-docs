@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import re
 
-from .model import ImmutableSourceReference, PullRequestSourceReference
+from .model import (
+    ImmutableSourceReference,
+    LocalSourceReference,
+    PullRequestSourceReference,
+)
 
 IMMUTABLE_SOURCE_RE = re.compile(
     r"https://github\.com/(?P<repository>[^/]+/[^/]+)/blob/"
@@ -11,6 +15,9 @@ IMMUTABLE_SOURCE_RE = re.compile(
 PULL_REQUEST_SOURCE_RE = re.compile(
     r"https://github\.com/(?P<repository>[^/]+/[^/]+)/pull/"
     r"(?P<pull_request>[1-9][0-9]*)"
+)
+LOCAL_SOURCE_RE = re.compile(
+    r"local://(?P<repository>[^/]+/[^/]+)/(?P<path>[^?#]+)"
 )
 
 
@@ -38,4 +45,16 @@ def parse_pull_request_source(
     return PullRequestSourceReference(
         repository=match.group("repository"),
         pull_request=int(match.group("pull_request")),
+    )
+
+
+def parse_local_source(value: str) -> LocalSourceReference | None:
+    """Parse a preview-only local repository reference."""
+
+    match = LOCAL_SOURCE_RE.fullmatch(value)
+    if match is None:
+        return None
+    return LocalSourceReference(
+        repository=match.group("repository"),
+        path=match.group("path"),
     )

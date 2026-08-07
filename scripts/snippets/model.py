@@ -59,3 +59,9 @@ class ImmutableSourceReference:
 class PullRequestSourceReference:
     repository: str
     pull_request: int
+
+
+@dataclass(frozen=True)
+class LocalSourceReference:
+    repository: str
+    path: str
