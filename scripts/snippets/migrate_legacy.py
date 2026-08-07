@@ -183,6 +183,10 @@ def _strip_trailing_whitespace(text: str) -> str:
     return re.sub(r"[ \t]+(?=\r?$)", "", text, flags=re.MULTILINE)
 
 
+def _without_terminal_newline(text: str) -> str:
+    return text.removesuffix("\n")
+
+
 def declaration(
     snippet: LegacySnippet,
     pin: SourcePin,
@@ -217,7 +221,9 @@ def declaration(
             f"Cannot declare blocked snippet {snippet.alias}:{snippet.name}"
         )
     attributes.append(f"normalize={_quoted(normalization)}")
-    if snippet.alias == "splice" and "kms-participant-" in snippet.name:
+    if options.get("trim") is True or (
+        snippet.alias == "splice" and "kms-participant-" in snippet.name
+    ):
         attributes.append('trim="true"')
     if existing_text is not None and _has_trailing_whitespace(existing_text):
         attributes.append('stripTrailingWhitespace="true"')
@@ -319,7 +325,7 @@ def audit(
             if _has_trailing_whitespace(existing)
             else existing
         )
-        if rendered != expected:
+        if _without_terminal_newline(rendered) != _without_terminal_newline(expected):
             failures.append(f"{snippet.alias}:{snippet.name}: rendered content differs")
             continue
         declarations[(snippet.alias, snippet.name)] = declaration_text

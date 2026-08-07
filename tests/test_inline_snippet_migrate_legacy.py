@@ -76,6 +76,27 @@ def test_declares_legacy_url_substitution_in_the_page() -> None:
     assert 'trim="true"' not in rendered
 
 
+def test_declares_manifest_requested_full_file_trimming() -> None:
+    item = snippet(
+        {
+            "snippetName": "debug-values",
+            "sourceRepo": "cn-quickstart",
+            "sourceFilepath": "debug.yaml",
+            "location": {"type": "fullFile"},
+            "options": {"language": "yaml", "trim": True},
+        }
+    )
+    pin = SourcePin(
+        "cn-quickstart",
+        "digital-asset/cn-quickstart",
+        "41f2d75cd16eff28aedfaf2e9a2278a881b1c71a",
+    )
+
+    rendered = declaration(item, pin, "services: {}")
+
+    assert 'trim="true"' in rendered
+
+
 def test_declares_trailing_whitespace_cleanup_only_when_legacy_output_needs_it() -> (
     None
 ):
@@ -97,6 +118,12 @@ def test_declares_trailing_whitespace_cleanup_only_when_legacy_output_needs_it()
     rendered = declaration(item, pin, "source", "line with space \n")
 
     assert 'stripTrailingWhitespace="true"' in rendered
+
+
+def test_legacy_audit_ignores_only_the_wrapper_terminal_newline() -> None:
+    assert migrate_legacy._without_terminal_newline("body\n") == "body"
+    assert migrate_legacy._without_terminal_newline("body") == "body"
+    assert migrate_legacy._without_terminal_newline("body\n\n") == "body\n"
 
 
 def test_page_migration_preserves_frontmatter_and_other_imports(
