@@ -46,3 +46,10 @@ class IfVersionTag:
 class ElseTag:
     span: Span
     closing: bool
+
+
+@dataclass(frozen=True)
+class ImmutableSourceReference:
+    repository: str
+    commit: str
+    path: str
