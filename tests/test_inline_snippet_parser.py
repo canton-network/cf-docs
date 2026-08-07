@@ -7,7 +7,6 @@ import pytest
 from scripts.snippets.model import SnippetValidationError, SourceKind
 from scripts.snippets.parser import parse_page
 
-
 REPOSITORIES = {
     "canton-network/splice": {
         "url": "https://github.com/canton-network/splice",
@@ -73,8 +72,8 @@ def test_parses_candidate_inside_release_condition() -> None:
 
 def test_parses_legacy_line_range_compatibility() -> None:
     page = parse(
-        f'''<Snippet source="https://github.com/canton-network/splice/blob/{COMMIT}/a.rst"
-  lines="10..14" normalize="preserve" language="none" />'''
+        f"""<Snippet source="https://github.com/canton-network/splice/blob/{COMMIT}/a.rst"
+  lines="10..14" normalize="preserve" language="none" />"""
     )
 
     snippet = page.snippets[0]

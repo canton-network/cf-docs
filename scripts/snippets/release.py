@@ -9,7 +9,6 @@ from typing import Any, Protocol
 from .model import IfVersionDirective
 from .source import PullRequestResolution
 
-
 VERSION_RE = re.compile(
     r"(?P<major>0|[1-9][0-9]*)\.(?P<minor>0|[1-9][0-9]*)\.(?P<patch>0|[1-9][0-9]*)"
 )

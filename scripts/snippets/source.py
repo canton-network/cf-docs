@@ -13,7 +13,6 @@ from typing import Any, Protocol
 
 from .model import SnippetDirective, SourceKind, SourceReference
 
-
 DEFAULT_MAX_SOURCE_BYTES = 1024 * 1024
 REMOTE_PATTERNS = (
     re.compile(r"https://github\.com/(?P<repo>[^/]+/[^/]+?)(?:\.git)?$"),
@@ -401,9 +400,7 @@ def extract_snippet(directive: SnippetDirective, source: ResolvedSource) -> str:
     if directive.normalization in {"baseline", "two-spaces"}:
         selected_lines = selected.split("\n")
         indents = [
-            len(line) - len(line.lstrip())
-            for line in selected_lines
-            if line.strip()
+            len(line) - len(line.lstrip()) for line in selected_lines if line.strip()
         ]
         strip = min(indents, default=0)
         prefix = "  " if directive.normalization == "two-spaces" else ""

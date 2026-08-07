@@ -7,7 +7,6 @@ from pathlib import Path
 from .model import Diagnostic, SnippetValidationError
 from .parser import load_registry, parse_page
 
-
 CF_DOCS_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_REGISTRY = CF_DOCS_ROOT / "config" / "snippet-repositories.json"
 
@@ -19,7 +18,7 @@ def discover_pages(paths: list[Path]) -> list[Path]:
             pages.extend(path.rglob("*.source.mdx"))
         elif path.is_file():
             pages.append(path)
-    return sorted(set(page.resolve() for page in pages))
+    return sorted({page.resolve() for page in pages})
 
 
 def validate_pages(

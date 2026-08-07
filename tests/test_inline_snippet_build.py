@@ -5,7 +5,6 @@ from pathlib import Path
 
 from scripts.snippets import build
 
-
 REPOSITORY = "canton-network/splice"
 
 
@@ -56,12 +55,12 @@ def test_preview_renders_local_source_without_a_pr_argument(tmp_path: Path) -> N
 def test_preview_requires_an_explicit_release_selection(tmp_path: Path, capsys) -> None:
     page = tmp_path / "validator.source.mdx"
     page.write_text(
-        f'''<IfVersion repository="https://github.com/{REPOSITORY}" containsPullRequest={{6123}}>
+        f"""<IfVersion repository="https://github.com/{REPOSITORY}" containsPullRequest={{6123}}>
 new
 <Else>
 old
 </Else>
-</IfVersion>''',
+</IfVersion>""",
         encoding="utf-8",
     )
 
@@ -71,7 +70,9 @@ old
     assert "Select at least one" in capsys.readouterr().err
 
 
-def test_unconditional_immutable_page_needs_no_release_selection(tmp_path: Path) -> None:
+def test_unconditional_immutable_page_needs_no_release_selection(
+    tmp_path: Path,
+) -> None:
     page = tmp_path / "validator.source.mdx"
     page.write_text("prose", encoding="utf-8")
     output = tmp_path / "preview.mdx"

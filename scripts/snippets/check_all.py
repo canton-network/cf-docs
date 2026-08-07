@@ -7,7 +7,6 @@ from . import build
 from .parser import load_registry, parse_page
 from .validate import DEFAULT_REGISTRY, discover_pages
 
-
 CF_DOCS_ROOT = Path(__file__).resolve().parents[2]
 
 

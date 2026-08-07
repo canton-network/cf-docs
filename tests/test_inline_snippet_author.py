@@ -6,7 +6,6 @@ from pathlib import Path
 from scripts.snippets import author
 from scripts.snippets.parser import parse_page
 
-
 REPOSITORY = "canton-network/splice"
 REPOSITORIES = {
     REPOSITORY: {

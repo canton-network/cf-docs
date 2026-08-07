@@ -16,7 +16,6 @@ from scripts.snippets.compiler import (
 from scripts.snippets.model import SourceReference
 from scripts.snippets.source import ResolvedSource
 
-
 REPOSITORY = "canton-network/splice"
 COMMIT = "2c941ea9e834d7602d388f3271c0f864025ea756"
 REPOSITORIES = {
@@ -101,6 +100,8 @@ def test_compiles_only_new_prose_and_candidate_when_release_contains_change() ->
     assert "<IfVersion" not in rendered
     assert "<Snippet" not in rendered
     assert "snippet-source: https://github.com/canton-network/splice/blob/" in rendered
+    assert rendered.startswith("---\ntitle: Validator\n---\n")
+    assert "Generated from validator.source.mdx" in rendered.splitlines()[4]
 
 
 def test_compiles_only_existing_prose_and_immutable_snippet_otherwise() -> None:

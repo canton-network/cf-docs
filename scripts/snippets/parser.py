@@ -16,7 +16,6 @@ from .model import (
     Span,
 )
 
-
 TAG_RE = re.compile(
     r"<(?P<closing>/)?(?P<name>Snippet|IfVersion|Else)\b(?P<body>(?:[^\"'>]|\"[^\"]*\"|'[^']*')*?)(?P<self_closing>/)?>",
     re.DOTALL,

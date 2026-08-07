@@ -15,7 +15,6 @@ from scripts.snippets.source import (
     repository_from_remote,
 )
 
-
 REPOSITORY = "canton-network/splice"
 COMMIT = "2c941ea9e834d7602d388f3271c0f864025ea756"
 HEAD = "7a6b8d9012fe34ac56bd7890ef12ab34cd56ef78"
@@ -207,6 +206,7 @@ def test_extracts_legacy_lines_with_baseline_normalization_and_replacement() -> 
     )
 
     assert extract_snippet(item, source) == "new: true\n  nested: true"
+
 
 @pytest.mark.parametrize(
     "content",

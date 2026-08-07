@@ -12,7 +12,6 @@ from .compiler import render_snippet
 from .parser import load_registry, parse_page
 from .source import GitHubClient, SourceResolutionError, SourceResolver
 
-
 CF_DOCS_ROOT = Path(__file__).resolve().parents[2]
 CONFIG_ROOT = CF_DOCS_ROOT / "config" / "snippet-config"
 DOCS_ROOT = CF_DOCS_ROOT / "docs-main"
@@ -195,9 +194,8 @@ def declaration(snippet: LegacySnippet, pin: SourcePin, source_text: str) -> str
         )
         normalization = "baseline"
     elif location_type == "lines":
-        attributes.append(
-            f"lines={_quoted(f'{location.get("start")}..{location.get("end")}')}"
-        )
+        line_range = f"{location.get('start')}..{location.get('end')}"
+        attributes.append(f"lines={_quoted(line_range)}")
         normalization = "preserve"
     elif location_type == "fullFile":
         normalization = "two-spaces" if snippet.alias == "canton" else "baseline"
@@ -320,7 +318,9 @@ def migrate_pages(
     for page in sorted(DOCS_ROOT.rglob("*.mdx")):
         if page.name.endswith(".source.mdx") or "snippets" in page.parts:
             continue
-        original = page.read_text(encoding="utf-8")
+        source_page = page.with_name(f"{page.stem}.source.mdx")
+        authoring_page = source_page if source_page.is_file() else page
+        original = authoring_page.read_text(encoding="utf-8")
         imports: list[tuple[re.Match[str], re.Match[str], tuple[str, str]]] = []
         for line_match in re.finditer(r"(?m)^.*$", original):
             import_match = IMPORT_RE.fullmatch(line_match.group(0))
@@ -338,12 +338,15 @@ def migrate_pages(
             matches = list(component.finditer(rewritten))
             if not matches:
                 raise LegacyMigrationError(
-                    f"{page}: imported {identifier} has no self-closing component use"
+                    f"{authoring_page}: imported {identifier} has no self-closing "
+                    "component use"
                 )
             rewritten = component.sub(declarations[key], rewritten)
-            rewritten = rewritten[: line_match.start()] + rewritten[line_match.end() :]
+            import_end = line_match.end()
+            if import_end < len(rewritten) and rewritten[import_end] == "\n":
+                import_end += 1
+            rewritten = rewritten[: line_match.start()] + rewritten[import_end:]
             used.add(key)
-        source_page = page.with_name(f"{page.stem}.source.mdx")
         source_page.write_text(rewritten, encoding="utf-8")
         changed_pages.add(source_page)
     return used, changed_pages

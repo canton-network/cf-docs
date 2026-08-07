@@ -6,7 +6,6 @@ from pathlib import Path
 from scripts.snippets import check_all
 from scripts.snippets.validate import validate_pages
 
-
 REPOSITORY = "canton-network/splice"
 
 

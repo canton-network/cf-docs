@@ -38,6 +38,19 @@ def _code_fence(content: str) -> str:
     return "`" * max(3, longest + 1)
 
 
+def _generated_header(compiled: str, page_path: Path) -> str:
+    header = (
+        f"{{/* Generated from {page_path.name}. "
+        f"Edit {page_path.name}, then run npm run snippets:generate. */}}\n"
+    )
+    if compiled.startswith("---\n"):
+        closing = compiled.find("\n---\n", 4)
+        if closing >= 0:
+            body_start = closing + len("\n---\n")
+            return compiled[:body_start] + "\n" + header + compiled[body_start:]
+    return header + compiled
+
+
 def _provenance(directive: SnippetDirective, source: ResolvedSource) -> str:
     if source.commit:
         encoded_path = urllib.parse.quote(source.reference.path, safe="/")
@@ -59,9 +72,7 @@ def render_snippet(
 ) -> str:
     content = extract_snippet(directive, source)
     fence = _code_fence(content)
-    if directive.normalization is not None:
-        content += "\n"
-    elif content and not content.endswith("\n"):
+    if directive.normalization is not None or (content and not content.endswith("\n")):
         content += "\n"
     provenance = _provenance(directive, source)
     language = "" if directive.language.lower() == "none" else directive.language
@@ -246,11 +257,7 @@ def compile_page_variants(
         return "".join(output)
 
     compiled = render_range(0, len(text), None)
-    header = (
-        f"{{/* Generated from {page_path.name}. "
-        f"Edit {page_path.name}, then run npm run snippets:generate. */}}\n"
-    )
-    return header + compiled
+    return _generated_header(compiled, page_path)
 
 
 def assert_generated_output(source_path: Path, compiled: str) -> None:

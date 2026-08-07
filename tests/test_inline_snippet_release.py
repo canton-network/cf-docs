@@ -15,7 +15,6 @@ from scripts.snippets.release import (
 )
 from scripts.snippets.source import PullRequestResolution
 
-
 REPOSITORY = "canton-network/splice"
 HEAD = "7a6b8d9012fe34ac56bd7890ef12ab34cd56ef78"
 MERGE = "e3f10a2479bc56de8012fa34bc56de7890ab12cd"

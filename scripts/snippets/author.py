@@ -17,7 +17,6 @@ from .source import (
     repository_from_remote,
 )
 
-
 CF_DOCS_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_REGISTRY = CF_DOCS_ROOT / "config" / "snippet-repositories.json"
 LOCAL_SOURCE_ATTRIBUTE_RE = re.compile(

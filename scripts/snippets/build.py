@@ -27,7 +27,6 @@ from .release import (
 )
 from .source import GitHubClient, SourceResolutionError, SourceResolver
 
-
 CF_DOCS_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_REGISTRY = CF_DOCS_ROOT / "config" / "snippet-repositories.json"
 DEFAULT_DASHBOARD = CF_DOCS_ROOT / "config" / "repo-version-config.json"
