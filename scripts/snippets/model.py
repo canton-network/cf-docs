@@ -81,3 +81,30 @@ class ConditionStructureIssue:
     rule: ConditionStructureRule
     span: Span
     message: str
+
+
+@dataclass(frozen=True)
+class IfVersionCondition:
+    repository: str
+    contains_pull_request: int
+    span: Span
+
+
+class IfVersionAttributeRule(str, Enum):
+    UNKNOWN_ATTRIBUTE = "unknown_attribute"
+    INVALID_REPOSITORY = "invalid_repository"
+    UNREGISTERED_REPOSITORY = "unregistered_repository"
+    INVALID_PULL_REQUEST = "invalid_pull_request"
+
+
+@dataclass(frozen=True)
+class IfVersionAttributeIssue:
+    rule: IfVersionAttributeRule
+    span: Span
+    message: str
+
+
+@dataclass(frozen=True)
+class IfVersionAttributeValidation:
+    condition: IfVersionCondition | None
+    issues: tuple[IfVersionAttributeIssue, ...]

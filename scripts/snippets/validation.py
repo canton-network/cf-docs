@@ -8,11 +8,17 @@ from .model import (
     ConditionStructureIssue,
     ConditionStructureRule,
     ElseTag,
+    IfVersionAttributeIssue,
+    IfVersionAttributeRule,
+    IfVersionAttributeValidation,
+    IfVersionCondition,
     IfVersionTag,
 )
+from .references import parse_github_repository_url
 from .registry import RepositoryRegistry
 
 SAFE_LANGUAGE_RE = re.compile(r"[A-Za-z0-9_+.-]+")
+IF_VERSION_ATTRIBUTES = {"repository", "containsPullRequest"}
 
 
 def is_safe_source_path(value: str) -> bool:
@@ -145,3 +151,81 @@ def validate_if_version_structure(
             )
         )
     return tuple(issues)
+
+
+def validate_if_version_attributes(
+    tag: IfVersionTag, registry: RepositoryRegistry
+) -> IfVersionAttributeValidation:
+    """Validate one opening IfVersion tag without applying nesting rules."""
+
+    if tag.closing:
+        raise ValueError("Cannot validate attributes on a closing IfVersion tag")
+
+    issues: list[IfVersionAttributeIssue] = []
+    unknown = sorted(
+        attribute.name
+        for attribute in tag.attributes
+        if attribute.name not in IF_VERSION_ATTRIBUTES
+    )
+    if unknown:
+        issues.append(
+            IfVersionAttributeIssue(
+                rule=IfVersionAttributeRule.UNKNOWN_ATTRIBUTE,
+                span=tag.span,
+                message=f"Unknown IfVersion attribute(s): {', '.join(unknown)}",
+            )
+        )
+
+    repository_value = tag.attribute("repository")
+    repository = (
+        parse_github_repository_url(repository_value)
+        if isinstance(repository_value, str)
+        else None
+    )
+    if repository is None:
+        issues.append(
+            IfVersionAttributeIssue(
+                rule=IfVersionAttributeRule.INVALID_REPOSITORY,
+                span=tag.span,
+                message=(
+                    "IfVersion repository must be a complete GitHub repository URL"
+                ),
+            )
+        )
+    elif not is_registered_repository(repository, registry):
+        issues.append(
+            IfVersionAttributeIssue(
+                rule=IfVersionAttributeRule.UNREGISTERED_REPOSITORY,
+                span=tag.span,
+                message=f"Repository {repository!r} is not allowlisted",
+            )
+        )
+
+    candidate = tag.attribute("containsPullRequest")
+    if not isinstance(candidate, int) or candidate < 1:
+        issues.append(
+            IfVersionAttributeIssue(
+                rule=IfVersionAttributeRule.INVALID_PULL_REQUEST,
+                span=tag.span,
+                message=(
+                    "IfVersion containsPullRequest must be a positive integer "
+                    "expression"
+                ),
+            )
+        )
+
+    condition = None
+    if (
+        repository is not None
+        and is_registered_repository(repository, registry)
+        and isinstance(candidate, int)
+        and candidate > 0
+    ):
+        condition = IfVersionCondition(
+            repository=repository,
+            contains_pull_request=candidate,
+            span=tag.span,
+        )
+    return IfVersionAttributeValidation(
+        condition=condition, issues=tuple(issues)
+    )
