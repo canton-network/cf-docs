@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 from .model import (
+    ElseTag,
+    IfVersionCondition,
+    IfVersionTag,
     ImmutableSourceReference,
     LocalSourceReference,
     PullRequestSnippetSource,
     PullRequestSourceReference,
     SnippetAttributeIssue,
     SnippetAttributeRule,
+    SnippetConditionContext,
     SnippetSourceAttributeIssue,
     SnippetSourceAttributeRule,
     SnippetSourceAttributeValidation,
@@ -136,3 +140,35 @@ def validate_snippet_basic_attributes(
             )
         )
     return tuple(issues)
+
+
+def map_snippet_condition_contexts(
+    snippets: tuple[SnippetTag, ...],
+    conditional_tags: tuple[IfVersionTag | ElseTag, ...],
+    conditions: tuple[IfVersionCondition, ...],
+) -> tuple[SnippetConditionContext, ...]:
+    """Associate snippets with their innermost enclosing IfVersion condition."""
+
+    conditions_by_start = {
+        condition.span.start: condition for condition in conditions
+    }
+    events = sorted(
+        (*snippets, *conditional_tags), key=lambda event: event.span.start
+    )
+    stack: list[IfVersionCondition | None] = []
+    contexts: list[SnippetConditionContext] = []
+    for event in events:
+        if isinstance(event, IfVersionTag):
+            if event.closing:
+                if stack:
+                    stack.pop()
+            else:
+                stack.append(conditions_by_start.get(event.span.start))
+        elif isinstance(event, SnippetTag):
+            contexts.append(
+                SnippetConditionContext(
+                    snippet=event,
+                    condition=stack[-1] if stack else None,
+                )
+            )
+    return tuple(contexts)

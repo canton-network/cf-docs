@@ -173,3 +173,9 @@ class SnippetAttributeIssue:
     rule: SnippetAttributeRule
     span: Span
     message: str
+
+
+@dataclass(frozen=True)
+class SnippetConditionContext:
+    snippet: SnippetTag
+    condition: IfVersionCondition | None
