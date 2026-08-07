@@ -3,8 +3,6 @@ title: "Query Contracts and Transactions with PQS"
 description: "Use the Participant Query Store (PQS) to query Daml contracts and transactions via SQL."
 ---
 
-{/* Generated from m4-query-with-pqs.source.mdx. Edit m4-query-with-pqs.source.mdx, then run npm run snippets:generate. */}
-
 import ExternalScribeMainScribeRstCodeDocsUserSdlcHowtosApplicationsDevelopPqsIndexText23 from "/snippets/external/scribe/main/scribe-rst-code-docs-user-sdlc-howtos-applications-develop-pqs-index-text-23.mdx";
 
 {/* COPIED_START source="docs-website:docs/replicated/pqs/3.4/sdlc-howtos/applications/develop/pqs/index.rst" hash="a0009fae" */}
@@ -17,11 +15,12 @@ import ExternalScribeMainScribeRstCodeDocsUserSdlcHowtosApplicationsDevelopPqsIn
 
 To fetch contracts in the ACS use the `active()` table function[^1] which is part of Participant Query Store’s (PQS) schema and can be used as any other PostgreSQL function.
 
-{/* snippet-source: https://github.com/DACH-NY/scribe/blob/a12a6a22213ba26a85852d9a6b8c8662a8ab5c3e/docs/user/sdlc-howtos/applications/develop/pqs/index.rst; authored-at: docs-main/appdev/modules/m4-query-with-pqs.source.mdx:18 */}
-```sql
-   select * from active();
-
-```
+<Snippet
+  source="https://github.com/DACH-NY/scribe/blob/a12a6a22213ba26a85852d9a6b8c8662a8ab5c3e/docs/user/sdlc-howtos/applications/develop/pqs/index.rst"
+  lines="19..20"
+  normalize="preserve"
+  language="sql"
+/>
 
 <ExternalScribeMainScribeRstCodeDocsUserSdlcHowtosApplicationsDevelopPqsIndexText23 />
 
@@ -29,34 +28,30 @@ To fetch contracts in the ACS use the `active()` table function[^1] which is par
 
 The previous example is very resource-consuming and unadvisable to use except on tiny datasets. A more typical (and efficient at the same time) use case is to limit the result set to a specific Daml template type. The reason for improved efficiency is PostgreSQL’s ability to prune unused partitions when planning the query execution. As long as there is no ambiguity in resolving the type, the following forms are equivalent.
 
-{/* snippet-source: https://github.com/DACH-NY/scribe/blob/a12a6a22213ba26a85852d9a6b8c8662a8ab5c3e/docs/user/sdlc-howtos/applications/develop/pqs/index.rst; authored-at: docs-main/appdev/modules/m4-query-with-pqs.source.mdx:31 */}
-```sql
-   select * from active('register:DA.Register:IssuerApproval');
-   select * from active('DA.Register:IssuerApproval');
-   select * from active('IssuerApproval');
-
-```
+<Snippet
+  source="https://github.com/DACH-NY/scribe/blob/a12a6a22213ba26a85852d9a6b8c8662a8ab5c3e/docs/user/sdlc-howtos/applications/develop/pqs/index.rst"
+  lines="58..61"
+  normalize="preserve"
+  language="sql"
+/>
 
 ### How to query contracts that are in ACS by information in payload
 
 To query contracts by business information in the payload, use JSONB operators[^2] in the `WHERE` clause.
 
-{/* snippet-source: https://github.com/DACH-NY/scribe/blob/a12a6a22213ba26a85852d9a6b8c8662a8ab5c3e/docs/user/sdlc-howtos/applications/develop/pqs/index.rst; authored-at: docs-main/appdev/modules/m4-query-with-pqs.source.mdx:42 */}
-```sql
-   select *
-   from active('register:DA.Register:IssuerApproval')
-   where payload->'issue'->>'issuer' = 'foo';
+<Snippet
+  source="https://github.com/DACH-NY/scribe/blob/a12a6a22213ba26a85852d9a6b8c8662a8ab5c3e/docs/user/sdlc-howtos/applications/develop/pqs/index.rst"
+  lines="69..72"
+  normalize="preserve"
+  language="sql"
+/>
 
-```
-
-{/* snippet-source: https://github.com/DACH-NY/scribe/blob/a12a6a22213ba26a85852d9a6b8c8662a8ab5c3e/docs/user/sdlc-howtos/applications/develop/pqs/index.rst; authored-at: docs-main/appdev/modules/m4-query-with-pqs.source.mdx:49 */}
-```sql
-   select payload->'token'->'wallet'->>'label'
-   from active('TokenOpen')
-   where payload->'token'->'issue'->>'issuer' = 'foo'
-     and (payload->'token'->>'quantity')::decimal > 42;
-
-```
+<Snippet
+  source="https://github.com/DACH-NY/scribe/blob/a12a6a22213ba26a85852d9a6b8c8662a8ab5c3e/docs/user/sdlc-howtos/applications/develop/pqs/index.rst"
+  lines="75..79"
+  normalize="preserve"
+  language="sql"
+/>
 
 <Note>
 See also `pqs-how-to-add-an-index-on-expression-over-jsonb-payload`.
@@ -70,62 +65,57 @@ Querying by payload contents may require additional development and administrati
 
 To join contracts from multiple Daml template types use standard `JOIN` syntax.
 
-{/* snippet-source: https://github.com/DACH-NY/scribe/blob/a12a6a22213ba26a85852d9a6b8c8662a8ab5c3e/docs/user/sdlc-howtos/applications/develop/pqs/index.rst; authored-at: docs-main/appdev/modules/m4-query-with-pqs.source.mdx:68 */}
-```sql
-   select ia.contract_id, ip.contract_id
-   from active('IssuerApproval') ia
-   inner join active('IssuerProposal') ip
-     on ia.payload->>'transferId' = ip.payload->>'transferId';
-
-```
+<Snippet
+  source="https://github.com/DACH-NY/scribe/blob/a12a6a22213ba26a85852d9a6b8c8662a8ab5c3e/docs/user/sdlc-howtos/applications/develop/pqs/index.rst"
+  lines="96..100"
+  normalize="preserve"
+  stripTrailingWhitespace="true"
+  language="sql"
+/>
 
 ### How to aggregate data from contract values
 
 Since PQS is backed by PostgreSQL database, one can use aggregate functions available as part of Structured Query Language (SQL) syntax.
 
-{/* snippet-source: https://github.com/DACH-NY/scribe/blob/a12a6a22213ba26a85852d9a6b8c8662a8ab5c3e/docs/user/sdlc-howtos/applications/develop/pqs/index.rst; authored-at: docs-main/appdev/modules/m4-query-with-pqs.source.mdx:80 */}
-```sql
-   select payload->'token'->'issue'->>'issuer'          as issuer,
-          sum((payload->'token'->>'quantity')::decimal) as total_quantity
-   from active('TokenOpen')
-   group by payload->'token'->'issue'->>'issuer';
-
-```
+<Snippet
+  source="https://github.com/DACH-NY/scribe/blob/a12a6a22213ba26a85852d9a6b8c8662a8ab5c3e/docs/user/sdlc-howtos/applications/develop/pqs/index.rst"
+  lines="109..113"
+  normalize="preserve"
+  language="sql"
+/>
 
 ### How to query state in the past
 
 PQS uses Event Sourcing[^3] architecture and therefore users can peek into the state at an arbitrary point in ledger history by providing an offset explicitly.
 
-{/* snippet-source: https://github.com/DACH-NY/scribe/blob/a12a6a22213ba26a85852d9a6b8c8662a8ab5c3e/docs/user/sdlc-howtos/applications/develop/pqs/index.rst; authored-at: docs-main/appdev/modules/m4-query-with-pqs.source.mdx:91 */}
-```sql
-   select ia.contract_id, ip.contract_id
-   from active('IssuerApproval', 'some_offset') ia
-   inner join active('IssuerProposal', 'some_offset') ip
-     on ia.payload->>'transferId' = ip.payload->>'transferId';
-
-```
+<Snippet
+  source="https://github.com/DACH-NY/scribe/blob/a12a6a22213ba26a85852d9a6b8c8662a8ab5c3e/docs/user/sdlc-howtos/applications/develop/pqs/index.rst"
+  lines="122..126"
+  normalize="preserve"
+  language="sql"
+/>
 
 ### How to fetch a contract by its contract ID
 
 Contracts may be fetched by their contract ID (regardless of their activeness state). Keep in mind, that interface views and contracts share the same contract ID so the function will return interface views as well.
 
-{/* snippet-source: https://github.com/DACH-NY/scribe/blob/a12a6a22213ba26a85852d9a6b8c8662a8ab5c3e/docs/user/sdlc-howtos/applications/develop/pqs/index.rst; authored-at: docs-main/appdev/modules/m4-query-with-pqs.source.mdx:102 */}
-```sql
-   select * from lookup_contract('contract_id');
-
-```
+<Snippet
+  source="https://github.com/DACH-NY/scribe/blob/a12a6a22213ba26a85852d9a6b8c8662a8ab5c3e/docs/user/sdlc-howtos/applications/develop/pqs/index.rst"
+  lines="135..136"
+  normalize="preserve"
+  language="sql"
+/>
 
 ### How to get a list of contracts created in an offset range
 
 To get a sorted list of "contract created" events within a specific offset range.
 
-{/* snippet-source: https://github.com/DACH-NY/scribe/blob/a12a6a22213ba26a85852d9a6b8c8662a8ab5c3e/docs/user/sdlc-howtos/applications/develop/pqs/index.rst; authored-at: docs-main/appdev/modules/m4-query-with-pqs.source.mdx:113 */}
-```sql
-   select *
-   from creates(from_offset := 'from', to_offset := 'to')
-   order by created_at_offset, create_event_pk;
-
-```
+<Snippet
+  source="https://github.com/DACH-NY/scribe/blob/a12a6a22213ba26a85852d9a6b8c8662a8ab5c3e/docs/user/sdlc-howtos/applications/develop/pqs/index.rst"
+  lines="144..147"
+  normalize="preserve"
+  language="sql"
+/>
 
 <div className="caution">
 
@@ -137,13 +127,12 @@ This query is potentially resource-heavy in the presence of multiple template ty
 
 By default, offset edges in `creates()` and `archives()` SQL functions represent closed ranges. To make either or both open, use `WHERE` clauses with desired refinements.
 
-{/* snippet-source: https://github.com/DACH-NY/scribe/blob/a12a6a22213ba26a85852d9a6b8c8662a8ab5c3e/docs/user/sdlc-howtos/applications/develop/pqs/index.rst; authored-at: docs-main/appdev/modules/m4-query-with-pqs.source.mdx:130 */}
-```sql
-   select *
-   from creates(from_offset := 'from', to_offset := 'to')
-   where created_at_offset > 'from';
-
-```
+<Snippet
+  source="https://github.com/DACH-NY/scribe/blob/a12a6a22213ba26a85852d9a6b8c8662a8ab5c3e/docs/user/sdlc-howtos/applications/develop/pqs/index.rst"
+  lines="161..164"
+  normalize="preserve"
+  language="sql"
+/>
 
 ### How to emulate a stream of "contract created" events with SQL
 
@@ -151,14 +140,13 @@ Although PQS is a poor substitute for Ledger API stream of events, it is sometim
 
 To emulate such a stream, one needs to implement client-side busy polling of the database using a similar query.
 
-{/* snippet-source: https://github.com/DACH-NY/scribe/blob/a12a6a22213ba26a85852d9a6b8c8662a8ab5c3e/docs/user/sdlc-howtos/applications/develop/pqs/index.rst; authored-at: docs-main/appdev/modules/m4-query-with-pqs.source.mdx:143 */}
-```sql
-   select *
-   from creates(from_offset := 'last_memoized_offset')
-   where created_at_offset > 'last_memoized_offset'
-   order by created_at_offset;
-
-```
+<Snippet
+  source="https://github.com/DACH-NY/scribe/blob/a12a6a22213ba26a85852d9a6b8c8662a8ab5c3e/docs/user/sdlc-howtos/applications/develop/pqs/index.rst"
+  lines="175..179"
+  normalize="preserve"
+  stripTrailingWhitespace="true"
+  language="sql"
+/>
 
 The client driver should execute this query in a loop, memoizing[^4] the latest observed offset and passing it into the next iteration. It might be a good idea to add sleeping intervals in the loop when no results are returned to minimize resource wasting.
 
@@ -180,27 +168,19 @@ For additional information concerning performance optimization, refer to [Perfor
 
 To optimize read performance of queries that use `WHERE` clauses with information from payload add indexes on expression[^5].
 
-{/* snippet-source: https://github.com/DACH-NY/scribe/blob/a12a6a22213ba26a85852d9a6b8c8662a8ab5c3e/docs/user/sdlc-howtos/applications/develop/pqs/index.rst; authored-at: docs-main/appdev/modules/m4-query-with-pqs.source.mdx:171 */}
-```sql
-   call create_index_for_contract(
-     'token_wallet_holder_idx',
-     'register:DA.Register:Token',
-     '(payload->''wallet''->>''holder'')',
-     'hash'
-   );
+<Snippet
+  source="https://github.com/DACH-NY/scribe/blob/a12a6a22213ba26a85852d9a6b8c8662a8ab5c3e/docs/user/sdlc-howtos/applications/develop/pqs/index.rst"
+  lines="216..222"
+  normalize="preserve"
+  language="sql"
+/>
 
-```
-
-{/* snippet-source: https://github.com/DACH-NY/scribe/blob/a12a6a22213ba26a85852d9a6b8c8662a8ab5c3e/docs/user/sdlc-howtos/applications/develop/pqs/index.rst; authored-at: docs-main/appdev/modules/m4-query-with-pqs.source.mdx:178 */}
-```sql
-   call create_index_for_contract(
-     'token_open_wallet_qty_idx',
-     'register:DA.Register:TokenOpen',
-     '((payload->''wallet''->>''quantity'')::decimal)',
-     'btree'
-   );
-
-```
+<Snippet
+  source="https://github.com/DACH-NY/scribe/blob/a12a6a22213ba26a85852d9a6b8c8662a8ab5c3e/docs/user/sdlc-howtos/applications/develop/pqs/index.rst"
+  lines="225..231"
+  normalize="preserve"
+  language="sql"
+/>
 
 Provide full expressions used in `WHERE` clauses (including operators and casts).
 
@@ -212,21 +192,21 @@ Most Read API functions return an abundance of data in the result set, including
 
 Bad:
 
-{/* snippet-source: https://github.com/DACH-NY/scribe/blob/a12a6a22213ba26a85852d9a6b8c8662a8ab5c3e/docs/user/sdlc-howtos/applications/develop/pqs/index.rst; authored-at: docs-main/appdev/modules/m4-query-with-pqs.source.mdx:195 */}
-```sql
-   select * from active('Token');
-
-```
+<Snippet
+  source="https://github.com/DACH-NY/scribe/blob/a12a6a22213ba26a85852d9a6b8c8662a8ab5c3e/docs/user/sdlc-howtos/applications/develop/pqs/index.rst"
+  lines="248..249"
+  normalize="preserve"
+  language="sql"
+/>
 
 Good:
 
-{/* snippet-source: https://github.com/DACH-NY/scribe/blob/a12a6a22213ba26a85852d9a6b8c8662a8ab5c3e/docs/user/sdlc-howtos/applications/develop/pqs/index.rst; authored-at: docs-main/appdev/modules/m4-query-with-pqs.source.mdx:204 */}
-```sql
-   select payload->'wallet'->>'holder' as holder,
-          (payload->'wallet'->>'quantity')::decimal as quantity
-   from active('Token');
-
-```
+<Snippet
+  source="https://github.com/DACH-NY/scribe/blob/a12a6a22213ba26a85852d9a6b8c8662a8ab5c3e/docs/user/sdlc-howtos/applications/develop/pqs/index.rst"
+  lines="254..257"
+  normalize="preserve"
+  language="sql"
+/>
 
 ### How to paginate efficiently
 
@@ -234,27 +214,21 @@ Make sure your paginated access[^7] to data is efficient and does not cause perf
 
 Bad:
 
-{/* snippet-source: https://github.com/DACH-NY/scribe/blob/a12a6a22213ba26a85852d9a6b8c8662a8ab5c3e/docs/user/sdlc-howtos/applications/develop/pqs/index.rst; authored-at: docs-main/appdev/modules/m4-query-with-pqs.source.mdx:217 */}
-```sql
-   select *
-   from the_source
-   order by the_key
-   limit page_size
-   offset (page_num * page_size);
-
-```
+<Snippet
+  source="https://github.com/DACH-NY/scribe/blob/a12a6a22213ba26a85852d9a6b8c8662a8ab5c3e/docs/user/sdlc-howtos/applications/develop/pqs/index.rst"
+  lines="267..272"
+  normalize="preserve"
+  language="sql"
+/>
 
 Good:
 
-{/* snippet-source: https://github.com/DACH-NY/scribe/blob/a12a6a22213ba26a85852d9a6b8c8662a8ab5c3e/docs/user/sdlc-howtos/applications/develop/pqs/index.rst; authored-at: docs-main/appdev/modules/m4-query-with-pqs.source.mdx:226 */}
-```sql
-   select *
-   from the_source
-   where the_key > prev_page_last_key
-   order by the_key
-   limit page_size;
-
-```
+<Snippet
+  source="https://github.com/DACH-NY/scribe/blob/a12a6a22213ba26a85852d9a6b8c8662a8ab5c3e/docs/user/sdlc-howtos/applications/develop/pqs/index.rst"
+  lines="277..282"
+  normalize="preserve"
+  language="sql"
+/>
 
 [^1]: [https://www.postgresql.org/docs/current/xfunc-sql.html#XFUNC-SQL-TABLE-FUNCTIONS](https://www.postgresql.org/docs/current/xfunc-sql.html#XFUNC-SQL-TABLE-FUNCTIONS)
 
