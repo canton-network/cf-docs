@@ -58,3 +58,20 @@ def parse_local_source(value: str) -> LocalSourceReference | None:
         repository=match.group("repository"),
         path=match.group("path"),
     )
+
+
+def parse_source_reference(
+    value: str,
+) -> (
+    ImmutableSourceReference
+    | PullRequestSourceReference
+    | LocalSourceReference
+    | None
+):
+    """Classify a value as one of the supported snippet source forms."""
+
+    return (
+        parse_immutable_source(value)
+        or parse_pull_request_source(value)
+        or parse_local_source(value)
+    )
