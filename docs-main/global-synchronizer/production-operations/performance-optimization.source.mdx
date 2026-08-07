@@ -3,8 +3,6 @@ title: "Performance Optimization"
 description: "Tuning database, JVM, and Canton configuration for validator and SV node performance"
 ---
 
-{/* Generated from performance-optimization.source.mdx. Edit performance-optimization.source.mdx, then run npm run snippets:generate. */}
-
 
 
 Canton node performance depends on database throughput, JVM configuration, sequencer capacity, and pruning strategy. This page covers the key tuning areas for validator and SV node operators.
@@ -18,16 +16,12 @@ PostgreSQL is the primary performance bottleneck in most Canton deployments.
 Canton uses HikariCP for database connection pooling. The default pool size works for light workloads, but high-throughput deployments benefit from tuning:
 
 
-{/* snippet-source: https://github.com/digital-asset/canton/blob/eaa9e7a4bf48793acb35aba270b85a970afe6006/community/app/src/test/resources/documentation-snippets/docs-cn-global-synchronizer_performance_optimization.conf; authored-at: docs-main/global-synchronizer/production-operations/performance-optimization.source.mdx:19 */}
-```hocon
-canton.participants.participant.storage {
-  type = "memory"
-
-  config {
-    # Maximum number of connections in the pool
-    maxConnections = 30
-
-```
+<Snippet
+  source="https://github.com/digital-asset/canton/blob/eaa9e7a4bf48793acb35aba270b85a970afe6006/community/app/src/test/resources/documentation-snippets/docs-cn-global-synchronizer_performance_optimization.conf"
+  lines="1..7"
+  normalize="preserve"
+  language="hocon"
+/>
 
 
 Set `maxConnections` based on your PostgreSQL `max_connections` setting and the number of Canton processes sharing the database server. A good starting point is `max_connections / number_of_canton_processes`, leaving headroom for monitoring and maintenance connections.
@@ -129,13 +123,12 @@ Canton stores a full history of transactions and ACS (Active Contract Set) snaps
 ### Configuration
 
 
-{/* snippet-source: https://github.com/digital-asset/canton/blob/eaa9e7a4bf48793acb35aba270b85a970afe6006/community/app/src/test/resources/documentation-snippets/docs-cn-global-synchronizer_performance_optimization.conf; authored-at: docs-main/global-synchronizer/production-operations/performance-optimization.source.mdx:126 */}
-```hocon
-    connectionTimeout = 30000
-  }
-}
-
-```
+<Snippet
+  source="https://github.com/digital-asset/canton/blob/eaa9e7a4bf48793acb35aba270b85a970afe6006/community/app/src/test/resources/documentation-snippets/docs-cn-global-synchronizer_performance_optimization.conf"
+  lines="9..12"
+  normalize="preserve"
+  language="hocon"
+/>
 
 
 <Warning>
@@ -147,13 +140,12 @@ Pruned data cannot be recovered. Ensure you have backups before enabling aggress
 Canton processes commands in batches internally. The default batch sizes balance latency and throughput. For high-throughput workloads, you can increase batch sizes:
 
 
-{/* snippet-source: https://github.com/digital-asset/canton/blob/eaa9e7a4bf48793acb35aba270b85a970afe6006/community/app/src/test/resources/documentation-snippets/docs-cn-global-synchronizer_performance_optimization.conf; authored-at: docs-main/global-synchronizer/production-operations/performance-optimization.source.mdx:143 */}
-```hocon
-canton.participants.participant.parameters.batching {
-  # Prune data older than this duration
-  max-pruning-batch-size = 1000
-}
-```
+<Snippet
+  source="https://github.com/digital-asset/canton/blob/eaa9e7a4bf48793acb35aba270b85a970afe6006/community/app/src/test/resources/documentation-snippets/docs-cn-global-synchronizer_performance_optimization.conf"
+  lines="13..16"
+  normalize="preserve"
+  language="hocon"
+/>
 
 
 Larger batches improve throughput at the cost of slightly higher per-command latency. Monitor sequencer and command completion latency metrics to find the right balance.
@@ -346,11 +338,7 @@ The effective connection pool sizes are reported by the Canton nodes at startup.
 
 Canton may schedule more database queries than the database can handle. As a result, these queries will be placed into the database queue. By default, the database queue has a size of 1000 queries. Reaching the queueing limit will lead to a `DB_STORAGE_DEGRADATION` warning. The impact of this warning is that the queuing will overflow into the asynchronous execution context and slowly degrade the processing, which will result in fewer database queries being created. However, for high-performance setups, such spikes might occur more regularly. Therefore, to avoid the degradation warning appearing too frequently, the queue size can be configured using:
 
-{/* snippet-source: https://github.com/digital-asset/canton/blob/eaa9e7a4bf48793acb35aba270b85a970afe6006/community/app/src/test/resources/documentation-snippets/storage-queue-size.conf; authored-at: docs-main/global-synchronizer/production-operations/performance-optimization.source.mdx:341 */}
-```conf
-  canton.participants.participant1.storage.config.queueSize = 10000
-
-```
+<Snippet source="https://github.com/digital-asset/canton/blob/eaa9e7a4bf48793acb35aba270b85a970afe6006/community/app/src/test/resources/documentation-snippets/storage-queue-size.conf" normalize="two-spaces" language="conf" />
 
 ### Postgres
 
