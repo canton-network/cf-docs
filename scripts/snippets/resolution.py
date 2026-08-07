@@ -71,3 +71,29 @@ def resolve_candidate_preview(
             f"Source exceeds the {max_source_bytes}-byte size limit"
         )
     return ResolvedSource(reference, pull_request.head_commit, content)
+
+
+def resolve_merged_candidate(
+    reference: PullRequestSnippetSource,
+    github: GitHubPullRequestClient,
+    *,
+    max_source_bytes: int = DEFAULT_MAX_SOURCE_BYTES,
+) -> ResolvedSource:
+    """Read a candidate at GitHub's merge commit after the pull request merges."""
+
+    pull_request = github.resolve_pull_request(
+        reference.repository, reference.pull_request
+    )
+    if not pull_request.merged or pull_request.merge_commit is None:
+        raise SourceResolutionError(
+            f"{reference.repository}#{reference.pull_request} is not merged; "
+            "candidate refs are preview-only"
+        )
+    content = github.read_file(
+        reference.repository, pull_request.merge_commit, reference.path
+    )
+    if len(content) > max_source_bytes:
+        raise SourceResolutionError(
+            f"Source exceeds the {max_source_bytes}-byte size limit"
+        )
+    return ResolvedSource(reference, pull_request.merge_commit, content)
