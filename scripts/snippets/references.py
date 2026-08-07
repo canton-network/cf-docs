@@ -19,6 +19,9 @@ PULL_REQUEST_SOURCE_RE = re.compile(
 LOCAL_SOURCE_RE = re.compile(
     r"local://(?P<repository>[^/]+/[^/]+)/(?P<path>[^?#]+)"
 )
+GITHUB_REPOSITORY_RE = re.compile(
+    r"https://github\.com/(?P<repository>[^/?#]+/[^/?#]+)/?"
+)
 
 
 def parse_immutable_source(value: str) -> ImmutableSourceReference | None:
@@ -75,3 +78,10 @@ def parse_source_reference(
         or parse_pull_request_source(value)
         or parse_local_source(value)
     )
+
+
+def parse_github_repository_url(value: str) -> str | None:
+    """Return owner/repository from a complete GitHub repository URL."""
+
+    match = GITHUB_REPOSITORY_RE.fullmatch(value)
+    return match.group("repository") if match is not None else None
