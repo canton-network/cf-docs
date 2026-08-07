@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from .model import (
+    CandidateConditionIssue,
+    CandidateConditionRule,
     ElseTag,
     IfVersionCondition,
     IfVersionTag,
@@ -172,3 +174,39 @@ def map_snippet_condition_contexts(
                 )
             )
     return tuple(contexts)
+
+
+def validate_candidate_condition(
+    source: (
+        ImmutableSourceReference | PullRequestSnippetSource | LocalSourceReference
+    ),
+    context: SnippetConditionContext,
+) -> tuple[CandidateConditionIssue, ...]:
+    """Require candidate source identity to match its enclosing condition."""
+
+    if not isinstance(source, PullRequestSnippetSource):
+        return ()
+    condition = context.condition
+    if condition is None:
+        return (
+            CandidateConditionIssue(
+                rule=CandidateConditionRule.CONDITION_REQUIRED,
+                span=context.snippet.span,
+                message="Candidate pull-request snippet must be inside IfVersion",
+            ),
+        )
+    if (
+        source.repository != condition.repository
+        or source.pull_request != condition.contains_pull_request
+    ):
+        return (
+            CandidateConditionIssue(
+                rule=CandidateConditionRule.IDENTITY_MISMATCH,
+                span=context.snippet.span,
+                message=(
+                    "Candidate snippet does not match its enclosing IfVersion "
+                    f"({condition.repository}#{condition.contains_pull_request})"
+                ),
+            ),
+        )
+    return ()

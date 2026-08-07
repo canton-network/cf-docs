@@ -179,3 +179,15 @@ class SnippetAttributeIssue:
 class SnippetConditionContext:
     snippet: SnippetTag
     condition: IfVersionCondition | None
+
+
+class CandidateConditionRule(str, Enum):
+    CONDITION_REQUIRED = "condition_required"
+    IDENTITY_MISMATCH = "identity_mismatch"
+
+
+@dataclass(frozen=True)
+class CandidateConditionIssue:
+    rule: CandidateConditionRule
+    span: Span
+    message: str
