@@ -59,7 +59,9 @@ def render_snippet(
 ) -> str:
     content = extract_snippet(directive, source)
     fence = _code_fence(content)
-    if content and not content.endswith("\n"):
+    if directive.normalization is not None:
+        content += "\n"
+    elif content and not content.endswith("\n"):
         content += "\n"
     provenance = _provenance(directive, source)
     language = "" if directive.language.lower() == "none" else directive.language

@@ -37,6 +37,7 @@ class SnippetDirective:
     line_start: int | None
     line_end: int | None
     normalization: str | None
+    trim: bool
     replace_from: str | None
     replace_with: str | None
     span: Span

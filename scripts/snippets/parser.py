@@ -40,6 +40,7 @@ SNIPPET_ATTRIBUTES = {
     "endBefore",
     "lines",
     "normalize",
+    "trim",
     "replaceFrom",
     "replaceWith",
     "language",
@@ -440,13 +441,24 @@ def parse_page(
             if normalization is not None and normalization not in {
                 "baseline",
                 "preserve",
+                "two-spaces",
             }:
                 diagnostics.append(
                     _diagnostic(
                         path,
                         span,
                         "SNIP033",
-                        "Legacy normalize must be either 'baseline' or 'preserve'",
+                        "Legacy normalize must be 'baseline', 'preserve', or 'two-spaces'",
+                    )
+                )
+            trim_value = attributes.get("trim")
+            if trim_value not in {None, "true"}:
+                diagnostics.append(
+                    _diagnostic(
+                        path,
+                        span,
+                        "SNIP036",
+                        "Legacy trim, when present, must be the quoted value 'true'",
                     )
                 )
             replace_from = attributes.get("replaceFrom")
@@ -539,6 +551,7 @@ def parse_page(
                         normalization=(
                             normalization if isinstance(normalization, str) else None
                         ),
+                        trim=trim_value == "true",
                         replace_from=(
                             replace_from if isinstance(replace_from, str) else None
                         ),

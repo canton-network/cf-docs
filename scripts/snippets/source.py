@@ -390,10 +390,15 @@ def extract_snippet(directive: SnippetDirective, source: ResolvedSource) -> str:
                 f"in {directive.source.path}"
             )
         selected = "".join(lines[starts[0] + 1 : ends[0]])
+        if directive.normalization is not None:
+            selected = selected.strip()
     else:
         selected = text
 
-    if directive.normalization == "baseline":
+    if directive.trim:
+        selected = selected.strip()
+
+    if directive.normalization in {"baseline", "two-spaces"}:
         selected_lines = selected.split("\n")
         indents = [
             len(line) - len(line.lstrip())
@@ -401,12 +406,11 @@ def extract_snippet(directive: SnippetDirective, source: ResolvedSource) -> str:
             if line.strip()
         ]
         strip = min(indents, default=0)
+        prefix = "  " if directive.normalization == "two-spaces" else ""
         selected = "\n".join(
-            "" if not line.strip() else line[strip:] for line in selected_lines
+            "" if not line.strip() else f"{prefix}{line[strip:]}"
+            for line in selected_lines
         )
-    if directive.normalization is not None:
-        selected = re.sub(r"^\s*\n+", "", selected)
-        selected = re.sub(r"\n+\s*$", "", selected)
     if directive.replace_from is not None:
         assert directive.replace_with is not None
         selected = selected.replace(directive.replace_from, directive.replace_with)
