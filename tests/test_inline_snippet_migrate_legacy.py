@@ -265,3 +265,34 @@ def test_page_migration_is_transactional_when_a_reference_is_missing(
 
     assert page.read_text(encoding="utf-8") == original
     assert not (docs / "page.source.mdx").exists()
+
+
+def test_page_migration_collapses_declaration_inside_a_markdown_container(
+    tmp_path: Path, monkeypatch
+) -> None:
+    docs = tmp_path / "docs-main"
+    docs.mkdir()
+    page = docs / "page.mdx"
+    page.write_text(
+        """import Example from "/snippets/external/splice/main/example.mdx";
+
+- Example:
+
+  <Example />
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(migrate_legacy, "DOCS_ROOT", docs)
+
+    migrate_legacy.migrate_pages(
+        {
+            ("splice", "example"): """<Snippet
+  source="ref"
+  normalize="preserve"
+  language="yaml"
+/>"""
+        }
+    )
+
+    source = (docs / "page.source.mdx").read_text(encoding="utf-8")
+    assert '  <Snippet source="ref" normalize="preserve" language="yaml" />' in source

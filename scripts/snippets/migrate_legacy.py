@@ -336,6 +336,15 @@ def _component_pattern(identifier: str) -> re.Pattern[str]:
     return re.compile(rf"<{re.escape(identifier)}\s*/>")
 
 
+def _container_safe_declaration(
+    text: str, match: re.Match[str], declaration_text: str
+) -> str:
+    line_start = text.rfind("\n", 0, match.start()) + 1
+    if match.start() == line_start:
+        return declaration_text
+    return " ".join(line.strip() for line in declaration_text.splitlines())
+
+
 def migrate_pages(
     declarations: dict[tuple[str, str], str],
 ) -> tuple[set[tuple[str, str]], set[Path]]:
@@ -367,7 +376,14 @@ def migrate_pages(
                     f"{authoring_page}: imported {identifier} has no self-closing "
                     "component use"
                 )
-            rewritten = component.sub(declarations[key], rewritten)
+            declaration_text = declarations[key]
+            before_replacement = rewritten
+            rewritten = component.sub(
+                lambda match, page_text=before_replacement, replacement=declaration_text: (
+                    _container_safe_declaration(page_text, match, replacement)
+                ),
+                rewritten,
+            )
             import_end = line_match.end()
             if import_end < len(rewritten) and rewritten[import_end] == "\n":
                 import_end += 1
