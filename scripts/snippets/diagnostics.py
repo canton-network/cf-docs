@@ -5,6 +5,8 @@ from pathlib import Path
 from .model import (
     Diagnostic,
     LocalSourcePolicyIssue,
+    SnippetAttributeIssue,
+    SnippetAttributeRule,
     SnippetSourceAttributeIssue,
     SnippetSourceAttributeRule,
     SnippetSourceSafetyIssue,
@@ -25,6 +27,11 @@ SOURCE_ATTRIBUTE_CODES = {
 SOURCE_SAFETY_CODES = {
     SnippetSourceSafetyRule.UNREGISTERED_REPOSITORY: "SNIP009",
     SnippetSourceSafetyRule.UNSAFE_PATH: "SNIP010",
+}
+SNIPPET_ATTRIBUTE_CODES = {
+    SnippetAttributeRule.UNKNOWN_ATTRIBUTE: "SNIP015",
+    SnippetAttributeRule.INVALID_LANGUAGE: "SNIP016",
+    SnippetAttributeRule.INVALID_MARKERS: "SNIP017",
 }
 
 
@@ -68,6 +75,22 @@ def snippet_source_safety_diagnostics(
             path=path,
             span=issue.span,
             code=SOURCE_SAFETY_CODES[issue.rule],
+            message=issue.message,
+        )
+        for issue in issues
+    )
+
+
+def snippet_attribute_diagnostics(
+    path: Path, issues: tuple[SnippetAttributeIssue, ...]
+) -> tuple[Diagnostic, ...]:
+    """Assign stable diagnostic codes to basic Snippet attribute failures."""
+
+    return tuple(
+        Diagnostic(
+            path=path,
+            span=issue.span,
+            code=SNIPPET_ATTRIBUTE_CODES[issue.rule],
             message=issue.message,
         )
         for issue in issues
