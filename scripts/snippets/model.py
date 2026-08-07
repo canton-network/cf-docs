@@ -108,3 +108,37 @@ class IfVersionAttributeIssue:
 class IfVersionAttributeValidation:
     condition: IfVersionCondition | None
     issues: tuple[IfVersionAttributeIssue, ...]
+
+
+@dataclass(frozen=True)
+class PullRequestSnippetSource:
+    repository: str
+    pull_request: int
+    path: str
+
+
+class SnippetSourceAttributeRule(str, Enum):
+    SOURCE_REQUIRED = "source_required"
+    UNSUPPORTED_SOURCE = "unsupported_source"
+    PATH_MUST_BE_QUOTED = "path_must_be_quoted"
+    IMMUTABLE_PATH_FORBIDDEN = "immutable_path_forbidden"
+    PULL_REQUEST_PATH_REQUIRED = "pull_request_path_required"
+    LOCAL_PATH_FORBIDDEN = "local_path_forbidden"
+
+
+@dataclass(frozen=True)
+class SnippetSourceAttributeIssue:
+    rule: SnippetSourceAttributeRule
+    span: Span
+    message: str
+
+
+@dataclass(frozen=True)
+class SnippetSourceAttributeValidation:
+    source: (
+        ImmutableSourceReference
+        | PullRequestSnippetSource
+        | LocalSourceReference
+        | None
+    )
+    issues: tuple[SnippetSourceAttributeIssue, ...]
