@@ -227,3 +227,20 @@ class ConditionPageValidation:
     tags: tuple[IfVersionTag | ElseTag, ...]
     conditions: tuple[IfVersionCondition, ...]
     diagnostics: tuple[Diagnostic, ...]
+
+
+@dataclass(frozen=True)
+class ValidatedSnippet:
+    tag: SnippetTag
+    source: (
+        ImmutableSourceReference
+        | PullRequestSnippetSource
+        | LocalSourceReference
+    )
+    condition: IfVersionCondition | None
+
+
+@dataclass(frozen=True)
+class SnippetPageValidation:
+    snippets: tuple[ValidatedSnippet, ...]
+    diagnostics: tuple[Diagnostic, ...]
