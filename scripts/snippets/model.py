@@ -154,3 +154,9 @@ class SnippetSourceSafetyIssue:
     rule: SnippetSourceSafetyRule
     span: Span
     message: str
+
+
+@dataclass(frozen=True)
+class LocalSourcePolicyIssue:
+    span: Span
+    message: str

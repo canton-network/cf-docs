@@ -14,6 +14,7 @@ from .model import (
     IfVersionCondition,
     IfVersionTag,
     ImmutableSourceReference,
+    LocalSourcePolicyIssue,
     LocalSourceReference,
     PullRequestSnippetSource,
     SnippetSourceSafetyIssue,
@@ -291,3 +292,25 @@ def validate_snippet_source_safety(
             )
         )
     return tuple(issues)
+
+
+def validate_local_source_policy(
+    source: (
+        ImmutableSourceReference | PullRequestSnippetSource | LocalSourceReference
+    ),
+    *,
+    span: Span,
+    allow_local: bool,
+) -> tuple[LocalSourcePolicyIssue, ...]:
+    """Reject preview-only local refs unless the caller opts into preview mode."""
+
+    if isinstance(source, LocalSourceReference) and not allow_local:
+        return (
+            LocalSourcePolicyIssue(
+                span=span,
+                message=(
+                    "Local snippet references are preview-only and cannot be committed"
+                ),
+            ),
+        )
+    return ()
