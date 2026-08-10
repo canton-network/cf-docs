@@ -306,12 +306,14 @@ def test_update_typescript_bindings_source_updates_stale_package_versions(tmp_pa
     module = load_script_module()
     source_config_path = tmp_path / "source-artifacts.json"
     write_typescript_bindings_source_config(source_config_path)
-    latest_versions = {
+    highest_stable_versions = {
         "@daml/types": "3.5.2",
         "@canton-network/wallet-sdk": "1.3.1",
         "@canton-network/dapp-sdk": "1.2.0",
     }
-    module.typescript_bindings.latest_npm_version = lambda package_name: latest_versions[package_name]
+    module.typescript_bindings.highest_stable_npm_version = (
+        lambda package_name: highest_stable_versions[package_name]
+    )
 
     updates = module.typescript_bindings.update_source(
         source_config_path=source_config_path,
@@ -352,12 +354,14 @@ def test_update_typescript_bindings_source_noops_when_current(tmp_path: Path) ->
         wallet_sdk_version="1.3.1",
         dapp_sdk_version="1.2.0",
     )
-    latest_versions = {
+    highest_stable_versions = {
         "@daml/types": "3.5.2",
         "@canton-network/wallet-sdk": "1.3.1",
         "@canton-network/dapp-sdk": "1.2.0",
     }
-    module.typescript_bindings.latest_npm_version = lambda package_name: latest_versions[package_name]
+    module.typescript_bindings.highest_stable_npm_version = (
+        lambda package_name: highest_stable_versions[package_name]
+    )
 
     assert module.typescript_bindings.update_source(
         source_config_path=source_config_path,
@@ -369,7 +373,7 @@ def test_update_typescript_bindings_source_dry_run_does_not_write(tmp_path: Path
     module = load_script_module()
     source_config_path = tmp_path / "source-artifacts.json"
     write_typescript_bindings_source_config(source_config_path)
-    module.typescript_bindings.latest_npm_version = lambda package_name: {
+    module.typescript_bindings.highest_stable_npm_version = lambda package_name: {
         "@daml/types": "3.5.2",
         "@canton-network/wallet-sdk": "1.3.1",
         "@canton-network/dapp-sdk": "1.2.0",
@@ -384,6 +388,37 @@ def test_update_typescript_bindings_source_dry_run_does_not_write(tmp_path: Path
     packages = json.loads(source_config_path.read_text(encoding="utf-8"))["packages"]
     assert packages[0]["publish_version"] == "3.4.11"
     assert packages[2]["publish_version"] == "1.1.0"
+
+
+def test_highest_stable_npm_version_ignores_latest_tag_regression() -> None:
+    module = load_script_module()
+
+    class RegistryResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def read(self) -> bytes:
+            return json.dumps(
+                {
+                    "dist-tags": {
+                        "latest": "2.10.6",
+                        "next": "3.6.0-snapshot.20260806.14775.0.v12070684",
+                    },
+                    "versions": {
+                        "2.10.6": {},
+                        "3.5.1": {},
+                        "3.5.2": {},
+                        "3.6.0-snapshot.20260806.14775.0.v12070684": {},
+                    },
+                }
+            ).encode("utf-8")
+
+    module.typescript_bindings.urlopen = lambda *_args, **_kwargs: RegistryResponse()
+
+    assert module.typescript_bindings.highest_stable_npm_version("@daml/types") == "3.5.2"
 
 
 def test_update_ledger_api_source_updates_publish_version_canton_release(tmp_path: Path) -> None:

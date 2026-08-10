@@ -120,8 +120,7 @@ To disable **session signing keys**:
 canton.participants.participant3.crypto.kms.session-signing-keys.enabled = false
 ```
 
-Please note that **session signing keys** are only used with an external KMS (Key Management Service) provider.
-
+Please note that **session signing keys** are only used with an [external KMS (Key Management Service) provider](/global-synchronizer/production-operations/kms-operations#enable-external-key-storage-with-a-kms) and are disabled by default.
 {/* COPIED_END */}
 
 {/* COPIED_START source="docs-website:docs/replicated/canton/3.5/participant/howtos/secure/keys/key_restrictions.rst" hash="a29520ac" */}
@@ -589,9 +588,17 @@ You cannot rotate the root namespace key. If you need to discontinue the usage o
 ## Configure session keys
 Canton uses session keys to reduce expensive cryptographic operations during protocol execution, improving performance. There are two types: session encryption keys, which reduce the number of asymmetric encryptions, and session signing keys, which help avoid frequent calls to external signers such as a KMS.
 
-You can read more about the rationale and security considerations in [Cryptographic keys in Canton](/overview/learn/cryptographic-keys).
+You can read more about the rationale and security considerations in [Session Keys](/overview/learn/cryptographic-keys#kms-with-session-signing-keys).
 
-Extending the lifetime of session keys minimizes the need for repeated key negotiation or remote signing—but it also increases the window during which keys are stored in memory, raising the risk of compromise.
+Currently, **session encryption keys are enabled by default**, whereas **session signing keys**, being directly tied to
+a KMS, are **disabled by default**. However, the latter can be enabled when using an external KMS to store private keys
+[via a configuration parameter](/global-synchronizer/production-operations/key-management#enable-session-signing-keys-and-increase-lifetime).
+
+<Warning>
+**Important:**
+    Extending the lifetime of session keys minimizes the need for repeated key negotiation or remote signing/encryption,
+    but it also increases the window during which keys are stored in memory, raising the risk of compromise.
+</Warning>
 
 ### Increase session **encryption** keys lifetime
 You can control how long a session encryption key remains active by adjusting the `expire-after-timeout` values in your configuration. To globally increase the lifetime of session encryption keys, increase the `expire-after-timeout` for both the `sender-cache` and `receiver-cache`.
@@ -615,16 +622,22 @@ canton.participants.participant1 {
 }
 ```
 
-### Increase session **signing** keys lifetime
-When using external KMS (Key Management Service) provider you can control how long a session signing key remains active by adjusting the `key-validity-duration` and the `key-eviction-period`. The `key-eviction-period` should always be longer than the `key-validity-duration` and at least as long as the sum of `confirmation_response_timeout` and `mediator_reaction_timeout`, as configured in the dynamic Synchronizer parameters.
+### Enable session **signing** keys and increase lifetime
+When using [external KMS (Key Management Service) provider](/global-synchronizer/production-operations/kms-operations#enable-external-key-storage-with-a-kms) you can enable and control how long session signing keys
+remain active by setting the ``enabled = true`` and adjusting the ``key-validity-duration``
+and the ``key-eviction-period``. The ``key-eviction-period`` should always be longer than the ``key-validity-duration``
+and at least as long as the ``defaultMaxSequencingTimeOffset`` and the sum of ``confirmation_response_timeout``
+and ``mediator_reaction_timeout``, as configured in the the [dynamic Synchronizer parameters](/global-synchronizer/extension-synchronizers/synchronizer-operations#manage-dynamic-synchronizer-parameters).
+If you want to know more about each configurable parameter and the factors to consider when modifying them,
+you can refer to the session signing keys' [Configurable Parameters](/overview/learn/cryptographic-keys#configurable-parameters) section.
 
 ```scala
 canton.participants.participant1.crypto.kms {
   session-signing-keys {
-    # these are the default values
     enabled = true
     key-validity-duration = 5m
-    cut-off-duration = 30s,
+    tolerance-shift-duration = 2m
+    cut-off-duration = 1m,
     key-eviction-period = 10m,
     signing-algorithm-spec = ed-25519,
     signing-key-spec = ec-curve-25519,

@@ -21,12 +21,39 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  update-generated-docs:
+  select-targets:
     runs-on: ubuntu-latest
-    environment: cf-docs-generated-docs-merger
+    outputs:
+      targets: ${{ steps.select-targets.outputs.targets }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Select generated-doc targets
+        id: select-targets
+        env:
+          GENERATED_DOCS_TARGETS: ${{ inputs.targets || 'all' }}
+        run: |
+          targets="$(python3 scripts/update_generated_reference_prs.py --targets $GENERATED_DOCS_TARGETS --print-targets-json)"
+          echo "targets=$targets" >> "$GITHUB_OUTPUT"
+
+  update-generated-docs:
+    needs: select-targets
+    name: Update ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    environment: cf-docs-generated-docs-merger
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        target: ${{ fromJSON(needs.select-targets.outputs.targets) }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
 
       - name: Set up Nix
         uses: cachix/install-nix-action@v31
@@ -66,10 +93,15 @@ jobs:
           app-id: ${{ secrets.GENERATED_DOCS_MERGER_APP_ID }}
           private-key: ${{ secrets.GENERATED_DOCS_MERGER_PRIVATE_KEY }}
 
+      - name: Configure generated-docs PR authentication
+        env:
+          GH_TOKEN: ${{ steps.merger-token.outputs.token || github.token }}
+        run: gh auth setup-git
+
       - name: Generate update pull requests
         env:
-          GH_TOKEN: ${{ github.token }}
-          GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.merger-token.outputs.token || github.token }}
+          GITHUB_TOKEN: ${{ steps.merger-token.outputs.token || github.token }}
           GENERATED_DOCS_MERGER_TOKEN: ${{ steps.merger-token.outputs.token }}
-          GENERATED_DOCS_TARGETS: ${{ inputs.targets || 'all' }}
-        run: python3 scripts/update_generated_reference_prs.py --targets $GENERATED_DOCS_TARGETS
+          GENERATED_DOCS_WORKFLOW_TOKEN: ${{ github.token }}
+        run: python3 scripts/update_generated_reference_prs.py --targets ${{ matrix.target }}
