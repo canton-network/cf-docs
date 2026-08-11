@@ -5,16 +5,14 @@ from __future__ import annotations
 import argparse
 import base64
 import json
-import os
 import re
 import sys
-import urllib.error
 import urllib.parse
-import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Sequence
 
+import github_api_utils
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SOURCE_REPO = "digital-asset/canton"
@@ -72,22 +70,7 @@ class PageUpdate:
 
 
 def github_request_json(url: str) -> Any:
-    headers = {
-        "Accept": "application/vnd.github+json",
-        "User-Agent": USER_AGENT,
-        "X-GitHub-Api-Version": "2022-11-28",
-    }
-    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
-
-    request = urllib.request.Request(url, headers=headers)
-    try:
-        with urllib.request.urlopen(request, timeout=30) as response:
-            return json.loads(response.read().decode("utf-8"))
-    except urllib.error.HTTPError as error:
-        message = error.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"GitHub API request failed for {url}: HTTP {error.code}: {message}") from error
+    return github_api_utils.request_json(url, user_agent=USER_AGENT)
 
 
 def github_api_url(source_repo: str, path: str, *, query: str = "") -> str:
