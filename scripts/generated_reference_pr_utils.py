@@ -5,9 +5,8 @@ import os
 import subprocess
 import tempfile
 import time
+from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Mapping, Sequence
-
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -46,6 +45,8 @@ def env_for_token(token: str) -> dict[str, str]:
 
 
 def current_repository() -> str:
+    if repository := os.environ.get("GITHUB_REPOSITORY"):
+        return repository
     return gh("repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner", capture=True)
 
 
