@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass
 import gzip
 import importlib.util
 import json
@@ -14,14 +13,15 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import time
 import urllib.request
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from docs_env import ensure_repo_direnv, repo_direnv_command
 import generated_reference_nav
 import reference_nav
-
+from docs_env import ensure_repo_direnv, repo_direnv_command
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SOURCE_CONFIG = REPO_ROOT / "config" / "x2mdx" / "protobuf-history" / "source-artifacts.json"
@@ -53,6 +53,8 @@ ADMIN_API_COMMUNITY_IMPORT_PREFIXES = (
     "com/digitalasset/canton/topology/admin",
 )
 USER_AGENT = "digital-asset-docs-x2mdx/1.0"
+GIT_ATTEMPTS = 3
+GIT_RETRY_DELAY_SECONDS = 5.0
 
 
 @dataclass(frozen=True)
@@ -141,14 +143,42 @@ def git(args: list[str], *, cwd: Path, capture: bool = False) -> str:
     return run(["git", *args], cwd=cwd, capture=capture)
 
 
+def retry_git(
+    args: list[str],
+    *,
+    cwd: Path | None = None,
+    incomplete_clone_dir: Path | None = None,
+) -> None:
+    command = ["git", *args]
+    for attempt in range(1, GIT_ATTEMPTS + 1):
+        try:
+            run(command, cwd=cwd)
+            return
+        except subprocess.CalledProcessError as error:
+            if incomplete_clone_dir is not None:
+                shutil.rmtree(incomplete_clone_dir, ignore_errors=True)
+            if attempt == GIT_ATTEMPTS:
+                raise
+            delay = GIT_RETRY_DELAY_SECONDS * attempt
+            print(
+                f"Git command attempt {attempt}/{GIT_ATTEMPTS} failed: "
+                f"{' '.join(command)}; retrying in {delay:g}s",
+                file=sys.stderr,
+            )
+            time.sleep(delay)
+
+
 def ensure_repo(repo_dir: Path, *, remote: str, fetch: bool) -> Path:
     repo_dir.parent.mkdir(parents=True, exist_ok=True)
     if not repo_dir.exists():
-        run(["git", "clone", "--bare", remote, str(repo_dir)])
+        retry_git(
+            ["clone", "--bare", remote, str(repo_dir)],
+            incomplete_clone_dir=repo_dir,
+        )
     else:
         git(["remote", "set-url", "origin", remote], cwd=repo_dir)
     if fetch:
-        git(["fetch", "origin", "--tags", "--prune", "--force"], cwd=repo_dir)
+        retry_git(["fetch", "origin", "--tags", "--prune", "--force"], cwd=repo_dir)
     return repo_dir
 
 

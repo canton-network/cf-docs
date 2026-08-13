@@ -14,7 +14,6 @@ from typing import Sequence
 import generated_reference_pr_utils as pr_utils
 import summarize_version_changes
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 NETWORK_VARIABLE_TAB_PAGES = (
     "docs-main/appdev/deep-dives/token-standard.mdx",
@@ -50,6 +49,7 @@ class UpdateTarget:
     source_update_paths: tuple[str, ...] = ()
     require_summary_changes: bool = False
     auto_merge: bool = True
+    requires_daml_tooling: bool = False
 
 
 UPDATE_TARGETS = (
@@ -143,6 +143,7 @@ UPDATE_TARGETS = (
             "npm run generate:splice-token-standard-v2-reference",
             "git diff --check",
         ),
+        requires_daml_tooling=True,
     ),
     UpdateTarget(
         key="wallet-gateway-openrpc",
@@ -339,6 +340,7 @@ UPDATE_TARGETS = (
             ("nix-shell", "--run", "npm run update:generated-reference-sources -- --source daml-standard-library"),
         ),
         source_update_paths=("config/x2mdx/daml-standard-library/source-artifacts.json",),
+        requires_daml_tooling=True,
     ),
     UpdateTarget(
         key="daml-script",
@@ -368,6 +370,7 @@ UPDATE_TARGETS = (
             ("nix-shell", "--run", "npm run update:generated-reference-sources -- --source daml-script"),
         ),
         source_update_paths=("config/x2mdx/daml-script/source-artifacts.json",),
+        requires_daml_tooling=True,
     ),
     UpdateTarget(
         key="typescript-bindings",
@@ -692,15 +695,21 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="List selected generated-doc targets and commands without changing files or opening PRs.",
     )
-    parser.add_argument(
+    json_output = parser.add_mutually_exclusive_group()
+    json_output.add_argument(
         "--print-targets-json",
         action="store_true",
         help="Print the selected target keys as JSON without running them.",
     )
+    json_output.add_argument(
+        "--print-target-matrix-json",
+        action="store_true",
+        help="Print the selected targets as a GitHub Actions matrix without running them.",
+    )
     args = parser.parse_args()
     if "all" in args.targets and len(args.targets) > 1:
         parser.error("pass --targets all by itself, or list specific target keys")
-    if args.dry_run or args.print_targets_json:
+    if args.dry_run or args.print_targets_json or args.print_target_matrix_json:
         args.base_branch = args.base_branch or ""
         args.repository = args.repository or ""
     else:
@@ -720,11 +729,26 @@ def targets_to_run(target_keys: Sequence[str]) -> tuple[UpdateTarget, ...]:
     return tuple(target for target in UPDATE_TARGETS if target.key in requested)
 
 
+def target_matrix(targets: Sequence[UpdateTarget]) -> dict[str, list[dict[str, str | bool]]]:
+    return {
+        "include": [
+            {
+                "target": target.key,
+                "requires_daml_tooling": target.requires_daml_tooling,
+            }
+            for target in targets
+        ]
+    }
+
+
 def main() -> int:
     args = parse_args()
     selected_targets = targets_to_run(args.targets)
     if args.print_targets_json:
         print(json.dumps([target.key for target in selected_targets]))
+        return 0
+    if args.print_target_matrix_json:
+        print(json.dumps(target_matrix(selected_targets)))
         return 0
     if args.dry_run:
         for target in selected_targets:
