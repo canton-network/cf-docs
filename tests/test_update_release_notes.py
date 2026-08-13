@@ -42,12 +42,30 @@ def test_package_release_pages_record_upstream_source_metadata() -> None:
     release_page = module.release_page(release_target, sections[0])
 
     assert 'title: "Wallet Gateway"' in index_page
+    assert 'sidebarTitle: "Release Notes"' in index_page
     assert 'latest_version="1.5.0"' in index_page
     assert "[Wallet Gateway 1.5.0 — 2026-06-29](/integrations/release-notes/wallet-gateway-releases/1-5-0)" in index_page
     assert 'title: "1.5.0 — 2026-06-29"' in release_page
     assert 'version="1.5.0"' in release_page
     assert "# 1.5.0 — 2026-06-29" in release_page
     assert "- changed &lt;placeholder&gt;" in release_page
+
+
+def test_release_index_pages_use_release_notes_sidebar_title_for_every_target() -> None:
+    module = load_script_module()
+    section = module.ReleaseNoteSection(
+        version=module.Version.parse("1.0.0"),
+        title="1.0.0",
+        body="## 1.0.0",
+        source_id="example-source",
+        source_url="https://github.com/example/release",
+    )
+
+    for target in module.WALLET_RELEASE_TARGETS.values():
+        index_page = module.release_index_page(target, (section,))
+
+        assert f'title: "{target.title}"' in index_page
+        assert index_page.count('sidebarTitle: "Release Notes"') == 1
 
 
 def test_rst_to_mdx_converts_wallet_sdk_headings_links_and_code_blocks() -> None:

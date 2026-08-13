@@ -297,6 +297,7 @@ def release_index_page(target: ReleaseNoteTarget, sections: Sequence[ReleaseNote
         "---\n"
         f'title: "{target.title}"\n'
         f'description: "{target.description}"\n'
+        'sidebarTitle: "Release Notes"\n'
         "---"
     )
     comment = source_comment(
