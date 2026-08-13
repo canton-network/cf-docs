@@ -22,7 +22,9 @@ def test_copy_helper_and_config_copies_helper(tmp_path: Path) -> None:
     assert (target_scripts / "exportConfig.json").is_file()
 
 
-def test_copy_helper_and_config_uses_repo_scripts_subdir(tmp_path: Path) -> None:
+def test_copy_helper_and_config_uses_default_scripts_subdir_for_splice(
+    tmp_path: Path,
+) -> None:
     source_dir = tmp_path / "splice"
     helper = generator.copy_helper_and_config(
         generator.REPOS["splice"],
@@ -30,10 +32,11 @@ def test_copy_helper_and_config_uses_repo_scripts_subdir(tmp_path: Path) -> None
         dry_run=False,
     )
 
-    target_scripts = source_dir / "gha-scripts" / "cf-docs"
+    target_scripts = source_dir / "scripts" / "docs"
     assert helper == target_scripts / "generateOutputDocs.js"
     assert helper.is_file()
     assert (target_scripts / "exportConfig.json").is_file()
+    assert generator.REPOS["splice"].scripts_subdir == "scripts/docs"
 
 
 def test_validate_inputs_reports_missing_helper(
