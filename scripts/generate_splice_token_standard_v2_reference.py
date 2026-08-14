@@ -6,8 +6,11 @@ import argparse
 import json
 import os
 import shutil
+import ssl
 import subprocess
 import sys
+import time
+import urllib.error
 import urllib.request
 import zipfile
 from dataclasses import dataclass
@@ -48,6 +51,9 @@ TOKEN_STANDARD_VERSION_GROUPS = (
     ("v1", "Token Standard v1"),
     ("v2", "Token Standard v2"),
 )
+DOWNLOAD_ATTEMPTS = 3
+DOWNLOAD_RETRY_DELAY_SECONDS = 5.0
+RETRYABLE_HTTP_STATUS_CODES = frozenset({408, 425, 429, 500, 502, 503, 504})
 
 
 @dataclass(frozen=True)
@@ -184,8 +190,33 @@ def ensure_dar(
     request = urllib.request.Request(
         url, headers={"User-Agent": "cf-docs-token-standard-v2-generator"}
     )
-    with urllib.request.urlopen(request, timeout=60) as response:
-        payload = response.read()
+    for attempt in range(1, DOWNLOAD_ATTEMPTS + 1):
+        try:
+            with urllib.request.urlopen(request, timeout=60) as response:
+                payload = response.read()
+            break
+        except urllib.error.HTTPError as error:
+            if error.code not in RETRYABLE_HTTP_STATUS_CODES or attempt == DOWNLOAD_ATTEMPTS:
+                raise
+            delay = DOWNLOAD_RETRY_DELAY_SECONDS * attempt
+            print(
+                f"DAR download attempt {attempt}/{DOWNLOAD_ATTEMPTS} failed for {url}: "
+                f"HTTP {error.code}; retrying in {delay:g}s",
+                file=sys.stderr,
+            )
+            time.sleep(delay)
+        except (urllib.error.URLError, TimeoutError, ssl.SSLError) as error:
+            if attempt == DOWNLOAD_ATTEMPTS:
+                raise
+            delay = DOWNLOAD_RETRY_DELAY_SECONDS * attempt
+            print(
+                f"DAR download attempt {attempt}/{DOWNLOAD_ATTEMPTS} failed for {url}: "
+                f"{error}; retrying in {delay:g}s",
+                file=sys.stderr,
+            )
+            time.sleep(delay)
+    else:
+        raise AssertionError("unreachable")
     if not payload.startswith(b"PK"):
         raise ValueError(f"Downloaded DAR is not a zip archive: {url}")
     output_path.write_bytes(payload)

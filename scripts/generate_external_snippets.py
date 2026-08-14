@@ -73,7 +73,6 @@ REPOS: dict[str, SnippetRepo] = {
         name="splice",
         config_name="splice-snippet-list-remote.json",
         aliases=("splice",),
-        scripts_subdir="gha-scripts/cf-docs",
     ),
 }
 

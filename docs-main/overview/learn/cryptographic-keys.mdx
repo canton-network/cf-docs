@@ -58,27 +58,27 @@ Session signing keys are only used to sign [protocol messages](/global-synchroni
 #### Configurable parameters
 
 Session signing keys have a validity period associated with them every time they are created, and they are only valid
-during that period. This period can be adapted through Canton's configuration files. This section lists the
+during that period. This period can be [adapted through Canton's configuration files](/global-synchronizer/production-operations/key-management#enable-session-signing-keys-and-increase-lifetime). This section lists the
 configurable parameters, what they control, and what to keep in mind when modifying them. Throughout this section
 ``ts`` denotes the timestamp at which we are signing.
 
-- **enabled**
+- ``enabled``
 
   - Enables the usage of session signing keys in the protocol. This option can only be used when a KMS is deployed and the private keys are stored within it.
 
-- **keyValidityDuration**
+- ``keyValidityDuration``
 
   - Specifies the validity duration for each session signing key. Its lifespan **must** satisfy: ``keyValidityDuration > 2 * cutoffDuration``.
 
   - The validity duration should also not be too short, so that a session signing key can cover the lifespan of a message (i.e., its maximum sequencing time) and be reused across multiple submission requests.
 
-  - Recommended (optional) constraints. If these are not satisfied, the operator should be aware that some messages may need to be signed with the long-term key, which may lead to increased load on the KMS and more frequent calls to the KMS:
+  - Recommended (optional) constraints. If these are not satisfied, the operator should be aware that some messages may need to be signed with the long-term key, which may lead to an increased load on the KMS and more frequent calls to it. You can find more information on some of these parameters by reading about the [dynamic synchronizer parameters](/global-synchronizer/extension-synchronizers/synchronizer-operations#manage-dynamic-synchronizer-parameters):
 
      1. ``keyValidityDuration > defaultMaxSequencingTimeOffset``
      2. ``keyValidityDuration > setBalanceRequestSubmissionWindowSize``
      3. ``keyValidityDuration > confirmationResponseTimeout + mediatorReactionTimeout``
 
-- **toleranceShiftDuration**
+- ``toleranceShiftDuration``
 
   - Shifts the validity interval from ``[ts, ts+keyValidityDuration]`` to ``[ts-toleranceShiftDuration, ts+keyValidityDuration-toleranceShiftDuration]``.
 
@@ -89,23 +89,23 @@ configurable parameters, what they control, and what to keep in mind when modify
 
   - We use this tolerance to minimize the number of intervals (i.e., session signing keys) created. For example, without a shift, a sequence of timestamps ``ts, ts-1us, ts-2us, ts-3us`` would generate multiple keys. The value can be adjusted depending on whether timestamps are mostly increasing or decreasing. A shift of around 50% of the ``keyValidityDuration`` is generally recommended.
 
-- **cutoffDuration**
+- ``cutoffDuration``
 
   - Measures the tolerable clock skew and should be longer than ``ledgerRecordTimeTolerance``. This ensures that submissions do not fail verification due to clock skew.
 
   - The node uses an existing session signing key only if the key’s validity period fully covers the required time range, with a buffer/margin applied on both sides.
 
-- **keyEvictionPeriod**
+- ``keyEvictionPeriod``
 
   - Defines how long the private session signing key remains in memory.
 
   - **Must be longer** than ``keyValidityDuration``.
 
-- **signingAlgorithmSpec**
+- ``signingAlgorithmSpec``
 
   - Defines the signing algorithm for session signing keys. Defaults to ``Ed25519``.
 
-- **signingKeySpec**
+- ``signingKeySpec``
 
   - Defines the key scheme for session signing keys. Defaults to ``EcCurve25519``.
 

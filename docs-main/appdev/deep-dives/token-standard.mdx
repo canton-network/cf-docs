@@ -7,7 +7,8 @@ description: "The Canton Network Token Standard APIs and Daml interfaces"
 
 ## Overview
 
-- See the [text of the CIP-0056](https://github.com/canton-foundation/cips/blob/main/cip-0056/cip-0056.md) for an overview of the APIs that are part of the Canton Network Token Standard.
+- See the [text of the CIP-0056](https://github.com/canton-foundation/cips/blob/main/cip-0056/cip-0056.md) for an overview of the APIs that are part of the Canton Network Token Standard V1.
+- See the [text of the CIP-0112](https://github.com/canton-foundation/cips/blob/main/cip-0112/cip-0112.md) for an overview of the APIs that are part of the Canton Network Token Standard V2.
 - See the [README in its source-code](https://github.com/canton-network/splice/tree/main/token-standard#readme) for background on how to use the APIs.
 
 ## Holding UTXO Management
@@ -35,33 +36,33 @@ We recommend wallet providers to implement a UTXO management strategy that:
 {/* NETWORKVARS_START source="/snippets/networkvars/appdev/deep-dives/token-standard-1.mdx" */}
 <Tabs>
 
-<Tab title="DevNet (0.7.0)">
+<Tab title="DevNet (0.7.1)">
 
 Assuming you are a wallet provider that runs a validator node for your users, you can set up `MergeDelegation` contracts for your users as follows.
 
-1.  Extract the latest version of the `splice-util-token-standard-wallet.dar` file from the release bundle (<a href="https://github.com/digital-asset/decentralized-canton-sync/releases/download/v0.7.0/0.7.0_splice-node.tar.gz">Download Bundle (DevNet 0.7.0)</a>).
+1.  Extract the latest version of the `splice-util-token-standard-wallet.dar` file from the release bundle (<a href="https://github.com/digital-asset/decentralized-canton-sync/releases/download/v0.7.1/0.7.1_splice-node.tar.gz">Download Bundle (DevNet 0.7.1)</a>).
 2.  Upload the extracted `.dar` file to your validator node.
 3.  Adjust your user onboarding procedure such that the users signs the creation of a `MergeDelegationProposal` contract (see docs).
 4.  Accept the `MergeDelegationProposal` contracts by exercising their `Accept` choice using your wallet provider's party.
 
 </Tab>
 
-<Tab title="TestNet (0.6.14)">
+<Tab title="TestNet (0.7.0)">
 
 Assuming you are a wallet provider that runs a validator node for your users, you can set up `MergeDelegation` contracts for your users as follows.
 
-1.  Extract the latest version of the `splice-util-token-standard-wallet.dar` file from the release bundle (<a href="https://github.com/digital-asset/decentralized-canton-sync/releases/download/v0.6.14/0.6.14_splice-node.tar.gz">Download Bundle (TestNet 0.6.14)</a>).
+1.  Extract the latest version of the `splice-util-token-standard-wallet.dar` file from the release bundle (<a href="https://github.com/digital-asset/decentralized-canton-sync/releases/download/v0.7.0/0.7.0_splice-node.tar.gz">Download Bundle (TestNet 0.7.0)</a>).
 2.  Upload the extracted `.dar` file to your validator node.
 3.  Adjust your user onboarding procedure such that the users signs the creation of a `MergeDelegationProposal` contract (see docs).
 4.  Accept the `MergeDelegationProposal` contracts by exercising their `Accept` choice using your wallet provider's party.
 
 </Tab>
 
-<Tab title="MainNet (0.6.13)">
+<Tab title="MainNet (0.6.14)">
 
 Assuming you are a wallet provider that runs a validator node for your users, you can set up `MergeDelegation` contracts for your users as follows.
 
-1.  Extract the latest version of the `splice-util-token-standard-wallet.dar` file from the release bundle (<a href="https://github.com/digital-asset/decentralized-canton-sync/releases/download/v0.6.13/0.6.13_splice-node.tar.gz">Download Bundle (MainNet 0.6.13)</a>).
+1.  Extract the latest version of the `splice-util-token-standard-wallet.dar` file from the release bundle (<a href="https://github.com/digital-asset/decentralized-canton-sync/releases/download/v0.6.14/0.6.14_splice-node.tar.gz">Download Bundle (MainNet 0.6.14)</a>).
 2.  Upload the extracted `.dar` file to your validator node.
 3.  Adjust your user onboarding procedure such that the users signs the creation of a `MergeDelegationProposal` contract (see docs).
 4.  Accept the `MergeDelegationProposal` contracts by exercising their `Accept` choice using your wallet provider's party.
@@ -161,7 +162,7 @@ To filter for a particular party and interface, it should include a `filtersByPa
 For example:
 
 - `"$A_PARTY"` could look like `test::1220a0db3761b3fc919b55e7ff80ad740824336010bfde8829611c0e64477ab7bee5`.
-- `"$AN_INTERFACE_ID"` could be `#splice-api-token-holding-v1:Splice.Api.Token.HoldingV1:Holding`.
+- `"$AN_INTERFACE_ID"` could be `#splice-api-token-holding-v2:Splice.Api.Token.HoldingV2:Holding`.
 
 Additionally, there's three flags that can be set:
 
@@ -204,7 +205,7 @@ To filter for a particular party and interface, it should include a `filtersByPa
 For example:
 
 - `"$A_PARTY"` could look like `test::1220a0db3761b3fc919b55e7ff80ad740824336010bfde8829611c0e64477ab7bee5`.
-- `"$AN_INTERFACE_ID"` could be `#splice-api-token-holding-v1:Splice.Api.Token.HoldingV1:Holding` to read all `Holding` contracts of the specified party.
+- `"$AN_INTERFACE_ID"` could be `#splice-api-token-holding-v2:Splice.Api.Token.HoldingV2:Holding` to read all `Holding` contracts of the specified party.
 
 To include other transaction nodes that don't directly involve the interfaces (e.g., non-interface-specific children nodes), a `WildcardFilter` can be included in the `cumulative` filter array:
 
@@ -222,9 +223,17 @@ To include other transaction nodes that don't directly involve the interfaces (e
 
 The `beginExclusive` field is the offset from which to start reading transactions. To paginate, you can start with the `participantPrunedUpToInclusive` from `GET ${PARTICIPANT_URL}/v2/state/latest-pruned-offsets` and continue by passing the offset of the last transaction from the previous response.
 
-#### Parsing the history
+#### Parsing the history (V2)
 
-Example code: [the parser here](https://github.com/canton-network/splice/blob/main/token-standard/cli/src/txparse/parser.ts). It extracts a user-readable wallet history by parsing transactions involving the `Holding` and `TransferInstruction` interfaces.
+Example code: [the parser here](https://github.com/canton-network/splice/blob/main/token-standard/cli/src/txparse/parserv2.ts). It extracts a user-readable wallet history by parsing transactions involving the `Holding` and `TransferInstruction` interfaces.
+
+The parser looks for all exercises of `EventLog_HoldingsChange` to build the transaction history.
+This is a choice that signals a change in the holdings of an account to the observers.
+Refer to its [full documentation](/sdks-tools/api-reference/splice-daml/splice-api-token-transfer-events-v2/splice-api-token-transfereventsv2#choice-eventlog_holdingschange).
+
+#### Parsing the history (V1)
+
+Example code: [the parser here](https://github.com/canton-network/splice/blob/main/token-standard/cli/src/txparse/parserv1.ts). It extracts a user-readable wallet history by parsing transactions involving the `Holding` and `TransferInstruction` interfaces.
 
 The endpoint returns transaction trees as an array. The transactions are ordered as they occur in the ledger. Given an `ExercisedEvent` with `nodeId=X` and `lastDescendantNodeId=Y`, the children of that node are those with `nodeId` in the range `[X+1, Y]`. `CreatedEvent` and `ArchivedEvent` (or equivalently, `ExercisedEvent` where `consuming=true`) do not have children.
 
@@ -280,7 +289,7 @@ With this data, you can execute a choice on the factory. For external parties yo
 
 In both cases, you must include an `ExerciseCommand` in your payload with the following fields:
 
-- `templateId`: the interface id of the factory you want to exercise the choice on. For example, `#splice-api-token-transfer-instruction-v1:Splice.Api.Token.TransferInstructionV1:TransferFactory`.
+- `templateId`: the interface id of the factory you want to exercise the choice on. For example, `#splice-api-token-transfer-instruction-v2:Splice.Api.Token.TransferInstructionV2:TransferFactory`.
 - `contractId`: the `factoryId` obtained from the registry.
 - `choice`: the name of the choice you want to execute. For example, `TransferFactory_Transfer`.
 - `choiceArgument`: the arguments that will be passed to the Daml choice. These will be decoded from JSON. For a `TransferFactory_Transfer`, this will include for example the sender, receiver and amount, among other fields.
@@ -293,7 +302,7 @@ To execute a choice on a contract implementing a Token Standard interface for ex
 
 In both cases, you must include an `ExerciseCommand` in your payload with the following fields:
 
-- `templateId`: the interface id of the contract you want to exercise the choice on. For example, `#splice-api-token-transfer-instruction-v1:Splice.Api.Token.TransferInstructionV1:TransferInstruction`.
+- `templateId`: the interface id of the contract you want to exercise the choice on. For example, `#splice-api-token-transfer-instruction-v2:Splice.Api.Token.TransferInstructionV2:TransferInstruction`.
 - `contractId`: the contract id of the contract you want to exercise the choice on. Typically, you'll get this from the current ACS of a party.
 - `choice`: the name of the choice you want to execute. For example, `TransferInstruction_Accept`.
 - `choiceArgument`: the arguments that will be passed to the Daml choice. These will be decoded from JSON.
@@ -323,7 +332,8 @@ Splice releases the optional `splice-util-token-standard-wallet.dar` file, which
 
 ## API References
 
-Refer to [CIP-0056](https://github.com/canton-foundation/cips/blob/main/cip-0056/cip-0056.md#details) for more context on the APIs.
+Refer to [CIP-0056](https://github.com/canton-foundation/cips/blob/main/cip-0056/cip-0056.md#details) for more context on the V1 APIs,
+and to [CIP-0112](https://github.com/canton-foundation/cips/blob/main/cip-0112/cip-01 for more context on the V2 APIs.
 
 ### Token Metadata
 
@@ -334,30 +344,38 @@ Refer to [CIP-0056](https://github.com/canton-foundation/cips/blob/main/cip-0056
 
 This allows implementation of a [Portfolio View](https://github.com/canton-foundation/cips/blob/main/cip-0056/cip-0056.md#wallet-client--portfolio-view).
 
-- Daml reference: [splice-api-token-holding-v1](/sdks-tools/api-reference/splice-daml/splice-api-token-holding-v1)
+- V2 Daml reference: [splice-api-token-holding-v2](/sdks-tools/api-reference/splice-daml/splice-api-token-holding-v2)
+- V1 Daml reference: [splice-api-token-holding-v1](/sdks-tools/api-reference/splice-daml/splice-api-token-holding-v1)
 
 ### Transfer Instruction
 
 This allows implementation of [Direct Peer-to-Peer / Free of Payment (FOP) Transfers](https://github.com/canton-foundation/cips/blob/main/cip-0056/cip-0056.md#direct-peer-to-peer--free-of-payment-fop-transfer-workflow).
 
-- Daml reference: [splice-api-token-transfer-instruction-v1](/sdks-tools/api-reference/splice-daml/splice-api-token-transfer-instruction-v1)
-- OpenAPI reference: [Transfer Instruction API](/reference/splice-transfer-instruction-api/post-registrytransfer-instructionv1transfer-factory)
+- V2 Daml reference: [splice-api-token-transfer-instruction-v2](/sdks-tools/api-reference/splice-daml/splice-api-token-transfer-instruction-v2)
+- V2 OpenAPI reference: [Transfer Instruction V2 API](/reference/splice-transfer-instruction-api/post-registrytransfer-instructionv2transfer-factory)
+- V1 Daml reference: [splice-api-token-transfer-instruction-v1](/sdks-tools/api-reference/splice-daml/splice-api-token-transfer-instruction-v1)
+- V1 OpenAPI reference: [Transfer Instruction V1 API](/reference/splice-transfer-instruction-api/post-registrytransfer-instructionv1transfer-factory)
 
 ### Allocation
 
 This allows implementation of [Delivery versus Payment (DVP) Transfer Workflows](https://github.com/canton-foundation/cips/blob/main/cip-0056/cip-0056.md#delivery-versus-payment-dvp-transfer-workflows), jointly with the Allocation Instruction and Allocation Request APIs below.
 
-- Daml reference: [splice-api-token-allocation-v1](/sdks-tools/api-reference/splice-daml/splice-api-token-allocation-v1)
-- OpenAPI reference: [Allocation API](/reference/splice-allocation-api/post-registryallocationsv1:allocationidchoice-contextsexecute-transfer)
+- V2 Daml reference: [splice-api-token-allocation-v2](/sdks-tools/api-reference/splice-daml/splice-api-token-allocation-v2)
+- V2 OpenAPI reference: [Allocation V2 API](/reference/splice-allocation-api/post-registryallocationsv2:allocationidchoice-contextsexecute-transfer)
+- V1 Daml reference: [splice-api-token-allocation-v1](/sdks-tools/api-reference/splice-daml/splice-api-token-allocation-v1)
+- V1 OpenAPI reference: [Allocation V1 API](/reference/splice-allocation-api/post-registryallocationsv1:allocationidchoice-contextsexecute-transfer)
 
 ### Allocation Instruction
 
-- Daml reference: [splice-api-token-allocation-instruction-v1](/sdks-tools/api-reference/splice-daml/splice-api-token-allocation-instruction-v1)
-- OpenAPI reference: [Allocation Instruction API](/reference/splice-allocation-instruction-api/post-registryallocation-instructionv1allocation-factory)
+- V2 Daml reference: [splice-api-token-allocation-instruction-v2](/sdks-tools/api-reference/splice-daml/splice-api-token-allocation-instruction-v2)
+- V2 OpenAPI reference: [Allocation Instruction V2 API](/reference/splice-allocation-instruction-api/post-registryallocation-instructionv2allocation-factory)
+- V1 Daml reference: [splice-api-token-allocation-instruction-v1](/sdks-tools/api-reference/splice-daml/splice-api-token-allocation-instruction-v1)
+- V1 OpenAPI reference: [Allocation Instruction V1 API](/reference/splice-allocation-instruction-api/post-registryallocation-instructionv1allocation-factory)
 
 ### Allocation Request
 
-- Daml reference: [splice-api-token-allocation-request-v1](/sdks-tools/api-reference/splice-daml/splice-api-token-allocation-request-v1)
+- V2 Daml reference: [splice-api-token-allocation-request-v2](/sdks-tools/api-reference/splice-daml/splice-api-token-allocation-request-v2)
+- V1 Daml reference: [splice-api-token-allocation-request-v1](/sdks-tools/api-reference/splice-daml/splice-api-token-allocation-request-v1)
 
 {/* COPIED_END */}
 
