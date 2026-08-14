@@ -317,10 +317,10 @@ First, we need to add the Bank as a party:
 You might have noticed that we've added a `waitForSynchronizer` argument here. This is necessary to force some synchronization between the nodes to ensure that the new party is known within the distributed system before it is used.
 
 <Note>
-Canton alleviates most synchronization issues when interacting with Daml contracts. Nevertheless, Canton is a concurrent, distributed system. All operations happen asynchronously. Creating the `Bank` party is an operation local to `participant2`, and `mysynchronizer` becomes aware of the party with a delay (see Topology Transactions for more detail). Processing and network delays also exist for all other operations that affect multiple nodes, though everyone sees the operations on the synchronizer in the same order. When you execute commands interactively, the delays are usually too small to notice. However, if you're programming Canton scripts or applications that talk to multiple nodes, you might need some form of manual synchronization. Most Canton console commands have some form of synchronization to simplify your life and sometimes, using `utils.retry_until_true(...)` is a handy solution.
+Canton alleviates most synchronization issues when interacting with Canton contracts. Nevertheless, Canton is a concurrent, distributed system. All operations happen asynchronously. Creating the `Bank` party is an operation local to `participant2`, and `mysynchronizer` becomes aware of the party with a delay (see Topology Transactions for more detail). Processing and network delays also exist for all other operations that affect multiple nodes, though everyone sees the operations on the synchronizer in the same order. When you execute commands interactively, the delays are usually too small to notice. However, if you're programming Canton scripts or applications that talk to multiple nodes, you might need some form of manual synchronization. Most Canton console commands have some form of synchronization to simplify your life and sometimes, using `utils.retry_until_true(...)` is a handy solution.
 </Note>
 
-The corresponding Daml contracts that we are going to use for this example are:
+The corresponding Canton contracts that we are going to use for this example are:
 
 ``` none
 module Iou where
@@ -400,7 +400,7 @@ template OfferToPaintHouseByPainter
         return iouId2
 ```
 
-We won't dive into the details of Daml, as this is [explained elsewhere](/appdev/modules/m3-language-fundamentals). But one key observation is that the contracts themselves are passive. The contract instances represent the ledger and only encode the rules according to which the ledger state can be changed. Any change requires you to trigger some Daml contract execution by sending the appropriate commands over the Ledger API.
+We won't dive into the details of Canton, as this is [explained elsewhere](/appdev/modules/m3-language-fundamentals). But one key observation is that the contracts themselves are passive. The contract instances represent the ledger and only encode the rules according to which the ledger state can be changed. Any change requires you to trigger some Daml contract execution by sending the appropriate commands over the Ledger API.
 
 The Canton console gives you interactive access to this API, together with some utilities that can be useful for experimentation. The Ledger API uses [gRPC](http://grpc.io).
 
@@ -418,7 +418,7 @@ and then send that command to the Ledger API:
 
 <ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantTutorialsGettingStarted30 />
 
-Here, we've submitted this command as party `Bank` on participant2. Interestingly, we can test here the Daml authorization logic. As the `signatory` of the contract is `Bank`, we can't have Alice submitting the contract:
+Here, we've submitted this command as party `Bank` on participant2. Interestingly, we can test here the authorization logic. As the `signatory` of the contract is `Bank`, we can't have Alice submitting the contract:
 
 <ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantTutorialsGettingStarted31 />
 
@@ -442,7 +442,7 @@ Going back to our story, Bob now wants to offer to paint Alice's house in exchan
 
 <ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantTutorialsGettingStarted36 />
 
-Note that the modules are compositional. The `Iou` module is not aware of the `Paint` module, but the `Paint` module is using the `Iou` module within its workflow. This is how we can extend any workflow in Daml and build on top of it. In particular, the Bank does not need to know about the `Paint` module at all, but can still participate in the transaction without any adverse effect. As a result, everybody can extend the system with their own functionality. Let's create and submit the offer now:
+Note that the modules are compositional. The `Iou` module is not aware of the `Paint` module, but the `Paint` module is using the `Iou` module within its workflow. This is how we can extend any workflow and build on top of it. In particular, the Bank does not need to know about the `Paint` module at all, but can still participate in the transaction without any adverse effect. As a result, everybody can extend the system with their own functionality. Let's create and submit the offer now:
 
 <ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantTutorialsGettingStarted37 />
 
