@@ -21,72 +21,49 @@ Traffic credits are consumed even if a confirmation request fails due to content
 
 ### Holding Fees
 
-{/* COPIED_START source="splice:docs/src/background/tokenomics/overview_tokenomics.rst" hash="4b0e1a6e" */}
-
-Canton Network tokenomics is based on an *Activity Record* which identifies a party that performed an action which provides value to the network. An activity record has a *weight* which is the relative share of CC minting associated with this activity record.
-
-Creating an activity record and minting the associated Canton Coin (CC) are two distinct steps. The creation and minting steps are performed in a cycle that is called a *round* which has five phases. In the first phase, any fee values for that round are written to the ledger (the fees can be obtained from the [Scan State API](/sdks-tools/api-reference/splice-scan-current-state-api)). The second phase is called the *activity recording* and it is when activity records are created; records created in this phase belong to that round. The next phase calculates a [CC-issuance-per-activity-weight](https://github.com/canton-network/splice/blob/332e06a7ae9e13fde5bba0bf7dcb059aa36f979e/daml/splice-amulet/daml/Splice/Issuance.daml#L67) for each kind of activity record which is the share of total CC that can be minted for this type of activity record. This is followed by a *minting phase* where the owners of an activity record can mint CC proportional to its minting weight.
-
-There are several rounds active concurrently with each round being in a different phase. A round starts every 10 minutes, which is a configuration parameter that the Super Validators may change in the future via a governance vote. See the CC whitepaper for the details.
-
-There is no difference in activity record creation for an external party or a local party, but there is a difference in the automation support used in the minting phase. For local parties onboarded to a validator, the validator application runs background automation to mint all activity records automatically. An external party signs transactions using a key they control. As a consequence, the validator automation is not able to perform minting for external parties directly. For external parties, there are two options:
-
-1.  Use a [minting delegation](/global-synchronizer/splice-fundamentals/rewards-minting) to delegate reward collection to a validator, avoiding the need to build custom automation.
-2.  Develop custom automation to call AmuletRules_Transfer at least once per round with all activity records as inputs.
-
-{/* DIVERGENCE: corrected CIP-0073 title from "SV-Determined Parties" to "SV-Chosen Parties" to match the actual upstream CIP title; upstream splice source (docs/src/background/tokenomics/overview_tokenomics.rst, hash 4b0e1a6e) still has the incorrect title. See cf-docs issue #1049. */}
-
-An approved CIP called [Weighted Validator Liveness Rewards for SV-Chosen Parties](https://github.com/canton-foundation/cips/blob/main/cip-0073/cip-0073.md) describes providing this support.
-
-As an aside, some interesting templates are important to the tokenomics are:
-
-- AmuletRules which stores the fees schedules;
-- OpenMiningRound which stores the price and fees as of opening the round;
-- IssuingMiningRound which stores the amount-to-mint-per-activity-weight.
-
-## Types of Activity Records
-
-There are five key templates involved in the accounting for network activity:
-
-- Two templates are application related:
-
-  > - FeaturedAppActivityMarker
-  > - AppRewardCoupon
-
-- Three templates relate to providing the infrastructure for the applications:
-
-  > - ValidatorRewardCoupon
-  > - ValidatorLivenessActivityRecord
-  > - SvRewardCoupon
-
-The last four are activity records while a `FeaturedAppActivityMarker` is not considered an activity record. As discussed later, a `FeaturedAppActivityMarker` is converted into an `AppRewardCoupon` via automation run by the Super Validators. The featured CC transfer and `FeaturedAppActivityMarker`` both generate the same reward. The ``FeaturedAppActivityMarker`\` is the preferred way to generate app activity records.
-
-The `FeaturedAppActivityMarker`, `AppRewardCoupon`, and `ValidatorRewardCoupon` contracts are created when an application's transaction succeeds. In general, an application receives rewards when its Daml code directly creates `FeaturedAppActivityMarker` contracts or interacts with Daml models that feature the application provider's party. A `ValidatorRewardCoupon` is created for every call to `AmuletRules_Transfer` (e.g., a CC Transfer using the Splice Wallet UI) or when CC is burned.
-
-Aside from the minting weight, an application's reward also depends on whether it is designated as *featured* or *unfeatured* (the default state). After CIP-0078 was implemented, only featured applications get a reward. A featured application receives a minting weight with a total equivalent value of about \$1 US (the SuperValidators may adjust this in the future).
-
-## How to become a featured application
-
-To become a featured application you need an *application provider's party ID* which is an input to the application. That process starts by filling in [this form](https://sync.global/featured-app-request/). The request goes to the tokenomics committee who reviews the application and responds to it. This [webpage](https://lists.sync.global/g/tokenomics/topics) lists the tokenomics committees topics for tracking. Here’s an [example of a successful submission](https://lists.sync.global/g/tokenomics/topic/new_featured_app_request/112787885). Note that, for testing purposes, you can self-feature your application on DevNet.
-
-For some of the templates, the attribution of activity can be shared with multiple beneficiary parties. For example, a featured application reward can be shared between the application provider and application user, based on a given `weight` for each. The general pattern for this is:
-
-- A list of beneficiaries, each with a `weight`, is provided. The weights sum up to `1.0`.
-- Later processing creates a separate contract for each beneficiary and weight pair, setting the contract's `beneficiary` and `weight` fields accordingly.
-
-Beneficiaries are discussed further in the following sections.
-
-[CIP-0078](https://github.com/canton-foundation/cips/blob/main/cip-0078/cip-0078.md) eliminated almost all fees for Canton Coin transfers and locks so unfeatured applications no longer receive any reward. The holding fee remains but its behavior changed so that no holding fees are charged when using a coin as an input to a transfer.
-
-The holding fees is a fixed fee, per separate coin contract (UTXO) per unit of time, that is independent of the coin amount. It promotes merging of CC to reduce network storage use by incentivizing merging or removal of dust coins. Holding fees are not charged when transferring coins but only explicitly on expired coin contracts via the `Amulet_Expire` choice. A coin contract (UTXO) may be expired by the Super Validators once its accrued holding fees are greater than its coin value. This makes accounting for holding fees simple as the value of the coin contract is constant and independent of the holding fee.
-
-{/* COPIED_END */}
-
-Because the holding fee is per-UTXO rather than per-CC-amount, small "dust" coins accrue fees faster relative to their value. Once the accrued holding fee exceeds the coin's value, Super Validators can expire the contract, removing it from the ledger. This makes accounting straightforward: the face value of a coin contract stays constant and does not decrease with accumulated fees.
+Holding fees are a fixed charge per coin contract (UTXO) per unit of time, independent of the coin's face value. They promote merging of CC to reduce network storage use by incentivizing removal of dust coins. Holding fees are not charged on transfers, only on expired coin contracts via the `Amulet_Expire` choice -- see [Dust Expiry](#dust-expiry) below for how this works.
 
 ### Transfer and Lock Fees (Post CIP-0078)
 
-[CIP-0078](https://github.com/canton-foundation/cips/blob/main/cip-0078/cip-0078.md) eliminated almost all fees for CC transfers and locks. Neither legacy Amulet transfers, CN Token Standard two-step transfers, nor one-step `TransferPreapproval` transfers charge fees. The only exception is that featured one-step transfers still generate an `AppRewardCoupon` for the provider party who maintains the `TransferPreapproval` contract.
+[CIP-0078](https://github.com/canton-foundation/cips/blob/main/cip-0078/cip-0078.md) eliminated almost all fees for CC transfers and locks. Neither legacy Amulet transfers, CN Token Standard two-step transfers, nor one-step `TransferPreapproval` transfers charge fees. The only exception is that featured one-step transfers still generate an app reward for the provider party who maintains the `TransferPreapproval` contract.
+
+## Activity Records and Minting Rounds
+
+Canton Network tokenomics is based on an *activity record* that identifies a party that performed an action providing value to the network. An activity record has a *weight*, which is its relative share of CC minting for that round.
+
+Creating an activity record and minting the associated CC are distinct steps, performed in a cycle called a *round*. A round has five phases: fee values for the round are written to the ledger; activity records are created during the round's *activity recording* phase; the network calculates a CC-issuance-per-activity-weight for each kind of activity record; owners of an activity record mint CC proportional to its weight during the *minting phase*; and the round closes. Several rounds are active concurrently, each in a different phase. A round starts every 10 minutes by default, a parameter the Super Validators may change via governance vote. See the [Canton Coin white paper](https://www.digitalasset.com/hubfs/Canton%20Network%20Files/Documents%20(whitepapers%2c%20etc...)/Canton%20Coin_%20A%20Canton-Network-native%20payment%20application.pdf) for the full accounting details.
+
+Three Daml templates drive the round lifecycle:
+
+- **`AmuletRules`** stores the fee schedules
+- **`OpenMiningRound`** stores the price and fees as of the round's opening
+- **`IssuingMiningRound`** stores the computed CC-issuance-per-activity-weight
+
+### Minting for External Parties
+
+For local parties, the validator application runs background automation that mints all activity records automatically. External parties sign transactions with keys they control, so the validator automation cannot mint on their behalf directly. External parties have two options:
+
+- **Minting delegation** -- Delegate reward collection to a validator, avoiding custom automation. See [Minting Delegations](/global-synchronizer/splice-fundamentals/rewards-minting).
+- **Custom automation** -- Call `AmuletRules_Transfer` at least once per round with all activity records as inputs.
+
+[CIP-0073 (Weighted Validator Liveness Rewards for SV-Chosen Parties)](https://github.com/canton-foundation/cips/blob/main/cip-0073/cip-0073.md) described additional support for this workflow, but was superseded by [CIP-0096](https://github.com/canton-foundation/cips/blob/main/cip-0096/cip-0096.md), which discontinued validator liveness rewards.
+
+### Beneficiary Sharing
+
+Attribution for an activity record can be split among multiple beneficiaries. Each beneficiary receives a `weight` (summing to 1.0), and the network creates a separate contract per beneficiary/weight pair during minting. See [Reward Sharing](/global-synchronizer/splice-fundamentals/reward-sharing) for details.
+
+## App Rewards
+
+Application providers earn CC by generating traffic-relevant activity on the network. Only **featured** applications are eligible: submit a request through the [Canton Foundation featured app request form](https://canton.foundation/featured-app-request/), which goes to the tokenomics committee for review. Submissions and decisions are tracked on the [tokenomics mailing list](https://lists.sync.global/g/tokenomics/topics). On DevNet, you can self-feature your application for testing without going through the formal process. See [App Rewards](/appdev/app-rewards) for the full walkthrough.
+
+How a featured app's reward is computed depends on which reward mechanism a given network has enabled:
+
+- **Traffic-based rewards (current, [CIP-0104](https://github.com/canton-foundation/cips/blob/main/cip-0104/cip-0104.md))** -- rewards are computed off-ledger from the actual network traffic burned by an app provider's confirmed transactions, using sequencer and mediator data. No application code changes are required, and `Splice.Amulet.RewardCouponV2` contracts replace per-transaction marker contracts. SVs enable this per network through a governance vote; see [Traffic-Based App Rewards](/global-synchronizer/splice-fundamentals/traffic-based-app-rewards) for the full mechanism and [SV Operations](/global-synchronizer/deployment/sv-operations#enabling-traffic-based-app-rewards) for the rollout procedure.
+- **Featured app activity markers (legacy)** -- the mechanism traffic-based rewards is replacing. An app's automation creates `Splice.Amulet.FeaturedAppActivityMarker` contracts referencing its activity, which SV automation converts into `AppRewardCoupon` contracts included in the round's minting calculation. This remains the active mechanism on networks that have not yet enabled CIP-0104.
+
+A featured application receives a minting weight with a total equivalent value of about \$1 US per qualifying round of activity under either mechanism (the Super Validators may adjust this in the future). Unfeatured applications receive no reward.
+
+Aside from `FeaturedAppActivityMarker` and `AppRewardCoupon` (or `RewardCouponV2`), the remaining activity record templates are unaffected by CIP-0104: `ValidatorRewardCoupon` is created for every call to `AmuletRules_Transfer` or when CC is burned, and `SvRewardCoupon` rewards Super Validator infrastructure operation. `ValidatorLivenessActivityRecord` still exists as a template but its reward was capped at $0 effective 2026-04-30 under [CIP-0096](https://github.com/canton-foundation/cips/blob/main/cip-0096/cip-0096.md).
 
 ## Burn-Mint Equilibrium
 
@@ -99,35 +76,6 @@ Minting rewards are distributed across three categories of contributors:
 - **Validators** earn minting rights proportional to the fees they burn, which the network treats as a proxy for the activity generated by that node.
 
 Validators previously also earned a liveness bonus for uptime independent of activity. [CIP-0096](https://github.com/canton-foundation/cips/blob/main/cip-0096/cip-0096.md) phased this out, capping the per-validator liveness reward at $0 effective 2026-04-30.
-
-## Minting Rounds
-
-Three Daml templates drive the round lifecycle:
-
-- **`AmuletRules`** stores the fee schedules
-- **`OpenMiningRound`** stores the price and fees as of the round's opening
-- **`IssuingMiningRound`** stores the computed CC-issuance-per-activity-weight
-
-### Minting for External Parties
-
-For local parties, the validator application runs background automation that mints all activity records automatically. External parties sign transactions with keys they control, so the validator automation cannot mint on their behalf directly. External parties have two options:
-
-- **Minting delegation** -- Delegate reward collection to a validator, avoiding custom automation.
-- **Custom automation** -- Call `AmuletRules_Transfer` at least once per round with all activity records as inputs.
-
-[CIP-0073 (Weighted Validator Liveness Rewards for SV-Chosen Parties)](https://github.com/canton-foundation/cips/blob/main/cip-0073/cip-0073.md) described additional support for this workflow, but was superseded by [CIP-0096](https://github.com/canton-foundation/cips/blob/main/cip-0096/cip-0096.md), which discontinued validator liveness rewards.
-
-## Activity Records
-
-Activity record attribution can be shared among multiple beneficiaries. Each beneficiary receives a `weight` (summing to 1.0), and the system creates a separate contract per beneficiary/weight pair during minting.
-
-## Featured vs. Unfeatured Applications
-
-An application's reward depends on whether it is designated as *featured* or *unfeatured* (the default). After CIP-0078, only featured applications receive a reward. A featured application gets a minting weight with a total equivalent value of approximately $1 USD per qualifying activity (the Super Validators may adjust this amount).
-
-The `FeaturedAppActivityMarker` is the preferred mechanism for generating application activity records. Featured one-step transfers via `TransferPreapproval` also generate an `AppRewardCoupon` for the provider party.
-
-To become a featured application, submit a request through the [CF featured app request form](https://sync.global/featured-app-request/). The tokenomics committee reviews submissions; progress is tracked on the [tokenomics committee topics page](https://lists.sync.global/g/tokenomics/topics). On DevNet, you can self-feature your application for testing purposes.
 
 ## UTXO Model and Dust Expiry
 
@@ -157,6 +105,10 @@ For API details, see the [CIP-0056 text](https://github.com/canton-foundation/ci
 ## Related Resources
 
 - [Canton Coin and the Global Synchronizer](/overview/understand/canton-coin) -- conceptual overview and how to obtain CC
+- [App Rewards](/appdev/app-rewards) -- full walkthrough of getting featured and earning app rewards
+- [Traffic-Based App Rewards](/global-synchronizer/splice-fundamentals/traffic-based-app-rewards) -- how CIP-0104 traffic-based rewards are computed
+- [Reward Sharing](/global-synchronizer/splice-fundamentals/reward-sharing) -- sharing rewards with beneficiaries
+- [CIP-0104 (Traffic-Based App Rewards)](https://github.com/canton-foundation/cips/blob/main/cip-0104/cip-0104.md) -- replaces featured app activity markers with traffic-based reward computation
 - [CIP-0078 (CC Fee Removal)](https://github.com/canton-foundation/cips/blob/main/cip-0078/cip-0078.md) -- the proposal that eliminated transfer and lock fees
 - [CIP-0056 (CN Token Standard)](https://github.com/canton-foundation/cips/blob/main/cip-0056/cip-0056.md) -- standard interfaces for token operations
 - [CIP-0073 (Weighted Validator Liveness Rewards)](https://github.com/canton-foundation/cips/blob/main/cip-0073/cip-0073.md) -- liveness reward support for SV-chosen parties, superseded by CIP-0096
