@@ -287,6 +287,18 @@ select * from prune_archived_to_offset(nearest_offset(interval '3 days'));
 
 #### Querying the pruning state
 
+{/* DIVERGENCE: this subsection is 3.5-only and absent from the source COPIED_START block above (docs-website:docs/replicated/pqs/3.4/component-howtos/pqs/operate.rst, hash f00146d1); split into version tabs per PQS 3.4/3.5 divergence, cf-docs PR #1395 follow-up. */}
+
+<Tabs>
+
+<Tab title="PQS 3.4 (MainNet, TestNet)">
+
+Not available in PQS 3.4. Use the `prune` CLI command's dry-run mode (see [Pruning from the command line](#pruning-from-the-command-line)) to inspect the effect of a pruning operation before applying it.
+
+</Tab>
+
+<Tab title="PQS 3.5 (DevNet)">
+
 PQS persists the offset of the last pruning operation. You can query it using the `pruned_offset()` function:
 
 ```sql
@@ -301,6 +313,10 @@ Pruning to an offset at or below the last pruned offset is a no-op and returns z
 Query functions such as `archives()`, `exercises()`, and related summary functions automatically use the pruned
 offset as their default `from_offset` when available, avoiding unnecessary scans over pruned ranges.
 </Note>
+
+</Tab>
+
+</Tabs>
 
 ### Resetting
 
@@ -448,6 +464,30 @@ columns `argument` and `result` for a redacted exercise are `NULL`:
 [#] https://en.wikipedia.org/wiki/ISO_8601#Durations
 
 {/* COPIED_END */}
+
+{/* DIVERGENCE: "Representative package ID support" existed only in PQS 3.4 (docs-website:docs/replicated/pqs/3.4/component-howtos/pqs/operate.rst, hash f00146d1) and was removed from the 3.5 source; split into version tabs per PQS 3.4/3.5 divergence, cf-docs PR #1395 follow-up. */}
+
+<Tabs>
+
+<Tab title="PQS 3.4 (MainNet, TestNet)">
+
+##### Representative package ID support
+
+PQS does not support ingesting contract payloads where the original package ID of a Ledger API create event is not available in the Participant Node's package store that the PQS instance is connected to. Such a situation can occur on an ACS import procedure on the Participant Node, where the original package ID is replaced by its representative package ID.
+
+<Note>
+If you are using ACS import/export procedures that can replace the original package ID of contracts, please ensure that the original package IDs are also uploaded to the Participant Node's package store to avoid disruptions in PQS processing.
+</Note>
+
+</Tab>
+
+<Tab title="PQS 3.5 (DevNet)">
+
+This limitation is no longer documented for PQS 3.5.
+
+</Tab>
+
+</Tabs>
 
 ## Observe
 
@@ -677,6 +717,18 @@ $ curl http://localhost:8080/livez
 
 #### Readiness: `/readyz`
 
+{/* DIVERGENCE: `/readyz` is 3.5-only and absent from the source COPIED_START block above (docs-website:docs/replicated/pqs/3.4/component-howtos/pqs/observe.rst, hash 69375e51); split into version tabs per PQS 3.4/3.5 divergence, cf-docs PR #1395 follow-up. */}
+
+<Tabs>
+
+<Tab title="PQS 3.4 (MainNet, TestNet)">
+
+Not available in PQS 3.4. Use `/livez` for liveness probes; there is no separate readiness endpoint.
+
+</Tab>
+
+<Tab title="PQS 3.5 (DevNet)">
+
 Returns HTTP 200 when PQS can reach both the Participant Node (gRPC) and PostgreSQL (JDBC). Returns HTTP 503
 otherwise.
 
@@ -696,6 +748,10 @@ $ curl -w '\n%{http_code}' http://localhost:8080/readyz
 {"status":"unavailable","grpc_up":false,"jdbc_connection_pool_up":true,"stream_up":false}
 503
 ```
+
+</Tab>
+
+</Tabs>
 
 ### Tracing of pipeline execution
 
@@ -1307,7 +1363,38 @@ last failure (point B), such as after operating without any failures for 5 minut
 
 #### Dynamic Daml package reload
 
-   Deploying new Daml packages (DARs) to the Participant Node does not require restarting PQS. When PQS encounters an unknown package while processing a received event, it fetches the missing packages from the Participant Node.
+{/* DIVERGENCE: this subsection's body differs substantively between the 3.4 and 3.5 sources (docs-website:docs/replicated/pqs/3.4/component-howtos/pqs/recover.rst hash 0a28a79f vs .../3.5/.../recover.rst hash 65e938ee) -- not just reflow; split into version tabs per PQS 3.4/3.5 divergence, cf-docs PR #1395 follow-up. */}
+
+<Tabs>
+
+<Tab title="PQS 3.4 (MainNet, TestNet)">
+
+When PQS encounters a transaction referencing an unknown Daml package, it does not terminate. Instead:
+
+1. Ingestion pauses.
+2. PQS fetches new packages from the Participant Node.
+3. Type mappings are rebuilt.
+4. Ingestion resumes from the paused offset.
+
+This handles the case where new DARs are deployed to the Participant Node while PQS is running. No restart is needed.
+
+**Log messages** to look for:
+
+```
+Recoverable: unknown Daml package detected.
+```
+
+**Metric**: `app_restarts_total` with label `exception="Recoverable: unknown Daml package detected."` increments each time this occurs.
+
+<Note>
+Dynamic package reload only applies to newly deployed Daml packages. Other configuration changes (parties, templates, interfaces in filters) still require a restart.
+</Note>
+
+</Tab>
+
+<Tab title="PQS 3.5 (DevNet)">
+
+Deploying new Daml packages (DARs) to the Participant Node does not require restarting PQS. When PQS encounters an unknown package while processing a received event, it fetches the missing packages from the Participant Node.
 
 This applies when PQS receives a transaction that references a Daml package that was not present when the current
 pipeline session started. PQS temporarily pauses ingestion while it reloads its internal schema:
@@ -1346,6 +1433,10 @@ track the frequency of package reloads and set up alerts if reloads happen more 
 Dynamic package reload applies to Daml package deployments only. Other configuration changes such as adding
 parties, templates, or interfaces to filters still require a restart. See [Configure](/sdks-tools/development-tools/pqs/configure).
 </Note>
+
+</Tab>
+
+</Tabs>
 
 #### Exit codes
 
