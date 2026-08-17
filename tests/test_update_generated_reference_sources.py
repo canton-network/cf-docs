@@ -444,6 +444,38 @@ def test_update_ledger_api_source_updates_publish_version_canton_release(tmp_pat
     assert versions[1]["canton_version"] == "3.5.5"
 
 
+def test_public_canton_bundle_versions_filters_tags_without_release_bundles(monkeypatch, tmp_path: Path) -> None:
+    module = load_script_module()
+    source_config_path = tmp_path / "source-artifacts.json"
+    write_ledger_api_source_config(source_config_path, canton_version="3.5.10")
+    source_config = module.canton_release_bundles.parse_source_config(source_config_path)
+    monkeypatch.setattr(
+        module.canton_release_bundles.canton_protobuf_history,
+        "ensure_repo",
+        lambda *_args, **_kwargs: tmp_path / "canton",
+    )
+    monkeypatch.setattr(
+        module.canton_release_bundles.canton_protobuf_history,
+        "stable_tags",
+        lambda *_args, **_kwargs: [
+            ("3.5.10", "v3.5.10"),
+            ("3.5.11", "v3.5.11"),
+            ("3.5.12", "v3.5.12"),
+        ],
+    )
+    monkeypatch.setattr(
+        module.canton_release_bundles,
+        "release_bundle_exists",
+        lambda _config, *, canton_version: canton_version != "3.5.11",
+    )
+
+    assert module.canton_release_bundles.public_canton_bundle_versions(
+        source_config,
+        docs_version="3.5",
+        repo_dir=tmp_path / "canton",
+    ) == ("3.5.10", "3.5.12")
+
+
 def test_update_ledger_api_source_noops_when_current(tmp_path: Path) -> None:
     module = load_script_module()
     source_config_path = tmp_path / "source-artifacts.json"
