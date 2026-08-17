@@ -425,8 +425,8 @@ UPDATE_TARGETS = (
         title="Update Canton release notes",
         branch="release-notes/canton/update",
         description=(
-            "Updates the published Canton release-note page from the latest stable "
-            "digital-asset/canton release note in `release-notes/*.md`."
+            "Updates the published Canton release-note pages from the `RELEASE-NOTES.md` "
+            "files in stable public Canton release bundles."
         ),
         generate_commands=(("nix-shell", "--run", "npm run update:canton-release-notes"),),
         paths=(
