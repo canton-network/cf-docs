@@ -3,6 +3,86 @@ title: "Splice"
 description: "Release notes and version history for Global Synchronizer software"
 ---
 
+## 0.7.3
+
+   - Upgrade Canton to `3.5.14-snapshot.20260815.19176.0.v65fa04f6` to
+     fix a CantonBFT issue that got surfaced on devnet. To recover devnet, Supervalidators must upgrade
+     and temporarily set the following environment variable.
+     Make sure to remove the environment variable again after devnet is recovered.
+
+     ```
+        - name: ADDITIONAL_CONFIG_VIEW_CHANGE_TIMEOUT
+          value: |
+            canton.sequencers.sequencer.sequencer.config.view-change-timeout-override = 30s
+     ```
+
+## 0.7.2
+
+   - Upgrade Canton to `3.5.13`.
+
+   - SV App
+
+     - The SV app now reconciles the `setBalanceRequestSubmissionWindowSize` traffic control parameter of the global synchronizer against a new SV app config value `set-balance-request-submission-window-size`, which defaults to Canton's current default of 2 minutes.
+        This parameter defines the time window used to compute the max sequencing time of traffic purchase (top-up) requests.
+        Canton lowered its default from 4 minutes to 2 minutes (see the [Canton 3.5.1 release notes](https://docs.canton.network/global-synchronizer/release-notes/canton-releases/3-5-1#minor-breaking-changes)).
+        Networks bootstrapped on an older version (DevNet, TestNet, MainNet) still use the old value for this parameter.
+        By upgrading to this version, SVs agree to change this parameter to 2 minutes (unless they override the new SV app config value).
+        The change takes effect once a sufficient number of SVs have upgraded.
+
+     - The governance UI no longer stops an SV from casting or changing its vote once a proposal's target effective time has passed. Votes are now accepted for as long as the vote request is open, matching what the ledger allows. This makes it possible to reject a proposal whose action fails to execute and which would otherwise remain in flight indefinitely.
+
+     - Network banner now always shows. The network name is derived from the scan node's public URL: MainNet/TestNet/DevNet/ScratchNet from the cluster subdomain, LocalNet for localhost, and a capitalized fallback otherwise (Unknown Network when no scan URL is available).
+
+   - SV UI
+
+     - During the creation of `AmuletRules_SetConfig` proposal, for the `rewardConfig` config field form improve the field descriptions and use drop-downs.
+
+   - Participant
+
+     - [Session-signing keys](/overview/learn/cryptographic-keys#kms-with-session-signing-keys) are now officially supported for KMS-enabled validator and SV participants. Please see the updated example configurations for [validators](/global-synchronizer/production-operations/validator-security) and [SVs](/global-synchronizer/production-operations/sv-security) for details on how to enable on Splice deployments.
+       Session signing keys reduce KMS load and cost on KMS-backed participants by signing most messages with short-lived in-memory keys instead of calling the KMS each time.
+
+## 0.7.1
+
+   - Upgrade Canton to ``3.5.12``.
+
+   - Wallet app
+
+       - Duplicate wallet operations submitted with the same command id (e.g. ``tap``, ``transfer``,
+         token standard transfers) now return the original result idempotently instead of ``HTTP 409``.
+         This aligns with standard idempotency-key semantics: a second request with a previously
+         accepted command id receives a ``200`` response with the same result as the first.
+         Concurrent duplicates, where no submission has completed yet, are still rejected.
+
+       - ``TransferPreapprovalProposal`` s are now accepted if there is an existing one but it has expired.
+
+   - CantonBft
+
+       - Increase the default segment length by 4x to reduce performance impact from epoch switches.
+
+   - Validator App
+
+       - Added a ``type`` parameter to validator config's ``reward-sharing-config-by-party`` option.
+
+         When this is set to ``external``, it indicates that the assignment of reward coupons to beneficiaries is being managed by a process external to the validator app, and thus the validator app's automation does not assign or mint the unassigned coupons.
+
+         The ``type`` defaults to ``built-in`` preserving the existing behavior where the validator app will either mint the unassigned rewards coupons, or assign them to beneficiaries if configured.
+
+         See the reward-sharing documentation for details:
+         https://docs.canton.network/global-synchronizer/splice-fundamentals/reward-sharing#reward-sharing
+
+         Example enabling external sharing automation for a party::
+
+             ```canton.validator-apps.<validator>.reward-sharing-config-by-party = {
+               "<party-id>" = {
+                 type = "external"
+                 # Optionally batch-size may be specified to configure the maximum number of coupons to mint in a single transaction
+                 batch-size = 80
+               }
+             }
+             ```
+
+
 ## 0.7.0
 
    - PostgreSQL 18

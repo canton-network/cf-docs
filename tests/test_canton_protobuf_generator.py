@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -56,6 +57,76 @@ class CantonProtobufGeneratorTests(unittest.TestCase):
                 (("git", "fetch", "origin", "--tags", "--prune", "--force"), repo_dir),
             ],
         )
+
+    def test_ensure_repo_retries_clone_and_cleans_incomplete_directory(self) -> None:
+        repo_dir = self.root / "clone.git"
+        calls: list[tuple[str, ...]] = []
+        sleeps: list[float] = []
+        original_run = generator.run
+        original_sleep = generator.time.sleep
+        original_delay = generator.GIT_RETRY_DELAY_SECONDS
+
+        def fake_run(args, cwd=None, capture=False):
+            del cwd, capture
+            self.assertFalse(repo_dir.exists())
+            calls.append(tuple(args))
+            repo_dir.mkdir(parents=True, exist_ok=True)
+            if len(calls) < 3:
+                raise subprocess.CalledProcessError(128, args)
+            return ""
+
+        try:
+            generator.run = fake_run
+            generator.time.sleep = sleeps.append
+            generator.GIT_RETRY_DELAY_SECONDS = 2
+            generator.ensure_repo(
+                repo_dir,
+                remote="https://github.com/digital-asset/canton.git",
+                fetch=False,
+            )
+        finally:
+            generator.run = original_run
+            generator.time.sleep = original_sleep
+            generator.GIT_RETRY_DELAY_SECONDS = original_delay
+
+        self.assertEqual(len(calls), 3)
+        self.assertEqual(sleeps, [2, 4])
+        self.assertTrue(repo_dir.exists())
+
+    def test_ensure_repo_retries_fetch(self) -> None:
+        repo_dir = self.root / "cached.git"
+        repo_dir.mkdir()
+        fetch_attempts = 0
+        sleeps: list[float] = []
+        original_run = generator.run
+        original_sleep = generator.time.sleep
+        original_delay = generator.GIT_RETRY_DELAY_SECONDS
+
+        def fake_run(args, cwd=None, capture=False):
+            nonlocal fetch_attempts
+            del cwd, capture
+            if args[1] == "fetch":
+                fetch_attempts += 1
+                if fetch_attempts < 3:
+                    raise subprocess.CalledProcessError(128, args)
+            return ""
+
+        try:
+            generator.run = fake_run
+            generator.time.sleep = sleeps.append
+            generator.GIT_RETRY_DELAY_SECONDS = 2
+            generator.ensure_repo(
+                repo_dir,
+                remote="https://github.com/digital-asset/canton.git",
+                fetch=True,
+            )
+        finally:
+            generator.run = original_run
+            generator.time.sleep = original_sleep
+            generator.GIT_RETRY_DELAY_SECONDS = original_delay
+
+        self.assertEqual(fetch_attempts, 3)
+        self.assertEqual(sleeps, [2, 4])
 
     def test_bundle_selection_maps_only_ledger_and_admin_api_inputs(self) -> None:
         protobuf_root = self.root / "protobuf"
