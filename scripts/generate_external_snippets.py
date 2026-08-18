@@ -49,11 +49,6 @@ REPOS: dict[str, SnippetRepo] = {
         ),
         needs_docker=True,
     ),
-    "dpm": SnippetRepo(
-        name="dpm",
-        config_name="dpm-snippet-list-remote.json",
-        aliases=("dpm",),
-    ),
     "daml": SnippetRepo(
         name="daml",
         config_name="daml-snippet-list-remote.json",
@@ -63,11 +58,6 @@ REPOS: dict[str, SnippetRepo] = {
         name="daml-shell",
         config_name="daml-shell-snippet-list-remote.json",
         aliases=("daml-shell",),
-    ),
-    "scribe": SnippetRepo(
-        name="scribe",
-        config_name="scribe-snippet-list-remote.json",
-        aliases=("scribe",),
     ),
     "splice": SnippetRepo(
         name="splice",
