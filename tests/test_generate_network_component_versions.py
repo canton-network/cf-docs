@@ -48,7 +48,7 @@ def dashboard_snapshot(*, generated_at: str, splice_version: str) -> dict:
         "generatedAt": generated_at,
         "generatorMode": "public_source_collection_with_manual_fallbacks",
         "networks": networks,
-        "latestDpmSdk": "3.5.1",
+        "latestDamlSdk": "3.5.3",
         "latestDpm": "1.0.21",
         "latestPqs": "3.5.1",
         "latestWalletGateway": "1.4.0",
@@ -57,6 +57,24 @@ def dashboard_snapshot(*, generated_at: str, splice_version: str) -> dict:
             "walletSdk": "1.4.0",
             "dappSdk": "1.1.0",
         },
+    }
+
+
+def daml_sdk_manifest(version: str) -> dict:
+    annotations = {
+        "org.opencontainers.image.version": version,
+        "com.digitalasset.version": version,
+    }
+    return {
+        "mediaType": "application/vnd.oci.image.index.v1+json",
+        "annotations": annotations,
+        "manifests": [
+            {
+                "mediaType": "application/vnd.oci.image.manifest.v1+json",
+                "annotations": annotations,
+                "platform": {"architecture": "amd64", "os": "linux"},
+            }
+        ],
     }
 
 
@@ -95,7 +113,7 @@ def test_build_config_preserves_generated_metadata_when_dashboard_values_do_not_
         generated_at="2026-06-03T12:00:00+00:00",
         splice_version="0.6.3",
     )
-    candidate_snapshot["latestDpmSdk"] = "3.5.2"
+    candidate_snapshot["unpublishedProbe"] = "changed"
 
     result = module.build_config(existing_config, candidate_snapshot)
 
@@ -357,8 +375,12 @@ def test_collect_snapshot_preserves_previous_network_on_failure(monkeypatch) -> 
         }
 
     monkeypatch.setattr(module, "collect_network_snapshot", fake_collect_network_snapshot)
-    monkeypatch.setattr(module, "fetch_text", lambda url, timeout: "3.5.1")
     monkeypatch.setattr(module, "previous_stable_pqs_version", lambda existing_config: "3.5.1")
+    monkeypatch.setattr(
+        module,
+        "collect_latest_daml_sdk_version",
+        lambda timeout, existing_config: "3.5.1",
+    )
     monkeypatch.setattr(module, "fetch_latest_dpm_version", lambda timeout: "1.0.21")
     monkeypatch.setattr(
         module,
@@ -384,7 +406,6 @@ def test_collect_snapshot_raises_when_failed_network_has_no_previous(monkeypatch
         raise RuntimeError(f"{network_key} boom")
 
     monkeypatch.setattr(module, "collect_network_snapshot", fake_collect_network_snapshot)
-    monkeypatch.setattr(module, "fetch_text", lambda url, timeout: "3.5.1")
     monkeypatch.setattr(module, "previous_stable_pqs_version", lambda existing_config: "3.5.1")
 
     with pytest.raises(RuntimeError, match="no previous dashboard config"):
@@ -407,6 +428,106 @@ def test_latest_stable_version_ignores_prerelease_and_debug_tags() -> None:
         )
         == "3.5.1"
     )
+
+
+def test_fetch_latest_daml_sdk_version_uses_highest_stable_tag(monkeypatch) -> None:
+    module = load_script_module()
+
+    def fake_fetch_json(url: str, timeout: float) -> dict:
+        assert url == module.DAML_SDK_TAGS_URL
+        return {
+            "tags": [
+                "mainnet",
+                "testnet",
+                "devnet",
+                "3.5",
+                "3.5.3",
+                "3.5.4-rc1",
+                "3.5.4.linux_amd64",
+                "3.5.4",
+            ]
+        }
+
+    def fake_fetch_manifest_json(url: str, timeout: float) -> dict:
+        assert url == (
+            "https://europe-docker.pkg.dev/v2/da-images/public/"
+            "sdk-manifests/open-source/manifests/3.5.4"
+        )
+        return daml_sdk_manifest("3.5.4")
+
+    monkeypatch.setattr(module, "fetch_json", fake_fetch_json)
+    monkeypatch.setattr(module, "fetch_manifest_json", fake_fetch_manifest_json)
+
+    assert module.fetch_latest_daml_sdk_version(timeout=1.0) == "3.5.4"
+
+
+def test_fetch_daml_sdk_manifest_version_rejects_annotation_mismatch(monkeypatch) -> None:
+    module = load_script_module()
+    manifest = daml_sdk_manifest("3.5.3")
+    manifest["annotations"]["com.digitalasset.version"] = "3.5.2"
+    monkeypatch.setattr(module, "fetch_manifest_json", lambda url, timeout: manifest)
+
+    with pytest.raises(RuntimeError, match="version annotation mismatch"):
+        module.fetch_daml_sdk_manifest_version("3.5.3", timeout=1.0)
+
+
+def test_daml_sdk_manifest_url_rejects_prerelease() -> None:
+    module = load_script_module()
+
+    with pytest.raises(ValueError, match="Expected stable"):
+        module.daml_sdk_manifest_url("3.5.4-rc1")
+
+
+def test_collect_latest_daml_sdk_version_preserves_previous_latest_value(monkeypatch) -> None:
+    module = load_script_module()
+    existing_config = {
+        "repositories": {
+            "damlSdk": {
+                "versionMapping": {
+                    "mainnet": {"externalVersion": "3.5.1"},
+                    "testnet": {"externalVersion": "3.5.2"},
+                    "devnet": {"externalVersion": "3.5.2-rc1"},
+                }
+            }
+        }
+    }
+
+    def fail_fetch_latest_daml_sdk_version(timeout: float) -> str:
+        raise RuntimeError("registry unavailable")
+
+    monkeypatch.setattr(
+        module,
+        "fetch_latest_daml_sdk_version",
+        fail_fetch_latest_daml_sdk_version,
+    )
+
+    assert module.collect_latest_daml_sdk_version(1.0, existing_config) == "3.5.2"
+
+
+def test_build_config_records_latest_daml_sdk_manifest_source() -> None:
+    module = load_script_module()
+
+    config = module.build_config(
+        {"versions": {}, "repositories": {}},
+        dashboard_snapshot(
+            generated_at="2026-08-05T12:00:00+00:00",
+            splice_version="0.7.0",
+        ),
+    )
+
+    assert config["repositories"]["damlSdk"]["url"] == (
+        f"https://{module.DAML_SDK_MANIFEST_REPOSITORY}"
+    )
+    assert config["repositories"]["damlSdk"]["versionMapping"]["testnet"] == {
+        "branch": "",
+        "externalVersion": "3.5.3",
+        "folderPathRepo": "",
+    }
+    assert (
+        module.DAML_SDK_VERSION_ANNOTATION
+        in config["_generated"]["sourceContract"]["damlSdk"]
+    )
+    assert "ignoring moving network tags" in config["_generated"]["sourceContract"]["damlSdk"]
 
 
 def test_previous_stable_pqs_version_uses_existing_dashboard_config() -> None:

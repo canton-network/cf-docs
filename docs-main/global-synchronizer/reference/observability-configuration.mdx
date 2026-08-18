@@ -76,36 +76,14 @@ This list is not exhaustive. It highlights the most important metrics.
 
 ### Enable the Prometheus Reporter
 
-[Prometheus](https://prometheus.io) is recommended for metrics reporting. Other reporters (jmx, graphite, and csv) are supported, but they are deprecated. Any such reporter should be migrated to Prometheus.
-
-Prometheus can be enabled using:
-
-```hocon
-canton.monitoring.metrics.reporters = [{
-  type = prometheus
-  address = "localhost" // default
-  port = 9000 // default
-}]
-```
-### Prometheus-Only Metrics
-
-Some metrics are available only when using the Prometheus reporter. These metrics include common gRPC and HTTP metrics (which help you to measure the four golden [signals](https://sre.google/sre-book/monitoring-distributed-systems/#xref_monitoring_golden-signals)), and JVM GC and memory usage metrics (if enabled). The metrics are documented in detail below.
-
-Any metric marked with `*` is available only when using the Prometheus reporter.
-
-### Deprecated Reporters
-
-JMX-based reporting (for testing purposes only) can be enabled using:
-
-```hocon
-canton.monitoring.metrics.reporters = [{ type = jmx }]
-```
-Additionally, metrics can be written to a file:
+[Prometheus](https://prometheus.io) is recommended for metrics reporting.
+Two other reporter types, `csv` (writes metrics to CSV files) and `logging`
+(writes metrics to the Canton log), are available for debugging purposes.
+The `csv` reporter requires a `directory` and should be configured with filters to limit the number of files created.
+For example:
 
 ```hocon
 canton.monitoring.metrics.reporters = [{
-  type = jmx
-}, {
   type = csv
   directory = "metrics"
   interval = 5s // default
@@ -114,25 +92,21 @@ canton.monitoring.metrics.reporters = [{
   }]
 }]
 ```
-or reported via Graphite (to Grafana) using:
+
+Prometheus can be enabled using:
 
 ```hocon
 canton.monitoring.metrics.reporters = [{
-  type = graphite
+  type = prometheus
   address = "localhost" // default
-  port = 2003
-  prefix.type = hostname // default
-  interval = 30s // default
-  filters = [{
-    contains = "canton"
-  }]
+  port = 9464 // default
 }]
 ```
-When using the `graphite` or the `csv` reporter, Canton periodically evaluates all metrics matching the given filters. Filter for only those metrics that are relevant to you.
+### Prometheus-Only Metrics
 
-In addition to Canton metrics, the process can also report Daml metrics (of the Ledger API server). Optionally, JVM metrics can be included using:
+Some metrics are available only when using the Prometheus reporter. These metrics include common gRPC and HTTP metrics (which help you to measure the four golden [signals](https://sre.google/sre-book/monitoring-distributed-systems/#xref_monitoring_golden-signals)), and JVM GC and memory usage metrics (if enabled). The metrics are documented in detail below.
 
-    canton.monitoring.metrics.report-jvm-metrics = yes // default no
+Any metric marked with `*` is available only when using the Prometheus reporter.
 
 ## Metrics
 
@@ -190,7 +164,7 @@ The custom lnav log format [file](https://docs.lnav.org/en/latest/formats.html) 
 
 By default, logging omits details to avoid writing sensitive data into log files. For debugging or educational purposes, you can turn on additional logging using the following configuration switches:
 
-``` none
+```hocon
 canton.monitoring.logging {
     event-details = true
     api {
@@ -217,41 +191,52 @@ The trace-id propagation is enabled by setting the `canton.monitoring.tracing.pr
 
 You can configure the service where traces and spans are reported for observing distributed traces. Refer to Traces for a preview.
 
-Jaeger and Zipkin are supported. For example, Jaeger reporting can be configured as follows:
+Traces are exported in the [OTLP](https://opentelemetry.io/docs/specs/otlp/) format,
+which is supported by most tracing backends, including Jaeger, Grafana Tempo, and the OpenTelemetry Collector.
+The OTLP exporter can be configured as follows:
 
-```text
+```hocon
 monitoring.tracing.tracer.exporter {
-  type = jaeger
-  address = ... // default: "localhost"
-  port = ... // default: 14250
+  type = otlp
+  address = "localhost" // default
+  port = 4317 // default
 }
 ```
-This configuration connects to a running Jaeger server to report tracing information.
 
-You can run Jaeger in a Docker container as follows:
+The OTLP exporter also accepts the optional settings `trust-collection-path`
+(a path to a TLS trust certificate collection), `additional-headers` (a map of headers to send with each request), `timeout`, and `connect-timeout`.
 
-    docker run --rm -it --name jaeger\
-      -p 16686:16686 \
-      -p 14250:14250 \
-      jaegertracing/all-in-one:1.22.0
+You can run a [Jaeger](https://www.jaegertracing.io) backend in a Docker container as follows:
 
-If you prefer not to use Docker, you can download the binary for your specific OS at Download Jaeger. Unzip the file and then run the binary `jaeger-all-in-one` (no arguments are needed). By default, Jaeger will expose port `16686` (for its UI, which can be seen in a browser window) and port `14250` (to which Canton will report trace information). Be sure to properly expose these ports.
+```bash
+docker run --rm -it --name jaeger \
+  -p 16686:16686 \
+  -p 4317:4317 \
+  jaegertracing/all-in-one:latest
+```
 
-Make sure that all Canton nodes in the network report to the same Jaeger server to have an accurate view of the full traces. Also, ensure that the Jaeger server is reachable by all Canton nodes.
+Jaeger exposes port `16686` (for its UI, which can be viewed in a browser window) and port `4317` (the OTLP endpoint to which Canton reports trace information).
 
-Apart from jaeger, Canton nodes can also be configured to report in Zipkin or OTLP formats.
+Verify that all Canton nodes in the network report to the same tracing backend for an accurate view of the full traces and ensure that the backend is reachable by all Canton nodes.
 
 ### Sampling
 
-You can change how often spans are sampled and reported to the configured exporter. By default, it will always report (`monitoring.tracing.tracer.sampler.type = always-on`). You can configure it to never report (`monitoring.tracing.tracer.sampler.type = always-off`), although this is less useful. Also, you can configure only a specific fraction of spans to be reported as follows:
+You can change how often spans are sampled and reported to the configured exporter. By default, it will always report (`monitoring.tracing.tracer.sampler.type = always-on`).
+You can configure it to never report (`monitoring.tracing.tracer.sampler.type = always-off`), although this is less useful.
+Also, you can configure only a specific fraction of spans to be reported as follows:
 
-```text
+```hocon
 monitoring.tracing.tracer.sampler = {
   type = trace-id-ratio
   ratio = 0.5
 }
 ```
-You can also change the parent-based sampling property. By default, it is turned on (`monitoring.tracing.tracer.sampler.parent-based = true`). When turned on, a span is sampled iff its parent is sampled (the root span will follow the configured sampling strategy). There will never be incomplete traces; either the full trace is sampled or it is not. If you change this property, all spans will follow the configured sampling strategy and ignore whether the parent is sampled.
+
+You can also change the parent-based sampling property.
+By default, it is turned on (`monitoring.tracing.tracer.sampler.parent-based = true`).
+When turned on, a span is sampled if its parent is sampled (the root span will follow the configured sampling strategy).
+There will never be incomplete traces; either the full trace is sampled or it is not.
+If you change this property, all spans will follow the configured sampling strategy and ignore whether the parent is sampled.
 
 ### Known Limitations
 
@@ -374,7 +359,7 @@ The precise way the state is computed is subject to change.
 
 Here is an example monitoring configuration to place inside a node configuration object:
 
-``` none
+```hocon
 monitoring.grpc-health-server {
   address = "127.0.0.1"
   port = 5861
@@ -382,7 +367,7 @@ monitoring.grpc-health-server {
 ```
 
 <Note>
-The gRPC health server is configured per Canton node, not per process, as is the case for the HTTP health check server (see below). This means that the configuration must be inserted within a node's configuration object.
+The gRPC health server is configured per Canton node, so the configuration must be inserted within a node's configuration object.
 </Note>
 
 <Note>
@@ -391,25 +376,21 @@ To support usage as a Kubernetes liveness probe, the health server exposes a ser
 
 ### HTTP Health Check
 
-Optionally, the `canton` process can expose an HTTP endpoint indicating whether the process believes it is healthy. This may be used as an uptime check or as a Kubernetes liveness [probe](https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes). If enabled, the `/health` endpoint will respond to a `GET` HTTP request with a 200 HTTP status code (if healthy) or 500 (if unhealthy, along with a plain text description of why it is unhealthy).
+Optionally, each Canton node can expose an HTTP endpoint indicating whether the node believes it is healthy.
+This may be used as an uptime check or as a Kubernetes liveness [probe](https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes).
+If enabled, the `/health` endpoint responds to a `GET` HTTP request with a 200 HTTP status code (if healthy) or 500 (if unhealthy,
+along with a plain text description of why it is unhealthy).
 
-To enable this health endpoint, add a `monitoring` section to the Canton configuration. Since this health check is for the whole process, add it directly to the `canton` configuration rather than for a specific node.
+To enable this health endpoint, add an `http-health-server` section to the node's monitoring configuration:
 
 ```hocon
-canton {
-  monitoring.health {
-   server {
-      port = 7000
-   }
-
-   check {
-     type = ping
-     participant = participant1
-     interval = 30s
-   }
+monitoring.http-health-server {
+  address = "0.0.0.0" // default
+  port = 7000
 }
 ```
-This health check causes `participant1` to "ledger ping" itself every 30 seconds. The process is considered healthy if the ping is successful.
+
+Health information is then available at `http://<host>:<port>/health`.
 
 ## Health Dumps
 
@@ -458,11 +439,11 @@ Metrics will be available for scraping in OpenMetrics format at `http://<host>:9
 
 You can also export JVM metrics with
 
-`canton.monitoring.metrics.reporters.jvm-metrics.enabled = yes`
+`canton.monitoring.metrics.jvm-metrics.enabled = yes`
 
 e.g.
 
-``` none
+```hocon
 canton.monitoring.metrics {
     jvm-metrics.enabled = yes
     reporters = [{
@@ -475,43 +456,6 @@ canton.monitoring.metrics {
 ```
 
 See the metrics reference for the full list of metrics exported.
-
-## Deprecated Reporters
-
-Other reporters (jmx, graphite, and csv) are supported, but they are deprecated. Any such reporter should be migrated to [Prometheus](https://prometheus.io).
-
-JMX-based reporting (for testing purposes only) can be enabled using:
-
-```hocon
-canton.monitoring.metrics.reporters = [{ type = jmx }]
-```
-Additionally, metrics can be written to a file:
-
-```hocon
-canton.monitoring.metrics.reporters = [{
-  type = jmx
-}, {
-  type = csv
-  directory = "metrics"
-  interval = 5s // default
-  filters = [{
-    contains = "canton"
-  }]
-}]
-```
-or reported via Graphite (to Grafana) using:
-
-```hocon
-canton.monitoring.metrics.reporters = [{
-  type = graphite
-  port = 2003
-  interval = 30s // default
-  filters = [{
-    contains = "canton"
-  }]
-}]
-```
-When using the `graphite` or the `csv` reporter, Canton periodically evaluates all metrics matching the given filters. Filter for only those metrics that are relevant to you.
 
 
 {/* COPIED_END */}
