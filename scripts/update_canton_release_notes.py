@@ -3,30 +3,31 @@
 from __future__ import annotations
 
 import argparse
-import base64
 import json
 import re
 import sys
-import urllib.parse
+import tarfile
+import urllib.error
+import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable, Sequence
+from typing import Iterable, Sequence
 
-import github_api_utils
+from generated_reference_sources import canton_release_bundles
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_SOURCE_REPO = "digital-asset/canton"
-DEFAULT_SOURCE_REF = "main"
+DEFAULT_SOURCE_CONFIG = REPO_ROOT / "config" / "x2mdx" / "ledger-api" / "source-artifacts.json"
+DEFAULT_CANTON_REPO_DIR = canton_release_bundles.DEFAULT_REPO_DIR
+DEFAULT_CANTON_REMOTE = canton_release_bundles.DEFAULT_CANTON_REMOTE
 DOCS_MAIN = REPO_ROOT / "docs-main"
 DEFAULT_RELEASE_INDEX = DOCS_MAIN / "global-synchronizer" / "release-notes" / "canton.mdx"
 DEFAULT_RELEASE_DIR = DOCS_MAIN / "global-synchronizer" / "release-notes" / "canton-releases"
 DEFAULT_LEGACY_RELEASE_PAGE = DOCS_MAIN / "global-synchronizer" / "release-notes" / "canton" / "index.mdx"
 DEFAULT_LEGACY_RELEASE_DIR = DOCS_MAIN / "global-synchronizer" / "release-notes" / "canton"
 DEFAULT_DOCS_JSON = DOCS_MAIN / "docs.json"
-GITHUB_API = "https://api.github.com"
 USER_AGENT = "cf-docs-canton-release-note-updater"
+DOWNLOAD_TIMEOUT_SECONDS = 300.0
 RELEASE_HEADING_RE = re.compile(r"^# Release of Canton (?P<version>\d+\.\d+\.\d+)\s*$", re.MULTILINE)
-RELEASE_NOTE_FILE_RE = re.compile(r"^(?P<version>\d+\.\d+\.\d+)\.md$")
 CANTON_RELEASE_LINK_RE = re.compile(
     r"/global-synchronizer/release-notes/(?:canton|canton-releases)/(?P<slug>\d+-\d+-\d+)"
 )
@@ -57,8 +58,8 @@ class Version:
 @dataclass(frozen=True)
 class ReleaseNoteSource:
     version: Version
-    path: str
-    blob_sha: str
+    url: str
+    archive_path: str
 
 
 @dataclass(frozen=True)
@@ -69,87 +70,54 @@ class PageUpdate:
     changed: bool
 
 
-def github_request_json(url: str) -> Any:
-    return github_api_utils.request_json(url, user_agent=USER_AGENT)
-
-
-def github_api_url(source_repo: str, path: str, *, query: str = "") -> str:
-    suffix = f"?{query}" if query else ""
-    return f"{GITHUB_API}/repos/{source_repo}/{path}{suffix}"
-
-
 def release_note_sources(
     *,
-    source_repo: str,
-    source_ref: str,
+    source_config_path: Path,
+    canton_repo_dir: Path,
+    canton_remote: str,
     version_prefix: str | None,
 ) -> tuple[ReleaseNoteSource, ...]:
-    payload = github_request_json(
-        github_api_url(source_repo, "contents/release-notes", query=urllib.parse.urlencode({"ref": source_ref}))
+    source_config = canton_release_bundles.parse_source_config(source_config_path)
+    selected_prefix = version_prefix or source_config.publish_version
+    versions = canton_release_bundles.public_canton_bundle_versions(
+        source_config,
+        docs_version=selected_prefix,
+        repo_dir=canton_repo_dir,
+        remote=canton_remote,
     )
-    if not isinstance(payload, list):
-        raise RuntimeError(f"Expected release-notes directory listing from {source_repo}@{source_ref}")
-
-    sources: list[ReleaseNoteSource] = []
-    for item in payload:
-        if not isinstance(item, dict):
-            continue
-        name = item.get("name")
-        sha = item.get("sha")
-        path = item.get("path")
-        if not isinstance(name, str) or not isinstance(sha, str) or not isinstance(path, str):
-            continue
-        match = RELEASE_NOTE_FILE_RE.match(name)
-        if match is None:
-            continue
-        version = Version.parse(match.group("version"))
-        if version_prefix is not None and not str(version).startswith(f"{version_prefix}."):
-            continue
-        sources.append(ReleaseNoteSource(version=version, path=path, blob_sha=sha))
-
-    if not sources:
-        prefix_text = f" matching {version_prefix}" if version_prefix else ""
-        raise RuntimeError(f"No Canton release-note sources{prefix_text} found in {source_repo}@{source_ref}")
-    return tuple(sorted(sources, key=lambda source: source.version))
-
-
-def latest_release_line(sources: Sequence[ReleaseNoteSource]) -> str:
-    if not sources:
-        raise ValueError("Cannot select a release line from an empty source list")
-    latest = sources[-1].version
-    return f"{latest.major}.{latest.minor}"
-
-
-def selected_release_note_sources(
-    *,
-    source_repo: str,
-    source_ref: str,
-    version_prefix: str | None,
-) -> tuple[ReleaseNoteSource, ...]:
-    sources = release_note_sources(source_repo=source_repo, source_ref=source_ref, version_prefix=None)
-    selected_prefix = version_prefix or latest_release_line(sources)
-    selected_sources = tuple(source for source in sources if str(source.version).startswith(f"{selected_prefix}."))
-    if not selected_sources:
-        raise RuntimeError(f"No Canton release-note sources matching {selected_prefix} found")
-    return selected_sources
+    if not versions:
+        raise RuntimeError(f"No public Canton release bundles found for release line {selected_prefix}")
+    return tuple(
+        ReleaseNoteSource(
+            version=Version.parse(version),
+            url=canton_release_bundles.release_url(source_config, canton_version=version),
+            archive_path=f"canton-open-source-{version}/RELEASE-NOTES.md",
+        )
+        for version in versions
+    )
 
 
 def fetch_release_note_markdown(
     *,
-    source_repo: str,
-    source_ref: str,
-    source_path: str,
+    source: ReleaseNoteSource,
 ) -> str:
-    payload = github_request_json(
-        github_api_url(source_repo, f"contents/{source_path}", query=urllib.parse.urlencode({"ref": source_ref}))
+    request = urllib.request.Request(
+        source.url,
+        headers={"User-Agent": USER_AGENT},
     )
-    if not isinstance(payload, dict):
-        raise RuntimeError(f"Expected file payload for {source_repo}@{source_ref}:{source_path}")
-    content = payload.get("content")
-    encoding = payload.get("encoding")
-    if not isinstance(content, str) or encoding != "base64":
-        raise RuntimeError(f"Expected base64 file content for {source_repo}@{source_ref}:{source_path}")
-    return base64.b64decode(content).decode("utf-8")
+    try:
+        with urllib.request.urlopen(request, timeout=DOWNLOAD_TIMEOUT_SECONDS) as response:
+            with tarfile.open(fileobj=response, mode="r|gz") as archive:
+                for member in archive:
+                    if member.name != source.archive_path:
+                        continue
+                    release_notes = archive.extractfile(member)
+                    if release_notes is None:
+                        break
+                    return release_notes.read().decode("utf-8")
+    except (urllib.error.URLError, tarfile.TarError, UnicodeDecodeError) as error:
+        raise RuntimeError(f"Could not read {source.archive_path} from {source.url}: {error}") from error
+    raise RuntimeError(f"Could not find {source.archive_path} in {source.url}")
 
 
 def current_release_version(page_text: str) -> str:
@@ -227,9 +195,9 @@ def release_index_markdown(sources: Sequence[ReleaseNoteSource]) -> str:
         f'description: "{CANTON_PAGE_DESCRIPTION}"',
         "---",
         "",
-        "{/* Generated from upstream digital-asset/canton release-note sources. */}",
+        "{/* Generated from the RELEASE-NOTES.md files in public Canton release bundles. */}",
         "",
-        "Canton release notes are reproduced below from the upstream `digital-asset/canton` release-note sources.",
+        "Canton release notes are reproduced below from the published Canton release bundles.",
         "",
         "## Releases",
         "",
@@ -244,14 +212,9 @@ def release_index_markdown(sources: Sequence[ReleaseNoteSource]) -> str:
 
 def read_source_markdown(
     *,
-    source_repo: str,
-    source_ref: str,
     sources: Sequence[ReleaseNoteSource],
 ) -> dict[ReleaseNoteSource, str]:
-    return {
-        source: fetch_release_note_markdown(source_repo=source_repo, source_ref=source_ref, source_path=source.path)
-        for source in sources
-    }
+    return {source: fetch_release_note_markdown(source=source) for source in sources}
 
 
 def write_release_pages(
@@ -268,18 +231,21 @@ def write_release_pages(
         release_index: release_index_markdown(sources),
     }
     for source in sources:
-        desired_files[release_page_path(release_dir, source)] = (
-            release_page_frontmatter(source) + normalized_release_markdown(source_markdown[source]) + "\n"
-        )
+        path = release_page_path(release_dir, source)
+        if source in source_markdown:
+            desired_files[path] = (
+                release_page_frontmatter(source) + normalized_release_markdown(source_markdown[source]) + "\n"
+            )
 
     existing_release_files = set(release_dir.glob("*.mdx")) if release_dir.exists() else set()
-    stale_files = existing_release_files - set(desired_files)
+    selected_release_files = {release_page_path(release_dir, source) for source in sources}
+    stale_files = existing_release_files - selected_release_files
     if legacy_release_page != release_index and legacy_release_page.exists():
         stale_files.add(legacy_release_page)
     if legacy_release_dir != release_dir and legacy_release_dir.exists():
         stale_files.update(legacy_release_dir.glob("*.mdx"))
     changed = any(path.read_text(encoding="utf-8") != text if path.exists() else True for path, text in desired_files.items())
-    changed = changed or bool(stale_files)
+    changed = changed or bool(stale_files) or any(not path.exists() for path in selected_release_files)
 
     if dry_run or not changed:
         return changed
@@ -360,24 +326,23 @@ def update_release_page(
     legacy_release_page: Path,
     legacy_release_dir: Path,
     docs_json: Path,
-    source_repo: str,
-    source_ref: str,
+    source_config_path: Path,
+    canton_repo_dir: Path,
+    canton_remote: str,
     version_prefix: str | None,
     dry_run: bool,
 ) -> PageUpdate:
     previous_page = release_index if release_index.exists() else legacy_release_page
     previous_text = previous_page.read_text(encoding="utf-8") if previous_page.exists() else ""
     previous_versions = release_versions(previous_text)
-    sources = selected_release_note_sources(
-        source_repo=source_repo,
-        source_ref=source_ref,
+    sources = release_note_sources(
+        source_config_path=source_config_path,
+        canton_repo_dir=canton_repo_dir,
+        canton_remote=canton_remote,
         version_prefix=version_prefix,
     )
-    source_markdown = read_source_markdown(
-        source_repo=source_repo,
-        source_ref=source_ref,
-        sources=sources,
-    )
+    missing_sources = tuple(source for source in sources if not release_page_path(release_dir, source).exists())
+    source_markdown = {} if dry_run else read_source_markdown(sources=missing_sources)
     changed_pages = write_release_pages(
         release_index=release_index,
         release_dir=release_dir,
@@ -392,18 +357,19 @@ def update_release_page(
     return PageUpdate(
         previous_versions=previous_versions,
         current_versions=tuple(str(source.version) for source in sources),
-        source_paths=tuple(source.path for source in sources),
+        source_paths=tuple(f"{source.url}#{source.archive_path}" for source in sources),
         changed=changed_pages or changed_nav,
     )
 
 
 def parse_args(argv: Iterable[str]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Update the published Canton release-note page from upstream.")
-    parser.add_argument("--source-repo", default=DEFAULT_SOURCE_REPO)
-    parser.add_argument("--source-ref", default=DEFAULT_SOURCE_REF)
+    parser = argparse.ArgumentParser(description="Update the published Canton release-note pages from release bundles.")
+    parser.add_argument("--source-config", type=Path, default=DEFAULT_SOURCE_CONFIG)
+    parser.add_argument("--canton-repo-dir", type=Path, default=DEFAULT_CANTON_REPO_DIR)
+    parser.add_argument("--canton-remote", default=DEFAULT_CANTON_REMOTE)
     parser.add_argument(
         "--version-prefix",
-        help="Restrict source selection to a release line such as 3.5. Defaults to the latest upstream release line.",
+        help="Restrict source selection to a release line such as 3.5. Defaults to the configured publish line.",
     )
     parser.add_argument("--release-index", type=Path, default=DEFAULT_RELEASE_INDEX)
     parser.add_argument("--release-dir", type=Path, default=DEFAULT_RELEASE_DIR)
@@ -422,8 +388,9 @@ def main(argv: Iterable[str] = sys.argv[1:]) -> int:
         legacy_release_page=args.legacy_release_page,
         legacy_release_dir=args.legacy_release_dir,
         docs_json=args.docs_json,
-        source_repo=args.source_repo,
-        source_ref=args.source_ref,
+        source_config_path=args.source_config,
+        canton_repo_dir=args.canton_repo_dir,
+        canton_remote=args.canton_remote,
         version_prefix=args.version_prefix,
         dry_run=args.dry_run,
     )
@@ -433,7 +400,7 @@ def main(argv: Iterable[str] = sys.argv[1:]) -> int:
     print(
         f"{action} Canton release notes: "
         f"{previous} -> {current} "
-        f"from {args.source_repo}@{args.source_ref}"
+        "from public Canton release bundles"
     )
     return 0
 
