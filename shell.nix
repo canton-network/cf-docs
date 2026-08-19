@@ -23,6 +23,7 @@ let
 in
 pkgs.mkShell {
   packages = [
+    pkgs.direnv
     pkgs.gh
     pkgs.jdk25_headless
     pkgs.nodejs_24
