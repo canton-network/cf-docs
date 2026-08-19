@@ -5,7 +5,6 @@ import sys
 from pathlib import Path
 from types import ModuleType
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -105,6 +104,33 @@ def test_generated_docs_workflow_uses_merger_app_for_pr_mutations() -> None:
     assert "GITHUB_TOKEN: ${{ steps.merger-token.outputs.token || github.token }}" in workflow
     assert "GENERATED_DOCS_WORKFLOW_TOKEN: ${{ github.token }}" in workflow
     assert "run: gh auth setup-git" in workflow
+
+
+def test_generated_docs_workflow_only_sets_up_daml_for_declared_targets() -> None:
+    module = load_script_module()
+    workflow = (REPO_ROOT / ".github" / "workflows" / "update-version-dashboard.yml").read_text(
+        encoding="utf-8"
+    )
+
+    daml_targets = [target.key for target in module.UPDATE_TARGETS if target.requires_daml_tooling]
+
+    assert daml_targets == ["splice-token-standard-v2", "daml-standard-library", "daml-script"]
+    assert "--print-target-matrix-json" in workflow
+    assert "matrix: ${{ fromJSON(needs.select-targets.outputs.target_matrix) }}" in workflow
+    assert "if: ${{ matrix.requires_daml_tooling }}" in workflow
+    assert "bash scripts/install_daml_tooling.sh" in workflow
+
+
+def test_target_matrix_includes_daml_requirement() -> None:
+    module = load_script_module()
+    targets = module.targets_to_run(["splice-token-standard-v2", "canton-release-notes"])
+
+    assert module.target_matrix(targets) == {
+        "include": [
+            {"target": "splice-token-standard-v2", "requires_daml_tooling": True},
+            {"target": "canton-release-notes", "requires_daml_tooling": False},
+        ]
+    }
 
 
 def test_daml_script_target_wires_source_pin_and_generated_paths() -> None:
