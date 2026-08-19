@@ -21,13 +21,15 @@ Traffic credits are consumed even if a confirmation request fails due to content
 
 ### Holding Fees
 
-Holding fees are a fixed charge per coin contract (UTXO) per unit of time, independent of the coin's face value. They promote merging of CC to reduce network storage use by incentivizing removal of dust coins. Holding fees are not charged on transfers, only on expired coin contracts via the `Amulet_Expire` choice -- see [Dust Expiry](#dust-expiry) below for how this works.
+Holding fees are a fixed charge per coin contract (UTXO) per unit of time, independent of the coin's face value. They promote merging of CC to reduce network storage use by incentivizing removal of dust coins. Holding fees are not charged on transfers, only on expired coin contracts via the [`Amulet_ExpireV2`](/sdks-tools/api-reference/splice-daml/splice-amulet/splice-amulet#templates) choice -- see [Dust Expiry](#dust-expiry) below for how this works.
 
 ### Transfer and Lock Fees (Post CIP-0078)
 
 [CIP-0078](https://github.com/canton-foundation/cips/blob/main/cip-0078/cip-0078.md) eliminated almost all fees for CC transfers and locks. Neither legacy Amulet transfers, CN Token Standard two-step transfers, nor one-step `TransferPreapproval` transfers charge fees. The only exception is that featured one-step transfers still generate an app reward for the provider party who maintains the `TransferPreapproval` contract.
 
 ## Activity Records and Minting Rounds
+
+{/* DIVERGENCE: this section and "App Rewards" below originated as a verbatim copy of the upstream splice source (docs/src/background/tokenomics/overview_tokenomics.rst, hash 4b0e1a6e) but have since been substantially restructured and rewritten to lead with the current state (CIP-0104 traffic-based rewards) and present FeaturedAppActivityMarker as the legacy mechanism it replaces, per cf-docs issue #1392. The rewrite also folds in CIP-0078 fee removal and CIP-0096 liveness-reward changes. Because the prose no longer matches upstream byte-for-byte, it is not wrapped in COPIED_START/COPIED_END. */}
 
 Canton Network tokenomics is based on an *activity record* that identifies a party that performed an action providing value to the network. An activity record has a *weight*, which is its relative share of CC minting for that round.
 
@@ -61,7 +63,7 @@ How a featured app's reward is computed depends on which reward mechanism a give
 - **Traffic-based rewards (current, [CIP-0104](https://github.com/canton-foundation/cips/blob/main/cip-0104/cip-0104.md))** -- rewards are computed off-ledger from the actual network traffic burned by an app provider's confirmed transactions, using sequencer and mediator data. No application code changes are required, and `Splice.Amulet.RewardCouponV2` contracts replace per-transaction marker contracts. SVs enable this per network through a governance vote; see [Traffic-Based App Rewards](/global-synchronizer/splice-fundamentals/traffic-based-app-rewards) for the full mechanism and [SV Operations](/global-synchronizer/deployment/sv-operations#enabling-traffic-based-app-rewards) for the rollout procedure.
 - **Featured app activity markers (legacy)** -- the mechanism traffic-based rewards is replacing. An app's automation creates `Splice.Amulet.FeaturedAppActivityMarker` contracts referencing its activity, which SV automation converts into `AppRewardCoupon` contracts included in the round's minting calculation. This remains the active mechanism on networks that have not yet enabled CIP-0104.
 
-A featured application receives a minting weight with a total equivalent value of about \$1 US per qualifying round of activity under either mechanism (the Super Validators may adjust this in the future). Unfeatured applications receive no reward.
+Under the legacy featured app activity marker mechanism, a featured application receives a minting weight with a total equivalent value of about \$1 US per qualifying round of activity (the Super Validators may adjust this in the future). Under traffic-based rewards, coupon amounts are no longer targeted at a fixed value: an application's coupon reflects the actual traffic weight of its activity for the round, with a default value amount of \$0.50, but coupon amounts can vary -- see [RewardConfig](/global-synchronizer/splice-fundamentals/traffic-based-app-rewards#rewardconfig) for the `appRewardCouponThreshold` parameter. Unfeatured applications receive no reward under either mechanism.
 
 Aside from `FeaturedAppActivityMarker` and `AppRewardCoupon` (or `RewardCouponV2`), the remaining activity record templates are unaffected by CIP-0104: `ValidatorRewardCoupon` is created for every call to `AmuletRules_Transfer` or when CC is burned, and `SvRewardCoupon` rewards Super Validator infrastructure operation. `ValidatorLivenessActivityRecord` still exists as a template but its reward was capped at $0 effective 2026-04-30 under [CIP-0096](https://github.com/canton-foundation/cips/blob/main/cip-0096/cip-0096.md).
 
@@ -87,7 +89,7 @@ When a transfer produces change (the input exceeds the amount being sent), a new
 
 The per-UTXO holding fee creates a natural cleanup mechanism for dust. Because the fee is fixed per contract regardless of the coin's face value, a 0.001 CC coin and a 1000 CC coin accrue the same holding fee per unit of time. Small coins therefore become uneconomical faster.
 
-Once the accrued holding fee on a UTXO exceeds its face value, Super Validators can expire the contract by exercising the `Amulet_Expire` choice. This removes the contract from the ledger entirely. Users are incentivized to merge small coins into larger ones to minimize the number of UTXOs and reduce holding fee exposure. The Splice wallet automation handles this merging automatically when possible.
+Once the accrued holding fee on a UTXO exceeds its face value, Super Validators can expire the contract by exercising the `Amulet_ExpireV2` choice. This removes the contract from the ledger entirely. Users are incentivized to merge small coins into larger ones to minimize the number of UTXOs and reduce holding fee exposure. The Splice wallet automation handles this merging automatically when possible.
 
 ## CN Token Standard (CIP-0056)
 
