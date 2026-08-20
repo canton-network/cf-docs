@@ -15,7 +15,6 @@ REQUIRED_COMMANDS = (
     "awk",
     "bash",
     "curl",
-    "direnv",
     "env",
     "find",
     "gh",

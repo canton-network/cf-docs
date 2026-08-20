@@ -24,7 +24,6 @@ in
 pkgs.mkShell {
   packages = [
     pkgs.curl
-    pkgs.direnv
     pkgs.gh
     pkgs.git
     pkgs.jdk25_headless
