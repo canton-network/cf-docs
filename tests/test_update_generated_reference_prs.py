@@ -103,7 +103,12 @@ def test_generated_docs_workflow_uses_merger_app_for_pr_mutations() -> None:
     assert "GH_TOKEN: ${{ steps.merger-token.outputs.token || github.token }}" in workflow
     assert "GITHUB_TOKEN: ${{ steps.merger-token.outputs.token || github.token }}" in workflow
     assert "GENERATED_DOCS_WORKFLOW_TOKEN: ${{ github.token }}" in workflow
-    assert "run: gh auth setup-git" in workflow
+    assert "run: SKIP_NPM_INSTALL=1 direnv exec . gh auth setup-git" in workflow
+    assert 'args=(--targets "${{ matrix.target }}")' in workflow
+    assert "args+=(--dry-run)" in workflow
+    assert (
+        'direnv exec . python3 scripts/update_generated_reference_prs.py "${args[@]}"' in workflow
+    )
 
 
 def test_generated_docs_workflow_only_sets_up_daml_for_declared_targets() -> None:

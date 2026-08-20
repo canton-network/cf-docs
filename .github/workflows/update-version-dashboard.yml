@@ -9,6 +9,10 @@ on:
         description: "Generated-doc targets to run"
         type: string
         default: "all"
+      dry_run:
+        description: "List selected target commands without generating or publishing changes"
+        type: boolean
+        default: false
 
 permissions:
   actions: write
@@ -96,7 +100,7 @@ jobs:
       - name: Configure generated-docs PR authentication
         env:
           GH_TOKEN: ${{ steps.merger-token.outputs.token || github.token }}
-        run: gh auth setup-git
+        run: SKIP_NPM_INSTALL=1 direnv exec . gh auth setup-git
 
       - name: Generate update pull requests
         env:
@@ -104,4 +108,9 @@ jobs:
           GITHUB_TOKEN: ${{ steps.merger-token.outputs.token || github.token }}
           GENERATED_DOCS_MERGER_TOKEN: ${{ steps.merger-token.outputs.token }}
           GENERATED_DOCS_WORKFLOW_TOKEN: ${{ github.token }}
-        run: python3 scripts/update_generated_reference_prs.py --targets ${{ matrix.target }}
+        run: |
+          args=(--targets "${{ matrix.target }}")
+          if [[ "${{ inputs.dry_run || false }}" == "true" ]]; then
+            args+=(--dry-run)
+          fi
+          SKIP_NPM_INSTALL=1 direnv exec . python3 scripts/update_generated_reference_prs.py "${args[@]}"
