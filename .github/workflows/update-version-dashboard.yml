@@ -9,6 +9,10 @@ on:
         description: "Generated-doc targets to run"
         type: string
         default: "all"
+      dry_run:
+        description: "List selected target commands without generating or publishing changes"
+        type: boolean
+        default: false
 
 permissions:
   actions: write
@@ -20,6 +24,7 @@ concurrency:
   group: update-generated-docs
   cancel-in-progress: false
 
+# The canton-network-cf-docs runner contract provides Nix through a shared store and daemon.
 jobs:
   select-targets:
     runs-on: canton-network-cf-docs
@@ -36,7 +41,7 @@ jobs:
         env:
           GENERATED_DOCS_TARGETS: ${{ inputs.targets || 'all' }}
         run: |
-          target_matrix="$(python3 scripts/update_generated_reference_prs.py --targets $GENERATED_DOCS_TARGETS --print-target-matrix-json)"
+          target_matrix="$(SKIP_NPM_INSTALL=1 nix-shell --run 'python3 scripts/update_generated_reference_prs.py --targets $GENERATED_DOCS_TARGETS --print-target-matrix-json')"
           echo "target_matrix=$target_matrix" >> "$GITHUB_OUTPUT"
 
   update-generated-docs:
@@ -54,24 +59,20 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Set up Nix
-        uses: cachix/install-nix-action@v31
-
-      - name: Set up direnv
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y direnv
-          SKIP_NPM_INSTALL=1 direnv allow .
-
       - name: Install npm dependencies
-        run: SKIP_NPM_INSTALL=1 direnv exec . npm ci
+        run: SKIP_NPM_INSTALL=1 nix-shell --run 'npm ci'
 
       - name: Set up Daml tooling
         if: ${{ matrix.requires_daml_tooling }}
         run: |
-          bash scripts/install_daml_tooling.sh
+          SKIP_NPM_INSTALL=1 nix-shell --run 'bash scripts/install_daml_tooling.sh'
           echo "$HOME/.dpm/bin" >> "$GITHUB_PATH"
           echo "$HOME/.daml/bin" >> "$GITHUB_PATH"
+
+      - name: Verify generated-doc dependencies
+        env:
+          GENERATED_DOCS_DEPENDENCY_ARGS: ${{ matrix.requires_daml_tooling && '--require-daml' || '' }}
+        run: SKIP_NPM_INSTALL=1 nix-shell --run "python3 scripts/check_generated_docs_dependencies.py $GENERATED_DOCS_DEPENDENCY_ARGS"
 
       - name: Check generated-docs merger app configuration
         id: merger-app
@@ -96,7 +97,7 @@ jobs:
       - name: Configure generated-docs PR authentication
         env:
           GH_TOKEN: ${{ steps.merger-token.outputs.token || github.token }}
-        run: gh auth setup-git
+        run: SKIP_NPM_INSTALL=1 nix-shell --run 'gh auth setup-git'
 
       - name: Generate update pull requests
         env:
@@ -104,4 +105,10 @@ jobs:
           GITHUB_TOKEN: ${{ steps.merger-token.outputs.token || github.token }}
           GENERATED_DOCS_MERGER_TOKEN: ${{ steps.merger-token.outputs.token }}
           GENERATED_DOCS_WORKFLOW_TOKEN: ${{ github.token }}
-        run: python3 scripts/update_generated_reference_prs.py --targets ${{ matrix.target }}
+        run: |
+          args=(python3 scripts/update_generated_reference_prs.py --targets "${{ matrix.target }}")
+          if [[ "${{ inputs.dry_run || false }}" == "true" ]]; then
+            args+=(--dry-run)
+          fi
+          printf -v generated_docs_command '%q ' "${args[@]}"
+          SKIP_NPM_INSTALL=1 nix-shell --run "$generated_docs_command"
