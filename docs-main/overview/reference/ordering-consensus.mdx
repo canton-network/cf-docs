@@ -91,17 +91,19 @@ A block is considered ordered when a node receives a valid pre-prepare and more 
 
 BFT orderer nodes communicate peer-to-peer. Each node establishes a gRPC/HTTP2 stream to every other peer in the ordering service. These connections use TLS for point-to-point authentication and integrity. The peer-to-peer API is typically not exposed publicly; access is restricted to known BFT orderer peers.
 
-## Centralized vs. Decentralized Options
+## Ordering Options
 
-Canton supports multiple sequencer backends. The choice of backend determines the trust model for the synchronizer.
+Canton supports two approaches to the sequencer's ordering backend. The choice determines the trust model for the synchronizer.
 
-**Centralized (single database backend).** A single database provides the ordering. This is the simplest configuration: lowest latency, easiest to operate, but a single point of trust and failure. If the database or its operator is compromised, ordering integrity is lost. Suitable for dedicated synchronizers where the synchronizer operator is trusted by all participants. Note that the centralized orderer is in an Alpha state and not yet ready for production. This option will be removed in favor of running the Native BFT orderer even for single-sequencer deployments.
+**Ordering with CantonBFT.** CantonBFT, the ISS-inspired Native BFT orderer described above, is Canton's own ordering implementation and runs in-process with the sequencer. It supports three deployment modes:
 
-**CometBFT driver.** An external BFT ordering service using [CometBFT](https://cometbft.com/). Canton includes a driver that integrates CometBFT as the sequencer backend. This provides Byzantine fault tolerance through an established consensus engine, but runs as a separate process outside the sequencer JVM.
+- **Single-node**, for centralized ordering — one operator runs a single orderer node. Lowest latency, easiest to operate, but a single point of trust and failure.
+- **Multi-node, run by a single entity**, for high availability — one operator runs multiple orderer nodes for redundancy without distributing trust across parties.
+- **Cross-entity**, for full Byzantine fault tolerance — multiple independent parties each run orderer nodes, and no single party controls ordering. This is how the Global Synchronizer operates.
 
-**Native BFT orderer.** The ISS-inspired orderer described above, running in-process with the sequencer. This is Canton's own BFT implementation, designed specifically for the sequencer's requirements and integrated tightly with Canton's topology and key management.
+**BFT ordering with external CometBFT.** An external BFT ordering service using [CometBFT](https://cometbft.com/). Canton includes a driver that integrates CometBFT as the sequencer backend, running as a separate process outside the sequencer JVM. This option is used for the Global Synchronizer; it isn't recommended for dedicated synchronizers, which should use CantonBFT instead.
 
-The **Global Synchronizer** uses the BFT configuration, operated by Super Validators. Each Super Validator runs sequencer and mediator nodes, and the BFT orderer nodes communicate peer-to-peer across Super Validator infrastructure. Dedicated Synchronizers may use any backend — a single-database backend for simplicity, or a BFT backend when trust must be distributed among multiple operators.
+The **Global Synchronizer** is operated by Super Validators, each running sequencer and mediator nodes with orderer nodes communicating peer-to-peer across Super Validator infrastructure. Dedicated Synchronizers can run CantonBFT in any of the three modes above, depending on how much trust needs to be distributed among operators.
 
 ## Sequencer Guarantees
 
