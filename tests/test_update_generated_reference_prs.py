@@ -103,8 +103,12 @@ def test_generated_docs_workflow_uses_merger_app_for_pr_mutations() -> None:
     assert "GH_TOKEN: ${{ steps.merger-token.outputs.token || github.token }}" in workflow
     assert "GITHUB_TOKEN: ${{ steps.merger-token.outputs.token || github.token }}" in workflow
     assert "GENERATED_DOCS_WORKFLOW_TOKEN: ${{ github.token }}" in workflow
-    assert workflow.count("uses: cachix/install-nix-action@v31") == 2
+    assert "uses: cachix/install-nix-action@v31" not in workflow
     assert "sudo apt-get" not in workflow
+    assert (
+        "run: SKIP_NPM_INSTALL=1 direnv allow . && SKIP_NPM_INSTALL=1 direnv exec . true"
+        in workflow
+    )
     assert "python3 scripts/check_generated_docs_dependencies.py" in workflow
     assert "run: SKIP_NPM_INSTALL=1 nix-shell --run 'gh auth setup-git'" in workflow
     assert 'args=(python3 scripts/update_generated_reference_prs.py --targets "${{ matrix.target }}")' in workflow
