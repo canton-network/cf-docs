@@ -35,12 +35,15 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Set up Nix
+        uses: cachix/install-nix-action@v31
+
       - name: Select generated-doc targets
         id: select-targets
         env:
           GENERATED_DOCS_TARGETS: ${{ inputs.targets || 'all' }}
         run: |
-          target_matrix="$(python3 scripts/update_generated_reference_prs.py --targets $GENERATED_DOCS_TARGETS --print-target-matrix-json)"
+          target_matrix="$(SKIP_NPM_INSTALL=1 nix-shell --run 'python3 scripts/update_generated_reference_prs.py --targets $GENERATED_DOCS_TARGETS --print-target-matrix-json')"
           echo "target_matrix=$target_matrix" >> "$GITHUB_OUTPUT"
 
   update-generated-docs:
@@ -61,21 +64,23 @@ jobs:
       - name: Set up Nix
         uses: cachix/install-nix-action@v31
 
-      - name: Set up direnv
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y direnv
-          SKIP_NPM_INSTALL=1 direnv allow .
+      - name: Trust project environment
+        run: SKIP_NPM_INSTALL=1 nix-shell --run 'direnv allow .'
 
       - name: Install npm dependencies
-        run: SKIP_NPM_INSTALL=1 direnv exec . npm ci
+        run: SKIP_NPM_INSTALL=1 nix-shell --run 'npm ci'
 
       - name: Set up Daml tooling
         if: ${{ matrix.requires_daml_tooling }}
         run: |
-          bash scripts/install_daml_tooling.sh
+          SKIP_NPM_INSTALL=1 nix-shell --run 'bash scripts/install_daml_tooling.sh'
           echo "$HOME/.dpm/bin" >> "$GITHUB_PATH"
           echo "$HOME/.daml/bin" >> "$GITHUB_PATH"
+
+      - name: Verify generated-doc dependencies
+        env:
+          GENERATED_DOCS_DEPENDENCY_ARGS: ${{ matrix.requires_daml_tooling && '--require-daml' || '' }}
+        run: SKIP_NPM_INSTALL=1 nix-shell --run "python3 scripts/check_generated_docs_dependencies.py $GENERATED_DOCS_DEPENDENCY_ARGS"
 
       - name: Check generated-docs merger app configuration
         id: merger-app
@@ -100,7 +105,7 @@ jobs:
       - name: Configure generated-docs PR authentication
         env:
           GH_TOKEN: ${{ steps.merger-token.outputs.token || github.token }}
-        run: SKIP_NPM_INSTALL=1 direnv exec . gh auth setup-git
+        run: SKIP_NPM_INSTALL=1 nix-shell --run 'gh auth setup-git'
 
       - name: Generate update pull requests
         env:
@@ -109,8 +114,9 @@ jobs:
           GENERATED_DOCS_MERGER_TOKEN: ${{ steps.merger-token.outputs.token }}
           GENERATED_DOCS_WORKFLOW_TOKEN: ${{ github.token }}
         run: |
-          args=(--targets "${{ matrix.target }}")
+          args=(python3 scripts/update_generated_reference_prs.py --targets "${{ matrix.target }}")
           if [[ "${{ inputs.dry_run || false }}" == "true" ]]; then
             args+=(--dry-run)
           fi
-          SKIP_NPM_INSTALL=1 direnv exec . python3 scripts/update_generated_reference_prs.py "${args[@]}"
+          printf -v generated_docs_command '%q ' "${args[@]}"
+          SKIP_NPM_INSTALL=1 nix-shell --run "$generated_docs_command"
