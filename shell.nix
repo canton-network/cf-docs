@@ -23,11 +23,14 @@ let
 in
 pkgs.mkShell {
   packages = [
-    pkgs.direnv
+    pkgs.curl
     pkgs.gh
+    pkgs.git
     pkgs.jdk25_headless
+    pkgs.ncurses
     pkgs.nodejs_24
     pkgs.ruff
+    pkgs.unzip
     python
   ];
 
