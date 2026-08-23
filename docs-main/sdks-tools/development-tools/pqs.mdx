@@ -7,7 +7,6 @@ import DamlDocsSdksToolsDevelopmentToolsPqsL62 from "/snippets/daml-docs/sdks-to
 import DamlDocsSdksToolsDevelopmentToolsPqsL73 from "/snippets/daml-docs/sdks-tools_development-tools_pqs_L73.mdx";
 import DamlDocsSdksToolsDevelopmentToolsPqsL85 from "/snippets/daml-docs/sdks-tools_development-tools_pqs_L85.mdx";
 import DamlDocsSdksToolsDevelopmentToolsPqsL96 from "/snippets/daml-docs/sdks-tools_development-tools_pqs_L96.mdx";
-import DamlDocsSdksToolsDevelopmentToolsPqsL108 from "/snippets/daml-docs/sdks-tools_development-tools_pqs_L108.mdx";
 
 
 PQS (Participant Query Store) subscribes to a validator's transaction stream and projects contract data into a PostgreSQL database. Your backend queries this database with standard SQL, enabling: filtered queries, aggregations, joins, and full-text search that would be impractical through the Ledger API alone.
@@ -294,15 +293,17 @@ PQS is tested for compatibility with multiple versions of dependencies, as follo
 
 ## SQL Query Examples
 
+These examples use the PQS SQL API — a set of provisioned functions that are the only database artifacts applications should query. See the [PQS SQL API reference](/appdev/reference/pqs-sql-reference) for the full function list and returned columns.
+
 ### Active Contracts
 
 Query all active contracts for a specific template:
 
 <DamlDocsSdksToolsDevelopmentToolsPqsL62 />
 
-### Transaction History
+### Recent Create Events
 
-View recent transactions for a party:
+View recent create events for a party:
 
 <DamlDocsSdksToolsDevelopmentToolsPqsL73 />
 
@@ -314,17 +315,11 @@ Count active contracts by template:
 
 ### Party Filtering
 
-Find all contracts visible to a specific party:
+Find contracts where a specific party is a signatory:
 
 <DamlDocsSdksToolsDevelopmentToolsPqsL96 />
 
 ## Performance Optimization
-
-### Indexes
-
-Add indexes on columns you query frequently. PQS creates basic indexes on startup, but your application may benefit from additional ones:
-
-<DamlDocsSdksToolsDevelopmentToolsPqsL108 />
 
 ### Connection Pooling
 
@@ -332,9 +327,8 @@ Use a connection pool (like HikariCP for Java or `pg-pool` for Node.js) between 
 
 ### Query Patterns
 
-- Avoid `SELECT *` on large tables; specify the columns you need
-- Use `template_id` filters to narrow the dataset before applying payload filters
-- For time-range queries, add indexes on `effective_at` or `created_at` columns
+- Avoid `SELECT *` on large result sets; specify the columns you need
+- Use the `name` argument of the table functions (for example `active('Licensing:License')`) to narrow the dataset before applying payload filters
 
 ## High Availability and Database Sharing
 
