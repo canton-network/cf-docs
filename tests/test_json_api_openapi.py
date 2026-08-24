@@ -197,6 +197,94 @@ def test_openapi_navigation_replaces_only_configured_manual_operations() -> None
     ]
 
 
+def test_all_manual_operations_preserve_native_mintlify_routes() -> None:
+    module = load_script_module("generate_json_api_reference.py")
+    spec = {
+        "paths": {
+            "/v2/packages/{package-id}/status": {
+                "get": {"operationId": "getPackageStatus"}
+            },
+            "/v2/interactive-submission/executeAndWait": {
+                "post": {"operationId": "executeAndWait"}
+            },
+        }
+    }
+
+    operations = module.configured_manual_operations(
+        {"manual_operations": "all"},
+        spec=spec,
+        directory="reference/json-api-reference",
+    )
+
+    assert operations == [
+        {
+            "method": "GET",
+            "path": "/v2/packages/{package-id}/status",
+            "page_ref": "reference/json-api-reference/get-v2packages:package-idstatus",
+        },
+        {
+            "method": "POST",
+            "path": "/v2/interactive-submission/executeAndWait",
+            "page_ref": "reference/json-api-reference/post-v2interactive-submissionexecuteandwait",
+        },
+    ]
+    assert all(
+        not module.is_native_openapi_page_ref(page_ref)
+        for page_ref in module.openapi_navigation_page_refs(
+            spec, manual_operations=operations
+        )
+    )
+
+
+def test_all_manual_operations_require_published_spec() -> None:
+    module = load_script_module("generate_json_api_reference.py")
+
+    try:
+        module.configured_manual_operations({"manual_operations": "all"})
+    except ValueError as error:
+        assert "requires the published OpenAPI spec" in str(error)
+    else:
+        raise AssertionError("Expected all-operation mode without a spec to fail")
+
+
+def test_manual_route_baseline_detects_public_route_drift() -> None:
+    module = load_script_module("generate_json_api_reference.py")
+    operations = [
+        {
+            "method": "GET",
+            "path": "/v2/users",
+            "page_ref": "reference/json-api-reference/get-v2users",
+        }
+    ]
+    route_hash = module.hashlib.sha256(
+        b"/reference/json-api-reference/get-v2users\n"
+    ).hexdigest()
+    module.validate_manual_route_baseline(
+        {
+            "legacy_manual_route_baseline": {
+                "operation_count": 1,
+                "sha256": route_hash,
+            }
+        },
+        manual_operations=operations,
+    )
+
+    try:
+        module.validate_manual_route_baseline(
+            {
+                "legacy_manual_route_baseline": {
+                    "operation_count": 1,
+                    "sha256": "0" * 64,
+                }
+            },
+            manual_operations=operations,
+        )
+    except ValueError as error:
+        assert "do not match the captured native-route baseline" in str(error)
+    else:
+        raise AssertionError("Expected public route drift to fail")
+
+
 def test_manual_openapi_config_rejects_duplicate_operation_identity() -> None:
     module = load_script_module("generate_json_api_reference.py")
     operation = {
@@ -267,6 +355,7 @@ def test_update_docs_navigation_supports_product_navigation(tmp_path: Path) -> N
         group_label="OpenAPI",
         openapi_source_ref="openapi/json-ledger-api/openapi.yaml",
         openapi_directory="reference/json-api-reference",
+        overview_page_ref="reference/json-api-reference/overview",
         details_page_ref="reference/json-api-reference/details",
         openapi_page_refs=["GET /v2/users", "POST /v2/users"],
     )
@@ -289,6 +378,65 @@ def test_update_docs_navigation_supports_product_navigation(tmp_path: Path) -> N
         },
         {"group": "AsyncAPI", "pages": ["reference/asyncapi"]},
     ]
+
+
+def test_update_docs_navigation_removes_native_openapi_and_history_page(
+    tmp_path: Path,
+) -> None:
+    module = load_script_module("generate_json_api_reference.py")
+    docs_json = tmp_path / "docs.json"
+    docs_json.write_text(
+        json.dumps(
+            {
+                "navigation": {
+                    "products": [
+                        {
+                            "product": "API Reference",
+                            "pages": [
+                                {
+                                    "group": "Ledger API",
+                                    "pages": [
+                                        {
+                                            "group": "OpenAPI",
+                                            "openapi": {"source": "stale.yaml"},
+                                            "pages": [
+                                                "GET /v2/users",
+                                                "reference/json-api-reference/details",
+                                            ],
+                                        }
+                                    ],
+                                }
+                            ],
+                        }
+                    ]
+                }
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    module.update_docs_navigation(
+        docs_json_path=docs_json,
+        dropdown_label="API Reference",
+        parent_group_label="Ledger API",
+        group_label="OpenAPI",
+        openapi_source_ref="openapi/json-ledger-api/openapi.yaml",
+        openapi_directory="reference/json-api-reference",
+        overview_page_ref="reference/json-api-reference/overview",
+        details_page_ref="reference/json-api-reference/details",
+        openapi_page_refs=["reference/json-api-reference/get-v2users"],
+    )
+
+    docs = json.loads(docs_json.read_text(encoding="utf-8"))
+    group = docs["navigation"]["products"][0]["pages"][0]["pages"][0]
+    assert group == {
+        "group": "OpenAPI",
+        "pages": [
+            "reference/json-api-reference/overview",
+            "reference/json-api-reference/get-v2users",
+        ],
+    }
 
 
 def test_operation_summary_uses_descriptions_for_generated_method_path_summaries() -> (
@@ -359,3 +507,98 @@ def test_build_openapi_details_page_uses_reference_overview_layout() -> None:
     assert '<div class="x2mdx-ref-card x2mdx-ref-card--static">' in rendered
     assert "Changed 3.5" in rendered
     assert "## Endpoint Reference (Latest)" not in rendered
+
+
+def test_openapi_overview_links_raw_spec_without_history_label() -> None:
+    module = load_script_module("generate_json_api_reference.py")
+
+    rendered = render_page(
+        module.build_openapi_overview_page(
+            overview_page_ref="reference/json-api-reference/overview",
+            publish_version="3.5",
+            source_name="release fixtures",
+            raw_spec_ref="openapi/json-ledger-api/openapi.yaml",
+            operation_count=67,
+        )
+    )
+
+    assert 'title: "JSON Ledger API OpenAPI"' in rendered
+    assert "Operations</dt>" in rendered
+    assert "67</dd>" in rendered
+    assert "(/openapi/json-ledger-api/openapi.yaml)" in rendered
+    assert "Details and history" not in rendered
+
+
+def test_ensure_redirect_is_idempotent(tmp_path: Path) -> None:
+    module = load_script_module("generate_json_api_reference.py")
+    docs_json = tmp_path / "docs.json"
+    docs_json.write_text('{"redirects": []}\n', encoding="utf-8")
+
+    for _ in range(2):
+        module.ensure_redirect(
+            docs_json_path=docs_json,
+            source="/reference/json-api-reference/details",
+            destination="/reference/json-api-reference/overview",
+        )
+
+    assert json.loads(docs_json.read_text(encoding="utf-8"))["redirects"] == [
+        {
+            "source": "/reference/json-api-reference/details",
+            "destination": "/reference/json-api-reference/overview",
+        }
+    ]
+
+
+def test_checked_in_json_openapi_target_is_fully_manual_and_conformant() -> None:
+    module = load_script_module("generate_json_api_reference.py")
+    source_config = json.loads(
+        (REPO_ROOT / "config/x2mdx/ledger-api/source-artifacts.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    spec = module.yaml.safe_load(
+        (REPO_ROOT / "docs-main/openapi/json-ledger-api/openapi.yaml").read_text(
+            encoding="utf-8"
+        )
+    )
+    operations = module.configured_manual_operations(
+        source_config,
+        spec=spec,
+        directory="reference/json-api-reference",
+    )
+    module.validate_manual_route_baseline(source_config, manual_operations=operations)
+
+    assert len(operations) == 67
+    expected_page_refs = [operation["page_ref"] for operation in operations]
+    output_directory = REPO_ROOT / "docs-main/reference/json-api-reference"
+    expected_files = {
+        REPO_ROOT / f"docs-main/{page_ref}.mdx" for page_ref in expected_page_refs
+    } | {output_directory / "overview.mdx"}
+    assert set(output_directory.glob("*.mdx")) == expected_files
+
+    docs_json = json.loads(
+        (REPO_ROOT / "docs-main/docs.json").read_text(encoding="utf-8")
+    )
+    pages = module.reference_nav.navigation_pages(
+        docs_json,
+        label="API Reference",
+        docs_json_path=REPO_ROOT / "docs-main/docs.json",
+    )
+    ledger_group = module._find_group(pages, "Ledger API")
+    assert ledger_group is not None
+    openapi_group = module._find_group(ledger_group["pages"], "OpenAPI")
+    assert openapi_group == {
+        "group": "OpenAPI",
+        "pages": ["reference/json-api-reference/overview", *expected_page_refs],
+    }
+    assert {
+        "source": "/reference/json-api-reference/details",
+        "destination": "/reference/json-api-reference/overview",
+    } in docs_json["redirects"]
+
+    for output_path in expected_files - {output_directory / "overview.mdx"}:
+        rendered = output_path.read_text(encoding="utf-8")
+        assert '\napi: "' in rendered
+        assert "\n## History\n" in rendered
+        assert "lifecycle events" not in rendered.lower()
+        assert "details and history" not in rendered.lower()

@@ -1,0 +1,369 @@
+---
+title: "Query active contracts list (blocking call)"
+api: "POST http://localhost:7575/v2/state/active-contracts"
+authMethod: "bearer"
+playground: "interactive"
+---
+
+<div class="x2mdx-ref-page x2mdx-ref-page--operation x2mdx-ref-page--manual-api"></div>
+
+
+
+<div class="x2mdx-ref-hero">
+
+  <p class="x2mdx-ref-eyebrow">JSON Ledger API</p>
+
+
+  <h1 class="x2mdx-ref-title">Query active contracts list (blocking call)</h1>
+
+
+
+<div class="x2mdx-ref-badges">
+
+  <span class="x2mdx-ref-badge x2mdx-ref-badge--protocol">OpenAPI</span>
+
+  <span class="x2mdx-ref-badge x2mdx-ref-badge--added">Since 3.4</span>
+
+  <span class="x2mdx-ref-badge x2mdx-ref-badge--changed">Changed 3.5</span>
+
+</div>
+
+
+</div>
+
+Query active contracts list (blocking call). Querying active contracts is an expensive operation and if possible should not be repeated often. Consider querying active contracts initially (for a given offset) and then repeatedly call one of `/v2/updates/...`endpoints to get subsequent modifications. You can also use websockets to get updates with better performance. Returns a stream of the snapshot of the active contracts and incomplete (un)assignments...
+
+## Protocol Details
+
+
+<dl class="x2mdx-ref-meta-grid">
+
+  <div class="x2mdx-ref-meta-item">
+    <dt>Operation ID</dt>
+    <dd>postV2StateActive-contracts</dd>
+  </div>
+
+  <div class="x2mdx-ref-meta-item">
+    <dt>Authentication</dt>
+    <dd>Bearer token</dd>
+  </div>
+
+  <div class="x2mdx-ref-meta-item">
+    <dt>Published</dt>
+    <dd>3.5</dd>
+  </div>
+
+</dl>
+
+
+## Inputs
+
+
+
+### Query parameters
+
+
+
+
+
+
+
+<ParamField query="limit" type="number">
+OpenAPI type: `integer (int64)`.
+
+
+maximum number of elements to return, this param is ignored if is bigger than server setting
+</ParamField>
+
+
+
+<ParamField query="stream_idle_timeout_ms" type="number">
+OpenAPI type: `integer (int64)`.
+
+
+timeout to complete and send result if no new elements are received (for open ended streams)
+</ParamField>
+
+
+
+
+
+
+
+
+
+### Request body
+
+
+<div class="x2mdx-ref-badges">
+
+  <span class="x2mdx-ref-badge x2mdx-ref-badge--neutral">application/json</span>
+
+</div>
+
+
+
+
+
+
+<ParamField body="filter" type="object">
+OpenAPI type: `TransactionFilter`.
+
+
+Provided for backwards compatibility, it will be removed in the Canton version 3.5.0. Used both for filtering create and archive events as well as for filtering transaction trees.
+</ParamField>
+
+
+
+<ParamField body="verbose" type="boolean">
+
+Provided for backwards compatibility, it will be removed in the Canton version 3.5.0. If enabled, values served over the API will contain more information than strictly necessary to interpret the data. In particular, setting the verbose flag to true triggers the ledger to include labels for record fields. Optional, if specified event_format must be unset.
+</ParamField>
+
+
+
+<ParamField body="activeAtOffset" type="number" required>
+OpenAPI type: `integer (int64)`.
+
+
+The offset at which the snapshot of the active contracts will be computed. Must be no greater than the current ledger end offset. Must be greater than or equal to the last pruning offset. Must be a valid absolute offset (positive integer) or ledger begin offset (zero). If zero, the empty set will be returned. Required
+</ParamField>
+
+
+
+<ParamField body="eventFormat" type="object">
+OpenAPI type: `EventFormat`.
+
+
+A format for events which defines both which events should be included and what data should be computed and included for them. Note that some of the filtering behavior depends on the `TransactionShape`, which is expected to be specified alongside usages of `EventFormat`.
+</ParamField>
+
+
+
+<ParamField body="streamContinuationToken" type="string">
+
+Opaque representation of a continuation token defining a position in the active contracts snapshot. The prefix of the active contracts snapshot will be omitted up to and including the element from which the continuation token was read. To reuse the continuation token from a `GetActiveContractsPageResponse`: - subsequent request must be executed on the same participant with the same version of canton, - subsequent request must have the same active_at_offset, - subsequent request must have the same event_format - and the participant must not have been pruned after the active_at_offset. If not specified, the whole active contracts snapshot will be returned. Optional: can be empty
+</ParamField>
+
+
+
+
+
+
+
+
+
+## Outputs
+
+
+
+### 200
+
+
+<div class="x2mdx-ref-badges">
+
+  <span class="x2mdx-ref-badge x2mdx-ref-badge--neutral">application/json</span>
+
+</div>
+
+
+
+
+
+
+<ResponseField name="value" type="JsGetActiveContractsResponse[]" required>
+-
+</ResponseField>
+
+
+
+
+
+
+
+
+
+### 400
+
+
+<div class="x2mdx-ref-badges">
+
+  <span class="x2mdx-ref-badge x2mdx-ref-badge--neutral">text/plain</span>
+
+</div>
+
+
+
+
+
+
+<ResponseField name="value" type="string" required>
+-
+</ResponseField>
+
+
+
+
+
+
+
+
+
+### default
+
+
+<div class="x2mdx-ref-badges">
+
+  <span class="x2mdx-ref-badge x2mdx-ref-badge--neutral">application/json</span>
+
+</div>
+
+
+
+
+
+
+<ResponseField name="code" type="string" required>
+-
+</ResponseField>
+
+
+
+<ResponseField name="cause" type="string" required>
+-
+</ResponseField>
+
+
+
+<ResponseField name="correlationId" type="string">
+-
+</ResponseField>
+
+
+
+<ResponseField name="traceId" type="string">
+-
+</ResponseField>
+
+
+
+<ResponseField name="context" type="Map_String" required>
+-
+</ResponseField>
+
+
+
+<ResponseField name="resources" type="Tuple2_String_String[]">
+-
+</ResponseField>
+
+
+
+<ResponseField name="errorCategory" type="integer (int32)" required>
+-
+</ResponseField>
+
+
+
+<ResponseField name="grpcCodeValue" type="integer (int32)">
+-
+</ResponseField>
+
+
+
+<ResponseField name="retryInfo" type="string">
+-
+</ResponseField>
+
+
+
+<ResponseField name="definiteAnswer" type="boolean">
+-
+</ResponseField>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## History
+
+<div class="x2mdx-ref-history" aria-label="Reference history">
+
+  <div class="x2mdx-ref-history-event x2mdx-ref-history-event--changed">
+    <div class="x2mdx-ref-history-event-head">
+      <span class="x2mdx-ref-history-event-label">Changed</span>
+      <code class="x2mdx-ref-history-event-version">3.5</code>
+    </div>
+
+    <p class="x2mdx-ref-history-event-detail">The POST /v2/state/active-contracts operation changed in this snapshot.</p>
+
+  </div>
+
+  <div class="x2mdx-ref-history-event x2mdx-ref-history-event--introduced">
+    <div class="x2mdx-ref-history-event-head">
+      <span class="x2mdx-ref-history-event-label">Introduced</span>
+      <code class="x2mdx-ref-history-event-version">3.4</code>
+    </div>
+
+  </div>
+
+</div>
+
+
+
+
+<RequestExample>
+
+```bash Request
+curl --request POST \
+  --url 'http://localhost:7575/v2/state/active-contracts' \
+  --header 'Authorization: Bearer $TOKEN' \
+  --header 'Content-Type: application/json' \
+  --data '{"filter":{"filtersByParty":{},"filtersForAnyParty":{}},"verbose":false,"activeAtOffset":0,"eventFormat":{"filtersByParty":{},"filtersForAnyParty":{},"verbose":false},"streamContinuationToken":"string"}'
+```
+
+</RequestExample>
+
+
+<ResponseExample>
+
+```json 200 response
+[
+  {
+    "workflowId": "string",
+    "contractEntry": {},
+    "streamContinuationToken": "string"
+  }
+]
+```
+
+```json default response
+{
+  "code": "string",
+  "cause": "string",
+  "correlationId": "string",
+  "traceId": "string",
+  "context": {},
+  "resources": [
+    [
+      "string"
+    ]
+  ],
+  "errorCategory": 0,
+  "grpcCodeValue": 0,
+  "retryInfo": "string",
+  "definiteAnswer": false
+}
+```
+
+</ResponseExample>

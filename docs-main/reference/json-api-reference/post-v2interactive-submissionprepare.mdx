@@ -1,0 +1,442 @@
+---
+title: "Requires `readAs` scope for the submitting party when LAPI User authorization is enabled"
+api: "POST http://localhost:7575/v2/interactive-submission/prepare"
+authMethod: "bearer"
+playground: "interactive"
+---
+
+<div class="x2mdx-ref-page x2mdx-ref-page--operation x2mdx-ref-page--manual-api"></div>
+
+
+
+<div class="x2mdx-ref-hero">
+
+  <p class="x2mdx-ref-eyebrow">JSON Ledger API</p>
+
+
+  <h1 class="x2mdx-ref-title">Requires `readAs` scope for the submitting party when LAPI User authorization is enabled</h1>
+
+
+
+<div class="x2mdx-ref-badges">
+
+  <span class="x2mdx-ref-badge x2mdx-ref-badge--protocol">OpenAPI</span>
+
+  <span class="x2mdx-ref-badge x2mdx-ref-badge--added">Since 3.4</span>
+
+  <span class="x2mdx-ref-badge x2mdx-ref-badge--changed">Changed 3.5</span>
+
+</div>
+
+
+</div>
+
+Requires `readAs` scope for the submitting party when LAPI User authorization is enabled
+
+## Protocol Details
+
+
+<dl class="x2mdx-ref-meta-grid">
+
+  <div class="x2mdx-ref-meta-item">
+    <dt>Operation ID</dt>
+    <dd>postV2Interactive-submissionPrepare</dd>
+  </div>
+
+  <div class="x2mdx-ref-meta-item">
+    <dt>Authentication</dt>
+    <dd>Bearer token</dd>
+  </div>
+
+  <div class="x2mdx-ref-meta-item">
+    <dt>Published</dt>
+    <dd>3.5</dd>
+  </div>
+
+</dl>
+
+
+## Inputs
+
+
+
+### Request body
+
+
+<div class="x2mdx-ref-badges">
+
+  <span class="x2mdx-ref-badge x2mdx-ref-badge--neutral">application/json</span>
+
+</div>
+
+
+
+
+
+
+<ParamField body="userId" type="string">
+
+Uniquely identifies the participant user that prepares the transaction. Must be a valid UserIdString (as described in ``value.proto``). Required unless authentication is used with a user token. In that case, the token&#x27;s user-id will be used for the request&#x27;s user_id. Optional
+</ParamField>
+
+
+
+<ParamField body="commandId" type="string" required>
+
+Uniquely identifies the command. The triple (user_id, act_as, command_id) constitutes the change ID for the intended ledger change, where act_as is interpreted as a set of party names. The change ID can be used for matching the intended ledger changes with all their completions. Must be a valid LedgerString (as described in ``value.proto``). Required
+</ParamField>
+
+
+
+<ParamField body="commands" type="object[]" required>
+OpenAPI type: `Command[]`.
+
+
+Individual elements of this atomic command. Must be non-empty. Limitation: Only single command transaction are currently supported by the API. The field is marked as repeated in preparation for future support of multiple commands. Required: must be non-empty
+</ParamField>
+
+
+
+<ParamField body="minLedgerTime" type="object">
+OpenAPI type: `MinLedgerTime`.
+
+
+-
+</ParamField>
+
+
+
+<ParamField body="actAs" type="string[]" required>
+
+Set of parties on whose behalf the command should be executed, if submitted. If ledger API authorization is enabled, then the authorization metadata must authorize the sender of the request to **read** (not act) on behalf of each of the given parties. This is because this RPC merely prepares a transaction and does not execute it. Therefore read authorization is sufficient even for actAs parties. Note: This may change, and more specific authorization scope may be introduced in the future. Each element must be a valid PartyIdString (as described in ``value.proto``). Required: must be non-empty
+</ParamField>
+
+
+
+<ParamField body="readAs" type="string[]">
+
+Set of parties on whose behalf (in addition to all parties listed in ``act_as``) contracts can be retrieved. This affects Daml operations such as ``fetch``, ``fetchByKey``, ``lookupByKey``, ``exercise``, and ``exerciseByKey``. Note: A command can only use contracts that are visible to at least one of the parties in ``act_as`` or ``read_as``. This visibility check is independent from the Daml authorization rules for fetch operations. If ledger API authorization is enabled, then the authorization metadata must authorize the sender of the request to read contract data on behalf of each of the given parties. Optional: can be empty
+</ParamField>
+
+
+
+<ParamField body="disclosedContracts" type="object[]">
+OpenAPI type: `DisclosedContract[]`.
+
+
+Additional contracts used to resolve contract &amp; contract key lookups. Optional: can be empty
+</ParamField>
+
+
+
+<ParamField body="synchronizerId" type="string">
+
+Must be a valid synchronizer id If not set, a suitable synchronizer that this node is connected to will be chosen Optional
+</ParamField>
+
+
+
+<ParamField body="packageIdSelectionPreference" type="string[]">
+
+The package-id selection preference of the client for resolving package names and interface instances in command submission and interpretation Optional: can be empty
+</ParamField>
+
+
+
+<ParamField body="verboseHashing" type="boolean">
+
+When true, the response will contain additional details on how the transaction was encoded and hashed This can be useful for troubleshooting of hash mismatches. Should only be used for debugging. Defaults to false Optional
+</ParamField>
+
+
+
+<ParamField body="prefetchContractKeys" type="object[]">
+OpenAPI type: `PrefetchContractKey[]`.
+
+
+Fetches the contract keys into the caches to speed up the command processing. Should only contain contract keys that are expected to be resolved during interpretation of the commands. Keys of disclosed contracts do not need prefetching. Optional: can be empty
+</ParamField>
+
+
+
+<ParamField body="maxRecordTime" type="string">
+
+Maximum timestamp at which the transaction can be recorded onto the ledger via the synchronizer specified in the `PrepareSubmissionResponse`. If submitted after it will be rejected even if otherwise valid, in which case it needs to be prepared and signed again with a new valid max_record_time. Use this to limit the time-to-life of a prepared transaction, which is useful to know when it can definitely not be accepted anymore and resorting to preparing another transaction for the same intent is safe again. Optional
+</ParamField>
+
+
+
+<ParamField body="estimateTrafficCost" type="object">
+OpenAPI type: `CostEstimationHints`.
+
+
+Hints to improve cost estimation precision of a prepared transaction
+</ParamField>
+
+
+
+<ParamField body="tapsMaxPasses" type="number">
+OpenAPI type: `integer (int32)`.
+
+
+The maximum number of passes for the Topology-Aware Package Selection (TAPS). Higher values can increase the chance of successful package selection for routing of interpreted transactions. If unset, this defaults to the value defined in the participant configuration. The provided value must not exceed the limit specified in the participant configuration. Optional
+</ParamField>
+
+
+
+<ParamField body="hashingSchemeVersion" type="string">
+
+The hashing scheme version to be used when building the hash. Defaults to HASHING_SCHEME_VERSION_V2. Optional
+</ParamField>
+
+
+
+
+
+
+
+
+
+## Outputs
+
+
+
+### 200
+
+
+<div class="x2mdx-ref-badges">
+
+  <span class="x2mdx-ref-badge x2mdx-ref-badge--neutral">application/json</span>
+
+</div>
+
+
+
+
+
+
+<ResponseField name="preparedTransaction" type="string" required>
+The interpreted transaction, it represents the ledger changes necessary to execute the commands specified in the request. Clients MUST display the content of the transaction to the user for them to validate before signing the hash if the preparing participant is not trusted. Required
+</ResponseField>
+
+
+
+<ResponseField name="preparedTransactionHash" type="string" required>
+Hash of the transaction, this is what needs to be signed by the party to authorize the transaction. Only provided for convenience, clients MUST recompute the hash from the raw transaction if the preparing participant is not trusted. May be removed in future versions Required: must be non-empty
+</ResponseField>
+
+
+
+<ResponseField name="hashingSchemeVersion" type="string" required>
+The hashing scheme version used when building the hash Required
+</ResponseField>
+
+
+
+<ResponseField name="hashingDetails" type="string">
+Optional additional details on how the transaction was encoded and hashed. Only set if verbose_hashing = true in the request Note that there are no guarantees on the stability of the format or content of this field. Its content should NOT be parsed and should only be used for troubleshooting purposes. Optional
+</ResponseField>
+
+
+
+<ResponseField name="costEstimation" type="CostEstimation">
+Estimation of the cost of submitting the prepared transaction The estimation is done against the synchronizer chosen during preparation of the transaction (or the one explicitly requested). The cost of re-assigning contracts to another synchronizer when necessary is not included in the estimation.
+</ResponseField>
+
+
+
+
+
+
+
+
+
+### 400
+
+
+<div class="x2mdx-ref-badges">
+
+  <span class="x2mdx-ref-badge x2mdx-ref-badge--neutral">text/plain</span>
+
+</div>
+
+
+
+
+
+
+<ResponseField name="value" type="string" required>
+-
+</ResponseField>
+
+
+
+
+
+
+
+
+
+### default
+
+
+<div class="x2mdx-ref-badges">
+
+  <span class="x2mdx-ref-badge x2mdx-ref-badge--neutral">application/json</span>
+
+</div>
+
+
+
+
+
+
+<ResponseField name="code" type="string" required>
+-
+</ResponseField>
+
+
+
+<ResponseField name="cause" type="string" required>
+-
+</ResponseField>
+
+
+
+<ResponseField name="correlationId" type="string">
+-
+</ResponseField>
+
+
+
+<ResponseField name="traceId" type="string">
+-
+</ResponseField>
+
+
+
+<ResponseField name="context" type="Map_String" required>
+-
+</ResponseField>
+
+
+
+<ResponseField name="resources" type="Tuple2_String_String[]">
+-
+</ResponseField>
+
+
+
+<ResponseField name="errorCategory" type="integer (int32)" required>
+-
+</ResponseField>
+
+
+
+<ResponseField name="grpcCodeValue" type="integer (int32)">
+-
+</ResponseField>
+
+
+
+<ResponseField name="retryInfo" type="string">
+-
+</ResponseField>
+
+
+
+<ResponseField name="definiteAnswer" type="boolean">
+-
+</ResponseField>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## History
+
+<div class="x2mdx-ref-history" aria-label="Reference history">
+
+  <div class="x2mdx-ref-history-event x2mdx-ref-history-event--changed">
+    <div class="x2mdx-ref-history-event-head">
+      <span class="x2mdx-ref-history-event-label">Changed</span>
+      <code class="x2mdx-ref-history-event-version">3.5</code>
+    </div>
+
+    <p class="x2mdx-ref-history-event-detail">The POST /v2/interactive-submission/prepare operation changed in this snapshot.</p>
+
+  </div>
+
+  <div class="x2mdx-ref-history-event x2mdx-ref-history-event--introduced">
+    <div class="x2mdx-ref-history-event-head">
+      <span class="x2mdx-ref-history-event-label">Introduced</span>
+      <code class="x2mdx-ref-history-event-version">3.4</code>
+    </div>
+
+  </div>
+
+</div>
+
+
+
+
+<RequestExample>
+
+```bash Request
+curl --request POST \
+  --url 'http://localhost:7575/v2/interactive-submission/prepare' \
+  --header 'Authorization: Bearer $TOKEN' \
+  --header 'Content-Type: application/json' \
+  --data '{"userId":"string","commandId":"string","commands":[{}],"minLedgerTime":{"time":{}},"actAs":["string"],"readAs":["string"],"disclosedContracts":[{}],"synchronizerId":"string","packageIdSelectionPreference":["string"],"verboseHashing":false,"prefetchContractKeys":[{}],"maxRecordTime":"string","estimateTrafficCost":{"disabled":false,"expectedSignatures":["SIGNING_ALGORITHM_SPEC_UNSPECIFIED"]},"tapsMaxPasses":0,"hashingSchemeVersion":"HASHING_SCHEME_VERSION_UNSPECIFIED"}'
+```
+
+</RequestExample>
+
+
+<ResponseExample>
+
+```json 200 response
+{
+  "preparedTransaction": "string",
+  "preparedTransactionHash": "string",
+  "hashingSchemeVersion": "HASHING_SCHEME_VERSION_UNSPECIFIED",
+  "hashingDetails": "string",
+  "costEstimation": {
+    "estimationTimestamp": "string",
+    "confirmationRequestTrafficCostEstimation": 0,
+    "confirmationResponseTrafficCostEstimation": 0,
+    "totalTrafficCostEstimation": 0
+  }
+}
+```
+
+```json default response
+{
+  "code": "string",
+  "cause": "string",
+  "correlationId": "string",
+  "traceId": "string",
+  "context": {},
+  "resources": [
+    [
+      "string"
+    ]
+  ],
+  "errorCategory": 0,
+  "grpcCodeValue": 0,
+  "retryInfo": "string",
+  "definiteAnswer": false
+}
+```
+
+</ResponseExample>

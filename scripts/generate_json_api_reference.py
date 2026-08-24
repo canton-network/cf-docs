@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -55,6 +56,7 @@ DEFAULT_NAV_DROPDOWN = "API Reference"
 DEFAULT_PARENT_GROUP = "Ledger API"
 DEFAULT_GROUP_LABEL = "OpenAPI"
 DEFAULT_OPENAPI_DIRECTORY = "reference/json-api-reference"
+DEFAULT_OVERVIEW_PAGE_REF = "reference/json-api-reference/overview"
 DEFAULT_DETAILS_PAGE_REF = "reference/json-api-reference/details"
 LEGACY_OUTPUT_FILE = REPO_ROOT / "docs-main" / "reference" / "json-api-reference.mdx"
 HTTP_METHODS = {"get", "put", "post", "delete", "options", "head", "patch", "trace"}
@@ -76,6 +78,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--parent-group", default=DEFAULT_PARENT_GROUP)
     parser.add_argument("--group-label", default=DEFAULT_GROUP_LABEL)
     parser.add_argument("--openapi-directory", default=DEFAULT_OPENAPI_DIRECTORY)
+    parser.add_argument("--overview-page-ref", default=DEFAULT_OVERVIEW_PAGE_REF)
     parser.add_argument("--details-page-ref", default=DEFAULT_DETAILS_PAGE_REF)
     parser.add_argument(
         "--publish-version", help="Explicit docs major version to publish."
@@ -138,6 +141,7 @@ def update_docs_navigation(
     group_label: str,
     openapi_source_ref: str,
     openapi_directory: str,
+    overview_page_ref: str,
     details_page_ref: str,
     openapi_page_refs: list[str],
 ) -> None:
@@ -161,12 +165,21 @@ def update_docs_navigation(
 
     group.clear()
     group["group"] = group_label
-    group["openapi"] = {
-        "source": openapi_source_ref,
-        "directory": openapi_directory,
-    }
-    group["pages"] = [*openapi_page_refs, details_page_ref]
+    has_native_pages = any(is_native_openapi_page_ref(ref) for ref in openapi_page_refs)
+    if has_native_pages:
+        group["openapi"] = {
+            "source": openapi_source_ref,
+            "directory": openapi_directory,
+        }
+        group["pages"] = [*openapi_page_refs, details_page_ref]
+    else:
+        group["pages"] = [overview_page_ref, *openapi_page_refs]
     docs_json_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
+def is_native_openapi_page_ref(page_ref: str) -> bool:
+    method, separator, path = page_ref.partition(" ")
+    return bool(separator and method.lower() in HTTP_METHODS and path.startswith("/"))
 
 
 def remove_legacy_output(*, output_file: Path) -> None:
@@ -209,10 +222,38 @@ def openapi_operation_page_refs(spec: dict[str, Any]) -> list[str]:
     return refs
 
 
-def configured_manual_operations(source_config: dict[str, Any]) -> list[dict[str, str]]:
+def legacy_openapi_operation_page_ref(*, method: str, path: str, directory: str) -> str:
+    mintlify_path = re.sub(r"\{([^{}]+)\}", r":\1", path)
+    slug = mintlify_path.removeprefix("/").replace("/", "").lower()
+    return f"{directory.rstrip('/')}/{method.lower()}-{slug}"
+
+
+def configured_manual_operations(
+    source_config: dict[str, Any],
+    *,
+    spec: dict[str, Any] | None = None,
+    directory: str = DEFAULT_OPENAPI_DIRECTORY,
+) -> list[dict[str, str]]:
     configured = source_config.get("manual_operations") or []
+    if configured == "all":
+        if spec is None:
+            raise ValueError(
+                "manual_operations 'all' requires the published OpenAPI spec"
+            )
+        return [
+            {
+                "method": method,
+                "path": path,
+                "page_ref": legacy_openapi_operation_page_ref(
+                    method=method,
+                    path=path,
+                    directory=directory,
+                ),
+            }
+            for method, path in openapi_operation_identities(spec)
+        ]
     if not isinstance(configured, list):
-        raise ValueError("manual_operations must be an array")
+        raise ValueError("manual_operations must be an array or 'all'")
     operations: list[dict[str, str]] = []
     for index, value in enumerate(configured):
         if not isinstance(value, dict):
@@ -240,6 +281,14 @@ def configured_manual_operations(source_config: dict[str, Any]) -> list[dict[str
     return operations
 
 
+def openapi_operation_identities(spec: dict[str, Any]) -> list[tuple[str, str]]:
+    identities: list[tuple[str, str]] = []
+    for page_ref in openapi_operation_page_refs(spec):
+        method, path = page_ref.split(" ", 1)
+        identities.append((method, path))
+    return identities
+
+
 def openapi_navigation_page_refs(
     spec: dict[str, Any], *, manual_operations: list[dict[str, str]]
 ) -> list[str]:
@@ -252,6 +301,38 @@ def openapi_navigation_page_refs(
         method, path = page_ref.split(" ", 1)
         page_refs.append(manual_refs.get((method, path), page_ref))
     return page_refs
+
+
+def validate_manual_route_baseline(
+    source_config: dict[str, Any], *, manual_operations: list[dict[str, str]]
+) -> None:
+    baseline = source_config.get("legacy_manual_route_baseline")
+    if baseline is None:
+        return
+    if not isinstance(baseline, dict):
+        raise ValueError("legacy_manual_route_baseline must be an object")
+    expected_count = baseline.get("operation_count")
+    expected_sha256 = baseline.get("sha256")
+    if not isinstance(expected_count, int) or expected_count < 0:
+        raise ValueError(
+            "legacy_manual_route_baseline.operation_count must be a non-negative integer"
+        )
+    if not isinstance(expected_sha256, str) or not re.fullmatch(
+        r"[0-9a-f]{64}", expected_sha256
+    ):
+        raise ValueError(
+            "legacy_manual_route_baseline.sha256 must be a lowercase SHA-256 digest"
+        )
+    routes = sorted(f"/{operation['page_ref']}" for operation in manual_operations)
+    actual_sha256 = hashlib.sha256(
+        ("\n".join(routes) + "\n").encode("utf-8")
+    ).hexdigest()
+    if len(routes) != expected_count or actual_sha256 != expected_sha256:
+        raise ValueError(
+            "Manual OpenAPI routes do not match the captured native-route baseline: "
+            f"expected {expected_count} routes/{expected_sha256}, got "
+            f"{len(routes)} routes/{actual_sha256}"
+        )
 
 
 def generated_operation_summary(path: str, method: str) -> str:
@@ -439,8 +520,9 @@ def write_manual_operation_pages(
     source_name: str,
     server: str,
     manual_operations: list[dict[str, str]],
-) -> None:
+) -> set[Path]:
     published_spec = specs_by_version[publish_version]
+    written_paths: set[Path] = set()
     for operation in manual_operations:
         history_events = operation_history_events(
             specs_by_version=specs_by_version,
@@ -463,7 +545,26 @@ def write_manual_operation_pages(
         )
         output_path = docs_json_path.parent / f"{operation['page_ref']}.mdx"
         write_page(page, output_path)
+        written_paths.add(output_path.resolve())
         print(f"Generated manual OpenAPI page: {output_path}")
+    return written_paths
+
+
+def remove_stale_manual_operation_pages(
+    *,
+    docs_json_path: Path,
+    openapi_directory: str,
+    current_pages: set[Path],
+    preserved_pages: set[Path],
+) -> None:
+    output_directory = docs_json_path.parent / openapi_directory
+    if not output_directory.exists():
+        return
+    keep = {path.resolve() for path in current_pages | preserved_pages}
+    for output_path in output_directory.glob("*.mdx"):
+        if output_path.resolve() not in keep:
+            output_path.unlink()
+            print(f"Removed stale manual OpenAPI page: {output_path}")
 
 
 def strip_raw_markdown_trailing_whitespace(page: Page) -> Page:
@@ -632,6 +733,83 @@ def write_openapi_details_page(
     write_page(page, docs_json_path.parent / f"{details_page_ref}.mdx")
 
 
+def build_openapi_overview_page(
+    *,
+    overview_page_ref: str,
+    publish_version: str,
+    source_name: str,
+    raw_spec_ref: str,
+    operation_count: int,
+) -> Page:
+    return strip_raw_markdown_trailing_whitespace(
+        render_collection_page(
+            ReferenceCollectionPage(
+                path=f"{overview_page_ref}.mdx",
+                title="JSON Ledger API OpenAPI",
+                description="JSON Ledger API OpenAPI reference overview and raw specification download.",
+                eyebrow="Ledger API",
+                summary=(
+                    "Generated operation reference for the JSON Ledger API, with lifecycle "
+                    "history embedded on each operation page."
+                ),
+                badges=[
+                    ReferenceBadge("OpenAPI", tone="protocol"),
+                    ReferenceBadge(publish_version, tone="neutral"),
+                ],
+                meta_items=[
+                    ReferenceMetaItem("Operations", str(operation_count)),
+                    ReferenceMetaItem("Source", source_name),
+                ],
+                sections=[
+                    ReferenceSection(
+                        heading="Specification",
+                        body_markdown=(
+                            "[Download the published OpenAPI specification]"
+                            f"(/{raw_spec_ref})."
+                        ),
+                    )
+                ],
+            )
+        )
+    )
+
+
+def write_openapi_overview_page(
+    *, docs_json_path: Path, overview_page_ref: str, page: Page
+) -> Path:
+    output_path = docs_json_path.parent / f"{overview_page_ref}.mdx"
+    write_page(page, output_path)
+    return output_path
+
+
+def remove_openapi_details_page(*, docs_json_path: Path, details_page_ref: str) -> None:
+    output_path = docs_json_path.parent / f"{details_page_ref}.mdx"
+    if output_path.exists():
+        output_path.unlink()
+        print(f"Removed OpenAPI details/history page: {output_path}")
+
+
+def ensure_redirect(*, docs_json_path: Path, source: str, destination: str) -> None:
+    payload = load_json(docs_json_path)
+    redirects = payload.setdefault("redirects", [])
+    if not isinstance(redirects, list):
+        raise ValueError("docs.json redirects must be an array")
+    matches = [
+        redirect
+        for redirect in redirects
+        if isinstance(redirect, dict) and redirect.get("source") == source
+    ]
+    if len(matches) > 1:
+        raise ValueError(f"Duplicate redirect source in docs.json: {source}")
+    redirect = {"source": source, "destination": destination}
+    if matches:
+        matches[0].clear()
+        matches[0].update(redirect)
+    else:
+        redirects.append(redirect)
+    docs_json_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
 def main() -> int:
     args = parse_args()
     source_config = load_json(Path(args.source_config).resolve())
@@ -669,8 +847,13 @@ def main() -> int:
         spec_filename="openapi.yaml",
         force_refresh=args.force_refresh,
     )
-    manual_operations = configured_manual_operations(source_config)
-    write_manual_operation_pages(
+    manual_operations = configured_manual_operations(
+        source_config,
+        spec=specs_by_version[publish_entry["version"]],
+        directory=args.openapi_directory,
+    )
+    validate_manual_route_baseline(source_config, manual_operations=manual_operations)
+    manual_page_paths = write_manual_operation_pages(
         docs_json_path=docs_json_path,
         specs_by_version=specs_by_version,
         versions=version_labels,
@@ -690,23 +873,60 @@ def main() -> int:
         group_label=args.group_label,
         openapi_source_ref=docs_relative_file_ref(output_spec, docs_json_path),
         openapi_directory=args.openapi_directory,
+        overview_page_ref=args.overview_page_ref,
         details_page_ref=args.details_page_ref,
         openapi_page_refs=openapi_navigation_page_refs(
             specs_by_version[publish_entry["version"]],
             manual_operations=manual_operations,
         ),
     )
-    write_openapi_details_page(
-        docs_json_path=docs_json_path,
-        details_page_ref=args.details_page_ref,
-        page=build_openapi_details_page(
-            specs_by_version=specs_by_version,
-            versions=version_labels,
-            publish_version=publish_entry["version"],
-            details_page_ref=args.details_page_ref,
-            source_name=source_name,
-        ),
+    has_native_pages = any(
+        is_native_openapi_page_ref(page_ref)
+        for page_ref in openapi_navigation_page_refs(
+            specs_by_version[publish_entry["version"]],
+            manual_operations=manual_operations,
+        )
     )
+    if has_native_pages:
+        write_openapi_details_page(
+            docs_json_path=docs_json_path,
+            details_page_ref=args.details_page_ref,
+            page=build_openapi_details_page(
+                specs_by_version=specs_by_version,
+                versions=version_labels,
+                publish_version=publish_entry["version"],
+                details_page_ref=args.details_page_ref,
+                source_name=source_name,
+            ),
+        )
+    else:
+        raw_spec_ref = docs_relative_file_ref(output_spec, docs_json_path)
+        overview_path = write_openapi_overview_page(
+            docs_json_path=docs_json_path,
+            overview_page_ref=args.overview_page_ref,
+            page=build_openapi_overview_page(
+                overview_page_ref=args.overview_page_ref,
+                publish_version=publish_entry["version"],
+                source_name=source_name,
+                raw_spec_ref=raw_spec_ref,
+                operation_count=len(manual_operations),
+            ),
+        )
+        remove_openapi_details_page(
+            docs_json_path=docs_json_path,
+            details_page_ref=args.details_page_ref,
+        )
+        ensure_redirect(
+            docs_json_path=docs_json_path,
+            source=f"/{args.details_page_ref}",
+            destination=f"/{args.overview_page_ref}",
+        )
+        remove_stale_manual_operation_pages(
+            docs_json_path=docs_json_path,
+            openapi_directory=args.openapi_directory,
+            current_pages=manual_page_paths,
+            preserved_pages={overview_path},
+        )
     remove_legacy_output(output_file=LEGACY_OUTPUT_FILE.resolve())
     return 0
 
