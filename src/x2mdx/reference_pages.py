@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from x2mdx.history.models import HistoryEvent, HistoryItem
 from x2mdx.output import Page, RawMarkdown
 from x2mdx.templating import render_template
 
@@ -132,6 +133,7 @@ class ReferenceOperationPage:
     examples: list[ReferenceExample] = field(default_factory=list)
     lifecycle_changes: list[ReferenceChange] = field(default_factory=list)
     related_schemas: list[ReferenceSchema] = field(default_factory=list)
+    history_events: list[HistoryEvent] = field(default_factory=list)
 
 
 def markdown_page_from_template(
@@ -168,6 +170,20 @@ def render_operation_page(page: ReferenceOperationPage) -> Page:
         template_name="reference/operation.md.j2",
         page=page,
     )
+
+
+def reference_badges_for_history_item(
+    item: HistoryItem,
+    *,
+    kind_label: str,
+) -> list[ReferenceBadge]:
+    badges = [ReferenceBadge(kind_label, "protocol")]
+    badges.append(ReferenceBadge(f"Since {item.first_seen}", "added"))
+    if item.last_changed is not None:
+        badges.append(ReferenceBadge(f"Changed {item.last_changed}", "changed"))
+    if item.remove_as_of is not None:
+        badges.append(ReferenceBadge(f"Remove as of {item.remove_as_of}", "removed"))
+    return badges
 
 
 def compact_text(text: str, *, limit: int = 160) -> str:

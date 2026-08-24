@@ -31,7 +31,7 @@ def history_events_for_item(
             HistoryEvent(
                 kind=HistoryEventKind.REMOVE_AS_OF,
                 version=item.remove_as_of,
-                label=f"Remove as of {item.remove_as_of}",
+                label="Remove as of",
                 details=(),
                 evidence=(item.remove_as_of_evidence,),
             )
