@@ -1,0 +1,353 @@
+---
+title: "Read a page of ledger's filtered updates"
+api: "POST http://localhost:7575/v2/updates/get-updates-page"
+authMethod: "bearer"
+playground: "interactive"
+---
+
+<div class="x2mdx-ref-page x2mdx-ref-page--operation x2mdx-ref-page--manual-api"></div>
+
+
+
+<div class="x2mdx-ref-hero">
+
+  <p class="x2mdx-ref-eyebrow">JSON Ledger API</p>
+
+
+  <h1 class="x2mdx-ref-title">Read a page of ledger&#x27;s filtered updates</h1>
+
+
+
+<div class="x2mdx-ref-badges">
+
+  <span class="x2mdx-ref-badge x2mdx-ref-badge--protocol">OpenAPI</span>
+
+  <span class="x2mdx-ref-badge x2mdx-ref-badge--added">Since 3.5</span>
+
+</div>
+
+
+</div>
+
+Read a page of ledger's filtered updates. It returns the event types in accordance with the specified contents and filters. Additionally, the selection criteria for individual events depends on the transaction shape chosen. - ACS delta: an event is included only if the requesting party is a stakeholder. - ledger effects: an event is included if the requesting party is a witness.
+
+## Protocol Details
+
+
+<dl class="x2mdx-ref-meta-grid">
+
+  <div class="x2mdx-ref-meta-item">
+    <dt>Operation ID</dt>
+    <dd>postV2UpdatesGet-updates-page</dd>
+  </div>
+
+  <div class="x2mdx-ref-meta-item">
+    <dt>Authentication</dt>
+    <dd>Bearer token</dd>
+  </div>
+
+  <div class="x2mdx-ref-meta-item">
+    <dt>Published</dt>
+    <dd>3.5</dd>
+  </div>
+
+</dl>
+
+
+## Inputs
+
+
+
+### Request body
+
+
+<div class="x2mdx-ref-badges">
+
+  <span class="x2mdx-ref-badge x2mdx-ref-badge--neutral">application/json</span>
+
+</div>
+
+
+
+
+
+
+<ParamField body="beginOffsetExclusive" type="number">
+OpenAPI type: `integer (int64)`.
+
+
+Exclusive lower bound offset of the requested ledger section (non-negative integer). The response page will only contain updates whose offset is strictly greater than this. If set to zero or not defined, the lower bound is set to the actual pruning offset or to the beginning of the ledger if the participant was not pruned yet. If set to positive and the ledger has been pruned, this parameter must be greater or equal than the pruning offset. Optional
+</ParamField>
+
+
+
+<ParamField body="endOffsetInclusive" type="number">
+OpenAPI type: `integer (int64)`.
+
+
+Inclusive upper bound offset of the requested ledger section. If specified the response will only contain updates whose offset is less than or equal to this. If not specified response will only contain updates whose offset is less than the current ledger-end. Optional
+</ParamField>
+
+
+
+<ParamField body="maxPageSize" type="number">
+OpenAPI type: `integer (int32)`.
+
+
+The result page will contain the first max_page_size Updates of all matching updates. The server may reject queries with max_page_size above server specified limits. If not specified, the default max_page_size is determined by the server. Optional
+</ParamField>
+
+
+
+<ParamField body="updateFormat" type="object" required>
+OpenAPI type: `UpdateFormat`.
+
+
+A format specifying what updates to include and how to render them.
+</ParamField>
+
+
+
+<ParamField body="descendingOrder" type="boolean">
+
+If set, the page will populate the elements in descending order starting from the end_offset_inclusive. Optional
+</ParamField>
+
+
+
+<ParamField body="pageToken" type="string">
+
+To get the next page of updates, the ``page_token`` should be set to the ``next_page_token`` of the last ``GetUpdatesPageResponse``. To achieve correct paging: subsequent requests must - be executed on the same participant, - have the same begin_offset_exclusive, - have the same end_offset_inclusive, - have the same update_format and - have the same descending_order. If not specified, the first page of updates will be returned. Optional: can be empty
+</ParamField>
+
+
+
+
+
+
+
+
+
+## Outputs
+
+
+
+### 200
+
+
+<div class="x2mdx-ref-badges">
+
+  <span class="x2mdx-ref-badge x2mdx-ref-badge--neutral">application/json</span>
+
+</div>
+
+
+
+
+
+
+<ResponseField name="updates" type="JsGetUpdateResponse[]">
+The first max_page_size updates that match the filter in the request. In case descending_order was selected, the order of the updates is in reversed offset order. Optional: can be empty
+</ResponseField>
+
+
+
+<ResponseField name="lowestPageOffsetExclusive" type="integer (int64)" required>
+Represents the lower bound of this page. Required
+</ResponseField>
+
+
+
+<ResponseField name="highestPageOffsetInclusive" type="integer (int64)" required>
+Represents the upper bound of the page. Required
+</ResponseField>
+
+
+
+<ResponseField name="nextPageToken" type="string">
+If the value is not populated, this is the last page. If the value is populated, this token can be used to get the next page. If the original ``GetFirstUpdatePageRequest`` end_offset_inclusive was not specified and the request uses ascending order, then this token will always be populated, so you can use it to &quot;tail&quot; the ledger by repeatedly polling with the new page token returned. Optional: can be empty
+</ResponseField>
+
+
+
+
+
+
+
+
+
+### 400
+
+
+<div class="x2mdx-ref-badges">
+
+  <span class="x2mdx-ref-badge x2mdx-ref-badge--neutral">text/plain</span>
+
+</div>
+
+
+
+
+
+
+<ResponseField name="value" type="string" required>
+-
+</ResponseField>
+
+
+
+
+
+
+
+
+
+### default
+
+
+<div class="x2mdx-ref-badges">
+
+  <span class="x2mdx-ref-badge x2mdx-ref-badge--neutral">application/json</span>
+
+</div>
+
+
+
+
+
+
+<ResponseField name="code" type="string" required>
+-
+</ResponseField>
+
+
+
+<ResponseField name="cause" type="string" required>
+-
+</ResponseField>
+
+
+
+<ResponseField name="correlationId" type="string">
+-
+</ResponseField>
+
+
+
+<ResponseField name="traceId" type="string">
+-
+</ResponseField>
+
+
+
+<ResponseField name="context" type="Map_String" required>
+-
+</ResponseField>
+
+
+
+<ResponseField name="resources" type="Tuple2_String_String[]">
+-
+</ResponseField>
+
+
+
+<ResponseField name="errorCategory" type="integer (int32)" required>
+-
+</ResponseField>
+
+
+
+<ResponseField name="grpcCodeValue" type="integer (int32)">
+-
+</ResponseField>
+
+
+
+<ResponseField name="retryInfo" type="string">
+-
+</ResponseField>
+
+
+
+<ResponseField name="definiteAnswer" type="boolean">
+-
+</ResponseField>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## History
+
+<div class="x2mdx-ref-history" aria-label="Reference history">
+
+  <div class="x2mdx-ref-history-event x2mdx-ref-history-event--introduced">
+    <div class="x2mdx-ref-history-event-head">
+      <span class="x2mdx-ref-history-event-label">Introduced</span>
+      <code class="x2mdx-ref-history-event-version">3.5</code>
+    </div>
+
+  </div>
+
+</div>
+
+
+
+
+<RequestExample>
+
+```bash Request
+curl --request POST \
+  --url 'http://localhost:7575/v2/updates/get-updates-page' \
+  --header 'Authorization: Bearer $TOKEN' \
+  --header 'Content-Type: application/json' \
+  --data '{"beginOffsetExclusive":0,"endOffsetInclusive":0,"maxPageSize":0,"updateFormat":{"includeTransactions":{},"includeReassignments":{},"includeTopologyEvents":{}},"descendingOrder":false,"pageToken":"string"}'
+```
+
+</RequestExample>
+
+
+<ResponseExample>
+
+```json 200 response
+{
+  "updates": [
+    {}
+  ],
+  "lowestPageOffsetExclusive": 0,
+  "highestPageOffsetInclusive": 0,
+  "nextPageToken": "string"
+}
+```
+
+```json default response
+{
+  "code": "string",
+  "cause": "string",
+  "correlationId": "string",
+  "traceId": "string",
+  "context": {},
+  "resources": [
+    [
+      "string"
+    ]
+  ],
+  "errorCategory": 0,
+  "grpcCodeValue": 0,
+  "retryInfo": "string",
+  "definiteAnswer": false
+}
+```
+
+</ResponseExample>

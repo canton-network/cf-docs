@@ -385,9 +385,53 @@ def _operation_fingerprint(operation: dict[str, Any]) -> str:
 
 
 def _remove_as_of(operation: dict[str, Any]) -> str | None:
+    extension = operation.get("x-remove-as-of")
+    if isinstance(extension, str) and extension.strip():
+        return extension.strip().removeprefix("v")
     text = " ".join(str(operation.get(key) or "") for key in ("summary", "description"))
     match = REMOVE_AS_OF_RE.search(text)
     return match.group("version").removeprefix("v") if match else None
+
+
+def _operation_id(operation: dict[str, Any]) -> str | None:
+    value = operation.get("operationId")
+    return value.strip() if isinstance(value, str) and value.strip() else None
+
+
+def _operations_by_id(
+    spec: dict[str, Any],
+) -> dict[str, tuple[str, str, dict[str, Any]]]:
+    paths = spec.get("paths")
+    if not isinstance(paths, dict):
+        raise ValueError("OpenAPI specification must define paths")
+    indexed: dict[str, tuple[str, str, dict[str, Any]]] = {}
+    for path, path_item in paths.items():
+        if not isinstance(path, str) or not isinstance(path_item, dict):
+            continue
+        for method, operation in path_item.items():
+            if method.lower() not in {
+                "get",
+                "put",
+                "post",
+                "delete",
+                "options",
+                "head",
+                "patch",
+                "trace",
+            } or not isinstance(operation, dict):
+                continue
+            operation_id = _operation_id(operation)
+            if operation_id is None:
+                continue
+            if operation_id in indexed:
+                previous_method, previous_path, _previous = indexed[operation_id]
+                raise ValueError(
+                    "Duplicate OpenAPI operationId "
+                    f"'{operation_id}': {previous_method.upper()} {previous_path} and "
+                    f"{method.upper()} {path}"
+                )
+            indexed[operation_id] = (method.lower(), path, operation)
+    return indexed
 
 
 def _operation_title(operation: dict[str, Any], *, method: str, path: str) -> str:
@@ -402,8 +446,22 @@ def _operation_title(operation: dict[str, Any], *, method: str, path: str) -> st
         return summary
     description = " ".join(str(operation.get("description") or "").split())
     first_sentence = description.partition(".")[0].strip()
-    if first_sentence:
+    if first_sentence and len(first_sentence) <= 96:
         return first_sentence
+    operation_id = _operation_id(operation)
+    if operation_id is not None:
+        title = re.sub(
+            rf"^(?:{'|'.join(('get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace'))})",
+            "",
+            operation_id,
+            flags=re.IGNORECASE,
+        )
+        title = re.sub(r"^V\d+", "", title)
+        title = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", title)
+        title = re.sub(r"[-_]+", " ", title)
+        title = " ".join(title.split())
+        if title:
+            return title[0].upper() + title[1:].lower()
     return f"{method.upper()} {path}"
 
 
@@ -416,21 +474,37 @@ def operation_history_events(
     path: str,
     source_name: str,
 ) -> list[HistoryEvent]:
-    observed: list[tuple[str, dict[str, Any]]] = []
+    published = _operation(specs_by_version[publish_version], method, path)
+    published_operation_id = _operation_id(published)
+    observed: list[tuple[str, str, str, dict[str, Any]]] = []
     for version in versions:
-        try:
-            observed.append(
-                (version, _operation(specs_by_version[version], method, path))
+        if published_operation_id is not None:
+            located = _operations_by_id(specs_by_version[version]).get(
+                published_operation_id
             )
-        except ValueError:
-            continue
+            if located is not None:
+                observed_method, observed_path, observed_operation = located
+                observed.append(
+                    (version, observed_method, observed_path, observed_operation)
+                )
+        else:
+            try:
+                observed.append(
+                    (
+                        version,
+                        method.lower(),
+                        path,
+                        _operation(specs_by_version[version], method, path),
+                    )
+                )
+            except ValueError:
+                continue
     if not observed:
         raise ValueError(
             f"Operation is absent from all comparison versions: {method.upper()} {path}"
         )
 
     events: list[HistoryEvent] = []
-    published = _operation(specs_by_version[publish_version], method, path)
     remove_as_of = _remove_as_of(published)
     if remove_as_of is not None:
         evidence = Evidence(
@@ -450,20 +524,21 @@ def operation_history_events(
             )
         )
 
-    deprecated_version = next(
+    deprecated_observation = next(
         (
-            version
-            for version, operation in observed
+            (version, observed_method, observed_path)
+            for version, observed_method, observed_path, operation in observed
             if operation.get("deprecated") is True
         ),
         None,
     )
-    if deprecated_version is not None:
+    if deprecated_observation is not None:
+        deprecated_version, deprecated_method, deprecated_path = deprecated_observation
         evidence = Evidence(
             kind=EvidenceKind.SOURCE_METADATA,
             source=source_name,
             observed_in_version=deprecated_version,
-            location=f"paths.{path}.{method.lower()}.deprecated",
+            location=f"paths.{deprecated_path}.{deprecated_method}.deprecated",
         )
         events.append(
             HistoryEvent(
@@ -476,34 +551,48 @@ def operation_history_events(
         )
 
     previous_fingerprint: str | None = None
-    for version, operation in observed:
+    previous_location: tuple[str, str] | None = None
+    for version, observed_method, observed_path, operation in observed:
         fingerprint = _operation_fingerprint(operation)
-        if previous_fingerprint is not None and fingerprint != previous_fingerprint:
+        location = (observed_method, observed_path)
+        if previous_fingerprint is not None and (
+            fingerprint != previous_fingerprint or location != previous_location
+        ):
+            if previous_location is not None and location != previous_location:
+                prior_method, prior_path = previous_location
+                details = (
+                    f"The operation moved from {prior_method.upper()} {prior_path} "
+                    f"to {observed_method.upper()} {observed_path}.",
+                )
+            else:
+                details = (
+                    f"The {observed_method.upper()} {observed_path} operation changed "
+                    "in this snapshot.",
+                )
             evidence = Evidence(
                 kind=EvidenceKind.SNAPSHOT_DIFF,
                 source=source_name,
                 observed_in_version=version,
-                location=f"paths.{path}.{method.lower()}",
+                location=f"paths.{observed_path}.{observed_method}",
             )
             events.append(
                 HistoryEvent(
                     kind=HistoryEventKind.CHANGED,
                     version=version,
                     label="Changed",
-                    details=(
-                        f"The {method.upper()} {path} operation changed in this snapshot.",
-                    ),
+                    details=details,
                     evidence=(evidence,),
                 )
             )
         previous_fingerprint = fingerprint
+        previous_location = location
 
-    first_version = observed[0][0]
+    first_version, first_method, first_path, _first_operation = observed[0]
     introduction = Evidence(
         kind=EvidenceKind.SNAPSHOT,
         source=source_name,
         observed_in_version=first_version,
-        location=f"paths.{path}.{method.lower()}",
+        location=f"paths.{first_path}.{first_method}",
     )
     events.append(
         HistoryEvent(
@@ -514,6 +603,24 @@ def operation_history_events(
             evidence=(introduction,),
         )
     )
+
+    replacement = published.get("x-replaces")
+    if isinstance(replacement, str) and replacement.strip():
+        evidence = Evidence(
+            kind=EvidenceKind.SOURCE_METADATA,
+            source=source_name,
+            observed_in_version=publish_version,
+            location=f"paths.{path}.{method.lower()}.x-replaces",
+        )
+        events.append(
+            HistoryEvent(
+                kind=HistoryEventKind.REPLACEMENT,
+                version=first_version,
+                label="Replacement",
+                details=(f"Replaces {replacement.strip()}.",),
+                evidence=(evidence,),
+            )
+        )
 
     version_order = {version: index for index, version in enumerate(versions)}
     kind_order = {
@@ -548,8 +655,13 @@ def _request_example(
         lines.append(
             f"  --header 'Content-Type: {media_type or 'application/json'}' \\"
         )
-        compact_sample = json.dumps(sample, ensure_ascii=False, separators=(",", ":"))
-        lines.append(f"  --data '{compact_sample}'")
+        if media_type == "application/octet-stream":
+            lines.append("  --data-binary '@request.bin'")
+        else:
+            compact_sample = json.dumps(
+                sample, ensure_ascii=False, separators=(",", ":")
+            )
+            lines.append(f"  --data '{compact_sample}'")
     else:
         lines[-1] = lines[-1].removesuffix(" \\")
     return ReferenceExample(

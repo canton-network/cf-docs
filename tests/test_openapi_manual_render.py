@@ -126,6 +126,74 @@ def test_operation_history_uses_authored_remove_as_of_and_snapshot_changes() -> 
     assert events[2].evidence[0].kind.value == "snapshot_diff"
 
 
+def test_operation_history_tracks_operation_id_across_route_move() -> None:
+    original = operation_spec(changed=False)
+    moved = operation_spec(changed=False)
+    operation = moved["paths"].pop("/v2/updates/flats")["post"]
+    moved["paths"]["/v2/updates/flat-transactions"] = {"post": operation}
+
+    events = operation_history_events(
+        specs_by_version={"3.4": original, "3.5": moved},
+        versions=["3.4", "3.5"],
+        publish_version="3.5",
+        method="post",
+        path="/v2/updates/flat-transactions",
+        source_name="release fixtures",
+    )
+
+    assert [(event.kind, event.version) for event in events] == [
+        (HistoryEventKind.CHANGED, "3.5"),
+        (HistoryEventKind.INTRODUCED, "3.4"),
+    ]
+    assert "moved from POST /v2/updates/flats" in events[0].details[0]
+
+
+def test_operation_history_rejects_duplicate_operation_ids() -> None:
+    duplicate = operation_spec(changed=False)
+    duplicate["paths"]["/duplicate"] = {
+        "get": {
+            "operationId": "postV2UpdatesFlats",
+            "responses": {},
+        }
+    }
+
+    try:
+        operation_history_events(
+            specs_by_version={"3.5": duplicate},
+            versions=["3.5"],
+            publish_version="3.5",
+            method="post",
+            path="/v2/updates/flats",
+            source_name="release fixtures",
+        )
+    except ValueError as error:
+        assert "Duplicate OpenAPI operationId" in str(error)
+    else:
+        raise AssertionError("Expected duplicate operation IDs to fail")
+
+
+def test_operation_history_reads_lifecycle_extensions() -> None:
+    spec = operation_spec(changed=False)
+    operation = spec["paths"]["/v2/updates/flats"]["post"]
+    operation["x-remove-as-of"] = "v4.0.0"
+    operation["x-replaces"] = "legacyFlatUpdates"
+
+    events = operation_history_events(
+        specs_by_version={"3.5": spec},
+        versions=["3.5"],
+        publish_version="3.5",
+        method="post",
+        path="/v2/updates/flats",
+        source_name="release fixtures",
+    )
+
+    assert [(event.kind, event.version) for event in events] == [
+        (HistoryEventKind.REMOVE_AS_OF, "4.0.0"),
+        (HistoryEventKind.INTRODUCED, "3.5"),
+        (HistoryEventKind.REPLACEMENT, "3.5"),
+    ]
+
+
 def test_manual_openapi_page_preserves_playground_and_standard_history_layout() -> None:
     specs = {
         "3.4": operation_spec(changed=False),
@@ -167,3 +235,72 @@ def test_manual_openapi_page_preserves_playground_and_standard_history_layout() 
     assert "Remove as of" in rendered
     assert "3.5.0" in rendered
     assert "details and history" not in rendered.lower()
+
+
+def test_binary_request_example_uses_file_upload_curl() -> None:
+    spec = operation_spec(changed=False)
+    operation = spec["paths"]["/v2/updates/flats"]["post"]
+    operation["requestBody"] = {
+        "content": {
+            "application/octet-stream": {
+                "schema": {"type": "string", "format": "binary"}
+            }
+        }
+    }
+    history = operation_history_events(
+        specs_by_version={"3.5": spec},
+        versions=["3.5"],
+        publish_version="3.5",
+        method="post",
+        path="/v2/updates/flats",
+        source_name="release fixtures",
+    )
+
+    rendered = render_page(
+        render_manual_openapi_operation(
+            spec=spec,
+            options=ManualOpenAPIRenderOptions(
+                method="post",
+                path="/v2/updates/flats",
+                output_path="reference/json-api-reference/post-v2updatesflats.mdx",
+            ),
+            history_events=history,
+            publish_version="3.5",
+        )
+    )
+
+    assert "--header 'Content-Type: application/octet-stream'" in rendered
+    assert "--data-binary '@request.bin'" in rendered
+
+
+def test_long_generated_title_falls_back_to_humanized_operation_id() -> None:
+    spec = operation_spec(changed=False)
+    operation = spec["paths"]["/v2/updates/flats"]["post"]
+    operation["description"] = (
+        "You may use this endpoint to generate a result that requires a very long "
+        "explanation before the source reaches its first sentence boundary and that "
+        "explanation does not belong in the page title."
+    )
+    history = operation_history_events(
+        specs_by_version={"3.5": spec},
+        versions=["3.5"],
+        publish_version="3.5",
+        method="post",
+        path="/v2/updates/flats",
+        source_name="release fixtures",
+    )
+
+    rendered = render_page(
+        render_manual_openapi_operation(
+            spec=spec,
+            options=ManualOpenAPIRenderOptions(
+                method="post",
+                path="/v2/updates/flats",
+                output_path="reference/json-api-reference/post-v2updatesflats.mdx",
+            ),
+            history_events=history,
+            publish_version="3.5",
+        )
+    )
+
+    assert 'title: "Updates flats"' in rendered
