@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import json
 
 from x2mdx.output import Block, BulletList, Heading, Page, Paragraph, RawMarkdown, Table
 
@@ -13,6 +14,16 @@ def strip_trailing_whitespace(text: str) -> str:
 
 def frontmatter_escape(value: str) -> str:
     return value.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def render_frontmatter_value(value: str | bool | int | float | list[str]) -> str:
+    if isinstance(value, str):
+        return f'"{frontmatter_escape(value)}"'
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, list):
+        return json.dumps(value, ensure_ascii=False)
+    return str(value)
 
 
 def render_block(block: Block) -> str:
@@ -38,6 +49,10 @@ def render_page(page: Page) -> str:
     lines = ["---", f'title: "{frontmatter_escape(page.title)}"']
     if page.description is not None:
         lines.append(f'description: "{frontmatter_escape(page.description)}"')
+    for key, value in page.frontmatter.items():
+        if key in {"title", "description"}:
+            raise ValueError(f"Reserved frontmatter key: {key}")
+        lines.append(f"{key}: {render_frontmatter_value(value)}")
     lines.extend(["---", ""])
 
     body_parts = [render_block(block).rstrip() for block in page.blocks]
