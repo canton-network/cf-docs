@@ -21,6 +21,11 @@ from ledger_api_release_bundles import (
 )
 import reference_nav
 from x2mdx.output import Page, RawMarkdown
+from x2mdx.openapi import (
+    ManualOpenAPIRenderOptions,
+    operation_history_events,
+    render_manual_openapi_operation,
+)
 from x2mdx.reference_pages import (
     ReferenceBadge,
     ReferenceCard,
@@ -35,10 +40,16 @@ from x2mdx.render import write_page
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_CACHE_ROOT = Path(os.environ.get("XDG_CACHE_HOME", "~/.cache")).expanduser() / "x2mdx"
-DEFAULT_SOURCE_CONFIG = REPO_ROOT / "config" / "x2mdx" / "ledger-api" / "source-artifacts.json"
+DEFAULT_CACHE_ROOT = (
+    Path(os.environ.get("XDG_CACHE_HOME", "~/.cache")).expanduser() / "x2mdx"
+)
+DEFAULT_SOURCE_CONFIG = (
+    REPO_ROOT / "config" / "x2mdx" / "ledger-api" / "source-artifacts.json"
+)
 DEFAULT_CACHE_DIR = DEFAULT_CACHE_ROOT / "ledger-api-bundles"
-DEFAULT_OUTPUT_SPEC = REPO_ROOT / "docs-main" / "openapi" / "json-ledger-api" / "openapi.yaml"
+DEFAULT_OUTPUT_SPEC = (
+    REPO_ROOT / "docs-main" / "openapi" / "json-ledger-api" / "openapi.yaml"
+)
 DEFAULT_DOCS_JSON = REPO_ROOT / "docs-main" / "docs.json"
 DEFAULT_NAV_DROPDOWN = "API Reference"
 DEFAULT_PARENT_GROUP = "Ledger API"
@@ -47,9 +58,7 @@ DEFAULT_OPENAPI_DIRECTORY = "reference/json-api-reference"
 DEFAULT_DETAILS_PAGE_REF = "reference/json-api-reference/details"
 LEGACY_OUTPUT_FILE = REPO_ROOT / "docs-main" / "reference" / "json-api-reference.mdx"
 HTTP_METHODS = {"get", "put", "post", "delete", "options", "head", "patch", "trace"}
-INTERNAL_TODO_LINE_RE = re.compile(
-    r"(?m)^[ \t]*TODO\([^\r\n)]+\)[^\r\n]*(?:\r?\n|$)"
-)
+INTERNAL_TODO_LINE_RE = re.compile(r"(?m)^[ \t]*TODO\([^\r\n)]+\)[^\r\n]*(?:\r?\n|$)")
 
 
 def parse_args() -> argparse.Namespace:
@@ -68,7 +77,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--group-label", default=DEFAULT_GROUP_LABEL)
     parser.add_argument("--openapi-directory", default=DEFAULT_OPENAPI_DIRECTORY)
     parser.add_argument("--details-page-ref", default=DEFAULT_DETAILS_PAGE_REF)
-    parser.add_argument("--publish-version", help="Explicit docs major version to publish.")
+    parser.add_argument(
+        "--publish-version", help="Explicit docs major version to publish."
+    )
     parser.add_argument(
         "--version",
         action="append",
@@ -108,10 +119,14 @@ def resolve_publish_version(
     if publish_version is None:
         return versions[-1]
 
-    selected = next((entry for entry in versions if entry["version"] == publish_version), None)
+    selected = next(
+        (entry for entry in versions if entry["version"] == publish_version), None
+    )
     if selected is None:
         available = ", ".join(entry["version"] for entry in versions)
-        raise ValueError(f"Publish version '{publish_version}' not found in selected versions: {available}")
+        raise ValueError(
+            f"Publish version '{publish_version}' not found in selected versions: {available}"
+        )
     return selected
 
 
@@ -127,7 +142,9 @@ def update_docs_navigation(
     openapi_page_refs: list[str],
 ) -> None:
     payload = load_json(docs_json_path)
-    pages = reference_nav.navigation_pages(payload, label=dropdown_label, docs_json_path=docs_json_path)
+    pages = reference_nav.navigation_pages(
+        payload, label=dropdown_label, docs_json_path=docs_json_path
+    )
 
     parent_group = _find_group(pages, parent_group_label)
     if parent_group is None:
@@ -192,6 +209,51 @@ def openapi_operation_page_refs(spec: dict[str, Any]) -> list[str]:
     return refs
 
 
+def configured_manual_operations(source_config: dict[str, Any]) -> list[dict[str, str]]:
+    configured = source_config.get("manual_operations") or []
+    if not isinstance(configured, list):
+        raise ValueError("manual_operations must be an array")
+    operations: list[dict[str, str]] = []
+    for index, value in enumerate(configured):
+        if not isinstance(value, dict):
+            raise ValueError(f"manual_operations[{index}] must be an object")
+        operation: dict[str, str] = {}
+        for key in ("method", "path", "page_ref"):
+            field = value.get(key)
+            if not isinstance(field, str) or not field.strip():
+                raise ValueError(
+                    f"manual_operations[{index}].{key} must be a non-empty string"
+                )
+            operation[key] = field.strip()
+        operation["method"] = operation["method"].upper()
+        if operation["method"].lower() not in HTTP_METHODS:
+            raise ValueError(
+                f"manual_operations[{index}].method is not supported: {operation['method']}"
+            )
+        operations.append(operation)
+    identities = [(operation["method"], operation["path"]) for operation in operations]
+    if len(identities) != len(set(identities)):
+        raise ValueError("manual_operations contains duplicate method/path identities")
+    page_refs = [operation["page_ref"] for operation in operations]
+    if len(page_refs) != len(set(page_refs)):
+        raise ValueError("manual_operations contains duplicate page_ref values")
+    return operations
+
+
+def openapi_navigation_page_refs(
+    spec: dict[str, Any], *, manual_operations: list[dict[str, str]]
+) -> list[str]:
+    manual_refs = {
+        (operation["method"], operation["path"]): operation["page_ref"]
+        for operation in manual_operations
+    }
+    page_refs: list[str] = []
+    for page_ref in openapi_operation_page_refs(spec):
+        method, path = page_ref.split(" ", 1)
+        page_refs.append(manual_refs.get((method, path), page_ref))
+    return page_refs
+
+
 def generated_operation_summary(path: str, method: str) -> str:
     mintlify_path = re.sub(r"\{([^{}]+)\}", r":\1", path)
     return f"{method.upper()} {mintlify_path}"
@@ -233,7 +295,9 @@ def add_missing_operation_summaries(text: str) -> str:
             current_path_indent = None
             continue
 
-        path_match = re.fullmatch(rf"(?P<indent>{re.escape(paths_indent)}\s{{2}})(?P<path>/.*):\s*", line)
+        path_match = re.fullmatch(
+            rf"(?P<indent>{re.escape(paths_indent)}\s{{2}})(?P<path>/.*):\s*", line
+        )
         if path_match:
             current_path = path_match.group("path")
             current_path_indent = path_match.group("indent")
@@ -252,16 +316,24 @@ def add_missing_operation_summaries(text: str) -> str:
         method = method_match.group("method")
         if (current_path, method) in missing:
             summary_indent = f"{method_match.group('indent')}  "
-            output_lines.append(f'{summary_indent}summary: "{generated_operation_summary(current_path, method)}"')
+            output_lines.append(
+                f'{summary_indent}summary: "{generated_operation_summary(current_path, method)}"'
+            )
 
     rendered = "\n".join(output_lines).rstrip() + "\n"
     parsed = yaml.safe_load(rendered)
     if not isinstance(parsed, dict):
-        raise ValueError("Generated OpenAPI YAML stopped parsing after summary insertion")
+        raise ValueError(
+            "Generated OpenAPI YAML stopped parsing after summary insertion"
+        )
     remaining = missing_operation_summaries(parsed)
     if remaining:
-        details = ", ".join(f"{method.upper()} {path}" for path, method in sorted(remaining))
-        raise ValueError(f"Failed to insert generated summaries for OpenAPI operations: {details}")
+        details = ", ".join(
+            f"{method.upper()} {path}" for path, method in sorted(remaining)
+        )
+        raise ValueError(
+            f"Failed to insert generated summaries for OpenAPI operations: {details}"
+        )
     return rendered
 
 
@@ -283,7 +355,9 @@ def normalize_mintlify_openapi(openapi_path: Path) -> None:
 def mintlify_openapi_page_refs(openapi_path: Path) -> list[str]:
     spec = yaml.safe_load(openapi_path.read_text(encoding="utf-8"))
     if not isinstance(spec, dict):
-        raise ValueError(f"Expected generated OpenAPI YAML to parse as an object: {openapi_path}")
+        raise ValueError(
+            f"Expected generated OpenAPI YAML to parse as an object: {openapi_path}"
+        )
     return openapi_operation_page_refs(spec)
 
 
@@ -300,7 +374,12 @@ def operation_summary(path: str, path_item: dict[str, Any]) -> str:
     for method, operation in operation_items(path_item):
         summary = str(operation.get("summary") or "").strip()
         description = str(operation.get("description") or "").strip()
-        label = summary if summary and summary not in {path, generated_operation_summary(path, method)} else description
+        label = (
+            summary
+            if summary
+            and summary not in {path, generated_operation_summary(path, method)}
+            else description
+        )
         if label:
             summaries.append(f"{method.upper()}: {label}")
     if summaries:
@@ -313,7 +392,9 @@ def operation_methods(path_item: dict[str, Any]) -> list[str]:
 
 
 def path_item_fingerprint(path_item: Any) -> str:
-    return json.dumps(path_item, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return json.dumps(
+        path_item, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    )
 
 
 def versioned_openapi_specs(
@@ -342,9 +423,47 @@ def versioned_openapi_specs(
             )
         )
         if not isinstance(spec, dict):
-            raise ValueError(f"Expected OpenAPI spec for {entry['version']} to parse as an object")
+            raise ValueError(
+                f"Expected OpenAPI spec for {entry['version']} to parse as an object"
+            )
         specs[entry["version"]] = spec
     return specs
+
+
+def write_manual_operation_pages(
+    *,
+    docs_json_path: Path,
+    specs_by_version: dict[str, dict[str, Any]],
+    versions: list[str],
+    publish_version: str,
+    source_name: str,
+    server: str,
+    manual_operations: list[dict[str, str]],
+) -> None:
+    published_spec = specs_by_version[publish_version]
+    for operation in manual_operations:
+        history_events = operation_history_events(
+            specs_by_version=specs_by_version,
+            versions=versions,
+            publish_version=publish_version,
+            method=operation["method"],
+            path=operation["path"],
+            source_name=source_name,
+        )
+        page = render_manual_openapi_operation(
+            spec=published_spec,
+            options=ManualOpenAPIRenderOptions(
+                method=operation["method"],
+                path=operation["path"],
+                output_path=f"{operation['page_ref']}.mdx",
+                server=server,
+            ),
+            history_events=history_events,
+            publish_version=publish_version,
+        )
+        output_path = docs_json_path.parent / f"{operation['page_ref']}.mdx"
+        write_page(page, output_path)
+        print(f"Generated manual OpenAPI page: {output_path}")
 
 
 def strip_raw_markdown_trailing_whitespace(page: Page) -> Page:
@@ -402,12 +521,19 @@ def build_openapi_details_page(
             previous_fingerprint = fingerprint
 
         badges = [
-            ReferenceBadge(", ".join(operation_methods(path_item)) or "Endpoint", tone="protocol"),
+            ReferenceBadge(
+                ", ".join(operation_methods(path_item)) or "Endpoint", tone="protocol"
+            ),
             ReferenceBadge(f"Since {introduced}", tone="added"),
         ]
         if changed_versions:
-            badges.append(ReferenceBadge(f"Changed {changed_versions[-1]}", tone="changed"))
-        if any(bool(operation.get("deprecated")) for _method, operation in operation_items(path_item)):
+            badges.append(
+                ReferenceBadge(f"Changed {changed_versions[-1]}", tone="changed")
+            )
+        if any(
+            bool(operation.get("deprecated"))
+            for _method, operation in operation_items(path_item)
+        ):
             badges.append(ReferenceBadge("Deprecated", tone="removed"))
         endpoint_cards.append(
             ReferenceCard(
@@ -415,7 +541,9 @@ def build_openapi_details_page(
                 summary=operation_summary(path, path_item),
                 badges=badges,
                 meta_items=[
-                    ReferenceMetaItem("Operations", ", ".join(operation_methods(path_item)) or "-"),
+                    ReferenceMetaItem(
+                        "Operations", ", ".join(operation_methods(path_item)) or "-"
+                    ),
                     ReferenceMetaItem("Last seen", last_seen),
                 ],
             )
@@ -424,22 +552,37 @@ def build_openapi_details_page(
     for version in versions:
         current_paths = version_path_items[version]
         previous_index = versions.index(version) - 1
-        previous_paths = version_path_items[versions[previous_index]] if previous_index >= 0 else {}
-        current_keys = {key for key, value in current_paths.items() if isinstance(key, str) and isinstance(value, dict)}
-        previous_keys = {key for key, value in previous_paths.items() if isinstance(key, str) and isinstance(value, dict)}
+        previous_paths = (
+            version_path_items[versions[previous_index]] if previous_index >= 0 else {}
+        )
+        current_keys = {
+            key
+            for key, value in current_paths.items()
+            if isinstance(key, str) and isinstance(value, dict)
+        }
+        previous_keys = {
+            key
+            for key, value in previous_paths.items()
+            if isinstance(key, str) and isinstance(value, dict)
+        }
         changed = sum(
             1
             for key in current_keys & previous_keys
-            if path_item_fingerprint(current_paths[key]) != path_item_fingerprint(previous_paths[key])
+            if path_item_fingerprint(current_paths[key])
+            != path_item_fingerprint(previous_paths[key])
         )
         version_cards.append(
             ReferenceCard(
                 title=version,
                 summary="Endpoint changes included in this release snapshot.",
                 badges=[
-                    ReferenceBadge(f"Added {len(current_keys - previous_keys)}", tone="added"),
+                    ReferenceBadge(
+                        f"Added {len(current_keys - previous_keys)}", tone="added"
+                    ),
                     ReferenceBadge(f"Changed {changed}", tone="changed"),
-                    ReferenceBadge(f"Removed {len(previous_keys - current_keys)}", tone="removed"),
+                    ReferenceBadge(
+                        f"Removed {len(previous_keys - current_keys)}", tone="removed"
+                    ),
                 ],
             )
         )
@@ -452,7 +595,10 @@ def build_openapi_details_page(
                 description="JSON Ledger API OpenAPI endpoint details and version history.",
                 eyebrow="OpenAPI Reference",
                 summary="Endpoint overview for the JSON Ledger API OpenAPI surface, built from versioned release snapshots.",
-                badges=[ReferenceBadge("OpenAPI", tone="protocol"), ReferenceBadge(publish_version, tone="neutral")],
+                badges=[
+                    ReferenceBadge("OpenAPI", tone="protocol"),
+                    ReferenceBadge(publish_version, tone="neutral"),
+                ],
                 meta_items=[
                     ReferenceMetaItem("Publish version", publish_version),
                     ReferenceMetaItem("Source", source_name),
@@ -511,6 +657,28 @@ def main() -> int:
     print(f"Published Mintlify OpenAPI source: {output_spec}")
 
     docs_json_path = Path(args.docs_json).resolve()
+    version_labels = [entry["version"] for entry in versions]
+    source_name = str(
+        source_config.get("source")
+        or "Canton release bundle JSON Ledger API OpenAPI fixtures"
+    )
+    specs_by_version = versioned_openapi_specs(
+        source_config=source_config,
+        cache_dir=cache_dir,
+        versions=versions,
+        spec_filename="openapi.yaml",
+        force_refresh=args.force_refresh,
+    )
+    manual_operations = configured_manual_operations(source_config)
+    write_manual_operation_pages(
+        docs_json_path=docs_json_path,
+        specs_by_version=specs_by_version,
+        versions=version_labels,
+        publish_version=publish_entry["version"],
+        source_name=source_name,
+        server=str(source_config.get("manual_api_server") or "http://localhost:7575"),
+        manual_operations=manual_operations,
+    )
     reference_nav.regroup_ledger_api_nav(
         docs_json_path=docs_json_path,
         dropdown_label=args.nav_dropdown,
@@ -523,24 +691,20 @@ def main() -> int:
         openapi_source_ref=docs_relative_file_ref(output_spec, docs_json_path),
         openapi_directory=args.openapi_directory,
         details_page_ref=args.details_page_ref,
-        openapi_page_refs=mintlify_openapi_page_refs(output_spec),
-    )
-    specs_by_version = versioned_openapi_specs(
-        source_config=source_config,
-        cache_dir=cache_dir,
-        versions=versions,
-        spec_filename="openapi.yaml",
-        force_refresh=args.force_refresh,
+        openapi_page_refs=openapi_navigation_page_refs(
+            specs_by_version[publish_entry["version"]],
+            manual_operations=manual_operations,
+        ),
     )
     write_openapi_details_page(
         docs_json_path=docs_json_path,
         details_page_ref=args.details_page_ref,
         page=build_openapi_details_page(
             specs_by_version=specs_by_version,
-            versions=[entry["version"] for entry in versions],
+            versions=version_labels,
             publish_version=publish_entry["version"],
             details_page_ref=args.details_page_ref,
-            source_name=str(source_config.get("source") or "Canton release bundle JSON Ledger API OpenAPI fixtures"),
+            source_name=source_name,
         ),
     )
     remove_legacy_output(output_file=LEGACY_OUTPUT_FILE.resolve())

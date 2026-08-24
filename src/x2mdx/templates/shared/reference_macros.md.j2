@@ -84,8 +84,24 @@
 {% endif %}
 {%- endmacro %}
 
-{% macro fields_table(fields) -%}
+{% macro fields_table(fields, use_api_components=False, field_kind="parameter") -%}
 {% if fields %}
+{% if use_api_components %}
+  {% for field in fields %}
+  {% if field_kind == "response" %}
+<ResponseField name="{{ escape_html(inline_text(field.name)) }}" type="{{ escape_html(inline_text(field.type_label)) }}"{% if field.required %} required{% endif %}{% if field.default is not none %} default="{{ escape_html(inline_text(field.default)) }}"{% endif %}>
+{{ escape_mdx_html_text(inline_text(field.description or "-")) }}
+</ResponseField>
+  {% elif field.location %}
+<ParamField {{ field.location }}="{{ escape_html(inline_text(field.name)) }}" type="{{ escape_html(inline_text(field.api_type_label or field.type_label)) }}"{% if field.required %} required{% endif %}{% if field.default is not none %} default="{{ escape_html(inline_text(field.default)) }}"{% endif %}>
+{% if field.api_type_label and field.api_type_label != field.type_label %}OpenAPI type: `{{ escape_mdx_html_text(inline_text(field.type_label)) }}`.
+
+{% endif %}
+{{ escape_mdx_html_text(inline_text(field.description or "-")) }}
+</ParamField>
+  {% endif %}
+  {% endfor %}
+{% else %}
 <div class="x2mdx-ref-fields">
   {% for field in fields %}
   <div class="x2mdx-ref-field-row">
@@ -102,6 +118,7 @@
   </div>
   {% endfor %}
 </div>
+{% endif %}
 {% endif %}
 {%- endmacro %}
 
@@ -173,7 +190,18 @@
   {% endif %}
 {%- endmacro %}
 
-{% macro panel_block(panel, render_text=True, render_schema_description=True) -%}
+{% macro panel_block(panel, render_text=True, render_schema_description=True, use_api_components=False, field_kind="parameter") -%}
+{% if use_api_components %}
+### {{ escape_mdx_html_text(inline_text(panel.title)) }}
+
+{{ badge_row(panel.badges) }}
+{% if panel.schema %}
+{{ fields_table(panel.schema.fields, use_api_components=True, field_kind=field_kind) }}
+{% endif %}
+{% if panel.example %}
+{{ example_block(panel.example) }}
+{% endif %}
+{% else %}
 <div class="x2mdx-ref-panel">
   <div class="x2mdx-ref-panel-head">
     <h3>{{ escape_mdx_html_text(inline_text(panel.title)) }}</h3>
@@ -187,12 +215,40 @@
   {% endif %}
   {{ meta_grid(panel.meta_items) }}
   {% if panel.schema %}
+  {% if use_api_components %}
+  {{ fields_table(panel.schema.fields, use_api_components=True, field_kind=field_kind) }}
+  {% else %}
   {{ schema_body(panel.schema, render_example=False, render_description=render_schema_description) }}
+  {% endif %}
   {% endif %}
   {% if panel.example %}
   {{ example_block(panel.example) }}
   {% endif %}
 </div>
+{% endif %}
+{%- endmacro %}
+
+{% macro mintlify_operation_examples(examples) -%}
+{% set request_examples = examples|selectattr("kind", "equalto", "request")|list %}
+{% set response_examples = examples|selectattr("kind", "equalto", "response")|list %}
+{% if request_examples %}
+<RequestExample>
+{% for example in request_examples %}
+```{{ escape_html(inline_text(example.language or "text")) }} {{ escape_html(inline_text(example.title)) }}
+{{ example.body }}
+```
+{% endfor %}
+</RequestExample>
+{% endif %}
+{% if response_examples %}
+<ResponseExample>
+{% for example in response_examples %}
+```{{ escape_html(inline_text(example.language or "text")) }} {{ escape_html(inline_text(example.title)) }}
+{{ example.body }}
+```
+{% endfor %}
+</ResponseExample>
+{% endif %}
 {%- endmacro %}
 
 {% macro operation_right_rail(operation) -%}
@@ -218,7 +274,7 @@
 {% endif %}
 {%- endmacro %}
 
-{% macro operation_sections(operation, heading_prefix="##", include_examples=True) -%}
+{% macro operation_sections(operation, heading_prefix="##", include_examples=True, use_api_components=False) -%}
 {{ heading_prefix }} Protocol Details
 
 {{ meta_grid(operation.protocol_items) }}
@@ -226,13 +282,13 @@
 {{ heading_prefix }} Inputs
 
 {% for panel in operation.inputs %}
-{{ panel_block(panel, render_text=False, render_schema_description=False) }}
+{{ panel_block(panel, render_text=False, render_schema_description=False, use_api_components=use_api_components, field_kind="parameter") }}
 {% endfor %}
 
 {{ heading_prefix }} Outputs
 
 {% for panel in operation.outputs %}
-{{ panel_block(panel, render_text=False, render_schema_description=False) }}
+{{ panel_block(panel, render_text=False, render_schema_description=False, use_api_components=use_api_components, field_kind="response") }}
 {% endfor %}
 
 {% if include_examples and operation.examples %}

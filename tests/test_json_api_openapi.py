@@ -25,7 +25,9 @@ def load_script_module(script_name: str) -> ModuleType:
     return module
 
 
-def test_add_missing_operation_summaries_uses_method_path_labels_for_mintlify_nav() -> None:
+def test_add_missing_operation_summaries_uses_method_path_labels_for_mintlify_nav() -> (
+    None
+):
     module = load_script_module("generate_json_api_reference.py")
     source = """  openapi: 3.0.3
   paths:
@@ -45,7 +47,7 @@ def test_add_missing_operation_summaries_uses_method_path_labels_for_mintlify_na
 
     assert '        summary: "POST /v2/commands/submit-and-wait"' in rendered
     assert "summary: Existing summary" in rendered
-    assert "summary: \"/v2/commands/submit-and-wait\"" not in rendered
+    assert 'summary: "/v2/commands/submit-and-wait"' not in rendered
     assert module.missing_operation_summaries(module.yaml.safe_load(rendered)) == set()
 
 
@@ -75,7 +77,9 @@ components: {}
     assert operations["patch"]["summary"] == "PATCH /v2/users/:user-id"
 
 
-def test_add_missing_operation_summaries_preserves_specs_that_already_have_summaries() -> None:
+def test_add_missing_operation_summaries_preserves_specs_that_already_have_summaries() -> (
+    None
+):
     module = load_script_module("generate_json_api_reference.py")
     source = """openapi: 3.0.3
 paths:
@@ -106,7 +110,9 @@ paths:
 components: {}
 """
 
-    assert module.sanitize_internal_todos(source) == """openapi: 3.0.3
+    assert (
+        module.sanitize_internal_todos(source)
+        == """openapi: 3.0.3
 paths:
   /v2/parties:
     post:
@@ -118,6 +124,7 @@ paths:
       example: TODO(#12345) remains because it is not a standalone line
 components: {}
 """
+    )
 
 
 def test_normalize_mintlify_openapi_text_sanitizes_todos_and_adds_summaries() -> None:
@@ -161,6 +168,58 @@ def test_openapi_operation_page_refs_lists_endpoint_refs_in_source_order() -> No
     ]
 
 
+def test_openapi_navigation_replaces_only_configured_manual_operations() -> None:
+    module = load_script_module("generate_json_api_reference.py")
+    spec = {
+        "paths": {
+            "/v2/updates": {"post": {"summary": "POST /v2/updates"}},
+            "/v2/updates/flats": {"post": {"summary": "POST /v2/updates/flats"}},
+        }
+    }
+    manual_operations = module.configured_manual_operations(
+        {
+            "manual_operations": [
+                {
+                    "method": "post",
+                    "path": "/v2/updates/flats",
+                    "page_ref": "reference/json-api-reference/post-v2updatesflats",
+                }
+            ]
+        }
+    )
+
+    assert manual_operations[0]["method"] == "POST"
+    assert module.openapi_navigation_page_refs(
+        spec, manual_operations=manual_operations
+    ) == [
+        "POST /v2/updates",
+        "reference/json-api-reference/post-v2updatesflats",
+    ]
+
+
+def test_manual_openapi_config_rejects_duplicate_operation_identity() -> None:
+    module = load_script_module("generate_json_api_reference.py")
+    operation = {
+        "method": "POST",
+        "path": "/v2/updates/flats",
+        "page_ref": "reference/json-api-reference/post-v2updatesflats",
+    }
+
+    try:
+        module.configured_manual_operations(
+            {
+                "manual_operations": [
+                    operation,
+                    {**operation, "page_ref": "reference/duplicate"},
+                ]
+            }
+        )
+    except ValueError as error:
+        assert "duplicate method/path" in str(error)
+    else:
+        raise AssertionError("Expected duplicate manual operation identity to fail")
+
+
 def test_update_docs_navigation_supports_product_navigation(tmp_path: Path) -> None:
     module = load_script_module("generate_json_api_reference.py")
     docs_json = tmp_path / "docs.json"
@@ -184,7 +243,10 @@ def test_update_docs_navigation_supports_product_navigation(tmp_path: Path) -> N
                                             },
                                             "pages": ["stale-page"],
                                         },
-                                        {"group": "AsyncAPI", "pages": ["reference/asyncapi"]},
+                                        {
+                                            "group": "AsyncAPI",
+                                            "pages": ["reference/asyncapi"],
+                                        },
                                     ],
                                 },
                             ],
@@ -219,13 +281,19 @@ def test_update_docs_navigation_supports_product_navigation(tmp_path: Path) -> N
                 "source": "openapi/json-ledger-api/openapi.yaml",
                 "directory": "reference/json-api-reference",
             },
-            "pages": ["GET /v2/users", "POST /v2/users", "reference/json-api-reference/details"],
+            "pages": [
+                "GET /v2/users",
+                "POST /v2/users",
+                "reference/json-api-reference/details",
+            ],
         },
         {"group": "AsyncAPI", "pages": ["reference/asyncapi"]},
     ]
 
 
-def test_operation_summary_uses_descriptions_for_generated_method_path_summaries() -> None:
+def test_operation_summary_uses_descriptions_for_generated_method_path_summaries() -> (
+    None
+):
     module = load_script_module("generate_json_api_reference.py")
     path_item = {
         "get": {
@@ -238,7 +306,10 @@ def test_operation_summary_uses_descriptions_for_generated_method_path_summaries
         },
     }
 
-    assert module.operation_summary("/v2/users/{user-id}", path_item) == "GET: Get user.; PATCH: Update user."
+    assert (
+        module.operation_summary("/v2/users/{user-id}", path_item)
+        == "GET: Get user.; PATCH: Update user."
+    )
 
 
 def test_build_openapi_details_page_uses_reference_overview_layout() -> None:
