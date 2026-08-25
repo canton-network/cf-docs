@@ -57,6 +57,19 @@
 {% endif %}
 {%- endmacro %}
 
+{% macro api_meta_grid(meta_items) -%}
+{% if meta_items %}
+<div class="x2mdx-ref-meta-grid">
+  {% for item in meta_items %}
+  <div class="x2mdx-ref-meta-item">
+    <span class="x2mdx-ref-meta-label">{{ escape_mdx_html_text(inline_text(item.label)) }}</span>
+    <span class="x2mdx-ref-meta-value">{% if item.href %}<a href="{{ item.href }}">{{ escape_mdx_html_text(inline_text(item.value)) }}</a>{% else %}{{ escape_mdx_html_text(inline_text(item.value)) }}{% endif %}</span>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+{%- endmacro %}
+
 {% macro card_grid(cards) -%}
 {% if cards %}
 <div class="x2mdx-ref-card-grid">
@@ -89,16 +102,16 @@
 {% if use_api_components %}
   {% for field in fields %}
   {% if field_kind == "response" %}
-<ResponseField name="{{ escape_html(inline_text(field.name)) }}" type="{{ escape_html(inline_text(field.type_label)) }}"{% if field.required %} required{% endif %}{% if field.default is not none %} default="{{ escape_html(inline_text(field.default)) }}"{% endif %}>
-{{ escape_mdx_html_text(inline_text(field.description or "-")) }}
-</ResponseField>
+<ResponseField name="{{ escape_html(inline_text(field.name)) }}" type="{{ escape_html(inline_text(field.type_label)) }}"{% if field.required %} required{% endif %}{% if field.default is not none %} default="{{ escape_html(inline_text(field.default)) }}"{% endif %}{% if not field.description %} /{% endif %}>{% if field.description %}
+{{ escape_mdx_html_text(inline_text(field.description)) }}
+</ResponseField>{% endif %}
   {% elif field.location %}
-<ParamField {{ field.location }}="{{ escape_html(inline_text(field.name)) }}" type="{{ escape_html(inline_text(field.api_type_label or field.type_label)) }}"{% if field.required %} required{% endif %}{% if field.default is not none %} default="{{ escape_html(inline_text(field.default)) }}"{% endif %}>
+<ParamField {{ field.location }}="{{ escape_html(inline_text(field.name)) }}" type="{{ escape_html(inline_text(field.api_type_label or field.type_label)) }}"{% if field.required %} required{% endif %}{% if field.default is not none %} default="{{ escape_html(inline_text(field.default)) }}"{% endif %}{% if not field.description and not (field.api_type_label and field.api_type_label != field.type_label) %} /{% endif %}>{% if field.description or (field.api_type_label and field.api_type_label != field.type_label) %}
 {% if field.api_type_label and field.api_type_label != field.type_label %}OpenAPI type: `{{ escape_mdx_html_text(inline_text(field.type_label)) }}`.
 
 {% endif %}
-{{ escape_mdx_html_text(inline_text(field.description or "-")) }}
-</ParamField>
+{% if field.description %}{{ escape_mdx_html_text(inline_text(field.description)) }}{% endif %}
+</ParamField>{% endif %}
   {% endif %}
   {% endfor %}
 {% else %}
@@ -277,7 +290,11 @@
 {% macro operation_sections(operation, heading_prefix="##", include_examples=True, use_api_components=False) -%}
 {{ heading_prefix }} Protocol Details
 
+{% if use_api_components %}
+{{ api_meta_grid(operation.protocol_items) }}
+{% else %}
 {{ meta_grid(operation.protocol_items) }}
+{% endif %}
 
 {{ heading_prefix }} Inputs
 

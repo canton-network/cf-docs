@@ -6,6 +6,7 @@ from x2mdx.openapi import (
     operation_history_events,
     render_manual_openapi_operation,
 )
+from x2mdx.reference_pages import ReferenceBreadcrumb
 from x2mdx.render import render_page
 
 
@@ -148,6 +149,50 @@ def test_operation_history_tracks_operation_id_across_route_move() -> None:
     assert "moved from POST /v2/updates/flats" in events[0].details[0]
 
 
+def test_operation_history_falls_back_to_method_and_path_when_older_id_is_missing() -> (
+    None
+):
+    original = operation_spec(changed=False)
+    del original["paths"]["/v2/updates/flats"]["post"]["operationId"]
+    current = operation_spec(changed=False)
+
+    events = operation_history_events(
+        specs_by_version={"3.4": original, "3.5": current},
+        versions=["3.4", "3.5"],
+        publish_version="3.5",
+        method="post",
+        path="/v2/updates/flats",
+        source_name="release fixtures",
+    )
+
+    assert [(event.kind, event.version) for event in events] == [
+        (HistoryEventKind.CHANGED, "3.5"),
+        (HistoryEventKind.INTRODUCED, "3.4"),
+    ]
+
+
+def test_operation_history_detects_changes_in_referenced_schemas() -> None:
+    original = operation_spec(changed=False)
+    current = operation_spec(changed=False)
+    current["components"]["schemas"]["GetUpdatesRequest"]["properties"]["newField"] = {
+        "type": "string"
+    }
+
+    events = operation_history_events(
+        specs_by_version={"3.4": original, "3.5": current},
+        versions=["3.4", "3.5"],
+        publish_version="3.5",
+        method="post",
+        path="/v2/updates/flats",
+        source_name="release fixtures",
+    )
+
+    assert [(event.kind, event.version) for event in events] == [
+        (HistoryEventKind.CHANGED, "3.5"),
+        (HistoryEventKind.INTRODUCED, "3.4"),
+    ]
+
+
 def test_operation_history_rejects_duplicate_operation_ids() -> None:
     duplicate = operation_spec(changed=False)
     duplicate["paths"]["/duplicate"] = {
@@ -227,7 +272,7 @@ def test_manual_openapi_page_preserves_playground_and_standard_history_layout() 
     assert '<ParamField query="limit" type="number">' in rendered
     assert "OpenAPI type: `integer (int64)`." in rendered
     assert '<ParamField body="beginExclusive" type="number" required>' in rendered
-    assert '<ResponseField name="value" type="Update[]" required>' in rendered
+    assert '<ResponseField name="value" type="Update[]" required />' in rendered
     assert "<RequestExample>" in rendered
     assert "<ResponseExample>" in rendered
     assert "x2mdx-ref-operation-shell" not in rendered
@@ -235,6 +280,53 @@ def test_manual_openapi_page_preserves_playground_and_standard_history_layout() 
     assert "Remove as of" in rendered
     assert "3.5.0" in rendered
     assert "details and history" not in rendered.lower()
+
+
+def test_manual_openapi_page_supports_public_operation_without_authentication() -> None:
+    spec = operation_spec(changed=False)
+    operation = spec["paths"]["/v2/updates/flats"]["post"]
+    operation.pop("security")
+    history = operation_history_events(
+        specs_by_version={"0.7.4": spec},
+        versions=["0.7.4"],
+        publish_version="0.7.4",
+        method="post",
+        path="/v2/updates/flats",
+        source_name="Splice release fixtures",
+    )
+
+    rendered = render_page(
+        render_manual_openapi_operation(
+            spec=spec,
+            options=ManualOpenAPIRenderOptions(
+                method="post",
+                path="/v2/updates/flats",
+                output_path="reference/splice-scan-api/post-v2updatesflats.mdx",
+                server="https://scan.example.com/api/scan",
+                surface_label="Scan API",
+                breadcrumbs=(
+                    ReferenceBreadcrumb("Splice APIs", "/api-reference"),
+                    ReferenceBreadcrumb("Scan APIs"),
+                    ReferenceBreadcrumb("Scan API"),
+                ),
+                auth_method=None,
+                authentication_label=None,
+                raw_spec_href="/openapi/splice/scan/scan.yaml",
+            ),
+            history_events=history,
+            publish_version="0.7.4",
+        )
+    )
+
+    assert "authMethod:" not in rendered
+    assert "Authorization: Bearer" not in rendered
+    assert "Splice APIs" in rendered
+    assert "Scan APIs" in rendered
+    assert '<div class="x2mdx-ref-meta-grid">' in rendered
+    assert '<span class="x2mdx-ref-meta-label">Operation ID</span>' in rendered
+    assert "Download OpenAPI" in rendered
+    assert "/openapi/splice/scan/scan.yaml" in rendered
+    assert "\n-\n</ResponseField>" not in rendered
 
 
 def test_binary_request_example_uses_file_upload_curl() -> None:
@@ -304,3 +396,37 @@ def test_long_generated_title_falls_back_to_humanized_operation_id() -> None:
     )
 
     assert 'title: "Updates flats"' in rendered
+
+
+def test_long_operation_overview_does_not_truncate_inside_mdx_path_token() -> None:
+    spec = operation_spec(changed=False)
+    operation = spec["paths"]["/v2/updates/flats"]["post"]
+    operation["description"] = (
+        "Returns the matching update. "
+        + "This explanation is deliberately long. " * 20
+        + "Compare `v2/updates/{update_id}` for exact lookup behavior."
+    )
+    history = operation_history_events(
+        specs_by_version={"3.5": spec},
+        versions=["3.5"],
+        publish_version="3.5",
+        method="post",
+        path="/v2/updates/flats",
+        source_name="release fixtures",
+    )
+
+    rendered = render_page(
+        render_manual_openapi_operation(
+            spec=spec,
+            options=ManualOpenAPIRenderOptions(
+                method="post",
+                path="/v2/updates/flats",
+                output_path="reference/json-api-reference/post-v2updatesflats.mdx",
+            ),
+            history_events=history,
+            publish_version="3.5",
+        )
+    )
+
+    assert "Returns the matching update." in rendered
+    assert "`v2/updates/{..." not in rendered

@@ -15,7 +15,6 @@ from x2mdx.reference_pages import (
     ReferenceOperationPage,
     ReferencePanel,
     ReferenceSchema,
-    compact_text,
     json_body,
     render_operation_page,
 )
@@ -35,7 +34,10 @@ class ManualOpenAPIRenderOptions:
     output_path: str
     server: str = "http://localhost:7575"
     surface_label: str = "JSON Ledger API"
-    auth_method: str = "bearer"
+    breadcrumbs: tuple[ReferenceBreadcrumb, ...] = ()
+    auth_method: str | None = "bearer"
+    authentication_label: str | None = "Bearer token"
+    raw_spec_href: str | None = None
     playground: str = "interactive"
 
 
@@ -378,9 +380,53 @@ def _response_panels(
     return panels, examples
 
 
-def _operation_fingerprint(operation: dict[str, Any]) -> str:
+def _expand_local_refs(
+    spec: dict[str, Any],
+    value: Any,
+    *,
+    seen_refs: frozenset[str] = frozenset(),
+) -> Any:
+    if isinstance(value, list):
+        return [_expand_local_refs(spec, item, seen_refs=seen_refs) for item in value]
+    if not isinstance(value, dict):
+        return value
+    reference = value.get("$ref")
+    if isinstance(reference, str) and reference.startswith("#/"):
+        if reference in seen_refs:
+            return {"$ref": reference}
+        resolved = _resolve_local_ref(spec, value)
+        return {
+            "$ref": reference,
+            "$resolved": _expand_local_refs(
+                spec,
+                resolved,
+                seen_refs=seen_refs | {reference},
+            ),
+        }
+    return {
+        str(key): _expand_local_refs(spec, child, seen_refs=seen_refs)
+        for key, child in value.items()
+    }
+
+
+def _operation_fingerprint(
+    spec: dict[str, Any],
+    operation: dict[str, Any],
+    *,
+    method: str,
+    path: str,
+) -> str:
+    path_parameters = _path_item(spec, path).get("parameters") or []
+    contract = {
+        "method": method.lower(),
+        "operation": operation,
+        "path_parameters": path_parameters,
+    }
     return json.dumps(
-        operation, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+        _expand_local_refs(spec, contract),
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
     )
 
 
@@ -465,6 +511,16 @@ def _operation_title(operation: dict[str, Any], *, method: str, path: str) -> st
     return f"{method.upper()} {path}"
 
 
+def _operation_overview(operation: dict[str, Any], *, limit: int = 460) -> str:
+    description = " ".join(str(operation.get("description") or "").split())
+    if len(description) <= limit:
+        return description
+    sentence_end = description.rfind(". ", 0, limit)
+    if sentence_end >= 0:
+        return description[: sentence_end + 1]
+    return description
+
+
 def operation_history_events(
     *,
     specs_by_version: dict[str, dict[str, Any]],
@@ -487,6 +543,18 @@ def operation_history_events(
                 observed.append(
                     (version, observed_method, observed_path, observed_operation)
                 )
+                continue
+            try:
+                observed.append(
+                    (
+                        version,
+                        method.lower(),
+                        path,
+                        _operation(specs_by_version[version], method, path),
+                    )
+                )
+            except ValueError:
+                continue
         else:
             try:
                 observed.append(
@@ -553,7 +621,12 @@ def operation_history_events(
     previous_fingerprint: str | None = None
     previous_location: tuple[str, str] | None = None
     for version, observed_method, observed_path, operation in observed:
-        fingerprint = _operation_fingerprint(operation)
+        fingerprint = _operation_fingerprint(
+            specs_by_version[version],
+            operation,
+            method=observed_method,
+            path=observed_path,
+        )
         location = (observed_method, observed_path)
         if previous_fingerprint is not None and (
             fingerprint != previous_fingerprint or location != previous_location
@@ -645,12 +718,18 @@ def _request_example(
     path: str,
     media_type: str | None,
     sample: Any,
+    auth_method: str | None,
 ) -> ReferenceExample:
     lines = [
         f"curl --request {method.upper()} \\",
         f"  --url '{server.rstrip('/')}{path}' \\",
     ]
-    lines.append("  --header 'Authorization: Bearer $TOKEN' \\")
+    if auth_method == "bearer":
+        lines.append("  --header 'Authorization: Bearer $TOKEN' \\")
+    elif auth_method is not None:
+        raise ValueError(
+            f"Unsupported manual OpenAPI authentication method: {auth_method}"
+        )
     if sample is not None:
         lines.append(
             f"  --header 'Content-Type: {media_type or 'application/json'}' \\"
@@ -680,7 +759,7 @@ def render_manual_openapi_operation(
     operation = _operation(spec, method, options.path)
     path_item = _path_item(spec, options.path)
     summary = _operation_title(operation, method=method, path=options.path)
-    description = compact_text(str(operation.get("description") or ""), limit=460)
+    description = _operation_overview(operation)
 
     inputs = _parameter_panels(spec, path_item, operation)
     request_panel, request_sample, request_media_type = _request_panel(spec, operation)
@@ -694,6 +773,7 @@ def render_manual_openapi_operation(
             path=options.path,
             media_type=request_media_type,
             sample=request_sample,
+            auth_method=options.auth_method,
         ),
         *response_examples,
     ]
@@ -729,26 +809,32 @@ def render_manual_openapi_operation(
         badges.append(ReferenceBadge(f"Remove as of {remove_as_of}", "removed"))
 
     api_path = f"{method} {options.server.rstrip('/')}{options.path}"
+    protocol_items = [
+        ReferenceMetaItem("Operation ID", str(operation.get("operationId") or "-")),
+    ]
+    if options.authentication_label is not None:
+        protocol_items.append(
+            ReferenceMetaItem("Authentication", options.authentication_label)
+        )
+    protocol_items.append(ReferenceMetaItem("Published", publish_version))
+    if options.raw_spec_href is not None:
+        protocol_items.append(
+            ReferenceMetaItem(
+                "Specification", "Download OpenAPI", href=options.raw_spec_href
+            )
+        )
+
     return render_operation_page(
         ReferenceOperationPage(
             path=options.output_path,
             title=summary,
             eyebrow=options.surface_label,
-            breadcrumbs=[
-                ReferenceBreadcrumb("Ledger API", "/api-reference"),
-                ReferenceBreadcrumb("OpenAPI"),
-            ],
+            breadcrumbs=list(options.breadcrumbs),
             badges=badges,
             operation_method=method,
             operation_target=options.path,
             overview_markdown=description,
-            protocol_items=[
-                ReferenceMetaItem(
-                    "Operation ID", str(operation.get("operationId") or "-")
-                ),
-                ReferenceMetaItem("Authentication", "Bearer token"),
-                ReferenceMetaItem("Published", publish_version),
-            ],
+            protocol_items=protocol_items,
             inputs=inputs,
             outputs=outputs,
             examples=examples,
