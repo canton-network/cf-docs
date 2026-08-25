@@ -1,0 +1,187 @@
+---
+title: "Open and issuing mining rounds"
+api: "POST https://scan.sv-1.global.canton.network.sync.global/api/scan/v0/open-and-issuing-mining-rounds"
+playground: "interactive"
+---
+
+<div class="x2mdx-ref-page x2mdx-ref-page--operation x2mdx-ref-page--manual-api"></div>
+
+
+
+<div class="x2mdx-ref-hero">
+
+  <p class="x2mdx-ref-eyebrow">Scan API</p>
+
+
+  <h1 class="x2mdx-ref-title">Open and issuing mining rounds</h1>
+
+
+
+<div class="x2mdx-ref-badges">
+
+  <span class="x2mdx-ref-badge x2mdx-ref-badge--protocol">OpenAPI</span>
+
+  <span class="x2mdx-ref-badge x2mdx-ref-badge--added">Since 0.5.10</span>
+
+</div>
+
+
+</div>
+
+All current open and issuing mining rounds, if the request is empty; passing contract IDs in the request can reduce the response data for polling/client-cache-update efficiency.
+
+## Protocol Details
+
+
+
+<div class="x2mdx-ref-meta-grid">
+
+  <div class="x2mdx-ref-meta-item">
+    <span class="x2mdx-ref-meta-label">Operation ID</span>
+    <span class="x2mdx-ref-meta-value">getOpenAndIssuingMiningRounds</span>
+  </div>
+
+  <div class="x2mdx-ref-meta-item">
+    <span class="x2mdx-ref-meta-label">Published</span>
+    <span class="x2mdx-ref-meta-value">0.7.4</span>
+  </div>
+
+  <div class="x2mdx-ref-meta-item">
+    <span class="x2mdx-ref-meta-label">Specification</span>
+    <span class="x2mdx-ref-meta-value"><a href="/openapi/splice/scan/scan.yaml">Download OpenAPI</a></span>
+  </div>
+
+</div>
+
+
+
+## Inputs
+
+
+
+### Request body
+
+
+<div class="x2mdx-ref-badges">
+
+  <span class="x2mdx-ref-badge x2mdx-ref-badge--neutral">application/json</span>
+
+</div>
+
+
+
+
+
+
+<ParamField body="cached_open_mining_round_contract_ids" type="object[]" required>
+OpenAPI type: `ContractId[]`.
+
+
+The contract IDs for `open_mining_rounds` in the response the caller knows about. If unsure, an empty array is fine; only a performance penalty is incurred.
+</ParamField>
+
+
+
+<ParamField body="cached_issuing_round_contract_ids" type="object[]" required>
+OpenAPI type: `ContractId[]`.
+
+
+The contract IDs for `issuing_mining_rounds` in the response the caller knows about. If unsure, an empty array is fine; only a performance penalty is incurred.
+</ParamField>
+
+
+
+
+
+
+
+
+
+## Outputs
+
+
+
+### 200
+
+
+<div class="x2mdx-ref-badges">
+
+  <span class="x2mdx-ref-badge x2mdx-ref-badge--neutral">application/json</span>
+
+</div>
+
+
+
+
+
+
+<ResponseField name="time_to_live_in_microseconds" type="integer" required>
+Suggested cache TTL for the response; this should expire before the `opensAt` of any open rounds that may not be in this response yet.
+</ResponseField>
+
+
+
+<ResponseField name="open_mining_rounds" type="MaybeCachedContractWithStateMap" required>
+Always created with respect to an input set of contract IDs. If an input contract ID is absent from the keys of this map, that contract should be considered removed by the caller; if present, `contract` may be empty, reflecting that the caller should already have the full contract data for that contract ID. Contracts not present in the input set will have full contract data. `domain_id` is always up-to-date; if undefined the contract is currently unassigned to a synchronizer, i.e. &quot;in-flight&quot;.
+</ResponseField>
+
+
+
+<ResponseField name="issuing_mining_rounds" type="MaybeCachedContractWithStateMap" required>
+Always created with respect to an input set of contract IDs. If an input contract ID is absent from the keys of this map, that contract should be considered removed by the caller; if present, `contract` may be empty, reflecting that the caller should already have the full contract data for that contract ID. Contracts not present in the input set will have full contract data. `domain_id` is always up-to-date; if undefined the contract is currently unassigned to a synchronizer, i.e. &quot;in-flight&quot;.
+</ResponseField>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## History
+
+<div class="x2mdx-ref-history" aria-label="Reference history">
+
+  <div class="x2mdx-ref-history-event x2mdx-ref-history-event--introduced">
+    <div class="x2mdx-ref-history-event-head">
+      <span class="x2mdx-ref-history-event-label">Introduced</span>
+      <code class="x2mdx-ref-history-event-version">0.5.10</code>
+    </div>
+
+  </div>
+
+</div>
+
+
+
+
+<RequestExample>
+
+```bash Request
+curl --request POST \
+  --url 'https://scan.sv-1.global.canton.network.sync.global/api/scan/v0/open-and-issuing-mining-rounds' \
+  --header 'Content-Type: application/json' \
+  --data '{"cached_open_mining_round_contract_ids":["string"],"cached_issuing_round_contract_ids":["string"]}'
+```
+
+</RequestExample>
+
+
+<ResponseExample>
+
+```json 200 response
+{
+  "time_to_live_in_microseconds": 0,
+  "open_mining_rounds": {},
+  "issuing_mining_rounds": {}
+}
+```
+
+</ResponseExample>

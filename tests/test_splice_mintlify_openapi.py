@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -32,7 +33,9 @@ def test_splice_openapi_release_requests_use_github_token(monkeypatch) -> None:
     module = load_script_module("generate_splice_mintlify_openapi.py")
     monkeypatch.setenv("GITHUB_TOKEN", "test-token")
 
-    assert module.request_headers("https://api.github.com/repos/example/project/releases") == {
+    assert module.request_headers(
+        "https://api.github.com/repos/example/project/releases"
+    ) == {
         "Accept": "application/vnd.github+json",
         "User-Agent": module.USER_AGENT,
         "Authorization": "Bearer test-token",
@@ -64,14 +67,21 @@ paths: {}
         output_path=tmp_path / "wallet-external.yaml",
     ).decode("utf-8")
 
-    assert "https://scan.sv-1.global.canton.network.sync.global/api/scan" in rendered_scan
-    assert "https://scan.sv-1.global.canton.network.sync.global/api/scan" in rendered_stream
+    assert (
+        "https://scan.sv-1.global.canton.network.sync.global/api/scan" in rendered_scan
+    )
+    assert (
+        "https://scan.sv-1.global.canton.network.sync.global/api/scan"
+        in rendered_stream
+    )
     assert "https://example.com/api/scan" not in rendered_scan
     assert "https://example.com/api/scan" not in rendered_stream
     assert "https://example.com/api/scan" in rendered_wallet
 
 
-def test_splice_openapi_nav_emits_explicit_pages_for_every_spec(tmp_path: Path) -> None:
+def test_splice_openapi_nav_emits_explicit_manual_pages_for_every_spec(
+    tmp_path: Path,
+) -> None:
     module = load_script_module("generate_splice_mintlify_openapi.py")
     docs_json = tmp_path / "docs-main" / "docs.json"
     write_json(
@@ -81,13 +91,17 @@ def test_splice_openapi_nav_emits_explicit_pages_for_every_spec(tmp_path: Path) 
                 "dropdowns": [
                     {
                         "dropdown": "API Reference",
-                        "pages": [{"group": "Wallet Kernel", "pages": ["reference/wallet"]}],
+                        "pages": [
+                            {"group": "Wallet Kernel", "pages": ["reference/wallet"]}
+                        ],
                     }
                 ]
             }
         },
     )
-    openapi_path = tmp_path / "docs-main" / "openapi" / "splice" / "token-standard" / "token.yaml"
+    openapi_path = (
+        tmp_path / "docs-main" / "openapi" / "splice" / "token-standard" / "token.yaml"
+    )
     openapi_path.parent.mkdir(parents=True, exist_ok=True)
     openapi_path.write_text(
         """openapi: 3.0.3
@@ -136,18 +150,62 @@ components: {}
     scan_api = scan_group["pages"][0]
     assert scan_api == {
         "group": "Scan API",
-        "openapi": {
-            "source": "openapi/splice/token-standard/token.yaml",
-            "directory": "reference/splice-scan-api",
-        },
         "pages": [
-            "GET /registry/metadata",
-            "POST /registry/metadata/{token-id}",
+            "reference/splice-scan-api/get-registrymetadata",
+            "reference/splice-scan-api/post-registrymetadata:token-id",
         ],
     }
 
 
-def test_splice_openapi_normalizes_path_summaries_for_mintlify_operation_slugs(tmp_path: Path) -> None:
+def test_splice_manual_pages_rely_on_mintlify_navigation_breadcrumbs(
+    tmp_path: Path,
+) -> None:
+    module = load_script_module("generate_splice_mintlify_openapi.py")
+    spec = {
+        "openapi": "3.0.3",
+        "servers": [{"url": "https://scan.example.com/api/scan"}],
+        "paths": {
+            "/v0/scans": {
+                "get": {
+                    "summary": "List scans",
+                    "operationId": "listScans",
+                    "responses": {"200": {"description": "Success"}},
+                }
+            }
+        },
+    }
+    docs_json = tmp_path / "docs-main" / "docs.json"
+
+    written = module.write_manual_operation_pages(
+        docs_json_path=docs_json,
+        families=[
+            {
+                "group": "Scan APIs",
+                "specs": [
+                    {
+                        "filename": "scan.yaml",
+                        "nav_label": "Scan API",
+                        "source": "openapi/splice/scan/scan.yaml",
+                        "directory": "reference/splice-scan-api",
+                    }
+                ],
+            }
+        ],
+        snapshots={"scan.yaml": {"0.7.4": spec}},
+        release_versions=["0.7.4"],
+        publish_version="0.7.4",
+        source_name="test fixtures",
+    )
+
+    assert len(written) == 1
+    rendered = next(iter(written)).read_text(encoding="utf-8")
+    assert "x2mdx-ref-breadcrumbs" not in rendered
+    assert '<span class="x2mdx-ref-meta-label">Operation ID</span>' in rendered
+
+
+def test_splice_openapi_normalizes_path_summaries_for_mintlify_operation_slugs(
+    tmp_path: Path,
+) -> None:
     module = load_script_module("generate_splice_mintlify_openapi.py")
     source = b"""openapi: 3.0.3
 paths:
@@ -178,9 +236,13 @@ components: {}
     assert '      summary: "GET /registry/missing/:token-id"' in rendered
 
 
-def test_splice_openapi_validator_rejects_mintlify_operation_slug_collisions(tmp_path: Path) -> None:
+def test_splice_openapi_validator_rejects_mintlify_operation_slug_collisions(
+    tmp_path: Path,
+) -> None:
     module = load_script_module("validate_splice_mintlify_openapi_nav.py")
-    openapi_path = tmp_path / "docs-main" / "openapi" / "splice" / "token-standard" / "token.yaml"
+    openapi_path = (
+        tmp_path / "docs-main" / "openapi" / "splice" / "token-standard" / "token.yaml"
+    )
     openapi_path.parent.mkdir(parents=True, exist_ok=True)
     openapi_path.write_text(
         """openapi: 3.0.3
@@ -199,7 +261,9 @@ components: {}
     try:
         module.validate_openapi_operation_slug_uniqueness(
             docs_json_path=tmp_path / "docs-main" / "docs.json",
-            entries=[("openapi/splice/token-standard/token.yaml", "reference/splice-token")],
+            entries=[
+                ("openapi/splice/token-standard/token.yaml", "reference/splice-token")
+            ],
         )
     except ValueError as error:
         assert "collide under Mintlify operation slugging" in str(error)
@@ -228,7 +292,10 @@ def test_splice_openapi_nav_updates_product_navigation_and_preserves_existing_pa
                                 "group": "Splice APIs",
                                 "pages": [
                                     "sdks-tools/api-reference/splice-daml-apis",
-                                    {"group": "Scan APIs", "pages": ["stale-scan-entry"]},
+                                    {
+                                        "group": "Scan APIs",
+                                        "pages": ["stale-scan-entry"],
+                                    },
                                 ],
                             },
                         ],
@@ -281,4 +348,71 @@ components: {}
     assert splice_group["group"] == "Splice APIs"
     assert splice_group["pages"][0] == "sdks-tools/api-reference/splice-daml-apis"
     assert splice_group["pages"][1]["group"] == "Scan APIs"
-    assert splice_group["pages"][1]["pages"][0]["pages"] == ["GET /v0/scans"]
+    assert splice_group["pages"][1]["pages"][0]["pages"] == [
+        "reference/splice-scan-api/get-v0scans"
+    ]
+
+
+def test_splice_openapi_exclusions_must_cover_disabled_specs() -> None:
+    module = load_script_module("generate_splice_mintlify_openapi.py")
+    source_config = {
+        "enabled_nav_specs": ["public.yaml"],
+        "excluded_specs": [{"filename": "internal.yaml", "reason": "Internal API."}],
+        "families": [
+            {
+                "group": "APIs",
+                "specs": [
+                    {
+                        "filename": "public.yaml",
+                        "nav_label": "Public",
+                        "source": "openapi/public.yaml",
+                        "directory": "reference/public",
+                    },
+                    {
+                        "filename": "internal.yaml",
+                        "nav_label": "Internal",
+                        "source": "openapi/internal.yaml",
+                        "directory": "reference/internal",
+                    },
+                ],
+            }
+        ],
+    }
+
+    module.validate_excluded_specs(
+        source_config=source_config,
+        families=module.normalized_families(source_config),
+        enabled_specs=module.enabled_nav_specs(source_config),
+    )
+
+
+def test_splice_openapi_route_baseline_covers_manual_reader_routes() -> None:
+    module = load_script_module("generate_splice_mintlify_openapi.py")
+    spec = {
+        "openapi": "3.0.3",
+        "paths": {
+            "/v0/items/{item_id}": {"get": {"operationId": "getItem", "responses": {}}}
+        },
+    }
+    route = "/reference/splice-items/get-v0items:item_id\n"
+    module.validate_manual_route_baseline(
+        {
+            "legacy_manual_route_baseline": {
+                "operation_count": 1,
+                "sha256": hashlib.sha256(route.encode("utf-8")).hexdigest(),
+            }
+        },
+        families=[
+            {
+                "group": "APIs",
+                "specs": [
+                    {
+                        "filename": "items.yaml",
+                        "directory": "reference/splice-items",
+                    }
+                ],
+            }
+        ],
+        snapshots={"items.yaml": {"0.7.4": spec}},
+        publish_version="0.7.4",
+    )

@@ -12,7 +12,13 @@ import yaml
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_SOURCE_CONFIG = REPO_ROOT / "config" / "mintlify-openapi" / "splice-openapi" / "source-artifacts.json"
+DEFAULT_SOURCE_CONFIG = (
+    REPO_ROOT
+    / "config"
+    / "mintlify-openapi"
+    / "splice-openapi"
+    / "source-artifacts.json"
+)
 DEFAULT_DOCS_JSON = REPO_ROOT / "docs-main" / "docs.json"
 HTTP_METHODS = {"get", "put", "post", "delete", "options", "head", "patch", "trace"}
 
@@ -24,14 +30,20 @@ def load_json(path: Path) -> dict[str, Any]:
     return payload
 
 
-def navigation_dropdown_pages(docs: dict[str, Any], dropdown_label: str, docs_json_path: Path) -> list[Any]:
+def navigation_dropdown_pages(
+    docs: dict[str, Any], dropdown_label: str, docs_json_path: Path
+) -> list[Any]:
     navigation = docs.get("navigation")
     if not isinstance(navigation, dict):
         raise ValueError(f"docs.json missing navigation object: {docs_json_path}")
     dropdowns = navigation.get("dropdowns")
     if isinstance(dropdowns, list):
         dropdown = next(
-            (item for item in dropdowns if isinstance(item, dict) and item.get("dropdown") == dropdown_label),
+            (
+                item
+                for item in dropdowns
+                if isinstance(item, dict) and item.get("dropdown") == dropdown_label
+            ),
             None,
         )
         if dropdown is None:
@@ -44,7 +56,11 @@ def navigation_dropdown_pages(docs: dict[str, Any], dropdown_label: str, docs_js
     products = navigation.get("products")
     if isinstance(products, list):
         product = next(
-            (item for item in products if isinstance(item, dict) and item.get("product") == dropdown_label),
+            (
+                item
+                for item in products
+                if isinstance(item, dict) and item.get("product") == dropdown_label
+            ),
             None,
         )
         if product is None:
@@ -54,7 +70,9 @@ def navigation_dropdown_pages(docs: dict[str, Any], dropdown_label: str, docs_js
             raise ValueError(f"Product does not expose a pages list: {dropdown_label}")
         return pages
 
-    raise ValueError(f"docs.json navigation must define dropdowns or products: {docs_json_path}")
+    raise ValueError(
+        f"docs.json navigation must define dropdowns or products: {docs_json_path}"
+    )
 
 
 def find_group(items: list[Any], label: str) -> dict[str, Any] | None:
@@ -100,8 +118,13 @@ def expected_openapi_specs(source_config: dict[str, Any]) -> list[dict[str, Any]
             nav_label = spec.get("nav_label")
             source = spec.get("source")
             directory = spec.get("directory")
-            if not all(isinstance(item, str) and item for item in (filename, nav_label, source, directory)):
-                raise ValueError("Each source config spec must define filename, nav_label, source, and directory")
+            if not all(
+                isinstance(item, str) and item
+                for item in (filename, nav_label, source, directory)
+            ):
+                raise ValueError(
+                    "Each source config spec must define filename, nav_label, source, and directory"
+                )
             if selected is None or filename in selected:
                 entries.append(
                     {
@@ -116,7 +139,10 @@ def expected_openapi_specs(source_config: dict[str, Any]) -> list[dict[str, Any]
 
 
 def expected_openapi_entries(source_config: dict[str, Any]) -> list[tuple[str, str]]:
-    return [(spec["source"], spec["directory"]) for spec in expected_openapi_specs(source_config)]
+    return [
+        (spec["source"], spec["directory"])
+        for spec in expected_openapi_specs(source_config)
+    ]
 
 
 def collect_openapi_entries(node: Any, entries: set[tuple[str, str]]) -> None:
@@ -177,6 +203,30 @@ def openapi_operation_page_refs(openapi_path: Path) -> list[str]:
     return refs
 
 
+def mintlify_operation_path(path: str) -> str:
+    return re.sub(r"\{([^{}]+)\}", r":\1", path)
+
+
+def manual_operation_page_ref(*, directory: str, method: str, path: str) -> str:
+    mintlify_path = mintlify_operation_path(path)
+    slug = mintlify_path.removeprefix("/").replace("/", "").lower()
+    return f"{directory.rstrip('/')}/{method.lower()}-{slug}"
+
+
+def manual_operation_page_refs(openapi_path: Path, *, directory: str) -> list[str]:
+    return [
+        manual_operation_page_ref(
+            directory=directory,
+            method=method,
+            path=path,
+        )
+        for method, path in (
+            page_ref.split(" ", 1)
+            for page_ref in openapi_operation_page_refs(openapi_path)
+        )
+    ]
+
+
 def mintlify_operation_slug(summary: str) -> str:
     without_braced_params = re.sub(r"\{[^}]+}", "", summary)
     return re.sub(r"[^A-Za-z0-9]+", "", without_braced_params).lower()
@@ -193,7 +243,9 @@ def validate_openapi_operation_slug_uniqueness(
         openapi_path = docs_root / source
         spec = yaml.safe_load(openapi_path.read_text(encoding="utf-8"))
         if not isinstance(spec, dict):
-            raise ValueError(f"Expected OpenAPI spec to parse as an object: {openapi_path}")
+            raise ValueError(
+                f"Expected OpenAPI spec to parse as an object: {openapi_path}"
+            )
         paths = spec.get("paths")
         if not isinstance(paths, dict):
             continue
@@ -203,7 +255,9 @@ def validate_openapi_operation_slug_uniqueness(
             if not isinstance(path, str) or not isinstance(path_item, dict):
                 continue
             for method, operation in path_item.items():
-                if method.lower() not in HTTP_METHODS or not isinstance(operation, dict):
+                if method.lower() not in HTTP_METHODS or not isinstance(
+                    operation, dict
+                ):
                     continue
                 summary = operation.get("summary")
                 if not isinstance(summary, str) or not summary.strip():
@@ -242,7 +296,7 @@ def validate_openapi_operation_summaries(
         )
 
 
-def validate_explicit_openapi_nav_pages(
+def validate_explicit_manual_nav_pages(
     *,
     docs_json_path: Path,
     top_group: dict[str, Any],
@@ -256,25 +310,55 @@ def validate_explicit_openapi_nav_pages(
     for spec in expected_specs:
         family_group = find_group(top_group_pages, spec["family_group"])
         if family_group is None:
-            raise ValueError(f"Splice OpenAPI family is missing from nav: {spec['family_group']}")
+            raise ValueError(
+                f"Splice OpenAPI family is missing from nav: {spec['family_group']}"
+            )
         family_pages = family_group.get("pages")
         if not isinstance(family_pages, list):
-            raise ValueError(f"Splice OpenAPI family must expose pages: {spec['family_group']}")
+            raise ValueError(
+                f"Splice OpenAPI family must expose pages: {spec['family_group']}"
+            )
         spec_group = find_group(family_pages, spec["nav_label"])
         if spec_group is None:
-            raise ValueError(f"Splice OpenAPI spec is missing from nav: {spec['nav_label']}")
+            raise ValueError(
+                f"Splice OpenAPI spec is missing from nav: {spec['nav_label']}"
+            )
         actual_pages = spec_group.get("pages")
         if not isinstance(actual_pages, list):
-            raise ValueError(f"Splice OpenAPI spec must expose explicit pages: {spec['nav_label']}")
-        expected_pages = openapi_operation_page_refs(docs_root / spec["source"])
+            raise ValueError(
+                f"Splice OpenAPI spec must expose explicit pages: {spec['nav_label']}"
+            )
+        expected_pages = manual_operation_page_refs(
+            docs_root / spec["source"],
+            directory=spec["directory"],
+        )
         if actual_pages != expected_pages:
             raise ValueError(
-                f"Splice OpenAPI nav pages differ for {spec['nav_label']}:\n"
+                f"Splice manual OpenAPI nav pages differ for {spec['nav_label']}:\n"
                 f"expected={expected_pages}\nactual={actual_pages}"
             )
 
+        for page_ref in expected_pages:
+            page_path = docs_root / f"{page_ref}.mdx"
+            if not page_path.is_file():
+                raise ValueError(f"Splice manual OpenAPI page is missing: {page_path}")
+            text = page_path.read_text(encoding="utf-8")
+            headings = re.findall(r"(?m)^## .+$", text)
+            if not headings or headings[-1] != "## History":
+                raise ValueError(
+                    f"Splice manual OpenAPI page must end with History: {page_path}"
+                )
+            if "details and history" in text.lower():
+                raise ValueError(
+                    f"Splice manual OpenAPI page contains retired history wording: {page_path}"
+                )
 
-def validate_splice_nav(*, source_config_path: Path = DEFAULT_SOURCE_CONFIG, docs_json_path: Path = DEFAULT_DOCS_JSON) -> None:
+
+def validate_splice_nav(
+    *,
+    source_config_path: Path = DEFAULT_SOURCE_CONFIG,
+    docs_json_path: Path = DEFAULT_DOCS_JSON,
+) -> None:
     source_config = load_json(source_config_path)
     docs = load_json(docs_json_path)
     dropdown_label = source_config.get("nav_dropdown") or "API Reference"
@@ -287,19 +371,30 @@ def validate_splice_nav(*, source_config_path: Path = DEFAULT_SOURCE_CONFIG, doc
     pages = navigation_dropdown_pages(docs, dropdown_label, docs_json_path)
     top_group = find_group(pages, top_level_group_label)
     if top_group is None:
-        raise ValueError(f"Configured Splice OpenAPI nav group is missing: {top_level_group_label}")
+        raise ValueError(
+            f"Configured Splice OpenAPI nav group is missing: {top_level_group_label}"
+        )
 
     actual_entries: set[tuple[str, str]] = set()
     collect_openapi_entries(top_group, actual_entries)
+    if actual_entries:
+        details = "\n".join(
+            f"- source={source} directory={directory}"
+            for source, directory in sorted(actual_entries)
+        )
+        raise ValueError(
+            "Splice APIs still contain native Mintlify OpenAPI navigation entries:\n"
+            f"{details}"
+        )
     expected_specs = expected_openapi_specs(source_config)
     expected_entries = [(spec["source"], spec["directory"]) for spec in expected_specs]
-    missing = [entry for entry in expected_entries if entry not in actual_entries]
-    if missing:
-        details = "\n".join(f"- source={source} directory={directory}" for source, directory in missing)
-        raise ValueError(f"Splice OpenAPI nav is missing configured entries:\n{details}")
-    validate_openapi_operation_summaries(docs_json_path=docs_json_path, entries=expected_entries)
-    validate_openapi_operation_slug_uniqueness(docs_json_path=docs_json_path, entries=expected_entries)
-    validate_explicit_openapi_nav_pages(
+    validate_openapi_operation_summaries(
+        docs_json_path=docs_json_path, entries=expected_entries
+    )
+    validate_openapi_operation_slug_uniqueness(
+        docs_json_path=docs_json_path, entries=expected_entries
+    )
+    validate_explicit_manual_nav_pages(
         docs_json_path=docs_json_path,
         top_group=top_group,
         expected_specs=expected_specs,
@@ -307,7 +402,9 @@ def validate_splice_nav(*, source_config_path: Path = DEFAULT_SOURCE_CONFIG, doc
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Validate configured Splice OpenAPI specs are wired into docs.json.")
+    parser = argparse.ArgumentParser(
+        description="Validate configured Splice OpenAPI specs are wired into docs.json."
+    )
     parser.add_argument("--source-config", default=str(DEFAULT_SOURCE_CONFIG))
     parser.add_argument("--docs-json", default=str(DEFAULT_DOCS_JSON))
     return parser.parse_args()

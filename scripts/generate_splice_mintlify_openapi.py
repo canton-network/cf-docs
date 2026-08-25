@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -16,15 +17,31 @@ from typing import Any
 import yaml
 
 from validate_splice_mintlify_openapi_nav import validate_splice_nav
+from x2mdx.openapi import (
+    ManualOpenAPIRenderOptions,
+    operation_history_events,
+    render_manual_openapi_operation,
+)
+from x2mdx.render import write_page
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 USER_AGENT = "digital-asset-docs-mintlify-openapi/1.0"
-DEFAULT_SOURCE_CONFIG = REPO_ROOT / "config" / "mintlify-openapi" / "splice-openapi" / "source-artifacts.json"
-DEFAULT_CACHE_DIR = REPO_ROOT / ".internal" / "cache" / "mintlify-openapi" / "splice-openapi"
+DEFAULT_SOURCE_CONFIG = (
+    REPO_ROOT
+    / "config"
+    / "mintlify-openapi"
+    / "splice-openapi"
+    / "source-artifacts.json"
+)
+DEFAULT_CACHE_DIR = (
+    REPO_ROOT / ".internal" / "cache" / "mintlify-openapi" / "splice-openapi"
+)
 DEFAULT_DOCS_JSON = REPO_ROOT / "docs-main" / "docs.json"
 HTTP_METHODS = {"get", "put", "post", "delete", "options", "head", "patch", "trace"}
 SCAN_OPENAPI_PLACEHOLDER_SERVER = "https://example.com/api/scan"
-SCAN_OPENAPI_PUBLIC_SERVER = "https://scan.sv-1.global.canton.network.sync.global/api/scan"
+SCAN_OPENAPI_PUBLIC_SERVER = (
+    "https://scan.sv-1.global.canton.network.sync.global/api/scan"
+)
 SCAN_OPENAPI_SERVER_REPLACEMENT_SPECS = {"scan.yaml", "scan-stream-server.yaml"}
 UNPUBLISHED_SECURITY_SCHEME_LINK_RE = re.compile(
     r"as described in \[spliceAppBearerAuth\]\(\"?(?:\.\./)+common/src/main/openapi/"
@@ -91,7 +108,9 @@ def selected_releases(
             f"https://api.github.com/repos/{release_repo}/releases?per_page=100&page={page}"
         )
         if not isinstance(payload, list):
-            raise ValueError(f"Expected list payload from GitHub releases API for {release_repo}")
+            raise ValueError(
+                f"Expected list payload from GitHub releases API for {release_repo}"
+            )
         if not payload:
             break
         for release in payload:
@@ -141,7 +160,9 @@ def selected_releases(
 
     releases.sort(key=lambda entry: version_key(entry["version"]))
     if not releases:
-        raise ValueError(f"No published releases matched the configured Splice OpenAPI selection for {release_repo}")
+        raise ValueError(
+            f"No published releases matched the configured Splice OpenAPI selection for {release_repo}"
+        )
     return releases
 
 
@@ -160,10 +181,14 @@ def resolve_publish_release(
     if publish_version is None:
         return releases[-1]
 
-    selected = next((entry for entry in releases if entry["version"] == publish_version), None)
+    selected = next(
+        (entry for entry in releases if entry["version"] == publish_version), None
+    )
     if selected is None:
         available = ", ".join(entry["version"] for entry in releases)
-        raise ValueError(f"Publish version '{publish_version}' not found in selected releases: {available}")
+        raise ValueError(
+            f"Publish version '{publish_version}' not found in selected releases: {available}"
+        )
     return selected
 
 
@@ -187,7 +212,10 @@ def ensure_archive(
         release["download_url"],
         headers={"User-Agent": USER_AGENT},
     )
-    with urllib.request.urlopen(request, timeout=180) as response, temp_path.open("wb") as handle:
+    with (
+        urllib.request.urlopen(request, timeout=180) as response,
+        temp_path.open("wb") as handle,
+    ):
         shutil.copyfileobj(response, handle)
     temp_path.replace(output_path)
     return output_path
@@ -216,7 +244,10 @@ def normalized_families(source_config: dict[str, Any]) -> list[dict[str, Any]]:
             nav_label = spec.get("nav_label")
             source_ref = spec.get("source")
             directory = spec.get("directory")
-            if not all(isinstance(item, str) and item for item in (filename, nav_label, source_ref, directory)):
+            if not all(
+                isinstance(item, str) and item
+                for item in (filename, nav_label, source_ref, directory)
+            ):
                 raise ValueError(
                     f"Specs for family '{group}' must define non-empty filename, nav_label, source, and directory"
                 )
@@ -247,17 +278,49 @@ def extract_spec_bytes(
                 continue
             raw_handle = handle.extractfile(member)
             if raw_handle is None:
-                raise FileNotFoundError(f"Failed to extract '{member.name}' from {archive}")
+                raise FileNotFoundError(
+                    f"Failed to extract '{member.name}' from {archive}"
+                )
             extracted[filename] = raw_handle.read()
 
     missing = sorted(spec_filenames - extracted.keys())
     if missing:
         joined = ", ".join(missing)
-        raise FileNotFoundError(f"Archive {archive} did not contain expected OpenAPI specs: {joined}")
+        raise FileNotFoundError(
+            f"Archive {archive} did not contain expected OpenAPI specs: {joined}"
+        )
     return extracted
 
 
-def render_output_bytes(*, spec_filename: str, spec_bytes: bytes, output_path: Path) -> bytes:
+def extract_available_spec_bytes(
+    *,
+    archive: Path,
+    spec_filenames: set[str],
+) -> dict[str, bytes]:
+    extracted: dict[str, bytes] = {}
+    with tarfile.open(archive, "r:gz") as handle:
+        for member in handle.getmembers():
+            if not member.isfile():
+                continue
+            filename = Path(member.name).name
+            if filename not in spec_filenames:
+                continue
+            if filename in extracted:
+                raise ValueError(
+                    f"Duplicate OpenAPI spec '{filename}' found in {archive}"
+                )
+            raw_handle = handle.extractfile(member)
+            if raw_handle is None:
+                raise FileNotFoundError(
+                    f"Failed to extract '{member.name}' from {archive}"
+                )
+            extracted[filename] = raw_handle.read()
+    return extracted
+
+
+def render_output_bytes(
+    *, spec_filename: str, spec_bytes: bytes, output_path: Path
+) -> bytes:
     if output_path.suffix not in {".yaml", ".yml"}:
         return spec_bytes
 
@@ -329,9 +392,13 @@ def operation_summary_rewrites(spec: dict[str, Any]) -> dict[tuple[str, str], st
                 continue
             summary = operation.get("summary")
             if not isinstance(summary, str) or not summary.strip():
-                rewrites[(path, method.lower())] = generated_operation_summary(path, method)
+                rewrites[(path, method.lower())] = generated_operation_summary(
+                    path, method
+                )
             elif path_only_operation_summary(path, method, summary):
-                rewrites[(path, method.lower())] = generated_operation_summary(path, method)
+                rewrites[(path, method.lower())] = generated_operation_summary(
+                    path, method
+                )
     return rewrites
 
 
@@ -355,7 +422,9 @@ def add_missing_operation_summaries(text: str) -> str:
         if current_path is not None and current_method is not None:
             summary_match = re.fullmatch(r"      summary:\s*.*", line)
             if summary_match and (current_path, current_method) in rewrites:
-                output_lines.append(f'      summary: "{rewrites[(current_path, current_method)]}"')
+                output_lines.append(
+                    f'      summary: "{rewrites[(current_path, current_method)]}"'
+                )
                 current_method = None
                 continue
 
@@ -382,7 +451,9 @@ def add_missing_operation_summaries(text: str) -> str:
             current_method = None
             continue
 
-        method_match = re.fullmatch(r"    (?P<method>get|put|post|delete|options|head|patch|trace):\s*", line)
+        method_match = re.fullmatch(
+            r"    (?P<method>get|put|post|delete|options|head|patch|trace):\s*", line
+        )
         if current_path is None or method_match is None:
             continue
 
@@ -395,12 +466,88 @@ def add_missing_operation_summaries(text: str) -> str:
     rendered = "\n".join(output_lines).rstrip() + "\n"
     parsed = yaml.safe_load(rendered)
     if not isinstance(parsed, dict):
-        raise ValueError("Generated OpenAPI YAML stopped parsing after summary insertion")
+        raise ValueError(
+            "Generated OpenAPI YAML stopped parsing after summary insertion"
+        )
     remaining = operation_summary_rewrites(parsed)
     if remaining:
-        details = ", ".join(f"{method.upper()} {path}" for path, method in sorted(remaining))
-        raise ValueError(f"Failed to normalize generated summaries for OpenAPI operations: {details}")
+        details = ", ".join(
+            f"{method.upper()} {path}" for path, method in sorted(remaining)
+        )
+        raise ValueError(
+            f"Failed to normalize generated summaries for OpenAPI operations: {details}"
+        )
     return rendered
+
+
+def materialize_release_specs(
+    *,
+    cache_dir: Path,
+    release: dict[str, str],
+    spec_filenames: set[str],
+    force_refresh: bool,
+) -> dict[str, dict[str, Any]]:
+    archive = ensure_archive(
+        cache_dir=cache_dir,
+        release=release,
+        force_refresh=force_refresh,
+    )
+    extracted = extract_available_spec_bytes(
+        archive=archive,
+        spec_filenames=spec_filenames,
+    )
+    fixture_dir = cache_dir / "fixtures" / release["version"]
+    if fixture_dir.exists():
+        shutil.rmtree(fixture_dir)
+    fixture_dir.mkdir(parents=True, exist_ok=True)
+
+    parsed: dict[str, dict[str, Any]] = {}
+    for filename, raw_bytes in sorted(extracted.items()):
+        normalized = render_output_bytes(
+            spec_filename=filename,
+            spec_bytes=raw_bytes,
+            output_path=Path(filename),
+        )
+        fixture_path = fixture_dir / filename
+        fixture_path.write_bytes(normalized)
+        payload = yaml.safe_load(normalized.decode("utf-8"))
+        if not isinstance(payload, dict):
+            raise ValueError(
+                f"Expected {filename} from Splice {release['version']} to parse as an object"
+            )
+        parsed[filename] = payload
+    return parsed
+
+
+def versioned_enabled_specs(
+    *,
+    cache_dir: Path,
+    releases: list[dict[str, str]],
+    spec_filenames: set[str],
+    force_refresh: bool,
+) -> dict[str, dict[str, dict[str, Any]]]:
+    snapshots: dict[str, dict[str, dict[str, Any]]] = {
+        filename: {} for filename in spec_filenames
+    }
+    for release in releases:
+        release_specs = materialize_release_specs(
+            cache_dir=cache_dir,
+            release=release,
+            spec_filenames=spec_filenames,
+            force_refresh=force_refresh,
+        )
+        for filename, payload in release_specs.items():
+            snapshots[filename][release["version"]] = payload
+
+    missing = sorted(
+        filename for filename, versions in snapshots.items() if not versions
+    )
+    if missing:
+        raise ValueError(
+            "Enabled Splice OpenAPI specs were absent from every selected release: "
+            + ", ".join(missing)
+        )
+    return snapshots
 
 
 def write_managed_specs(
@@ -481,6 +628,119 @@ def filtered_families_for_navigation(
     return filtered
 
 
+def validate_excluded_specs(
+    *,
+    source_config: dict[str, Any],
+    families: list[dict[str, Any]],
+    enabled_specs: set[str] | None,
+) -> None:
+    if enabled_specs is None:
+        return
+    all_specs = {spec["filename"] for family in families for spec in family["specs"]}
+    disabled_specs = all_specs - enabled_specs
+    excluded = source_config.get("excluded_specs")
+    if not isinstance(excluded, list):
+        raise ValueError(
+            "source config must record every disabled family spec in excluded_specs"
+        )
+    recorded: set[str] = set()
+    for index, item in enumerate(excluded):
+        if not isinstance(item, dict):
+            raise ValueError(f"excluded_specs[{index}] must be an object")
+        filename = item.get("filename")
+        reason = item.get("reason")
+        if not isinstance(filename, str) or not filename:
+            raise ValueError(
+                f"excluded_specs[{index}].filename must be a non-empty string"
+            )
+        if not isinstance(reason, str) or not reason.strip():
+            raise ValueError(
+                f"excluded_specs[{index}].reason must be a non-empty string"
+            )
+        recorded.add(filename)
+    if recorded != disabled_specs:
+        raise ValueError(
+            "excluded_specs must exactly match disabled family specs: "
+            f"expected={sorted(disabled_specs)} recorded={sorted(recorded)}"
+        )
+
+
+def operation_items(spec: dict[str, Any]) -> list[tuple[str, str, dict[str, Any]]]:
+    paths = spec.get("paths")
+    if not isinstance(paths, dict):
+        raise ValueError("OpenAPI specification must define paths")
+    operations: list[tuple[str, str, dict[str, Any]]] = []
+    for path, path_item in paths.items():
+        if not isinstance(path, str) or not isinstance(path_item, dict):
+            continue
+        for method, operation in path_item.items():
+            if method.lower() in HTTP_METHODS and isinstance(operation, dict):
+                operations.append((method.upper(), path, operation))
+    return operations
+
+
+def manual_operation_page_ref(*, directory: str, method: str, path: str) -> str:
+    mintlify_path = mintlify_operation_path(path)
+    slug = mintlify_path.removeprefix("/").replace("/", "").lower()
+    return f"{directory.rstrip('/')}/{method.lower()}-{slug}"
+
+
+def manual_operation_page_refs(*, spec: dict[str, Any], directory: str) -> list[str]:
+    return [
+        manual_operation_page_ref(directory=directory, method=method, path=path)
+        for method, path, _operation in operation_items(spec)
+    ]
+
+
+def validate_manual_route_baseline(
+    source_config: dict[str, Any],
+    *,
+    families: list[dict[str, Any]],
+    snapshots: dict[str, dict[str, dict[str, Any]]],
+    publish_version: str,
+) -> None:
+    baseline = source_config.get("legacy_manual_route_baseline")
+    if not isinstance(baseline, dict):
+        raise ValueError("legacy_manual_route_baseline must be an object")
+    expected_count = baseline.get("operation_count")
+    expected_sha256 = baseline.get("sha256")
+    if not isinstance(expected_count, int) or expected_count < 0:
+        raise ValueError(
+            "legacy_manual_route_baseline.operation_count must be a non-negative integer"
+        )
+    if not isinstance(expected_sha256, str) or not re.fullmatch(
+        r"[0-9a-f]{64}", expected_sha256
+    ):
+        raise ValueError(
+            "legacy_manual_route_baseline.sha256 must be a lowercase SHA-256 digest"
+        )
+
+    routes: list[str] = []
+    for family in families:
+        for spec_config in family["specs"]:
+            published = snapshots[spec_config["filename"]].get(publish_version)
+            if published is None:
+                raise ValueError(
+                    f"Enabled spec {spec_config['filename']} is absent from publish version {publish_version}"
+                )
+            routes.extend(
+                f"/{page_ref}"
+                for page_ref in manual_operation_page_refs(
+                    spec=published,
+                    directory=spec_config["directory"],
+                )
+            )
+    actual_sha256 = hashlib.sha256(
+        ("\n".join(sorted(routes)) + "\n").encode("utf-8")
+    ).hexdigest()
+    if len(routes) != expected_count or actual_sha256 != expected_sha256:
+        raise ValueError(
+            "Manual Splice OpenAPI routes do not match the captured native-route baseline: "
+            f"expected {expected_count} routes/{expected_sha256}, got "
+            f"{len(routes)} routes/{actual_sha256}"
+        )
+
+
 def openapi_operation_page_refs(spec: dict[str, Any]) -> list[str]:
     paths = spec.get("paths")
     if not isinstance(paths, dict):
@@ -497,33 +757,164 @@ def openapi_operation_page_refs(spec: dict[str, Any]) -> list[str]:
     return refs
 
 
-def build_splice_openapi_nav_entry(*, docs_root: Path, spec: dict[str, Any]) -> dict[str, Any]:
+def manual_api_server(spec: dict[str, Any]) -> str:
+    servers = spec.get("servers")
+    if isinstance(servers, list):
+        for server in servers:
+            if isinstance(server, dict):
+                url = server.get("url")
+                if isinstance(url, str) and url.strip():
+                    return url.strip()
+    return "https://example.com"
+
+
+def operation_authentication(
+    *,
+    spec: dict[str, Any],
+    operation: dict[str, Any],
+) -> tuple[str | None, str | None]:
+    security = operation.get("security", spec.get("security"))
+    if security is None or security == []:
+        return None, None
+    if not isinstance(security, list):
+        raise ValueError("OpenAPI operation security must be a list")
+    if any(requirement == {} for requirement in security):
+        return None, None
+
+    components = spec.get("components")
+    schemes = (
+        components.get("securitySchemes") if isinstance(components, dict) else None
+    )
+    if not isinstance(schemes, dict):
+        raise ValueError("Secured OpenAPI operation does not define securitySchemes")
+    for requirement in security:
+        if not isinstance(requirement, dict):
+            continue
+        for scheme_name in requirement:
+            scheme = schemes.get(scheme_name)
+            if not isinstance(scheme, dict):
+                continue
+            if (
+                scheme.get("type") == "http"
+                and str(scheme.get("scheme")).lower() == "bearer"
+            ):
+                return "bearer", "Bearer token"
+    raise ValueError(
+        "Manual Splice OpenAPI rendering currently supports public or HTTP bearer operations"
+    )
+
+
+def prepare_manual_output_directories(
+    *, docs_root: Path, families: list[dict[str, Any]]
+) -> None:
+    for family in families:
+        for spec_config in family["specs"]:
+            output_dir = docs_root / spec_config["directory"]
+            if output_dir.exists():
+                shutil.rmtree(output_dir)
+            output_dir.mkdir(parents=True, exist_ok=True)
+
+
+def write_manual_operation_pages(
+    *,
+    docs_json_path: Path,
+    families: list[dict[str, Any]],
+    snapshots: dict[str, dict[str, dict[str, Any]]],
+    release_versions: list[str],
+    publish_version: str,
+    source_name: str,
+) -> set[Path]:
+    docs_root = docs_json_path.parent
+    prepare_manual_output_directories(docs_root=docs_root, families=families)
+    written: set[Path] = set()
+    for family in families:
+        for spec_config in family["specs"]:
+            filename = spec_config["filename"]
+            specs_by_version = snapshots[filename]
+            versions = [
+                version for version in release_versions if version in specs_by_version
+            ]
+            if publish_version not in specs_by_version:
+                raise ValueError(
+                    f"Enabled spec {filename} is absent from publish version {publish_version}"
+                )
+            published = specs_by_version[publish_version]
+            server = manual_api_server(published)
+            raw_spec_href = f"/{spec_config['source']}"
+            for method, path, operation in operation_items(published):
+                page_ref = manual_operation_page_ref(
+                    directory=spec_config["directory"],
+                    method=method,
+                    path=path,
+                )
+                auth_method, authentication_label = operation_authentication(
+                    spec=published,
+                    operation=operation,
+                )
+                history_events = operation_history_events(
+                    specs_by_version=specs_by_version,
+                    versions=versions,
+                    publish_version=publish_version,
+                    method=method,
+                    path=path,
+                    source_name=f"{source_name}: {filename}",
+                )
+                page = render_manual_openapi_operation(
+                    spec=published,
+                    options=ManualOpenAPIRenderOptions(
+                        method=method,
+                        path=path,
+                        output_path=f"{page_ref}.mdx",
+                        server=server,
+                        surface_label=spec_config["nav_label"],
+                        auth_method=auth_method,
+                        authentication_label=authentication_label,
+                        raw_spec_href=raw_spec_href,
+                    ),
+                    history_events=history_events,
+                    publish_version=publish_version,
+                )
+                output_path = docs_root / f"{page_ref}.mdx"
+                write_page(page, output_path)
+                written.add(output_path.resolve())
+                print(f"Generated manual Splice OpenAPI page: {output_path}")
+    return written
+
+
+def build_splice_openapi_nav_entry(
+    *, docs_root: Path, spec: dict[str, Any]
+) -> dict[str, Any]:
     openapi_path = docs_root / spec["source"]
     payload = yaml.safe_load(openapi_path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
         raise ValueError(f"Expected OpenAPI spec to parse as an object: {openapi_path}")
     entry: dict[str, Any] = {
         "group": spec["nav_label"],
-        "openapi": {
-            "source": spec["source"],
-            "directory": spec["directory"],
-        },
-        "pages": openapi_operation_page_refs(payload),
+        "pages": manual_operation_page_refs(
+            spec=payload,
+            directory=spec["directory"],
+        ),
     }
     return entry
 
 
-def build_splice_group_pages(*, docs_root: Path, families: list[dict[str, Any]]) -> list[Any]:
+def build_splice_group_pages(
+    *, docs_root: Path, families: list[dict[str, Any]]
+) -> list[Any]:
     pages: list[Any] = []
     for family in families:
         family_pages: list[dict[str, Any]] = []
         for spec in family["specs"]:
-            family_pages.append(build_splice_openapi_nav_entry(docs_root=docs_root, spec=spec))
+            family_pages.append(
+                build_splice_openapi_nav_entry(docs_root=docs_root, spec=spec)
+            )
         pages.append({"group": family["group"], "pages": family_pages})
     return pages
 
 
-def navigation_pages(payload: dict[str, Any], dropdown_label: str, docs_json_path: Path) -> list[Any]:
+def navigation_pages(
+    payload: dict[str, Any], dropdown_label: str, docs_json_path: Path
+) -> list[Any]:
     navigation = payload.get("navigation")
     if not isinstance(navigation, dict):
         raise ValueError(f"docs.json missing navigation object: {docs_json_path}")
@@ -531,7 +922,11 @@ def navigation_pages(payload: dict[str, Any], dropdown_label: str, docs_json_pat
     dropdowns = navigation.get("dropdowns")
     if isinstance(dropdowns, list):
         dropdown = next(
-            (item for item in dropdowns if isinstance(item, dict) and item.get("dropdown") == dropdown_label),
+            (
+                item
+                for item in dropdowns
+                if isinstance(item, dict) and item.get("dropdown") == dropdown_label
+            ),
             None,
         )
         if dropdown is None:
@@ -544,7 +939,11 @@ def navigation_pages(payload: dict[str, Any], dropdown_label: str, docs_json_pat
     products = navigation.get("products")
     if isinstance(products, list):
         product = next(
-            (item for item in products if isinstance(item, dict) and item.get("product") == dropdown_label),
+            (
+                item
+                for item in products
+                if isinstance(item, dict) and item.get("product") == dropdown_label
+            ),
             None,
         )
         if product is None:
@@ -554,10 +953,14 @@ def navigation_pages(payload: dict[str, Any], dropdown_label: str, docs_json_pat
             raise ValueError(f"Product does not expose a pages list: {dropdown_label}")
         return pages
 
-    raise ValueError(f"docs.json navigation must define dropdowns or products: {docs_json_path}")
+    raise ValueError(
+        f"docs.json navigation must define dropdowns or products: {docs_json_path}"
+    )
 
 
-def merge_splice_group_pages(*, existing_pages: list[Any], generated_pages: list[Any]) -> list[Any]:
+def merge_splice_group_pages(
+    *, existing_pages: list[Any], generated_pages: list[Any]
+) -> list[Any]:
     generated_group_labels = {
         item["group"]
         for item in generated_pages
@@ -588,7 +991,9 @@ def update_docs_navigation(
     if insert_after_group is not None and not isinstance(insert_after_group, str):
         raise ValueError("insert_after_group must be a string when set")
     enabled_specs = enabled_nav_specs(source_config)
-    navigation_families = filtered_families_for_navigation(families=families, enabled_specs=enabled_specs)
+    navigation_families = filtered_families_for_navigation(
+        families=families, enabled_specs=enabled_specs
+    )
 
     pages = navigation_pages(payload, dropdown_label, docs_json_path)
 
@@ -612,7 +1017,9 @@ def update_docs_navigation(
                 insert_at = index + 1
                 break
 
-    generated_pages = build_splice_group_pages(docs_root=docs_json_path.parent, families=navigation_families)
+    generated_pages = build_splice_group_pages(
+        docs_root=docs_json_path.parent, families=navigation_families
+    )
     if existing_top_group_pages is not None:
         generated_pages = merge_splice_group_pages(
             existing_pages=existing_top_group_pages,
@@ -630,8 +1037,9 @@ def update_docs_navigation(
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Publish the latest configured Splice OpenAPI specs into docs-main/openapi so Mintlify can "
-            "render them natively, and wire any enabled spec groups into docs.json."
+            "Publish configured Splice OpenAPI specs into docs-main/openapi, generate "
+            "checked-in manual operation pages with release history, and wire enabled "
+            "spec groups into docs.json."
         )
     )
     parser.add_argument("--source-config", default=str(DEFAULT_SOURCE_CONFIG))
@@ -658,19 +1066,34 @@ def main() -> int:
     args = parse_args()
     source_config = load_json(Path(args.source_config).resolve())
     include_versions = set(args.version) if args.version else None
-    releases = selected_releases(source_config=source_config, include_versions=include_versions)
+    releases = selected_releases(
+        source_config=source_config, include_versions=include_versions
+    )
     publish_release = resolve_publish_release(
         source_config=source_config,
         releases=releases,
         requested_version=args.publish_version,
     )
+    cache_dir = Path(args.cache_dir).resolve()
     archive = ensure_archive(
-        cache_dir=Path(args.cache_dir).resolve(),
+        cache_dir=cache_dir,
         release=publish_release,
         force_refresh=args.force_refresh,
     )
     families = normalized_families(source_config)
-    spec_filenames = {spec["filename"] for family in families for spec in family["specs"]}
+    enabled_specs = enabled_nav_specs(source_config)
+    validate_excluded_specs(
+        source_config=source_config,
+        families=families,
+        enabled_specs=enabled_specs,
+    )
+    navigation_families = filtered_families_for_navigation(
+        families=families,
+        enabled_specs=enabled_specs,
+    )
+    spec_filenames = {
+        spec["filename"] for family in families for spec in family["specs"]
+    }
     spec_bytes = extract_spec_bytes(archive=archive, spec_filenames=spec_filenames)
 
     docs_json_path = Path(args.docs_json).resolve()
@@ -680,6 +1103,31 @@ def main() -> int:
         source_config=source_config,
         families=families,
         spec_bytes=spec_bytes,
+    )
+    enabled_filenames = {
+        spec["filename"] for family in navigation_families for spec in family["specs"]
+    }
+    snapshots = versioned_enabled_specs(
+        cache_dir=cache_dir,
+        releases=releases,
+        spec_filenames=enabled_filenames,
+        force_refresh=args.force_refresh,
+    )
+    validate_manual_route_baseline(
+        source_config,
+        families=navigation_families,
+        snapshots=snapshots,
+        publish_version=publish_release["version"],
+    )
+    write_manual_operation_pages(
+        docs_json_path=docs_json_path,
+        families=navigation_families,
+        snapshots=snapshots,
+        release_versions=[release["version"] for release in releases],
+        publish_version=publish_release["version"],
+        source_name=str(
+            source_config.get("source") or "Splice OpenAPI release bundle snapshots"
+        ),
     )
     cleanup_legacy_outputs(docs_root=docs_root, source_config=source_config)
     update_docs_navigation(
