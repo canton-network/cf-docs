@@ -427,6 +427,27 @@ UPDATE_TARGETS = (
         ),
     ),
     UpdateTarget(
+        key="canton-topology-proto-link",
+        title="Update Canton topology.proto link",
+        branch="generated-docs/canton-topology-proto-link/update",
+        description=(
+            "Resolves the latest stable digital-asset/canton release, derives the matching "
+            "release-line branch URL for topology.proto, verifies the URL is reachable, and "
+            "updates the generated MDX export used by the topology reference page."
+        ),
+        generate_commands=(
+            ("nix-shell", "--run", "npm run generate:canton-topology-proto-link"),
+        ),
+        paths=("docs-main/snippets/generated/canton-topology-proto-link.mdx",),
+        summary_kind="static",
+        summary_path=None,
+        summary_label=None,
+        validation=(
+            "npm run generate:canton-topology-proto-link",
+            "git diff --check",
+        ),
+    ),
+    UpdateTarget(
         key="canton-release-notes",
         title="Update Canton release notes",
         branch="release-notes/canton/update",
