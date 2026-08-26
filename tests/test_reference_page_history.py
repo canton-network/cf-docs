@@ -232,3 +232,39 @@ def test_manual_openapi_lifecycle_badges_hydrate_into_the_native_header() -> Non
     assert "header.insertBefore(hydrated, mobileContextMenu || null);" in script
     assert "new MutationObserver(scheduleManualApiHeaderBadgeSync)" in script
     assert "body:has(#x2mdx-ref-api-header-badges)" in styles
+
+
+def test_shared_reference_colors_match_the_approved_design_tokens() -> None:
+    styles = (Path(__file__).parents[1] / "docs-main" / "styles.css").read_text(
+        encoding="utf-8"
+    )
+
+    expected_tokens = {
+        "--x2mdx-ref-canvas: #F6F8FB;",
+        "--x2mdx-ref-sidebar: #FBFCFD;",
+        "--x2mdx-ref-surface: #FFFFFF;",
+        "--x2mdx-ref-text-strong: #11131A;",
+        "--x2mdx-ref-text: #252937;",
+        "--x2mdx-ref-text-muted: #6B7280;",
+        "--x2mdx-ref-accent-soft: #F3EEFF;",
+        "--x2mdx-ref-info: #1D4ED8;",
+        "--x2mdx-ref-info-soft: #EDF5FF;",
+        "--x2mdx-ref-success: #15803D;",
+        "--x2mdx-ref-success-soft: #ECFBF0;",
+        "--x2mdx-ref-danger: #B91C1C;",
+        "--x2mdx-ref-danger-soft: #FFF1F1;",
+        "--x2mdx-ref-warning-soft: #FFF8E4;",
+    }
+
+    assert expected_tokens <= {line.strip() for line in styles.splitlines()}
+    assert (
+        "body:has(.x2mdx-ref-page):not(:has(.x2mdx-ref-page--manual-api)) "
+        "#background-color"
+    ) in styles
+    assert (
+        "body:has(.x2mdx-ref-page):not(:has(.x2mdx-ref-page--manual-api)) "
+        "#navbar"
+    ) in styles
+    assert "background: var(--x2mdx-ref-success-soft);" in styles
+    assert "background: var(--x2mdx-ref-info-soft);" in styles
+    assert "background: var(--x2mdx-ref-danger-soft);" in styles
