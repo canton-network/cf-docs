@@ -24,7 +24,7 @@ The headers used to extract the client IP are configured through the ordered lis
 <Warning>
 The default headers (`x-forwarded-for`, `x-real-ip`) are client-controlled and can be spoofed. A client rotating the header value bypasses per-client-IP limits entirely.
 
-Every SV operator must therefore either configure their ingress to **overwrite** (not append to) the header the apps read, or point `client-ip-headers` at a header the client cannot influence. With an Istio/Envoy ingress the recommended value is the non-spoofable `x-envoy-external-address`. Make sure the number of trusted XFF hops on your gateway matches your actual topology, so Envoy derives the real client IP.
+The default value for rate-limiting.client-ip-headers is set to ["x-forwarded-for", "x-real-ip"] as a convenience trade-off. Every SV operator must configure set rate-limiting.client-ip-headers to the header fully controlled (rewritten, not passed through or appended to) by their ingress. For example ["x-forwarded-for"] or ["x-envoy-external-address"].
 </Warning>
 
 ```hocon
@@ -49,6 +49,7 @@ Similar to the sequencer traffic caps configuration, a shared rate limiter confi
 ### Requirements
 
 The following infrastructure level rate limits should be configured. These limits should apply individually to the Scan API and the sequencer gRPC API.
+These limits should be higher than the application level limits, and work as a last line of defense.
 
 - **Global limits**: a cap on the total request rate reaching a given service.
 - **Per-source-IP limits**: a cap on the request rate of a single client IP, so a single client cannot consume the global budget.
@@ -57,7 +58,7 @@ The following infrastructure level rate limits should be configured. These limit
 
 Both limits must be enforced over a **fixed window of 60 seconds**. A client is allowed at most `limit` requests per 60s window; once the budget for the current window is exhausted, all further requests from that client (or, for the global limit, to that service) are rejected with `429 Too Many Requests` until the window rolls over.
 
-For the sequencer, limits must be applied to gRPC(HTTP/2) traffic requests.
+For the sequencer, limits must be applied to gRPC(HTTP/2) traffic.
 
 ### Optional: fine-grained custom limits
 
@@ -66,4 +67,4 @@ Beyond the global and per-IP limits above, operators are encouraged to keep the 
 
 ### Shared rate limiter configuration
 
-The same shared rate limiter configuration file that defines application-level overrides will also define a number of infrastructure level configurations (global and per-IP limits, the 60s rate limiting interval, per IP overrides, and any ban thresholds) that should be applied to the ingress by the SV operator.
+The same shared rate limiter configuration file that defines application-level overrides will also define a number of infrastructure level configurations (global and per-IP limits, the 60s rate limiting interval, per IP overrides, and any ban thresholds) that represent suggested configurations that the SVs should apply to the infra level rate limits.
