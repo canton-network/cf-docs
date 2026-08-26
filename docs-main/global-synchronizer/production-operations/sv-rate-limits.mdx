@@ -4,7 +4,7 @@ sidebarTitle: "SV Rate Limits"
 description: "Rate limiting requirements for Super Validator nodes"
 ---
 
-SV nodes must protect their HTTP and gRPC endpoints against excessive load with two complementary layers:
+SV nodes protect their HTTP and gRPC endpoints against excessive load with two complementary layers:
 
 1.  **Application-level rate limits**, enforced by the SV app, the Scan app and the sequencer. They are enabled by default and values are tuned based on observed traffic patterns. Temporary overrides can be applied by the operators to react to unexpected traffic spikes.
 2.  **Infrastructure-level rate limits**, enforced by your network infrastructure. These are not shipped with Splice and **must** be configured by every SV operator.
@@ -40,13 +40,13 @@ Similar to the sequencer traffic caps configuration, a shared rate limiter confi
 
 #### Monitoring
 
-- `splice_splice_rate_limiting` — metrics prefix that identifies the rate limiting metrics.
+- `splice_rate_limiting` — metrics prefix that identifies the rate limiting metrics.
 
 ## Infrastructure-level rate limits
 
 ### Requirements
 
-The following infrastructure level rate limits should be configured. These limits should apply individually to the Scan API, public SV app endpoints and the sequencer gRPC API.
+The following infrastructure level rate limits should be configured. These limits should apply individually to the Scan API and the sequencer gRPC API.
 
 - **Global limits**: a cap on the total request rate reaching a given service.
 - **Per-source-IP limits**: a cap on the request rate of a single client IP, so a single client cannot consume the global budget.
@@ -56,10 +56,6 @@ The following infrastructure level rate limits should be configured. These limit
 Both limits must be enforced over a **fixed window of 60 seconds**. A client is allowed at most `limit` requests per 60s window; once the budget for the current window is exhausted, all further requests from that client (or, for the global limit, to that service) are rejected with `429 Too Many Requests` until the window rolls over.
 
 For the sequencer, limits must be applied to gRPC traffic requests.
-
-### Optional: banning aggressively retrying clients
-
-Clients that ignore `429` responses and immediately retry keep consuming ingress capacity even though every request is rejected. Operators are therefore encouraged to additionally **ban clients that retry too quickly**.
 
 ### Optional: fine-grained custom limits
 
