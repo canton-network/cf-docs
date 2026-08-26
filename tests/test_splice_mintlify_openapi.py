@@ -43,6 +43,36 @@ def test_splice_openapi_release_requests_use_github_token(monkeypatch) -> None:
     }
 
 
+def test_splice_openapi_publish_defaults_to_latest_selected_release() -> None:
+    module = load_script_module("generate_splice_mintlify_openapi.py")
+    releases = [
+        {"version": "0.5.10"},
+        {"version": "0.6.14"},
+        {"version": "0.7.4"},
+    ]
+
+    assert module.resolve_publish_release(
+        source_config={},
+        releases=releases,
+        requested_version=None,
+    ) == {"version": "0.7.4"}
+
+
+def test_splice_openapi_publish_allows_explicit_historical_override() -> None:
+    module = load_script_module("generate_splice_mintlify_openapi.py")
+    releases = [
+        {"version": "0.5.10"},
+        {"version": "0.6.14"},
+        {"version": "0.7.4"},
+    ]
+
+    assert module.resolve_publish_release(
+        source_config={},
+        releases=releases,
+        requested_version="0.6.14",
+    ) == {"version": "0.6.14"}
+
+
 def test_splice_openapi_rewrites_scan_server_examples(tmp_path: Path) -> None:
     module = load_script_module("generate_splice_mintlify_openapi.py")
     spec_bytes = b"""openapi: 3.0.0
