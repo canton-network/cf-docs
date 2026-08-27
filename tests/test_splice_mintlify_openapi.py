@@ -7,6 +7,12 @@ import sys
 from pathlib import Path
 from types import ModuleType
 
+from x2mdx.history import (
+    VersionSelectionPolicy,
+    load_history_report,
+    validate_history_report,
+)
+
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -43,6 +49,32 @@ def test_splice_openapi_release_requests_use_github_token(monkeypatch) -> None:
     }
 
 
+def test_checked_in_splice_history_report_is_valid_and_retains_removed_operations() -> (
+    None
+):
+    report = load_history_report(
+        REPO_ROOT / "docs-main" / "openapi" / "splice" / "history-report.json"
+    )
+
+    validate_history_report(report)
+
+    assert report.surface_id == "splice-openapi"
+    assert report.version_policy == VersionSelectionPolicy.LATEST_SELECTED_RELEASE
+    assert report.comparison_versions[0] == "0.5.10"
+    assert report.comparison_versions[-1] == report.publish_version
+    assert tuple(artifact.version for artifact in report.source_artifacts) == (
+        report.comparison_versions
+    )
+    assert len(report.current_items()) == 121
+    assert any(not item.current_present for item in report.items)
+    assert all(item.route is None for item in report.items if not item.current_present)
+    assert all(
+        (REPO_ROOT / "docs-main" / f"{item.route.removeprefix('/')}.mdx").is_file()
+        for item in report.current_items()
+        if item.route is not None
+    )
+
+
 def test_splice_openapi_publish_defaults_to_latest_selected_release() -> None:
     module = load_script_module("generate_splice_mintlify_openapi.py")
     releases = [
@@ -71,6 +103,23 @@ def test_splice_openapi_publish_allows_explicit_historical_override() -> None:
         releases=releases,
         requested_version="0.6.14",
     ) == {"version": "0.6.14"}
+
+
+def test_splice_openapi_history_window_ends_at_historical_publish_override() -> None:
+    module = load_script_module("generate_splice_mintlify_openapi.py")
+    releases = [
+        {"version": "0.5.10"},
+        {"version": "0.6.14"},
+        {"version": "0.7.4"},
+    ]
+
+    assert module.comparison_releases_through_publish(
+        releases=releases,
+        publish_version="0.6.14",
+    ) == [
+        {"version": "0.5.10"},
+        {"version": "0.6.14"},
+    ]
 
 
 def test_splice_openapi_rewrites_scan_server_examples(tmp_path: Path) -> None:
@@ -206,25 +255,42 @@ def test_splice_manual_pages_rely_on_mintlify_navigation_breadcrumbs(
     }
     docs_json = tmp_path / "docs-main" / "docs.json"
 
+    families = [
+        {
+            "group": "Scan APIs",
+            "specs": [
+                {
+                    "filename": "scan.yaml",
+                    "nav_label": "Scan API",
+                    "source": "openapi/splice/scan/scan.yaml",
+                    "directory": "reference/splice-scan-api",
+                }
+            ],
+        }
+    ]
+    snapshots = {"scan.yaml": {"0.7.4": spec}}
+    releases = [
+        {
+            "version": "0.7.4",
+            "tag": "v0.7.4",
+            "asset_name": "0.7.4_openapi.tar.gz",
+            "download_url": "https://example.com/0.7.4_openapi.tar.gz",
+        }
+    ]
+    history_report = module.build_splice_history_report(
+        source_config={},
+        families=families,
+        snapshots=snapshots,
+        releases=releases,
+        publish_version="0.7.4",
+    )
+
     written = module.write_manual_operation_pages(
         docs_json_path=docs_json,
-        families=[
-            {
-                "group": "Scan APIs",
-                "specs": [
-                    {
-                        "filename": "scan.yaml",
-                        "nav_label": "Scan API",
-                        "source": "openapi/splice/scan/scan.yaml",
-                        "directory": "reference/splice-scan-api",
-                    }
-                ],
-            }
-        ],
-        snapshots={"scan.yaml": {"0.7.4": spec}},
-        release_versions=["0.7.4"],
+        families=families,
+        snapshots=snapshots,
         publish_version="0.7.4",
-        source_name="test fixtures",
+        history_report=history_report,
     )
 
     assert len(written) == 1
