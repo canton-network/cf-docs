@@ -1,0 +1,317 @@
+---
+title: "Create an offer to directly transfer a given amount of Amulet to another party"
+api: "POST https://example.com/api/validator/v0/wallet/transfer-offers"
+authMethod: "bearer"
+playground: "interactive"
+---
+
+<div class="x2mdx-ref-page x2mdx-ref-page--operation x2mdx-ref-page--manual-api"></div>
+
+
+
+<div class="x2mdx-ref-hero">
+
+  <p class="x2mdx-ref-eyebrow">Wallet API (External)</p>
+
+
+  <h1 class="x2mdx-ref-title">Create an offer to directly transfer a given amount of Amulet to another party</h1>
+
+
+
+<div class="x2mdx-ref-badges">
+
+  <span class="x2mdx-ref-badge x2mdx-ref-badge--protocol">OpenAPI</span>
+
+  <a class="x2mdx-ref-badge x2mdx-ref-badge--added" href="#history-added-0-5-10">Added 0.5.10</a>
+
+</div>
+
+
+</div>
+
+Create an offer to directly transfer a given amount of Amulet to another party. Direct transfers are a three-step process: 1. The sender creates a transfer offer 2. The receiver accepts the offer 3. The sender's wallet automation consumes the accepted offer and transfers the amount. Amulets are not locked for direct transfers. If the sender's wallet does not have enough Amulet to fulfill the offer at this point, the transfer will fail.
+
+## Protocol Details
+
+
+
+<div class="x2mdx-ref-meta-grid">
+
+  <div class="x2mdx-ref-meta-item">
+    <span class="x2mdx-ref-meta-label">Operation ID</span>
+    <span class="x2mdx-ref-meta-value">createTransferOffer</span>
+  </div>
+
+  <div class="x2mdx-ref-meta-item">
+    <span class="x2mdx-ref-meta-label">Authentication</span>
+    <span class="x2mdx-ref-meta-value">Bearer token</span>
+  </div>
+
+  <div class="x2mdx-ref-meta-item">
+    <span class="x2mdx-ref-meta-label">Published</span>
+    <span class="x2mdx-ref-meta-value">0.7.5</span>
+  </div>
+
+  <div class="x2mdx-ref-meta-item">
+    <span class="x2mdx-ref-meta-label">Specification</span>
+    <span class="x2mdx-ref-meta-value"><a href="/openapi/splice/validator/wallet-external.yaml">Download OpenAPI</a></span>
+  </div>
+
+</div>
+
+
+
+## Inputs
+
+
+
+### Request body
+
+
+<div class="x2mdx-ref-badges">
+
+  <span class="x2mdx-ref-badge x2mdx-ref-badge--neutral">application/json</span>
+
+</div>
+
+
+
+
+
+
+<ParamField body="receiver_party_id" type="string" required>
+
+The party id of the receiver.
+</ParamField>
+
+
+
+<ParamField body="amount" type="string" required>
+
+The amount of Amulet to transfer.
+</ParamField>
+
+
+
+<ParamField body="description" type="string" required>
+
+An arbitrary, user chosen text. This should be a human readable string that describes the purpose of the transfer. It will be shown to the receiver when they decide whether to accept the offer.
+</ParamField>
+
+
+
+<ParamField body="expires_at" type="number" required>
+OpenAPI type: `integer (int64)`.
+
+
+Expiry time of the transfer offer as unix timestamp in microseconds. After this time, the offer can no longer be accepted and automation in the wallet will eventually expire the transfer offer. Note that this time is compared against the ledger effective time of the Daml transaction accepting or expiring an offer, and can skew from the wall clock time measured on the caller&#x27;s machine. See https://docs.daml.com/concepts/time.html for how ledger effective time is bound to the record time of a transaction on a domain.
+</ParamField>
+
+
+
+<ParamField body="tracking_id" type="string" required>
+
+Tracking id to support exactly once submission. Once submitted, all successive calls with the same tracking id will get rejected with a 409 or 429 status code unless the command fails and the offer did not get created. Clients should create a fresh tracking id when they try to create a new transfer offer. If that command submission fails with a retryable error or the application crashed and got restarted, successive command submissions must reuse the same tracking id to ensure they don&#x27;t create the same offer multiple times.
+</ParamField>
+
+
+
+
+
+
+
+
+
+## Outputs
+
+
+
+### 200
+
+
+<div class="x2mdx-ref-badges">
+
+  <span class="x2mdx-ref-badge x2mdx-ref-badge--neutral">application/json</span>
+
+</div>
+
+
+
+
+
+
+<ResponseField name="offer_contract_id" type="string" required />
+
+
+
+
+
+
+
+
+
+### 400
+
+
+<div class="x2mdx-ref-badges">
+
+  <span class="x2mdx-ref-badge x2mdx-ref-badge--neutral">application/json</span>
+
+</div>
+
+
+
+
+
+
+<ResponseField name="error" type="string" required />
+
+
+
+
+
+
+
+
+
+### 404
+
+
+<div class="x2mdx-ref-badges">
+
+  <span class="x2mdx-ref-badge x2mdx-ref-badge--neutral">application/json</span>
+
+</div>
+
+
+
+
+
+
+<ResponseField name="error" type="string" required />
+
+
+
+
+
+
+
+
+
+### 409
+
+
+<div class="x2mdx-ref-badges">
+
+  <span class="x2mdx-ref-badge x2mdx-ref-badge--neutral">application/json</span>
+
+</div>
+
+
+
+
+
+
+<ResponseField name="error" type="string" required />
+
+
+
+
+
+
+
+
+
+### 429
+
+
+<div class="x2mdx-ref-badges">
+
+  <span class="x2mdx-ref-badge x2mdx-ref-badge--neutral">application/json</span>
+
+</div>
+
+
+
+
+
+
+<ResponseField name="error" type="string" required />
+
+
+
+
+
+
+
+
+
+### 500
+
+
+<div class="x2mdx-ref-badges">
+
+  <span class="x2mdx-ref-badge x2mdx-ref-badge--neutral">application/json</span>
+
+</div>
+
+
+
+
+
+
+<ResponseField name="error" type="string" required />
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## History
+
+<div class="x2mdx-ref-history" aria-label="Reference history">
+
+  <div class="x2mdx-ref-history-event x2mdx-ref-history-event--introduced" id="history-added-0-5-10">
+    <div class="x2mdx-ref-history-event-head">
+      <span class="x2mdx-ref-history-event-label">Added</span>
+      <code class="x2mdx-ref-history-event-version">0.5.10</code>
+    </div>
+
+  </div>
+
+</div>
+
+
+
+
+<RequestExample>
+
+```bash Request
+curl --request POST \
+  --url 'https://example.com/api/validator/v0/wallet/transfer-offers' \
+  --header 'Authorization: Bearer $TOKEN' \
+  --header 'Content-Type: application/json' \
+  --data '{"receiver_party_id":"string","amount":"string","description":"string","expires_at":0,"tracking_id":"string"}'
+```
+
+</RequestExample>
+
+
+<ResponseExample>
+
+```json 200 response
+{
+  "offer_contract_id": "string"
+}
+```
+
+</ResponseExample>

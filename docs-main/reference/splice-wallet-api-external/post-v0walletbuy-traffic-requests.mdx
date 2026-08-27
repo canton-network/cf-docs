@@ -1,0 +1,295 @@
+---
+title: "Create a request to buy traffic"
+api: "POST https://example.com/api/validator/v0/wallet/buy-traffic-requests"
+authMethod: "bearer"
+playground: "interactive"
+---
+
+<div class="x2mdx-ref-page x2mdx-ref-page--operation x2mdx-ref-page--manual-api"></div>
+
+
+
+<div class="x2mdx-ref-hero">
+
+  <p class="x2mdx-ref-eyebrow">Wallet API (External)</p>
+
+
+  <h1 class="x2mdx-ref-title">Create a request to buy traffic</h1>
+
+
+
+<div class="x2mdx-ref-badges">
+
+  <span class="x2mdx-ref-badge x2mdx-ref-badge--protocol">OpenAPI</span>
+
+  <a class="x2mdx-ref-badge x2mdx-ref-badge--added" href="#history-added-0-5-10">Added 0.5.10</a>
+
+</div>
+
+
+</div>
+
+Create a request to buy traffic. Note that this only creates the request to do so. Refer to the status endpoint to check if the request succeeded.
+
+## Protocol Details
+
+
+
+<div class="x2mdx-ref-meta-grid">
+
+  <div class="x2mdx-ref-meta-item">
+    <span class="x2mdx-ref-meta-label">Operation ID</span>
+    <span class="x2mdx-ref-meta-value">createBuyTrafficRequest</span>
+  </div>
+
+  <div class="x2mdx-ref-meta-item">
+    <span class="x2mdx-ref-meta-label">Authentication</span>
+    <span class="x2mdx-ref-meta-value">Bearer token</span>
+  </div>
+
+  <div class="x2mdx-ref-meta-item">
+    <span class="x2mdx-ref-meta-label">Published</span>
+    <span class="x2mdx-ref-meta-value">0.7.5</span>
+  </div>
+
+  <div class="x2mdx-ref-meta-item">
+    <span class="x2mdx-ref-meta-label">Specification</span>
+    <span class="x2mdx-ref-meta-value"><a href="/openapi/splice/validator/wallet-external.yaml">Download OpenAPI</a></span>
+  </div>
+
+</div>
+
+
+
+## Inputs
+
+
+
+### Request body
+
+
+<div class="x2mdx-ref-badges">
+
+  <span class="x2mdx-ref-badge x2mdx-ref-badge--neutral">application/json</span>
+
+</div>
+
+
+
+
+
+
+<ParamField body="receiving_validator_party_id" type="string" required>
+
+Traffic will be purchased for the validator hosting this party. If the party is hosted on multiple participants, the request will fail with 400 Bad Request.
+</ParamField>
+
+
+
+<ParamField body="domain_id" type="string" required>
+
+The domain to purchase traffic for.
+</ParamField>
+
+
+
+<ParamField body="traffic_amount" type="number" required>
+OpenAPI type: `integer (int64)`.
+
+
+traffic to purchase in bytes.
+</ParamField>
+
+
+
+<ParamField body="tracking_id" type="string" required>
+
+Tracking id to support exactly once submission. Once submitted, all succeessive calls with the same tracking id will get rejected with a 409 or 429 status code unless the command fails and the traffic did not get purchased. Clients should create a fresh tracking id when they try to send a new request to buy traffic. If that command submission fails with a retryable error or the application crashed and got restarted, successive command submissions must reuse the same tracking id to ensure they don&#x27;t purchase traffic multiple times.
+</ParamField>
+
+
+
+<ParamField body="expires_at" type="number" required>
+OpenAPI type: `integer (int64)`.
+
+
+Expiry time of the request to buy traffic as unix timestamp in microseconds. If the request does not succeed before this time, the wallet automation will reject and expire it. Note that this time is compared against the ledger effective time of the Daml transaction accepting or expiring an offer, and can skew from the wall clock time measured on the caller&#x27;s machine. See https://docs.daml.com/concepts/time.html for how ledger effective time is bound to the record time of a transaction on a domain.
+</ParamField>
+
+
+
+
+
+
+
+
+
+## Outputs
+
+
+
+### 200
+
+
+<div class="x2mdx-ref-badges">
+
+  <span class="x2mdx-ref-badge x2mdx-ref-badge--neutral">application/json</span>
+
+</div>
+
+
+
+
+
+
+<ResponseField name="request_contract_id" type="string" required />
+
+
+
+
+
+
+
+
+
+### 400
+
+
+<div class="x2mdx-ref-badges">
+
+  <span class="x2mdx-ref-badge x2mdx-ref-badge--neutral">application/json</span>
+
+</div>
+
+
+
+
+
+
+<ResponseField name="error" type="string" required />
+
+
+
+
+
+
+
+
+
+### 409
+
+
+<div class="x2mdx-ref-badges">
+
+  <span class="x2mdx-ref-badge x2mdx-ref-badge--neutral">application/json</span>
+
+</div>
+
+
+
+
+
+
+<ResponseField name="error" type="string" required />
+
+
+
+
+
+
+
+
+
+### 429
+
+
+<div class="x2mdx-ref-badges">
+
+  <span class="x2mdx-ref-badge x2mdx-ref-badge--neutral">application/json</span>
+
+</div>
+
+
+
+
+
+
+<ResponseField name="error" type="string" required />
+
+
+
+
+
+
+
+
+
+### 500
+
+
+<div class="x2mdx-ref-badges">
+
+  <span class="x2mdx-ref-badge x2mdx-ref-badge--neutral">application/json</span>
+
+</div>
+
+
+
+
+
+
+<ResponseField name="error" type="string" required />
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## History
+
+<div class="x2mdx-ref-history" aria-label="Reference history">
+
+  <div class="x2mdx-ref-history-event x2mdx-ref-history-event--introduced" id="history-added-0-5-10">
+    <div class="x2mdx-ref-history-event-head">
+      <span class="x2mdx-ref-history-event-label">Added</span>
+      <code class="x2mdx-ref-history-event-version">0.5.10</code>
+    </div>
+
+  </div>
+
+</div>
+
+
+
+
+<RequestExample>
+
+```bash Request
+curl --request POST \
+  --url 'https://example.com/api/validator/v0/wallet/buy-traffic-requests' \
+  --header 'Authorization: Bearer $TOKEN' \
+  --header 'Content-Type: application/json' \
+  --data '{"receiving_validator_party_id":"string","domain_id":"string","traffic_amount":0,"tracking_id":"string","expires_at":0}'
+```
+
+</RequestExample>
+
+
+<ResponseExample>
+
+```json 200 response
+{
+  "request_contract_id": "string"
+}
+```
+
+</ResponseExample>

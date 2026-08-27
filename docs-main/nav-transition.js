@@ -7,10 +7,13 @@
 
   var FADE_MS = 120;
   var SPINNER_FADE_IN_MS = 150;
+  var NAVIGATION_FALLBACK_MS = 1000;
+  var JSON_API_REFERENCE_PREFIX = "/reference/json-api-reference/";
   var TARGET_SELECTOR = "#content-area";
   var fadedOutFromClick = false;
   var spinnerElement = null;
   var contentCleanupTimer = null;
+  var navigationFallbackTimer = null;
 
   var style = document.createElement("style");
   style.textContent =
@@ -100,6 +103,37 @@
 
   function isPageNavigation(fromUrl, toUrl) {
     return getPagePath(fromUrl) !== getPagePath(toUrl);
+  }
+
+  function isJsonApiReferenceTransition(fromUrl, toUrl) {
+    return (
+      getPagePath(fromUrl).startsWith(JSON_API_REFERENCE_PREFIX) &&
+      getPagePath(toUrl).startsWith(JSON_API_REFERENCE_PREFIX)
+    );
+  }
+
+  function scheduleNavigationFallback(fromUrl, toUrl) {
+    if (!isJsonApiReferenceTransition(fromUrl, toUrl)) {
+      return;
+    }
+
+    if (navigationFallbackTimer) {
+      window.clearTimeout(navigationFallbackTimer);
+    }
+
+    var fromPath = getPagePath(fromUrl);
+    navigationFallbackTimer = window.setTimeout(function () {
+      navigationFallbackTimer = null;
+
+      // Mintlify can suppress the client-side transition from the overview to
+      // a manual API page at narrow breakpoints. Fall back to native navigation
+      // only when the click has left the browser on the original route.
+      if (window.location.pathname !== fromPath) {
+        return;
+      }
+
+      window.location.assign(toUrl);
+    }, NAVIGATION_FALLBACK_MS);
   }
 
   function prepareTransition(element) {
@@ -242,6 +276,7 @@
       }
 
       fadedOutFromClick = fadeOut();
+      scheduleNavigationFallback(window.location.href, url.href);
     },
     true
   );

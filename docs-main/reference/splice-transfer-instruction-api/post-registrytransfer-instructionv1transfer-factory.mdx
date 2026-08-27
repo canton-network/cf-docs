@@ -1,0 +1,236 @@
+---
+title: "Get the factory and choice context for executing a direct transfer"
+api: "POST https://example.com/registry/transfer-instruction/v1/transfer-factory"
+playground: "interactive"
+---
+
+<div class="x2mdx-ref-page x2mdx-ref-page--operation x2mdx-ref-page--manual-api"></div>
+
+
+
+<div class="x2mdx-ref-hero">
+
+  <p class="x2mdx-ref-eyebrow">Transfer Instruction API</p>
+
+
+  <h1 class="x2mdx-ref-title">Get the factory and choice context for executing a direct transfer</h1>
+
+
+
+<div class="x2mdx-ref-badges">
+
+  <span class="x2mdx-ref-badge x2mdx-ref-badge--protocol">OpenAPI</span>
+
+  <a class="x2mdx-ref-badge x2mdx-ref-badge--added" href="#history-added-0-5-10">Added 0.5.10</a>
+
+</div>
+
+
+</div>
+
+Get the factory and choice context for executing a direct transfer.
+
+## Protocol Details
+
+
+
+<div class="x2mdx-ref-meta-grid">
+
+  <div class="x2mdx-ref-meta-item">
+    <span class="x2mdx-ref-meta-label">Operation ID</span>
+    <span class="x2mdx-ref-meta-value">getTransferFactory</span>
+  </div>
+
+  <div class="x2mdx-ref-meta-item">
+    <span class="x2mdx-ref-meta-label">Published</span>
+    <span class="x2mdx-ref-meta-value">0.7.5</span>
+  </div>
+
+  <div class="x2mdx-ref-meta-item">
+    <span class="x2mdx-ref-meta-label">Specification</span>
+    <span class="x2mdx-ref-meta-value"><a href="/openapi/splice/token-standard/transfer-instruction-v1.yaml">Download OpenAPI</a></span>
+  </div>
+
+</div>
+
+
+
+## Inputs
+
+
+
+### Request body
+
+
+<div class="x2mdx-ref-badges">
+
+  <span class="x2mdx-ref-badge x2mdx-ref-badge--neutral">application/json</span>
+
+</div>
+
+
+
+
+
+
+<ParamField body="choiceArguments" type="object" required>
+
+The arguments that are intended to be passed to the choice provided by the factory. To avoid repeating the Daml type definitions, they are specified as JSON objects. However the concrete format is given by how the choice arguments are encoded using the Daml JSON API (with the `extraArgs.context` and `extraArgs.meta` fields set to the empty object). The choice arguments are provided so that the registry can also provide choice-argument specific contracts, e.g., the configuration for a specific instrument-id.
+</ParamField>
+
+
+
+<ParamField body="excludeDebugFields" type="boolean" default="False">
+
+If set to true, the response will not include fields prefixed with &#x27;debug&#x27;. Useful to save bandwidth.
+</ParamField>
+
+
+
+
+
+
+
+
+
+## Outputs
+
+
+
+### 200
+
+
+<div class="x2mdx-ref-badges">
+
+  <span class="x2mdx-ref-badge x2mdx-ref-badge--neutral">application/json</span>
+
+</div>
+
+
+
+
+
+
+<ResponseField name="factoryId" type="string" required>
+The contract ID of the contract implementing the factory interface.
+</ResponseField>
+
+
+
+<ResponseField name="transferKind" type="string" required>
+The kind of transfer workflow that will be used: * `offer`: offer a transfer to the receiver and only transfer if they accept * `direct`: transfer directly to the receiver without asking them for approval. Only chosen if the receiver has pre-approved direct transfers. * `self`: a self-transfer where the sender and receiver are the same party. No approval is required, and the transfer is typically immediate.
+</ResponseField>
+
+
+
+<ResponseField name="choiceContext" type="ChoiceContext" required>
+The context required to exercise a choice on a contract via an interface. Used to retrieve additional reference data that is passed in via disclosed contracts, which are in turn referred to via their contract ID in the `choiceContextData`.
+</ResponseField>
+
+
+
+
+
+
+
+
+
+### 400
+
+
+<div class="x2mdx-ref-badges">
+
+  <span class="x2mdx-ref-badge x2mdx-ref-badge--neutral">application/json</span>
+
+</div>
+
+
+
+
+
+
+<ResponseField name="error" type="string" required />
+
+
+
+
+
+
+
+
+
+### 404
+
+
+<div class="x2mdx-ref-badges">
+
+  <span class="x2mdx-ref-badge x2mdx-ref-badge--neutral">application/json</span>
+
+</div>
+
+
+
+
+
+
+<ResponseField name="error" type="string" required />
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## History
+
+<div class="x2mdx-ref-history" aria-label="Reference history">
+
+  <div class="x2mdx-ref-history-event x2mdx-ref-history-event--introduced" id="history-added-0-5-10">
+    <div class="x2mdx-ref-history-event-head">
+      <span class="x2mdx-ref-history-event-label">Added</span>
+      <code class="x2mdx-ref-history-event-version">0.5.10</code>
+    </div>
+
+  </div>
+
+</div>
+
+
+
+
+<RequestExample>
+
+```bash Request
+curl --request POST \
+  --url 'https://example.com/registry/transfer-instruction/v1/transfer-factory' \
+  --header 'Content-Type: application/json' \
+  --data '{"choiceArguments":{},"excludeDebugFields":false}'
+```
+
+</RequestExample>
+
+
+<ResponseExample>
+
+```json 200 response
+{
+  "factoryId": "string",
+  "transferKind": "self",
+  "choiceContext": {
+    "choiceContextData": {},
+    "disclosedContracts": [
+      {}
+    ]
+  }
+}
+```
+
+</ResponseExample>

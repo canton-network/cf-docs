@@ -1,0 +1,310 @@
+---
+title: "State active contracts page"
+api: "POST http://localhost:7575/v2/state/active-contracts-page"
+authMethod: "bearer"
+playground: "interactive"
+---
+
+<div class="x2mdx-ref-page x2mdx-ref-page--operation x2mdx-ref-page--manual-api"></div>
+
+
+
+<div class="x2mdx-ref-hero">
+
+  <p class="x2mdx-ref-eyebrow">JSON Ledger API</p>
+
+
+  <h1 class="x2mdx-ref-title">State active contracts page</h1>
+
+
+
+<div class="x2mdx-ref-badges">
+
+  <span class="x2mdx-ref-badge x2mdx-ref-badge--protocol">OpenAPI</span>
+
+  <a class="x2mdx-ref-badge x2mdx-ref-badge--added" href="#history-added-3-5">Added 3.5</a>
+
+</div>
+
+
+</div>
+
+Returns a page of the snapshot of the active contracts and incomplete (un)assignments at a ledger offset. Once all pages are fetched by repeated calls to ``GetActiveContractsPage``, the client SHOULD begin retrieving updates from the update service, starting at the ``GetActiveContractsPageResponse``.``active_at_offset`` specified in this request. Clients SHOULD NOT assume that the set of active contracts they receive reflects the state at the ledger end.
+
+## Protocol Details
+
+
+
+<div class="x2mdx-ref-meta-grid">
+
+  <div class="x2mdx-ref-meta-item">
+    <span class="x2mdx-ref-meta-label">Operation ID</span>
+    <span class="x2mdx-ref-meta-value">postV2StateActive-contracts-page</span>
+  </div>
+
+  <div class="x2mdx-ref-meta-item">
+    <span class="x2mdx-ref-meta-label">Authentication</span>
+    <span class="x2mdx-ref-meta-value">Bearer token</span>
+  </div>
+
+  <div class="x2mdx-ref-meta-item">
+    <span class="x2mdx-ref-meta-label">Published</span>
+    <span class="x2mdx-ref-meta-value">3.5</span>
+  </div>
+
+</div>
+
+
+
+## Inputs
+
+
+
+### Request body
+
+
+<div class="x2mdx-ref-badges">
+
+  <span class="x2mdx-ref-badge x2mdx-ref-badge--neutral">application/json</span>
+
+</div>
+
+
+
+
+
+
+<ParamField body="activeAtOffset" type="number">
+OpenAPI type: `integer (int64)`.
+
+
+The offset at which the snapshot of the active contracts will be computed. Must be no greater than the current ledger end offset. Must be greater than or equal to the last pruning offset. Optional, if defined, it must be a valid absolute offset (positive integer) or ledger begin offset (zero). If zero, the empty set will be returned. If not defined, the current ledger end will be used and it will be populated in the response. Optional
+</ParamField>
+
+
+
+<ParamField body="eventFormat" type="object" required>
+OpenAPI type: `EventFormat`.
+
+
+A format for events which defines both which events should be included and what data should be computed and included for them. Note that some of the filtering behavior depends on the `TransactionShape`, which is expected to be specified alongside usages of `EventFormat`.
+</ParamField>
+
+
+
+<ParamField body="maxPageSize" type="number">
+OpenAPI type: `integer (int32)`.
+
+
+The result page will contain at most max_page_size entries of the respective active contract snapshot. The server might reject max_page_size breaching the server-specified limit. Optional, if not defined, the default will be determined by the server. Optional
+</ParamField>
+
+
+
+<ParamField body="pageToken" type="string">
+
+To get the next page of the active contracts snapshot, the ``page_token`` should be set to the ``next_page_token`` of the last ``GetActiveContractsPageResponse``. The page token only works if subsequent requests: - are executed on the same participant, - use the same active_at_offset and event_format, - and the participant&#x27;s store was not pruned to after the active_at_offset. If not specified, the first page of the active contracts snapshot will be returned. Optional: can be empty
+</ParamField>
+
+
+
+
+
+
+
+
+
+## Outputs
+
+
+
+### 200
+
+
+<div class="x2mdx-ref-badges">
+
+  <span class="x2mdx-ref-badge x2mdx-ref-badge--neutral">application/json</span>
+
+</div>
+
+
+
+
+
+
+<ResponseField name="activeContracts" type="JsGetActiveContractsResponse[]" required>
+The collection of active contracts for this page response. Required: must be non-empty
+</ResponseField>
+
+
+
+<ResponseField name="activeAtOffset" type="integer (int64)" required>
+The active_at_offset which was specified in the request, or the calculated active_at_offset from the actual ledger end from at the evaluation of the request. Required
+</ResponseField>
+
+
+
+<ResponseField name="nextPageToken" type="string">
+If not present this is the last page. If present, this token must be used to get the next page. Optional: can be empty
+</ResponseField>
+
+
+
+
+
+
+
+
+
+### 400
+
+
+<div class="x2mdx-ref-badges">
+
+  <span class="x2mdx-ref-badge x2mdx-ref-badge--neutral">text/plain</span>
+
+</div>
+
+
+
+
+
+
+<ResponseField name="value" type="string" required />
+
+
+
+
+
+
+
+
+
+### default
+
+
+<div class="x2mdx-ref-badges">
+
+  <span class="x2mdx-ref-badge x2mdx-ref-badge--neutral">application/json</span>
+
+</div>
+
+
+
+
+
+
+<ResponseField name="code" type="string" required />
+
+
+
+<ResponseField name="cause" type="string" required />
+
+
+
+<ResponseField name="correlationId" type="string" />
+
+
+
+<ResponseField name="traceId" type="string" />
+
+
+
+<ResponseField name="context" type="Map_String" required />
+
+
+
+<ResponseField name="resources" type="Tuple2_String_String[]" />
+
+
+
+<ResponseField name="errorCategory" type="integer (int32)" required />
+
+
+
+<ResponseField name="grpcCodeValue" type="integer (int32)" />
+
+
+
+<ResponseField name="retryInfo" type="string" />
+
+
+
+<ResponseField name="definiteAnswer" type="boolean" />
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## History
+
+<div class="x2mdx-ref-history" aria-label="Reference history">
+
+  <div class="x2mdx-ref-history-event x2mdx-ref-history-event--introduced" id="history-added-3-5">
+    <div class="x2mdx-ref-history-event-head">
+      <span class="x2mdx-ref-history-event-label">Added</span>
+      <code class="x2mdx-ref-history-event-version">3.5</code>
+    </div>
+
+  </div>
+
+</div>
+
+
+
+
+<RequestExample>
+
+```bash Request
+curl --request POST \
+  --url 'http://localhost:7575/v2/state/active-contracts-page' \
+  --header 'Authorization: Bearer $TOKEN' \
+  --header 'Content-Type: application/json' \
+  --data '{"activeAtOffset":0,"eventFormat":{"filtersByParty":{},"filtersForAnyParty":{},"verbose":false},"maxPageSize":0,"pageToken":"string"}'
+```
+
+</RequestExample>
+
+
+<ResponseExample>
+
+```json 200 response
+{
+  "activeContracts": [
+    {}
+  ],
+  "activeAtOffset": 0,
+  "nextPageToken": "string"
+}
+```
+
+```json default response
+{
+  "code": "string",
+  "cause": "string",
+  "correlationId": "string",
+  "traceId": "string",
+  "context": {},
+  "resources": [
+    [
+      "string"
+    ]
+  ],
+  "errorCategory": 0,
+  "grpcCodeValue": 0,
+  "retryInfo": "string",
+  "definiteAnswer": false
+}
+```
+
+</ResponseExample>

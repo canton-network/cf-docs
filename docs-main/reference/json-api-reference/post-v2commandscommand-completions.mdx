@@ -1,0 +1,308 @@
+---
+title: "Query completions list (blocking call) Subscribe to command completion events"
+api: "POST http://localhost:7575/v2/commands/command-completions"
+authMethod: "bearer"
+playground: "interactive"
+---
+
+<div class="x2mdx-ref-page x2mdx-ref-page--operation x2mdx-ref-page--manual-api"></div>
+
+
+
+<div class="x2mdx-ref-hero">
+
+  <p class="x2mdx-ref-eyebrow">JSON Ledger API</p>
+
+
+  <h1 class="x2mdx-ref-title">Query completions list (blocking call) Subscribe to command completion events</h1>
+
+
+
+<div class="x2mdx-ref-badges">
+
+  <span class="x2mdx-ref-badge x2mdx-ref-badge--protocol">OpenAPI</span>
+
+  <a class="x2mdx-ref-badge x2mdx-ref-badge--added" href="#history-added-3-5">Added 3.5</a>
+
+</div>
+
+
+</div>
+
+Query completions list (blocking call) Subscribe to command completion events. This streaming endpoint provides more flexibility in filtering than the predecessor ``CompletionStream``. Notice: This endpoint should be used for small results set. When number of results exceeded node configuration limit (`http-list-max-elements-limit`) there will be an error (`413 Content Too Large`) returned.
+
+## Protocol Details
+
+
+
+<div class="x2mdx-ref-meta-grid">
+
+  <div class="x2mdx-ref-meta-item">
+    <span class="x2mdx-ref-meta-label">Operation ID</span>
+    <span class="x2mdx-ref-meta-value">postV2CommandsCommand-completions</span>
+  </div>
+
+  <div class="x2mdx-ref-meta-item">
+    <span class="x2mdx-ref-meta-label">Authentication</span>
+    <span class="x2mdx-ref-meta-value">Bearer token</span>
+  </div>
+
+  <div class="x2mdx-ref-meta-item">
+    <span class="x2mdx-ref-meta-label">Published</span>
+    <span class="x2mdx-ref-meta-value">3.5</span>
+  </div>
+
+</div>
+
+
+
+## Inputs
+
+
+
+### Query parameters
+
+
+
+
+
+
+
+<ParamField query="limit" type="number">
+OpenAPI type: `integer (int64)`.
+
+
+maximum number of elements to return, this param is ignored if is bigger than server setting
+</ParamField>
+
+
+
+<ParamField query="stream_idle_timeout_ms" type="number">
+OpenAPI type: `integer (int64)`.
+
+
+timeout to complete and send result if no new elements are received (for open ended streams)
+</ParamField>
+
+
+
+
+
+
+
+
+
+### Request body
+
+
+<div class="x2mdx-ref-badges">
+
+  <span class="x2mdx-ref-badge x2mdx-ref-badge--neutral">application/json</span>
+
+</div>
+
+
+
+
+
+
+<ParamField body="parties" type="string[]">
+
+If specified, only completions of commands are included, which have at least one of the ``act_as`` parties in the given set of parties. Only Ledger API users with CanReadAsAnyParty permission allowed to provide no ``parties``. Must be a valid PartyIdString (as described in ``value.proto``). Optional: can be empty
+</ParamField>
+
+
+
+<ParamField body="beginExclusive" type="number">
+OpenAPI type: `integer (int64)`.
+
+
+This optional field indicates the minimum offset for completions. This can be used to resume an earlier completion stream. If not set the ledger uses the ledger begin offset instead. If specified, it must be a valid absolute offset (positive integer) or zero (ledger begin offset). If the ledger has been pruned, this parameter must be specified and greater than the pruning offset. (the pruning offset is accessible on the StateService.GetLatestPrunedOffsets endpoint) Optional
+</ParamField>
+
+
+
+
+
+
+
+
+
+## Outputs
+
+
+
+### 200
+
+
+<div class="x2mdx-ref-badges">
+
+  <span class="x2mdx-ref-badge x2mdx-ref-badge--neutral">application/json</span>
+
+</div>
+
+
+
+
+
+
+<ResponseField name="value" type="CompletionStreamResponse[]" required />
+
+
+
+
+
+
+
+
+
+### 400
+
+
+<div class="x2mdx-ref-badges">
+
+  <span class="x2mdx-ref-badge x2mdx-ref-badge--neutral">text/plain</span>
+
+</div>
+
+
+
+
+
+
+<ResponseField name="value" type="string" required />
+
+
+
+
+
+
+
+
+
+### default
+
+
+<div class="x2mdx-ref-badges">
+
+  <span class="x2mdx-ref-badge x2mdx-ref-badge--neutral">application/json</span>
+
+</div>
+
+
+
+
+
+
+<ResponseField name="code" type="string" required />
+
+
+
+<ResponseField name="cause" type="string" required />
+
+
+
+<ResponseField name="correlationId" type="string" />
+
+
+
+<ResponseField name="traceId" type="string" />
+
+
+
+<ResponseField name="context" type="Map_String" required />
+
+
+
+<ResponseField name="resources" type="Tuple2_String_String[]" />
+
+
+
+<ResponseField name="errorCategory" type="integer (int32)" required />
+
+
+
+<ResponseField name="grpcCodeValue" type="integer (int32)" />
+
+
+
+<ResponseField name="retryInfo" type="string" />
+
+
+
+<ResponseField name="definiteAnswer" type="boolean" />
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## History
+
+<div class="x2mdx-ref-history" aria-label="Reference history">
+
+  <div class="x2mdx-ref-history-event x2mdx-ref-history-event--introduced" id="history-added-3-5">
+    <div class="x2mdx-ref-history-event-head">
+      <span class="x2mdx-ref-history-event-label">Added</span>
+      <code class="x2mdx-ref-history-event-version">3.5</code>
+    </div>
+
+  </div>
+
+</div>
+
+
+
+
+<RequestExample>
+
+```bash Request
+curl --request POST \
+  --url 'http://localhost:7575/v2/commands/command-completions' \
+  --header 'Authorization: Bearer $TOKEN' \
+  --header 'Content-Type: application/json' \
+  --data '{"parties":["string"],"beginExclusive":0}'
+```
+
+</RequestExample>
+
+
+<ResponseExample>
+
+```json 200 response
+[
+  {
+    "completionResponse": {}
+  }
+]
+```
+
+```json default response
+{
+  "code": "string",
+  "cause": "string",
+  "correlationId": "string",
+  "traceId": "string",
+  "context": {},
+  "resources": [
+    [
+      "string"
+    ]
+  ],
+  "errorCategory": 0,
+  "grpcCodeValue": 0,
+  "retryInfo": "string",
+  "definiteAnswer": false
+}
+```
+
+</ResponseExample>

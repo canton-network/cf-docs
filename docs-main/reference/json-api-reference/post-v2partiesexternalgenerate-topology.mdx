@@ -1,0 +1,348 @@
+---
+title: "Parties external generate topology"
+api: "POST http://localhost:7575/v2/parties/external/generate-topology"
+authMethod: "bearer"
+playground: "interactive"
+---
+
+<div class="x2mdx-ref-page x2mdx-ref-page--operation x2mdx-ref-page--manual-api"></div>
+
+
+
+<div class="x2mdx-ref-hero">
+
+  <p class="x2mdx-ref-eyebrow">JSON Ledger API</p>
+
+
+  <h1 class="x2mdx-ref-title">Parties external generate topology</h1>
+
+
+
+<div class="x2mdx-ref-badges">
+
+  <span class="x2mdx-ref-badge x2mdx-ref-badge--protocol">OpenAPI</span>
+
+  <a class="x2mdx-ref-badge x2mdx-ref-badge--added" href="#history-added-3-4">Added 3.4</a>
+
+  <a class="x2mdx-ref-badge x2mdx-ref-badge--changed" href="#history-updated-3-5">Updated 3.5</a>
+
+</div>
+
+
+</div>
+
+You may use this endpoint to generate the common external topology transactions which can be signed externally and uploaded as part of the allocate party process Note that this request will create a normal namespace using the same key for the identity as for signing. More elaborate schemes such as multi-signature or decentralized parties require you to construct the topology transactions yourself.
+
+## Protocol Details
+
+
+
+<div class="x2mdx-ref-meta-grid">
+
+  <div class="x2mdx-ref-meta-item">
+    <span class="x2mdx-ref-meta-label">Operation ID</span>
+    <span class="x2mdx-ref-meta-value">postV2PartiesExternalGenerate-topology</span>
+  </div>
+
+  <div class="x2mdx-ref-meta-item">
+    <span class="x2mdx-ref-meta-label">Authentication</span>
+    <span class="x2mdx-ref-meta-value">Bearer token</span>
+  </div>
+
+  <div class="x2mdx-ref-meta-item">
+    <span class="x2mdx-ref-meta-label">Published</span>
+    <span class="x2mdx-ref-meta-value">3.5</span>
+  </div>
+
+</div>
+
+
+
+## Inputs
+
+
+
+### Request body
+
+
+<div class="x2mdx-ref-badges">
+
+  <span class="x2mdx-ref-badge x2mdx-ref-badge--neutral">application/json</span>
+
+</div>
+
+
+
+
+
+
+<ParamField body="synchronizer" type="string" required>
+
+Synchronizer-id for which we are building this request. Required
+</ParamField>
+
+
+
+<ParamField body="partyHint" type="string" required>
+
+The actual party id will be constructed from this hint and a fingerprint of the public key Required
+</ParamField>
+
+
+
+<ParamField body="publicKey" type="object" required>
+OpenAPI type: `SigningPublicKey`.
+
+
+
+</ParamField>
+
+
+
+<ParamField body="localParticipantObservationOnly" type="boolean">
+
+If true, then the local participant will only be observing, not confirming. Default false. Optional
+</ParamField>
+
+
+
+<ParamField body="otherConfirmingParticipantUids" type="string[]">
+
+Other participant ids which should be confirming for this party Optional: can be empty
+</ParamField>
+
+
+
+<ParamField body="confirmationThreshold" type="number">
+OpenAPI type: `integer (int32)`.
+
+
+Confirmation threshold &gt;= 1 for the party. Defaults to all available confirmers (or if set to 0). Optional
+</ParamField>
+
+
+
+<ParamField body="observingParticipantUids" type="string[]">
+
+Other observing participant ids for this party Optional: can be empty
+</ParamField>
+
+
+
+
+
+
+
+
+
+## Outputs
+
+
+
+### 200
+
+
+<div class="x2mdx-ref-badges">
+
+  <span class="x2mdx-ref-badge x2mdx-ref-badge--neutral">application/json</span>
+
+</div>
+
+
+
+
+
+
+<ResponseField name="partyId" type="string" required>
+The generated party id Required
+</ResponseField>
+
+
+
+<ResponseField name="publicKeyFingerprint" type="string" required>
+The fingerprint of the supplied public key Required
+</ResponseField>
+
+
+
+<ResponseField name="topologyTransactions" type="string[]" required>
+The serialized topology transactions which need to be signed and submitted as part of the allocate party process Note that the serialization includes the versioning information. Therefore, the transaction here is serialized as an `UntypedVersionedMessage` which in turn contains the serialized `TopologyTransaction` in the version supported by the synchronizer. Required: must be non-empty
+</ResponseField>
+
+
+
+<ResponseField name="multiHash" type="string" required>
+the multi-hash which may be signed instead of each individual transaction Required: must be non-empty
+</ResponseField>
+
+
+
+
+
+
+
+
+
+### 400
+
+
+<div class="x2mdx-ref-badges">
+
+  <span class="x2mdx-ref-badge x2mdx-ref-badge--neutral">text/plain</span>
+
+</div>
+
+
+
+
+
+
+<ResponseField name="value" type="string" required />
+
+
+
+
+
+
+
+
+
+### default
+
+
+<div class="x2mdx-ref-badges">
+
+  <span class="x2mdx-ref-badge x2mdx-ref-badge--neutral">application/json</span>
+
+</div>
+
+
+
+
+
+
+<ResponseField name="code" type="string" required />
+
+
+
+<ResponseField name="cause" type="string" required />
+
+
+
+<ResponseField name="correlationId" type="string" />
+
+
+
+<ResponseField name="traceId" type="string" />
+
+
+
+<ResponseField name="context" type="Map_String" required />
+
+
+
+<ResponseField name="resources" type="Tuple2_String_String[]" />
+
+
+
+<ResponseField name="errorCategory" type="integer (int32)" required />
+
+
+
+<ResponseField name="grpcCodeValue" type="integer (int32)" />
+
+
+
+<ResponseField name="retryInfo" type="string" />
+
+
+
+<ResponseField name="definiteAnswer" type="boolean" />
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## History
+
+<div class="x2mdx-ref-history" aria-label="Reference history">
+
+  <div class="x2mdx-ref-history-event x2mdx-ref-history-event--changed" id="history-updated-3-5">
+    <div class="x2mdx-ref-history-event-head">
+      <span class="x2mdx-ref-history-event-label">Updated</span>
+      <code class="x2mdx-ref-history-event-version">3.5</code>
+    </div>
+
+    <p class="x2mdx-ref-history-event-detail">The POST /v2/parties/external/generate-topology operation was updated in this snapshot.</p>
+
+  </div>
+
+  <div class="x2mdx-ref-history-event x2mdx-ref-history-event--introduced" id="history-added-3-4">
+    <div class="x2mdx-ref-history-event-head">
+      <span class="x2mdx-ref-history-event-label">Added</span>
+      <code class="x2mdx-ref-history-event-version">3.4</code>
+    </div>
+
+  </div>
+
+</div>
+
+
+
+
+<RequestExample>
+
+```bash Request
+curl --request POST \
+  --url 'http://localhost:7575/v2/parties/external/generate-topology' \
+  --header 'Authorization: Bearer $TOKEN' \
+  --header 'Content-Type: application/json' \
+  --data '{"synchronizer":"string","partyHint":"string","publicKey":{"format":"CRYPTO_KEY_FORMAT_DER_X509_SUBJECT_PUBLIC_KEY_INFO","keyData":"string","keySpec":"SIGNING_KEY_SPEC_EC_CURVE25519"},"localParticipantObservationOnly":false,"otherConfirmingParticipantUids":["string"],"confirmationThreshold":0,"observingParticipantUids":["string"]}'
+```
+
+</RequestExample>
+
+
+<ResponseExample>
+
+```json 200 response
+{
+  "partyId": "string",
+  "publicKeyFingerprint": "string",
+  "topologyTransactions": [
+    "string"
+  ],
+  "multiHash": "string"
+}
+```
+
+```json default response
+{
+  "code": "string",
+  "cause": "string",
+  "correlationId": "string",
+  "traceId": "string",
+  "context": {},
+  "resources": [
+    [
+      "string"
+    ]
+  ],
+  "errorCategory": 0,
+  "grpcCodeValue": 0,
+  "retryInfo": "string",
+  "definiteAnswer": false
+}
+```
+
+</ResponseExample>
