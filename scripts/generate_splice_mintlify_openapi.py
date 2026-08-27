@@ -17,9 +17,18 @@ from typing import Any
 import yaml
 
 from validate_splice_mintlify_openapi_nav import validate_splice_nav
+from x2mdx.history import (
+    SourceArtifact,
+    SurfaceHistoryReport,
+    VersionSelectionPolicy,
+    history_events_for_item,
+    validate_history_report,
+    write_history_report,
+)
 from x2mdx.openapi import (
     ManualOpenAPIRenderOptions,
-    operation_history_events,
+    OpenAPIHistoryScope,
+    build_openapi_history_report,
     render_manual_openapi_operation,
 )
 from x2mdx.render import write_page
@@ -37,6 +46,9 @@ DEFAULT_CACHE_DIR = (
     REPO_ROOT / ".internal" / "cache" / "mintlify-openapi" / "splice-openapi"
 )
 DEFAULT_DOCS_JSON = REPO_ROOT / "docs-main" / "docs.json"
+DEFAULT_HISTORY_REPORT = (
+    REPO_ROOT / "docs-main" / "openapi" / "splice" / "history-report.json"
+)
 HTTP_METHODS = {"get", "put", "post", "delete", "options", "head", "patch", "trace"}
 SCAN_OPENAPI_PLACEHOLDER_SERVER = "https://example.com/api/scan"
 SCAN_OPENAPI_PUBLIC_SERVER = (
@@ -190,6 +202,24 @@ def resolve_publish_release(
             f"Publish version '{publish_version}' not found in selected releases: {available}"
         )
     return selected
+
+
+def comparison_releases_through_publish(
+    *, releases: list[dict[str, str]], publish_version: str
+) -> list[dict[str, str]]:
+    publish_index = next(
+        (
+            index
+            for index, release in enumerate(releases)
+            if release["version"] == publish_version
+        ),
+        None,
+    )
+    if publish_index is None:
+        raise ValueError(
+            f"Publish version '{publish_version}' is absent from selected releases"
+        )
+    return releases[: publish_index + 1]
 
 
 def archive_path(cache_dir: Path, *, release: dict[str, str]) -> Path:
@@ -692,6 +722,76 @@ def manual_operation_page_refs(*, spec: dict[str, Any], directory: str) -> list[
     ]
 
 
+def build_splice_history_report(
+    *,
+    source_config: dict[str, Any],
+    families: list[dict[str, Any]],
+    snapshots: dict[str, dict[str, dict[str, Any]]],
+    releases: list[dict[str, str]],
+    publish_version: str,
+) -> SurfaceHistoryReport:
+    comparison_versions = tuple(release["version"] for release in releases)
+    scopes: list[OpenAPIHistoryScope] = []
+    for family in families:
+        for spec_config in family["specs"]:
+            filename = spec_config["filename"]
+            specs_by_version = snapshots[filename]
+            published = specs_by_version.get(publish_version)
+            if published is None:
+                raise ValueError(
+                    f"Enabled spec {filename} is absent from publish version {publish_version}"
+                )
+            current_routes = {
+                (method.lower(), path): (
+                    "/"
+                    + manual_operation_page_ref(
+                        directory=spec_config["directory"],
+                        method=method,
+                        path=path,
+                    )
+                )
+                for method, path, _operation in operation_items(published)
+            }
+            scopes.append(
+                OpenAPIHistoryScope(
+                    id=filename,
+                    specs_by_version=specs_by_version,
+                    current_routes=current_routes,
+                )
+            )
+
+    source_artifacts = tuple(
+        SourceArtifact(
+            version=release["version"],
+            source=release["download_url"],
+            revision=release["tag"],
+            path=release["asset_name"],
+        )
+        for release in releases
+    )
+    limitations = tuple(
+        f"{item['filename']} is excluded: {item['reason']}"
+        for item in source_config.get("excluded_specs", [])
+        if isinstance(item, dict)
+        and isinstance(item.get("filename"), str)
+        and isinstance(item.get("reason"), str)
+    )
+    return build_openapi_history_report(
+        surface_id="splice-openapi",
+        title="Splice OpenAPI",
+        configured_scope=(
+            f"Reader-facing operations from {len(scopes)} enabled Splice OpenAPI "
+            "specifications."
+        ),
+        scopes=tuple(scopes),
+        comparison_versions=comparison_versions,
+        publish_version=publish_version,
+        source_artifacts=source_artifacts,
+        version_policy=VersionSelectionPolicy.LATEST_SELECTED_RELEASE,
+        limitations=limitations,
+    )
+
+
 def validate_manual_route_baseline(
     source_config: dict[str, Any],
     *,
@@ -820,20 +920,19 @@ def write_manual_operation_pages(
     docs_json_path: Path,
     families: list[dict[str, Any]],
     snapshots: dict[str, dict[str, dict[str, Any]]],
-    release_versions: list[str],
     publish_version: str,
-    source_name: str,
+    history_report: SurfaceHistoryReport,
 ) -> set[Path]:
     docs_root = docs_json_path.parent
     prepare_manual_output_directories(docs_root=docs_root, families=families)
     written: set[Path] = set()
+    history_items_by_route = {
+        item.route: item for item in history_report.current_items() if item.route
+    }
     for family in families:
         for spec_config in family["specs"]:
             filename = spec_config["filename"]
             specs_by_version = snapshots[filename]
-            versions = [
-                version for version in release_versions if version in specs_by_version
-            ]
             if publish_version not in specs_by_version:
                 raise ValueError(
                     f"Enabled spec {filename} is absent from publish version {publish_version}"
@@ -851,13 +950,17 @@ def write_manual_operation_pages(
                     spec=published,
                     operation=operation,
                 )
-                history_events = operation_history_events(
-                    specs_by_version=specs_by_version,
-                    versions=versions,
-                    publish_version=publish_version,
-                    method=method,
-                    path=path,
-                    source_name=f"{source_name}: {filename}",
+                history_item = history_items_by_route.get(f"/{page_ref}")
+                if history_item is None or not history_item.current_present:
+                    raise ValueError(
+                        f"Normalized Splice history is missing current operation: "
+                        f"{filename} {method} {path}"
+                    )
+                history_events = list(
+                    history_events_for_item(
+                        history_item,
+                        comparison_versions=history_report.comparison_versions,
+                    )
                 )
                 page = render_manual_openapi_operation(
                     spec=published,
@@ -1046,6 +1149,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--cache-dir", default=str(DEFAULT_CACHE_DIR))
     parser.add_argument("--docs-json", default=str(DEFAULT_DOCS_JSON))
     parser.add_argument(
+        "--history-report",
+        default=str(DEFAULT_HISTORY_REPORT),
+        help="Write the validated normalized Splice history report to this JSON path.",
+    )
+    parser.add_argument(
         "--publish-version",
         help="Explicit decentralized-canton-sync release version whose OpenAPI bundle should drive the Mintlify view.",
     )
@@ -1073,6 +1181,10 @@ def main() -> int:
         source_config=source_config,
         releases=releases,
         requested_version=args.publish_version,
+    )
+    comparison_releases = comparison_releases_through_publish(
+        releases=releases,
+        publish_version=publish_release["version"],
     )
     cache_dir = Path(args.cache_dir).resolve()
     archive = ensure_archive(
@@ -1109,7 +1221,7 @@ def main() -> int:
     }
     snapshots = versioned_enabled_specs(
         cache_dir=cache_dir,
-        releases=releases,
+        releases=comparison_releases,
         spec_filenames=enabled_filenames,
         force_refresh=args.force_refresh,
     )
@@ -1119,15 +1231,23 @@ def main() -> int:
         snapshots=snapshots,
         publish_version=publish_release["version"],
     )
+    history_report = build_splice_history_report(
+        source_config=source_config,
+        families=navigation_families,
+        snapshots=snapshots,
+        releases=comparison_releases,
+        publish_version=publish_release["version"],
+    )
+    validate_history_report(history_report)
+    history_report_path = Path(args.history_report).resolve()
+    write_history_report(history_report_path, history_report)
+    print(f"Generated normalized Splice history report: {history_report_path}")
     write_manual_operation_pages(
         docs_json_path=docs_json_path,
         families=navigation_families,
         snapshots=snapshots,
-        release_versions=[release["version"] for release in releases],
         publish_version=publish_release["version"],
-        source_name=str(
-            source_config.get("source") or "Splice OpenAPI release bundle snapshots"
-        ),
+        history_report=history_report,
     )
     cleanup_legacy_outputs(docs_root=docs_root, source_config=source_config)
     update_docs_navigation(

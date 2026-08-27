@@ -151,3 +151,11 @@ def load_history_report(path: Path) -> SurfaceHistoryReport:
 
 def history_report_to_dict(report: SurfaceHistoryReport) -> dict[str, Any]:
     return asdict(report)
+
+
+def write_history_report(path: Path, report: SurfaceHistoryReport) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(history_report_to_dict(report), indent=2) + "\n",
+        encoding="utf-8",
+    )

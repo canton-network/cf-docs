@@ -5,6 +5,7 @@ from x2mdx.history.io import (
     history_report_from_dict,
     history_report_to_dict,
     load_history_report,
+    write_history_report,
 )
 from x2mdx.history.models import (
     ChangeDetail,
@@ -47,4 +48,5 @@ __all__ = [
     "history_report_to_dict",
     "load_history_report",
     "validate_history_report",
+    "write_history_report",
 ]
