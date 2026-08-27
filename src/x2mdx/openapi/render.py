@@ -16,6 +16,7 @@ from x2mdx.reference_pages import (
     ReferencePanel,
     ReferenceSchema,
     json_body,
+    reference_badges_for_history_events,
     render_operation_page,
 )
 
@@ -586,7 +587,7 @@ def operation_history_events(
             HistoryEvent(
                 kind=HistoryEventKind.REMOVE_AS_OF,
                 version=remove_as_of,
-                label="Remove as of",
+                label="Removal scheduled",
                 details=(),
                 evidence=(evidence,),
             )
@@ -639,7 +640,7 @@ def operation_history_events(
                 )
             else:
                 details = (
-                    f"The {observed_method.upper()} {observed_path} operation changed "
+                    f"The {observed_method.upper()} {observed_path} operation was updated "
                     "in this snapshot.",
                 )
             evidence = Evidence(
@@ -652,7 +653,7 @@ def operation_history_events(
                 HistoryEvent(
                     kind=HistoryEventKind.CHANGED,
                     version=version,
-                    label="Changed",
+                    label="Updated",
                     details=details,
                     evidence=(evidence,),
                 )
@@ -671,7 +672,7 @@ def operation_history_events(
         HistoryEvent(
             kind=HistoryEventKind.INTRODUCED,
             version=first_version,
-            label="Introduced",
+            label="Added",
             details=(),
             evidence=(introduction,),
         )
@@ -778,35 +779,10 @@ def render_manual_openapi_operation(
         *response_examples,
     ]
 
-    introduced = next(
-        event.version
-        for event in history_events
-        if event.kind == HistoryEventKind.INTRODUCED
+    badges = reference_badges_for_history_events(
+        history_events,
+        kind_label="OpenAPI",
     )
-    badges = [
-        ReferenceBadge("OpenAPI", "protocol"),
-        ReferenceBadge(f"Since {introduced}", "added"),
-    ]
-    changed = next(
-        (
-            event.version
-            for event in history_events
-            if event.kind == HistoryEventKind.CHANGED
-        ),
-        None,
-    )
-    if changed is not None:
-        badges.append(ReferenceBadge(f"Changed {changed}", "changed"))
-    remove_as_of = next(
-        (
-            event.version
-            for event in history_events
-            if event.kind == HistoryEventKind.REMOVE_AS_OF
-        ),
-        None,
-    )
-    if remove_as_of is not None:
-        badges.append(ReferenceBadge(f"Remove as of {remove_as_of}", "removed"))
 
     api_path = f"{method} {options.server.rstrip('/')}{options.path}"
     protocol_items = [

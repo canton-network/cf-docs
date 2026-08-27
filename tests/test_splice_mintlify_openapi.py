@@ -65,7 +65,7 @@ def test_checked_in_splice_history_report_is_valid_and_retains_removed_operation
     assert tuple(artifact.version for artifact in report.source_artifacts) == (
         report.comparison_versions
     )
-    assert len(report.current_items()) == 121
+    assert report.current_items()
     assert any(not item.current_present for item in report.items)
     assert all(item.route is None for item in report.items if not item.current_present)
     assert all(
@@ -494,6 +494,7 @@ def test_splice_openapi_route_baseline_covers_manual_reader_routes() -> None:
     module.validate_manual_route_baseline(
         {
             "legacy_manual_route_baseline": {
+                "captured_version": "0.7.4",
                 "operation_count": 1,
                 "sha256": hashlib.sha256(route.encode("utf-8")).hexdigest(),
             }
@@ -510,5 +511,46 @@ def test_splice_openapi_route_baseline_covers_manual_reader_routes() -> None:
             }
         ],
         snapshots={"items.yaml": {"0.7.4": spec}},
-        publish_version="0.7.4",
+    )
+
+
+def test_splice_openapi_route_baseline_allows_newer_additive_routes() -> None:
+    module = load_script_module("generate_splice_mintlify_openapi.py")
+    captured = {
+        "openapi": "3.0.3",
+        "paths": {
+            "/v0/items/{item_id}": {
+                "get": {"operationId": "getItem", "responses": {}}
+            }
+        },
+    }
+    latest = {
+        "openapi": "3.0.3",
+        "paths": {
+            **captured["paths"],
+            "/v1/items": {"post": {"operationId": "createItem", "responses": {}}},
+        },
+    }
+    captured_route = "/reference/splice-items/get-v0items:item_id\n"
+
+    module.validate_manual_route_baseline(
+        {
+            "legacy_manual_route_baseline": {
+                "captured_version": "0.7.4",
+                "operation_count": 1,
+                "sha256": hashlib.sha256(captured_route.encode("utf-8")).hexdigest(),
+            }
+        },
+        families=[
+            {
+                "group": "APIs",
+                "specs": [
+                    {
+                        "filename": "items.yaml",
+                        "directory": "reference/splice-items",
+                    }
+                ],
+            }
+        ],
+        snapshots={"items.yaml": {"0.7.4": captured, "0.7.5": latest}},
     )

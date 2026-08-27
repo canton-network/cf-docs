@@ -797,13 +797,17 @@ def validate_manual_route_baseline(
     *,
     families: list[dict[str, Any]],
     snapshots: dict[str, dict[str, dict[str, Any]]],
-    publish_version: str,
 ) -> None:
     baseline = source_config.get("legacy_manual_route_baseline")
     if not isinstance(baseline, dict):
         raise ValueError("legacy_manual_route_baseline must be an object")
     expected_count = baseline.get("operation_count")
     expected_sha256 = baseline.get("sha256")
+    captured_version = baseline.get("captured_version")
+    if not isinstance(captured_version, str) or not captured_version:
+        raise ValueError(
+            "legacy_manual_route_baseline.captured_version must be a non-empty string"
+        )
     if not isinstance(expected_count, int) or expected_count < 0:
         raise ValueError(
             "legacy_manual_route_baseline.operation_count must be a non-negative integer"
@@ -818,15 +822,16 @@ def validate_manual_route_baseline(
     routes: list[str] = []
     for family in families:
         for spec_config in family["specs"]:
-            published = snapshots[spec_config["filename"]].get(publish_version)
-            if published is None:
+            captured = snapshots[spec_config["filename"]].get(captured_version)
+            if captured is None:
                 raise ValueError(
-                    f"Enabled spec {spec_config['filename']} is absent from publish version {publish_version}"
+                    f"Enabled spec {spec_config['filename']} is absent from captured "
+                    f"baseline version {captured_version}"
                 )
             routes.extend(
                 f"/{page_ref}"
                 for page_ref in manual_operation_page_refs(
-                    spec=published,
+                    spec=captured,
                     directory=spec_config["directory"],
                 )
             )
@@ -1229,7 +1234,6 @@ def main() -> int:
         source_config,
         families=navigation_families,
         snapshots=snapshots,
-        publish_version=publish_release["version"],
     )
     history_report = build_splice_history_report(
         source_config=source_config,

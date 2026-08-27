@@ -1,6 +1,6 @@
 """Shared history contracts for generated reference surfaces."""
 
-from x2mdx.history.events import history_events_for_item
+from x2mdx.history.events import history_event_anchor, history_events_for_item
 from x2mdx.history.io import (
     history_report_from_dict,
     history_report_to_dict,
@@ -43,6 +43,7 @@ __all__ = [
     "SourceArtifact",
     "SurfaceHistoryReport",
     "VersionSelectionPolicy",
+    "history_event_anchor",
     "history_events_for_item",
     "history_report_from_dict",
     "history_report_to_dict",

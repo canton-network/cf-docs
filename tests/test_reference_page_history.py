@@ -85,14 +85,23 @@ def test_standard_page_puts_contract_badges_near_the_title_in_order() -> None:
 
     badge_labels = [
         "REST",
-        "Since 1.0.0",
-        "Changed 1.1.0",
-        "Remove as of 2.1.0",
+        "Added 1.0.0",
+        "Updated 1.1.0",
+        "Deprecated 1.1.0",
+        "Removal scheduled 2.1.0",
     ]
     badge_positions = [rendered.index(label) for label in badge_labels]
 
     assert badge_positions == sorted(badge_positions)
     assert badge_positions[-1] < rendered.index('<div class="x2mdx-ref-operation-bar">')
+    assert '<span class="x2mdx-ref-badge x2mdx-ref-badge--protocol">REST</span>' in rendered
+    assert 'href="#history-added-1-0-0">Added 1.0.0</a>' in rendered
+    assert 'href="#history-updated-1-1-0">Updated 1.1.0</a>' in rendered
+    assert 'href="#history-deprecated-1-1-0">Deprecated 1.1.0</a>' in rendered
+    assert (
+        'href="#history-removal-scheduled-2-1-0">Removal scheduled 2.1.0</a>'
+        in rendered
+    )
 
 
 def test_history_is_the_final_main_column_section_without_a_count() -> None:
@@ -117,15 +126,19 @@ def test_history_renders_newest_first_with_text_bearing_event_labels() -> None:
     rendered = render_synthetic_operation()
     history = rendered[rendered.index("## History") :]
     labels = [
-        "Remove as of",
+        "Removal scheduled",
         "Replacement",
         "Deprecated",
-        "Changed",
-        "Introduced",
+        "Updated",
+        "Added",
     ]
     positions = [history.index(label) for label in labels]
 
     assert positions == sorted(positions)
+    assert 'id="history-removal-scheduled-2-1-0"' in history
+    assert 'id="history-deprecated-1-1-0"' in history
+    assert 'id="history-updated-1-1-0"' in history
+    assert 'id="history-added-1-0-0"' in history
     assert "Replaced by payments.createV2" in history
     assert "Added an optional idempotency key." in history
 
@@ -137,6 +150,8 @@ def test_history_styles_cover_desktop_dark_mode_and_narrow_layouts() -> None:
 
     assert ".x2mdx-ref-history-event" in styles
     assert '[data-theme="dark"] .x2mdx-ref-history-event' in styles
+    assert "a.x2mdx-ref-badge:focus-visible" in styles
+    assert "scroll-margin-top: 6rem;" in styles
     assert "@media (max-width: 640px)" in styles
 
 

@@ -10,6 +10,7 @@ from typing import Any
 from jinja2 import Environment, PackageLoader, StrictUndefined
 
 from x2mdx.output import Page, RawMarkdown
+from x2mdx.history.events import history_event_anchor
 
 
 def heading(level: int, text: str) -> str:
@@ -189,6 +190,7 @@ def template_environment() -> Environment:
         compact_version_sequence=compact_version_sequence,
         render_status_cell=render_status_cell,
         render_status_legend=render_status_legend,
+        history_event_anchor=history_event_anchor,
     )
     return environment
 

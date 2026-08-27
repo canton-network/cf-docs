@@ -1,6 +1,6 @@
 ---
-title: "Deprecated"
-api: "POST https://scan.sv-1.global.canton.network.sync.global/api/scan/v0/holdings/summary"
+title: "Holdings state at v2"
+api: "POST https://scan.sv-1.global.canton.network.sync.global/api/scan/v2/holdings/state"
 playground: "interactive"
 ---
 
@@ -13,7 +13,7 @@ playground: "interactive"
   <p class="x2mdx-ref-eyebrow">Scan API</p>
 
 
-  <h1 class="x2mdx-ref-title">Deprecated</h1>
+  <h1 class="x2mdx-ref-title">Holdings state at v2</h1>
 
 
 
@@ -21,18 +21,14 @@ playground: "interactive"
 
   <span class="x2mdx-ref-badge x2mdx-ref-badge--protocol">OpenAPI</span>
 
-  <a class="x2mdx-ref-badge x2mdx-ref-badge--added" href="#history-added-0-5-10">Added 0.5.10</a>
-
-  <a class="x2mdx-ref-badge x2mdx-ref-badge--changed" href="#history-updated-0-6-3">Updated 0.6.3</a>
-
-  <a class="x2mdx-ref-badge x2mdx-ref-badge--removed" href="#history-deprecated-0-6-3">Deprecated 0.6.3</a>
+  <a class="x2mdx-ref-badge x2mdx-ref-badge--added" href="#history-added-0-7-5">Added 0.7.5</a>
 
 </div>
 
 
 </div>
 
-Deprecated. Please use /v1/holdings/summary instead. Returns the summary of active amulet contracts for a given migration id and record time, for the given parties. This is an aggregate of `/v0/holdings/state` by owner party ID with better performance than client-side computation.
+Returns the active amulet contracts for a given migration id and record time, in creation date ascending order, paged.
 
 ## Protocol Details
 
@@ -42,7 +38,7 @@ Deprecated. Please use /v1/holdings/summary instead. Returns the summary of acti
 
   <div class="x2mdx-ref-meta-item">
     <span class="x2mdx-ref-meta-label">Operation ID</span>
-    <span class="x2mdx-ref-meta-value">getHoldingsSummaryAt</span>
+    <span class="x2mdx-ref-meta-value">getHoldingsStateAtV2</span>
   </div>
 
   <div class="x2mdx-ref-meta-item">
@@ -81,7 +77,7 @@ Deprecated. Please use /v1/holdings/summary instead. Returns the summary of acti
 OpenAPI type: `integer (int64)`.
 
 
-The migration id for which to return the summary.
+The migration id for which to return the ACS.
 </ParamField>
 
 
@@ -102,18 +98,25 @@ How to match the record_time. &quot;exact&quot; requires the record_time to matc
 
 
 
-<ParamField body="owner_party_ids" type="string[]" required>
+<ParamField body="after" type="string">
 
-The owners for which to compute the summary.
+Pagination token for the next page of results. This token is opaque and not meant to be edited by users.
 </ParamField>
 
 
 
-<ParamField body="as_of_round" type="number">
-OpenAPI type: `integer (int64)`.
+<ParamField body="page_size" type="number" required>
+OpenAPI type: `integer (int32)`.
 
 
-Compute holding fees as of this round. Defaults to the earliest open mining round.
+The maximum number of created events returned for this request.
+</ParamField>
+
+
+
+<ParamField body="owner_party_ids" type="string[]" required>
+
+Filters by contracts in which these party_ids are the owners of the amulets.
 </ParamField>
 
 
@@ -154,13 +157,15 @@ The same `migration_id` as in the request.
 
 
 
-<ResponseField name="computed_as_of_round" type="integer (int64)" required>
-The same `as_of_round` as in the request, with the same default.
+<ResponseField name="created_events" type="ActiveContract[]" required>
+Up to `page_size` contracts in the ACS. `create_arguments` are always encoded as `compact_json`.
 </ResponseField>
 
 
 
-<ResponseField name="summaries" type="HoldingsSummary[]" required />
+<ResponseField name="next_page_token" type="string">
+When requesting the next page of results, pass this as `after` to the `AcsRequestV2` or `HoldingsStateRequestV2`. Will be absent when there are no more pages. This token is opaque and not meant to be edited by users.
+</ResponseField>
 
 
 
@@ -252,28 +257,10 @@ The same `as_of_round` as in the request, with the same default.
 
 <div class="x2mdx-ref-history" aria-label="Reference history">
 
-  <div class="x2mdx-ref-history-event x2mdx-ref-history-event--deprecated" id="history-deprecated-0-6-3">
-    <div class="x2mdx-ref-history-event-head">
-      <span class="x2mdx-ref-history-event-label">Deprecated</span>
-      <code class="x2mdx-ref-history-event-version">0.6.3</code>
-    </div>
-
-  </div>
-
-  <div class="x2mdx-ref-history-event x2mdx-ref-history-event--changed" id="history-updated-0-6-3">
-    <div class="x2mdx-ref-history-event-head">
-      <span class="x2mdx-ref-history-event-label">Updated</span>
-      <code class="x2mdx-ref-history-event-version">0.6.3</code>
-    </div>
-
-    <p class="x2mdx-ref-history-event-detail">The POST /v0/holdings/summary operation was updated in this snapshot.</p>
-
-  </div>
-
-  <div class="x2mdx-ref-history-event x2mdx-ref-history-event--introduced" id="history-added-0-5-10">
+  <div class="x2mdx-ref-history-event x2mdx-ref-history-event--introduced" id="history-added-0-7-5">
     <div class="x2mdx-ref-history-event-head">
       <span class="x2mdx-ref-history-event-label">Added</span>
-      <code class="x2mdx-ref-history-event-version">0.5.10</code>
+      <code class="x2mdx-ref-history-event-version">0.7.5</code>
     </div>
 
   </div>
@@ -287,9 +274,9 @@ The same `as_of_round` as in the request, with the same default.
 
 ```bash Request
 curl --request POST \
-  --url 'https://scan.sv-1.global.canton.network.sync.global/api/scan/v0/holdings/summary' \
+  --url 'https://scan.sv-1.global.canton.network.sync.global/api/scan/v2/holdings/state' \
   --header 'Content-Type: application/json' \
-  --data '{"migration_id":0,"record_time":"2026-01-01T00:00:00Z","record_time_match":"exact","owner_party_ids":["string"],"as_of_round":0}'
+  --data '{"migration_id":0,"record_time":"2026-01-01T00:00:00Z","record_time_match":"exact","after":"string","page_size":0,"owner_party_ids":["string"]}'
 ```
 
 </RequestExample>
@@ -301,10 +288,10 @@ curl --request POST \
 {
   "record_time": "2026-01-01T00:00:00Z",
   "migration_id": 0,
-  "computed_as_of_round": 0,
-  "summaries": [
+  "created_events": [
     {}
-  ]
+  ],
+  "next_page_token": "string"
 }
 ```
 

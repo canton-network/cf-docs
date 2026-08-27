@@ -417,7 +417,7 @@ def _changes(
         else:
             summary = (
                 f"The {observation.method.upper()} {observation.path} operation "
-                "changed in this snapshot."
+                "was updated in this snapshot."
             )
         changes.append(
             ChangeDetail(

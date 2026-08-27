@@ -277,7 +277,15 @@ def test_manual_openapi_page_preserves_playground_and_standard_history_layout() 
     assert "<ResponseExample>" in rendered
     assert "x2mdx-ref-operation-shell" not in rendered
     assert "## History" in rendered
-    assert "Remove as of" in rendered
+    history = rendered[rendered.index("## History") :]
+    assert '<span class="x2mdx-ref-history-event-label">Removal scheduled</span>' in history
+    assert 'href="#history-added-3-4">Added 3.4</a>' in rendered
+    assert 'href="#history-updated-3-5">Updated 3.5</a>' in rendered
+    assert 'href="#history-deprecated-3-5">Deprecated 3.5</a>' in rendered
+    assert (
+        'href="#history-removal-scheduled-3-5-0">Removal scheduled 3.5.0</a>'
+        in rendered
+    )
     assert "3.5.0" in rendered
     assert "details and history" not in rendered.lower()
 
