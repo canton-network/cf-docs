@@ -273,6 +273,7 @@ def test_daml_script_nav_is_top_level_in_api_reference(tmp_path: Path) -> None:
         {
             "group": "Daml Script",
             "pages": [
+                "appdev/reference/daml-script/index",
                 {
                     "group": "Modules",
                     "pages": [
@@ -283,6 +284,9 @@ def test_daml_script_nav_is_top_level_in_api_reference(tmp_path: Path) -> None:
             ],
         },
     ]
+    assert (output_dir / "index.mdx").read_text(encoding="utf-8").startswith(
+        '---\ntitle: "Overview"\n---'
+    )
 
 
 def test_java_bindings_redirects_are_idempotent(tmp_path: Path) -> None:
