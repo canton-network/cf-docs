@@ -140,6 +140,8 @@ def test_history_styles_cover_desktop_dark_mode_and_narrow_layouts() -> None:
     assert ".x2mdx-ref-history-event" in styles
     assert '[data-theme="dark"] .x2mdx-ref-history-event' in styles
     assert "@media (max-width: 640px)" in styles
+    assert ".x2mdx-ref-hero > *" in styles
+    assert "overflow-wrap: anywhere;" in styles
 
 
 def test_collection_pages_mark_the_standardized_reference_canvas() -> None:
