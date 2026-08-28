@@ -45,6 +45,7 @@ SECTION_TO_REPO_PREFIX = {
     "ledger-api-value": "community/daml-lf/ledger-api-value-proto/src/main/protobuf",
     "participant": "community/participant/src/main/protobuf",
     "synchronizer": "community/synchronizer/src/main/protobuf",
+    "traffic-enforcement": "community/traffic-enforcement/api/protobuf",
 }
 SUPPORT_SECTION_NAMES = {"lib"}
 ADMIN_API_COMMUNITY_IMPORT_PREFIXES = (
@@ -52,6 +53,7 @@ ADMIN_API_COMMUNITY_IMPORT_PREFIXES = (
     "com/digitalasset/canton/crypto/admin",
     "com/digitalasset/canton/topology/admin",
 )
+TRAFFIC_ENFORCEMENT_IMPORT_PREFIXES = ("com/digitalasset/canton/tea/v1",)
 USER_AGENT = "digital-asset-docs-x2mdx/1.0"
 GIT_ATTEMPTS = 3
 GIT_RETRY_DELAY_SECONDS = 5.0
@@ -67,6 +69,11 @@ class ProtobufSelection:
 LEDGER_API_SELECTIONS = (
     ProtobufSelection("ledger-api", SECTION_TO_REPO_PREFIX["ledger-api"]),
     ProtobufSelection("ledger-api-value", SECTION_TO_REPO_PREFIX["ledger-api-value"]),
+    ProtobufSelection(
+        "traffic-enforcement",
+        SECTION_TO_REPO_PREFIX["traffic-enforcement"],
+        TRAFFIC_ENFORCEMENT_IMPORT_PREFIXES,
+    ),
 )
 ADMIN_API_SELECTIONS = (
     ProtobufSelection("admin-api", SECTION_TO_REPO_PREFIX["admin-api"]),
