@@ -524,6 +524,80 @@ class JvmDocsTests(unittest.TestCase):
             ["reference/jvm-api/index"],
         )
 
+    def test_cli_builds_standardized_current_pages_with_shared_history(self) -> None:
+        manifest_path = self._write_manifest()
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["artifacts"] = [
+            artifact
+            for artifact in manifest["artifacts"]
+            if artifact["language"] == "java"
+        ]
+        manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+
+        overview = self.root / "reference" / "java-bindings.mdx"
+        details_dir = self.root / "reference" / "java"
+        history_report = details_dir / "history-report.json"
+
+        result = cli_main(
+            [
+                "jvm-docs",
+                "build-api-pages-from-manifest",
+                "--manifest",
+                str(manifest_path),
+                "--overview-file",
+                str(overview),
+                "--details-dir",
+                str(details_dir),
+                "--overview-title",
+                "Java Bindings",
+                "--history-report",
+                str(history_report),
+                "--reader-route-prefix",
+                "reference/java",
+                "--surface-id",
+                "java-bindings",
+                "--surface-title",
+                "Java Bindings",
+            ]
+        )
+
+        self.assertEqual(result, 0)
+        payload = json.loads(history_report.read_text(encoding="utf-8"))
+        self.assertEqual(payload["surface_id"], "java-bindings")
+        self.assertEqual(payload["comparison_versions"], ["1.0.0", "1.1.0", "1.2.0"])
+        self.assertEqual(len(payload["items"]), 4)
+        current_items = [item for item in payload["items"] if item["current_present"]]
+        self.assertEqual(len(current_items), 3)
+        legacy = next(item for item in payload["items"] if item["location"] == "com.example.Legacy")
+        self.assertFalse(legacy["current_present"])
+        self.assertEqual(legacy["observed_removal"], "1.1.0")
+        self.assertIsNone(legacy.get("route"))
+
+        artifact_page = details_dir / "bindings-java.mdx"
+        package_dir = details_dir / "bindings-java-packages" / "com-example"
+        package_page = package_dir / "index.mdx"
+        foo_page = package_dir / "foo.mdx"
+        bar_page = package_dir / "bar.mdx"
+        legacy_page = package_dir / "legacy.mdx"
+        self.assertTrue(overview.exists())
+        self.assertTrue(artifact_page.exists())
+        self.assertTrue(package_page.exists())
+        self.assertTrue(foo_page.exists())
+        self.assertTrue(bar_page.exists())
+        self.assertFalse(legacy_page.exists())
+
+        overview_text = overview.read_text(encoding="utf-8")
+        foo_text = foo_page.read_text(encoding="utf-8")
+        bar_text = bar_page.read_text(encoding="utf-8")
+        self.assertNotIn("Details and history", overview_text)
+        self.assertNotIn("Active Since", foo_text)
+        self.assertIn("x2mdx-ref-page--collection", foo_text)
+        self.assertIn('href="#history-added-1-0-0">Added 1.0.0</a>', foo_text)
+        self.assertIn('href="#history-deprecated-1-2-0">Deprecated 1.2.0</a>', bar_text)
+        self.assertGreater(foo_text.rfind("## History"), foo_text.rfind("## Members"))
+        self.assertIn('id="history-added-1-0-0"', foo_text)
+        self.assertIn('id="history-deprecated-1-2-0"', bar_text)
+
     def test_cli_list_formats_outputs_all_supported_formats(self) -> None:
         stdout = io.StringIO()
         with redirect_stdout(stdout):

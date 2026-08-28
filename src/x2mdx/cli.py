@@ -178,6 +178,20 @@ def build_parser() -> argparse.ArgumentParser:
         help="Title to use for the generated overview page.",
     )
     build_jvm_docs.add_argument(
+        "--history-report",
+        help="Optional normalized shared-history report to write.",
+    )
+    build_jvm_docs.add_argument(
+        "--reader-route-prefix",
+        help="Reader route prefix for current Java type pages.",
+    )
+    build_jvm_docs.add_argument("--surface-id", default="java-bindings")
+    build_jvm_docs.add_argument("--surface-title", default="Java Bindings")
+    build_jvm_docs.add_argument(
+        "--configured-scope",
+        default="Ledger API Java binding types",
+    )
+    build_jvm_docs.add_argument(
         "--docs-json",
         help="Optional docs.json file to update with the generated overview page",
     )
@@ -554,7 +568,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "jvm-docs":
         if args.jvm_docs_command == "build-api-pages-from-manifest":
-            from x2mdx.jvm_docs.render import build_pages
+            from x2mdx.history import validate_history_report, write_history_report
+            from x2mdx.jvm_docs.history import build_jvm_surface_history_report
+            from x2mdx.jvm_docs.render import build_pages, build_reader_type_routes
             from x2mdx.mintlify import MintlifyNavTarget, update_docs_json_navigation
             from x2mdx.render import write_pages
 
@@ -564,6 +580,21 @@ def main(argv: Sequence[str] | None = None) -> int:
                 parser.error("--docs-json requires --nav-dropdown")
 
             report = build_jvm_doc_report_from_manifest_args(args)
+            history_report = None
+            if args.history_report:
+                if not args.reader_route_prefix:
+                    parser.error("--history-report requires --reader-route-prefix")
+                history_report = build_jvm_surface_history_report(
+                    report,
+                    routes=build_reader_type_routes(
+                        report,
+                        reader_route_prefix=args.reader_route_prefix,
+                    ),
+                    surface_id=args.surface_id,
+                    title=args.surface_title,
+                    configured_scope=args.configured_scope,
+                )
+                validate_history_report(history_report)
             overview_file = Path(args.overview_file)
             details_dir = Path(args.details_dir)
             if overview_file.exists():
@@ -575,8 +606,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                 overview_output=overview_file,
                 details_dir=details_dir,
                 overview_title=args.overview_title,
+                history_report=history_report,
             )
             write_pages(pages, output_root)
+            if history_report is not None:
+                write_history_report(Path(args.history_report), history_report)
             if args.docs_json:
                 update_docs_json_navigation(
                     Path(args.docs_json),
