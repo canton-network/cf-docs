@@ -248,6 +248,10 @@ def test_manual_openapi_page_preserves_playground_and_standard_history_layout() 
     assert 'playground: "interactive"' in rendered
     assert 'title: "POST /v2/updates/flats"' in rendered
     assert 'description: "Query flat transactions.' in rendered
+    assert (
+        '<p class="x2mdx-ref-summary">Query flat transactions. Provided for '
+        "backwards compatibility"
+    ) in rendered
     assert "## Authorizations" in rendered
     assert '<ParamField header="Authorization" type="string" required>' in rendered
     assert '<ParamField query="limit" type="number">' in rendered

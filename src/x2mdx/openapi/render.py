@@ -1220,7 +1220,7 @@ def render_manual_openapi_operation(
             title=page_title,
             description=description or summary,
             eyebrow=options.surface_label,
-            summary=summary,
+            summary=description or summary,
             breadcrumbs=list(options.breadcrumbs),
             badges=badges,
             operation_method=method,

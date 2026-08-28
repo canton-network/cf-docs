@@ -181,3 +181,12 @@ def test_collection_pages_mark_the_standardized_reference_canvas() -> None:
     )
 
     assert rendered.count("x2mdx-ref-page--collection") == 1
+
+
+def test_manual_openapi_summary_defers_to_the_native_header_description() -> None:
+    styles = (Path(__file__).parents[1] / "docs-main" / "styles.css").read_text(
+        encoding="utf-8"
+    )
+
+    assert "body:has(.x2mdx-ref-page--manual-api):has(#header p)" in styles
+    assert ".x2mdx-ref-page--manual-api + .x2mdx-ref-hero .x2mdx-ref-summary" in styles
