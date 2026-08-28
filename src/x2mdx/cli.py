@@ -270,6 +270,33 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Render Interfaces before other declaration sections on module pages.",
     )
+    build_daml_json.add_argument(
+        "--history-report",
+        help="Optional path for a validated shared history report.",
+    )
+    build_daml_json.add_argument(
+        "--reader-route-prefix",
+        help="Root-relative route prefix for current module pages.",
+    )
+    build_daml_json.add_argument(
+        "--surface-id",
+        default="daml-reference",
+        help="Stable surface identifier for the shared history report.",
+    )
+    build_daml_json.add_argument(
+        "--surface-title",
+        default="Daml reference",
+        help="Reader-facing surface title for the shared history report.",
+    )
+    build_daml_json.add_argument(
+        "--configured-scope",
+        default="configured Daml docs JSON modules",
+        help="Description of the configured module scope.",
+    )
+    build_daml_json.add_argument(
+        "--lifecycle-metadata",
+        help="Optional owned JSON sidecar containing module remove_as_of schedules.",
+    )
 
     protobuf = subparsers.add_parser("protobuf", help="Descriptor-backed protobuf commands")
     protobuf_subparsers = protobuf.add_subparsers(dest="protobuf_command", required=True)
@@ -625,13 +652,44 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "daml-json":
         if args.daml_json_command == "build-api-pages-from-manifest":
-            from x2mdx.daml_json.render import build_pages
+            from x2mdx.daml_json.history import (
+                build_daml_surface_history_report,
+                load_daml_removal_schedules,
+            )
+            from x2mdx.daml_json.render import (
+                EXCLUDED_MODULE_NAMES,
+                build_pages,
+                build_reader_module_routes,
+            )
+            from x2mdx.history import validate_history_report, write_history_report
             from x2mdx.render import write_pages
 
             report = build_daml_doc_report_from_manifest_args(args)
             output_dir = Path(args.output_dir)
             if output_dir.exists():
                 shutil.rmtree(output_dir)
+            history_report = None
+            if args.history_report:
+                if not args.reader_route_prefix:
+                    parser.error("--history-report requires --reader-route-prefix")
+                schedules = (
+                    load_daml_removal_schedules(Path(args.lifecycle_metadata))
+                    if args.lifecycle_metadata
+                    else {}
+                )
+                history_report = build_daml_surface_history_report(
+                    report,
+                    routes=build_reader_module_routes(
+                        report,
+                        reader_route_prefix=args.reader_route_prefix,
+                    ),
+                    surface_id=args.surface_id,
+                    title=args.surface_title,
+                    configured_scope=args.configured_scope,
+                    removal_schedules=schedules,
+                    excluded_modules=EXCLUDED_MODULE_NAMES,
+                )
+                validate_history_report(history_report)
             output_root, pages = build_pages(
                 report,
                 output_dir=output_dir,
@@ -639,8 +697,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                 link_prefix=args.link_prefix,
                 include_module_snapshot=not args.omit_module_snapshot,
                 interfaces_first=args.interfaces_first,
+                history_report=history_report,
             )
             write_pages(pages, output_root)
+            if history_report is not None:
+                write_history_report(Path(args.history_report), history_report)
             return 0
 
     if args.command == "protobuf":
