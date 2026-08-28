@@ -257,27 +257,28 @@ def reference_badges_for_history_events(
     events: list[HistoryEvent],
     *,
     kind_label: str,
+    linked: bool = True,
 ) -> list[ReferenceBadge]:
     badges = [ReferenceBadge(kind_label, "protocol")]
-    badge_details = {
-        HistoryEventKind.INTRODUCED: ("Added", "added"),
-        HistoryEventKind.CHANGED: ("Updated", "changed"),
-        HistoryEventKind.DEPRECATED: ("Deprecated", "removed"),
-        HistoryEventKind.REMOVE_AS_OF: ("Removal scheduled", "removed"),
-    }
-    seen_kinds: set[HistoryEventKind] = set()
-    for event in events:
-        if event.kind in seen_kinds or event.kind not in badge_details:
+    badge_details = (
+        (HistoryEventKind.INTRODUCED, "Added", "added"),
+        (HistoryEventKind.CHANGED, "Updated", "changed"),
+        (HistoryEventKind.DEPRECATED, "Deprecated", "removed"),
+        (HistoryEventKind.REMOVE_AS_OF, "Removal scheduled", "removed"),
+    )
+    for kind, label, tone in badge_details:
+        event = next((candidate for candidate in events if candidate.kind == kind), None)
+        if event is None:
             continue
-        label, tone = badge_details[event.kind]
         badges.append(
             ReferenceBadge(
                 f"{label} {event.version}",
                 tone,
-                f"#{history_event_anchor(event.kind, event.version)}",
+                f"#{history_event_anchor(event.kind, event.version)}"
+                if linked
+                else None,
             )
         )
-        seen_kinds.add(event.kind)
     return badges
 
 

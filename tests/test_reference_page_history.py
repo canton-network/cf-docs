@@ -12,6 +12,7 @@ from x2mdx.reference_pages import (
     ReferenceOperationPage,
     ReferencePanel,
     ReferenceSchema,
+    reference_badges_for_history_events,
     reference_badges_for_history_item,
     render_collection_page,
     render_operation_page,
@@ -96,6 +97,27 @@ def test_standard_page_puts_contract_badges_near_the_title_in_order() -> None:
 
     assert badge_positions == sorted(badge_positions)
     assert badge_positions[-1] < rendered.index('<div class="x2mdx-ref-operation-bar">')
+
+
+def test_event_badges_use_standard_lifecycle_order() -> None:
+    report = load_history_report(REPORT_FIXTURE)
+    item = report.items_by_id()["payments.create"]
+    events = list(
+        history_events_for_item(
+            item,
+            comparison_versions=report.comparison_versions,
+        )
+    )
+
+    badges = reference_badges_for_history_events(events, kind_label="REST")
+
+    assert [badge.label for badge in badges] == [
+        "REST",
+        "Added 1.0.0",
+        "Updated 1.1.0",
+        "Deprecated 1.1.0",
+        "Removal scheduled 2.1.0",
+    ]
 
 
 def test_history_is_the_final_main_column_section_without_a_count() -> None:
