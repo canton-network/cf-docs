@@ -335,3 +335,34 @@ def test_lifecycle_prefix_is_not_used_as_the_operation_title() -> None:
 
     assert 'title: "Updates flats"' in rendered
     assert '<h1 class="x2mdx-ref-title">Deprecated</h1>' not in rendered
+
+
+def test_humanized_operation_title_drops_a_dangling_preposition() -> None:
+    spec = operation_spec(changed=True)
+    operation = spec["paths"]["/v2/updates/flats"]["post"]
+    operation["summary"] = "POST /v2/updates/flats"
+    operation["description"] = "Deprecated. Please use /v3/updates/flats instead."
+    operation["operationId"] = "getHoldingsSummaryAt"
+    history = operation_history_events(
+        specs_by_version={"3.5": spec},
+        versions=["3.5"],
+        publish_version="3.5",
+        method="post",
+        path="/v2/updates/flats",
+        source_name="release fixtures",
+    )
+
+    rendered = render_page(
+        render_manual_openapi_operation(
+            spec=spec,
+            options=ManualOpenAPIRenderOptions(
+                method="post",
+                path="/v2/updates/flats",
+                output_path="reference/json-api-reference/post-v2updatesflats.mdx",
+            ),
+            history_events=history,
+            publish_version="3.5",
+        )
+    )
+
+    assert 'title: "Holdings summary"' in rendered

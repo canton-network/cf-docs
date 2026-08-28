@@ -453,6 +453,12 @@ def _humanized_operation_id(operation: dict[str, Any]) -> str | None:
     title = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", title)
     title = re.sub(r"[-_]+", " ", title)
     title = " ".join(title.split())
+    title = re.sub(
+        r"\s+(?:at|by|for|from|to|with)$",
+        "",
+        title,
+        flags=re.IGNORECASE,
+    )
     return title[0].upper() + title[1:].lower() if title else None
 
 
