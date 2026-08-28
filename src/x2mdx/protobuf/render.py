@@ -500,6 +500,7 @@ def build_overview_page(
     output_dir: Path,
     package_docs: list[dict[str, Any]],
     history_report: SurfaceHistoryReport | None = None,
+    overview_name: str = "index.mdx",
 ) -> ReferenceCollectionPage:
     history_items = list(history_report.items) if history_report is not None else []
     overview_events = (
@@ -530,7 +531,7 @@ def build_overview_page(
         package_groups[group_label].append(
             ReferenceCard(
                 title=package["package"],
-                href=page_ref(output_dir / "index.mdx", package_page_map[package["package"]]),
+                href=page_ref(output_dir / overview_name, package_page_map[package["package"]]),
                 summary=compact_package_summary(package),
                 badges=lifecycle_badges(events=package_events, linked=False),
                 meta_items=[
@@ -575,7 +576,7 @@ def build_overview_page(
             )
     latest = report["latestSnapshot"]
     return ReferenceCollectionPage(
-        path="index.mdx",
+        path=overview_name,
         title="Canton Protobuf Reference",
         description="Descriptor-backed protobuf API history grouped by package.",
         eyebrow="Protobuf Reference",
@@ -606,6 +607,7 @@ def build_package_page(
     ctx: dict[str, dict[str, Any]],
     endpoint_docs: dict[str, dict[str, Any]],
     history_report: SurfaceHistoryReport | None = None,
+    overview_name: str = "index.mdx",
 ) -> ReferenceCollectionPage:
     lifecycle_map = {entry["id"]: entry for entry in report["endpointLifecycle"]}
     history_items_by_id = history_report.items_by_id() if history_report is not None else {}
@@ -623,7 +625,7 @@ def build_package_page(
         else []
     )
     page_path = package_page_path(output_dir, package_doc["package"])
-    overview_path = output_dir / "index.mdx"
+    overview_path = output_dir / overview_name
 
     service_sections: list[ReferenceSection] = []
     for service_id in package_doc["serviceIds"]:
@@ -736,6 +738,7 @@ def build_operation_page(
     ctx: dict[str, dict[str, Any]],
     history_item: HistoryItem | None = None,
     comparison_versions: tuple[str, ...] = (),
+    overview_name: str = "index.mdx",
 ) -> ReferenceOperationPage:
     page_path = operation_page_path(output_dir, package_name, endpoint["service"], endpoint["name"])
     package_path = package_page_path(output_dir, package_name)
@@ -757,7 +760,7 @@ def build_operation_page(
         back_label="Back to package",
         breadcrumbs=[
             ReferenceBreadcrumb(package_group(package_name, has_services=True)),
-            ReferenceBreadcrumb("Protobuf", page_ref(page_path, output_dir / "index.mdx")),
+            ReferenceBreadcrumb("Protobuf", page_ref(page_path, output_dir / overview_name)),
             ReferenceBreadcrumb(package_name, page_ref(page_path, package_path)),
             ReferenceBreadcrumb(endpoint["name"]),
         ],
@@ -849,6 +852,7 @@ def build_pages(
     *,
     output_dir: Path,
     history_report: SurfaceHistoryReport | None = None,
+    overview_name: str = "index.mdx",
 ) -> tuple[Path, list[Any]]:
     latest = report["latestSnapshot"]
     ctx = {
@@ -872,6 +876,7 @@ def build_pages(
                 output_dir=output_dir,
                 package_docs=package_docs,
                 history_report=history_report,
+                overview_name=overview_name,
             )
         )
     ]
@@ -885,6 +890,7 @@ def build_pages(
                     ctx=ctx,
                     endpoint_docs=endpoint_docs,
                     history_report=history_report,
+                    overview_name=overview_name,
                 )
             )
         )
@@ -903,6 +909,7 @@ def build_pages(
                             if history_report is not None
                             else ()
                         ),
+                        overview_name=overview_name,
                     )
                 )
             )

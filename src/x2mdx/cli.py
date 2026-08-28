@@ -292,6 +292,34 @@ def build_parser() -> argparse.ArgumentParser:
         "--version-filter",
         help="Optional label describing the selected version set.",
     )
+    build_protobuf.add_argument(
+        "--history-report",
+        help="Optional path for a validated shared history report.",
+    )
+    build_protobuf.add_argument(
+        "--surface-id",
+        default="protobuf-reference",
+        help="Stable surface identifier for the shared history report.",
+    )
+    build_protobuf.add_argument(
+        "--surface-title",
+        default="Protobuf reference",
+        help="Reader-facing surface title for the shared history report.",
+    )
+    build_protobuf.add_argument(
+        "--configured-scope",
+        default="Protobuf service methods",
+        help="Configured item scope for the shared history report.",
+    )
+    build_protobuf.add_argument(
+        "--reader-route-prefix",
+        help="Root-relative route prefix for current generated operation pages.",
+    )
+    build_protobuf.add_argument(
+        "--overview-name",
+        default="index.mdx",
+        help="Filename for the generated overview page.",
+    )
 
     typedoc = subparsers.add_parser("typedoc", help="TypeDoc-based TypeScript bindings commands")
     typedoc_subparsers = typedoc.add_subparsers(dest="typedoc_command", required=True)
@@ -583,15 +611,57 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "protobuf":
         if args.protobuf_command == "build-api-pages-from-manifest":
-            from x2mdx.protobuf.render import build_pages
+            from x2mdx.history import (
+                ReferenceFormat,
+                validate_history_report,
+                write_history_report,
+            )
+            from x2mdx.protobuf.history import build_protobuf_surface_history_report
+            from x2mdx.protobuf.render import build_pages, operation_page_path
             from x2mdx.render import write_pages
 
             report = build_protobuf_report_from_manifest_args(args)
             output_dir = Path(args.output_dir)
             if output_dir.exists():
                 shutil.rmtree(output_dir)
-            output_root, pages = build_pages(report, output_dir=output_dir)
+            history_report = None
+            if args.history_report:
+                if not args.reader_route_prefix:
+                    parser.error("--history-report requires --reader-route-prefix")
+                route_prefix = args.reader_route_prefix.strip("/")
+                routes = {
+                    str(endpoint_id): (
+                        f"/{route_prefix}/"
+                        + operation_page_path(
+                            output_dir,
+                            str(endpoint["package"]),
+                            str(endpoint["service"]),
+                            str(endpoint["name"]),
+                        )
+                        .relative_to(output_dir)
+                        .with_suffix("")
+                        .as_posix()
+                    )
+                    for endpoint_id, endpoint in report["latestSnapshot"]["endpoints"].items()
+                }
+                history_report = build_protobuf_surface_history_report(
+                    report,
+                    routes=routes,
+                    surface_id=args.surface_id,
+                    title=args.surface_title,
+                    configured_scope=args.configured_scope,
+                    format=ReferenceFormat.PROTOBUF,
+                )
+                validate_history_report(history_report)
+            output_root, pages = build_pages(
+                report,
+                output_dir=output_dir,
+                history_report=history_report,
+                overview_name=args.overview_name,
+            )
             write_pages(pages, output_root)
+            if history_report is not None:
+                write_history_report(Path(args.history_report), history_report)
             return 0
 
     if args.command == "typedoc":

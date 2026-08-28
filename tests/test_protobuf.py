@@ -241,6 +241,55 @@ class ProtobufTests(unittest.TestCase):
         self.assertEqual(operation_text.count('class="x2mdx-ref-schema"'), 2)
         self.assertFalse(stale_endpoint_file.exists())
 
+    def test_cli_builds_shared_history_pages_and_report(self) -> None:
+        manifest_path = self._write_manifest()
+        output_dir = self.root / "out" / "protobuf-history"
+        history_report = output_dir / "history-report.json"
+
+        result = cli_main(
+            [
+                "protobuf",
+                "build-api-pages-from-manifest",
+                "--manifest",
+                str(manifest_path),
+                "--output-dir",
+                str(output_dir),
+                "--history-report",
+                str(history_report),
+                "--surface-id",
+                "ledger-api-protobuf",
+                "--surface-title",
+                "Ledger API protobuf",
+                "--configured-scope",
+                "Ledger API protobuf service methods",
+                "--reader-route-prefix",
+                "reference/protobuf",
+                "--overview-name",
+                "overview.mdx",
+            ]
+        )
+
+        self.assertEqual(result, 0)
+        self.assertTrue(history_report.exists())
+        self.assertFalse((output_dir / "index.mdx").exists())
+        overview_text = (output_dir / "overview.mdx").read_text(encoding="utf-8")
+        operation_text = (
+            output_dir
+            / "operations"
+            / "com-example-v1"
+            / "exampleservice"
+            / "getfoo.mdx"
+        ).read_text(encoding="utf-8")
+        self.assertIn("## History", overview_text)
+        self.assertIn("Added 1.0.0", operation_text)
+        self.assertIn("Updated 1.1.0", operation_text)
+        self.assertIn('href="#history-added-1-0-0"', operation_text)
+        self.assertNotIn("Since ", operation_text)
+        self.assertNotIn("Details and History", overview_text)
+        loaded = json.loads(history_report.read_text(encoding="utf-8"))
+        self.assertEqual(loaded["surface_id"], "ledger-api-protobuf")
+        self.assertEqual(loaded["comparison_versions"], ["1.0.0", "1.1.0"])
+
     def test_operation_adapter_collects_request_and_response_schemas(self) -> None:
         ctx = {
             "messages": {
