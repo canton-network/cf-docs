@@ -1046,12 +1046,6 @@ def build_standardized_pages(
             history_events=overview_events,
         )
     )
-    overview.blocks.insert(
-        0,
-        RawMarkdown(
-            '<div class="x2mdx-ref-page x2mdx-ref-page--collection"></div>\n'
-        ),
-    )
     pages.insert(0, strip_raw_markdown_trailing_whitespace(overview))
     return root, pages
 
