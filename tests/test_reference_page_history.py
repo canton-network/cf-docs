@@ -210,5 +210,24 @@ def test_manual_openapi_summary_defers_to_the_native_header_description() -> Non
         encoding="utf-8"
     )
 
+    assert "#content-container:has(.x2mdx-ref-page--manual-api)" in styles
+    assert "#content-area\n  #header\n  > div:has(> p)" in styles
+    assert "display: block !important;" in styles
     assert "body:has(.x2mdx-ref-page--manual-api):has(#header p)" in styles
     assert ".x2mdx-ref-page--manual-api + .x2mdx-ref-hero .x2mdx-ref-summary" in styles
+    assert "font-size: 2.25rem !important;" in styles
+    assert "font-size: 1.875rem !important;" in styles
+    assert "font-size: 1.125rem !important;" in styles
+    assert "line-height: 1.6875rem !important;" in styles
+
+
+def test_manual_openapi_lifecycle_badges_hydrate_into_the_native_header() -> None:
+    root = Path(__file__).parents[1] / "docs-main"
+    script = (root / "nav-transition.js").read_text(encoding="utf-8")
+    styles = (root / "styles.css").read_text(encoding="utf-8")
+
+    assert 'var HEADER_BADGES_ID = "x2mdx-ref-api-header-badges";' in script
+    assert "hydrated = source.cloneNode(true);" in script
+    assert "header.insertBefore(hydrated, mobileContextMenu || null);" in script
+    assert "new MutationObserver(scheduleManualApiHeaderBadgeSync)" in script
+    assert "body:has(#x2mdx-ref-api-header-badges)" in styles

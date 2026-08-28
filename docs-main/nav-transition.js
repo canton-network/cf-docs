@@ -10,10 +10,14 @@
   var NAVIGATION_FALLBACK_MS = 1000;
   var JSON_API_REFERENCE_PREFIX = "/reference/json-api-reference/";
   var TARGET_SELECTOR = "#content-area";
+  var MANUAL_API_BADGES_SELECTOR =
+    ".x2mdx-ref-page--manual-api + .x2mdx-ref-hero .x2mdx-ref-badges";
+  var HEADER_BADGES_ID = "x2mdx-ref-api-header-badges";
   var fadedOutFromClick = false;
   var spinnerElement = null;
   var contentCleanupTimer = null;
   var navigationFallbackTimer = null;
+  var badgeSyncScheduled = false;
 
   var style = document.createElement("style");
   style.textContent =
@@ -60,6 +64,52 @@
 
   function getContentArea() {
     return document.querySelector(TARGET_SELECTOR);
+  }
+
+  function syncManualApiHeaderBadges() {
+    badgeSyncScheduled = false;
+
+    var source = document.querySelector(MANUAL_API_BADGES_SELECTOR);
+    var header = document.querySelector("#header");
+    var hydrated = document.getElementById(HEADER_BADGES_ID);
+
+    if (!source || !header) {
+      if (hydrated) {
+        hydrated.remove();
+      }
+      return;
+    }
+
+    if (!hydrated) {
+      hydrated = source.cloneNode(true);
+      hydrated.id = HEADER_BADGES_ID;
+      hydrated.classList.add("x2mdx-ref-api-header-badges");
+    }
+
+    if (hydrated.innerHTML !== source.innerHTML) {
+      hydrated.innerHTML = source.innerHTML;
+    }
+
+    var mobileContextMenu = Array.prototype.find.call(
+      header.children,
+      function (child) {
+        return child.id === "page-context-menu";
+      }
+    );
+    if (
+      hydrated.parentElement !== header ||
+      hydrated.nextElementSibling !== mobileContextMenu
+    ) {
+      header.insertBefore(hydrated, mobileContextMenu || null);
+    }
+  }
+
+  function scheduleManualApiHeaderBadgeSync() {
+    if (badgeSyncScheduled) {
+      return;
+    }
+    badgeSyncScheduled = true;
+    requestAnimationFrame(syncManualApiHeaderBadges);
   }
 
   function installSpinner() {
@@ -252,11 +302,16 @@
   }
 
   function onPageReady() {
+    scheduleManualApiHeaderBadgeSync();
     hideSpinner();
     fadeIn();
   }
 
   installSpinner();
+  scheduleManualApiHeaderBadgeSync();
+
+  var badgeObserver = new MutationObserver(scheduleManualApiHeaderBadgeSync);
+  badgeObserver.observe(document.body, { childList: true, subtree: true });
 
   document.addEventListener(
     "click",
