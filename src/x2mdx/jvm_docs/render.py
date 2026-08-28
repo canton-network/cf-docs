@@ -21,7 +21,7 @@ from x2mdx.history.models import (
 )
 from x2mdx.history.versioning import compare_versions
 from x2mdx.jvm_docs.models import JvmDocArtifactLifecycle, JvmDocLifecycleReport, JvmDocSymbolLifecycle
-from x2mdx.output import Page, RawMarkdown
+from x2mdx.output import Page
 from x2mdx.reference_pages import (
     ReferenceBadge,
     ReferenceCard,
@@ -692,14 +692,7 @@ def current_member_rows(
 
 
 def render_standardized_collection_page(page: ReferenceCollectionPage) -> Page:
-    rendered = render_collection_page(page)
-    rendered.blocks.insert(
-        0,
-        RawMarkdown(
-            '<div class="x2mdx-ref-page x2mdx-ref-page--collection"></div>\n'
-        ),
-    )
-    return rendered
+    return render_collection_page(page)
 
 
 def build_standardized_artifact_pages(
