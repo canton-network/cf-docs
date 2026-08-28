@@ -4,15 +4,19 @@ from __future__ import annotations
 
 import json
 import re
+from functools import cmp_to_key
 from pathlib import Path
 from typing import Any
 
+from x2mdx.history.events import history_events_for_item
+from x2mdx.history.models import HistoryEvent, HistoryEventKind, HistoryItem, SurfaceHistoryReport
+from x2mdx.history.versioning import compare_versions
+from x2mdx.openrpc.history import openrpc_item_id
 from x2mdx.openrpc.models import OpenRpcMethodLifecycle, OpenRpcReport, OpenRpcSpecLifecycle
 from x2mdx.reference_pages import (
     ReferenceBadge,
     ReferenceBreadcrumb,
     ReferenceCard,
-    ReferenceChange,
     ReferenceCollectionPage,
     ReferenceExample,
     ReferenceMetaItem,
@@ -24,6 +28,8 @@ from x2mdx.reference_pages import (
     relative_page_ref,
     render_collection_page,
     render_operation_page,
+    reference_badges_for_history_events,
+    reference_badges_for_history_item,
     rooted_page_ref,
     safe_markdown_text,
     schema_from_sample,
@@ -62,20 +68,59 @@ def page_ref(from_path: Path, to_path: Path, *, output_dir: Path, link_prefix: s
 
 def lifecycle_badges(
     *,
-    protocol_label: str,
-    introduced: str,
-    lifecycle_state: str | None = None,
-    changed: list[str] | None = None,
-    removed: str | None = None,
+    item: HistoryItem | None = None,
+    events: list[HistoryEvent] | None = None,
+    linked: bool = True,
 ) -> list[ReferenceBadge]:
-    badges = [ReferenceBadge(protocol_label, tone="protocol"), ReferenceBadge(f"Since {introduced}", tone="added")]
-    if lifecycle_state:
-        badges.append(ReferenceBadge(lifecycle_state_label(lifecycle_state), tone=lifecycle_state_tone(lifecycle_state)))
-    if changed:
-        badges.append(ReferenceBadge(f"Changed {changed[-1]}", tone="changed"))
-    if removed:
-        badges.append(ReferenceBadge(f"Removed {removed}", tone="removed"))
-    return badges
+    if item is not None:
+        return reference_badges_for_history_item(item, kind_label="JSON-RPC", linked=linked)
+    return reference_badges_for_history_events(events or [], kind_label="JSON-RPC", linked=linked)
+
+
+def spec_history_events(
+    items: list[HistoryItem],
+    *,
+    comparison_versions: tuple[str, ...],
+) -> list[HistoryEvent]:
+    combined: dict[tuple[HistoryEventKind, str], HistoryEvent] = {}
+    for item in items:
+        method = item.id.rsplit("#", 1)[-1]
+        for event in history_events_for_item(item, comparison_versions=comparison_versions):
+            key = (event.kind, event.version)
+            details = tuple(f"{method}: {detail}" for detail in event.details)
+            existing = combined.get(key)
+            if existing is None:
+                combined[key] = HistoryEvent(
+                    kind=event.kind,
+                    version=event.version,
+                    label=event.label,
+                    details=details,
+                    evidence=event.evidence,
+                )
+            else:
+                combined[key] = HistoryEvent(
+                    kind=existing.kind,
+                    version=existing.version,
+                    label=existing.label,
+                    details=tuple(dict.fromkeys((*existing.details, *details))),
+                    evidence=tuple(dict.fromkeys((*existing.evidence, *event.evidence))),
+                )
+
+    priority = {
+        HistoryEventKind.REMOVE_AS_OF: 0,
+        HistoryEventKind.DEPRECATED: 1,
+        HistoryEventKind.CHANGED: 2,
+        HistoryEventKind.INTRODUCED: 3,
+        HistoryEventKind.REPLACEMENT: 4,
+    }
+
+    def compare(left: HistoryEvent, right: HistoryEvent) -> int:
+        version_comparison = compare_versions(left.version, right.version, known_order=comparison_versions)
+        if version_comparison:
+            return -version_comparison
+        return priority[left.kind] - priority[right.kind]
+
+    return sorted(combined.values(), key=cmp_to_key(compare))
 
 
 def lifecycle_state_label(value: str) -> str:
@@ -163,25 +208,28 @@ def build_overview_page(
     overview_name: str,
     overview_title: str,
     spec_dir_name: str,
+    history_report: SurfaceHistoryReport,
     link_prefix: str | None = None,
 ) -> ReferenceCollectionPage:
     overview_path = output_dir / overview_name
     cards = []
+    items_by_id = history_report.items_by_id()
     for spec in report.specs:
         spec_path = spec_page_path(output_dir, spec, spec_dir_name=spec_dir_name)
+        items = [
+            items_by_id[openrpc_item_id(spec.spec_id, method.method)]
+            for method in spec.methods
+            if method.status == "active"
+        ]
+        events = spec_history_events(items, comparison_versions=history_report.comparison_versions)
         cards.append(
             ReferenceCard(
                 title=spec.display_name,
                 href=page_ref(overview_path, spec_path, output_dir=output_dir, link_prefix=link_prefix),
                 summary=info_summary(spec),
-                badges=lifecycle_badges(
-                    protocol_label="JSON-RPC",
-                    introduced=spec.introduced_version,
-                    changed=spec.changed_in_versions,
-                    removed=spec.removed_version,
-                ),
+                badges=lifecycle_badges(events=events, linked=False),
                 meta_items=[
-                    ReferenceMetaItem("Methods", str(len(spec.methods))),
+                    ReferenceMetaItem("Methods", str(len(items))),
                     ReferenceMetaItem("Latest version", spec.latest_version),
                     ReferenceMetaItem("OpenRPC", spec.openrpc_version or "-"),
                 ],
@@ -216,21 +264,23 @@ def build_spec_page(
     output_dir: Path,
     overview_name: str,
     spec_dir_name: str,
+    history_report: SurfaceHistoryReport,
     link_prefix: str | None = None,
 ) -> ReferenceCollectionPage:
     spec_path = spec_page_path(output_dir, spec, spec_dir_name=spec_dir_name)
     overview_path = output_dir / overview_name
+    items_by_id = history_report.items_by_id()
+    current_methods = [method for method in spec.methods if method.status == "active"]
+    current_items = [items_by_id[openrpc_item_id(spec.spec_id, method.method)] for method in current_methods]
+    events = spec_history_events(current_items, comparison_versions=history_report.comparison_versions)
     method_cards = [
         ReferenceCard(
             title=method.method,
             href=page_ref(spec_path, operation_page_path(output_dir, spec, method), output_dir=output_dir, link_prefix=link_prefix),
             summary=compact_text(method.latest.get("summary") or method.latest.get("description") or "", limit=170),
             badges=lifecycle_badges(
-                protocol_label="JSON-RPC",
-                introduced=method.introduced_version,
-                lifecycle_state=method.lifecycle_state,
-                changed=method.changed_in_versions,
-                removed=method.removed_version,
+                item=items_by_id[openrpc_item_id(spec.spec_id, method.method)],
+                linked=False,
             ),
             meta_items=[
                 ReferenceMetaItem("Parameters", str(len(method.latest.get("params", [])))),
@@ -238,7 +288,7 @@ def build_spec_page(
                 *lifecycle_meta_items(method),
             ],
         )
-        for method in spec.methods
+        for method in current_methods
     ]
 
     return ReferenceCollectionPage(
@@ -249,12 +299,7 @@ def build_spec_page(
         summary=spec.info_description or info_summary(spec),
         back_link=page_ref(spec_path, overview_path, output_dir=output_dir, link_prefix=link_prefix),
         back_label="Back to overview",
-        badges=lifecycle_badges(
-            protocol_label="JSON-RPC",
-            introduced=spec.introduced_version,
-            changed=spec.changed_in_versions,
-            removed=spec.removed_version,
-        ),
+        badges=lifecycle_badges(events=events),
         meta_items=[
             ReferenceMetaItem("Latest source path", spec.latest_source_path),
             ReferenceMetaItem("Publish version", spec.latest_version),
@@ -268,6 +313,7 @@ def build_spec_page(
                 cards=method_cards,
             )
         ],
+        history_events=events,
     )
 
 
@@ -277,6 +323,8 @@ def build_method_page(
     *,
     output_dir: Path,
     spec_dir_name: str,
+    history_item: HistoryItem,
+    comparison_versions: tuple[str, ...],
     link_prefix: str | None = None,
 ) -> ReferenceOperationPage:
     page_path = operation_page_path(output_dir, spec, method)
@@ -323,7 +371,7 @@ def build_method_page(
             )
         )
 
-    overview_parts = [part for part in [method.latest.get("summary"), method.latest.get("description")] if part]
+    history_events = list(history_events_for_item(history_item, comparison_versions=comparison_versions))
     return ReferenceOperationPage(
         path=page_path.relative_to(output_dir).as_posix(),
         title=method.method,
@@ -337,18 +385,11 @@ def build_method_page(
             ReferenceBreadcrumb(spec.display_name, page_ref(page_path, spec_path, output_dir=output_dir, link_prefix=link_prefix)),
             ReferenceBreadcrumb(method.method),
         ],
-        badges=lifecycle_badges(
-            protocol_label="JSON-RPC",
-            introduced=method.introduced_version,
-            lifecycle_state=method.lifecycle_state,
-            changed=method.changed_in_versions,
-            removed=method.removed_version,
-        ),
+        badges=lifecycle_badges(item=history_item),
         meta_items=[
             ReferenceMetaItem("Spec", spec.display_name),
             ReferenceMetaItem("Introduced", method.introduced_version),
             ReferenceMetaItem("Last seen", method.last_seen_in),
-            ReferenceMetaItem("Removed", method.removed_version or "-"),
             *lifecycle_meta_items(method),
         ],
         operation_method="POST",
@@ -375,11 +416,8 @@ def build_method_page(
             )
         ],
         examples=examples,
-        lifecycle_changes=[
-            ReferenceChange(version=str(entry["version"]), details="; ".join(str(change) for change in entry["changes"]))
-            for entry in method.change_details
-        ],
         related_schemas=related_schemas,
+        history_events=history_events,
     )
 
 
@@ -387,12 +425,14 @@ def build_pages(
     report: OpenRpcReport,
     *,
     output_dir: Path,
+    history_report: SurfaceHistoryReport,
     overview_name: str = "index.mdx",
     spec_dir_name: str = "specs",
     overview_title: str = "Wallet Gateway OpenRPC",
     link_prefix: str | None = None,
 ) -> tuple[Path, list[Any]]:
     normalized_link_prefix = normalize_link_prefix(link_prefix) if link_prefix else None
+    items_by_id = history_report.items_by_id()
     pages = [
         render_collection_page(
             build_overview_page(
@@ -401,6 +441,7 @@ def build_pages(
                 overview_name=overview_name,
                 overview_title=overview_title,
                 spec_dir_name=spec_dir_name,
+                history_report=history_report,
                 link_prefix=normalized_link_prefix,
             )
         )
@@ -413,11 +454,13 @@ def build_pages(
                     output_dir=output_dir,
                     overview_name=overview_name,
                     spec_dir_name=spec_dir_name,
+                    history_report=history_report,
                     link_prefix=normalized_link_prefix,
                 )
             )
         )
-        for method in spec.methods:
+        for method in (candidate for candidate in spec.methods if candidate.status == "active"):
+            history_item = items_by_id[openrpc_item_id(spec.spec_id, method.method)]
             pages.append(
                 render_operation_page(
                     build_method_page(
@@ -425,6 +468,8 @@ def build_pages(
                         method,
                         output_dir=output_dir,
                         spec_dir_name=spec_dir_name,
+                        history_item=history_item,
+                        comparison_versions=history_report.comparison_versions,
                         link_prefix=normalized_link_prefix,
                     )
                 )

@@ -174,6 +174,8 @@ class OpenRpcMinimalLifecycleTests(unittest.TestCase):
                 str(manifest_path),
                 "--output-dir",
                 str(output_dir),
+                "--history-report",
+                str(output_dir / "history-report.json"),
                 "--publish-version",
                 "1.1.0",
                 "--source-name",
@@ -202,7 +204,6 @@ class OpenRpcMinimalLifecycleTests(unittest.TestCase):
                 "operations/remote/status.mdx",
                 "operations/wallet/alphapayments.mdx",
                 "operations/wallet/listlegacypayments.mdx",
-                "operations/wallet/listpayments.mdx",
                 "operations/wallet/listpaymentsv2.mdx",
                 "operations/wallet/previewpayments.mdx",
             },
@@ -212,7 +213,13 @@ class OpenRpcMinimalLifecycleTests(unittest.TestCase):
         overview = read_mdx(output_dir, "wallet-gateway-overview.mdx")
         remote_method = read_mdx(output_dir, "operations/remote/status.mdx")
         assert_contains_all(overview, ["/reference/wallet-gateway-json-rpc/rpc-specs/wallet", "Wallet API"])
-        assert_contains_all(remote_method, ["PaymentResult", "amount", "x2mdx-ref-schema"])
+        assert_contains_all(remote_method, ["PaymentResult", "amount", "x2mdx-ref-schema", "## History", "Added 1.0.0", "Updated 1.1.0"])
+        history_report = json.loads((output_dir / "history-report.json").read_text(encoding="utf-8"))
+        self.assertEqual(history_report["format"], "openrpc")
+        self.assertEqual(history_report["comparison_versions"], ["1.0.0", "1.1.0"])
+        removed = next(item for item in history_report["items"] if item["id"] == "wallet#listPayments")
+        self.assertFalse(removed["current_present"])
+        self.assertIsNone(removed["route"])
 
     def test_cli_renders_explicit_lifecycle_states(self) -> None:
         output_dir = self._render_pages("openrpc-lifecycle")
@@ -221,16 +228,16 @@ class OpenRpcMinimalLifecycleTests(unittest.TestCase):
         wallet_spec = read_mdx(output_dir, "rpc-specs/wallet.mdx")
         stable_method = read_mdx(output_dir, "operations/wallet/listpaymentsv2.mdx")
         deprecated_method = read_mdx(output_dir, "operations/wallet/listlegacypayments.mdx")
-        assert_contains_all(wallet_spec, ["Alpha", "Beta", "Stable", "Deprecated"])
-        assert_contains_all(stable_method, ["Lifecycle", "Stable"])
-        assert_contains_all(deprecated_method, ["Lifecycle", "Deprecated"])
+        assert_contains_all(wallet_spec, ["Added 1.1.0", "Deprecated 1.1.0", "## History"])
+        assert_contains_all(stable_method, ["Lifecycle", "Stable", "## History"])
+        assert_contains_all(deprecated_method, ["Lifecycle", "Deprecated", "Deprecated 1.1.0", "## History"])
 
     def test_cli_renders_replacement_metadata(self) -> None:
         output_dir = self._render_pages("openrpc-replacements")
 
         assert_text_tree_matches_fixture(output_dir, "openrpc/default")
         stable_method = read_mdx(output_dir, "operations/wallet/listpaymentsv2.mdx")
-        assert_contains_all(stable_method, ["Replaces", "listPayments", "JSON-RPC listPaymentsV2"])
+        assert_contains_all(stable_method, ["Replaces", "listPayments", "JSON-RPC listPaymentsV2", "Replacement", "## History"])
         assert_contains_none(stable_method, ["x-state", "x-replaces", "## Examples"])
 
     def test_cli_prunes_stale_output(self) -> None:
@@ -248,6 +255,8 @@ class OpenRpcMinimalLifecycleTests(unittest.TestCase):
                 str(manifest_path),
                 "--output-dir",
                 str(output_dir),
+                "--history-report",
+                str(output_dir / "history-report.json"),
                 "--publish-version",
                 "1.1.0",
                 "--source-name",

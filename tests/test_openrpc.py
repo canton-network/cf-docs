@@ -9,6 +9,7 @@ from contextlib import redirect_stdout
 from pathlib import Path
 
 from x2mdx.cli import main as cli_main
+from x2mdx.openrpc.history import build_openrpc_history_report
 from x2mdx.openrpc.lifecycle import build_openrpc_report_from_sources, parse_openrpc
 from x2mdx.openrpc.models import OpenRpcSourceSnapshot
 from x2mdx.openrpc.render import build_method_page
@@ -388,6 +389,9 @@ class OpenRpcTests(unittest.TestCase):
         self.assertIn("curl", status_page)
         self.assertIn("<JSON_RPC_URL>", status_page)
         self.assertIn("## Related Schemas", status_page)
+        self.assertIn("## History", status_page)
+        self.assertIn("Added 1.0.0", status_page)
+        self.assertIn("Updated 1.1.0", status_page)
         self.assertEqual(status_page.count('class="x2mdx-ref-schema"'), 1)
         self.assertIn("required fields", remote_page)
 
@@ -454,7 +458,20 @@ class OpenRpcTests(unittest.TestCase):
             publish_version="1.1.0",
         )
         spec = report.specs[0]
-        page = build_method_page(spec, spec.methods[0], output_dir=self.root / "out", spec_dir_name="specs")
+        history_report = build_openrpc_history_report(
+            sources=[method],
+            routes={("dapp-api", "status"): "operations/dapp-api/status"},
+            publish_version="1.1.0",
+        )
+        history_item = history_report.items_by_id()["dapp-api#status"]
+        page = build_method_page(
+            spec,
+            spec.methods[0],
+            output_dir=self.root / "out",
+            spec_dir_name="specs",
+            history_item=history_item,
+            comparison_versions=history_report.comparison_versions,
+        )
 
         self.assertEqual(page.path, "operations/dapp-api/status.mdx")
         self.assertEqual(page.badges[0].label, "JSON-RPC")
@@ -465,3 +482,4 @@ class OpenRpcTests(unittest.TestCase):
         self.assertEqual(page.examples[0].title, "cURL")
         self.assertIn('"method": "status"', page.examples[0].body)
         self.assertEqual(page.examples[1].title, "Result")
+        self.assertEqual(page.history_events[0].label, "Added")
