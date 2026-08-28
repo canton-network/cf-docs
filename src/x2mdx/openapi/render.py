@@ -27,6 +27,11 @@ REMOVE_AS_OF_RE = re.compile(
     re.IGNORECASE,
 )
 
+LIFECYCLE_TITLE_RE = re.compile(
+    r"^(?:deprecated|removed|obsolete)\b(?:$|\s*[:.\-]\s*|\s+)",
+    re.IGNORECASE,
+)
+
 
 @dataclass(frozen=True)
 class ManualOpenAPIRenderOptions:
@@ -434,6 +439,27 @@ def _operations_by_id(
     return indexed
 
 
+def _humanized_operation_id(operation: dict[str, Any]) -> str | None:
+    operation_id = _operation_id(operation)
+    if operation_id is None:
+        return None
+    title = re.sub(
+        rf"^(?:{'|'.join(('get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace'))})",
+        "",
+        operation_id,
+        flags=re.IGNORECASE,
+    )
+    title = re.sub(r"^V\d+", "", title)
+    title = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", title)
+    title = re.sub(r"[-_]+", " ", title)
+    title = " ".join(title.split())
+    return title[0].upper() + title[1:].lower() if title else None
+
+
+def _describes_operation(text: str) -> bool:
+    return not LIFECYCLE_TITLE_RE.match(text.strip())
+
+
 def _operation_title(operation: dict[str, Any], *, method: str, path: str) -> str:
     summary = str(operation.get("summary") or "").strip()
     mintlify_path = re.sub(r"\{([^{}]+)\}", r":\1", path)
@@ -442,26 +468,23 @@ def _operation_title(operation: dict[str, Any], *, method: str, path: str) -> st
         f"{method.upper()} {path}",
         f"{method.upper()} {mintlify_path}",
     }
-    if summary and summary not in generated_summaries:
+    if (
+        summary
+        and summary not in generated_summaries
+        and _describes_operation(summary)
+    ):
         return summary
     description = " ".join(str(operation.get("description") or "").split())
     first_sentence = description.partition(".")[0].strip()
-    if first_sentence and len(first_sentence) <= 96:
+    if (
+        first_sentence
+        and len(first_sentence) <= 96
+        and _describes_operation(first_sentence)
+    ):
         return first_sentence
-    operation_id = _operation_id(operation)
-    if operation_id is not None:
-        title = re.sub(
-            rf"^(?:{'|'.join(('get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace'))})",
-            "",
-            operation_id,
-            flags=re.IGNORECASE,
-        )
-        title = re.sub(r"^V\d+", "", title)
-        title = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", title)
-        title = re.sub(r"[-_]+", " ", title)
-        title = " ".join(title.split())
-        if title:
-            return title[0].upper() + title[1:].lower()
+    operation_id_title = _humanized_operation_id(operation)
+    if operation_id_title is not None:
+        return operation_id_title
     return f"{method.upper()} {path}"
 
 

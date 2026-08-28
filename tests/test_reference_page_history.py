@@ -5,6 +5,7 @@ from pathlib import Path
 from x2mdx.history import history_events_for_item, load_history_report
 from x2mdx.reference_pages import (
     ReferenceBreadcrumb,
+    ReferenceCollectionPage,
     ReferenceExample,
     ReferenceField,
     ReferenceMetaItem,
@@ -12,6 +13,7 @@ from x2mdx.reference_pages import (
     ReferencePanel,
     ReferenceSchema,
     reference_badges_for_history_item,
+    render_collection_page,
     render_operation_page,
 )
 from x2mdx.render import render_page
@@ -138,3 +140,17 @@ def test_history_styles_cover_desktop_dark_mode_and_narrow_layouts() -> None:
     assert ".x2mdx-ref-history-event" in styles
     assert '[data-theme="dark"] .x2mdx-ref-history-event' in styles
     assert "@media (max-width: 640px)" in styles
+
+
+def test_collection_pages_mark_the_standardized_reference_canvas() -> None:
+    rendered = render_page(
+        render_collection_page(
+            ReferenceCollectionPage(
+                path="reference/payments/index.mdx",
+                title="Payments API",
+                eyebrow="API Reference",
+            )
+        )
+    )
+
+    assert rendered.count("x2mdx-ref-page--collection") == 1
