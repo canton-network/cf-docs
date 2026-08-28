@@ -73,23 +73,20 @@ def build_asyncapi_nav_group(
     group_label: str,
 ) -> MintlifyNavGroup:
     pages: MintlifyNavItems = []
+    overview_page = output_dir / "index.mdx"
+    if overview_page.exists():
+        pages.append(docs_json_page_ref(overview_page, docs_json_path))
     channel_groups: MintlifyNavItems = []
-    operation_root = output_dir / "operations"
-    for channel_details_page in sorted(operation_root.glob("*/details.mdx"), key=lambda path: path.parent.name):
-        channel_slug = channel_details_page.parent.name
+    for channel_page in sorted((output_dir / "channels").glob("*.mdx"), key=mdx_title):
+        channel_slug = channel_page.stem
         operation_dir = output_dir / "operations" / channel_slug
-        operation_refs: MintlifyNavItems = [
+        operation_refs: MintlifyNavItems = [docs_json_page_ref(channel_page, docs_json_path)]
+        operation_refs.extend(
             docs_json_page_ref(path, docs_json_path)
-            for path in sorted(
-                operation_dir.glob("*.mdx"),
-                key=lambda path: (path.name == "details.mdx", mdx_title(path)),
-            )
-        ]
-        channel_groups.append(nav_group(_asyncapi_channel_name(channel_details_page), operation_refs))
+            for path in sorted(operation_dir.glob("*.mdx"), key=mdx_title)
+        )
+        channel_groups.append(nav_group(_asyncapi_channel_name(channel_page), operation_refs))
     pages.extend(channel_groups)
-    details_page = operation_root / "details.mdx"
-    if details_page.exists():
-        pages.append(docs_json_page_ref(details_page, docs_json_path))
     return nav_group(group_label, pages)
 
 

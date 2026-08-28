@@ -364,6 +364,20 @@ def build_parser() -> argparse.ArgumentParser:
         help="Exact MDX file path to write for the generated AsyncAPI page",
     )
     build_asyncapi.add_argument(
+        "--history-report",
+        help="Optional path for the validated normalized history report.",
+    )
+    build_asyncapi.add_argument(
+        "--surface-id",
+        default="json-ledger-api-asyncapi",
+        help="Stable normalized-history surface identifier.",
+    )
+    build_asyncapi.add_argument(
+        "--configured-scope",
+        default="JSON Ledger API WebSocket channel actions",
+        help="Configured reader scope recorded in normalized history.",
+    )
+    build_asyncapi.add_argument(
         "--overview-name",
         default="index.mdx",
         help="Filename for the overview page inside the output directory.",
@@ -584,7 +598,12 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "asyncapi":
         if args.asyncapi_command == "build-api-pages-from-manifest":
-            from x2mdx.asyncapi.render import build_page, build_pages
+            from x2mdx.asyncapi.history import build_asyncapi_history_report
+            from x2mdx.asyncapi.lifecycle import build_asyncapi_report_from_sources
+            from x2mdx.asyncapi.render import build_page, build_pages, operation_page_path
+            from x2mdx.asyncapi.snapshots import load_asyncapi_source_snapshots
+            from x2mdx.history.io import write_history_report
+            from x2mdx.history.validation import validate_history_report
             from x2mdx.mintlify import MintlifyNavTarget, update_docs_json_navigation
             from x2mdx.render import write_page, write_pages
 
@@ -597,7 +616,21 @@ def main(argv: Sequence[str] | None = None) -> int:
             if args.output_dir and args.output_file:
                 parser.error("build-api-pages-from-manifest accepts only one of --output-dir or --output-file")
 
-            report = build_asyncapi_report_from_manifest_args(args)
+            manifest_path = Path(args.manifest)
+            include_versions = set(args.version) if args.version else None
+            fixture_root = Path(args.fixture_root) if args.fixture_root else None
+            sources = load_asyncapi_source_snapshots(
+                manifest_path,
+                fixture_root=fixture_root,
+                include_versions=include_versions,
+            )
+            report = build_asyncapi_report_from_sources(
+                sources,
+                source_name=args.source_name or str(manifest_path),
+                version_filter=args.version_filter
+                or ("selected manifest versions" if include_versions else "manifest versions"),
+                publish_version=args.publish_version,
+            )
             if args.output_file:
                 output_file = Path(args.output_file)
                 page = build_page(
@@ -611,14 +644,46 @@ def main(argv: Sequence[str] | None = None) -> int:
                 output_dir = Path(args.output_dir)
                 if output_dir.exists():
                     shutil.rmtree(output_dir)
+                docs_root = (
+                    Path(args.docs_json).resolve().parent
+                    if args.docs_json
+                    else output_dir.resolve()
+                )
+                routes: dict[tuple[str, str], str] = {}
+                for channel in report.channels:
+                    if channel.status != "active":
+                        continue
+                    for action in channel.latest.get("actions", []):
+                        operation_path = operation_page_path(
+                            output_dir,
+                            channel,
+                            action["action"],
+                        ).resolve()
+                        try:
+                            route = operation_path.relative_to(docs_root).with_suffix("").as_posix()
+                        except ValueError:
+                            route = operation_path.relative_to(output_dir.resolve()).with_suffix("").as_posix()
+                        routes[(channel.channel, action["action"])] = route
+                history_report = build_asyncapi_history_report(
+                    sources=sources,
+                    routes=routes,
+                    publish_version=report.publish_version,
+                    surface_id=args.surface_id,
+                    title=args.page_title,
+                    configured_scope=args.configured_scope,
+                )
+                validate_history_report(history_report)
                 output_root, pages = build_pages(
                     report,
                     output_dir=output_dir,
                     overview_name=args.overview_name,
                     page_title=args.page_title,
                     page_description=args.page_description,
+                    history_report=history_report,
                 )
                 write_pages(pages, output_root)
+                if args.history_report:
+                    write_history_report(Path(args.history_report), history_report)
                 output_file = output_dir / args.overview_name
             if args.docs_json:
                 update_docs_json_navigation(
