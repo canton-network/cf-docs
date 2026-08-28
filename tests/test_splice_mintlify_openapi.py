@@ -65,7 +65,7 @@ def test_checked_in_splice_history_report_is_valid_and_retains_removed_operation
     assert tuple(artifact.version for artifact in report.source_artifacts) == (
         report.comparison_versions
     )
-    assert len(report.current_items()) == 121
+    assert len(report.current_items()) == 123
     assert any(not item.current_present for item in report.items)
     assert all(item.route is None for item in report.items if not item.current_present)
     assert all(
@@ -296,7 +296,9 @@ def test_splice_manual_pages_rely_on_mintlify_navigation_breadcrumbs(
     assert len(written) == 1
     rendered = next(iter(written)).read_text(encoding="utf-8")
     assert "x2mdx-ref-breadcrumbs" not in rendered
-    assert '<span class="x2mdx-ref-meta-label">Operation ID</span>' in rendered
+    assert 'title: "GET /v0/scans"' in rendered
+    assert 'api: "GET https://scan.example.com/api/scan/v0/scans"' in rendered
+    assert '<span class="x2mdx-ref-meta-label">Operation ID</span>' not in rendered
 
 
 def test_splice_openapi_normalizes_path_summaries_for_mintlify_operation_slugs(

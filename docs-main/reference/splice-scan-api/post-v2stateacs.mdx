@@ -1,7 +1,7 @@
 ---
-title: "POST /v0/holdings/summary"
-description: "Deprecated. Please use /v1/holdings/summary instead. Returns the summary of active amulet contracts for a given migration id and record time, for the given parties. This is an aggregate of `/v0/holdings/state` by owner party ID with better performance than client-side computation."
-api: "POST https://scan.sv-1.global.canton.network.sync.global/api/scan/v0/holdings/summary"
+title: "POST /v2/state/acs"
+description: "Returns the ACS in creation date ascending order, paged, for a given migration id and record time. Unlike /v0/state/acs, every contract is identified by an (optional) update_id (as opposed to the event ID in /v0/state/acs, which was not BFT-safe). The update_id is the ID of the update in which the contract was created, and can be used to correlate with updates returned by /v2/updates."
+api: "POST https://scan.sv-1.global.canton.network.sync.global/api/scan/v2/state/acs"
 playground: "interactive"
 ---
 
@@ -18,11 +18,7 @@ playground: "interactive"
 
   <span class="x2mdx-ref-badge x2mdx-ref-badge--protocol">OpenAPI</span>
 
-  <a class="x2mdx-ref-badge x2mdx-ref-badge--removed" href="#history-deprecated-0-6-3">Deprecated 0.6.3</a>
-
-  <a class="x2mdx-ref-badge x2mdx-ref-badge--changed" href="#history-updated-0-6-3">Updated 0.6.3</a>
-
-  <a class="x2mdx-ref-badge x2mdx-ref-badge--added" href="#history-added-0-5-10">Added 0.5.10</a>
+  <a class="x2mdx-ref-badge x2mdx-ref-badge--added" href="#history-added-0-7-5">Added 0.7.5</a>
 
 </div>
 
@@ -35,16 +31,20 @@ playground: "interactive"
 
 ```bash cURL
 curl --request POST \
-  --url 'https://scan.sv-1.global.canton.network.sync.global/api/scan/v0/holdings/summary' \
+  --url 'https://scan.sv-1.global.canton.network.sync.global/api/scan/v2/state/acs' \
   --header 'Content-Type: application/json' \
   --data '{
   "migration_id": 123,
   "record_time": "2026-01-01T00:00:00Z",
   "record_time_match": "exact",
-  "owner_party_ids": [
+  "after": "<string>",
+  "page_size": 123,
+  "party_ids": [
     "<string>"
   ],
-  "as_of_round": 123
+  "templates": [
+    "<string>"
+  ]
 }'
 ```
 
@@ -52,16 +52,20 @@ curl --request POST \
 import json
 import requests
 
-url = "https://scan.sv-1.global.canton.network.sync.global/api/scan/v0/holdings/summary"
+url = "https://scan.sv-1.global.canton.network.sync.global/api/scan/v2/state/acs"
 headers = {'Content-Type': 'application/json'}
 payload = json.loads(r'''{
   "migration_id": 123,
   "record_time": "2026-01-01T00:00:00Z",
   "record_time_match": "exact",
-  "owner_party_ids": [
+  "after": "<string>",
+  "page_size": 123,
+  "party_ids": [
     "<string>"
   ],
-  "as_of_round": 123
+  "templates": [
+    "<string>"
+  ]
 }''')
 response = requests.request(
     "POST", url, headers=headers, json=payload
@@ -71,7 +75,7 @@ print(response.text)
 ```
 
 ```javascript JavaScript
-const response = await fetch('https://scan.sv-1.global.canton.network.sync.global/api/scan/v0/holdings/summary', {
+const response = await fetch('https://scan.sv-1.global.canton.network.sync.global/api/scan/v2/state/acs', {
   method: 'POST',
   headers: {
   "Content-Type": "application/json"
@@ -80,10 +84,14 @@ const response = await fetch('https://scan.sv-1.global.canton.network.sync.globa
   "migration_id": 123,
   "record_time": "2026-01-01T00:00:00Z",
   "record_time_match": "exact",
-  "owner_party_ids": [
+  "after": "<string>",
+  "page_size": 123,
+  "party_ids": [
     "<string>"
   ],
-  "as_of_round": 123
+  "templates": [
+    "<string>"
+  ]
 }),
 });
 
@@ -95,7 +103,7 @@ console.log(await response.text());
 $curl = curl_init();
 
 curl_setopt_array($curl, [
-    CURLOPT_URL => 'https://scan.sv-1.global.canton.network.sync.global/api/scan/v0/holdings/summary',
+    CURLOPT_URL => 'https://scan.sv-1.global.canton.network.sync.global/api/scan/v2/state/acs',
     CURLOPT_RETURNTRANSFER => true,
     CURLOPT_CUSTOMREQUEST => 'POST',
     CURLOPT_POSTFIELDS => <<<'JSON'
@@ -103,10 +111,14 @@ curl_setopt_array($curl, [
   "migration_id": 123,
   "record_time": "2026-01-01T00:00:00Z",
   "record_time_match": "exact",
-  "owner_party_ids": [
+  "after": "<string>",
+  "page_size": 123,
+  "party_ids": [
     "<string>"
   ],
-  "as_of_round": 123
+  "templates": [
+    "<string>"
+  ]
 }
 JSON,
     CURLOPT_HTTPHEADER => [
@@ -129,14 +141,18 @@ import (
 )
 
 func main() {
-  req, _ := http.NewRequest("POST", "https://scan.sv-1.global.canton.network.sync.global/api/scan/v0/holdings/summary", bytes.NewBufferString(`{
+  req, _ := http.NewRequest("POST", "https://scan.sv-1.global.canton.network.sync.global/api/scan/v2/state/acs", bytes.NewBufferString(`{
   "migration_id": 123,
   "record_time": "2026-01-01T00:00:00Z",
   "record_time_match": "exact",
-  "owner_party_ids": [
+  "after": "<string>",
+  "page_size": 123,
+  "party_ids": [
     "<string>"
   ],
-  "as_of_round": 123
+  "templates": [
+    "<string>"
+  ]
 }`))
   req.Header.Set("Content-Type", "application/json")
   response, _ := http.DefaultClient.Do(req)
@@ -153,17 +169,21 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 
 var request = HttpRequest.newBuilder()
-    .uri(URI.create("https://scan.sv-1.global.canton.network.sync.global/api/scan/v0/holdings/summary"))
+    .uri(URI.create("https://scan.sv-1.global.canton.network.sync.global/api/scan/v2/state/acs"))
     .header("Content-Type", "application/json")
     .method("POST", HttpRequest.BodyPublishers.ofString("""
 {
   "migration_id": 123,
   "record_time": "2026-01-01T00:00:00Z",
   "record_time_match": "exact",
-  "owner_party_ids": [
+  "after": "<string>",
+  "page_size": 123,
+  "party_ids": [
     "<string>"
   ],
-  "as_of_round": 123
+  "templates": [
+    "<string>"
+  ]
 }
 """))
     .build();
@@ -176,7 +196,7 @@ System.out.println(response.body());
 require 'net/http'
 require 'uri'
 
-uri = URI('https://scan.sv-1.global.canton.network.sync.global/api/scan/v0/holdings/summary')
+uri = URI('https://scan.sv-1.global.canton.network.sync.global/api/scan/v2/state/acs')
 request = Net::HTTP::Post.new(uri)
 request['Content-Type'] = 'application/json'
 request.body = <<~JSON
@@ -184,10 +204,14 @@ request.body = <<~JSON
   "migration_id": 123,
   "record_time": "2026-01-01T00:00:00Z",
   "record_time_match": "exact",
-  "owner_party_ids": [
+  "after": "<string>",
+  "page_size": 123,
+  "party_ids": [
     "<string>"
   ],
-  "as_of_round": 123
+  "templates": [
+    "<string>"
+  ]
 }
 JSON
 response = Net::HTTP.start(uri.hostname, uri.port) do |http|
@@ -205,19 +229,23 @@ puts response.body
 {
   "record_time": "2026-01-01T00:00:00Z",
   "migration_id": 123,
-  "computed_as_of_round": 123,
-  "summaries": [
+  "created_events": [
     {
-      "party_id": "<string>",
-      "total_unlocked_coin": "<string>",
-      "total_locked_coin": "<string>",
-      "total_coin_holdings": "<string>",
-      "accumulated_holding_fees_unlocked": "<string>",
-      "accumulated_holding_fees_locked": "<string>",
-      "accumulated_holding_fees_total": "<string>",
-      "total_available_coin": "<string>"
+      "created_in_update_id": "<string>",
+      "contract_id": "<string>",
+      "template_id": "<string>",
+      "package_name": "<string>",
+      "create_arguments": {},
+      "created_at": "2026-01-01T00:00:00Z",
+      "signatories": [
+        "<string>"
+      ],
+      "observers": [
+        "<string>"
+      ]
     }
-  ]
+  ],
+  "next_page_token": "<string>"
 }
 ```
 
@@ -263,7 +291,7 @@ OpenAPI type: <code>integer (int64)</code>.
 
 
 
-The migration id for which to return the summary.
+The migration id for which to return the ACS.
 
 
 
@@ -306,14 +334,12 @@ Allowed values: <code>exact</code>, <code>at_or_before</code>.
 
 
 
-<ParamField body="owner_party_ids" type="string[]" required>
+<ParamField body="after" type="string">
 
 
-The owners for which to compute the summary.
+Pagination token for the next page of results. For this to be valid, this must be the `next_page_token` from a prior request with identical parameters aside from `after` and `page_size`; the response may be invalid otherwise. This token is opaque and not meant to be edited by users.
 
 
-
-Minimum items: 1.
 
 
 
@@ -322,12 +348,40 @@ Minimum items: 1.
 
 
 
-<ParamField body="as_of_round" type="number">
-OpenAPI type: <code>integer (int64)</code>.
+<ParamField body="page_size" type="number" required>
+OpenAPI type: <code>integer (int32)</code>.
 
 
 
-Compute holding fees as of this round. Defaults to the earliest open mining round.
+The maximum number of created events returned for this request.
+
+
+
+
+
+
+</ParamField>
+
+
+
+<ParamField body="party_ids" type="string[]">
+
+
+Filters the ACS by contracts in which these party IDs are stakeholders.
+
+
+
+
+
+
+</ParamField>
+
+
+
+<ParamField body="templates" type="string[]">
+
+
+Filters the ACS by contracts with these template IDs, specified as &quot;PACKAGE_NAME:MODULE_NAME:ENTITY_NAME&quot;.
 
 
 
@@ -388,20 +442,9 @@ The same `migration_id` as in the request.
 
 
 
-<ResponseField name="computed_as_of_round" type="integer (int64)" required>
+<ResponseField name="created_events" type="ActiveContract[]" required>
 
-The same `as_of_round` as in the request, with the same default.
-
-
-
-
-
-
-</ResponseField>
-
-
-
-<ResponseField name="summaries" type="HoldingsSummary[]" required>
+Up to `page_size` contracts in the ACS. `create_arguments` are always encoded as `compact_json`.
 
 
 
@@ -412,22 +455,9 @@ The same `as_of_round` as in the request, with the same default.
 
 
 
-<ResponseField name="party_id" type="string" required>
+<ResponseField name="created_in_update_id" type="string">
 
-Owner party ID of the amulet. Guaranteed to be unique among `summaries`.
-
-
-
-
-
-
-</ResponseField>
-
-
-
-<ResponseField name="total_unlocked_coin" type="string" required>
-
-Sum of unlocked amulet at time of reception, not counting holding fees deducted since.
+The id of the update in which this contract was created. Optional and will be absent for contracts created in prior migration IDs.
 
 
 
@@ -438,22 +468,9 @@ Sum of unlocked amulet at time of reception, not counting holding fees deducted 
 
 
 
-<ResponseField name="total_locked_coin" type="string" required>
+<ResponseField name="contract_id" type="string" required>
 
-Sum of locked amulet at time of original amulet reception, not counting holding fees deducted since.
-
-
-
-
-
-
-</ResponseField>
-
-
-
-<ResponseField name="total_coin_holdings" type="string" required>
-
-`total_unlocked_coin` + `total_locked_coin`.
+The ID of the created contract.
 
 
 
@@ -464,22 +481,9 @@ Sum of locked amulet at time of original amulet reception, not counting holding 
 
 
 
-<ResponseField name="accumulated_holding_fees_unlocked" type="string" required>
+<ResponseField name="template_id" type="string" required>
 
-Sum of holding fees as of `computed_as_of_round` that apply to unlocked amulet.
-
-
-
-
-
-
-</ResponseField>
-
-
-
-<ResponseField name="accumulated_holding_fees_locked" type="string" required>
-
-Sum of holding fees as of `computed_as_of_round` that apply to locked amulet, including fees applied since the amulet&#x27;s creation round.
+The template of the created contract.
 
 
 
@@ -490,9 +494,9 @@ Sum of holding fees as of `computed_as_of_round` that apply to locked amulet, in
 
 
 
-<ResponseField name="accumulated_holding_fees_total" type="string" required>
+<ResponseField name="package_name" type="string" required>
 
-Same as `accumulated_holding_fees_unlocked` + `accumulated_holding_fees_locked`.
+The package name of the created contract.
 
 
 
@@ -503,9 +507,48 @@ Same as `accumulated_holding_fees_unlocked` + `accumulated_holding_fees_locked`.
 
 
 
-<ResponseField name="total_available_coin" type="string" required>
+<ResponseField name="create_arguments" type="object" required>
 
-Same as `total_unlocked_coin` - `accumulated_holding_fees_unlocked`.
+The arguments that have been used to create the contract, in the form of JSON representation of a Daml record.
+
+
+
+
+
+
+</ResponseField>
+
+
+
+<ResponseField name="created_at" type="string (date-time)" required>
+
+Ledger effective time of the transaction that created the contract.
+
+
+
+
+
+
+</ResponseField>
+
+
+
+<ResponseField name="signatories" type="string[]" required>
+
+Signatories to the contract, in the form of party IDs.
+
+
+
+
+
+
+</ResponseField>
+
+
+
+<ResponseField name="observers" type="string[]" required>
+
+Observers to the contract, in the form of party IDs.
 
 
 
@@ -518,6 +561,19 @@ Same as `total_unlocked_coin` - `accumulated_holding_fees_unlocked`.
 
 
 </Expandable>
+
+
+</ResponseField>
+
+
+
+<ResponseField name="next_page_token" type="string">
+
+When requesting the next page of results, pass this as `after` to the `AcsRequestV2` or `HoldingsStateRequestV2`. Will be absent when there are no more pages. This token is opaque and not meant to be edited by users.
+
+
+
+
 
 
 </ResponseField>
@@ -626,28 +682,10 @@ internal server error
 
 <div class="x2mdx-ref-history" aria-label="Reference history">
 
-  <div class="x2mdx-ref-history-event x2mdx-ref-history-event--deprecated" id="history-deprecated-0-6-3">
-    <div class="x2mdx-ref-history-event-head">
-      <span class="x2mdx-ref-history-event-label">Deprecated</span>
-      <code class="x2mdx-ref-history-event-version">0.6.3</code>
-    </div>
-
-  </div>
-
-  <div class="x2mdx-ref-history-event x2mdx-ref-history-event--changed" id="history-updated-0-6-3">
-    <div class="x2mdx-ref-history-event-head">
-      <span class="x2mdx-ref-history-event-label">Updated</span>
-      <code class="x2mdx-ref-history-event-version">0.6.3</code>
-    </div>
-
-    <p class="x2mdx-ref-history-event-detail">The POST /v0/holdings/summary operation changed in this snapshot.</p>
-
-  </div>
-
-  <div class="x2mdx-ref-history-event x2mdx-ref-history-event--introduced" id="history-added-0-5-10">
+  <div class="x2mdx-ref-history-event x2mdx-ref-history-event--introduced" id="history-added-0-7-5">
     <div class="x2mdx-ref-history-event-head">
       <span class="x2mdx-ref-history-event-label">Added</span>
-      <code class="x2mdx-ref-history-event-version">0.5.10</code>
+      <code class="x2mdx-ref-history-event-version">0.7.5</code>
     </div>
 
   </div>
