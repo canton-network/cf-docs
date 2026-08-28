@@ -213,18 +213,18 @@ def test_daml_standard_library_nav_supports_product_navigation(tmp_path: Path) -
                 {
                     "group": "Daml Standard Library",
                     "pages": [
+                        "appdev/reference/daml-standard-library/index",
                         {
                             "group": "Modules",
                             "pages": ["appdev/reference/daml-standard-library/da-list"],
                         },
-                        "appdev/reference/daml-standard-library/index",
                     ],
                 }
             ],
         }
     ]
     assert (output_dir / "index.mdx").read_text(encoding="utf-8").startswith(
-        '---\ntitle: "Details and history"\n---'
+        '---\ntitle: "Overview"\n---'
     )
 
 
