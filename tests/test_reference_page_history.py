@@ -142,6 +142,18 @@ def test_history_styles_cover_desktop_dark_mode_and_narrow_layouts() -> None:
     assert "@media (max-width: 640px)" in styles
     assert ".x2mdx-ref-hero > *" in styles
     assert "overflow-wrap: anywhere;" in styles
+    history_layout = styles[
+        styles.index(".x2mdx-ref-history,") : styles.index(
+            ".x2mdx-ref-history-event--introduced"
+        )
+    ]
+    assert "min-width: 0;" in history_layout
+    assert "max-width: 100%;" in history_layout
+    assert (
+        ".x2mdx-ref-history-event-detail {\n"
+        "  margin: 0;\n"
+        "  overflow-wrap: anywhere;"
+    ) in styles
 
 
 def test_collection_pages_mark_the_standardized_reference_canvas() -> None:
