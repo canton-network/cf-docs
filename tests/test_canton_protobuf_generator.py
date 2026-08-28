@@ -202,7 +202,7 @@ class CantonProtobufGeneratorTests(unittest.TestCase):
         self.write_mdx(ledger_output, "overview.mdx", "Ledger API protobuf")
         self.write_mdx(ledger_legacy_output, "overview.mdx", "Ledger API protobuf")
         self.write_mdx(ledger_legacy_output, "packages/com-daml-ledger-api-v2.mdx", "com.daml.ledger.api.v2")
-        self.write_mdx(admin_output, "index.mdx", "Details and History")
+        self.write_mdx(admin_output, "overview.mdx", "Admin API protobuf")
         self.write_mdx(admin_output, "packages/com-digitalasset-canton-admin-health-v30.mdx", "com.digitalasset.canton.admin.health.v30")
 
         generator.update_split_protobuf_navigation(
@@ -233,7 +233,8 @@ class CantonProtobufGeneratorTests(unittest.TestCase):
         self.assertFalse(
             any(isinstance(item, dict) and item.get("group") == "Protobufs" for item in admin_grpc["pages"])
         )
-        self.assertEqual(admin_grpc["pages"][-1], "reference/admin-api/protobuf/index")
+        self.assertEqual(admin_grpc["pages"][0], "reference/admin-api/protobuf/overview")
+        self.assertNotIn("reference/admin-api/protobuf/index", admin_grpc["pages"])
 
     def test_ledger_protobuf_redirects_are_idempotent(self) -> None:
         docs_root = self.root / "docs-main"
@@ -274,6 +275,32 @@ class CantonProtobufGeneratorTests(unittest.TestCase):
                 {
                     "source": "/appdev/reference/protobuf-history/index",
                     "destination": "/appdev/reference/protobuf-history/overview",
+                },
+            ],
+        )
+
+    def test_admin_protobuf_redirects_are_idempotent(self) -> None:
+        docs_root = self.root / "docs-main"
+        docs_json = docs_root / "docs.json"
+        docs_root.mkdir(parents=True)
+        docs_json.write_text('{"redirects": []}\n', encoding="utf-8")
+
+        for _ in range(2):
+            generator.ensure_admin_protobuf_redirects(
+                docs_json_path=docs_json,
+                output_dir=docs_root / "reference" / "admin-api" / "protobuf",
+            )
+
+        self.assertEqual(
+            json.loads(docs_json.read_text(encoding="utf-8"))["redirects"],
+            [
+                {
+                    "source": "/reference/admin-api/protobuf",
+                    "destination": "/reference/admin-api/protobuf/overview",
+                },
+                {
+                    "source": "/reference/admin-api/protobuf/index",
+                    "destination": "/reference/admin-api/protobuf/overview",
                 },
             ],
         )
