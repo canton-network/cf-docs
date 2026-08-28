@@ -411,6 +411,32 @@ def build_parser() -> argparse.ArgumentParser:
         default="TypeScript and JavaScript language bindings for Canton.",
         help="Description to use for the generated page.",
     )
+    build_typedoc.add_argument(
+        "--history-report",
+        help="Optional path for a validated shared history report.",
+    )
+    build_typedoc.add_argument(
+        "--reader-route",
+        help="Root-relative route for the generated package page.",
+    )
+    build_typedoc.add_argument(
+        "--surface-id",
+        default="typescript-package",
+        help="Stable package surface identifier for the shared history report.",
+    )
+    build_typedoc.add_argument(
+        "--surface-title",
+        help="Reader-facing package title for the shared history report.",
+    )
+    build_typedoc.add_argument(
+        "--configured-scope",
+        default="Published TypeScript package exports",
+        help="Configured symbol scope for the shared history report.",
+    )
+    build_typedoc.add_argument(
+        "--lifecycle-metadata",
+        help="Optional TypeScript lifecycle sidecar with removal schedules.",
+    )
 
     asyncapi = subparsers.add_parser("asyncapi", help="AsyncAPI websocket commands")
     asyncapi_subparsers = asyncapi.add_subparsers(dest="asyncapi_command", required=True)
@@ -761,18 +787,45 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "typedoc":
         if args.typedoc_command == "build-api-pages-from-manifest":
+            from x2mdx.history.io import write_history_report
+            from x2mdx.history.validation import validate_history_report
             from x2mdx.render import write_page
+            from x2mdx.typedoc.history import (
+                build_typedoc_surface_history_report,
+                load_typedoc_removal_schedules,
+            )
             from x2mdx.typedoc.render import build_page
 
             report = build_typedoc_report_from_manifest_args(args)
+            history_report = None
+            if args.history_report:
+                if not args.reader_route:
+                    parser.error("--history-report requires --reader-route")
+                schedules = (
+                    load_typedoc_removal_schedules(Path(args.lifecycle_metadata))
+                    if args.lifecycle_metadata
+                    else {}
+                )
+                history_report = build_typedoc_surface_history_report(
+                    report,
+                    reader_route=args.reader_route,
+                    surface_id=args.surface_id,
+                    title=args.surface_title or args.page_title,
+                    configured_scope=args.configured_scope,
+                    removal_schedules=schedules,
+                )
+                validate_history_report(history_report)
             output_file = Path(args.output_file)
             page = build_page(
                 report,
                 output_path=output_file.name,
                 page_title=args.page_title,
                 page_description=args.page_description,
+                history_report=history_report,
             )
             write_page(page, output_file)
+            if history_report is not None:
+                write_history_report(Path(args.history_report), history_report)
             return 0
 
     if args.command == "asyncapi":
