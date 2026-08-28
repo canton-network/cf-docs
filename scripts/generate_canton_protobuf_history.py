@@ -38,6 +38,8 @@ GROUP_LABEL = "Canton Protobuf History"
 DETAILS_LABEL = "Details and History"
 LEDGER_OVERVIEW_NAME = "overview.mdx"
 LEDGER_OVERVIEW_TITLE = "Ledger API protobuf"
+ADMIN_OVERVIEW_NAME = "overview.mdx"
+ADMIN_OVERVIEW_TITLE = "Admin API protobuf"
 DESCRIPTOR_IMAGE_NAME = ".proto_snapshot_image.bin.gz"
 STABLE_TAG_RE = re.compile(r"^v(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)$")
 SECTION_TO_REPO_PREFIX = {
@@ -99,7 +101,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min-version", help="Minimum stable version to include when auto-discovering tags.")
     parser.add_argument("--skip-fetch", action="store_true", help="Skip fetching tags from origin before generation.")
     parser.add_argument("--force-refresh", action="store_true", help="Refresh cached protobuf bundles and descriptor images.")
-    parser.add_argument("--skip-admin-api", action="store_true", help="Only regenerate the Ledger API protobuf reference.")
+    surface_selection = parser.add_mutually_exclusive_group()
+    surface_selection.add_argument(
+        "--skip-admin-api",
+        action="store_true",
+        help="Only regenerate the Ledger API protobuf reference.",
+    )
+    surface_selection.add_argument(
+        "--skip-ledger-api",
+        action="store_true",
+        help="Only regenerate the Admin API protobuf reference.",
+    )
     parser.add_argument(
         "--source-name",
         default="Canton protobuf trees from published release bundles",
@@ -485,6 +497,7 @@ def update_split_protobuf_navigation(
     }
     if admin_output_dir is not None:
         stale_refs.add(docs_json_page_ref(admin_output_dir / "index.mdx", docs_json_path))
+        stale_refs.add(docs_json_page_ref(admin_output_dir / ADMIN_OVERVIEW_NAME, docs_json_path))
     pages[:] = prune_nav_items(
         pages,
         page_refs=stale_refs,
@@ -505,22 +518,19 @@ def update_split_protobuf_navigation(
     )
 
     if admin_output_dir is not None:
-        admin_details_page_ref = docs_json_page_ref(admin_output_dir / "index.mdx", docs_json_path)
         admin_protobuf_group_pages = generated_reference_nav.build_protobuf_nav_group(
             output_dir=admin_output_dir,
             docs_json_path=docs_json_path,
             group_label=reference_nav.PROTOBUF_GROUP,
-            include_details_page=False,
+            overview_name=ADMIN_OVERVIEW_NAME,
+            overview_first=True,
         )["pages"]
         replace_group_at_path(
             pages,
             [reference_nav.ADMIN_API_PARENT_GROUP],
             {
                 "group": reference_nav.GRPC_GROUP,
-                "pages": [
-                    *admin_protobuf_group_pages,
-                    admin_details_page_ref,
-                ],
+                "pages": admin_protobuf_group_pages,
             },
         )
 
@@ -713,6 +723,21 @@ def ensure_ledger_protobuf_redirects(
         )
 
 
+def ensure_admin_protobuf_redirects(
+    *,
+    docs_json_path: Path,
+    output_dir: Path,
+) -> None:
+    prefix = "/" + output_dir.resolve().relative_to(docs_json_path.resolve().parent).as_posix()
+    destination = f"{prefix}/overview"
+    ensure_redirect(docs_json_path=docs_json_path, source=prefix, destination=destination)
+    ensure_redirect(
+        docs_json_path=docs_json_path,
+        source=f"{prefix}/index",
+        destination=destination,
+    )
+
+
 def main() -> int:
     ensure_repo_direnv(repo_root=REPO_ROOT, script_path=Path(__file__).resolve(), argv=sys.argv[1:])
     args = parse_args()
@@ -747,53 +772,53 @@ def main() -> int:
         else:
             version_filter = f"stable Canton release bundles >= {min_version}"
 
-    ledger_releases = materialize_releases(
-        source_config=source_config,
-        repo_dir=repo_dir,
-        cache_dir=cache_dir,
-        selected_tags=selected_tags,
-        bundle_proto_dir=bundle_proto_dir,
-        selections=LEDGER_API_SELECTIONS,
-        surface="ledger-api",
-        force_refresh=args.force_refresh,
-    )
-    if not ledger_releases:
-        raise ValueError("No Ledger API protobuf releases were materialized")
-
-    ledger_manifest_path = write_manifest(
-        source_config=source_config,
-        releases=ledger_releases,
-        manifest_path=Path(args.manifest_out).resolve(),
-        source_name=args.source_name,
-    )
-
     ledger_output_dir = Path(args.output_dir).resolve()
     ledger_legacy_output_dir = Path(args.legacy_output_dir).resolve()
     docs_json_path = Path(args.docs_json).resolve()
-    canonical_route_prefix = ledger_legacy_output_dir.relative_to(docs_json_path.parent).as_posix()
-    result = render_protobuf_reference(
-        manifest_path=ledger_manifest_path,
-        output_dir=ledger_output_dir,
-        source_name=args.source_name,
-        version_filter=version_filter,
-        history_report_path=ledger_output_dir / "history-report.json",
-        surface_id="ledger-api-protobuf",
-        surface_title=LEDGER_OVERVIEW_TITLE,
-        configured_scope="Ledger API protobuf service methods",
-        reader_route_prefix=canonical_route_prefix,
-        overview_name=LEDGER_OVERVIEW_NAME,
-    )
-    if result != 0:
-        return result
+    if not args.skip_ledger_api:
+        ledger_releases = materialize_releases(
+            source_config=source_config,
+            repo_dir=repo_dir,
+            cache_dir=cache_dir,
+            selected_tags=selected_tags,
+            bundle_proto_dir=bundle_proto_dir,
+            selections=LEDGER_API_SELECTIONS,
+            surface="ledger-api",
+            force_refresh=args.force_refresh,
+        )
+        if not ledger_releases:
+            raise ValueError("No Ledger API protobuf releases were materialized")
 
-    retitle_overview_page(
-        ledger_output_dir / LEDGER_OVERVIEW_NAME,
-        title=LEDGER_OVERVIEW_TITLE,
-    )
-    sync_output_tree(
-        source_dir=ledger_output_dir,
-        target_dir=ledger_legacy_output_dir,
-    )
+        ledger_manifest_path = write_manifest(
+            source_config=source_config,
+            releases=ledger_releases,
+            manifest_path=Path(args.manifest_out).resolve(),
+            source_name=args.source_name,
+        )
+        canonical_route_prefix = ledger_legacy_output_dir.relative_to(docs_json_path.parent).as_posix()
+        result = render_protobuf_reference(
+            manifest_path=ledger_manifest_path,
+            output_dir=ledger_output_dir,
+            source_name=args.source_name,
+            version_filter=version_filter,
+            history_report_path=ledger_output_dir / "history-report.json",
+            surface_id="ledger-api-protobuf",
+            surface_title=LEDGER_OVERVIEW_TITLE,
+            configured_scope="Ledger API protobuf service methods",
+            reader_route_prefix=canonical_route_prefix,
+            overview_name=LEDGER_OVERVIEW_NAME,
+        )
+        if result != 0:
+            return result
+
+        retitle_overview_page(
+            ledger_output_dir / LEDGER_OVERVIEW_NAME,
+            title=LEDGER_OVERVIEW_TITLE,
+        )
+        sync_output_tree(
+            source_dir=ledger_output_dir,
+            target_dir=ledger_legacy_output_dir,
+        )
 
     admin_output_dir: Path | None = None
     if not args.skip_admin_api:
@@ -817,15 +842,25 @@ def main() -> int:
             source_name=admin_source_name,
         )
         admin_output_dir = Path(args.admin_output_dir).resolve()
+        admin_route_prefix = admin_output_dir.relative_to(docs_json_path.parent).as_posix()
         result = render_protobuf_reference(
             manifest_path=admin_manifest_path,
             output_dir=admin_output_dir,
             source_name=admin_source_name,
             version_filter=version_filter,
+            history_report_path=admin_output_dir / "history-report.json",
+            surface_id="admin-api-protobuf",
+            surface_title=ADMIN_OVERVIEW_TITLE,
+            configured_scope="Canton Admin API protobuf service methods",
+            reader_route_prefix=admin_route_prefix,
+            overview_name=ADMIN_OVERVIEW_NAME,
         )
         if result != 0:
             return result
-        retitle_overview_page(admin_output_dir / "index.mdx")
+        retitle_overview_page(
+            admin_output_dir / ADMIN_OVERVIEW_NAME,
+            title=ADMIN_OVERVIEW_TITLE,
+        )
         strip_trailing_whitespace_tree(admin_output_dir)
 
     update_split_protobuf_navigation(
@@ -835,10 +870,16 @@ def main() -> int:
         ledger_legacy_output_dir=ledger_legacy_output_dir,
         admin_output_dir=admin_output_dir,
     )
-    ensure_ledger_protobuf_redirects(
-        docs_json_path=docs_json_path,
-        output_dirs=(ledger_output_dir, ledger_legacy_output_dir),
-    )
+    if not args.skip_ledger_api:
+        ensure_ledger_protobuf_redirects(
+            docs_json_path=docs_json_path,
+            output_dirs=(ledger_output_dir, ledger_legacy_output_dir),
+        )
+    if admin_output_dir is not None:
+        ensure_admin_protobuf_redirects(
+            docs_json_path=docs_json_path,
+            output_dir=admin_output_dir,
+        )
     return 0
 
 
