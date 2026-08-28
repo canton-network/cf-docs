@@ -80,7 +80,7 @@ def operation_spec(*, changed: bool) -> dict:
             "schemas": {
                 "GetUpdatesRequest": {
                     "type": "object",
-                    "required": ["beginExclusive"],
+                    "required": ["beginExclusive", "commands"],
                     "properties": {
                         "beginExclusive": {
                             "type": "integer",
@@ -88,6 +88,29 @@ def operation_spec(*, changed: bool) -> dict:
                             "description": "First offset to read after.",
                         },
                         "verbose": {"type": "boolean", "default": False},
+                        "commands": {
+                            "type": "array",
+                            "items": {"$ref": "#/components/schemas/Command"},
+                        },
+                    },
+                },
+                "Command": {
+                    "type": "object",
+                    "required": ["commandId", "payload"],
+                    "properties": {
+                        "commandId": {"type": "string"},
+                        "payload": {"$ref": "#/components/schemas/CommandPayload"},
+                    },
+                },
+                "CommandPayload": {
+                    "type": "object",
+                    "required": ["templateId"],
+                    "properties": {
+                        "templateId": {"type": "string"},
+                        "arguments": {
+                            "type": "object",
+                            "additionalProperties": True,
+                        },
                     },
                 },
                 "Update": {
@@ -223,16 +246,40 @@ def test_manual_openapi_page_preserves_playground_and_standard_history_layout() 
     assert 'api: "POST http://localhost:7575/v2/updates/flats"' in rendered
     assert 'authMethod: "bearer"' in rendered
     assert 'playground: "interactive"' in rendered
-    assert 'title: "Query flat transactions"' in rendered
+    assert 'title: "POST /v2/updates/flats"' in rendered
+    assert 'description: "Query flat transactions.' in rendered
+    assert "## Authorizations" in rendered
+    assert '<ParamField header="Authorization" type="string" required>' in rendered
     assert '<ParamField query="limit" type="number">' in rendered
-    assert "OpenAPI type: `integer (int64)`." in rendered
+    assert "OpenAPI type: <code>integer (int64)</code>." in rendered
     assert '<ParamField body="beginExclusive" type="number" required>' in rendered
+    assert '<ParamField body="commands" type="object[]" required>' in rendered
+    assert '<Expandable title="child attributes">' in rendered
+    assert '<ParamField body="commandId" type="string" required>' in rendered
+    assert '<ParamField body="templateId" type="string" required>' in rendered
     assert '<ResponseField name="value" type="Update[]" required>' in rendered
     assert "<RequestExample>" in rendered
     assert "<ResponseExample>" in rendered
+    assert "```bash cURL" in rendered
+    assert "```python Python" in rendered
+    assert "```javascript JavaScript" in rendered
+    assert "```php PHP" in rendered
+    assert "```go Go" in rendered
+    assert "```java Java" in rendered
+    assert "```ruby Ruby" in rendered
+    assert "```text 400" in rendered
+    assert '"commands": [' in rendered
+    assert '"templateId": "<string>"' in rendered
     assert "x2mdx-ref-operation-shell" not in rendered
+    assert "## Protocol Details" not in rendered
+    assert "## Inputs" not in rendered
+    assert "## Outputs" not in rendered
+    assert rendered.index("## Authorizations") < rendered.index("## Body")
+    assert rendered.index("## Body") < rendered.index("## Responses")
+    assert rendered.index("## Responses") < rendered.index("## History")
     assert "## History" in rendered
-    assert "Remove as of" in rendered
+    assert "Removal scheduled" in rendered
+    assert 'href="#history-removal-scheduled-3-5-0"' in rendered
     assert "3.5.0" in rendered
     assert "details and history" not in rendered.lower()
 
@@ -273,6 +320,76 @@ def test_binary_request_example_uses_file_upload_curl() -> None:
     assert "--data-binary '@request.bin'" in rendered
 
 
+def test_public_operation_omits_authentication_ui_and_headers() -> None:
+    spec = operation_spec(changed=False)
+    operation = spec["paths"]["/v2/updates/flats"]["post"]
+    operation["security"] = []
+    history = operation_history_events(
+        specs_by_version={"3.5": spec},
+        versions=["3.5"],
+        publish_version="3.5",
+        method="post",
+        path="/v2/updates/flats",
+        source_name="release fixtures",
+    )
+
+    rendered = render_page(
+        render_manual_openapi_operation(
+            spec=spec,
+            options=ManualOpenAPIRenderOptions(
+                method="post",
+                path="/v2/updates/flats",
+                output_path="reference/json-api-reference/post-v2updatesflats.mdx",
+            ),
+            history_events=history,
+            publish_version="3.5",
+        )
+    )
+
+    assert "authMethod:" not in rendered
+    assert "## Authorizations" not in rendered
+    assert "Authorization: Bearer" not in rendered
+
+
+def test_authored_media_examples_override_generated_placeholders() -> None:
+    spec = operation_spec(changed=False)
+    operation = spec["paths"]["/v2/updates/flats"]["post"]
+    request_media = operation["requestBody"]["content"]["application/json"]
+    request_media["example"] = {
+        "beginExclusive": 42,
+        "commands": [],
+        "verbose": True,
+    }
+    response_media = operation["responses"]["200"]["content"]["application/json"]
+    response_media["examples"] = {
+        "success": {"value": [{"offset": 84}]},
+    }
+    history = operation_history_events(
+        specs_by_version={"3.5": spec},
+        versions=["3.5"],
+        publish_version="3.5",
+        method="post",
+        path="/v2/updates/flats",
+        source_name="release fixtures",
+    )
+
+    rendered = render_page(
+        render_manual_openapi_operation(
+            spec=spec,
+            options=ManualOpenAPIRenderOptions(
+                method="post",
+                path="/v2/updates/flats",
+                output_path="reference/json-api-reference/post-v2updatesflats.mdx",
+            ),
+            history_events=history,
+            publish_version="3.5",
+        )
+    )
+
+    assert '"beginExclusive": 42' in rendered
+    assert '"offset": 84' in rendered
+
+
 def test_long_generated_title_falls_back_to_humanized_operation_id() -> None:
     spec = operation_spec(changed=False)
     operation = spec["paths"]["/v2/updates/flats"]["post"]
@@ -303,7 +420,8 @@ def test_long_generated_title_falls_back_to_humanized_operation_id() -> None:
         )
     )
 
-    assert 'title: "Updates flats"' in rendered
+    assert 'title: "POST /v2/updates/flats"' in rendered
+    assert 'description: "You may use this endpoint' in rendered
 
 
 def test_lifecycle_prefix_is_not_used_as_the_operation_title() -> None:
@@ -333,7 +451,7 @@ def test_lifecycle_prefix_is_not_used_as_the_operation_title() -> None:
         )
     )
 
-    assert 'title: "Updates flats"' in rendered
+    assert 'title: "POST /v2/updates/flats"' in rendered
     assert '<h1 class="x2mdx-ref-title">Deprecated</h1>' not in rendered
 
 
@@ -365,4 +483,4 @@ def test_humanized_operation_title_drops_a_dangling_preposition() -> None:
         )
     )
 
-    assert 'title: "Holdings summary"' in rendered
+    assert 'title: "POST /v2/updates/flats"' in rendered

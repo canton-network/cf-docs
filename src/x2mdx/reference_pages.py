@@ -8,7 +8,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from x2mdx.history.models import HistoryEvent, HistoryItem
+from x2mdx.history.events import history_event_anchor
+from x2mdx.history.models import (
+    HistoryEvent,
+    HistoryEventKind,
+    HistoryItem,
+    LifecycleState,
+)
 from x2mdx.output import FrontmatterValue, Page, RawMarkdown
 from x2mdx.templating import render_template
 
@@ -17,6 +23,7 @@ from x2mdx.templating import render_template
 class ReferenceBadge:
     label: str
     tone: str = "neutral"
+    href: str | None = None
 
 
 @dataclass(frozen=True)
@@ -41,6 +48,9 @@ class ReferenceField:
     location: str | None = None
     default: str | None = None
     api_type_label: str | None = None
+    children: list["ReferenceField"] = field(default_factory=list)
+    enum_values: list[str] = field(default_factory=list)
+    constraints: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -131,6 +141,7 @@ class ReferenceOperationPage:
     operation_target: str | None = None
     overview_markdown: str | None = None
     protocol_items: list[ReferenceMetaItem] = field(default_factory=list)
+    authorizations: list[ReferencePanel] = field(default_factory=list)
     inputs: list[ReferencePanel] = field(default_factory=list)
     outputs: list[ReferencePanel] = field(default_factory=list)
     examples: list[ReferenceExample] = field(default_factory=list)
@@ -187,7 +198,7 @@ def render_operation_page(page: ReferenceOperationPage) -> Page:
     return markdown_page_from_template(
         path=page.path,
         title=page.title,
-        description=None,
+        description=page.description,
         template_name="reference/operation.md.j2",
         frontmatter=frontmatter,
         page=page,
@@ -200,11 +211,73 @@ def reference_badges_for_history_item(
     kind_label: str,
 ) -> list[ReferenceBadge]:
     badges = [ReferenceBadge(kind_label, "protocol")]
-    badges.append(ReferenceBadge(f"Since {item.first_seen}", "added"))
+    badges.append(
+        ReferenceBadge(
+            f"Added {item.first_seen}",
+            "added",
+            f"#{history_event_anchor(HistoryEventKind.INTRODUCED, item.first_seen)}",
+        )
+    )
     if item.last_changed is not None:
-        badges.append(ReferenceBadge(f"Changed {item.last_changed}", "changed"))
+        badges.append(
+            ReferenceBadge(
+                f"Updated {item.last_changed}",
+                "changed",
+                f"#{history_event_anchor(HistoryEventKind.CHANGED, item.last_changed)}",
+            )
+        )
+    deprecated_transition = next(
+        (
+            transition
+            for transition in reversed(item.lifecycle_transitions)
+            if transition.state == LifecycleState.DEPRECATED
+        ),
+        None,
+    )
+    if deprecated_transition is not None:
+        badges.append(
+            ReferenceBadge(
+                f"Deprecated {deprecated_transition.version}",
+                "removed",
+                f"#{history_event_anchor(HistoryEventKind.DEPRECATED, deprecated_transition.version)}",
+            )
+        )
     if item.remove_as_of is not None:
-        badges.append(ReferenceBadge(f"Remove as of {item.remove_as_of}", "removed"))
+        badges.append(
+            ReferenceBadge(
+                f"Removal scheduled {item.remove_as_of}",
+                "removed",
+                f"#{history_event_anchor(HistoryEventKind.REMOVE_AS_OF, item.remove_as_of)}",
+            )
+        )
+    return badges
+
+
+def reference_badges_for_history_events(
+    events: list[HistoryEvent],
+    *,
+    kind_label: str,
+) -> list[ReferenceBadge]:
+    badges = [ReferenceBadge(kind_label, "protocol")]
+    badge_details = {
+        HistoryEventKind.INTRODUCED: ("Added", "added"),
+        HistoryEventKind.CHANGED: ("Updated", "changed"),
+        HistoryEventKind.DEPRECATED: ("Deprecated", "removed"),
+        HistoryEventKind.REMOVE_AS_OF: ("Removal scheduled", "removed"),
+    }
+    seen_kinds: set[HistoryEventKind] = set()
+    for event in events:
+        if event.kind in seen_kinds or event.kind not in badge_details:
+            continue
+        label, tone = badge_details[event.kind]
+        badges.append(
+            ReferenceBadge(
+                f"{label} {event.version}",
+                tone,
+                f"#{history_event_anchor(event.kind, event.version)}",
+            )
+        )
+        seen_kinds.add(event.kind)
     return badges
 
 

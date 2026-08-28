@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from functools import cmp_to_key
 
 from x2mdx.history.models import (
@@ -20,6 +21,21 @@ EVENT_KIND_PRIORITY = {
 }
 
 
+EVENT_ANCHOR_LABELS = {
+    HistoryEventKind.REMOVE_AS_OF: "removal-scheduled",
+    HistoryEventKind.DEPRECATED: "deprecated",
+    HistoryEventKind.CHANGED: "updated",
+    HistoryEventKind.INTRODUCED: "added",
+    HistoryEventKind.REPLACEMENT: "replacement",
+}
+
+
+def history_event_anchor(kind: HistoryEventKind, version: str) -> str:
+    """Return the stable fragment used to link a lifecycle badge to History."""
+    version_slug = re.sub(r"[^a-z0-9]+", "-", version.casefold()).strip("-")
+    return f"history-{EVENT_ANCHOR_LABELS[kind]}-{version_slug or 'unknown'}"
+
+
 def history_events_for_item(
     item: HistoryItem,
     *,
@@ -31,7 +47,7 @@ def history_events_for_item(
             HistoryEvent(
                 kind=HistoryEventKind.REMOVE_AS_OF,
                 version=item.remove_as_of,
-                label="Remove as of",
+                label="Removal scheduled",
                 details=(),
                 evidence=(item.remove_as_of_evidence,),
             )
@@ -55,7 +71,7 @@ def history_events_for_item(
             HistoryEvent(
                 kind=HistoryEventKind.CHANGED,
                 version=change.version,
-                label="Changed",
+                label="Updated",
                 details=(change.summary,),
                 evidence=change.evidence,
             )
@@ -65,7 +81,7 @@ def history_events_for_item(
         HistoryEvent(
             kind=HistoryEventKind.INTRODUCED,
             version=item.first_seen,
-            label="Introduced",
+            label="Added",
             details=(),
             evidence=(item.introduction_evidence,),
         )

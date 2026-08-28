@@ -87,9 +87,10 @@ def test_standard_page_puts_contract_badges_near_the_title_in_order() -> None:
 
     badge_labels = [
         "REST",
-        "Since 1.0.0",
-        "Changed 1.1.0",
-        "Remove as of 2.1.0",
+        "Added 1.0.0",
+        "Updated 1.1.0",
+        "Deprecated 1.1.0",
+        "Removal scheduled 2.1.0",
     ]
     badge_positions = [rendered.index(label) for label in badge_labels]
 
@@ -119,17 +120,28 @@ def test_history_renders_newest_first_with_text_bearing_event_labels() -> None:
     rendered = render_synthetic_operation()
     history = rendered[rendered.index("## History") :]
     labels = [
-        "Remove as of",
+        "Removal scheduled",
         "Replacement",
         "Deprecated",
-        "Changed",
-        "Introduced",
+        "Updated",
+        "Added",
     ]
     positions = [history.index(label) for label in labels]
 
     assert positions == sorted(positions)
     assert "Replaced by payments.createV2" in history
     assert "Added an optional idempotency key." in history
+
+
+def test_lifecycle_badges_link_to_their_history_events() -> None:
+    rendered = render_synthetic_operation()
+
+    assert 'href="#history-added-1-0-0"' in rendered
+    assert 'id="history-added-1-0-0"' in rendered
+    assert 'href="#history-updated-1-1-0"' in rendered
+    assert 'id="history-updated-1-1-0"' in rendered
+    assert 'href="#history-removal-scheduled-2-1-0"' in rendered
+    assert 'id="history-removal-scheduled-2-1-0"' in rendered
 
 
 def test_history_styles_cover_desktop_dark_mode_and_narrow_layouts() -> None:

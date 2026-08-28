@@ -15,8 +15,8 @@ from x2mdx.reference_pages import (
     ReferenceOperationPage,
     ReferencePanel,
     ReferenceSchema,
-    compact_text,
     json_body,
+    reference_badges_for_history_events,
     render_operation_page,
 )
 
@@ -40,7 +40,10 @@ class ManualOpenAPIRenderOptions:
     output_path: str
     server: str = "http://localhost:7575"
     surface_label: str = "JSON Ledger API"
-    auth_method: str = "bearer"
+    breadcrumbs: tuple[ReferenceBreadcrumb, ...] = ()
+    auth_method: str | None = "bearer"
+    authentication_label: str | None = "Bearer token"
+    raw_spec_href: str | None = None
     playground: str = "interactive"
 
 
@@ -141,8 +144,10 @@ def _example_value(
 
     reference = schema.get("$ref")
     if isinstance(reference, str):
-        if reference in seen_refs or depth >= 4:
-            return {}
+        if reference in seen_refs:
+            return f"<{reference.rsplit('/', 1)[-1]}>"
+        if depth >= 12:
+            return "<object>"
         return _example_value(
             spec,
             _resolve_local_ref(spec, schema),
@@ -174,8 +179,8 @@ def _example_value(
     schema_type = schema.get("type")
     properties = schema.get("properties")
     if schema_type == "object" or isinstance(properties, dict):
-        if depth >= 4:
-            return {}
+        if depth >= 12:
+            return "<object>"
         return {
             str(name): _example_value(
                 spec,
@@ -195,16 +200,139 @@ def _example_value(
             )
         ]
     if schema_type == "integer":
-        return 0
+        return 123
     if schema_type == "number":
-        return 0.0
+        return 123.0
     if schema_type == "boolean":
         return False
     if schema.get("format") == "date-time":
         return "2026-01-01T00:00:00Z"
     if schema.get("format") == "date":
         return "2026-01-01"
-    return "string"
+    return "<string>"
+
+
+def _schema_constraints(schema: dict[str, Any]) -> list[str]:
+    labels = {
+        "minimum": "Minimum",
+        "maximum": "Maximum",
+        "exclusiveMinimum": "Exclusive minimum",
+        "exclusiveMaximum": "Exclusive maximum",
+        "minLength": "Minimum length",
+        "maxLength": "Maximum length",
+        "minItems": "Minimum items",
+        "maxItems": "Maximum items",
+        "pattern": "Pattern",
+    }
+    constraints = [
+        f"{label}: {schema[key]}" for key, label in labels.items() if key in schema
+    ]
+    if schema.get("nullable") is True:
+        constraints.append("Nullable")
+    if schema.get("readOnly") is True:
+        constraints.append("Read only")
+    if schema.get("writeOnly") is True:
+        constraints.append("Write only")
+    return constraints
+
+
+def _default_label(value: Any) -> str:
+    if isinstance(value, (bool, int, float)) or value is None:
+        return json.dumps(value)
+    return str(value)
+
+
+def _schema_with_composition(
+    spec: dict[str, Any],
+    schema: dict[str, Any],
+    *,
+    seen_refs: frozenset[str],
+) -> dict[str, Any]:
+    reference = schema.get("$ref")
+    if isinstance(reference, str):
+        if reference in seen_refs:
+            return schema
+        resolved = _resolve_local_ref(spec, schema)
+        if not isinstance(resolved, dict):
+            return schema
+        return _schema_with_composition(
+            spec,
+            resolved,
+            seen_refs=seen_refs | {reference},
+        )
+
+    merged = dict(schema)
+    variants = schema.get("allOf")
+    if isinstance(variants, list):
+        properties: dict[str, Any] = dict(schema.get("properties") or {})
+        required = list(schema.get("required") or [])
+        for variant in variants:
+            if not isinstance(variant, dict):
+                continue
+            resolved_variant = _schema_with_composition(
+                spec,
+                variant,
+                seen_refs=seen_refs,
+            )
+            properties.update(resolved_variant.get("properties") or {})
+            for name in resolved_variant.get("required") or []:
+                if name not in required:
+                    required.append(name)
+        if properties:
+            merged["properties"] = properties
+            merged["type"] = "object"
+        if required:
+            merged["required"] = required
+    return merged
+
+
+def _field_from_schema(
+    spec: dict[str, Any],
+    *,
+    name: str,
+    schema: Any,
+    required: bool,
+    location: str | None,
+    depth: int,
+    seen_refs: frozenset[str],
+) -> ReferenceField:
+    raw_schema = schema if isinstance(schema, dict) else {}
+    reference = raw_schema.get("$ref")
+    next_seen_refs = seen_refs
+    if isinstance(reference, str):
+        next_seen_refs = seen_refs | {reference}
+    resolved = _schema_with_composition(
+        spec,
+        raw_schema,
+        seen_refs=seen_refs,
+    )
+    description = str(resolved.get("description") or raw_schema.get("description") or "")
+    child_schema: Any = resolved
+    if resolved.get("type") == "array":
+        child_schema = resolved.get("items")
+    children: list[ReferenceField] = []
+    if depth < 12 and not (isinstance(reference, str) and reference in seen_refs):
+        children = _schema_fields(
+            spec,
+            child_schema,
+            location=location,
+            depth=depth + 1,
+            seen_refs=next_seen_refs,
+            root_value=False,
+        )
+    enum = resolved.get("enum")
+    return ReferenceField(
+        name=name,
+        type_label=_type_label(spec, raw_schema),
+        required=required,
+        description=description,
+        location=location,
+        default=_default_label(resolved["default"]) if "default" in resolved else None,
+        api_type_label=_playground_type_label(spec, raw_schema) if location else None,
+        children=children,
+        enum_values=[str(value) for value in enum] if isinstance(enum, list) else [],
+        constraints=_schema_constraints(resolved),
+    )
 
 
 def _schema_fields(
@@ -212,44 +340,58 @@ def _schema_fields(
     schema: Any,
     *,
     location: str | None,
+    depth: int = 0,
+    seen_refs: frozenset[str] = frozenset(),
+    root_value: bool = True,
 ) -> list[ReferenceField]:
     if not isinstance(schema, dict):
         return []
-    resolved = _resolve_local_ref(spec, schema)
-    if not isinstance(resolved, dict):
+    resolved = _schema_with_composition(spec, schema, seen_refs=seen_refs)
+    if not isinstance(resolved, dict) or depth >= 12:
         return []
     properties = resolved.get("properties")
     if not isinstance(properties, dict):
+        if not root_value:
+            variants = resolved.get("oneOf") or resolved.get("anyOf")
+            if isinstance(variants, list):
+                fields: list[ReferenceField] = []
+                for index, variant in enumerate(variants, start=1):
+                    if not isinstance(variant, dict):
+                        continue
+                    fields.append(
+                        _field_from_schema(
+                            spec,
+                            name=_schema_name(variant, fallback=f"Variant {index}"),
+                            schema=variant,
+                            required=False,
+                            location=location,
+                            depth=depth,
+                            seen_refs=seen_refs,
+                        )
+                    )
+                return fields
+            return []
         return [
-            ReferenceField(
+            _field_from_schema(
+                spec,
                 name="value",
-                type_label=_type_label(spec, schema),
+                schema=schema,
                 required=True,
-                description=str(resolved.get("description") or ""),
                 location=location,
-                api_type_label=(
-                    _playground_type_label(spec, schema) if location else None
-                ),
+                depth=depth,
+                seen_refs=seen_refs,
             )
         ]
     required = set(resolved.get("required") or [])
     return [
-        ReferenceField(
+        _field_from_schema(
+            spec,
             name=str(name),
-            type_label=_type_label(spec, child),
+            schema=child,
             required=name in required,
-            description=str(
-                (
-                    _resolve_local_ref(spec, child) if isinstance(child, dict) else {}
-                ).get("description", "")
-            ),
             location=location,
-            default=(
-                str(child["default"])
-                if isinstance(child, dict) and "default" in child
-                else None
-            ),
-            api_type_label=(_playground_type_label(spec, child) if location else None),
+            depth=depth,
+            seen_refs=seen_refs,
         )
         for name, child in properties.items()
     ]
@@ -268,6 +410,23 @@ def _media_schema(content: Any) -> tuple[str | None, dict[str, Any] | None]:
     return str(media_type), None
 
 
+def _media_example(content: Any, media_type: str | None) -> Any:
+    if not isinstance(content, dict) or media_type is None:
+        return None
+    media = content.get(media_type)
+    if not isinstance(media, dict):
+        return None
+    if "example" in media:
+        return media["example"]
+    examples = media.get("examples")
+    if isinstance(examples, dict):
+        for raw_example in examples.values():
+            example = raw_example.get("value") if isinstance(raw_example, dict) else None
+            if example is not None:
+                return example
+    return None
+
+
 def _parameter_panels(
     spec: dict[str, Any], path_item: dict[str, Any], operation: dict[str, Any]
 ) -> list[ReferencePanel]:
@@ -282,18 +441,16 @@ def _parameter_panels(
             continue
         location = str(parameter.get("in") or "query")
         schema = parameter.get("schema")
-        field = ReferenceField(
+        if isinstance(schema, dict) and parameter.get("description"):
+            schema = {**schema, "description": str(parameter["description"])}
+        field = _field_from_schema(
+            spec,
             name=str(parameter.get("name") or "parameter"),
-            type_label=_type_label(spec, schema),
+            schema=schema,
             required=bool(parameter.get("required")),
-            description=str(parameter.get("description") or ""),
             location=location,
-            default=(
-                str(schema["default"])
-                if isinstance(schema, dict) and "default" in schema
-                else None
-            ),
-            api_type_label=_playground_type_label(spec, schema),
+            depth=0,
+            seen_refs=frozenset(),
         )
         by_location.setdefault(location, []).append(field)
     labels = {
@@ -318,13 +475,16 @@ def _request_panel(
     request_body = _resolve_local_ref(spec, operation.get("requestBody"))
     if not isinstance(request_body, dict):
         return None, None, None
-    media_type, schema = _media_schema(request_body.get("content"))
+    content = request_body.get("content")
+    media_type, schema = _media_schema(content)
     if schema is None:
         return None, None, media_type
     name = _schema_name(schema, fallback="RequestBody")
-    sample = _example_value(spec, schema)
+    authored_sample = _media_example(content, media_type)
+    sample = authored_sample if authored_sample is not None else _example_value(spec, schema)
     panel = ReferencePanel(
-        title="Request body",
+        title="Body",
+        description=str(request_body.get("description") or ""),
         badges=[ReferenceBadge(media_type or "body", "neutral")],
         schema=ReferenceSchema(
             name=name,
@@ -333,6 +493,74 @@ def _request_panel(
         ),
     )
     return panel, sample, media_type
+
+
+def _authorization_panels(
+    spec: dict[str, Any], operation: dict[str, Any]
+) -> list[ReferencePanel]:
+    security = operation.get("security", spec.get("security"))
+    if not isinstance(security, list) or not security:
+        return []
+    components = spec.get("components")
+    schemes = components.get("securitySchemes") if isinstance(components, dict) else {}
+    if not isinstance(schemes, dict):
+        schemes = {}
+
+    panels: list[ReferencePanel] = []
+    seen: set[str] = set()
+    for requirement in security:
+        if not isinstance(requirement, dict):
+            continue
+        for scheme_name in requirement:
+            if scheme_name in seen:
+                continue
+            seen.add(scheme_name)
+            raw_scheme = _resolve_local_ref(spec, schemes.get(scheme_name))
+            scheme = raw_scheme if isinstance(raw_scheme, dict) else {}
+            scheme_type = str(scheme.get("type") or "authentication")
+            parameter_name = "Authorization"
+            location = "header"
+            type_label = "string"
+            details: list[str] = []
+            if scheme_type == "http":
+                http_scheme = str(scheme.get("scheme") or "").strip()
+                bearer_format = str(scheme.get("bearerFormat") or "").strip()
+                if http_scheme:
+                    details.append(f"HTTP {http_scheme} authentication.")
+                if http_scheme.casefold() == "bearer":
+                    details.append(
+                        "Send the token as `Authorization: Bearer <token>`."
+                    )
+                if bearer_format:
+                    details.append(f"Bearer format: `{bearer_format}`.")
+            elif scheme_type == "apiKey":
+                parameter_name = str(scheme.get("name") or "apiKey")
+                location = str(scheme.get("in") or "header")
+                details.append(f"API key authentication in the {location}.")
+            elif scheme_type in {"oauth2", "openIdConnect"}:
+                details.append(f"{scheme_type} authentication.")
+            authored_description = str(scheme.get("description") or "").strip()
+            if authored_description:
+                details.append(authored_description)
+            panels.append(
+                ReferencePanel(
+                    title=str(scheme_name),
+                    schema=ReferenceSchema(
+                        name=str(scheme_name),
+                        fields=[
+                            ReferenceField(
+                                name=parameter_name,
+                                type_label=type_label,
+                                required=True,
+                                description=" ".join(details),
+                                location=location,
+                                api_type_label=type_label,
+                            )
+                        ],
+                    ),
+                )
+            )
+    return panels
 
 
 def _response_panels(
@@ -347,7 +575,8 @@ def _response_panels(
         response = _resolve_local_ref(spec, raw_response)
         if not isinstance(response, dict):
             continue
-        media_type, schema = _media_schema(response.get("content"))
+        content = response.get("content")
+        media_type, schema = _media_schema(content)
         description = str(response.get("description") or "")
         fields = (
             _schema_fields(spec, schema, location=None) if schema is not None else []
@@ -360,7 +589,7 @@ def _response_panels(
         panels.append(
             ReferencePanel(
                 title=str(status),
-                summary=description,
+                description=description,
                 badges=[ReferenceBadge(media_type, "neutral")] if media_type else [],
                 schema=ReferenceSchema(
                     name=schema_name,
@@ -371,11 +600,22 @@ def _response_panels(
                 else None,
             )
         )
-        if schema is not None and (str(status).startswith("2") or status == "default"):
+        if schema is not None:
+            language = "json" if media_type and "json" in media_type else "text"
+            authored_sample = _media_example(content, media_type)
+            sample = (
+                authored_sample
+                if authored_sample is not None
+                else _example_value(spec, schema)
+            )
+            example_body = (
+                json_body(sample) if language == "json" else str(sample or "")
+            )
             examples.append(
                 ReferenceExample(
-                    title=f"{status} response",
-                    body=json_body(_example_value(spec, schema)),
+                    title=str(status),
+                    body=example_body,
+                    language=language,
                     kind="response",
                     media_type=media_type,
                 )
@@ -383,9 +623,51 @@ def _response_panels(
     return panels, examples
 
 
-def _operation_fingerprint(operation: dict[str, Any]) -> str:
+def _expand_local_refs(
+    spec: dict[str, Any],
+    value: Any,
+    *,
+    seen_refs: frozenset[str] = frozenset(),
+) -> Any:
+    if isinstance(value, list):
+        return [_expand_local_refs(spec, item, seen_refs=seen_refs) for item in value]
+    if not isinstance(value, dict):
+        return value
+    reference = value.get("$ref")
+    if isinstance(reference, str) and reference.startswith("#/"):
+        if reference in seen_refs:
+            return {"$ref": reference}
+        return {
+            "$ref": reference,
+            "$resolved": _expand_local_refs(
+                spec,
+                _resolve_local_ref(spec, value),
+                seen_refs=seen_refs | {reference},
+            ),
+        }
+    return {
+        str(key): _expand_local_refs(spec, child, seen_refs=seen_refs)
+        for key, child in value.items()
+    }
+
+
+def _operation_fingerprint(
+    spec: dict[str, Any],
+    operation: dict[str, Any],
+    *,
+    method: str,
+    path: str,
+) -> str:
+    contract = {
+        "method": method.lower(),
+        "operation": operation,
+        "path_parameters": _path_item(spec, path).get("parameters") or [],
+    }
     return json.dumps(
-        operation, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+        _expand_local_refs(spec, contract),
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
     )
 
 
@@ -494,6 +776,16 @@ def _operation_title(operation: dict[str, Any], *, method: str, path: str) -> st
     return f"{method.upper()} {path}"
 
 
+def _operation_overview(operation: dict[str, Any], *, limit: int = 460) -> str:
+    description = " ".join(str(operation.get("description") or "").split())
+    if len(description) <= limit:
+        return description
+    sentence_end = description.rfind(". ", 0, limit)
+    if sentence_end >= 0:
+        return description[: sentence_end + 1]
+    return description
+
+
 def operation_history_events(
     *,
     specs_by_version: dict[str, dict[str, Any]],
@@ -516,6 +808,18 @@ def operation_history_events(
                 observed.append(
                     (version, observed_method, observed_path, observed_operation)
                 )
+                continue
+            try:
+                observed.append(
+                    (
+                        version,
+                        method.lower(),
+                        path,
+                        _operation(specs_by_version[version], method, path),
+                    )
+                )
+            except ValueError:
+                continue
         else:
             try:
                 observed.append(
@@ -547,7 +851,7 @@ def operation_history_events(
             HistoryEvent(
                 kind=HistoryEventKind.REMOVE_AS_OF,
                 version=remove_as_of,
-                label="Remove as of",
+                label="Removal scheduled",
                 details=(),
                 evidence=(evidence,),
             )
@@ -582,7 +886,12 @@ def operation_history_events(
     previous_fingerprint: str | None = None
     previous_location: tuple[str, str] | None = None
     for version, observed_method, observed_path, operation in observed:
-        fingerprint = _operation_fingerprint(operation)
+        fingerprint = _operation_fingerprint(
+            specs_by_version[version],
+            operation,
+            method=observed_method,
+            path=observed_path,
+        )
         location = (observed_method, observed_path)
         if previous_fingerprint is not None and (
             fingerprint != previous_fingerprint or location != previous_location
@@ -595,7 +904,7 @@ def operation_history_events(
                 )
             else:
                 details = (
-                    f"The {observed_method.upper()} {observed_path} operation changed "
+                    f"The {observed_method.upper()} {observed_path} operation was updated "
                     "in this snapshot.",
                 )
             evidence = Evidence(
@@ -608,7 +917,7 @@ def operation_history_events(
                 HistoryEvent(
                     kind=HistoryEventKind.CHANGED,
                     version=version,
-                    label="Changed",
+                    label="Updated",
                     details=details,
                     evidence=(evidence,),
                 )
@@ -627,7 +936,7 @@ def operation_history_events(
         HistoryEvent(
             kind=HistoryEventKind.INTRODUCED,
             version=first_version,
-            label="Introduced",
+            label="Added",
             details=(),
             evidence=(introduction,),
         )
@@ -667,35 +976,182 @@ def operation_history_events(
     return sorted(events, key=sort_key)
 
 
-def _request_example(
+def _request_examples(
     *,
     method: str,
     server: str,
     path: str,
     media_type: str | None,
     sample: Any,
-) -> ReferenceExample:
+    auth_method: str | None,
+) -> list[ReferenceExample]:
+    if auth_method not in {None, "bearer"}:
+        raise ValueError(
+            f"Unsupported manual OpenAPI authentication method: {auth_method}"
+        )
+    url = f"{server.rstrip('/')}{path}"
+    content_type = media_type or "application/json"
     lines = [
         f"curl --request {method.upper()} \\",
-        f"  --url '{server.rstrip('/')}{path}' \\",
+        f"  --url '{url}' \\",
     ]
-    lines.append("  --header 'Authorization: Bearer $TOKEN' \\")
+    if auth_method == "bearer":
+        lines.append("  --header 'Authorization: Bearer $TOKEN' \\")
     if sample is not None:
-        lines.append(
-            f"  --header 'Content-Type: {media_type or 'application/json'}' \\"
-        )
+        lines.append(f"  --header 'Content-Type: {content_type}' \\")
         if media_type == "application/octet-stream":
             lines.append("  --data-binary '@request.bin'")
         else:
-            compact_sample = json.dumps(
-                sample, ensure_ascii=False, separators=(",", ":")
-            )
-            lines.append(f"  --data '{compact_sample}'")
-    else:
+            shell_sample = json_body(sample).replace("'", "'\"'\"'")
+            lines.append(f"  --data '{shell_sample}'")
+    if lines[-1].endswith(" \\"):
         lines[-1] = lines[-1].removesuffix(" \\")
-    return ReferenceExample(
-        title="Request", body="\n".join(lines), language="bash", kind="request"
+    curl = ReferenceExample(
+        title="cURL", body="\n".join(lines), language="bash", kind="request"
     )
+    if media_type == "application/octet-stream":
+        return [curl]
+
+    headers: dict[str, str] = {}
+    if auth_method == "bearer":
+        headers["Authorization"] = "Bearer <token>"
+    if sample is not None:
+        headers["Content-Type"] = content_type
+    pretty_sample = json_body(sample) if sample is not None else ""
+
+    python_lines = ["import json", "import requests", "", f'url = "{url}"']
+    if headers:
+        python_lines.append(f"headers = {headers!r}")
+    if sample is not None:
+        python_lines.extend(
+            [
+                f"payload = json.loads(r'''{pretty_sample}''')",
+                "response = requests.request(",
+                f'    "{method.upper()}", url, headers=headers, json=payload',
+                ")",
+            ]
+        )
+    else:
+        header_arg = ", headers=headers" if headers else ""
+        python_lines.append(
+            f'response = requests.request("{method.upper()}", url{header_arg})'
+        )
+    python_lines.extend(["", "print(response.text)"])
+
+    js_headers = json.dumps(headers, ensure_ascii=False, indent=2)
+    javascript_lines = [
+        f"const response = await fetch('{url}', {{",
+        f"  method: '{method.upper()}',",
+    ]
+    if headers:
+        javascript_lines.append(f"  headers: {js_headers},")
+    if sample is not None:
+        javascript_lines.append(f"  body: JSON.stringify({pretty_sample}),")
+    javascript_lines.extend(["});", "", "console.log(await response.text());"])
+
+    php_headers = ",\n        ".join(
+        json.dumps(f"{name}: {value}") for name, value in headers.items()
+    )
+    php_lines = ["<?php", "$curl = curl_init();", "", "curl_setopt_array($curl, ["]
+    php_lines.extend(
+        [
+            f"    CURLOPT_URL => '{url}',",
+            "    CURLOPT_RETURNTRANSFER => true,",
+            f"    CURLOPT_CUSTOMREQUEST => '{method.upper()}',",
+        ]
+    )
+    if sample is not None:
+        php_lines.append(f"    CURLOPT_POSTFIELDS => <<<'JSON'\n{pretty_sample}\nJSON,")
+    if headers:
+        php_lines.append(f"    CURLOPT_HTTPHEADER => [\n        {php_headers}\n    ],")
+    php_lines.extend(["]);", "", "$response = curl_exec($curl);", "echo $response;"])
+
+    go_headers = [
+        f'req.Header.Set("{name}", "{value}")' for name, value in headers.items()
+    ]
+    escaped_go_sample = pretty_sample.replace(chr(96), "\\" + chr(96))
+    go_body = (
+        f"bytes.NewBufferString({chr(96)}{escaped_go_sample}{chr(96)})"
+        if sample is not None
+        else "nil"
+    )
+    go_imports = ['  "fmt"', '  "io"', '  "net/http"']
+    if sample is not None:
+        go_imports.insert(0, '  "bytes"')
+    go_lines = [
+        "package main",
+        "",
+        "import (",
+        *go_imports,
+        ")",
+        "",
+        "func main() {",
+        f'  req, _ := http.NewRequest("{method.upper()}", "{url}", {go_body})',
+        *(f"  {line}" for line in go_headers),
+        "  response, _ := http.DefaultClient.Do(req)",
+        "  defer response.Body.Close()",
+        "  body, _ := io.ReadAll(response.Body)",
+        "  fmt.Println(string(body))",
+        "}",
+    ]
+
+    java_lines = [
+        "import java.net.URI;",
+        "import java.net.http.HttpClient;",
+        "import java.net.http.HttpRequest;",
+        "import java.net.http.HttpResponse;",
+        "",
+        "var request = HttpRequest.newBuilder()",
+        f'    .uri(URI.create("{url}"))',
+    ]
+    for name, value in headers.items():
+        java_lines.append(f'    .header("{name}", "{value}")')
+    body_publisher = (
+        f'HttpRequest.BodyPublishers.ofString("""\n{pretty_sample}\n""")'
+        if sample is not None
+        else "HttpRequest.BodyPublishers.noBody()"
+    )
+    java_lines.extend(
+        [
+            f'    .method("{method.upper()}", {body_publisher})',
+            "    .build();",
+            "var response = HttpClient.newHttpClient().send(",
+            "    request, HttpResponse.BodyHandlers.ofString());",
+            "System.out.println(response.body());",
+        ]
+    )
+
+    ruby_lines = [
+        "require 'net/http'",
+        "require 'uri'",
+        "",
+        f"uri = URI('{url}')",
+        f"request = Net::HTTP::{method.title()}.new(uri)",
+    ]
+    for name, value in headers.items():
+        ruby_lines.append(f"request['{name}'] = '{value}'")
+    if sample is not None:
+        ruby_lines.extend(["request.body = <<~JSON", pretty_sample, "JSON"])
+    ruby_lines.extend(
+        [
+            "response = Net::HTTP.start(uri.hostname, uri.port) do |http|",
+            "  http.request(request)",
+            "end",
+            "puts response.body",
+        ]
+    )
+
+    return [
+        curl,
+        ReferenceExample("Python", "\n".join(python_lines), "python", "request"),
+        ReferenceExample(
+            "JavaScript", "\n".join(javascript_lines), "javascript", "request"
+        ),
+        ReferenceExample("PHP", "\n".join(php_lines), "php", "request"),
+        ReferenceExample("Go", "\n".join(go_lines), "go", "request"),
+        ReferenceExample("Java", "\n".join(java_lines), "java", "request"),
+        ReferenceExample("Ruby", "\n".join(ruby_lines), "ruby", "request"),
+    ]
 
 
 def render_manual_openapi_operation(
@@ -709,81 +1165,74 @@ def render_manual_openapi_operation(
     operation = _operation(spec, method, options.path)
     path_item = _path_item(spec, options.path)
     summary = _operation_title(operation, method=method, path=options.path)
-    description = compact_text(str(operation.get("description") or ""), limit=460)
+    description = _operation_overview(operation)
+    mintlify_path = re.sub(r"\{([^{}]+)\}", r":\1", options.path)
+    page_title = f"{method} {mintlify_path}"
+    declared_security = operation.get("security", spec.get("security"))
+    effective_auth_method = (
+        None if declared_security == [] else options.auth_method
+    )
 
+    authorizations = _authorization_panels(spec, operation)
     inputs = _parameter_panels(spec, path_item, operation)
     request_panel, request_sample, request_media_type = _request_panel(spec, operation)
     if request_panel is not None:
         inputs.append(request_panel)
     outputs, response_examples = _response_panels(spec, operation)
     examples = [
-        _request_example(
+        *_request_examples(
             method=method,
             server=options.server,
             path=options.path,
             media_type=request_media_type,
             sample=request_sample,
+            auth_method=effective_auth_method,
         ),
         *response_examples,
     ]
 
-    introduced = next(
-        event.version
-        for event in history_events
-        if event.kind == HistoryEventKind.INTRODUCED
+    badges = reference_badges_for_history_events(
+        history_events,
+        kind_label="OpenAPI",
     )
-    badges = [
-        ReferenceBadge("OpenAPI", "protocol"),
-        ReferenceBadge(f"Since {introduced}", "added"),
-    ]
-    changed = next(
-        (
-            event.version
-            for event in history_events
-            if event.kind == HistoryEventKind.CHANGED
-        ),
-        None,
-    )
-    if changed is not None:
-        badges.append(ReferenceBadge(f"Changed {changed}", "changed"))
-    remove_as_of = next(
-        (
-            event.version
-            for event in history_events
-            if event.kind == HistoryEventKind.REMOVE_AS_OF
-        ),
-        None,
-    )
-    if remove_as_of is not None:
-        badges.append(ReferenceBadge(f"Remove as of {remove_as_of}", "removed"))
 
     api_path = f"{method} {options.server.rstrip('/')}{options.path}"
+    protocol_items = [
+        ReferenceMetaItem("Operation ID", str(operation.get("operationId") or "-")),
+        ReferenceMetaItem("Published", publish_version),
+    ]
+    if (
+        effective_auth_method is not None
+        and options.authentication_label is not None
+    ):
+        protocol_items.insert(
+            1, ReferenceMetaItem("Authentication", options.authentication_label)
+        )
+    if options.raw_spec_href is not None:
+        protocol_items.append(
+            ReferenceMetaItem(
+                "Specification", "Download OpenAPI", href=options.raw_spec_href
+            )
+        )
     return render_operation_page(
         ReferenceOperationPage(
             path=options.output_path,
-            title=summary,
+            title=page_title,
+            description=description or summary,
             eyebrow=options.surface_label,
-            breadcrumbs=[
-                ReferenceBreadcrumb("Ledger API", "/api-reference"),
-                ReferenceBreadcrumb("OpenAPI"),
-            ],
+            summary=summary,
+            breadcrumbs=list(options.breadcrumbs),
             badges=badges,
             operation_method=method,
             operation_target=options.path,
-            overview_markdown=description,
-            protocol_items=[
-                ReferenceMetaItem(
-                    "Operation ID", str(operation.get("operationId") or "-")
-                ),
-                ReferenceMetaItem("Authentication", "Bearer token"),
-                ReferenceMetaItem("Published", publish_version),
-            ],
+            protocol_items=protocol_items,
+            authorizations=authorizations,
             inputs=inputs,
             outputs=outputs,
             examples=examples,
             history_events=history_events,
             api_frontmatter=api_path,
-            auth_method=options.auth_method,
+            auth_method=effective_auth_method,
             playground=options.playground,
         )
     )
