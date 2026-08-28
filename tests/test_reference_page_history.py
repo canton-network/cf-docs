@@ -142,6 +142,7 @@ def test_history_styles_cover_desktop_dark_mode_and_narrow_layouts() -> None:
     assert "@media (max-width: 640px)" in styles
     assert ".x2mdx-ref-hero > *" in styles
     assert "overflow-wrap: anywhere;" in styles
+    assert "#content-container:has(.x2mdx-ref-page) #pagination" in styles
     history_layout = styles[
         styles.index(".x2mdx-ref-history,") : styles.index(
             ".x2mdx-ref-history-event--introduced"
