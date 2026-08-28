@@ -114,19 +114,26 @@ def write_ledger_api_source_config(path: Path, *, canton_version: str) -> None:
     )
 
 
-def write_ledger_bindings_source_config(path: Path, *, versions: list[str] | None = None) -> None:
+def write_ledger_bindings_source_config(
+    path: Path,
+    *,
+    versions: list[str] | None = None,
+    min_version: str | None = None,
+) -> None:
+    artifact = {
+        "group": "com.daml",
+        "artifact": "bindings-java",
+        "language": "java",
+    }
+    if min_version is not None:
+        artifact["min_version"] = min_version
+    else:
+        artifact["versions"] = versions or ["3.4.11"]
     path.write_text(
         json.dumps(
             {
                 "repo_base": "https://repo1.maven.org/maven2",
-                "artifacts": [
-                    {
-                        "group": "com.daml",
-                        "artifact": "bindings-java",
-                        "language": "java",
-                        "versions": versions or ["3.4.11"],
-                    }
-                ],
+                "artifacts": [artifact],
             },
             indent=2,
         )
@@ -426,6 +433,30 @@ def test_update_ledger_bindings_source_noops_when_latest_is_configured(tmp_path:
         )
         == []
     )
+
+
+def test_update_ledger_bindings_source_preserves_unbounded_version_policy(tmp_path: Path) -> None:
+    module = load_script_module()
+    source_config_path = tmp_path / "source-artifacts.json"
+    write_ledger_bindings_source_config(source_config_path, min_version="3.4.8")
+    module.ledger_bindings.latest_maven_version = lambda *_args, **_kwargs: (_ for _ in ()).throw(
+        AssertionError("unbounded configs do not need a source pin update")
+    )
+
+    assert (
+        module.ledger_bindings.update_source(
+            source_config_path=source_config_path,
+            dry_run=False,
+        )
+        == []
+    )
+    artifact = json.loads(source_config_path.read_text(encoding="utf-8"))["artifacts"][0]
+    assert artifact == {
+        "group": "com.daml",
+        "artifact": "bindings-java",
+        "language": "java",
+        "min_version": "3.4.8",
+    }
 
 
 def test_update_daml_standard_library_source_updates_latest_dpm_version(tmp_path: Path) -> None:
