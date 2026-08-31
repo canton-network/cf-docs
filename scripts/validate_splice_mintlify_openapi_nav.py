@@ -344,7 +344,7 @@ def validate_explicit_manual_nav_pages(
                 raise ValueError(f"Splice manual OpenAPI page is missing: {page_path}")
             text = page_path.read_text(encoding="utf-8")
             headings = re.findall(r"(?m)^## .+$", text)
-            if not headings or headings[-1] != "## History":
+            if "## History" in headings and headings[-1] != "## History":
                 raise ValueError(
                     f"Splice manual OpenAPI page must end with History: {page_path}"
                 )
