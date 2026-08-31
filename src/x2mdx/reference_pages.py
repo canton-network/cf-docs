@@ -212,7 +212,7 @@ def reference_badges_for_history_item(
     item: HistoryItem,
     *,
     kind_label: str,
-    comparison_versions: tuple[str, ...] = (),
+    comparison_versions: tuple[str, ...],
 ) -> list[ReferenceBadge]:
     badges = [ReferenceBadge(kind_label, "protocol")]
     introduction_label = (
