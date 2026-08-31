@@ -195,6 +195,84 @@ def test_generated_reference_nav_replaces_group_in_product_navigation(tmp_path: 
     ]
 
 
+def test_asyncapi_nav_uses_overview_channel_and_action_pages(tmp_path: Path) -> None:
+    generated_reference_nav = load_script("generated_reference_nav")
+    docs_json = tmp_path / "docs-main" / "docs.json"
+    docs_json.parent.mkdir(parents=True)
+    docs_json.write_text("{}", encoding="utf-8")
+    output_dir = docs_json.parent / "reference" / "json-api-asyncapi-reference"
+
+    write_mdx(output_dir / "index.mdx", "JSON API AsyncAPI Reference")
+    write_mdx(output_dir / "channels" / "stream.mdx", "/stream")
+    write_mdx(output_dir / "operations" / "stream" / "publish.mdx", "Publish stream")
+    write_mdx(output_dir / "operations" / "stream" / "subscribe.mdx", "Subscribe stream")
+
+    group = generated_reference_nav.build_asyncapi_nav_group(
+        output_dir=output_dir,
+        docs_json_path=docs_json,
+        group_label="JSON API AsyncAPI",
+    )
+
+    assert group == {
+        "group": "JSON API AsyncAPI",
+        "pages": [
+            "reference/json-api-asyncapi-reference/index",
+            {
+                "group": "/stream",
+                "pages": [
+                    "reference/json-api-asyncapi-reference/channels/stream",
+                    "reference/json-api-asyncapi-reference/operations/stream/publish",
+                    "reference/json-api-asyncapi-reference/operations/stream/subscribe",
+                ],
+            },
+        ],
+    }
+
+
+def test_asyncapi_redirects_replace_details_routes_idempotently(tmp_path: Path) -> None:
+    generator = load_script("generate_json_api_asyncapi_reference")
+    docs_json = tmp_path / "docs-main" / "docs.json"
+    docs_json.parent.mkdir(parents=True)
+    docs_json.write_text(
+        json.dumps(
+            {
+                "redirects": [
+                    {"source": "/unrelated", "destination": "/still-here"},
+                    {
+                        "source": "/reference/json-api-asyncapi-reference/operations/details",
+                        "destination": "/stale",
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    output_dir = docs_json.parent / "reference" / "json-api-asyncapi-reference"
+    write_mdx(output_dir / "channels" / "stream.mdx", "/stream")
+
+    generator.ensure_asyncapi_redirects(
+        docs_json_path=docs_json,
+        output_dir=output_dir,
+    )
+    generator.ensure_asyncapi_redirects(
+        docs_json_path=docs_json,
+        output_dir=output_dir,
+    )
+
+    redirects = json.loads(docs_json.read_text(encoding="utf-8"))["redirects"]
+    assert redirects == [
+        {"source": "/unrelated", "destination": "/still-here"},
+        {
+            "source": "/reference/json-api-asyncapi-reference/operations/details",
+            "destination": "/reference/json-api-asyncapi-reference/index",
+        },
+        {
+            "source": "/reference/json-api-asyncapi-reference/operations/stream/details",
+            "destination": "/reference/json-api-asyncapi-reference/channels/stream",
+        },
+    ]
+
+
 def test_asyncapi_wrapper_builds_legacy_dropdown_scratch_for_product_navigation() -> None:
     generate_json_api_asyncapi_reference = load_script("generate_json_api_asyncapi_reference")
     docs = {
