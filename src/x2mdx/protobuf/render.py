@@ -91,10 +91,16 @@ def lifecycle_badges(
     removed: str | None = None,
     item: HistoryItem | None = None,
     events: list[HistoryEvent] | None = None,
+    comparison_versions: tuple[str, ...] = (),
     linked: bool = True,
 ) -> list[ReferenceBadge]:
     if item is not None:
-        return reference_badges_for_history_item(item, kind_label="gRPC", linked=linked)
+        return reference_badges_for_history_item(
+            item,
+            kind_label="gRPC",
+            comparison_versions=comparison_versions,
+            linked=linked,
+        )
     if events is not None:
         return reference_badges_for_history_events(events, kind_label="gRPC", linked=linked)
     if introduced is None:
@@ -634,7 +640,11 @@ def build_package_page(
                     href=page_ref(page_path, operation_path),
                     summary=compact_text(endpoint.get("description") or endpoint_signature(endpoint), limit=180),
                     badges=(
-                        lifecycle_badges(item=history_item, linked=False)
+                        lifecycle_badges(
+                            item=history_item,
+                            comparison_versions=history_report.comparison_versions,
+                            linked=False,
+                        )
                         if history_item is not None
                         else lifecycle_badges(
                             introduced=str(lifecycle["introducedIn"]),
@@ -752,7 +762,10 @@ def build_operation_page(
             ReferenceBreadcrumb(endpoint["name"]),
         ],
         badges=(
-            lifecycle_badges(item=history_item)
+            lifecycle_badges(
+                item=history_item,
+                comparison_versions=comparison_versions,
+            )
             if history_item is not None
             else lifecycle_badges(
                 introduced=str(lifecycle["introducedIn"]),
