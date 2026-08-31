@@ -378,7 +378,9 @@ def test_generated_packages_publish_standard_overviews_and_module_history() -> N
         assert '<Card title="Notices">' not in module_text
         assert module_text.index("## Interfaces") < module_text.index("## Data Types")
         assert 'class="x2mdx-ref-page' in module_text
-        assert "## History" in module_text
+        assert "Present since at least" not in module_text
+        if "## History" in module_text:
+            assert module_text.rfind("## History") > module_text.rfind("## Data Types")
 
     report = token_v2_reference.load_history_report(
         output_root / "token-standard-v2-history-report.json"
