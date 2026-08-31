@@ -936,7 +936,11 @@ def operation_history_events(
         HistoryEvent(
             kind=HistoryEventKind.INTRODUCED,
             version=first_version,
-            label="Added",
+            label=(
+                "Present since at least"
+                if first_version == versions[0]
+                else "Added"
+            ),
             details=(),
             evidence=(introduction,),
         )
@@ -1218,6 +1222,7 @@ def render_manual_openapi_operation(
         ReferenceOperationPage(
             path=options.output_path,
             title=page_title,
+            sidebar_title=mintlify_path,
             description=description or summary,
             eyebrow=options.surface_label,
             summary=description or summary,

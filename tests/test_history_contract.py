@@ -54,6 +54,7 @@ def test_history_events_are_newest_first_with_remove_as_of_at_the_top() -> None:
         HistoryEventKind.INTRODUCED,
     ]
     assert events[0].label == "Removal scheduled"
+    assert events[-1].label == "Present since at least"
 
 
 def test_current_item_at_removal_deadline_fails() -> None:

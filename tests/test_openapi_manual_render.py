@@ -145,6 +145,7 @@ def test_operation_history_uses_authored_remove_as_of_and_snapshot_changes() -> 
         (HistoryEventKind.CHANGED, "3.5"),
         (HistoryEventKind.INTRODUCED, "3.4"),
     ]
+    assert events[-1].label == "Present since at least"
     assert events[0].evidence[0].kind.value == "source_metadata"
     assert events[2].evidence[0].kind.value == "snapshot_diff"
 
@@ -215,6 +216,26 @@ def test_operation_history_reads_lifecycle_extensions() -> None:
         (HistoryEventKind.INTRODUCED, "3.5"),
         (HistoryEventKind.REPLACEMENT, "3.5"),
     ]
+    assert events[1].label == "Present since at least"
+
+
+def test_operation_history_calls_a_later_first_observation_added() -> None:
+    earlier = operation_spec(changed=False)
+    earlier["paths"] = {}
+    current = operation_spec(changed=False)
+
+    events = operation_history_events(
+        specs_by_version={"3.4": earlier, "3.5": current},
+        versions=["3.4", "3.5"],
+        publish_version="3.5",
+        method="post",
+        path="/v2/updates/flats",
+        source_name="release fixtures",
+    )
+
+    assert events[-1].kind == HistoryEventKind.INTRODUCED
+    assert events[-1].version == "3.5"
+    assert events[-1].label == "Added"
 
 
 def test_manual_openapi_page_preserves_playground_and_standard_history_layout() -> None:
@@ -247,6 +268,8 @@ def test_manual_openapi_page_preserves_playground_and_standard_history_layout() 
     assert 'authMethod: "bearer"' in rendered
     assert 'playground: "interactive"' in rendered
     assert 'title: "POST /v2/updates/flats"' in rendered
+    assert 'sidebarTitle: "/v2/updates/flats"' in rendered
+    assert "Present since at least 3.4" in rendered
     assert 'description: "Query flat transactions.' in rendered
     assert (
         '<p class="x2mdx-ref-summary">Query flat transactions. Provided for '

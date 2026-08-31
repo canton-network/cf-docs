@@ -50,7 +50,11 @@ def render_synthetic_operation() -> str:
             ReferenceBreadcrumb("Payments", "/reference/payments"),
             ReferenceBreadcrumb("Create a payment"),
         ],
-        badges=reference_badges_for_history_item(item, kind_label="REST"),
+        badges=reference_badges_for_history_item(
+            item,
+            kind_label="REST",
+            comparison_versions=report.comparison_versions,
+        ),
         operation_method="POST",
         operation_target="/payments",
         protocol_items=[
@@ -88,7 +92,7 @@ def test_standard_page_puts_contract_badges_near_the_title_in_order() -> None:
 
     badge_labels = [
         "REST",
-        "Added 1.0.0",
+        "Present since at least 1.0.0",
         "Updated 1.1.0",
         "Deprecated 1.1.0",
         "Removal scheduled 2.1.0",
@@ -113,7 +117,7 @@ def test_event_badges_use_standard_lifecycle_order() -> None:
 
     assert [badge.label for badge in badges] == [
         "REST",
-        "Added 1.0.0",
+        "Present since at least 1.0.0",
         "Updated 1.1.0",
         "Deprecated 1.1.0",
         "Removal scheduled 2.1.0",
@@ -146,7 +150,7 @@ def test_history_renders_newest_first_with_text_bearing_event_labels() -> None:
         "Replacement",
         "Deprecated",
         "Updated",
-        "Added",
+        "Present since at least",
     ]
     positions = [history.index(label) for label in labels]
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -596,9 +597,22 @@ def test_checked_in_json_openapi_target_is_fully_manual_and_conformant() -> None
         "destination": "/reference/json-api-reference/overview",
     } in docs_json["redirects"]
 
-    for output_path in expected_files - {output_directory / "overview.mdx"}:
+    for operation in operations:
+        output_path = REPO_ROOT / f"docs-main/{operation['page_ref']}.mdx"
         rendered = output_path.read_text(encoding="utf-8")
+        sidebar_path = re.sub(r"\{([^{}]+)\}", r":\1", operation["path"])
         assert '\napi: "' in rendered
+        assert f'title: "{operation["method"]} {sidebar_path}"' in rendered
+        assert f'sidebarTitle: "{sidebar_path}"' in rendered
         assert "\n## History\n" in rendered
         assert "lifecycle events" not in rendered.lower()
         assert "details and history" not in rendered.lower()
+        badge_block = rendered[
+            rendered.index('<div class="x2mdx-ref-badges">') : rendered.index(
+                "</div>", rendered.index('<div class="x2mdx-ref-badges">')
+            )
+        ]
+        baseline_position = badge_block.find("Present since at least")
+        updated_position = badge_block.find("Updated")
+        if baseline_position >= 0 and updated_position >= 0:
+            assert baseline_position < updated_position

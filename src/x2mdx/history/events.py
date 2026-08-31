@@ -81,7 +81,11 @@ def history_events_for_item(
         HistoryEvent(
             kind=HistoryEventKind.INTRODUCED,
             version=item.first_seen,
-            label="Added",
+            label=(
+                "Present since at least"
+                if comparison_versions and item.first_seen == comparison_versions[0]
+                else "Added"
+            ),
             details=(),
             evidence=(item.introduction_evidence,),
         )

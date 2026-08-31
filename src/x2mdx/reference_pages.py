@@ -128,6 +128,7 @@ class ReferenceChange:
 class ReferenceOperationPage:
     path: str
     title: str
+    sidebar_title: str | None = None
     anchor: str | None = None
     description: str | None = None
     eyebrow: str | None = None
@@ -195,6 +196,8 @@ def render_operation_page(page: ReferenceOperationPage) -> Page:
         frontmatter["authMethod"] = page.auth_method
     if page.playground is not None:
         frontmatter["playground"] = page.playground
+    if page.sidebar_title is not None:
+        frontmatter["sidebarTitle"] = page.sidebar_title
     return markdown_page_from_template(
         path=page.path,
         title=page.title,
@@ -209,11 +212,17 @@ def reference_badges_for_history_item(
     item: HistoryItem,
     *,
     kind_label: str,
+    comparison_versions: tuple[str, ...] = (),
 ) -> list[ReferenceBadge]:
     badges = [ReferenceBadge(kind_label, "protocol")]
+    introduction_label = (
+        "Added"
+        if comparison_versions and item.first_seen != comparison_versions[0]
+        else "Present since at least"
+    )
     badges.append(
         ReferenceBadge(
-            f"Added {item.first_seen}",
+            f"{introduction_label} {item.first_seen}",
             "added",
             f"#{history_event_anchor(HistoryEventKind.INTRODUCED, item.first_seen)}",
         )
@@ -261,18 +270,18 @@ def reference_badges_for_history_events(
 ) -> list[ReferenceBadge]:
     badges = [ReferenceBadge(kind_label, "protocol")]
     badge_details = (
-        (HistoryEventKind.INTRODUCED, "Added", "added"),
-        (HistoryEventKind.CHANGED, "Updated", "changed"),
-        (HistoryEventKind.DEPRECATED, "Deprecated", "removed"),
-        (HistoryEventKind.REMOVE_AS_OF, "Removal scheduled", "removed"),
+        (HistoryEventKind.INTRODUCED, "added"),
+        (HistoryEventKind.CHANGED, "changed"),
+        (HistoryEventKind.DEPRECATED, "removed"),
+        (HistoryEventKind.REMOVE_AS_OF, "removed"),
     )
-    for kind, label, tone in badge_details:
+    for kind, tone in badge_details:
         event = next((candidate for candidate in events if candidate.kind == kind), None)
         if event is None:
             continue
         badges.append(
             ReferenceBadge(
-                f"{label} {event.version}",
+                f"{event.label} {event.version}",
                 tone,
                 f"#{history_event_anchor(event.kind, event.version)}"
                 if linked
