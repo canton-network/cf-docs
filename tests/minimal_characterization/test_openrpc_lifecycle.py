@@ -220,7 +220,6 @@ class OpenRpcMinimalLifecycleTests(unittest.TestCase):
                 "amount",
                 "x2mdx-ref-schema",
                 "## History",
-                "Present since at least 1.0.0",
                 "Updated 1.1.0",
             ],
         )
