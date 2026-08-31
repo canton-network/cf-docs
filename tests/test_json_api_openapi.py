@@ -612,7 +612,8 @@ def test_checked_in_json_openapi_target_is_fully_manual_and_conformant() -> None
                 "</div>", rendered.index('<div class="x2mdx-ref-badges">')
             )
         ]
-        baseline_position = badge_block.find("Present since at least")
+        assert "Present since at least" not in badge_block
+        added_position = badge_block.find("Added")
         updated_position = badge_block.find("Updated")
-        if baseline_position >= 0 and updated_position >= 0:
-            assert baseline_position < updated_position
+        if added_position >= 0 and updated_position >= 0:
+            assert added_position < updated_position

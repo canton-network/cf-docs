@@ -77,19 +77,16 @@ def history_events_for_item(
             )
         )
 
-    events.append(
-        HistoryEvent(
-            kind=HistoryEventKind.INTRODUCED,
-            version=item.first_seen,
-            label=(
-                "Present since at least"
-                if comparison_versions and item.first_seen == comparison_versions[0]
-                else "Added"
-            ),
-            details=(),
-            evidence=(item.introduction_evidence,),
+    if not comparison_versions or item.first_seen != comparison_versions[0]:
+        events.append(
+            HistoryEvent(
+                kind=HistoryEventKind.INTRODUCED,
+                version=item.first_seen,
+                label="Added",
+                details=(),
+                evidence=(item.introduction_evidence,),
+            )
         )
-    )
 
     for edge in item.replacement_edges:
         if edge.to_item_id == item.id:

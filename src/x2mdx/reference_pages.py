@@ -215,18 +215,14 @@ def reference_badges_for_history_item(
     comparison_versions: tuple[str, ...],
 ) -> list[ReferenceBadge]:
     badges = [ReferenceBadge(kind_label, "protocol")]
-    introduction_label = (
-        "Added"
-        if comparison_versions and item.first_seen != comparison_versions[0]
-        else "Present since at least"
-    )
-    badges.append(
-        ReferenceBadge(
-            f"{introduction_label} {item.first_seen}",
-            "added",
-            f"#{history_event_anchor(HistoryEventKind.INTRODUCED, item.first_seen)}",
+    if not comparison_versions or item.first_seen != comparison_versions[0]:
+        badges.append(
+            ReferenceBadge(
+                f"Added {item.first_seen}",
+                "added",
+                f"#{history_event_anchor(HistoryEventKind.INTRODUCED, item.first_seen)}",
+            )
         )
-    )
     if item.last_changed is not None:
         badges.append(
             ReferenceBadge(

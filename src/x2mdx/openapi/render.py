@@ -926,25 +926,22 @@ def operation_history_events(
         previous_location = location
 
     first_version, first_method, first_path, _first_operation = observed[0]
-    introduction = Evidence(
-        kind=EvidenceKind.SNAPSHOT,
-        source=source_name,
-        observed_in_version=first_version,
-        location=f"paths.{first_path}.{first_method}",
-    )
-    events.append(
-        HistoryEvent(
-            kind=HistoryEventKind.INTRODUCED,
-            version=first_version,
-            label=(
-                "Present since at least"
-                if first_version == versions[0]
-                else "Added"
-            ),
-            details=(),
-            evidence=(introduction,),
+    if first_version != versions[0]:
+        introduction = Evidence(
+            kind=EvidenceKind.SNAPSHOT_DIFF,
+            source=source_name,
+            observed_in_version=first_version,
+            location=f"paths.{first_path}.{first_method}",
         )
-    )
+        events.append(
+            HistoryEvent(
+                kind=HistoryEventKind.INTRODUCED,
+                version=first_version,
+                label="Added",
+                details=(),
+                evidence=(introduction,),
+            )
+        )
 
     replacement = published.get("x-replaces")
     if isinstance(replacement, str) and replacement.strip():
