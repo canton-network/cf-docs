@@ -8,7 +8,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from x2mdx.output import Page, RawMarkdown
+from x2mdx.history.events import history_event_anchor
+from x2mdx.history.models import (
+    HistoryEvent,
+    HistoryEventKind,
+    HistoryItem,
+    LifecycleState,
+)
+from x2mdx.output import FrontmatterValue, Page, RawMarkdown
 from x2mdx.templating import render_template
 
 
@@ -16,6 +23,7 @@ from x2mdx.templating import render_template
 class ReferenceBadge:
     label: str
     tone: str = "neutral"
+    href: str | None = None
 
 
 @dataclass(frozen=True)
@@ -37,6 +45,12 @@ class ReferenceField:
     type_label: str
     required: bool = False
     description: str = ""
+    location: str | None = None
+    default: str | None = None
+    api_type_label: str | None = None
+    children: list["ReferenceField"] = field(default_factory=list)
+    enum_values: list[str] = field(default_factory=list)
+    constraints: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -114,6 +128,7 @@ class ReferenceChange:
 class ReferenceOperationPage:
     path: str
     title: str
+    sidebar_title: str | None = None
     anchor: str | None = None
     description: str | None = None
     eyebrow: str | None = None
@@ -127,11 +142,16 @@ class ReferenceOperationPage:
     operation_target: str | None = None
     overview_markdown: str | None = None
     protocol_items: list[ReferenceMetaItem] = field(default_factory=list)
+    authorizations: list[ReferencePanel] = field(default_factory=list)
     inputs: list[ReferencePanel] = field(default_factory=list)
     outputs: list[ReferencePanel] = field(default_factory=list)
     examples: list[ReferenceExample] = field(default_factory=list)
     lifecycle_changes: list[ReferenceChange] = field(default_factory=list)
     related_schemas: list[ReferenceSchema] = field(default_factory=list)
+    history_events: list[HistoryEvent] = field(default_factory=list)
+    api_frontmatter: str | None = None
+    auth_method: str | None = None
+    playground: str | None = None
 
 
 def markdown_page_from_template(
@@ -140,13 +160,21 @@ def markdown_page_from_template(
     title: str,
     description: str | None,
     template_name: str,
+    frontmatter: dict[str, FrontmatterValue] | None = None,
     **context: Any,
 ) -> Page:
     return Page(
         path=path,
         title=title,
-        description=safe_markdown_text(description) if description is not None else None,
-        blocks=[RawMarkdown(render_template(template_name, collapse_blank_lines=False, **context))],
+        description=safe_markdown_text(description)
+        if description is not None
+        else None,
+        frontmatter=frontmatter or {},
+        blocks=[
+            RawMarkdown(
+                render_template(template_name, collapse_blank_lines=False, **context)
+            )
+        ],
     )
 
 
@@ -161,13 +189,102 @@ def render_collection_page(page: ReferenceCollectionPage) -> Page:
 
 
 def render_operation_page(page: ReferenceOperationPage) -> Page:
+    frontmatter: dict[str, FrontmatterValue] = {}
+    if page.api_frontmatter is not None:
+        frontmatter["api"] = page.api_frontmatter
+    if page.auth_method is not None:
+        frontmatter["authMethod"] = page.auth_method
+    if page.playground is not None:
+        frontmatter["playground"] = page.playground
+    if page.sidebar_title is not None:
+        frontmatter["sidebarTitle"] = page.sidebar_title
     return markdown_page_from_template(
         path=page.path,
         title=page.title,
-        description=None,
+        description=page.description,
         template_name="reference/operation.md.j2",
+        frontmatter=frontmatter,
         page=page,
     )
+
+
+def reference_badges_for_history_item(
+    item: HistoryItem,
+    *,
+    kind_label: str,
+    comparison_versions: tuple[str, ...],
+) -> list[ReferenceBadge]:
+    badges = [ReferenceBadge(kind_label, "protocol")]
+    if not comparison_versions or item.first_seen != comparison_versions[0]:
+        badges.append(
+            ReferenceBadge(
+                f"Added {item.first_seen}",
+                "added",
+                f"#{history_event_anchor(HistoryEventKind.INTRODUCED, item.first_seen)}",
+            )
+        )
+    if item.last_changed is not None:
+        badges.append(
+            ReferenceBadge(
+                f"Updated {item.last_changed}",
+                "changed",
+                f"#{history_event_anchor(HistoryEventKind.CHANGED, item.last_changed)}",
+            )
+        )
+    deprecated_transition = next(
+        (
+            transition
+            for transition in reversed(item.lifecycle_transitions)
+            if transition.state == LifecycleState.DEPRECATED
+        ),
+        None,
+    )
+    if deprecated_transition is not None:
+        badges.append(
+            ReferenceBadge(
+                f"Deprecated {deprecated_transition.version}",
+                "removed",
+                f"#{history_event_anchor(HistoryEventKind.DEPRECATED, deprecated_transition.version)}",
+            )
+        )
+    if item.remove_as_of is not None:
+        badges.append(
+            ReferenceBadge(
+                f"Removal scheduled {item.remove_as_of}",
+                "removed",
+                f"#{history_event_anchor(HistoryEventKind.REMOVE_AS_OF, item.remove_as_of)}",
+            )
+        )
+    return badges
+
+
+def reference_badges_for_history_events(
+    events: list[HistoryEvent],
+    *,
+    kind_label: str,
+    linked: bool = True,
+) -> list[ReferenceBadge]:
+    badges = [ReferenceBadge(kind_label, "protocol")]
+    badge_details = (
+        (HistoryEventKind.INTRODUCED, "added"),
+        (HistoryEventKind.CHANGED, "changed"),
+        (HistoryEventKind.DEPRECATED, "removed"),
+        (HistoryEventKind.REMOVE_AS_OF, "removed"),
+    )
+    for kind, tone in badge_details:
+        event = next((candidate for candidate in events if candidate.kind == kind), None)
+        if event is None:
+            continue
+        badges.append(
+            ReferenceBadge(
+                f"{event.label} {event.version}",
+                tone,
+                f"#{history_event_anchor(event.kind, event.version)}"
+                if linked
+                else None,
+            )
+        )
+    return badges
 
 
 def compact_text(text: str, *, limit: int = 160) -> str:
@@ -256,7 +373,11 @@ def schema_from_sample(
             )
         )
 
-    example = ReferenceExample(title=name, body=json_body(sample)) if sample is not None else None
+    example = (
+        ReferenceExample(title=name, body=json_body(sample))
+        if sample is not None
+        else None
+    )
     return ReferenceSchema(
         name=name,
         summary=summary or infer_type_label(sample),
