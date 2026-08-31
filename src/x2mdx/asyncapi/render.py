@@ -86,12 +86,14 @@ def lifecycle_badges(
     *,
     item: HistoryItem | None = None,
     events: list[HistoryEvent] | None = None,
+    comparison_versions: tuple[str, ...] = (),
     linked: bool = True,
 ) -> list[ReferenceBadge]:
     if item is not None:
         return reference_badges_for_history_item(
             item,
             kind_label="WebSocket",
+            comparison_versions=comparison_versions,
             linked=linked,
         )
     channel_events = events or legacy_channel_history_events(channel)
@@ -349,6 +351,7 @@ def build_action_operation(
             channel,
             item=history_item,
             events=history_events,
+            comparison_versions=comparison_versions or (),
         ),
         meta_items=[
             ReferenceMetaItem("Channel", channel.channel),
@@ -470,7 +473,12 @@ def build_channel_page(
                 title=f"{action['action']} {channel.channel}",
                 href=page_ref(page_path, operation_page_path(output_dir, channel, action["action"])),
                 summary=compact_text(action.get("description") or channel.latest.get("description") or "", limit=170),
-                badges=lifecycle_badges(channel, item=item, linked=False),
+                badges=lifecycle_badges(
+                    channel,
+                    item=item,
+                    comparison_versions=history_report.comparison_versions,
+                    linked=False,
+                ),
                 meta_items=[
                     ReferenceMetaItem("Operation ID", str(action.get("operation_id") or "-")),
                     ReferenceMetaItem("Method", str(action.get("ws_method") or "-")),
