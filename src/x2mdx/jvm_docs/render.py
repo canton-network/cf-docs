@@ -663,6 +663,7 @@ def markdown_table(headers: list[str], rows: list[list[str]]) -> str:
 def current_member_rows(
     entry: dict[str, Any],
     *,
+    baseline_version: str,
     publish_version: str,
 ) -> list[list[str]]:
     rows: list[list[str]] = []
@@ -676,7 +677,9 @@ def current_member_rows(
             if member.language == "java"
             else scala_member_owner_and_label(member)[1]
         )
-        status_parts = [f"Added `{md_code(member.introduced_version)}`"]
+        status_parts: list[str] = []
+        if member.introduced_version != baseline_version:
+            status_parts.append(f"Added `{md_code(member.introduced_version)}`")
         if member.deprecated_version is not None:
             status_parts.append(
                 f"Deprecated `{md_code(member.deprecated_version)}`"
@@ -684,7 +687,7 @@ def current_member_rows(
         rows.append(
             [
                 f"`{md_code(label)}`",
-                " · ".join(status_parts),
+                " · ".join(status_parts) or "-",
                 latest_doc_markdown_link(member),
             ]
         )
@@ -788,6 +791,7 @@ def build_standardized_artifact_pages(
                         ["Member", "Lifecycle", "Upstream docs"],
                         current_member_rows(
                             entry,
+                            baseline_version=history_report.comparison_versions[0],
                             publish_version=history_report.publish_version,
                         ),
                     ),

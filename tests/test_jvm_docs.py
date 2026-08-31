@@ -16,7 +16,7 @@ from x2mdx.jvm_docs.lifecycle import (
     parse_scala_type_page,
 )
 from x2mdx.jvm_docs.models import JvmDocArtifactLifecycle, JvmDocLifecycleReport, JvmDocSymbolLifecycle
-from x2mdx.jvm_docs.render import build_pages
+from x2mdx.jvm_docs.render import build_pages, current_member_rows
 from x2mdx.render import render_page
 from x2mdx.jvm_docs.snapshots import load_jvm_doc_sources
 
@@ -593,11 +593,48 @@ class JvmDocsTests(unittest.TestCase):
         self.assertNotIn("Active Since", foo_text)
         self.assertIn("x2mdx-ref-page--collection", foo_text)
         self.assertNotIn("history-added-1-0-0", foo_text)
+        self.assertIn("| `newMethod` | Added `1.1.0` |", foo_text)
+        self.assertNotIn("| Added `1.0.0` |", foo_text)
         self.assertIn('href="#history-deprecated-1-2-0">Deprecated 1.2.0</a>', bar_text)
         self.assertNotIn("## History", foo_text)
         self.assertGreater(bar_text.rfind("## History"), bar_text.rfind("## Members"))
         self.assertNotIn('id="history-added-1-0-0"', foo_text)
         self.assertIn('id="history-deprecated-1-2-0"', bar_text)
+
+    def test_standardized_member_rows_omit_baseline_introduction(self) -> None:
+        baseline_member = JvmDocSymbolLifecycle(
+            symbol_key="bindings-java:java:member:com.example.Foo#existing()",
+            language="java",
+            kind="member",
+            symbol="com.example.Foo#existing()",
+            introduced_version="1.0.0",
+            deprecated_version=None,
+            removed_version=None,
+            versions_present=["1.0.0", "1.1.0", "1.2.0"],
+            doc_links={"1.2.0": "https://example.com/Foo.html#existing()"},
+            latest_doc_path="com/example/Foo.html",
+        )
+        added_member = JvmDocSymbolLifecycle(
+            symbol_key="bindings-java:java:member:com.example.Foo#added()",
+            language="java",
+            kind="member",
+            symbol="com.example.Foo#added()",
+            introduced_version="1.1.0",
+            deprecated_version=None,
+            removed_version=None,
+            versions_present=["1.1.0", "1.2.0"],
+            doc_links={"1.2.0": "https://example.com/Foo.html#added()"},
+            latest_doc_path="com/example/Foo.html",
+        )
+
+        rows = current_member_rows(
+            {"members": [baseline_member, added_member]},
+            baseline_version="1.0.0",
+            publish_version="1.2.0",
+        )
+
+        self.assertEqual(rows[0][1], "-")
+        self.assertEqual(rows[1][1], "Added `1.1.0`")
 
     def test_cli_list_formats_outputs_all_supported_formats(self) -> None:
         stdout = io.StringIO()
