@@ -213,7 +213,17 @@ class OpenRpcMinimalLifecycleTests(unittest.TestCase):
         overview = read_mdx(output_dir, "wallet-gateway-overview.mdx")
         remote_method = read_mdx(output_dir, "operations/remote/status.mdx")
         assert_contains_all(overview, ["/reference/wallet-gateway-json-rpc/rpc-specs/wallet", "Wallet API"])
-        assert_contains_all(remote_method, ["PaymentResult", "amount", "x2mdx-ref-schema", "## History", "Added 1.0.0", "Updated 1.1.0"])
+        assert_contains_all(
+            remote_method,
+            [
+                "PaymentResult",
+                "amount",
+                "x2mdx-ref-schema",
+                "## History",
+                "Present since at least 1.0.0",
+                "Updated 1.1.0",
+            ],
+        )
         history_report = json.loads((output_dir / "history-report.json").read_text(encoding="utf-8"))
         self.assertEqual(history_report["format"], "openrpc")
         self.assertEqual(history_report["comparison_versions"], ["1.0.0", "1.1.0"])

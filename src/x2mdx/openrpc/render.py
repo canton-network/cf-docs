@@ -70,10 +70,16 @@ def lifecycle_badges(
     *,
     item: HistoryItem | None = None,
     events: list[HistoryEvent] | None = None,
+    comparison_versions: tuple[str, ...] = (),
     linked: bool = True,
 ) -> list[ReferenceBadge]:
     if item is not None:
-        return reference_badges_for_history_item(item, kind_label="JSON-RPC", linked=linked)
+        return reference_badges_for_history_item(
+            item,
+            kind_label="JSON-RPC",
+            comparison_versions=comparison_versions,
+            linked=linked,
+        )
     return reference_badges_for_history_events(events or [], kind_label="JSON-RPC", linked=linked)
 
 
@@ -280,6 +286,7 @@ def build_spec_page(
             summary=compact_text(method.latest.get("summary") or method.latest.get("description") or "", limit=170),
             badges=lifecycle_badges(
                 item=items_by_id[openrpc_item_id(spec.spec_id, method.method)],
+                comparison_versions=history_report.comparison_versions,
                 linked=False,
             ),
             meta_items=[
@@ -385,7 +392,10 @@ def build_method_page(
             ReferenceBreadcrumb(spec.display_name, page_ref(page_path, spec_path, output_dir=output_dir, link_prefix=link_prefix)),
             ReferenceBreadcrumb(method.method),
         ],
-        badges=lifecycle_badges(item=history_item),
+        badges=lifecycle_badges(
+            item=history_item,
+            comparison_versions=comparison_versions,
+        ),
         meta_items=[
             ReferenceMetaItem("Spec", spec.display_name),
             ReferenceMetaItem("Introduced", method.introduced_version),
