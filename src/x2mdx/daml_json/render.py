@@ -979,6 +979,7 @@ def build_standardized_pages(
                 badges=reference_badges_for_history_item(
                     item,
                     kind_label="Daml",
+                    comparison_versions=history_report.comparison_versions,
                     linked=False,
                 ),
             )
@@ -1007,6 +1008,7 @@ def build_standardized_pages(
                 page_badges=reference_badges_for_history_item(
                     item,
                     kind_label="Daml",
+                    comparison_versions=history_report.comparison_versions,
                 ),
                 page_meta_items=[
                     ReferenceMetaItem("Module", name),
