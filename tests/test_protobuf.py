@@ -281,7 +281,7 @@ class ProtobufTests(unittest.TestCase):
             / "getfoo.mdx"
         ).read_text(encoding="utf-8")
         self.assertIn("## History", overview_text)
-        self.assertIn("Added 1.0.0", operation_text)
+        self.assertIn("Present since at least 1.0.0", operation_text)
         self.assertIn("Updated 1.1.0", operation_text)
         self.assertIn('href="#history-added-1-0-0"', operation_text)
         self.assertNotIn("Since ", operation_text)
