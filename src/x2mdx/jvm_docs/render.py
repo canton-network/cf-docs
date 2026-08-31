@@ -763,6 +763,7 @@ def build_standardized_artifact_pages(
                     badges=reference_badges_for_history_item(
                         item,
                         kind_label="Java",
+                        comparison_versions=history_report.comparison_versions,
                         linked=False,
                     ),
                 )
@@ -808,6 +809,7 @@ def build_standardized_artifact_pages(
                         badges=reference_badges_for_history_item(
                             item,
                             kind_label="Java",
+                            comparison_versions=history_report.comparison_versions,
                         ),
                         meta_items=[
                             ReferenceMetaItem("Package", package_name),
