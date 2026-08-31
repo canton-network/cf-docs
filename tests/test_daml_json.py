@@ -451,7 +451,10 @@ class DamlJsonTests(unittest.TestCase):
         overview_text = (output_dir / "index.mdx").read_text(encoding="utf-8")
         self.assertFalse((output_dir / "da-legacy.mdx").exists())
         self.assertIn("x2mdx-ref-page--collection", list_text)
-        self.assertIn('href="#history-added-1-0-0">Added 1.0.0</a>', list_text)
+        self.assertIn(
+            'href="#history-added-1-0-0">Present since at least 1.0.0</a>',
+            list_text,
+        )
         self.assertIn('href="#history-updated-1-1-0">Updated 1.1.0</a>', list_text)
         self.assertIn('href="#history-deprecated-1-1-0">Deprecated 1.1.0</a>', list_text)
         self.assertIn('href="#history-removal-scheduled-1-2-0">Removal scheduled 1.2.0</a>', list_text)
