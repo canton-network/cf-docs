@@ -292,6 +292,8 @@ def validate_history_report(report: SurfaceHistoryReport) -> None:
         problems.append("comparison_versions must be unique")
     if report.publish_version not in versions:
         problems.append("publish_version must be present in comparison_versions")
+    elif versions and versions[-1] != report.publish_version:
+        problems.append("publish_version must be the final comparison version")
     if report.history_mode == HistoryMode.UNAVAILABLE and not report.limitations:
         problems.append("history_mode=unavailable requires at least one limitation")
 
@@ -309,6 +311,13 @@ def validate_history_report(report: SurfaceHistoryReport) -> None:
     item_ids = [item.id for item in report.items]
     if len(item_ids) != len(set(item_ids)):
         problems.append("item IDs must be unique")
+    current_routes = [
+        item.route
+        for item in report.items
+        if item.current_present and item.route is not None
+    ]
+    if len(current_routes) != len(set(current_routes)):
+        problems.append("current item routes must be unique")
     known_item_ids = set(item_ids)
     for item in report.items:
         _validate_item(item, report=report, item_ids=known_item_ids, problems=problems)

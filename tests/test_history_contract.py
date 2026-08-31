@@ -16,6 +16,7 @@ from x2mdx.history import (
     history_report_to_dict,
     load_history_report,
     validate_history_report,
+    write_history_report,
 )
 
 
@@ -71,6 +72,16 @@ def test_current_item_at_removal_deadline_fails() -> None:
         HistoryValidationError, match="still present at or after remove_as_of"
     ):
         validate_history_report(stale_report)
+
+
+def test_publish_version_must_end_the_comparison_window() -> None:
+    report = conformance_report()
+    invalid_report = replace(report, publish_version="1.1.0")
+
+    with pytest.raises(
+        HistoryValidationError, match="publish_version must be the final comparison"
+    ):
+        validate_history_report(invalid_report)
 
 
 def test_item_removed_before_advertised_version_fails() -> None:
@@ -140,3 +151,13 @@ def test_report_round_trips_through_json_shape() -> None:
 
     assert round_tripped == report
     json.dumps(payload)
+
+
+def test_report_can_be_persisted_and_loaded(tmp_path: Path) -> None:
+    report = conformance_report()
+    output = tmp_path / "history-report.json"
+
+    write_history_report(output, report)
+
+    assert load_history_report(output) == report
+    assert output.read_text(encoding="utf-8").endswith("\n")

@@ -21,10 +21,15 @@ from ledger_api_release_bundles import (
     selected_versions,
 )
 import reference_nav
+from x2mdx.history.events import history_events_for_item
+from x2mdx.history.io import write_history_report
+from x2mdx.history.models import SourceArtifact, SurfaceHistoryReport, VersionSelectionPolicy
+from x2mdx.history.validation import validate_history_report
 from x2mdx.output import Page, RawMarkdown
 from x2mdx.openapi import (
     ManualOpenAPIRenderOptions,
-    operation_history_events,
+    OpenAPIHistoryScope,
+    build_openapi_history_report,
     render_manual_openapi_operation,
 )
 from x2mdx.reference_pages import (
@@ -52,6 +57,9 @@ DEFAULT_OUTPUT_SPEC = (
     REPO_ROOT / "docs-main" / "openapi" / "json-ledger-api" / "openapi.yaml"
 )
 DEFAULT_DOCS_JSON = REPO_ROOT / "docs-main" / "docs.json"
+DEFAULT_HISTORY_REPORT = (
+    REPO_ROOT / "docs-main" / "reference" / "json-api-reference" / "history-report.json"
+)
 DEFAULT_NAV_DROPDOWN = "API Reference"
 DEFAULT_PARENT_GROUP = "Ledger API"
 DEFAULT_GROUP_LABEL = "OpenAPI"
@@ -74,6 +82,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--cache-dir", default=str(DEFAULT_CACHE_DIR))
     parser.add_argument("--output-spec", default=str(DEFAULT_OUTPUT_SPEC))
     parser.add_argument("--docs-json", default=str(DEFAULT_DOCS_JSON))
+    parser.add_argument("--history-report", default=str(DEFAULT_HISTORY_REPORT))
     parser.add_argument("--nav-dropdown", default=DEFAULT_NAV_DROPDOWN)
     parser.add_argument("--parent-group", default=DEFAULT_PARENT_GROUP)
     parser.add_argument("--group-label", default=DEFAULT_GROUP_LABEL)
@@ -515,22 +524,26 @@ def write_manual_operation_pages(
     *,
     docs_json_path: Path,
     specs_by_version: dict[str, dict[str, Any]],
-    versions: list[str],
     publish_version: str,
-    source_name: str,
     server: str,
     manual_operations: list[dict[str, str]],
+    history_report: SurfaceHistoryReport,
 ) -> set[Path]:
     published_spec = specs_by_version[publish_version]
+    history_items_by_route = {
+        item.route: item for item in history_report.current_items() if item.route
+    }
     written_paths: set[Path] = set()
     for operation in manual_operations:
-        history_events = operation_history_events(
-            specs_by_version=specs_by_version,
-            versions=versions,
-            publish_version=publish_version,
-            method=operation["method"],
-            path=operation["path"],
-            source_name=source_name,
+        route = f"/{operation['page_ref']}"
+        history_item = history_items_by_route.get(route)
+        if history_item is None:
+            raise ValueError(f"Current JSON OpenAPI operation has no history item: {route}")
+        history_events = list(
+            history_events_for_item(
+                history_item,
+                comparison_versions=history_report.comparison_versions,
+            )
         )
         page = render_manual_openapi_operation(
             spec=published_spec,
@@ -853,14 +866,48 @@ def main() -> int:
         directory=args.openapi_directory,
     )
     validate_manual_route_baseline(source_config, manual_operations=manual_operations)
+    history_report = build_openapi_history_report(
+        surface_id="json-ledger-api-openapi",
+        title="JSON Ledger API OpenAPI",
+        configured_scope="JSON Ledger API OpenAPI operations",
+        scopes=(
+            OpenAPIHistoryScope(
+                id="json-ledger-api",
+                specs_by_version=specs_by_version,
+                current_routes={
+                    (operation["method"].lower(), operation["path"]): (
+                        f"/{operation['page_ref']}"
+                    )
+                    for operation in manual_operations
+                },
+            ),
+        ),
+        comparison_versions=tuple(version_labels),
+        publish_version=publish_entry["version"],
+        source_artifacts=tuple(
+            SourceArtifact(
+                version=entry["version"],
+                source=source_name,
+                revision=entry.get("canton_version"),
+            )
+            for entry in versions
+        ),
+        version_policy=VersionSelectionPolicy.CONFIGURED_PUBLISH_VERSION,
+        limitations=(
+            "Release-bundle OpenAPI snapshots establish operation additions, normalized updates, authored deprecations, and removals.",
+        ),
+    )
+    validate_history_report(history_report)
+    history_report_path = Path(args.history_report).resolve()
+    write_history_report(history_report_path, history_report)
+    print(f"Generated normalized JSON OpenAPI history report: {history_report_path}")
     manual_page_paths = write_manual_operation_pages(
         docs_json_path=docs_json_path,
         specs_by_version=specs_by_version,
-        versions=version_labels,
         publish_version=publish_entry["version"],
-        source_name=source_name,
         server=str(source_config.get("manual_api_server") or "http://localhost:7575"),
         manual_operations=manual_operations,
+        history_report=history_report,
     )
     reference_nav.regroup_ledger_api_nav(
         docs_json_path=docs_json_path,
