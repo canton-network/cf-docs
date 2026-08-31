@@ -137,8 +137,10 @@ def build_protobuf_nav_group(
     group_label: str,
     extra_page_refs: list[str] | None = None,
     include_details_page: bool = True,
+    overview_name: str = "index.mdx",
+    overview_first: bool = False,
 ) -> MintlifyNavGroup:
-    details_page_ref = docs_json_page_ref(output_dir / "index.mdx", docs_json_path)
+    details_page_ref = docs_json_page_ref(output_dir / overview_name, docs_json_path)
     pages: MintlifyNavItems = []
     package_groups: MintlifyNavItems = []
     for package_page in sorted((output_dir / "packages").glob("*.mdx"), key=mdx_title):
@@ -162,9 +164,11 @@ def build_protobuf_nav_group(
         if service_groups:
             package_pages.append(nav_group("Services", service_groups))
         package_groups.append(nav_group(mdx_title(package_page), package_pages))
+    if overview_first and include_details_page:
+        pages.append(details_page_ref)
     if package_groups:
         pages.append(nav_group("Packages", package_groups))
-    details_refs = [details_page_ref] if include_details_page else []
+    details_refs = [details_page_ref] if include_details_page and not overview_first else []
     for page_ref in [*(extra_page_refs or []), *details_refs]:
         if page_ref not in pages:
             pages.append(page_ref)
