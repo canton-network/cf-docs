@@ -163,8 +163,7 @@ def package_history_events(history_report: SurfaceHistoryReport) -> list[History
         details: tuple[str, ...]
         if kind == HistoryEventKind.INTRODUCED:
             noun = f"exported symbol{'s' if len(entries) != 1 else ''}"
-            verb = "present." if entries[0][1].label == "Present since at least" else "added."
-            details = (f"{len(entries)} {noun} {verb}",)
+            details = (f"{len(entries)} {noun} added.",)
         elif kind in {HistoryEventKind.DEPRECATED, HistoryEventKind.REMOVE_AS_OF}:
             details = tuple(sorted({name for name, _ in entries}, key=str.casefold))
         else:
