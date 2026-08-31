@@ -9,6 +9,8 @@ from pathlib import Path
 from google.protobuf import descriptor_pb2
 
 from x2mdx.cli import main as cli_main
+from x2mdx.history import ReferenceFormat, validate_history_report
+from x2mdx.protobuf.history import build_protobuf_surface_history_report
 from x2mdx.protobuf.lifecycle import build_protobuf_history_report_from_sources
 from x2mdx.protobuf.render import build_operation_page
 from x2mdx.protobuf.snapshots import load_protobuf_sources
@@ -144,6 +146,29 @@ class ProtobufTests(unittest.TestCase):
         )
         self.assertEqual(
             lifecycle["com.example.v1.ExampleService/GetBar"]["introducedIn"],
+            "1.1.0",
+        )
+
+        normalized = build_protobuf_surface_history_report(
+            report,
+            routes={
+                endpoint_id: f"/reference/grpc/{endpoint_id.replace('/', '-')}"
+                for endpoint_id in report["latestSnapshot"]["endpoints"]
+            },
+            surface_id="test-grpc",
+            title="Test gRPC",
+            configured_scope="test endpoints",
+            format=ReferenceFormat.GRPC,
+        )
+        validate_history_report(normalized)
+        normalized_items = normalized.items_by_id()
+        self.assertEqual(normalized.comparison_versions, ("1.0.0", "1.1.0"))
+        self.assertEqual(
+            normalized_items["com.example.v1.ExampleService/GetFoo"].last_changed,
+            "1.1.0",
+        )
+        self.assertEqual(
+            normalized_items["com.example.v1.ExampleService/GetBar"].first_seen,
             "1.1.0",
         )
 
