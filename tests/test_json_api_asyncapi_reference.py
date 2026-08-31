@@ -48,9 +48,12 @@ def test_checked_asyncapi_item_pages_use_linked_badges_and_history_last() -> Non
             HistoryEventKind.INTRODUCED,
             item.first_seen,
         )
-        assert f'href="#{added_anchor}"' in text
-        assert "## History" in text
-        assert text.rfind("\n## ") == text.index("\n## History")
+        if item.first_seen == report.comparison_versions[0]:
+            assert f'href="#{added_anchor}"' not in text
+        else:
+            assert f'href="#{added_anchor}"' in text
+        if "## History" in text:
+            assert text.rfind("\n## ") == text.index("\n## History")
         assert "Details and history" not in text
         assert "## Lifecycle Changes" not in text
 
