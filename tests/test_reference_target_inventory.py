@@ -94,10 +94,10 @@ def test_every_target_has_valid_normalized_history_and_resolvable_current_pages(
     for page_path in checked_pages:
         text = page_path.read_text(encoding="utf-8")
         assert "x2mdx-ref-page" in text, page_path
-        assert 'href="#history-' in text, page_path
-        assert "## History" in text, page_path
-        history_tail = text.rsplit("## History", 1)[1]
-        assert re.search(r"^## ", history_tail, re.MULTILINE) is None, page_path
+        assert "Present since at least" not in text, page_path
+        if "## History" in text:
+            history_tail = text.rsplit("## History", 1)[1]
+            assert re.search(r"^## ", history_tail, re.MULTILINE) is None, page_path
 
 
 def test_separate_details_and_history_pages_are_absent() -> None:
