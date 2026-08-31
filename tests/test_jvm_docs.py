@@ -592,13 +592,11 @@ class JvmDocsTests(unittest.TestCase):
         self.assertNotIn("Details and history", overview_text)
         self.assertNotIn("Active Since", foo_text)
         self.assertIn("x2mdx-ref-page--collection", foo_text)
-        self.assertIn(
-            'href="#history-added-1-0-0">Present since at least 1.0.0</a>',
-            foo_text,
-        )
+        self.assertNotIn("history-added-1-0-0", foo_text)
         self.assertIn('href="#history-deprecated-1-2-0">Deprecated 1.2.0</a>', bar_text)
-        self.assertGreater(foo_text.rfind("## History"), foo_text.rfind("## Members"))
-        self.assertIn('id="history-added-1-0-0"', foo_text)
+        self.assertNotIn("## History", foo_text)
+        self.assertGreater(bar_text.rfind("## History"), bar_text.rfind("## Members"))
+        self.assertNotIn('id="history-added-1-0-0"', foo_text)
         self.assertIn('id="history-deprecated-1-2-0"', bar_text)
 
     def test_cli_list_formats_outputs_all_supported_formats(self) -> None:
