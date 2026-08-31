@@ -592,7 +592,10 @@ class JvmDocsTests(unittest.TestCase):
         self.assertNotIn("Details and history", overview_text)
         self.assertNotIn("Active Since", foo_text)
         self.assertIn("x2mdx-ref-page--collection", foo_text)
-        self.assertIn('href="#history-added-1-0-0">Added 1.0.0</a>', foo_text)
+        self.assertIn(
+            'href="#history-added-1-0-0">Present since at least 1.0.0</a>',
+            foo_text,
+        )
         self.assertIn('href="#history-deprecated-1-2-0">Deprecated 1.2.0</a>', bar_text)
         self.assertGreater(foo_text.rfind("## History"), foo_text.rfind("## Members"))
         self.assertIn('id="history-added-1-0-0"', foo_text)
