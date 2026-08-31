@@ -41,20 +41,19 @@ def write_source_config(path: Path) -> None:
     )
 
 
-def write_wallet_gateway_source_config(path: Path, *, publish_version: str) -> None:
+def write_wallet_gateway_source_config(path: Path, *, publish_version: str | None = None) -> None:
+    payload = {
+        "source": "test",
+        "release_repo": "canton-network/wallet",
+        "remote": "https://github.com/canton-network/wallet.git",
+        "tag_prefix": "@canton-network/wallet-gateway-remote@",
+        "min_version": "0.24.0",
+        "specs": [],
+    }
+    if publish_version is not None:
+        payload["publish_version"] = publish_version
     path.write_text(
-        json.dumps(
-            {
-                "source": "test",
-                "release_repo": "hyperledger-labs/splice-wallet-kernel",
-                "remote": "https://github.com/hyperledger-labs/splice-wallet-kernel.git",
-                "tag_prefix": "@canton-network/wallet-gateway-remote@",
-                "min_version": "0.24.0",
-                "publish_version": publish_version,
-                "specs": [],
-            },
-            indent=2,
-        )
+        json.dumps(payload, indent=2)
         + "\n",
         encoding="utf-8",
     )
@@ -186,42 +185,10 @@ def test_update_splice_openapi_source_is_dynamic_and_unpinned(tmp_path: Path) ->
     )
 
 
-def test_update_wallet_gateway_openrpc_source_updates_stale_publish_version(tmp_path: Path) -> None:
+def test_update_wallet_gateway_openrpc_source_is_dynamic_and_unpinned(tmp_path: Path) -> None:
     module = load_script_module()
     source_config_path = tmp_path / "source-artifacts.json"
-    write_wallet_gateway_source_config(source_config_path, publish_version="0.25.0")
-    module.wallet_gateway_openrpc.wallet_gateway_openrpc_generator.stable_release_versions = (
-        lambda **_kwargs: [
-            "0.25.0",
-            "1.4.0",
-        ]
-    )
-
-    update = module.wallet_gateway_openrpc.update_source(
-        source_config_path=source_config_path,
-        dry_run=False,
-    )
-
-    assert update == module.SourceUpdate(
-        source="Wallet Gateway OpenRPC",
-        path=source_config_path,
-        field="publish_version",
-        previous="0.25.0",
-        current="1.4.0",
-    )
-    assert json.loads(source_config_path.read_text(encoding="utf-8"))["publish_version"] == "1.4.0"
-
-
-def test_update_wallet_gateway_openrpc_source_noops_when_current(tmp_path: Path) -> None:
-    module = load_script_module()
-    source_config_path = tmp_path / "source-artifacts.json"
-    write_wallet_gateway_source_config(source_config_path, publish_version="1.4.0")
-    module.wallet_gateway_openrpc.wallet_gateway_openrpc_generator.stable_release_versions = (
-        lambda **_kwargs: [
-            "0.25.0",
-            "1.4.0",
-        ]
-    )
+    write_wallet_gateway_source_config(source_config_path)
 
     assert (
         module.wallet_gateway_openrpc.update_source(
@@ -230,29 +197,7 @@ def test_update_wallet_gateway_openrpc_source_noops_when_current(tmp_path: Path)
         )
         is None
     )
-    assert json.loads(source_config_path.read_text(encoding="utf-8"))["publish_version"] == "1.4.0"
-
-
-def test_update_wallet_gateway_openrpc_source_dry_run_does_not_write(tmp_path: Path) -> None:
-    module = load_script_module()
-    source_config_path = tmp_path / "source-artifacts.json"
-    write_wallet_gateway_source_config(source_config_path, publish_version="0.25.0")
-    module.wallet_gateway_openrpc.wallet_gateway_openrpc_generator.stable_release_versions = (
-        lambda **_kwargs: [
-            "0.25.0",
-            "1.4.0",
-        ]
-    )
-
-    update = module.wallet_gateway_openrpc.update_source(
-        source_config_path=source_config_path,
-        dry_run=True,
-    )
-
-    assert update is not None
-    assert update.previous == "0.25.0"
-    assert update.current == "1.4.0"
-    assert json.loads(source_config_path.read_text(encoding="utf-8"))["publish_version"] == "0.25.0"
+    assert "publish_version" not in json.loads(source_config_path.read_text(encoding="utf-8"))
 
 
 def test_update_typescript_bindings_source_updates_stale_package_versions(tmp_path: Path) -> None:
