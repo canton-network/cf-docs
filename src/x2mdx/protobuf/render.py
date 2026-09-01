@@ -5,9 +5,13 @@ from __future__ import annotations
 import json
 import re
 from collections import defaultdict
+from functools import cmp_to_key
 from pathlib import Path
 from typing import Any
 
+from x2mdx.history.events import history_events_for_item
+from x2mdx.history.models import HistoryEvent, HistoryEventKind, HistoryItem, SurfaceHistoryReport
+from x2mdx.history.versioning import compare_versions
 from x2mdx.reference_pages import (
     ReferenceBadge,
     ReferenceBreadcrumb,
@@ -25,6 +29,8 @@ from x2mdx.reference_pages import (
     relative_page_ref,
     render_collection_page,
     render_operation_page,
+    reference_badges_for_history_events,
+    reference_badges_for_history_item,
     safe_markdown_text,
 )
 
@@ -78,13 +84,85 @@ def package_group_sort_key(package_name: str, *, has_services: bool) -> tuple[in
     return (PACKAGE_GROUP_ORDER.index(label), package_name)
 
 
-def lifecycle_badges(*, introduced: str, changed: str | None = None, removed: str | None = None) -> list[ReferenceBadge]:
+def lifecycle_badges(
+    *,
+    introduced: str | None = None,
+    changed: str | None = None,
+    removed: str | None = None,
+    item: HistoryItem | None = None,
+    events: list[HistoryEvent] | None = None,
+    comparison_versions: tuple[str, ...] = (),
+    linked: bool = True,
+) -> list[ReferenceBadge]:
+    if item is not None:
+        return reference_badges_for_history_item(
+            item,
+            kind_label="gRPC",
+            comparison_versions=comparison_versions,
+            linked=linked,
+        )
+    if events is not None:
+        return reference_badges_for_history_events(events, kind_label="gRPC", linked=linked)
+    if introduced is None:
+        return [ReferenceBadge("gRPC", tone="protocol")]
     badges = [ReferenceBadge("gRPC", tone="protocol"), ReferenceBadge(f"Since {introduced}", tone="added")]
     if changed and changed != introduced:
         badges.append(ReferenceBadge(f"Changed {changed}", tone="changed"))
     if removed:
         badges.append(ReferenceBadge(f"Removed {removed}", tone="removed"))
     return badges
+
+
+def aggregate_history_events(
+    items: list[HistoryItem],
+    *,
+    comparison_versions: tuple[str, ...],
+) -> list[HistoryEvent]:
+    combined: dict[tuple[HistoryEventKind, str], HistoryEvent] = {}
+    for item in items:
+        endpoint = item.id
+        for event in history_events_for_item(item, comparison_versions=comparison_versions):
+            key = (event.kind, event.version)
+            details = tuple(
+                f"{endpoint}: {detail}" for detail in event.details
+            ) or (f"{endpoint}",)
+            existing = combined.get(key)
+            if existing is None:
+                combined[key] = HistoryEvent(
+                    kind=event.kind,
+                    version=event.version,
+                    label=event.label,
+                    details=details,
+                    evidence=event.evidence,
+                )
+            else:
+                combined[key] = HistoryEvent(
+                    kind=existing.kind,
+                    version=existing.version,
+                    label=existing.label,
+                    details=tuple(dict.fromkeys((*existing.details, *details))),
+                    evidence=tuple(dict.fromkeys((*existing.evidence, *event.evidence))),
+                )
+
+    priority = {
+        HistoryEventKind.REMOVE_AS_OF: 0,
+        HistoryEventKind.DEPRECATED: 1,
+        HistoryEventKind.CHANGED: 2,
+        HistoryEventKind.INTRODUCED: 3,
+        HistoryEventKind.REPLACEMENT: 4,
+    }
+
+    def compare(left: HistoryEvent, right: HistoryEvent) -> int:
+        version_comparison = compare_versions(
+            left.version,
+            right.version,
+            known_order=comparison_versions,
+        )
+        if version_comparison:
+            return -version_comparison
+        return priority[left.kind] - priority[right.kind]
+
+    return sorted(combined.values(), key=cmp_to_key(compare))
 
 
 def page_ref(from_path: Path, to_path: Path) -> str:
@@ -421,17 +499,41 @@ def build_overview_page(
     *,
     output_dir: Path,
     package_docs: list[dict[str, Any]],
+    history_report: SurfaceHistoryReport | None = None,
+    overview_name: str = "index.mdx",
 ) -> ReferenceCollectionPage:
+    history_items = list(history_report.items) if history_report is not None else []
+    overview_events = (
+        aggregate_history_events(
+            history_items,
+            comparison_versions=history_report.comparison_versions,
+        )
+        if history_report is not None
+        else []
+    )
     package_page_map = {package["package"]: package_page_path(output_dir, package["package"]) for package in package_docs}
     package_groups: dict[str, list[ReferenceCard]] = defaultdict(list)
     for package in package_docs:
         group_label = package_group(package["package"], has_services=bool(package["serviceCount"] or package["endpointCount"]))
+        package_items = [
+            item
+            for item in history_items
+            if item.id.startswith(f"{package['package']}.")
+        ]
+        package_events = (
+            aggregate_history_events(
+                package_items,
+                comparison_versions=history_report.comparison_versions,
+            )
+            if history_report is not None
+            else []
+        )
         package_groups[group_label].append(
             ReferenceCard(
                 title=package["package"],
-                href=page_ref(output_dir / "index.mdx", package_page_map[package["package"]]),
+                href=page_ref(output_dir / overview_name, package_page_map[package["package"]]),
                 summary=compact_package_summary(package),
-                badges=[ReferenceBadge("gRPC", tone="protocol")],
+                badges=lifecycle_badges(events=package_events, linked=False),
                 meta_items=[
                     ReferenceMetaItem("Services", str(package["serviceCount"])),
                     ReferenceMetaItem("Endpoints", str(package["endpointCount"])),
@@ -474,12 +576,16 @@ def build_overview_page(
             )
     latest = report["latestSnapshot"]
     return ReferenceCollectionPage(
-        path="index.mdx",
+        path=overview_name,
         title="Canton Protobuf Reference",
         description="Descriptor-backed protobuf API history grouped by package.",
         eyebrow="Protobuf Reference",
         summary="Operation-first gRPC pages with package-level browsing and recursive related schema sections.",
-        badges=[ReferenceBadge("Protobuf", tone="protocol"), ReferenceBadge(str(report["latestRelease"]), tone="neutral")],
+        badges=(
+            lifecycle_badges(events=overview_events)
+            if history_report is not None
+            else [ReferenceBadge("Protobuf", tone="protocol"), ReferenceBadge(str(report["latestRelease"]), tone="neutral")]
+        ),
         meta_items=[
             ReferenceMetaItem("Source", str(report["sourceName"])),
             ReferenceMetaItem("Version filter", str(report["versionFilter"])),
@@ -489,6 +595,7 @@ def build_overview_page(
             ReferenceMetaItem("Messages", str(latest["stats"]["messages"])),
         ],
         sections=sections,
+        history_events=overview_events,
     )
 
 
@@ -499,10 +606,26 @@ def build_package_page(
     output_dir: Path,
     ctx: dict[str, dict[str, Any]],
     endpoint_docs: dict[str, dict[str, Any]],
+    history_report: SurfaceHistoryReport | None = None,
+    overview_name: str = "index.mdx",
 ) -> ReferenceCollectionPage:
     lifecycle_map = {entry["id"]: entry for entry in report["endpointLifecycle"]}
+    history_items_by_id = history_report.items_by_id() if history_report is not None else {}
+    package_history_items = [
+        item
+        for item in history_items_by_id.values()
+        if item.id.startswith(f"{package_doc['package']}.")
+    ]
+    package_events = (
+        aggregate_history_events(
+            package_history_items,
+            comparison_versions=history_report.comparison_versions,
+        )
+        if history_report is not None
+        else []
+    )
     page_path = package_page_path(output_dir, package_doc["package"])
-    overview_path = output_dir / "index.mdx"
+    overview_path = output_dir / overview_name
 
     service_sections: list[ReferenceSection] = []
     for service_id in package_doc["serviceIds"]:
@@ -511,16 +634,25 @@ def build_package_page(
         for endpoint_id in sorted(service["endpointIds"]):
             endpoint = endpoint_docs[endpoint_id]
             lifecycle = lifecycle_map[endpoint_id]
+            history_item = history_items_by_id.get(endpoint_id)
             operation_path = operation_page_path(output_dir, package_doc["package"], endpoint["service"], endpoint["name"])
             service_cards.append(
                 ReferenceCard(
                     title=f"{endpoint['service']}.{endpoint['name']}",
                     href=page_ref(page_path, operation_path),
                     summary=compact_text(endpoint.get("description") or endpoint_signature(endpoint), limit=180),
-                    badges=lifecycle_badges(
-                        introduced=str(lifecycle["introducedIn"]),
-                        changed=str(lifecycle.get("lastChangedIn") or ""),
-                        removed=str(lifecycle.get("removedIn") or "") or None,
+                    badges=(
+                        lifecycle_badges(
+                            item=history_item,
+                            comparison_versions=history_report.comparison_versions,
+                            linked=False,
+                        )
+                        if history_item is not None
+                        else lifecycle_badges(
+                            introduced=str(lifecycle["introducedIn"]),
+                            changed=str(lifecycle.get("lastChangedIn") or ""),
+                            removed=str(lifecycle.get("removedIn") or "") or None,
+                        )
                     ),
                     meta_items=[
                         ReferenceMetaItem("Request", endpoint["requestType"]),
@@ -584,7 +716,7 @@ def build_package_page(
         summary=compact_package_summary(package_doc),
         back_link=page_ref(page_path, overview_path),
         back_label="Back to overview",
-        badges=[ReferenceBadge("gRPC", tone="protocol")],
+        badges=lifecycle_badges(events=package_events),
         meta_items=[
             ReferenceMetaItem("Files", str(package_doc["fileCount"])),
             ReferenceMetaItem("Services", str(package_doc["serviceCount"])),
@@ -593,6 +725,7 @@ def build_package_page(
             ReferenceMetaItem("Enums", str(package_doc["enumCount"])),
         ],
         sections=sections,
+        history_events=package_events,
     )
 
 
@@ -603,6 +736,9 @@ def build_operation_page(
     *,
     output_dir: Path,
     ctx: dict[str, dict[str, Any]],
+    history_item: HistoryItem | None = None,
+    comparison_versions: tuple[str, ...] = (),
+    overview_name: str = "index.mdx",
 ) -> ReferenceOperationPage:
     page_path = operation_page_path(output_dir, package_name, endpoint["service"], endpoint["name"])
     package_path = package_page_path(output_dir, package_name)
@@ -614,8 +750,6 @@ def build_operation_page(
     request_body = message_json_sample(endpoint["requestType"], ctx)
     response_body = message_json_sample(endpoint["responseType"], ctx)
 
-    description = str(endpoint.get("description") or "")
-
     return ReferenceOperationPage(
         path=page_path.relative_to(output_dir).as_posix(),
         title=endpoint["name"],
@@ -626,14 +760,21 @@ def build_operation_page(
         back_label="Back to package",
         breadcrumbs=[
             ReferenceBreadcrumb(package_group(package_name, has_services=True)),
-            ReferenceBreadcrumb("Protobuf", page_ref(page_path, output_dir / "index.mdx")),
+            ReferenceBreadcrumb("Protobuf", page_ref(page_path, output_dir / overview_name)),
             ReferenceBreadcrumb(package_name, page_ref(page_path, package_path)),
             ReferenceBreadcrumb(endpoint["name"]),
         ],
-        badges=lifecycle_badges(
-            introduced=str(lifecycle["introducedIn"]),
-            changed=str(lifecycle.get("lastChangedIn") or ""),
-            removed=str(lifecycle.get("removedIn") or "") or None,
+        badges=(
+            lifecycle_badges(
+                item=history_item,
+                comparison_versions=comparison_versions,
+            )
+            if history_item is not None
+            else lifecycle_badges(
+                introduced=str(lifecycle["introducedIn"]),
+                changed=str(lifecycle.get("lastChangedIn") or ""),
+                removed=str(lifecycle.get("removedIn") or "") or None,
+            )
         ),
         meta_items=[
             ReferenceMetaItem("Package", package_name),
@@ -685,7 +826,7 @@ def build_operation_page(
                 media_type="application/json",
             ),
         ],
-        lifecycle_changes=[
+        lifecycle_changes=[] if history_item is not None else [
             ReferenceChange(
                 version=str(event["version"]),
                 details=", ".join(str(change) for change in event.get("changeTypes", [])) or str(event["kind"]),
@@ -693,10 +834,26 @@ def build_operation_page(
             for event in lifecycle.get("history", [])
         ],
         related_schemas=related_schemas,
+        history_events=(
+            list(
+                history_events_for_item(
+                    history_item,
+                    comparison_versions=comparison_versions,
+                )
+            )
+            if history_item is not None
+            else []
+        ),
     )
 
 
-def build_pages(report: dict[str, Any], *, output_dir: Path) -> tuple[Path, list[Any]]:
+def build_pages(
+    report: dict[str, Any],
+    *,
+    output_dir: Path,
+    history_report: SurfaceHistoryReport | None = None,
+    overview_name: str = "index.mdx",
+) -> tuple[Path, list[Any]]:
     latest = report["latestSnapshot"]
     ctx = {
         "files": latest["files"],
@@ -711,7 +868,18 @@ def build_pages(report: dict[str, Any], *, output_dir: Path) -> tuple[Path, list
     endpoint_docs = endpoint_snapshot_map(report)
     lifecycle_map = {entry["id"]: entry for entry in report["endpointLifecycle"]}
 
-    pages = [render_collection_page(build_overview_page(report, output_dir=output_dir, package_docs=package_docs))]
+    history_items_by_id = history_report.items_by_id() if history_report is not None else {}
+    pages = [
+        render_collection_page(
+            build_overview_page(
+                report,
+                output_dir=output_dir,
+                package_docs=package_docs,
+                history_report=history_report,
+                overview_name=overview_name,
+            )
+        )
+    ]
     for package_doc in package_docs:
         pages.append(
             render_collection_page(
@@ -721,6 +889,8 @@ def build_pages(report: dict[str, Any], *, output_dir: Path) -> tuple[Path, list
                     output_dir=output_dir,
                     ctx=ctx,
                     endpoint_docs=endpoint_docs,
+                    history_report=history_report,
+                    overview_name=overview_name,
                 )
             )
         )
@@ -733,6 +903,13 @@ def build_pages(report: dict[str, Any], *, output_dir: Path) -> tuple[Path, list
                         lifecycle_map[endpoint_id],
                         output_dir=output_dir,
                         ctx=ctx,
+                        history_item=history_items_by_id.get(endpoint_id),
+                        comparison_versions=(
+                            history_report.comparison_versions
+                            if history_report is not None
+                            else ()
+                        ),
+                        overview_name=overview_name,
                     )
                 )
             )

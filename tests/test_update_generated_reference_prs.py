@@ -94,6 +94,21 @@ def test_java_ledger_bindings_target_does_not_auto_merge() -> None:
     assert target.auto_merge is False
 
 
+def test_splice_openapi_target_regenerates_without_a_source_pin() -> None:
+    module = load_script_module()
+    target = next(target for target in module.UPDATE_TARGETS if target.key == "splice-openapi")
+
+    assert target.source_update_commands == ()
+    assert target.source_update_paths == ()
+    assert target.summary_kind == "static"
+    assert target.summary_path is None
+    assert target.generate_commands == (
+        ("nix-shell", "--run", "npm run generate:splice-mintlify-openapi"),
+    )
+    assert "config/mintlify-openapi/splice-openapi/source-artifacts.json" not in target.paths
+    assert "docs-main/reference/splice-scan-api" in target.paths
+
+
 def test_generated_docs_workflow_uses_merger_app_for_pr_mutations() -> None:
     workflow = (REPO_ROOT / ".github" / "workflows" / "update-version-dashboard.yml").read_text(
         encoding="utf-8"
@@ -103,7 +118,17 @@ def test_generated_docs_workflow_uses_merger_app_for_pr_mutations() -> None:
     assert "GH_TOKEN: ${{ steps.merger-token.outputs.token || github.token }}" in workflow
     assert "GITHUB_TOKEN: ${{ steps.merger-token.outputs.token || github.token }}" in workflow
     assert "GENERATED_DOCS_WORKFLOW_TOKEN: ${{ github.token }}" in workflow
-    assert "run: gh auth setup-git" in workflow
+    assert "uses: cachix/install-nix-action@v31" not in workflow
+    assert "sudo apt-get" not in workflow
+    assert (
+        "run: SKIP_NPM_INSTALL=1 direnv allow . && SKIP_NPM_INSTALL=1 direnv exec . true"
+        in workflow
+    )
+    assert "python3 scripts/check_generated_docs_dependencies.py" in workflow
+    assert "run: SKIP_NPM_INSTALL=1 nix-shell --run 'gh auth setup-git'" in workflow
+    assert 'args=(python3 scripts/update_generated_reference_prs.py --targets "${{ matrix.target }}")' in workflow
+    assert "args+=(--dry-run)" in workflow
+    assert "SKIP_NPM_INSTALL=1 nix-shell --run \"$generated_docs_command\"" in workflow
 
 
 def test_generated_docs_workflow_only_sets_up_daml_for_declared_targets() -> None:
