@@ -37,6 +37,12 @@ different marker convention. The add command derives the existing-style
 manifest, creates the initial file under
 `docs-main/snippets/external/<repo>/main/`, and prints the page import and
 component usage. Pass `--name` only when a stable name cannot be derived.
+Authoring always targets the `main` output folder.
+
+The source file must be tracked, unchanged at `HEAD`, and available at an exact
+remote-tracking ref. The command records the 40-character commit, normalized
+remote URL, and remote ref in `config/snippet-config/snippet-source-lock.json`.
+This keeps provenance outside the established manifest schema.
 
 Edit a snippet by its stable `snippetName`:
 
@@ -44,31 +50,52 @@ Edit a snippet by its stable `snippetName`:
 npm run snippets:edit -- splice \
   splice-literal-marker-apps-example-sweep-start \
   --source-dir ../splice \
+  --marker SWEEP
+```
+
+Edit changes the selector or language. Move changes the source path and may
+also change its selector or language while preserving the stable name and page
+imports:
+
+```bash
+npm run snippets:move -- splice \
+  splice-literal-marker-apps-example-sweep-start \
+  --source-dir ../splice \
   --source apps/renamed-example.yaml \
   --marker SWEEP
 ```
 
-Only the supplied source, selector, or language fields change. The command
-preserves `snippetName`, description, other formatting options, output path,
-and existing page imports, then validates and regenerates the MDX. Both
-commands fail before writing if the source is missing, markers are ambiguous,
-or the proposed source/selector duplicates another entry.
+Add, edit, and move preserve descriptions and unrelated formatting options,
+validate the source, regenerate the MDX, and refresh its source-lock record.
+They fail before writing if the source is missing or dirty, the commit lacks a
+remote-tracking ref, markers are ambiguous, or the source/selector duplicates
+another entry.
+
+Delete refuses to proceed while any docs page still imports the stable output:
+
+```bash
+npm run snippets:delete -- splice \
+  splice-literal-marker-apps-example-sweep-start
+```
+
+After references are removed, delete removes the manifest entry, generated
+MDX, and source-lock record together.
 
 Preview the validated manifest and generated-MDX changes without writing either
-file by adding `--dry-run` to an add or edit command:
+file by adding `--dry-run` to any add, edit, move, or delete command:
 
 ```bash
 npm run snippets:edit -- splice \
   splice-literal-marker-apps-example-sweep-start \
   --source-dir ../splice \
-  --source apps/renamed-example.yaml \
   --marker SWEEP \
   --dry-run
 ```
 
-The command prints unified diffs for the repository manifest and the stable MDX
-output. It still performs source, selector, duplicate, and extraction
-validation, so a successful preview exercises the same checks as the write.
+The command prints unified diffs for the repository manifest, source lock, and
+stable MDX output. It still performs the corresponding source, selector,
+duplicate, extraction, or reference validation, so a successful preview
+exercises the same checks as the write.
 
 ## Local one-command extraction
 
