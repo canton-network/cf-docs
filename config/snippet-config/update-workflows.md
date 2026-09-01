@@ -6,6 +6,54 @@ This document describes the external snippet update workflow for this docs repos
 
 The automation to pull the snippet updates into this repository is implemented using GitHub Action workflows
 
+## Add or edit a snippet
+
+The manifest and generated MDX live in this repository, while the source file
+lives in a separate local checkout. New snippets may use a complete file or a
+stable named-marker region; the authoring commands do not create new line or
+JSON-index selectors.
+
+Add a complete-file snippet:
+
+```bash
+npm run snippets:add -- splice \
+  --source-dir ../splice \
+  --source apps/example.yaml
+```
+
+Add a marker-delimited snippet. `--marker SWEEP` looks for exactly one
+`SWEEP_START` and one `SWEEP_END` in the source file:
+
+```bash
+npm run snippets:add -- splice \
+  --source-dir ../splice \
+  --source apps/example.yaml \
+  --marker SWEEP
+```
+
+Use `--start-marker` and `--end-marker` when the source repository uses a
+different marker convention. The add command derives the existing-style
+`snippetName`, validates and extracts the source, updates the repository
+manifest, creates the initial file under
+`docs-main/snippets/external/<repo>/main/`, and prints the page import and
+component usage. Pass `--name` only when a stable name cannot be derived.
+
+Edit a snippet by its stable `snippetName`:
+
+```bash
+npm run snippets:edit -- splice \
+  splice-literal-marker-apps-example-sweep-start \
+  --source-dir ../splice \
+  --source apps/renamed-example.yaml \
+  --marker SWEEP
+```
+
+Only the supplied source, selector, or language fields change. The command
+preserves `snippetName`, description, other formatting options, output path,
+and existing page imports, then validates and regenerates the MDX. Both
+commands fail before writing if the source is missing, markers are ambiguous,
+or the proposed source/selector duplicates another entry.
+
 ## Local one-command extraction
 
 From this repository, use `generate:external-snippets` to copy the matching helper/config into a local source repository and run extraction there:
