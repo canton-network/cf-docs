@@ -145,6 +145,38 @@ def test_add_does_not_write_when_marker_validation_fails(
     assert "Marker not found" in capsys.readouterr().err
 
 
+def test_add_dry_run_prints_diffs_without_writing(
+    authoring_fixture: tuple[Path, Path, Path], capsys: pytest.CaptureFixture[str]
+) -> None:
+    root, manifest, source_dir = authoring_fixture
+    source = source_dir / "example.py"
+    source.write_text("print('preview')\n", encoding="utf-8")
+    original_manifest = manifest.read_bytes()
+
+    result = author.main(
+        [
+            "add",
+            "splice",
+            "--source-dir",
+            str(source_dir),
+            "--source",
+            "example.py",
+            "--dry-run",
+        ]
+    )
+
+    assert result == 0
+    assert manifest.read_bytes() == original_manifest
+    assert not (root / "docs-main").exists()
+    output = capsys.readouterr().out
+    assert "Dry run: would add splice-literal-full-example; no files written" in output
+    assert "Manifest diff:" in output
+    assert '+      "snippetName": "splice-literal-full-example"' in output
+    assert "Generated MDX diff:" in output
+    assert "+```python" in output
+    assert "+print('preview')" in output
+
+
 def test_add_refuses_to_overwrite_an_orphaned_output(
     authoring_fixture: tuple[Path, Path, Path], capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -237,6 +269,60 @@ def test_edit_preserves_name_and_regenerates_output(
     )
     assert output.read_text(encoding="utf-8") == "```yaml\n  nested: true\n```"
     assert "its import path is unchanged" in capsys.readouterr().out
+
+
+def test_edit_dry_run_diffs_manifest_and_existing_output_without_writing(
+    authoring_fixture: tuple[Path, Path, Path], capsys: pytest.CaptureFixture[str]
+) -> None:
+    root, manifest, source_dir = authoring_fixture
+    name = "stable-example"
+    write_manifest(
+        manifest,
+        [
+            {
+                "snippetName": name,
+                "sourceRepo": "splice",
+                "sourceFilepath": "example.py",
+                "location": {"type": "fullFile"},
+                "description": "",
+                "options": {"language": "python"},
+            }
+        ],
+    )
+    source = source_dir / "example.py"
+    source.write_text("print('new')\n", encoding="utf-8")
+    generated = (
+        root / "docs-main" / "snippets" / "external" / "splice" / "main" / f"{name}.mdx"
+    )
+    generated.parent.mkdir(parents=True)
+    generated.write_text("```python\nprint('old')\n```", encoding="utf-8")
+    original_manifest = manifest.read_bytes()
+    original_generated = generated.read_bytes()
+
+    result = author.main(
+        [
+            "edit",
+            "splice",
+            name,
+            "--source-dir",
+            str(source_dir),
+            "--language",
+            "javascript",
+            "--dry-run",
+        ]
+    )
+
+    assert result == 0
+    assert manifest.read_bytes() == original_manifest
+    assert generated.read_bytes() == original_generated
+    output = capsys.readouterr().out
+    assert "Dry run: would edit stable-example; no files written" in output
+    assert '-        "language": "python"' in output
+    assert '+        "language": "javascript"' in output
+    assert "-```python" in output
+    assert "+```javascript" in output
+    assert "-print('old')" in output
+    assert "+print('new')" in output
 
 
 @pytest.mark.parametrize("version", ["", "..", "candidate/next", "candidate\\next"])

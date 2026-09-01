@@ -54,6 +54,22 @@ and existing page imports, then validates and regenerates the MDX. Both
 commands fail before writing if the source is missing, markers are ambiguous,
 or the proposed source/selector duplicates another entry.
 
+Preview the validated manifest and generated-MDX changes without writing either
+file by adding `--dry-run` to an add or edit command:
+
+```bash
+npm run snippets:edit -- splice \
+  splice-literal-marker-apps-example-sweep-start \
+  --source-dir ../splice \
+  --source apps/renamed-example.yaml \
+  --marker SWEEP \
+  --dry-run
+```
+
+The command prints unified diffs for the repository manifest and the stable MDX
+output. It still performs source, selector, duplicate, and extraction
+validation, so a successful preview exercises the same checks as the write.
+
 ## Local one-command extraction
 
 From this repository, use `generate:external-snippets` to copy the matching helper/config into a local source repository and run extraction there:

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import difflib
 import json
 import os
 import re
@@ -269,6 +270,10 @@ def atomic_write(path: Path, content: bytes) -> None:
         raise
 
 
+def serialized_manifest(manifest: dict[str, Any]) -> bytes:
+    return (json.dumps(manifest, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
+
+
 def commit_manifest_and_output(
     manifest_file: Path,
     manifest: dict[str, Any],
@@ -277,9 +282,7 @@ def commit_manifest_and_output(
 ) -> None:
     original_manifest = manifest_file.read_bytes()
     original_output = generated_file.read_bytes() if generated_file.exists() else None
-    manifest_content = (
-        json.dumps(manifest, indent=2, ensure_ascii=False) + "\n"
-    ).encode("utf-8")
+    manifest_content = serialized_manifest(manifest)
     try:
         atomic_write(manifest_file, manifest_content)
         atomic_write(generated_file, generated_content)
@@ -290,6 +293,42 @@ def commit_manifest_and_output(
         else:
             atomic_write(generated_file, original_output)
         raise
+
+
+def print_file_diff(path: Path, proposed: bytes) -> None:
+    original = path.read_bytes() if path.exists() else b""
+    try:
+        label = path.relative_to(CF_DOCS_ROOT).as_posix()
+    except ValueError:
+        label = str(path)
+    from_label = f"a/{label}" if path.exists() else "/dev/null"
+    to_label = f"b/{label}"
+    diff = difflib.unified_diff(
+        original.decode("utf-8").splitlines(keepends=True),
+        proposed.decode("utf-8").splitlines(keepends=True),
+        fromfile=from_label,
+        tofile=to_label,
+    )
+    rendered = "".join(diff)
+    print(rendered, end="" if rendered.endswith("\n") else "\n")
+    if not rendered:
+        print("(no changes)")
+
+
+def print_change_preview(
+    *,
+    action: str,
+    snippet_name: str,
+    manifest_file: Path,
+    manifest: dict[str, Any],
+    generated_file: Path,
+    generated_content: bytes,
+) -> None:
+    print(f"Dry run: would {action} {snippet_name}; no files written")
+    print("\nManifest diff:")
+    print_file_diff(manifest_file, serialized_manifest(manifest))
+    print("\nGenerated MDX diff:")
+    print_file_diff(generated_file, generated_content)
 
 
 def component_name(repo: SnippetRepo, version: str, snippet_name: str) -> str:
@@ -364,6 +403,17 @@ def add(args: argparse.Namespace, repo: SnippetRepo) -> int:
             f"Refusing to overwrite an existing output not owned by the manifest: "
             f"{generated_file}"
         )
+    if args.dry_run:
+        print_change_preview(
+            action="add",
+            snippet_name=name,
+            manifest_file=manifest_file,
+            manifest=manifest,
+            generated_file=generated_file,
+            generated_content=generated,
+        )
+        print_usage(repo, version, name)
+        return 0
     commit_manifest_and_output(manifest_file, manifest, generated_file, generated)
 
     print(f"Added {name}")
@@ -438,6 +488,16 @@ def edit(args: argparse.Namespace, repo: SnippetRepo) -> int:
         entry=entry,
     )
     generated_file = output_path(repo, version, args.snippet_name)
+    if args.dry_run:
+        print_change_preview(
+            action="edit",
+            snippet_name=args.snippet_name,
+            manifest_file=manifest_file,
+            manifest=manifest,
+            generated_file=generated_file,
+            generated_content=generated,
+        )
+        return 0
     commit_manifest_and_output(manifest_file, manifest, generated_file, generated)
 
     print(f"Edited {args.snippet_name}; its import path is unchanged")
@@ -460,6 +520,11 @@ def add_common_arguments(parser: argparse.ArgumentParser, *, editing: bool) -> N
         help="Local source checkout; common sibling locations are searched when omitted",
     )
     parser.add_argument("--version", default="main", help="Output version folder")
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Validate and print manifest/MDX diffs without writing files",
+    )
     parser.add_argument("--language")
     parser.add_argument("--full-file", action="store_true")
     parser.add_argument(
