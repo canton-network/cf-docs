@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass
 import gzip
 import importlib.util
 import json
@@ -14,14 +13,15 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import time
 import urllib.request
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from docs_env import ensure_repo_direnv, repo_direnv_command
 import generated_reference_nav
 import reference_nav
-
+from docs_env import ensure_repo_direnv, repo_direnv_command
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SOURCE_CONFIG = REPO_ROOT / "config" / "x2mdx" / "protobuf-history" / "source-artifacts.json"
@@ -36,6 +36,10 @@ DEFAULT_DOCS_JSON = REPO_ROOT / "docs-main" / "docs.json"
 DEFAULT_REPO_DIR = DEFAULT_CACHE_DIR / "repos" / "canton"
 GROUP_LABEL = "Canton Protobuf History"
 DETAILS_LABEL = "Details and History"
+LEDGER_OVERVIEW_NAME = "overview.mdx"
+LEDGER_OVERVIEW_TITLE = "Ledger API protobuf"
+ADMIN_OVERVIEW_NAME = "overview.mdx"
+ADMIN_OVERVIEW_TITLE = "Admin API protobuf"
 DESCRIPTOR_IMAGE_NAME = ".proto_snapshot_image.bin.gz"
 STABLE_TAG_RE = re.compile(r"^v(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)$")
 SECTION_TO_REPO_PREFIX = {
@@ -53,6 +57,8 @@ ADMIN_API_COMMUNITY_IMPORT_PREFIXES = (
     "com/digitalasset/canton/topology/admin",
 )
 USER_AGENT = "digital-asset-docs-x2mdx/1.0"
+GIT_ATTEMPTS = 3
+GIT_RETRY_DELAY_SECONDS = 5.0
 
 
 @dataclass(frozen=True)
@@ -95,7 +101,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min-version", help="Minimum stable version to include when auto-discovering tags.")
     parser.add_argument("--skip-fetch", action="store_true", help="Skip fetching tags from origin before generation.")
     parser.add_argument("--force-refresh", action="store_true", help="Refresh cached protobuf bundles and descriptor images.")
-    parser.add_argument("--skip-admin-api", action="store_true", help="Only regenerate the Ledger API protobuf reference.")
+    surface_selection = parser.add_mutually_exclusive_group()
+    surface_selection.add_argument(
+        "--skip-admin-api",
+        action="store_true",
+        help="Only regenerate the Ledger API protobuf reference.",
+    )
+    surface_selection.add_argument(
+        "--skip-ledger-api",
+        action="store_true",
+        help="Only regenerate the Admin API protobuf reference.",
+    )
     parser.add_argument(
         "--source-name",
         default="Canton protobuf trees from published release bundles",
@@ -141,14 +157,42 @@ def git(args: list[str], *, cwd: Path, capture: bool = False) -> str:
     return run(["git", *args], cwd=cwd, capture=capture)
 
 
+def retry_git(
+    args: list[str],
+    *,
+    cwd: Path | None = None,
+    incomplete_clone_dir: Path | None = None,
+) -> None:
+    command = ["git", *args]
+    for attempt in range(1, GIT_ATTEMPTS + 1):
+        try:
+            run(command, cwd=cwd)
+            return
+        except subprocess.CalledProcessError:
+            if incomplete_clone_dir is not None:
+                shutil.rmtree(incomplete_clone_dir, ignore_errors=True)
+            if attempt == GIT_ATTEMPTS:
+                raise
+            delay = GIT_RETRY_DELAY_SECONDS * attempt
+            print(
+                f"Git command attempt {attempt}/{GIT_ATTEMPTS} failed: "
+                f"{' '.join(command)}; retrying in {delay:g}s",
+                file=sys.stderr,
+            )
+            time.sleep(delay)
+
+
 def ensure_repo(repo_dir: Path, *, remote: str, fetch: bool) -> Path:
     repo_dir.parent.mkdir(parents=True, exist_ok=True)
     if not repo_dir.exists():
-        run(["git", "clone", "--bare", remote, str(repo_dir)])
+        retry_git(
+            ["clone", "--bare", remote, str(repo_dir)],
+            incomplete_clone_dir=repo_dir,
+        )
     else:
         git(["remote", "set-url", "origin", remote], cwd=repo_dir)
     if fetch:
-        git(["fetch", "origin", "--tags", "--prune", "--force"], cwd=repo_dir)
+        retry_git(["fetch", "origin", "--tags", "--prune", "--force"], cwd=repo_dir)
     return repo_dir
 
 
@@ -337,20 +381,20 @@ def replace_text(path: Path, replacements: list[tuple[str, str]]) -> None:
         path.write_text(updated, encoding="utf-8")
 
 
-def retitle_overview_page(path: Path) -> None:
+def retitle_overview_page(path: Path, *, title: str = DETAILS_LABEL) -> None:
     replace_text(
         path,
         [
-            ('title: "Canton Protobuf History"', f'title: "{DETAILS_LABEL}"'),
-            ('title: "Canton Protobuf Reference"', f'title: "{DETAILS_LABEL}"'),
-            ('title: "Canton Protobuf References"', f'title: "{DETAILS_LABEL}"'),
+            ('title: "Canton Protobuf History"', f'title: "{title}"'),
+            ('title: "Canton Protobuf Reference"', f'title: "{title}"'),
+            ('title: "Canton Protobuf References"', f'title: "{title}"'),
             (
                 '<h1 class="x2mdx-ref-title">Canton Protobuf Reference</h1>',
-                f'<h1 class="x2mdx-ref-title">{DETAILS_LABEL}</h1>',
+                f'<h1 class="x2mdx-ref-title">{title}</h1>',
             ),
             (
                 '<h1 class="x2mdx-ref-title">Canton Protobuf References</h1>',
-                f'<h1 class="x2mdx-ref-title">{DETAILS_LABEL}</h1>',
+                f'<h1 class="x2mdx-ref-title">{title}</h1>',
             ),
         ],
     )
@@ -447,10 +491,13 @@ def update_split_protobuf_navigation(
 
     stale_refs = {
         docs_json_page_ref(ledger_output_dir / "index.mdx", docs_json_path),
+        docs_json_page_ref(ledger_output_dir / LEDGER_OVERVIEW_NAME, docs_json_path),
         docs_json_page_ref(ledger_legacy_output_dir / "index.mdx", docs_json_path),
+        docs_json_page_ref(ledger_legacy_output_dir / LEDGER_OVERVIEW_NAME, docs_json_path),
     }
     if admin_output_dir is not None:
         stale_refs.add(docs_json_page_ref(admin_output_dir / "index.mdx", docs_json_path))
+        stale_refs.add(docs_json_page_ref(admin_output_dir / ADMIN_OVERVIEW_NAME, docs_json_path))
     pages[:] = prune_nav_items(
         pages,
         page_refs=stale_refs,
@@ -461,6 +508,8 @@ def update_split_protobuf_navigation(
         output_dir=ledger_legacy_output_dir,
         docs_json_path=docs_json_path,
         group_label=reference_nav.PROTOBUF_GROUP,
+        overview_name=LEDGER_OVERVIEW_NAME,
+        overview_first=True,
     )
     replace_group_at_path(
         pages,
@@ -469,22 +518,19 @@ def update_split_protobuf_navigation(
     )
 
     if admin_output_dir is not None:
-        admin_details_page_ref = docs_json_page_ref(admin_output_dir / "index.mdx", docs_json_path)
         admin_protobuf_group_pages = generated_reference_nav.build_protobuf_nav_group(
             output_dir=admin_output_dir,
             docs_json_path=docs_json_path,
             group_label=reference_nav.PROTOBUF_GROUP,
-            include_details_page=False,
+            overview_name=ADMIN_OVERVIEW_NAME,
+            overview_first=True,
         )["pages"]
         replace_group_at_path(
             pages,
             [reference_nav.ADMIN_API_PARENT_GROUP],
             {
                 "group": reference_nav.GRPC_GROUP,
-                "pages": [
-                    *admin_protobuf_group_pages,
-                    admin_details_page_ref,
-                ],
+                "pages": admin_protobuf_group_pages,
             },
         )
 
@@ -597,6 +643,12 @@ def render_protobuf_reference(
     output_dir: Path,
     source_name: str,
     version_filter: str,
+    history_report_path: Path | None = None,
+    surface_id: str | None = None,
+    surface_title: str | None = None,
+    configured_scope: str | None = None,
+    reader_route_prefix: str | None = None,
+    overview_name: str = "index.mdx",
 ) -> int:
     command = repo_direnv_command(
         REPO_ROOT,
@@ -611,10 +663,79 @@ def render_protobuf_reference(
         source_name,
         "--version-filter",
         version_filter,
+        "--overview-name",
+        overview_name,
     )
+    if history_report_path is not None:
+        command.extend(
+            [
+                "--history-report",
+                str(history_report_path),
+                "--surface-id",
+                surface_id or "protobuf-reference",
+                "--surface-title",
+                surface_title or "Protobuf reference",
+                "--configured-scope",
+                configured_scope or "Protobuf service methods",
+                "--reader-route-prefix",
+                reader_route_prefix or "reference/protobuf",
+            ]
+        )
     print("Running:", " ".join(command))
     completed = subprocess.run(command, cwd=REPO_ROOT)
     return completed.returncode
+
+
+def ensure_redirect(*, docs_json_path: Path, source: str, destination: str) -> None:
+    payload = load_json(docs_json_path)
+    redirects = payload.setdefault("redirects", [])
+    if not isinstance(redirects, list):
+        raise ValueError("docs.json redirects must be an array")
+    matches = [
+        redirect
+        for redirect in redirects
+        if isinstance(redirect, dict) and redirect.get("source") == source
+    ]
+    if len(matches) > 1:
+        raise ValueError(f"Duplicate redirect source in docs.json: {source}")
+    redirect = {"source": source, "destination": destination}
+    if matches:
+        matches[0].clear()
+        matches[0].update(redirect)
+    else:
+        redirects.append(redirect)
+    docs_json_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
+def ensure_ledger_protobuf_redirects(
+    *,
+    docs_json_path: Path,
+    output_dirs: tuple[Path, ...],
+) -> None:
+    for output_dir in output_dirs:
+        prefix = "/" + output_dir.resolve().relative_to(docs_json_path.resolve().parent).as_posix()
+        destination = f"{prefix}/overview"
+        ensure_redirect(docs_json_path=docs_json_path, source=prefix, destination=destination)
+        ensure_redirect(
+            docs_json_path=docs_json_path,
+            source=f"{prefix}/index",
+            destination=destination,
+        )
+
+
+def ensure_admin_protobuf_redirects(
+    *,
+    docs_json_path: Path,
+    output_dir: Path,
+) -> None:
+    prefix = "/" + output_dir.resolve().relative_to(docs_json_path.resolve().parent).as_posix()
+    destination = f"{prefix}/overview"
+    ensure_redirect(docs_json_path=docs_json_path, source=prefix, destination=destination)
+    ensure_redirect(
+        docs_json_path=docs_json_path,
+        source=f"{prefix}/index",
+        destination=destination,
+    )
 
 
 def main() -> int:
@@ -651,40 +772,53 @@ def main() -> int:
         else:
             version_filter = f"stable Canton release bundles >= {min_version}"
 
-    ledger_releases = materialize_releases(
-        source_config=source_config,
-        repo_dir=repo_dir,
-        cache_dir=cache_dir,
-        selected_tags=selected_tags,
-        bundle_proto_dir=bundle_proto_dir,
-        selections=LEDGER_API_SELECTIONS,
-        surface="ledger-api",
-        force_refresh=args.force_refresh,
-    )
-    if not ledger_releases:
-        raise ValueError("No Ledger API protobuf releases were materialized")
+    ledger_output_dir = Path(args.output_dir).resolve()
+    ledger_legacy_output_dir = Path(args.legacy_output_dir).resolve()
+    docs_json_path = Path(args.docs_json).resolve()
+    if not args.skip_ledger_api:
+        ledger_releases = materialize_releases(
+            source_config=source_config,
+            repo_dir=repo_dir,
+            cache_dir=cache_dir,
+            selected_tags=selected_tags,
+            bundle_proto_dir=bundle_proto_dir,
+            selections=LEDGER_API_SELECTIONS,
+            surface="ledger-api",
+            force_refresh=args.force_refresh,
+        )
+        if not ledger_releases:
+            raise ValueError("No Ledger API protobuf releases were materialized")
 
-    ledger_manifest_path = write_manifest(
-        source_config=source_config,
-        releases=ledger_releases,
-        manifest_path=Path(args.manifest_out).resolve(),
-        source_name=args.source_name,
-    )
+        ledger_manifest_path = write_manifest(
+            source_config=source_config,
+            releases=ledger_releases,
+            manifest_path=Path(args.manifest_out).resolve(),
+            source_name=args.source_name,
+        )
+        canonical_route_prefix = ledger_legacy_output_dir.relative_to(docs_json_path.parent).as_posix()
+        result = render_protobuf_reference(
+            manifest_path=ledger_manifest_path,
+            output_dir=ledger_output_dir,
+            source_name=args.source_name,
+            version_filter=version_filter,
+            history_report_path=ledger_output_dir / "history-report.json",
+            surface_id="ledger-api-protobuf",
+            surface_title=LEDGER_OVERVIEW_TITLE,
+            configured_scope="Ledger API protobuf service methods",
+            reader_route_prefix=canonical_route_prefix,
+            overview_name=LEDGER_OVERVIEW_NAME,
+        )
+        if result != 0:
+            return result
 
-    result = render_protobuf_reference(
-        manifest_path=ledger_manifest_path,
-        output_dir=Path(args.output_dir).resolve(),
-        source_name=args.source_name,
-        version_filter=version_filter,
-    )
-    if result != 0:
-        return result
-
-    retitle_overview_page(Path(args.output_dir).resolve() / "index.mdx")
-    sync_output_tree(
-        source_dir=Path(args.output_dir).resolve(),
-        target_dir=Path(args.legacy_output_dir).resolve(),
-    )
+        retitle_overview_page(
+            ledger_output_dir / LEDGER_OVERVIEW_NAME,
+            title=LEDGER_OVERVIEW_TITLE,
+        )
+        sync_output_tree(
+            source_dir=ledger_output_dir,
+            target_dir=ledger_legacy_output_dir,
+        )
 
     admin_output_dir: Path | None = None
     if not args.skip_admin_api:
@@ -708,24 +842,44 @@ def main() -> int:
             source_name=admin_source_name,
         )
         admin_output_dir = Path(args.admin_output_dir).resolve()
+        admin_route_prefix = admin_output_dir.relative_to(docs_json_path.parent).as_posix()
         result = render_protobuf_reference(
             manifest_path=admin_manifest_path,
             output_dir=admin_output_dir,
             source_name=admin_source_name,
             version_filter=version_filter,
+            history_report_path=admin_output_dir / "history-report.json",
+            surface_id="admin-api-protobuf",
+            surface_title=ADMIN_OVERVIEW_TITLE,
+            configured_scope="Canton Admin API protobuf service methods",
+            reader_route_prefix=admin_route_prefix,
+            overview_name=ADMIN_OVERVIEW_NAME,
         )
         if result != 0:
             return result
-        retitle_overview_page(admin_output_dir / "index.mdx")
+        retitle_overview_page(
+            admin_output_dir / ADMIN_OVERVIEW_NAME,
+            title=ADMIN_OVERVIEW_TITLE,
+        )
         strip_trailing_whitespace_tree(admin_output_dir)
 
     update_split_protobuf_navigation(
-        docs_json_path=Path(args.docs_json).resolve(),
+        docs_json_path=docs_json_path,
         dropdown_label=args.nav_dropdown,
-        ledger_output_dir=Path(args.output_dir).resolve(),
-        ledger_legacy_output_dir=Path(args.legacy_output_dir).resolve(),
+        ledger_output_dir=ledger_output_dir,
+        ledger_legacy_output_dir=ledger_legacy_output_dir,
         admin_output_dir=admin_output_dir,
     )
+    if not args.skip_ledger_api:
+        ensure_ledger_protobuf_redirects(
+            docs_json_path=docs_json_path,
+            output_dirs=(ledger_output_dir, ledger_legacy_output_dir),
+        )
+    if admin_output_dir is not None:
+        ensure_admin_protobuf_redirects(
+            docs_json_path=docs_json_path,
+            output_dir=admin_output_dir,
+        )
     return 0
 
 

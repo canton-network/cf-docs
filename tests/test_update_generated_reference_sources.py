@@ -24,7 +24,7 @@ def load_script_module() -> ModuleType:
     return module
 
 
-def write_source_config(path: Path, *, publish_version: str) -> None:
+def write_source_config(path: Path) -> None:
     path.write_text(
         json.dumps(
             {
@@ -32,7 +32,6 @@ def write_source_config(path: Path, *, publish_version: str) -> None:
                 "release_repo": "digital-asset/decentralized-canton-sync",
                 "tag_regex": "^v(?P<version>0\\.[0-9]+\\.[0-9]+)$",
                 "min_version": "0.5.10",
-                "publish_version": publish_version,
                 "asset_template": "{version}_openapi.tar.gz",
             },
             indent=2,
@@ -42,20 +41,19 @@ def write_source_config(path: Path, *, publish_version: str) -> None:
     )
 
 
-def write_wallet_gateway_source_config(path: Path, *, publish_version: str) -> None:
+def write_wallet_gateway_source_config(path: Path, *, publish_version: str | None = None) -> None:
+    payload = {
+        "source": "test",
+        "release_repo": "canton-network/wallet",
+        "remote": "https://github.com/canton-network/wallet.git",
+        "tag_prefix": "@canton-network/wallet-gateway-remote@",
+        "min_version": "0.24.0",
+        "specs": [],
+    }
+    if publish_version is not None:
+        payload["publish_version"] = publish_version
     path.write_text(
-        json.dumps(
-            {
-                "source": "test",
-                "release_repo": "hyperledger-labs/splice-wallet-kernel",
-                "remote": "https://github.com/hyperledger-labs/splice-wallet-kernel.git",
-                "tag_prefix": "@canton-network/wallet-gateway-remote@",
-                "min_version": "0.24.0",
-                "publish_version": publish_version,
-                "specs": [],
-            },
-            indent=2,
-        )
+        json.dumps(payload, indent=2)
         + "\n",
         encoding="utf-8",
     )
@@ -116,19 +114,26 @@ def write_ledger_api_source_config(path: Path, *, canton_version: str) -> None:
     )
 
 
-def write_ledger_bindings_source_config(path: Path, *, versions: list[str] | None = None) -> None:
+def write_ledger_bindings_source_config(
+    path: Path,
+    *,
+    versions: list[str] | None = None,
+    min_version: str | None = None,
+) -> None:
+    artifact = {
+        "group": "com.daml",
+        "artifact": "bindings-java",
+        "language": "java",
+    }
+    if min_version is not None:
+        artifact["min_version"] = min_version
+    else:
+        artifact["versions"] = versions or ["3.4.11"]
     path.write_text(
         json.dumps(
             {
                 "repo_base": "https://repo1.maven.org/maven2",
-                "artifacts": [
-                    {
-                        "group": "com.daml",
-                        "artifact": "bindings-java",
-                        "language": "java",
-                        "versions": versions or ["3.4.11"],
-                    }
-                ],
+                "artifacts": [artifact],
             },
             indent=2,
         )
@@ -170,38 +175,10 @@ def write_daml_script_source_config(path: Path, *, publish_version: str) -> None
     )
 
 
-def test_update_splice_openapi_source_updates_stale_publish_version(tmp_path: Path) -> None:
+def test_update_splice_openapi_source_is_dynamic_and_unpinned(tmp_path: Path) -> None:
     module = load_script_module()
     source_config_path = tmp_path / "source-artifacts.json"
-    write_source_config(source_config_path, publish_version="0.5.18")
-    module.splice_openapi.splice_openapi_generator.selected_releases = lambda **_kwargs: [
-        {"version": "0.5.18"},
-        {"version": "0.6.7"},
-    ]
-
-    update = module.splice_openapi.update_source(
-        source_config_path=source_config_path,
-        dry_run=False,
-    )
-
-    assert update == module.SourceUpdate(
-        source="Splice OpenAPI",
-        path=source_config_path,
-        field="publish_version",
-        previous="0.5.18",
-        current="0.6.7",
-    )
-    assert json.loads(source_config_path.read_text(encoding="utf-8"))["publish_version"] == "0.6.7"
-
-
-def test_update_splice_openapi_source_noops_when_current(tmp_path: Path) -> None:
-    module = load_script_module()
-    source_config_path = tmp_path / "source-artifacts.json"
-    write_source_config(source_config_path, publish_version="0.6.7")
-    module.splice_openapi.splice_openapi_generator.selected_releases = lambda **_kwargs: [
-        {"version": "0.5.18"},
-        {"version": "0.6.7"},
-    ]
+    write_source_config(source_config_path)
 
     assert (
         module.splice_openapi.update_source(
@@ -210,65 +187,15 @@ def test_update_splice_openapi_source_noops_when_current(tmp_path: Path) -> None
         )
         is None
     )
-    assert json.loads(source_config_path.read_text(encoding="utf-8"))["publish_version"] == "0.6.7"
+    assert "publish_version" not in json.loads(
+        source_config_path.read_text(encoding="utf-8")
+    )
 
 
-def test_update_splice_openapi_source_dry_run_does_not_write(tmp_path: Path) -> None:
+def test_update_wallet_gateway_openrpc_source_is_dynamic_and_unpinned(tmp_path: Path) -> None:
     module = load_script_module()
     source_config_path = tmp_path / "source-artifacts.json"
-    write_source_config(source_config_path, publish_version="0.5.18")
-    module.splice_openapi.splice_openapi_generator.selected_releases = lambda **_kwargs: [
-        {"version": "0.5.18"},
-        {"version": "0.6.7"},
-    ]
-
-    update = module.splice_openapi.update_source(
-        source_config_path=source_config_path,
-        dry_run=True,
-    )
-
-    assert update is not None
-    assert update.previous == "0.5.18"
-    assert update.current == "0.6.7"
-    assert json.loads(source_config_path.read_text(encoding="utf-8"))["publish_version"] == "0.5.18"
-
-
-def test_update_wallet_gateway_openrpc_source_updates_stale_publish_version(tmp_path: Path) -> None:
-    module = load_script_module()
-    source_config_path = tmp_path / "source-artifacts.json"
-    write_wallet_gateway_source_config(source_config_path, publish_version="0.25.0")
-    module.wallet_gateway_openrpc.wallet_gateway_openrpc_generator.stable_release_versions = (
-        lambda **_kwargs: [
-            "0.25.0",
-            "1.4.0",
-        ]
-    )
-
-    update = module.wallet_gateway_openrpc.update_source(
-        source_config_path=source_config_path,
-        dry_run=False,
-    )
-
-    assert update == module.SourceUpdate(
-        source="Wallet Gateway OpenRPC",
-        path=source_config_path,
-        field="publish_version",
-        previous="0.25.0",
-        current="1.4.0",
-    )
-    assert json.loads(source_config_path.read_text(encoding="utf-8"))["publish_version"] == "1.4.0"
-
-
-def test_update_wallet_gateway_openrpc_source_noops_when_current(tmp_path: Path) -> None:
-    module = load_script_module()
-    source_config_path = tmp_path / "source-artifacts.json"
-    write_wallet_gateway_source_config(source_config_path, publish_version="1.4.0")
-    module.wallet_gateway_openrpc.wallet_gateway_openrpc_generator.stable_release_versions = (
-        lambda **_kwargs: [
-            "0.25.0",
-            "1.4.0",
-        ]
-    )
+    write_wallet_gateway_source_config(source_config_path)
 
     assert (
         module.wallet_gateway_openrpc.update_source(
@@ -277,29 +204,7 @@ def test_update_wallet_gateway_openrpc_source_noops_when_current(tmp_path: Path)
         )
         is None
     )
-    assert json.loads(source_config_path.read_text(encoding="utf-8"))["publish_version"] == "1.4.0"
-
-
-def test_update_wallet_gateway_openrpc_source_dry_run_does_not_write(tmp_path: Path) -> None:
-    module = load_script_module()
-    source_config_path = tmp_path / "source-artifacts.json"
-    write_wallet_gateway_source_config(source_config_path, publish_version="0.25.0")
-    module.wallet_gateway_openrpc.wallet_gateway_openrpc_generator.stable_release_versions = (
-        lambda **_kwargs: [
-            "0.25.0",
-            "1.4.0",
-        ]
-    )
-
-    update = module.wallet_gateway_openrpc.update_source(
-        source_config_path=source_config_path,
-        dry_run=True,
-    )
-
-    assert update is not None
-    assert update.previous == "0.25.0"
-    assert update.current == "1.4.0"
-    assert json.loads(source_config_path.read_text(encoding="utf-8"))["publish_version"] == "0.25.0"
+    assert "publish_version" not in json.loads(source_config_path.read_text(encoding="utf-8"))
 
 
 def test_update_typescript_bindings_source_updates_stale_package_versions(tmp_path: Path) -> None:
@@ -444,6 +349,38 @@ def test_update_ledger_api_source_updates_publish_version_canton_release(tmp_pat
     assert versions[1]["canton_version"] == "3.5.5"
 
 
+def test_public_canton_bundle_versions_filters_tags_without_release_bundles(monkeypatch, tmp_path: Path) -> None:
+    module = load_script_module()
+    source_config_path = tmp_path / "source-artifacts.json"
+    write_ledger_api_source_config(source_config_path, canton_version="3.5.10")
+    source_config = module.canton_release_bundles.parse_source_config(source_config_path)
+    monkeypatch.setattr(
+        module.canton_release_bundles.canton_protobuf_history,
+        "ensure_repo",
+        lambda *_args, **_kwargs: tmp_path / "canton",
+    )
+    monkeypatch.setattr(
+        module.canton_release_bundles.canton_protobuf_history,
+        "stable_tags",
+        lambda *_args, **_kwargs: [
+            ("3.5.10", "v3.5.10"),
+            ("3.5.11", "v3.5.11"),
+            ("3.5.12", "v3.5.12"),
+        ],
+    )
+    monkeypatch.setattr(
+        module.canton_release_bundles,
+        "release_bundle_exists",
+        lambda _config, *, canton_version: canton_version != "3.5.11",
+    )
+
+    assert module.canton_release_bundles.public_canton_bundle_versions(
+        source_config,
+        docs_version="3.5",
+        repo_dir=tmp_path / "canton",
+    ) == ("3.5.10", "3.5.12")
+
+
 def test_update_ledger_api_source_noops_when_current(tmp_path: Path) -> None:
     module = load_script_module()
     source_config_path = tmp_path / "source-artifacts.json"
@@ -496,6 +433,30 @@ def test_update_ledger_bindings_source_noops_when_latest_is_configured(tmp_path:
         )
         == []
     )
+
+
+def test_update_ledger_bindings_source_preserves_unbounded_version_policy(tmp_path: Path) -> None:
+    module = load_script_module()
+    source_config_path = tmp_path / "source-artifacts.json"
+    write_ledger_bindings_source_config(source_config_path, min_version="3.4.8")
+    module.ledger_bindings.latest_maven_version = lambda *_args, **_kwargs: (_ for _ in ()).throw(
+        AssertionError("unbounded configs do not need a source pin update")
+    )
+
+    assert (
+        module.ledger_bindings.update_source(
+            source_config_path=source_config_path,
+            dry_run=False,
+        )
+        == []
+    )
+    artifact = json.loads(source_config_path.read_text(encoding="utf-8"))["artifacts"][0]
+    assert artifact == {
+        "group": "com.daml",
+        "artifact": "bindings-java",
+        "language": "java",
+        "min_version": "3.4.8",
+    }
 
 
 def test_update_daml_standard_library_source_updates_latest_dpm_version(tmp_path: Path) -> None:

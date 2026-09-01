@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -56,6 +57,76 @@ class CantonProtobufGeneratorTests(unittest.TestCase):
                 (("git", "fetch", "origin", "--tags", "--prune", "--force"), repo_dir),
             ],
         )
+
+    def test_ensure_repo_retries_clone_and_cleans_incomplete_directory(self) -> None:
+        repo_dir = self.root / "clone.git"
+        calls: list[tuple[str, ...]] = []
+        sleeps: list[float] = []
+        original_run = generator.run
+        original_sleep = generator.time.sleep
+        original_delay = generator.GIT_RETRY_DELAY_SECONDS
+
+        def fake_run(args, cwd=None, capture=False):
+            del cwd, capture
+            self.assertFalse(repo_dir.exists())
+            calls.append(tuple(args))
+            repo_dir.mkdir(parents=True, exist_ok=True)
+            if len(calls) < 3:
+                raise subprocess.CalledProcessError(128, args)
+            return ""
+
+        try:
+            generator.run = fake_run
+            generator.time.sleep = sleeps.append
+            generator.GIT_RETRY_DELAY_SECONDS = 2
+            generator.ensure_repo(
+                repo_dir,
+                remote="https://github.com/digital-asset/canton.git",
+                fetch=False,
+            )
+        finally:
+            generator.run = original_run
+            generator.time.sleep = original_sleep
+            generator.GIT_RETRY_DELAY_SECONDS = original_delay
+
+        self.assertEqual(len(calls), 3)
+        self.assertEqual(sleeps, [2, 4])
+        self.assertTrue(repo_dir.exists())
+
+    def test_ensure_repo_retries_fetch(self) -> None:
+        repo_dir = self.root / "cached.git"
+        repo_dir.mkdir()
+        fetch_attempts = 0
+        sleeps: list[float] = []
+        original_run = generator.run
+        original_sleep = generator.time.sleep
+        original_delay = generator.GIT_RETRY_DELAY_SECONDS
+
+        def fake_run(args, cwd=None, capture=False):
+            nonlocal fetch_attempts
+            del cwd, capture
+            if args[1] == "fetch":
+                fetch_attempts += 1
+                if fetch_attempts < 3:
+                    raise subprocess.CalledProcessError(128, args)
+            return ""
+
+        try:
+            generator.run = fake_run
+            generator.time.sleep = sleeps.append
+            generator.GIT_RETRY_DELAY_SECONDS = 2
+            generator.ensure_repo(
+                repo_dir,
+                remote="https://github.com/digital-asset/canton.git",
+                fetch=True,
+            )
+        finally:
+            generator.run = original_run
+            generator.time.sleep = original_sleep
+            generator.GIT_RETRY_DELAY_SECONDS = original_delay
+
+        self.assertEqual(fetch_attempts, 3)
+        self.assertEqual(sleeps, [2, 4])
 
     def test_bundle_selection_maps_only_ledger_and_admin_api_inputs(self) -> None:
         protobuf_root = self.root / "protobuf"
@@ -128,10 +199,10 @@ class CantonProtobufGeneratorTests(unittest.TestCase):
         ledger_output = docs_root / "appdev" / "reference" / "protobuf-history"
         ledger_legacy_output = docs_root / "reference" / "protobuf"
         admin_output = docs_root / "reference" / "admin-api" / "protobuf"
-        self.write_mdx(ledger_output, "index.mdx", "Details and History")
-        self.write_mdx(ledger_legacy_output, "index.mdx", "Details and History")
+        self.write_mdx(ledger_output, "overview.mdx", "Ledger API protobuf")
+        self.write_mdx(ledger_legacy_output, "overview.mdx", "Ledger API protobuf")
         self.write_mdx(ledger_legacy_output, "packages/com-daml-ledger-api-v2.mdx", "com.daml.ledger.api.v2")
-        self.write_mdx(admin_output, "index.mdx", "Details and History")
+        self.write_mdx(admin_output, "overview.mdx", "Admin API protobuf")
         self.write_mdx(admin_output, "packages/com-digitalasset-canton-admin-health-v30.mdx", "com.digitalasset.canton.admin.health.v30")
 
         generator.update_split_protobuf_navigation(
@@ -149,7 +220,7 @@ class CantonProtobufGeneratorTests(unittest.TestCase):
         admin_grpc = next(item for item in admin["pages"] if item["group"] == "gRPC API")
         admin_packages = next(item for item in admin_grpc["pages"] if isinstance(item, dict) and item["group"] == "Packages")
 
-        self.assertIn("reference/protobuf/index", ledger_protobuf["pages"])
+        self.assertEqual(ledger_protobuf["pages"][0], "reference/protobuf/overview")
         self.assertEqual(
             admin_packages["pages"],
             [
@@ -162,7 +233,77 @@ class CantonProtobufGeneratorTests(unittest.TestCase):
         self.assertFalse(
             any(isinstance(item, dict) and item.get("group") == "Protobufs" for item in admin_grpc["pages"])
         )
-        self.assertEqual(admin_grpc["pages"][-1], "reference/admin-api/protobuf/index")
+        self.assertEqual(admin_grpc["pages"][0], "reference/admin-api/protobuf/overview")
+        self.assertNotIn("reference/admin-api/protobuf/index", admin_grpc["pages"])
+
+    def test_ledger_protobuf_redirects_are_idempotent(self) -> None:
+        docs_root = self.root / "docs-main"
+        docs_json = docs_root / "docs.json"
+        docs_root.mkdir(parents=True)
+        docs_json.write_text('{"redirects": []}\n', encoding="utf-8")
+
+        generator.ensure_ledger_protobuf_redirects(
+            docs_json_path=docs_json,
+            output_dirs=(
+                docs_root / "reference" / "protobuf",
+                docs_root / "appdev" / "reference" / "protobuf-history",
+            ),
+        )
+        generator.ensure_ledger_protobuf_redirects(
+            docs_json_path=docs_json,
+            output_dirs=(
+                docs_root / "reference" / "protobuf",
+                docs_root / "appdev" / "reference" / "protobuf-history",
+            ),
+        )
+
+        self.assertEqual(
+            json.loads(docs_json.read_text(encoding="utf-8"))["redirects"],
+            [
+                {
+                    "source": "/reference/protobuf",
+                    "destination": "/reference/protobuf/overview",
+                },
+                {
+                    "source": "/reference/protobuf/index",
+                    "destination": "/reference/protobuf/overview",
+                },
+                {
+                    "source": "/appdev/reference/protobuf-history",
+                    "destination": "/appdev/reference/protobuf-history/overview",
+                },
+                {
+                    "source": "/appdev/reference/protobuf-history/index",
+                    "destination": "/appdev/reference/protobuf-history/overview",
+                },
+            ],
+        )
+
+    def test_admin_protobuf_redirects_are_idempotent(self) -> None:
+        docs_root = self.root / "docs-main"
+        docs_json = docs_root / "docs.json"
+        docs_root.mkdir(parents=True)
+        docs_json.write_text('{"redirects": []}\n', encoding="utf-8")
+
+        for _ in range(2):
+            generator.ensure_admin_protobuf_redirects(
+                docs_json_path=docs_json,
+                output_dir=docs_root / "reference" / "admin-api" / "protobuf",
+            )
+
+        self.assertEqual(
+            json.loads(docs_json.read_text(encoding="utf-8"))["redirects"],
+            [
+                {
+                    "source": "/reference/admin-api/protobuf",
+                    "destination": "/reference/admin-api/protobuf/overview",
+                },
+                {
+                    "source": "/reference/admin-api/protobuf/index",
+                    "destination": "/reference/admin-api/protobuf/overview",
+                },
+            ],
+        )
 
 
 if __name__ == "__main__":

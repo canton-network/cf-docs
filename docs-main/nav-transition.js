@@ -7,10 +7,17 @@
 
   var FADE_MS = 120;
   var SPINNER_FADE_IN_MS = 150;
+  var NAVIGATION_FALLBACK_MS = 1000;
+  var JSON_API_REFERENCE_PREFIX = "/reference/json-api-reference/";
   var TARGET_SELECTOR = "#content-area";
+  var MANUAL_API_BADGES_SELECTOR =
+    ".x2mdx-ref-page--manual-api + .x2mdx-ref-hero .x2mdx-ref-badges";
+  var HEADER_BADGES_ID = "x2mdx-ref-api-header-badges";
   var fadedOutFromClick = false;
   var spinnerElement = null;
   var contentCleanupTimer = null;
+  var navigationFallbackTimer = null;
+  var badgeSyncScheduled = false;
 
   var style = document.createElement("style");
   style.textContent =
@@ -59,6 +66,52 @@
     return document.querySelector(TARGET_SELECTOR);
   }
 
+  function syncManualApiHeaderBadges() {
+    badgeSyncScheduled = false;
+
+    var source = document.querySelector(MANUAL_API_BADGES_SELECTOR);
+    var header = document.querySelector("#header");
+    var hydrated = document.getElementById(HEADER_BADGES_ID);
+
+    if (!source || !header) {
+      if (hydrated) {
+        hydrated.remove();
+      }
+      return;
+    }
+
+    if (!hydrated) {
+      hydrated = source.cloneNode(true);
+      hydrated.id = HEADER_BADGES_ID;
+      hydrated.classList.add("x2mdx-ref-api-header-badges");
+    }
+
+    if (hydrated.innerHTML !== source.innerHTML) {
+      hydrated.innerHTML = source.innerHTML;
+    }
+
+    var mobileContextMenu = Array.prototype.find.call(
+      header.children,
+      function (child) {
+        return child.id === "page-context-menu";
+      }
+    );
+    if (
+      hydrated.parentElement !== header ||
+      hydrated.nextElementSibling !== mobileContextMenu
+    ) {
+      header.insertBefore(hydrated, mobileContextMenu || null);
+    }
+  }
+
+  function scheduleManualApiHeaderBadgeSync() {
+    if (badgeSyncScheduled) {
+      return;
+    }
+    badgeSyncScheduled = true;
+    requestAnimationFrame(syncManualApiHeaderBadges);
+  }
+
   function installSpinner() {
     if (spinnerElement && document.contains(spinnerElement)) {
       return;
@@ -100,6 +153,37 @@
 
   function isPageNavigation(fromUrl, toUrl) {
     return getPagePath(fromUrl) !== getPagePath(toUrl);
+  }
+
+  function isJsonApiReferenceTransition(fromUrl, toUrl) {
+    return (
+      getPagePath(fromUrl).startsWith(JSON_API_REFERENCE_PREFIX) &&
+      getPagePath(toUrl).startsWith(JSON_API_REFERENCE_PREFIX)
+    );
+  }
+
+  function scheduleNavigationFallback(fromUrl, toUrl) {
+    if (!isJsonApiReferenceTransition(fromUrl, toUrl)) {
+      return;
+    }
+
+    if (navigationFallbackTimer) {
+      window.clearTimeout(navigationFallbackTimer);
+    }
+
+    var fromPath = getPagePath(fromUrl);
+    navigationFallbackTimer = window.setTimeout(function () {
+      navigationFallbackTimer = null;
+
+      // Mintlify can suppress the client-side transition from the overview to
+      // a manual API page at narrow breakpoints. Fall back to native navigation
+      // only when the click has left the browser on the original route.
+      if (window.location.pathname !== fromPath) {
+        return;
+      }
+
+      window.location.assign(toUrl);
+    }, NAVIGATION_FALLBACK_MS);
   }
 
   function prepareTransition(element) {
@@ -218,11 +302,16 @@
   }
 
   function onPageReady() {
+    scheduleManualApiHeaderBadgeSync();
     hideSpinner();
     fadeIn();
   }
 
   installSpinner();
+  scheduleManualApiHeaderBadgeSync();
+
+  var badgeObserver = new MutationObserver(scheduleManualApiHeaderBadgeSync);
+  badgeObserver.observe(document.body, { childList: true, subtree: true });
 
   document.addEventListener(
     "click",
@@ -242,6 +331,7 @@
       }
 
       fadedOutFromClick = fadeOut();
+      scheduleNavigationFallback(window.location.href, url.href);
     },
     true
   );

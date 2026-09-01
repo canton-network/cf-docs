@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import importlib.util
+import io
 import json
 import sys
+import urllib.error
 from pathlib import Path
 from types import ModuleType
+from typing import Self
 
 import pytest
 
@@ -74,6 +77,58 @@ def test_dar_family_requires_the_configured_package_version() -> None:
             "splice-api-token-holding-v2-current.dar",
             package_version="1.0.0",
         )
+
+
+class FakeDarResponse:
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, *_args: object) -> None:
+        return None
+
+    def read(self) -> bytes:
+        return b"PK-test-dar"
+
+
+def test_ensure_dar_retries_transient_download_failures(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    outcomes: list[object] = [
+        urllib.error.URLError("connection reset by peer"),
+        urllib.error.HTTPError(
+            "https://raw.githubusercontent.test/dar",
+            503,
+            "Service Unavailable",
+            {},
+            io.BytesIO(),
+        ),
+        FakeDarResponse(),
+    ]
+    sleeps: list[float] = []
+
+    def fake_urlopen(_request: object, *, timeout: float) -> FakeDarResponse:
+        assert timeout == 60
+        outcome = outcomes.pop(0)
+        if isinstance(outcome, Exception):
+            raise outcome
+        assert isinstance(outcome, FakeDarResponse)
+        return outcome
+
+    monkeypatch.setattr(token_v2_reference.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(token_v2_reference.time, "sleep", sleeps.append)
+    monkeypatch.setattr(token_v2_reference, "DOWNLOAD_RETRY_DELAY_SECONDS", 2)
+
+    output = token_v2_reference.ensure_dar(
+        repository="canton-network/splice",
+        revision="abc123",
+        filename="splice-api-token-holding-v2-1.0.0.dar",
+        cache_dir=tmp_path,
+        force_refresh=False,
+    )
+
+    assert output.read_bytes() == b"PK-test-dar"
+    assert sleeps == [2, 4]
+    assert outcomes == []
 
 
 def test_dependency_include_dirs_resolves_token_package_names(tmp_path: Path) -> None:
