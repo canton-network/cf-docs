@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import io
 import json
 import sys
 from pathlib import Path
@@ -27,7 +28,39 @@ def write_mdx(path: Path, title: str, body: str = "") -> None:
     path.write_text(f'---\ntitle: "{title}"\n---\n{body}', encoding="utf-8")
 
 
-def test_java_bindings_nav_includes_details_and_history_page(tmp_path: Path) -> None:
+def test_java_bindings_discovers_all_stable_maven_versions_from_lower_bound(
+    monkeypatch,
+) -> None:
+    generate_ledger_bindings_api_reference = load_script("generate_ledger_bindings_api_reference")
+    metadata = b"""\
+<metadata>
+  <versioning>
+    <versions>
+      <version>3.4.7</version>
+      <version>3.4.8</version>
+      <version>3.5.1</version>
+      <version>3.5.2-snapshot</version>
+      <version>3.5.10</version>
+      <version>4.0.0-rc1</version>
+    </versions>
+  </versioning>
+</metadata>
+"""
+    monkeypatch.setattr(
+        generate_ledger_bindings_api_reference.urllib.request,
+        "urlopen",
+        lambda _request, timeout: io.BytesIO(metadata),
+    )
+
+    assert generate_ledger_bindings_api_reference.discover_stable_maven_versions(
+        repo_base="https://repo.example.test/maven2",
+        group="com.daml",
+        artifact="bindings-java",
+        min_version="3.4.8",
+    ) == ["3.4.8", "3.5.1", "3.5.10"]
+
+
+def test_java_bindings_nav_puts_overview_before_packages(tmp_path: Path) -> None:
     generate_ledger_bindings_api_reference = load_script("generate_ledger_bindings_api_reference")
     reference_nav = load_script("reference_nav")
     docs_json = tmp_path / "docs-main" / "docs.json"
@@ -52,8 +85,7 @@ def test_java_bindings_nav_includes_details_and_history_page(tmp_path: Path) -> 
     )
     publish_root = docs_json.parent / "reference"
     overview_file = publish_root / "java-bindings.mdx"
-    write_mdx(overview_file, "Details and history")
-    write_mdx(publish_root / "java" / "index.mdx", "Javadocs")
+    write_mdx(overview_file, "Java Bindings")
     write_mdx(
         publish_root / "java" / "com-example" / "index.mdx",
         "com.example",
@@ -76,11 +108,11 @@ def test_java_bindings_nav_includes_details_and_history_page(tmp_path: Path) -> 
     assert ledger_pages[-1] == {
         "group": "Java Bindings",
         "pages": [
+            "reference/java-bindings",
             {
-                "group": "Javadocs",
+                "group": "Packages",
                 "pages": [{"group": "com.example", "pages": ["reference/java/com-example/Client"]}],
             },
-            "reference/java-bindings",
         ],
     }
 
@@ -106,7 +138,7 @@ def test_java_bindings_nav_supports_product_navigation(tmp_path: Path) -> None:
     )
     publish_root = docs_json.parent / "reference"
     overview_file = publish_root / "java-bindings.mdx"
-    write_mdx(overview_file, "Details and history")
+    write_mdx(overview_file, "Java Bindings")
     write_mdx(
         publish_root / "java" / "com-example" / "index.mdx",
         "com.example",
@@ -131,11 +163,11 @@ def test_java_bindings_nav_supports_product_navigation(tmp_path: Path) -> None:
                 {
                     "group": "Java Bindings",
                     "pages": [
+                        "reference/java-bindings",
                         {
-                            "group": "Javadocs",
+                            "group": "Packages",
                             "pages": [{"group": "com.example", "pages": ["reference/java/com-example/Client"]}],
                         },
-                        "reference/java-bindings",
                     ],
                 }
             ],
@@ -253,12 +285,39 @@ def test_daml_script_nav_is_top_level_in_api_reference(tmp_path: Path) -> None:
     ]
 
 
-def test_java_bindings_overview_is_published_as_details_and_history() -> None:
+def test_java_bindings_redirects_are_idempotent(tmp_path: Path) -> None:
+    generate_ledger_bindings_api_reference = load_script("generate_ledger_bindings_api_reference")
+    docs_json = tmp_path / "docs.json"
+    docs_json.write_text('{"redirects": []}\n', encoding="utf-8")
+
+    for _ in range(2):
+        generate_ledger_bindings_api_reference.ensure_java_bindings_redirects(
+            docs_json_path=docs_json,
+        )
+
+    assert json.loads(docs_json.read_text(encoding="utf-8"))["redirects"] == [
+        {
+            "source": "/reference/java",
+            "destination": "/reference/java-bindings",
+        },
+        {
+            "source": "/reference/java/index",
+            "destination": "/reference/java-bindings",
+        },
+    ]
+
+
+def test_java_bindings_publish_rewrites_standardized_html_links() -> None:
     generate_ledger_bindings_api_reference = load_script("generate_ledger_bindings_api_reference")
 
-    assert (
-        generate_ledger_bindings_api_reference.rewrite_overview_as_details_page(
-            '---\ntitle: "Java Bindings"\ndescription: "Generated lifecycle timeline"\n---\nBody\n'
-        )
-        == '---\ntitle: "Details and history"\ndescription: "Generated lifecycle timeline"\n---\n\nBody\n'
+    assert generate_ledger_bindings_api_reference.rewrite_markdown_links(
+        '<a href="./bindings-java-packages/com-example/index">Package</a>\n'
+        '<a href="../../bindings-java">Back</a>\n',
+        [
+            ("./bindings-java-packages/", "./java/"),
+            ("../../bindings-java", "../../java-bindings"),
+        ],
+    ) == (
+        '<a href="./java/com-example/index">Package</a>\n'
+        '<a href="../../java-bindings">Back</a>\n'
     )

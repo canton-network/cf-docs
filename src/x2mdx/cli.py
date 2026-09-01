@@ -178,6 +178,20 @@ def build_parser() -> argparse.ArgumentParser:
         help="Title to use for the generated overview page.",
     )
     build_jvm_docs.add_argument(
+        "--history-report",
+        help="Optional normalized shared-history report to write.",
+    )
+    build_jvm_docs.add_argument(
+        "--reader-route-prefix",
+        help="Reader route prefix for current Java type pages.",
+    )
+    build_jvm_docs.add_argument("--surface-id", default="java-bindings")
+    build_jvm_docs.add_argument("--surface-title", default="Java Bindings")
+    build_jvm_docs.add_argument(
+        "--configured-scope",
+        default="Ledger API Java binding types",
+    )
+    build_jvm_docs.add_argument(
         "--docs-json",
         help="Optional docs.json file to update with the generated overview page",
     )
@@ -292,6 +306,34 @@ def build_parser() -> argparse.ArgumentParser:
         "--version-filter",
         help="Optional label describing the selected version set.",
     )
+    build_protobuf.add_argument(
+        "--history-report",
+        help="Optional path for a validated shared history report.",
+    )
+    build_protobuf.add_argument(
+        "--surface-id",
+        default="protobuf-reference",
+        help="Stable surface identifier for the shared history report.",
+    )
+    build_protobuf.add_argument(
+        "--surface-title",
+        default="Protobuf reference",
+        help="Reader-facing surface title for the shared history report.",
+    )
+    build_protobuf.add_argument(
+        "--configured-scope",
+        default="Protobuf service methods",
+        help="Configured item scope for the shared history report.",
+    )
+    build_protobuf.add_argument(
+        "--reader-route-prefix",
+        help="Root-relative route prefix for current generated operation pages.",
+    )
+    build_protobuf.add_argument(
+        "--overview-name",
+        default="index.mdx",
+        help="Filename for the generated overview page.",
+    )
 
     typedoc = subparsers.add_parser("typedoc", help="TypeDoc-based TypeScript bindings commands")
     typedoc_subparsers = typedoc.add_subparsers(dest="typedoc_command", required=True)
@@ -362,6 +404,20 @@ def build_parser() -> argparse.ArgumentParser:
     build_asyncapi.add_argument(
         "--output-file",
         help="Exact MDX file path to write for the generated AsyncAPI page",
+    )
+    build_asyncapi.add_argument(
+        "--history-report",
+        help="Optional path for the validated normalized history report.",
+    )
+    build_asyncapi.add_argument(
+        "--surface-id",
+        default="json-ledger-api-asyncapi",
+        help="Stable normalized-history surface identifier.",
+    )
+    build_asyncapi.add_argument(
+        "--configured-scope",
+        default="JSON Ledger API WebSocket channel actions",
+        help="Configured reader scope recorded in normalized history.",
     )
     build_asyncapi.add_argument(
         "--overview-name",
@@ -439,6 +495,20 @@ def build_parser() -> argparse.ArgumentParser:
         help="Directory where generated MDX pages should be written",
     )
     build_openrpc.add_argument(
+        "--history-report",
+        help="Optional path for the validated normalized history report.",
+    )
+    build_openrpc.add_argument(
+        "--surface-id",
+        default="wallet-gateway-openrpc",
+        help="Stable normalized-history surface identifier.",
+    )
+    build_openrpc.add_argument(
+        "--configured-scope",
+        default="Wallet Gateway OpenRPC methods",
+        help="Configured reader scope recorded in normalized history.",
+    )
+    build_openrpc.add_argument(
         "--fixture-root",
         help="Directory to resolve manifest fixture paths from; defaults to the manifest directory",
     )
@@ -498,7 +568,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "jvm-docs":
         if args.jvm_docs_command == "build-api-pages-from-manifest":
-            from x2mdx.jvm_docs.render import build_pages
+            from x2mdx.history import validate_history_report, write_history_report
+            from x2mdx.jvm_docs.history import build_jvm_surface_history_report
+            from x2mdx.jvm_docs.render import build_pages, build_reader_type_routes
             from x2mdx.mintlify import MintlifyNavTarget, update_docs_json_navigation
             from x2mdx.render import write_pages
 
@@ -508,6 +580,21 @@ def main(argv: Sequence[str] | None = None) -> int:
                 parser.error("--docs-json requires --nav-dropdown")
 
             report = build_jvm_doc_report_from_manifest_args(args)
+            history_report = None
+            if args.history_report:
+                if not args.reader_route_prefix:
+                    parser.error("--history-report requires --reader-route-prefix")
+                history_report = build_jvm_surface_history_report(
+                    report,
+                    routes=build_reader_type_routes(
+                        report,
+                        reader_route_prefix=args.reader_route_prefix,
+                    ),
+                    surface_id=args.surface_id,
+                    title=args.surface_title,
+                    configured_scope=args.configured_scope,
+                )
+                validate_history_report(history_report)
             overview_file = Path(args.overview_file)
             details_dir = Path(args.details_dir)
             if overview_file.exists():
@@ -519,8 +606,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                 overview_output=overview_file,
                 details_dir=details_dir,
                 overview_title=args.overview_title,
+                history_report=history_report,
             )
             write_pages(pages, output_root)
+            if history_report is not None:
+                write_history_report(Path(args.history_report), history_report)
             if args.docs_json:
                 update_docs_json_navigation(
                     Path(args.docs_json),
@@ -555,15 +645,57 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "protobuf":
         if args.protobuf_command == "build-api-pages-from-manifest":
-            from x2mdx.protobuf.render import build_pages
+            from x2mdx.history import (
+                ReferenceFormat,
+                validate_history_report,
+                write_history_report,
+            )
+            from x2mdx.protobuf.history import build_protobuf_surface_history_report
+            from x2mdx.protobuf.render import build_pages, operation_page_path
             from x2mdx.render import write_pages
 
             report = build_protobuf_report_from_manifest_args(args)
             output_dir = Path(args.output_dir)
             if output_dir.exists():
                 shutil.rmtree(output_dir)
-            output_root, pages = build_pages(report, output_dir=output_dir)
+            history_report = None
+            if args.history_report:
+                if not args.reader_route_prefix:
+                    parser.error("--history-report requires --reader-route-prefix")
+                route_prefix = args.reader_route_prefix.strip("/")
+                routes = {
+                    str(endpoint_id): (
+                        f"/{route_prefix}/"
+                        + operation_page_path(
+                            output_dir,
+                            str(endpoint["package"]),
+                            str(endpoint["service"]),
+                            str(endpoint["name"]),
+                        )
+                        .relative_to(output_dir)
+                        .with_suffix("")
+                        .as_posix()
+                    )
+                    for endpoint_id, endpoint in report["latestSnapshot"]["endpoints"].items()
+                }
+                history_report = build_protobuf_surface_history_report(
+                    report,
+                    routes=routes,
+                    surface_id=args.surface_id,
+                    title=args.surface_title,
+                    configured_scope=args.configured_scope,
+                    format=ReferenceFormat.PROTOBUF,
+                )
+                validate_history_report(history_report)
+            output_root, pages = build_pages(
+                report,
+                output_dir=output_dir,
+                history_report=history_report,
+                overview_name=args.overview_name,
+            )
             write_pages(pages, output_root)
+            if history_report is not None:
+                write_history_report(Path(args.history_report), history_report)
             return 0
 
     if args.command == "typedoc":
@@ -584,7 +716,12 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "asyncapi":
         if args.asyncapi_command == "build-api-pages-from-manifest":
-            from x2mdx.asyncapi.render import build_page, build_pages
+            from x2mdx.asyncapi.history import build_asyncapi_history_report
+            from x2mdx.asyncapi.lifecycle import build_asyncapi_report_from_sources
+            from x2mdx.asyncapi.render import build_page, build_pages, operation_page_path
+            from x2mdx.asyncapi.snapshots import load_asyncapi_source_snapshots
+            from x2mdx.history.io import write_history_report
+            from x2mdx.history.validation import validate_history_report
             from x2mdx.mintlify import MintlifyNavTarget, update_docs_json_navigation
             from x2mdx.render import write_page, write_pages
 
@@ -597,7 +734,21 @@ def main(argv: Sequence[str] | None = None) -> int:
             if args.output_dir and args.output_file:
                 parser.error("build-api-pages-from-manifest accepts only one of --output-dir or --output-file")
 
-            report = build_asyncapi_report_from_manifest_args(args)
+            manifest_path = Path(args.manifest)
+            include_versions = set(args.version) if args.version else None
+            fixture_root = Path(args.fixture_root) if args.fixture_root else None
+            sources = load_asyncapi_source_snapshots(
+                manifest_path,
+                fixture_root=fixture_root,
+                include_versions=include_versions,
+            )
+            report = build_asyncapi_report_from_sources(
+                sources,
+                source_name=args.source_name or str(manifest_path),
+                version_filter=args.version_filter
+                or ("selected manifest versions" if include_versions else "manifest versions"),
+                publish_version=args.publish_version,
+            )
             if args.output_file:
                 output_file = Path(args.output_file)
                 page = build_page(
@@ -611,14 +762,46 @@ def main(argv: Sequence[str] | None = None) -> int:
                 output_dir = Path(args.output_dir)
                 if output_dir.exists():
                     shutil.rmtree(output_dir)
+                docs_root = (
+                    Path(args.docs_json).resolve().parent
+                    if args.docs_json
+                    else output_dir.resolve()
+                )
+                routes: dict[tuple[str, str], str] = {}
+                for channel in report.channels:
+                    if channel.status != "active":
+                        continue
+                    for action in channel.latest.get("actions", []):
+                        operation_path = operation_page_path(
+                            output_dir,
+                            channel,
+                            action["action"],
+                        ).resolve()
+                        try:
+                            route = operation_path.relative_to(docs_root).with_suffix("").as_posix()
+                        except ValueError:
+                            route = operation_path.relative_to(output_dir.resolve()).with_suffix("").as_posix()
+                        routes[(channel.channel, action["action"])] = route
+                history_report = build_asyncapi_history_report(
+                    sources=sources,
+                    routes=routes,
+                    publish_version=report.publish_version,
+                    surface_id=args.surface_id,
+                    title=args.page_title,
+                    configured_scope=args.configured_scope,
+                )
+                validate_history_report(history_report)
                 output_root, pages = build_pages(
                     report,
                     output_dir=output_dir,
                     overview_name=args.overview_name,
                     page_title=args.page_title,
                     page_description=args.page_description,
+                    history_report=history_report,
                 )
                 write_pages(pages, output_root)
+                if args.history_report:
+                    write_history_report(Path(args.history_report), history_report)
                 output_file = output_dir / args.overview_name
             if args.docs_json:
                 update_docs_json_navigation(
@@ -634,22 +817,63 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "openrpc":
         if args.openrpc_command == "build-api-pages-from-manifest":
-            from x2mdx.openrpc.render import build_pages
+            from x2mdx.history.io import write_history_report
+            from x2mdx.history.validation import validate_history_report
+            from x2mdx.openrpc.history import build_openrpc_history_report
+            from x2mdx.openrpc.lifecycle import build_openrpc_report_from_sources
+            from x2mdx.openrpc.render import build_pages, operation_page_path
+            from x2mdx.openrpc.snapshots import load_openrpc_source_snapshots
             from x2mdx.render import write_pages
 
-            report = build_openrpc_report_from_manifest_args(args)
+            manifest_path = Path(args.manifest)
+            include_versions = set(args.version) if args.version else None
+            fixture_root = Path(args.fixture_root) if args.fixture_root else None
+            sources = load_openrpc_source_snapshots(
+                manifest_path,
+                fixture_root=fixture_root,
+                include_versions=include_versions,
+            )
+            report = build_openrpc_report_from_sources(
+                sources,
+                source_name=args.source_name or str(manifest_path),
+                version_filter=args.version_filter
+                or ("selected manifest versions" if include_versions else "manifest versions"),
+                publish_version=args.publish_version,
+            )
             output_dir = Path(args.output_dir)
             if output_dir.exists():
                 shutil.rmtree(output_dir)
+            routes: dict[tuple[str, str], str] = {}
+            route_prefix = args.link_prefix.rstrip("/") if args.link_prefix else None
+            for spec in report.specs:
+                for method in spec.methods:
+                    if method.status != "active":
+                        continue
+                    operation_path = operation_page_path(output_dir, spec, method)
+                    relative_route = operation_path.relative_to(output_dir).with_suffix("").as_posix()
+                    route = f"{route_prefix}/{relative_route}" if route_prefix else relative_route
+                    routes[(spec.spec_id, method.method)] = route
+            history_report = build_openrpc_history_report(
+                sources=sources,
+                routes=routes,
+                publish_version=report.publish_version,
+                surface_id=args.surface_id,
+                title=args.overview_title,
+                configured_scope=args.configured_scope,
+            )
+            validate_history_report(history_report)
             output_root, pages = build_pages(
                 report,
                 output_dir=output_dir,
+                history_report=history_report,
                 overview_name=args.overview_name,
                 spec_dir_name=args.spec_dir_name,
                 overview_title=args.overview_title,
                 link_prefix=args.link_prefix,
             )
             write_pages(pages, output_root)
+            if args.history_report:
+                write_history_report(Path(args.history_report), history_report)
             return 0
 
     parser.error("unknown command")
