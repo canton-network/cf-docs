@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Union
+from typing import TypeAlias, Union
+
+
+FrontmatterValue: TypeAlias = str | bool | int | float | list[str]
 
 
 @dataclass(frozen=True)
@@ -41,4 +44,5 @@ class Page:
     path: str
     title: str
     description: str | None = None
+    frontmatter: dict[str, FrontmatterValue] = field(default_factory=dict)
     blocks: list[Block] = field(default_factory=list)

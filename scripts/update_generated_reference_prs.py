@@ -90,30 +90,36 @@ UPDATE_TARGETS = (
         title="Update Splice OpenAPI reference",
         branch="generated-references/splice-openapi/update",
         description=(
-            "Updates the Splice OpenAPI source pin to the latest stable "
-            "decentralized-canton-sync release and regenerates the checked-in "
-            "Splice OpenAPI specifications and navigation."
+            "Discovers every eligible stable decentralized-canton-sync release, "
+            "publishes the latest Splice OpenAPI bundle, and regenerates the checked-in "
+            "specifications, operation pages, history, and navigation."
         ),
         generate_commands=(
             ("nix-shell", "--run", "npm run generate:splice-mintlify-openapi"),
         ),
         paths=(
-            "config/mintlify-openapi/splice-openapi/source-artifacts.json",
             "docs-main/docs.json",
             "docs-main/openapi/splice",
+            "docs-main/reference/splice-allocation-api",
+            "docs-main/reference/splice-allocation-instruction-api",
+            "docs-main/reference/splice-allocation-instruction-v2-api",
+            "docs-main/reference/splice-allocation-v2-api",
+            "docs-main/reference/splice-ans-api",
+            "docs-main/reference/splice-scan-api",
+            "docs-main/reference/splice-scan-proxy-api",
+            "docs-main/reference/splice-scan-streaming-api",
+            "docs-main/reference/splice-token-metadata-service",
+            "docs-main/reference/splice-transfer-instruction-api",
+            "docs-main/reference/splice-transfer-instruction-v2-api",
+            "docs-main/reference/splice-wallet-api-external",
         ),
-        summary_kind="source-config",
-        summary_path="config/mintlify-openapi/splice-openapi/source-artifacts.json",
-        summary_label="Splice OpenAPI",
+        summary_kind="static",
+        summary_path=None,
+        summary_label=None,
         validation=(
-            "npm run update:generated-reference-sources -- --source splice-openapi",
             "npm run generate:splice-mintlify-openapi",
             "git diff --check",
         ),
-        source_update_commands=(
-            ("nix-shell", "--run", "npm run update:generated-reference-sources -- --source splice-openapi"),
-        ),
-        source_update_paths=("config/mintlify-openapi/splice-openapi/source-artifacts.json",),
     ),
     UpdateTarget(
         key="splice-token-standard-v2",
@@ -121,14 +127,17 @@ UPDATE_TARGETS = (
         branch="generated-references/splice-token-standard-v2/update",
         description=(
             "Regenerates the checked-in Canton Network Token Standard v2 Daml package "
-            "reference pages from the pinned DAR artifacts in canton-network/splice."
+            "reference pages and normalized history from every eligible stable "
+            "canton-network/splice release tag."
         ),
         generate_commands=(
             ("nix-shell", "--run", "npm run generate:splice-token-standard-v2-reference"),
         ),
         paths=(
             "config/x2mdx/splice-token-standard-v2/source-artifacts.json",
+            "config/x2mdx/splice-token-standard-v2/lifecycle.json",
             "docs-main/docs.json",
+            "docs-main/sdks-tools/api-reference/splice-daml/token-standard-v2-history-report.json",
             "docs-main/sdks-tools/api-reference/splice-daml/splice-api-token-allocation-instruction-v2",
             "docs-main/sdks-tools/api-reference/splice-daml/splice-api-token-allocation-request-v2",
             "docs-main/sdks-tools/api-reference/splice-daml/splice-api-token-allocation-v2",
