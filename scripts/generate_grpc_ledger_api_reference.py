@@ -608,6 +608,7 @@ def write_manifest(
             cache_dir,
             version,
             surface="grpc-ledger-api",
+            selections=canton_protobuf_history.LEDGER_API_SELECTIONS,
         )
         if not image_path.exists() or force_refresh:
             canton_protobuf_history.compile_descriptor_image(

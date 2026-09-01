@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import gzip
+import hashlib
 import importlib.util
 import json
 import os
@@ -37,6 +38,9 @@ DEFAULT_REPO_DIR = DEFAULT_CACHE_DIR / "repos" / "canton"
 GROUP_LABEL = "Canton Protobuf History"
 DETAILS_LABEL = "Details and History"
 DESCRIPTOR_IMAGE_NAME = ".proto_snapshot_image.bin.gz"
+# Selection changes alter the fingerprint automatically. Bump this when the
+# descriptor compilation contract changes without changing the selections.
+DESCRIPTOR_CACHE_SCHEMA = "selection-v1"
 STABLE_TAG_RE = re.compile(r"^v(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)$")
 SECTION_TO_REPO_PREFIX = {
     "admin-api": "community/admin-api/src/main/protobuf",
@@ -247,8 +251,36 @@ def bundle_extract_root(cache_dir: Path, version: str) -> Path:
     return cache_dir / "bundles" / version
 
 
-def descriptor_image_path(cache_dir: Path, version: str, *, surface: str) -> Path:
-    return cache_dir / "descriptor-images" / surface / version / DESCRIPTOR_IMAGE_NAME
+def descriptor_selection_fingerprint(selections: tuple[ProtobufSelection, ...]) -> str:
+    payload = [
+        {
+            "section_name": selection.section_name,
+            "repo_prefix": selection.repo_prefix,
+            "import_prefixes": list(selection.import_prefixes),
+        }
+        for selection in selections
+    ]
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def descriptor_image_path(
+    cache_dir: Path,
+    version: str,
+    *,
+    surface: str,
+    selections: tuple[ProtobufSelection, ...],
+) -> Path:
+    selection_fingerprint = descriptor_selection_fingerprint(selections)
+    return (
+        cache_dir
+        / "descriptor-images"
+        / surface
+        / DESCRIPTOR_CACHE_SCHEMA
+        / selection_fingerprint
+        / version
+        / DESCRIPTOR_IMAGE_NAME
+    )
 
 
 def ensure_bundle_archive(
@@ -609,7 +641,12 @@ def materialize_releases(
         if not import_to_repo_path:
             print(f"Skipping {tag} for {surface}: no published owned protobuf files found")
             continue
-        image_path = descriptor_image_path(cache_dir, version, surface=surface)
+        image_path = descriptor_image_path(
+            cache_dir,
+            version,
+            surface=surface,
+            selections=selections,
+        )
         if not image_path.exists() or force_refresh:
             compile_descriptor_image(
                 protobuf_root,
