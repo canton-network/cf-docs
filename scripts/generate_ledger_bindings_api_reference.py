@@ -11,6 +11,7 @@ import subprocess
 import sys
 import urllib.error
 import urllib.request
+import xml.etree.ElementTree as ET
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
@@ -25,8 +26,10 @@ DEFAULT_SOURCE_CONFIG = REPO_ROOT / "config" / "x2mdx" / "ledger-bindings" / "so
 DEFAULT_CACHE_DIR = DEFAULT_CACHE_ROOT / "ledger-bindings"
 DEFAULT_MANIFEST = REPO_ROOT / ".internal" / "generated" / "x2mdx" / "ledger-bindings" / "manifest.json"
 DEFAULT_RENDER_ROOT = REPO_ROOT / ".internal" / "generated" / "x2mdx" / "ledger-bindings" / "site"
+DEFAULT_RENDER_HISTORY_REPORT = DEFAULT_RENDER_ROOT / "history-report.json"
 DEFAULT_OVERVIEW_FILE = REPO_ROOT / "docs-main" / "reference" / "java-bindings.mdx"
 DEFAULT_DETAILS_DIR = REPO_ROOT / "docs-main" / "reference"
+DEFAULT_HISTORY_REPORT = REPO_ROOT / "docs-main" / "reference" / "java" / "history-report.json"
 DEFAULT_DOCS_JSON = REPO_ROOT / "docs-main" / "docs.json"
 LEGACY_JVM_OVERVIEW_FILE = REPO_ROOT / "docs-main" / "reference" / "ledger-api-jvm-bindings.mdx"
 LEGACY_OVERVIEW_FILE = REPO_ROOT / "docs-main" / "appdev" / "reference" / "ledger-bindings-api-lifecycle.mdx"
@@ -41,7 +44,6 @@ LANGUAGE_DIRS = {
     "java": "java",
 }
 REMOVED_LANGUAGE_DIRS = {"scala"}
-DETAILS_LABEL = "Details and history"
 ARTIFACT_PAGE_DESCRIPTIONS = {
     "java": "Generated package reference and version summary from local Javadoc snapshots",
 }
@@ -117,7 +119,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--version-filter",
-        default="configured bindings artifact versions",
+        default="eligible stable Maven releases from the configured lower bound",
         help="Version-filter label embedded in generated content.",
     )
     return parser.parse_args()
@@ -166,7 +168,7 @@ def read_package_label(path: Path) -> str:
         match = re.match(r"## Package `(.*)`$", line)
         if match:
             return match.group(1)
-    raise ValueError(f"Missing package heading in {path}")
+    return read_mdx_title(path)
 
 
 def prune_nav_items(items: list[Any], *, page_refs: set[str], group_labels: set[str]) -> list[Any]:
@@ -252,7 +254,7 @@ def build_jvm_nav_group(
         if not page_entries:
             continue
         page_entries.sort(key=lambda item: (item[0].lower(), item[0]))
-        label = LANGUAGE_LABELS.get(language, language.title())
+        label = "Packages"
         language_groups.append(
             (
                 LANGUAGE_ORDER.get(language, 99),
@@ -294,9 +296,12 @@ def update_docs_navigation(
     )
     overview_ref = docs_json_page_ref(overview_file, docs_json_path)
     generated_refs.add(overview_ref)
+    generated_refs.add(
+        docs_json_page_ref(publish_root / "java" / "index.mdx", docs_json_path)
+    )
     jvm_pages = jvm_group.setdefault("pages", [])
     if isinstance(jvm_pages, list) and overview_ref not in jvm_pages:
-        jvm_pages.append(overview_ref)
+        jvm_pages.insert(0, overview_ref)
     pruned_pages = prune_nav_items(
         pages,
         page_refs=generated_refs,
@@ -312,10 +317,79 @@ def update_docs_navigation(
     return docs_json_path
 
 
+def ensure_redirect(*, docs_json_path: Path, source: str, destination: str) -> None:
+    payload = load_json(docs_json_path)
+    redirects = payload.setdefault("redirects", [])
+    if not isinstance(redirects, list):
+        raise ValueError("docs.json redirects must be an array")
+    matches = [
+        redirect
+        for redirect in redirects
+        if isinstance(redirect, dict) and redirect.get("source") == source
+    ]
+    if len(matches) > 1:
+        raise ValueError(f"Duplicate redirect source in docs.json: {source}")
+    redirect = {"source": source, "destination": destination}
+    if matches:
+        matches[0].clear()
+        matches[0].update(redirect)
+    else:
+        redirects.append(redirect)
+    docs_json_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
+def ensure_java_bindings_redirects(*, docs_json_path: Path) -> None:
+    for source in ("/reference/java", "/reference/java/index"):
+        ensure_redirect(
+            docs_json_path=docs_json_path,
+            source=source,
+            destination="/reference/java-bindings",
+        )
+
+
 def maven_javadoc_url(repo_base: str, group: str, artifact: str, version: str) -> str:
     group_path = group.replace(".", "/")
     file_name = f"{artifact}-{version}-javadoc.jar"
     return f"{repo_base.rstrip('/')}/{group_path}/{artifact}/{version}/{file_name}"
+
+
+def semver_key(version: str) -> tuple[int, int, int]:
+    match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)", version)
+    if not match:
+        raise ValueError(f"Expected stable semantic version, got: {version}")
+    return tuple(int(part) for part in match.groups())
+
+
+def discover_stable_maven_versions(
+    *,
+    repo_base: str,
+    group: str,
+    artifact: str,
+    min_version: str,
+) -> list[str]:
+    group_path = group.replace(".", "/")
+    url = f"{repo_base.rstrip('/')}/{group_path}/{artifact}/maven-metadata.xml"
+    request = urllib.request.Request(
+        url,
+        headers={"User-Agent": "digital-asset-docs-x2mdx/1.0"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=60) as response:
+            root = ET.fromstring(response.read())
+    except urllib.error.HTTPError as exc:
+        raise RuntimeError(f"HTTP {exc.code} while downloading {url}") from exc
+    except urllib.error.URLError as exc:
+        raise RuntimeError(f"Network error while downloading {url}: {exc}") from exc
+
+    minimum = semver_key(min_version)
+    versions = [
+        element.text.strip()
+        for element in root.findall("./versioning/versions/version")
+        if element.text
+        and re.fullmatch(r"\d+\.\d+\.\d+", element.text.strip())
+        and semver_key(element.text.strip()) >= minimum
+    ]
+    return sorted(set(versions), key=semver_key)
 
 
 def download_file(url: str, target: Path, *, force: bool) -> None:
@@ -376,7 +450,8 @@ def build_manifest(
         group = artifact_entry.get("group")
         artifact = artifact_entry.get("artifact")
         language = artifact_entry.get("language")
-        versions = artifact_entry.get("versions")
+        configured_versions = artifact_entry.get("versions")
+        min_version = artifact_entry.get("min_version")
         include_prefixes = artifact_entry.get("include_prefixes") or []
         if not isinstance(group, str) or not group:
             continue
@@ -384,7 +459,16 @@ def build_manifest(
             continue
         if language != "java":
             continue
-        if not isinstance(versions, list):
+        if isinstance(configured_versions, list):
+            versions = configured_versions
+        elif isinstance(min_version, str) and min_version:
+            versions = discover_stable_maven_versions(
+                repo_base=repo_base,
+                group=group,
+                artifact=artifact,
+                min_version=min_version,
+            )
+        else:
             continue
 
         version_entries: list[dict[str, str]] = []
@@ -453,6 +537,16 @@ def build_command(args: argparse.Namespace, manifest_path: Path) -> list[str]:
         args.source_name,
         "--version-filter",
         args.version_filter,
+        "--history-report",
+        str(DEFAULT_RENDER_HISTORY_REPORT.resolve()),
+        "--reader-route-prefix",
+        "reference/java",
+        "--surface-id",
+        "java-bindings",
+        "--surface-title",
+        args.overview_title,
+        "--configured-scope",
+        "Ledger API Java binding types",
     )
     for version in args.version or []:
         command.extend(["--version", version])
@@ -554,21 +648,6 @@ def rewrite_java_only_generated_text(text: str) -> str:
         if line.strip() != "- Scala deprecation is not inferred from Scaladoc indexes in this initial implementation."
     ]
     return "\n".join(filtered_lines).rstrip() + "\n"
-
-
-def rewrite_overview_as_details_page(text: str) -> str:
-    frontmatter, body = split_frontmatter(text)
-    updated_frontmatter: list[str] = []
-    title_written = False
-    for line in frontmatter:
-        if line.startswith("title: "):
-            updated_frontmatter.append(f'title: "{DETAILS_LABEL}"')
-            title_written = True
-        else:
-            updated_frontmatter.append(line)
-    if not title_written:
-        updated_frontmatter.insert(0, f'title: "{DETAILS_LABEL}"')
-    return "\n".join(["---", *updated_frontmatter, "---", "", body.rstrip(), ""])
 
 
 def parse_markdown_table(lines: list[str]) -> tuple[list[str], list[list[str]]]:
@@ -813,7 +892,7 @@ def publish_rendered_pages(
     publish_overview_file: Path,
     publish_root: Path,
 ) -> tuple[Path, set[str]]:
-    render_overview_file, render_details_dir = render_output_paths()
+    _, render_details_dir = render_output_paths()
     publish_root.mkdir(parents=True, exist_ok=True)
 
     artifact_entries = [
@@ -824,6 +903,10 @@ def publish_rendered_pages(
         and isinstance(entry.get("language"), str)
         and entry.get("language") in LANGUAGE_DIRS
     ]
+    if len(artifact_entries) != 1:
+        raise ValueError(
+            "The Java bindings reader surface requires exactly one configured artifact"
+        )
 
     preserved_language_dirs = {
         LANGUAGE_DIRS[str(entry["language"])]
@@ -844,7 +927,6 @@ def publish_rendered_pages(
         LEGACY_OVERVIEW_FILE.unlink()
     shutil.rmtree(LEGACY_DETAILS_DIR, ignore_errors=True)
 
-    overview_replacements: list[tuple[str, str]] = []
     generated_refs: set[str] = set()
 
     for artifact_entry in artifact_entries:
@@ -855,20 +937,17 @@ def publish_rendered_pages(
         artifact_slug = slugify(artifact)
         source_artifact_page = render_details_dir / f"{artifact_slug}.mdx"
         source_package_dir = render_details_dir / f"{artifact_slug}-packages"
-        target_artifact_page = language_dir / "index.mdx"
-
-        overview_replacements.extend(
-            [
-                (f"({render_details_dir.name}/{artifact_slug})", f"({LANGUAGE_DIRS[language]})"),
-                (f"(./{render_details_dir.name}/{artifact_slug})", f"(./{LANGUAGE_DIRS[language]})"),
-            ]
-        )
+        target_artifact_page = publish_overview_file
         copy_rewritten_page(
             source_artifact_page,
             target_artifact_page,
-            replacements=[(f"({source_package_dir.name}/", "(")],
+            replacements=[
+                (
+                    f"./{source_package_dir.name}/",
+                    f"./{LANGUAGE_DIRS[language]}/",
+                )
+            ],
             artifact_entry=artifact_entry,
-            rewrite_artifact_layout=True,
         )
         generated_refs.add(docs_json_page_ref(target_artifact_page, DEFAULT_DOCS_JSON))
 
@@ -887,7 +966,12 @@ def publish_rendered_pages(
             copy_rewritten_page(
                 source_package_page,
                 target_package_page,
-                replacements=[(f"(../{artifact_slug})", "(index)")],
+                replacements=[
+                    (
+                        f"../../{artifact_slug}",
+                        "../../java-bindings",
+                    )
+                ],
                 artifact_entry=artifact_entry,
             )
             generated_refs.add(docs_json_page_ref(target_package_page, DEFAULT_DOCS_JSON))
@@ -903,17 +987,9 @@ def publish_rendered_pages(
                 )
                 generated_refs.add(docs_json_page_ref(target_object_page, DEFAULT_DOCS_JSON))
 
-    copy_rewritten_page(
-        render_overview_file,
-        publish_overview_file,
-        replacements=overview_replacements,
-        rewrite_java_only_text=True,
-    )
-    publish_overview_file.write_text(
-        rewrite_overview_as_details_page(publish_overview_file.read_text(encoding="utf-8")),
-        encoding="utf-8",
-    )
-    generated_refs.add(docs_json_page_ref(publish_overview_file, DEFAULT_DOCS_JSON))
+    history_report_target = DEFAULT_HISTORY_REPORT
+    history_report_target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(DEFAULT_RENDER_HISTORY_REPORT, history_report_target)
     return publish_overview_file, generated_refs
 
 
@@ -954,6 +1030,9 @@ def main() -> int:
     reference_nav.regroup_ledger_api_nav(
         docs_json_path=Path(args.docs_json).resolve(),
         dropdown_label=args.nav_dropdown,
+    )
+    ensure_java_bindings_redirects(
+        docs_json_path=Path(args.docs_json).resolve(),
     )
     return 0
 

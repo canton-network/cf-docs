@@ -413,6 +413,7 @@ def extract_method_detail(
             "description": str(method.get("description") or ""),
             "lifecycle_state": normalize_lifecycle_state(method.get("x-state")),
             "replaces": str(method.get("x-replaces")) if isinstance(method.get("x-replaces"), str) else None,
+            "remove_as_of": str(method.get("x-remove-as-of")) if isinstance(method.get("x-remove-as-of"), str) else None,
             "params": [extract_param_detail(doc_index, current_source_path, param) for param in params if isinstance(param, dict)],
             "result": extract_result_detail(doc_index, current_source_path, method.get("result")),
             "fingerprint": "",
@@ -423,6 +424,7 @@ def extract_method_detail(
                 "description": detail["description"],
                 "lifecycle_state": detail["lifecycle_state"],
                 "replaces": detail["replaces"],
+                "remove_as_of": detail["remove_as_of"],
                 "params": detail["params"],
                 "result": detail["result"],
             }
@@ -458,6 +460,8 @@ def describe_method_changes(previous: OpenRpcMethodDetail, current: OpenRpcMetho
         changes.append("lifecycle state updated")
     if previous.get("replaces") != current.get("replaces"):
         changes.append("replacement target updated")
+    if previous.get("remove_as_of") != current.get("remove_as_of"):
+        changes.append("removal schedule updated")
 
     previous_params = {param["name"]: param for param in previous["params"]}
     current_params = {param["name"]: param for param in current["params"]}
