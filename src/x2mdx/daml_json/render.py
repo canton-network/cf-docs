@@ -1034,7 +1034,7 @@ def build_standardized_pages(
             title=overview_title,
             description=f"Reference documentation for {overview_title} modules.",
             eyebrow="Daml Reference",
-            summary="Current Daml Standard Library modules generated from versioned docs JSON snapshots.",
+            summary=f"Current {overview_title} modules generated from versioned docs JSON snapshots.",
             badges=reference_badges_for_history_events(
                 overview_events,
                 kind_label="Daml",

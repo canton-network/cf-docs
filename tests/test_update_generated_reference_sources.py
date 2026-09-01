@@ -158,14 +158,13 @@ def write_daml_standard_library_source_config(path: Path, *, min_version: str) -
     )
 
 
-def write_daml_script_source_config(path: Path, *, publish_version: str) -> None:
+def write_daml_script_source_config(path: Path, *, min_version: str) -> None:
     path.write_text(
         json.dumps(
             {
                 "source": "test",
-                "publish_version": publish_version,
+                "min_version": min_version,
                 "sdk_source": "dpm",
-                "versions": ["3.4.11"],
             },
             indent=2,
         )
@@ -475,34 +474,27 @@ def test_update_daml_standard_library_source_keeps_unbounded_policy(tmp_path: Pa
     assert "versions" not in payload
 
 
-def test_update_daml_script_source_updates_latest_dpm_version(tmp_path: Path) -> None:
+def test_update_daml_script_source_keeps_unbounded_policy(tmp_path: Path) -> None:
     module = load_script_module()
     source_config_path = tmp_path / "source-artifacts.json"
-    write_daml_script_source_config(source_config_path, publish_version="3.4.11")
-    module.daml_script.latest_dpm_version = lambda: "3.5.1"
+    write_daml_script_source_config(source_config_path, min_version="3.4.9")
 
     update = module.daml_script.update_source(
         source_config_path=source_config_path,
         dry_run=False,
     )
 
-    assert update == module.SourceUpdate(
-        source="Daml Script",
-        path=source_config_path,
-        field="publish_version",
-        previous="3.4.11",
-        current="3.5.1",
-    )
+    assert update is None
     payload = json.loads(source_config_path.read_text(encoding="utf-8"))
-    assert payload["publish_version"] == "3.5.1"
-    assert payload["versions"] == ["3.4.11", "3.5.1"]
+    assert payload["min_version"] == "3.4.9"
+    assert "publish_version" not in payload
+    assert "versions" not in payload
 
 
 def test_update_daml_script_source_noops_when_current(tmp_path: Path) -> None:
     module = load_script_module()
     source_config_path = tmp_path / "source-artifacts.json"
-    write_daml_script_source_config(source_config_path, publish_version="3.5.1")
-    module.daml_script.latest_dpm_version = lambda: "3.5.1"
+    write_daml_script_source_config(source_config_path, min_version="3.4.9")
 
     assert (
         module.daml_script.update_source(
@@ -511,23 +503,21 @@ def test_update_daml_script_source_noops_when_current(tmp_path: Path) -> None:
         )
         is None
     )
-    assert json.loads(source_config_path.read_text(encoding="utf-8"))["publish_version"] == "3.5.1"
+    assert json.loads(source_config_path.read_text(encoding="utf-8"))["min_version"] == "3.4.9"
 
 
 def test_update_daml_script_source_dry_run_does_not_write(tmp_path: Path) -> None:
     module = load_script_module()
     source_config_path = tmp_path / "source-artifacts.json"
-    write_daml_script_source_config(source_config_path, publish_version="3.4.11")
-    module.daml_script.latest_dpm_version = lambda: "3.5.1"
+    write_daml_script_source_config(source_config_path, min_version="3.4.9")
 
     update = module.daml_script.update_source(
         source_config_path=source_config_path,
         dry_run=True,
     )
 
-    assert update is not None
-    assert update.current == "3.5.1"
-    assert json.loads(source_config_path.read_text(encoding="utf-8"))["publish_version"] == "3.4.11"
+    assert update is None
+    assert json.loads(source_config_path.read_text(encoding="utf-8"))["min_version"] == "3.4.9"
 
 
 def test_requested_sources_defaults_to_all_sources() -> None:
