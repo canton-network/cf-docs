@@ -270,6 +270,33 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Render Interfaces before other declaration sections on module pages.",
     )
+    build_daml_json.add_argument(
+        "--history-report",
+        help="Optional path for a validated shared history report.",
+    )
+    build_daml_json.add_argument(
+        "--reader-route-prefix",
+        help="Root-relative route prefix for current module pages.",
+    )
+    build_daml_json.add_argument(
+        "--surface-id",
+        default="daml-reference",
+        help="Stable surface identifier for the shared history report.",
+    )
+    build_daml_json.add_argument(
+        "--surface-title",
+        default="Daml reference",
+        help="Reader-facing surface title for the shared history report.",
+    )
+    build_daml_json.add_argument(
+        "--configured-scope",
+        default="configured Daml docs JSON modules",
+        help="Description of the configured module scope.",
+    )
+    build_daml_json.add_argument(
+        "--lifecycle-metadata",
+        help="Optional owned JSON sidecar containing module remove_as_of schedules.",
+    )
 
     protobuf = subparsers.add_parser("protobuf", help="Descriptor-backed protobuf commands")
     protobuf_subparsers = protobuf.add_subparsers(dest="protobuf_command", required=True)
@@ -383,6 +410,32 @@ def build_parser() -> argparse.ArgumentParser:
         "--page-description",
         default="TypeScript and JavaScript language bindings for Canton.",
         help="Description to use for the generated page.",
+    )
+    build_typedoc.add_argument(
+        "--history-report",
+        help="Optional path for a validated shared history report.",
+    )
+    build_typedoc.add_argument(
+        "--reader-route",
+        help="Root-relative route for the generated package page.",
+    )
+    build_typedoc.add_argument(
+        "--surface-id",
+        default="typescript-package",
+        help="Stable package surface identifier for the shared history report.",
+    )
+    build_typedoc.add_argument(
+        "--surface-title",
+        help="Reader-facing package title for the shared history report.",
+    )
+    build_typedoc.add_argument(
+        "--configured-scope",
+        default="Published TypeScript package exports",
+        help="Configured symbol scope for the shared history report.",
+    )
+    build_typedoc.add_argument(
+        "--lifecycle-metadata",
+        help="Optional TypeScript lifecycle sidecar with removal schedules.",
     )
 
     asyncapi = subparsers.add_parser("asyncapi", help="AsyncAPI websocket commands")
@@ -625,13 +678,44 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "daml-json":
         if args.daml_json_command == "build-api-pages-from-manifest":
-            from x2mdx.daml_json.render import build_pages
+            from x2mdx.daml_json.history import (
+                build_daml_surface_history_report,
+                load_daml_removal_schedules,
+            )
+            from x2mdx.daml_json.render import (
+                EXCLUDED_MODULE_NAMES,
+                build_pages,
+                build_reader_module_routes,
+            )
+            from x2mdx.history import validate_history_report, write_history_report
             from x2mdx.render import write_pages
 
             report = build_daml_doc_report_from_manifest_args(args)
             output_dir = Path(args.output_dir)
             if output_dir.exists():
                 shutil.rmtree(output_dir)
+            history_report = None
+            if args.history_report:
+                if not args.reader_route_prefix:
+                    parser.error("--history-report requires --reader-route-prefix")
+                schedules = (
+                    load_daml_removal_schedules(Path(args.lifecycle_metadata))
+                    if args.lifecycle_metadata
+                    else {}
+                )
+                history_report = build_daml_surface_history_report(
+                    report,
+                    routes=build_reader_module_routes(
+                        report,
+                        reader_route_prefix=args.reader_route_prefix,
+                    ),
+                    surface_id=args.surface_id,
+                    title=args.surface_title,
+                    configured_scope=args.configured_scope,
+                    removal_schedules=schedules,
+                    excluded_modules=EXCLUDED_MODULE_NAMES,
+                )
+                validate_history_report(history_report)
             output_root, pages = build_pages(
                 report,
                 output_dir=output_dir,
@@ -639,8 +723,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                 link_prefix=args.link_prefix,
                 include_module_snapshot=not args.omit_module_snapshot,
                 interfaces_first=args.interfaces_first,
+                history_report=history_report,
             )
             write_pages(pages, output_root)
+            if history_report is not None:
+                write_history_report(Path(args.history_report), history_report)
             return 0
 
     if args.command == "protobuf":
@@ -700,18 +787,45 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "typedoc":
         if args.typedoc_command == "build-api-pages-from-manifest":
+            from x2mdx.history.io import write_history_report
+            from x2mdx.history.validation import validate_history_report
             from x2mdx.render import write_page
+            from x2mdx.typedoc.history import (
+                build_typedoc_surface_history_report,
+                load_typedoc_removal_schedules,
+            )
             from x2mdx.typedoc.render import build_page
 
             report = build_typedoc_report_from_manifest_args(args)
+            history_report = None
+            if args.history_report:
+                if not args.reader_route:
+                    parser.error("--history-report requires --reader-route")
+                schedules = (
+                    load_typedoc_removal_schedules(Path(args.lifecycle_metadata))
+                    if args.lifecycle_metadata
+                    else {}
+                )
+                history_report = build_typedoc_surface_history_report(
+                    report,
+                    reader_route=args.reader_route,
+                    surface_id=args.surface_id,
+                    title=args.surface_title or args.page_title,
+                    configured_scope=args.configured_scope,
+                    removal_schedules=schedules,
+                )
+                validate_history_report(history_report)
             output_file = Path(args.output_file)
             page = build_page(
                 report,
                 output_path=output_file.name,
                 page_title=args.page_title,
                 page_description=args.page_description,
+                history_report=history_report,
             )
             write_page(page, output_file)
+            if history_report is not None:
+                write_history_report(Path(args.history_report), history_report)
             return 0
 
     if args.command == "asyncapi":
