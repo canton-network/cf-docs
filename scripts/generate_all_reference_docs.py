@@ -40,6 +40,7 @@ class NavSlice:
 class ScriptJob:
     script_path: Path
     nav_slices: tuple[NavSlice, ...]
+    target_ids: tuple[str, ...]
     extra_args: tuple[str, ...] = ()
 
 
@@ -47,14 +48,17 @@ SCRIPT_JOBS = [
     ScriptJob(
         script_path=REPO_ROOT / "scripts" / "generate_json_api_reference.py",
         nav_slices=(NavSlice("ledger_child", (reference_nav.OPENAPI_GROUP,)),),
+        target_ids=("json-ledger-api-openapi",),
     ),
     ScriptJob(
         script_path=REPO_ROOT / "scripts" / "generate_json_api_asyncapi_reference.py",
         nav_slices=(NavSlice("ledger_child", (reference_nav.ASYNCAPI_GROUP,)),),
+        target_ids=("json-ledger-api-asyncapi",),
     ),
     ScriptJob(
         script_path=REPO_ROOT / "scripts" / "generate_grpc_ledger_api_reference.py",
         nav_slices=(NavSlice("ledger_child", (reference_nav.GRPC_GROUP,)),),
+        target_ids=("ledger-api-grpc",),
         extra_args=(
             # The gRPC and protobuf wrappers both default to the same protobuf-history
             # cache tree, so parallel fanout gives the gRPC wrapper its own cache root.
@@ -67,14 +71,17 @@ SCRIPT_JOBS = [
     ScriptJob(
         script_path=REPO_ROOT / "scripts" / "generate_ledger_bindings_api_reference.py",
         nav_slices=(NavSlice("ledger_child", (reference_nav.BINDINGS_GROUP,)),),
+        target_ids=("java-bindings",),
     ),
     ScriptJob(
         script_path=REPO_ROOT / "scripts" / "generate_daml_standard_library_reference.py",
         nav_slices=(NavSlice("top_group", ("Daml Standard Library",)),),
+        target_ids=("daml-standard-library",),
     ),
     ScriptJob(
         script_path=REPO_ROOT / "scripts" / "generate_daml_script_reference.py",
         nav_slices=(NavSlice("top_group", ("Daml Script",)),),
+        target_ids=("daml-script",),
     ),
     ScriptJob(
         script_path=REPO_ROOT / "scripts" / "generate_canton_protobuf_history.py",
@@ -82,22 +89,27 @@ SCRIPT_JOBS = [
             NavSlice("ledger_child", (reference_nav.PROTOBUF_GROUP,)),
             NavSlice("top_group", (reference_nav.ADMIN_API_PARENT_GROUP,)),
         ),
+        target_ids=("ledger-api-protobuf", "admin-api-protobuf"),
     ),
     ScriptJob(
         script_path=REPO_ROOT / "scripts" / "generate_wallet_gateway_openrpc_reference.py",
         nav_slices=(NavSlice("top_groups", ("dApp API", "Wallet Gateway")),),
+        target_ids=("wallet-gateway-openrpc",),
     ),
     ScriptJob(
         script_path=REPO_ROOT / "scripts" / "generate_splice_mintlify_openapi.py",
         nav_slices=(NavSlice("top_group", ("Splice APIs",)),),
+        target_ids=("splice-openapi",),
     ),
     ScriptJob(
         script_path=REPO_ROOT / "scripts" / "generate_splice_token_standard_v2_reference.py",
         nav_slices=(NavSlice("nested_group", ("Splice APIs", "Splice Daml Packages")),),
+        target_ids=("splice-token-standard-v2-daml",),
     ),
     ScriptJob(
         script_path=REPO_ROOT / "scripts" / "generate_typescript_bindings_reference.py",
         nav_slices=(NavSlice("top_group", ("TypeScript",)),),
+        target_ids=("typescript-bindings",),
     ),
 ]
 
