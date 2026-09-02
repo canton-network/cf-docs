@@ -202,7 +202,8 @@ def render_parameters(parameters: list[dict[str, Any]]) -> str:
     rendered: list[str] = []
     for parameter in parameters:
         name = str(parameter.get("name", "arg"))
-        flags = parameter.get("flags") if isinstance(parameter.get("flags"), dict) else {}
+        raw_flags = parameter.get("flags")
+        flags: dict[str, Any] = raw_flags if isinstance(raw_flags, dict) else {}
         prefix = "..." if flags.get("isRest") else ""
         suffix = "?" if flags.get("isOptional") else ""
         rendered.append(f"{prefix}{name}{suffix}: {render_type(parameter.get('type'))}")
@@ -224,7 +225,8 @@ def render_signature(signature: dict[str, Any], *, include_name: bool = True) ->
 
 
 def render_property_shape(node: dict[str, Any]) -> str:
-    flags = node.get("flags") if isinstance(node.get("flags"), dict) else {}
+    raw_flags = node.get("flags")
+    flags: dict[str, Any] = raw_flags if isinstance(raw_flags, dict) else {}
     prefix = "readonly " if flags.get("isReadonly") else ""
     suffix = "?" if flags.get("isOptional") else ""
     return f"{prefix}{node.get('name', 'value')}{suffix}: {render_type(node.get('type'))}"
@@ -449,7 +451,8 @@ def extract_signature_docs(signatures: list[dict[str, Any]]) -> list[dict[str, A
             if not isinstance(parameter, dict):
                 continue
             name = str(parameter.get("name", "arg"))
-            flags = parameter.get("flags") if isinstance(parameter.get("flags"), dict) else {}
+            raw_flags = parameter.get("flags")
+            flags: dict[str, Any] = raw_flags if isinstance(raw_flags, dict) else {}
             parameters.append(
                 {
                     "name": name,
@@ -580,7 +583,8 @@ def collect_snapshot_exports(document: dict[str, Any]) -> tuple[list[str], dict[
     for fallback_index, child in enumerate(document.get("children", [])):
         if not isinstance(child, dict) or is_internal_node(child):
             continue
-        child_id = child.get("id")
+        raw_child_id = child.get("id")
+        child_id = raw_child_id if isinstance(raw_child_id, int) else -1
         group_title, group_index, item_index = child_group.get(child_id, ("Other Exports", len(group_titles), fallback_index))
         if group_title not in group_indices and group_title != "Other Exports":
             group_titles.append(group_title)
@@ -588,6 +592,31 @@ def collect_snapshot_exports(document: dict[str, Any]) -> tuple[list[str], dict[
         export_doc = build_export_doc(group_title, child, group_index=group_index, item_index=item_index)
         exports[export_doc["key"]] = export_doc
     return group_titles, exports
+
+
+def lifecycle_transitions_for_history(history: dict[str, Any]) -> list[dict[str, str]]:
+    """Return authored non-null lifecycle transitions through the last observation."""
+    versions = list(history["versions"])
+    if not versions or history["docs"][versions[-1]].get("lifecycle_state") is None:
+        return []
+    transitions: list[dict[str, str]] = []
+    previous_state: str | None = None
+    for version in versions:
+        doc = history["docs"][version]
+        state = doc.get("lifecycle_state")
+        if state is None or state == previous_state:
+            continue
+        detail = doc.get("deprecated_text") or f"TypeDoc lifecycle tag: @{state}"
+        transitions.append(
+            {
+                "state": str(state),
+                "version": version,
+                "detail": str(detail),
+                "location": str(doc.get("source_location") or doc["key"]),
+            }
+        )
+        previous_state = str(state)
+    return transitions
 
 
 def build_typedoc_report_from_sources(
@@ -659,6 +688,7 @@ def build_typedoc_report_from_sources(
                 "removed_in": None,
                 "last_seen_in": history["versions"][-1],
                 "status": "active",
+                "lifecycle_transitions": lifecycle_transitions_for_history(history),
             }
         )
         merged_exports.append(merged)
@@ -683,6 +713,7 @@ def build_typedoc_report_from_sources(
                 "removed_in": removed_in,
                 "last_seen_in": last_seen_in,
                 "status": "removed",
+                "lifecycle_transitions": lifecycle_transitions_for_history(history),
             }
         )
         merged_exports.append(merged)
