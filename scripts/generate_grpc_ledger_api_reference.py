@@ -27,7 +27,10 @@ from x2mdx.protobuf.lifecycle import (
     build_protobuf_history_report_from_sources,
     build_release_diffs,
 )
+from x2mdx.history import ReferenceFormat, validate_history_report, write_history_report
+from x2mdx.protobuf.history import build_protobuf_surface_history_report
 from x2mdx.protobuf.render import build_pages, package_page_path, slugify_segment
+from x2mdx.protobuf.render import operation_page_path
 from x2mdx.protobuf.snapshots import load_protobuf_sources
 from x2mdx.render import write_pages
 
@@ -41,7 +44,8 @@ DEFAULT_DOCS_JSON = REPO_ROOT / "docs-main" / "docs.json"
 DEFAULT_REPO_DIR = DEFAULT_CACHE_DIR / "repos" / "canton"
 GROUP_LABEL = "gRPC API"
 LEGACY_GROUP_LABEL = "gRPC Ledger API Reference"
-DETAILS_LABEL = "Details and history"
+OVERVIEW_NAME = "overview.mdx"
+OVERVIEW_TITLE = "Ledger API gRPC"
 DEFAULT_INSERT_AFTER_GROUP = "Ledger API Endpoints"
 DEFAULT_SOURCE_NAME = "Canton Ledger API protobuf release bundles"
 DEFAULT_NAV_GROUP = ["Ledger API"]
@@ -256,8 +260,8 @@ def retitle_generated_pages(*, output_dir: Path) -> None:
         replace_text(
             overview_path,
             [
-                ('title: "Canton Protobuf History"', f'title: "{DETAILS_LABEL}"'),
-                ('title: "Canton Protobuf Reference"', f'title: "{DETAILS_LABEL}"'),
+                ('title: "Canton Protobuf History"', f'title: "{OVERVIEW_TITLE}"'),
+                ('title: "Canton Protobuf Reference"', f'title: "{OVERVIEW_TITLE}"'),
                 (
                     'description: "Descriptor-backed protobuf API history grouped by package."',
                     'description: "Generated Ledger API gRPC reference grouped by package."',
@@ -267,7 +271,7 @@ def retitle_generated_pages(*, output_dir: Path) -> None:
                     "This page is generated from published Canton protobuf release bundles and filtered to the Ledger API gRPC packages.",
                 ),
                 ('<p class="x2mdx-ref-eyebrow">Protobuf Reference</p>', '<p class="x2mdx-ref-eyebrow">gRPC API</p>'),
-                ('<h1 class="x2mdx-ref-title">Canton Protobuf Reference</h1>', f'<h1 class="x2mdx-ref-title">{DETAILS_LABEL}</h1>'),
+                ('<h1 class="x2mdx-ref-title">Canton Protobuf Reference</h1>', f'<h1 class="x2mdx-ref-title">{OVERVIEW_TITLE}</h1>'),
                 (
                     '<span class="x2mdx-ref-badge x2mdx-ref-badge--protocol">Protobuf</span>',
                     '<span class="x2mdx-ref-badge x2mdx-ref-badge--protocol">gRPC</span>',
@@ -309,8 +313,8 @@ def normalize_flattened_links_and_labels(*, output_dir: Path, report: dict[str, 
         for package_doc in report["latestSnapshot"]["packages"]
     }
 
-    details_path = output_dir / "details.mdx"
-    if details_path.exists():
+    overview_path = output_dir / OVERVIEW_NAME
+    if overview_path.exists():
         replacements: list[tuple[str, str]] = []
         for package_slug, label in package_labels.items():
             package_name = package_names[package_slug]
@@ -324,7 +328,7 @@ def normalize_flattened_links_and_labels(*, output_dir: Path, report: dict[str, 
                     ),
                 ]
             )
-        replace_text(details_path, replacements)
+        replace_text(overview_path, replacements)
 
     for package_slug, label in package_labels.items():
         package_page = output_dir / f"{package_slug}.mdx"
@@ -332,7 +336,7 @@ def normalize_flattened_links_and_labels(*, output_dir: Path, report: dict[str, 
             replace_text(
                 package_page,
                 [
-                    ('href="../index"', 'href="./details"'),
+                    ('href="../index"', 'href="./overview"'),
                     (f'href="../operations/{package_slug}/', f'href="./{package_slug}/'),
                 ],
             )
@@ -345,7 +349,7 @@ def normalize_flattened_links_and_labels(*, output_dir: Path, report: dict[str, 
             replace_text(
                 operation_page,
                 [
-                    ('href="../../../index">Protobuf</a>', 'href="../../details">gRPC API</a>'),
+                    ('href="../../../index">Protobuf</a>', 'href="../../overview">gRPC API</a>'),
                     (
                         f'href="../../../packages/{package_slug}">{html_text(package_name)}</a>',
                         f'href="../../{package_slug}">{html_text(label)}</a>',
@@ -357,7 +361,7 @@ def normalize_flattened_links_and_labels(*, output_dir: Path, report: dict[str, 
 def flattened_page_path(path: Path, *, output_dir: Path) -> Path:
     relative = path.resolve().relative_to(output_dir.resolve())
     if relative == Path("index.mdx"):
-        return output_dir / "details.mdx"
+        return output_dir / OVERVIEW_NAME
     if relative.parts and relative.parts[0] in {"packages", "operations"}:
         return output_dir.joinpath(*relative.parts[1:])
     return path
@@ -367,11 +371,11 @@ def flatten_generated_tree(*, output_dir: Path, page_paths: list[Path]) -> list[
     flattened_paths = [flattened_page_path(path, output_dir=output_dir) for path in page_paths]
 
     index_path = output_dir / "index.mdx"
-    details_path = output_dir / "details.mdx"
+    overview_path = output_dir / OVERVIEW_NAME
     if index_path.exists():
-        if details_path.exists():
-            details_path.unlink()
-        index_path.rename(details_path)
+        if overview_path.exists():
+            overview_path.unlink()
+        index_path.rename(overview_path)
 
     for source_dir_name in ("packages", "operations"):
         source_dir = output_dir / source_dir_name
@@ -471,15 +475,15 @@ def shorten_package_page_headings(*, output_dir: Path, report: dict[str, Any]) -
 def build_nav_group(
     *,
     docs_json_path: Path,
-    details_path: Path,
+    overview_path: Path,
     page_paths: list[Path],
 ) -> tuple[dict[str, Any], set[str]]:
-    details_ref = canton_protobuf_history.docs_json_page_ref(details_path, docs_json_path)
-    refs = {details_ref}
-    output_dir = details_path.parent
+    overview_ref = canton_protobuf_history.docs_json_page_ref(overview_path, docs_json_path)
+    refs = {overview_ref}
+    output_dir = overview_path.parent
     package_groups: list[Any] = []
     for package_page in sorted(
-        (path for path in page_paths if path.parent == output_dir and path.name != details_path.name),
+        (path for path in page_paths if path.parent == output_dir and path.name != overview_path.name),
         key=lambda path: mdx_title(path).lower(),
     ):
         package_ref = canton_protobuf_history.docs_json_page_ref(package_page, docs_json_path)
@@ -511,10 +515,9 @@ def build_nav_group(
             package_pages.append({"group": "Services", "pages": service_groups})
         package_groups.append({"group": mdx_title(package_page), "pages": package_pages})
 
-    pages: list[Any] = []
+    pages: list[Any] = [overview_ref]
     if package_groups:
         pages.append({"group": "Packages", "pages": package_groups})
-    pages.append(details_ref)
     return {"group": GROUP_LABEL, "pages": pages}, refs
 
 
@@ -533,7 +536,7 @@ def update_docs_navigation(
     dropdown_label: str,
     parent_groups: list[str],
     insert_after_group: str | None,
-    details_path: Path,
+    overview_path: Path,
     page_paths: list[Path],
 ) -> None:
     docs = load_json(docs_json_path)
@@ -541,7 +544,7 @@ def update_docs_navigation(
 
     nav_group, generated_refs = build_nav_group(
         docs_json_path=docs_json_path,
-        details_path=details_path,
+        overview_path=overview_path,
         page_paths=page_paths,
     )
     target_pages = canton_protobuf_history.ensure_group_path(pages, parent_groups)
@@ -553,6 +556,60 @@ def update_docs_navigation(
     insert_group(target_pages, group=nav_group, after_group=insert_after_group)
     docs_json_path.write_text(json.dumps(docs, indent=2) + "\n", encoding="utf-8")
     print(f"Updated docs navigation: {docs_json_path}")
+
+
+def ensure_redirect(*, docs_json_path: Path, source: str, destination: str) -> None:
+    payload = load_json(docs_json_path)
+    redirects = payload.setdefault("redirects", [])
+    if not isinstance(redirects, list):
+        raise ValueError("docs.json redirects must be an array")
+    matches = [
+        redirect
+        for redirect in redirects
+        if isinstance(redirect, dict) and redirect.get("source") == source
+    ]
+    if len(matches) > 1:
+        raise ValueError(f"Duplicate redirect source in docs.json: {source}")
+    redirect = {"source": source, "destination": destination}
+    if matches:
+        matches[0].clear()
+        matches[0].update(redirect)
+    else:
+        redirects.append(redirect)
+    docs_json_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
+def ensure_grpc_redirects(*, docs_json_path: Path, output_dir: Path) -> None:
+    prefix = "/" + output_dir.resolve().relative_to(docs_json_path.resolve().parent).as_posix()
+    destination = f"{prefix}/overview"
+    ensure_redirect(docs_json_path=docs_json_path, source=prefix, destination=destination)
+    ensure_redirect(
+        docs_json_path=docs_json_path,
+        source=f"{prefix}/details",
+        destination=destination,
+    )
+
+
+def endpoint_routes(
+    report: dict[str, Any],
+    *,
+    output_dir: Path,
+    docs_json_path: Path,
+) -> dict[str, str]:
+    routes: dict[str, str] = {}
+    for endpoint_id, endpoint in report["latestSnapshot"]["endpoints"].items():
+        generated_path = operation_page_path(
+            output_dir,
+            str(endpoint["package"]),
+            str(endpoint["service"]),
+            str(endpoint["name"]),
+        )
+        flattened_path = flattened_page_path(generated_path, output_dir=output_dir)
+        routes[str(endpoint_id)] = "/" + canton_protobuf_history.docs_json_page_ref(
+            flattened_path,
+            docs_json_path,
+        )
+    return routes
 
 
 def write_manifest(
@@ -608,6 +665,7 @@ def write_manifest(
             cache_dir,
             version,
             surface="grpc-ledger-api",
+            selections=canton_protobuf_history.LEDGER_API_SELECTIONS,
         )
         if not image_path.exists() or force_refresh:
             canton_protobuf_history.compile_descriptor_image(
@@ -668,10 +726,29 @@ def main() -> int:
     )
     sort_report_packages(report)
     output_dir = Path(args.output_dir).resolve()
+    docs_json_path = Path(args.docs_json).resolve()
     if output_dir.exists():
         shutil.rmtree(output_dir)
-    root, pages = build_pages(report, output_dir=output_dir)
+    history_report = build_protobuf_surface_history_report(
+        report,
+        routes=endpoint_routes(
+            report,
+            output_dir=output_dir,
+            docs_json_path=docs_json_path,
+        ),
+        surface_id="ledger-api-grpc",
+        title=OVERVIEW_TITLE,
+        configured_scope="Ledger API gRPC endpoints",
+        format=ReferenceFormat.GRPC,
+    )
+    validate_history_report(history_report)
+    root, pages = build_pages(
+        report,
+        output_dir=output_dir,
+        history_report=history_report,
+    )
     written_paths = write_pages(pages, root)
+    write_history_report(output_dir / "history-report.json", history_report)
     retitle_generated_pages(output_dir=output_dir)
     page_paths = flatten_generated_tree(
         output_dir=output_dir,
@@ -681,19 +758,20 @@ def main() -> int:
     shorten_package_page_titles(output_dir=output_dir, report=report)
     normalize_flattened_links_and_labels(output_dir=output_dir, report=report)
 
-    details_path = output_dir / "details.mdx"
+    overview_path = output_dir / OVERVIEW_NAME
     update_docs_navigation(
-        docs_json_path=Path(args.docs_json).resolve(),
+        docs_json_path=docs_json_path,
         dropdown_label=args.nav_dropdown,
         parent_groups=args.nav_group or [],
         insert_after_group=args.insert_after_group,
-        details_path=details_path,
+        overview_path=overview_path,
         page_paths=page_paths,
     )
     reference_nav.regroup_ledger_api_nav(
-        docs_json_path=Path(args.docs_json).resolve(),
+        docs_json_path=docs_json_path,
         dropdown_label=args.nav_dropdown,
     )
+    ensure_grpc_redirects(docs_json_path=docs_json_path, output_dir=output_dir)
     print(f"Wrote {len(written_paths)} generated pages under {output_dir}")
     return 0
 

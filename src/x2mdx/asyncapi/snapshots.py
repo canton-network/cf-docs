@@ -40,7 +40,10 @@ def load_asyncapi_source_snapshots(
     root = fixture_root or manifest_path.parent
 
     snapshots: list[AsyncApiSourceSnapshot] = []
-    for entry in manifest["versions"]:
+    raw_versions = manifest.get("versions")
+    if not isinstance(raw_versions, list):
+        raise ValueError("Snapshot manifest must include a `versions` list")
+    for entry in raw_versions:
         if not isinstance(entry, dict):
             continue
         version = entry.get("version")
@@ -55,6 +58,9 @@ def load_asyncapi_source_snapshots(
         source_path = entry.get("source_path")
         if not isinstance(source_path, str) or not source_path:
             source_path = fixture_path
+        source_url = entry.get("url")
+        if not isinstance(source_url, str) or not source_url:
+            source_url = None
 
         document_path = root / fixture_path
         document = parse_asyncapi(document_path.read_text(encoding="utf-8"))
@@ -63,6 +69,7 @@ def load_asyncapi_source_snapshots(
                 version=version,
                 source_path=source_path,
                 document=document,
+                source_url=source_url,
             )
         )
 
