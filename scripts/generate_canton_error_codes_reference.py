@@ -88,9 +88,7 @@ def load_error_codes(payload: object) -> list[ErrorCodeItem]:
     return items
 
 
-def mdx_text(value: str | None) -> str:
-    if not value:
-        return "Not documented."
+def mdx_text(value: str) -> str:
     normalized = " ".join(textwrap.dedent(value).split())
     return (
         normalized.replace("<", r"\<")
@@ -121,10 +119,6 @@ def render_inventory(items: list[ErrorCodeItem], *, asset: ReleaseAsset) -> str:
         "",
         LEGACY_HEADING,
         "",
-        (
-            f"This inventory is generated from runtime error metadata in the public Canton {asset.version} release."
-        ),
-        "",
     ]
     for group_path in sorted(
         grouped, key=lambda path: tuple(part.casefold() for part in path)
@@ -135,19 +129,15 @@ def render_inventory(items: list[ErrorCodeItem], *, asset: ReleaseAsset) -> str:
             occurrence = anchor_counts[base]
             anchor_counts[base] += 1
             anchor = base if occurrence == 0 else f"{base}-{occurrence + 1}"
-            lines.extend(
-                [
-                    f'<div id="{anchor}" />',
-                    "",
-                    f"#### `{item['code']}`",
-                    "",
-                    f"- **Explanation:** {mdx_text(item['explanation'])}",
-                    f"- **Resolution:** {mdx_text(item['resolution'])}",
-                    f"- **Category:** `{item['category']}`",
-                    f"- **Conveyance:** {mdx_text(item['conveyance'])}",
-                    "",
-                ]
-            )
+            lines.extend([f'<div id="{anchor}" />', "", f"#### `{item['code']}`", ""])
+            if item["explanation"]:
+                lines.append(f"- **Explanation:** {mdx_text(item['explanation'])}")
+            if item["resolution"]:
+                lines.append(f"- **Resolution:** {mdx_text(item['resolution'])}")
+            lines.append(f"- **Category:** `{item['category']}`")
+            if item["conveyance"]:
+                lines.append(f"- **Conveyance:** {mdx_text(item['conveyance'])}")
+            lines.append("")
     lines.append(GENERATED_END)
     return "\n".join(lines)
 

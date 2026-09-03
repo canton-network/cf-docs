@@ -87,6 +87,21 @@ class CantonErrorCodesReferenceTests(unittest.TestCase):
         self.assertIn('<div id="error-code-alpha-2" />', rendered)
         self.assertIn(r"Use \<value\>", rendered)
         self.assertEqual(rendered.count("#### `"), len(items))
+        self.assertNotIn("This inventory is generated", rendered)
+
+    def test_render_inventory_omits_missing_upstream_prose(self) -> None:
+        item = error_code("ALPHA", grouping=["Participant"])
+        item["explanation"] = None
+        item["resolution"] = None
+        item["conveyance"] = None
+
+        rendered = generator.render_inventory([item], asset=self.asset)
+
+        self.assertNotIn("Explanation:", rendered)
+        self.assertNotIn("Resolution:", rendered)
+        self.assertNotIn("Conveyance:", rendered)
+        self.assertNotIn("Not documented", rendered)
+        self.assertIn("- **Category:** `InvalidIndependentOfSystemState`", rendered)
 
     def test_replace_inventory_preserves_hand_authored_content(self) -> None:
         legacy = (
