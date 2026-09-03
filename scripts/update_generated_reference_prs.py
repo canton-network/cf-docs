@@ -127,14 +127,17 @@ UPDATE_TARGETS = (
         branch="generated-references/splice-token-standard-v2/update",
         description=(
             "Regenerates the checked-in Canton Network Token Standard v2 Daml package "
-            "reference pages from the pinned DAR artifacts in canton-network/splice."
+            "reference pages and normalized history from every eligible stable "
+            "canton-network/splice release tag."
         ),
         generate_commands=(
             ("nix-shell", "--run", "npm run generate:splice-token-standard-v2-reference"),
         ),
         paths=(
             "config/x2mdx/splice-token-standard-v2/source-artifacts.json",
+            "config/x2mdx/splice-token-standard-v2/lifecycle.json",
             "docs-main/docs.json",
+            "docs-main/sdks-tools/api-reference/splice-daml/token-standard-v2-history-report.json",
             "docs-main/sdks-tools/api-reference/splice-daml/splice-api-token-allocation-instruction-v2",
             "docs-main/sdks-tools/api-reference/splice-daml/splice-api-token-allocation-request-v2",
             "docs-main/sdks-tools/api-reference/splice-daml/splice-api-token-allocation-v2",

@@ -73,18 +73,15 @@ def write_typescript_bindings_source_config(
                 "packages": [
                     {
                         "package_name": "@daml/types",
-                        "publish_version": daml_types_version,
-                        "versions": ["3.4.11"],
+                        "min_version": daml_types_version,
                     },
                     {
                         "package_name": "@canton-network/wallet-sdk",
-                        "publish_version": wallet_sdk_version,
-                        "versions": ["1.3.1"],
+                        "min_version": wallet_sdk_version,
                     },
                     {
                         "package_name": "@canton-network/dapp-sdk",
-                        "publish_version": dapp_sdk_version,
-                        "versions": ["1.1.0"],
+                        "min_version": dapp_sdk_version,
                     },
                 ],
             },
@@ -142,15 +139,14 @@ def write_ledger_bindings_source_config(
     )
 
 
-def write_daml_standard_library_source_config(path: Path, *, publish_version: str) -> None:
+def write_daml_standard_library_source_config(path: Path, *, min_version: str) -> None:
     path.write_text(
         json.dumps(
             {
                 "source": "test",
-                "publish_version": publish_version,
+                "min_version": min_version,
                 "package_set": "base",
                 "sdk_source": "dpm",
-                "versions": ["3.4.11"],
             },
             indent=2,
         )
@@ -159,14 +155,13 @@ def write_daml_standard_library_source_config(path: Path, *, publish_version: st
     )
 
 
-def write_daml_script_source_config(path: Path, *, publish_version: str) -> None:
+def write_daml_script_source_config(path: Path, *, min_version: str) -> None:
     path.write_text(
         json.dumps(
             {
                 "source": "test",
-                "publish_version": publish_version,
+                "min_version": min_version,
                 "sdk_source": "dpm",
-                "versions": ["3.4.11"],
             },
             indent=2,
         )
@@ -207,92 +202,19 @@ def test_update_wallet_gateway_openrpc_source_is_dynamic_and_unpinned(tmp_path: 
     assert "publish_version" not in json.loads(source_config_path.read_text(encoding="utf-8"))
 
 
-def test_update_typescript_bindings_source_updates_stale_package_versions(tmp_path: Path) -> None:
+def test_update_typescript_bindings_source_is_dynamic_and_unpinned(tmp_path: Path) -> None:
     module = load_script_module()
     source_config_path = tmp_path / "source-artifacts.json"
     write_typescript_bindings_source_config(source_config_path)
-    highest_stable_versions = {
-        "@daml/types": "3.5.2",
-        "@canton-network/wallet-sdk": "1.3.1",
-        "@canton-network/dapp-sdk": "1.2.0",
-    }
-    module.typescript_bindings.highest_stable_npm_version = (
-        lambda package_name: highest_stable_versions[package_name]
-    )
-
     updates = module.typescript_bindings.update_source(
         source_config_path=source_config_path,
         dry_run=False,
     )
 
-    assert updates == [
-        module.SourceUpdate(
-            source="TypeScript bindings @daml/types",
-            path=source_config_path,
-            field="publish_version",
-            previous="3.4.11",
-            current="3.5.2",
-        ),
-        module.SourceUpdate(
-            source="TypeScript bindings @canton-network/dapp-sdk",
-            path=source_config_path,
-            field="publish_version",
-            previous="1.1.0",
-            current="1.2.0",
-        ),
-    ]
+    assert updates == []
     packages = json.loads(source_config_path.read_text(encoding="utf-8"))["packages"]
-    assert packages[0]["publish_version"] == "3.5.2"
-    assert packages[0]["versions"] == ["3.4.11", "3.5.2"]
-    assert packages[1]["publish_version"] == "1.3.1"
-    assert packages[1]["versions"] == ["1.3.1"]
-    assert packages[2]["publish_version"] == "1.2.0"
-    assert packages[2]["versions"] == ["1.1.0", "1.2.0"]
-
-
-def test_update_typescript_bindings_source_noops_when_current(tmp_path: Path) -> None:
-    module = load_script_module()
-    source_config_path = tmp_path / "source-artifacts.json"
-    write_typescript_bindings_source_config(
-        source_config_path,
-        daml_types_version="3.5.2",
-        wallet_sdk_version="1.3.1",
-        dapp_sdk_version="1.2.0",
-    )
-    highest_stable_versions = {
-        "@daml/types": "3.5.2",
-        "@canton-network/wallet-sdk": "1.3.1",
-        "@canton-network/dapp-sdk": "1.2.0",
-    }
-    module.typescript_bindings.highest_stable_npm_version = (
-        lambda package_name: highest_stable_versions[package_name]
-    )
-
-    assert module.typescript_bindings.update_source(
-        source_config_path=source_config_path,
-        dry_run=False,
-    ) == []
-
-
-def test_update_typescript_bindings_source_dry_run_does_not_write(tmp_path: Path) -> None:
-    module = load_script_module()
-    source_config_path = tmp_path / "source-artifacts.json"
-    write_typescript_bindings_source_config(source_config_path)
-    module.typescript_bindings.highest_stable_npm_version = lambda package_name: {
-        "@daml/types": "3.5.2",
-        "@canton-network/wallet-sdk": "1.3.1",
-        "@canton-network/dapp-sdk": "1.2.0",
-    }[package_name]
-
-    updates = module.typescript_bindings.update_source(
-        source_config_path=source_config_path,
-        dry_run=True,
-    )
-
-    assert [update.current for update in updates] == ["3.5.2", "1.2.0"]
-    packages = json.loads(source_config_path.read_text(encoding="utf-8"))["packages"]
-    assert packages[0]["publish_version"] == "3.4.11"
-    assert packages[2]["publish_version"] == "1.1.0"
+    assert [package["min_version"] for package in packages] == ["3.4.11", "1.3.1", "1.1.0"]
+    assert all("versions" not in package and "publish_version" not in package for package in packages)
 
 
 def test_highest_stable_npm_version_ignores_latest_tag_regression() -> None:
@@ -459,57 +381,44 @@ def test_update_ledger_bindings_source_preserves_unbounded_version_policy(tmp_pa
     }
 
 
-def test_update_daml_standard_library_source_updates_latest_dpm_version(tmp_path: Path) -> None:
+def test_update_daml_standard_library_source_keeps_unbounded_policy(tmp_path: Path) -> None:
     module = load_script_module()
     source_config_path = tmp_path / "source-artifacts.json"
-    write_daml_standard_library_source_config(source_config_path, publish_version="3.4.11")
-    module.daml_standard_library.latest_dpm_version = lambda: "3.5.1"
+    write_daml_standard_library_source_config(source_config_path, min_version="3.4.9")
 
     update = module.daml_standard_library.update_source(
         source_config_path=source_config_path,
         dry_run=False,
     )
 
-    assert update == module.SourceUpdate(
-        source="Daml Standard Library",
-        path=source_config_path,
-        field="publish_version",
-        previous="3.4.11",
-        current="3.5.1",
-    )
+    assert update is None
     payload = json.loads(source_config_path.read_text(encoding="utf-8"))
-    assert payload["publish_version"] == "3.5.1"
-    assert payload["versions"] == ["3.4.11", "3.5.1"]
+    assert payload["min_version"] == "3.4.9"
+    assert "publish_version" not in payload
+    assert "versions" not in payload
 
 
-def test_update_daml_script_source_updates_latest_dpm_version(tmp_path: Path) -> None:
+def test_update_daml_script_source_keeps_unbounded_policy(tmp_path: Path) -> None:
     module = load_script_module()
     source_config_path = tmp_path / "source-artifacts.json"
-    write_daml_script_source_config(source_config_path, publish_version="3.4.11")
-    module.daml_script.latest_dpm_version = lambda: "3.5.1"
+    write_daml_script_source_config(source_config_path, min_version="3.4.9")
 
     update = module.daml_script.update_source(
         source_config_path=source_config_path,
         dry_run=False,
     )
 
-    assert update == module.SourceUpdate(
-        source="Daml Script",
-        path=source_config_path,
-        field="publish_version",
-        previous="3.4.11",
-        current="3.5.1",
-    )
+    assert update is None
     payload = json.loads(source_config_path.read_text(encoding="utf-8"))
-    assert payload["publish_version"] == "3.5.1"
-    assert payload["versions"] == ["3.4.11", "3.5.1"]
+    assert payload["min_version"] == "3.4.9"
+    assert "publish_version" not in payload
+    assert "versions" not in payload
 
 
 def test_update_daml_script_source_noops_when_current(tmp_path: Path) -> None:
     module = load_script_module()
     source_config_path = tmp_path / "source-artifacts.json"
-    write_daml_script_source_config(source_config_path, publish_version="3.5.1")
-    module.daml_script.latest_dpm_version = lambda: "3.5.1"
+    write_daml_script_source_config(source_config_path, min_version="3.4.9")
 
     assert (
         module.daml_script.update_source(
@@ -518,23 +427,21 @@ def test_update_daml_script_source_noops_when_current(tmp_path: Path) -> None:
         )
         is None
     )
-    assert json.loads(source_config_path.read_text(encoding="utf-8"))["publish_version"] == "3.5.1"
+    assert json.loads(source_config_path.read_text(encoding="utf-8"))["min_version"] == "3.4.9"
 
 
 def test_update_daml_script_source_dry_run_does_not_write(tmp_path: Path) -> None:
     module = load_script_module()
     source_config_path = tmp_path / "source-artifacts.json"
-    write_daml_script_source_config(source_config_path, publish_version="3.4.11")
-    module.daml_script.latest_dpm_version = lambda: "3.5.1"
+    write_daml_script_source_config(source_config_path, min_version="3.4.9")
 
     update = module.daml_script.update_source(
         source_config_path=source_config_path,
         dry_run=True,
     )
 
-    assert update is not None
-    assert update.current == "3.5.1"
-    assert json.loads(source_config_path.read_text(encoding="utf-8"))["publish_version"] == "3.4.11"
+    assert update is None
+    assert json.loads(source_config_path.read_text(encoding="utf-8"))["min_version"] == "3.4.9"
 
 
 def test_requested_sources_defaults_to_all_sources() -> None:
