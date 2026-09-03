@@ -5,7 +5,7 @@ description: "Enable end-users to independently verify privacy-enabled asset tra
 
 ## Overview
 
-Privacy-enabled assets on the Canton Network, such as DA registry assets, require a specialized mechanism for users to verify transaction outcomes while preserving the privacy of the involved parties. Users need a way to independently and indisputably verify that an asset transfer was successful, obtaining a reliable, network-verified confirmation that is independent of any single platform's internal reporting.
+Privacy-enabled assets on the Canton Network, such as DA Registry assets, require a specialized mechanism for users to verify transaction outcomes while preserving the privacy of the involved parties. Users need a way to independently and indisputably verify that an asset transfer was successful, obtaining a reliable, network-verified confirmation that is independent of any single platform's internal reporting.
 
 To enable this transfer proofing capability, wallets must make the **Transfer Object** payload and **UpdateID** extractable, allowing end-users to easily locate and copy this data directly from their transaction history to use in proofing services or network explorers.
 
@@ -90,12 +90,10 @@ If the update represents the creation of a transfer offer, look for a **Created*
 If the update represents a concluded transfer (e.g., an accepted offer or a pre-approved transfer), look for an **Exercised** event.
 
 - **Template:** `Utility.Registry.V0.Rule.Transfer:TransferRule`
-
 - **Triggering Choices:** The event must be triggered by one of the following choices:
   - `TransferRule_DirectTransfer`
   - `TransferRule_TwoStepTransfer`
   - `TransferRule_Transfer` (This choice will be deprecated. It is only required for backwards compatibility)
-
 - **Location:** Extract the Transfer Object from the `choiceArgument` of this event.
 
 <Tabs>
@@ -127,12 +125,12 @@ If the update represents a concluded transfer (e.g., an accepted offer or a pre-
 
 If the update represents an offer that was ultimately rejected or withdrawn, locating the object is a two-step process:
 
-1.  **Identify the Event:** Look for an **Exercised** event matching the following:
-    - **Interface ID:** `Splice.Api.Token.TransferInstructionV1:TransferInstruction`
-    - **Triggering Choices:** `TransferInstruction_Reject` OR `TransferInstruction_Withdraw`
-2.  **Fetch the Contract ID:** Extract the Contract ID of the transfer offer from this exercised event.
-3.  **Fetch the Original Offer:** Query the JSON API using the extracted Contract ID: `GET /v2/events/events-by-contract-id`
-4.  **Location:** Extract the Transfer Object from the `createArgument` of the original transfer offer (transfer instruction) returned by this secondary query.
+1. **Identify the Event:** Look for an **Exercised** event matching the following:
+   - **Interface ID:** `Splice.Api.Token.TransferInstructionV1:TransferInstruction`
+   - **Triggering Choices:** `TransferInstruction_Reject` OR `TransferInstruction_Withdraw`
+2. **Fetch the Contract ID:** Extract the Contract ID of the transfer offer from this exercised event.
+3. **Fetch the Original Offer:** Query the JSON API using the extracted Contract ID: `GET /v2/events/events-by-contract-id`
+4. **Location:** Extract the Transfer Object from the `createArgument` of the original transfer offer (transfer instruction) returned by this secondary query.
 
 <Tabs>
   <Tab title="JSON">
@@ -172,12 +170,12 @@ If the update represents an offer that was ultimately rejected or withdrawn, loc
 
 There are two key items to be displayed within the transaction details:
 
-1.  Updated ID
-2.  Transfer object
+1. UpdateID
+2. Transfer object
 
 **Displaying value**
 
-A truncated preview of the Updated ID can be displayed or in full. A truncated preview of the json object can be displayed as needed or none at all.
+A truncated preview of the UpdateID can be displayed or in full. A truncated preview of the json object can be displayed as needed or none at all.
 
 **Interactive options**
 
@@ -193,6 +191,10 @@ Option 2
 
 - Click to open the accordion containing the content. The accordion is closed by default, and a copy button is accessible without opening the accordion.
 
+<Note>
+  The Proof of Transfer API is supporting the validation of multiple transaction within an UpdateID, that means also Batch Transfer can be validated. In order to enable it from a wallet perspective, ensure that your users can extract the `Transfer Object` for each individual transaction of a batch.
+</Note>
+
 **Copying behavior**
 
-The copy behavior must always copy the full Updated ID and full json object, never the truncated preview string.
+The copy behavior must always copy the full UpdateID and full json object, never the truncated preview string.
