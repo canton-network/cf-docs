@@ -59,6 +59,7 @@ def test_update_targets_cover_all_generated_doc_surfaces() -> None:
         "daml-script",
         "typescript-bindings",
         "canton-metrics-reference",
+        "canton-topology-proto-link",
         "canton-release-notes",
         "wallet-gateway-release-notes",
         "wallet-sdk-release-notes",
