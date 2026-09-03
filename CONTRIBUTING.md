@@ -51,7 +51,7 @@ Use this to report a problem or request new content without editing the source y
 
 ### Larger changes: PR from a local checkout
 
-For new pages, restructuring, or anything touching multiple files, set up a local checkout, preview your changes with `mintlify dev`, and run `mintlify broken-links` before opening a PR.
+For new pages, restructuring, or anything touching multiple files, set up a local checkout, preview your changes with `mintlify dev`, and run `mintlify broken-links` before opening a PR. The broken-links check also runs as a GitHub Action on the PR.
 
 #### Prerequisites
 
