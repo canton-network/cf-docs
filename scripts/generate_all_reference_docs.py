@@ -111,6 +111,11 @@ SCRIPT_JOBS = [
         nav_slices=(NavSlice("top_group", ("TypeScript",)),),
         target_ids=("typescript-bindings",),
     ),
+    ScriptJob(
+        script_path=REPO_ROOT / "scripts" / "generate_canton_console_reference.py",
+        nav_slices=(),
+        target_ids=(),
+    ),
 ]
 
 
