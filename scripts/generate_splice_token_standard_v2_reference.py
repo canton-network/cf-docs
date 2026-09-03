@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import ssl
 import subprocess
@@ -21,11 +22,26 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-from docs_env import ensure_repo_direnv, repo_direnv_command
+from docs_env import ensure_repo_direnv, repo_direnv_command  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
+
+from x2mdx.daml_json.history import (  # type: ignore[import-untyped] # noqa: E402
+    DamlRemovalSchedule,
+    load_daml_removal_schedules,
+)
+from x2mdx.history import (  # type: ignore[import-untyped] # noqa: E402
+    HistoryMode,
+    ReferenceFormat,
+    SourceArtifact,
+    SurfaceHistoryReport,
+    VersionSelectionPolicy,
+    load_history_report,
+    validate_history_report,
+    write_history_report,
+)
 
 DEFAULT_SOURCE_CONFIG = (
     REPO_ROOT
@@ -46,6 +62,14 @@ DEFAULT_OUTPUT_ROOT = (
     REPO_ROOT / "docs-main" / "sdks-tools" / "api-reference" / "splice-daml"
 )
 DEFAULT_DOCS_JSON = REPO_ROOT / "docs-main" / "docs.json"
+DEFAULT_LIFECYCLE_METADATA = (
+    REPO_ROOT
+    / "config"
+    / "x2mdx"
+    / "splice-token-standard-v2"
+    / "lifecycle.json"
+)
+DEFAULT_HISTORY_REPORT = DEFAULT_OUTPUT_ROOT / "token-standard-v2-history-report.json"
 TOKEN_STANDARD_PACKAGE_PREFIX = "splice-api-token-"
 TOKEN_STANDARD_VERSION_GROUPS = (
     ("v1", "Token Standard v1"),
@@ -64,6 +88,13 @@ class PackageInfo:
     package_root: Path
     exposed_modules: list[str]
     depends: list[str]
+
+
+@dataclass(frozen=True)
+class ReleaseInfo:
+    version: str
+    tag: str
+    revision: str
 
 
 def parse_args() -> argparse.Namespace:
@@ -93,6 +124,10 @@ def parse_args() -> argparse.Namespace:
         "--publish-version", help="Release version whose pages should be published."
     )
     parser.add_argument(
+        "--lifecycle-metadata", default=str(DEFAULT_LIFECYCLE_METADATA)
+    )
+    parser.add_argument("--history-report", default=str(DEFAULT_HISTORY_REPORT))
+    parser.add_argument(
         "--force-refresh",
         action="store_true",
         help="Re-download and re-extract release bundles.",
@@ -104,12 +139,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--source-name",
-        default="Canton Network Token Standard v2 DARs from canton-network/splice",
+        default="Canton Network Token Standard v2 DARs from stable canton-network/splice releases",
         help="Source label embedded in generated content.",
     )
     parser.add_argument(
         "--version-filter",
-        default="configured Token Standard v2 DAR package version",
+        default="stable Splice releases from the configured lower bound",
         help="Version-filter label embedded in generated content.",
     )
     return parser.parse_args()
@@ -140,6 +175,127 @@ def require_string_list(
     return list(value)
 
 
+def version_key(version: str) -> tuple[int, ...]:
+    return tuple(int(part) for part in version.split("."))
+
+
+def request_headers(url: str) -> dict[str, str]:
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "cf-docs-token-standard-v2-generator",
+    }
+    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    if token and url.startswith("https://api.github.com/"):
+        headers["Authorization"] = f"Bearer {token}"
+        headers["X-GitHub-Api-Version"] = "2022-11-28"
+    return headers
+
+
+def github_json(url: str) -> Any:
+    request = urllib.request.Request(url, headers=request_headers(url))
+    with urllib.request.urlopen(request, timeout=180) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def selected_releases(
+    *,
+    source_config: dict[str, Any],
+    include_versions: set[str] | None,
+) -> list[ReleaseInfo]:
+    repository = require_string(
+        source_config, "repository", source_path=Path("source-artifacts.json")
+    )
+    tag_regex = require_string(
+        source_config, "tag_regex", source_path=Path("source-artifacts.json")
+    )
+    min_version = require_string(
+        source_config, "min_version", source_path=Path("source-artifacts.json")
+    )
+    matcher = re.compile(tag_regex)
+    minimum_key = version_key(min_version)
+    releases: list[ReleaseInfo] = []
+    page = 1
+    while True:
+        payload = github_json(
+            f"https://api.github.com/repos/{repository}/tags?per_page=100&page={page}"
+        )
+        if not isinstance(payload, list):
+            raise ValueError(f"Expected list payload from GitHub tags API for {repository}")
+        if not payload:
+            break
+        for tag in payload:
+            if not isinstance(tag, dict):
+                continue
+            tag_name = tag.get("name")
+            commit = tag.get("commit")
+            revision = commit.get("sha") if isinstance(commit, dict) else None
+            if not isinstance(tag_name, str) or not isinstance(revision, str):
+                continue
+            match = matcher.fullmatch(tag_name)
+            if match is None:
+                continue
+            version = match.groupdict().get("version") or tag_name.removeprefix("v")
+            if version_key(version) < minimum_key:
+                continue
+            if include_versions is not None and version not in include_versions:
+                continue
+            releases.append(
+                ReleaseInfo(version=version, tag=tag_name, revision=revision)
+            )
+        if len(payload) < 100:
+            break
+        page += 1
+
+    releases.sort(key=lambda release: version_key(release.version))
+    if include_versions is not None:
+        missing_versions = sorted(
+            include_versions - {release.version for release in releases},
+            key=version_key,
+        )
+        if missing_versions:
+            raise ValueError(
+                "Requested Splice releases are not eligible stable tags: "
+                + ", ".join(missing_versions)
+            )
+    if not releases:
+        raise ValueError(
+            f"No stable Splice releases matched the configured selection for {repository}"
+        )
+    return releases
+
+
+def resolve_publish_release(
+    *, releases: list[ReleaseInfo], requested_version: str | None
+) -> ReleaseInfo:
+    if requested_version is None:
+        return releases[-1]
+    selected = next(
+        (release for release in releases if release.version == requested_version), None
+    )
+    if selected is None:
+        available = ", ".join(release.version for release in releases)
+        raise ValueError(
+            f"Publish version {requested_version!r} was not selected: {available}"
+        )
+    return selected
+
+
+def releases_through_publish(
+    *, releases: list[ReleaseInfo], publish_version: str
+) -> list[ReleaseInfo]:
+    publish_index = next(
+        (
+            index
+            for index, release in enumerate(releases)
+            if release.version == publish_version
+        ),
+        None,
+    )
+    if publish_index is None:
+        raise ValueError(f"Publish version {publish_version!r} was not selected")
+    return releases[: publish_index + 1]
+
+
 def docs_json_page_ref(path: Path, docs_json_path: Path) -> str:
     relative = path.resolve().relative_to(docs_json_path.resolve().parent)
     if relative.suffix != ".mdx":
@@ -165,6 +321,28 @@ def read_mdx_title(path: Path) -> str:
         if line.startswith("title: "):
             return line.split(":", 1)[1].strip().strip('"')
     raise ValueError(f"Missing title frontmatter in {path}")
+
+
+def set_mdx_title(path: Path, title: str) -> None:
+    text = path.read_text(encoding="utf-8")
+    if not text.startswith("---\n"):
+        return
+    frontmatter_end = text.find("\n---", 4)
+    if frontmatter_end == -1:
+        return
+    frontmatter = text[:frontmatter_end]
+    replacement = f'title: "{title}"'
+    updated_frontmatter, count = re.subn(
+        r"(?m)^title:\s*(?:\"[^\"]*\"|'[^']*'|.+?)\s*$",
+        replacement,
+        frontmatter,
+        count=1,
+    )
+    if count == 0:
+        updated_frontmatter = frontmatter + "\n" + replacement
+    updated = updated_frontmatter + text[frontmatter_end:]
+    if updated != text:
+        path.write_text(updated, encoding="utf-8")
 
 
 def dar_family(filename: str, *, package_version: str) -> str:
@@ -411,6 +589,8 @@ def run_x2mdx(
     source_name: str,
     version_filter: str,
     docs_json_path: Path,
+    history_report_path: Path,
+    lifecycle_metadata_path: Path,
 ) -> None:
     route_prefix = docs_route(output_dir / "index.mdx", docs_json_path)
     command = repo_tool_command(
@@ -435,12 +615,21 @@ def run_x2mdx(
         route_prefix,
         "--omit-module-snapshot",
         "--interfaces-first",
+        "--history-report",
+        str(history_report_path),
+        "--reader-route-prefix",
+        route_prefix,
+        "--surface-id",
+        f"splice-token-standard-v2-daml:{output_dir.name}",
+        "--surface-title",
+        f"Token Standard v2: {output_dir.name}",
+        "--configured-scope",
+        f"{output_dir.name} modules from stable Splice release DARs",
+        "--lifecycle-metadata",
+        str(lifecycle_metadata_path),
     )
     print("Running:", " ".join(command))
     subprocess.run(command, cwd=str(REPO_ROOT), check=True)
-    # Each Token Standard DAR exposes one module, so the generated package-level
-    # overview duplicates the only substantive module page.
-    (output_dir / "index.mdx").unlink()
 
 
 def family_group(*, family_dir: Path, docs_json_path: Path) -> dict[str, Any]:
@@ -449,9 +638,12 @@ def family_group(*, family_dir: Path, docs_json_path: Path) -> dict[str, Any]:
         raise FileNotFoundError(f"Missing generated module pages in: {family_dir}")
     page_entries = []
     for page in module_pages:
+        if page.name == "index.mdx":
+            set_mdx_title(page, "Overview")
         title = read_mdx_title(page)
         page_entries.append(
             (
+                0 if page.name == "index.mdx" else 1,
                 title.lower(),
                 docs_json_page_ref(page, docs_json_path),
             )
@@ -459,7 +651,7 @@ def family_group(*, family_dir: Path, docs_json_path: Path) -> dict[str, Any]:
     page_entries.sort()
     return {
         "group": family_dir.name,
-        "pages": [page_ref for _title, page_ref in page_entries],
+        "pages": [page_ref for _rank, _title, page_ref in page_entries],
     }
 
 
@@ -654,6 +846,79 @@ def update_docs_navigation(
     print(f"Updated docs navigation: {docs_json_path}")
 
 
+def write_family_lifecycle_metadata(
+    *,
+    schedules: dict[str, DamlRemovalSchedule],
+    module_names: set[str],
+    output_path: Path,
+) -> Path:
+    payload = {
+        "modules": {
+            module_name: {
+                "remove_as_of": schedule.version,
+                "observed_in_version": schedule.observed_in_version,
+                "source": schedule.source,
+                **({"detail": schedule.detail} if schedule.detail is not None else {}),
+            }
+            for module_name, schedule in sorted(schedules.items())
+            if module_name in module_names
+        }
+    }
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    return output_path
+
+
+def write_target_history_report(
+    *,
+    family_report_paths: list[Path],
+    output_path: Path,
+    releases: list[ReleaseInfo],
+    repository: str,
+    package_version: str,
+) -> Path:
+    family_reports = [load_history_report(path) for path in family_report_paths]
+    items = tuple(
+        sorted(
+            (item for report in family_reports for item in report.items),
+            key=lambda item: item.id,
+        )
+    )
+    report = SurfaceHistoryReport(
+        surface_id="splice-token-standard-v2-daml",
+        title="Splice Token Standard v2 Daml",
+        format=ReferenceFormat.DAML_JSON,
+        configured_scope=(
+            "Published Token Standard v2 Daml modules from stable "
+            "canton-network/splice release tags"
+        ),
+        history_mode=HistoryMode.SNAPSHOTS,
+        publish_version=releases[-1].version,
+        comparison_versions=tuple(release.version for release in releases),
+        source_artifacts=tuple(
+            SourceArtifact(
+                version=release.version,
+                source=(
+                    f"https://github.com/{repository}/tree/{release.revision}/daml/dars"
+                ),
+                revision=release.revision,
+                path=f"daml/dars/splice-api-token-*-v2-{package_version}.dar",
+            )
+            for release in releases
+        ),
+        version_policy=VersionSelectionPolicy.LATEST_SELECTED_RELEASE,
+        items=items,
+        limitations=(
+            "Daml docs JSON snapshots establish module additions, normalized module updates, authored module deprecations, and removals.",
+            "Entity declarations remain anchored within their current package module page; this report uses the reader page boundary as its item boundary.",
+        ),
+    )
+    validate_history_report(report)
+    write_history_report(output_path, report)
+    print(f"Wrote target history report: {output_path}")
+    return output_path
+
+
 def render_reference(
     *,
     source_config_path: Path,
@@ -665,6 +930,8 @@ def render_reference(
     include_families: set[str] | None,
     include_versions: set[str] | None,
     publish_version_override: str | None,
+    lifecycle_metadata_path: Path,
+    history_report_path: Path,
     source_name: str,
     version_filter: str,
     force_refresh: bool,
@@ -674,9 +941,8 @@ def render_reference(
     repository = require_string(
         source_config, "repository", source_path=source_config_path
     )
-    revision = require_string(source_config, "revision", source_path=source_config_path)
-    configured_version = require_string(
-        source_config, "publish_version", source_path=source_config_path
+    package_version = require_string(
+        source_config, "package_version", source_path=source_config_path
     )
     published_dars = require_string_list(
         source_config, "published_dars", source_path=source_config_path
@@ -684,18 +950,18 @@ def render_reference(
     supporting_dars = require_string_list(
         source_config, "supporting_dars", source_path=source_config_path
     )
-    if include_versions is not None and configured_version not in include_versions:
-        raise ValueError(
-            f"Configured package version {configured_version!r} was not selected"
-        )
-    publish_version = publish_version_override or configured_version
-    if publish_version != configured_version:
-        raise ValueError(
-            f"Publish version {publish_version!r} does not match configured DAR version {configured_version!r}"
-        )
+    releases = selected_releases(
+        source_config=source_config, include_versions=include_versions
+    )
+    publish_release = resolve_publish_release(
+        releases=releases, requested_version=publish_version_override
+    )
+    comparison_releases = releases_through_publish(
+        releases=releases, publish_version=publish_release.version
+    )
 
     families = [
-        dar_family(filename, package_version=configured_version)
+        dar_family(filename, package_version=package_version)
         for filename in published_dars
     ]
     if len(families) != len(set(families)):
@@ -711,52 +977,104 @@ def render_reference(
     if not selected_families:
         raise ValueError("No Token Standard v2 families selected for generation")
 
-    family_infos: dict[str, PackageInfo] = {}
-    id_index: dict[str, PackageInfo] = {}
-    for filename in [*published_dars, *supporting_dars]:
-        family = dar_family(filename, package_version=configured_version)
-        dar_path = ensure_dar(
-            repository=repository,
-            revision=revision,
-            filename=filename,
-            cache_dir=cache_dir,
-            force_refresh=force_refresh,
-        )
-        extract_dir = extract_dar(
-            dar_path=dar_path,
-            output_dir=cache_dir / "extracted" / revision / family,
-            force_refresh=force_refresh,
-        )
-        info = package_info(family=family, extract_dir=extract_dir)
-        family_infos[family] = info
-        id_index[info.package_id] = info
+    json_snapshots: dict[str, list[dict[str, str]]] = {
+        family: [] for family in selected_families
+    }
+    family_module_names: dict[str, set[str]] = {
+        family: set() for family in selected_families
+    }
+    for release in comparison_releases:
+        family_infos: dict[str, PackageInfo] = {}
+        id_index: dict[str, PackageInfo] = {}
+        for filename in [*published_dars, *supporting_dars]:
+            family = dar_family(filename, package_version=package_version)
+            dar_path = ensure_dar(
+                repository=repository,
+                revision=release.revision,
+                filename=filename,
+                cache_dir=cache_dir,
+                force_refresh=force_refresh,
+            )
+            extract_dir = extract_dar(
+                dar_path=dar_path,
+                output_dir=cache_dir / "extracted" / release.revision / family,
+                force_refresh=force_refresh,
+            )
+            info = package_info(family=family, extract_dir=extract_dir)
+            family_infos[family] = info
+            id_index[info.package_id] = info
 
+        for family in selected_families:
+            info = family_infos[family]
+            family_module_names[family].update(info.exposed_modules)
+            output_json = generate_daml_json(
+                info=info,
+                include_dirs=dependency_include_dirs(
+                    info=info, package_index=id_index
+                ),
+                output_json=(
+                    cache_dir
+                    / "json"
+                    / release.revision
+                    / f"{family}.json"
+                ),
+                force_regenerate=force_regenerate,
+            )
+            json_snapshots[family].append(
+                {
+                    "version": release.version,
+                    "json_path": str(output_json.resolve()),
+                }
+            )
+
+    schedules = load_daml_removal_schedules(lifecycle_metadata_path)
+    known_modules = set().union(*family_module_names.values())
+    unknown_schedules = sorted(set(schedules) - known_modules)
+    if unknown_schedules:
+        raise ValueError(
+            "Removal schedules reference unknown Token Standard v2 modules: "
+            + ", ".join(unknown_schedules)
+        )
+
+    family_report_paths: list[Path] = []
     for family in selected_families:
-        info = family_infos[family]
-        output_json = generate_daml_json(
-            info=info,
-            include_dirs=dependency_include_dirs(info=info, package_index=id_index),
-            output_json=cache_dir / "json" / revision / f"{family}.json",
-            force_regenerate=force_regenerate,
+        family_manifest_root = manifest_root / family
+        family_report_path = family_manifest_root / "history-report.json"
+        family_lifecycle_path = write_family_lifecycle_metadata(
+            schedules=schedules,
+            module_names=family_module_names[family],
+            output_path=family_manifest_root / "lifecycle.json",
         )
 
         manifest_path = write_manifest(
-            manifest_path=manifest_root / family / "manifest.json",
+            manifest_path=family_manifest_root / "manifest.json",
             source_name=source_name,
-            publish_version=publish_version,
-            versions=[
-                {"version": publish_version, "json_path": str(output_json.resolve())}
-            ],
+            publish_version=publish_release.version,
+            versions=json_snapshots[family],
         )
         run_x2mdx(
             manifest_path=manifest_path,
             output_dir=output_root / family,
-            publish_version=publish_version,
+            publish_version=publish_release.version,
             overview_title=family,
             source_name=source_name,
             version_filter=version_filter,
             docs_json_path=docs_json_path,
+            history_report_path=family_report_path,
+            lifecycle_metadata_path=family_lifecycle_path,
         )
+        family_report_paths.append(family_report_path)
+
+    if include_families is None:
+        write_target_history_report(
+            family_report_paths=family_report_paths,
+            output_path=history_report_path,
+            releases=comparison_releases,
+            repository=repository,
+            package_version=package_version,
+        )
+    else:
+        print("Skipped target history report for a partial family selection")
 
     update_docs_navigation(
         docs_json_path=docs_json_path,
@@ -788,6 +1106,8 @@ def main() -> int:
         include_families=set(args.family) if args.family else None,
         include_versions=set(args.version) if args.version else None,
         publish_version_override=args.publish_version,
+        lifecycle_metadata_path=Path(args.lifecycle_metadata).resolve(),
+        history_report_path=Path(args.history_report).resolve(),
         source_name=args.source_name,
         version_filter=args.version_filter,
         force_refresh=args.force_refresh,
