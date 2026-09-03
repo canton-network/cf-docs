@@ -448,6 +448,24 @@ UPDATE_TARGETS = (
         ),
     ),
     UpdateTarget(
+        key="canton-release-protocol-versions",
+        title="Update Canton release/protocol compatibility",
+        branch="generated-docs/canton-release-protocol-versions/update",
+        description=(
+            "Regenerates the Canton release-to-protocol compatibility table from "
+            "runtime metadata in the latest public Canton release binary."
+        ),
+        generate_commands=(("nix-shell", "--run", "npm run generate:canton-release-protocol-versions"),),
+        paths=("docs-main/release-notes/releases-and-versioning.mdx",),
+        summary_kind="static",
+        summary_path=None,
+        summary_label=None,
+        validation=(
+            "npm run generate:canton-release-protocol-versions",
+            "git diff --check",
+        ),
+    ),
+    UpdateTarget(
         key="canton-metrics-reference",
         title="Update Canton metrics reference",
         branch="generated-docs/canton-metrics-reference/update",
