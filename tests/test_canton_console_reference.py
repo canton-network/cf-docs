@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import base64
+from dataclasses import replace
+import hashlib
 import json
 from pathlib import Path
 import subprocess
@@ -46,9 +49,55 @@ class CantonConsoleReferenceTests(unittest.TestCase):
             size=123,
             digest="sha256:" + "a" * 64,
         )
+        self.source = generator.PublicSourceArtifact(
+            repo="digital-asset/canton",
+            ref=self.asset.tag,
+            commit="b" * 40,
+            path=generator.CONSOLE_TEMPLATE_PATH,
+            blob="c" * 40,
+            content=""".. _canton_console_reference:
+
+.. note::
+    test note
+
+Console Commands
+================
+
+Top-level Commands
+------------------
+
+<console-topic-marker: Top-level Commands>
+
+Participant Commands
+--------------------
+
+<console-topic-marker: Participant>
+
+<console-topic-marker: Participant, DAR Management>
+
+Multiple Participants
+---------------------
+
+<console-topic-marker: Multiple Participants, DAR Management>
+
+Sequencer Administration Commands
+---------------------------------
+
+<console-topic-marker: Sequencer, Traffic>
+
+Mediator Administration Commands
+--------------------------------
+
+<console-topic-marker: Mediator, Health>
+""",
+        )
 
     def test_defaults_use_public_canton_release(self) -> None:
         self.assertEqual(generator.DEFAULT_RELEASE_REPO, "digital-asset/canton")
+        self.assertEqual(
+            generator.CONSOLE_TEMPLATE_PATH,
+            "docs-open/src/main/resources/console.rst.template",
+        )
         self.assertNotIn(
             "DACH-NY", generator.REFERENCE_SCRIPT.read_text(encoding="utf-8")
         )
@@ -88,6 +137,37 @@ class CantonConsoleReferenceTests(unittest.TestCase):
 
         self.assertEqual(resolved, self.asset)
 
+    def test_resolve_public_source_artifact_verifies_the_git_blob(self) -> None:
+        content = b"Console Commands\n================\n"
+        blob = generator.git_blob_sha(content)
+        payloads = {
+            "commits": {"sha": "d" * 40},
+            "contents": {
+                "type": "file",
+                "encoding": "base64",
+                "content": base64.b64encode(content).decode(),
+                "sha": blob,
+            },
+        }
+        original = generator.github_api_json
+        try:
+            generator.github_api_json = lambda path: (
+                payloads["contents"] if "/contents/" in path else payloads["commits"]
+            )
+            resolved = generator.resolve_public_source_artifact(
+                repo="digital-asset/canton",
+                ref="v3.5.15",
+                path=generator.CONSOLE_TEMPLATE_PATH,
+            )
+        finally:
+            generator.github_api_json = original
+
+        self.assertEqual(resolved.commit, "d" * 40)
+        self.assertEqual(resolved.blob, blob)
+        self.assertEqual(resolved.content, content.decode())
+        header = f"blob {len(content)}\0".encode()
+        self.assertEqual(hashlib.sha1(header + content).hexdigest(), blob)
+
     def test_load_console_items_rejects_invalid_shapes(self) -> None:
         with self.assertRaisesRegex(ValueError, "console list"):
             generator.load_console_items({})
@@ -121,19 +201,56 @@ class CantonConsoleReferenceTests(unittest.TestCase):
             ),
         ]
 
-        mdx = generator.render_console_reference(items, asset=self.asset)
+        mdx, rendered_count = generator.render_console_reference(
+            items, asset=self.asset, source=self.source
+        )
 
-        self.assertIn('source="digital-asset/canton"', mdx)
+        self.assertIn('template_source="digital-asset/canton:', mdx)
         self.assertIn('ref="v3.5.15"', mdx)
-        self.assertIn('command_count="7"', mdx)
-        self.assertEqual(mdx.count('<div id="'), len(items))
+        self.assertIn('raw_command_count="7"', mdx)
+        self.assertIn('rendered_command_count="6"', mdx)
+        self.assertEqual(rendered_count, 6)
+        self.assertEqual(mdx.count('<div id="'), rendered_count + 1)
         self.assertIn('<div id="help" />', mdx)
         self.assertIn('<div id="help_1" />', mdx)
         self.assertIn("## Participant Commands", mdx)
-        self.assertIn("### DAR Management", mdx)
-        self.assertIn("#### `traffic.set` (Preview)", mdx)
+        self.assertIn("### `traffic.set`", mdx)
         self.assertIn(r'Type help("\<command\>").', mdx)
-        self.assertIn("### `repair.contract` (Repair)", mdx)
+        self.assertNotIn("repair.contract", mdx)
+
+    def test_render_console_reference_preserves_current_content_corrections(
+        self,
+    ) -> None:
+        items = [
+            console_item(
+                "resources.set_resource_limits",
+                topic=["Participant"],
+                description=(
+                    "Resource limits can only be changed, if the server runs Canton enterprise. "
+                    "In the community edition, the server uses fixed limits that cannot be changed."
+                ),
+            )
+        ]
+
+        source = replace(
+            self.source,
+            content=(
+                "Console Commands\n"
+                "================\n\n"
+                "Participant Commands\n"
+                "--------------------\n\n"
+                "<console-topic-marker: Participant>\n"
+            ),
+        )
+        mdx, rendered_count = generator.render_console_reference(
+            items, asset=self.asset, source=source
+        )
+
+        self.assertEqual(rendered_count, 1)
+        self.assertIn(
+            "Resource limits can be changed at runtime using this command.", mdx
+        )
+        self.assertNotIn("Canton enterprise", mdx)
 
     def test_generate_reference_json_caches_release_binary_output(self) -> None:
         payload = {"console": [console_item("help", topic=["Top-level Commands"])]}

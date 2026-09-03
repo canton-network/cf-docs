@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 from collections import defaultdict
 from dataclasses import dataclass
 import hashlib
@@ -21,6 +22,10 @@ import urllib.parse
 import urllib.request
 
 from docs_env import ensure_repo_direnv
+from canton_console_rst import (
+    convert_generated_console_rst,
+    parse_generated_console_rst,
+)
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -33,16 +38,11 @@ DEFAULT_OUTPUT = (
     / "canton-console-commands.mdx"
 )
 DEFAULT_RELEASE_REPO = "digital-asset/canton"
+CONSOLE_TEMPLATE_PATH = "docs-open/src/main/resources/console.rst.template"
 REFERENCE_SCRIPT = REPO_ROOT / "scripts" / "canton_console_reference.canton"
 SIMPLE_TOPOLOGY_CONFIG = Path("examples/01-simple-topology/simple-topology.conf")
 USER_AGENT = "cf-docs-canton-console-reference/1.0"
 STABLE_TAG_RE = re.compile(r"^v(?P<version>\d+\.\d+\.\d+)$")
-PRIMARY_SECTIONS = (
-    ("Participant", "Participant Commands"),
-    ("Multiple Participants", "Multiple Participant Commands"),
-    ("Sequencer", "Sequencer Administration Commands"),
-    ("Mediator", "Mediator Administration Commands"),
-)
 
 
 class ConsoleItem(TypedDict):
@@ -63,6 +63,16 @@ class ReleaseAsset:
     url: str
     size: int
     digest: str
+
+
+@dataclass(frozen=True)
+class PublicSourceArtifact:
+    repo: str
+    ref: str
+    commit: str
+    path: str
+    blob: str
+    content: str
 
 
 def parse_args() -> argparse.Namespace:
@@ -158,6 +168,55 @@ def resolve_release_asset(*, release_repo: str, tag: str | None) -> ReleaseAsset
         url=url,
         size=size,
         digest=digest,
+    )
+
+
+def git_blob_sha(content: bytes) -> str:
+    header = f"blob {len(content)}\0".encode()
+    return hashlib.sha1(header + content).hexdigest()
+
+
+def resolve_public_source_artifact(
+    *, repo: str, ref: str, path: str
+) -> PublicSourceArtifact:
+    encoded_ref = urllib.parse.quote(ref, safe="")
+    commit_payload = github_api_json(f"repos/{repo}/commits/{encoded_ref}")
+    if not isinstance(commit_payload, dict) or not isinstance(
+        commit_payload.get("sha"), str
+    ):
+        raise ValueError(f"Could not resolve public source commit {repo}@{ref}")
+    commit = commit_payload["sha"]
+    if not re.fullmatch(r"[0-9a-f]{40}", commit):
+        raise ValueError(f"Unexpected public source commit SHA for {repo}@{ref}")
+
+    encoded_path = urllib.parse.quote(path, safe="/")
+    source_payload = github_api_json(
+        f"repos/{repo}/contents/{encoded_path}?ref={encoded_ref}"
+    )
+    if not isinstance(source_payload, dict) or source_payload.get("type") != "file":
+        raise ValueError(f"Expected a public source file at {repo}@{ref}:{path}")
+    if source_payload.get("encoding") != "base64" or not isinstance(
+        source_payload.get("content"), str
+    ):
+        raise ValueError(
+            f"GitHub did not return base64 content for {repo}@{ref}:{path}"
+        )
+    blob = source_payload.get("sha")
+    if not isinstance(blob, str) or not re.fullmatch(r"[0-9a-f]{40}", blob):
+        raise ValueError(f"Unexpected Git blob SHA for {repo}@{ref}:{path}")
+    content = base64.b64decode(source_payload["content"], validate=False)
+    actual_blob = git_blob_sha(content)
+    if actual_blob != blob:
+        raise ValueError(
+            f"Git blob mismatch for {repo}@{ref}:{path}: expected {blob}, got {actual_blob}"
+        )
+    return PublicSourceArtifact(
+        repo=repo,
+        ref=ref,
+        commit=commit,
+        path=path,
+        blob=blob,
+        content=content.decode("utf-8"),
     )
 
 
@@ -326,128 +385,98 @@ def generate_reference_json(
     return payload
 
 
-def normalize_help_text(value: str) -> str:
-    normalized = textwrap.dedent(value).strip()
-    normalized = re.sub(r"``([^`]+)``", r"`\1`", normalized)
-    return (
-        normalized.replace("<", r"\<")
-        .replace(">", r"\>")
-        .replace("{", r"\{")
-        .replace("}", r"\}")
-    )
+def _rst_description_block(content: str) -> str:
+    dedented = textwrap.dedent(content)
+    block = textwrap.indent(dedented, "            ")
+    return f"\n        .. code-block:: none\n\n{block}\n"
 
 
-def inline_code(value: str) -> str:
-    if "`" in value:
-        return f"`` {value} ``"
-    return f"`{value}`"
+def _render_upstream_command(item: ConsoleItem, *, seen_names: dict[str, int]) -> str:
+    name = item["name"]
+    if name in seen_names:
+        seen_names[name] += 1
+        anchor = f"{name}_{seen_names[name]}"
+    else:
+        seen_names[name] = 0
+        anchor = name
 
-
-def anchor_base(name: str) -> str:
-    return re.sub(r"[^a-z0-9._-]+", "-", name.lower()).strip("-")
-
-
-def sorted_items(items: list[ConsoleItem]) -> list[ConsoleItem]:
-    return sorted(
-        items,
-        key=lambda item: (
-            item["name"].casefold(),
-            item["scope"].casefold(),
-            tuple(
-                (name.casefold(), value.casefold()) for name, value in item["arguments"]
-            ),
-        ),
-    )
-
-
-def render_command(
-    item: ConsoleItem, *, heading_level: int, anchor_counts: dict[str, int]
-) -> list[str]:
-    base = anchor_base(item["name"])
-    occurrence = anchor_counts[base]
-    anchor_counts[base] += 1
-    anchor = base if occurrence == 0 else f"{base}_{occurrence}"
-    scope = "" if item["scope"] == "Stable" else f" ({item['scope']})"
+    scope = f" ({item['scope']})" if item["scope"] != "Stable" else ""
     lines = [
-        f'<div id="{anchor}" />',
+        f".. _{anchor.lower()}:",
         "",
-        f"{'#' * heading_level} {inline_code(item['name'])}{scope}",
         "",
-        normalize_help_text(item["summary"]),
-        "",
+        f":ref:`{name}{scope} <{anchor}>`",
+        f"\t* **Summary**: {item['summary']}",
     ]
-
-    description = normalize_help_text(item["description"])
-    if description:
-        lines.extend([description, ""])
     if item["arguments"]:
-        lines.extend(["**Arguments**", ""])
-        for name, argument_type in item["arguments"]:
-            lines.append(f"- {inline_code(name)}: {inline_code(argument_type)}")
-        lines.append("")
+        lines.append("\t* **Arguments**: ")
+        lines.extend(
+            f"\t\t* ``{argument_name}``: {argument_type}"
+            for argument_name, argument_type in item["arguments"]
+        )
     if item["return_type"]:
-        lines.extend([f"**Returns:** {inline_code(item['return_type'])}", ""])
-    return lines
+        lines.extend(("\t* **Return type**: ", f"\t\t* {item['return_type']}"))
+    if item["description"]:
+        lines.append(
+            f"\t* **Description**:\n{_rst_description_block(item['description'])}"
+        )
+    lines.append("")
+    return "\n".join(lines)
 
 
-def render_console_reference(items: list[ConsoleItem], *, asset: ReleaseAsset) -> str:
-    section_roots = {root for root, _title in PRIMARY_SECTIONS}
-    top_level = [item for item in items if item["topic"][0] not in section_roots]
-    by_root: dict[str, list[ConsoleItem]] = {
-        root: [item for item in items if item["topic"][0] == root]
-        for root, _title in PRIMARY_SECTIONS
-    }
-    anchor_counts: dict[str, int] = defaultdict(int)
-    lines = [
-        "---",
-        'title: "Canton Console Commands"',
-        'description: "Generated Canton console command reference for participant, mediator, and sequencer administration."',
-        "---",
-        "",
+def render_upstream_console_rst(items: list[ConsoleItem], *, template: str) -> str:
+    by_topic: dict[str, list[str]] = defaultdict(list)
+    seen_names: dict[str, int] = {}
+    for item in sorted(items, key=lambda candidate: candidate["name"]):
+        topic = ", ".join(item["topic"])
+        by_topic[topic].append(_render_upstream_command(item, seen_names=seen_names))
+
+    rendered = template
+    for topic, commands in by_topic.items():
+        rendered = rendered.replace(
+            f"<console-topic-marker: {topic}>", "\n".join(commands)
+        )
+    if "console-topic-marker" in rendered:
+        marker_index = rendered.index("console-topic-marker")
+        context = rendered[marker_index : marker_index + 200]
+        raise ValueError(f"Public console template has an unmatched marker: {context}")
+    return rendered
+
+
+def render_console_reference(
+    items: list[ConsoleItem],
+    *,
+    asset: ReleaseAsset,
+    source: PublicSourceArtifact,
+) -> tuple[str, int]:
+    rst = render_upstream_console_rst(items, template=source.content)
+    rendered_commands, _static_lines = parse_generated_console_rst(rst)
+    header = "\n".join(
         (
-            "{/* GENERATED_FROM "
-            f'source="{DEFAULT_RELEASE_REPO}" ref="{asset.tag}" asset="{asset.name}" '
-            f'digest="{asset.digest}" command_count="{len(items)}" */}}'
-        ),
-        "",
-        "# Console Commands",
-        "",
-        (
-            f"This reference is generated from runtime help metadata in the public Canton {asset.version} release. "
-            "Commands marked Preview, Testing, or Repair are outside the stable command surface."
-        ),
-        "",
-        "## Top-level Commands",
-        "",
-        "The following commands are available at the top level of the Canton console.",
-        "",
-    ]
-    for item in sorted_items(top_level):
-        lines.extend(render_command(item, heading_level=3, anchor_counts=anchor_counts))
-
-    for root, section_title in PRIMARY_SECTIONS:
-        section_items = by_root[root]
-        lines.extend([f"## {section_title}", ""])
-        direct_items = [item for item in section_items if len(item["topic"]) == 1]
-        for item in sorted_items(direct_items):
-            lines.extend(
-                render_command(item, heading_level=3, anchor_counts=anchor_counts)
-            )
-
-        grouped: dict[tuple[str, ...], list[ConsoleItem]] = defaultdict(list)
-        for item in section_items:
-            if len(item["topic"]) > 1:
-                grouped[tuple(item["topic"][1:])].append(item)
-        for topic in sorted(
-            grouped, key=lambda value: tuple(part.casefold() for part in value)
-        ):
-            lines.extend([f"### {' › '.join(topic)}", ""])
-            for item in sorted_items(grouped[topic]):
-                lines.extend(
-                    render_command(item, heading_level=4, anchor_counts=anchor_counts)
-                )
-
-    return "\n".join(lines).rstrip() + "\n"
+            "---",
+            'title: "Canton Console Commands"',
+            'description: "Canton admin console command reference: participant, mediator, sequencer, and topology commands."',
+            "---",
+            "",
+            (
+                "{/* GENERATED_FROM "
+                f'source="{asset.name}" ref="{asset.tag}" digest="{asset.digest}" '
+                f'template_source="{source.repo}:{source.path}" template_commit="{source.commit}" '
+                f'template_blob="{source.blob}" raw_command_count="{len(items)}" '
+                f'rendered_command_count="{len(rendered_commands)}" */}}'
+            ),
+        )
+    )
+    source_version = ".".join(asset.version.split(".")[:2])
+    mdx = convert_generated_console_rst(
+        rst,
+        source_version=source_version,
+        header=header,
+        apply_current_content_edits=True,
+        apply_legacy_snapshot_edits=False,
+        escape_description_mdx=True,
+    )
+    return mdx, len(rendered_commands)
 
 
 def main() -> int:
@@ -455,31 +484,41 @@ def main() -> int:
         repo_root=REPO_ROOT, script_path=Path(__file__).resolve(), argv=sys.argv[1:]
     )
     args = parse_args()
+    cache_dir = args.cache_dir.resolve()
+    output_path = args.output.resolve()
     asset = resolve_release_asset(release_repo=args.release_repo, tag=args.canton_tag)
+    source = resolve_public_source_artifact(
+        repo=args.release_repo,
+        ref=asset.tag,
+        path=CONSOLE_TEMPLATE_PATH,
+    )
     if args.reference_json is not None:
-        payload = json.loads(args.reference_json.read_text(encoding="utf-8"))
+        payload = json.loads(args.reference_json.resolve().read_text(encoding="utf-8"))
     else:
         archive_path = ensure_release_archive(
-            asset=asset, cache_dir=args.cache_dir, force_refresh=args.force_refresh
+            asset=asset, cache_dir=cache_dir, force_refresh=args.force_refresh
         )
         distribution_root = extract_release(
             archive_path=archive_path,
             asset=asset,
-            cache_dir=args.cache_dir,
+            cache_dir=cache_dir,
             force_refresh=args.force_refresh,
         )
         payload = generate_reference_json(
             distribution_root=distribution_root,
-            cache_dir=args.cache_dir,
+            cache_dir=cache_dir,
             asset=asset,
             force_refresh=args.force_refresh,
         )
 
     items = load_console_items(payload)
-    output = render_console_reference(items, asset=asset)
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(output, encoding="utf-8")
-    print(f"Generated {args.output} from {asset.tag} ({len(items)} console commands)")
+    output, rendered_count = render_console_reference(items, asset=asset, source=source)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(output, encoding="utf-8")
+    print(
+        f"Generated {output_path} from {asset.tag} "
+        f"({rendered_count} of {len(items)} console commands selected by the public template)"
+    )
     return 0
 
 
