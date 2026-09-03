@@ -24,7 +24,7 @@ from docs_env import ensure_repo_direnv
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_CACHE_DIR = REPO_ROOT / ".internal" / "cache" / "canton-console-reference"
+DEFAULT_CACHE_DIR = REPO_ROOT / ".internal" / "cache" / "canton-release-reference"
 DEFAULT_OUTPUT = (
     REPO_ROOT
     / "docs-main"
