@@ -412,6 +412,24 @@ UPDATE_TARGETS = (
         source_update_paths=("config/x2mdx/typescript-bindings/source-artifacts.json",),
     ),
     UpdateTarget(
+        key="canton-console-reference",
+        title="Update Canton console command reference",
+        branch="generated-docs/canton-console-reference/update",
+        description=(
+            "Regenerates the checked-in Canton console command reference from runtime "
+            "help metadata in the latest public Canton release binary."
+        ),
+        generate_commands=(("nix-shell", "--run", "npm run generate:canton-console-reference"),),
+        paths=("docs-main/global-synchronizer/reference/canton-console-commands.mdx",),
+        summary_kind="static",
+        summary_path=None,
+        summary_label=None,
+        validation=(
+            "npm run generate:canton-console-reference",
+            "git diff --check",
+        ),
+    ),
+    UpdateTarget(
         key="canton-metrics-reference",
         title="Update Canton metrics reference",
         branch="generated-docs/canton-metrics-reference/update",
