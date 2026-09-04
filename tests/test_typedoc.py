@@ -262,6 +262,8 @@ class TypeDocTests(unittest.TestCase):
     def test_cli_builds_single_page_and_filters_internal_members(self) -> None:
         manifest_path = self._write_manifest()
         output_file = self.root / "out" / "typescript.mdx"
+        history_report = self.root / "out" / "history-report.json"
+        lifecycle_metadata = self._write_json("lifecycle.json", {"exports": {}})
 
         result = cli_main(
             [
@@ -275,6 +277,14 @@ class TypeDocTests(unittest.TestCase):
                 "unit test typedoc snapshots",
                 "--version-filter",
                 "unit test versions",
+                "--history-report",
+                str(history_report),
+                "--reader-route",
+                "/reference/typescript",
+                "--surface-id",
+                "typescript-daml-types",
+                "--lifecycle-metadata",
+                str(lifecycle_metadata),
             ]
         )
 
@@ -282,21 +292,25 @@ class TypeDocTests(unittest.TestCase):
         text = output_file.read_text(encoding="utf-8")
         self.assertIn('title: "TypeScript/JavaScript"', text)
         self.assertIn("## Table of Contents", text)
-        self.assertIn("## Version Change Summary", text)
         self.assertIn("## Reference", text)
-        self.assertIn("[`Thing`](#type-alias-thing)", text)
         self.assertIn("[`Thing`](#variable-thing)", text)
         self.assertIn("`1.1.0`: summary updated; members added: `kind`", text)
         self.assertIn("| Name | Kind | Summary | Introduced | Changed | Deprecated | Removed |", text)
-        self.assertIn("| Version | Added | Changed | Removed |", text)
-        self.assertIn("Removed in: `1.1.0`", text)
-        self.assertIn("Shown for historical reference.", text)
+        self.assertNotIn("#type-alias-thing", text)
         self.assertIn("Widget interface updated.", text)
-        self.assertIn("**Version Changes**", text)
-        self.assertIn("call signatures updated", text)
+        self.assertIn("## History", text)
+        self.assertIn('href="#history-updated-1-1-0"', text)
         self.assertIn("`kind`", text)
         self.assertNotIn("internalOnly", text)
         self.assertNotIn("`debug`", text)
+        history = json.loads(history_report.read_text(encoding="utf-8"))
+        items = {item["id"]: item for item in history["items"]}
+        self.assertFalse(items["@daml/types::Type Aliases::Thing"]["current_present"])
+        self.assertIsNone(items["@daml/types::Type Aliases::Thing"]["route"])
+        self.assertEqual(
+            items["@daml/types::Functions::makeWidget"]["route"],
+            "/reference/typescript#function-makewidget",
+        )
 
     def test_render_type_handles_sdk_typedoc_type_nodes(self) -> None:
         self.assertEqual(
