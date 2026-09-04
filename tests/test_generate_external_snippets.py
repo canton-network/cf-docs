@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -139,3 +141,85 @@ def test_wrapper_copies_helper_runs_extraction_and_copies_output(
         "```text\nhello\n```"
     )
     assert (target / "example.mdx").read_text(encoding="utf-8") == "```text\nhello\n```"
+
+
+def _write_string_marker_fixture(
+    tmp_path: Path, source_text: str, *, normalize_indent: bool | None = None
+) -> tuple[Path, Path]:
+    source_dir = tmp_path / "source"
+    helper = source_dir / "scripts" / "docs" / "generateOutputDocs.js"
+    config = helper.parent / "exportConfig.json"
+    source = source_dir / "docs" / "example.txt"
+
+    helper.parent.mkdir(parents=True)
+    source.parent.mkdir(parents=True)
+    shutil.copy2(generator.helper_path(), helper)
+    options: dict[str, object] = {"language": "text"}
+    if normalize_indent is not None:
+        options["normalizeIndent"] = normalize_indent
+    config.write_text(
+        json.dumps(
+            {
+                "snippets": [
+                    {
+                        "snippetName": "example",
+                        "sourceFilepath": "docs/example.txt",
+                        "location": {
+                            "type": "stringMarker",
+                            "start": "SNIPPET_START",
+                            "end": "SNIPPET_END",
+                        },
+                        "options": options,
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    source.write_text(source_text, encoding="utf-8")
+    return source_dir, helper
+
+
+def test_string_marker_preserves_first_line_indentation(tmp_path: Path) -> None:
+    source_dir, helper = _write_string_marker_fixture(
+        tmp_path,
+        "before\nSNIPPET_START\n\n    first\n        second\n\nSNIPPET_END\nafter\n",
+        normalize_indent=False,
+    )
+
+    generator.run_extraction(source_dir, helper, quiet=True, dry_run=False)
+
+    assert (source_dir / "docs-output" / "example.mdx").read_text(
+        encoding="utf-8"
+    ) == "```text\n    first\n        second\n```"
+
+
+@pytest.mark.parametrize("duplicate_marker", ["SNIPPET_START", "SNIPPET_END"])
+def test_string_marker_rejects_duplicate_markers(
+    tmp_path: Path, duplicate_marker: str
+) -> None:
+    source_dir, helper = _write_string_marker_fixture(
+        tmp_path,
+        "\n".join(
+            [
+                "SNIPPET_START",
+                "content",
+                "SNIPPET_END",
+                duplicate_marker,
+                "",
+            ]
+        ),
+    )
+
+    result = subprocess.run(
+        ["node", helper],
+        cwd=source_dir,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert f'Marker must appear exactly once, found 2: "{duplicate_marker}"' in (
+        result.stderr
+    )

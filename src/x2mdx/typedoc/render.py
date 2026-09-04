@@ -3,11 +3,20 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from pathlib import Path
+from functools import cmp_to_key
 from typing import Any
 
+from x2mdx.history.events import history_events_for_item
+from x2mdx.history.models import HistoryEvent, HistoryEventKind, SurfaceHistoryReport
+from x2mdx.history.versioning import compare_versions
 from x2mdx.output import Page
+from x2mdx.reference_pages import (
+    ReferenceBadge,
+    ReferenceMetaItem,
+    reference_badges_for_history_events,
+)
 from x2mdx.templating import markdown_page
+from x2mdx.typedoc.history import typedoc_item_id
 
 
 def escape_md_cell(text: str) -> str:
@@ -30,7 +39,8 @@ def render_change_summary(change_details: list[dict[str, object]]) -> str:
     parts: list[str] = []
     for entry in change_details:
         version = str(entry["version"])
-        changes = entry["changes"] if isinstance(entry.get("changes"), list) else []
+        raw_changes = entry.get("changes")
+        changes: list[object] = raw_changes if isinstance(raw_changes, list) else []
         rendered_changes = "; ".join(str(change) for change in changes) if changes else "details updated"
         parts.append(f"`{version}`: {rendered_changes}")
     return "<br/>".join(parts) if parts else "-"
@@ -39,27 +49,6 @@ def render_change_summary(change_details: list[dict[str, object]]) -> str:
 def render_summary_cell(text: str) -> str:
     summary = text.strip()
     return escape_md_cell(summary) if summary else "-"
-
-
-def version_change_summary_rows(exports: list[dict[str, object]], versions: list[str]) -> list[list[str]]:
-    rows: list[list[str]] = []
-    for version in versions:
-        added = sum(1 for export in exports if export["introduced_in"] == version)
-        changed = sum(
-            1
-            for export in exports
-            if any(str(entry["version"]) == version for entry in export["change_details"])
-        )
-        removed = sum(1 for export in exports if export["removed_in"] == version)
-        rows.append(
-            [
-                f"`{version}`",
-                f"`{added}`" if added else "-",
-                f"`{changed}`" if changed else "-",
-                f"`{removed}`" if removed else "-",
-            ]
-        )
-    return rows
 
 
 def _type_parameter_rows(items: list[dict[str, Any]]) -> list[list[str]]:
@@ -95,10 +84,14 @@ def _signature_docs(signature_docs: list[dict[str, Any]]) -> list[dict[str, Any]
     ]
 
 
-def _export_context(export: dict[str, Any]) -> dict[str, Any]:
+def _export_context(
+    export: dict[str, Any],
+    *,
+    package_name: str,
+    history_report: SurfaceHistoryReport | None,
+) -> dict[str, Any]:
     lifecycle_bits = [
         f"Kind: `{export['kind_label']}`",
-        f"Introduced: `{export['introduced_in']}`",
     ]
     if export["lifecycle_label"]:
         lifecycle_bits.append(f"Lifecycle: `{export['lifecycle_label']}`")
@@ -106,17 +99,32 @@ def _export_context(export: dict[str, Any]) -> dict[str, Any]:
         lifecycle_bits.append(f"Replaces: `{escape_mdx_text(export['replaces'])}`")
     if export["deprecated_text"]:
         lifecycle_bits.append(f"Deprecated: {escape_mdx_text(export['deprecated_text'])}")
-    if export["change_details"]:
-        lifecycle_bits.append("Changed in: " + ", ".join(f"`{entry['version']}`" for entry in export["change_details"]))
-    if export["removed_in"]:
-        lifecycle_bits.append(f"Removed in: `{export['removed_in']}`")
-        lifecycle_bits.append("Shown for historical reference.")
     if export["source_location"]:
         lifecycle_bits.append(f"Source: `{export['source_location']}`")
+
+    if history_report is not None:
+        item = history_report.items_by_id()[
+            typedoc_item_id(package_name, str(export["key"]))
+        ]
+        badges = reference_badges_for_history_events(
+            list(
+                history_events_for_item(
+                    item,
+                    comparison_versions=history_report.comparison_versions,
+                )
+            ),
+            kind_label=str(export["kind_label"]),
+        )
+    else:
+        badges = [
+            ReferenceBadge(str(export["kind_label"]), "protocol"),
+            ReferenceBadge(f"Added {export['introduced_in']}", "added"),
+        ]
 
     return {
         "anchor": str(export["anchor"]),
         "name": str(export["name"]),
+        "badges": badges,
         "lifecycle_bits": lifecycle_bits,
         "change_rows": [
             [
@@ -140,22 +148,107 @@ def _export_context(export: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def package_history_events(history_report: SurfaceHistoryReport) -> list[HistoryEvent]:
+    grouped: dict[tuple[HistoryEventKind, str], list[tuple[str, HistoryEvent]]] = defaultdict(list)
+    for item in history_report.current_items():
+        symbol_name = item.id.rsplit("::", 1)[-1]
+        for event in history_events_for_item(
+            item,
+            comparison_versions=history_report.comparison_versions,
+        ):
+            grouped[(event.kind, event.version)].append((symbol_name, event))
+
+    events: list[HistoryEvent] = []
+    for (kind, version), entries in grouped.items():
+        details: tuple[str, ...]
+        if kind == HistoryEventKind.INTRODUCED:
+            noun = f"exported symbol{'s' if len(entries) != 1 else ''}"
+            details = (f"{len(entries)} {noun} added.",)
+        elif kind in {HistoryEventKind.DEPRECATED, HistoryEventKind.REMOVE_AS_OF}:
+            details = tuple(sorted({name for name, _ in entries}, key=str.casefold))
+        else:
+            details = tuple(
+                f"{name}: {detail.replace('`', '')}"
+                for name, event in entries
+                for detail in (event.details or (event.label,))
+            )
+        events.append(
+            HistoryEvent(
+                kind=kind,
+                version=version,
+                label=entries[0][1].label,
+                details=details,
+                evidence=tuple(
+                    dict.fromkeys(
+                        evidence
+                        for _, event in entries
+                        for evidence in event.evidence
+                    )
+                ),
+            )
+        )
+
+    priority = {
+        HistoryEventKind.REMOVE_AS_OF: 0,
+        HistoryEventKind.DEPRECATED: 1,
+        HistoryEventKind.CHANGED: 2,
+        HistoryEventKind.INTRODUCED: 3,
+        HistoryEventKind.REPLACEMENT: 4,
+    }
+
+    def compare(left: HistoryEvent, right: HistoryEvent) -> int:
+        version_comparison = compare_versions(
+            left.version,
+            right.version,
+            known_order=history_report.comparison_versions,
+        )
+        if version_comparison:
+            return -version_comparison
+        return priority[left.kind] - priority[right.kind]
+
+    return sorted(events, key=cmp_to_key(compare))
+
+
 def build_page(
     report,
     *,
     output_path: str,
     page_title: str,
     page_description: str,
+    history_report: SurfaceHistoryReport | None = None,
 ) -> Page:
+    current_exports = [export for export in report.exports if export["status"] == "active"]
     exports_by_group: dict[str, list[dict[str, object]]] = defaultdict(list)
-    for export in report.exports:
+    for export in current_exports:
         exports_by_group[export["group"]].append(export)
 
     grouped_exports = []
     for group_title in report.export_groups:
         exports = exports_by_group.get(group_title)
         if exports:
-            grouped_exports.append({"title": group_title, "exports": [_export_context(export) for export in exports]})
+            grouped_exports.append(
+                {
+                    "title": group_title,
+                    "exports": [
+                        _export_context(
+                            export,
+                            package_name=report.package_name,
+                            history_report=history_report,
+                        )
+                        for export in exports
+                    ],
+                }
+            )
+
+    history_events = package_history_events(history_report) if history_report else []
+    page_badges = (
+        reference_badges_for_history_events(
+            history_events,
+            kind_label="TypeScript",
+        )
+        if history_report
+        else [ReferenceBadge("TypeScript", "protocol")]
+    )
 
     return markdown_page(
         path=output_path,
@@ -163,6 +256,14 @@ def build_page(
         description=page_description,
         template_name="typedoc/page.md.j2",
         report=report,
+        page_title=page_title,
+        page_summary=page_description,
+        page_badges=page_badges,
+        page_meta_items=[
+            ReferenceMetaItem("Package", report.package_name),
+            ReferenceMetaItem("Current release", report.publish_version),
+            ReferenceMetaItem("Compared releases", str(len(report.versions))),
+        ],
         toc_rows=[
             [
                 f"[{code_span(export['name'])}](#{export['anchor']})",
@@ -171,10 +272,10 @@ def build_page(
                 code_span(export["introduced_in"]),
                 escape_md_cell(render_change_summary(export["change_details"])),
                 code_span(export["lifecycle_label"]) if export["lifecycle_label"] == "Deprecated" else "-",
-                code_span(export["removed_in"]) if export["removed_in"] else "-",
+                "-",
             ]
-            for export in report.exports
+            for export in current_exports
         ],
-        version_change_summary_rows=version_change_summary_rows(report.exports, report.versions),
         grouped_exports=grouped_exports,
+        history_events=history_events,
     )
