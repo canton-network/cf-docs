@@ -430,6 +430,24 @@ UPDATE_TARGETS = (
         ),
     ),
     UpdateTarget(
+        key="canton-error-codes-reference",
+        title="Update Canton error-code reference",
+        branch="generated-docs/canton-error-codes-reference/update",
+        description=(
+            "Regenerates the checked-in Canton error-code inventory from runtime "
+            "metadata in the latest public Canton release binary."
+        ),
+        generate_commands=(("nix-shell", "--run", "npm run generate:canton-error-codes-reference"),),
+        paths=("docs-main/global-synchronizer/reference/error-codes.mdx",),
+        summary_kind="static",
+        summary_path=None,
+        summary_label=None,
+        validation=(
+            "npm run generate:canton-error-codes-reference",
+            "git diff --check",
+        ),
+    ),
+    UpdateTarget(
         key="canton-metrics-reference",
         title="Update Canton metrics reference",
         branch="generated-docs/canton-metrics-reference/update",
