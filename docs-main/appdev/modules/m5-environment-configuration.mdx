@@ -421,6 +421,86 @@ dpm update
 
 See the docs section on [Publishing Dars](/sdks-tools/cli-tools/dpm#publishing-dars-to-an-oci) to learn how to publish your own `oci://` dars
 
+#### Git Dars
+
+<Note>
+Support for git DAR dependencies is unreleased.
+</Note>
+
+You can depend on a `.dar` stored in a public git repository. Git is another remote source, like OCI. Put the location under `dependencies` or `data-dependencies`.
+
+The canonical form is:
+
+```
+git:<host>/<repo>#<ref>?path=<path/inside/the/repo.dar>
+```
+
+- `<ref>` is a branch, a tag, or a commit SHA.
+- `?path=` is required, relative to the repo root, and must end in `.dar`.
+- A trailing `.git` on the repo is optional.
+- HTTPS only. SSH clone URLs are not supported. The repository must be public.
+
+You can add a dependency using `dpm add dar`:
+```shell
+dpm add dar --data-dependencies 'git:example.com/my/dars#1.2.3?path=my-package-1.2.3.dar'
+```
+
+Resulting `daml.yaml`
+``` yaml
+# daml.yaml
+data-dependencies:
+  - git:example.com/my/dars#82a5467ac5bf4ed78415dee71f7af587a9e7a8f5?path=my-package-1.2.3.dar
+```
+
+`dpm add dar` and `dpm install` rewrite a branch or tag `<ref>` to a commit SHA. You can pass `--dependencies` instead of `--data-dependencies`.
+
+For a GitHub release asset:
+
+```
+git:github.com/example/my-dars?release=1.2.3&asset=my-package-1.2.3.dar
+```
+
+`?release=` is supported on `github.com` only. Omit `&asset=` to expand the entry into one line per `.dar` on that release. On other hosts, use `#<ref>?path=` instead. Release lines are not rewritten to a commit SHA.
+
+You can write the same information as a mapping. `dpm install` pins it using the canonical one-liner:
+
+```yaml
+data-dependencies:
+  - git:
+      url: example.com/my/dars
+      ref: 1.2.3
+      path: my-package-1.2.3.dar
+```
+
+or, for a GitHub release:
+
+```yaml
+data-dependencies:
+  - git:
+      url: github.com/example/my-dars
+      release: 1.2.3
+      # asset: my-package-1.2.3.dar   # optional
+```
+
+To reuse one repository URL for several DARs, name it under `artifact-locations` and refer to it as `@alias`. The alias is only the repo URL; `#ref` and `?path=` stay on the dependency line. After `dpm install`, the alias is replaced by a full `git:` line.
+
+```yaml
+artifact-locations:
+  "@my-dars":
+    url: git:example.com/my/dars
+
+data-dependencies:
+  - "@my-dars#1.2.3?path=my-package-1.2.3.dar"
+```
+
+`dpm add dar` also accepts a browser `raw`/`blob` URL to a `.dar` and writes the canonical line into `daml.yaml`. Do not paste a browser URL into `daml.yaml` yourself.
+
+```shell
+dpm add dar --data-dependencies 'https://github.com/example/my-dars/raw/refs/tags/1.2.3/my-package-1.2.3.dar'
+```
+
+See [Building and Packaging](/appdev/modules/m3-building-packaging#how-to-depend-on-daml-packages) for `dependencies` vs `data-dependencies`.
+
 ## Next Steps
 
 - [Deployment Progression](/appdev/modules/m5-deployment-progression) — Environment differences and promotion checklist
