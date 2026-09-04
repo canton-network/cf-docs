@@ -77,8 +77,10 @@ def load_daml_doc_sources(
     if publish_version is not None and not isinstance(publish_version, str):
         raise ValueError("Manifest `publish_version` must be a string when present")
 
+    raw_source = manifest.get("source")
+    source = raw_source if isinstance(raw_source, str) else None
     return DamlDocsSources(
         snapshots=snapshots,
         publish_version=publish_version,
-        source=manifest.get("source") if isinstance(manifest.get("source"), str) else None,
+        source=source,
     )
