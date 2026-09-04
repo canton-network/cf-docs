@@ -7,9 +7,9 @@ Canton relies on PostgreSQL for its storage needs. A key capability of Canton is
 
 # Use a Professional Cloud Operator
 
-While there are procedures to recover a node's data from the network, they are rather complex (there is an incoming improvement with GetRemoteAcs in 3.7), time-consuming, and only allow you to recover the current state, not history. The simpler approach is therefore to avoid performing these procedures by not corrupting your data.
+While there are procedures to recover a node's data from the network, they are rather complex, time-consuming, and only allow you to recover the current state, not history. The simpler approach is therefore to avoid performing these procedures by not corrupting your data.
 
-Operating a database is not trivial, especially when dealing with faults and issues. The simplest way is to rely on cloud-based SQL services offered by all cloud providers, and additionally export the database and store it securely in a second location (ideally encrypted).
+Operating a database is not trivial, especially when handling faults and operational issues. The simplest approach leverages cloud-native SQL services offered by all cloud providers, complemented by exporting the database and storing a secure and encrypted backup in a secondary location.
 
 If you choose to run your own database yourself, you need to ensure that your data is correct and that your recovery procedures are in place. The present guide summarizes a few recipes in this regard. Note that some recipes require expert knowledge and are listed here solely to guide experts through the recovery process. Manipulating databases without care may result in data corruption and loss.
 
@@ -21,7 +21,7 @@ The following action items may help you to prevent data corruption.
 In Kubernetes, use StatefulSets and use at least ReadWriteOnce (or even better ReadWriteOncePod) to protect the volume.
 If you are using Docker Compose, be very careful when manipulating compose.yaml or changing volume and Postgres service names. Always check what is running before operating the cluster, and manually shut down any existing ones before starting new containers. Never run with `--scale=2` and similar.
 
-- **Ensure Postgres Shuts Down Cleanly:** Postgres is designed to recover from crashes and sudden system shutdowns. However, recovering from a crash delays startup and therefore the restart time, and increases the risk of data corruption by triggering bugs in either the containerization, the file system, or the disk driver. It may also be a sign of duplicate access to the volume. Therefore, monitor the postgres.log of your database, and check whether Postgres is invoking crash recovery, which is indicated by the following log line:
+- **Ensure Postgres Shuts Down Cleanly:** Postgres is designed to recover from crashes and sudden system shutdowns. However, recovering from a crash delays startup and therefore the restart time, and increases the risk of data corruption by triggering bugs in either the containerization, the file system, or the disk driver. It may also be an indication of duplicate access to the volume. Therefore, monitor the postgres.log of your database, and check whether Postgres is invoking crash recovery, which is indicated by the following log line:
 `database system was not properly shut down; automatic recovery in progress`
 
 - **Checksums:** Make sure that Postgres checksums are enabled. Use PSQL to check `SHOW data_checksums`. Alternatively, use `SELECT name, setting, source FROM pg_settings WHERE name IN ('fsync','full_page_writes','synchronous_commit', 'wal_sync_method','data_checksums');` to inspect various consistency-related settings of your Postgres instance.
@@ -73,6 +73,6 @@ Repairing the database is generally not possible. If the database is corrupted, 
 
 The only case where a database might be repaired is when some indexes on auxiliary tables are broken. In this case, a simple REINDEX TABLE <tablename> will rebuild the database index. This might be an option in case the issue affects a section of the database where errors cannot propagate. Note that broken indexes may result from hardware failure; as such, further investigation is necessary.
 
-# Final Summary
+# Final Takeaway
 
-There has been no reported case of database corruption in Canton operated on Cloud SQL. The same cannot be said for databases run in containers, whether on K8S or Docker Compose setups.
+There has been no reported case of database corruption in Canton operated on Cloud SQL. The same cannot be said for databases run in containers, whether on K8S or Docker Compose setups. Therefore, if you want to avoid troubles use a cloud-native SQL solution.
