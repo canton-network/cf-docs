@@ -58,7 +58,9 @@ def test_update_targets_cover_all_generated_doc_surfaces() -> None:
         "daml-standard-library",
         "daml-script",
         "typescript-bindings",
+        "canton-console-reference",
         "canton-metrics-reference",
+        "canton-topology-proto-link",
         "canton-release-notes",
         "wallet-gateway-release-notes",
         "wallet-sdk-release-notes",
@@ -368,6 +370,7 @@ def test_generated_clean_paths_include_target_paths_and_internal_output() -> Non
     assert "docs-main/reference/typescript" in clean_paths
     assert "docs-main/snippets/generated/version-dashboard-data.mdx" in clean_paths
     assert "docs-main/global-synchronizer/deployment/validator-kubernetes.mdx" in clean_paths
+    assert "docs-main/global-synchronizer/reference/canton-console-commands.mdx" in clean_paths
     assert "docs-main/global-synchronizer/reference/canton-metrics.mdx" in clean_paths
     assert "docs-main/global-synchronizer/release-notes" in clean_paths
     assert "docs-main/integrations/release-notes/wallet-gateway.mdx" in clean_paths
