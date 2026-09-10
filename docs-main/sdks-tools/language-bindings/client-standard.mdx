@@ -1,0 +1,188 @@
+---
+title: "Client Standard"
+description: "Capability standard for Canton Ledger client libraries, including existing and upcoming functionality."
+---
+
+This page captures the Ledger Client Standard from the source matrix in `temp/Client Standard.html`.
+
+- The **Existing functionality** column marks capabilities expected today.
+- The **Upcoming functionality** column marks capabilities planned for upcoming iterations.
+
+<style>{`
+  .client-standard-wrap {
+    overflow-x: auto;
+  }
+
+  .client-standard {
+    width: 100%;
+    min-width: 980px;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+    line-height: 1.4;
+  }
+
+  .client-standard th,
+  .client-standard td {
+    border: 1px solid #999999;
+    padding: 8px 10px;
+    vertical-align: top;
+  }
+
+  .client-standard thead th {
+    background: #434343;
+    color: #ffffff;
+    text-align: left;
+  }
+
+  .client-standard .status {
+    text-align: center;
+    width: 130px;
+    font-weight: 600;
+    vertical-align: middle;
+  }
+
+  .client-standard .section td {
+    color: #ffffff;
+    font-weight: 700;
+    border-color: #ffffff;
+    letter-spacing: 0.01em;
+  }
+
+  .client-standard .sec-codegen td { background: #0b5394; }
+  .client-standard .sec-infra td { background: #45818e; }
+  .client-standard .sec-commands td { background: #b85b22; }
+  .client-standard .sec-streams td { background: #134f5c; }
+  .client-standard .sec-parties td { background: #351c75; }
+  .client-standard .sec-packages td { background: #59473f; }
+  .client-standard .sec-topology td { background: #741b47; }
+  .client-standard .sec-user td { background: #0c343d; }
+  .client-standard .sec-multisync td { background: #1155cc; }
+  .client-standard .sec-token td { background: #6aa84f; }
+  .client-standard .sec-docs td { background: #0b5394; }
+
+  .client-standard .tone-white td { background: #ffffff; }
+  .client-standard .tone-blue td { background: #cfe2f3; }
+  .client-standard .tone-bluegray td { background: #d0e0e3; }
+  .client-standard .tone-peach td { background: #fce5cd; }
+  .client-standard .tone-lavender td { background: #d9d2e9; }
+  .client-standard .tone-gray td { background: #efefef; }
+  .client-standard .tone-pink td { background: #ead1dc; }
+  .client-standard .tone-green td { background: #d9ead3; }
+`}</style>
+
+<div className="client-standard-wrap">
+  <table className="client-standard">
+    <thead>
+      <tr>
+        <th>Domain</th>
+        <th>Additional info</th>
+        <th>Existing functionality</th>
+        <th>Upcoming functionality</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr className="section sec-codegen"><td colSpan="4">Codegen and bindings</td></tr>
+      <tr className="tone-white"><td>Daml representation</td><td>Implementation contains a code-generating tool that is able to convert Daml types into the native representation in the target language. <br />It must support <br />- all serializable Daml types<br />- interfaces<br />- contract keys<br />- dependencies</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-blue"><td>JSON Codec</td><td>The tool extends the code-generated objects in the native language with methods to serialize and deserialize to JSON format required in the Ledger API Json requests and responses</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-white"><td>gRPC Codec</td><td>The tool extends the code-generated objects in the native language with methods to serialize and deserialize to proto format required in the Ledger API gRPC requests and responses</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-blue"><td>JSON Bindings</td><td>The library provides utility wrappers in the host languages that facilitate construction and bridge the interaction between the classes generated from Ledger API OpenAPI definitions and the classes code-generated from Daml</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-white"><td>gRPC Bindings</td><td>The library provides utility wrappers in the host languages that facilitate construction and bridge the interaction between the classes generated from Ledger API proto definitions and the classes code-generated from Daml</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-blue"><td>PQS bindings</td><td>The library provides mechanisms that bridge the interaction between the tables in PQS and and the classes code-generated from Daml</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="section sec-infra"><td colSpan="4">Basic infrastructure</td></tr>
+      <tr className="tone-white"><td>TLS</td><td>The library utilizes secure HTTP and gRPC connections using TLS. <br />It supports mutual and server-side TLS.</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-bluegray"><td>Authorization</td><td>The library supports client credential workflow to obtain and refresh oauth tokens. <br />It has the capability to inject the JWT tokens into the call context</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-white"><td>Error parsing and handling</td><td>The library has the ability to parse and process all types of errors returned by Ledger API. <br />It supports<br />- classification of errors into retriable and non-retriable<br />- JSON and gRPC errors<br />- extraction of the error code, message, request info, error info and other structured details such as contract ids, packages, party names etc.</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-bluegray"><td>Tracing</td><td>The library handles tracing according to the Open Telemetry standard and OTLP servers. <br />It supports<br />- creation and injection of trace ids into the headers of the requests <br />- extraction of trace ids from the response <br />- support JSON and gRPC requests<br />- report the spans to the OpenTelemetry compatible OTLP server</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-white"><td>Retry logic</td><td>The library handles seamlessly the retry logic for Ledger API calls. <br />It supports<br />- retries on retriable errors only<br />- timeouts <br />- maximum number of retries</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-bluegray"><td>Logging</td><td>The library is able to log using a standard library adequate for the host language.<br />It supports<br />- logging requests and responses<br />- utilizes trace-ids<br />- verbose logging of Ledger API errors<br />- configurable log level sensitivity<br />- configurable log destination<br />- configurable log format</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-white"><td>Metrics</td><td>The library handles metrics according to OpenTelemetry standard<br />It supports<br />- sending metrics to the OTLP server<br />- reporting vitals of the communication: number of requests and responses<br />- breakdown by error and success<br />- breakdown by endpoint</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-bluegray"><td>Signing</td><td>The library supports signing algorithms that are needed in the externally signed Ledger API endpoints.<br />It supports<br />- KMS systems<br />- keys provided in a file<br />- all algorithms supported by canton</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-white"><td>Node Health</td><td>The library supports monitoring node's health letting the client applications respond to the intermittent and permanent failure situations.</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="section sec-commands"><td colSpan="4">Commands</td></tr>
+      <tr className="tone-white"><td>JSON</td><td>The library facilitates construction and submission of Daml commands over the Ledger API JSON endpoint.<br />It supports<br />- create commands<br />- exercise commands</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-peach"><td>gRPC</td><td>The library facilitates construction and submission of Daml commands over the Ledger API gRPC endpoint.<br />It supports<br />- create commands<br />- exercise commands</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-white"><td>Internal commands</td><td>The library uses the internal command submission endpoints.<br />It supports<br />- submit method<br />- submitAndWait in all its forms</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-peach"><td>External commands</td><td>The library uses externally signed command submission endpoints<br />It supports<br />- prepare method<br />- execute method<br />- executeAndWait in all its forms</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-white"><td>Deduplication</td><td>The library contains logic that allows client applications to send commands in a reliable fashion utilizing the built-in deduplicating provisions of the Ledger API.<br />It supports<br />- error handling<br />- retries</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-peach"><td>Command recovery</td><td>The library is capable of recovering pending command state after the crash utilizing command completion endpoint.<br />It supports<br />- recovery from participant crash<br />- recovery from client crash<br />- recovery from lost connection<br />- recovery from a timeout</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-white"><td>Batching</td><td>The library is capable of creating batched Ledger API commands.</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-peach"><td>Contract keys</td><td>The library uses Ledger API command submission provisions for contract keys.<br />It supports<br />- exercising choices by contract keys<br />- prefetching of contract keys for accelerated execution</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-white"><td>Explicit disclosure</td><td>The library uses explicit disclosure to augment the submitted commands with additional contracts that the submitting party is not privy to.</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-peach"><td>Pending set</td><td>The library keeps track of the contracts that are being operated on in a pending data set.<br />It supports<br />- keeping track of consuming exercises<br />- keeping track of creates<br />- keeping track of non-consuming exercises</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-white"><td>Package selection</td><td>The library allows selecting a particular package version preference for command submission in the package_id_selection_preference field.</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-peach"><td>HA</td><td>The library supports command deduplication across multiple participants that host the same submitting parties.</td><td className="status"></td><td className="status">Yes</td></tr>
+      <tr className="section sec-streams"><td colSpan="4">Streams</td></tr>
+      <tr className="tone-white"><td>JSON</td><td>The library facilitates query construction and subscription to ACS and Update streams over the Ledger API JSON endpoint.</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-bluegray"><td>gRPC</td><td>The library facilitates query construction and subscription to ACS and Update streams over the Ledger API gRPC endpoint.</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-white"><td>ACS streaming</td><td>The library uses streaming endpoints to retrieve the ACS for given parties and templates. It utilizes streaming endpoints in gRPC and websocket endpoints in JSON.</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-bluegray"><td>ACS paging</td><td>The library uses paging endpoints to retrieve the ACS for given parties and templates. It utilizes paging in gRPC and JSON.</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-white"><td>Updates streaming</td><td>The library uses streaming endpoints to retrieve the updates for given parties and templates. It utilizes streaming endpoints in gRPC and websocket endpoints in JSON.</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-bluegray"><td>Updates paging</td><td>The library uses paging endpoints to retrieve the updates for given parties and templates. It utilizes paging in gRPC and JSON.</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-white"><td>Reverse order</td><td>The library can serve data in reverse order utilizing appropriate Ledger API provisions.</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-bluegray"><td>Interfaces</td><td>The library subscribes to and processes interface views</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-white"><td>Topology events</td><td>The library subscribes to and processes topology events</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-bluegray"><td>In memory ACS</td><td>The library contains a component that keeps an in-memory copy of the Active Contract Set.<br />It supports<br />- parameterization by set of parties and templates<br />- filters to limit the ACS to contracts with specific attributes<br />- initiates from an ACS query and keeps current view by subscribing to update stream<br />- interface views</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-white"><td>Resilient streams</td><td>The library can recover a stream after an interrupt from the last known location.<br />It supports<br />- recovery from the last offset<br />- recovery from the last record time vector<br />- recovery from the continuation token</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-bluegray"><td>HA</td><td>The library can recover a stream transmission after a switch-over to a secondary participant.<br />It supports<br />- record time vectors<br />- paging restarts</td><td className="status"></td><td className="status">Yes</td></tr>
+      <tr className="section sec-parties"><td colSpan="4">Parties</td></tr>
+      <tr className="tone-white"><td>JSON</td><td>The library utilizes party management functionality of the Ledger API using JSON endpoints.</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-lavender"><td>gRPC</td><td>The library utilizes party management functionality of the Ledger API using gRPC endpoints.</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-white"><td>List parties</td><td>The library supports listing parties on the node using various filtering criteria.</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-lavender"><td>Local parties creation</td><td>The library can create parties local to the participant node. It takes advantage of self administration mode where party is automatically assigned to the requesting user.</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-white"><td>External parties creation</td><td>The library can create external parties. It supports<br />- generate method<br />- signing<br />- allocate method<br />- self administration mode</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-lavender"><td>Local parties modification</td><td>The library can change aspects of the party topology definition. In particular it supports<br />- changing mapping of parties to participants<br />- changing participant permission levels</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-white"><td>External parties modification</td><td>The library can change aspects of the party topology definition. In particular it supports<br />- changing mapping of parties to participants<br />- changing participant permission levels<br />- changing keys responsible for transaction signing<br />- change the signature threshold</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-lavender"><td>Decentralized party creation</td><td>The library can manage decentralized parties. In particular it supports<br />- create a decentralized namespace<br />- modify a decentralized namespace<br />- changing participant permission levels<br />- changing keys responsible for transaction signing<br />- change the signature threshold</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="section sec-packages"><td colSpan="4">Packages</td></tr>
+      <tr className="tone-white"><td>JSON</td><td>The library utilizes package management functionality of the Ledger API using JSON endpoints.</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-gray"><td>gRPC</td><td>The library utilizes package management functionality of the Ledger API using gRPC endpoints.</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-white"><td>Upload</td><td>The library facilitates the upload of the DAR packages to the participant using the Ledger API endpoints</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-gray"><td>Validation</td><td>The library facilitates the validation of the DAR packages to the participant using the Ledger API endpoints</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-white"><td>Vetting</td><td>The library facilitates vetting of the required packages on the target participants and synchronizers. It is capable of computing the required vetting action from the current vetting state and the desired outcome.</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-gray"><td>Listing</td><td>The library facilitates listing the packages on the participant using various criteria such as package names, ids, participants and synchronizers</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-white"><td>Package preference</td><td>Library facilitates the selection of the preferred packages for a command submission. It makes sure the preference conforms with the existing vetting state.</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-gray"><td>Description</td><td>The library uses the daml description service to request the descriptors of the daml package and types from the participants</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="section sec-topology"><td colSpan="4">Topology</td></tr>
+      <tr className="tone-white"><td>List mappings</td><td>The library enables the retrieval and inspection of current topology mappings. Users can apply precise list parameters to restrict search results based on specific mapping types or attributes.</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-pink"><td>Mapping presentation</td><td>The library supports rendering of the topology mapping in a format idiomatic to the target programming language.</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-white"><td>Mapping construction</td><td>The library facilitates creation of new topology mappings by abstracting the underlying complexity of calculating state modifications relative to prior values.</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-pink"><td>Mapping signing</td><td>The library supports signing of topology transactions,</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-white"><td>Mapping submission</td><td>The library facilitates submission of the signed topology transactions. It supports<br />synchronous and asynchronous semantics.</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-pink"><td>Namespace delegations</td><td>The library supports managing namespace delegations of all shapes</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-white"><td>Decentralized namespaces</td><td>The library supports managing decentralized namespace delegations of all shapes</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-pink"><td>Owner to key mapping</td><td>The library supports managing owner to key mappings of all shapes</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-white"><td>Party to participant</td><td>The library supports managing party to participant mappings  of all shapes</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-pink"><td>Party to key mapping</td><td>The library supports managing party to key mappings  of all shapes</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-white"><td>Vetted packages</td><td>The library supports managing vetted package mappings  of all shapes</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-pink"><td>Admin API</td><td>The library supports topology functionality exposed through the Admin API</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-white"><td>Ledger API</td><td>The library supports topology functionality exposed through the Ledger API</td><td className="status"></td><td className="status">Yes</td></tr>
+      <tr className="section sec-user"><td colSpan="4">User</td></tr>
+      <tr className="tone-white"><td>Self-inspect</td><td>The library allows the users to pull own record to check permissions and other settings.</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-bluegray"><td>Self-admin</td><td>The library allows the users to manage add and modify the parties attached to the user account.</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-white"><td>Traffic computation</td><td>The library processes the traffic cost estimations produced by the prepare transactions. It facilitates setting limits on transaction cost. can convert the traffic cost expressed in the synchronizer units to local units of the validator</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-bluegray"><td>Traffic account listing and inspecting</td><td>The library supports listing traffic accounts available to the user and inspecting the account balance</td><td className="status"></td><td className="status">Yes</td></tr>
+      <tr className="tone-white"><td>Traffic account selection</td><td>The library facilitates selecting a traffic account to be debited during the command submission</td><td className="status"></td><td className="status">Yes</td></tr>
+      <tr className="tone-bluegray"><td>Traffic top-up</td><td>The library facilitates the top up operation replenishing the traffic accounts with fresh credits</td><td className="status"></td><td className="status">Yes</td></tr>
+      <tr className="section sec-multisync"><td colSpan="4">Multi-synchronizer</td></tr>
+      <tr className="tone-white"><td>Listing</td><td>The library lists connected synchronizers for the participant in general and for a party in particular</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-blue"><td>Parties</td><td>The library allows managing party allocations and changing topology configurations across multiple synchronizers.</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-white"><td>Packages</td><td>The library allows users to maintain package vetting where the set of package versions vetted on each synchronizer is separately tailored for the needs of the application workflows.</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-blue"><td>Commands</td><td>The library allows the clients to select the the target synchronizer. It keeps track of it during command retries and in the completion processing.</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-white"><td>Streams</td><td>The library keeps track of the current synchronizer of the contract. It handles the out of order assign and unassign events putting them back in order distilling the most up to date contract state.</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="section sec-token"><td colSpan="4">Token Standard</td></tr>
+      <tr className="tone-white"><td>One step transfers</td><td>The library supports workflows with one step transfers</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-green"><td>Pre-approvals</td><td>The library supports pre-approvals</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-white"><td>Allocate</td><td>The library supports trade allocations</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-green"><td>Transfer</td><td>The library supports asset transfers</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-white"><td>Instrument inspection</td><td>The library supports instrument inspection</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-green"><td>V1</td><td>The library supports interactions with interfaces and templates written according to TS standard V1</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-white"><td>V2</td><td>The library supports interactions with interfaces and templates written according to TS standard V2</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="section sec-docs"><td colSpan="4">Documentation</td></tr>
+      <tr className="tone-white"><td>User manual</td><td>The library is shipped with the comprehensive user manual that covers all functionality offered by the library. It must explain how to do X in language Y for each of the rows covered in this standard.</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-blue"><td>Tutorials</td><td>The library is shipped with tutorials that demonstrate key interactions:<br />- building applications<br />- configuration<br />- connecting to ledger<br />- creating and managing users, parties<br />- uploading and vetting packages<br />- submitting commands using internal and external signing<br />- maintaining acs<br />- interacting with pqs<br />- managing traffic credits</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-white"><td>Examples</td><td>The library is shipped with example application(s) that showcases the capabilities and can be used as a blueprint for developers</td><td className="status">Yes</td><td className="status"></td></tr>
+      <tr className="tone-blue"><td>Reference</td><td>The library is shipped with a complete reference material where each class, method and function is explained.</td><td className="status">Yes</td><td className="status"></td></tr>
+    </tbody>
+  </table>
+</div>
+
