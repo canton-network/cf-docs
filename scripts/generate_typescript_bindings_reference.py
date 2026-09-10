@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from docs_env import ensure_repo_direnv, repo_direnv_command
+from generated_reference_sources.typescript_bindings import stable_npm_versions, version_key
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CACHE_ROOT = Path(os.environ.get("XDG_CACHE_HOME", "~/.cache")).expanduser() / "x2mdx"
@@ -24,6 +25,7 @@ DEFAULT_TYPEDOC_DIR = REPO_ROOT / ".internal" / "generated" / "x2mdx" / "typescr
 DEFAULT_OUTPUT_FILE = REPO_ROOT / "docs-main" / "reference" / "typescript.mdx"
 LEGACY_OUTPUT_FILE = REPO_ROOT / "docs-main" / "sdks-tools" / "language-bindings" / "typescript.mdx"
 DEFAULT_DOCS_JSON = REPO_ROOT / "docs-main" / "docs.json"
+DEFAULT_LIFECYCLE_METADATA = REPO_ROOT / "config" / "x2mdx" / "typescript-bindings" / "lifecycle.json"
 DEFAULT_NAV_GROUP = "TypeScript"
 LEGACY_NAV_GROUPS = ("Daml TypeScript Bindings",)
 
@@ -41,6 +43,9 @@ class TypeScriptPackageConfig:
     page_title: str
     page_description: str
     output_file: Path
+    history_report: Path
+    reader_route: str
+    surface_id: str
     cache_key: str
 
 
@@ -58,6 +63,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--manifest-out", default=str(DEFAULT_MANIFEST))
     parser.add_argument("--output-file", default=str(DEFAULT_OUTPUT_FILE))
     parser.add_argument("--docs-json", default=str(DEFAULT_DOCS_JSON))
+    parser.add_argument("--lifecycle-metadata", default=str(DEFAULT_LIFECYCLE_METADATA))
     parser.add_argument("--nav-dropdown", default="API Reference")
     parser.add_argument("--nav-group", default=DEFAULT_NAV_GROUP)
     parser.add_argument("--version", action="append", help="Version to include. Repeat to limit generation.")
@@ -225,6 +231,7 @@ def configured_packages(source_config: dict[str, Any], args: argparse.Namespace)
         packages = [
             {
                 "package_name": source_config.get("package_name") or "@daml/types",
+                "min_version": source_config.get("min_version"),
                 "versions": source_config.get("versions"),
                 "publish_version": source_config.get("publish_version"),
                 "typedoc_version": source_config.get("typedoc_version"),
@@ -246,11 +253,32 @@ def configured_packages(source_config: dict[str, Any], args: argparse.Namespace)
         package_name = str(package.get("package_name") or "")
         if not package_name:
             raise ValueError("Each TypeScript package config must define `package_name`")
-        versions = string_list(package.get("versions"), field=f"packages[{package_name}].versions")
+        configured_versions = package.get("versions")
+        if configured_versions is not None:
+            versions = string_list(
+                configured_versions,
+                field=f"packages[{package_name}].versions",
+            )
+        else:
+            min_version = str(package.get("min_version") or "")
+            if not min_version:
+                raise ValueError(
+                    f"Each TypeScript package config must define `min_version`: {package_name}"
+                )
+            minimum_key = version_key(min_version)
+            versions = [
+                version
+                for version in stable_npm_versions(package_name)
+                if version_key(version) >= minimum_key
+            ]
+            if not versions:
+                raise ValueError(
+                    f"No stable npm versions found for {package_name} at or above {min_version}"
+                )
         selected_versions = [version for version in versions if not args.version or version in set(args.version)]
         if not selected_versions:
             raise ValueError(f"No versions selected for {package_name}")
-        publish_version = args.publish_version or str(package.get("publish_version") or selected_versions[-1])
+        publish_version = args.publish_version or selected_versions[-1]
         if publish_version not in selected_versions:
             raise ValueError(
                 f"Publish version '{publish_version}' for {package_name} is not present in selected versions: {selected_versions}"
@@ -260,6 +288,18 @@ def configured_packages(source_config: dict[str, Any], args: argparse.Namespace)
         if output_file in seen_output_files:
             raise ValueError(f"Duplicate TypeScript output file configured: {output_file}")
         seen_output_files.add(output_file)
+        history_report = path_from_config(
+            str(package.get("history_report") or ""),
+            base=REPO_ROOT,
+        ).resolve()
+        if not str(package.get("history_report") or ""):
+            raise ValueError(
+                f"Each TypeScript package config must define `history_report`: {package_name}"
+            )
+        reader_route = "/" + docs_json_page_ref(
+            output_file,
+            Path(args.docs_json).resolve(),
+        )
 
         typedoc_args = package.get("typedoc_args") or []
         if not isinstance(typedoc_args, list) or not all(isinstance(item, str) and item for item in typedoc_args):
@@ -274,10 +314,22 @@ def configured_packages(source_config: dict[str, Any], args: argparse.Namespace)
                 entry_point=str(package.get("entry_point") or source_config.get("entry_point") or "index.d.ts"),
                 typedoc_args=list(typedoc_args),
                 source_name=str(package.get("source") or source_config.get("source") or f"Published {package_name} npm tarballs rendered to local TypeDoc JSON"),
-                version_filter=str(package.get("version_filter") or args.version_filter),
+                version_filter=str(
+                    package.get("version_filter")
+                    or (
+                        f"stable {package_name} npm releases at or above "
+                        f"{package.get('min_version')}"
+                    )
+                ),
                 page_title=str(package.get("page_title") or package_name),
                 page_description=str(package.get("page_description") or args.page_description),
                 output_file=output_file,
+                history_report=history_report,
+                reader_route=reader_route,
+                surface_id=str(
+                    package.get("surface_id")
+                    or f"typescript-{package_cache_key(package_name)}"
+                ),
                 cache_key=str(package.get("cache_key") or package_cache_key(package_name)),
             )
         )
@@ -461,6 +513,18 @@ def main() -> int:
             package.page_title,
             "--page-description",
             package.page_description,
+            "--history-report",
+            str(package.history_report),
+            "--reader-route",
+            package.reader_route,
+            "--surface-id",
+            package.surface_id,
+            "--surface-title",
+            package.page_title,
+            "--configured-scope",
+            f"Published exports from {package.package_name}",
+            "--lifecycle-metadata",
+            str(Path(args.lifecycle_metadata).resolve()),
         )
         for version in args.version or []:
             command.extend(["--version", version])

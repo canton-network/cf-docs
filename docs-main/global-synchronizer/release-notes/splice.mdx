@@ -3,6 +3,413 @@ title: "Splice"
 description: "Release notes and version history for Global Synchronizer software"
 ---
 
+## 0.8.0
+
+  - Summary of Breaking Changes:
+
+    | Breaking API Changes | Protocol Changes  | Daml Model Changes |
+    | :------------------- | :---------------- | :----------------- |
+    | yes                  | yes (*)           | yes                |
+
+    Details:
+
+    - Breaking API Changes:
+
+      - Scan App will no longer return featured app rights as part of the choice context for CC transfers and allocations.
+        The vote to make this configuration effective will happen after the release. We expect the SVs will vote on this configuration change as part of the breaking config changes event associated with this release.
+        Validators must upgrade to this version before this change takes effect.
+
+      - The deprecated ``TransferCommand`` functionality enabled by
+        ``canton.validator-apps.validator_backend.enable-deprecated-transfer-command-support=true`` has been fully removed.
+
+    - Protocol Changes:
+
+      - (*) The protocol version remains 35, but the ordering layer has been prepared for a switch from CometBFT to CantonBFT. This switch will require an LSU.
+        The LSU to implement this switch on DevNet has already taken place, which has allowed early testing.
+        Final confirmation that this switch will be rolled out to TestNet and MainNet as part of this release will be announced soon.
+
+    - Daml Model Changes:
+
+      - Add Daml support for delaying minting of development fund coupons and for blacklisting development fund managers.
+        The vote to make this configuration effective will happen after the release. We expect the SVs to vote on this configuration change as part of the breaking config changes event associated with this release.
+        Applications that statically depend on ``splice-amulet`` must recompile against the new version before this change takes effect.
+
+      - Add Daml support for SVs to coordinate switchover of configurations by voting on precise switchover times.
+        We anticipate that the SVs and the Foundation may use this feature to vote on the delayed minting described above.
+        Validators must upgrade to this version before this feature is used for the first time.
+
+      - These changes require a Daml upgrade to the following versions:
+
+        | name | version |
+        | :--- | :--- |
+        | amulet | 0.1.23 |
+        | amuletNameService | 0.1.24 |
+        | dsoGovernance | 0.1.29 |
+        | validatorLifecycle | 0.1.9 |
+        | wallet | 0.1.24 |
+        | walletPayments | 0.1.23 |
+
+
+
+  - Postgres image in Compose, LocalNet & splice-postgres Helm chart
+
+    - The default ``imageName`` of the postgres in ``splice-postgres`` has changed
+      from ``imageName: "postgres:14"`` to ``imageName: "postgres:14.24-trixie"``.
+      The image for Postgres 14 has been based on Debian Trixie since 14.18, released on 2025-05-08.
+      If you were somehow using an older or non-trixie version of the postgres image,
+      you might encounter `locale issues <https://wiki.postgresql.org/wiki/Locale_data_changes>`_.
+      In that case you should use a compatible version of the image you're using.
+      Two related reminders:
+
+        - Postgres 14 is reaching end-of-life in November 2026, so you should plan to upgrade to Postgres 18.
+
+        - The ``splice-postgres`` chart is deprecated since Splice 0.6.13, so you should use something else.
+
+  - SV App
+
+    - The public ``/v0/dso`` endpoint is deprecated and will be removed in 0.9.0
+      (see also the release notes for 0.5.5 for the original deprecation notice).
+      Use the public ``/v0/dso`` endpoint in the scan app if you need to fetch DSO info
+      without SV operator credentials.
+      A new ``/v1/dso`` endpoint has been added that returns the same response as ``/v0/dso``
+      but requires authorization as SV operator.
+
+    - Joining SVs now fetch DSO info during onboarding from a scan instance
+      (typically the sponsor's) instead of the sponsor SV app's deprecated public
+      ``/v0/dso`` endpoint. The scan is configured via the new ``.joinWithKeyOnboarding.sponsorScanUrl`` Helm value.
+      SVs who set the ``.joinWithKeyOnboarding`` key config must set it before upgrading.
+
+  - Scan App
+
+    - *Breaking* Scan will no longer return featured app rights as part of the choice context for CC transfers and allocations
+      once ``no-featured-app-choice-context`` has been set in ``svOperationsSwitchOverTimes`` and the switchover time has been reached.
+      This change was made to avoid apps accidentally not complying with the marker guidance set by the Canton foundation which requires precise control over the markers issued. If you
+      really do intend to feature a CC transfer, you can query for the contract through ``/api/scan/v0/featured-apps/{provider_party_id}`` on Scan
+      and add it to the choice context under the ``featured-app-right`` choice context key.
+
+      Validators *must* upgrade to 0.8.0 before the SVs vote on
+      setting the ``svOperationsSwitchOverTimes`` field or risk
+      breakage as the ``DsoRules`` contract cannot be downgraded
+      once the field is set.
+
+
+  - CometBFT
+
+    - Increased default resources of watchdog and made it only query for metrics it needs.
+
+  - Daml
+
+<Warning title="Important">
+
+          **Action required for app devs:** apps with Daml code that statically depends on
+          ``splice-amulet`` should recompile against the new version. When the SVs set
+          ``minDevelopmentFundMintingDelay`` or ``developmentFundManagerBlacklist``, those
+          values block downgrades to package versions that do not enforce them. From that
+          point, code that still links against the old ``AmuletConfig`` stops working.
+
+</Warning>
+
+    - Add an optional ``mintAfter`` field to ``DevelopmentFundCoupon``. Add
+      ``minDevelopmentFundMintingDelay`` and ``developmentFundManagerBlacklist`` to
+      ``AmuletConfig``.
+      The SVs need to set a minimum delay between coupon allocation and minting
+      by the beneficiary. They can also block minting of coupons from blacklisted
+      fund managers.
+
+      This change addresses suggestion QS2 from Quantstamp in the
+      `Canton Coin 2026 audit <https://certificate.quantstamp.com/full/canton-coin-2026-audit/7719ab33-0012-4bb6-bf6c-ce3c0335a93d/index.html#suggestions-qs2>`_.
+
+      This release does not change existing behavior. Both config fields default to unset.
+      The SVs enforce the minting delay when they set ``minDevelopmentFundMintingDelay``
+      to a non-zero value. They block minting of the coupons of a development fund manager
+      when they add that manager to ``developmentFundManagerBlacklist``. While
+      ``minDevelopmentFundMintingDelay`` stays unset, callers can allocate coupons
+      without ``mintAfter`` and mint them immediately, as before.
+
+      Callers of ``AmuletRules_AllocateDevelopmentFundCoupon`` must change their call sites
+      before the SVs set a non-zero delay. After that, the choice rejects allocations
+      that omit ``mintAfter``. Coupons allocated before that vote have no ``mintAfter``.
+      A beneficiary can mint those coupons with no delay.
+
+  - Wallet UI
+
+    - The development fund allocation form now has a ``Mint After`` field, which sets the
+      earliest time at which the beneficiary can mint the coupon. While
+      the ``minDevelopmentFundMintingDelay`` stays unset in the ``AmuletConfig``, the field is
+      optional and the coupons are allocated without a mint-after
+      constraint.
+
+    - The development fund coupon list now shows a ``Mint After`` column.
+
+  - Validator
+
+    - *breaking*: The deprecated ``TransferCommand`` functionality
+      enabled by ``canton.validator-apps.validator_backend.enable-deprecated-transfer-command-support=true``
+      has been fully removed. Migrate to token standard transfers
+      and remove the flag.
+
+    - The wallet endpoint ``/v0/wallet/development-fund-coupons/allocate`` accepts an
+      optional ``mintAfter`` field, in epoch microseconds. Callers must set it once the SVs
+      configure a non-zero ``minDevelopmentFundMintingDelay``, otherwise the allocations
+      will be rejected.
+
+  - Helm
+
+    - The node pods of the operator charts now accept a ``priorityClassName``, so operators can
+      protect a node from eviction under resource pressure. It is unset by default, which leaves
+      scheduling behaviour unchanged.
+
+    - The Postgres role and bootstrap database used by the validator and participant charts are
+      no longer hardcoded. ``persistence.user`` and ``persistence.bootstrapDatabaseName`` are now
+      honoured by the ``pg-init`` and wait containers, by the Postgres exporter sidecar, and — for
+      the participant — by the Canton node itself, which previously always connected as
+      ``cnadmin`` regardless of the configured value. They default to ``cnadmin`` and
+      ``cantonnet``, so rendered output is unchanged unless you set them. This matters for
+      operators moving off ``splice-postgres`` to a self-provisioned or managed Postgres, where a
+      ``cnadmin`` superuser and a ``cantonnet`` database may not be available to create. The SV
+      charts are not covered yet and still use the hardcoded values.
+
+    - All Splice Helm charts now set ``automountServiceAccountToken: false`` on the pods they
+      deploy. Splice components do not use the Kubernetes API, so pods no longer receive an
+      API-server credential by default; this reduces the impact of a compromised pod in
+      clusters where permissions are bound to the namespace's ``default`` service account.
+      If your deployment relies on the mounted token, for example through a custom service
+      account set via ``serviceAccountName``, you can restore the previous behavior by setting
+      the new ``automountServiceAccountToken`` Helm value to ``true``.
+
+    - The (long unused) `splice-domain` Helm chart is deprecated and will be removed in 0.9.0.
+
+  - SV UI
+
+    - The ``AmuletRules_SetConfig`` proposal form can now set
+      ``minDevelopmentFundMintingDelay`` and ``developmentFundManagerBlacklist``.
+
+## 0.7.5
+
+   - Upgrade Canton to `3.5.15`.
+
+  - Docker
+
+      - Updated Docker base image to 1.0.13, which updates gRPC health probe to v0.4.55.
+
+  - Scan & SV App
+
+      - The client IP used for per-client-IP HTTP rate limiting is now extracted based on a
+        configurable, ordered list of headers, ``rate-limiting.client-ip-headers``, which defaults
+        to ``["x-forwarded-for", "x-real-ip"]``. The first configured header that is present and
+        whose value parses as an IP literal is used; for comma separated values (as in
+        ``X-Forwarded-For``) the first entry is taken. Configuring an empty list disables the
+        extraction, in which case no per-client-IP rate limit is enforced.
+
+        This replaces the ``rate-limiting.trusted-client-ip-header`` and
+        ``rate-limiting.enable-client-provided-ip-headers`` options, which have been removed.
+
+  - Scan App
+
+      - The endpoints ``/v1/state/acs`` and ``/v1/holdings/state`` are now deprecated, please use the new counterparts,
+        ``/v2/state/acs`` and ``/v2/holdings/state``.
+        The only change between v1 and v2 is the type of the pagination token (``after`` in request, ``next_page_token``
+        in response), which is now a String instead of a number.
+        The deprecated V1 endpoints are planned to be removed in Splice 0.9.0.
+
+  - SV App
+
+      - The SV app OpenAPI specification now annotates endpoints
+        (``x-jvm-package: sv_public``) with an ``x-external-audience`` extension, which is one of
+        ``validators`` (endpoints that validator operators need to reach), ``svs``
+        (endpoints that only other SVs need to reach) or ``none`` (endpoints that do not
+        need to be reachable from outside of the SV node's own deployment, e.g. the CometBFT
+        endpoints). SV operators can use this
+        annotation to restrict the external exposure of their SV app: only the endpoints of a
+        given audience need to be reachable from the corresponding networks, and endpoints with
+        an audience of ``none``, as well as endpoints without an ``x-external-audience``, do not
+        need to be exposed to external traffic at all.
+        Note that endpoints currently marked for exposure to validators will be phased out in the foreseeable future,
+        and replaced by a new limited number of endpoints which should be made available only on DevNet.
+
+
+## 0.7.4
+
+   - Upgrade Canton to `3.5.14`.
+
+   - Scan app
+
+       - The ``enable-app-activity-record-and-traffic-ingestion`` and
+         ``serve-app-activity-records-and-traffic`` configuration options have been removed. App
+         activity records and sequencer traffic are now always ingested, and app activity is
+         always computed and served on the corresponding HTTP endpoints.
+
+   - SV App
+
+       - The SV app now exposes a ``splice.sv_vote_requests.active`` metric counting the active
+         vote requests by their state relative to the SV (``action_needed``, ``in_progress``,
+         ``ready_to_close``), allowing SV operators to alert on vote proposals that require
+         their vote.
+
+   - SV UI
+
+       - The governance page now has a search field: paste a vote proposal contract ID to
+         filter the Action Required, Inflight Votes, and Vote History sections down to that
+         proposal, or press Enter to open its details page directly.
+
+   - Scan & SV App
+
+       - HTTP rate limiting has been extended with a global rate limiter applied across all
+         operations, optional per-client-IP rate limiting (enabled by default at the global level),
+         and an additional sustained rate limit enforced over a longer window on top of the existing
+         per-second burst limit. The client IP is taken from the trusted, non-spoofable
+         ``X-Envoy-External-Address`` header set by the Envoy/Istio ingress, falling back to the
+         client-controlled ``X-Forwarded-For``/ ``X-Real-Ip`` headers and finally the remote
+         address only for requests that did not pass through the ingress. These can be tuned via
+         the ``rate-limiting`` config keys.
+
+<Warning title="Important">
+
+            When per-client-IP rate limiting is enabled, SV operators must ensure that the client IP
+            used for rate limiting cannot be spoofed. Either configure
+            ``rate-limiting.trusted-client-ip-header`` to a trusted, non-spoofable header set by
+            your ingress/proxy (e.g. ``x-envoy-external-address`` for Istio deployments), or ensure
+            that the ``X-Forwarded-For`` header contains the actual client IP as its first value
+            and cannot be spoofed by clients. Otherwise, clients may bypass per-client-IP limits or
+            cause other clients to be throttled by forging these headers.
+</Warning>
+
+         The fallback to the client-controlled ``X-Forwarded-For``/ ``X-Real-Ip`` headers can be
+         disabled by setting ``rate-limiting.enable-client-provided-ip-headers`` to ``false``.
+         If no IP can be extracted no per IP rate limit is enforced.
+
+         Comprehensive documentation about rate limiting configuration and infrastructure requirements (for SVs) will be added in the future.
+
+       - Default rate limits have been adjusted.
+
+   - CometBFT
+
+       - Added a watchdog to restart cometbft when we detect that it
+         is replaying messages. You must set
+         ``watchdog.sequencerMetricsUrl: http://global-domain-SERIAL_ID-sequencer:10013/metrics`` and
+         ``watchdog.mediatorMetricsUrl: http://global-domain-SERIAL_ID-mediator:10013/metrics`` in the
+         cometbft helm values. If needed, the watchdog can be disabled through ``watchdog.enabled: false``.
+
+
+       - Bump the default ``deduplicationCacheSize`` to ``1000000``.
+
+## 0.7.3
+
+   - Upgrade Canton to `3.5.14-snapshot.20260815.19176.0.v65fa04f6` to
+     fix a CantonBFT issue that got surfaced on devnet. To recover devnet, Supervalidators must upgrade
+     and temporarily set the following environment variable.
+     Make sure to remove the environment variable again after devnet is recovered.
+
+     ```
+        - name: ADDITIONAL_CONFIG_VIEW_CHANGE_TIMEOUT
+          value: |
+            canton.sequencers.sequencer.sequencer.config.view-change-timeout-override = 30s
+     ```
+
+## 0.7.2
+
+   - Upgrade Canton to `3.5.13`.
+
+   - SV App
+
+     - The SV app now reconciles the `setBalanceRequestSubmissionWindowSize` traffic control parameter of the global synchronizer against a new SV app config value `set-balance-request-submission-window-size`, which defaults to Canton's current default of 2 minutes.
+        This parameter defines the time window used to compute the max sequencing time of traffic purchase (top-up) requests.
+        Canton lowered its default from 4 minutes to 2 minutes (see the [Canton 3.5.1 release notes](https://docs.canton.network/global-synchronizer/release-notes/canton-releases/3-5-1#minor-breaking-changes)).
+        Networks bootstrapped on an older version (DevNet, TestNet, MainNet) still use the old value for this parameter.
+        By upgrading to this version, SVs agree to change this parameter to 2 minutes (unless they override the new SV app config value).
+        The change takes effect once a sufficient number of SVs have upgraded.
+
+     - The governance UI no longer stops an SV from casting or changing its vote once a proposal's target effective time has passed. Votes are now accepted for as long as the vote request is open, matching what the ledger allows. This makes it possible to reject a proposal whose action fails to execute and which would otherwise remain in flight indefinitely.
+
+     - Network banner now always shows. The network name is derived from the scan node's public URL: MainNet/TestNet/DevNet/ScratchNet from the cluster subdomain, LocalNet for localhost, and a capitalized fallback otherwise (Unknown Network when no scan URL is available).
+
+   - SV UI
+
+     - During the creation of `AmuletRules_SetConfig` proposal, for the `rewardConfig` config field form improve the field descriptions and use drop-downs.
+
+   - Participant
+
+     - [Session-signing keys](/overview/learn/cryptographic-keys#kms-with-session-signing-keys) are now officially supported for KMS-enabled validator and SV participants. Please see the updated example configurations for [validators](/global-synchronizer/production-operations/validator-security) and [SVs](/global-synchronizer/production-operations/sv-security) for details on how to enable on Splice deployments.
+       Session signing keys reduce KMS load and cost on KMS-backed participants by signing most messages with short-lived in-memory keys instead of calling the KMS each time.
+
+## 0.7.1
+
+   - Upgrade Canton to ``3.5.12``.
+
+   - Wallet app
+
+       - Duplicate wallet operations submitted with the same command id (e.g. ``tap``, ``transfer``,
+         token standard transfers) now return the original result idempotently instead of ``HTTP 409``.
+         This aligns with standard idempotency-key semantics: a second request with a previously
+         accepted command id receives a ``200`` response with the same result as the first.
+         Concurrent duplicates, where no submission has completed yet, are still rejected.
+
+       - ``TransferPreapprovalProposal`` s are now accepted if there is an existing one but it has expired.
+
+   - CantonBft
+
+       - Increase the default segment length by 4x to reduce performance impact from epoch switches.
+
+   - Validator App
+
+       - Added a ``type`` parameter to validator config's ``reward-sharing-config-by-party`` option.
+
+         When this is set to ``external``, it indicates that the assignment of reward coupons to beneficiaries is being managed by a process external to the validator app, and thus the validator app's automation does not assign or mint the unassigned coupons.
+
+         The ``type`` defaults to ``built-in`` preserving the existing behavior where the validator app will either mint the unassigned rewards coupons, or assign them to beneficiaries if configured.
+
+         See the reward-sharing documentation for details:
+         https://docs.canton.network/global-synchronizer/splice-fundamentals/reward-sharing#reward-sharing
+
+         Example enabling external sharing automation for a party::
+
+             ```canton.validator-apps.<validator>.reward-sharing-config-by-party = {
+               "<party-id>" = {
+                 type = "external"
+                 # Optionally batch-size may be specified to configure the maximum number of coupons to mint in a single transaction
+                 batch-size = 80
+               }
+             }
+             ```
+
+
+## 0.7.0
+
+   - PostgreSQL 18
+
+       - Splice now officially supports PostgreSQL 18.
+         **Warning**: Note that that PostgreSQL 14, which was the default until now, will reach End of Life on November 12, 2026.
+         You should upgrade before that date.
+
+   - Scan app
+
+       - Remove deprecated `/transactions` endpoint.
+
+   - Validator app
+
+       - The deprecated `TransferCommand` functionality consisting
+         of the endpoints
+         `/v0/admin/external-party/transfer-preapproval/prepare-send`,
+         `/v0/admin/external-party/transfer-preapproval/submit-send`
+         and the automation to execute transfer commands is now
+         disabled by default. If you were still using those switch to
+         token standard transfers which also support 24h submission
+         delays since [cip 107](https://github.com/canton-foundation/cips/blob/63761df732afa139d2977ca1f4908eef19e58d41/cip-0107/cip-0107.md?plain=1#L6)
+         If you need some time to migrate, you can temporarily
+         reenable it by setting
+         `canton.validator-apps.validator_backend.enable-deprecated-transfer-command-support=true`. The
+         functionality is expected to be fully removed in 0.8.0 so
+         this only provides a bit more time to migrate but you must
+         complete the migration.
+
+   - Deployment
+
+       - The sequencer and mediator can now be configured with independent `additionalJvmOptions` via the new `sequencer.additionalJvmOptions` and `mediator.additionalJvmOptions` values in the `splice-global-domain` helm chart.
+
+   - SV app
+
+     - Add support for updating weight via `UpdateFeaturedAppRight` governance voting UI.
+
 ## 0.6.14
 
   - Scan
@@ -171,7 +578,7 @@ description: "Release notes and version history for Global Synchronizer software
 
       - Greatly simplify the parsing of Amulet transaction history for wallets
         and explorers by reporting all holding changes as
-        [V2.EventLog_HoldingsChange](#type-splice-api-token-transfereventsv2-eventlogholdingschange-79855) events.
+        [V2.EventLog_HoldingsChange](/sdks-tools/api-reference/splice-daml/splice-api-token-transfer-events-v2/splice-api-token-transfereventsv2#type-splice-api-token-transfereventsv2-eventlogholdingschange-79855) events.
 
         Note that this required adding a **meta** (*Optional Metadata*) field to the ``AmuletRules.TransferOutput`` type and
         the ``TransferPreapproval_SendV2`` choice to properly propagate metadata from transfer creation to

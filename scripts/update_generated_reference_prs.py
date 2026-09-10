@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 import tempfile
@@ -12,7 +13,6 @@ from typing import Sequence
 
 import generated_reference_pr_utils as pr_utils
 import summarize_version_changes
-
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 NETWORK_VARIABLE_TAB_PAGES = (
@@ -47,7 +47,9 @@ class UpdateTarget:
     validation: tuple[str, ...]
     source_update_commands: tuple[tuple[str, ...], ...] = ()
     source_update_paths: tuple[str, ...] = ()
+    require_summary_changes: bool = False
     auto_merge: bool = True
+    requires_daml_tooling: bool = False
 
 
 UPDATE_TARGETS = (
@@ -81,36 +83,76 @@ UPDATE_TARGETS = (
             "config/repo-version-config.json",
             "docs-main/snippets/generated/version-dashboard-data.mdx",
         ),
+        require_summary_changes=True,
     ),
     UpdateTarget(
         key="splice-openapi",
         title="Update Splice OpenAPI reference",
         branch="generated-references/splice-openapi/update",
         description=(
-            "Updates the Splice OpenAPI source pin to the latest stable "
-            "decentralized-canton-sync release and regenerates the checked-in "
-            "Splice OpenAPI specifications and navigation."
+            "Discovers every eligible stable decentralized-canton-sync release, "
+            "publishes the latest Splice OpenAPI bundle, and regenerates the checked-in "
+            "specifications, operation pages, history, and navigation."
         ),
         generate_commands=(
             ("nix-shell", "--run", "npm run generate:splice-mintlify-openapi"),
         ),
         paths=(
-            "config/mintlify-openapi/splice-openapi/source-artifacts.json",
             "docs-main/docs.json",
             "docs-main/openapi/splice",
+            "docs-main/reference/splice-allocation-api",
+            "docs-main/reference/splice-allocation-instruction-api",
+            "docs-main/reference/splice-allocation-instruction-v2-api",
+            "docs-main/reference/splice-allocation-v2-api",
+            "docs-main/reference/splice-ans-api",
+            "docs-main/reference/splice-scan-api",
+            "docs-main/reference/splice-scan-proxy-api",
+            "docs-main/reference/splice-scan-streaming-api",
+            "docs-main/reference/splice-token-metadata-service",
+            "docs-main/reference/splice-transfer-instruction-api",
+            "docs-main/reference/splice-transfer-instruction-v2-api",
+            "docs-main/reference/splice-wallet-api-external",
         ),
-        summary_kind="source-config",
-        summary_path="config/mintlify-openapi/splice-openapi/source-artifacts.json",
-        summary_label="Splice OpenAPI",
+        summary_kind="static",
+        summary_path=None,
+        summary_label=None,
         validation=(
-            "npm run update:generated-reference-sources -- --source splice-openapi",
             "npm run generate:splice-mintlify-openapi",
             "git diff --check",
         ),
-        source_update_commands=(
-            ("nix-shell", "--run", "npm run update:generated-reference-sources -- --source splice-openapi"),
+    ),
+    UpdateTarget(
+        key="splice-token-standard-v2",
+        title="Update Token Standard v2 Daml reference",
+        branch="generated-references/splice-token-standard-v2/update",
+        description=(
+            "Regenerates the checked-in Canton Network Token Standard v2 Daml package "
+            "reference pages and normalized history from every eligible stable "
+            "canton-network/splice release tag."
         ),
-        source_update_paths=("config/mintlify-openapi/splice-openapi/source-artifacts.json",),
+        generate_commands=(
+            ("nix-shell", "--run", "npm run generate:splice-token-standard-v2-reference"),
+        ),
+        paths=(
+            "config/x2mdx/splice-token-standard-v2/source-artifacts.json",
+            "config/x2mdx/splice-token-standard-v2/lifecycle.json",
+            "docs-main/docs.json",
+            "docs-main/sdks-tools/api-reference/splice-daml/token-standard-v2-history-report.json",
+            "docs-main/sdks-tools/api-reference/splice-daml/splice-api-token-allocation-instruction-v2",
+            "docs-main/sdks-tools/api-reference/splice-daml/splice-api-token-allocation-request-v2",
+            "docs-main/sdks-tools/api-reference/splice-daml/splice-api-token-allocation-v2",
+            "docs-main/sdks-tools/api-reference/splice-daml/splice-api-token-holding-v2",
+            "docs-main/sdks-tools/api-reference/splice-daml/splice-api-token-transfer-events-v2",
+            "docs-main/sdks-tools/api-reference/splice-daml/splice-api-token-transfer-instruction-v2",
+        ),
+        summary_kind="static",
+        summary_path=None,
+        summary_label=None,
+        validation=(
+            "npm run generate:splice-token-standard-v2-reference",
+            "git diff --check",
+        ),
+        requires_daml_tooling=True,
     ),
     UpdateTarget(
         key="wallet-gateway-openrpc",
@@ -307,6 +349,7 @@ UPDATE_TARGETS = (
             ("nix-shell", "--run", "npm run update:generated-reference-sources -- --source daml-standard-library"),
         ),
         source_update_paths=("config/x2mdx/daml-standard-library/source-artifacts.json",),
+        requires_daml_tooling=True,
     ),
     UpdateTarget(
         key="daml-script",
@@ -336,6 +379,7 @@ UPDATE_TARGETS = (
             ("nix-shell", "--run", "npm run update:generated-reference-sources -- --source daml-script"),
         ),
         source_update_paths=("config/x2mdx/daml-script/source-artifacts.json",),
+        requires_daml_tooling=True,
     ),
     UpdateTarget(
         key="typescript-bindings",
@@ -368,6 +412,60 @@ UPDATE_TARGETS = (
         source_update_paths=("config/x2mdx/typescript-bindings/source-artifacts.json",),
     ),
     UpdateTarget(
+        key="canton-console-reference",
+        title="Update Canton console command reference",
+        branch="generated-docs/canton-console-reference/update",
+        description=(
+            "Regenerates the checked-in Canton console command reference from runtime "
+            "help metadata in the latest public Canton release binary."
+        ),
+        generate_commands=(("nix-shell", "--run", "npm run generate:canton-console-reference"),),
+        paths=("docs-main/global-synchronizer/reference/canton-console-commands.mdx",),
+        summary_kind="static",
+        summary_path=None,
+        summary_label=None,
+        validation=(
+            "npm run generate:canton-console-reference",
+            "git diff --check",
+        ),
+    ),
+    UpdateTarget(
+        key="canton-error-codes-reference",
+        title="Update Canton error-code reference",
+        branch="generated-docs/canton-error-codes-reference/update",
+        description=(
+            "Regenerates the checked-in Canton error-code inventory from runtime "
+            "metadata in the latest public Canton release binary."
+        ),
+        generate_commands=(("nix-shell", "--run", "npm run generate:canton-error-codes-reference"),),
+        paths=("docs-main/global-synchronizer/reference/error-codes.mdx",),
+        summary_kind="static",
+        summary_path=None,
+        summary_label=None,
+        validation=(
+            "npm run generate:canton-error-codes-reference",
+            "git diff --check",
+        ),
+    ),
+    UpdateTarget(
+        key="canton-release-protocol-versions",
+        title="Update Canton release/protocol compatibility",
+        branch="generated-docs/canton-release-protocol-versions/update",
+        description=(
+            "Regenerates the Canton release-to-protocol compatibility table from "
+            "runtime metadata in the latest public Canton release binary."
+        ),
+        generate_commands=(("nix-shell", "--run", "npm run generate:canton-release-protocol-versions"),),
+        paths=("docs-main/release-notes/releases-and-versioning.mdx",),
+        summary_kind="static",
+        summary_path=None,
+        summary_label=None,
+        validation=(
+            "npm run generate:canton-release-protocol-versions",
+            "git diff --check",
+        ),
+    ),
+    UpdateTarget(
         key="canton-metrics-reference",
         title="Update Canton metrics reference",
         branch="generated-docs/canton-metrics-reference/update",
@@ -386,12 +484,38 @@ UPDATE_TARGETS = (
         ),
     ),
     UpdateTarget(
+        key="canton-topology-proto-link",
+        title="Update Canton topology references",
+        branch="generated-docs/canton-topology-proto-link/update",
+        description=(
+            "Resolves the latest stable digital-asset/canton release, derives the matching "
+            "release-line branch URL for topology.proto, and regenerates the topology-transaction "
+            "protocol/protobuf compatibility table from the public release binary."
+        ),
+        generate_commands=(
+            ("nix-shell", "--run", "npm run generate:canton-topology-proto-link"),
+            ("nix-shell", "--run", "npm run generate:canton-topology-transaction-versions"),
+        ),
+        paths=(
+            "docs-main/snippets/generated/canton-topology-proto-link.mdx",
+            "docs-main/appdev/deep-dives/external-signing-topology.mdx",
+        ),
+        summary_kind="static",
+        summary_path=None,
+        summary_label=None,
+        validation=(
+            "npm run generate:canton-topology-proto-link",
+            "npm run generate:canton-topology-transaction-versions",
+            "git diff --check",
+        ),
+    ),
+    UpdateTarget(
         key="canton-release-notes",
         title="Update Canton release notes",
         branch="release-notes/canton/update",
         description=(
-            "Updates the published Canton release-note page from the latest stable "
-            "digital-asset/canton release note in `release-notes/*.md`."
+            "Updates the published Canton release-note pages from the `RELEASE-NOTES.md` "
+            "files in stable public Canton release bundles."
         ),
         generate_commands=(("nix-shell", "--run", "npm run update:canton-release-notes"),),
         paths=(
@@ -605,10 +729,26 @@ def process_target(*, target: UpdateTarget, base_sha: str, base_branch: str, rep
         )
         return
 
+    changes: list[str] | None = None
+    if target.require_summary_changes:
+        if before_path is None:
+            raise ValueError(f"Update target {target.key} requires a summary path")
+        changes = summarize_target_changes(target, before_path)
+        if not changes:
+            print(f"No material changes for {target.title}; skipping generation")
+            pr_utils.close_stale_pull_request(
+                title=target.title,
+                branch=target.branch,
+                base_branch=base_branch,
+                repository=repository,
+            )
+            return
+
     for command in target.generate_commands:
         pr_utils.run(command)
 
-    changes = summarize_target_changes(target, before_path) if before_path is not None else []
+    if changes is None:
+        changes = summarize_target_changes(target, before_path) if before_path is not None else []
     with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as body_file:
         body_path = Path(body_file.name)
     body_path.write_text(body_markdown(target=target, changes=changes), encoding="utf-8")
@@ -644,10 +784,21 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="List selected generated-doc targets and commands without changing files or opening PRs.",
     )
+    json_output = parser.add_mutually_exclusive_group()
+    json_output.add_argument(
+        "--print-targets-json",
+        action="store_true",
+        help="Print the selected target keys as JSON without running them.",
+    )
+    json_output.add_argument(
+        "--print-target-matrix-json",
+        action="store_true",
+        help="Print the selected targets as a GitHub Actions matrix without running them.",
+    )
     args = parser.parse_args()
     if "all" in args.targets and len(args.targets) > 1:
         parser.error("pass --targets all by itself, or list specific target keys")
-    if args.dry_run:
+    if args.dry_run or args.print_targets_json or args.print_target_matrix_json:
         args.base_branch = args.base_branch or ""
         args.repository = args.repository or ""
     else:
@@ -667,9 +818,27 @@ def targets_to_run(target_keys: Sequence[str]) -> tuple[UpdateTarget, ...]:
     return tuple(target for target in UPDATE_TARGETS if target.key in requested)
 
 
+def target_matrix(targets: Sequence[UpdateTarget]) -> dict[str, list[dict[str, str | bool]]]:
+    return {
+        "include": [
+            {
+                "target": target.key,
+                "requires_daml_tooling": target.requires_daml_tooling,
+            }
+            for target in targets
+        ]
+    }
+
+
 def main() -> int:
     args = parse_args()
     selected_targets = targets_to_run(args.targets)
+    if args.print_targets_json:
+        print(json.dumps([target.key for target in selected_targets]))
+        return 0
+    if args.print_target_matrix_json:
+        print(json.dumps(target_matrix(selected_targets)))
+        return 0
     if args.dry_run:
         for target in selected_targets:
             print(f"{target.key}: {target.title}")

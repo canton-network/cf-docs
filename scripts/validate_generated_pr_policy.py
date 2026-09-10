@@ -14,7 +14,7 @@ import update_generated_reference_prs
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-EXPECTED_AUTHOR = "app/github-actions"
+EXPECTED_AUTHOR = "app/cf-docs-generated-docs-merger"
 
 
 @dataclass(frozen=True)

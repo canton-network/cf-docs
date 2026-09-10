@@ -7,7 +7,6 @@ import DamlDocsSdksToolsDevelopmentToolsPqsL62 from "/snippets/daml-docs/sdks-to
 import DamlDocsSdksToolsDevelopmentToolsPqsL73 from "/snippets/daml-docs/sdks-tools_development-tools_pqs_L73.mdx";
 import DamlDocsSdksToolsDevelopmentToolsPqsL85 from "/snippets/daml-docs/sdks-tools_development-tools_pqs_L85.mdx";
 import DamlDocsSdksToolsDevelopmentToolsPqsL96 from "/snippets/daml-docs/sdks-tools_development-tools_pqs_L96.mdx";
-import DamlDocsSdksToolsDevelopmentToolsPqsL108 from "/snippets/daml-docs/sdks-tools_development-tools_pqs_L108.mdx";
 
 
 PQS (Participant Query Store) subscribes to a validator's transaction stream and projects contract data into a PostgreSQL database. Your backend queries this database with standard SQL, enabling: filtered queries, aggregations, joins, and full-text search that would be impractical through the Ledger API alone.
@@ -120,12 +119,27 @@ image:
   repo: europe-docker.pkg.dev/da-images/public/docker
   tag: "3.5.2"
 
-# Defines the Kubernetes ServiceAccount name and its annotations
+# Defines a Kubernetes ServiceAccount name and its annotations when create is true
+# Otherwise, specifies an existing Kubernetes ServiceAccount by name
 # (e.g., for workload identity mapping).
 serviceAccount:
+  create: true
   name: pqs-sa
   annotations:
     iam.gke.io/gcp-service-account: pqs-service-account@my-project.iam.gserviceaccount.com
+
+# (ONLY AVAILABLE FROM v3.5.5 ONWARDS)
+# Enables PQS auto pruning
+# Run as a kubernetes cronjob based on defined cron schedule
+autoPrune:
+  # Enable auto pruning (disabled by default)
+  enabled: false
+
+  # Define when the pqs pruning job will run format: POSIX 5 field cron schedule
+  cronSchedule: "0 * * * *"
+
+  # ISO 8601 - Default prunes >30 days
+  maxAge: "P30D"
 
 # Allows injection of custom initialization containers
 # that run to completion before the main PQS app starts.
@@ -279,15 +293,17 @@ PQS is tested for compatibility with multiple versions of dependencies, as follo
 
 ## SQL Query Examples
 
+These examples use the PQS SQL API — a set of provisioned functions that are the only database artifacts applications should query. See the [PQS SQL API reference](/appdev/reference/pqs-sql-reference) for the full function list and returned columns.
+
 ### Active Contracts
 
 Query all active contracts for a specific template:
 
 <DamlDocsSdksToolsDevelopmentToolsPqsL62 />
 
-### Transaction History
+### Recent Create Events
 
-View recent transactions for a party:
+View recent create events for a party:
 
 <DamlDocsSdksToolsDevelopmentToolsPqsL73 />
 
@@ -299,17 +315,14 @@ Count active contracts by template:
 
 ### Party Filtering
 
-Find all contracts visible to a specific party:
+Find contracts where a specific party is a signatory:
 
 <DamlDocsSdksToolsDevelopmentToolsPqsL96 />
 
 ## Performance Optimization
 
-### Indexes
-
-Add indexes on columns you query frequently. PQS creates basic indexes on startup, but your application may benefit from additional ones:
-
-<DamlDocsSdksToolsDevelopmentToolsPqsL108 />
+To speed up payload filters, create JSONB indexes with the supported `create_index_for_contract` procedure ([JSONB indexing](/appdev/reference/pqs-sql-reference#jsonb-indexing));
+for host and PostgreSQL tuning, see [Optimize](/sdks-tools/development-tools/pqs/optimize).
 
 ### Connection Pooling
 
@@ -317,9 +330,8 @@ Use a connection pool (like HikariCP for Java or `pg-pool` for Node.js) between 
 
 ### Query Patterns
 
-- Avoid `SELECT *` on large tables; specify the columns you need
-- Use `template_id` filters to narrow the dataset before applying payload filters
-- For time-range queries, add indexes on `effective_at` or `created_at` columns
+- Avoid `SELECT *` on large result sets; specify the columns you need
+- Use the `name` argument of the table functions (for example `active('Licensing:License')`) to narrow the dataset before applying payload filters
 
 ## High Availability and Database Sharing
 

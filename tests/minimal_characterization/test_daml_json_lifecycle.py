@@ -180,8 +180,8 @@ class DamlJsonMinimalLifecycleTests(unittest.TestCase):
             overview,
             [
                 '<p class="x2mdx-ref-eyebrow">Daml Reference</p>',
-                '<a class="x2mdx-ref-card" href="/reference/daml-json/da-alpha">',
-                '<a class="x2mdx-ref-card" href="/reference/daml-json/da-current">',
+                '<a class="x2mdx-ref-card-title" href="/reference/daml-json/da-alpha">DA.Alpha</a>',
+                '<a class="x2mdx-ref-card-title" href="/reference/daml-json/da-current">DA.Current</a>',
                 "1.1.0",
             ],
         )
