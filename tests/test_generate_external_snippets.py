@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -8,6 +9,24 @@ from pathlib import Path
 import pytest
 
 from scripts import generate_external_snippets as generator
+
+
+def test_canton_docs_cn_imports_have_manifest_destinations() -> None:
+    """Historical snippet names must still match their configured destinations."""
+    config = json.loads(generator.config_path(generator.REPOS["canton"]).read_text())
+    destinations = {snippet["snippetName"] for snippet in config["snippets"]}
+    imports = {
+        name
+        for page in (generator.CF_DOCS_ROOT / "docs-main").rglob("*.mdx")
+        for name in re.findall(
+            r"from [\"']/snippets/external/canton/main/"
+            r"(docs-open/target/snippet_json_data/docs-cn/[^\"']+)\.mdx[\"']",
+            page.read_text(encoding="utf-8"),
+        )
+    }
+
+    assert imports
+    assert not imports - destinations
 
 
 def test_copy_helper_and_config_copies_helper(tmp_path: Path) -> None:
