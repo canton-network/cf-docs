@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from dataclasses import replace
 from typing import cast
 
 import yaml
@@ -730,6 +731,14 @@ def build_asyncapi_report_from_sources(
                 latest=history["details"][last_seen_in],
             )
         )
+
+    for index, channel in enumerate(merged_channels):
+        retained_actions = {action["action"]: action for action in channel.latest.get("actions", [])}
+        history = channel_history[channel.channel]
+        for version in reversed(history["versions"]):
+            for action in history["details"][version].get("actions", []):
+                retained_actions.setdefault(action["action"], action)
+        merged_channels[index] = replace(channel, latest={**channel.latest, "actions": list(retained_actions.values())})
 
     merged_channels.sort(key=lambda channel: (1 if channel.status == "removed" else 0, channel.channel))
 

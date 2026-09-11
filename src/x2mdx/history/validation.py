@@ -314,10 +314,10 @@ def validate_history_report(report: SurfaceHistoryReport) -> None:
     current_routes = [
         item.route
         for item in report.items
-        if item.current_present and item.route is not None
+        if item.route is not None
     ]
     if len(current_routes) != len(set(current_routes)):
-        problems.append("current item routes must be unique")
+        problems.append("reader routes must be unique")
     known_item_ids = set(item_ids)
     for item in report.items:
         _validate_item(item, report=report, item_ids=known_item_ids, problems=problems)

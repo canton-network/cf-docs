@@ -506,3 +506,27 @@ def test_humanized_operation_title_drops_a_dangling_preposition() -> None:
     )
 
     assert 'title: "POST /v2/updates/flats"' in rendered
+
+
+def test_removed_operation_has_historical_schema_and_no_live_playground() -> None:
+    from x2mdx.history import Evidence, EvidenceKind, HistoryEvent
+
+    removal = HistoryEvent(
+        kind=HistoryEventKind.REMOVED, version="2.0.0", label="Removed in",
+        details=("Last available in 1.0.0.",),
+        evidence=(Evidence(EvidenceKind.SNAPSHOT_DIFF, "https://example.com/2", "2.0.0"),),
+    )
+    rendered = render_page(render_manual_openapi_operation(
+        spec=operation_spec(changed=False),
+        options=ManualOpenAPIRenderOptions(method="POST", path="/v2/updates/flats", output_path="removed.mdx"),
+        history_events=[removal], publish_version="1.0.0",
+    ))
+    assert "Removed in 2.0.0" in rendered
+    assert "Historical definition from 1.0.0" in rendered
+    assert 'href="#history-removed-2-0-0"' in rendered
+    assert 'id="history-removed-2-0-0"' in rendered
+    assert "First offset to read after." in rendered
+    assert "beginExclusive" in rendered
+    assert "\napi:" not in rendered
+    assert "\nplayground:" not in rendered
+    assert "(removed)" in rendered

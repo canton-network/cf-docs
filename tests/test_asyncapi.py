@@ -518,10 +518,10 @@ class AsyncApiTests(unittest.TestCase):
         self.assertNotIn("## Lifecycle Changes", action)
         self.assertLess(action.index("## Related Schemas"), action.index("## History"))
         self.assertEqual(action.count('class="x2mdx-ref-schema"'), 1)
-        self.assertFalse((output_dir / "channels" / "legacy.mdx").exists())
-        self.assertFalse((output_dir / "operations" / "legacy" / "subscribe.mdx").exists())
+        self.assertTrue((output_dir / "channels" / "legacy.mdx").exists())
+        self.assertIn("Removed in 1.1.0", (output_dir / "operations" / "legacy" / "subscribe.mdx").read_text())
         self.assertFalse(history_report.items_by_id()["/legacy#subscribe"].current_present)
-        self.assertIsNone(history_report.items_by_id()["/legacy#subscribe"].route)
+        self.assertEqual(history_report.items_by_id()["/legacy#subscribe"].route, "reference/asyncapi/operations/legacy/subscribe")
         self.assertEqual(
             history_report.items_by_id()["/stream#subscribe"].route,
             "reference/asyncapi/operations/stream/subscribe",
@@ -530,6 +530,32 @@ class AsyncApiTests(unittest.TestCase):
             docs["navigation"]["dropdowns"][0]["groups"],
             [{"group": "JSON Ledger API", "pages": ["reference/asyncapi/index"]}],
         )
+
+    def test_removed_action_is_retained_when_its_channel_still_exists(self) -> None:
+        import yaml
+
+        manifest_path = self._write_manifest()
+        current_path = manifest_path.parent / "1.1.0/asyncapi.yaml"
+        current = yaml.safe_load(current_path.read_text())
+        del current["channels"]["/stream"]["publish"]
+        del current["components"]["messages"]["StreamRequest"]
+        del current["components"]["schemas"]["StreamRequest"]
+        current_path.write_text(yaml.safe_dump(current))
+        output_dir = self.root / "out"
+
+        self.assertEqual(cli_main([
+            "asyncapi", "build-api-pages-from-manifest", "--manifest", str(manifest_path),
+            "--output-dir", str(output_dir),
+        ]), 0)
+
+        removed = (output_dir / "operations/stream/publish.mdx").read_text()
+        current_page = (output_dir / "operations/stream/subscribe.mdx").read_text()
+        channel = (output_dir / "channels/stream.mdx").read_text()
+        self.assertIn("Removed in 1.1.0", removed)
+        self.assertIn("party", removed)
+        self.assertNotIn("Removed in", current_page)
+        self.assertIn("publish", channel)
+        self.assertIn("subscribe", channel)
 
     def test_action_adapter_builds_operation_page_context(self) -> None:
         channel = build_asyncapi_report_from_sources(

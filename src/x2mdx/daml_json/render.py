@@ -872,7 +872,7 @@ def build_reader_module_routes(
     return {
         name: f"{prefix}/{module_page_slug(name)}"
         for name, lifecycle in report.module_lifecycle.items()
-        if lifecycle.get("status") == "active" and name not in EXCLUDED_MODULE_NAMES
+        if name not in EXCLUDED_MODULE_NAMES
     }
 
 
@@ -897,7 +897,7 @@ def aggregate_history_events(
                 combined[key] = HistoryEvent(
                     kind=event.kind,
                     version=event.version,
-                    label=event.label,
+                    label="Modules removed in" if event.kind == HistoryEventKind.REMOVED else event.label,
                     details=details,
                     evidence=event.evidence,
                 )
@@ -913,6 +913,7 @@ def aggregate_history_events(
                 )
 
     priority = {
+        HistoryEventKind.REMOVED: -1,
         HistoryEventKind.REMOVE_AS_OF: 0,
         HistoryEventKind.DEPRECATED: 1,
         HistoryEventKind.CHANGED: 2,
@@ -954,7 +955,6 @@ def build_standardized_pages(
             ).lower(),
         )
         if str(module.get("md_name", "")) in history_by_id
-        and history_by_id[str(module.get("md_name", ""))].current_present
         and str(module.get("md_name", "")) not in EXCLUDED_MODULE_NAMES
     ]
     anchor_to_page = build_anchor_page_index(modules)
@@ -1012,7 +1012,7 @@ def build_standardized_pages(
                 ),
                 page_meta_items=[
                     ReferenceMetaItem("Module", name),
-                    ReferenceMetaItem("Latest release", history_report.publish_version),
+                    ReferenceMetaItem("Last available release" if not item.current_present else "Latest release", item.last_seen),
                 ],
                 history_events=list(
                     history_events_for_item(
@@ -1040,7 +1040,7 @@ def build_standardized_pages(
                 kind_label="Daml",
             ),
             meta_items=[
-                ReferenceMetaItem("Latest release", history_report.publish_version),
+                ReferenceMetaItem("Last available release" if not item.current_present else "Latest release", item.last_seen),
                 ReferenceMetaItem("Versions", str(len(history_report.comparison_versions))),
                 ReferenceMetaItem("Current modules", str(len(history_report.current_items()))),
             ],
