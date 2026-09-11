@@ -38,7 +38,7 @@
 {% if badges %}
 <div class="x2mdx-ref-badges">
   {% for badge in badges %}
-  <span class="x2mdx-ref-badge x2mdx-ref-badge--{{ escape_html(inline_text(badge.tone)) }}">{{ escape_mdx_html_text(inline_text(badge.label)) }}</span>
+  {% if badge.href %}<a class="x2mdx-ref-badge x2mdx-ref-badge--{{ escape_html(inline_text(badge.tone)) }}" href="{{ badge.href }}">{{ escape_mdx_html_text(inline_text(badge.label)) }}</a>{% else %}<span class="x2mdx-ref-badge x2mdx-ref-badge--{{ escape_html(inline_text(badge.tone)) }}">{{ escape_mdx_html_text(inline_text(badge.label)) }}</span>{% endif %}
   {% endfor %}
 </div>
 {% endif %}
@@ -84,8 +84,39 @@
 {% endif %}
 {%- endmacro %}
 
-{% macro fields_table(fields) -%}
+{% macro fields_table(fields, use_api_components=False, field_kind="parameter") -%}
 {% if fields %}
+{% if use_api_components %}
+  {% for field in fields %}
+  {% if field_kind == "response" %}
+<ResponseField name="{{ escape_html(inline_text(field.name)) }}" type="{{ escape_html(inline_text(field.type_label)) }}"{% if field.required %} required{% endif %}{% if field.default is not none %} default="{{ escape_html(inline_text(field.default)) }}"{% endif %}>
+  {% elif field.location %}
+<ParamField {{ field.location }}="{{ escape_html(inline_text(field.name)) }}" type="{{ escape_html(inline_text(field.api_type_label or field.type_label)) }}"{% if field.required %} required{% endif %}{% if field.default is not none %} default="{{ escape_html(inline_text(field.default)) }}"{% endif %}>
+{% if field.api_type_label and field.api_type_label != field.type_label %}OpenAPI type: <code>{{ escape_mdx_html_text(inline_text(field.type_label)) }}</code>.
+
+{% endif %}
+  {% endif %}
+{% if field.description %}{{ escape_mdx_html_text(inline_text(field.description)) }}
+
+{% endif %}
+{% if field.enum_values %}Allowed values: {% for value in field.enum_values %}<code>{{ escape_mdx_html_text(inline_text(value)) }}</code>{% if not loop.last %}, {% endif %}{% endfor %}.
+
+{% endif %}
+{% for constraint in field.constraints %}{{ escape_mdx_html_text(inline_text(constraint)) }}{% if not loop.last %}; {% endif %}{% endfor %}{% if field.constraints %}.
+
+{% endif %}
+{% if field.children %}
+<Expandable title="child attributes">
+{{ fields_table(field.children, use_api_components=True, field_kind=field_kind) }}
+</Expandable>
+{% endif %}
+  {% if field_kind == "response" %}
+</ResponseField>
+  {% elif field.location %}
+</ParamField>
+  {% endif %}
+  {% endfor %}
+{% else %}
 <div class="x2mdx-ref-fields">
   {% for field in fields %}
   <div class="x2mdx-ref-field-row">
@@ -102,6 +133,7 @@
   </div>
   {% endfor %}
 </div>
+{% endif %}
 {% endif %}
 {%- endmacro %}
 
@@ -173,7 +205,18 @@
   {% endif %}
 {%- endmacro %}
 
-{% macro panel_block(panel, render_text=True, render_schema_description=True) -%}
+{% macro panel_block(panel, render_text=True, render_schema_description=True, use_api_components=False, field_kind="parameter") -%}
+{% if use_api_components %}
+### {{ escape_mdx_html_text(inline_text(panel.title)) }}
+
+{{ badge_row(panel.badges) }}
+{% if panel.schema %}
+{{ fields_table(panel.schema.fields, use_api_components=True, field_kind=field_kind) }}
+{% endif %}
+{% if panel.example %}
+{{ example_block(panel.example) }}
+{% endif %}
+{% else %}
 <div class="x2mdx-ref-panel">
   <div class="x2mdx-ref-panel-head">
     <h3>{{ escape_mdx_html_text(inline_text(panel.title)) }}</h3>
@@ -187,12 +230,84 @@
   {% endif %}
   {{ meta_grid(panel.meta_items) }}
   {% if panel.schema %}
+  {% if use_api_components %}
+  {{ fields_table(panel.schema.fields, use_api_components=True, field_kind=field_kind) }}
+  {% else %}
   {{ schema_body(panel.schema, render_example=False, render_description=render_schema_description) }}
+  {% endif %}
   {% endif %}
   {% if panel.example %}
   {{ example_block(panel.example) }}
   {% endif %}
 </div>
+{% endif %}
+{%- endmacro %}
+
+{% macro manual_api_panel(panel, field_kind="parameter") -%}
+## {{ escape_mdx_html_text(inline_text(panel.title)) }}
+
+{% if panel.description %}{{ escape_mdx_html_text(inline_text(panel.description)) }}
+
+{% endif %}
+{{ badge_row(panel.badges) }}
+{% if panel.schema %}
+{{ fields_table(panel.schema.fields, use_api_components=True, field_kind=field_kind) }}
+{% endif %}
+{%- endmacro %}
+
+{% macro manual_api_operation_sections(operation) -%}
+{% if operation.authorizations %}
+## Authorizations
+
+{% for panel in operation.authorizations %}
+### {{ escape_mdx_html_text(inline_text(panel.title)) }}
+
+{% if panel.schema %}
+{{ fields_table(panel.schema.fields, use_api_components=True, field_kind="parameter") }}
+{% endif %}
+{% endfor %}
+{% endif %}
+{% for panel in operation.inputs %}
+{{ manual_api_panel(panel, field_kind="parameter") }}
+{% endfor %}
+{% if operation.outputs %}
+## Responses
+
+{% for panel in operation.outputs %}
+### {{ escape_mdx_html_text(inline_text(panel.title)) }}
+
+{% if panel.description %}{{ escape_mdx_html_text(inline_text(panel.description)) }}
+
+{% endif %}
+{{ badge_row(panel.badges) }}
+{% if panel.schema %}
+{{ fields_table(panel.schema.fields, use_api_components=True, field_kind="response") }}
+{% endif %}
+{% endfor %}
+{% endif %}
+{%- endmacro %}
+
+{% macro mintlify_operation_examples(examples) -%}
+{% set request_examples = examples|selectattr("kind", "equalto", "request")|list %}
+{% set response_examples = examples|selectattr("kind", "equalto", "response")|list %}
+{% if request_examples %}
+<RequestExample>
+{% for example in request_examples %}
+```{{ escape_html(inline_text(example.language or "text")) }} {{ escape_html(inline_text(example.title)) }}
+{{ example.body }}
+```
+{% endfor %}
+</RequestExample>
+{% endif %}
+{% if response_examples %}
+<ResponseExample>
+{% for example in response_examples %}
+```{{ escape_html(inline_text(example.language or "text")) }} {{ escape_html(inline_text(example.title)) }}
+{{ example.body }}
+```
+{% endfor %}
+</ResponseExample>
+{% endif %}
 {%- endmacro %}
 
 {% macro operation_right_rail(operation) -%}
@@ -218,7 +333,7 @@
 {% endif %}
 {%- endmacro %}
 
-{% macro operation_sections(operation, heading_prefix="##", include_examples=True) -%}
+{% macro operation_sections(operation, heading_prefix="##", include_examples=True, use_api_components=False) -%}
 {{ heading_prefix }} Protocol Details
 
 {{ meta_grid(operation.protocol_items) }}
@@ -226,13 +341,13 @@
 {{ heading_prefix }} Inputs
 
 {% for panel in operation.inputs %}
-{{ panel_block(panel, render_text=False, render_schema_description=False) }}
+{{ panel_block(panel, render_text=False, render_schema_description=False, use_api_components=use_api_components, field_kind="parameter") }}
 {% endfor %}
 
 {{ heading_prefix }} Outputs
 
 {% for panel in operation.outputs %}
-{{ panel_block(panel, render_text=False, render_schema_description=False) }}
+{{ panel_block(panel, render_text=False, render_schema_description=False, use_api_components=use_api_components, field_kind="response") }}
 {% endfor %}
 
 {% if include_examples and operation.examples %}
@@ -268,5 +383,25 @@
 </Accordion>
 {% endfor %}
 </AccordionGroup>
+{% endif %}
+{%- endmacro %}
+
+{% macro history_section(events, heading_prefix="##") -%}
+{% if events %}
+{{ heading_prefix }} History
+
+<div class="x2mdx-ref-history" aria-label="Reference history">
+  {% for event in events %}
+  <div class="x2mdx-ref-history-event x2mdx-ref-history-event--{{ escape_html(inline_text(event.kind.value)|replace('_', '-')) }}"{% if event.kind.value != "replacement" %} id="{{ history_event_anchor(event.kind, event.version) }}"{% endif %}>
+    <div class="x2mdx-ref-history-event-head">
+      <span class="x2mdx-ref-history-event-label">{{ escape_mdx_html_text(inline_text(event.label)) }}</span>
+      <code class="x2mdx-ref-history-event-version">{{ escape_mdx_html_text(inline_text(event.version)) }}</code>
+    </div>
+    {% for detail in event.details %}
+    <p class="x2mdx-ref-history-event-detail">{{ escape_mdx_html_text(inline_text(detail)) }}</p>
+    {% endfor %}
+  </div>
+  {% endfor %}
+</div>
 {% endif %}
 {%- endmacro %}

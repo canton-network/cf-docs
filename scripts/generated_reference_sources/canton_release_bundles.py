@@ -116,8 +116,42 @@ def latest_public_canton_bundle_version(
     repo_dir: Path = DEFAULT_REPO_DIR,
     remote: str = DEFAULT_CANTON_REMOTE,
 ) -> str:
+    candidates = stable_canton_bundle_candidates(
+        docs_version=docs_version,
+        repo_dir=repo_dir,
+        remote=remote,
+    )
+    for version in reversed(candidates):
+        if release_bundle_exists(source_config, canton_version=version):
+            return version
+    raise ValueError(f"No public Canton release bundle found for docs version {docs_version}")
+
+
+def public_canton_bundle_versions(
+    source_config: LedgerApiSourceConfig,
+    *,
+    docs_version: str,
+    repo_dir: Path = DEFAULT_REPO_DIR,
+    remote: str = DEFAULT_CANTON_REMOTE,
+) -> tuple[str, ...]:
+    candidates = stable_canton_bundle_candidates(
+        docs_version=docs_version,
+        repo_dir=repo_dir,
+        remote=remote,
+    )
+    return tuple(
+        version for version in candidates if release_bundle_exists(source_config, canton_version=version)
+    )
+
+
+def stable_canton_bundle_candidates(
+    *,
+    docs_version: str,
+    repo_dir: Path,
+    remote: str,
+) -> tuple[str, ...]:
     repo = canton_protobuf_history.ensure_repo(repo_dir, remote=remote, fetch=True)
-    candidates = [
+    return tuple(
         version
         for version, _tag in canton_protobuf_history.stable_tags(
             repo,
@@ -125,11 +159,7 @@ def latest_public_canton_bundle_version(
             include_versions=None,
         )
         if version.startswith(f"{docs_version}.")
-    ]
-    for version in reversed(candidates):
-        if release_bundle_exists(source_config, canton_version=version):
-            return version
-    raise ValueError(f"No public Canton release bundle found for docs version {docs_version}")
+    )
 
 
 def update_source(

@@ -35,6 +35,7 @@ class OpenRpcMethodDetail(TypedDict):
     description: str
     lifecycle_state: str | None
     replaces: str | None
+    remove_as_of: str | None
     params: list[OpenRpcParamDetail]
     result: OpenRpcResultDetail
     fingerprint: str

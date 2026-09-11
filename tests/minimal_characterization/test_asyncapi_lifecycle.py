@@ -182,19 +182,21 @@ class AsyncApiMinimalLifecycleTests(unittest.TestCase):
                 "channels/payments-created-v2.mdx",
                 "channels/payments-legacy.mdx",
                 "channels/payments-preview.mdx",
-                "channels/payments-created.mdx",
                 "operations/payments-alpha/subscribe.mdx",
                 "operations/payments-created-v2/subscribe.mdx",
                 "operations/payments-legacy/subscribe.mdx",
                 "operations/payments-preview/subscribe.mdx",
-                "operations/payments-created/subscribe.mdx",
             },
         )
         assert_text_tree_matches_fixture(output_dir, "asyncapi/default")
 
         overview = read_mdx(output_dir, "index.mdx")
         alpha_operation = read_mdx(output_dir, "operations/payments-alpha/subscribe.mdx")
-        assert_contains_all(overview, ["minimal asyncapi lifecycle fixtures", "minimal versions", "payments.created"])
+        assert_contains_all(
+            overview,
+            ["minimal asyncapi lifecycle fixtures", "minimal versions", "payments.created.v2"],
+        )
+        assert_contains_none(overview, ["payments.created\""])
         assert_contains_all(alpha_operation, ["WebSocket", "SUBSCRIBE", "JSON API AsyncAPI"])
 
     def test_cli_renders_explicit_lifecycle_states(self) -> None:

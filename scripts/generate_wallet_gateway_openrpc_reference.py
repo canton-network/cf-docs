@@ -25,8 +25,8 @@ DEFAULT_REPO_DIR = DEFAULT_CACHE_DIR / "repos" / "splice-wallet-kernel"
 GROUP_LABEL = "Wallet Gateway"
 DAPP_GROUP_LABEL = "dApp API"
 LEGACY_GROUP_LABELS = {"Wallet Kernel", "Wallet Gateway JSON-RPC", "Wallet Kernel SDK"}
-DETAILS_LABEL = "Details and history"
 SPEC_DIR_NAME = "specs"
+OVERVIEW_NAME = "overview.mdx"
 DEFAULT_RELEASE_REPO = "canton-network/wallet"
 NAV_SECTION_BY_SPEC_ID = {
     "dapp-api": DAPP_GROUP_LABEL,
@@ -53,7 +53,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--skip-fetch", action="store_true", help="Skip fetching tags from origin before reading selected tag snapshots.")
     parser.add_argument(
         "--source-name",
-        default="splice-wallet-kernel Wallet Gateway OpenRPC specs from wallet-gateway-remote releases",
+        default="canton-network/wallet Wallet Gateway OpenRPC specs from wallet-gateway-remote releases",
         help="Source label embedded in generated content.",
     )
     parser.add_argument(
@@ -114,6 +114,8 @@ def ensure_repo(repo_dir: Path, *, remote: str, fetch: bool) -> Path:
     repo_dir.parent.mkdir(parents=True, exist_ok=True)
     if not repo_dir.exists():
         run(["git", "clone", "--bare", remote, str(repo_dir)])
+    elif git(["remote", "get-url", "origin"], cwd=repo_dir, capture=True) != remote:
+        git(["remote", "set-url", "origin", remote], cwd=repo_dir)
     if fetch:
         git(["fetch", "origin", "--tags", "--prune", "--force"], cwd=repo_dir)
     return repo_dir
@@ -184,57 +186,12 @@ def spec_page_ref(output_dir: Path, docs_json_path: Path, spec_id: str) -> str:
 
 
 def overview_page_ref(output_dir: Path, docs_json_path: Path) -> str:
-    return docs_json_page_ref(output_dir / "index.mdx", docs_json_path)
+    return docs_json_page_ref(output_dir / OVERVIEW_NAME, docs_json_path)
 
 
-def overview_route_prefix(output_dir: Path, docs_json_path: Path) -> str:
-    page_ref = overview_page_ref(output_dir, docs_json_path)
-    if page_ref.endswith("/index"):
-        return "/" + page_ref[: -len("/index")]
-    return "/" + page_ref
-
-
-def rewrite_frontmatter_title(contents: str, title: str) -> str:
-    if not contents.startswith("---\n"):
-        return contents
-    end = contents.find("\n---\n", 4)
-    if end == -1:
-        return contents
-    frontmatter = contents[4:end].splitlines()
-    updated: list[str] = []
-    replaced = False
-    for line in frontmatter:
-        if line.startswith("title:"):
-            updated.append(f'title: "{title}"')
-            replaced = True
-        else:
-            updated.append(line)
-    if not replaced:
-        updated.insert(0, f'title: "{title}"')
-    return "---\n" + "\n".join(updated) + contents[end:]
-
-
-def write_details_pages(*, output_dir: Path, spec_entries: list[dict[str, Any]]) -> None:
-    overview = output_dir / "index.mdx"
-    if overview.exists():
-        details = output_dir / "operations" / "details.mdx"
-        details.parent.mkdir(parents=True, exist_ok=True)
-        details.write_text(
-            rewrite_frontmatter_title(overview.read_text(encoding="utf-8"), DETAILS_LABEL),
-            encoding="utf-8",
-        )
-
-    for spec in spec_entries:
-        spec_id = str(spec["spec_id"])
-        spec_page = output_dir / SPEC_DIR_NAME / f"{slugify(spec_id)}.mdx"
-        if not spec_page.exists():
-            continue
-        details = output_dir / "operations" / slugify(spec_id) / "details.mdx"
-        details.parent.mkdir(parents=True, exist_ok=True)
-        details.write_text(
-            rewrite_frontmatter_title(spec_page.read_text(encoding="utf-8"), DETAILS_LABEL),
-            encoding="utf-8",
-        )
+def output_route_prefix(output_dir: Path, docs_json_path: Path) -> str:
+    relative = output_dir.resolve().relative_to(docs_json_path.resolve().parent)
+    return "/" + relative.as_posix()
 
 
 def prune_nav_items(items: list[Any], *, page_refs: set[str], group_labels: set[str]) -> list[Any]:
@@ -279,7 +236,11 @@ def update_docs_navigation(
     if not isinstance(pages, list):
         raise ValueError(f"Product does not expose a pages list: {dropdown_label}")
 
-    refs = {overview_page_ref(output_dir, docs_json_path), docs_json_page_ref(output_dir / "operations" / "details.mdx", docs_json_path)}
+    refs = {
+        overview_page_ref(output_dir, docs_json_path),
+        docs_json_page_ref(output_dir / "index.mdx", docs_json_path),
+        docs_json_page_ref(output_dir / "operations" / "details.mdx", docs_json_path),
+    }
     refs.update(spec_page_ref(output_dir, docs_json_path, spec["spec_id"]) for spec in spec_entries)
     refs.update(
         docs_json_page_ref(output_dir / "operations" / slugify(str(spec["spec_id"])) / "details.mdx", docs_json_path)
@@ -304,16 +265,62 @@ def update_docs_navigation(
         spec_group_sections=NAV_SECTION_BY_SPEC_ID,
     )
     wallet_groups = [item for item in group["pages"] if isinstance(item, dict)]
-    details_refs = [item for item in group["pages"] if isinstance(item, str)]
+    overview_refs = [item for item in group["pages"] if isinstance(item, str)]
     for wallet_group in wallet_groups:
         if wallet_group.get("group") == GROUP_LABEL:
-            wallet_group["pages"].extend(details_refs)
+            wallet_group["pages"] = [*overview_refs, *wallet_group["pages"]]
             break
     for offset, wallet_group in enumerate(wallet_groups):
         pruned_pages.insert(min(insert_at + offset, len(pruned_pages)), wallet_group)
     nav_root["pages"] = pruned_pages
     docs_json_path.write_text(json.dumps(docs, indent=2) + "\n", encoding="utf-8")
     print(f"Updated docs navigation: {docs_json_path}")
+
+
+def ensure_redirect(*, docs_json_path: Path, source: str, destination: str) -> None:
+    payload = load_json(docs_json_path)
+    redirects = payload.setdefault("redirects", [])
+    if not isinstance(redirects, list):
+        raise ValueError("docs.json redirects must be an array")
+    matches = [
+        redirect
+        for redirect in redirects
+        if isinstance(redirect, dict) and redirect.get("source") == source
+    ]
+    if len(matches) > 1:
+        raise ValueError(f"Duplicate redirect source in docs.json: {source}")
+    redirect = {"source": source, "destination": destination}
+    if matches:
+        matches[0].update(redirect)
+    else:
+        redirects.append(redirect)
+    docs_json_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
+def ensure_openrpc_redirects(
+    *,
+    docs_json_path: Path,
+    output_dir: Path,
+    spec_entries: list[dict[str, Any]],
+) -> None:
+    prefix = output_route_prefix(output_dir, docs_json_path)
+    ensure_redirect(
+        docs_json_path=docs_json_path,
+        source=prefix,
+        destination=f"{prefix}/overview",
+    )
+    ensure_redirect(
+        docs_json_path=docs_json_path,
+        source=f"{prefix}/operations/details",
+        destination=f"{prefix}/overview",
+    )
+    for spec in spec_entries:
+        spec_slug = slugify(str(spec["spec_id"]))
+        ensure_redirect(
+            docs_json_path=docs_json_path,
+            source=f"{prefix}/operations/{spec_slug}/details",
+            destination=f"{prefix}/{SPEC_DIR_NAME}/{spec_slug}",
+        )
 
 
 def write_manifest(
@@ -351,7 +358,7 @@ def write_manifest(
             )
 
     manifest = {
-        "source": source_config.get("source") or "splice-wallet-kernel OpenRPC snapshots",
+        "source": source_config.get("source") or "canton-network/wallet OpenRPC snapshots",
         "publish_version": publish_version,
         "specs": specs_payload,
     }
@@ -432,12 +439,20 @@ def main() -> int:
         str(fixture_root),
         "--output-dir",
         str(Path(args.output_dir).resolve()),
+        "--history-report",
+        str((Path(args.output_dir).resolve() / "history-report.json")),
+        "--surface-id",
+        "wallet-gateway-openrpc",
+        "--configured-scope",
+        "Wallet Gateway OpenRPC methods",
         "--publish-version",
         publish_version,
         "--overview-title",
         args.overview_title,
+        "--overview-name",
+        OVERVIEW_NAME,
         "--link-prefix",
-        overview_route_prefix(Path(args.output_dir).resolve(), Path(args.docs_json).resolve()),
+        output_route_prefix(Path(args.output_dir).resolve(), Path(args.docs_json).resolve()),
         "--source-name",
         args.source_name,
         "--version-filter",
@@ -450,13 +465,14 @@ def main() -> int:
     if completed.returncode != 0:
         return completed.returncode
 
-    write_details_pages(
-        output_dir=Path(args.output_dir).resolve(),
-        spec_entries=spec_entries,
-    )
     update_docs_navigation(
         docs_json_path=Path(args.docs_json).resolve(),
         dropdown_label=args.nav_dropdown,
+        output_dir=Path(args.output_dir).resolve(),
+        spec_entries=spec_entries,
+    )
+    ensure_openrpc_redirects(
+        docs_json_path=Path(args.docs_json).resolve(),
         output_dir=Path(args.output_dir).resolve(),
         spec_entries=spec_entries,
     )

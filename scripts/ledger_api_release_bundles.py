@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import shutil
 import tarfile
 import urllib.request
@@ -134,7 +133,7 @@ def materialize_bundle_spec(
         existing_text = output_path.read_text(encoding="utf-8")
         existing_lines = [line for line in existing_text.splitlines() if line]
         if existing_lines:
-            indent_candidates = [re.match(r"^\s*", line).group(0) for line in existing_lines]
+            indent_candidates = [line[: len(line) - len(line.lstrip())] for line in existing_lines]
             non_empty_indents = [indent for indent in indent_candidates if indent]
             shared_prefix = min(non_empty_indents, key=len) if non_empty_indents else ""
             if shared_prefix:
