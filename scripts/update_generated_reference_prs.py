@@ -412,6 +412,60 @@ UPDATE_TARGETS = (
         source_update_paths=("config/x2mdx/typescript-bindings/source-artifacts.json",),
     ),
     UpdateTarget(
+        key="canton-console-reference",
+        title="Update Canton console command reference",
+        branch="generated-docs/canton-console-reference/update",
+        description=(
+            "Regenerates the checked-in Canton console command reference from runtime "
+            "help metadata in the latest public Canton release binary."
+        ),
+        generate_commands=(("nix-shell", "--run", "npm run generate:canton-console-reference"),),
+        paths=("docs-main/global-synchronizer/reference/canton-console-commands.mdx",),
+        summary_kind="static",
+        summary_path=None,
+        summary_label=None,
+        validation=(
+            "npm run generate:canton-console-reference",
+            "git diff --check",
+        ),
+    ),
+    UpdateTarget(
+        key="canton-error-codes-reference",
+        title="Update Canton error-code reference",
+        branch="generated-docs/canton-error-codes-reference/update",
+        description=(
+            "Regenerates the checked-in Canton error-code inventory from runtime "
+            "metadata in the latest public Canton release binary."
+        ),
+        generate_commands=(("nix-shell", "--run", "npm run generate:canton-error-codes-reference"),),
+        paths=("docs-main/global-synchronizer/reference/error-codes.mdx",),
+        summary_kind="static",
+        summary_path=None,
+        summary_label=None,
+        validation=(
+            "npm run generate:canton-error-codes-reference",
+            "git diff --check",
+        ),
+    ),
+    UpdateTarget(
+        key="canton-release-protocol-versions",
+        title="Update Canton release/protocol compatibility",
+        branch="generated-docs/canton-release-protocol-versions/update",
+        description=(
+            "Regenerates the Canton release-to-protocol compatibility table from "
+            "runtime metadata in the latest public Canton release binary."
+        ),
+        generate_commands=(("nix-shell", "--run", "npm run generate:canton-release-protocol-versions"),),
+        paths=("docs-main/release-notes/releases-and-versioning.mdx",),
+        summary_kind="static",
+        summary_path=None,
+        summary_label=None,
+        validation=(
+            "npm run generate:canton-release-protocol-versions",
+            "git diff --check",
+        ),
+    ),
+    UpdateTarget(
         key="canton-metrics-reference",
         title="Update Canton metrics reference",
         branch="generated-docs/canton-metrics-reference/update",
@@ -426,6 +480,32 @@ UPDATE_TARGETS = (
         summary_label=None,
         validation=(
             "npm run generate:canton-metrics-reference",
+            "git diff --check",
+        ),
+    ),
+    UpdateTarget(
+        key="canton-topology-proto-link",
+        title="Update Canton topology references",
+        branch="generated-docs/canton-topology-proto-link/update",
+        description=(
+            "Resolves the latest stable digital-asset/canton release, derives the matching "
+            "release-line branch URL for topology.proto, and regenerates the topology-transaction "
+            "protocol/protobuf compatibility table from the public release binary."
+        ),
+        generate_commands=(
+            ("nix-shell", "--run", "npm run generate:canton-topology-proto-link"),
+            ("nix-shell", "--run", "npm run generate:canton-topology-transaction-versions"),
+        ),
+        paths=(
+            "docs-main/snippets/generated/canton-topology-proto-link.mdx",
+            "docs-main/appdev/deep-dives/external-signing-topology.mdx",
+        ),
+        summary_kind="static",
+        summary_path=None,
+        summary_label=None,
+        validation=(
+            "npm run generate:canton-topology-proto-link",
+            "npm run generate:canton-topology-transaction-versions",
             "git diff --check",
         ),
     ),
