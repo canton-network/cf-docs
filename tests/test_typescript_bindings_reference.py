@@ -12,7 +12,7 @@ SCRIPTS_DIR = REPO_ROOT / "scripts"
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
-from scripts.generate_typescript_bindings_reference import (
+from scripts.generate_typescript_bindings_reference import (  # noqa: E402
     configured_packages,
     update_docs_navigation,
 )
@@ -35,6 +35,7 @@ class TypeScriptBindingsReferenceTests(unittest.TestCase):
             version_filter="cli versions",
             page_title="@daml/types",
             page_description="TypeScript and JavaScript language bindings for Canton.",
+            docs_json=str(self.root / "docs-main" / "docs.json"),
         )
 
     def test_configured_packages_support_output_entry_point_and_typedoc_args(self) -> None:
@@ -48,6 +49,7 @@ class TypeScriptBindingsReferenceTests(unittest.TestCase):
                     "publish_version": "3.4.11",
                     "entry_point": "index.d.ts",
                     "output_file": str(self.root / "docs-main" / "reference" / "typescript.mdx"),
+                    "history_report": str(self.root / "docs-main" / "reference" / "typescript" / "daml-types-history-report.json"),
                     "page_title": "@daml/types",
                 },
                 {
@@ -57,6 +59,7 @@ class TypeScriptBindingsReferenceTests(unittest.TestCase):
                     "entry_point": "dist/index.d.ts",
                     "typedoc_args": ["--skipErrorChecking"],
                     "output_file": str(self.root / "docs-main" / "reference" / "typescript" / "wallet-sdk.mdx"),
+                    "history_report": str(self.root / "docs-main" / "reference" / "typescript" / "wallet-sdk-history-report.json"),
                     "page_title": "Wallet SDK",
                     "page_description": "Wallet SDK docs.",
                 },
