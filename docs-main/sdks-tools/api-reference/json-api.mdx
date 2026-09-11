@@ -15,7 +15,7 @@ The JSON API provides an HTTP/REST interface to the Canton Ledger API. In Canton
 | Property | Value |
 |----------|-------|
 | **Protocol** | HTTP/1.1 + JSON |
-| **Default port** | 7575 |
+| **Port** | 7575 in sandbox and LocalNet; set by `http-ledger-api.port`, no built-in default |
 | **Underlying API** | Ledger API v2 (gRPC) |
 | **Authentication** | JWT Bearer tokens |
 
@@ -104,7 +104,18 @@ curl localhost:7575/v2/state/active-contracts \
 
 ### Transaction Streaming
 
-The JSON API supports both HTTP POST and WebSocket connections for streaming updates on `/v2/updates`. WebSocket connections use the `daml.ws.auth` subprotocol.
+The JSON API supports both HTTP POST and WebSocket connections for streaming. The WebSocket channels are listed in the [AsyncAPI reference](/reference/json-api-asyncapi-reference/index). For WebSocket requests, you must pass two subprotocols:
+
+- `jwt.token.<paste-jwt-here>`
+- `daml.ws.auth`
+
+Example using `wscat`:
+
+```bash
+wscat -c http://localhost:7575/v2/state/active-contracts \
+    -s "jwt.token.<paste-jwt-here>" \
+    -s "daml.ws.auth"
+```
 
 ### Ledger End
 
@@ -123,6 +134,10 @@ See [Validator API](/sdks-tools/api-reference/splice-validator-api) for the surr
 
 The JSON API is configured via the `http-ledger-api` section of the participant node's configuration. In cn-quickstart LocalNet deployments, it is pre-configured and available at `http://localhost:7575`.
 
+<Warning>
+Never expose the JSON API to the Internet. In production, run it behind a [reverse proxy such as NGINX](https://docs.nginx.com/nginx/admin-guide/web-server/reverse-proxy/).
+</Warning>
+
 The OpenAPI and AsyncAPI specifications are available at runtime:
 
 <DamlDocsSdksToolsApiReferenceJsonApiL125 />
@@ -134,6 +149,37 @@ Pass a JWT Bearer token in the `Authorization` header:
 <DamlDocsSdksToolsApiReferenceJsonApiL134 />
 
 The token must be valid for the OIDC provider configured for your deployment.
+
+The JSON API does not hold on to the access token, which is only used to fulfill the request it came along with. The same token is used to issue the request to the Ledger API. The only exceptions are the documentation endpoints, `/docs/openapi` and `/docs/asyncapi`, which do not strictly require tokens.
+
+## Errors
+
+When the gRPC Ledger API returns an error code, the JSON API maps it to an HTTP status code according to [the official gRPC to HTTP code mapping](https://cloud.google.com/apis/design/errors#generating_errors):
+
+| gRPC code | HTTP status |
+|---|---|
+| `OK` | 200 |
+| `INVALID_ARGUMENT`, `FAILED_PRECONDITION`, `OUT_OF_RANGE` | 400 |
+| `UNAUTHENTICATED` | 401 |
+| `PERMISSION_DENIED` | 403 |
+| `NOT_FOUND` | 404 |
+| `ABORTED`, `ALREADY_EXISTS` | 409 |
+| `RESOURCE_EXHAUSTED` | 429 |
+| `CANCELLED` | 499 |
+| `UNKNOWN`, `INTERNAL`, `DATA_LOSS` | 500 |
+| `UNIMPLEMENTED` | 501 |
+| `UNAVAILABLE` | 503 |
+| `DEADLINE_EXCEEDED` | 504 |
+
+When the JSON API returns a Canton error, the response body is a JSON object where:
+
+- `cause` is a textual message containing the readable error reason
+- `code` is the Canton error code
+- `context` is additional error metadata, such as the error category and participant
+- `traceId` is the telemetry tracing id
+- `grpcCodeValue` is the numeric gRPC status code and `errorCategory` the category defined in [Error Codes](/appdev/reference/error-codes)
+
+In the case of WebSockets, an error is delivered as a frame. Each incoming frame is either a correct response for the endpoint or an error frame in the format above.
 
 ## Related Pages
 
