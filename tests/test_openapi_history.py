@@ -313,3 +313,34 @@ def test_openapi_report_does_not_carry_a_cancelled_removal_schedule_forward() ->
     item = report.items_by_id()["public.yaml::getStatus"]
     assert item.remove_as_of is None
     assert item.remove_as_of_evidence is None
+
+
+@pytest.mark.parametrize("text_field", ["summary", "description"])
+@pytest.mark.parametrize("extension, expected", [(None, None), (" ", None), ("v2.0.0", "2.0.0")])
+def test_removal_schedule_requires_structured_metadata(text_field, extension, expected) -> None:
+    authored = operation("getStatus", deprecated=True, remove_as_of=extension)
+    authored[text_field] = "This will be removed in the Canton version 9.0.0."
+    report = build_openapi_history_report(
+        surface_id="example", title="Example", configured_scope="One specification.",
+        scopes=(OpenAPIHistoryScope(
+            id="public.yaml",
+            specs_by_version={
+                "1.0.0": {"openapi": "3.0.3", "paths": {"/status": {"get": authored}}},
+                "2.0.0": {"openapi": "3.0.3", "paths": {}},
+            },
+            current_routes={},
+        ),),
+        comparison_versions=("1.0.0", "2.0.0"), publish_version="2.0.0",
+        source_artifacts=(SourceArtifact("1.0.0", "https://example.com/1"), SourceArtifact("2.0.0", "https://example.com/2")),
+        version_policy=VersionSelectionPolicy.LATEST_SELECTED_RELEASE,
+    )
+    validate_history_report(report)
+    item = report.items[0]
+    assert item.remove_as_of == expected
+    assert item.observed_removal == "2.0.0"
+    assert item.removal_evidence.kind.value == "snapshot_diff"
+    assert item.lifecycle_state == LifecycleState.DEPRECATED
+    if expected is None:
+        assert item.remove_as_of_evidence is None
+    else:
+        assert item.remove_as_of_evidence.location.endswith(".x-remove-as-of")

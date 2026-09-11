@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import re
 from dataclasses import dataclass, field, replace
 from typing import Any, Mapping
 
@@ -32,11 +31,6 @@ HTTP_METHODS = {
     "patch",
     "trace",
 }
-REMOVE_AS_OF_RE = re.compile(
-    r"\b(?:will\s+be\s+)?removed\s+in\s+(?:the\s+)?(?:Canton\s+)?version\s+"
-    r"(?P<version>v?\d+(?:\.\d+){1,3}(?:[-+][0-9A-Za-z.-]+)?)",
-    re.IGNORECASE,
-)
 
 
 @dataclass(frozen=True)
@@ -480,12 +474,6 @@ def _authored_remove_as_of(
     value = _remove_as_of(observation.operation)
     if value is None:
         return None, None
-    if isinstance(observation.operation.get("x-remove-as-of"), str):
-        field_name = "x-remove-as-of"
-        detail = "Authored removal schedule in the OpenAPI extension."
-    else:
-        field_name = "description"
-        detail = "Authored removal schedule in the OpenAPI operation text."
     return value, _evidence(
         kind=EvidenceKind.SOURCE_METADATA,
         source=sources_by_version[observation.version],
@@ -493,8 +481,8 @@ def _authored_remove_as_of(
         scope_id=scope_id,
         method=observation.method,
         path=observation.path,
-        field_name=field_name,
-        detail=detail,
+        field_name="x-remove-as-of",
+        detail="Authored removal schedule in the OpenAPI extension.",
     )
 
 
@@ -654,9 +642,7 @@ def _remove_as_of(operation: dict[str, Any]) -> str | None:
     extension = operation.get("x-remove-as-of")
     if isinstance(extension, str) and extension.strip():
         return extension.strip().removeprefix("v")
-    text = " ".join(str(operation.get(key) or "") for key in ("summary", "description"))
-    match = REMOVE_AS_OF_RE.search(text)
-    return match.group("version").removeprefix("v") if match else None
+    return None
 
 
 def _authored_lifecycle_state(

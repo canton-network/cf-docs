@@ -20,13 +20,6 @@ from x2mdx.reference_pages import (
     render_operation_page,
 )
 
-
-REMOVE_AS_OF_RE = re.compile(
-    r"\b(?:will\s+be\s+)?removed\s+in\s+(?:the\s+)?(?:Canton\s+)?version\s+"
-    r"(?P<version>v?\d+(?:\.\d+){1,3}(?:[-+][0-9A-Za-z.-]+)?)",
-    re.IGNORECASE,
-)
-
 LIFECYCLE_TITLE_RE = re.compile(
     r"^(?:deprecated|removed|obsolete)\b(?:$|\s*[:.\-]\s*|\s+)",
     re.IGNORECASE,
@@ -675,9 +668,7 @@ def _remove_as_of(operation: dict[str, Any]) -> str | None:
     extension = operation.get("x-remove-as-of")
     if isinstance(extension, str) and extension.strip():
         return extension.strip().removeprefix("v")
-    text = " ".join(str(operation.get(key) or "") for key in ("summary", "description"))
-    match = REMOVE_AS_OF_RE.search(text)
-    return match.group("version").removeprefix("v") if match else None
+    return None
 
 
 def _operation_id(operation: dict[str, Any]) -> str | None:
@@ -844,8 +835,8 @@ def operation_history_events(
             kind=EvidenceKind.SOURCE_METADATA,
             source=source_name,
             observed_in_version=publish_version,
-            location=f"paths.{path}.{method.lower()}.description",
-            detail="Authored removal schedule in the OpenAPI operation description.",
+            location=f"paths.{path}.{method.lower()}.x-remove-as-of",
+            detail="Authored removal schedule in the OpenAPI x-remove-as-of extension.",
         )
         events.append(
             HistoryEvent(

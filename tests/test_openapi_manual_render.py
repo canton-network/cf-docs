@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from x2mdx.history.models import HistoryEventKind
 from x2mdx.openapi import (
     ManualOpenAPIRenderOptions,
@@ -42,6 +44,7 @@ def operation_spec(*, changed: bool) -> dict:
                     "description": description,
                     "operationId": "postV2UpdatesFlats",
                     "deprecated": changed,
+                    **({"x-remove-as-of": "3.5.0"} if changed else {}),
                     "security": [{"httpAuth": []}],
                     "parameters": parameters,
                     "requestBody": {
@@ -506,3 +509,23 @@ def test_humanized_operation_title_drops_a_dangling_preposition() -> None:
     )
 
     assert 'title: "POST /v2/updates/flats"' in rendered
+
+
+@pytest.mark.parametrize("text_field", ["summary", "description"])
+@pytest.mark.parametrize("extension, expected", [(None, None), (" ", None), ("v3.0.0", "3.0.0")])
+def test_operation_history_does_not_infer_removal_schedules_from_prose(text_field, extension, expected) -> None:
+    spec = operation_spec(changed=True)
+    authored = spec["paths"]["/v2/updates/flats"]["post"]
+    authored.pop("x-remove-as-of")
+    authored[text_field] = "This will be removed in the Canton version 9.0.0."
+    if extension is not None:
+        authored["x-remove-as-of"] = extension
+    events = operation_history_events(
+        specs_by_version={"3.5": spec}, versions=["3.5"], publish_version="3.5",
+        method="post", path="/v2/updates/flats", source_name="release fixtures",
+    )
+    scheduled = [event for event in events if event.kind == HistoryEventKind.REMOVE_AS_OF]
+    assert [event.version for event in scheduled] == ([] if expected is None else [expected])
+    assert any(event.kind == HistoryEventKind.DEPRECATED for event in events)
+    if scheduled:
+        assert scheduled[0].evidence[0].location.endswith(".x-remove-as-of")
