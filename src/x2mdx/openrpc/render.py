@@ -99,7 +99,7 @@ def spec_history_events(
                 combined[key] = HistoryEvent(
                     kind=event.kind,
                     version=event.version,
-                    label=event.label,
+                    label="Methods removed in" if event.kind == HistoryEventKind.REMOVED else event.label,
                     details=details,
                     evidence=event.evidence,
                 )
@@ -113,6 +113,7 @@ def spec_history_events(
                 )
 
     priority = {
+        HistoryEventKind.REMOVED: -1,
         HistoryEventKind.REMOVE_AS_OF: 0,
         HistoryEventKind.DEPRECATED: 1,
         HistoryEventKind.CHANGED: 2,
@@ -225,7 +226,6 @@ def build_overview_page(
         items = [
             items_by_id[openrpc_item_id(spec.spec_id, method.method)]
             for method in spec.methods
-            if method.status == "active"
         ]
         events = spec_history_events(items, comparison_versions=history_report.comparison_versions)
         cards.append(
@@ -276,7 +276,7 @@ def build_spec_page(
     spec_path = spec_page_path(output_dir, spec, spec_dir_name=spec_dir_name)
     overview_path = output_dir / overview_name
     items_by_id = history_report.items_by_id()
-    current_methods = [method for method in spec.methods if method.status == "active"]
+    current_methods = list(spec.methods)
     current_items = [items_by_id[openrpc_item_id(spec.spec_id, method.method)] for method in current_methods]
     events = spec_history_events(current_items, comparison_versions=history_report.comparison_versions)
     method_cards = [
@@ -469,7 +469,7 @@ def build_pages(
                 )
             )
         )
-        for method in (candidate for candidate in spec.methods if candidate.status == "active"):
+        for method in spec.methods:
             history_item = items_by_id[openrpc_item_id(spec.spec_id, method.method)]
             pages.append(
                 render_operation_page(

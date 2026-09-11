@@ -52,7 +52,7 @@ def build_protobuf_surface_history_report(
         first_version, first_endpoint = observations[0]
         last_version, last_endpoint = observations[-1]
         current_present = endpoint_id in latest_endpoint_ids
-        route = routes.get(endpoint_id) if current_present else None
+        route = routes.get(endpoint_id)
         if current_present and route is None:
             raise ValueError(f"Current protobuf endpoint has no reader route: {endpoint_id}")
 
