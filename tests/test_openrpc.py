@@ -345,6 +345,27 @@ class OpenRpcTests(unittest.TestCase):
         self.assertEqual(remote_methods["status"].changed_in_versions, ["1.1.0"])
         self.assertIn("result updated (required fields)", remote_methods["status"].change_details[0]["changes"])
 
+    def test_removed_method_keeps_historical_schema_and_collection_link(self) -> None:
+        manifest_path = self._write_manifest()
+        current_path = manifest_path.parent / "1.1.0/dapp-api.json"
+        current = json.loads(current_path.read_text())
+        current["methods"] = [method for method in current["methods"] if method["name"] != "status"]
+        current_path.write_text(json.dumps(current))
+        output_dir = self.root / "out"
+
+        self.assertEqual(cli_main([
+            "openrpc", "build-api-pages-from-manifest", "--manifest", str(manifest_path),
+            "--output-dir", str(output_dir),
+        ]), 0)
+
+        page = (output_dir / "operations/dapp-api/status.mdx").read_text()
+        collection = (output_dir / "specs/dapp-api.mdx").read_text()
+        self.assertIn("Removed in 1.1.0", page)
+        self.assertIn("connected", page)
+        self.assertNotIn("network", page)
+        self.assertIn("status", collection)
+        self.assertIn("Removed in 1.1.0", collection)
+
     def test_cli_builds_openrpc_pages(self) -> None:
         manifest_path = self._write_manifest()
         output_dir = self.root / "out"

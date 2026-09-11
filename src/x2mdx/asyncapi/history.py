@@ -173,7 +173,7 @@ def _history_item(
     )
     current_present = current is not None
     location_observation = current or last
-    route = None
+    route = routes.get((last.channel, last.action["action"]))
     if current is not None:
         route = routes.get((current.channel, current.action["action"]))
         if route is None:

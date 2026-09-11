@@ -30,7 +30,7 @@ from x2mdx.protobuf.lifecycle import (
 from x2mdx.history import ReferenceFormat, validate_history_report, write_history_report
 from x2mdx.protobuf.history import build_protobuf_surface_history_report
 from x2mdx.protobuf.render import build_pages, package_page_path, slugify_segment
-from x2mdx.protobuf.render import operation_page_path
+from x2mdx.protobuf.render import operation_page_path, endpoint_snapshot_map
 from x2mdx.protobuf.snapshots import load_protobuf_sources
 from x2mdx.render import write_pages
 
@@ -39,8 +39,8 @@ DEFAULT_SOURCE_CONFIG = REPO_ROOT / "config" / "x2mdx" / "grpc-ledger-api-refere
 DEFAULT_CACHE_ROOT = Path(os.environ.get("XDG_CACHE_HOME", "~/.cache")).expanduser() / "x2mdx"
 DEFAULT_CACHE_DIR = DEFAULT_CACHE_ROOT / "protobuf-history"
 DEFAULT_MANIFEST = REPO_ROOT / ".internal" / "generated" / "x2mdx" / "grpc-ledger-api-reference" / "manifest.json"
-DEFAULT_OUTPUT_DIR = REPO_ROOT / "docs-source" / "reference" / "grpc-ledger-api-reference"
-DEFAULT_DOCS_JSON = REPO_ROOT / "docs-source" / "docs.json"
+DEFAULT_OUTPUT_DIR = REPO_ROOT / "docs-main" / "reference" / "grpc-ledger-api-reference"
+DEFAULT_DOCS_JSON = REPO_ROOT / "docs-main" / "docs.json"
 DEFAULT_REPO_DIR = DEFAULT_CACHE_DIR / "repos" / "canton"
 GROUP_LABEL = "gRPC API"
 LEGACY_GROUP_LABEL = "gRPC Ledger API Reference"
@@ -597,7 +597,7 @@ def endpoint_routes(
     docs_json_path: Path,
 ) -> dict[str, str]:
     routes: dict[str, str] = {}
-    for endpoint_id, endpoint in report["latestSnapshot"]["endpoints"].items():
+    for endpoint_id, endpoint in endpoint_snapshot_map(report).items():
         generated_path = operation_page_path(
             output_dir,
             str(endpoint["package"]),
