@@ -497,7 +497,9 @@ class DescriptorSnapshotBuilder:
             "description": description,
             "line": line,
             "sourceUrl": self.file_source_url(file_proto.name, line),
-            "metadata": self.metadata("endpoints", metadata_id),
+            # Accept the descriptor's dotted method name while preserving the
+            # slash-based endpoint IDs used by existing overlays.
+            "metadata": self.metadata("endpoints", metadata_id) or self.metadata("endpoints", endpoint_id),
             "requestType": strip_leading_dot(method_proto.input_type),
             "responseType": strip_leading_dot(method_proto.output_type),
             "clientStreaming": bool(method_proto.client_streaming),

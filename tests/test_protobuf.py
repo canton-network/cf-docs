@@ -129,6 +129,26 @@ class ProtobufTests(unittest.TestCase):
         manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
         return manifest_path
 
+    def test_endpoint_metadata_accepts_dotted_and_legacy_slash_keys(self) -> None:
+        manifest_path = self._write_manifest()
+        manifest = json.loads(manifest_path.read_text())
+        metadata_path = Path(manifest["metadata_path"])
+        endpoint_id = "com.example.v1.ExampleService/GetFoo"
+        for metadata_key in ("com.example.v1.ExampleService.GetFoo", endpoint_id):
+            with self.subTest(metadata_key=metadata_key):
+                metadata_path.write_text(json.dumps({
+                    "endpoints": {metadata_key: {"lifecycle": {"state": "beta"}}},
+                }))
+                report = build_protobuf_history_report_from_sources(
+                    load_protobuf_sources(manifest_path),
+                    source_name="metadata compatibility fixtures",
+                    version_filter="1.0.0 and 1.1.0",
+                )
+                for release in report["releases"]:
+                    endpoint = release["snapshot"]["endpoints"][endpoint_id]
+                    self.assertEqual(endpoint["id"], endpoint_id)
+                    self.assertEqual(endpoint["metadata"]["lifecycle"]["state"], "beta")
+
     def test_build_report_tracks_endpoint_lifecycle(self) -> None:
         manifest_path = self._write_manifest()
         sources = load_protobuf_sources(manifest_path)
@@ -289,6 +309,23 @@ class ProtobufTests(unittest.TestCase):
         loaded = json.loads(history_report.read_text(encoding="utf-8"))
         self.assertEqual(loaded["surface_id"], "ledger-api-protobuf")
         self.assertEqual(loaded["comparison_versions"], ["1.0.0", "1.1.0"])
+
+    def test_operation_metadata_tolerates_external_message_types(self) -> None:
+        endpoint = {
+            "service": "ExampleService", "name": "Reset",
+            "requestType": "google.protobuf.Empty", "responseType": "google.protobuf.Empty",
+            "clientStreaming": False, "serverStreaming": False,
+            "file": "example.proto", "sourceUrl": None,
+        }
+        page = build_operation_page(
+            "com.example.v1", endpoint,
+            {"introducedIn": "1.0.0", "removedIn": None, "history": []},
+            output_dir=self.root / "out",
+            ctx={"messages": {}, "fields": {}, "enums": {}, "enumValues": {}},
+        )
+        self.assertEqual(page.inputs[0].title, "Empty")
+        self.assertEqual(page.outputs[0].title, "Empty")
+        self.assertIsNone(page.outputs[0].schema)
 
     def test_operation_adapter_collects_request_and_response_schemas(self) -> None:
         ctx = {
