@@ -116,6 +116,7 @@ class ReferenceCollectionPage:
     badges: list[ReferenceBadge] = field(default_factory=list)
     meta_items: list[ReferenceMetaItem] = field(default_factory=list)
     sections: list[ReferenceSection] = field(default_factory=list)
+    history_events: list[HistoryEvent] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -213,6 +214,7 @@ def reference_badges_for_history_item(
     *,
     kind_label: str,
     comparison_versions: tuple[str, ...],
+    linked: bool = True,
 ) -> list[ReferenceBadge]:
     badges = [ReferenceBadge(kind_label, "protocol")]
     if not comparison_versions or item.first_seen != comparison_versions[0]:
@@ -220,7 +222,9 @@ def reference_badges_for_history_item(
             ReferenceBadge(
                 f"Added {item.first_seen}",
                 "added",
-                f"#{history_event_anchor(HistoryEventKind.INTRODUCED, item.first_seen)}",
+                f"#{history_event_anchor(HistoryEventKind.INTRODUCED, item.first_seen)}"
+                if linked
+                else None,
             )
         )
     if item.last_changed is not None:
@@ -228,7 +232,9 @@ def reference_badges_for_history_item(
             ReferenceBadge(
                 f"Updated {item.last_changed}",
                 "changed",
-                f"#{history_event_anchor(HistoryEventKind.CHANGED, item.last_changed)}",
+                f"#{history_event_anchor(HistoryEventKind.CHANGED, item.last_changed)}"
+                if linked
+                else None,
             )
         )
     deprecated_transition = next(
@@ -244,7 +250,9 @@ def reference_badges_for_history_item(
             ReferenceBadge(
                 f"Deprecated {deprecated_transition.version}",
                 "removed",
-                f"#{history_event_anchor(HistoryEventKind.DEPRECATED, deprecated_transition.version)}",
+                f"#{history_event_anchor(HistoryEventKind.DEPRECATED, deprecated_transition.version)}"
+                if linked
+                else None,
             )
         )
     if item.remove_as_of is not None:
@@ -252,7 +260,9 @@ def reference_badges_for_history_item(
             ReferenceBadge(
                 f"Removal scheduled {item.remove_as_of}",
                 "removed",
-                f"#{history_event_anchor(HistoryEventKind.REMOVE_AS_OF, item.remove_as_of)}",
+                f"#{history_event_anchor(HistoryEventKind.REMOVE_AS_OF, item.remove_as_of)}"
+                if linked
+                else None,
             )
         )
     return badges

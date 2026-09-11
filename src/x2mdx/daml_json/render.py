@@ -6,10 +6,19 @@ import json
 import re
 from contextvars import ContextVar
 from dataclasses import dataclass
+from functools import cmp_to_key
 from pathlib import Path
 from typing import Any, Iterator, Mapping
 
 from x2mdx.daml_json.models import DamlDocsReport
+from x2mdx.history.events import history_events_for_item
+from x2mdx.history.models import (
+    HistoryEvent,
+    HistoryEventKind,
+    HistoryItem,
+    SurfaceHistoryReport,
+)
+from x2mdx.history.versioning import compare_versions
 from x2mdx.output import Page, RawMarkdown
 from x2mdx.reference_pages import (
     ReferenceBadge,
@@ -17,6 +26,9 @@ from x2mdx.reference_pages import (
     ReferenceCollectionPage,
     ReferenceMetaItem,
     ReferenceSection,
+    markdown_page_from_template,
+    reference_badges_for_history_events,
+    reference_badges_for_history_item,
     render_collection_page,
     safe_markdown_text,
 )
@@ -628,22 +640,22 @@ def render_adt(adt_union: dict[str, Any]) -> str:
     tag, adt = as_union(adt_union)
     name = str(adt["ad_name"])
     anchor = adt.get("ad_anchor")
-    parts: list[str] = []
+    union_parts: list[str] = []
     if anchor:
-        parts.append(f'<span id="{anchor}"></span>')
+        union_parts.append(f'<span id="{anchor}"></span>')
     if tag in {"Data", "Newtype", "Template", "Interface"}:
         args = " ".join(adt.get("ad_args", []))
         header = f"{'newtype' if tag == 'Newtype' else 'data'} {name}"
         if args:
             header = f"{header} {args}"
-        parts.append(f"### `{header}`")
+        union_parts.append(f"### `{header}`")
         desc = render_doc_blocks(adt.get("ad_descr"))
         if desc:
-            parts.append(desc)
+            union_parts.append(desc)
         constrs = adt.get("ad_constrs", [])
         if constrs:
-            parts.append("Constructors:")
-            parts.append("\n".join(render_constructor(constructor) for constructor in constrs))
+            union_parts.append("Constructors:")
+            union_parts.append("\n".join(render_constructor(constructor) for constructor in constrs))
     elif tag == "Synonym":
         return render_type_synonym(
             name=name,
@@ -655,14 +667,14 @@ def render_adt(adt_union: dict[str, Any]) -> str:
             instances=adt.get("ad_instances") or [],
         )
     else:
-        parts.append(f"### `{name}`")
-        parts.append(f"```json\n{json.dumps(adt_union, indent=2)}\n```")
+        union_parts.append(f"### `{name}`")
+        union_parts.append(f"```json\n{json.dumps(adt_union, indent=2)}\n```")
 
     instances = adt.get("ad_instances", [])
     if instances:
-        parts.append("Instances:")
-        parts.append("\n".join(render_instance_line(instance) for instance in instances))
-    return "\n\n".join(parts)
+        union_parts.append("Instances:")
+        union_parts.append("\n".join(render_instance_line(instance) for instance in instances))
+    return "\n\n".join(union_parts)
 
 
 def module_file_name(module_name: str) -> str:
@@ -851,6 +863,195 @@ def strip_raw_markdown_trailing_whitespace(page: Page) -> Page:
     )
 
 
+def build_reader_module_routes(
+    report: DamlDocsReport,
+    *,
+    reader_route_prefix: str,
+) -> dict[str, str]:
+    prefix = "/" + reader_route_prefix.strip("/")
+    return {
+        name: f"{prefix}/{module_page_slug(name)}"
+        for name, lifecycle in report.module_lifecycle.items()
+        if lifecycle.get("status") == "active" and name not in EXCLUDED_MODULE_NAMES
+    }
+
+
+def aggregate_history_events(
+    items: list[HistoryItem],
+    *,
+    comparison_versions: tuple[str, ...],
+) -> list[HistoryEvent]:
+    combined: dict[tuple[HistoryEventKind, str], HistoryEvent] = {}
+    for item in items:
+        label = item.location or item.id
+        for event in history_events_for_item(
+            item,
+            comparison_versions=comparison_versions,
+        ):
+            key = (event.kind, event.version)
+            details = tuple(f"{label}: {detail}" for detail in event.details) or (
+                label,
+            )
+            existing = combined.get(key)
+            if existing is None:
+                combined[key] = HistoryEvent(
+                    kind=event.kind,
+                    version=event.version,
+                    label=event.label,
+                    details=details,
+                    evidence=event.evidence,
+                )
+            else:
+                combined[key] = HistoryEvent(
+                    kind=existing.kind,
+                    version=existing.version,
+                    label=existing.label,
+                    details=tuple(dict.fromkeys((*existing.details, *details))),
+                    evidence=tuple(
+                        dict.fromkeys((*existing.evidence, *event.evidence))
+                    ),
+                )
+
+    priority = {
+        HistoryEventKind.REMOVE_AS_OF: 0,
+        HistoryEventKind.DEPRECATED: 1,
+        HistoryEventKind.CHANGED: 2,
+        HistoryEventKind.INTRODUCED: 3,
+        HistoryEventKind.REPLACEMENT: 4,
+    }
+
+    def compare(left: HistoryEvent, right: HistoryEvent) -> int:
+        version_comparison = compare_versions(
+            left.version,
+            right.version,
+            known_order=comparison_versions,
+        )
+        if version_comparison:
+            return -version_comparison
+        return priority[left.kind] - priority[right.kind]
+
+    return sorted(combined.values(), key=cmp_to_key(compare))
+
+
+def build_standardized_pages(
+    report: DamlDocsReport,
+    *,
+    output_dir: Path,
+    history_report: SurfaceHistoryReport,
+    overview_title: str,
+    link_prefix: str | None,
+    interfaces_first: bool,
+) -> tuple[Path, list[Page]]:
+    root = output_dir.parent
+    normalized_link_prefix = normalize_link_prefix(link_prefix) if link_prefix else None
+    history_by_id = history_report.items_by_id()
+    modules = [
+        module
+        for module in sorted(
+            report.modules,
+            key=lambda value: module_display_name(
+                str(value.get("md_name", ""))
+            ).lower(),
+        )
+        if str(module.get("md_name", "")) in history_by_id
+        and history_by_id[str(module.get("md_name", ""))].current_present
+        and str(module.get("md_name", "")) not in EXCLUDED_MODULE_NAMES
+    ]
+    anchor_to_page = build_anchor_page_index(modules)
+    pages: list[Page] = []
+    module_cards: list[ReferenceCard] = []
+
+    for module in modules:
+        name = str(module["md_name"])
+        display_name = module_display_name(name)
+        target_ref = module_page_slug(name)
+        target = output_dir / f"{target_ref}.mdx"
+        item = history_by_id[name]
+        if normalized_link_prefix:
+            module_link = f"{normalized_link_prefix}/{target_ref}"
+        else:
+            module_link = target.relative_to(root).with_suffix("").as_posix()
+        module_cards.append(
+            ReferenceCard(
+                title=display_name,
+                href=module_link,
+                summary=module_summary_preview(module),
+                badges=reference_badges_for_history_item(
+                    item,
+                    kind_label="Daml",
+                    comparison_versions=history_report.comparison_versions,
+                    linked=False,
+                ),
+            )
+        )
+
+        context = module_template_context(
+            module,
+            module_deprecation_introduced_in=report.module_deprecation_first_seen.get(name),
+            module_lifecycle=report.module_lifecycle.get(name),
+            type_links=TypeLinkContext(
+                current_page=target_ref,
+                link_prefix=normalized_link_prefix,
+                anchor_to_page=anchor_to_page,
+            ),
+            include_module_snapshot=False,
+            interfaces_first=interfaces_first,
+        )
+        pages.append(
+            markdown_page_from_template(
+                path=target.relative_to(root).as_posix(),
+                title=display_name,
+                description=f"Reference documentation for Daml module {display_name}.",
+                template_name="daml_json/standardized_module.md.j2",
+                page_title=display_name,
+                page_summary=module_summary_preview(module),
+                page_badges=reference_badges_for_history_item(
+                    item,
+                    kind_label="Daml",
+                    comparison_versions=history_report.comparison_versions,
+                ),
+                page_meta_items=[
+                    ReferenceMetaItem("Module", name),
+                    ReferenceMetaItem("Latest release", history_report.publish_version),
+                ],
+                history_events=list(
+                    history_events_for_item(
+                        item,
+                        comparison_versions=history_report.comparison_versions,
+                    )
+                ),
+                **context,
+            )
+        )
+
+    overview_events = aggregate_history_events(
+        list(history_report.items),
+        comparison_versions=history_report.comparison_versions,
+    )
+    overview = render_collection_page(
+        ReferenceCollectionPage(
+            path=(output_dir / "index.mdx").relative_to(root).as_posix(),
+            title=overview_title,
+            description=f"Reference documentation for {overview_title} modules.",
+            eyebrow="Daml Reference",
+            summary=f"Current {overview_title} modules generated from versioned docs JSON snapshots.",
+            badges=reference_badges_for_history_events(
+                overview_events,
+                kind_label="Daml",
+            ),
+            meta_items=[
+                ReferenceMetaItem("Latest release", history_report.publish_version),
+                ReferenceMetaItem("Versions", str(len(history_report.comparison_versions))),
+                ReferenceMetaItem("Current modules", str(len(history_report.current_items()))),
+            ],
+            sections=[ReferenceSection(heading="Modules", cards=module_cards)],
+            history_events=overview_events,
+        )
+    )
+    pages.insert(0, strip_raw_markdown_trailing_whitespace(overview))
+    return root, pages
+
+
 def build_pages(
     report: DamlDocsReport,
     *,
@@ -859,7 +1060,17 @@ def build_pages(
     link_prefix: str | None = None,
     include_module_snapshot: bool = True,
     interfaces_first: bool = False,
+    history_report: SurfaceHistoryReport | None = None,
 ) -> tuple[Path, list[Page]]:
+    if history_report is not None:
+        return build_standardized_pages(
+            report,
+            output_dir=output_dir,
+            history_report=history_report,
+            overview_title=overview_title,
+            link_prefix=link_prefix,
+            interfaces_first=interfaces_first,
+        )
     root = output_dir.parent
     pages: list[Page] = []
     module_entries: list[tuple[str, str, str]] = []
@@ -901,13 +1112,13 @@ def build_pages(
             )
         )
 
-    for source_name, display_name, target in module_entries:
+    for source_name, display_name, module_target in module_entries:
         lifecycle = report.module_lifecycle.get(source_name, {})
         deprecation_version = report.module_deprecation_first_seen.get(source_name)
         if normalized_link_prefix:
-            module_link = f"{normalized_link_prefix}/{target}"
+            module_link = f"{normalized_link_prefix}/{module_target}"
         else:
-            module_link = (output_dir / target).relative_to(root).with_suffix("").as_posix()
+            module_link = (output_dir / module_target).relative_to(root).with_suffix("").as_posix()
         module_doc = modules_by_name[source_name]
         module_cards.append(
             ReferenceCard(

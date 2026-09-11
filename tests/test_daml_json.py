@@ -194,6 +194,7 @@ class DamlJsonTests(unittest.TestCase):
         self.assertEqual(report.module_lifecycle["DA.Legacy"]["status"], "removed")
         self.assertEqual(report.module_lifecycle["DA.Legacy"]["removed_in"], "1.1.0")
         self.assertEqual(report.module_lifecycle["DA.NonEmpty"]["introduced_in"], "1.1.0")
+        self.assertEqual(report.module_changes["DA.List"], ("1.1.0",))
 
         module_names = {str(module["md_name"]) for module in report.modules}
         self.assertIn("DA.Legacy", module_names)
@@ -387,6 +388,76 @@ class DamlJsonTests(unittest.TestCase):
         self.assertIn("Removed 1.1.0", index_text)
         self.assertIn("Deprecated since: `1.1.0`", list_text)
         self.assertIn("historical reference", legacy_text)
+
+    def test_cli_builds_standardized_current_module_pages_with_shared_history(self) -> None:
+        manifest_path = self._write_manifest()
+        output_dir = self.root / "out" / "daml-standard-library"
+        history_report = output_dir / "history-report.json"
+        lifecycle_metadata = self._write_json(
+            "lifecycle.json",
+            {
+                "modules": {
+                    "DA.List": {
+                        "remove_as_of": "1.2.0",
+                        "observed_in_version": "1.1.0",
+                        "source": "https://example.com/removal-plan",
+                        "detail": "Remove after DA.NonEmpty adoption.",
+                    }
+                }
+            },
+        )
+
+        result = cli_main(
+            [
+                "daml-json",
+                "build-api-pages-from-manifest",
+                "--manifest",
+                str(manifest_path),
+                "--output-dir",
+                str(output_dir),
+                "--overview-title",
+                "Daml Standard Library",
+                "--source-name",
+                "unit test daml docs",
+                "--version-filter",
+                "unit test versions",
+                "--history-report",
+                str(history_report),
+                "--reader-route-prefix",
+                "/appdev/reference/daml-standard-library",
+                "--surface-id",
+                "daml-standard-library",
+                "--surface-title",
+                "Daml Standard Library",
+                "--lifecycle-metadata",
+                str(lifecycle_metadata),
+            ]
+        )
+
+        self.assertEqual(result, 0)
+        payload = json.loads(history_report.read_text(encoding="utf-8"))
+        self.assertEqual(payload["surface_id"], "daml-standard-library")
+        self.assertEqual(payload["comparison_versions"], ["1.0.0", "1.1.0"])
+        self.assertEqual(len(payload["items"]), 3)
+        legacy = next(item for item in payload["items"] if item["id"] == "DA.Legacy")
+        self.assertFalse(legacy["current_present"])
+        self.assertIsNone(legacy["route"])
+        self.assertEqual(legacy["observed_removal"], "1.1.0")
+        da_list = next(item for item in payload["items"] if item["id"] == "DA.List")
+        self.assertEqual(da_list["last_changed"], "1.1.0")
+        self.assertEqual(da_list["remove_as_of"], "1.2.0")
+
+        list_text = (output_dir / "da-list.mdx").read_text(encoding="utf-8")
+        overview_text = (output_dir / "index.mdx").read_text(encoding="utf-8")
+        self.assertFalse((output_dir / "da-legacy.mdx").exists())
+        self.assertIn("x2mdx-ref-page--collection", list_text)
+        self.assertNotIn("history-added-1-0-0", list_text)
+        self.assertIn('href="#history-updated-1-1-0">Updated 1.1.0</a>', list_text)
+        self.assertIn('href="#history-deprecated-1-1-0">Deprecated 1.1.0</a>', list_text)
+        self.assertIn('href="#history-removal-scheduled-1-2-0">Removal scheduled 1.2.0</a>', list_text)
+        self.assertGreater(list_text.rfind("## History"), list_text.rfind("## Functions"))
+        self.assertNotIn("Module Snapshot", list_text)
+        self.assertNotIn("Details and history", overview_text)
 
     def test_cli_renders_utilities_style_adts_and_templates(self) -> None:
         snapshot = self._write_json(
