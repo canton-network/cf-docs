@@ -113,7 +113,7 @@ def build_daml_surface_history_report(
             raise ValueError(f"Incomplete Daml module lifecycle: {module_name}")
 
         current_present = lifecycle.get("status") == "active"
-        route = routes.get(module_name) if current_present else None
+        route = routes.get(module_name)
         if current_present and route is None:
             raise ValueError(f"Current Daml module has no reader route: {module_name}")
 

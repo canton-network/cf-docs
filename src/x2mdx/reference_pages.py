@@ -265,6 +265,11 @@ def reference_badges_for_history_item(
                 else None,
             )
         )
+    if item.observed_removal is not None:
+        badges.append(ReferenceBadge(
+            f"Removed in {item.observed_removal}", "removed",
+            f"#{history_event_anchor(HistoryEventKind.REMOVED, item.observed_removal)}" if linked else None,
+        ))
     return badges
 
 
@@ -280,6 +285,7 @@ def reference_badges_for_history_events(
         (HistoryEventKind.CHANGED, "changed"),
         (HistoryEventKind.DEPRECATED, "removed"),
         (HistoryEventKind.REMOVE_AS_OF, "removed"),
+        (HistoryEventKind.REMOVED, "removed"),
     )
     for kind, tone in badge_details:
         event = next((candidate for candidate in events if candidate.kind == kind), None)

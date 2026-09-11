@@ -110,7 +110,7 @@ def lifecycle_badges(
     if changed and changed != introduced:
         badges.append(ReferenceBadge(f"Changed {changed}", tone="changed"))
     if removed:
-        badges.append(ReferenceBadge(f"Removed {removed}", tone="removed"))
+        badges.append(ReferenceBadge(f"Removed in {removed}", tone="removed"))
     return badges
 
 
@@ -165,7 +165,7 @@ def aggregate_history_events(
                 combined[key] = HistoryEvent(
                     kind=event.kind,
                     version=event.version,
-                    label=event.label,
+                    label="Methods removed in" if event.kind == HistoryEventKind.REMOVED else event.label,
                     details=details,
                     evidence=event.evidence,
                 )
@@ -179,6 +179,7 @@ def aggregate_history_events(
                 )
 
     priority = {
+        HistoryEventKind.REMOVED: -1,
         HistoryEventKind.REMOVE_AS_OF: 0,
         HistoryEventKind.DEPRECATED: 1,
         HistoryEventKind.CHANGED: 2,
@@ -237,8 +238,25 @@ def endpoint_snapshot_map(report: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return snapshots
 
 
+def retained_snapshot(report: dict[str, Any]) -> dict[str, Any]:
+    """Last known definitions, used only for historical browsing, not source specs."""
+    import copy
+
+    snapshot = copy.deepcopy(report["latestSnapshot"])
+    for release in reversed(report["releases"]):
+        for category in ("files", "services", "endpoints", "messages", "fields", "enums", "enumValues"):
+            for identity, definition in release["snapshot"][category].items():
+                snapshot[category].setdefault(identity, copy.deepcopy(definition))
+    for service in snapshot["services"].values():
+        service["endpointIds"] = sorted(
+            identity for identity, endpoint in snapshot["endpoints"].items()
+            if endpoint["package"] == service["package"] and endpoint["service"] == service["name"]
+        )
+    return snapshot
+
+
 def build_package_docs(report: dict[str, Any]) -> list[dict[str, Any]]:
-    latest = report["latestSnapshot"]
+    latest = retained_snapshot(report)
     package_docs = {package["package"]: dict(package) for package in latest["packages"]}
     current_services = latest["services"]
     current_endpoints = latest["endpoints"]
@@ -711,7 +729,7 @@ def build_package_page(
     file_cards = [
         ReferenceCard(
                 title=file_doc["repoPath"],
-                summary="Current source file in the latest published descriptor snapshot.",
+                summary="Last available source file in the compared descriptor snapshots.",
                 meta_items=[
                     ReferenceMetaItem("Services", str(len(file_doc["serviceIds"]))),
                     ReferenceMetaItem("Messages", str(len(file_doc["messageIds"]))),
@@ -737,7 +755,7 @@ def build_package_page(
         sections.append(
             ReferenceSection(
                 heading="Type Inventory",
-                body_markdown="These are the package-level message and enum shapes in the publish-version snapshot.",
+                body_markdown="These are the last available package-level message and enum shapes. Endpoint pages use the definitions from the last release containing that endpoint.",
                 schemas=related_types,
             )
         )
@@ -789,7 +807,7 @@ def build_operation_page(
         title=endpoint["name"],
         description=None,
         eyebrow=package_name,
-        summary=None,
+        summary=(f"Removed in {history_item.observed_removal}. Historical definition from {history_item.last_seen}." if history_item and not history_item.current_present else None),
         back_link=page_ref(page_path, package_path),
         back_label="Back to package",
         breadcrumbs=[
@@ -819,7 +837,13 @@ def build_operation_page(
         ],
         operation_method="RPC",
         operation_target=f"/{package_name}.{endpoint['service']}/{endpoint['name']}",
-        overview_markdown=safe_markdown_text(lifecycle_summary(endpoint)) or None,
+        overview_markdown="\n\n".join(filter(None, [
+            (
+                f"**Removed in {history_item.observed_removal}.** Historical definition from {history_item.last_seen}."
+                if history_item and not history_item.current_present else None
+            ),
+            safe_markdown_text(lifecycle_summary(endpoint)),
+        ])) or None,
         protocol_items=[
             ReferenceMetaItem("Protocol", "gRPC"),
             ReferenceMetaItem("Service", endpoint["service"]),
@@ -890,7 +914,7 @@ def build_pages(
     history_report: SurfaceHistoryReport | None = None,
     overview_name: str = "index.mdx",
 ) -> tuple[Path, list[Any]]:
-    latest = report["latestSnapshot"]
+    latest = retained_snapshot(report)
     ctx = {
         "files": latest["files"],
         "services": latest["services"],
@@ -938,7 +962,10 @@ def build_pages(
                         endpoint_docs[endpoint_id],
                         lifecycle_map[endpoint_id],
                         output_dir=output_dir,
-                        ctx=ctx,
+                        ctx=next(
+                            release["snapshot"] for release in reversed(report["releases"])
+                            if endpoint_id in release["snapshot"]["endpoints"]
+                        ),
                         history_item=history_items_by_id.get(endpoint_id),
                         comparison_versions=(
                             history_report.comparison_versions
