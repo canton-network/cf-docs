@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import re
 from dataclasses import dataclass, field, replace
 from typing import Any, Mapping
@@ -119,6 +120,19 @@ def build_openapi_history_report(
             "within that OpenAPI specification and is recorded as lower confidence."
         )
 
+    # A new operation can reuse a removed operation's method/path. Keep its
+    # current route and give the historical identity a deterministic suffix.
+    occupied = {item.route for item in items if item.current_present and item.route}
+    routed_items = []
+    for item in sorted(items, key=lambda value: (not value.current_present, value.id)):
+        if not item.current_present and item.route:
+            route = item.route
+            if route in occupied:
+                route += "-removed-" + hashlib.sha256(item.id.encode()).hexdigest()[:12]
+            occupied.add(route)
+            item = replace(item, route=route)
+        routed_items.append(item)
+    items = routed_items
     return SurfaceHistoryReport(
         surface_id=surface_id,
         title=title,
@@ -223,7 +237,7 @@ def _history_item(
             "continuity without an explicit reintroduction event."
         )
     location_observation = current or last
-    route = None
+    route = scope.current_routes.get((last.method, last.path))
     if current is not None:
         route = scope.current_routes.get((current.method, current.path))
         if route is None:

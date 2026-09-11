@@ -66,10 +66,10 @@ def test_checked_in_splice_history_report_is_valid_and_retains_removed_operation
     )
     assert report.current_items()
     assert any(not item.current_present for item in report.items)
-    assert all(item.route is None for item in report.items if not item.current_present)
+    assert all(item.route is not None for item in report.items if not item.current_present)
     assert all(
         (REPO_ROOT / "docs-main" / f"{item.route.removeprefix('/')}.mdx").is_file()
-        for item in report.current_items()
+        for item in report.items
         if item.route is not None
     )
 
@@ -481,3 +481,15 @@ def test_splice_openapi_exclusions_must_cover_disabled_specs() -> None:
         families=module.normalized_families(source_config),
         enabled_specs=module.enabled_nav_specs(source_config),
     )
+
+
+def test_removed_navigation_uses_custom_history_report(tmp_path: Path) -> None:
+    module = load_script_module("validate_splice_mintlify_openapi_nav.py")
+    report_path = REPO_ROOT / "docs-main/openapi/splice/history-report.json"
+    custom_path = tmp_path / "custom-history.json"
+    custom_path.write_bytes(report_path.read_bytes())
+    report = load_history_report(custom_path)
+    removed = next(item for item in report.items if not item.current_present)
+    filename = removed.id.split("::", 1)[0]
+    pages = module.removed_operation_page_refs(tmp_path, filename, history_report_path=custom_path)
+    assert removed.route.lstrip("/") in pages
