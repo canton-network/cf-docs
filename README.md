@@ -49,6 +49,23 @@ OR:
 - [Node.js 24](https://nodejs.org/en/download) (note that `mintlify` is not currently compatible with Node.js 26)
 - [Python 3.14](https://www.python.org/downloads/) if you are running any of the machinery for syncing snippets or updating generated docs
 
+### Authoring and generated content
+
+Edit pages, navigation, and images in `docs-main/`, either directly or through
+the Mintlify editor. Ordinary content has no separate source copy and is not
+rewritten by documentation generation.
+
+Network-dependent sections use templates in `docs-main/snippets/networkvars/`.
+Edit those templates, then run `npm run generate:network-variable-tabs` to update
+the marked `NETWORKVARS_START` / `NETWORKVARS_END` regions. Generation preserves
+content outside those regions. Edit generated reference pages through their
+owning generators, as before.
+
+Run `npm run validate:network-variable-tabs` to check generated regions without
+modifying files. Direct edits inside those regions fail validation; edit the
+referenced template instead. Ordinary page edits and new images do not require
+regeneration.
+
 ### Running the dev server
 
 ```bash
