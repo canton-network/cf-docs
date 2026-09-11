@@ -48,6 +48,7 @@ PACKAGE_GROUP_ORDER = [
 GRPC_TARGET_PLACEHOLDER = "<HOST:PORT>"
 REQUEST_SAMPLE_MAX_DEPTH = 4
 REQUEST_SAMPLE_MAX_FIELDS = 8
+LIFECYCLE_STATES = {"alpha", "beta", "stable", "deprecated"}
 
 
 def slugify_segment(value: str) -> str:
@@ -111,6 +112,39 @@ def lifecycle_badges(
     if removed:
         badges.append(ReferenceBadge(f"Removed in {removed}", tone="removed"))
     return badges
+
+
+def lifecycle_meta_items(entity: dict[str, Any]) -> list[ReferenceMetaItem]:
+    metadata = entity.get("metadata")
+    lifecycle = metadata.get("lifecycle") if isinstance(metadata, dict) else None
+    if not isinstance(lifecycle, dict):
+        return []
+
+    items: list[ReferenceMetaItem] = []
+    raw_state = lifecycle.get("state")
+    if raw_state is not None:
+        if not isinstance(raw_state, str) or raw_state.strip().lower() not in LIFECYCLE_STATES:
+            allowed = ", ".join(sorted(LIFECYCLE_STATES))
+            raise ValueError(
+                f"Unsupported Protobuf lifecycle state {raw_state!r} for {entity['id']}; "
+                f"expected one of {allowed}"
+            )
+        items.append(ReferenceMetaItem("Lifecycle", raw_state.strip().title()))
+
+    replaces = lifecycle.get("replaces")
+    if replaces is not None:
+        if not isinstance(replaces, str) or not replaces.strip():
+            raise ValueError(
+                f"Protobuf replacement target for {entity['id']} must be a non-empty string"
+            )
+        items.append(ReferenceMetaItem("Replaces", replaces.strip()))
+    return items
+
+
+def lifecycle_summary(entity: dict[str, Any]) -> str:
+    # Mintlify drops definition-list markup; keep authored lifecycle details in
+    # the visible text areas supported by cards, operations, and schema panels.
+    return " ".join(f"{item.label}: {item.value}." for item in lifecycle_meta_items(entity))
 
 
 def aggregate_history_events(
@@ -658,7 +692,7 @@ def build_package_page(
                 ReferenceCard(
                     title=f"{endpoint['service']}.{endpoint['name']}",
                     href=page_ref(page_path, operation_path),
-                    summary=compact_text(endpoint.get("description") or endpoint_signature(endpoint), limit=180),
+                    summary=" ".join(filter(None, [compact_text(endpoint.get("description") or endpoint_signature(endpoint), limit=180), lifecycle_summary(endpoint)])),
                     badges=(
                         lifecycle_badges(
                             item=history_item,
@@ -803,10 +837,13 @@ def build_operation_page(
         ],
         operation_method="RPC",
         operation_target=f"/{package_name}.{endpoint['service']}/{endpoint['name']}",
-        overview_markdown=(
-            f"**Removed in {history_item.observed_removal}.** Historical definition from {history_item.last_seen}."
-            if history_item and not history_item.current_present else None
-        ),
+        overview_markdown="\n\n".join(filter(None, [
+            (
+                f"**Removed in {history_item.observed_removal}.** Historical definition from {history_item.last_seen}."
+                if history_item and not history_item.current_present else None
+            ),
+            safe_markdown_text(lifecycle_summary(endpoint)),
+        ])) or None,
         protocol_items=[
             ReferenceMetaItem("Protocol", "gRPC"),
             ReferenceMetaItem("Service", endpoint["service"]),
@@ -817,6 +854,7 @@ def build_operation_page(
         inputs=[
             ReferencePanel(
                 title=short_type_name(endpoint["requestType"]),
+                badges=[ReferenceBadge(f"{item.label}: {item.value}") for item in lifecycle_meta_items(ctx["messages"].get(endpoint["requestType"], {}))],
                 meta_items=[
                     ReferenceMetaItem("Message", endpoint["requestType"]),
                     ReferenceMetaItem("Client stream", "Yes" if endpoint["clientStreaming"] else "No"),
@@ -827,6 +865,7 @@ def build_operation_page(
         outputs=[
             ReferencePanel(
                 title=short_type_name(endpoint["responseType"]),
+                badges=[ReferenceBadge(f"{item.label}: {item.value}") for item in lifecycle_meta_items(ctx["messages"].get(endpoint["responseType"], {}))],
                 meta_items=[
                     ReferenceMetaItem("Message", endpoint["responseType"]),
                     ReferenceMetaItem("Server stream", "Yes" if endpoint["serverStreaming"] else "No"),
