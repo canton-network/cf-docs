@@ -1,18 +1,18 @@
 ---
-title: "External Signing: Submitting Transactions"
+title: "External Signing: Submitting Transactions, Part 1"
 description: "Submit externally signed transactions to the Canton ledger"
 ---
 
-{/* COPIED_START source="docs-website:docs/replicated/canton/3.4/sdk/tutorials/app-dev/external_signing_submission.rst" hash="8784b709" */}
+{/* COPIED_START source="docs-website:docs/replicated/canton/3.5/sdk/tutorials/app-dev/external_signing_submission.rst" hash="c31bb509" */}
 
 # Submit Externally Signed Transactions - Part 1
 
-This tutorial demonstrates how to submit Daml commands to a Canton ledger using an external private key for transaction authorization. Before proceeding, it is recommended to review the external signing overview to understand the concept of external signing.
+This tutorial demonstrates how to submit Daml commands to a Canton ledger using an external private key for transaction authorization. Before proceeding, it is recommended to review the [external signing overview](/appdev/deep-dives/external-signing) to understand the concept of external signing.
 
 The tutorial illustrates the external signing process using two external parties, `Alice` and `Bob`, leveraging the Ping Daml Template which is included by default in all participant nodes.
 
 ``` none
--- Copyright (c) 2025 Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved.
+-- Copyright (c) 2026 Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 
 module Canton.Internal.Ping where
@@ -52,7 +52,7 @@ This tutorial is for demo purposes. The code snippets should not be used directl
 For simplicity, this tutorial assumes a minimal Canton setup consisting of one participant node connected to one synchronizer (which includes both a sequencer node and a mediator node).
 
 <Tip>
-If you already have such an instance running or have completed the onboarding tutorial, proceed to the Setup section.
+If you already have such an instance running or have completed the [onboarding tutorial](/appdev/deep-dives/external-signing-onboarding), proceed to the [Setup](#setup) section.
 </Tip>
 
 ### Start Canton
@@ -75,7 +75,7 @@ Once the Welcome to Canton message appears, you are ready to proceed.
 
 Navigate to the interactive submission example folder located at `examples/08-interactive-submission` in the Canton release artifact.
 
-This tutorial demonstrates external signing with two external parties: Alice and Bob. If you haven't onboarded an external party yet, refer to the onboarding tutorial.
+This tutorial demonstrates external signing with two external parties: Alice and Bob. If you haven't onboarded an external party yet, refer to the [onboarding tutorial](/appdev/deep-dives/external-signing-onboarding).
 
 To proceed, gather the following information:
 
@@ -84,7 +84,7 @@ To proceed, gather the following information:
 - Synchronizer Id to which the participant is connected
 - gRPC Ledger API endpoint
 
-The Party IDs and key-related information should already be known from the onboarding tutorial. To retrieve the participant and synchronizer IDs, as well as the gRPC Ledger API ports, run the following commands in the Canton console:
+The Party IDs and key-related information should already be known from the [onboarding tutorial](/appdev/deep-dives/external-signing-onboarding). To retrieve the participant and synchronizer IDs, as well as the gRPC Ledger API ports, run the following commands in the Canton console:
 
 ``` none
 @ sequencer1.synchronizer_id.filterString
@@ -98,7 +98,7 @@ The Party IDs and key-related information should already be known from the onboa
 
 ``` none
 @ participant1.config.ledgerApi.port.unwrap
-    res3: Int = 30225
+    res3: Int = 30140
 ```
 
 For this tutorial, the following values will be used (replace them with actual values):
@@ -113,7 +113,7 @@ For this tutorial, the following values will be used (replace them with actual v
 This tutorial interacts with the `InteractiveSubmissionService`, a service available on the gRPC Ledger API of the participant node.
 
 ``` none
-// Copyright (c) 2025 Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved.
+// Copyright (c) 2026 Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 syntax = "proto3";
@@ -147,15 +147,12 @@ service InteractiveSubmissionService {
   // Requires `readAs` scope for the submitting party when LAPI User authorization is enabled
   rpc PrepareSubmission(PrepareSubmissionRequest) returns (PrepareSubmissionResponse);
   // Execute a prepared submission _asynchronously_ on the ledger.
+  // Requires `actAs` or `executeAs` scope for the submitting party when LAPI User authorization is enabled
   // Requires a signature of the transaction from the submitting external party.
   rpc ExecuteSubmission(ExecuteSubmissionRequest) returns (ExecuteSubmissionResponse);
   // Similar to ExecuteSubmission but _synchronously_ wait for the completion of the transaction
-  // IMPORTANT: Relying on the response from this endpoint requires trusting the Participant Node to be honest.
-  // A malicious node could make a successfully committed request appeared failed and vice versa
   rpc ExecuteSubmissionAndWait(ExecuteSubmissionAndWaitRequest) returns (ExecuteSubmissionAndWaitResponse);
   // Similar to ExecuteSubmissionAndWait but additionally returns the transaction
-  // IMPORTANT: Relying on the response from this endpoint requires trusting the Participant Node to be honest.
-  // A malicious node could make a successfully committed request appear as failed and vice versa
   rpc ExecuteSubmissionAndWaitForTransaction(ExecuteSubmissionAndWaitForTransactionRequest) returns (ExecuteSubmissionAndWaitForTransactionResponse);
 
   // A preferred package is the highest-versioned package for a provided package-name
@@ -195,12 +192,16 @@ service InteractiveSubmissionService {
 message CostEstimationHints {
   // Disable cost estimation
   // Default (not set) is false
+  //
+  // Optional
   bool disabled = 1;
   // Details on the keys that will be used to sign the transaction (how many and of which type).
   // Signature size impacts the cost of the transaction.
   // If empty, the signature sizes will be approximated with threshold-many signatures (where threshold is defined
-  // in the PartyToKeyMapping of the external party), using keys in the order they are registered.
-  // Optional (empty list is equivalent to not providing this field)
+  // in the PartyToParticipant of the external party), using keys in the order they are registered.
+  // Empty list is equivalent to not providing this field
+  //
+  // Optional: can be empty
   repeated SigningAlgorithmSpec expected_signatures = 2;
 }
 
@@ -210,14 +211,22 @@ message CostEstimationHints {
 // The cost of re-assigning contracts to another synchronizer when necessary is not included in the estimation.
 message CostEstimation {
   // Timestamp at which the estimation was made
+  //
+  // Required
   google.protobuf.Timestamp estimation_timestamp = 1;
   // Estimated traffic cost of the confirmation request associated with the transaction
+  //
+  // Required
   uint64 confirmation_request_traffic_cost_estimation = 2;
   // Estimated traffic cost of the confirmation response associated with the transaction
   // This field can also be used as an indication of the cost that other potential confirming nodes
   // of the party will incur to approve or reject the transaction
+  //
+  // Required
   uint64 confirmation_response_traffic_cost_estimation = 3;
   // Sum of the fields above
+  //
+  // Required
   uint64 total_traffic_cost_estimation = 4;
 }
 
@@ -226,6 +235,7 @@ message PrepareSubmissionRequest {
   // Must be a valid UserIdString (as described in ``value.proto``).
   // Required unless authentication is used with a user token.
   // In that case, the token's user-id will be used for the request's user_id.
+  //
   // Optional
   string user_id = 1;
 
@@ -234,13 +244,15 @@ message PrepareSubmissionRequest {
   // where act_as is interpreted as a set of party names.
   // The change ID can be used for matching the intended ledger changes with all their completions.
   // Must be a valid LedgerString (as described in ``value.proto``).
+  //
   // Required
   string command_id = 2;
 
   // Individual elements of this atomic command. Must be non-empty.
   // Limitation: Only single command transaction are currently supported by the API.
   // The field is marked as repeated in preparation for future support of multiple commands.
-  // Required
+  //
+  // Required: must be non-empty
   repeated Command commands = 3;
 
   // Optional
@@ -253,6 +265,7 @@ message PrepareSubmissionRequest {
   // which is useful to know when it can definitely not be accepted
   // anymore and resorting to preparing another transaction for the same
   // intent is safe again.
+  //
   // Optional
   optional google.protobuf.Timestamp max_record_time = 11;
 
@@ -262,7 +275,8 @@ message PrepareSubmissionRequest {
   // and does not execute it. Therefore read authorization is sufficient even for actAs parties.
   // Note: This may change, and more specific authorization scope may be introduced in the future.
   // Each element must be a valid PartyIdString (as described in ``value.proto``).
-  // Required, must be non-empty.
+  //
+  // Required: must be non-empty
   repeated string act_as = 5;
 
   // Set of parties on whose behalf (in addition to all parties listed in ``act_as``) contracts can be retrieved.
@@ -272,33 +286,39 @@ message PrepareSubmissionRequest {
   // rules for fetch operations.
   // If ledger API authorization is enabled, then the authorization metadata must authorize the sender of the request
   // to read contract data on behalf of each of the given parties.
-  // Optional
+  //
+  // Optional: can be empty
   repeated string read_as = 6;
 
   // Additional contracts used to resolve contract & contract key lookups.
-  // Optional
+  //
+  // Optional: can be empty
   repeated DisclosedContract disclosed_contracts = 7;
 
   // Must be a valid synchronizer id
   // If not set, a suitable synchronizer that this node is connected to will be chosen
+  //
   // Optional
   string synchronizer_id = 8;
 
   // The package-id selection preference of the client for resolving
   // package names and interface instances in command submission and interpretation
-  // Optional
+  //
+  // Optional: can be empty
   repeated string package_id_selection_preference = 9;
 
   // When true, the response will contain additional details on how the transaction was encoded and hashed
   // This can be useful for troubleshooting of hash mismatches. Should only be used for debugging.
-  // Optional, default to false
+  // Defaults to false
+  //
+  // Optional
   bool verbose_hashing = 10;
 
   // Fetches the contract keys into the caches to speed up the command processing.
   // Should only contain contract keys that are expected to be resolved during interpretation of the commands.
   // Keys of disclosed contracts do not need prefetching.
   //
-  // Optional
+  // Optional: can be empty
   repeated PrefetchContractKey prefetch_contract_keys = 15;
 
   // Hints to improve the accuracy of traffic cost estimation.
@@ -307,9 +327,25 @@ message PrepareSubmissionRequest {
   // Request amplification is not accounted for in the estimation: each amplified request will
   // result in the cost of the confirmation request to be charged additionally.
   //
-  // Optional - Traffic cost estimation is enabled by default if this field is not set
+  // Traffic cost estimation is enabled by default if this field is not set
   // To turn off cost estimation, set the CostEstimationHints#disabled field to true
+  //
+  // Optional
   optional CostEstimationHints estimate_traffic_cost = 16;
+
+  // The hashing scheme version to be used when building the hash.
+  // Defaults to HASHING_SCHEME_VERSION_V2.
+  //
+  // Optional
+  optional HashingSchemeVersion hashing_scheme_version = 17;
+
+  // The maximum number of passes for the Topology-Aware Package Selection (TAPS).
+  // Higher values can increase the chance of successful package selection for routing of interpreted transactions.
+  // If unset, this defaults to the value defined in the participant configuration.
+  // The provided value must not exceed the limit specified in the participant configuration.
+  //
+  // Optional
+  optional uint32 taps_max_passes = 18;
 }
 
 // [docs-entry-start: HashingSchemeVersion]
@@ -318,27 +354,37 @@ enum HashingSchemeVersion {
   HASHING_SCHEME_VERSION_UNSPECIFIED = 0;
   reserved 1; // Hashing Scheme V1 - unsupported
   HASHING_SCHEME_VERSION_V2 = 2;
+  HASHING_SCHEME_VERSION_V3 = 3;
 }
 // [docs-entry-end: HashingSchemeVersion]
 
 message PrepareSubmissionResponse {
   // The interpreted transaction, it represents the ledger changes necessary to execute the commands specified in the request.
   // Clients MUST display the content of the transaction to the user for them to validate before signing the hash if the preparing participant is not trusted.
+  //
+  // Required
   PreparedTransaction prepared_transaction = 1;
   // Hash of the transaction, this is what needs to be signed by the party to authorize the transaction.
   // Only provided for convenience, clients MUST recompute the hash from the raw transaction if the preparing participant is not trusted.
   // May be removed in future versions
+  //
+  // Required: must be non-empty
   bytes prepared_transaction_hash = 2;
 
   // The hashing scheme version used when building the hash
+  //
+  // Required
   HashingSchemeVersion hashing_scheme_version = 3;
 
   // Optional additional details on how the transaction was encoded and hashed. Only set if verbose_hashing = true in the request
   // Note that there are no guarantees on the stability of the format or content of this field.
   // Its content should NOT be parsed and should only be used for troubleshooting purposes.
+  //
+  // Optional
   optional string hashing_details = 4;
 
   // Traffic cost estimation of the prepared transaction
+  //
   // Optional
   optional CostEstimation cost_estimation = 5;
 }
@@ -346,17 +392,20 @@ message PrepareSubmissionResponse {
 // Signatures provided by a single party
 message SinglePartySignatures {
   // Submitting party
+  //
   // Required
   string party = 1;
   // Signatures
-  // Required
+  //
+  // Required: must be non-empty
   repeated Signature signatures = 2;
 }
 
 // Additional signatures provided by the submitting parties
 message PartySignatures {
   // Additional signatures provided by all individual parties
-  // Required
+  //
+  // Required: must be non-empty
   repeated SinglePartySignatures signatures = 1;
 }
 
@@ -364,6 +413,7 @@ message ExecuteSubmissionRequest {
   // the prepared transaction
   // Typically this is the value of the `prepared_transaction` field in `PrepareSubmissionResponse`
   // obtained from calling `prepareSubmission`.
+  //
   // Required
   PreparedTransaction prepared_transaction = 1;
 
@@ -371,11 +421,13 @@ message ExecuteSubmissionRequest {
   // Each party can provide one or more signatures..
   // and one or more parties can sign.
   // Note that currently, only single party submissions are supported.
+  //
   // Required
   PartySignatures party_signatures = 2;
 
   // Specifies the deduplication period for the change ID (See PrepareSubmissionRequest).
   // If omitted, the participant will assume the configured maximum deduplication time.
+  //
   // Optional
   oneof deduplication_period {
     // Specifies the length of the deduplication period.
@@ -397,15 +449,18 @@ message ExecuteSubmissionRequest {
   string submission_id = 5;
 
   // See [PrepareSubmissionRequest.user_id]
+  //
   // Optional
   string user_id = 6;
 
   // The hashing scheme version used when building the hash
+  //
   // Required
   HashingSchemeVersion hashing_scheme_version = 7;
 
   // If set will influence the chosen ledger effective time but will not result in a submission delay so any override
   // should be scheduled to executed within the window allowed by synchronizer.
+  //
   // Optional
   MinLedgerTime min_ledger_time = 8;
 }
@@ -416,6 +471,7 @@ message ExecuteSubmissionAndWaitRequest {
   // the prepared transaction
   // Typically this is the value of the `prepared_transaction` field in `PrepareSubmissionResponse`
   // obtained from calling `prepareSubmission`.
+  //
   // Required
   PreparedTransaction prepared_transaction = 1;
 
@@ -423,11 +479,13 @@ message ExecuteSubmissionAndWaitRequest {
   // Each party can provide one or more signatures..
   // and one or more parties can sign.
   // Note that currently, only single party submissions are supported.
+  //
   // Required
   PartySignatures party_signatures = 2;
 
   // Specifies the deduplication period for the change ID (See PrepareSubmissionRequest).
   // If omitted, the participant will assume the configured maximum deduplication time.
+  //
   // Optional
   oneof deduplication_period {
     // Specifies the length of the deduplication period.
@@ -449,15 +507,18 @@ message ExecuteSubmissionAndWaitRequest {
   string submission_id = 5;
 
   // See [PrepareSubmissionRequest.user_id]
+  //
   // Optional
   string user_id = 6;
 
   // The hashing scheme version used when building the hash
+  //
   // Required
   HashingSchemeVersion hashing_scheme_version = 7;
 
   // If set will influence the chosen ledger effective time but will not result in a submission delay so any override
   // should be scheduled to executed within the window allowed by synchronizer.
+  //
   // Optional
   MinLedgerTime min_ledger_time = 8;
 }
@@ -465,10 +526,12 @@ message ExecuteSubmissionAndWaitRequest {
 message ExecuteSubmissionAndWaitResponse {
   // The id of the transaction that resulted from the submitted command.
   // Must be a valid LedgerString (as described in ``value.proto``).
+  //
   // Required
   string update_id = 1;
 
   // The details of the offset field are described in ``community/ledger-api/README.md``.
+  //
   // Required
   int64 completion_offset = 2;
 }
@@ -477,6 +540,7 @@ message ExecuteSubmissionAndWaitForTransactionRequest {
   // the prepared transaction
   // Typically this is the value of the `prepared_transaction` field in `PrepareSubmissionResponse`
   // obtained from calling `prepareSubmission`.
+  //
   // Required
   PreparedTransaction prepared_transaction = 1;
 
@@ -484,11 +548,13 @@ message ExecuteSubmissionAndWaitForTransactionRequest {
   // Each party can provide one or more signatures..
   // and one or more parties can sign.
   // Note that currently, only single party submissions are supported.
+  //
   // Required
   PartySignatures party_signatures = 2;
 
   // Specifies the deduplication period for the change ID (See PrepareSubmissionRequest).
   // If omitted, the participant will assume the configured maximum deduplication time.
+  //
   // Optional
   oneof deduplication_period {
     // Specifies the length of the deduplication period.
@@ -510,15 +576,18 @@ message ExecuteSubmissionAndWaitForTransactionRequest {
   string submission_id = 5;
 
   // See [PrepareSubmissionRequest.user_id]
+  //
   // Optional
   string user_id = 6;
 
   // The hashing scheme version used when building the hash
+  //
   // Required
   HashingSchemeVersion hashing_scheme_version = 7;
 
   // If set will influence the chosen ledger effective time but will not result in a submission delay so any override
   // should be scheduled to executed within the window allowed by synchronizer.
+  //
   // Optional
   MinLedgerTime min_ledger_time = 8;
 
@@ -527,6 +596,7 @@ message ExecuteSubmissionAndWaitForTransactionRequest {
   // filter for all original ``act_as`` and ``read_as`` parties and the ``verbose`` flag is set.
   // When the ``transaction_shape`` TRANSACTION_SHAPE_ACS_DELTA shape is used (explicitly or is defaulted to as explained above),
   // events will only be returned if the submitting party is hosted on this node.
+  //
   // Optional
   TransactionFormat transaction_format = 9;
 }
@@ -534,11 +604,13 @@ message ExecuteSubmissionAndWaitForTransactionRequest {
 message ExecuteSubmissionAndWaitForTransactionResponse {
   // The transaction that resulted from the submitted command.
   // The transaction might contain no events (request conditions result in filtering out all of them).
+  //
   // Required
   Transaction transaction = 1;
 }
 
 message MinLedgerTime {
+  // Required
   oneof time {
     // Lower bound for the ledger time assigned to the resulting transaction.
     // The ledger time of a transaction is assigned as part of command interpretation.
@@ -564,8 +636,12 @@ message MinLedgerTime {
  */
 message PreparedTransaction {
   // Daml Transaction representing the ledger effect if executed. See below
+  //
+  // Required
   DamlTransaction transaction = 1;
   // Metadata context necessary to execute the transaction
+  //
+  // Required
   Metadata metadata = 2;
 }
 
@@ -573,22 +649,30 @@ message PreparedTransaction {
 // Refer to the hashing documentation for information on how it should be hashed.
 message Metadata {
   message SubmitterInfo {
+    // Required: must be non-empty
     repeated string act_as = 1;
+    // Required
     string command_id = 2;
   }
 
+  // This message is deprecated and may be removed in future releases
   message GlobalKeyMappingEntry {
-    interactive.GlobalKey key = 1;
-    optional Value value = 2;
+    // Required
+    interactive.GlobalKey key = 1 [deprecated = true];
+    // Optional
+    optional Value value = 2 [deprecated = true];
   }
 
   message InputContract {
+    // Required
     oneof contract {
       // When new versions will be added, they will show here
       interactive.transaction.v1.Create v1 = 1;
     }
+    // Required
     uint64 created_at = 1000;
     reserved 1001; // Used to contain driver_metadata, now contained in event_blob
+    // Required: must be non-empty
     bytes event_blob = 1002;
   }
 
@@ -599,11 +683,19 @@ message Metadata {
   // this used to contain the ledger effective time
   reserved 1;
 
+  // Required
   SubmitterInfo submitter_info = 2;
+  // Required
   string synchronizer_id = 3;
+  // Required
   uint32 mediator_group = 4;
+  // Required
   string transaction_uuid = 5;
+  // Required
   uint64 preparation_time = 6;
+  // Not populated if the transaction has no input contracts
+  //
+  // Optional: can be empty
   repeated InputContract input_contracts = 7;
 
   /*
@@ -614,24 +706,28 @@ message Metadata {
    * If the ledger effective time is outside of any populated min/max bounds then a different transaction
    * can result, that will cause a confirmation message rejection.
    */
+  // Optional
   optional uint64 min_ledger_effective_time = 9;
+  // Optional
   optional uint64 max_ledger_effective_time = 10;
+
+  // Maximum timestamp at which the transaction can be recorded onto the ledger via the synchronizer `synchronizer_id`.
+  // If submitted after it will be rejected even if otherwise valid, in which case it needs to be prepared and signed again
+  // with a new valid max_record_time.
+  // Set max_record_time in the PreparedTransactionRequest to get this field set accordingly
+  //
+  // Optional
+  optional uint64 max_record_time = 11;
 
   /* ********************************************************** */
   /* ** Metadata information that does NOT need to be signed ** */
   /* ********************************************************** */
 
-  // Contextual information needed to process the transaction but not signed, either because it's already indirectly
-  // signed by signing the transaction, or because it doesn't impact the ledger state
-  repeated GlobalKeyMappingEntry global_key_mapping = 8;
-
-  // Maximum timestamp at which the transaction can be recorded onto the ledger via the synchronizer `synchronizer_id`.
-  // If submitted after it will be rejected even if otherwise valid, in which case it needs to be prepared and signed again
-  // with a new valid max_record_time.
-  // Unsigned in 3.3 to avoid a breaking protocol change
-  // Will be signed in 3.4+
-  // Set max_record_time in the PreparedTransactionRequest to get this field set accordingly
-  optional uint64 max_record_time = 11;
+  // This fields is deprecated and will always be empty.
+  // Keys and associated contracts are already present and signed within the transaction nodes where they're used
+  //
+  // Optional: can be empty
+  repeated GlobalKeyMappingEntry global_key_mapping = 8 [deprecated = true];
 }
 
 /*
@@ -640,7 +736,9 @@ message Metadata {
  */
 message DamlTransaction {
   message NodeSeed {
+    // Required
     int32 node_id = 1;
+    // Required: must be non-empty
     bytes seed = 2;
   }
 
@@ -648,60 +746,80 @@ message DamlTransaction {
   // Each node must be hashed using the hashing algorithm corresponding to its specific version.
   // [docs-entry-start: DamlTransaction.Node]
   message Node {
+    // Required
     string node_id = 1;
 
     // Versioned node
+    //
+    // Required
     oneof versioned_node {
       // Start at 1000 so we can add more fields before if necessary
       // When new versions will be added, they will show here
+      //
+      // Required
       interactive.transaction.v1.Node v1 = 1000;
     }
   }
   // [docs-entry-end: DamlTransaction.Node]
 
   // serialization version, will be >= max(nodes version)
+  //
+  // Required
   string version = 1;
   // Root nodes of the transaction
+  //
+  // Required: must be non-empty
   repeated string roots = 2;
   // List of nodes in the transaction
+  //
+  // Required: must be non-empty
   repeated Node nodes = 3;
   // Node seeds are values associated with certain nodes used for generating cryptographic salts
+  //
+  // Required: must be non-empty
   repeated NodeSeed node_seeds = 4;
 }
 
 message GetPreferredPackageVersionRequest {
   // The parties whose participants' vetting state should be considered when resolving the preferred package.
-  // Required
+  //
+  // Required: must be non-empty
   repeated string parties = 1;
   // The package-name for which the preferred package should be resolved.
+  //
   // Required
   string package_name = 2;
 
   // The synchronizer whose vetting state should be used for resolving this query.
   // If not specified, the vetting states of all synchronizers to which the participant is connected are used.
+  //
   // Optional
   string synchronizer_id = 3;
 
   // The timestamp at which the package vetting validity should be computed
   // on the latest topology snapshot as seen by the participant.
   // If not provided, the participant's current clock time is used.
+  //
   // Optional
   google.protobuf.Timestamp vetting_valid_at = 4;
 }
 
 message GetPreferredPackageVersionResponse {
   // Not populated when no preferred package is found
+  //
   // Optional
   PackagePreference package_preference = 1;
 }
 
 message PackagePreference {
   // The package reference of the preferred package.
+  //
   // Required
   PackageReference package_reference = 1;
 
   // The synchronizer for which the preferred package was computed.
   // If the synchronizer_id was specified in the request, then it matches the request synchronizer_id.
+  //
   // Required
   string synchronizer_id = 2;
 }
@@ -709,10 +827,12 @@ message PackagePreference {
 // Defines a package-name for which the commonly vetted package with the highest version must be found.
 message PackageVettingRequirement {
   // The parties whose participants' vetting state should be considered when resolving the preferred package.
-  // Required
+  //
+  // Required: must be non-empty
   repeated string parties = 1;
 
   // The package-name for which the preferred package should be resolved.
+  //
   // Required
   string package_name = 2;
 }
@@ -724,17 +844,19 @@ message GetPreferredPackagesRequest {
   // Additional package-name requirements can be provided when additional Daml transaction informees need to use
   // package dependencies of the command's root packages.
   //
-  // Required
+  // Required: must be non-empty
   repeated PackageVettingRequirement package_vetting_requirements = 1;
 
   // The synchronizer whose vetting state should be used for resolving this query.
   // If not specified, the vetting states of all synchronizers to which the participant is connected are used.
+  //
   // Optional
   string synchronizer_id = 2;
 
   // The timestamp at which the package vetting validity should be computed
   // on the latest topology snapshot as seen by the participant.
   // If not provided, the participant's current clock time is used.
+  //
   // Optional
   google.protobuf.Timestamp vetting_valid_at = 3;
 }
@@ -748,11 +870,12 @@ message GetPreferredPackagesResponse {
   // in the ``package_id_selection_preference`` of the command submission to
   // avoid race conditions with concurrent changes of the on-ledger package vetting state.
   //
-  // Required
+  // Required: must be non-empty
   repeated PackageReference package_references = 1;
 
   // The synchronizer for which the package preferences are computed.
   // If the synchronizer_id was specified in the request, then it matches the request synchronizer_id.
+  //
   // Required
   string synchronizer_id = 2;
 }
@@ -935,16 +1058,14 @@ from google.protobuf.json_format import MessageToJson
 from com.daml.ledger.api.v2.interactive import interactive_submission_service_pb2_grpc
 from com.daml.ledger.api.v2.interactive import interactive_submission_service_pb2
 from com.daml.ledger.api.v2 import commands_pb2, value_pb2, completion_pb2, crypto_pb2
-from external_party_onboarding_admin_api import onboard_external_party
+from external_party_onboarding import onboard_external_party
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ec import EllipticCurvePrivateKey
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives import hashes
-from daml_transaction_hashing_v2 import (
-    create_nodes_dict,
-    encode_prepared_transaction,
-    HASHING_SCHEME_VERSION_V2,
-)
+from daml_transaction_hashing_common import create_nodes_dict
+import daml_transaction_hashing_v2
+import daml_transaction_hashing_v3
 from com.daml.ledger.api.v2 import (
     command_completion_service_pb2,
     command_completion_service_pb2_grpc,
@@ -1096,13 +1217,13 @@ Additional information required for transaction processing.
 
 - `submission_time`: The timestamp that the Canton protocol will use as a submission time to perform validations (e.g for de-duplication)
 
-- `disclosed_events`: Existing input contracts used in the transaction
+- `input_contracts`: Existing input contracts used in the transaction
 
 - `global_key_mapping`: Unused in the current version, can be ignored.
 
 #### Hash
 
-- `prepared_transaction_hash`: Pre-computed transaction hash. For security reasons the hash should be re-computed client-side as mentioned in the Compute transaction hash section.
+- `prepared_transaction_hash`: Pre-computed transaction hash. For security reasons the hash should be re-computed client-side as mentioned in the [Compute transaction hash](#3-compute-the-transaction-hash) section.
 
 <Note>
 The `prepare` API can return additional details on how the Canton node is hashing the transaction to help troubleshoot hash-related errors (for example: pre-computed and re-computed hash mismatch).
@@ -1157,20 +1278,20 @@ Deserialize and inspect the transaction to verify its correctness before proceed
 
 It is strongly recommended that the transaction hash be recomputed from the transaction and metadata to verify correctness. The pre-computed hash provided in the `Prepare` step is for debugging purposes.
 
-- The hashing algorithm specification is available here as well as in the release artifact under `protobuf/ledger-api/com/daml/ledger/api/v2/interactive/README.md`
-- An example implementation in python is available in the release articact under `examples/08-interactive-submission/daml_transaction_hashing_v2.py`
+- The hashing algorithm specification is available [here](/appdev/deep-dives/external-signing-hashing-algorithm) as well as in the release artifact under `protobuf/ledger-api/com/daml/ledger/api/v2/interactive/README.md`
+- An example implementation in python is available in the release artifact under `examples/08-interactive-submission/daml_transaction_hashing_v2.py`
 
 ## 4. Sign the transaction hash
 
 Using `Alice`'s protocol signing private key, sign the hash.
 
 <Note>
-Technically what is needed is the ability to sign with `Alice`'s key, not the key itself. The management of the key can be delegated to a wallet, HSM or crypto custody provider. In this tutorial the key is managed locally and explicitly to demonstrate the signing process. Refer to the onboarding tutorial for details on how to generate a key for this tutorial.
+Technically what is needed is the ability to sign with `Alice`'s key, not the key itself. The management of the key can be delegated to a wallet, HSM or crypto custody provider. In this tutorial the key is managed locally and explicitly to demonstrate the signing process. Refer to the [onboarding tutorial](/appdev/deep-dives/external-signing-onboarding) for details on how to generate a key for this tutorial.
 </Note>
 
 Bash
 
-Assuming `Alice's` private key is stored in a file called `alice::1220d466a5d96a3509736c821e25fe81fc8a73f226d92e57e94a65170e58b07fc08e-private-key.der`, he hash can be signed using `openssl`.
+Assuming `Alice's` private key is stored in a file called `alice::1220d466a5d96a3509736c821e25fe81fc8a73f226d92e57e94a65170e58b07fc08e-private-key.der`, the hash can be signed using `openssl`.
 
 <Note>
 In this tutorial the hash retrieved from the response of step 1 will be signed, without re-computing it as suggested in step 3. For an example of how to re-compute the hash, see the `Python` example.
@@ -1184,9 +1305,14 @@ SIGNATURE=$(echo -n "$TRANSACTION_HASH" | base64 --decode | openssl pkeyutl -raw
 
 Python
 
-The Python example demo includes an implementation of the transaction hashing algorithm. In this example, `party_private_key` is assumed to be an `EllipticCurvePrivateKey` Python object containing Alice's private key. If the onboarding tutorial was followed, this key should already be available.
+The Python example demo includes an implementation of the transaction hashing algorithm. In this example, `party_private_key` is assumed to be an `EllipticCurvePrivateKey` Python object containing Alice's private key. If the [onboarding tutorial](/appdev/deep-dives/external-signing-onboarding) was followed, this key should already be available.
 
 ``` none
+if hashing_scheme_version == interactive_submission_service_pb2.HashingSchemeVersion.HASHING_SCHEME_VERSION_V3:
+    encode_prepared_transaction = daml_transaction_hashing_v3.encode_prepared_transaction
+else:
+    encode_prepared_transaction = daml_transaction_hashing_v2.encode_prepared_transaction
+
 transaction_hash = encode_prepared_transaction(
     prepared_transaction, create_nodes_dict(prepared_transaction)
 )
@@ -1242,16 +1368,16 @@ execute_request = interactive_submission_service_pb2.ExecuteSubmissionRequest(
                 party=party,
                 signatures=[
                     crypto_pb2.Signature(
-                        format=crypto_pb2.SignatureFormat.SIGNATURE_FORMAT_CONCAT,
+                        format=crypto_pb2.SignatureFormat.SIGNATURE_FORMAT_DER,
                         signature=signature,
                         signed_by=pub_fingerprint,
-                        signing_algorithm_spec=crypto_pb2.SigningAlgorithmSpec.SIGNING_ALGORITHM_SPEC_ED25519,
+                        signing_algorithm_spec=crypto_pb2.SigningAlgorithmSpec.SIGNING_ALGORITHM_SPEC_EC_DSA_SHA_256,
                     )
                 ],
             )
         ]
     ),
-    hashing_scheme_version=HASHING_SCHEME_VERSION_V2,
+    hashing_scheme_version=hashing_scheme_version,
     submission_id=str(uuid.uuid4()),
 )
 
@@ -1261,14 +1387,14 @@ iss_client.ExecuteSubmission(execute_request)
 
 In the request, note the presence of:
 
-- `submission_id`: Random string uniquely generated for this submission. This differs from the `command_id` in that a retry of this same prepared transaction would necessitate a new `submission_id`. The `submission_id` is used to correlate several submissions of the same command with completion events (See next step for more on completion events).
+- `submission_id`: Random string uniquely generated for this submission. This differs from the `command_id` in that a retry of this same prepared transaction would necessitate a new `submission_id`. The `submission_id` is used to correlate several submissions of the same command with completion events (See [next step](#6-observe-the-transaction-outcome) for more on completion events).
 
   > - Because `submission_id` is not part of the signature, a command can be re-submitted with a different `submission_id` without requiring a new signature.
 
 - `signatures`: Object containing the signature of the transaction hash, along with metadata. In particular:
 
   > - `signing_algorithm_spec`: Will vary depending on the key used during onboarding.
-  > - `signed_by`: Fingerprint of the protocol signing *public* key of `Alice`. This tutorial assumes the same key was used to create `Alice`'s namespace and her protocol signing key. This is why the fingerprint of the signing key matches the second part of her Party Id (after `::`). For more details check out the onboarding tutorial and the [Daml parties guide](/appdev/deep-dives/manage-daml-parties).
+  > - `signed_by`: Fingerprint of the protocol signing *public* key of `Alice`. This tutorial assumes the same key was used to create `Alice`'s namespace and her protocol signing key. This is why the fingerprint of the signing key matches the second part of her Party Id (after `::`). For more details check out the [onboarding tutorial](/appdev/deep-dives/external-signing-onboarding) and the [Parties and users on a Canton ledger](/appdev/deep-dives/manage-daml-parties).
 
 <Note>
 If the gRPC Ledger API authorization is enabled, the user must have the `actAs` claim on behalf of `Alice` to call the `execute` endpoint.
@@ -1575,8 +1701,14 @@ def execute_and_get_contract_id(
     party: str,
     party_private_key: EllipticCurvePrivateKey,
     pub_fingerprint: str,
+    hashing_scheme_version=interactive_submission_service_pb2.HashingSchemeVersion.HASHING_SCHEME_VERSION_V2,
 ):
     # [Compute transaction hash]
+    if hashing_scheme_version == interactive_submission_service_pb2.HashingSchemeVersion.HASHING_SCHEME_VERSION_V3:
+        encode_prepared_transaction = daml_transaction_hashing_v3.encode_prepared_transaction
+    else:
+        encode_prepared_transaction = daml_transaction_hashing_v2.encode_prepared_transaction
+
     transaction_hash = encode_prepared_transaction(
         prepared_transaction, create_nodes_dict(prepared_transaction)
     )
@@ -1596,16 +1728,16 @@ def execute_and_get_contract_id(
                     party=party,
                     signatures=[
                         crypto_pb2.Signature(
-                            format=crypto_pb2.SignatureFormat.SIGNATURE_FORMAT_CONCAT,
+                            format=crypto_pb2.SignatureFormat.SIGNATURE_FORMAT_DER,
                             signature=signature,
                             signed_by=pub_fingerprint,
-                            signing_algorithm_spec=crypto_pb2.SigningAlgorithmSpec.SIGNING_ALGORITHM_SPEC_ED25519,
+                            signing_algorithm_spec=crypto_pb2.SigningAlgorithmSpec.SIGNING_ALGORITHM_SPEC_EC_DSA_SHA_256,
                         )
                     ],
                 )
             ]
         ),
-        hashing_scheme_version=HASHING_SCHEME_VERSION_V2,
+        hashing_scheme_version=hashing_scheme_version,
         submission_id=str(uuid.uuid4()),
     )
 
@@ -1671,7 +1803,7 @@ def get_active_contracts(party: str):
 ``` none
 ping_created_event: event_pb2.CreatedEvent
 initiator_active_contracts = get_active_contracts(initiator)
-# Find the contract in the active contract set
+# Find the contract in the active contract store
 for active_contract_response in initiator_active_contracts:
     if (
         active_contract_response.HasField("active_contract")
@@ -1682,143 +1814,6 @@ for active_contract_response in initiator_active_contracts:
         break
 ```
 
-This concludes Part 1 of the tutorial. In Part 2, `Bob` exercises the `Respond` choice to archive the contract.
+This concludes Part 1 of the tutorial. In [Part 2](/appdev/deep-dives/external-signing-transactions-part-2), `Bob` exercises the `Respond` choice to archive the contract.
 
 {/* COPIED_END */}
-
-{/* COPIED_START source="docs-website:docs/replicated/canton/3.4/sdk/tutorials/app-dev/external_signing_submission_part_2.rst" hash="cdbe11dc" */}
-
-# Submit Externally Signed Transactions - Part 2
-
-Complete Part 1 before proceeding.
-
-The tutorial illustrates the external signing process using two external parties, `Alice` and `Bob`, leveraging the same Ping Daml Template used in Part 1 of the tutorial.
-
-- In Part 1 `Alice` created a `Ping` contract.
-- In Part 2 `Bob` exercises the `Respond` choice on the contract and archives it.
-
-The majority of the work involved in external transaction signing was completed in Part 1. The key addition in Part 2 is utilizing the Ping contract created earlier through **explicit disclosure** and executing the Respond choice on that contract. The overall process remains similar to Part 1.
-
-<Warning>
-This tutorial is for demo purposes. The code snippets should not be used directly in a production environment.
-</Warning>
-
-## Setup
-
-To proceed, gather the following information:
-
-- `Bob`'s Party ID, protocol signing private key, and protocol signing public key fingerprint
-- Synchronizer ID of the synchronizer to which the participant is connected
-- gRPC Ledger API endpoint
-- `ping_created_event`: Event retrieved in the last step of Part 1.
-- `contract_id`: ID of the contract created in Part 1.
-
-This information should already be known from the onboarding tutorial and the first part of the external signing tutorial.
-
-## Python
-
-If you are following this tutorial in Python, generate gRPC Python classes by following the setup instructions in the `README` in the example folder.
-
-## Exercise `Respond` Choice
-
-This tutorial does not repeat the material covered in Part 1 regarding transaction preparation, validation, signing, and execution, as these steps remain largely the same. Instead, it highlights the key differences from Part 1.
-
-### Prepare the transaction
-
-``` none
-ping_exercise_command = commands_pb2.Command(
-    exercise=commands_pb2.ExerciseCommand(
-        template_id=ping_template_id,
-        contract_id=contract_id,
-        choice="Respond",
-        choice_argument=value_pb2.Value(
-            record=value_pb2.Record(record_id=None, fields=[])
-        ),
-    )
-)
-```
-
-``` none
-prepare_exercise_request = interactive_submission_service_pb2.PrepareSubmissionRequest(
-    user_id=user_id,
-    command_id=str(uuid.uuid4()),
-    act_as=[responder],
-    read_as=[responder],
-    synchronizer_id=synchronizer_id,
-    commands=[ping_exercise_command],
-    # We need to explicitly disclosed the ping contract we created earlier
-    disclosed_contracts=[
-        commands_pb2.DisclosedContract(
-            template_id=template_id,
-            contract_id=contract_id,
-            created_event_blob=created_event_blob,
-            synchronizer_id=synchronizer_id,
-        )
-    ],
-)
-
-prepare_exercise_response = iss_client.PrepareSubmission(prepare_exercise_request)
-```
-
-The `Prepare` request is very similar to the one from Part 1, with the following differences:
-
-- `act_as`: Now the `responder`, `Bob`, instead of the `initiator`, `Alice`. This makes sense because `Bob` is the one exercising the choice on the contract.
-- `commands`: The command is now an `Exercise`command instead of a `Create` command. Notably it requires the `contract_id` from Part 1.
-- `disclosed_contracts`: The serialized representation of contracts required to process the transaction.
-
-#### Metadata
-
-The only significant difference with Part 1 in the metadata is: `disclosed_events`. This field now contains the input `Ping` contract. It is also included in the hash of the transaction.
-
-<Warning>
-Like in Part 1, the transaction must be validated, hashed and signed. The hash computation and signature is performed by the `execute_and_get_contract_id` function provided at the end of Part 1, as shown in the next section.
-</Warning>
-
-### Submit and observe archived contract
-
-``` none
-execute_and_get_contract_id(
-    prepared_exercise_transaction,
-    responder,
-    responder_private_key,
-    responder_fingerprint,
-)
-
-# The contract was archived by exercising the choice, we get an archived event this time
-contract_events = get_events(responder, contract_id)
-if contract_events.HasField("archived"):
-    print(
-        f"Ping contract with ID {contract_events.archived.archived_event.contract_id} has been archived"
-    )
-else:
-    raise Exception("Expected an archive event")
-```
-
-By querying the event service and filtering for the contract ID, an archived event is observed, confirming that the contract has been successfully archived.
-
-This concludes the external signing tutorial. The code used in this tutorial is available in the `examples/08-interactive-submission` folder and can be run with
-
-```bash
-python interactive_submission.py run-demo
-```
-
-## Tooling
-
-The scripts mentioned in this tutorial can be used as tools for testing and development purposes
-
-### Decode base64 encoded prepared transaction to JSON
-
-```bash
-./setup.sh
-python daml_transaction_util.py --decode --base64 <base64_encoded_transaction>
-```
-
-### Compute hash of base64 encoded prepared transaction
-
-```bash
-./setup.sh
-python daml_transaction_util.py --hash --base64 <base64_encoded_transaction>
-```
-
-{/* COPIED_END */}
-
