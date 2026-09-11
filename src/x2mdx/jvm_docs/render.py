@@ -7,12 +7,31 @@ import html
 import os
 import re
 from collections import defaultdict
+from functools import cmp_to_key
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
+from x2mdx.history.events import history_events_for_item
+from x2mdx.history.models import (
+    HistoryEvent,
+    HistoryEventKind,
+    HistoryItem,
+    SurfaceHistoryReport,
+)
+from x2mdx.history.versioning import compare_versions
 from x2mdx.jvm_docs.models import JvmDocArtifactLifecycle, JvmDocLifecycleReport, JvmDocSymbolLifecycle
 from x2mdx.output import Page
+from x2mdx.reference_pages import (
+    ReferenceBadge,
+    ReferenceCard,
+    ReferenceCollectionPage,
+    ReferenceMetaItem,
+    ReferenceSection,
+    render_collection_page,
+    reference_badges_for_history_events,
+    reference_badges_for_history_item,
+)
 from x2mdx.templating import markdown_page
 
 CHANGE_MARKER = "🔵"
@@ -350,6 +369,7 @@ def build_type_entries(
                 "upstream": latest_doc_markdown_link(type_symbol),
                 "signature": type_symbol.latest_signature or "",
                 "member_rows": member_rows,
+                "members": type_members,
                 "symbol": type_symbol,
             }
         )
@@ -532,13 +552,420 @@ def build_artifact_page(
     return artifact_page, package_pages
 
 
+def current_type_entries(
+    artifact: JvmDocArtifactLifecycle,
+) -> list[dict[str, Any]]:
+    return [
+        entry
+        for entry in build_type_entries(artifact)
+        if entry["symbol"].removed_version is None
+        and artifact.versions[-1] in entry["symbol"].versions_present
+    ]
+
+
+def build_reader_type_routes(
+    report: JvmDocLifecycleReport,
+    *,
+    reader_route_prefix: str,
+) -> dict[str, str]:
+    prefix = "/" + reader_route_prefix.strip("/")
+    routes: dict[str, str] = {}
+    for artifact in report.artifacts:
+        package_groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for entry in current_type_entries(artifact):
+            package_groups[str(entry["package"])].append(entry)
+        for package_name in sorted(package_groups):
+            used_slugs: set[str] = set()
+            entries = sorted(
+                package_groups[package_name],
+                key=lambda item: str(item["object_name"]),
+            )
+            for entry in entries:
+                object_slug = build_object_slug(
+                    str(entry["object_name"]),
+                    used_slugs=used_slugs,
+                )
+                symbol = entry["symbol"]
+                routes[symbol.symbol_key] = (
+                    f"{prefix}/{slugify(package_name)}/{object_slug}"
+                )
+    return routes
+
+
+def aggregate_history_events(
+    items: list[HistoryItem],
+    *,
+    comparison_versions: tuple[str, ...],
+) -> list[HistoryEvent]:
+    combined: dict[tuple[HistoryEventKind, str], HistoryEvent] = {}
+    for item in items:
+        label = item.location or item.id
+        for event in history_events_for_item(
+            item,
+            comparison_versions=comparison_versions,
+        ):
+            key = (event.kind, event.version)
+            details = tuple(
+                f"{label}: {detail}" for detail in event.details
+            ) or (label,)
+            existing = combined.get(key)
+            if existing is None:
+                combined[key] = HistoryEvent(
+                    kind=event.kind,
+                    version=event.version,
+                    label=event.label,
+                    details=details,
+                    evidence=event.evidence,
+                )
+            else:
+                combined[key] = HistoryEvent(
+                    kind=existing.kind,
+                    version=existing.version,
+                    label=existing.label,
+                    details=tuple(dict.fromkeys((*existing.details, *details))),
+                    evidence=tuple(
+                        dict.fromkeys((*existing.evidence, *event.evidence))
+                    ),
+                )
+
+    priority = {
+        HistoryEventKind.REMOVE_AS_OF: 0,
+        HistoryEventKind.DEPRECATED: 1,
+        HistoryEventKind.CHANGED: 2,
+        HistoryEventKind.INTRODUCED: 3,
+        HistoryEventKind.REPLACEMENT: 4,
+    }
+
+    def compare(left: HistoryEvent, right: HistoryEvent) -> int:
+        version_comparison = compare_versions(
+            left.version,
+            right.version,
+            known_order=comparison_versions,
+        )
+        if version_comparison:
+            return -version_comparison
+        return priority[left.kind] - priority[right.kind]
+
+    return sorted(combined.values(), key=cmp_to_key(compare))
+
+
+def markdown_table(headers: list[str], rows: list[list[str]]) -> str:
+    if not rows:
+        return "No current entries."
+    lines = [
+        "| " + " | ".join(headers) + " |",
+        "| " + " | ".join("---" for _ in headers) + " |",
+    ]
+    lines.extend("| " + " | ".join(row) + " |" for row in rows)
+    return "\n".join(lines)
+
+
+def current_member_rows(
+    entry: dict[str, Any],
+    *,
+    baseline_version: str,
+    publish_version: str,
+) -> list[list[str]]:
+    rows: list[list[str]] = []
+    for member in entry["members"]:
+        if member.removed_version is not None:
+            continue
+        if publish_version not in member.versions_present:
+            continue
+        label = (
+            java_member_label(member)
+            if member.language == "java"
+            else scala_member_owner_and_label(member)[1]
+        )
+        status_parts: list[str] = []
+        if member.introduced_version != baseline_version:
+            status_parts.append(f"Added `{md_code(member.introduced_version)}`")
+        if member.deprecated_version is not None:
+            status_parts.append(
+                f"Deprecated `{md_code(member.deprecated_version)}`"
+            )
+        rows.append(
+            [
+                f"`{md_code(label)}`",
+                " · ".join(status_parts) or "-",
+                latest_doc_markdown_link(member),
+            ]
+        )
+    return rows
+
+
+def render_standardized_collection_page(page: ReferenceCollectionPage) -> Page:
+    return render_collection_page(page)
+
+
+def build_standardized_artifact_pages(
+    artifact: JvmDocArtifactLifecycle,
+    *,
+    root: Path,
+    overview_output: Path,
+    details_dir: Path,
+    history_report: SurfaceHistoryReport,
+    overview_title: str,
+) -> tuple[Page, list[Page]]:
+    artifact_slug = slugify(artifact.artifact)
+    artifact_page_path = details_dir / f"{artifact_slug}.mdx"
+    package_pages_dir = details_dir / f"{artifact_slug}-packages"
+    history_by_id = history_report.items_by_id()
+
+    package_groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for entry in current_type_entries(artifact):
+        package_groups[str(entry["package"])].append(entry)
+
+    package_cards: list[ReferenceCard] = []
+    pages: list[Page] = []
+    for package_name in sorted(package_groups):
+        package_dir = package_pages_dir / slugify(package_name)
+        package_page_path = package_dir / "index.mdx"
+        entries = sorted(
+            package_groups[package_name],
+            key=lambda item: str(item["object_name"]),
+        )
+        used_slugs: set[str] = set()
+        for entry in entries:
+            entry["page_path"] = package_dir / (
+                build_object_slug(
+                    str(entry["object_name"]),
+                    used_slugs=used_slugs,
+                )
+                + ".mdx"
+            )
+
+        package_items = [history_by_id[entry["symbol"].symbol_key] for entry in entries]
+        package_events = aggregate_history_events(
+            package_items,
+            comparison_versions=history_report.comparison_versions,
+        )
+        package_cards.append(
+            ReferenceCard(
+                title=package_name,
+                href=relative_page_link(artifact_page_path, package_page_path),
+                summary=f"{len(entries)} current types",
+                badges=reference_badges_for_history_events(
+                    package_events,
+                    kind_label="Java",
+                    linked=False,
+                ),
+            )
+        )
+
+        object_cards: list[ReferenceCard] = []
+        for entry in entries:
+            symbol = entry["symbol"]
+            item = history_by_id[symbol.symbol_key]
+            object_path = Path(entry["page_path"])
+            object_cards.append(
+                ReferenceCard(
+                    title=str(entry["object_name"]),
+                    href=relative_page_link(package_page_path, object_path),
+                    summary=symbol.latest_summary or "Java type reference.",
+                    badges=reference_badges_for_history_item(
+                        item,
+                        kind_label="Java",
+                        comparison_versions=history_report.comparison_versions,
+                        linked=False,
+                    ),
+                )
+            )
+
+            sections: list[ReferenceSection] = []
+            if symbol.latest_signature:
+                sections.append(
+                    ReferenceSection(
+                        heading="Signature",
+                        body_markdown=(
+                            "```java\n"
+                            f"{symbol.latest_signature}\n"
+                            "```"
+                        ),
+                    )
+                )
+            sections.append(
+                ReferenceSection(
+                    heading="Members",
+                    body_markdown=markdown_table(
+                        ["Member", "Lifecycle", "Upstream docs"],
+                        current_member_rows(
+                            entry,
+                            baseline_version=history_report.comparison_versions[0],
+                            publish_version=history_report.publish_version,
+                        ),
+                    ),
+                )
+            )
+            pages.append(
+                render_standardized_collection_page(
+                    ReferenceCollectionPage(
+                        path=page_path(root, object_path),
+                        title=str(entry["object_name"]),
+                        description=object_page_description(
+                            symbol,
+                            str(entry["object_name"]),
+                        ),
+                        eyebrow=package_name,
+                        summary=symbol.latest_summary,
+                        back_link=relative_page_link(object_path, package_page_path),
+                        back_label="Back to package",
+                        badges=reference_badges_for_history_item(
+                            item,
+                            kind_label="Java",
+                            comparison_versions=history_report.comparison_versions,
+                        ),
+                        meta_items=[
+                            ReferenceMetaItem("Package", package_name),
+                            ReferenceMetaItem(
+                                "Upstream docs",
+                                "Open Javadoc",
+                                href=latest_doc_link(symbol),
+                            ),
+                        ],
+                        sections=sections,
+                        history_events=list(
+                            history_events_for_item(
+                                item,
+                                comparison_versions=history_report.comparison_versions,
+                            )
+                        ),
+                    )
+                )
+            )
+
+        pages.append(
+            render_standardized_collection_page(
+                ReferenceCollectionPage(
+                    path=page_path(root, package_page_path),
+                    title=package_name,
+                    description=f"Current Java types in {package_name}.",
+                    eyebrow="Java package",
+                    summary=f"{len(entries)} current types",
+                    back_link=relative_page_link(
+                        package_page_path,
+                        artifact_page_path,
+                    ),
+                    back_label="Back to Java Bindings",
+                    badges=reference_badges_for_history_events(
+                        package_events,
+                        kind_label="Java",
+                    ),
+                    sections=[
+                        ReferenceSection(
+                            heading="Types",
+                            cards=object_cards,
+                        )
+                    ],
+                    history_events=package_events,
+                )
+            )
+        )
+
+    all_events = aggregate_history_events(
+        list(history_report.items),
+        comparison_versions=history_report.comparison_versions,
+    )
+    artifact_page = render_standardized_collection_page(
+        ReferenceCollectionPage(
+            path=page_path(root, artifact_page_path),
+            title=overview_title,
+            description="Generated Java bindings reference with embedded version history.",
+            eyebrow="Ledger API",
+            summary="Current Java binding types generated from published Javadoc snapshots.",
+            badges=reference_badges_for_history_events(
+                all_events,
+                kind_label="Java",
+            ),
+            meta_items=[
+                ReferenceMetaItem("Artifact", f"{artifact.group}:{artifact.artifact}"),
+                ReferenceMetaItem("Latest release", history_report.publish_version),
+                ReferenceMetaItem("Versions", str(len(history_report.comparison_versions))),
+                ReferenceMetaItem("Current types", str(len(history_report.current_items()))),
+            ],
+            sections=[ReferenceSection(heading="Packages", cards=package_cards)],
+            history_events=all_events,
+        )
+    )
+    return artifact_page, pages
+
+
+def build_standardized_pages(
+    report: JvmDocLifecycleReport,
+    *,
+    overview_output: Path,
+    details_dir: Path,
+    history_report: SurfaceHistoryReport,
+    overview_title: str,
+) -> tuple[Path, list[Page]]:
+    root = compute_output_root(overview_output, details_dir)
+    pages: list[Page] = []
+    artifact_cards: list[ReferenceCard] = []
+    for artifact in report.artifacts:
+        artifact_page, artifact_pages = build_standardized_artifact_pages(
+            artifact,
+            root=root,
+            overview_output=overview_output,
+            details_dir=details_dir,
+            history_report=history_report,
+            overview_title=overview_title,
+        )
+        pages.append(artifact_page)
+        pages.extend(artifact_pages)
+        artifact_cards.append(
+            ReferenceCard(
+                title=f"{artifact.group}:{artifact.artifact}",
+                href=relative_page_link(
+                    overview_output,
+                    root / artifact_page.path,
+                ),
+                summary=f"{len(history_report.current_items())} current Java types",
+                badges=[ReferenceBadge("Java", tone="protocol")],
+            )
+        )
+
+    overview_events = aggregate_history_events(
+        list(history_report.items),
+        comparison_versions=history_report.comparison_versions,
+    )
+    pages.insert(
+        0,
+        render_standardized_collection_page(
+            ReferenceCollectionPage(
+                path=page_path(root, overview_output),
+                title=overview_title,
+                description="Generated Java bindings reference with embedded version history.",
+                eyebrow="Ledger API",
+                summary="Current Java binding types generated from published Javadoc snapshots.",
+                badges=reference_badges_for_history_events(
+                    overview_events,
+                    kind_label="Java",
+                ),
+                sections=[ReferenceSection(heading="Artifacts", cards=artifact_cards)],
+                history_events=overview_events,
+            )
+        ),
+    )
+    return root, pages
+
+
 def build_pages(
     report: JvmDocLifecycleReport,
     *,
     overview_output: Path,
     details_dir: Path,
     overview_title: str = "JVM API Lifecycle",
+    history_report: SurfaceHistoryReport | None = None,
 ) -> tuple[Path, list[Page]]:
+    if history_report is not None:
+        return build_standardized_pages(
+            report,
+            overview_output=overview_output,
+            details_dir=details_dir,
+            history_report=history_report,
+            overview_title=overview_title,
+        )
+
     root = compute_output_root(overview_output, details_dir)
     pages: list[Page] = []
 

@@ -16,7 +16,7 @@ from x2mdx.jvm_docs.lifecycle import (
     parse_scala_type_page,
 )
 from x2mdx.jvm_docs.models import JvmDocArtifactLifecycle, JvmDocLifecycleReport, JvmDocSymbolLifecycle
-from x2mdx.jvm_docs.render import build_pages
+from x2mdx.jvm_docs.render import build_pages, current_member_rows
 from x2mdx.render import render_page
 from x2mdx.jvm_docs.snapshots import load_jvm_doc_sources
 
@@ -523,6 +523,118 @@ class JvmDocsTests(unittest.TestCase):
             docs_payload["navigation"]["dropdowns"][0]["pages"],
             ["reference/jvm-api/index"],
         )
+
+    def test_cli_builds_standardized_current_pages_with_shared_history(self) -> None:
+        manifest_path = self._write_manifest()
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["artifacts"] = [
+            artifact
+            for artifact in manifest["artifacts"]
+            if artifact["language"] == "java"
+        ]
+        manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+
+        overview = self.root / "reference" / "java-bindings.mdx"
+        details_dir = self.root / "reference" / "java"
+        history_report = details_dir / "history-report.json"
+
+        result = cli_main(
+            [
+                "jvm-docs",
+                "build-api-pages-from-manifest",
+                "--manifest",
+                str(manifest_path),
+                "--overview-file",
+                str(overview),
+                "--details-dir",
+                str(details_dir),
+                "--overview-title",
+                "Java Bindings",
+                "--history-report",
+                str(history_report),
+                "--reader-route-prefix",
+                "reference/java",
+                "--surface-id",
+                "java-bindings",
+                "--surface-title",
+                "Java Bindings",
+            ]
+        )
+
+        self.assertEqual(result, 0)
+        payload = json.loads(history_report.read_text(encoding="utf-8"))
+        self.assertEqual(payload["surface_id"], "java-bindings")
+        self.assertEqual(payload["comparison_versions"], ["1.0.0", "1.1.0", "1.2.0"])
+        self.assertEqual(len(payload["items"]), 4)
+        current_items = [item for item in payload["items"] if item["current_present"]]
+        self.assertEqual(len(current_items), 3)
+        legacy = next(item for item in payload["items"] if item["location"] == "com.example.Legacy")
+        self.assertFalse(legacy["current_present"])
+        self.assertEqual(legacy["observed_removal"], "1.1.0")
+        self.assertIsNone(legacy.get("route"))
+
+        artifact_page = details_dir / "bindings-java.mdx"
+        package_dir = details_dir / "bindings-java-packages" / "com-example"
+        package_page = package_dir / "index.mdx"
+        foo_page = package_dir / "foo.mdx"
+        bar_page = package_dir / "bar.mdx"
+        legacy_page = package_dir / "legacy.mdx"
+        self.assertTrue(overview.exists())
+        self.assertTrue(artifact_page.exists())
+        self.assertTrue(package_page.exists())
+        self.assertTrue(foo_page.exists())
+        self.assertTrue(bar_page.exists())
+        self.assertFalse(legacy_page.exists())
+
+        overview_text = overview.read_text(encoding="utf-8")
+        foo_text = foo_page.read_text(encoding="utf-8")
+        bar_text = bar_page.read_text(encoding="utf-8")
+        self.assertNotIn("Details and history", overview_text)
+        self.assertNotIn("Active Since", foo_text)
+        self.assertIn("x2mdx-ref-page--collection", foo_text)
+        self.assertNotIn("history-added-1-0-0", foo_text)
+        self.assertIn("| `newMethod` | Added `1.1.0` |", foo_text)
+        self.assertNotIn("| Added `1.0.0` |", foo_text)
+        self.assertIn('href="#history-deprecated-1-2-0">Deprecated 1.2.0</a>', bar_text)
+        self.assertNotIn("## History", foo_text)
+        self.assertGreater(bar_text.rfind("## History"), bar_text.rfind("## Members"))
+        self.assertNotIn('id="history-added-1-0-0"', foo_text)
+        self.assertIn('id="history-deprecated-1-2-0"', bar_text)
+
+    def test_standardized_member_rows_omit_baseline_introduction(self) -> None:
+        baseline_member = JvmDocSymbolLifecycle(
+            symbol_key="bindings-java:java:member:com.example.Foo#existing()",
+            language="java",
+            kind="member",
+            symbol="com.example.Foo#existing()",
+            introduced_version="1.0.0",
+            deprecated_version=None,
+            removed_version=None,
+            versions_present=["1.0.0", "1.1.0", "1.2.0"],
+            doc_links={"1.2.0": "https://example.com/Foo.html#existing()"},
+            latest_doc_path="com/example/Foo.html",
+        )
+        added_member = JvmDocSymbolLifecycle(
+            symbol_key="bindings-java:java:member:com.example.Foo#added()",
+            language="java",
+            kind="member",
+            symbol="com.example.Foo#added()",
+            introduced_version="1.1.0",
+            deprecated_version=None,
+            removed_version=None,
+            versions_present=["1.1.0", "1.2.0"],
+            doc_links={"1.2.0": "https://example.com/Foo.html#added()"},
+            latest_doc_path="com/example/Foo.html",
+        )
+
+        rows = current_member_rows(
+            {"members": [baseline_member, added_member]},
+            baseline_version="1.0.0",
+            publish_version="1.2.0",
+        )
+
+        self.assertEqual(rows[0][1], "-")
+        self.assertEqual(rows[1][1], "Added `1.1.0`")
 
     def test_cli_list_formats_outputs_all_supported_formats(self) -> None:
         stdout = io.StringIO()
