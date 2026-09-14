@@ -100,9 +100,9 @@ Open a PR there to add your tool. Maintaining external tooling in the Dev Hub en
 
 ### Handling version divergence
 
-Canton Network docs track the current MainNet, TestNet, and DevNet releases. Check the [Version Compatibility Dashboard](https://docs.canton.network/shared/version-compatibility-dashboard) for which Canton/Splice versions each net is actually on before assuming a version pin — don't copy a version number from another page, and don't hardcode a table of pins into a guide like this one, since it goes stale as soon as a net upgrades.
+Canton Network docs track the current major version (eg. 3.5.x) as well as the last major version (eg. 3.4).
 
-**Default to latest.** When you're not told otherwise, write against the latest upstream version and verify it against the current release, not whatever version an existing sibling page happens to be pinned to.
+**Default to latest.** When not directed otherwise, write against the latest upstream version and verify it against the current release, not whatever version an existing sibling page happens to be pinned to.
 
 **When behavior, config, or output genuinely differs between Canton versions still live on a supported net**, don't silently describe only one of them and don't duplicate the whole page. Use Mintlify's `<Tabs>` component to branch the diverging section, with one `<Tab>` for the current major Canton version (e.g. `3.5.x`) and one for the previous major version (e.g. `3.4.x`), defaulting to the tab for the current major version. Content pulled from upstream inside a tab keeps its own `{/* COPIED_START ... COPIED_END */}` markers, scoped to that tab. See `global-synchronizer/production-operations/key-management.mdx` for a worked example (Offline Root Namespace Key tabbed 3.5/3.4, Online Root Namespace Key left untabbed since it hasn't diverged).
 
