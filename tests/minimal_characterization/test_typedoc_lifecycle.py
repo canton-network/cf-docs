@@ -184,6 +184,8 @@ class TypeDocMinimalLifecycleTests(unittest.TestCase):
     def _render_page(self, relative_output_file: str = "typescript.mdx") -> Path:
         manifest_path = self._write_manifest()
         output_file = self.root / "out" / relative_output_file
+        history_report = self.root / "out" / f"{output_file.stem}-history-report.json"
+        lifecycle_metadata = self._write_json("lifecycle.json", {"exports": {}})
 
         run_x2mdx(
             [
@@ -197,6 +199,14 @@ class TypeDocMinimalLifecycleTests(unittest.TestCase):
                 "minimal typedoc lifecycle fixtures",
                 "--version-filter",
                 "minimal versions",
+                "--history-report",
+                str(history_report),
+                "--reader-route",
+                "/reference/typescript",
+                "--surface-id",
+                "typescript-daml-types",
+                "--lifecycle-metadata",
+                str(lifecycle_metadata),
             ]
         )
         return output_file
@@ -210,8 +220,9 @@ class TypeDocMinimalLifecycleTests(unittest.TestCase):
             page,
             [
                 "## Table of Contents",
-                "## Version Change Summary",
                 "## Reference",
+                "## History",
+                'href="#history-updated-1-1-0"',
                 "makeWidget(value: number): Result",
                 "lifecycle state updated",
             ],

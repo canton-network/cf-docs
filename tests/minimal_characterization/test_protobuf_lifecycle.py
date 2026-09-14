@@ -199,6 +199,7 @@ class ProtobufMinimalLifecycleTests(unittest.TestCase):
                 "packages/com-example-payments-v1.mdx",
                 "operations/com-example-payments-v1/paymentservice/createpayment.mdx",
                 "operations/com-example-payments-v1/paymentservice/listpayments.mdx",
+                "operations/com-example-payments-v1/paymentservice/legacypayment.mdx",
             },
         )
         assert_text_tree_matches_fixture(output_dir, "protobuf/default")
@@ -231,7 +232,7 @@ class ProtobufMinimalLifecycleTests(unittest.TestCase):
                 "PaymentResultV2",
             ],
         )
-        assert_contains_none(package, ["LegacyPayment"])
+        assert_contains_all(package, ["LegacyPayment", "Removed in 1.1.0"])
         assert_contains_all(
             create_payment,
             [

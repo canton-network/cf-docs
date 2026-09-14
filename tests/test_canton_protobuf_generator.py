@@ -128,10 +128,61 @@ class CantonProtobufGeneratorTests(unittest.TestCase):
         self.assertEqual(fetch_attempts, 3)
         self.assertEqual(sleeps, [2, 4])
 
-    def test_bundle_selection_maps_only_ledger_and_admin_api_inputs(self) -> None:
+    def test_descriptor_cache_path_changes_with_protobuf_selection(self) -> None:
+        cache_dir = self.root / "cache"
+        without_traffic_enforcement = tuple(
+            selection
+            for selection in generator.LEDGER_API_SELECTIONS
+            if selection.section_name != "traffic-enforcement"
+        )
+
+        previous_selection_path = generator.descriptor_image_path(
+            cache_dir,
+            "3.5.15",
+            surface="grpc-ledger-api",
+            selections=without_traffic_enforcement,
+        )
+        current_selection_path = generator.descriptor_image_path(
+            cache_dir,
+            "3.5.15",
+            surface="grpc-ledger-api",
+            selections=generator.LEDGER_API_SELECTIONS,
+        )
+        legacy_path = (
+            cache_dir
+            / "descriptor-images"
+            / "grpc-ledger-api"
+            / "3.5.15"
+            / generator.DESCRIPTOR_IMAGE_NAME
+        )
+
+        self.assertNotEqual(previous_selection_path, current_selection_path)
+        self.assertNotEqual(legacy_path, current_selection_path)
+        self.assertIn(generator.DESCRIPTOR_CACHE_SCHEMA, current_selection_path.parts)
+        self.assertEqual(
+            current_selection_path,
+            generator.descriptor_image_path(
+                cache_dir,
+                "3.5.15",
+                surface="grpc-ledger-api",
+                selections=generator.LEDGER_API_SELECTIONS,
+            ),
+        )
+
+    def test_bundle_selection_maps_only_selected_ledger_and_admin_api_inputs(
+        self,
+    ) -> None:
         protobuf_root = self.root / "protobuf"
         self.write_proto(protobuf_root / "ledger-api", "com/daml/ledger/api/v2/command_service.proto")
         self.write_proto(protobuf_root / "ledger-api-value", "com/daml/ledger/api/v2/value.proto")
+        self.write_proto(
+            protobuf_root / "traffic-enforcement",
+            "com/digitalasset/canton/tea/v1/traffic_service.proto",
+        )
+        self.write_proto(
+            protobuf_root / "traffic-enforcement",
+            "com/digitalasset/canton/tea/scalapb/package.proto",
+        )
         self.write_proto(protobuf_root / "admin-api", "com/digitalasset/canton/admin/health/v30/status_service.proto")
         self.write_proto(protobuf_root / "community", "com/digitalasset/canton/time/admin/v30/synchronizer_time_service.proto")
         self.write_proto(protobuf_root / "community", "com/digitalasset/canton/crypto/admin/v30/vault_service.proto")
@@ -157,6 +208,10 @@ class CantonProtobufGeneratorTests(unittest.TestCase):
                 "com/daml/ledger/api/v2/value.proto": (
                     "community/daml-lf/ledger-api-value-proto/src/main/protobuf/com/daml/ledger/api/v2/value.proto"
                 ),
+                "com/digitalasset/canton/tea/v1/traffic_service.proto": (
+                    "community/traffic-enforcement/api/protobuf/"
+                    "com/digitalasset/canton/tea/v1/traffic_service.proto"
+                ),
             },
         )
         self.assertEqual(
@@ -171,6 +226,9 @@ class CantonProtobufGeneratorTests(unittest.TestCase):
         self.assertNotIn("com/daml/ledger/api/v2/value.proto", admin_mapping)
         self.assertNotIn("com/digitalasset/canton/protocol/v30/common.proto", admin_mapping)
         self.assertNotIn("com/digitalasset/canton/participant/foo.proto", admin_mapping)
+        self.assertNotIn(
+            "com/digitalasset/canton/tea/scalapb/package.proto", ledger_mapping
+        )
 
     def test_split_protobuf_navigation_flattens_admin_packages_under_grpc(self) -> None:
         docs_root = self.root / "docs-main"

@@ -13,6 +13,7 @@ from x2mdx.history.versioning import compare_versions
 
 
 EVENT_KIND_PRIORITY = {
+    HistoryEventKind.REMOVED: -1,
     HistoryEventKind.REMOVE_AS_OF: 0,
     HistoryEventKind.DEPRECATED: 1,
     HistoryEventKind.CHANGED: 2,
@@ -22,6 +23,7 @@ EVENT_KIND_PRIORITY = {
 
 
 EVENT_ANCHOR_LABELS = {
+    HistoryEventKind.REMOVED: "removed",
     HistoryEventKind.REMOVE_AS_OF: "removal-scheduled",
     HistoryEventKind.DEPRECATED: "deprecated",
     HistoryEventKind.CHANGED: "updated",
@@ -42,6 +44,16 @@ def history_events_for_item(
     comparison_versions: tuple[str, ...],
 ) -> tuple[HistoryEvent, ...]:
     events: list[HistoryEvent] = []
+    if item.observed_removal is not None and item.removal_evidence is not None:
+        events.append(
+            HistoryEvent(
+                kind=HistoryEventKind.REMOVED,
+                version=item.observed_removal,
+                label="Removed in",
+                details=(f"Last available in {item.last_seen}. Retained for historical reference.",),
+                evidence=(item.removal_evidence,),
+            )
+        )
     if item.remove_as_of is not None and item.remove_as_of_evidence is not None:
         events.append(
             HistoryEvent(

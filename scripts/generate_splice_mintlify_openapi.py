@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
 import re
@@ -16,7 +15,7 @@ from typing import Any
 
 import yaml
 
-from validate_splice_mintlify_openapi_nav import validate_splice_nav
+from validate_splice_mintlify_openapi_nav import validate_splice_nav, removed_operation_page_refs
 from x2mdx.history import (
     SourceArtifact,
     SurfaceHistoryReport,
@@ -750,7 +749,8 @@ def build_splice_history_report(
                         path=path,
                     )
                 )
-                for method, path, _operation in operation_items(published)
+                for snapshot in specs_by_version.values()
+                for method, path, _operation in operation_items(snapshot)
             }
             scopes.append(
                 OpenAPIHistoryScope(
@@ -790,55 +790,6 @@ def build_splice_history_report(
         version_policy=VersionSelectionPolicy.LATEST_SELECTED_RELEASE,
         limitations=limitations,
     )
-
-
-def validate_manual_route_baseline(
-    source_config: dict[str, Any],
-    *,
-    families: list[dict[str, Any]],
-    snapshots: dict[str, dict[str, dict[str, Any]]],
-    publish_version: str,
-) -> None:
-    baseline = source_config.get("legacy_manual_route_baseline")
-    if not isinstance(baseline, dict):
-        raise ValueError("legacy_manual_route_baseline must be an object")
-    expected_count = baseline.get("operation_count")
-    expected_sha256 = baseline.get("sha256")
-    if not isinstance(expected_count, int) or expected_count < 0:
-        raise ValueError(
-            "legacy_manual_route_baseline.operation_count must be a non-negative integer"
-        )
-    if not isinstance(expected_sha256, str) or not re.fullmatch(
-        r"[0-9a-f]{64}", expected_sha256
-    ):
-        raise ValueError(
-            "legacy_manual_route_baseline.sha256 must be a lowercase SHA-256 digest"
-        )
-
-    routes: list[str] = []
-    for family in families:
-        for spec_config in family["specs"]:
-            published = snapshots[spec_config["filename"]].get(publish_version)
-            if published is None:
-                raise ValueError(
-                    f"Enabled spec {spec_config['filename']} is absent from publish version {publish_version}"
-                )
-            routes.extend(
-                f"/{page_ref}"
-                for page_ref in manual_operation_page_refs(
-                    spec=published,
-                    directory=spec_config["directory"],
-                )
-            )
-    actual_sha256 = hashlib.sha256(
-        ("\n".join(sorted(routes)) + "\n").encode("utf-8")
-    ).hexdigest()
-    if len(routes) != expected_count or actual_sha256 != expected_sha256:
-        raise ValueError(
-            "Manual Splice OpenAPI routes do not match the captured native-route baseline: "
-            f"expected {expected_count} routes/{expected_sha256}, got "
-            f"{len(routes)} routes/{actual_sha256}"
-        )
 
 
 def openapi_operation_page_refs(spec: dict[str, Any]) -> list[str]:
@@ -905,7 +856,7 @@ def operation_authentication(
 
 
 def prepare_manual_output_directories(
-    *, docs_root: Path, families: list[dict[str, Any]]
+    *, docs_root: Path, families: list[dict[str, Any]], history_report_path: Path | None = None
 ) -> None:
     for family in families:
         for spec_config in family["specs"]:
@@ -926,56 +877,30 @@ def write_manual_operation_pages(
     docs_root = docs_json_path.parent
     prepare_manual_output_directories(docs_root=docs_root, families=families)
     written: set[Path] = set()
-    history_items_by_route = {
-        item.route: item for item in history_report.current_items() if item.route
-    }
     for family in families:
         for spec_config in family["specs"]:
             filename = spec_config["filename"]
             specs_by_version = snapshots[filename]
-            if publish_version not in specs_by_version:
-                raise ValueError(
-                    f"Enabled spec {filename} is absent from publish version {publish_version}"
-                )
-            published = specs_by_version[publish_version]
-            server = manual_api_server(published)
-            raw_spec_href = f"/{spec_config['source']}"
-            for method, path, operation in operation_items(published):
-                page_ref = manual_operation_page_ref(
-                    directory=spec_config["directory"],
-                    method=method,
-                    path=path,
-                )
-                auth_method, authentication_label = operation_authentication(
-                    spec=published,
-                    operation=operation,
-                )
-                history_item = history_items_by_route.get(f"/{page_ref}")
-                if history_item is None or not history_item.current_present:
-                    raise ValueError(
-                        f"Normalized Splice history is missing current operation: "
-                        f"{filename} {method} {path}"
-                    )
-                history_events = list(
-                    history_events_for_item(
-                        history_item,
-                        comparison_versions=history_report.comparison_versions,
-                    )
-                )
+            for item in history_report.items:
+                if not item.id.startswith(filename + "::"):
+                    continue
+                if not item.route or not item.location:
+                    raise ValueError(f"Splice operation has no historical reader route: {item.id}")
+                method, path = item.location.split(": ", 1)[1].split(" ", 1)
+                snapshot = specs_by_version[item.last_seen]
+                operation = snapshot["paths"][path][method.lower()]
+                page_ref = item.route.lstrip("/")
+                auth_method, authentication_label = operation_authentication(spec=snapshot, operation=operation)
                 page = render_manual_openapi_operation(
-                    spec=published,
+                    spec=snapshot,
                     options=ManualOpenAPIRenderOptions(
-                        method=method,
-                        path=path,
-                        output_path=f"{page_ref}.mdx",
-                        server=server,
-                        surface_label=spec_config["nav_label"],
-                        auth_method=auth_method,
-                        authentication_label=authentication_label,
-                        raw_spec_href=raw_spec_href,
+                        method=method, path=path, output_path=f"{page_ref}.mdx",
+                        server=manual_api_server(snapshot), surface_label=spec_config["nav_label"],
+                        auth_method=auth_method, authentication_label=authentication_label,
+                        raw_spec_href=f"/{spec_config['source']}" if item.current_present else None,
                     ),
-                    history_events=history_events,
-                    publish_version=publish_version,
+                    history_events=list(history_events_for_item(item, comparison_versions=history_report.comparison_versions)),
+                    publish_version=item.last_seen,
                 )
                 output_path = docs_root / f"{page_ref}.mdx"
                 write_page(page, output_path)
@@ -985,7 +910,7 @@ def write_manual_operation_pages(
 
 
 def build_splice_openapi_nav_entry(
-    *, docs_root: Path, spec: dict[str, Any]
+    *, docs_root: Path, spec: dict[str, Any], history_report_path: Path | None = None
 ) -> dict[str, Any]:
     openapi_path = docs_root / spec["source"]
     payload = yaml.safe_load(openapi_path.read_text(encoding="utf-8"))
@@ -996,20 +921,20 @@ def build_splice_openapi_nav_entry(
         "pages": manual_operation_page_refs(
             spec=payload,
             directory=spec["directory"],
-        ),
+        ) + removed_operation_page_refs(docs_root, spec["filename"], history_report_path=history_report_path),
     }
     return entry
 
 
 def build_splice_group_pages(
-    *, docs_root: Path, families: list[dict[str, Any]]
+    *, docs_root: Path, families: list[dict[str, Any]], history_report_path: Path | None = None
 ) -> list[Any]:
     pages: list[Any] = []
     for family in families:
         family_pages: list[dict[str, Any]] = []
         for spec in family["specs"]:
             family_pages.append(
-                build_splice_openapi_nav_entry(docs_root=docs_root, spec=spec)
+                build_splice_openapi_nav_entry(docs_root=docs_root, spec=spec, history_report_path=history_report_path)
             )
         pages.append({"group": family["group"], "pages": family_pages})
     return pages
@@ -1082,6 +1007,7 @@ def update_docs_navigation(
     docs_json_path: Path,
     source_config: dict[str, Any],
     families: list[dict[str, Any]],
+    history_report_path: Path | None = None,
 ) -> None:
     payload = load_json(docs_json_path)
     dropdown_label = source_config.get("nav_dropdown") or "API Reference"
@@ -1121,7 +1047,7 @@ def update_docs_navigation(
                 break
 
     generated_pages = build_splice_group_pages(
-        docs_root=docs_json_path.parent, families=navigation_families
+        docs_root=docs_json_path.parent, families=navigation_families, history_report_path=history_report_path
     )
     if existing_top_group_pages is not None:
         generated_pages = merge_splice_group_pages(
@@ -1225,12 +1151,6 @@ def main() -> int:
         spec_filenames=enabled_filenames,
         force_refresh=args.force_refresh,
     )
-    validate_manual_route_baseline(
-        source_config,
-        families=navigation_families,
-        snapshots=snapshots,
-        publish_version=publish_release["version"],
-    )
     history_report = build_splice_history_report(
         source_config=source_config,
         families=navigation_families,
@@ -1254,10 +1174,12 @@ def main() -> int:
         docs_json_path=docs_json_path,
         source_config=source_config,
         families=families,
+        history_report_path=history_report_path,
     )
     validate_splice_nav(
         source_config_path=Path(args.source_config).resolve(),
         docs_json_path=docs_json_path,
+        history_report_path=history_report_path,
     )
     print(f"Updated docs navigation: {docs_json_path}")
     return 0

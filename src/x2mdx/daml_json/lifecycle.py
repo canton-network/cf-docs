@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import json
 import re
 from typing import Any
 
@@ -78,6 +79,42 @@ def _compute_deprecation_first_seen(version_modules: list[tuple[str, list[dict[s
             if extract_tagged_warning_messages(module.get("md_warn"), "DeprecatedData"):
                 first_seen[module_name] = version
     return first_seen
+
+
+def _normalized_module(module_doc: dict[str, Any]) -> Any:
+    if isinstance(module_doc, dict):
+        return {
+            key: _normalized_module(value)
+            for key, value in sorted(module_doc.items())
+            if "anchor" not in key.casefold()
+        }
+    if isinstance(module_doc, list):
+        return [_normalized_module(value) for value in module_doc]
+    return module_doc
+
+
+def _compute_module_changes(
+    version_modules: list[tuple[str, list[dict[str, Any]]]],
+) -> dict[str, tuple[str, ...]]:
+    previous_fingerprints: dict[str, str] = {}
+    changes: dict[str, list[str]] = {}
+    for version, modules in version_modules:
+        current_names: set[str] = set()
+        for module in modules:
+            module_name = _module_name(module)
+            if not module_name:
+                continue
+            current_names.add(module_name)
+            fingerprint = json.dumps(
+                _normalized_module(module), sort_keys=True, separators=(",", ":")
+            )
+            previous = previous_fingerprints.get(module_name)
+            if previous is not None and previous != fingerprint:
+                changes.setdefault(module_name, []).append(version)
+            previous_fingerprints[module_name] = fingerprint
+        for missing_name in set(previous_fingerprints) - current_names:
+            previous_fingerprints.pop(missing_name)
+    return {name: tuple(versions) for name, versions in changes.items()}
 
 
 def _build_publish_modules(
@@ -162,6 +199,7 @@ def build_daml_doc_report_from_sources(
         publish_version=selected_publish_version,
     )
     deprecation_first_seen = _compute_deprecation_first_seen(version_modules)
+    module_changes = _compute_module_changes(version_modules)
     return DamlDocsReport(
         source_name=source_name,
         version_filter=version_filter,
@@ -170,5 +208,5 @@ def build_daml_doc_report_from_sources(
         modules=merged_modules,
         module_lifecycle=lifecycle,
         module_deprecation_first_seen=deprecation_first_seen,
+        module_changes=module_changes,
     )
-

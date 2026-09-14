@@ -160,7 +160,7 @@ def channel_history_events(
                 combined[key] = HistoryEvent(
                     kind=event.kind,
                     version=event.version,
-                    label=event.label,
+                    label="Actions removed in" if event.kind == HistoryEventKind.REMOVED else event.label,
                     details=details,
                     evidence=event.evidence,
                 )
@@ -174,6 +174,7 @@ def channel_history_events(
                 )
 
     priority = {
+        HistoryEventKind.REMOVED: -1,
         HistoryEventKind.REMOVE_AS_OF: 0,
         HistoryEventKind.DEPRECATED: 1,
         HistoryEventKind.CHANGED: 2,
@@ -402,7 +403,7 @@ def build_overview_page(
     overview_path = output_dir / overview_name
     items_by_id = history_report.items_by_id()
     cards = []
-    for channel in (candidate for candidate in report.channels if candidate.status == "active"):
+    for channel in report.channels:
         channel_items = [
             items_by_id[asyncapi_item_id(channel.channel, action["action"])]
             for action in channel.latest.get("actions", [])
@@ -522,7 +523,7 @@ def build_pages(
     history_report: SurfaceHistoryReport,
 ) -> tuple[Path, list[Any]]:
     items_by_id = history_report.items_by_id()
-    active_channels = [channel for channel in report.channels if channel.status == "active"]
+    active_channels = list(report.channels)
     pages = [
         render_collection_page(
             build_overview_page(

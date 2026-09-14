@@ -1162,6 +1162,7 @@ def render_manual_openapi_operation(
     history_events: list[HistoryEvent],
     publish_version: str,
 ) -> Any:
+    removed = next((event for event in history_events if event.kind == HistoryEventKind.REMOVED), None)
     method = options.method.upper()
     operation = _operation(spec, method, options.path)
     path_item = _path_item(spec, options.path)
@@ -1219,10 +1220,10 @@ def render_manual_openapi_operation(
         ReferenceOperationPage(
             path=options.output_path,
             title=page_title,
-            sidebar_title=mintlify_path,
+            sidebar_title=f"{mintlify_path} (removed)" if removed else mintlify_path,
             description=description or summary,
             eyebrow=options.surface_label,
-            summary=description or summary,
+            summary=(f"Removed in {removed.version}. Historical definition from {publish_version}. " + (description or summary)) if removed else (description or summary),
             breadcrumbs=list(options.breadcrumbs),
             badges=badges,
             operation_method=method,
@@ -1233,8 +1234,9 @@ def render_manual_openapi_operation(
             outputs=outputs,
             examples=examples,
             history_events=history_events,
-            api_frontmatter=api_path,
-            auth_method=effective_auth_method,
-            playground=options.playground,
+            overview_markdown=(f"<p><strong>Removed in {removed.version}.</strong> Historical definition from {publish_version}.</p>\n\n" + (description or summary)) if removed else None,
+            api_frontmatter=None if removed else api_path,
+            auth_method=None if removed else effective_auth_method,
+            playground=None if removed else options.playground,
         )
     )

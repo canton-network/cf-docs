@@ -45,6 +45,7 @@ class ReferenceTarget:
     version_policy: VersionPolicy
     source_config: str
     reader_output_roots: tuple[str, ...]
+    history_report_paths: tuple[str, ...]
     source_artifact_roots: tuple[str, ...]
     current_page_renderer: PageRenderer
     target_page_renderer: PageRenderer
@@ -137,6 +138,12 @@ def _parse_target(payload: object, *, index: int, repo_root: Path) -> ReferenceT
         context=context,
         required=True,
     )
+    history_report_paths = _string_tuple(
+        payload,
+        "history_report_paths",
+        context=context,
+        required=True,
+    )
     source_artifact_roots = _string_tuple(
         payload,
         "source_artifact_roots",
@@ -161,6 +168,7 @@ def _parse_target(payload: object, *, index: int, repo_root: Path) -> ReferenceT
         raise ValueError(f"{context}.source_config does not exist: {source_config}")
     for field, paths in (
         ("reader_output_roots", reader_output_roots),
+        ("history_report_paths", history_report_paths),
         ("source_artifact_roots", source_artifact_roots),
     ):
         for path in paths:
@@ -236,6 +244,7 @@ def _parse_target(payload: object, *, index: int, repo_root: Path) -> ReferenceT
         version_policy=cast(VersionPolicy, version_policy),
         source_config=source_config,
         reader_output_roots=reader_output_roots,
+        history_report_paths=history_report_paths,
         source_artifact_roots=source_artifact_roots,
         current_page_renderer=cast(PageRenderer, current_page_renderer),
         target_page_renderer=cast(PageRenderer, target_page_renderer),

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import gzip
+import hashlib
 import importlib.util
 import json
 import os
@@ -41,6 +42,9 @@ LEDGER_OVERVIEW_TITLE = "Ledger API protobuf"
 ADMIN_OVERVIEW_NAME = "overview.mdx"
 ADMIN_OVERVIEW_TITLE = "Admin API protobuf"
 DESCRIPTOR_IMAGE_NAME = ".proto_snapshot_image.bin.gz"
+# Selection changes alter the fingerprint automatically. Bump this when the
+# descriptor compilation contract changes without changing the selections.
+DESCRIPTOR_CACHE_SCHEMA = "selection-v1"
 STABLE_TAG_RE = re.compile(r"^v(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)$")
 SECTION_TO_REPO_PREFIX = {
     "admin-api": "community/admin-api/src/main/protobuf",
@@ -49,6 +53,7 @@ SECTION_TO_REPO_PREFIX = {
     "ledger-api-value": "community/daml-lf/ledger-api-value-proto/src/main/protobuf",
     "participant": "community/participant/src/main/protobuf",
     "synchronizer": "community/synchronizer/src/main/protobuf",
+    "traffic-enforcement": "community/traffic-enforcement/api/protobuf",
 }
 SUPPORT_SECTION_NAMES = {"lib"}
 ADMIN_API_COMMUNITY_IMPORT_PREFIXES = (
@@ -56,6 +61,7 @@ ADMIN_API_COMMUNITY_IMPORT_PREFIXES = (
     "com/digitalasset/canton/crypto/admin",
     "com/digitalasset/canton/topology/admin",
 )
+TRAFFIC_ENFORCEMENT_IMPORT_PREFIXES = ("com/digitalasset/canton/tea/v1",)
 USER_AGENT = "digital-asset-docs-x2mdx/1.0"
 GIT_ATTEMPTS = 3
 GIT_RETRY_DELAY_SECONDS = 5.0
@@ -71,6 +77,11 @@ class ProtobufSelection:
 LEDGER_API_SELECTIONS = (
     ProtobufSelection("ledger-api", SECTION_TO_REPO_PREFIX["ledger-api"]),
     ProtobufSelection("ledger-api-value", SECTION_TO_REPO_PREFIX["ledger-api-value"]),
+    ProtobufSelection(
+        "traffic-enforcement",
+        SECTION_TO_REPO_PREFIX["traffic-enforcement"],
+        TRAFFIC_ENFORCEMENT_IMPORT_PREFIXES,
+    ),
 )
 ADMIN_API_SELECTIONS = (
     ProtobufSelection("admin-api", SECTION_TO_REPO_PREFIX["admin-api"]),
@@ -254,8 +265,36 @@ def bundle_extract_root(cache_dir: Path, version: str) -> Path:
     return cache_dir / "bundles" / version
 
 
-def descriptor_image_path(cache_dir: Path, version: str, *, surface: str) -> Path:
-    return cache_dir / "descriptor-images" / surface / version / DESCRIPTOR_IMAGE_NAME
+def descriptor_selection_fingerprint(selections: tuple[ProtobufSelection, ...]) -> str:
+    payload = [
+        {
+            "section_name": selection.section_name,
+            "repo_prefix": selection.repo_prefix,
+            "import_prefixes": list(selection.import_prefixes),
+        }
+        for selection in selections
+    ]
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def descriptor_image_path(
+    cache_dir: Path,
+    version: str,
+    *,
+    surface: str,
+    selections: tuple[ProtobufSelection, ...],
+) -> Path:
+    selection_fingerprint = descriptor_selection_fingerprint(selections)
+    return (
+        cache_dir
+        / "descriptor-images"
+        / surface
+        / DESCRIPTOR_CACHE_SCHEMA
+        / selection_fingerprint
+        / version
+        / DESCRIPTOR_IMAGE_NAME
+    )
 
 
 def ensure_bundle_archive(
@@ -618,7 +657,12 @@ def materialize_releases(
         if not import_to_repo_path:
             print(f"Skipping {tag} for {surface}: no published owned protobuf files found")
             continue
-        image_path = descriptor_image_path(cache_dir, version, surface=surface)
+        image_path = descriptor_image_path(
+            cache_dir,
+            version,
+            surface=surface,
+            selections=selections,
+        )
         if not image_path.exists() or force_refresh:
             compile_descriptor_image(
                 protobuf_root,

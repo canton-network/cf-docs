@@ -129,6 +129,32 @@ class ProtobufTests(unittest.TestCase):
         manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
         return manifest_path
 
+    def test_removed_endpoint_retains_its_last_request_and_response(self) -> None:
+        manifest_path = self._write_manifest()
+        manifest = json.loads(manifest_path.read_text())
+        image_path = Path(manifest["versions"][1]["descriptor_image_path"])
+        descriptors = descriptor_pb2.FileDescriptorSet()
+        descriptors.ParseFromString(gzip.decompress(image_path.read_bytes()))
+        current_file = descriptors.file[0]
+        del current_file.service[0].method[0]
+        current_file.message_type[0].field[0].name = "current_only"
+        image_path.write_bytes(gzip.compress(descriptors.SerializeToString()))
+        output_dir = self.root / "out"
+
+        self.assertEqual(cli_main([
+            "protobuf", "build-api-pages-from-manifest", "--manifest", str(manifest_path),
+            "--output-dir", str(output_dir), "--history-report", str(output_dir / "history-report.json"), "--reader-route-prefix", "reference/protobuf",
+        ]), 0)
+
+        page = (output_dir / "operations/com-example-v1/exampleservice/getfoo.mdx").read_text()
+        package = (output_dir / "packages/com-example-v1.mdx").read_text()
+        self.assertIn("Removed in 1.1.0", page)
+        self.assertIn("history-removed-1-1-0", page)
+        self.assertIn("FooResponse", page)
+        self.assertNotIn("FooResponseV2", page)
+        self.assertNotIn("current_only", page)
+        self.assertIn("getfoo", package)
+
     def test_build_report_tracks_endpoint_lifecycle(self) -> None:
         manifest_path = self._write_manifest()
         sources = load_protobuf_sources(manifest_path)

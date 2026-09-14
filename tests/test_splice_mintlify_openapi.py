@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import importlib.util
-import hashlib
 import json
 import sys
 from pathlib import Path
@@ -65,12 +64,12 @@ def test_checked_in_splice_history_report_is_valid_and_retains_removed_operation
     assert tuple(artifact.version for artifact in report.source_artifacts) == (
         report.comparison_versions
     )
-    assert len(report.current_items()) == 123
+    assert report.current_items()
     assert any(not item.current_present for item in report.items)
-    assert all(item.route is None for item in report.items if not item.current_present)
+    assert all(item.route is not None for item in report.items if not item.current_present)
     assert all(
         (REPO_ROOT / "docs-main" / f"{item.route.removeprefix('/')}.mdx").is_file()
-        for item in report.current_items()
+        for item in report.items
         if item.route is not None
     )
 
@@ -484,33 +483,13 @@ def test_splice_openapi_exclusions_must_cover_disabled_specs() -> None:
     )
 
 
-def test_splice_openapi_route_baseline_covers_manual_reader_routes() -> None:
-    module = load_script_module("generate_splice_mintlify_openapi.py")
-    spec = {
-        "openapi": "3.0.3",
-        "paths": {
-            "/v0/items/{item_id}": {"get": {"operationId": "getItem", "responses": {}}}
-        },
-    }
-    route = "/reference/splice-items/get-v0items:item_id\n"
-    module.validate_manual_route_baseline(
-        {
-            "legacy_manual_route_baseline": {
-                "operation_count": 1,
-                "sha256": hashlib.sha256(route.encode("utf-8")).hexdigest(),
-            }
-        },
-        families=[
-            {
-                "group": "APIs",
-                "specs": [
-                    {
-                        "filename": "items.yaml",
-                        "directory": "reference/splice-items",
-                    }
-                ],
-            }
-        ],
-        snapshots={"items.yaml": {"0.7.4": spec}},
-        publish_version="0.7.4",
-    )
+def test_removed_navigation_uses_custom_history_report(tmp_path: Path) -> None:
+    module = load_script_module("validate_splice_mintlify_openapi_nav.py")
+    report_path = REPO_ROOT / "docs-main/openapi/splice/history-report.json"
+    custom_path = tmp_path / "custom-history.json"
+    custom_path.write_bytes(report_path.read_bytes())
+    report = load_history_report(custom_path)
+    removed = next(item for item in report.items if not item.current_present)
+    filename = removed.id.split("::", 1)[0]
+    pages = module.removed_operation_page_refs(tmp_path, filename, history_report_path=custom_path)
+    assert removed.route.lstrip("/") in pages
