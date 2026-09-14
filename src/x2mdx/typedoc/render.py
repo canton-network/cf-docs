@@ -12,6 +12,7 @@ from x2mdx.history.versioning import compare_versions
 from x2mdx.output import Page
 from x2mdx.reference_pages import (
     ReferenceBadge,
+    lifecycle_state_badges,
     ReferenceMetaItem,
     reference_badges_for_history_events,
 )
@@ -122,6 +123,9 @@ def _export_context(
             ReferenceBadge(str(export["kind_label"]), "protocol"),
             ReferenceBadge(f"Added {export['introduced_in']}", "added"),
         ]
+
+    state = export.get("lifecycle_state")
+    badges.extend(lifecycle_state_badges(state, existing=badges))
 
     return {
         "anchor": str(export["anchor"]),
