@@ -5,7 +5,8 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-from x2mdx.history.models import Evidence, EvidenceKind, HistoryEvent, HistoryEventKind
+from x2mdx.history.models import Evidence, EvidenceKind, HistoryEvent, HistoryEventKind, LifecycleState
+from x2mdx.openapi.history import authored_lifecycle_state
 from x2mdx.reference_pages import (
     ReferenceBadge,
     ReferenceBreadcrumb,
@@ -1197,6 +1198,9 @@ def render_manual_openapi_operation(
         history_events,
         kind_label="OpenAPI",
     )
+    lifecycle_state, _ = authored_lifecycle_state(operation)
+    if lifecycle_state in {LifecycleState.ALPHA, LifecycleState.BETA}:
+        badges.append(ReferenceBadge(lifecycle_state.value.title(), tone="changed"))
 
     api_path = f"{method} {options.server.rstrip('/')}{options.path}"
     protocol_items = [

@@ -58,7 +58,7 @@ For new pages, restructuring, or anything touching multiple files, set up a loca
 Either:
 
 - [`direnv`](https://direnv.net/)
-- [`nix`](https://nixos.org/download/)
+- [`nix`](https://nixos.org/download/) with `nix-command` and flakes support
 
 OR:
 
@@ -97,6 +97,20 @@ Open a PR there to add your tool. Maintaining external tooling in the Dev Hub en
 - If a page is generated or synced from an external source, refer to the 'Generate external snippets' section in `cf-docs/README.md`. Do not hand-edit the generated output. Instead, update the source or the snippet config in `config/snippet-config/`.
 
 - Links should be relative and verified with `mintlify broken-links`.
+
+### Handling version divergence
+
+Canton Network docs track the current major version (eg. 3.5.x) as well as the last major version (eg. 3.4).
+
+**Default to latest.** When not directed otherwise, write against the latest upstream version and verify it against the current release, not whatever version an existing sibling page happens to be pinned to.
+
+**When behavior, config, or output genuinely differs between Canton versions still live on a supported net**, don't silently describe only one of them and don't duplicate the whole page. Use Mintlify's `<Tabs>` component to branch the diverging section, with one `<Tab>` for the current major Canton version (e.g. `3.5.x`) and one for the previous major version (e.g. `3.4.x`), defaulting to the tab for the current major version. Content pulled from upstream inside a tab keeps its own `{/* COPIED_START ... COPIED_END */}` markers, scoped to that tab. See `global-synchronizer/production-operations/key-management.mdx` for a worked example (Offline Root Namespace Key tabbed 3.5/3.4, Online Root Namespace Key left untabbed since it hasn't diverged).
+
+**For snippets pulled from upstream**, the source path tells you whether it's versioned:
+- `{repo}:docs-open/...` sources track a repo's `main` branch and are not version-pinned — use these for content that doesn't diverge across supported Canton releases.
+- `docs-website:docs/replicated/{repo}/{version}/...` sources are pinned to a specific release branch (e.g. `3.4`, `3.5`) — use these when the content is expected to diverge, and pull the matching version for each `<Tab>`.
+
+See [config/snippet-config/update-workflows.md](config/snippet-config/update-workflows.md) for the extraction mechanics (`--version` flag, output location under `snippets/external/{repo}/{version}/`).
 
 ## Licensing
 
