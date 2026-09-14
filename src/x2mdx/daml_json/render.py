@@ -373,10 +373,14 @@ def render_function(fn: dict[str, Any]) -> str:
 def warning_lifecycle_state(warns: Any) -> str | None:
     if extract_tagged_warning_messages(warns, "DeprecatedData"):
         return "deprecated"
-    for message in extract_tagged_warning_messages(warns, "WarnData"):
+    messages = extract_tagged_warning_messages(warns, "WarnData")
+    for message in messages:
         match = re.match(r"^\s*(alpha|beta|stable)\s*:", message, re.IGNORECASE)
         if match:
             return match.group(1).lower()
+    for state in ("alpha", "beta"):
+        if any(state in message.lower() for message in messages):
+            return state
     return None
 
 
@@ -722,6 +726,8 @@ def module_template_context(
     module_deprecations = extract_tagged_warning_messages(module_doc.get("md_warn"), "DeprecatedData")
     module_state = warning_lifecycle_state(module_doc.get("md_warn"))
     module_prerelease_warning = next((msg for msg in module_warnings if re.match(r"^\s*(alpha|beta)\s*:", msg, re.IGNORECASE)), None)
+    if module_prerelease_warning is None and module_state in {"alpha", "beta"}:
+        module_prerelease_warning = next((msg for msg in module_warnings if module_state in msg.lower()), None)
     module_deprecation_warning = module_deprecations[0] if module_deprecations else None
     replacement_target = extract_exact_replacement_target(module_deprecations)
 

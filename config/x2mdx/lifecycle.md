@@ -98,4 +98,4 @@ data Token = Token
 module LegacyExample {-# DEPRECATED "Use Example instead." #-} where
 ```
 
-Accepted `WARNING` prefixes: `Alpha:`, `Beta:`, `Stable:` (case-insensitive). Deprecation uses `DEPRECATED`.
+Accepted `WARNING` prefixes: `Alpha:`, `Beta:`, `Stable:` (case-insensitive). Explicit prefixes override legacy matching of `alpha` or `beta` anywhere in warning text; otherwise `alpha` wins over `beta`. Deprecation uses `DEPRECATED` and takes precedence.
