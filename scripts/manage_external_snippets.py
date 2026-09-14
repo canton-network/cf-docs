@@ -611,11 +611,13 @@ def update(args: argparse.Namespace, repo: SnippetRepo) -> int:
     entry = find_manifest_entry(manifest, manifest_file, args.snippet_name)
     requested_location = marker_pair(args, editing=True)
     has_change = requested_location is not None or args.language is not None
+    if args.command == "move":
+        has_change = True
     if not has_change:
         raise SnippetAuthoringError("Edit requires a selector option or --language")
 
     source = normalized_source_path(
-        str(entry.get("sourceFilepath", ""))
+        args.source if args.command == "move" else str(entry.get("sourceFilepath", ""))
     )
     validate_source_file(source_dir, source)
     revision = source_revision(source_dir, source)
@@ -670,7 +672,7 @@ def update(args: argparse.Namespace, repo: SnippetRepo) -> int:
         return 0
     commit_changes(changes)
 
-    verb = "Edited"
+    verb = "Moved" if args.command == "move" else "Edited"
     print(f"{verb} {args.snippet_name}; its import path is unchanged")
     print(f"Manifest: {manifest_file.relative_to(CF_DOCS_ROOT)}")
     print(f"Source:   {revision.commit} at {revision.remote} ({revision.ref})")
@@ -743,9 +745,9 @@ def add_authoring_arguments(
     command: str,
 ) -> None:
     parser.add_argument("repo", choices=sorted(REPOS), help="Source repository key")
-    if command == "edit":
+    if command in {"edit", "move"}:
         parser.add_argument("snippet_name", help="Existing stable snippetName")
-    if command == "add":
+    if command in {"add", "move"}:
         parser.add_argument("--source", required=True)
     if command == "add":
         parser.add_argument("--name", help="Override the derived snippetName")
@@ -771,7 +773,7 @@ def add_authoring_arguments(
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Add, edit, or delete cf-docs external snippets"
+        description="Add, edit, move, or delete cf-docs external snippets"
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
     add_parser = subparsers.add_parser("add", help="Add and render a snippet")
@@ -780,6 +782,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "edit", help="Edit and rerender a snippet without changing its name"
     )
     add_authoring_arguments(edit_parser, command="edit")
+    move_parser = subparsers.add_parser(
+        "move", help="Move and rerender a snippet without changing its name"
+    )
+    add_authoring_arguments(move_parser, command="move")
     delete_parser = subparsers.add_parser(
         "delete", help="Delete an unreferenced snippet and its generated output"
     )
@@ -795,7 +801,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "add":
             return add(args, repo)
-        if args.command == "edit":
+        if args.command in {"edit", "move"}:
             return update(args, repo)
         return delete(args, repo)
     except (OSError, SnippetAuthoringError) as error:
