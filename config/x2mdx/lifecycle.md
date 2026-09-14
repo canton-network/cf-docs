@@ -33,3 +33,18 @@ channels:
 ```
 
 Accepted `x-state` values: `alpha`, `beta`, `stable`, `deprecated` (case-insensitive).
+
+## OpenRPC
+
+```json
+{
+  "methods": [{
+    "name": "getExample",
+    "x-state": "deprecated",
+    "params": [],
+    "result": {"name": "result", "schema": {"type": "string"}}
+  }]
+}
+```
+
+Accepted `x-state` values: `alpha`, `beta`, `stable`, `deprecated` (case-insensitive).
