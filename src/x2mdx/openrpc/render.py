@@ -136,13 +136,13 @@ def spec_history_events(
 
 
 def lifecycle_state_label(value: str) -> str:
-    return value.replace("_", " ").replace("-", " ").title()
+    return "Pre-alpha" if value == "pre-alpha" else value.replace("_", " ").replace("-", " ").title()
 
 
 def lifecycle_state_tone(value: str) -> str:
     if value == "deprecated":
         return "removed"
-    if value in {"alpha", "beta"}:
+    if value in {"pre-alpha", "alpha", "beta"}:
         return "changed"
     if value == "stable":
         return "added"

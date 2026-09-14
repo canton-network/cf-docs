@@ -42,14 +42,14 @@ Accepted `x-state` values: `pre-alpha`, `alpha`, `beta`, `stable`, `deprecated` 
 {
   "methods": [{
     "name": "getExample",
-    "x-state": "deprecated",
+    "x-state": "pre-alpha",
     "params": [],
     "result": {"name": "result", "schema": {"type": "string"}}
   }]
 }
 ```
 
-Accepted `x-state` values: `alpha`, `beta`, `stable`, `deprecated` (case-insensitive).
+Accepted `x-state` values: `pre-alpha`, `alpha`, `beta`, `stable`, `deprecated` (case-insensitive).
 
 ## TypeDoc
 

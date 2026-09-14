@@ -232,6 +232,17 @@ class OpenRpcMinimalLifecycleTests(unittest.TestCase):
         self.assertEqual(removed["route"], "/reference/wallet-gateway-json-rpc/operations/wallet/listpayments")
         assert_contains_all(read_mdx(output_dir, "operations/wallet/listpayments.mdx"), ["Removed in 1.1.0"])
 
+    def test_cli_renders_pre_alpha(self) -> None:
+        manifest = self._write_manifest()
+        source = manifest.parent / "1.1.0" / "wallet.json"
+        document = json.loads(source.read_text())
+        method = next(method for method in document["methods"] if method["name"] == "previewPayments")
+        method["x-state"] = " PRE-ALPHA "
+        source.write_text(json.dumps(document))
+        output = self.root / "pre-alpha"
+        run_x2mdx(["openrpc", "build-api-pages-from-manifest", "--manifest", str(manifest), "--output-dir", str(output), "--history-report", str(output / "history.json")])
+        assert_contains_all(read_mdx(output, "operations/wallet/previewpayments.mdx"), [">Pre-alpha</span>", "Pre-alpha"])
+
     def test_cli_renders_explicit_lifecycle_states(self) -> None:
         output_dir = self._render_pages("openrpc-lifecycle")
 

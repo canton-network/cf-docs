@@ -74,7 +74,7 @@ def normalize_lifecycle_state(value: object) -> str | None:
     if not isinstance(value, str):
         return None
     normalized = value.strip().lower()
-    if normalized in {"alpha", "beta", "stable", "deprecated"}:
+    if normalized in {"pre-alpha", "alpha", "beta", "stable", "deprecated"}:
         return normalized
     return None
 
