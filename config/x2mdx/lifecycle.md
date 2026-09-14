@@ -84,3 +84,18 @@ metadata_path: lifecycle.json
 ```
 
 Accepted `lifecycle.state` values: `alpha`, `beta`, `stable`, `deprecated` (case-insensitive).
+
+## Daml
+
+```daml
+module Example {-# WARNING "Alpha: experimental module." #-} where
+
+{-# WARNING Token "Beta: preview type." #-}
+data Token = Token
+```
+
+```daml
+module LegacyExample {-# DEPRECATED "Use Example instead." #-} where
+```
+
+Accepted `WARNING` prefixes: `Alpha:`, `Beta:`, `Stable:` (case-insensitive). Deprecation uses `DEPRECATED`.
