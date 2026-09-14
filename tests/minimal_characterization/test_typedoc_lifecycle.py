@@ -253,6 +253,18 @@ class TypeDocMinimalLifecycleTests(unittest.TestCase):
             ],
         )
 
+    def test_cli_renders_pre_alpha(self) -> None:
+        manifest = self._write_manifest()
+        source = Path(json.loads(manifest.read_text())["versions"][-1]["json_path"])
+        source.write_text(source.read_text().replace("@alpha", "@preAlpha"))
+        output = self.root / "pre-alpha.mdx"
+        run_x2mdx(["typedoc", "build-api-pages-from-manifest", "--manifest", str(manifest), "--output-file", str(output)])
+        assert_contains_all(output.read_text(), [">Pre-alpha</span>", "Lifecycle: `Pre-alpha`"])
+        from x2mdx.typedoc.lifecycle import normalize_lifecycle_state
+        self.assertEqual(normalize_lifecycle_state(comment("", modifier_tags=["@alpha", "@preAlpha"])), "pre-alpha")
+        self.assertEqual(normalize_lifecycle_state(comment("", block_tags=[("@preAlpha", "")])), "pre-alpha")
+        self.assertEqual(normalize_lifecycle_state(comment("", modifier_tags=["@preAlpha"], block_tags=[("@deprecated", "Use Current")])), "deprecated")
+
     def test_cli_renders_explicit_lifecycle_states(self) -> None:
         output_file = self._render_page("typescript-lifecycle.mdx")
         assert_text_file_matches_fixture(output_file, "typedoc/typescript.mdx")

@@ -54,7 +54,7 @@ Accepted `x-state` values: `pre-alpha`, `alpha`, `beta`, `stable`, `deprecated` 
 ## TypeDoc
 
 ```ts
-/** @alpha */
+/** @preAlpha */
 export interface Example {
   id: string;
 }
@@ -65,7 +65,7 @@ export interface LegacyExample {
 }
 ```
 
-Accepted lifecycle tags: `@alpha`, `@beta`, `@stable`, `@deprecated`.
+Accepted lifecycle tags: `@preAlpha`, `@alpha`, `@beta`, `@stable`, `@deprecated`.
 
 ## Protobuf/gRPC
 
