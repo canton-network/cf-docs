@@ -359,13 +359,33 @@ The [gRPC Ledger API](/sdks-tools/api-reference/ledger-api) is exposed under `gr
 
 The Canton Admin API is not exposed by default as it does not yet support auth. There is a commented out section in `nginx.conf` that you can enable to expose it if you ensure that it is not exposed publicly, e.g., through network restrictions.
 
+## Wallet Gateway and Portfolio UI
+
+Adding the `-g` flag to the `start.sh` command also deploys the [Wallet Gateway](/integrations/wallet-gateway/overview) and the [Splice Portfolio](/sdks-tools/development-tools/splice-portfolio/overview) alongside the validator:
+
+```bash
+./start.sh -s "<SPONSOR_SV_URL>" -o "<ONBOARDING_SECRET>" -p "<party_hint>" -m "<MIGRATION_ID>" -w -g
+```
+
+The gateway is accessible at [http://walletgateway.localhost](http://walletgateway.localhost) and the portfolio at [http://portfolio.localhost](http://portfolio.localhost). The gateway talks to the ledger API of the validator's participant, and the portfolio to the validator API and to the Scan instance passed to `start.sh`, which it uses as its token registry. The versions of both are pinned in the `.env` file as `WALLET_GATEWAY_VERSION` and `PORTFOLIO_VERSION`.
+
+The gateway allocates parties for existing ledger users, but does not create users itself. A user therefore has to [log in to the wallet UI](#logging-into-the-wallet-ui) and onboard there once before logging in to the gateway. Parties created through the gateway are additional parties hosted on the validator's participant, next to the user's wallet party.
+
+To use the portfolio, click **Connect Wallet**, enter `http://walletgateway.localhost/api/v0/dapp` as a custom wallet URL in the wallet picker, and log in to the gateway with the `Splice validator` network. Without authentication, the gateway issues self-signed tokens, and its login form asks for the name of a user onboarded via the wallet UI as the **Client ID** and `unsafe` as the **Client Secret**. Once connected, create a party on the gateway's **Parties** page and mark it as primary, as described in [Party management](/integrations/wallet-gateway/use/party-management). The portfolio then lists that party, and on DevNet you can [tap the faucet](/sdks-tools/development-tools/splice-portfolio/devnet-faucet) for it from the portfolio's **Settings** page.
+
+<Note>
+The portfolio calls the validator API with the tokens issued by the gateway, so `LEDGER_API_AUTH_AUDIENCE` and `VALIDATOR_AUTH_AUDIENCE` in the `.env` file must be equal. `start.sh` refuses to start with `-g` otherwise.
+
+The gateway keeps its state in databases of its own in the `postgres-splice` container, separate for deployments with and without authentication, so a gateway started with `-a` does not see the parties created without it.
+</Note>
+
 ## Configuring Authentication
 
 <Warning>
 The default deployment uses highly insecure self-signed tokens. Anyone with access to the wallet UI (or the machine and/or its network interface) may log in to your wallet as a user of their choice. For any production use, you should configure proper authentication as described in this section.
 </Warning>
 
-Please refer to the [Okta and Keycloak OIDC configuration guide](/global-synchronizer/deployment/oidc-providers) or the [community Keycloak configuration guide](/global-synchronizer/deployment/community-keycloak-config) for instructions on how to set up an OAuth provider for your validator. The URLs to configure for callbacks are `http://wallet.localhost` and `http://ans.localhost`.
+Please refer to the [Okta and Keycloak OIDC configuration guide](/global-synchronizer/deployment/oidc-providers) or the [community Keycloak configuration guide](/global-synchronizer/deployment/community-keycloak-config) for instructions on how to set up an OAuth provider for your validator. The URLs to configure for callbacks are `http://wallet.localhost` and `http://ans.localhost`, and `http://walletgateway.localhost/callback` if you deploy the wallet gateway with `-g`.
 
 Once you have set up your OAuth provider, you need to configure it by setting the following environment variables in the `.env` file:
 
@@ -376,13 +396,14 @@ Once you have set up your OAuth provider, you need to configure it by setting th
 | AUTH_WELLKNOWN_URL | The URL of your OIDC provider for obtaining the `openid-configuration`, will typically be `${AUTH_URL}/.well-known/openid-configuration`. |
 | LEDGER_API_AUTH_AUDIENCE | The audience for the participant ledger API, e.g. `https://ledger_api.example.com`. This sets the `ledger-api.auth-services.target-audience` configuration for the participant. |
 | LEDGER_API_AUTH_SCOPE | The scope for the participant ledger API. This sets the participant's `ledger-api.auth-services.target-scope` configuration. Optional. |
-| VALIDATOR_AUTH_AUDIENCE | The audience for the validator backend API. e.g. `https://validator.example.com`. |
+| VALIDATOR_AUTH_AUDIENCE | The audience for the validator backend API. e.g. `https://validator.example.com`. Must equal `LEDGER_API_AUTH_AUDIENCE` if you deploy the wallet gateway with `-g`. |
 | VALIDATOR_AUTH_CLIENT_ID | The client id of the OAuth app for the validator app backend. |
 | VALIDATOR_AUTH_CLIENT_SECRET | The client secret of the OAuth app for the validator app backend. |
 | LEDGER_API_ADMIN_USER | Should match the `sub` field of JWTs issued for the validator app. For some auth providers, this would be formed as `CLIENT_ID@clients`. |
 | WALLET_ADMIN_USER | The user ID of the user which should login as the wallet administrator. Note that this should be the full user id, e.g., `auth0\|43b68e1e4978b000cefba352`, *not* only the suffix `43b68e1e4978b000cefba352`. |
 | WALLET_UI_CLIENT_ID | The client id of the OAuth app for the wallet UI. |
 | ANS_UI_CLIENT_ID | The client id of the OAuth app for the CNS UI. |
+| WALLET_GATEWAY_UI_CLIENT_ID | The client id of the OAuth app for the wallet gateway. Required only with `-g`. |
 | CONTACT_POINT | The contact point for your validator node that can be used by other node operators to reach out to you if needed (slack username or an email address). Optional |
 
 In order to enable auth in the deployment, add the `-a` flag to the `start.sh` command, as follows:
