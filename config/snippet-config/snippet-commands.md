@@ -23,4 +23,15 @@ To change an existing selector or language while keeping its name:
 npm run snippets:edit -- splice example --source-dir ../splice --marker DEMO
 ```
 
+## Delete
+
+Remove the snippet's imports and component usages from pages, then run:
+
+```bash
+npm run snippets:delete -- splice example
+```
+
+Deletion refuses remaining references and removes the manifest entry, source
+lock record, and generated MDX.
+
 Review and commit the manifest, source lock, generated MDX, and any page edits.

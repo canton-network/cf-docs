@@ -26,6 +26,12 @@ def write_manifest(path: Path, snippets: list[dict] | None = None) -> None:
     )
 
 
+def write_lock(path: Path, snippets: dict[str, dict[str, str]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps({"schemaVersion": 1, "snippets": snippets}, indent=2) + "\n",
+        encoding="utf-8",
+    )
 
 
 def commit_source(source_dir: Path, message: str = "Record source") -> str:
@@ -332,8 +338,99 @@ def test_edit_dry_run_diffs_manifest_and_existing_output_without_writing(
     assert "+print('new')" in output
 
 
+def test_delete_dry_run_then_delete_removes_manifest_lock_and_output(
+    authoring_fixture: tuple[Path, Path, Path], capsys: pytest.CaptureFixture[str]
+) -> None:
+    root, manifest, _ = authoring_fixture
+    name = "stable-example"
+    entry = {
+        "snippetName": name,
+        "sourceRepo": "splice",
+        "sourceFilepath": "example.py",
+        "location": {"type": "fullFile"},
+        "description": "",
+        "options": {"language": "python"},
+    }
+    write_manifest(manifest, [entry])
+    lock_path = root / "config" / "snippet-config" / "snippet-source-lock.json"
+    write_lock(
+        lock_path,
+        {
+            name: {
+                "repository": "splice",
+                "commit": "a" * 40,
+                "remote": "https://github.com/canton-network/splice",
+                "ref": "origin/main",
+            }
+        },
+    )
+    generated = (
+        root / "docs-main" / "snippets" / "external" / "splice" / "main" / f"{name}.mdx"
+    )
+    generated.parent.mkdir(parents=True)
+    generated.write_text("```python\nprint('old')\n```", encoding="utf-8")
+    original_manifest = manifest.read_bytes()
+    original_lock = lock_path.read_bytes()
+    original_generated = generated.read_bytes()
+
+    dry_run = author.main(["delete", "splice", name, "--dry-run"])
+
+    assert dry_run == 0
+    assert manifest.read_bytes() == original_manifest
+    assert lock_path.read_bytes() == original_lock
+    assert generated.read_bytes() == original_generated
+    preview = capsys.readouterr().out
+    assert "Dry run: would delete stable-example; no files written" in preview
+    assert "--- a/config/snippet-config/splice-snippet-list-remote.json" in preview
+    assert "--- a/config/snippet-config/snippet-source-lock.json" in preview
+    assert "+++ /dev/null" in preview
+
+    result = author.main(["delete", "splice", name])
+
+    assert result == 0
+    assert json.loads(manifest.read_text(encoding="utf-8"))["snippets"] == []
+    assert json.loads(lock_path.read_text(encoding="utf-8"))["snippets"] == {}
+    assert not generated.exists()
 
 
+def test_delete_refuses_while_page_import_remains(
+    authoring_fixture: tuple[Path, Path, Path], capsys: pytest.CaptureFixture[str]
+) -> None:
+    root, manifest, _ = authoring_fixture
+    name = "stable-example"
+    write_manifest(
+        manifest,
+        [
+            {
+                "snippetName": name,
+                "sourceRepo": "splice",
+                "sourceFilepath": "example.py",
+                "location": {"type": "fullFile"},
+                "description": "",
+                "options": {"language": "python"},
+            }
+        ],
+    )
+    generated = (
+        root / "docs-main" / "snippets" / "external" / "splice" / "main" / f"{name}.mdx"
+    )
+    generated.parent.mkdir(parents=True)
+    generated.write_text("content", encoding="utf-8")
+    page = root / "docs-main" / "guide.mdx"
+    page.write_text(
+        f"import Example from '/snippets/external/splice/main/{name}';\n",
+        encoding="utf-8",
+    )
+    original_manifest = manifest.read_bytes()
+
+    result = author.main(["delete", "splice", name])
+
+    assert result == 1
+    assert manifest.read_bytes() == original_manifest
+    assert generated.exists()
+    error = capsys.readouterr().err
+    assert "page references remain" in error
+    assert "docs-main/guide.mdx:1" in error
 
 
 def test_add_rejects_dirty_source_before_recording_commit(
