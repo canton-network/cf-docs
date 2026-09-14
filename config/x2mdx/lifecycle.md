@@ -64,3 +64,23 @@ export interface LegacyExample {
 ```
 
 Accepted lifecycle tags: `@alpha`, `@beta`, `@stable`, `@deprecated`.
+
+## Protobuf/gRPC
+
+```yaml
+# Descriptor manifest
+metadata_path: lifecycle.json
+```
+
+```json
+{
+  "endpoints": {
+    "example.PaymentService/CreatePayment": {"lifecycle": {"state": "beta"}}
+  },
+  "messages": {
+    "example.CreatePaymentRequest": {"lifecycle": {"state": "deprecated"}}
+  }
+}
+```
+
+Accepted `lifecycle.state` values: `alpha`, `beta`, `stable`, `deprecated` (case-insensitive).
