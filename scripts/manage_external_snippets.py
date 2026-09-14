@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Add external snippet manifest entries from a local source checkout."""
+"""Add and edit external snippet manifest entries from a local source checkout."""
 
 from __future__ import annotations
 
@@ -495,6 +495,22 @@ def source_dir_for(args: argparse.Namespace, repo: SnippetRepo) -> Path:
         raise SnippetAuthoringError(str(error)) from error
 
 
+def find_manifest_entry(
+    manifest: dict[str, Any], manifest_file: Path, snippet_name: str
+) -> dict[str, Any]:
+    matches = [
+        entry
+        for entry in manifest["snippets"]
+        if entry.get("snippetName") == snippet_name
+    ]
+    if len(matches) != 1:
+        raise SnippetAuthoringError(
+            f"Expected exactly one snippet named {snippet_name!r} in {manifest_file}; "
+            f"found {len(matches)}"
+        )
+    return matches[0]
+
+
 def authoring_changes(
     *,
     manifest_file: Path,
@@ -587,12 +603,89 @@ def add(args: argparse.Namespace, repo: SnippetRepo) -> int:
     return 0
 
 
+def update(args: argparse.Namespace, repo: SnippetRepo) -> int:
+    source_dir = source_dir_for(args, repo)
+    manifest_file = manifest_path(repo)
+    manifest = load_manifest(manifest_file)
+    lock = load_source_lock()
+    entry = find_manifest_entry(manifest, manifest_file, args.snippet_name)
+    requested_location = marker_pair(args, editing=True)
+    has_change = requested_location is not None or args.language is not None
+    if not has_change:
+        raise SnippetAuthoringError("Edit requires a selector option or --language")
+
+    source = normalized_source_path(
+        str(entry.get("sourceFilepath", ""))
+    )
+    validate_source_file(source_dir, source)
+    revision = source_revision(source_dir, source)
+    location = requested_location or entry.get("location")
+    if not isinstance(location, dict) or location.get("type") not in {
+        "fullFile",
+        "stringMarker",
+        "lines",
+        "jsonIndex",
+        "regexWrap",
+    }:
+        raise SnippetAuthoringError(
+            f"Snippet has an unsupported existing selector: {location!r}"
+        )
+    options = entry.get("options")
+    if not isinstance(options, dict):
+        options = {}
+        entry["options"] = options
+    language = args.language or options.get("language") or infer_language(source)
+
+    for other in manifest["snippets"]:
+        if other is not entry and same_source(other, source, location):
+            raise SnippetAuthoringError(
+                f"Another snippet already uses this source and selector: "
+                f"{other.get('snippetName')}"
+            )
+
+    entry["sourceRepo"] = repo.name
+    entry["sourceFilepath"] = source
+    entry["location"] = location
+    options["language"] = language
+    lock["snippets"][args.snippet_name] = revision_record(repo, revision)
+    generated = render_one_snippet(
+        source_dir=source_dir,
+        manifest=manifest,
+        entry=entry,
+    )
+    generated_file = output_path(repo, args.snippet_name)
+    changes = authoring_changes(
+        manifest_file=manifest_file,
+        manifest=manifest,
+        lock=lock,
+        generated_file=generated_file,
+        generated_content=generated,
+    )
+    if args.dry_run:
+        print_change_preview(
+            action=args.command,
+            snippet_name=args.snippet_name,
+            changes=changes,
+        )
+        return 0
+    commit_changes(changes)
+
+    verb = "Edited"
+    print(f"{verb} {args.snippet_name}; its import path is unchanged")
+    print(f"Manifest: {manifest_file.relative_to(CF_DOCS_ROOT)}")
+    print(f"Source:   {revision.commit} at {revision.remote} ({revision.ref})")
+    print(f"Output:   {generated_file.relative_to(CF_DOCS_ROOT)}")
+    return 0
+
+
 def add_authoring_arguments(
     parser: argparse.ArgumentParser,
     *,
     command: str,
 ) -> None:
     parser.add_argument("repo", choices=sorted(REPOS), help="Source repository key")
+    if command == "edit":
+        parser.add_argument("snippet_name", help="Existing stable snippetName")
     if command == "add":
         parser.add_argument("--source", required=True)
     if command == "add":
@@ -619,11 +712,15 @@ def add_authoring_arguments(
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Add cf-docs external snippets"
+        description="Add or edit cf-docs external snippets"
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
     add_parser = subparsers.add_parser("add", help="Add and render a snippet")
     add_authoring_arguments(add_parser, command="add")
+    edit_parser = subparsers.add_parser(
+        "edit", help="Edit and rerender a snippet without changing its name"
+    )
+    add_authoring_arguments(edit_parser, command="edit")
     return parser.parse_args(argv)
 
 
@@ -631,7 +728,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     repo = REPOS[args.repo]
     try:
-        return add(args, repo)
+        if args.command == "add":
+            return add(args, repo)
+        return update(args, repo)
     except (OSError, SnippetAuthoringError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
