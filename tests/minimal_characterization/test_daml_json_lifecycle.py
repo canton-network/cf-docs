@@ -215,10 +215,14 @@ class DamlJsonMinimalLifecycleTests(unittest.TestCase):
 
     def test_warning_prefixes_override_legacy_keyword_matching(self) -> None:
         from x2mdx.daml_json.render import warning_lifecycle_state, module_prerelease_badges
-        for text, state in [("Alpha: experimental", "alpha"), (" BETA: preview", "beta"), ("Stable: supported", "stable"), ("Alphabetical order", "alpha"), ("Uses alpha internally", "alpha"), ("This is BETA software", "beta"), ("Supported module", None)]:
+        for text, state in [("Pre-alpha: experimental", "pre-alpha"), (" PRE-ALPHA: early", "pre-alpha"), ("This is pre-alpha software", "pre-alpha"), ("Alpha: experimental", "alpha"), (" BETA: preview", "beta"), ("Stable: supported", "stable"), ("Alphabetical order", "alpha"), ("Uses alpha internally", "alpha"), ("This is BETA software", "beta"), ("Supported module", None)]:
             with self.subTest(text=text):
                 self.assertEqual(warning_lifecycle_state({"WarnData": [text]}), state)
         for messages, state in [
+            (["This is pre-alpha software", "Beta: preview"], "beta"),
+            (["This is alpha software", "Pre-alpha: early"], "pre-alpha"),
+            (["Pre-alpha: formerly alpha", "This is beta software"], "pre-alpha"),
+            (["This is pre-alpha software", "Stable: supported"], "stable"),
             (["This is alpha software", "Beta: preview"], "beta"),
             (["This is beta software", "Alpha: experimental"], "alpha"),
             (["Uses alpha internally", "Stable: supported"], "stable"),
@@ -255,10 +259,11 @@ class DamlJsonMinimalLifecycleTests(unittest.TestCase):
     def test_daml_source_annotations_survive_extraction(self) -> None:
         source = Path(__file__).resolve().parents[1] / "fixtures" / "daml-lifecycle" / "Example.daml"
         extracted = self.root / "modules.json"
-        subprocess.run(["damlc", "docs", "--format", "json", "--combine", "--output", str(extracted), str(source), str(source.with_name("LegacyExample.daml"))], cwd=self.root, check=True, capture_output=True, text=True)
+        subprocess.run(["damlc", "docs", "--format", "json", "--combine", "--output", str(extracted), str(source), str(source.with_name("LegacyExample.daml")), str(source.with_name("PreAlphaExample.daml"))], cwd=self.root, check=True, capture_output=True, text=True)
         manifest = self._write_json("source-manifest.json", {"versions": [{"version": "1.0.0", "json_path": str(extracted)}]})
         output = self.root / "source-pages"
         run_x2mdx(["daml-json", "build-api-pages-from-manifest", "--manifest", str(manifest), "--output-dir", str(output), "--history-report", str(output / "history.json"), "--reader-route-prefix", "reference/daml", "--surface-id", "daml"])
+        assert_contains_all(read_mdx(output, "prealphaexample.mdx"), [">Pre-alpha</span>", "Pre-alpha: early module."])
         legacy = read_mdx(output, "legacyexample.mdx")
         self.assertIn(">Deprecated 1.0.0</a>", legacy)
         self.assertNotIn('class="x2mdx-ref-badge x2mdx-ref-badge--removed">Deprecated</span>', legacy)

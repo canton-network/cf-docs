@@ -375,10 +375,10 @@ def warning_lifecycle_state(warns: Any) -> str | None:
         return "deprecated"
     messages = extract_tagged_warning_messages(warns, "WarnData")
     for message in messages:
-        match = re.match(r"^\s*(alpha|beta|stable)\s*:", message, re.IGNORECASE)
+        match = re.match(r"^\s*(pre-alpha|alpha|beta|stable)\s*:", message, re.IGNORECASE)
         if match:
             return match.group(1).lower()
-    for state in ("alpha", "beta"):
+    for state in ("pre-alpha", "alpha", "beta"):
         if any(state in message.lower() for message in messages):
             return state
     return None
@@ -386,7 +386,7 @@ def warning_lifecycle_state(warns: Any) -> str | None:
 
 def module_prerelease_badges(module: dict[str, Any], *, removed: bool = False) -> list[ReferenceBadge]:
     state = warning_lifecycle_state(module.get("md_warn"))
-    return [ReferenceBadge(state.title(), tone="changed")] if not removed and state in {"alpha", "beta"} else []
+    return [ReferenceBadge(state.capitalize(), tone="changed")] if not removed and state in {"pre-alpha", "alpha", "beta"} else []
 
 
 def render_warn_blocks(warns: Any) -> list[str]:
@@ -725,8 +725,8 @@ def module_template_context(
     module_warnings = extract_tagged_warning_messages(module_doc.get("md_warn"), "WarnData")
     module_deprecations = extract_tagged_warning_messages(module_doc.get("md_warn"), "DeprecatedData")
     module_state = warning_lifecycle_state(module_doc.get("md_warn"))
-    module_prerelease_warning = next((msg for msg in module_warnings if re.match(r"^\s*(alpha|beta)\s*:", msg, re.IGNORECASE)), None)
-    if module_prerelease_warning is None and module_state in {"alpha", "beta"}:
+    module_prerelease_warning = next((msg for msg in module_warnings if re.match(r"^\s*(pre-alpha|alpha|beta)\s*:", msg, re.IGNORECASE)), None)
+    if module_prerelease_warning is None and module_state in {"pre-alpha", "alpha", "beta"}:
         module_prerelease_warning = next((msg for msg in module_warnings if module_state in msg.lower()), None)
     module_deprecation_warning = module_deprecations[0] if module_deprecations else None
     replacement_target = extract_exact_replacement_target(module_deprecations)
@@ -750,6 +750,8 @@ def module_template_context(
         lifecycle = "Removed."
     elif module_deprecation_warning:
         lifecycle = "Deprecated."
+    elif module_state == "pre-alpha":
+        lifecycle = "Pre-alpha (experimental)."
     elif module_state == "alpha":
         lifecycle = "Alpha (experimental)."
     elif module_state == "beta":

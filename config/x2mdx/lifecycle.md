@@ -90,7 +90,7 @@ Accepted `lifecycle.state` values: `pre-alpha`, `alpha`, `beta`, `stable`, `depr
 ## Daml
 
 ```daml
-module Example {-# WARNING "Alpha: experimental module." #-} where
+module Example {-# WARNING "Pre-alpha: experimental module." #-} where
 
 {-# WARNING Token "Beta: preview type." #-}
 data Token = Token
@@ -100,4 +100,4 @@ data Token = Token
 module LegacyExample {-# DEPRECATED "Use Example instead." #-} where
 ```
 
-Accepted `WARNING` prefixes: `Alpha:`, `Beta:`, `Stable:` (case-insensitive). Explicit prefixes override legacy matching of `alpha` or `beta` anywhere in warning text; otherwise `alpha` wins over `beta`. Deprecation uses `DEPRECATED` and takes precedence.
+Accepted `WARNING` prefixes: `Pre-alpha:`, `Alpha:`, `Beta:`, `Stable:` (case-insensitive). Explicit prefixes override legacy matching of `pre-alpha`, `alpha`, or `beta` anywhere in warning text; otherwise `pre-alpha` wins over `alpha`, then `beta`. Deprecation uses `DEPRECATED` and takes precedence.
