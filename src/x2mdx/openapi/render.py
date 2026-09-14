@@ -1199,8 +1199,8 @@ def render_manual_openapi_operation(
         kind_label="OpenAPI",
     )
     lifecycle_state, _ = authored_lifecycle_state(operation)
-    if lifecycle_state in {LifecycleState.ALPHA, LifecycleState.BETA}:
-        badges.append(ReferenceBadge(lifecycle_state.value.title(), tone="changed"))
+    if lifecycle_state in {LifecycleState.PRE_ALPHA, LifecycleState.ALPHA, LifecycleState.BETA}:
+        badges.append(ReferenceBadge(lifecycle_state.value.capitalize(), tone="changed"))
 
     api_path = f"{method} {options.server.rstrip('/')}{options.path}"
     protocol_items = [

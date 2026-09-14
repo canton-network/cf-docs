@@ -41,6 +41,7 @@ class IdentityConfidence(StrEnum):
 
 
 class LifecycleState(StrEnum):
+    PRE_ALPHA = "pre-alpha"
     ALPHA = "alpha"
     BETA = "beta"
     STABLE = "stable"

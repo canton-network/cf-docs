@@ -9,13 +9,15 @@ paths:
   /example:
     get:
       operationId: getExample
-      x-state: alpha
+      x-state: pre-alpha
       responses:
         '200':
           description: OK
 ```
 
-Accepted values: `alpha`, `beta`, `stable`, `deprecated` (case-insensitive).
+Accepted values: `pre-alpha`, `alpha`, `beta`, `stable`, `deprecated` (case-insensitive).
+
+An operation tag `pre-alpha` is also recognized when `x-state` is absent; native deprecation takes precedence over the tag.
 
 ## AsyncAPI
 
