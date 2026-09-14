@@ -462,7 +462,7 @@ def _lifecycle_transitions(
     transitions: list[LifecycleTransition] = []
     previous_state: LifecycleState | None = None
     for observation in observations:
-        state, field_name = _authored_lifecycle_state(observation.operation)
+        state, field_name = authored_lifecycle_state(observation.operation)
         if state is None or state == previous_state:
             continue
         transitions.append(
@@ -673,9 +673,10 @@ def _remove_as_of(operation: dict[str, Any]) -> str | None:
     return match.group("version").removeprefix("v") if match else None
 
 
-def _authored_lifecycle_state(
+def authored_lifecycle_state(
     operation: dict[str, Any],
 ) -> tuple[LifecycleState | None, str]:
+    """Read the operation state consistently for history and page rendering."""
     raw_state = operation.get("x-state")
     if raw_state is not None:
         if not isinstance(raw_state, str):
