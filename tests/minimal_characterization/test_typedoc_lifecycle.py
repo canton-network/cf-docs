@@ -115,6 +115,31 @@ def typedoc_document(children: list[dict[str, object]]) -> dict[str, object]:
 
 
 class TypeDocMinimalLifecycleTests(unittest.TestCase):
+    def test_prerelease_badges_follow_current_export_and_signature_tags(self) -> None:
+        for tags, label in [
+            (["@alpha"], "Alpha"), (["@beta"], "Beta"), (["@stable"], None),
+            ([], None), (["@deprecated", "@alpha"], "Deprecated"),
+        ]:
+            with self.subTest(tags=tags):
+                versions = []
+                for version, current_tags in [("1.0.0", ["@alpha"]), ("1.1.0", tags)]:
+                    path = self._write_json(f"{version}/badges.json", typedoc_document([
+                        interface_export(1, "Widget", "Widget API.", modifier_tags=current_tags),
+                        function_export(20, "makeWidget", "Create a widget.", modifier_tags=current_tags),
+                    ]))
+                    versions.append({"version": version, "json_path": str(path)})
+                manifest = self._write_json("badges-manifest.json", {
+                    "package_name": "@daml/types", "publish_version": "1.1.0", "versions": versions,
+                })
+                output = self.root / "badges.mdx"
+                run_x2mdx([
+                    "typedoc", "build-api-pages-from-manifest", "--manifest", str(manifest),
+                    "--output-file", str(output),
+                ])
+                page = output.read_text()
+                for candidate in ("Alpha", "Beta", "Deprecated"):
+                    self.assertEqual(page.count(f">{candidate}</span>"), 2 if candidate == label else 0)
+
     def setUp(self) -> None:
         self.temp_dir = tempfile.TemporaryDirectory()
         self.root = Path(self.temp_dir.name)

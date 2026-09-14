@@ -48,3 +48,19 @@ Accepted `x-state` values: `alpha`, `beta`, `stable`, `deprecated` (case-insensi
 ```
 
 Accepted `x-state` values: `alpha`, `beta`, `stable`, `deprecated` (case-insensitive).
+
+## TypeDoc
+
+```ts
+/** @alpha */
+export interface Example {
+  id: string;
+}
+
+/** @deprecated Use Example instead. */
+export interface LegacyExample {
+  id: string;
+}
+```
+
+Accepted lifecycle tags: `@alpha`, `@beta`, `@stable`, `@deprecated`.
