@@ -6,6 +6,8 @@ This document describes the external snippet update workflow for this docs repos
 
 The automation to pull the snippet updates into this repository is implemented using GitHub Action workflows
 
+For authoring commands, see [Snippet commands](snippet-commands.md).
+
 ## Local one-command extraction
 
 From this repository, use `generate:external-snippets` to copy the matching helper/config into a local source repository and run extraction there:
