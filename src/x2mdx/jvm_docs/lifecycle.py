@@ -11,6 +11,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
+from x2mdx.jvm_docs.annotations import doc_annotations
 from x2mdx.jvm_docs.models import (
     JvmDocArtifactLifecycle,
     JvmDocArtifactSource,
@@ -129,7 +130,7 @@ def java_type_href(entry: dict[str, Any]) -> str | None:
 
 
 def parse_since_from_note(note: str) -> str | None:
-    match = re.search(r"\bsince\s+([A-Za-z0-9._-]+)", note, flags=re.I)
+    match = re.search(r"\bsince\s+(?:version\s+)?([A-Za-z0-9._-]+)", note, flags=re.I)
     if match:
         return match.group(1).strip()
     return None
@@ -323,22 +324,33 @@ def parse_symbols_from_jar(
 ) -> list[dict[str, Any]]:
     with zipfile.ZipFile(jar_path) as archive:
         if language == "java":
-            return parse_java_symbols(
+            symbols = parse_java_symbols(
                 archive,
                 group=group,
                 artifact=artifact,
                 version=version,
                 include_prefixes=include_prefixes,
             )
-        if language == "scala":
-            return parse_scala_symbols(
+        elif language == "scala":
+            symbols = parse_scala_symbols(
                 archive,
                 group=group,
                 artifact=artifact,
                 version=version,
                 include_prefixes=include_prefixes,
             )
-    raise ValueError(f"Unsupported JVM docs language: {language}")
+        else:
+            raise ValueError(f"Unsupported JVM docs language: {language}")
+        pages = {}
+        for symbol in symbols:
+            path, _, anchor = urllib.parse.unquote(symbol["doc_path"]).partition("#")
+            if path not in pages:
+                pages[path] = doc_annotations(archive.read(path).decode("utf-8", errors="replace"), language=language) if path in archive.namelist() else {}
+            state, note = pages[path].get(anchor, (None, None))
+            symbol["lifecycle_state"] = state
+            if note is not None and symbol.get("deprecated_note") is None:
+                symbol["deprecated_note"] = note
+        return symbols
 
 
 def consolidate_lifecycle(
@@ -361,8 +373,10 @@ def consolidate_lifecycle(
                     "doc_links": {},
                     "doc_paths": {},
                     "deprecation_notes": {},
+                    "lifecycle_states": {},
                 },
             )
+            record["lifecycle_states"][version] = symbol.get("lifecycle_state")
             record["versions_present"].add(version)
             record["doc_links"][version] = symbol["doc_url"]
             record["doc_paths"][version] = symbol["doc_path"]
@@ -391,7 +405,8 @@ def consolidate_lifecycle(
                 deprecated_version = min(inferred_versions, key=lambda version: version_index[version])
 
         latest_present = present[-1]
-        status: str | None = None
+        lifecycle_state = record["lifecycle_states"][latest_present]
+        status: str | None = lifecycle_state
         if record["kind"] == "type" and deprecated_version is not None:
             status = "deprecated"
         lifecycle.append(
@@ -407,6 +422,7 @@ def consolidate_lifecycle(
                 doc_links=dict(record["doc_links"]),
                 latest_doc_path=str(record["doc_paths"][latest_present]),
                 status=status,
+                lifecycle_state=lifecycle_state,
                 deprecation_note=deprecation_note,
             )
         )
@@ -555,8 +571,8 @@ def build_jvm_doc_lifecycle_report_from_sources(
     total_members = sum(artifact.member_count for artifact in artifacts)
     notes = [
         "Input acquisition stays outside x2mdx; this report is built from supplied local Javadoc/Scaladoc jars.",
-        "Java deprecation metadata is best-effort from deprecated-list.html when present.",
-        "Scala deprecation is not inferred from Scaladoc indexes in this initial implementation.",
+        "Java deprecation metadata is read from deprecated-list.html and declaration annotations.",
+        "Scala deprecation metadata is read from Scala 2.13 Scaladoc declaration pages.",
         "Removed means the first configured version after the last observed presence.",
     ]
     return JvmDocLifecycleReport(

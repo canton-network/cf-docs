@@ -19,6 +19,7 @@ pkgs.mkShell {
     pkgs.curl
     pkgs.gh
     pkgs.git
+    pkgs.scala_2_13
     pkgs.jdk25_headless
     pkgs.ncurses
     pkgs.nodejs_24

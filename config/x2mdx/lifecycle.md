@@ -99,3 +99,26 @@ module LegacyExample {-# DEPRECATED "Use Example instead." #-} where
 ```
 
 Accepted `WARNING` prefixes: `Alpha:`, `Beta:`, `Stable:` (case-insensitive). Explicit prefixes override legacy matching of `alpha` or `beta` anywhere in warning text; otherwise `alpha` wins over `beta`. Deprecation uses `DEPRECATED` and takes precedence.
+
+## JVM (Java and Scala 2.13)
+
+```java
+@Alpha
+public class Example {
+    @Beta public void preview() {}
+    @Deprecated(since = "1.0.0") public void legacy() {}
+}
+```
+
+```scala
+@Alpha
+class Example {
+  @Beta def preview(): Unit = ()
+  @deprecated("Use preview instead.", "1.0.0")
+  def legacy(): Unit = ()
+}
+```
+
+Accepted markers: `@Alpha`, `@Beta`, `@Stable`. Use Java `@Deprecated` or Scala `@deprecated` for deprecation.
+
+Define/import the [marker annotations](../../tests/fixtures/jvm-lifecycle/annotations/example/lifecycle), annotate upstream source, and republish Javadoc/Scaladoc. Java markers require `@Documented`; no lifecycle YAML is needed.

@@ -36,6 +36,7 @@ class JvmDocSymbolLifecycle:
     deprecation_note: str | None = None
     latest_signature: str | None = None
     latest_summary: str | None = None
+    lifecycle_state: str | None = None
 
 
 @dataclass(frozen=True)
