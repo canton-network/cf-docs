@@ -171,6 +171,24 @@ class AsyncApiMinimalLifecycleTests(unittest.TestCase):
         )
         return output_dir
 
+    def test_pre_alpha_channel_and_action_override(self) -> None:
+        manifest = self._write_manifest()
+        source = manifest.parent / "1.1.0" / "asyncapi.yaml"
+        text = source.read_text().replace("x-state: alpha", "x-state: PRE-ALPHA")
+        source.write_text(text)
+        output = self.root / "pre-alpha"
+        run_x2mdx(["asyncapi", "build-api-pages-from-manifest", "--manifest", str(manifest), "--output-dir", str(output)])
+        page = read_mdx(output, "operations/payments-alpha/subscribe.mdx")
+        assert_contains_all(page, [">Pre-alpha</span>"])
+        import yaml
+        document = yaml.safe_load(text)
+        document["channels"]["payments.alpha"]["subscribe"]["x-state"] = "beta"
+        source.write_text(yaml.safe_dump(document))
+        run_x2mdx(["asyncapi", "build-api-pages-from-manifest", "--manifest", str(manifest), "--output-dir", str(output)])
+        page = read_mdx(output, "operations/payments-alpha/subscribe.mdx")
+        assert_contains_all(page, [">Beta</span>"])
+        assert_contains_none(page, [">Pre-alpha</span>"])
+
     def test_cli_renders_minimal_source_contract(self) -> None:
         output_dir = self._render_pages()
 

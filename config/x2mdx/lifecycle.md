@@ -24,7 +24,7 @@ An operation tag `pre-alpha` is also recognized when `x-state` is absent; native
 ```yaml
 channels:
   payments.created:
-    x-state: alpha
+    x-state: pre-alpha
     subscribe:
       x-state: beta
       message:
@@ -34,7 +34,7 @@ channels:
     x-state: deprecated
 ```
 
-Accepted `x-state` values: `alpha`, `beta`, `stable`, `deprecated` (case-insensitive).
+Accepted `x-state` values: `pre-alpha`, `alpha`, `beta`, `stable`, `deprecated` (case-insensitive).
 
 ## OpenRPC
 
