@@ -289,13 +289,13 @@ def build_package_docs(report: dict[str, Any]) -> list[dict[str, Any]]:
 
 def lifecycle_meta_items(entity: dict[str, Any]) -> list[ReferenceMetaItem]:
     state = metadata_lifecycle_state(entity)
-    return [ReferenceMetaItem("Lifecycle", state.title())] if state else []
+    return [ReferenceMetaItem("Lifecycle", state.capitalize())] if state else []
 
 
 def lifecycle_description(entity: dict[str, Any]) -> str:
     description = str(entity.get("description") or "")
     state = metadata_lifecycle_state(entity)
-    return "\n\n".join(filter(None, [f"Lifecycle: {state.title()}" if state else "", description]))
+    return "\n\n".join(filter(None, [f"Lifecycle: {state.capitalize()}" if state else "", description]))
 
 
 def field_type_label(field: dict[str, Any]) -> str:

@@ -77,7 +77,7 @@ metadata_path: lifecycle.json
 ```json
 {
   "endpoints": {
-    "example.PaymentService/CreatePayment": {"lifecycle": {"state": "beta"}}
+    "example.PaymentService/CreatePayment": {"lifecycle": {"state": "pre-alpha"}}
   },
   "messages": {
     "example.CreatePaymentRequest": {"lifecycle": {"state": "deprecated"}}
@@ -85,7 +85,7 @@ metadata_path: lifecycle.json
 }
 ```
 
-Accepted `lifecycle.state` values: `alpha`, `beta`, `stable`, `deprecated` (case-insensitive).
+Accepted `lifecycle.state` values: `pre-alpha`, `alpha`, `beta`, `stable`, `deprecated` (case-insensitive).
 
 ## Daml
 
