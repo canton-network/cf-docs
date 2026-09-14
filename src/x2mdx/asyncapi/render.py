@@ -25,6 +25,7 @@ from x2mdx.history.models import (
 from x2mdx.history.versioning import compare_versions
 from x2mdx.reference_pages import (
     ReferenceBadge,
+    lifecycle_state_badges,
     ReferenceBreadcrumb,
     ReferenceCard,
     ReferenceChange,
@@ -84,24 +85,29 @@ def lifecycle_state_tone(state: str | None) -> str:
 def lifecycle_badges(
     channel: AsyncApiChannelLifecycle,
     *,
+    action: AsyncApiActionDetail | None = None,
     item: HistoryItem | None = None,
     events: list[HistoryEvent] | None = None,
     comparison_versions: tuple[str, ...] = (),
     linked: bool = True,
 ) -> list[ReferenceBadge]:
     if item is not None:
-        return reference_badges_for_history_item(
+        badges = reference_badges_for_history_item(
             item,
             kind_label="WebSocket",
             comparison_versions=comparison_versions,
             linked=linked,
         )
-    channel_events = events or legacy_channel_history_events(channel)
-    return reference_badges_for_history_events(
-        channel_events,
-        kind_label="WebSocket",
-        linked=linked,
-    )
+    else:
+        channel_events = events or legacy_channel_history_events(channel)
+        badges = reference_badges_for_history_events(
+            channel_events,
+            kind_label="WebSocket",
+            linked=linked,
+        )
+    state = effective_lifecycle_state(channel, action)
+    badges.extend(lifecycle_state_badges(state, existing=badges))
+    return badges
 
 
 def legacy_channel_history_events(
@@ -195,9 +201,19 @@ def channel_history_events(
     return sorted(combined.values(), key=cmp_to_key(compare))
 
 
-def lifecycle_meta_items(channel: AsyncApiChannelLifecycle) -> list[ReferenceMetaItem]:
+def effective_lifecycle_state(
+    channel: AsyncApiChannelLifecycle,
+    action: AsyncApiActionDetail | None = None,
+) -> str | None:
+    return (action.get("lifecycle_state") if action is not None else None) or channel.lifecycle_state
+
+
+def lifecycle_meta_items(
+    channel: AsyncApiChannelLifecycle,
+    action: AsyncApiActionDetail | None = None,
+) -> list[ReferenceMetaItem]:
     items: list[ReferenceMetaItem] = []
-    state_label = lifecycle_state_label(channel.lifecycle_state)
+    state_label = lifecycle_state_label(effective_lifecycle_state(channel, action))
     if state_label:
         items.append(ReferenceMetaItem("Lifecycle", state_label))
     if channel.replaces:
@@ -350,6 +366,7 @@ def build_action_operation(
         else [],
         badges=lifecycle_badges(
             channel,
+            action=action,
             item=history_item,
             events=history_events,
             comparison_versions=comparison_versions or (),
@@ -357,7 +374,7 @@ def build_action_operation(
         meta_items=[
             ReferenceMetaItem("Channel", channel.channel),
             ReferenceMetaItem("Action", str(action["action"])),
-            *lifecycle_meta_items(channel),
+            *lifecycle_meta_items(channel, action),
         ],
         operation_method=str(action["action"]).upper(),
         operation_target=channel.channel,
@@ -372,7 +389,7 @@ def build_action_operation(
             ReferenceMetaItem("Operation ID", str(action.get("operation_id") or "-")),
             ReferenceMetaItem("Content type", str(action["message"].get("content_type") or "-")),
             ReferenceMetaItem("Payload", str(action["message"].get("payload_schema") or "-")),
-            *lifecycle_meta_items(channel),
+            *lifecycle_meta_items(channel, action),
         ],
         inputs=inputs,
         outputs=outputs,
@@ -476,6 +493,7 @@ def build_channel_page(
                 summary=compact_text(action.get("description") or channel.latest.get("description") or "", limit=170),
                 badges=lifecycle_badges(
                     channel,
+                    action=action,
                     item=item,
                     comparison_versions=history_report.comparison_versions,
                     linked=False,
@@ -484,7 +502,7 @@ def build_channel_page(
                     ReferenceMetaItem("Operation ID", str(action.get("operation_id") or "-")),
                     ReferenceMetaItem("Method", str(action.get("ws_method") or "-")),
                     ReferenceMetaItem("Payload", str(action["message"].get("payload_schema") or "-")),
-                    *lifecycle_meta_items(channel),
+                    *lifecycle_meta_items(channel, action),
                 ],
             )
         )

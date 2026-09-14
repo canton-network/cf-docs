@@ -22,6 +22,39 @@ def write_text(path: Path, contents: str) -> None:
 
 
 class AsyncApiTests(unittest.TestCase):
+    def test_prerelease_badge_uses_current_action_then_channel(self) -> None:
+        import yaml
+
+        for channel_state, action_state, label in [
+            ("alpha", None, "Alpha"),
+            ("alpha", " BETA ", "Beta"),
+            ("alpha", "stable", None),
+            (None, "beta", "Beta"),
+            ("alpha", "deprecated", "Deprecated"),
+            (None, None, None),
+        ]:
+            with self.subTest(channel=channel_state, action=action_state):
+                manifest = self._write_manifest()
+                for version, state in [("1.0.0", "alpha"), ("1.1.0", channel_state)]:
+                    path = manifest.parent / version / "asyncapi.yaml"
+                    spec = yaml.safe_load(path.read_text())
+                    channel = spec["channels"]["/stream"]
+                    if state is not None:
+                        channel["x-state"] = state
+                    if version == "1.1.0" and action_state is not None:
+                        channel["subscribe"]["x-state"] = action_state
+                    path.write_text(yaml.safe_dump(spec))
+                output = self.root / "badge-pages"
+                self.assertEqual(cli_main([
+                    "asyncapi", "build-api-pages-from-manifest", "--manifest", str(manifest),
+                    "--output-dir", str(output),
+                ]), 0)
+                page = (output / "operations/stream/subscribe.mdx").read_text()
+                for candidate in ("Alpha", "Beta", "Deprecated"):
+                    self.assertEqual(f">{candidate}</span>" in page, candidate == label)
+                if label is not None:
+                    self.assertIn(f"<dd>{label}</dd>", page)
+
     def setUp(self) -> None:
         self.temp_dir = tempfile.TemporaryDirectory()
         self.root = Path(self.temp_dir.name)
