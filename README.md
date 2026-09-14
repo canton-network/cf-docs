@@ -61,6 +61,9 @@ the marked `NETWORKVARS_START` / `NETWORKVARS_END` regions. Generation preserves
 content outside those regions. Edit generated reference pages through their
 owning generators, as before.
 
+To label a generated OpenAPI operation alpha or beta, see the short
+[`x-state` guide](config/x2mdx/openapi-lifecycle.md).
+
 Run `npm run validate:network-variable-tabs` to check generated regions without
 modifying files. Direct edits inside those regions fail validation; edit the
 referenced template instead. Ordinary page edits and new images do not require
