@@ -72,40 +72,38 @@ flowchart TB
 
 Deploy the participant node without the validator process. You can use the Canton open-source distribution for this, since you do not need the Splice-specific components.
 
-### Helm deployment
+### Configuration
 
-```yaml
-# participant-values.yaml
-participant:
-  storage:
-    type: postgres
-    config:
-      dataSourceClass: "org.postgresql.ds.PGSimpleDataSource"
-      properties:
-        serverName: "<postgres-host>"
-        portNumber: 5432
-        databaseName: "participant_db"
-        user: "participant_user"
-        password: "<password>"
-  ledgerApi:
-    port: 5001
-    tls:
-      certChainFile: "/certs/tls.crt"
-      privateKeyFile: "/certs/tls.key"
-  synchronizerConnections:
-    - alias: "private-sync"
-      sequencerConnection: "https://sequencer.private-sync.example.com"
-```
+Since this is a plain Canton participant with no Splice-specific components, configure it using Canton's native HOCON configuration format rather than the Splice Helm charts. See [Docker Deployment](/global-synchronizer/deployment/docker) for the container invocation pattern.
 
-```bash
-helm install participant canton/canton-participant \
-  -f participant-values.yaml \
-  --namespace canton
+```conf
+canton.participants.participant {
+  storage {
+    type = postgres
+    config {
+      dataSourceClass = "org.postgresql.ds.PGSimpleDataSource"
+      properties = {
+        serverName = "<postgres-host>"
+        portNumber = 5432
+        databaseName = "participant_db"
+        user = "participant_user"
+        password = "<password>"
+      }
+    }
+  }
+  ledger-api {
+    port = 5001
+    tls {
+      cert-chain-file = "/certs/tls.crt"
+      private-key-file = "/certs/tls.key"
+    }
+  }
+}
 ```
 
 ### Connecting to the synchronizer
 
-After the participant starts, it connects to the configured synchronizer automatically. Verify the connection:
+This configuration does not establish a synchronizer connection by itself — there is no static config key for it. After the participant starts, register the connection through the Canton Console or Admin API; see [Connecting to a Dedicated Synchronizer](/global-synchronizer/extension-synchronizers/dedicated-synchronizers#connecting-to-a-dedicated-synchronizer) and [Synchronizer Operations](/global-synchronizer/canton-console/essential-commands#synchronizer-operations) for the commands. Verify the connection:
 
 
 <CANTON_DOCS_CN_GS_EXTENSION_SYNCHRONIZERS_PRIVATE_VALIDATORS_0 />
