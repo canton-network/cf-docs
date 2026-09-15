@@ -36,33 +36,33 @@ We recommend wallet providers to implement a UTXO management strategy that:
 {/* NETWORKVARS_START source="/snippets/networkvars/appdev/deep-dives/token-standard-1.mdx" */}
 <Tabs>
 
-<Tab title="DevNet (0.8.0)">
+<Tab title="DevNet (0.8.1)">
 
 Assuming you are a wallet provider that runs a validator node for your users, you can set up `MergeDelegation` contracts for your users as follows.
 
-1.  Extract the latest version of the `splice-util-token-standard-wallet.dar` file from the release bundle (<a href="https://github.com/digital-asset/decentralized-canton-sync/releases/download/v0.8.0/0.8.0_splice-node.tar.gz">Download Bundle (DevNet 0.8.0)</a>).
+1.  Extract the latest version of the `splice-util-token-standard-wallet.dar` file from the release bundle (<a href="https://github.com/digital-asset/decentralized-canton-sync/releases/download/v0.8.1/0.8.1_splice-node.tar.gz">Download Bundle (DevNet 0.8.1)</a>).
 2.  Upload the extracted `.dar` file to your validator node.
 3.  Adjust your user onboarding procedure such that the users signs the creation of a `MergeDelegationProposal` contract (see docs).
 4.  Accept the `MergeDelegationProposal` contracts by exercising their `Accept` choice using your wallet provider's party.
 
 </Tab>
 
-<Tab title="TestNet (0.7.5)">
+<Tab title="TestNet (0.8.0)">
 
 Assuming you are a wallet provider that runs a validator node for your users, you can set up `MergeDelegation` contracts for your users as follows.
 
-1.  Extract the latest version of the `splice-util-token-standard-wallet.dar` file from the release bundle (<a href="https://github.com/digital-asset/decentralized-canton-sync/releases/download/v0.7.5/0.7.5_splice-node.tar.gz">Download Bundle (TestNet 0.7.5)</a>).
+1.  Extract the latest version of the `splice-util-token-standard-wallet.dar` file from the release bundle (<a href="https://github.com/digital-asset/decentralized-canton-sync/releases/download/v0.8.0/0.8.0_splice-node.tar.gz">Download Bundle (TestNet 0.8.0)</a>).
 2.  Upload the extracted `.dar` file to your validator node.
 3.  Adjust your user onboarding procedure such that the users signs the creation of a `MergeDelegationProposal` contract (see docs).
 4.  Accept the `MergeDelegationProposal` contracts by exercising their `Accept` choice using your wallet provider's party.
 
 </Tab>
 
-<Tab title="MainNet (0.7.4)">
+<Tab title="MainNet (0.7.5)">
 
 Assuming you are a wallet provider that runs a validator node for your users, you can set up `MergeDelegation` contracts for your users as follows.
 
-1.  Extract the latest version of the `splice-util-token-standard-wallet.dar` file from the release bundle (<a href="https://github.com/digital-asset/decentralized-canton-sync/releases/download/v0.7.4/0.7.4_splice-node.tar.gz">Download Bundle (MainNet 0.7.4)</a>).
+1.  Extract the latest version of the `splice-util-token-standard-wallet.dar` file from the release bundle (<a href="https://github.com/digital-asset/decentralized-canton-sync/releases/download/v0.7.5/0.7.5_splice-node.tar.gz">Download Bundle (MainNet 0.7.5)</a>).
 2.  Upload the extracted `.dar` file to your validator node.
 3.  Adjust your user onboarding procedure such that the users signs the creation of a `MergeDelegationProposal` contract (see docs).
 4.  Accept the `MergeDelegationProposal` contracts by exercising their `Accept` choice using your wallet provider's party.
@@ -378,5 +378,18 @@ This allows implementation of [Delivery versus Payment (DVP) Transfer Workflows]
 - V1 Daml reference: [splice-api-token-allocation-request-v1](/sdks-tools/api-reference/splice-daml/splice-api-token-allocation-request-v1)
 
 {/* COPIED_END */}
+
+## Common pitfall: unresolved registry token packages
+
+Your participant must have a registry token's DAR packages installed before it can interpret contracts and transactions involving that token — this is separate from having the Wallet SDK or CLI code that talks to the registry's off-ledger API. If a transfer involving a registry-issued token fails to resolve with an error like `UNRESOLVED_PACKAGE_NAME`, check that the relevant DARs are uploaded and vetted on your participant.
+
+## Detecting transfer preapproval from choice-context
+
+Whether a transfer is credited immediately or requires an explicit accept is determined by whether the receiver has a transfer preapproval, which is discoverable from the choice-context response before submitting the accept/transfer:
+
+- For CC, if the receiver has a transfer preapproval, the choice context returns an additional value named `transfer-preapproval` containing the `ContractId` of the corresponding preapproval contract.
+- For Registry Utility tokens, the choice context itself is the same regardless of whether a preapproval exists, but the returned `factoryId` differs: if a preapproval exists, the `TransferPreapproval` contract's factory is returned, so `TransferFactory_Transfer` should be called on that contract; otherwise the default factory is returned.
+
+This is why some inbound transfers show up as an already-credited balance while others show up as a pending offer needing `TransferInstruction_Accept`.
 
 {/* Mintlify preview rebuild marker. */}

@@ -64,7 +64,7 @@ def test_every_target_converges_on_checked_in_mdx() -> None:
     } == {"json-ledger-api-openapi", "splice-openapi"}
 
 
-def test_every_target_has_valid_normalized_history_and_resolvable_current_pages() -> None:
+def test_every_target_has_valid_history_and_resolvable_current_and_removed_items() -> None:
     inventory = load_reference_target_inventory()
     declared_reports = {
         report_path
@@ -84,11 +84,19 @@ def test_every_target_has_valid_normalized_history_and_resolvable_current_pages(
             validate_history_report(report)
             assert report.format.value == target.format
             assert report.items
-            for item in report.current_items():
+            for item in report.items:
                 assert item.route is not None
                 route = item.route.split("#", 1)[0].lstrip("/")
                 page_path = REPO_ROOT / "docs-main" / f"{route}.mdx"
                 assert page_path.is_file(), (item.id, page_path)
+                text = page_path.read_text(encoding="utf-8")
+                if "#" in item.route:
+                    anchor = item.route.split("#", 1)[1]
+                    assert f'id="{anchor}"' in text, (item.id, anchor)
+                if not item.current_present:
+                    assert f"Removed in {item.observed_removal}" in text, item.id
+                    if report.format.value == "openapi":
+                        assert not re.search(r"(?m)^api:|^playground:", text), item.id
                 checked_pages.add(page_path)
 
     assert checked_pages

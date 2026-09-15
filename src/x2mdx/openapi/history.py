@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import re
 from dataclasses import dataclass, field, replace
 from typing import Any, Mapping
@@ -119,6 +120,19 @@ def build_openapi_history_report(
             "within that OpenAPI specification and is recorded as lower confidence."
         )
 
+    # A new operation can reuse a removed operation's method/path. Keep its
+    # current route and give the historical identity a deterministic suffix.
+    occupied = {item.route for item in items if item.current_present and item.route}
+    routed_items = []
+    for item in sorted(items, key=lambda value: (not value.current_present, value.id)):
+        if not item.current_present and item.route:
+            route = item.route
+            if route in occupied:
+                route += "-removed-" + hashlib.sha256(item.id.encode()).hexdigest()[:12]
+            occupied.add(route)
+            item = replace(item, route=route)
+        routed_items.append(item)
+    items = routed_items
     return SurfaceHistoryReport(
         surface_id=surface_id,
         title=title,
@@ -223,7 +237,7 @@ def _history_item(
             "continuity without an explicit reintroduction event."
         )
     location_observation = current or last
-    route = None
+    route = scope.current_routes.get((last.method, last.path))
     if current is not None:
         route = scope.current_routes.get((current.method, current.path))
         if route is None:
@@ -448,7 +462,7 @@ def _lifecycle_transitions(
     transitions: list[LifecycleTransition] = []
     previous_state: LifecycleState | None = None
     for observation in observations:
-        state, field_name = _authored_lifecycle_state(observation.operation)
+        state, field_name = authored_lifecycle_state(observation.operation)
         if state is None or state == previous_state:
             continue
         transitions.append(
@@ -659,9 +673,10 @@ def _remove_as_of(operation: dict[str, Any]) -> str | None:
     return match.group("version").removeprefix("v") if match else None
 
 
-def _authored_lifecycle_state(
+def authored_lifecycle_state(
     operation: dict[str, Any],
 ) -> tuple[LifecycleState | None, str]:
+    """Read the operation state consistently for history and page rendering."""
     raw_state = operation.get("x-state")
     if raw_state is not None:
         if not isinstance(raw_state, str):

@@ -30,7 +30,7 @@ from x2mdx.protobuf.lifecycle import (
 from x2mdx.history import ReferenceFormat, validate_history_report, write_history_report
 from x2mdx.protobuf.history import build_protobuf_surface_history_report
 from x2mdx.protobuf.render import build_pages, package_page_path, slugify_segment
-from x2mdx.protobuf.render import operation_page_path
+from x2mdx.protobuf.render import operation_page_path, endpoint_snapshot_map
 from x2mdx.protobuf.snapshots import load_protobuf_sources
 from x2mdx.render import write_pages
 
@@ -597,7 +597,7 @@ def endpoint_routes(
     docs_json_path: Path,
 ) -> dict[str, str]:
     routes: dict[str, str] = {}
-    for endpoint_id, endpoint in report["latestSnapshot"]["endpoints"].items():
+    for endpoint_id, endpoint in endpoint_snapshot_map(report).items():
         generated_path = operation_page_path(
             output_dir,
             str(endpoint["package"]),
