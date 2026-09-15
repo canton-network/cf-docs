@@ -34,4 +34,15 @@ npm run snippets:delete -- splice example
 Deletion refuses remaining references and removes the manifest entry, source
 lock record, and generated MDX.
 
+## Move
+
+Move and commit/push the source upstream first, then update its mapping:
+
+```bash
+npm run snippets:move -- splice example --source-dir ../splice --source apps/renamed.yaml
+```
+
+The same source requirements apply. The snippet name and page imports stay
+unchanged; the selector is retained unless you supply a replacement.
+
 Review and commit the manifest, source lock, generated MDX, and any page edits.
