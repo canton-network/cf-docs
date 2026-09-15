@@ -19,9 +19,9 @@ Repair commands are disabled by default. See [Enabling repair commands](/global-
 
 If a synchronizer is irreparably lost or no longer trusted, the participant nodes previously connected to and sharing active contracts via that synchronizer can recover and migrate their contracts to a new synchronizer. The participant node administrators need to coordinate as follows:
 
-1. Disconnect all participant nodes from the synchronizer deemed lost or untrusted.
+1. Disconnect all participant nodes from every synchronizer, including the synchronizer deemed lost or untrusted.
 2. Identify the synchronizer configuration of the newly provisioned synchronizer.
-3. All participant node administrators invoke the `migrate_synchronizer` method specifying the "old" synchronizer as "source" and the "new" synchronizer. Additionally, set the "force" flag to true given that the old synchronizer is either lost or untrusted in this scenario.
+3. All participant node administrators invoke the `migrate_synchronizer` method specifying the alias of the "old" synchronizer as "source" and the "new" synchronizer. Additionally, set the "force" flag to true given that the old synchronizer is either lost or untrusted in this scenario.
 
    ```scala
    participants.all.foreach { participant =>
@@ -51,7 +51,7 @@ canton.participants.participant1.init = {
 }
 ```
 
-Then start Canton interactively using the `--manual-start` option to prevent the participant node from reconnecting to the synchronizers:
+Then start Canton interactively using the `--manual-start` option to prevent Canton from automatically starting the nodes and reconnecting them to the synchronizers:
 
 ```bash
 ./bin/canton -c myconfig --manual-start
@@ -70,7 +70,7 @@ repair.dars.download(participant1, tempDirParticipant)
 participant1.stop()
 ```
 
-This stores the topology state, the identity, and, if the participant node is not using a Key Management System, the secret keys on the disk in the specified directory.
+This stores the topology state, the identity, and the secret keys on the disk in the specified directory. Participant nodes using a Key Management System are not supported: the download fails because KMS-held private keys cannot be exported.
 
 The `dars.download` command is a convenience command to download all Daml archive files (DARs) that have been added to the participant via the console command `participant.dars.upload`. DARs that were uploaded through the Ledger API need to be manually re-uploaded to the new participant node.
 
@@ -78,21 +78,21 @@ After downloading, stop the participant node, back up the database, and then tru
 
 ```scala
 repair.identity.upload(
-  participant2,
+  participant1,
   tempDirParticipant,
   synchronizerId,
   staticSynchronizerParameters,
   sequencerConnections,
 )
-repair.dars.upload(participant2, tempDirParticipant)
+repair.dars.upload(participant1, tempDirParticipant)
 ```
 
 Reconnect the participant node to the synchronizer using a normal connect:
 
 ```scala
-participant2.synchronizers.connect_by_config(
+participant1.synchronizers.connect_by_config(
   SynchronizerConnectionConfig(
-    synchronizerAlias = daName,
+    synchronizerAlias = SynchronizerAlias.tryCreate("<your synchronizer alias>"),
     sequencerConnections = sequencerConnections,
     initializeFromTrustedSynchronizer = true,
   )
@@ -138,7 +138,7 @@ If a participant node is unable to process events from a synchronizer, and the p
      val lastCounter = lastSequencedEvent.counter
      ```
 
-4. Use the `repair.ignore_events` command to ignore the sequenced events that the participant node is unable to process. The command takes the physical synchronizer ID and the first and last sequencer counters of the events to ignore as parameters. You should not set the force flag.
+4. Use the `repair.ignore_events` command to ignore the sequenced events that the participant node is unable to process. The command takes the physical synchronizer ID and the first and last sequencer counters of the events to ignore as parameters, `fromInclusive` and `toInclusive`, determined in step 3. You should not set the force flag.
 
    ```scala
    participant.repair.ignore_events(
