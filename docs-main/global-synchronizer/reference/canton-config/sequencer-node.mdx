@@ -19,7 +19,7 @@ Paths are rooted at `canton`. Segments in angle brackets are names you choose:
 
 A `[]` suffix marks the fields of a list element. Keys marked **alpha** or **beta** are not covered by compatibility guarantees.
 
-**Required** lists only what you must set, and when: always, when you configure a particular section, or when you have chosen a particular `type`. **All options** shows every section two ways: **HOCON** as you would write it, every key with its default, and **Table** with the descriptions; a **bold** row names a section and the keys indented beneath it live inside it. Switching one section switches them all.
+**Required** lists only what you must set, and when: always, when you configure a particular section, or when you have chosen a particular `type`. **All options** covers every key. Each part is shown as a pair: the HOCON as you would write it, every key with its default, followed by the same keys as a table with their descriptions. A key that only applies under a particular `type` appears in the HOCON as a comment carrying that condition; in the table a **bold** row names a section and the keys indented beneath it live inside it.
 
 Some sections take a `type` that decides which other keys they accept. Those are documented once on the [types page](/global-synchronizer/reference/canton-config/types) and linked from wherever they occur.
 
@@ -36,9 +36,6 @@ In the Default column:
 
 ## Required
 
-<Tabs>
-<Tab title="HOCON">
-
 ```hocon
 canton.sequencers.<sequencer> {
   admin-api {
@@ -50,8 +47,8 @@ canton.sequencers.<sequencer> {
         # url = "..."   # required when type = jwt-jwks
         users = [
           {
-            # allowed-services = [ ]   # required when type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
-            # user-id = "..."   # required when type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
+            # allowed-services = [ ]   # required when admin-api.auth-services[].type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
+            # user-id = "..."   # required when admin-api.auth-services[].type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
           }
         ]
       }
@@ -65,11 +62,11 @@ canton.sequencers.<sequencer> {
       client-auth {
         admin-client {
           cert-chain-file {
-            # pem-bytes = "..."   # required when type = pem-string and type = require
-            # pem-file = "/path/to/file"   # required when type = pem-file and type = require
-            # type = pem-file|pem-string   # required when type = require
+            # pem-bytes = "..."   # required when type = pem-string and admin-api.tls.client-auth.type = require
+            # pem-file = "/path/to/file"   # required when type = pem-file and admin-api.tls.client-auth.type = require
+            # type = pem-file|pem-string   # required when admin-api.tls.client-auth.type = require
           }
-          # private-key-file = "..."   # required when type = require
+          # private-key-file = "..."   # required when admin-api.tls.client-auth.type = require
         }
         type = require|optional|none   # required
       }
@@ -115,8 +112,8 @@ canton.sequencers.<sequencer> {
   init {
     identity {
       identifier {
-        # name = "..."   # required when type = explicit and type = auto
-        # type = random|explicit|config   # required when type = auto
+        # name = "..."   # required when type = explicit and init.identity.type = auto
+        # type = random|explicit|config   # required when init.identity.type = auto
       }
       type = external|auto|manual   # required
     }
@@ -241,208 +238,208 @@ canton.sequencers.<sequencer> {
   sequencer {
     block {
       writer {
-        # type = low-latency|high-throughput   # required when type = bft-sequencer|external
+        # type = low-latency|high-throughput   # required when sequencer.type = bft-sequencer|external
       }
     }
     config {
       batch-aggregator {
-        # type = batching|no-batching   # required when type = bft-sequencer
+        # type = batching|no-batching   # required when sequencer.type = bft-sequencer
       }
       initial-network {
         endpoint-authentication {
           auth-token {
             backoff {
               jitter {
-                # type = equal|full   # required when type = bft-sequencer
+                # type = equal|full   # required when sequencer.type = bft-sequencer
               }
             }
           }
         }
         peer-endpoints = [
           {
-            # address = "..."   # required when type = bft-sequencer
+            # address = "..."   # required when sequencer.type = bft-sequencer
             channel {
-              # max-inbound-message-size = 0   # required when type = bft-sequencer
-              # trace-context-propagation = enabled|disabled   # required when type = bft-sequencer
+              # max-inbound-message-size = 0   # required when sequencer.type = bft-sequencer
+              # trace-context-propagation = enabled|disabled   # required when sequencer.type = bft-sequencer
             }
-            # port = 0   # required when type = bft-sequencer
+            # port = 0   # required when sequencer.type = bft-sequencer
             tls-config {
               client-cert {
                 cert-chain-file {
-                  # pem-bytes = "..."   # required when type = pem-string and type = bft-sequencer
-                  # pem-file = "/path/to/file"   # required when type = pem-file and type = bft-sequencer
-                  # type = pem-file|pem-string   # required when type = bft-sequencer
+                  # pem-bytes = "..."   # required when type = pem-string and sequencer.type = bft-sequencer
+                  # pem-file = "/path/to/file"   # required when type = pem-file and sequencer.type = bft-sequencer
+                  # type = pem-file|pem-string   # required when sequencer.type = bft-sequencer
                 }
-                # private-key-file = "..."   # required when type = bft-sequencer
+                # private-key-file = "..."   # required when sequencer.type = bft-sequencer
               }
               trust-collection-file {
-                # pem-bytes = "..."   # required when type = pem-string and type = bft-sequencer
-                # pem-file = "/path/to/file"   # required when type = pem-file and type = bft-sequencer
-                # type = pem-file|pem-string   # required when type = bft-sequencer
+                # pem-bytes = "..."   # required when type = pem-string and sequencer.type = bft-sequencer
+                # pem-file = "/path/to/file"   # required when type = pem-file and sequencer.type = bft-sequencer
+                # type = pem-file|pem-string   # required when sequencer.type = bft-sequencer
               }
             }
           }
         ]
         server-endpoint {
-          # address = "..."   # required when type = bft-sequencer
-          # external-address = "..."   # required when type = bft-sequencer
-          # external-port = 0   # required when type = bft-sequencer
+          # address = "..."   # required when sequencer.type = bft-sequencer
+          # external-address = "..."   # required when sequencer.type = bft-sequencer
+          # external-port = 0   # required when sequencer.type = bft-sequencer
           external-tls-config {
             client-cert {
               cert-chain-file {
-                # pem-bytes = "..."   # required when type = pem-string and type = bft-sequencer
-                # pem-file = "/path/to/file"   # required when type = pem-file and type = bft-sequencer
-                # type = pem-file|pem-string   # required when type = bft-sequencer
+                # pem-bytes = "..."   # required when type = pem-string and sequencer.type = bft-sequencer
+                # pem-file = "/path/to/file"   # required when type = pem-file and sequencer.type = bft-sequencer
+                # type = pem-file|pem-string   # required when sequencer.type = bft-sequencer
               }
-              # private-key-file = "..."   # required when type = bft-sequencer
+              # private-key-file = "..."   # required when sequencer.type = bft-sequencer
             }
             trust-collection-file {
-              # pem-bytes = "..."   # required when type = pem-string and type = bft-sequencer
-              # pem-file = "/path/to/file"   # required when type = pem-file and type = bft-sequencer
-              # type = pem-file|pem-string   # required when type = bft-sequencer
+              # pem-bytes = "..."   # required when type = pem-string and sequencer.type = bft-sequencer
+              # pem-file = "/path/to/file"   # required when type = pem-file and sequencer.type = bft-sequencer
+              # type = pem-file|pem-string   # required when sequencer.type = bft-sequencer
             }
           }
           tls {
             cert-chain-file {
-              # pem-bytes = "..."   # required when type = pem-string and type = bft-sequencer
-              # pem-file = "/path/to/file"   # required when type = pem-file and type = bft-sequencer
-              # type = pem-file|pem-string   # required when type = bft-sequencer
+              # pem-bytes = "..."   # required when type = pem-string and sequencer.type = bft-sequencer
+              # pem-file = "/path/to/file"   # required when type = pem-file and sequencer.type = bft-sequencer
+              # type = pem-file|pem-string   # required when sequencer.type = bft-sequencer
             }
             client-auth {
               admin-client {
                 cert-chain-file {
-                  # pem-bytes = "..."   # required when type = pem-string and type = require and type = bft-sequencer
-                  # pem-file = "/path/to/file"   # required when type = pem-file and type = require and type = bft-sequencer
-                  # type = pem-file|pem-string   # required when type = require and type = bft-sequencer
+                  # pem-bytes = "..."   # required when type = pem-string and sequencer.config.initial-network.server-endpoint.tls.client-auth.type = require and sequencer.type = bft-sequencer
+                  # pem-file = "/path/to/file"   # required when type = pem-file and sequencer.config.initial-network.server-endpoint.tls.client-auth.type = require and sequencer.type = bft-sequencer
+                  # type = pem-file|pem-string   # required when sequencer.config.initial-network.server-endpoint.tls.client-auth.type = require and sequencer.type = bft-sequencer
                 }
-                # private-key-file = "..."   # required when type = require and type = bft-sequencer
+                # private-key-file = "..."   # required when sequencer.config.initial-network.server-endpoint.tls.client-auth.type = require and sequencer.type = bft-sequencer
               }
-              # type = require|optional|none   # required when type = bft-sequencer
+              # type = require|optional|none   # required when sequencer.type = bft-sequencer
             }
-            # private-key-file = "..."   # required when type = bft-sequencer
+            # private-key-file = "..."   # required when sequencer.type = bft-sequencer
             trust-collection-file {
-              # pem-bytes = "..."   # required when type = pem-string and type = bft-sequencer
-              # pem-file = "/path/to/file"   # required when type = pem-file and type = bft-sequencer
-              # type = pem-file|pem-string   # required when type = bft-sequencer
+              # pem-bytes = "..."   # required when type = pem-string and sequencer.type = bft-sequencer
+              # pem-file = "/path/to/file"   # required when type = pem-file and sequencer.type = bft-sequencer
+              # type = pem-file|pem-string   # required when sequencer.type = bft-sequencer
             }
           }
         }
       }
       leader-selection-policy-config-for-pv-34 {
         how-long-to-blacklist {
-          # initial-value = 0   # required when type = exponential|linear-with-parameters and type = bft-sequencer
-          # slope = 0   # required when type = linear-with-parameters and type = bft-sequencer
-          # type = linear|linear-with-parameters|exponential|no-blacklisting   # required when type = bft-sequencer
+          # initial-value = 0   # required when type = exponential|linear-with-parameters and sequencer.type = bft-sequencer
+          # slope = 0   # required when type = linear-with-parameters and sequencer.type = bft-sequencer
+          # type = linear|linear-with-parameters|exponential|no-blacklisting   # required when sequencer.type = bft-sequencer
         }
-        # how-many-can-we-blacklist = num-faults-tolerated|no-blacklisting   # required when type = bft-sequencer
+        # how-many-can-we-blacklist = num-faults-tolerated|no-blacklisting   # required when sequencer.type = bft-sequencer
       }
       standalone {
         blacklist-leader-selection-policy-config {
           how-long-to-blacklist {
-            # initial-value = 0   # required when type = exponential|linear-with-parameters and type = bft-sequencer
-            # slope = 0   # required when type = linear-with-parameters and type = bft-sequencer
-            # type = linear|linear-with-parameters|exponential|no-blacklisting   # required when type = bft-sequencer
+            # initial-value = 0   # required when type = exponential|linear-with-parameters and sequencer.type = bft-sequencer
+            # slope = 0   # required when type = linear-with-parameters and sequencer.type = bft-sequencer
+            # type = linear|linear-with-parameters|exponential|no-blacklisting   # required when sequencer.type = bft-sequencer
           }
-          # how-many-can-we-blacklist = num-faults-tolerated|no-blacklisting   # required when type = bft-sequencer
+          # how-many-can-we-blacklist = num-faults-tolerated|no-blacklisting   # required when sequencer.type = bft-sequencer
         }
-        # max-batches-per-block-proposal = 0   # required when type = bft-sequencer
-        # max-requests-in-batch = 0   # required when type = bft-sequencer
-        # pbft-view-change-timeout = "30 seconds"   # required when type = bft-sequencer
+        # max-batches-per-block-proposal = 0   # required when sequencer.type = bft-sequencer
+        # max-requests-in-batch = 0   # required when sequencer.type = bft-sequencer
+        # pbft-view-change-timeout = "30 seconds"   # required when sequencer.type = bft-sequencer
         peers = [
           {
-            # sequencer-id = "..."   # required when type = bft-sequencer
-            # signing-public-key-proto-file = "/path/to/file"   # required when type = bft-sequencer
+            # sequencer-id = "..."   # required when sequencer.type = bft-sequencer
+            # signing-public-key-proto-file = "/path/to/file"   # required when sequencer.type = bft-sequencer
           }
         ]
-        # segment-length = 0   # required when type = bft-sequencer
-        # signing-private-key-proto-file = "/path/to/file"   # required when type = bft-sequencer
-        # signing-public-key-proto-file = "/path/to/file"   # required when type = bft-sequencer
+        # segment-length = 0   # required when sequencer.type = bft-sequencer
+        # signing-private-key-proto-file = "/path/to/file"   # required when sequencer.type = bft-sequencer
+        # signing-public-key-proto-file = "/path/to/file"   # required when sequencer.type = bft-sequencer
         test-slowdown {
           post-ordering-delay {
-            # duration = "30 seconds"   # required when type = constant-distribution and type = bft-sequencer
-            # high = "30 seconds"   # required when type = linear-distribution and type = bft-sequencer
-            # low = "30 seconds"   # required when type = linear-distribution|power-distribution and type = bft-sequencer
-            # mean = "30 seconds"   # required when type = power-distribution and type = bft-sequencer
-            # type = constant-distribution|weighted-distribution|linear-distribution|power-distribution   # required when type = bft-sequencer
+            # duration = "30 seconds"   # required when type = constant-distribution and sequencer.type = bft-sequencer
+            # high = "30 seconds"   # required when type = linear-distribution and sequencer.type = bft-sequencer
+            # low = "30 seconds"   # required when type = linear-distribution|power-distribution and sequencer.type = bft-sequencer
+            # mean = "30 seconds"   # required when type = power-distribution and sequencer.type = bft-sequencer
+            # type = constant-distribution|weighted-distribution|linear-distribution|power-distribution   # required when sequencer.type = bft-sequencer
             weighted-durations = [
               {
-                # duration = "30 seconds"   # required when type = weighted-distribution and type = bft-sequencer
-                # weight = 0   # required when type = weighted-distribution and type = bft-sequencer
+                # duration = "30 seconds"   # required when sequencer.config.standalone.test-slowdown.post-ordering-delay.type = weighted-distribution and sequencer.type = bft-sequencer
+                # weight = 0   # required when sequencer.config.standalone.test-slowdown.post-ordering-delay.type = weighted-distribution and sequencer.type = bft-sequencer
               }
             ]
           }
           send-delay {
             default-delay-distribution {
-              # duration = "30 seconds"   # required when type = constant-distribution and type = bft-sequencer
-              # high = "30 seconds"   # required when type = linear-distribution and type = bft-sequencer
-              # low = "30 seconds"   # required when type = linear-distribution|power-distribution and type = bft-sequencer
-              # mean = "30 seconds"   # required when type = power-distribution and type = bft-sequencer
-              # type = constant-distribution|weighted-distribution|linear-distribution|power-distribution   # required when type = bft-sequencer
+              # duration = "30 seconds"   # required when type = constant-distribution and sequencer.type = bft-sequencer
+              # high = "30 seconds"   # required when type = linear-distribution and sequencer.type = bft-sequencer
+              # low = "30 seconds"   # required when type = linear-distribution|power-distribution and sequencer.type = bft-sequencer
+              # mean = "30 seconds"   # required when type = power-distribution and sequencer.type = bft-sequencer
+              # type = constant-distribution|weighted-distribution|linear-distribution|power-distribution   # required when sequencer.type = bft-sequencer
               weighted-durations = [
                 {
-                  # duration = "30 seconds"   # required when type = weighted-distribution and type = bft-sequencer
-                  # weight = 0   # required when type = weighted-distribution and type = bft-sequencer
+                  # duration = "30 seconds"   # required when sequencer.config.standalone.test-slowdown.send-delay.default-delay-distribution.type = weighted-distribution and sequencer.type = bft-sequencer
+                  # weight = 0   # required when sequencer.config.standalone.test-slowdown.send-delay.default-delay-distribution.type = weighted-distribution and sequencer.type = bft-sequencer
                 }
               ]
             }
             delays-by-recipients = [
               {
                 delay-distribution {
-                  # duration = "30 seconds"   # required when type = constant-distribution and type = bft-sequencer
-                  # high = "30 seconds"   # required when type = linear-distribution and type = bft-sequencer
-                  # low = "30 seconds"   # required when type = linear-distribution|power-distribution and type = bft-sequencer
-                  # mean = "30 seconds"   # required when type = power-distribution and type = bft-sequencer
-                  # type = constant-distribution|weighted-distribution|linear-distribution|power-distribution   # required when type = bft-sequencer
+                  # duration = "30 seconds"   # required when type = constant-distribution and sequencer.type = bft-sequencer
+                  # high = "30 seconds"   # required when type = linear-distribution and sequencer.type = bft-sequencer
+                  # low = "30 seconds"   # required when type = linear-distribution|power-distribution and sequencer.type = bft-sequencer
+                  # mean = "30 seconds"   # required when type = power-distribution and sequencer.type = bft-sequencer
+                  # type = constant-distribution|weighted-distribution|linear-distribution|power-distribution   # required when sequencer.type = bft-sequencer
                   weighted-durations = [
                     {
-                      # duration = "30 seconds"   # required when type = weighted-distribution and type = bft-sequencer
-                      # weight = 0   # required when type = weighted-distribution and type = bft-sequencer
+                      # duration = "30 seconds"   # required when sequencer.config.standalone.test-slowdown.send-delay.delays-by-recipients[].delay-distribution.type = weighted-distribution and sequencer.type = bft-sequencer
+                      # weight = 0   # required when sequencer.config.standalone.test-slowdown.send-delay.delays-by-recipients[].delay-distribution.type = weighted-distribution and sequencer.type = bft-sequencer
                     }
                   ]
                 }
-                # instance-names = [ ]   # required when type = bft-sequencer
+                # instance-names = [ ]   # required when sequencer.type = bft-sequencer
               }
             ]
           }
           topology-delay {
             get-ordering-topology-delay {
-              # duration = "30 seconds"   # required when type = constant-distribution and type = bft-sequencer
-              # high = "30 seconds"   # required when type = linear-distribution and type = bft-sequencer
-              # low = "30 seconds"   # required when type = linear-distribution|power-distribution and type = bft-sequencer
-              # mean = "30 seconds"   # required when type = power-distribution and type = bft-sequencer
-              # type = constant-distribution|weighted-distribution|linear-distribution|power-distribution   # required when type = bft-sequencer
+              # duration = "30 seconds"   # required when type = constant-distribution and sequencer.type = bft-sequencer
+              # high = "30 seconds"   # required when type = linear-distribution and sequencer.type = bft-sequencer
+              # low = "30 seconds"   # required when type = linear-distribution|power-distribution and sequencer.type = bft-sequencer
+              # mean = "30 seconds"   # required when type = power-distribution and sequencer.type = bft-sequencer
+              # type = constant-distribution|weighted-distribution|linear-distribution|power-distribution   # required when sequencer.type = bft-sequencer
               weighted-durations = [
                 {
-                  # duration = "30 seconds"   # required when type = weighted-distribution and type = bft-sequencer
-                  # weight = 0   # required when type = weighted-distribution and type = bft-sequencer
+                  # duration = "30 seconds"   # required when sequencer.config.standalone.test-slowdown.topology-delay.get-ordering-topology-delay.type = weighted-distribution and sequencer.type = bft-sequencer
+                  # weight = 0   # required when sequencer.config.standalone.test-slowdown.topology-delay.get-ordering-topology-delay.type = weighted-distribution and sequencer.type = bft-sequencer
                 }
               ]
             }
             request-inspection-delay {
-              # duration = "30 seconds"   # required when type = constant-distribution and type = bft-sequencer
-              # high = "30 seconds"   # required when type = linear-distribution and type = bft-sequencer
-              # low = "30 seconds"   # required when type = linear-distribution|power-distribution and type = bft-sequencer
-              # mean = "30 seconds"   # required when type = power-distribution and type = bft-sequencer
-              # type = constant-distribution|weighted-distribution|linear-distribution|power-distribution   # required when type = bft-sequencer
+              # duration = "30 seconds"   # required when type = constant-distribution and sequencer.type = bft-sequencer
+              # high = "30 seconds"   # required when type = linear-distribution and sequencer.type = bft-sequencer
+              # low = "30 seconds"   # required when type = linear-distribution|power-distribution and sequencer.type = bft-sequencer
+              # mean = "30 seconds"   # required when type = power-distribution and sequencer.type = bft-sequencer
+              # type = constant-distribution|weighted-distribution|linear-distribution|power-distribution   # required when sequencer.type = bft-sequencer
               weighted-durations = [
                 {
-                  # duration = "30 seconds"   # required when type = weighted-distribution and type = bft-sequencer
-                  # weight = 0   # required when type = weighted-distribution and type = bft-sequencer
+                  # duration = "30 seconds"   # required when sequencer.config.standalone.test-slowdown.topology-delay.request-inspection-delay.type = weighted-distribution and sequencer.type = bft-sequencer
+                  # weight = 0   # required when sequencer.config.standalone.test-slowdown.topology-delay.request-inspection-delay.type = weighted-distribution and sequencer.type = bft-sequencer
                 }
               ]
             }
           }
         }
-        # this-sequencer-id = "..."   # required when type = bft-sequencer
+        # this-sequencer-id = "..."   # required when sequencer.type = bft-sequencer
       }
       storage {
-        # type = memory|h2|postgres   # required when type = bft-sequencer
+        # type = memory|h2|postgres   # required when sequencer.type = bft-sequencer
       }
     }
     # sequencer-type = "..."   # required when type = external
     type = database|external|bft-sequencer   # required
     writer {
-      # type = low-latency|high-throughput   # required when type = database
+      # type = low-latency|high-throughput   # required when sequencer.type = database
     }
   }
   storage {
@@ -455,10 +452,6 @@ canton.sequencers.<sequencer> {
   }
 }
 ```
-
-
-</Tab>
-<Tab title="Table">
 
 | Key | Type | Required when | Description |
 |---|---|---|---|
@@ -637,16 +630,9 @@ canton.sequencers.<sequencer> {
 | `storage.type` | one of `memory`, `h2`, `postgres` | `storage` is configured | Choose one type — see [StorageConfig](/global-synchronizer/reference/canton-config/types#storageconfig). |
 | `traffic-config.batch-aggregator-config.type` | one of `batching`, `no-batching` | `traffic-config.batch-aggregator-config` is configured | Choose one type — see [BatchAggregatorConfig](/global-synchronizer/reference/canton-config/types#batchaggregatorconfig). |
 
-
-</Tab>
-</Tabs>
-
 ## All options
 
 ### Top-level keys
-
-<Tabs>
-<Tab title="HOCON">
 
 ```hocon
 canton.sequencers.<sequencer> {
@@ -656,21 +642,11 @@ canton.sequencers.<sequencer> {
 
 Takes a `type`: [AuthServiceConfig](/global-synchronizer/reference/canton-config/types#authserviceconfig) at `admin-api.auth-services[]`, [PemFileOrString](/global-synchronizer/reference/canton-config/types#pemfileorstring) at `admin-api.tls.cert-chain-file`, [ServerAuthRequirementConfig](/global-synchronizer/reference/canton-config/types#serverauthrequirementconfig) at `admin-api.tls.client-auth`, [KmsConfig](/global-synchronizer/reference/canton-config/types#kmsconfig) at `crypto.kms`, [EncryptedPrivateStoreConfig](/global-synchronizer/reference/canton-config/types#encryptedprivatestoreconfig) at `crypto.private-key-store.encryption`, [NodeIdentifierConfig](/global-synchronizer/reference/canton-config/types#nodeidentifierconfig) at `init.identity.identifier`, [IdentityConfig](/global-synchronizer/reference/canton-config/types#identityconfig) at `init.identity`, [HowLongToBlacklist](/global-synchronizer/reference/canton-config/types#howlongtoblacklist) at `sequencer.config.leader-selection-policy-config-for-pv-34.how-long-to-blacklist`, [FiniteDurationDistribution](/global-synchronizer/reference/canton-config/types#finitedurationdistribution) at `sequencer.config.standalone.test-slowdown.post-ordering-delay`, [SequencerConfig](/global-synchronizer/reference/canton-config/types#sequencerconfig) at `sequencer`, [SequencerWriterConfig](/global-synchronizer/reference/canton-config/types#sequencerwriterconfig) at `sequencer.writer`, [StorageConfig](/global-synchronizer/reference/canton-config/types#storageconfig) at `storage`, [BatchAggregatorConfig](/global-synchronizer/reference/canton-config/types#batchaggregatorconfig) at `traffic-config.batch-aggregator-config`.
 
-
-</Tab>
-<Tab title="Table">
-
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `acknowledgements-conflate-window` | duration (PositiveFiniteDuration) | `45 seconds` |  |
 
-</Tab>
-</Tabs>
-
 ### `admin-api`
-
-<Tabs>
-<Tab title="HOCON">
 
 ```hocon
 canton.sequencers.<sequencer>.admin-api {
@@ -683,7 +659,21 @@ canton.sequencers.<sequencer>.admin-api {
   }
   auth-services = [
     {
+      # access-level = wildcard   # when type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
+      # certificate = "..."   # required when type = jwt-es-256-crt|jwt-es-512-crt|jwt-rs-256-crt
+      # max-token-life = <duration>   # when type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
+      # privileged = false   # when type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
+      # secret = "..."   # required when type = unsafe-jwt-hmac-256
+      # target-audience = <string>   # when type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
+      # target-scope = <string>   # when type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
       type = wildcard|unsafe-jwt-hmac-256|jwt-rs-256-crt|jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|party-jwt   # required
+      # url = "..."   # required when type = jwt-jwks
+      users = [
+        {
+          # allowed-services = [ ]   # required when auth-services[].type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
+          # user-id = "..."   # required when auth-services[].type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
+        }
+      ]
     }
   ]
   # flow-control-window = <int>
@@ -720,16 +710,28 @@ canton.sequencers.<sequencer>.admin-api {
   port = 30006
   tls {
     cert-chain-file {
+      # pem-bytes = "..."   # required when type = pem-string
+      # pem-file = "/path/to/file"   # required when type = pem-file
       type = pem-file|pem-string   # required
     }
     # ciphers = [ ... ]
     client-auth {
+      admin-client {
+        cert-chain-file {
+          # pem-bytes = "..."   # required when tls.client-auth.type = require and type = pem-string
+          # pem-file = "/path/to/file"   # required when tls.client-auth.type = require and type = pem-file
+          # type = pem-file|pem-string   # required when tls.client-auth.type = require
+        }
+        # private-key-file = "..."   # required when tls.client-auth.type = require
+      }
       type = require|optional|none   # required
     }
     enable-cert-revocation-checking = false
     minimum-server-protocol-version = "TLSv1.2"
     private-key-file = "..."   # required
     trust-collection-file {
+      # pem-bytes = "..."   # required when type = pem-string
+      # pem-file = "/path/to/file"   # required when type = pem-file
       type = pem-file|pem-string   # required
     }
   }
@@ -737,10 +739,6 @@ canton.sequencers.<sequencer>.admin-api {
 ```
 
 Takes a `type`: [AuthServiceConfig](/global-synchronizer/reference/canton-config/types#authserviceconfig) at `auth-services[]`, [PemFileOrString](/global-synchronizer/reference/canton-config/types#pemfileorstring) at `tls.cert-chain-file`, [ServerAuthRequirementConfig](/global-synchronizer/reference/canton-config/types#serverauthrequirementconfig) at `tls.client-auth`.
-
-
-</Tab>
-<Tab title="Table">
 
 | Key | Type | Default | Description |
 |---|---|---|---|
@@ -864,13 +862,7 @@ Takes a `type`: [AuthServiceConfig](/global-synchronizer/reference/canton-config
 |     **trust-collection-file** `type = pem-string` |  |  |  |
 |         `pem-bytes` | string | **required** |  |
 
-</Tab>
-</Tabs>
-
 ### `crypto`
-
-<Tabs>
-<Tab title="HOCON">
 
 ```hocon
 canton.sequencers.<sequencer>.crypto {
@@ -890,6 +882,20 @@ canton.sequencers.<sequencer>.crypto {
     # default = <generic>
   }
   kms {
+    # audit-logging = false   # when type = aws|gcp
+    # config = { }   # required when type = driver
+    custom-tags {
+      # <custom-tag> = [ ]   # when kms.type = aws
+    }
+    # disable-ssl-verification = false   # when type = aws
+    # endpoint-override = <string>   # when type = aws|gcp
+    # health-check-period = "10 seconds"   # when type = driver
+    # key-ring-id = "..."   # required when type = gcp
+    # location-id = "..."   # required when type = gcp
+    # multi-region-key = false   # when type = aws
+    # name = "..."   # required when type = driver
+    # project-id = "..."   # required when type = gcp
+    # region = "..."   # required when type = aws
     retries {
       create-key-check {
         initial-delay = "30 seconds"   # required
@@ -948,10 +954,6 @@ canton.sequencers.<sequencer>.crypto {
 ```
 
 Takes a `type`: [KmsConfig](/global-synchronizer/reference/canton-config/types#kmsconfig) at `kms`, [EncryptedPrivateStoreConfig](/global-synchronizer/reference/canton-config/types#encryptedprivatestoreconfig) at `private-key-store.encryption`.
-
-
-</Tab>
-<Tab title="Table">
 
 | Key | Type | Default | Description |
 |---|---|---|---|
@@ -1027,13 +1029,7 @@ Takes a `type`: [KmsConfig](/global-synchronizer/reference/canton-config/types#k
 |     `allowed` | array of S | _unset_ | The optional allowed schemes to use. If none is specified, all the provider's supported schemes of kind S are allowed. |
 |     `default` | depends on use (S) | _unset_ | The optional scheme to use. If none is specified, use the provider's default scheme of kind S. |
 
-</Tab>
-</Tabs>
-
 ### `declarative`
-
-<Tabs>
-<Tab title="HOCON">
 
 ```hocon
 canton.sequencers.<sequencer>.declarative {
@@ -1050,10 +1046,6 @@ canton.sequencers.<sequencer>.declarative {
 }
 ```
 
-
-</Tab>
-<Tab title="Table">
-
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `check-self-consistency` | boolean | `false` |  |
@@ -1065,13 +1057,7 @@ canton.sequencers.<sequencer>.declarative {
 |         `per-client-kbps-cap` | number (PositiveDouble) | `1000` |  |
 |         `per-client-tps-cap` | number (PositiveDouble) | `4` |  |
 
-</Tab>
-</Tabs>
-
 ### `health`
-
-<Tabs>
-<Tab title="HOCON">
 
 ```hocon
 canton.sequencers.<sequencer>.health {
@@ -1079,37 +1065,29 @@ canton.sequencers.<sequencer>.health {
 }
 ```
 
-
-</Tab>
-<Tab title="Table">
-
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `backend-check-period` | duration (NonNegativeFiniteDuration) | `5 seconds` | interval with which the sequencer will poll the health of its backend connection or state. |
 
-</Tab>
-</Tabs>
-
 ### `init`
-
-<Tabs>
-<Tab title="HOCON">
 
 ```hocon
 canton.sequencers.<sequencer>.init {
   generate-intermediate-key = false
   generate-topology-transactions-and-keys = true
   identity {
+    # certificates = [ ]   # when type = external
+    identifier {
+      # name = "..."   # required when identity.type = auto and type = explicit
+      # type = random|explicit|config   # required when identity.type = auto
+    }
+    # namespace = <string>   # when type = external
     type = external|auto|manual   # required
   }
 }
 ```
 
 Takes a `type`: [NodeIdentifierConfig](/global-synchronizer/reference/canton-config/types#nodeidentifierconfig) at `identity.identifier`, [IdentityConfig](/global-synchronizer/reference/canton-config/types#identityconfig) at `identity`.
-
-
-</Tab>
-<Tab title="Table">
 
 | Key | Type | Default | Description |
 |---|---|---|---|
@@ -1127,13 +1105,7 @@ Takes a `type`: [NodeIdentifierConfig](/global-synchronizer/reference/canton-con
 |     **identifier** `type = explicit` |  |  |  |
 |         `name` | string | **required** | name to use as identifier |
 
-</Tab>
-</Tabs>
-
 ### `monitoring`
-
-<Tabs>
-<Tab title="HOCON">
 
 ```hocon
 canton.sequencers.<sequencer>.monitoring {
@@ -1161,10 +1133,6 @@ canton.sequencers.<sequencer>.monitoring {
 }
 ```
 
-
-</Tab>
-<Tab title="Table">
-
 | Key | Type | Default | Description |
 |---|---|---|---|
 | **grpc-health-server** |  |  |  |
@@ -1185,13 +1153,7 @@ canton.sequencers.<sequencer>.monitoring {
 |     `address` | string | `0.0.0.0` |  |
 |     `port` | int (Port) | **required** |  |
 
-</Tab>
-</Tabs>
-
 ### `parameters`
-
-<Tabs>
-<Tab title="HOCON">
 
 ```hocon
 canton.sequencers.<sequencer>.parameters {
@@ -1203,11 +1165,15 @@ canton.sequencers.<sequencer>.parameters {
   }
   batching {
     aggregator {
+      # max-parallel-batches = 2   # when type = no-batching
       maximum-batch-size = 500
+      # maximum-in-flight = 2   # when type = batching
       type = batching|no-batching   # required
     }
     contract-store-aggregator {
+      # max-parallel-batches = 2   # when type = no-batching
       maximum-batch-size = 500
+      # maximum-in-flight = 2   # when type = batching
       type = batching|no-batching   # required
     }
     # in-flight-aggregations-query-interval = <duration>
@@ -1220,17 +1186,23 @@ canton.sequencers.<sequencer>.parameters {
     max-topology-update-batch-size = 1000
     max-topology-write-batch-size = 1000
     mediator-fetch-finalized-responses-aggregator {
+      # max-parallel-batches = 2   # when type = no-batching
       maximum-batch-size = 500
+      # maximum-in-flight = 2   # when type = batching
       type = batching|no-batching   # required
     }
     mediator-store-finalized-responses-aggregator {
+      # max-parallel-batches = 2   # when type = no-batching
       maximum-batch-size = 500
+      # maximum-in-flight = 2   # when type = batching
       type = batching|no-batching   # required
     }
     parallelism = 8
     pruning-parallelism = 2
     topology-cache-aggregator {
+      # max-parallel-batches = 2   # when type = no-batching
       maximum-batch-size = 500
+      # maximum-in-flight = 2   # when type = batching
       type = batching|no-batching   # required
     }
   }
@@ -1352,10 +1324,6 @@ canton.sequencers.<sequencer>.parameters {
 ```
 
 Takes a `type`: [BatchAggregatorConfig](/global-synchronizer/reference/canton-config/types#batchaggregatorconfig) at `batching.aggregator`.
-
-
-</Tab>
-<Tab title="Table">
 
 | Key | Type | Default | Description |
 |---|---|---|---|
@@ -1500,13 +1468,7 @@ Takes a `type`: [BatchAggregatorConfig](/global-synchronizer/reference/canton-co
 |     `enabled` | boolean | **required** |  |
 |     `kill-delay` | duration (NonNegativeFiniteDuration) | `NonNegativeFiniteDuration(30.seconds)` ‡ |  |
 
-</Tab>
-</Tabs>
-
 ### `public-api`
-
-<Tabs>
-<Tab title="HOCON">
 
 ```hocon
 canton.sequencers.<sequencer>.public-api {
@@ -1543,6 +1505,8 @@ canton.sequencers.<sequencer>.public-api {
   port = 30005
   tls {
     cert-chain-file {
+      # pem-bytes = "..."   # required when type = pem-string
+      # pem-file = "/path/to/file"   # required when type = pem-file
       type = pem-file|pem-string   # required
     }
     # ciphers = [ ... ]
@@ -1554,10 +1518,6 @@ canton.sequencers.<sequencer>.public-api {
 ```
 
 Takes a `type`: [PemFileOrString](/global-synchronizer/reference/canton-config/types#pemfileorstring) at `tls.cert-chain-file`.
-
-
-</Tab>
-<Tab title="Table">
 
 | Key | Type | Default | Description |
 |---|---|---|---|
@@ -1600,13 +1560,7 @@ Takes a `type`: [PemFileOrString](/global-synchronizer/reference/canton-config/t
 |     **cert-chain-file** `type = pem-string` |  |  |  |
 |         `pem-bytes` | string | **required** |  |
 
-</Tab>
-</Tabs>
-
 ### `replication`
-
-<Tabs>
-<Tab title="HOCON">
 
 ```hocon
 canton.sequencers.<sequencer>.replication {
@@ -1637,10 +1591,6 @@ canton.sequencers.<sequencer>.replication {
 }
 ```
 
-
-</Tab>
-<Tab title="Table">
-
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `enabled` | boolean | _unset_ | Needs to be set to true for a replicated node, which shares the database with other replicas. |
@@ -1665,13 +1615,7 @@ canton.sequencers.<sequencer>.replication {
 |             `health-check-period` | duration (PositiveFiniteDuration) | `5 seconds` | Health check period, i.e., how long to wait between one health check completed and the next to start. |
 |             `health-check-timeout` | duration (PositiveFiniteDuration) | `15 seconds` | Timeout for running a health check in seconds granularity. |
 
-</Tab>
-</Tabs>
-
 ### `sequencer-client`
-
-<Tabs>
-<Tab title="HOCON">
 
 ```hocon
 canton.sequencers.<sequencer>.sequencer-client {
@@ -1717,10 +1661,6 @@ canton.sequencers.<sequencer>.sequencer-client {
 }
 ```
 
-
-</Tab>
-<Tab title="Table">
-
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `acknowledgement-interval` | duration (NonNegativeFiniteDuration) | `1 minute` | Controls how frequently the client acknowledges how far it has successfully processed to the sequencer which allows the sequencer to remove this data when pruning. |
@@ -1759,13 +1699,7 @@ canton.sequencers.<sequencer>.sequencer-client {
 |     `time` | duration (NonNegativeFiniteDuration) | `40 seconds` | Sets the time without read activity before sending a keepalive ping. Do not set to small numbers (default is 40s) |
 |     `timeout` | duration (NonNegativeFiniteDuration) | `15 seconds` | Sets the time waiting for read activity after sending a keepalive ping (default is 15s). The default timeout was previously 20s and was lowered to 15s, because besides configuring the gRPC KeepAliveManager, it also sets up the socket's TCP_USER_TIMEOUT (see html). 15s gives a larger margin to detect a faulty connection earlier and retry a submission on another sequencer via amplification, thereby avoiding a request failure. |
 
-</Tab>
-</Tabs>
-
 ### `sequencer-limits`
-
-<Tabs>
-<Tab title="HOCON">
 
 ```hocon
 canton.sequencers.<sequencer>.sequencer-limits {
@@ -1774,34 +1708,559 @@ canton.sequencers.<sequencer>.sequencer-limits {
 }
 ```
 
-
-</Tab>
-<Tab title="Table">
-
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `max-client-protocol-versions` | int (PositiveInt) | `1000` | maximum number of entries accepted in handshake `clientProtocolVersions` |
 | `max-member-protocol-versions` | int (PositiveInt) | `1000` | maximum number of entries accepted in authentication challenge `memberProtocolVersions` |
 
-</Tab>
-</Tabs>
-
 ### `sequencer`
-
-<Tabs>
-<Tab title="HOCON">
 
 ```hocon
 canton.sequencers.<sequencer>.sequencer {
+  block {
+    circuit-breaker {
+      # enabled = true   # when type = bft-sequencer|external
+      messages {
+        acknowledgement {
+          # allowed-block-delay = "90 seconds"   # when type = bft-sequencer|external
+          # exponential-backoff-factor = 1   # when type = bft-sequencer|external
+          # max-failures = 10   # when type = bft-sequencer|external
+          # max-reset-timeout = "36500 days"   # when type = bft-sequencer|external
+          # reset-timeout = "30 seconds"   # when type = bft-sequencer|external
+        }
+        commitment {
+          # allowed-block-delay = "90 seconds"   # when type = bft-sequencer|external
+          # exponential-backoff-factor = 1   # when type = bft-sequencer|external
+          # max-failures = 10   # when type = bft-sequencer|external
+          # max-reset-timeout = "36500 days"   # when type = bft-sequencer|external
+          # reset-timeout = "30 seconds"   # when type = bft-sequencer|external
+        }
+        confirmation-request {
+          # allowed-block-delay = "90 seconds"   # when type = bft-sequencer|external
+          # exponential-backoff-factor = 1   # when type = bft-sequencer|external
+          # max-failures = 10   # when type = bft-sequencer|external
+          # max-reset-timeout = "36500 days"   # when type = bft-sequencer|external
+          # reset-timeout = "30 seconds"   # when type = bft-sequencer|external
+        }
+        confirmation-response {
+          # allowed-block-delay = "90 seconds"   # when type = bft-sequencer|external
+          # exponential-backoff-factor = 1   # when type = bft-sequencer|external
+          # max-failures = 10   # when type = bft-sequencer|external
+          # max-reset-timeout = "36500 days"   # when type = bft-sequencer|external
+          # reset-timeout = "30 seconds"   # when type = bft-sequencer|external
+        }
+        lsu-sequencing-test {
+          # allowed-block-delay = "90 seconds"   # when type = bft-sequencer|external
+          # exponential-backoff-factor = 1   # when type = bft-sequencer|external
+          # max-failures = 10   # when type = bft-sequencer|external
+          # max-reset-timeout = "36500 days"   # when type = bft-sequencer|external
+          # reset-timeout = "30 seconds"   # when type = bft-sequencer|external
+        }
+        time-proof {
+          # allowed-block-delay = "90 seconds"   # when type = bft-sequencer|external
+          # exponential-backoff-factor = 1   # when type = bft-sequencer|external
+          # max-failures = 10   # when type = bft-sequencer|external
+          # max-reset-timeout = "36500 days"   # when type = bft-sequencer|external
+          # reset-timeout = "30 seconds"   # when type = bft-sequencer|external
+        }
+        top-up {
+          # allowed-block-delay = "90 seconds"   # when type = bft-sequencer|external
+          # exponential-backoff-factor = 1   # when type = bft-sequencer|external
+          # max-failures = 10   # when type = bft-sequencer|external
+          # max-reset-timeout = "36500 days"   # when type = bft-sequencer|external
+          # reset-timeout = "30 seconds"   # when type = bft-sequencer|external
+        }
+        topology {
+          # allowed-block-delay = "90 seconds"   # when type = bft-sequencer|external
+          # exponential-backoff-factor = 1   # when type = bft-sequencer|external
+          # max-failures = 10   # when type = bft-sequencer|external
+          # max-reset-timeout = "36500 days"   # when type = bft-sequencer|external
+          # reset-timeout = "30 seconds"   # when type = bft-sequencer|external
+        }
+        unexpected {
+          # allowed-block-delay = "90 seconds"   # when type = bft-sequencer|external
+          # exponential-backoff-factor = 1   # when type = bft-sequencer|external
+          # max-failures = 10   # when type = bft-sequencer|external
+          # max-reset-timeout = "36500 days"   # when type = bft-sequencer|external
+          # reset-timeout = "30 seconds"   # when type = bft-sequencer|external
+        }
+        verdict {
+          # allowed-block-delay = "90 seconds"   # when type = bft-sequencer|external
+          # exponential-backoff-factor = 1   # when type = bft-sequencer|external
+          # max-failures = 10   # when type = bft-sequencer|external
+          # max-reset-timeout = "36500 days"   # when type = bft-sequencer|external
+          # reset-timeout = "30 seconds"   # when type = bft-sequencer|external
+        }
+      }
+    }
+    reader {
+      # checkpoint-interval = "5 seconds"   # when type = bft-sequencer|external
+      # event-generation-parallelism = 4   # when type = bft-sequencer|external
+      # payload-batch-size = 10   # when type = bft-sequencer|external
+      # payload-batch-window = "5 milliseconds"   # when type = bft-sequencer|external
+      # payload-fetch-parallelism = 2   # when type = bft-sequencer|external
+      # polling-interval = <duration>   # when type = bft-sequencer|external
+      # read-batch-size = 100   # when type = bft-sequencer|external
+    }
+    stream-instrumentation {
+      # buffer-size = 256   # when type = bft-sequencer|external
+      # is-enabled = false   # when type = bft-sequencer|external
+    }
+    # testing-interceptor = <string>   # when type = bft-sequencer|external
+    throughput-cap {
+      # clock-tick-interval = "100 milliseconds"   # when type = bft-sequencer|external
+      # delayed-activation = true   # when type = bft-sequencer|external
+      # enabled = false   # when type = bft-sequencer|external
+      messages {
+        confirmation-request {
+          # global-kbps-cap = 2000   # when type = bft-sequencer|external
+          # global-tps-cap = 10   # when type = bft-sequencer|external
+          # per-client-kbps-cap = 1000   # when type = bft-sequencer|external
+          # per-client-tps-cap = 4   # when type = bft-sequencer|external
+        }
+        confirmation-response {
+          # global-kbps-cap = 2000   # when type = bft-sequencer|external
+          # global-tps-cap = 10   # when type = bft-sequencer|external
+          # per-client-kbps-cap = 1000   # when type = bft-sequencer|external
+          # per-client-tps-cap = 4   # when type = bft-sequencer|external
+        }
+        topology {
+          # global-kbps-cap = 2000   # when type = bft-sequencer|external
+          # global-tps-cap = 10   # when type = bft-sequencer|external
+          # per-client-kbps-cap = 1000   # when type = bft-sequencer|external
+          # per-client-tps-cap = 4   # when type = bft-sequencer|external
+        }
+      }
+      # observation-period-seconds = 60   # when type = bft-sequencer|external
+      # strict = true   # when type = bft-sequencer|external
+      # thresholds = [ ]   # when type = bft-sequencer|external
+      # update-every-ms = 100   # when type = bft-sequencer|external
+    }
+    writer {
+      # buffered-events-max-memory = 8388608   # when type = bft-sequencer|external
+      # buffered-events-preload-batch-size = 50   # when type = bft-sequencer|external
+      # checkpoint-backfill-parallelism = 2   # when type = bft-sequencer|external
+      # checkpoint-interval = "30 seconds"   # when type = bft-sequencer|external
+      # commit-mode-validation = synchronous   # when type = bft-sequencer|external
+      # event-write-batch-max-size = 1   # when type = bft-sequencer|external and type = low-latency
+      # event-write-max-concurrency = 1   # when type = bft-sequencer|external
+      # payload-queue-size = 1000   # when type = bft-sequencer|external
+      # payload-to-event-margin = "60 seconds"   # when type = bft-sequencer|external
+      # payload-write-batch-max-size = 1   # when type = bft-sequencer|external and type = low-latency
+      # payload-write-max-concurrency = 2   # when type = bft-sequencer|external and type = low-latency
+      # type = low-latency|high-throughput   # required when type = bft-sequencer|external
+    }
+  }
+  config {
+    # availability-dissemination-patience = "5 seconds"   # when type = bft-sequencer
+    # availability-max-non-ordered-batches-per-node = 1000   # when type = bft-sequencer
+    # availability-min-proposal-creation-delay = "250 milliseconds"   # when type = bft-sequencer
+    # availability-number-of-attempts-of-downloading-output-fetch-before-warning = 5   # when type = bft-sequencer
+    batch-aggregator {
+      # max-parallel-batches = 2   # when type = bft-sequencer and type = no-batching
+      # maximum-batch-size = 500   # when type = bft-sequencer
+      # maximum-in-flight = 2   # when type = bft-sequencer and type = batching
+      # type = batching|no-batching   # required when type = bft-sequencer
+    }
+    # blocking-db-read-timeout = "1 minute"   # when type = bft-sequencer
+    # consensus-block-completion-timeout = "10 seconds"   # when type = bft-sequencer
+    # consensus-empty-block-creation-timeout = "500 milliseconds"   # when type = bft-sequencer
+    # consensus-enable-flushing-segment = true   # when type = bft-sequencer
+    # consensus-enable-log-end-of-epoch-progress = false   # when type = bft-sequencer
+    # consensus-flushing-min-blocks = 2   # when type = bft-sequencer
+    # consensus-new-epoch-topology-warn-timeout = "2 seconds"   # when type = bft-sequencer
+    # consensus-queue-max-size = <int>   # when type = bft-sequencer
+    # consensus-queue-per-node-quota = 1024   # when type = bft-sequencer
+    # dedicated-execution-context-divisor = <int>   # when type = bft-sequencer
+    # delayed-init-queue-max-size = 1024   # when type = bft-sequencer
+    # enable-performance-metrics = true   # when type = bft-sequencer
+    # epoch-state-transfer-future-epoch-queue-max-size = <int>   # when type = bft-sequencer
+    # epoch-state-transfer-future-epoch-queue-per-node-quota = 1024   # when type = bft-sequencer
+    # epoch-state-transfer-how-many-future-epochs-to-download-in-parallel = 5   # when type = bft-sequencer
+    # epoch-state-transfer-retry-timeout = "4 seconds"   # when type = bft-sequencer
+    # epoch-state-transfer-timeout-for-future-epoch = "500 milliseconds"   # when type = bft-sequencer
+    # init-query-timeout = <duration>   # when type = bft-sequencer
+    # init-timeout = <duration>   # when type = bft-sequencer
+    initial-network {
+      connection-management-config {
+        # connection-retry-delay-multiplier = <int>   # when type = bft-sequencer
+        # flow-control-buffer = 128   # when type = bft-sequencer
+        # flow-control-buffer-drop-newest = false   # when type = bft-sequencer
+        # flow-control-ready-allowance = <int>   # when type = bft-sequencer
+        # initial-connection-max-delay = "500 milliseconds"   # when type = bft-sequencer
+        # initial-connection-retry-delay = "500 milliseconds"   # when type = bft-sequencer
+        # max-connection-attempts-before-warning = 30   # when type = bft-sequencer
+        # max-connection-retry-delay = "2 minutes"   # when type = bft-sequencer
+      }
+      endpoint-authentication {
+        auth-token {
+          backoff {
+            # base = 2   # when type = bft-sequencer
+            jitter {
+              # type = equal|full   # required when type = bft-sequencer
+            }
+            # max-retry-interval = "2 minutes"   # when type = bft-sequencer
+          }
+          # min-retry-interval = "500 milliseconds"   # when type = bft-sequencer
+          # refresh-auth-token-before-expiry = "20 seconds"   # when type = bft-sequencer
+          # retries = 20   # when type = bft-sequencer
+        }
+        # enabled = true   # when type = bft-sequencer
+      }
+      # overwrite-stored-endpoints = false   # when type = bft-sequencer
+      peer-endpoints = [
+        {
+          # address = "..."   # required when type = bft-sequencer
+          channel {
+            # flow-control-window = <int>   # when type = bft-sequencer
+            # initial-flow-control-window = <int>   # when type = bft-sequencer
+            keep-alive-client {
+              # idle-timeout = "30 minutes"   # when type = bft-sequencer
+              # keep-alive-without-calls = false   # when type = bft-sequencer
+              # time = "40 seconds"   # when type = bft-sequencer
+              # timeout = "15 seconds"   # when type = bft-sequencer
+            }
+            # max-inbound-message-size = 0   # required when type = bft-sequencer
+            # trace-context-propagation = enabled|disabled   # required when type = bft-sequencer
+          }
+          # port = 0   # required when type = bft-sequencer
+          tls-config {
+            client-cert {
+              cert-chain-file {
+                # pem-bytes = "..."   # required when type = bft-sequencer and type = pem-string
+                # pem-file = "/path/to/file"   # required when type = bft-sequencer and type = pem-file
+                # type = pem-file|pem-string   # required when type = bft-sequencer
+              }
+              # private-key-file = "..."   # required when type = bft-sequencer
+            }
+            # enabled = true   # when type = bft-sequencer
+            trust-collection-file {
+              # pem-bytes = "..."   # required when type = bft-sequencer and type = pem-string
+              # pem-file = "/path/to/file"   # required when type = bft-sequencer and type = pem-file
+              # type = pem-file|pem-string   # required when type = bft-sequencer
+            }
+          }
+        }
+      ]
+      server-endpoint {
+        # address = "..."   # required when type = bft-sequencer
+        # external-address = "..."   # required when type = bft-sequencer
+        # external-port = 0   # required when type = bft-sequencer
+        external-tls-config {
+          client-cert {
+            cert-chain-file {
+              # pem-bytes = "..."   # required when type = bft-sequencer and type = pem-string
+              # pem-file = "/path/to/file"   # required when type = bft-sequencer and type = pem-file
+              # type = pem-file|pem-string   # required when type = bft-sequencer
+            }
+            # private-key-file = "..."   # required when type = bft-sequencer
+          }
+          # enabled = true   # when type = bft-sequencer
+          trust-collection-file {
+            # pem-bytes = "..."   # required when type = bft-sequencer and type = pem-string
+            # pem-file = "/path/to/file"   # required when type = bft-sequencer and type = pem-file
+            # type = pem-file|pem-string   # required when type = bft-sequencer
+          }
+        }
+        # flow-control-window = <int>   # when type = bft-sequencer
+        # initial-flow-control-window = <int>   # when type = bft-sequencer
+        keep-alive-server {
+          # permit-keep-alive-time = "20 seconds"   # when type = bft-sequencer
+          # permit-keep-alive-without-calls = false   # when type = bft-sequencer
+          # time = "40 seconds"   # when type = bft-sequencer
+          # timeout = "20 seconds"   # when type = bft-sequencer
+        }
+        limits {
+          active {
+            # <key> = [ ]   # when type = bft-sequencer
+          }
+          # throttle-logging-rate-per-second = 10   # when type = bft-sequencer
+          # warn-on-undefined-limits = false   # when type = bft-sequencer
+        }
+        # max-concurrent-calls-per-connection = 100000   # when type = bft-sequencer
+        # max-inbound-message-size = <int>   # when type = bft-sequencer
+        # port = <int>   # when type = bft-sequencer
+        tls {
+          cert-chain-file {
+            # pem-bytes = "..."   # required when type = bft-sequencer and type = pem-string
+            # pem-file = "/path/to/file"   # required when type = bft-sequencer and type = pem-file
+            # type = pem-file|pem-string   # required when type = bft-sequencer
+          }
+          # ciphers = [ ... ]   # when type = bft-sequencer
+          client-auth {
+            admin-client {
+              cert-chain-file {
+                # pem-bytes = "..."   # required when type = bft-sequencer and config.initial-network.server-endpoint.tls.client-auth.type = require and type = pem-string
+                # pem-file = "/path/to/file"   # required when type = bft-sequencer and config.initial-network.server-endpoint.tls.client-auth.type = require and type = pem-file
+                # type = pem-file|pem-string   # required when type = bft-sequencer and config.initial-network.server-endpoint.tls.client-auth.type = require
+              }
+              # private-key-file = "..."   # required when type = bft-sequencer and config.initial-network.server-endpoint.tls.client-auth.type = require
+            }
+            # type = require|optional|none   # required when type = bft-sequencer
+          }
+          # enable-cert-revocation-checking = false   # when type = bft-sequencer
+          # minimum-server-protocol-version = "TLSv1.2"   # when type = bft-sequencer
+          # private-key-file = "..."   # required when type = bft-sequencer
+          trust-collection-file {
+            # pem-bytes = "..."   # required when type = bft-sequencer and type = pem-string
+            # pem-file = "/path/to/file"   # required when type = bft-sequencer and type = pem-file
+            # type = pem-file|pem-string   # required when type = bft-sequencer
+          }
+        }
+      }
+    }
+    leader-selection-policy-config-for-pv-34 {
+      how-long-to-blacklist {
+        # initial-value = 0   # required when type = bft-sequencer and type = exponential|linear-with-parameters
+        # maximum-epoch-blacklisted = <int>   # when type = bft-sequencer and type = exponential|linear|linear-with-parameters
+        # slope = 0   # required when type = bft-sequencer and type = linear-with-parameters
+        # type = linear|linear-with-parameters|exponential|no-blacklisting   # required when type = bft-sequencer
+      }
+      # how-many-can-we-blacklist = num-faults-tolerated|no-blacklisting   # required when type = bft-sequencer
+    }
+    # manual-vacuum-enabled = false   # when type = bft-sequencer
+    # max-batch-creation-interval = "100 milliseconds"   # when type = bft-sequencer
+    # max-mempool-queue-size = <int>   # when type = bft-sequencer
+    # min-requests-in-batch = 3   # when type = bft-sequencer
+    # network-send-attempts = 5   # when type = bft-sequencer
+    # network-send-retry-jitter-cap = <duration>   # when type = bft-sequencer
+    # network-send-retry-minimum-delay = <duration>   # when type = bft-sequencer
+    # output-enqueue-max-retries = <int>   # when type = bft-sequencer
+    # output-enqueue-max-retry-delay = "5 seconds"   # when type = bft-sequencer
+    # output-fetch-how-many-recipients = 2   # when type = bft-sequencer
+    # output-fetch-minimum-delay = "200 milliseconds"   # when type = bft-sequencer
+    # output-fetch-timeout = "200 milliseconds"   # when type = bft-sequencer
+    # output-fetch-timeout-cap = "200 milliseconds"   # when type = bft-sequencer
+    # output-size-of-chunk-of-epochs-to-load-at-start = 10   # when type = bft-sequencer
+    # segment-length-for-pv-34 = <int>   # when type = bft-sequencer
+    # send-blacklist-ttl = "3 minutes"   # when type = bft-sequencer
+    sequencer-core-subscription-config {
+      # pause-orderer-threshold-buffer-size = 5000   # when type = bft-sequencer
+      # pekko-queue-source-buffer-size = 5000   # when type = bft-sequencer
+      # resume-orderer-threshold-buffer-size = 1000   # when type = bft-sequencer
+    }
+    standalone {
+      blacklist-leader-selection-policy-config {
+        how-long-to-blacklist {
+          # initial-value = 0   # required when type = bft-sequencer and type = exponential|linear-with-parameters
+          # maximum-epoch-blacklisted = <int>   # when type = bft-sequencer and type = exponential|linear|linear-with-parameters
+          # slope = 0   # required when type = bft-sequencer and type = linear-with-parameters
+          # type = linear|linear-with-parameters|exponential|no-blacklisting   # required when type = bft-sequencer
+        }
+        # how-many-can-we-blacklist = num-faults-tolerated|no-blacklisting   # required when type = bft-sequencer
+      }
+      # max-batches-per-block-proposal = 0   # required when type = bft-sequencer
+      # max-requests-in-batch = 0   # required when type = bft-sequencer
+      # pbft-view-change-timeout = "30 seconds"   # required when type = bft-sequencer
+      peers = [
+        {
+          # sequencer-id = "..."   # required when type = bft-sequencer
+          # signing-public-key-proto-file = "/path/to/file"   # required when type = bft-sequencer
+        }
+      ]
+      # segment-length = 0   # required when type = bft-sequencer
+      # signing-private-key-proto-file = "/path/to/file"   # required when type = bft-sequencer
+      # signing-public-key-proto-file = "/path/to/file"   # required when type = bft-sequencer
+      test-slowdown {
+        post-ordering-delay {
+          # duration = "30 seconds"   # required when type = bft-sequencer and type = constant-distribution
+          # high = "30 seconds"   # required when type = bft-sequencer and type = linear-distribution
+          # low = "30 seconds"   # required when type = bft-sequencer and type = linear-distribution|power-distribution
+          # mean = "30 seconds"   # required when type = bft-sequencer and type = power-distribution
+          # type = constant-distribution|weighted-distribution|linear-distribution|power-distribution   # required when type = bft-sequencer
+          weighted-durations = [
+            {
+              # duration = "30 seconds"   # required when type = bft-sequencer and config.standalone.test-slowdown.post-ordering-delay.type = weighted-distribution
+              # weight = 0   # required when type = bft-sequencer and config.standalone.test-slowdown.post-ordering-delay.type = weighted-distribution
+            }
+          ]
+        }
+        send-delay {
+          default-delay-distribution {
+            # duration = "30 seconds"   # required when type = bft-sequencer and type = constant-distribution
+            # high = "30 seconds"   # required when type = bft-sequencer and type = linear-distribution
+            # low = "30 seconds"   # required when type = bft-sequencer and type = linear-distribution|power-distribution
+            # mean = "30 seconds"   # required when type = bft-sequencer and type = power-distribution
+            # type = constant-distribution|weighted-distribution|linear-distribution|power-distribution   # required when type = bft-sequencer
+            weighted-durations = [
+              {
+                # duration = "30 seconds"   # required when type = bft-sequencer and config.standalone.test-slowdown.send-delay.default-delay-distribution.type = weighted-distribution
+                # weight = 0   # required when type = bft-sequencer and config.standalone.test-slowdown.send-delay.default-delay-distribution.type = weighted-distribution
+              }
+            ]
+          }
+          delays-by-recipients = [
+            {
+              delay-distribution {
+                # duration = "30 seconds"   # required when type = bft-sequencer and type = constant-distribution
+                # high = "30 seconds"   # required when type = bft-sequencer and type = linear-distribution
+                # low = "30 seconds"   # required when type = bft-sequencer and type = linear-distribution|power-distribution
+                # mean = "30 seconds"   # required when type = bft-sequencer and type = power-distribution
+                # type = constant-distribution|weighted-distribution|linear-distribution|power-distribution   # required when type = bft-sequencer
+                weighted-durations = [
+                  {
+                    # duration = "30 seconds"   # required when type = bft-sequencer and config.standalone.test-slowdown.send-delay.delays-by-recipients[].delay-distribution.type = weighted-distribution
+                    # weight = 0   # required when type = bft-sequencer and config.standalone.test-slowdown.send-delay.delays-by-recipients[].delay-distribution.type = weighted-distribution
+                  }
+                ]
+              }
+              # instance-names = [ ]   # required when type = bft-sequencer
+              # probability-of-grpc-send-accepted-by-flow-control = <number>   # when type = bft-sequencer
+              # probability-of-grpc-send-success = <number>   # when type = bft-sequencer
+            }
+          ]
+        }
+        topology-delay {
+          # broadcast-request-probability = <number>   # when type = bft-sequencer
+          get-ordering-topology-delay {
+            # duration = "30 seconds"   # required when type = bft-sequencer and type = constant-distribution
+            # high = "30 seconds"   # required when type = bft-sequencer and type = linear-distribution
+            # low = "30 seconds"   # required when type = bft-sequencer and type = linear-distribution|power-distribution
+            # mean = "30 seconds"   # required when type = bft-sequencer and type = power-distribution
+            # type = constant-distribution|weighted-distribution|linear-distribution|power-distribution   # required when type = bft-sequencer
+            weighted-durations = [
+              {
+                # duration = "30 seconds"   # required when type = bft-sequencer and config.standalone.test-slowdown.topology-delay.get-ordering-topology-delay.type = weighted-distribution
+                # weight = 0   # required when type = bft-sequencer and config.standalone.test-slowdown.topology-delay.get-ordering-topology-delay.type = weighted-distribution
+              }
+            ]
+          }
+          # pending-topology-changes-probability = <number>   # when type = bft-sequencer
+          # possible-ordering-topology-change-in-request-probability = <number>   # when type = bft-sequencer
+          request-inspection-delay {
+            # duration = "30 seconds"   # required when type = bft-sequencer and type = constant-distribution
+            # high = "30 seconds"   # required when type = bft-sequencer and type = linear-distribution
+            # low = "30 seconds"   # required when type = bft-sequencer and type = linear-distribution|power-distribution
+            # mean = "30 seconds"   # required when type = bft-sequencer and type = power-distribution
+            # type = constant-distribution|weighted-distribution|linear-distribution|power-distribution   # required when type = bft-sequencer
+            weighted-durations = [
+              {
+                # duration = "30 seconds"   # required when type = bft-sequencer and config.standalone.test-slowdown.topology-delay.request-inspection-delay.type = weighted-distribution
+                # weight = 0   # required when type = bft-sequencer and config.standalone.test-slowdown.topology-delay.request-inspection-delay.type = weighted-distribution
+              }
+            ]
+          }
+        }
+      }
+      # this-sequencer-id = "..."   # required when type = bft-sequencer
+    }
+    storage {
+      parameters {
+        connection-allocation {
+          # num-ledger-api = <int>   # when type = bft-sequencer
+          # num-reads = <int>   # when type = bft-sequencer
+          # num-writes = <int>   # when type = bft-sequencer
+        }
+        # connection-timeout = "5 seconds"   # when type = bft-sequencer
+        # fail-fast-on-startup = true   # when type = bft-sequencer
+        # failed-to-fatal-delay = "5 minutes"   # when type = bft-sequencer
+        # max-connections = <int>   # when type = bft-sequencer
+        # migrate-and-start = false   # when type = bft-sequencer
+        # migrations-paths = [ ]   # when type = bft-sequencer
+        partitions {
+          # initial-bft-orderer-tables-partition-size = 1500   # when type = bft-sequencer
+        }
+        # repeatable-migrations-paths = [ ]   # when type = bft-sequencer
+        # unsafe-baseline-on-migrate = false   # when type = bft-sequencer
+        # unsafe-clean-on-validation-error = false   # when type = bft-sequencer
+        # warn-on-slow-query = <duration>   # when type = bft-sequencer
+        # warn-on-slow-query-interval = "5 seconds"   # when type = bft-sequencer
+      }
+      # type = memory|h2|postgres   # required when type = bft-sequencer
+    }
+    # view-change-timeout-override = <duration>   # when type = bft-sequencer
+  }
+  high-availability {
+    connection-pool {
+      # active-timeout = "15 seconds"   # when type = database
+      connection {
+        # client-connection-check-interval = "5 seconds"   # when type = database
+        # connection-timeout = "10 seconds"   # when type = database
+        # health-check-period = "5 seconds"   # when type = database
+        # health-check-timeout = "15 seconds"   # when type = database
+        # initial-acquisition-interval = "200 milliseconds"   # when type = database
+        # initial-acquisition-max-retries = 5   # when type = database
+        # keep-alive-count = 5   # when type = database
+        # keep-alive-idle = "10 seconds"   # when type = database
+        # keep-alive-interval = "1 second"   # when type = database
+        lock {
+          # health-check-period = "5 seconds"   # when type = database
+          # health-check-timeout = "15 seconds"   # when type = database
+        }
+        # max-inconclusive-read-only-checks = 3   # when type = database
+        # passive-check-period = "15 seconds"   # when type = database
+      }
+      # health-check-period = "5 seconds"   # when type = database
+      # initial-locked-connection-timeout = "15 seconds"   # when type = database
+      # initial-must-remain-active-connection-timeout = "1 minute"   # when type = database
+    }
+    # enabled = <boolean>   # when type = database
+    exclusive-storage {
+      connection-pool {
+        # active-timeout = "15 seconds"   # when type = database
+        connection {
+          # client-connection-check-interval = "5 seconds"   # when type = database
+          # connection-timeout = "10 seconds"   # when type = database
+          # health-check-period = "5 seconds"   # when type = database
+          # health-check-timeout = "15 seconds"   # when type = database
+          # initial-acquisition-interval = "200 milliseconds"   # when type = database
+          # initial-acquisition-max-retries = 5   # when type = database
+          # keep-alive-count = 5   # when type = database
+          # keep-alive-idle = "10 seconds"   # when type = database
+          # keep-alive-interval = "1 second"   # when type = database
+          lock {
+            # health-check-period = "5 seconds"   # when type = database
+            # health-check-timeout = "15 seconds"   # when type = database
+          }
+          # max-inconclusive-read-only-checks = 3   # when type = database
+          # passive-check-period = "15 seconds"   # when type = database
+        }
+        # health-check-period = "5 seconds"   # when type = database
+        # initial-locked-connection-timeout = "15 seconds"   # when type = database
+        # initial-must-remain-active-connection-timeout = "1 minute"   # when type = database
+      }
+      # max-connections = 2   # when type = database
+    }
+    # keep-alive-interval = "50 milliseconds"   # when type = database
+    # offline-duration = "8 seconds"   # when type = database
+    # online-check-interval = "5 seconds"   # when type = database
+    # total-node-count = 10   # when type = database
+  }
+  pruning {
+    # max-pruning-batch-size = 50000   # when type = database
+    # pruning-metric-update-interval = <duration>   # when type = database
+    # traffic-purchased-retention = "1 hour"   # when type = database
+  }
+  reader {
+    # checkpoint-interval = "5 seconds"   # when type = database
+    # event-generation-parallelism = 4   # when type = database
+    # payload-batch-size = 10   # when type = database
+    # payload-batch-window = "5 milliseconds"   # when type = database
+    # payload-fetch-parallelism = 2   # when type = database
+    # polling-interval = <duration>   # when type = database
+    # read-batch-size = 100   # when type = database
+  }
+  # sequencer-type = "..."   # required when type = external
+  # testing-interceptor = <string>   # when type = database
   type = database|external|bft-sequencer   # required
+  writer {
+    # buffered-events-max-memory = <int>   # when type = database
+    # buffered-events-preload-batch-size = 50   # when type = database
+    # checkpoint-backfill-parallelism = <int>   # when type = database
+    # checkpoint-interval = "30 seconds"   # when type = database
+    # commit-mode-validation = synchronous|local   # when type = database
+    # event-write-batch-max-size = 1   # when type = database and type = low-latency
+    # event-write-max-concurrency = 1   # when type = database
+    # payload-queue-size = 1000   # when type = database
+    # payload-to-event-margin = "60 seconds"   # when type = database
+    # payload-write-batch-max-size = 1   # when type = database and type = low-latency
+    # payload-write-max-concurrency = 2   # when type = database and type = low-latency
+    # type = low-latency|high-throughput   # required when type = database
+  }
 }
 ```
 
 Takes a `type`: [BatchAggregatorConfig](/global-synchronizer/reference/canton-config/types#batchaggregatorconfig) at `config.batch-aggregator`, [PemFileOrString](/global-synchronizer/reference/canton-config/types#pemfileorstring) at `config.initial-network.peer-endpoints[].tls-config.trust-collection-file`, [ServerAuthRequirementConfig](/global-synchronizer/reference/canton-config/types#serverauthrequirementconfig) at `config.initial-network.server-endpoint.tls.client-auth`, [HowLongToBlacklist](/global-synchronizer/reference/canton-config/types#howlongtoblacklist) at `config.leader-selection-policy-config-for-pv-34.how-long-to-blacklist`, [FiniteDurationDistribution](/global-synchronizer/reference/canton-config/types#finitedurationdistribution) at `config.standalone.test-slowdown.post-ordering-delay`, [StorageConfig](/global-synchronizer/reference/canton-config/types#storageconfig) at `config.storage`, [SequencerConfig](/global-synchronizer/reference/canton-config/types#sequencerconfig) at `.`, [SequencerWriterConfig](/global-synchronizer/reference/canton-config/types#sequencerwriterconfig) at `writer`.
-
-
-</Tab>
-<Tab title="Table">
 
 | Key | Type | Default | Description |
 |---|---|---|---|
@@ -2438,13 +2897,7 @@ Takes a `type`: [BatchAggregatorConfig](/global-synchronizer/reference/canton-co
 |                 **partitions** |  |  |  |
 |                     `initial-bft-orderer-tables-partition-size` | int | `1500` | Initial partition size for bft-orderer tables. Note that this config is only read once, during the initial database setup and later changes to this value won't have any effect. This is also only used in Postgres setups. |
 
-</Tab>
-</Tabs>
-
 ### `storage`
-
-<Tabs>
-<Tab title="HOCON">
 
 ```hocon
 canton.sequencers.<sequencer>.storage {
@@ -2475,10 +2928,6 @@ canton.sequencers.<sequencer>.storage {
 
 Takes a `type`: [StorageConfig](/global-synchronizer/reference/canton-config/types#storageconfig) at `.`.
 
-
-</Tab>
-<Tab title="Table">
-
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `type` | one of `memory`, `h2`, `postgres` | `memory` † | Choose one type — see [StorageConfig](/global-synchronizer/reference/canton-config/types#storageconfig). Determines how a node stores persistent data. |
@@ -2501,13 +2950,7 @@ Takes a `type`: [StorageConfig](/global-synchronizer/reference/canton-config/typ
 |     **partitions** |  |  |  |
 |         `initial-bft-orderer-tables-partition-size` | int | `1500` | Initial partition size for bft-orderer tables. Note that this config is only read once, during the initial database setup and later changes to this value won't have any effect. This is also only used in Postgres setups. |
 
-</Tab>
-</Tabs>
-
 ### `time-tracker`
-
-<Tabs>
-<Tab title="HOCON">
 
 ```hocon
 canton.sequencers.<sequencer>.time-tracker {
@@ -2522,10 +2965,6 @@ canton.sequencers.<sequencer>.time-tracker {
 }
 ```
 
-
-</Tab>
-<Tab title="Table">
-
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `min-observation-duration` | duration (NonNegativeFiniteDuration) | `24 hours` | We will try to ensure that we receive a time at least once during this duration (measured using the host clock). This is practically useful if there is no other activity on the synchronizer as the sequencer client will then have an event to acknowledge allowing sequenced events to be pruned before this point. We may in the future use this to monitor clock skews between the host and synchronizer. |
@@ -2536,13 +2975,7 @@ canton.sequencers.<sequencer>.time-tracker {
 |     `max-retry-delay` | duration (NonNegativeFiniteDuration) | `5 seconds` | The max retry delay if the request to send a sequenced event fails |
 |     `max-sequencing-delay` | duration (NonNegativeFiniteDuration) | `10 seconds` | If our request for a sequenced event was successful, how long should we wait to observe it from the sequencer before starting a new request. |
 
-</Tab>
-</Tabs>
-
 ### `topology`
-
-<Tabs>
-<Tab title="HOCON">
 
 ```hocon
 canton.sequencers.<sequencer>.topology {
@@ -2560,10 +2993,6 @@ canton.sequencers.<sequencer>.topology {
 }
 ```
 
-
-</Tab>
-<Tab title="Table">
-
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `broadcast-batch-size` | int (PositiveInt) | `100` | The maximum number of topology transactions sent in a topology transaction broadcast |
@@ -2578,18 +3007,14 @@ canton.sequencers.<sequencer>.topology {
 | `use-time-proofs-to-observe-effective-time` | boolean | `false` | Whether the node will use time proofs to observe when an effective time has been reached. If false, no time proofs will be sent to the sequencers by any Canton node. |
 | `validate-initial-topology-snapshot` | boolean | `true` | if false, the validation is skipped and the snapshot is directly imported. this is risky as it might create a fork if the validation was changed. therefore, we only use this with great care. the proper solution is to make validation so fast that it doesn't impact performance. |
 
-</Tab>
-</Tabs>
-
 ### `traffic-config`
-
-<Tabs>
-<Tab title="HOCON">
 
 ```hocon
 canton.sequencers.<sequencer>.traffic-config {
   batch-aggregator-config {
+    # max-parallel-batches = 2   # when type = no-batching
     maximum-batch-size = 500
+    # maximum-in-flight = 2   # when type = batching
     type = batching|no-batching   # required
   }
   maximum-traffic-consumed-cache-size = 1000
@@ -2602,10 +3027,6 @@ canton.sequencers.<sequencer>.traffic-config {
 ```
 
 Takes a `type`: [BatchAggregatorConfig](/global-synchronizer/reference/canton-config/types#batchaggregatorconfig) at `batch-aggregator-config`.
-
-
-</Tab>
-<Tab title="Table">
 
 | Key | Type | Default | Description |
 |---|---|---|---|
@@ -2622,6 +3043,3 @@ Takes a `type`: [BatchAggregatorConfig](/global-synchronizer/reference/canton-co
 |     `maximum-in-flight` | int (PositiveNumeric) | `2` | Maximum number of in-flight get queries. |
 | **batch-aggregator-config** `type = no-batching` |  |  |  |
 |     `max-parallel-batches` | int (PositiveNumeric) | `2` | Maximum number of batches to execute in parallel when using runMany. |
-
-</Tab>
-</Tabs>

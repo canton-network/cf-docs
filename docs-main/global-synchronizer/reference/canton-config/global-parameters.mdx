@@ -17,7 +17,7 @@ Paths are rooted at `canton`. Segments in angle brackets are names you choose:
 
 A `[]` suffix marks the fields of a list element. Keys marked **alpha** or **beta** are not covered by compatibility guarantees.
 
-**Required** lists only what you must set, and when: always, when you configure a particular section, or when you have chosen a particular `type`. **All options** shows every section two ways: **HOCON** as you would write it, every key with its default, and **Table** with the descriptions; a **bold** row names a section and the keys indented beneath it live inside it. Switching one section switches them all.
+**Required** lists only what you must set, and when: always, when you configure a particular section, or when you have chosen a particular `type`. **All options** covers every key. Each part is shown as a pair: the HOCON as you would write it, every key with its default, followed by the same keys as a table with their descriptions. A key that only applies under a particular `type` appears in the HOCON as a comment carrying that condition; in the table a **bold** row names a section and the keys indented beneath it live inside it.
 
 Some sections take a `type` that decides which other keys they accept. Those are documented once on the [types page](/global-synchronizer/reference/canton-config/types) and linked from wherever they occur.
 
@@ -34,31 +34,28 @@ In the Default column:
 
 ## Required
 
-<Tabs>
-<Tab title="HOCON">
-
 ```hocon
 canton.parameters {
   clock {
     remote-api {
       channel {
-        # max-inbound-message-size = 0   # required when type = remote-clock
-        # trace-context-propagation = enabled|disabled   # required when type = remote-clock
+        # max-inbound-message-size = 0   # required when clock.type = remote-clock
+        # trace-context-propagation = enabled|disabled   # required when clock.type = remote-clock
       }
-      # port = 0   # required when type = remote-clock
+      # port = 0   # required when clock.type = remote-clock
       tls {
         client-cert {
           cert-chain-file {
-            # pem-bytes = "..."   # required when type = pem-string and type = remote-clock
-            # pem-file = "/path/to/file"   # required when type = pem-file and type = remote-clock
-            # type = pem-file|pem-string   # required when type = remote-clock
+            # pem-bytes = "..."   # required when type = pem-string and clock.type = remote-clock
+            # pem-file = "/path/to/file"   # required when type = pem-file and clock.type = remote-clock
+            # type = pem-file|pem-string   # required when clock.type = remote-clock
           }
-          # private-key-file = "..."   # required when type = remote-clock
+          # private-key-file = "..."   # required when clock.type = remote-clock
         }
         trust-collection-file {
-          # pem-bytes = "..."   # required when type = pem-string and type = remote-clock
-          # pem-file = "/path/to/file"   # required when type = pem-file and type = remote-clock
-          # type = pem-file|pem-string   # required when type = remote-clock
+          # pem-bytes = "..."   # required when type = pem-string and clock.type = remote-clock
+          # pem-file = "/path/to/file"   # required when type = pem-file and clock.type = remote-clock
+          # type = pem-file|pem-string   # required when clock.type = remote-clock
         }
       }
     }
@@ -69,10 +66,6 @@ canton.parameters {
   }
 }
 ```
-
-
-</Tab>
-<Tab title="Table">
 
 | Key | Type | Required when | Description |
 |---|---|---|---|
@@ -89,16 +82,9 @@ canton.parameters {
 | `clock.type` | one of `sim-clock`, `wall-clock`, `remote-clock` | `clock` is configured | Choose one type — see [ClockConfig](/global-synchronizer/reference/canton-config/types#clockconfig). |
 | `startup-memory-check-config.reporting-level` | one of `warn`, `ignore`, `crash` | `startup-memory-check-config` is configured |  |
 
-
-</Tab>
-</Tabs>
-
 ## All options
 
 ### Top-level keys
-
-<Tabs>
-<Tab title="HOCON">
 
 ```hocon
 canton.parameters {
@@ -119,10 +105,6 @@ canton.parameters {
 
 Takes a `type`: [PemFileOrString](/global-synchronizer/reference/canton-config/types#pemfileorstring) at `clock.remote-api.tls.trust-collection-file`, [ClockConfig](/global-synchronizer/reference/canton-config/types#clockconfig) at `clock`.
 
-
-</Tab>
-<Tab title="Table">
-
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `alpha-version-support` **alpha** | boolean | `false` | If true, allow synchronizer nodes to use alpha protocol versions and participant nodes to connect to such synchronizers |
@@ -138,25 +120,50 @@ Takes a `type`: [PemFileOrString](/global-synchronizer/reference/canton-config/t
 | `startup-parallelism` | int (PositiveInt) | _unset_ | Start up to N nodes in parallel (default is num-threads) |
 | `state-refresh-interval` | duration (NonNegativeFiniteDuration) | _unset_ | If configured, the config file will be reread in the given interval to allow dynamic properties to be picked up immediately |
 
-</Tab>
-</Tabs>
-
 ### `clock`
-
-<Tabs>
-<Tab title="HOCON">
 
 ```hocon
 canton.parameters.clock {
+  remote-api {
+    # address = "127.0.0.1"   # when type = remote-clock
+    channel {
+      # flow-control-window = <int>   # when type = remote-clock
+      # initial-flow-control-window = <int>   # when type = remote-clock
+      keep-alive-client {
+        # idle-timeout = "30 minutes"   # when type = remote-clock
+        # keep-alive-without-calls = false   # when type = remote-clock
+        # time = "40 seconds"   # when type = remote-clock
+        # timeout = "15 seconds"   # when type = remote-clock
+      }
+      # max-inbound-message-size = 0   # required when type = remote-clock
+      # trace-context-propagation = enabled|disabled   # required when type = remote-clock
+    }
+    # port = 0   # required when type = remote-clock
+    tls {
+      client-cert {
+        cert-chain-file {
+          # pem-bytes = "..."   # required when type = remote-clock and type = pem-string
+          # pem-file = "/path/to/file"   # required when type = remote-clock and type = pem-file
+          # type = pem-file|pem-string   # required when type = remote-clock
+        }
+        # private-key-file = "..."   # required when type = remote-clock
+      }
+      # enabled = true   # when type = remote-clock
+      trust-collection-file {
+        # pem-bytes = "..."   # required when type = remote-clock and type = pem-string
+        # pem-file = "/path/to/file"   # required when type = remote-clock and type = pem-file
+        # type = pem-file|pem-string   # required when type = remote-clock
+      }
+    }
+  }
+  skews {
+    # <skew> = [ ]   # when type = wall-clock
+  }
   type = sim-clock|wall-clock|remote-clock   # required
 }
 ```
 
 Takes a `type`: [PemFileOrString](/global-synchronizer/reference/canton-config/types#pemfileorstring) at `remote-api.tls.trust-collection-file`, [ClockConfig](/global-synchronizer/reference/canton-config/types#clockconfig) at `.`.
-
-
-</Tab>
-<Tab title="Table">
 
 | Key | Type | Default | Description |
 |---|---|---|---|
@@ -195,13 +202,7 @@ Takes a `type`: [PemFileOrString](/global-synchronizer/reference/canton-config/t
 |             **trust-collection-file** `type = pem-string` |  |  |  |
 |                 `pem-bytes` | string | **required** |  |
 
-</Tab>
-</Tabs>
-
 ### `console`
-
-<Tabs>
-<Tab title="HOCON">
 
 ```hocon
 canton.parameters.console {
@@ -213,10 +214,6 @@ canton.parameters.console {
 }
 ```
 
-
-</Tab>
-<Tab title="Table">
-
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `cache-dir` | path | `/home/circleci/.ammonite` | cache dir, defaults to ~/.ammonite. If none is given, in-memory is used. If you specify a cache dir, the Canton repl will startup faster. In our tests, we have very rarely observed unexpected compile errors when the cache was enabled; if you want to avoid that, set the cache dir to None (i.e. `cache-dir = null` in the config file). |
@@ -225,13 +222,7 @@ canton.parameters.console {
 | `verbose` | boolean | `false` | if true (not default), we'll emit verbose ammonite output |
 | `working-dir` | path | _unset_ | working directory. if none is given, we'll use the working directory of the Canton process |
 
-</Tab>
-</Tabs>
-
 ### `retention-period-defaults`
-
-<Tabs>
-<Tab title="HOCON">
 
 ```hocon
 canton.parameters.retention-period-defaults {
@@ -240,22 +231,12 @@ canton.parameters.retention-period-defaults {
 }
 ```
 
-
-</Tab>
-<Tab title="Table">
-
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `mediator` | duration (NonNegativeFiniteDuration) | `7 days` |  |
 | `sequencer` | duration (NonNegativeFiniteDuration) | `7 days` |  |
 
-</Tab>
-</Tabs>
-
 ### `startup-memory-check-config`
-
-<Tabs>
-<Tab title="HOCON">
 
 ```hocon
 canton.parameters.startup-memory-check-config {
@@ -263,21 +244,11 @@ canton.parameters.startup-memory-check-config {
 }
 ```
 
-
-</Tab>
-<Tab title="Table">
-
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `reporting-level` | one of `warn`, `ignore`, `crash` | `warn` † |  |
 
-</Tab>
-</Tabs>
-
 ### `threading`
-
-<Tabs>
-<Tab title="HOCON">
 
 ```hocon
 canton.parameters.threading {
@@ -291,10 +262,6 @@ canton.parameters.threading {
 }
 ```
 
-
-</Tab>
-<Tab title="Table">
-
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `core-pool-size` | int (PositiveInt) | _unset_ |  |
@@ -305,13 +272,7 @@ canton.parameters.threading {
 | `mutex-max-spins` | int (PositiveInt) | _unset_ | Tweak the number of spins we want to run before parking the thread |
 | `parallelism` | int (PositiveInt) | _unset_ | Number of CPU cores to use for the main ec (derived automatically by default) |
 
-</Tab>
-</Tabs>
-
 ### `timeouts`
-
-<Tabs>
-<Tab title="HOCON">
 
 ```hocon
 canton.parameters.timeouts {
@@ -346,10 +307,6 @@ canton.parameters.timeouts {
 }
 ```
 
-
-</Tab>
-<Tab title="Table">
-
 | Key | Type | Default | Description |
 |---|---|---|---|
 | **console** |  |  |  |
@@ -378,6 +335,3 @@ canton.parameters.timeouts {
 |     `topology-change-warn-delay` | duration (NonNegativeDuration) | `2 minutes` | maximum delay between the timestamp of the topology snapshot used during submission and the sequencing timestamp, after which we log inconsistency errors as warnings |
 |     `unbounded` | duration (NonNegativeDuration) | `3 minutes` | timeout on how long "unbounded" operations can run. should be infinite in theory. |
 |     `verify-active` | duration (NonNegativeDuration) | `60 seconds` | how long should we wait for the synchronizer to tell us whether we are active or not |
-
-</Tab>
-</Tabs>

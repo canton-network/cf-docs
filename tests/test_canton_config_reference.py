@@ -101,7 +101,7 @@ class CantonConfigReferenceTests(unittest.TestCase):
         self.assertNotIn("| `metrics.histograms` |", required)
         # The required view also has the skeleton as HOCON, first; variant-gated keys are commented
         # with their condition so the block stays one valid document.
-        self.assertLess(required.index('<Tab title="HOCON">'), required.index('<Tab title="Table">'))
+        self.assertLess(required.index("```hocon"), required.index("| Key | Type | Required when |"))
         self.assertIn(
             "canton.monitoring {\n  metrics {\n    histograms = [\n      {\n        aggregation {\n"
             "          # boundaries = [ ]   # required when type = buckets\n"
@@ -112,21 +112,24 @@ class CantonConfigReferenceTests(unittest.TestCase):
             required,
         )
 
-    def test_sections_offer_hocon_first_then_table(self) -> None:
+    def test_sections_pair_hocon_with_the_table_over_the_same_keys(self) -> None:
         monitoring = generator.render_pages(sample_artifact())["monitoring.mdx"]
-        self.assertLess(monitoring.index('<Tab title="HOCON">'), monitoring.index('<Tab title="Table">'))
+        all_options = monitoring.split("## All options")[1]
+        self.assertNotIn("<Tabs>", monitoring)
+        self.assertLess(all_options.index("```hocon"), all_options.index("| Key | Type | Default | Description |"))
         # The section-level block lists every key not gated by a nested type, defaults included,
         # and shows a discriminator as the values it accepts.
+        # The section HOCON is exhaustive: gated keys are commented with their condition, so the
+        # block and the table beneath it cover the same keys.
         self.assertIn(
             "canton.monitoring.metrics {\n  histograms = [\n    {\n      aggregation {\n"
+            "        # boundaries = [ ]   # required when type = buckets\n"
+            "        # max-buckets = 0   # required when type = exponential\n"
+            "        # max-scale = 0   # required when type = exponential\n"
             "        type = buckets|exponential   # required\n      }\n      name = \"...\"   # required\n"
             "    }\n  ]\n}",
-            monitoring,
+            all_options,
         )
-        # Variant-specific keys live on the types page, which the section links to; the only
-        # place they appear here is the commented required skeleton.
-        all_options = monitoring.split("## All options")[1]
-        self.assertNotIn("boundaries = [ ]", all_options)
         self.assertIn(
             f"Takes a `type`: [AggregationType]({generator.PAGE_URL_PREFIX}/types#aggregationtype) at `histograms[].aggregation`.",
             monitoring,

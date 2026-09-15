@@ -461,6 +461,19 @@ def nest(keys: "OrderedDict[str, dict]") -> dict:
     return tree
 
 
+def condition_text(scope: str, relative: str, gates: list[tuple[str, set[str]]]) -> str:
+    """`type = a|b` when the discriminator sits beside the key, otherwise its path from the section,
+    so a condition inside a nested block stays unambiguous."""
+    key_parent = relative.rsplit(".", 1)[0] if "." in relative else ""
+    clauses = []
+    for at, tags in gates:
+        disc = at[len(scope) + 1 :] if at.startswith(scope + ".") else at
+        disc_parent = disc.rsplit(".", 1)[0] if "." in disc else ""
+        label = disc.rsplit(".", 1)[-1] if disc_parent == key_parent else disc
+        clauses.append(f"{label} = " + "|".join(sorted(tags)))
+    return " and ".join(clauses)
+
+
 def render_block(tree: dict, indent: str, lines: list[str], seen: set[str], path: str = "") -> None:
     for name, child in tree.items():
         here = f"{path}.{name}" if path else name
@@ -478,12 +491,20 @@ def render_block(tree: dict, indent: str, lines: list[str], seen: set[str], path
                 lines.append(f"{indent}}}")
             continue
         seen.add(here)
+        # A key that only applies under a particular `type` is written as a comment carrying the
+        # condition, so the block stays one valid document while still listing everything.
+        when = option.get("__when__")
         if option["required"]:
             hint = type_hint(option) if option["valueType"].get("kind") == "enum" else placeholder_for(option)
-            lines.append(f"{indent}{name} = {hint}   # required")
+            if when:
+                lines.append(f"{indent}# {name} = {hint}   # required when {when}")
+            else:
+                lines.append(f"{indent}{name} = {hint}   # required")
             continue
         value = example_value(option)
-        if value is not None:
+        if when:
+            lines.append(f"{indent}# {name} = {value if value is not None else type_hint(option)}   # when {when}")
+        elif value is not None:
             lines.append(f"{indent}{name} = {value}")
         else:
             lines.append(f"{indent}# {name} = {type_hint(option)}")
@@ -551,25 +572,27 @@ def unions_within(scope: str, unions: dict) -> list[tuple[str, str]]:
 
 
 def render_scope_hocon(scope: str, entries: list[dict], variants_by_type: dict[str, list[str]]) -> list[str]:
-    """The whole section as HOCON: every key that applies regardless of any `type` chosen inside
-    it, with a discriminator shown as the values it accepts. Keys specific to one variant follow in
-    that variant's own block, so nothing is listed twice and nothing is left out."""
+    """The whole section as HOCON: every key, with a discriminator shown as the values it accepts
+    and a key that only applies under some `type` commented with that condition -- the same key set
+    as the table that follows it."""
     keys: "OrderedDict[str, dict]" = OrderedDict()
     for option, conditions in collapse_variants(entries):
-        gated = False
         union_of = {c["at"]: c["of"] for c in option["appliesWhen"]}
+        gates: list[tuple[str, set[str]]] = []
         for at, accepted in conditions.items():
             if not at.startswith(scope + "."):
                 continue
             known = set(variants_by_type.get(union_of.get(at, ""), []))
-            if not known or not accepted >= known:
-                gated = True
-                break
-        if gated:
-            continue
+            if known and accepted >= known:
+                continue
+            gates.append((at, accepted))
         relative = option["path"][len(scope) :].lstrip(".")
-        if relative:
-            keys.setdefault(relative, option)
+        if not relative:
+            continue
+        tagged = dict(option)
+        if gates:
+            tagged["__when__"] = condition_text(scope, relative, gates)
+        keys.setdefault(relative, tagged)
     if not keys:
         return []
     opening, closing, indent = open_path(scope)
@@ -585,33 +608,18 @@ def render_section_views(
     variants_by_type: dict[str, list[str]],
     unions: dict,
 ) -> list[str]:
-    """Two views of one section behind tabs, HOCON first: the file you would write is the more
-    comprehensible shape, while the table is where the human-written descriptions live."""
-    hocon = render_scope_hocon(scope, entries, variants_by_type)
+    """One section as a pair: HOCON as you would write it, then the same keys as a table with their
+    descriptions. Both cover exactly the same keys."""
+    lines = render_scope_hocon(scope, entries, variants_by_type)
     inside = unions_within(scope, unions)
     if inside:
         links = ", ".join(
             f"[{union}]({union_link(union)}) at `{path.rsplit('.', 1)[0][len(scope) + 1 :] or '.'}`"
             for union, path in inside
         )
-        hocon += [f"Takes a `type`: {links}.", ""]
-    table = render_table(entries, scope, variants_by_type)
-    # Tab bodies are left unindented: four leading spaces would turn a line into a code block.
-    return [
-        "<Tabs>",
-        '<Tab title="HOCON">',
-        "",
-        *hocon,
-        "",
-        "</Tab>",
-        '<Tab title="Table">',
-        "",
-        *table,
-        "",
-        "</Tab>",
-        "</Tabs>",
-        "",
-    ]
+        lines += [f"Takes a `type`: {links}.", ""]
+    lines += render_table(entries, scope, variants_by_type) + [""]
+    return lines
 
 
 def required_rows(prefix: str, entries: list[dict], variants_by_type: dict[str, list[str]]):
@@ -645,9 +653,7 @@ def render_required_hocon(prefix: str, entries: list[dict], variants_by_type: di
     for relative, option, _parent, gates in rows:
         tagged = dict(option)
         if gates:
-            tagged["__when__"] = " and ".join(
-                f"{at.rsplit('.', 1)[-1]} = " + "|".join(sorted(tags)) for at, tags in gates
-            )
+            tagged["__when__"] = condition_text(prefix, relative, [(prefix + "." + at, tags) for at, tags in gates])
         keys.setdefault(relative, tagged)
 
     def write(tree: dict, indent: str, out: list[str]) -> None:
@@ -681,22 +687,7 @@ def render_required_views(prefix: str, entries: list[dict], variants_by_type: di
     hocon = render_required_hocon(prefix, entries, variants_by_type)
     if not hocon:
         return ["Nothing under this section has to be set: every key has a default.", ""]
-    table = render_required(prefix, entries, variants_by_type)
-    return [
-        "<Tabs>",
-        '<Tab title="HOCON">',
-        "",
-        *hocon,
-        "",
-        "</Tab>",
-        '<Tab title="Table">',
-        "",
-        *table,
-        "",
-        "</Tab>",
-        "</Tabs>",
-        "",
-    ]
+    return [*hocon, *render_required(prefix, entries, variants_by_type)]
 
 
 def render_required(prefix: str, entries: list[dict], variants_by_type: dict[str, list[str]]) -> list[str]:
@@ -763,10 +754,11 @@ def reading_guide(artifact: dict, options: list[dict] | None) -> list[str]:
         "covered by compatibility guarantees.",
         "",
         "**Required** lists only what you must set, and when: always, when you configure a particular "
-        "section, or when you have chosen a particular `type`. **All options** shows every section two "
-        "ways: **HOCON** as you would write it, every key with its default, and **Table** with the "
-        "descriptions; a **bold** row names a section and the keys indented beneath it live inside it. "
-        "Switching one section switches them all.",
+        "section, or when you have chosen a particular `type`. **All options** covers every key. Each "
+        "part is shown as a pair: the HOCON as you would write it, every key with its default, followed "
+        "by the same keys as a table with their descriptions. A key that only applies under a particular "
+        "`type` appears in the HOCON as a comment carrying that condition; in the table a **bold** row "
+        "names a section and the keys indented beneath it live inside it.",
         "",
         "Some sections take a `type` that decides which other keys they accept. Those are documented "
         f"once on the [types page]({PAGE_URL_PREFIX}/{TYPES_PAGE}) and linked from wherever they occur.",

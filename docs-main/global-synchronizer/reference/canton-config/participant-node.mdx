@@ -23,7 +23,7 @@ Paths are rooted at `canton`. Segments in angle brackets are names you choose:
 
 A `[]` suffix marks the fields of a list element. Keys marked **alpha** or **beta** are not covered by compatibility guarantees.
 
-**Required** lists only what you must set, and when: always, when you configure a particular section, or when you have chosen a particular `type`. **All options** shows every section two ways: **HOCON** as you would write it, every key with its default, and **Table** with the descriptions; a **bold** row names a section and the keys indented beneath it live inside it. Switching one section switches them all.
+**Required** lists only what you must set, and when: always, when you configure a particular section, or when you have chosen a particular `type`. **All options** covers every key. Each part is shown as a pair: the HOCON as you would write it, every key with its default, followed by the same keys as a table with their descriptions. A key that only applies under a particular `type` appears in the HOCON as a comment carrying that condition; in the table a **bold** row names a section and the keys indented beneath it live inside it.
 
 Some sections take a `type` that decides which other keys they accept. Those are documented once on the [types page](/global-synchronizer/reference/canton-config/types) and linked from wherever they occur.
 
@@ -40,9 +40,6 @@ In the Default column:
 
 ## Required
 
-<Tabs>
-<Tab title="HOCON">
-
 ```hocon
 canton.participants.<participant> {
   admin-api {
@@ -54,8 +51,8 @@ canton.participants.<participant> {
         # url = "..."   # required when type = jwt-jwks
         users = [
           {
-            # allowed-services = [ ]   # required when type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
-            # user-id = "..."   # required when type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
+            # allowed-services = [ ]   # required when admin-api.auth-services[].type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
+            # user-id = "..."   # required when admin-api.auth-services[].type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
           }
         ]
       }
@@ -69,11 +66,11 @@ canton.participants.<participant> {
       client-auth {
         admin-client {
           cert-chain-file {
-            # pem-bytes = "..."   # required when type = pem-string and type = require
-            # pem-file = "/path/to/file"   # required when type = pem-file and type = require
-            # type = pem-file|pem-string   # required when type = require
+            # pem-bytes = "..."   # required when type = pem-string and admin-api.tls.client-auth.type = require
+            # pem-file = "/path/to/file"   # required when type = pem-file and admin-api.tls.client-auth.type = require
+            # type = pem-file|pem-string   # required when admin-api.tls.client-auth.type = require
           }
-          # private-key-file = "..."   # required when type = require
+          # private-key-file = "..."   # required when admin-api.tls.client-auth.type = require
         }
         type = require|optional|none   # required
       }
@@ -158,8 +155,8 @@ canton.participants.<participant> {
   init {
     identity {
       identifier {
-        # name = "..."   # required when type = explicit and type = auto
-        # type = random|explicit|config   # required when type = auto
+        # name = "..."   # required when type = explicit and init.identity.type = auto
+        # type = random|explicit|config   # required when init.identity.type = auto
       }
       type = external|auto|manual   # required
     }
@@ -173,8 +170,8 @@ canton.participants.<participant> {
         # url = "..."   # required when type = jwt-jwks
         users = [
           {
-            # allowed-services = [ ]   # required when type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
-            # user-id = "..."   # required when type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
+            # allowed-services = [ ]   # required when ledger-api.auth-services[].type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
+            # user-id = "..."   # required when ledger-api.auth-services[].type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
           }
         ]
       }
@@ -193,11 +190,11 @@ canton.participants.<participant> {
       client-auth {
         admin-client {
           cert-chain-file {
-            # pem-bytes = "..."   # required when type = pem-string and type = require
-            # pem-file = "/path/to/file"   # required when type = pem-file and type = require
-            # type = pem-file|pem-string   # required when type = require
+            # pem-bytes = "..."   # required when type = pem-string and ledger-api.tls.client-auth.type = require
+            # pem-file = "/path/to/file"   # required when type = pem-file and ledger-api.tls.client-auth.type = require
+            # type = pem-file|pem-string   # required when ledger-api.tls.client-auth.type = require
           }
-          # private-key-file = "..."   # required when type = require
+          # private-key-file = "..."   # required when ledger-api.tls.client-auth.type = require
         }
         type = require|optional|none   # required
       }
@@ -398,10 +395,6 @@ canton.participants.<participant> {
 }
 ```
 
-
-</Tab>
-<Tab title="Table">
-
 | Key | Type | Required when | Description |
 |---|---|---|---|
 | `admin-api.auth-services[].certificate` | string | `admin-api.auth-services[]` is configured and `admin-api.auth-services[].type` is one of `jwt-es-256-crt`, `jwt-es-512-crt`, `jwt-rs-256-crt` |  |
@@ -537,16 +530,9 @@ canton.participants.<participant> {
 | `testing-time.type` | one of `monotonic-time` | `testing-time` is configured | Optional ledger api time service configuration for demo and testing only |
 | `traffic-accounting.traffic-enforcement-server.type` | one of `internal` | `traffic-accounting.traffic-enforcement-server` is configured | Choose one type — see [TrafficEnforcementServerConfig](/global-synchronizer/reference/canton-config/types#trafficenforcementserverconfig). |
 
-
-</Tab>
-</Tabs>
-
 ## All options
 
 ### `admin-api`
-
-<Tabs>
-<Tab title="HOCON">
 
 ```hocon
 canton.participants.<participant>.admin-api {
@@ -559,7 +545,21 @@ canton.participants.<participant>.admin-api {
   }
   auth-services = [
     {
+      # access-level = wildcard   # when type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
+      # certificate = "..."   # required when type = jwt-es-256-crt|jwt-es-512-crt|jwt-rs-256-crt
+      # max-token-life = <duration>   # when type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
+      # privileged = false   # when type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
+      # secret = "..."   # required when type = unsafe-jwt-hmac-256
+      # target-audience = <string>   # when type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
+      # target-scope = <string>   # when type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
       type = wildcard|unsafe-jwt-hmac-256|jwt-rs-256-crt|jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|party-jwt   # required
+      # url = "..."   # required when type = jwt-jwks
+      users = [
+        {
+          # allowed-services = [ ]   # required when auth-services[].type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
+          # user-id = "..."   # required when auth-services[].type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
+        }
+      ]
     }
   ]
   # flow-control-window = <int>
@@ -596,16 +596,28 @@ canton.participants.<participant>.admin-api {
   port = 30002
   tls {
     cert-chain-file {
+      # pem-bytes = "..."   # required when type = pem-string
+      # pem-file = "/path/to/file"   # required when type = pem-file
       type = pem-file|pem-string   # required
     }
     # ciphers = [ ... ]
     client-auth {
+      admin-client {
+        cert-chain-file {
+          # pem-bytes = "..."   # required when tls.client-auth.type = require and type = pem-string
+          # pem-file = "/path/to/file"   # required when tls.client-auth.type = require and type = pem-file
+          # type = pem-file|pem-string   # required when tls.client-auth.type = require
+        }
+        # private-key-file = "..."   # required when tls.client-auth.type = require
+      }
       type = require|optional|none   # required
     }
     enable-cert-revocation-checking = false
     minimum-server-protocol-version = "TLSv1.2"
     private-key-file = "..."   # required
     trust-collection-file {
+      # pem-bytes = "..."   # required when type = pem-string
+      # pem-file = "/path/to/file"   # required when type = pem-file
       type = pem-file|pem-string   # required
     }
   }
@@ -613,10 +625,6 @@ canton.participants.<participant>.admin-api {
 ```
 
 Takes a `type`: [AuthServiceConfig](/global-synchronizer/reference/canton-config/types#authserviceconfig) at `auth-services[]`, [PemFileOrString](/global-synchronizer/reference/canton-config/types#pemfileorstring) at `tls.cert-chain-file`, [ServerAuthRequirementConfig](/global-synchronizer/reference/canton-config/types#serverauthrequirementconfig) at `tls.client-auth`.
-
-
-</Tab>
-<Tab title="Table">
 
 | Key | Type | Default | Description |
 |---|---|---|---|
@@ -740,13 +748,7 @@ Takes a `type`: [AuthServiceConfig](/global-synchronizer/reference/canton-config
 |     **trust-collection-file** `type = pem-string` |  |  |  |
 |         `pem-bytes` | string | **required** |  |
 
-</Tab>
-</Tabs>
-
 ### `alpha-dynamic`
-
-<Tabs>
-<Tab title="HOCON">
 
 ```hocon
 canton.participants.<participant>.alpha-dynamic {
@@ -830,10 +832,6 @@ canton.participants.<participant>.alpha-dynamic {
 }
 ```
 
-
-</Tab>
-<Tab title="Table">
-
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `check-self-consistency` | boolean | `true` | if set to true (default), then after every sync operation we'll check again if it really succeeded |
@@ -897,13 +895,7 @@ canton.participants.<participant>.alpha-dynamic {
 |         `read-as` | array of string | `[]` | the name of the parties the user can read as. |
 |         `read-as-any-party` | boolean | `false` | if true then the user can read as any party |
 
-</Tab>
-</Tabs>
-
 ### `crypto`
-
-<Tabs>
-<Tab title="HOCON">
 
 ```hocon
 canton.participants.<participant>.crypto {
@@ -923,6 +915,20 @@ canton.participants.<participant>.crypto {
     # default = <generic>
   }
   kms {
+    # audit-logging = false   # when type = aws|gcp
+    # config = { }   # required when type = driver
+    custom-tags {
+      # <custom-tag> = [ ]   # when kms.type = aws
+    }
+    # disable-ssl-verification = false   # when type = aws
+    # endpoint-override = <string>   # when type = aws|gcp
+    # health-check-period = "10 seconds"   # when type = driver
+    # key-ring-id = "..."   # required when type = gcp
+    # location-id = "..."   # required when type = gcp
+    # multi-region-key = false   # when type = aws
+    # name = "..."   # required when type = driver
+    # project-id = "..."   # required when type = gcp
+    # region = "..."   # required when type = aws
     retries {
       create-key-check {
         initial-delay = "30 seconds"   # required
@@ -981,10 +987,6 @@ canton.participants.<participant>.crypto {
 ```
 
 Takes a `type`: [KmsConfig](/global-synchronizer/reference/canton-config/types#kmsconfig) at `kms`, [EncryptedPrivateStoreConfig](/global-synchronizer/reference/canton-config/types#encryptedprivatestoreconfig) at `private-key-store.encryption`.
-
-
-</Tab>
-<Tab title="Table">
 
 | Key | Type | Default | Description |
 |---|---|---|---|
@@ -1060,13 +1062,7 @@ Takes a `type`: [KmsConfig](/global-synchronizer/reference/canton-config/types#k
 |     `allowed` | array of S | _unset_ | The optional allowed schemes to use. If none is specified, all the provider's supported schemes of kind S are allowed. |
 |     `default` | depends on use (S) | _unset_ | The optional scheme to use. If none is specified, use the provider's default scheme of kind S. |
 
-</Tab>
-</Tabs>
-
 ### `http-ledger-api`
-
-<Tabs>
-<Tab title="HOCON">
 
 ```hocon
 canton.participants.<participant>.http-ledger-api {
@@ -1096,10 +1092,6 @@ canton.participants.<participant>.http-ledger-api {
 }
 ```
 
-
-</Tab>
-<Tab title="Table">
-
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `address` | string | `127.0.0.1` |  |
@@ -1124,19 +1116,19 @@ canton.participants.<participant>.http-ledger-api {
 |     `throttle-elem` | int | `WSC.DefaultThrottleElem` ‡ |  |
 |     `throttle-per` | duration | `WSC.DefaultThrottlePer` ‡ |  |
 
-</Tab>
-</Tabs>
-
 ### `init`
-
-<Tabs>
-<Tab title="HOCON">
 
 ```hocon
 canton.participants.<participant>.init {
   generate-intermediate-key = false
   generate-topology-transactions-and-keys = true
   identity {
+    # certificates = [ ]   # when type = external
+    identifier {
+      # name = "..."   # required when identity.type = auto and type = explicit
+      # type = random|explicit|config   # required when identity.type = auto
+    }
+    # namespace = <string>   # when type = external
     type = external|auto|manual   # required
   }
   ledger-api {
@@ -1146,10 +1138,6 @@ canton.participants.<participant>.init {
 ```
 
 Takes a `type`: [NodeIdentifierConfig](/global-synchronizer/reference/canton-config/types#nodeidentifierconfig) at `identity.identifier`, [IdentityConfig](/global-synchronizer/reference/canton-config/types#identityconfig) at `identity`.
-
-
-</Tab>
-<Tab title="Table">
 
 | Key | Type | Default | Description |
 |---|---|---|---|
@@ -1169,13 +1157,7 @@ Takes a `type`: [NodeIdentifierConfig](/global-synchronizer/reference/canton-con
 | **ledger-api** |  |  |  |
 |     `max-deduplication-duration` | duration (NonNegativeFiniteDuration) | `7 days` | The max deduplication duration reported by the participant's ledger configuration service. The participant's command and command submission services accept all command deduplication durations up to this duration. Acceptance of longer ones is at the discretion of the participant and may vary over time. |
 
-</Tab>
-</Tabs>
-
 ### `ledger-api`
-
-<Tabs>
-<Tab title="HOCON">
 
 ```hocon
 canton.participants.<participant>.ledger-api {
@@ -1188,7 +1170,21 @@ canton.participants.<participant>.ledger-api {
   }
   auth-services = [
     {
+      # access-level = wildcard   # when type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
+      # certificate = "..."   # required when type = jwt-es-256-crt|jwt-es-512-crt|jwt-rs-256-crt
+      # max-token-life = <duration>   # when type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
+      # privileged = false   # when type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
+      # secret = "..."   # required when type = unsafe-jwt-hmac-256
+      # target-audience = <string>   # when type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
+      # target-scope = <string>   # when type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
       type = wildcard|unsafe-jwt-hmac-256|jwt-rs-256-crt|jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|party-jwt   # required
+      # url = "..."   # required when type = jwt-jwks
+      users = [
+        {
+          # allowed-services = [ ]   # required when auth-services[].type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
+          # user-id = "..."   # required when auth-services[].type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
+        }
+      ]
     }
   ]
   command-service {
@@ -1321,16 +1317,28 @@ canton.participants.<participant>.ledger-api {
   }
   tls {
     cert-chain-file {
+      # pem-bytes = "..."   # required when type = pem-string
+      # pem-file = "/path/to/file"   # required when type = pem-file
       type = pem-file|pem-string   # required
     }
     # ciphers = [ ... ]
     client-auth {
+      admin-client {
+        cert-chain-file {
+          # pem-bytes = "..."   # required when tls.client-auth.type = require and type = pem-string
+          # pem-file = "/path/to/file"   # required when tls.client-auth.type = require and type = pem-file
+          # type = pem-file|pem-string   # required when tls.client-auth.type = require
+        }
+        # private-key-file = "..."   # required when tls.client-auth.type = require
+      }
       type = require|optional|none   # required
     }
     enable-cert-revocation-checking = false
     minimum-server-protocol-version = "TLSv1.2"
     private-key-file = "..."   # required
     trust-collection-file {
+      # pem-bytes = "..."   # required when type = pem-string
+      # pem-file = "/path/to/file"   # required when type = pem-file
       type = pem-file|pem-string   # required
     }
   }
@@ -1356,10 +1364,6 @@ canton.participants.<participant>.ledger-api {
 ```
 
 Takes a `type`: [AuthServiceConfig](/global-synchronizer/reference/canton-config/types#authserviceconfig) at `auth-services[]`, [PemFileOrString](/global-synchronizer/reference/canton-config/types#pemfileorstring) at `tls.cert-chain-file`, [ServerAuthRequirementConfig](/global-synchronizer/reference/canton-config/types#serverauthrequirementconfig) at `tls.client-auth`.
-
-
-</Tab>
-<Tab title="Table">
 
 | Key | Type | Default | Description |
 |---|---|---|---|
@@ -1582,13 +1586,7 @@ Takes a `type`: [AuthServiceConfig](/global-synchronizer/reference/canton-config
 |     `max-rights-per-user` | int | `1000` | maximum number of rights per user |
 |     `max-users-page-size` | int | `1000` | maximum number of users returned |
 
-</Tab>
-</Tabs>
-
 ### `monitoring`
-
-<Tabs>
-<Tab title="HOCON">
 
 ```hocon
 canton.participants.<participant>.monitoring {
@@ -1616,10 +1614,6 @@ canton.participants.<participant>.monitoring {
 }
 ```
 
-
-</Tab>
-<Tab title="Table">
-
 | Key | Type | Default | Description |
 |---|---|---|---|
 | **grpc-health-server** |  |  |  |
@@ -1640,13 +1634,7 @@ canton.participants.<participant>.monitoring {
 |     `address` | string | `0.0.0.0` |  |
 |     `port` | int (Port) | **required** |  |
 
-</Tab>
-</Tabs>
-
 ### `parameters`
-
-<Tabs>
-<Tab title="HOCON">
 
 ```hocon
 canton.participants.<participant>.parameters {
@@ -1666,7 +1654,9 @@ canton.participants.<participant>.parameters {
     disable-old-acs-commitment-processor = on-new-protocol-versions
     enable-new-acs-commitment-processor = true
     load-batching {
+      # max-parallel-batches = 2   # when type = no-batching
       maximum-batch-size = 500
+      # maximum-in-flight = 2   # when type = batching
       type = batching|no-batching   # required
     }
     matching-parallelism = 20
@@ -1706,11 +1696,15 @@ canton.participants.<participant>.parameters {
   auto-sync-protocol-feature-flags = true
   batching {
     aggregator {
+      # max-parallel-batches = 2   # when type = no-batching
       maximum-batch-size = 500
+      # maximum-in-flight = 2   # when type = batching
       type = batching|no-batching   # required
     }
     contract-store-aggregator {
+      # max-parallel-batches = 2   # when type = no-batching
       maximum-batch-size = 500
+      # maximum-in-flight = 2   # when type = batching
       type = batching|no-batching   # required
     }
     # in-flight-aggregations-query-interval = <duration>
@@ -1723,17 +1717,23 @@ canton.participants.<participant>.parameters {
     max-topology-update-batch-size = 1000
     max-topology-write-batch-size = 1000
     mediator-fetch-finalized-responses-aggregator {
+      # max-parallel-batches = 2   # when type = no-batching
       maximum-batch-size = 500
+      # maximum-in-flight = 2   # when type = batching
       type = batching|no-batching   # required
     }
     mediator-store-finalized-responses-aggregator {
+      # max-parallel-batches = 2   # when type = no-batching
       maximum-batch-size = 500
+      # maximum-in-flight = 2   # when type = batching
       type = batching|no-batching   # required
     }
     parallelism = 8
     pruning-parallelism = 2
     topology-cache-aggregator {
+      # max-parallel-batches = 2   # when type = no-batching
       maximum-batch-size = 500
+      # maximum-in-flight = 2   # when type = batching
       type = batching|no-batching   # required
     }
   }
@@ -1841,6 +1841,7 @@ canton.participants.<participant>.parameters {
       <extension> {
         address = "..."   # required
         auth {
+          # token-file = "/path/to/file"   # required when type = bearer-token-file
           type = none|bearer-token-file   # required
         }
         connect-timeout = "500 milliseconds"
@@ -1853,6 +1854,8 @@ canton.participants.<participant>.parameters {
         tls {
           enabled = true
           trust-collection-file {
+            # pem-bytes = "..."   # required when type = pem-string
+            # pem-file = "/path/to/file"   # required when type = pem-file
             type = pem-file|pem-string   # required
           }
         }
@@ -2010,10 +2013,6 @@ canton.participants.<participant>.parameters {
 ```
 
 Takes a `type`: [BatchAggregatorConfig](/global-synchronizer/reference/canton-config/types#batchaggregatorconfig) at `acs-commitments.load-batching`, [ExtensionServiceAuthConfig](/global-synchronizer/reference/canton-config/types#extensionserviceauthconfig) at `engine.extensions.<extension>.auth`, [PemFileOrString](/global-synchronizer/reference/canton-config/types#pemfileorstring) at `engine.extensions.<extension>.tls.trust-collection-file`.
-
-
-</Tab>
-<Tab title="Table">
 
 | Key | Type | Default | Description |
 |---|---|---|---|
@@ -2343,13 +2342,7 @@ Takes a `type`: [BatchAggregatorConfig](/global-synchronizer/reference/canton-co
 |     `enabled` | boolean | **required** |  |
 |     `kill-delay` | duration (NonNegativeFiniteDuration) | `NonNegativeFiniteDuration(30.seconds)` ‡ |  |
 
-</Tab>
-</Tabs>
-
 ### `replication`
-
-<Tabs>
-<Tab title="HOCON">
 
 ```hocon
 canton.participants.<participant>.replication {
@@ -2380,10 +2373,6 @@ canton.participants.<participant>.replication {
 }
 ```
 
-
-</Tab>
-<Tab title="Table">
-
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `enabled` | boolean | _unset_ | Needs to be set to true for a replicated node, which shares the database with other replicas. |
@@ -2408,13 +2397,7 @@ canton.participants.<participant>.replication {
 |             `health-check-period` | duration (PositiveFiniteDuration) | `5 seconds` | Health check period, i.e., how long to wait between one health check completed and the next to start. |
 |             `health-check-timeout` | duration (PositiveFiniteDuration) | `15 seconds` | Timeout for running a health check in seconds granularity. |
 
-</Tab>
-</Tabs>
-
 ### `sequencer-client`
-
-<Tabs>
-<Tab title="HOCON">
 
 ```hocon
 canton.participants.<participant>.sequencer-client {
@@ -2460,10 +2443,6 @@ canton.participants.<participant>.sequencer-client {
 }
 ```
 
-
-</Tab>
-<Tab title="Table">
-
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `acknowledgement-interval` | duration (NonNegativeFiniteDuration) | `1 minute` | Controls how frequently the client acknowledges how far it has successfully processed to the sequencer which allows the sequencer to remove this data when pruning. |
@@ -2502,13 +2481,7 @@ canton.participants.<participant>.sequencer-client {
 |     `time` | duration (NonNegativeFiniteDuration) | `40 seconds` | Sets the time without read activity before sending a keepalive ping. Do not set to small numbers (default is 40s) |
 |     `timeout` | duration (NonNegativeFiniteDuration) | `15 seconds` | Sets the time waiting for read activity after sending a keepalive ping (default is 15s). The default timeout was previously 20s and was lowered to 15s, because besides configuring the gRPC KeepAliveManager, it also sets up the socket's TCP_USER_TIMEOUT (see html). 15s gives a larger margin to detect a faulty connection earlier and retry a submission on another sequencer via amplification, thereby avoiding a request failure. |
 
-</Tab>
-</Tabs>
-
 ### `storage`
-
-<Tabs>
-<Tab title="HOCON">
 
 ```hocon
 canton.participants.<participant>.storage {
@@ -2539,10 +2512,6 @@ canton.participants.<participant>.storage {
 
 Takes a `type`: [StorageConfig](/global-synchronizer/reference/canton-config/types#storageconfig) at `.`.
 
-
-</Tab>
-<Tab title="Table">
-
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `type` | one of `memory`, `h2`, `postgres` | `memory` † | Choose one type — see [StorageConfig](/global-synchronizer/reference/canton-config/types#storageconfig). Determines how a node stores persistent data. |
@@ -2565,13 +2534,7 @@ Takes a `type`: [StorageConfig](/global-synchronizer/reference/canton-config/typ
 |     **partitions** |  |  |  |
 |         `initial-bft-orderer-tables-partition-size` | int | `1500` | Initial partition size for bft-orderer tables. Note that this config is only read once, during the initial database setup and later changes to this value won't have any effect. This is also only used in Postgres setups. |
 
-</Tab>
-</Tabs>
-
 ### `testing-time`
-
-<Tabs>
-<Tab title="HOCON">
 
 ```hocon
 canton.participants.<participant>.testing-time {
@@ -2579,21 +2542,11 @@ canton.participants.<participant>.testing-time {
 }
 ```
 
-
-</Tab>
-<Tab title="Table">
-
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `type` | one of `monotonic-time` | **required** | Optional ledger api time service configuration for demo and testing only |
 
-</Tab>
-</Tabs>
-
 ### `topology`
-
-<Tabs>
-<Tab title="HOCON">
 
 ```hocon
 canton.participants.<participant>.topology {
@@ -2611,10 +2564,6 @@ canton.participants.<participant>.topology {
 }
 ```
 
-
-</Tab>
-<Tab title="Table">
-
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `broadcast-batch-size` | int (PositiveInt) | `100` | The maximum number of topology transactions sent in a topology transaction broadcast |
@@ -2629,13 +2578,7 @@ canton.participants.<participant>.topology {
 | `use-time-proofs-to-observe-effective-time` | boolean | `false` | Whether the node will use time proofs to observe when an effective time has been reached. If false, no time proofs will be sent to the sequencers by any Canton node. |
 | `validate-initial-topology-snapshot` | boolean | `true` | if false, the validation is skipped and the snapshot is directly imported. this is risky as it might create a fork if the validation was changed. therefore, we only use this with great care. the proper solution is to make validation so fast that it doesn't impact performance. |
 
-</Tab>
-</Tabs>
-
 ### `traffic-accounting`
-
-<Tabs>
-<Tab title="HOCON">
 
 ```hocon
 canton.participants.<participant>.traffic-accounting {
@@ -2663,10 +2606,6 @@ canton.participants.<participant>.traffic-accounting {
 
 Takes a `type`: [TrafficEnforcementServerConfig](/global-synchronizer/reference/canton-config/types#trafficenforcementserverconfig) at `traffic-enforcement-server`.
 
-
-</Tab>
-<Tab title="Table">
-
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `allow-submissions-on-degradation` | boolean | `false` | Whether to allow a submission to proceed without a balance check when the balance cannot be determined, for example due to a database outage. The submission is still charged, so an account that didn't have enough traffic balance might end up with a negative balance until it is topped up. Doesn't apply when the traffic service refuses the request. A bypassed check is logged at WARN. Disabled by default, so a failed lookup fails the submission. |
@@ -2686,6 +2625,3 @@ Takes a `type`: [TrafficEnforcementServerConfig](/global-synchronizer/reference/
 |         `min-projection-restart-backoff` | duration (PositiveFiniteDuration) | `1 second` | minimum amount of time before retrying the projection on failure |
 |         `projection-max-restarts` | int | `Int.MaxValue` ‡ |  |
 |         `projection-restart-random-factor` | number | `0.2` |  |
-
-</Tab>
-</Tabs>

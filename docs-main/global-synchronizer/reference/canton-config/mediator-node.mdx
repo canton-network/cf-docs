@@ -19,7 +19,7 @@ Paths are rooted at `canton`. Segments in angle brackets are names you choose:
 
 A `[]` suffix marks the fields of a list element. Keys marked **alpha** or **beta** are not covered by compatibility guarantees.
 
-**Required** lists only what you must set, and when: always, when you configure a particular section, or when you have chosen a particular `type`. **All options** shows every section two ways: **HOCON** as you would write it, every key with its default, and **Table** with the descriptions; a **bold** row names a section and the keys indented beneath it live inside it. Switching one section switches them all.
+**Required** lists only what you must set, and when: always, when you configure a particular section, or when you have chosen a particular `type`. **All options** covers every key. Each part is shown as a pair: the HOCON as you would write it, every key with its default, followed by the same keys as a table with their descriptions. A key that only applies under a particular `type` appears in the HOCON as a comment carrying that condition; in the table a **bold** row names a section and the keys indented beneath it live inside it.
 
 Some sections take a `type` that decides which other keys they accept. Those are documented once on the [types page](/global-synchronizer/reference/canton-config/types) and linked from wherever they occur.
 
@@ -36,9 +36,6 @@ In the Default column:
 
 ## Required
 
-<Tabs>
-<Tab title="HOCON">
-
 ```hocon
 canton.mediators.<mediator> {
   admin-api {
@@ -50,8 +47,8 @@ canton.mediators.<mediator> {
         # url = "..."   # required when type = jwt-jwks
         users = [
           {
-            # allowed-services = [ ]   # required when type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
-            # user-id = "..."   # required when type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
+            # allowed-services = [ ]   # required when admin-api.auth-services[].type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
+            # user-id = "..."   # required when admin-api.auth-services[].type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
           }
         ]
       }
@@ -65,11 +62,11 @@ canton.mediators.<mediator> {
       client-auth {
         admin-client {
           cert-chain-file {
-            # pem-bytes = "..."   # required when type = pem-string and type = require
-            # pem-file = "/path/to/file"   # required when type = pem-file and type = require
-            # type = pem-file|pem-string   # required when type = require
+            # pem-bytes = "..."   # required when type = pem-string and admin-api.tls.client-auth.type = require
+            # pem-file = "/path/to/file"   # required when type = pem-file and admin-api.tls.client-auth.type = require
+            # type = pem-file|pem-string   # required when admin-api.tls.client-auth.type = require
           }
-          # private-key-file = "..."   # required when type = require
+          # private-key-file = "..."   # required when admin-api.tls.client-auth.type = require
         }
         type = require|optional|none   # required
       }
@@ -173,8 +170,8 @@ canton.mediators.<mediator> {
   init {
     identity {
       identifier {
-        # name = "..."   # required when type = explicit and type = auto
-        # type = random|explicit|config   # required when type = auto
+        # name = "..."   # required when type = explicit and init.identity.type = auto
+        # type = random|explicit|config   # required when init.identity.type = auto
       }
       type = external|auto|manual   # required
     }
@@ -286,10 +283,6 @@ canton.mediators.<mediator> {
 }
 ```
 
-
-</Tab>
-<Tab title="Table">
-
 | Key | Type | Required when | Description |
 |---|---|---|---|
 | `admin-api.auth-services[].certificate` | string | `admin-api.auth-services[]` is configured and `admin-api.auth-services[].type` is one of `jwt-es-256-crt`, `jwt-es-512-crt`, `jwt-rs-256-crt` |  |
@@ -376,16 +369,9 @@ canton.mediators.<mediator> {
 | `sequencer-client.auth-token.backoff.jitter.type` | one of `equal`, `full` | `sequencer-client.auth-token.backoff.jitter` is configured |  |
 | `storage.type` | one of `memory`, `h2`, `postgres` | `storage` is configured | Choose one type — see [StorageConfig](/global-synchronizer/reference/canton-config/types#storageconfig). |
 
-
-</Tab>
-</Tabs>
-
 ## All options
 
 ### `admin-api`
-
-<Tabs>
-<Tab title="HOCON">
 
 ```hocon
 canton.mediators.<mediator>.admin-api {
@@ -398,7 +384,21 @@ canton.mediators.<mediator>.admin-api {
   }
   auth-services = [
     {
+      # access-level = wildcard   # when type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
+      # certificate = "..."   # required when type = jwt-es-256-crt|jwt-es-512-crt|jwt-rs-256-crt
+      # max-token-life = <duration>   # when type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
+      # privileged = false   # when type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
+      # secret = "..."   # required when type = unsafe-jwt-hmac-256
+      # target-audience = <string>   # when type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
+      # target-scope = <string>   # when type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
       type = wildcard|unsafe-jwt-hmac-256|jwt-rs-256-crt|jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|party-jwt   # required
+      # url = "..."   # required when type = jwt-jwks
+      users = [
+        {
+          # allowed-services = [ ]   # required when auth-services[].type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
+          # user-id = "..."   # required when auth-services[].type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
+        }
+      ]
     }
   ]
   # flow-control-window = <int>
@@ -435,16 +435,28 @@ canton.mediators.<mediator>.admin-api {
   port = 30004
   tls {
     cert-chain-file {
+      # pem-bytes = "..."   # required when type = pem-string
+      # pem-file = "/path/to/file"   # required when type = pem-file
       type = pem-file|pem-string   # required
     }
     # ciphers = [ ... ]
     client-auth {
+      admin-client {
+        cert-chain-file {
+          # pem-bytes = "..."   # required when tls.client-auth.type = require and type = pem-string
+          # pem-file = "/path/to/file"   # required when tls.client-auth.type = require and type = pem-file
+          # type = pem-file|pem-string   # required when tls.client-auth.type = require
+        }
+        # private-key-file = "..."   # required when tls.client-auth.type = require
+      }
       type = require|optional|none   # required
     }
     enable-cert-revocation-checking = false
     minimum-server-protocol-version = "TLSv1.2"
     private-key-file = "..."   # required
     trust-collection-file {
+      # pem-bytes = "..."   # required when type = pem-string
+      # pem-file = "/path/to/file"   # required when type = pem-file
       type = pem-file|pem-string   # required
     }
   }
@@ -452,10 +464,6 @@ canton.mediators.<mediator>.admin-api {
 ```
 
 Takes a `type`: [AuthServiceConfig](/global-synchronizer/reference/canton-config/types#authserviceconfig) at `auth-services[]`, [PemFileOrString](/global-synchronizer/reference/canton-config/types#pemfileorstring) at `tls.cert-chain-file`, [ServerAuthRequirementConfig](/global-synchronizer/reference/canton-config/types#serverauthrequirementconfig) at `tls.client-auth`.
-
-
-</Tab>
-<Tab title="Table">
 
 | Key | Type | Default | Description |
 |---|---|---|---|
@@ -579,13 +587,7 @@ Takes a `type`: [AuthServiceConfig](/global-synchronizer/reference/canton-config
 |     **trust-collection-file** `type = pem-string` |  |  |  |
 |         `pem-bytes` | string | **required** |  |
 
-</Tab>
-</Tabs>
-
 ### `caching`
-
-<Tabs>
-<Tab title="HOCON">
 
 ```hocon
 canton.mediators.<mediator>.caching {
@@ -666,10 +668,6 @@ canton.mediators.<mediator>.caching {
 }
 ```
 
-
-</Tab>
-<Tab title="Table">
-
 | Key | Type | Default | Description |
 |---|---|---|---|
 | **bft-ordering-batch-cache** |  |  |  |
@@ -728,13 +726,7 @@ canton.mediators.<mediator>.caching {
 |     `expire-after-access` | duration (NonNegativeFiniteDuration) | `1 minute` | how quickly after last access items should be expired from the cache |
 |     `maximum-size` | int (PositiveNumeric) | `100` † | the maximum size of the cache |
 
-</Tab>
-</Tabs>
-
 ### `crypto`
-
-<Tabs>
-<Tab title="HOCON">
 
 ```hocon
 canton.mediators.<mediator>.crypto {
@@ -754,6 +746,20 @@ canton.mediators.<mediator>.crypto {
     # default = <generic>
   }
   kms {
+    # audit-logging = false   # when type = aws|gcp
+    # config = { }   # required when type = driver
+    custom-tags {
+      # <custom-tag> = [ ]   # when kms.type = aws
+    }
+    # disable-ssl-verification = false   # when type = aws
+    # endpoint-override = <string>   # when type = aws|gcp
+    # health-check-period = "10 seconds"   # when type = driver
+    # key-ring-id = "..."   # required when type = gcp
+    # location-id = "..."   # required when type = gcp
+    # multi-region-key = false   # when type = aws
+    # name = "..."   # required when type = driver
+    # project-id = "..."   # required when type = gcp
+    # region = "..."   # required when type = aws
     retries {
       create-key-check {
         initial-delay = "30 seconds"   # required
@@ -812,10 +818,6 @@ canton.mediators.<mediator>.crypto {
 ```
 
 Takes a `type`: [KmsConfig](/global-synchronizer/reference/canton-config/types#kmsconfig) at `kms`, [EncryptedPrivateStoreConfig](/global-synchronizer/reference/canton-config/types#encryptedprivatestoreconfig) at `private-key-store.encryption`.
-
-
-</Tab>
-<Tab title="Table">
 
 | Key | Type | Default | Description |
 |---|---|---|---|
@@ -891,29 +893,25 @@ Takes a `type`: [KmsConfig](/global-synchronizer/reference/canton-config/types#k
 |     `allowed` | array of S | _unset_ | The optional allowed schemes to use. If none is specified, all the provider's supported schemes of kind S are allowed. |
 |     `default` | depends on use (S) | _unset_ | The optional scheme to use. If none is specified, use the provider's default scheme of kind S. |
 
-</Tab>
-</Tabs>
-
 ### `init`
-
-<Tabs>
-<Tab title="HOCON">
 
 ```hocon
 canton.mediators.<mediator>.init {
   generate-intermediate-key = false
   generate-topology-transactions-and-keys = true
   identity {
+    # certificates = [ ]   # when type = external
+    identifier {
+      # name = "..."   # required when identity.type = auto and type = explicit
+      # type = random|explicit|config   # required when identity.type = auto
+    }
+    # namespace = <string>   # when type = external
     type = external|auto|manual   # required
   }
 }
 ```
 
 Takes a `type`: [NodeIdentifierConfig](/global-synchronizer/reference/canton-config/types#nodeidentifierconfig) at `identity.identifier`, [IdentityConfig](/global-synchronizer/reference/canton-config/types#identityconfig) at `identity`.
-
-
-</Tab>
-<Tab title="Table">
 
 | Key | Type | Default | Description |
 |---|---|---|---|
@@ -931,19 +929,15 @@ Takes a `type`: [NodeIdentifierConfig](/global-synchronizer/reference/canton-con
 |     **identifier** `type = explicit` |  |  |  |
 |         `name` | string | **required** | name to use as identifier |
 
-</Tab>
-</Tabs>
-
 ### `mediator`
-
-<Tabs>
-<Tab title="HOCON">
 
 ```hocon
 canton.mediators.<mediator>.mediator {
   deduplication-store {
     persist-batching {
+      # max-parallel-batches = 2   # when type = no-batching
       maximum-batch-size = 500
+      # maximum-in-flight = 2   # when type = batching
       type = batching|no-batching   # required
     }
     prune-at-most-every = "10 seconds"
@@ -956,10 +950,6 @@ canton.mediators.<mediator>.mediator {
 ```
 
 Takes a `type`: [BatchAggregatorConfig](/global-synchronizer/reference/canton-config/types#batchaggregatorconfig) at `deduplication-store.persist-batching`.
-
-
-</Tab>
-<Tab title="Table">
 
 | Key | Type | Default | Description |
 |---|---|---|---|
@@ -976,13 +966,7 @@ Takes a `type`: [BatchAggregatorConfig](/global-synchronizer/reference/canton-co
 |     `max-pruning-batch-size` | int (PositiveInt) | `50000` | Maximum number of events to prune from a mediator at a time, used to break up batches internally |
 |     `pruning-metric-update-interval` | duration (PositiveDurationSeconds) | `1 hour` | How frequently to update the `max-event-age` pruning progress metric in the background. A setting of None disables background metric updating. |
 
-</Tab>
-</Tabs>
-
 ### `monitoring`
-
-<Tabs>
-<Tab title="HOCON">
 
 ```hocon
 canton.mediators.<mediator>.monitoring {
@@ -1010,10 +994,6 @@ canton.mediators.<mediator>.monitoring {
 }
 ```
 
-
-</Tab>
-<Tab title="Table">
-
 | Key | Type | Default | Description |
 |---|---|---|---|
 | **grpc-health-server** |  |  |  |
@@ -1034,24 +1014,22 @@ canton.mediators.<mediator>.monitoring {
 |     `address` | string | `0.0.0.0` |  |
 |     `port` | int (Port) | **required** |  |
 
-</Tab>
-</Tabs>
-
 ### `parameters`
-
-<Tabs>
-<Tab title="HOCON">
 
 ```hocon
 canton.mediators.<mediator>.parameters {
   alpha-version-support = false
   batching {
     aggregator {
+      # max-parallel-batches = 2   # when type = no-batching
       maximum-batch-size = 500
+      # maximum-in-flight = 2   # when type = batching
       type = batching|no-batching   # required
     }
     contract-store-aggregator {
+      # max-parallel-batches = 2   # when type = no-batching
       maximum-batch-size = 500
+      # maximum-in-flight = 2   # when type = batching
       type = batching|no-batching   # required
     }
     # in-flight-aggregations-query-interval = <duration>
@@ -1064,17 +1042,23 @@ canton.mediators.<mediator>.parameters {
     max-topology-update-batch-size = 1000
     max-topology-write-batch-size = 1000
     mediator-fetch-finalized-responses-aggregator {
+      # max-parallel-batches = 2   # when type = no-batching
       maximum-batch-size = 500
+      # maximum-in-flight = 2   # when type = batching
       type = batching|no-batching   # required
     }
     mediator-store-finalized-responses-aggregator {
+      # max-parallel-batches = 2   # when type = no-batching
       maximum-batch-size = 500
+      # maximum-in-flight = 2   # when type = batching
       type = batching|no-batching   # required
     }
     parallelism = 8
     pruning-parallelism = 2
     topology-cache-aggregator {
+      # max-parallel-batches = 2   # when type = no-batching
       maximum-batch-size = 500
+      # maximum-in-flight = 2   # when type = batching
       type = batching|no-batching   # required
     }
   }
@@ -1173,10 +1157,6 @@ canton.mediators.<mediator>.parameters {
 ```
 
 Takes a `type`: [BatchAggregatorConfig](/global-synchronizer/reference/canton-config/types#batchaggregatorconfig) at `batching.aggregator`.
-
-
-</Tab>
-<Tab title="Table">
 
 | Key | Type | Default | Description |
 |---|---|---|---|
@@ -1298,13 +1278,7 @@ Takes a `type`: [BatchAggregatorConfig](/global-synchronizer/reference/canton-co
 |     `enabled` | boolean | **required** |  |
 |     `kill-delay` | duration (NonNegativeFiniteDuration) | `NonNegativeFiniteDuration(30.seconds)` ‡ |  |
 
-</Tab>
-</Tabs>
-
 ### `replication`
-
-<Tabs>
-<Tab title="HOCON">
 
 ```hocon
 canton.mediators.<mediator>.replication {
@@ -1335,10 +1309,6 @@ canton.mediators.<mediator>.replication {
 }
 ```
 
-
-</Tab>
-<Tab title="Table">
-
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `enabled` | boolean | _unset_ | Needs to be set to true for a replicated node, which shares the database with other replicas. |
@@ -1363,13 +1333,7 @@ canton.mediators.<mediator>.replication {
 |             `health-check-period` | duration (PositiveFiniteDuration) | `5 seconds` | Health check period, i.e., how long to wait between one health check completed and the next to start. |
 |             `health-check-timeout` | duration (PositiveFiniteDuration) | `15 seconds` | Timeout for running a health check in seconds granularity. |
 
-</Tab>
-</Tabs>
-
 ### `sequencer-client`
-
-<Tabs>
-<Tab title="HOCON">
 
 ```hocon
 canton.mediators.<mediator>.sequencer-client {
@@ -1415,10 +1379,6 @@ canton.mediators.<mediator>.sequencer-client {
 }
 ```
 
-
-</Tab>
-<Tab title="Table">
-
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `acknowledgement-interval` | duration (NonNegativeFiniteDuration) | `1 minute` | Controls how frequently the client acknowledges how far it has successfully processed to the sequencer which allows the sequencer to remove this data when pruning. |
@@ -1457,13 +1417,7 @@ canton.mediators.<mediator>.sequencer-client {
 |     `time` | duration (NonNegativeFiniteDuration) | `40 seconds` | Sets the time without read activity before sending a keepalive ping. Do not set to small numbers (default is 40s) |
 |     `timeout` | duration (NonNegativeFiniteDuration) | `15 seconds` | Sets the time waiting for read activity after sending a keepalive ping (default is 15s). The default timeout was previously 20s and was lowered to 15s, because besides configuring the gRPC KeepAliveManager, it also sets up the socket's TCP_USER_TIMEOUT (see html). 15s gives a larger margin to detect a faulty connection earlier and retry a submission on another sequencer via amplification, thereby avoiding a request failure. |
 
-</Tab>
-</Tabs>
-
 ### `storage`
-
-<Tabs>
-<Tab title="HOCON">
 
 ```hocon
 canton.mediators.<mediator>.storage {
@@ -1494,10 +1448,6 @@ canton.mediators.<mediator>.storage {
 
 Takes a `type`: [StorageConfig](/global-synchronizer/reference/canton-config/types#storageconfig) at `.`.
 
-
-</Tab>
-<Tab title="Table">
-
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `type` | one of `memory`, `h2`, `postgres` | `memory` † | Choose one type — see [StorageConfig](/global-synchronizer/reference/canton-config/types#storageconfig). Determines how a node stores persistent data. |
@@ -1520,13 +1470,7 @@ Takes a `type`: [StorageConfig](/global-synchronizer/reference/canton-config/typ
 |     **partitions** |  |  |  |
 |         `initial-bft-orderer-tables-partition-size` | int | `1500` | Initial partition size for bft-orderer tables. Note that this config is only read once, during the initial database setup and later changes to this value won't have any effect. This is also only used in Postgres setups. |
 
-</Tab>
-</Tabs>
-
 ### `time-tracker`
-
-<Tabs>
-<Tab title="HOCON">
 
 ```hocon
 canton.mediators.<mediator>.time-tracker {
@@ -1541,10 +1485,6 @@ canton.mediators.<mediator>.time-tracker {
 }
 ```
 
-
-</Tab>
-<Tab title="Table">
-
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `min-observation-duration` | duration (NonNegativeFiniteDuration) | `24 hours` | We will try to ensure that we receive a time at least once during this duration (measured using the host clock). This is practically useful if there is no other activity on the synchronizer as the sequencer client will then have an event to acknowledge allowing sequenced events to be pruned before this point. We may in the future use this to monitor clock skews between the host and synchronizer. |
@@ -1555,13 +1495,7 @@ canton.mediators.<mediator>.time-tracker {
 |     `max-retry-delay` | duration (NonNegativeFiniteDuration) | `5 seconds` | The max retry delay if the request to send a sequenced event fails |
 |     `max-sequencing-delay` | duration (NonNegativeFiniteDuration) | `10 seconds` | If our request for a sequenced event was successful, how long should we wait to observe it from the sequencer before starting a new request. |
 
-</Tab>
-</Tabs>
-
 ### `topology`
-
-<Tabs>
-<Tab title="HOCON">
 
 ```hocon
 canton.mediators.<mediator>.topology {
@@ -1579,10 +1513,6 @@ canton.mediators.<mediator>.topology {
 }
 ```
 
-
-</Tab>
-<Tab title="Table">
-
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `broadcast-batch-size` | int (PositiveInt) | `100` | The maximum number of topology transactions sent in a topology transaction broadcast |
@@ -1596,6 +1526,3 @@ canton.mediators.<mediator>.topology {
 | `topology-transaction-registration-timeout` | duration (NonNegativeFiniteDuration) | `20 seconds` | Used to determine the max sequencing time for topology transaction broadcasts. |
 | `use-time-proofs-to-observe-effective-time` | boolean | `false` | Whether the node will use time proofs to observe when an effective time has been reached. If false, no time proofs will be sent to the sequencers by any Canton node. |
 | `validate-initial-topology-snapshot` | boolean | `true` | if false, the validation is skipped and the snapshot is directly imported. this is risky as it might create a fork if the validation was changed. therefore, we only use this with great care. the proper solution is to make validation so fast that it doesn't impact performance. |
-
-</Tab>
-</Tabs>
