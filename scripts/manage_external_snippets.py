@@ -678,6 +678,65 @@ def update(args: argparse.Namespace, repo: SnippetRepo) -> int:
     return 0
 
 
+def find_references(generated_file: Path) -> list[str]:
+    docs_root = CF_DOCS_ROOT / "docs-main"
+    target = generated_file.relative_to(docs_root).as_posix().removesuffix(".mdx")
+    target_pattern = re.compile(rf"{re.escape(target)}(?:\.mdx)?(?=$|['\"\s;)\]}}>])")
+    references: list[str] = []
+    searchable_suffixes = {".js", ".jsx", ".json", ".md", ".mdx", ".ts", ".tsx"}
+    for path in docs_root.rglob("*"):
+        if (
+            not path.is_file()
+            or path == generated_file
+            or path.suffix.lower() not in searchable_suffixes
+        ):
+            continue
+        for line_number, line in enumerate(
+            path.read_text(encoding="utf-8").splitlines(), start=1
+        ):
+            if target_pattern.search(line):
+                references.append(
+                    f"{path.relative_to(CF_DOCS_ROOT).as_posix()}:{line_number}"
+                )
+    return references
+
+
+def delete(args: argparse.Namespace, repo: SnippetRepo) -> int:
+    manifest_file = manifest_path(repo)
+    manifest = load_manifest(manifest_file)
+    lock = load_source_lock()
+    entry = find_manifest_entry(manifest, manifest_file, args.snippet_name)
+    generated_file = output_path(repo, args.snippet_name)
+    references = find_references(generated_file)
+    if references:
+        rendered = "\n  ".join(references)
+        raise SnippetAuthoringError(
+            f"Cannot delete {args.snippet_name}; page references remain:\n  {rendered}"
+        )
+
+    manifest["snippets"].remove(entry)
+    lock["snippets"].pop(args.snippet_name, None)
+    changes = authoring_changes(
+        manifest_file=manifest_file,
+        manifest=manifest,
+        lock=lock,
+        generated_file=generated_file,
+        generated_content=None,
+    )
+    if args.dry_run:
+        print_change_preview(
+            action="delete",
+            snippet_name=args.snippet_name,
+            changes=changes,
+        )
+        return 0
+    commit_changes(changes)
+    print(f"Deleted {args.snippet_name}")
+    print(f"Manifest: {manifest_file.relative_to(CF_DOCS_ROOT)}")
+    print(f"Output:   {generated_file.relative_to(CF_DOCS_ROOT)}")
+    return 0
+
+
 def add_authoring_arguments(
     parser: argparse.ArgumentParser,
     *,
@@ -712,7 +771,7 @@ def add_authoring_arguments(
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Add or edit cf-docs external snippets"
+        description="Add, edit, or delete cf-docs external snippets"
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
     add_parser = subparsers.add_parser("add", help="Add and render a snippet")
@@ -721,6 +780,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "edit", help="Edit and rerender a snippet without changing its name"
     )
     add_authoring_arguments(edit_parser, command="edit")
+    delete_parser = subparsers.add_parser(
+        "delete", help="Delete an unreferenced snippet and its generated output"
+    )
+    delete_parser.add_argument("repo", choices=sorted(REPOS))
+    delete_parser.add_argument("snippet_name", help="Existing stable snippetName")
+    delete_parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args(argv)
 
 
@@ -730,7 +795,9 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "add":
             return add(args, repo)
-        return update(args, repo)
+        if args.command == "edit":
+            return update(args, repo)
+        return delete(args, repo)
     except (OSError, SnippetAuthoringError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
