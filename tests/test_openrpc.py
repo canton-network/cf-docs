@@ -21,6 +21,28 @@ def write_text(path: Path, contents: str) -> None:
 
 
 class OpenRpcTests(unittest.TestCase):
+    def test_prerelease_badges_follow_published_method_state(self) -> None:
+        for state, label in [("alpha", "Alpha"), (" BETA ", "Beta"), ("stable", None), ("deprecated", "Deprecated"), (None, None)]:
+            with self.subTest(state=state):
+                manifest = self._write_manifest()
+                for version, value in [("1.0.0", "alpha"), ("1.1.0", state)]:
+                    path = manifest.parent / version / "dapp-api.json"
+                    spec = json.loads(path.read_text())
+                    if value is not None:
+                        spec["methods"][0]["x-state"] = value
+                    path.write_text(json.dumps(spec))
+                output = self.root / "badge-pages"
+                self.assertEqual(cli_main([
+                    "openrpc", "build-api-pages-from-manifest", "--manifest", str(manifest),
+                    "--output-dir", str(output),
+                ]), 0)
+                for relative in ["operations/dapp-api/status.mdx", "specs/dapp-api.mdx"]:
+                    page = (output / relative).read_text()
+                    for candidate in ("Alpha", "Beta"):
+                        self.assertEqual(f">{candidate}</span>" in page, candidate == label)
+                    if label == "Deprecated":
+                        self.assertNotIn('class="x2mdx-ref-badge x2mdx-ref-badge--removed">Deprecated</span>', page)
+
     def setUp(self) -> None:
         self.temp_dir = tempfile.TemporaryDirectory()
         self.root = Path(self.temp_dir.name)

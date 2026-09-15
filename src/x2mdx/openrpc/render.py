@@ -15,6 +15,7 @@ from x2mdx.openrpc.history import openrpc_item_id
 from x2mdx.openrpc.models import OpenRpcMethodLifecycle, OpenRpcReport, OpenRpcSpecLifecycle
 from x2mdx.reference_pages import (
     ReferenceBadge,
+    lifecycle_state_badges,
     ReferenceBreadcrumb,
     ReferenceCard,
     ReferenceCollectionPage,
@@ -68,19 +69,23 @@ def page_ref(from_path: Path, to_path: Path, *, output_dir: Path, link_prefix: s
 
 def lifecycle_badges(
     *,
+    state: str | None = None,
     item: HistoryItem | None = None,
     events: list[HistoryEvent] | None = None,
     comparison_versions: tuple[str, ...] = (),
     linked: bool = True,
 ) -> list[ReferenceBadge]:
     if item is not None:
-        return reference_badges_for_history_item(
+        badges = reference_badges_for_history_item(
             item,
             kind_label="JSON-RPC",
             comparison_versions=comparison_versions,
             linked=linked,
         )
-    return reference_badges_for_history_events(events or [], kind_label="JSON-RPC", linked=linked)
+    else:
+        badges = reference_badges_for_history_events(events or [], kind_label="JSON-RPC", linked=linked)
+    badges.extend(lifecycle_state_badges(state, existing=badges))
+    return badges
 
 
 def spec_history_events(
@@ -285,6 +290,7 @@ def build_spec_page(
             href=page_ref(spec_path, operation_page_path(output_dir, spec, method), output_dir=output_dir, link_prefix=link_prefix),
             summary=compact_text(method.latest.get("summary") or method.latest.get("description") or "", limit=170),
             badges=lifecycle_badges(
+                state=method.lifecycle_state,
                 item=items_by_id[openrpc_item_id(spec.spec_id, method.method)],
                 comparison_versions=history_report.comparison_versions,
                 linked=False,
@@ -393,6 +399,7 @@ def build_method_page(
             ReferenceBreadcrumb(method.method),
         ],
         badges=lifecycle_badges(
+            state=method.lifecycle_state,
             item=history_item,
             comparison_versions=comparison_versions,
         ),

@@ -9,11 +9,13 @@ from functools import cmp_to_key
 from pathlib import Path
 from typing import Any
 
+from x2mdx.protobuf.lifecycle import metadata_lifecycle_state
 from x2mdx.history.events import history_events_for_item
 from x2mdx.history.models import HistoryEvent, HistoryEventKind, HistoryItem, SurfaceHistoryReport
 from x2mdx.history.versioning import compare_versions
 from x2mdx.reference_pages import (
     ReferenceBadge,
+    lifecycle_state_badges,
     ReferenceBreadcrumb,
     ReferenceCard,
     ReferenceChange,
@@ -86,6 +88,7 @@ def package_group_sort_key(package_name: str, *, has_services: bool) -> tuple[in
 
 def lifecycle_badges(
     *,
+    state: str | None = None,
     introduced: str | None = None,
     changed: str | None = None,
     removed: str | None = None,
@@ -94,23 +97,25 @@ def lifecycle_badges(
     comparison_versions: tuple[str, ...] = (),
     linked: bool = True,
 ) -> list[ReferenceBadge]:
+    state_badges = lifecycle_state_badges(state)
     if item is not None:
-        return reference_badges_for_history_item(
+        badges = reference_badges_for_history_item(
             item,
             kind_label="gRPC",
             comparison_versions=comparison_versions,
             linked=linked,
         )
+        return lifecycle_state_badges(state, existing=badges) + badges
     if events is not None:
         return reference_badges_for_history_events(events, kind_label="gRPC", linked=linked)
     if introduced is None:
-        return [ReferenceBadge("gRPC", tone="protocol")]
+        return state_badges + [ReferenceBadge("gRPC", tone="protocol")]
     badges = [ReferenceBadge("gRPC", tone="protocol"), ReferenceBadge(f"Since {introduced}", tone="added")]
     if changed and changed != introduced:
         badges.append(ReferenceBadge(f"Changed {changed}", tone="changed"))
     if removed:
         badges.append(ReferenceBadge(f"Removed in {removed}", tone="removed"))
-    return badges
+    return state_badges + badges
 
 
 def aggregate_history_events(
@@ -282,6 +287,17 @@ def build_package_docs(report: dict[str, Any]) -> list[dict[str, Any]]:
     )
 
 
+def lifecycle_meta_items(entity: dict[str, Any]) -> list[ReferenceMetaItem]:
+    state = metadata_lifecycle_state(entity)
+    return [ReferenceMetaItem("Lifecycle", state.title())] if state else []
+
+
+def lifecycle_description(entity: dict[str, Any]) -> str:
+    description = str(entity.get("description") or "")
+    state = metadata_lifecycle_state(entity)
+    return "\n\n".join(filter(None, [f"Lifecycle: {state.title()}" if state else "", description]))
+
+
 def field_type_label(field: dict[str, Any]) -> str:
     if field.get("map"):
         base = "map"
@@ -319,14 +335,14 @@ def message_schema(
         ReferenceSchema(
             name=message["id"],
             summary=f"{len(message['fieldIds'])} fields",
-            description=str(message.get("description") or ""),
+            description=lifecycle_description(message),
             anchor=f"schema-{slugify_segment(message['id'])}",
             fields=[
                 ReferenceField(
                     name=field["name"],
                     type_label=display_field_type(field),
                     required=field.get("label") == "required",
-                    description=str(field.get("description") or ""),
+                    description=lifecycle_description(field),
                 )
                 for field_id in message["fieldIds"]
                 for field in [ctx["fields"][field_id]]
@@ -356,7 +372,7 @@ def enum_schema(enum_doc: dict[str, Any], ctx: dict[str, dict[str, Any]], *, see
         ReferenceSchema(
             name=enum_doc["id"],
             summary=f"{len(enum_doc['valueIds'])} values",
-            description=str(enum_doc.get("description") or ""),
+            description=lifecycle_description(enum_doc),
             anchor=f"schema-{slugify_segment(enum_doc['id'])}",
             enum_values=[
                 str(ctx_value["name"])
@@ -661,18 +677,21 @@ def build_package_page(
                     summary=compact_text(endpoint.get("description") or endpoint_signature(endpoint), limit=180),
                     badges=(
                         lifecycle_badges(
+                            state=metadata_lifecycle_state(endpoint),
                             item=history_item,
                             comparison_versions=history_report.comparison_versions,
                             linked=False,
                         )
                         if history_item is not None
                         else lifecycle_badges(
+                            state=metadata_lifecycle_state(endpoint),
                             introduced=str(lifecycle["introducedIn"]),
                             changed=str(lifecycle.get("lastChangedIn") or ""),
                             removed=str(lifecycle.get("removedIn") or "") or None,
                         )
                     ),
                     meta_items=[
+                        *lifecycle_meta_items(endpoint),
                         ReferenceMetaItem("Request", endpoint["requestType"]),
                         ReferenceMetaItem("Response", endpoint["responseType"]),
                         ReferenceMetaItem("Client stream", "Yes" if endpoint["clientStreaming"] else "No"),
@@ -784,17 +803,20 @@ def build_operation_page(
         ],
         badges=(
             lifecycle_badges(
+                state=metadata_lifecycle_state(endpoint),
                 item=history_item,
                 comparison_versions=comparison_versions,
             )
             if history_item is not None
             else lifecycle_badges(
+                state=metadata_lifecycle_state(endpoint),
                 introduced=str(lifecycle["introducedIn"]),
                 changed=str(lifecycle.get("lastChangedIn") or ""),
                 removed=str(lifecycle.get("removedIn") or "") or None,
             )
         ),
         meta_items=[
+            *lifecycle_meta_items(endpoint),
             ReferenceMetaItem("Package", package_name),
             ReferenceMetaItem("Service", endpoint["service"]),
             ReferenceMetaItem("Introduced", str(lifecycle["introducedIn"])),
@@ -808,6 +830,7 @@ def build_operation_page(
             if history_item and not history_item.current_present else None
         ),
         protocol_items=[
+            *lifecycle_meta_items(endpoint),
             ReferenceMetaItem("Protocol", "gRPC"),
             ReferenceMetaItem("Service", endpoint["service"]),
             ReferenceMetaItem("RPC", endpoint["name"]),
@@ -818,6 +841,7 @@ def build_operation_page(
             ReferencePanel(
                 title=short_type_name(endpoint["requestType"]),
                 meta_items=[
+                    *lifecycle_meta_items(ctx["messages"].get(endpoint["requestType"], {})),
                     ReferenceMetaItem("Message", endpoint["requestType"]),
                     ReferenceMetaItem("Client stream", "Yes" if endpoint["clientStreaming"] else "No"),
                 ],
@@ -828,6 +852,7 @@ def build_operation_page(
             ReferencePanel(
                 title=short_type_name(endpoint["responseType"]),
                 meta_items=[
+                    *lifecycle_meta_items(ctx["messages"].get(endpoint["responseType"], {})),
                     ReferenceMetaItem("Message", endpoint["responseType"]),
                     ReferenceMetaItem("Server stream", "Yes" if endpoint["serverStreaming"] else "No"),
                 ],

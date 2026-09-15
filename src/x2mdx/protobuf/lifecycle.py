@@ -126,6 +126,15 @@ def metadata_for(overlay: dict[str, Any], kind: str, entity_id: str) -> dict[str
     return value if isinstance(value, dict) else {}
 
 
+def metadata_lifecycle_state(entity: dict[str, Any]) -> str | None:
+    metadata = entity.get("metadata")
+    lifecycle = metadata.get("lifecycle") if isinstance(metadata, dict) else None
+    state = lifecycle.get("state") if isinstance(lifecycle, dict) else None
+    if isinstance(state, str) and state.strip().lower() in {"alpha", "beta", "stable", "deprecated"}:
+        return state.strip().lower()
+    return None
+
+
 def load_descriptor_set_from_image(image_path: str) -> Any:
     ensure_runtime_dependencies()
     descriptor_set = descriptor_pb2.FileDescriptorSet()
