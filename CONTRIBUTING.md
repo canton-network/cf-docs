@@ -14,6 +14,8 @@ This repo is the **home for Canton Network documentation** and content here shou
 
 - **Verify every technical claim:** an AI-generated draft might hallucinate or invent details. Always check API signatures, CLI flags, config keys, version numbers, and code samples against the Actual Current Canton/Splice/Daml Release or source docs. Do not assume the model's output reflects the current release, and make sure to review everything before opening a PR.
 
+For external code snippets, use the [snippet commands](config/snippet-config/snippet-commands.md).
+
 ## Ways to contribute
 
 ### Provide Feedback on a Docs Page
