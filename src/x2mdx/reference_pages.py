@@ -26,6 +26,18 @@ class ReferenceBadge:
     href: str | None = None
 
 
+def lifecycle_state_badges(state: str | None, *, existing: list[ReferenceBadge] | None = None) -> list[ReferenceBadge]:
+    """Display authored state without duplicating a dated deprecation badge."""
+    if state not in {"alpha", "beta", "deprecated"}:
+        return []
+    if state == "deprecated" and any(
+        badge.label == "Deprecated" or badge.label.startswith("Deprecated ")
+        for badge in existing or []
+    ):
+        return []
+    return [ReferenceBadge(state.title(), tone="removed" if state == "deprecated" else "changed")]
+
+
 @dataclass(frozen=True)
 class ReferenceMetaItem:
     label: str
