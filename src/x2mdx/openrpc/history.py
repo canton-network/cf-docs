@@ -78,6 +78,8 @@ def build_openrpc_history_report(
                 )
             )
 
+    observations = {key: values for key, values in observations.items()
+                    if values[-1].detail.get("lifecycle_state") != "dev"}
     known_item_ids = set(observations)
     items = [
         _history_item(
