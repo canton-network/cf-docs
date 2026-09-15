@@ -361,7 +361,7 @@ The Canton Admin API is not exposed by default as it does not yet support auth. 
 
 ## Wallet Gateway and Splice Portfolio
 
-Adding the `-g` flag to the `start.sh` command also deploys the [Wallet Gateway](/integrations/wallet-gateway/overview) and the [Splice Portfolio](/sdks-tools/development-tools/splice-portfolio/overview) alongside the validator (see [Wallet Gateway and Splice Portfolio](/global-synchronizer/deployment/validator-wallet-gateway) for how they fit into a validator deployment):
+Adding the `-g` flag to the `start.sh` command also deploys the [Wallet Gateway](/integrations/wallet-gateway/overview) and the [Splice Portfolio](/sdks-tools/development-tools/splice-portfolio/overview) alongside the validator (see [Wallet Gateway and Splice Portfolio](/global-synchronizer/deployment/validator-wallet-gateway) for how they fit into a validator deployment). Before you start, set `LEDGER_API_AUTH_AUDIENCE` and `VALIDATOR_AUTH_AUDIENCE` in the `.env` file to the same value, e.g. `https://canton.network.global`. If you deploy with authentication (`-a`), also set `WALLET_GATEWAY_UI_CLIENT_ID` and register the callback URL, as described in [Configuring Authentication](#configuring-authentication).
 
 ```bash
 ./start.sh -s "<SPONSOR_SV_URL>" -o "<ONBOARDING_SECRET>" -p "<party_hint>" -m "<MIGRATION_ID>" -w -g
@@ -369,12 +369,12 @@ Adding the `-g` flag to the `start.sh` command also deploys the [Wallet Gateway]
 
 The Wallet Gateway is accessible at [http://walletgateway.localhost](http://walletgateway.localhost) and the Splice Portfolio at [http://portfolio.localhost](http://portfolio.localhost). The versions of both are pinned in the `.env` file as `WALLET_GATEWAY_VERSION` and `PORTFOLIO_VERSION`.
 
-The Wallet Gateway only serves users that have been onboarded to the validator, so first [log in to the wallet UI](#logging-into-the-wallet-ui) with the user you want to use. Then open the Wallet Gateway, select the `Splice validator` network and log in with that username as the `Client ID` and `unsafe` as the `Client Secret`, replacing the prefilled Client ID. Your wallet party shows up on the `Parties` page as your primary party. You can create additional parties there, as described in [Party Management](/integrations/wallet-gateway/use/party-management).
+A user's wallet party is allocated when they onboard in the wallet UI, so first [log in to the wallet UI](#logging-into-the-wallet-ui) with the user you want to use. Then open the Wallet Gateway and select the `Splice validator` network. Without authentication (the default), log in with that username as the `Client ID` and `unsafe` as the `Client Secret`, replacing the prefilled `Client ID`. With `-a`, logging in redirects you to your OIDC provider, like the wallet UI. Your wallet party shows up on the `Parties` page as your primary party. You can create additional parties there, as described in [Party Management](/integrations/wallet-gateway/use/party-management).
 
 To use the Splice Portfolio, click `Connect Wallet`, enter `http://walletgateway.localhost/api/v0/dapp` as a custom wallet URL and log in to the Wallet Gateway in the popup as above. The portfolio then lists your parties, and on DevNet you can [tap the faucet](/sdks-tools/development-tools/splice-portfolio/devnet-faucet) for them from its `Settings` page.
 
 <Note>
-`LEDGER_API_AUTH_AUDIENCE` and `VALIDATOR_AUTH_AUDIENCE` in the `.env` file must be equal for the Splice Portfolio to work. The shipped defaults differ, so set both to the same value, e.g. `https://canton.network.global`. `start.sh` refuses to start with `-g` otherwise.
+The two audiences must be equal because the Splice Portfolio calls the validator API with the Wallet Gateway's Ledger API tokens. The shipped defaults differ, and `start.sh` refuses to start with `-g` until you change them.
 
 When adding `-g` to an already running deployment, `start.sh -w` may fail once reporting the `nginx` container as unhealthy. Run the same command again.
 

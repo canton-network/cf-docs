@@ -5,16 +5,16 @@ description: "Offer your validator's users a CIP-0103 wallet and a portfolio UI 
 
 A validator ships with the wallet UI and the CNS UI. You can additionally offer your users the [Wallet Gateway](/integrations/wallet-gateway/overview) and the [Splice Portfolio](/sdks-tools/development-tools/splice-portfolio/overview):
 
-- The **Wallet Gateway** is a self-hosted wallet that runs next to your validator. Users log in to it with the same identity provider as to the wallet UI, manage their parties in it, and connect it to dApps. It implements the [CIP-0103](https://github.com/canton-foundation/cips/blob/main/cip-0103/cip-0103.md) wallet standard, so any compatible dApp can connect to it.
+- The **Wallet Gateway** is a self-hosted wallet that runs next to your validator. Users log in to it with the same identity provider as the wallet UI, manage their parties in it, and connect it to dApps. It implements the [CIP-0103](https://github.com/canton-foundation/cips/blob/main/cip-0103/cip-0103.md) wallet standard, so any compatible dApp can connect to it.
 - The **Splice Portfolio** is a reference dApp for viewing and moving assets. It connects to the Wallet Gateway like any other dApp and shows the assets of all parties a user holds there.
 
 Both are developed in the [canton-network/wallet](https://github.com/canton-network/wallet) repository. This page describes how they fit into a validator deployment and where to find the instructions for deploying and using them.
 
 ## How they relate to your validator
 
-Parties created in the Wallet Gateway are hosted on your validator's participant, next to the parties the wallet UI allocates. The Wallet Gateway only serves users that already exist on your validator, so a user first has to log in to the wallet UI and onboard there. After that, the user's wallet party appears in the Wallet Gateway as their primary party, and they can create additional parties.
+Parties created in the Wallet Gateway are hosted on your validator's participant, next to the parties the wallet UI allocates. A user's wallet party is allocated when they onboard in the wallet UI, so a user first has to log in to the wallet UI and onboard there. After that, the user's wallet party appears in the Wallet Gateway as their primary party, and they can create additional parties.
 
-The Wallet Gateway signs transactions with your participant by default. It can also sign through an external custody provider instead, see [Signing providers](/integrations/wallet-gateway/operate/signing-providers).
+The Wallet Gateway signs transactions with your participant by default. It can also sign through an external custody provider instead. See [Signing providers](/integrations/wallet-gateway/operate/signing-providers).
 
 The Splice Portfolio reads balances and transaction history through your validator's API and a Scan instance, which it uses as its token registry.
 
@@ -35,13 +35,13 @@ Splice does not ship Helm charts for the Wallet Gateway and the Splice Portfolio
 | Wallet Gateway | `oci://ghcr.io/digital-asset/wallet-gateway/helm/wallet-gateway` |
 | Splice Portfolio | `oci://ghcr.io/digital-asset/splice-portfolio/helm/splice-portfolio` |
 
-Install the chart versions that the Docker Compose bundle of your Splice release pins as `WALLET_GATEWAY_VERSION` and `PORTFOLIO_VERSION` in its `.env` file. These are the versions Splice is tested against.
+Install the chart versions that the [Docker Compose bundle](/global-synchronizer/deployment/validator-docker-compose#deployment) of your Splice release pins as `WALLET_GATEWAY_VERSION` and `PORTFOLIO_VERSION` in its `.env` file. These are the versions Splice is tested against, and the chart versions use the same plain version numbers.
 
 On top of the upstream instructions, you need to:
 
-- Configure a Wallet Gateway [network](/integrations/wallet-gateway/operate/networks-and-identity) that points at the Ledger API of your validator's participant and uses the same OIDC provider as your validator. Its `audience` must be the one your validator accepts for both the Ledger API and the validator API.
+- Configure a Wallet Gateway [network](/integrations/wallet-gateway/operate/networks-and-identity) that points at the Ledger API of your validator's participant and uses the same OIDC provider as your validator. The Splice Portfolio calls the validator API with the Wallet Gateway's Ledger API tokens, so your validator API must accept the Ledger API audience. If you configured dedicated audiences for the two, as the [Kubernetes deployment](/global-synchronizer/deployment/validator-kubernetes#configuring-authentication) recommends, set the validator API audience to the Ledger API audience and use that as the network's `audience`.
 - Create an OAuth app for the Wallet Gateway UI in your OIDC provider, like the one for the wallet UI, with `https://<wallet gateway hostname>/callback` as the callback URL.
-- Point the Splice Portfolio at the validator API of your validator (`https://wallet.<your hostname>/api/validator`) and at a Scan instance as its registry.
+- Point the Splice Portfolio at the validator API of your validator (`https://wallet.validator.YOUR_HOSTNAME/api/validator` with the ingress configuration of the Kubernetes deployment) and at a Scan instance as its registry.
 - Expose both through your ingress, and allow the portfolio's origin in the Wallet Gateway's `allowedOrigins`.
 
 </Tab>
@@ -51,5 +51,5 @@ On top of the upstream instructions, you need to:
 
 1. Log in to the wallet UI and onboard the user, if not done yet.
 2. Open the Wallet Gateway, select your validator's network and log in. See [Party Management](/integrations/wallet-gateway/use/party-management) for managing parties there.
-3. Open the Splice Portfolio, click `Connect Wallet`, and select the Wallet Gateway. See [First-Time Setup](/sdks-tools/development-tools/splice-portfolio/first-time-setup).
-4. On DevNet, [tap the faucet](/sdks-tools/development-tools/splice-portfolio/devnet-faucet) from the portfolio's `Settings` page to get test Canton Coin. Transactions started from the portfolio are approved in a Wallet Gateway popup.
+3. Open the Splice Portfolio, click **Connect Wallet** and enter your Wallet Gateway's dApp URL, `https://<wallet gateway hostname>/api/v0/dapp`, as a custom wallet. See [First-Time Setup](/sdks-tools/development-tools/splice-portfolio/first-time-setup).
+4. On DevNet, [tap the faucet](/sdks-tools/development-tools/splice-portfolio/devnet-faucet) from the portfolio's **Settings** page to get test Canton Coin. Transactions started from the portfolio are approved in a Wallet Gateway popup.
