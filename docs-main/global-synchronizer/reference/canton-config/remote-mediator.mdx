@@ -17,7 +17,9 @@ Paths are rooted at `canton`. Segments in angle brackets are names you choose:
 
 A `[]` suffix marks the fields of a list element. Keys marked **alpha** or **beta** are not covered by compatibility guarantees.
 
-Each section is shown two ways. **HOCON** is the section as you would write it: every key with its default, and one further block per `type` a section accepts. **Table** lists the same keys with their descriptions; a **bold** row names a section and the keys indented beneath it live inside it. Switching one section switches them all.
+**Required** lists only what you must set, and when: always, when you configure a particular section, or when you have chosen a particular `type`. **All options** shows every section two ways: **HOCON** as you would write it, every key with its default, and **Table** with the descriptions; a **bold** row names a section and the keys indented beneath it live inside it. Switching one section switches them all.
+
+Some sections take a `type` that decides which other keys they accept. Those are documented once on the [types page](/global-synchronizer/reference/canton-config/types) and linked from wherever they occur.
 
 In the Default column:
 
@@ -30,7 +32,66 @@ In the Default column:
 
 </Accordion>
 
-## Top-level keys
+## Required
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.remote-mediators.<remote-mediator> {
+  admin-api {
+    channel {
+      max-inbound-message-size = 0   # required
+      trace-context-propagation = enabled|disabled   # required
+    }
+    port = 0   # required
+    tls {
+      client-cert {
+        cert-chain-file {
+          # pem-bytes = "..."   # required when type = pem-string
+          # pem-file = "/path/to/file"   # required when type = pem-file
+          type = pem-file|pem-string   # required
+        }
+        private-key-file = "..."   # required
+      }
+      trust-collection-file {
+        # pem-bytes = "..."   # required when type = pem-string
+        # pem-file = "/path/to/file"   # required when type = pem-file
+        type = pem-file|pem-string   # required
+      }
+    }
+  }
+  http-health {
+    port = 0   # required
+  }
+}
+```
+
+
+</Tab>
+<Tab title="Table">
+
+| Key | Type | Required when | Description |
+|---|---|---|---|
+| `admin-api.channel.max-inbound-message-size` | int (NonNegativeInt) | `admin-api.channel` is configured |  |
+| `admin-api.channel.trace-context-propagation` | one of `enabled`, `disabled` | `admin-api.channel` is configured |  |
+| `admin-api.port` | int (Port) | `admin-api` is configured |  |
+| `admin-api.tls.client-cert.cert-chain-file.pem-bytes` | string | `admin-api.tls.client-cert.cert-chain-file` is configured and `admin-api.tls.client-cert.cert-chain-file.type` is `pem-string` |  |
+| `admin-api.tls.client-cert.cert-chain-file.pem-file` | path (ExistingFile) | `admin-api.tls.client-cert.cert-chain-file` is configured and `admin-api.tls.client-cert.cert-chain-file.type` is `pem-file` |  |
+| `admin-api.tls.client-cert.cert-chain-file.type` | one of `pem-file`, `pem-string` | `admin-api.tls.client-cert.cert-chain-file` is configured | Choose one type — see [PemFileOrString](/global-synchronizer/reference/canton-config/types#pemfileorstring). |
+| `admin-api.tls.client-cert.private-key-file` | string (PemFile) | `admin-api.tls.client-cert` is configured |  |
+| `admin-api.tls.trust-collection-file.pem-bytes` | string | `admin-api.tls.trust-collection-file` is configured and `admin-api.tls.trust-collection-file.type` is `pem-string` |  |
+| `admin-api.tls.trust-collection-file.pem-file` | path (ExistingFile) | `admin-api.tls.trust-collection-file` is configured and `admin-api.tls.trust-collection-file.type` is `pem-file` |  |
+| `admin-api.tls.trust-collection-file.type` | one of `pem-file`, `pem-string` | `admin-api.tls.trust-collection-file` is configured | Choose one type — see [PemFileOrString](/global-synchronizer/reference/canton-config/types#pemfileorstring). |
+| `http-health.port` | int (Port) | `http-health` is configured |  |
+
+
+</Tab>
+</Tabs>
+
+## All options
+
+### Top-level keys
 
 <Tabs>
 <Tab title="HOCON">
@@ -41,21 +102,7 @@ canton.remote-mediators.<remote-mediator> {
 }
 ```
 
-**`admin-api.tls.trust-collection-file`** supports these types: `pem-file`, `pem-string`. Pick one; each block below is a complete example of that choice.
-
-```hocon
-canton.remote-mediators.<remote-mediator>.admin-api.tls.trust-collection-file {
-  type = pem-file
-  pem-file = "/path/to/file"   # required
-}
-```
-
-```hocon
-canton.remote-mediators.<remote-mediator>.admin-api.tls.trust-collection-file {
-  type = pem-string
-  pem-bytes = "..."   # required
-}
-```
+Takes a `type`: [PemFileOrString](/global-synchronizer/reference/canton-config/types#pemfileorstring) at `admin-api.tls.trust-collection-file`.
 
 
 </Tab>
@@ -68,7 +115,7 @@ canton.remote-mediators.<remote-mediator>.admin-api.tls.trust-collection-file {
 </Tab>
 </Tabs>
 
-## `admin-api`
+### `admin-api`
 
 <Tabs>
 <Tab title="HOCON">
@@ -104,21 +151,7 @@ canton.remote-mediators.<remote-mediator>.admin-api {
 }
 ```
 
-**`tls.trust-collection-file`** supports these types: `pem-file`, `pem-string`. Pick one; each block below is a complete example of that choice.
-
-```hocon
-canton.remote-mediators.<remote-mediator>.admin-api.tls.trust-collection-file {
-  type = pem-file
-  pem-file = "/path/to/file"   # required
-}
-```
-
-```hocon
-canton.remote-mediators.<remote-mediator>.admin-api.tls.trust-collection-file {
-  type = pem-string
-  pem-bytes = "..."   # required
-}
-```
+Takes a `type`: [PemFileOrString](/global-synchronizer/reference/canton-config/types#pemfileorstring) at `tls.trust-collection-file`.
 
 
 </Tab>
@@ -143,13 +176,13 @@ canton.remote-mediators.<remote-mediator>.admin-api.tls.trust-collection-file {
 |     **client-cert** |  |  |  |
 |         `private-key-file` | string (PemFile) | **required** |  |
 |         **cert-chain-file** |  |  |  |
-|             `type` | one of `pem-file`, `pem-string` | **required** | A class representing either an existing PEM file path or an inlined PEM string for configuration file fields |
+|             `type` | one of `pem-file`, `pem-string` | **required** | Choose one type — see [PemFileOrString](/global-synchronizer/reference/canton-config/types#pemfileorstring). A class representing either an existing PEM file path or an inlined PEM string for configuration file fields |
 |         **cert-chain-file** `type = pem-file` |  |  |  |
 |             `pem-file` | path (ExistingFile) | **required** |  |
 |         **cert-chain-file** `type = pem-string` |  |  |  |
 |             `pem-bytes` | string | **required** |  |
 |     **trust-collection-file** |  |  |  |
-|         `type` | one of `pem-file`, `pem-string` | **required** | A class representing either an existing PEM file path or an inlined PEM string for configuration file fields |
+|         `type` | one of `pem-file`, `pem-string` | **required** | Choose one type — see [PemFileOrString](/global-synchronizer/reference/canton-config/types#pemfileorstring). A class representing either an existing PEM file path or an inlined PEM string for configuration file fields |
 |     **trust-collection-file** `type = pem-file` |  |  |  |
 |         `pem-file` | path (ExistingFile) | **required** |  |
 |     **trust-collection-file** `type = pem-string` |  |  |  |
@@ -158,7 +191,7 @@ canton.remote-mediators.<remote-mediator>.admin-api.tls.trust-collection-file {
 </Tab>
 </Tabs>
 
-## `http-health`
+### `http-health`
 
 <Tabs>
 <Tab title="HOCON">

@@ -17,7 +17,9 @@ Paths are rooted at `canton`. Segments in angle brackets are names you choose:
 
 A `[]` suffix marks the fields of a list element. Keys marked **alpha** or **beta** are not covered by compatibility guarantees.
 
-Each section is shown two ways. **HOCON** is the section as you would write it: every key with its default, and one further block per `type` a section accepts. **Table** lists the same keys with their descriptions; a **bold** row names a section and the keys indented beneath it live inside it. Switching one section switches them all.
+**Required** lists only what you must set, and when: always, when you configure a particular section, or when you have chosen a particular `type`. **All options** shows every section two ways: **HOCON** as you would write it, every key with its default, and **Table** with the descriptions; a **bold** row names a section and the keys indented beneath it live inside it. Switching one section switches them all.
+
+Some sections take a `type` that decides which other keys they accept. Those are documented once on the [types page](/global-synchronizer/reference/canton-config/types) and linked from wherever they occur.
 
 In the Default column:
 
@@ -30,7 +32,86 @@ In the Default column:
 
 </Accordion>
 
-## Top-level keys
+## Required
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.monitoring {
+  logging {
+    query-cost {
+      every = "30 seconds"   # required
+    }
+  }
+  metrics {
+    histograms = [
+      {
+        aggregation {
+          # boundaries = [ ]   # required when type = buckets
+          # max-buckets = 0   # required when type = exponential
+          # max-scale = 0   # required when type = exponential
+          type = buckets|exponential   # required
+        }
+        name = "..."   # required
+      }
+    ]
+    reporters = [
+      {
+        auth {
+          # client-id = "..."   # required when type = otlp
+          # client-secret = "..."   # required when type = otlp
+          # token-url = "..."   # required when type = otlp
+          # type = oauth-client-credentials   # required when type = otlp
+        }
+        # directory = "/path/to/file"   # required when type = csv
+        type = prometheus|otlp|csv|logging   # required
+      }
+    ]
+  }
+  tracing {
+    tracer {
+      exporter {
+        type = disabled|zipkin|otlp   # required
+      }
+      sampler {
+        # ratio = 0   # required when type = trace-id-ratio
+        type = always-on|always-off|trace-id-ratio   # required
+      }
+    }
+  }
+}
+```
+
+
+</Tab>
+<Tab title="Table">
+
+| Key | Type | Required when | Description |
+|---|---|---|---|
+| `logging.query-cost.every` | duration (NonNegativeFiniteDuration) | `logging.query-cost` is configured | determines the duration between reports |
+| `metrics.histograms[].aggregation.boundaries` | array of Double | `metrics.histograms[].aggregation` is configured and `metrics.histograms[].aggregation.type` is `buckets` |  |
+| `metrics.histograms[].aggregation.max-buckets` | int | `metrics.histograms[].aggregation` is configured and `metrics.histograms[].aggregation.type` is `exponential` |  |
+| `metrics.histograms[].aggregation.max-scale` | int | `metrics.histograms[].aggregation` is configured and `metrics.histograms[].aggregation.type` is `exponential` |  |
+| `metrics.histograms[].aggregation.type` | one of `buckets`, `exponential` | `metrics.histograms[].aggregation` is configured | Choose one type — see [AggregationType](/global-synchronizer/reference/canton-config/types#aggregationtype). |
+| `metrics.histograms[].name` | string | `metrics.histograms[]` is configured | Instrument name that may contain the wildcard characters * and ? |
+| `metrics.reporters[].auth.client-id` | string | `metrics.reporters[].auth` is configured and `metrics.reporters[].type` is `otlp` |  |
+| `metrics.reporters[].auth.client-secret` | string | `metrics.reporters[].auth` is configured and `metrics.reporters[].type` is `otlp` |  |
+| `metrics.reporters[].auth.token-url` | string | `metrics.reporters[].auth` is configured and `metrics.reporters[].type` is `otlp` |  |
+| `metrics.reporters[].auth.type` | one of `oauth-client-credentials` | `metrics.reporters[].auth` is configured and `metrics.reporters[].type` is `otlp` | Choose one type — see [OtlpAuth](/global-synchronizer/reference/canton-config/types#otlpauth). |
+| `metrics.reporters[].directory` | path | `metrics.reporters[]` is configured and `metrics.reporters[].type` is `csv` | where to write the csv files to |
+| `metrics.reporters[].type` | one of `prometheus`, `otlp`, `csv`, `logging` | `metrics.reporters[]` is configured | Choose one type — see [MetricsReporterConfig](/global-synchronizer/reference/canton-config/types#metricsreporterconfig). |
+| `tracing.tracer.exporter.type` | one of `disabled`, `zipkin`, `otlp` | `tracing.tracer.exporter` is configured | Choose one type — see [Exporter](/global-synchronizer/reference/canton-config/types#exporter). |
+| `tracing.tracer.sampler.ratio` | number | `tracing.tracer.sampler` is configured and `tracing.tracer.sampler.type` is `trace-id-ratio` |  |
+| `tracing.tracer.sampler.type` | one of `always-on`, `always-off`, `trace-id-ratio` | `tracing.tracer.sampler` is configured | Choose one type — see [Sampler](/global-synchronizer/reference/canton-config/types#sampler). |
+
+
+</Tab>
+</Tabs>
+
+## All options
+
+### Top-level keys
 
 <Tabs>
 <Tab title="HOCON">
@@ -42,176 +123,7 @@ canton.monitoring {
 }
 ```
 
-**`metrics.histograms[].aggregation`** supports these types: `buckets`, `exponential`. Pick one; each block below is a complete example of that choice.
-
-```hocon
-canton.monitoring.metrics.histograms = [
-  {
-    aggregation {
-      type = buckets
-      boundaries = [ ]   # required
-    }
-  }
-]
-```
-
-```hocon
-canton.monitoring.metrics.histograms = [
-  {
-    aggregation {
-      type = exponential
-      max-buckets = 0   # required
-      max-scale = 0   # required
-    }
-  }
-]
-```
-
-**`metrics.reporters[].auth`** supports these types: `oauth-client-credentials`. Pick one; each block below is a complete example of that choice.
-
-```hocon
-canton.monitoring.metrics.reporters = [
-  {
-    auth {
-      type = oauth-client-credentials
-      client-id = "..."   # required
-      client-secret = "..."   # required
-      # scope = <string>
-      token-url = "..."   # required
-    }
-  }
-]
-```
-
-**`metrics.reporters[]`** supports these types: `prometheus`, `otlp`, `csv`, `logging`. Each block below shows one entry; a list may hold entries of different types.
-
-```hocon
-canton.monitoring.metrics.reporters = [
-  {
-    type = prometheus
-    address = "localhost"
-    filters = [
-      {
-        contains = ""
-        ends-with = ""
-        starts-with = ""
-      }
-    ]
-    port = 9464
-  }
-]
-```
-
-```hocon
-canton.monitoring.metrics.reporters = [
-  {
-    type = otlp
-    auth {
-      type = oauth-client-credentials   # required
-    }
-    endpoint = "http://localhost:4317"
-    filters = [
-      {
-        contains = ""
-        ends-with = ""
-        starts-with = ""
-      }
-    ]
-    interval = "10 seconds"
-    protocol = grpc
-  }
-]
-```
-
-```hocon
-canton.monitoring.metrics.reporters = [
-  {
-    type = csv
-    context-keys = [ ]
-    directory = "/path/to/file"   # required
-    filters = [
-      {
-        contains = ""
-        ends-with = ""
-        starts-with = ""
-      }
-    ]
-    interval = "5 seconds"
-  }
-]
-```
-
-```hocon
-canton.monitoring.metrics.reporters = [
-  {
-    type = logging
-    filters = [
-      {
-        contains = ""
-        ends-with = ""
-        starts-with = ""
-      }
-    ]
-    interval = "30 seconds"
-    log-as-info = true
-  }
-]
-```
-
-**`tracing.tracer.exporter`** supports these types: `disabled`, `zipkin`, `otlp`. Pick one; each block below is a complete example of that choice.
-
-```hocon
-canton.monitoring.tracing.tracer.exporter {
-  type = disabled
-  # takes no further keys
-}
-```
-
-```hocon
-canton.monitoring.tracing.tracer.exporter {
-  type = zipkin
-  address = "localhost"
-  port = 9411
-}
-```
-
-```hocon
-canton.monitoring.tracing.tracer.exporter {
-  type = otlp
-  additional-headers {
-    <additional-header> = [ ]
-  }
-  address = "localhost"
-  # connect-timeout = <duration>
-  port = 4317
-  # timeout = <duration>
-  # trust-collection-path = <string>
-}
-```
-
-**`tracing.tracer.sampler`** supports these types: `always-on`, `always-off`, `trace-id-ratio`. Pick one; each block below is a complete example of that choice.
-
-```hocon
-canton.monitoring.tracing.tracer.sampler {
-  type = always-on
-  parent-based = true
-}
-```
-
-```hocon
-canton.monitoring.tracing.tracer.sampler {
-  type = always-off
-  parent-based = true
-}
-```
-
-```hocon
-canton.monitoring.tracing.tracer.sampler {
-  type = trace-id-ratio
-  parent-based = true
-  ratio = 0   # required
-}
-```
+Takes a `type`: [AggregationType](/global-synchronizer/reference/canton-config/types#aggregationtype) at `metrics.histograms[].aggregation`, [OtlpAuth](/global-synchronizer/reference/canton-config/types#otlpauth) at `metrics.reporters[].auth`, [MetricsReporterConfig](/global-synchronizer/reference/canton-config/types#metricsreporterconfig) at `metrics.reporters[]`, [Exporter](/global-synchronizer/reference/canton-config/types#exporter) at `tracing.tracer.exporter`, [Sampler](/global-synchronizer/reference/canton-config/types#sampler) at `tracing.tracer.sampler`.
 
 
 </Tab>
@@ -225,7 +137,7 @@ canton.monitoring.tracing.tracer.sampler {
 </Tab>
 </Tabs>
 
-## `deadlock-detection`
+### `deadlock-detection`
 
 <Tabs>
 <Tab title="HOCON">
@@ -251,7 +163,7 @@ canton.monitoring.deadlock-detection {
 </Tab>
 </Tabs>
 
-## `logging`
+### `logging`
 
 <Tabs>
 <Tab title="HOCON">
@@ -324,7 +236,7 @@ canton.monitoring.logging {
 </Tab>
 </Tabs>
 
-## `metrics`
+### `metrics`
 
 <Tabs>
 <Tab title="HOCON">
@@ -367,121 +279,7 @@ canton.monitoring.metrics {
 }
 ```
 
-**`histograms[].aggregation`** supports these types: `buckets`, `exponential`. Pick one; each block below is a complete example of that choice.
-
-```hocon
-canton.monitoring.metrics.histograms = [
-  {
-    aggregation {
-      type = buckets
-      boundaries = [ ]   # required
-    }
-  }
-]
-```
-
-```hocon
-canton.monitoring.metrics.histograms = [
-  {
-    aggregation {
-      type = exponential
-      max-buckets = 0   # required
-      max-scale = 0   # required
-    }
-  }
-]
-```
-
-**`reporters[].auth`** supports these types: `oauth-client-credentials`. Pick one; each block below is a complete example of that choice.
-
-```hocon
-canton.monitoring.metrics.reporters = [
-  {
-    auth {
-      type = oauth-client-credentials
-      client-id = "..."   # required
-      client-secret = "..."   # required
-      # scope = <string>
-      token-url = "..."   # required
-    }
-  }
-]
-```
-
-**`reporters[]`** supports these types: `prometheus`, `otlp`, `csv`, `logging`. Each block below shows one entry; a list may hold entries of different types.
-
-```hocon
-canton.monitoring.metrics.reporters = [
-  {
-    type = prometheus
-    address = "localhost"
-    filters = [
-      {
-        contains = ""
-        ends-with = ""
-        starts-with = ""
-      }
-    ]
-    port = 9464
-  }
-]
-```
-
-```hocon
-canton.monitoring.metrics.reporters = [
-  {
-    type = otlp
-    auth {
-      type = oauth-client-credentials   # required
-    }
-    endpoint = "http://localhost:4317"
-    filters = [
-      {
-        contains = ""
-        ends-with = ""
-        starts-with = ""
-      }
-    ]
-    interval = "10 seconds"
-    protocol = grpc
-  }
-]
-```
-
-```hocon
-canton.monitoring.metrics.reporters = [
-  {
-    type = csv
-    context-keys = [ ]
-    directory = "/path/to/file"   # required
-    filters = [
-      {
-        contains = ""
-        ends-with = ""
-        starts-with = ""
-      }
-    ]
-    interval = "5 seconds"
-  }
-]
-```
-
-```hocon
-canton.monitoring.metrics.reporters = [
-  {
-    type = logging
-    filters = [
-      {
-        contains = ""
-        ends-with = ""
-        starts-with = ""
-      }
-    ]
-    interval = "30 seconds"
-    log-as-info = true
-  }
-]
-```
+Takes a `type`: [AggregationType](/global-synchronizer/reference/canton-config/types#aggregationtype) at `histograms[].aggregation`, [OtlpAuth](/global-synchronizer/reference/canton-config/types#otlpauth) at `reporters[].auth`, [MetricsReporterConfig](/global-synchronizer/reference/canton-config/types#metricsreporterconfig) at `reporters[]`.
 
 
 </Tab>
@@ -497,7 +295,7 @@ canton.monitoring.metrics.reporters = [
 |     `name` | string | **required** | Instrument name that may contain the wildcard characters * and ? |
 |     `view-name` | string | _unset_ |  |
 |     **aggregation** |  |  |  |
-|         `type` | one of `buckets`, `exponential` | **required** | Selects which of the keys below apply; see the example above. |
+|         `type` | one of `buckets`, `exponential` | **required** | Choose one type — see [AggregationType](/global-synchronizer/reference/canton-config/types#aggregationtype). |
 |     **aggregation** `type = buckets` |  |  |  |
 |         `boundaries` | array of Double | **required** |  |
 |     **aggregation** `type = exponential` |  |  |  |
@@ -513,7 +311,7 @@ canton.monitoring.metrics.reporters = [
 |     `memory-pools` **deprecated** | boolean | `true` |  |
 |     `threads` **deprecated** | boolean | `true` |  |
 | **reporters[]** |  |  |  |
-|     `type` | one of `prometheus`, `otlp`, `csv`, `logging` | **required** | Selects which of the keys below apply; see the example above. |
+|     `type` | one of `prometheus`, `otlp`, `csv`, `logging` | **required** | Choose one type — see [MetricsReporterConfig](/global-synchronizer/reference/canton-config/types#metricsreporterconfig). |
 |     **filters[]** |  |  |  |
 |         `contains` | string | `""` |  |
 |         `ends-with` | string | `""` |  |
@@ -532,7 +330,7 @@ canton.monitoring.metrics.reporters = [
 |         `client-secret` | string | **required** |  |
 |         `scope` | string | _unset_ |  |
 |         `token-url` | string | **required** |  |
-|         `type` | one of `oauth-client-credentials` | **required** | Selects which of the keys below apply; see the example above. |
+|         `type` | one of `oauth-client-credentials` | **required** | Choose one type — see [OtlpAuth](/global-synchronizer/reference/canton-config/types#otlpauth). |
 | **reporters[]** `type = csv` |  |  |  |
 |     `context-keys` | array of string | `node, synchronizer` | which context keys to include in the name. defaults to node names |
 |     `directory` | path | **required** | where to write the csv files to |
@@ -546,7 +344,7 @@ canton.monitoring.metrics.reporters = [
 </Tab>
 </Tabs>
 
-## `tracing`
+### `tracing`
 
 <Tabs>
 <Tab title="HOCON">
@@ -570,60 +368,7 @@ canton.monitoring.tracing {
 }
 ```
 
-**`tracer.exporter`** supports these types: `disabled`, `zipkin`, `otlp`. Pick one; each block below is a complete example of that choice.
-
-```hocon
-canton.monitoring.tracing.tracer.exporter {
-  type = disabled
-  # takes no further keys
-}
-```
-
-```hocon
-canton.monitoring.tracing.tracer.exporter {
-  type = zipkin
-  address = "localhost"
-  port = 9411
-}
-```
-
-```hocon
-canton.monitoring.tracing.tracer.exporter {
-  type = otlp
-  additional-headers {
-    <additional-header> = [ ]
-  }
-  address = "localhost"
-  # connect-timeout = <duration>
-  port = 4317
-  # timeout = <duration>
-  # trust-collection-path = <string>
-}
-```
-
-**`tracer.sampler`** supports these types: `always-on`, `always-off`, `trace-id-ratio`. Pick one; each block below is a complete example of that choice.
-
-```hocon
-canton.monitoring.tracing.tracer.sampler {
-  type = always-on
-  parent-based = true
-}
-```
-
-```hocon
-canton.monitoring.tracing.tracer.sampler {
-  type = always-off
-  parent-based = true
-}
-```
-
-```hocon
-canton.monitoring.tracing.tracer.sampler {
-  type = trace-id-ratio
-  parent-based = true
-  ratio = 0   # required
-}
-```
+Takes a `type`: [Exporter](/global-synchronizer/reference/canton-config/types#exporter) at `tracer.exporter`, [Sampler](/global-synchronizer/reference/canton-config/types#sampler) at `tracer.sampler`.
 
 
 </Tab>
@@ -637,7 +382,7 @@ canton.monitoring.tracing.tracer.sampler {
 |         `batch-size` | int | _unset_ |  |
 |         `schedule-delay` | duration | _unset_ |  |
 |     **exporter** |  |  |  |
-|         `type` | one of `disabled`, `zipkin`, `otlp` | `disabled` † | Configuration for how to export spans |
+|         `type` | one of `disabled`, `zipkin`, `otlp` | `disabled` † | Choose one type — see [Exporter](/global-synchronizer/reference/canton-config/types#exporter). Configuration for how to export spans |
 |     **exporter** `type = zipkin` |  |  |  |
 |         `address` | string | `localhost` |  |
 |         `port` | int | `9411` |  |
@@ -651,7 +396,7 @@ canton.monitoring.tracing.tracer.sampler {
 |             `<additional-header>` | string | `[]` |  |
 |     **sampler** |  |  |  |
 |         `parent-based` | boolean | `true` |  |
-|         `type` | one of `always-on`, `always-off`, `trace-id-ratio` | `always-on` † | Selects which of the keys below apply; see the example above. |
+|         `type` | one of `always-on`, `always-off`, `trace-id-ratio` | `always-on` † | Choose one type — see [Sampler](/global-synchronizer/reference/canton-config/types#sampler). |
 |     **sampler** `type = trace-id-ratio` |  |  |  |
 |         `ratio` | number | **required** |  |
 

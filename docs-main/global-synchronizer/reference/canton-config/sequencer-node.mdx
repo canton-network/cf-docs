@@ -19,7 +19,9 @@ Paths are rooted at `canton`. Segments in angle brackets are names you choose:
 
 A `[]` suffix marks the fields of a list element. Keys marked **alpha** or **beta** are not covered by compatibility guarantees.
 
-Each section is shown two ways. **HOCON** is the section as you would write it: every key with its default, and one further block per `type` a section accepts. **Table** lists the same keys with their descriptions; a **bold** row names a section and the keys indented beneath it live inside it. Switching one section switches them all.
+**Required** lists only what you must set, and when: always, when you configure a particular section, or when you have chosen a particular `type`. **All options** shows every section two ways: **HOCON** as you would write it, every key with its default, and **Table** with the descriptions; a **bold** row names a section and the keys indented beneath it live inside it. Switching one section switches them all.
+
+Some sections take a `type` that decides which other keys they accept. Those are documented once on the [types page](/global-synchronizer/reference/canton-config/types) and linked from wherever they occur.
 
 In the Default column:
 
@@ -32,7 +34,616 @@ In the Default column:
 
 </Accordion>
 
-## Top-level keys
+## Required
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.sequencers.<sequencer> {
+  admin-api {
+    auth-services = [
+      {
+        # certificate = "..."   # required when type = jwt-es-256-crt|jwt-es-512-crt|jwt-rs-256-crt
+        # secret = "..."   # required when type = unsafe-jwt-hmac-256
+        type = wildcard|unsafe-jwt-hmac-256|jwt-rs-256-crt|jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|party-jwt   # required
+        # url = "..."   # required when type = jwt-jwks
+        users = [
+          {
+            # allowed-services = [ ]   # required when type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
+            # user-id = "..."   # required when type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
+          }
+        ]
+      }
+    ]
+    tls {
+      cert-chain-file {
+        # pem-bytes = "..."   # required when type = pem-string
+        # pem-file = "/path/to/file"   # required when type = pem-file
+        type = pem-file|pem-string   # required
+      }
+      client-auth {
+        admin-client {
+          cert-chain-file {
+            # pem-bytes = "..."   # required when type = pem-string and type = require
+            # pem-file = "/path/to/file"   # required when type = pem-file and type = require
+            # type = pem-file|pem-string   # required when type = require
+          }
+          # private-key-file = "..."   # required when type = require
+        }
+        type = require|optional|none   # required
+      }
+      private-key-file = "..."   # required
+      trust-collection-file {
+        # pem-bytes = "..."   # required when type = pem-string
+        # pem-file = "/path/to/file"   # required when type = pem-file
+        type = pem-file|pem-string   # required
+      }
+    }
+  }
+  crypto {
+    kms {
+      # config = { }   # required when type = driver
+      # key-ring-id = "..."   # required when type = gcp
+      # location-id = "..."   # required when type = gcp
+      # name = "..."   # required when type = driver
+      # project-id = "..."   # required when type = gcp
+      # region = "..."   # required when type = aws
+      retries {
+        create-key-check {
+          initial-delay = "30 seconds"   # required
+          max-delay = "30 seconds"   # required
+          max-retries = 0   # required
+        }
+        failures {
+          initial-delay = "30 seconds"   # required
+          max-delay = "30 seconds"   # required
+          max-retries = 0   # required
+        }
+      }
+      type = driver|aws|gcp   # required
+    }
+    private-key-store {
+      encryption {
+        type = kms   # required
+      }
+    }
+    session-signing-keys {
+      enabled = false   # required
+    }
+  }
+  init {
+    identity {
+      identifier {
+        # name = "..."   # required when type = explicit and type = auto
+        # type = random|explicit|config   # required when type = auto
+      }
+      type = external|auto|manual   # required
+    }
+  }
+  monitoring {
+    http-health-server {
+      port = 0   # required
+    }
+  }
+  parameters {
+    batching {
+      aggregator {
+        type = batching|no-batching   # required
+      }
+      contract-store-aggregator {
+        type = batching|no-batching   # required
+      }
+      mediator-fetch-finalized-responses-aggregator {
+        type = batching|no-batching   # required
+      }
+      mediator-store-finalized-responses-aggregator {
+        type = batching|no-batching   # required
+      }
+      topology-cache-aggregator {
+        type = batching|no-batching   # required
+      }
+    }
+    caching {
+      bft-ordering-batch-cache {
+        maximum-memory = "..."   # required
+      }
+      contract-store {
+        maximum-size = 0   # required
+      }
+      finalized-mediator-confirmation-requests {
+        maximum-size = 0   # required
+      }
+      indexed-strings {
+        maximum-size = 0   # required
+      }
+      key-cache {
+        maximum-size = 0   # required
+      }
+      kms-metadata-cache {
+        maximum-size = 0   # required
+      }
+      member-cache {
+        maximum-size = 0   # required
+      }
+      package-upgrade-cache {
+        maximum-size = 0   # required
+      }
+      package-vetting-cache {
+        maximum-size = 0   # required
+      }
+      participant-cache {
+        maximum-size = 0   # required
+      }
+      party-cache {
+        maximum-size = 0   # required
+      }
+      public-key-conversion-cache {
+        maximum-size = 0   # required
+      }
+      sequencer-catchup-payload-cache {
+        maximum-memory = "..."   # required
+      }
+      sequencer-payload-cache {
+        maximum-memory = "..."   # required
+      }
+      session-encryption-key-cache {
+        receiver-cache {
+          maximum-size = 0   # required
+        }
+        sender-cache {
+          maximum-size = 0   # required
+        }
+      }
+      synchronizer-client-max-timestamp {
+        maximum-size = 0   # required
+      }
+      topology-snapshot {
+        maximum-size = 0   # required
+      }
+    }
+    lsu-repair {
+      lsu-sequencing-bounds-override {
+        lower-bound-sequencing-time-exclusive = "..."   # required
+        upgrade-time = "..."   # required
+      }
+    }
+    lsu {
+      contact-successor-retry {
+        initial-delay = "30 seconds"   # required
+        max-delay = "30 seconds"   # required
+        max-retries = 0   # required
+      }
+    }
+    watchdog {
+      enabled = false   # required
+    }
+  }
+  public-api {
+    tls {
+      cert-chain-file {
+        # pem-bytes = "..."   # required when type = pem-string
+        # pem-file = "/path/to/file"   # required when type = pem-file
+        type = pem-file|pem-string   # required
+      }
+      private-key-file = "..."   # required
+    }
+  }
+  sequencer-client {
+    auth-token {
+      backoff {
+        jitter {
+          type = equal|full   # required
+        }
+      }
+    }
+  }
+  sequencer {
+    block {
+      writer {
+        # type = low-latency|high-throughput   # required when type = bft-sequencer|external
+      }
+    }
+    config {
+      batch-aggregator {
+        # type = batching|no-batching   # required when type = bft-sequencer
+      }
+      initial-network {
+        endpoint-authentication {
+          auth-token {
+            backoff {
+              jitter {
+                # type = equal|full   # required when type = bft-sequencer
+              }
+            }
+          }
+        }
+        peer-endpoints = [
+          {
+            # address = "..."   # required when type = bft-sequencer
+            channel {
+              # max-inbound-message-size = 0   # required when type = bft-sequencer
+              # trace-context-propagation = enabled|disabled   # required when type = bft-sequencer
+            }
+            # port = 0   # required when type = bft-sequencer
+            tls-config {
+              client-cert {
+                cert-chain-file {
+                  # pem-bytes = "..."   # required when type = pem-string and type = bft-sequencer
+                  # pem-file = "/path/to/file"   # required when type = pem-file and type = bft-sequencer
+                  # type = pem-file|pem-string   # required when type = bft-sequencer
+                }
+                # private-key-file = "..."   # required when type = bft-sequencer
+              }
+              trust-collection-file {
+                # pem-bytes = "..."   # required when type = pem-string and type = bft-sequencer
+                # pem-file = "/path/to/file"   # required when type = pem-file and type = bft-sequencer
+                # type = pem-file|pem-string   # required when type = bft-sequencer
+              }
+            }
+          }
+        ]
+        server-endpoint {
+          # address = "..."   # required when type = bft-sequencer
+          # external-address = "..."   # required when type = bft-sequencer
+          # external-port = 0   # required when type = bft-sequencer
+          external-tls-config {
+            client-cert {
+              cert-chain-file {
+                # pem-bytes = "..."   # required when type = pem-string and type = bft-sequencer
+                # pem-file = "/path/to/file"   # required when type = pem-file and type = bft-sequencer
+                # type = pem-file|pem-string   # required when type = bft-sequencer
+              }
+              # private-key-file = "..."   # required when type = bft-sequencer
+            }
+            trust-collection-file {
+              # pem-bytes = "..."   # required when type = pem-string and type = bft-sequencer
+              # pem-file = "/path/to/file"   # required when type = pem-file and type = bft-sequencer
+              # type = pem-file|pem-string   # required when type = bft-sequencer
+            }
+          }
+          tls {
+            cert-chain-file {
+              # pem-bytes = "..."   # required when type = pem-string and type = bft-sequencer
+              # pem-file = "/path/to/file"   # required when type = pem-file and type = bft-sequencer
+              # type = pem-file|pem-string   # required when type = bft-sequencer
+            }
+            client-auth {
+              admin-client {
+                cert-chain-file {
+                  # pem-bytes = "..."   # required when type = pem-string and type = require and type = bft-sequencer
+                  # pem-file = "/path/to/file"   # required when type = pem-file and type = require and type = bft-sequencer
+                  # type = pem-file|pem-string   # required when type = require and type = bft-sequencer
+                }
+                # private-key-file = "..."   # required when type = require and type = bft-sequencer
+              }
+              # type = require|optional|none   # required when type = bft-sequencer
+            }
+            # private-key-file = "..."   # required when type = bft-sequencer
+            trust-collection-file {
+              # pem-bytes = "..."   # required when type = pem-string and type = bft-sequencer
+              # pem-file = "/path/to/file"   # required when type = pem-file and type = bft-sequencer
+              # type = pem-file|pem-string   # required when type = bft-sequencer
+            }
+          }
+        }
+      }
+      leader-selection-policy-config-for-pv-34 {
+        how-long-to-blacklist {
+          # initial-value = 0   # required when type = exponential|linear-with-parameters and type = bft-sequencer
+          # slope = 0   # required when type = linear-with-parameters and type = bft-sequencer
+          # type = linear|linear-with-parameters|exponential|no-blacklisting   # required when type = bft-sequencer
+        }
+        # how-many-can-we-blacklist = num-faults-tolerated|no-blacklisting   # required when type = bft-sequencer
+      }
+      standalone {
+        blacklist-leader-selection-policy-config {
+          how-long-to-blacklist {
+            # initial-value = 0   # required when type = exponential|linear-with-parameters and type = bft-sequencer
+            # slope = 0   # required when type = linear-with-parameters and type = bft-sequencer
+            # type = linear|linear-with-parameters|exponential|no-blacklisting   # required when type = bft-sequencer
+          }
+          # how-many-can-we-blacklist = num-faults-tolerated|no-blacklisting   # required when type = bft-sequencer
+        }
+        # max-batches-per-block-proposal = 0   # required when type = bft-sequencer
+        # max-requests-in-batch = 0   # required when type = bft-sequencer
+        # pbft-view-change-timeout = "30 seconds"   # required when type = bft-sequencer
+        peers = [
+          {
+            # sequencer-id = "..."   # required when type = bft-sequencer
+            # signing-public-key-proto-file = "/path/to/file"   # required when type = bft-sequencer
+          }
+        ]
+        # segment-length = 0   # required when type = bft-sequencer
+        # signing-private-key-proto-file = "/path/to/file"   # required when type = bft-sequencer
+        # signing-public-key-proto-file = "/path/to/file"   # required when type = bft-sequencer
+        test-slowdown {
+          post-ordering-delay {
+            # duration = "30 seconds"   # required when type = constant-distribution and type = bft-sequencer
+            # high = "30 seconds"   # required when type = linear-distribution and type = bft-sequencer
+            # low = "30 seconds"   # required when type = linear-distribution|power-distribution and type = bft-sequencer
+            # mean = "30 seconds"   # required when type = power-distribution and type = bft-sequencer
+            # type = constant-distribution|weighted-distribution|linear-distribution|power-distribution   # required when type = bft-sequencer
+            weighted-durations = [
+              {
+                # duration = "30 seconds"   # required when type = weighted-distribution and type = bft-sequencer
+                # weight = 0   # required when type = weighted-distribution and type = bft-sequencer
+              }
+            ]
+          }
+          send-delay {
+            default-delay-distribution {
+              # duration = "30 seconds"   # required when type = constant-distribution and type = bft-sequencer
+              # high = "30 seconds"   # required when type = linear-distribution and type = bft-sequencer
+              # low = "30 seconds"   # required when type = linear-distribution|power-distribution and type = bft-sequencer
+              # mean = "30 seconds"   # required when type = power-distribution and type = bft-sequencer
+              # type = constant-distribution|weighted-distribution|linear-distribution|power-distribution   # required when type = bft-sequencer
+              weighted-durations = [
+                {
+                  # duration = "30 seconds"   # required when type = weighted-distribution and type = bft-sequencer
+                  # weight = 0   # required when type = weighted-distribution and type = bft-sequencer
+                }
+              ]
+            }
+            delays-by-recipients = [
+              {
+                delay-distribution {
+                  # duration = "30 seconds"   # required when type = constant-distribution and type = bft-sequencer
+                  # high = "30 seconds"   # required when type = linear-distribution and type = bft-sequencer
+                  # low = "30 seconds"   # required when type = linear-distribution|power-distribution and type = bft-sequencer
+                  # mean = "30 seconds"   # required when type = power-distribution and type = bft-sequencer
+                  # type = constant-distribution|weighted-distribution|linear-distribution|power-distribution   # required when type = bft-sequencer
+                  weighted-durations = [
+                    {
+                      # duration = "30 seconds"   # required when type = weighted-distribution and type = bft-sequencer
+                      # weight = 0   # required when type = weighted-distribution and type = bft-sequencer
+                    }
+                  ]
+                }
+                # instance-names = [ ]   # required when type = bft-sequencer
+              }
+            ]
+          }
+          topology-delay {
+            get-ordering-topology-delay {
+              # duration = "30 seconds"   # required when type = constant-distribution and type = bft-sequencer
+              # high = "30 seconds"   # required when type = linear-distribution and type = bft-sequencer
+              # low = "30 seconds"   # required when type = linear-distribution|power-distribution and type = bft-sequencer
+              # mean = "30 seconds"   # required when type = power-distribution and type = bft-sequencer
+              # type = constant-distribution|weighted-distribution|linear-distribution|power-distribution   # required when type = bft-sequencer
+              weighted-durations = [
+                {
+                  # duration = "30 seconds"   # required when type = weighted-distribution and type = bft-sequencer
+                  # weight = 0   # required when type = weighted-distribution and type = bft-sequencer
+                }
+              ]
+            }
+            request-inspection-delay {
+              # duration = "30 seconds"   # required when type = constant-distribution and type = bft-sequencer
+              # high = "30 seconds"   # required when type = linear-distribution and type = bft-sequencer
+              # low = "30 seconds"   # required when type = linear-distribution|power-distribution and type = bft-sequencer
+              # mean = "30 seconds"   # required when type = power-distribution and type = bft-sequencer
+              # type = constant-distribution|weighted-distribution|linear-distribution|power-distribution   # required when type = bft-sequencer
+              weighted-durations = [
+                {
+                  # duration = "30 seconds"   # required when type = weighted-distribution and type = bft-sequencer
+                  # weight = 0   # required when type = weighted-distribution and type = bft-sequencer
+                }
+              ]
+            }
+          }
+        }
+        # this-sequencer-id = "..."   # required when type = bft-sequencer
+      }
+      storage {
+        # type = memory|h2|postgres   # required when type = bft-sequencer
+      }
+    }
+    # sequencer-type = "..."   # required when type = external
+    type = database|external|bft-sequencer   # required
+    writer {
+      # type = low-latency|high-throughput   # required when type = database
+    }
+  }
+  storage {
+    type = memory|h2|postgres   # required
+  }
+  traffic-config {
+    batch-aggregator-config {
+      type = batching|no-batching   # required
+    }
+  }
+}
+```
+
+
+</Tab>
+<Tab title="Table">
+
+| Key | Type | Required when | Description |
+|---|---|---|---|
+| `admin-api.auth-services[].certificate` | string | `admin-api.auth-services[]` is configured and `admin-api.auth-services[].type` is one of `jwt-es-256-crt`, `jwt-es-512-crt`, `jwt-rs-256-crt` |  |
+| `admin-api.auth-services[].secret` | string (NonEmptyString) | `admin-api.auth-services[]` is configured and `admin-api.auth-services[].type` is `unsafe-jwt-hmac-256` |  |
+| `admin-api.auth-services[].type` | one of `wildcard`, `unsafe-jwt-hmac-256`, `jwt-rs-256-crt`, `jwt-es-256-crt`, `jwt-es-512-crt`, `jwt-jwks`, `party-jwt` | `admin-api.auth-services[]` is configured | Choose one type — see [AuthServiceConfig](/global-synchronizer/reference/canton-config/types#authserviceconfig). |
+| `admin-api.auth-services[].url` | string (NonEmptyString) | `admin-api.auth-services[]` is configured and `admin-api.auth-services[].type` is `jwt-jwks` |  |
+| `admin-api.auth-services[].users[].allowed-services` | array of string | `admin-api.auth-services[].users[]` is configured and `admin-api.auth-services[].type` is one of `jwt-es-256-crt`, `jwt-es-512-crt`, `jwt-jwks`, `jwt-rs-256-crt`, `unsafe-jwt-hmac-256` |  |
+| `admin-api.auth-services[].users[].user-id` | string | `admin-api.auth-services[].users[]` is configured and `admin-api.auth-services[].type` is one of `jwt-es-256-crt`, `jwt-es-512-crt`, `jwt-jwks`, `jwt-rs-256-crt`, `unsafe-jwt-hmac-256` |  |
+| `admin-api.tls.cert-chain-file.pem-bytes` | string | `admin-api.tls.cert-chain-file` is configured and `admin-api.tls.cert-chain-file.type` is `pem-string` |  |
+| `admin-api.tls.cert-chain-file.pem-file` | path (ExistingFile) | `admin-api.tls.cert-chain-file` is configured and `admin-api.tls.cert-chain-file.type` is `pem-file` |  |
+| `admin-api.tls.cert-chain-file.type` | one of `pem-file`, `pem-string` | `admin-api.tls.cert-chain-file` is configured | Choose one type — see [PemFileOrString](/global-synchronizer/reference/canton-config/types#pemfileorstring). |
+| `admin-api.tls.client-auth.admin-client.cert-chain-file.pem-bytes` | string | `admin-api.tls.client-auth.admin-client.cert-chain-file` is configured and `admin-api.tls.client-auth.admin-client.cert-chain-file.type` is `pem-string` and `admin-api.tls.client-auth.type` is `require` |  |
+| `admin-api.tls.client-auth.admin-client.cert-chain-file.pem-file` | path (ExistingFile) | `admin-api.tls.client-auth.admin-client.cert-chain-file` is configured and `admin-api.tls.client-auth.admin-client.cert-chain-file.type` is `pem-file` and `admin-api.tls.client-auth.type` is `require` |  |
+| `admin-api.tls.client-auth.admin-client.cert-chain-file.type` | one of `pem-file`, `pem-string` | `admin-api.tls.client-auth.admin-client.cert-chain-file` is configured and `admin-api.tls.client-auth.type` is `require` | Choose one type — see [PemFileOrString](/global-synchronizer/reference/canton-config/types#pemfileorstring). |
+| `admin-api.tls.client-auth.admin-client.private-key-file` | string (PemFile) | `admin-api.tls.client-auth.admin-client` is configured and `admin-api.tls.client-auth.type` is `require` |  |
+| `admin-api.tls.client-auth.type` | one of `require`, `optional`, `none` | `admin-api.tls.client-auth` is configured | Choose one type — see [ServerAuthRequirementConfig](/global-synchronizer/reference/canton-config/types#serverauthrequirementconfig). |
+| `admin-api.tls.private-key-file` | string (PemFile) | `admin-api.tls` is configured | a file containing the server's private key. The key must not use a password. |
+| `admin-api.tls.trust-collection-file.pem-bytes` | string | `admin-api.tls.trust-collection-file` is configured and `admin-api.tls.trust-collection-file.type` is `pem-string` |  |
+| `admin-api.tls.trust-collection-file.pem-file` | path (ExistingFile) | `admin-api.tls.trust-collection-file` is configured and `admin-api.tls.trust-collection-file.type` is `pem-file` |  |
+| `admin-api.tls.trust-collection-file.type` | one of `pem-file`, `pem-string` | `admin-api.tls.trust-collection-file` is configured | Choose one type — see [PemFileOrString](/global-synchronizer/reference/canton-config/types#pemfileorstring). |
+| `crypto.kms.config` | config-value | `crypto.kms` is configured and `crypto.kms.type` is `driver` | The driver specific raw config section |
+| `crypto.kms.key-ring-id` | string | `crypto.kms` is configured and `crypto.kms.type` is `gcp` | defines a key-ring to where keys will be added. This can be created as a multi-region key-ring, which enables multi-region keys |
+| `crypto.kms.location-id` | string | `crypto.kms` is configured and `crypto.kms.type` is `gcp` | defines the GCP region to use (e.g. us-east1) |
+| `crypto.kms.name` | string | `crypto.kms` is configured and `crypto.kms.type` is `driver` | The name of the external KMS driver |
+| `crypto.kms.project-id` | string | `crypto.kms` is configured and `crypto.kms.type` is `gcp` | defines a GCP project to use (e.g. gcp-kms-testing) |
+| `crypto.kms.region` | string | `crypto.kms` is configured and `crypto.kms.type` is `aws` | defines the AWS region to be use (e.g. us-east-1) |
+| `crypto.kms.retries.create-key-check.initial-delay` | duration (NonNegativeFiniteDuration) | `crypto.kms.retries.create-key-check` is configured | initial delay before the first retry |
+| `crypto.kms.retries.create-key-check.max-delay` | duration (NonNegativeDuration) | `crypto.kms.retries.create-key-check` is configured | max delay between retries |
+| `crypto.kms.retries.create-key-check.max-retries` | int | `crypto.kms.retries.create-key-check` is configured | max number of retries |
+| `crypto.kms.retries.failures.initial-delay` | duration (NonNegativeFiniteDuration) | `crypto.kms.retries.failures` is configured | initial delay before the first retry |
+| `crypto.kms.retries.failures.max-delay` | duration (NonNegativeDuration) | `crypto.kms.retries.failures` is configured | max delay between retries |
+| `crypto.kms.retries.failures.max-retries` | int | `crypto.kms.retries.failures` is configured | max number of retries |
+| `crypto.kms.type` | one of `driver`, `aws`, `gcp` | `crypto.kms` is configured | Choose one type — see [KmsConfig](/global-synchronizer/reference/canton-config/types#kmsconfig). |
+| `crypto.private-key-store.encryption.type` | one of `kms` | `crypto.private-key-store.encryption` is configured | Choose one type — see [EncryptedPrivateStoreConfig](/global-synchronizer/reference/canton-config/types#encryptedprivatestoreconfig). |
+| `crypto.session-signing-keys.enabled` | boolean | `crypto.session-signing-keys` is configured | Enables the usage of session signing keys in the protocol. |
+| `init.identity.identifier` | string | `init.identity` is configured and `init.identity.type` is `external` | the string to use as identifier of the node |
+| `init.identity.identifier.name` | string | `init.identity.identifier` is configured and `init.identity.identifier.type` is `explicit` and `init.identity.type` is `auto` | name to use as identifier |
+| `init.identity.identifier.type` | one of `random`, `explicit`, `config` | `init.identity.identifier` is configured and `init.identity.type` is `auto` | Choose one type — see [NodeIdentifierConfig](/global-synchronizer/reference/canton-config/types#nodeidentifierconfig). |
+| `init.identity.type` | one of `external`, `auto`, `manual` | `init.identity` is configured | Choose one type — see [IdentityConfig](/global-synchronizer/reference/canton-config/types#identityconfig). |
+| `monitoring.http-health-server.port` | int (Port) | `monitoring.http-health-server` is configured |  |
+| `parameters.batching.aggregator.type` | one of `batching`, `no-batching` | `parameters.batching.aggregator` is configured | Choose one type — see [BatchAggregatorConfig](/global-synchronizer/reference/canton-config/types#batchaggregatorconfig). |
+| `parameters.batching.contract-store-aggregator.type` | one of `batching`, `no-batching` | `parameters.batching.contract-store-aggregator` is configured | Choose one type — see [BatchAggregatorConfig](/global-synchronizer/reference/canton-config/types#batchaggregatorconfig). |
+| `parameters.batching.mediator-fetch-finalized-responses-aggregator.type` | one of `batching`, `no-batching` | `parameters.batching.mediator-fetch-finalized-responses-aggregator` is configured | Choose one type — see [BatchAggregatorConfig](/global-synchronizer/reference/canton-config/types#batchaggregatorconfig). |
+| `parameters.batching.mediator-store-finalized-responses-aggregator.type` | one of `batching`, `no-batching` | `parameters.batching.mediator-store-finalized-responses-aggregator` is configured | Choose one type — see [BatchAggregatorConfig](/global-synchronizer/reference/canton-config/types#batchaggregatorconfig). |
+| `parameters.batching.topology-cache-aggregator.type` | one of `batching`, `no-batching` | `parameters.batching.topology-cache-aggregator` is configured | Choose one type — see [BatchAggregatorConfig](/global-synchronizer/reference/canton-config/types#batchaggregatorconfig). |
+| `parameters.caching.bft-ordering-batch-cache.maximum-memory` | string (PositiveNumeric) | `parameters.caching.bft-ordering-batch-cache` is configured |  |
+| `parameters.caching.contract-store.maximum-size` | int (PositiveNumeric) | `parameters.caching.contract-store` is configured | the maximum size of the cache |
+| `parameters.caching.finalized-mediator-confirmation-requests.maximum-size` | int (PositiveNumeric) | `parameters.caching.finalized-mediator-confirmation-requests` is configured | the maximum size of the cache |
+| `parameters.caching.indexed-strings.maximum-size` | int (PositiveNumeric) | `parameters.caching.indexed-strings` is configured | the maximum size of the cache |
+| `parameters.caching.key-cache.maximum-size` | int (PositiveNumeric) | `parameters.caching.key-cache` is configured | the maximum size of the cache |
+| `parameters.caching.kms-metadata-cache.maximum-size` | int (PositiveNumeric) | `parameters.caching.kms-metadata-cache` is configured | the maximum size of the cache |
+| `parameters.caching.member-cache.maximum-size` | int (PositiveNumeric) | `parameters.caching.member-cache` is configured | the maximum size of the cache |
+| `parameters.caching.package-upgrade-cache.maximum-size` | int (PositiveNumeric) | `parameters.caching.package-upgrade-cache` is configured | the maximum size of the cache |
+| `parameters.caching.package-vetting-cache.maximum-size` | int (PositiveNumeric) | `parameters.caching.package-vetting-cache` is configured | the maximum size of the cache |
+| `parameters.caching.participant-cache.maximum-size` | int (PositiveNumeric) | `parameters.caching.participant-cache` is configured | the maximum size of the cache |
+| `parameters.caching.party-cache.maximum-size` | int (PositiveNumeric) | `parameters.caching.party-cache` is configured | the maximum size of the cache |
+| `parameters.caching.public-key-conversion-cache.maximum-size` | int (PositiveNumeric) | `parameters.caching.public-key-conversion-cache` is configured | the maximum size of the cache |
+| `parameters.caching.sequencer-catchup-payload-cache.maximum-memory` | string (PositiveNumeric) | `parameters.caching.sequencer-catchup-payload-cache` is configured |  |
+| `parameters.caching.sequencer-payload-cache.maximum-memory` | string (PositiveNumeric) | `parameters.caching.sequencer-payload-cache` is configured |  |
+| `parameters.caching.session-encryption-key-cache.receiver-cache.maximum-size` | int (PositiveNumeric) | `parameters.caching.session-encryption-key-cache.receiver-cache` is configured | the maximum size of the cache |
+| `parameters.caching.session-encryption-key-cache.sender-cache.maximum-size` | int (PositiveNumeric) | `parameters.caching.session-encryption-key-cache.sender-cache` is configured | the maximum size of the cache |
+| `parameters.caching.synchronizer-client-max-timestamp.maximum-size` | int (PositiveNumeric) | `parameters.caching.synchronizer-client-max-timestamp` is configured | the maximum size of the cache |
+| `parameters.caching.topology-snapshot.maximum-size` | int (PositiveNumeric) | `parameters.caching.topology-snapshot` is configured | the maximum size of the cache |
+| `parameters.lsu-repair.lsu-sequencing-bounds-override.lower-bound-sequencing-time-exclusive` | string (CantonTimestamp) | `parameters.lsu-repair.lsu-sequencing-bounds-override` is configured | Defined as the highest effective time of the topology store on the broken synchronizer. |
+| `parameters.lsu-repair.lsu-sequencing-bounds-override.upgrade-time` | string (CantonTimestamp) | `parameters.lsu-repair.lsu-sequencing-bounds-override` is configured | The value should be chosen as follows: - At least lowerBoundSequencingTimeExclusive - At least the latest sequencing time on the broken synchronizer - At least the latest effective time of the latest non-rejected topology transaction on the broken synchronizer. - Not too far in the future, as it acts as a strict lower bound on the new synchronizer. |
+| `parameters.lsu.contact-successor-retry.initial-delay` | duration (NonNegativeFiniteDuration) | `parameters.lsu.contact-successor-retry` is configured | initial delay before the first retry |
+| `parameters.lsu.contact-successor-retry.max-delay` | duration (NonNegativeDuration) | `parameters.lsu.contact-successor-retry` is configured | max delay between retries |
+| `parameters.lsu.contact-successor-retry.max-retries` | int | `parameters.lsu.contact-successor-retry` is configured | max number of retries |
+| `parameters.watchdog.enabled` | boolean | `parameters.watchdog` is configured |  |
+| `public-api.tls.cert-chain-file.pem-bytes` | string | `public-api.tls.cert-chain-file` is configured and `public-api.tls.cert-chain-file.type` is `pem-string` |  |
+| `public-api.tls.cert-chain-file.pem-file` | path (ExistingFile) | `public-api.tls.cert-chain-file` is configured and `public-api.tls.cert-chain-file.type` is `pem-file` |  |
+| `public-api.tls.cert-chain-file.type` | one of `pem-file`, `pem-string` | `public-api.tls.cert-chain-file` is configured | Choose one type — see [PemFileOrString](/global-synchronizer/reference/canton-config/types#pemfileorstring). |
+| `public-api.tls.private-key-file` | string (PemFile) | `public-api.tls` is configured |  |
+| `sequencer-client.auth-token.backoff.jitter.type` | one of `equal`, `full` | `sequencer-client.auth-token.backoff.jitter` is configured |  |
+| `sequencer.block.writer.type` | one of `low-latency`, `high-throughput` | `sequencer.block.writer` is configured and `sequencer.type` is one of `bft-sequencer`, `external` | Choose one type — see [SequencerWriterConfig](/global-synchronizer/reference/canton-config/types#sequencerwriterconfig). |
+| `sequencer.config` | ConfigCursor (unclassified) | `sequencer` is configured and `sequencer.type` is `external` |  |
+| `sequencer.config.batch-aggregator.type` | one of `batching`, `no-batching` | `sequencer.config.batch-aggregator` is configured and `sequencer.type` is `bft-sequencer` | Choose one type — see [BatchAggregatorConfig](/global-synchronizer/reference/canton-config/types#batchaggregatorconfig). |
+| `sequencer.config.initial-network.endpoint-authentication.auth-token.backoff.jitter.type` | one of `equal`, `full` | `sequencer.config.initial-network.endpoint-authentication.auth-token.backoff.jitter` is configured and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.initial-network.peer-endpoints[].address` | string | `sequencer.config.initial-network.peer-endpoints[]` is configured and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.initial-network.peer-endpoints[].channel.max-inbound-message-size` | int (NonNegativeInt) | `sequencer.config.initial-network.peer-endpoints[].channel` is configured and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.initial-network.peer-endpoints[].channel.trace-context-propagation` | one of `enabled`, `disabled` | `sequencer.config.initial-network.peer-endpoints[].channel` is configured and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.initial-network.peer-endpoints[].port` | int (Port) | `sequencer.config.initial-network.peer-endpoints[]` is configured and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.initial-network.peer-endpoints[].tls-config.client-cert.cert-chain-file.pem-bytes` | string | `sequencer.config.initial-network.peer-endpoints[].tls-config.client-cert.cert-chain-file` is configured and `sequencer.config.initial-network.peer-endpoints[].tls-config.client-cert.cert-chain-file.type` is `pem-string` and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.initial-network.peer-endpoints[].tls-config.client-cert.cert-chain-file.pem-file` | path (ExistingFile) | `sequencer.config.initial-network.peer-endpoints[].tls-config.client-cert.cert-chain-file` is configured and `sequencer.config.initial-network.peer-endpoints[].tls-config.client-cert.cert-chain-file.type` is `pem-file` and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.initial-network.peer-endpoints[].tls-config.client-cert.cert-chain-file.type` | one of `pem-file`, `pem-string` | `sequencer.config.initial-network.peer-endpoints[].tls-config.client-cert.cert-chain-file` is configured and `sequencer.type` is `bft-sequencer` | Choose one type — see [PemFileOrString](/global-synchronizer/reference/canton-config/types#pemfileorstring). |
+| `sequencer.config.initial-network.peer-endpoints[].tls-config.client-cert.private-key-file` | string (PemFile) | `sequencer.config.initial-network.peer-endpoints[].tls-config.client-cert` is configured and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.initial-network.peer-endpoints[].tls-config.trust-collection-file.pem-bytes` | string | `sequencer.config.initial-network.peer-endpoints[].tls-config.trust-collection-file` is configured and `sequencer.config.initial-network.peer-endpoints[].tls-config.trust-collection-file.type` is `pem-string` and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.initial-network.peer-endpoints[].tls-config.trust-collection-file.pem-file` | path (ExistingFile) | `sequencer.config.initial-network.peer-endpoints[].tls-config.trust-collection-file` is configured and `sequencer.config.initial-network.peer-endpoints[].tls-config.trust-collection-file.type` is `pem-file` and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.initial-network.peer-endpoints[].tls-config.trust-collection-file.type` | one of `pem-file`, `pem-string` | `sequencer.config.initial-network.peer-endpoints[].tls-config.trust-collection-file` is configured and `sequencer.type` is `bft-sequencer` | Choose one type — see [PemFileOrString](/global-synchronizer/reference/canton-config/types#pemfileorstring). |
+| `sequencer.config.initial-network.server-endpoint.address` | string | `sequencer.config.initial-network.server-endpoint` is configured and `sequencer.type` is `bft-sequencer` | The internal binding address for the server. |
+| `sequencer.config.initial-network.server-endpoint.external-address` | string | `sequencer.config.initial-network.server-endpoint` is configured and `sequencer.type` is `bft-sequencer` | The external address that remote peers should connect to in order to reach the local server. In practice, this may not be the actual internal address that the local server listens on, and instead may represent, for example, an intermediate TLS-terminating proxy. |
+| `sequencer.config.initial-network.server-endpoint.external-port` | int (Port) | `sequencer.config.initial-network.server-endpoint` is configured and `sequencer.type` is `bft-sequencer` | The external port that remote peers should connect to in order to reach the local server. In practice, this may not be the actual internal internalPort that the local server listens on, and instead may represent, for example, an intermediate TLS-terminating proxy. |
+| `sequencer.config.initial-network.server-endpoint.external-tls-config.client-cert.cert-chain-file.pem-bytes` | string | `sequencer.config.initial-network.server-endpoint.external-tls-config.client-cert.cert-chain-file` is configured and `sequencer.config.initial-network.server-endpoint.external-tls-config.client-cert.cert-chain-file.type` is `pem-string` and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.initial-network.server-endpoint.external-tls-config.client-cert.cert-chain-file.pem-file` | path (ExistingFile) | `sequencer.config.initial-network.server-endpoint.external-tls-config.client-cert.cert-chain-file` is configured and `sequencer.config.initial-network.server-endpoint.external-tls-config.client-cert.cert-chain-file.type` is `pem-file` and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.initial-network.server-endpoint.external-tls-config.client-cert.cert-chain-file.type` | one of `pem-file`, `pem-string` | `sequencer.config.initial-network.server-endpoint.external-tls-config.client-cert.cert-chain-file` is configured and `sequencer.type` is `bft-sequencer` | Choose one type — see [PemFileOrString](/global-synchronizer/reference/canton-config/types#pemfileorstring). |
+| `sequencer.config.initial-network.server-endpoint.external-tls-config.client-cert.private-key-file` | string (PemFile) | `sequencer.config.initial-network.server-endpoint.external-tls-config.client-cert` is configured and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.initial-network.server-endpoint.external-tls-config.trust-collection-file.pem-bytes` | string | `sequencer.config.initial-network.server-endpoint.external-tls-config.trust-collection-file` is configured and `sequencer.config.initial-network.server-endpoint.external-tls-config.trust-collection-file.type` is `pem-string` and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.initial-network.server-endpoint.external-tls-config.trust-collection-file.pem-file` | path (ExistingFile) | `sequencer.config.initial-network.server-endpoint.external-tls-config.trust-collection-file` is configured and `sequencer.config.initial-network.server-endpoint.external-tls-config.trust-collection-file.type` is `pem-file` and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.initial-network.server-endpoint.external-tls-config.trust-collection-file.type` | one of `pem-file`, `pem-string` | `sequencer.config.initial-network.server-endpoint.external-tls-config.trust-collection-file` is configured and `sequencer.type` is `bft-sequencer` | Choose one type — see [PemFileOrString](/global-synchronizer/reference/canton-config/types#pemfileorstring). |
+| `sequencer.config.initial-network.server-endpoint.tls.cert-chain-file.pem-bytes` | string | `sequencer.config.initial-network.server-endpoint.tls.cert-chain-file` is configured and `sequencer.config.initial-network.server-endpoint.tls.cert-chain-file.type` is `pem-string` and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.initial-network.server-endpoint.tls.cert-chain-file.pem-file` | path (ExistingFile) | `sequencer.config.initial-network.server-endpoint.tls.cert-chain-file` is configured and `sequencer.config.initial-network.server-endpoint.tls.cert-chain-file.type` is `pem-file` and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.initial-network.server-endpoint.tls.cert-chain-file.type` | one of `pem-file`, `pem-string` | `sequencer.config.initial-network.server-endpoint.tls.cert-chain-file` is configured and `sequencer.type` is `bft-sequencer` | Choose one type — see [PemFileOrString](/global-synchronizer/reference/canton-config/types#pemfileorstring). |
+| `sequencer.config.initial-network.server-endpoint.tls.client-auth.admin-client.cert-chain-file.pem-bytes` | string | `sequencer.config.initial-network.server-endpoint.tls.client-auth.admin-client.cert-chain-file` is configured and `sequencer.config.initial-network.server-endpoint.tls.client-auth.admin-client.cert-chain-file.type` is `pem-string` and `sequencer.config.initial-network.server-endpoint.tls.client-auth.type` is `require` and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.initial-network.server-endpoint.tls.client-auth.admin-client.cert-chain-file.pem-file` | path (ExistingFile) | `sequencer.config.initial-network.server-endpoint.tls.client-auth.admin-client.cert-chain-file` is configured and `sequencer.config.initial-network.server-endpoint.tls.client-auth.admin-client.cert-chain-file.type` is `pem-file` and `sequencer.config.initial-network.server-endpoint.tls.client-auth.type` is `require` and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.initial-network.server-endpoint.tls.client-auth.admin-client.cert-chain-file.type` | one of `pem-file`, `pem-string` | `sequencer.config.initial-network.server-endpoint.tls.client-auth.admin-client.cert-chain-file` is configured and `sequencer.config.initial-network.server-endpoint.tls.client-auth.type` is `require` and `sequencer.type` is `bft-sequencer` | Choose one type — see [PemFileOrString](/global-synchronizer/reference/canton-config/types#pemfileorstring). |
+| `sequencer.config.initial-network.server-endpoint.tls.client-auth.admin-client.private-key-file` | string (PemFile) | `sequencer.config.initial-network.server-endpoint.tls.client-auth.admin-client` is configured and `sequencer.config.initial-network.server-endpoint.tls.client-auth.type` is `require` and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.initial-network.server-endpoint.tls.client-auth.type` | one of `require`, `optional`, `none` | `sequencer.config.initial-network.server-endpoint.tls.client-auth` is configured and `sequencer.type` is `bft-sequencer` | Choose one type — see [ServerAuthRequirementConfig](/global-synchronizer/reference/canton-config/types#serverauthrequirementconfig). |
+| `sequencer.config.initial-network.server-endpoint.tls.private-key-file` | string (PemFile) | `sequencer.config.initial-network.server-endpoint.tls` is configured and `sequencer.type` is `bft-sequencer` | a file containing the server's private key. The key must not use a password. |
+| `sequencer.config.initial-network.server-endpoint.tls.trust-collection-file.pem-bytes` | string | `sequencer.config.initial-network.server-endpoint.tls.trust-collection-file` is configured and `sequencer.config.initial-network.server-endpoint.tls.trust-collection-file.type` is `pem-string` and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.initial-network.server-endpoint.tls.trust-collection-file.pem-file` | path (ExistingFile) | `sequencer.config.initial-network.server-endpoint.tls.trust-collection-file` is configured and `sequencer.config.initial-network.server-endpoint.tls.trust-collection-file.type` is `pem-file` and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.initial-network.server-endpoint.tls.trust-collection-file.type` | one of `pem-file`, `pem-string` | `sequencer.config.initial-network.server-endpoint.tls.trust-collection-file` is configured and `sequencer.type` is `bft-sequencer` | Choose one type — see [PemFileOrString](/global-synchronizer/reference/canton-config/types#pemfileorstring). |
+| `sequencer.config.leader-selection-policy-config-for-pv-34.how-long-to-blacklist.initial-value` | int | `sequencer.config.leader-selection-policy-config-for-pv-34.how-long-to-blacklist` is configured and `sequencer.config.leader-selection-policy-config-for-pv-34.how-long-to-blacklist.type` is one of `exponential`, `linear-with-parameters` and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.leader-selection-policy-config-for-pv-34.how-long-to-blacklist.slope` | int | `sequencer.config.leader-selection-policy-config-for-pv-34.how-long-to-blacklist` is configured and `sequencer.config.leader-selection-policy-config-for-pv-34.how-long-to-blacklist.type` is `linear-with-parameters` and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.leader-selection-policy-config-for-pv-34.how-long-to-blacklist.type` | one of `linear`, `linear-with-parameters`, `exponential`, `no-blacklisting` | `sequencer.config.leader-selection-policy-config-for-pv-34.how-long-to-blacklist` is configured and `sequencer.type` is `bft-sequencer` | Choose one type — see [HowLongToBlacklist](/global-synchronizer/reference/canton-config/types#howlongtoblacklist). |
+| `sequencer.config.leader-selection-policy-config-for-pv-34.how-many-can-we-blacklist` | one of `num-faults-tolerated`, `no-blacklisting` | `sequencer.config.leader-selection-policy-config-for-pv-34` is configured and `sequencer.type` is `bft-sequencer` | The number of peers that can be simultaneously blacklisted, and defaults to the number of tolerated faults: f = (N-1)/3. |
+| `sequencer.config.standalone.blacklist-leader-selection-policy-config.how-long-to-blacklist.initial-value` | int | `sequencer.config.standalone.blacklist-leader-selection-policy-config.how-long-to-blacklist` is configured and `sequencer.config.standalone.blacklist-leader-selection-policy-config.how-long-to-blacklist.type` is one of `exponential`, `linear-with-parameters` and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.standalone.blacklist-leader-selection-policy-config.how-long-to-blacklist.slope` | int | `sequencer.config.standalone.blacklist-leader-selection-policy-config.how-long-to-blacklist` is configured and `sequencer.config.standalone.blacklist-leader-selection-policy-config.how-long-to-blacklist.type` is `linear-with-parameters` and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.standalone.blacklist-leader-selection-policy-config.how-long-to-blacklist.type` | one of `linear`, `linear-with-parameters`, `exponential`, `no-blacklisting` | `sequencer.config.standalone.blacklist-leader-selection-policy-config.how-long-to-blacklist` is configured and `sequencer.type` is `bft-sequencer` | Choose one type — see [HowLongToBlacklist](/global-synchronizer/reference/canton-config/types#howlongtoblacklist). |
+| `sequencer.config.standalone.blacklist-leader-selection-policy-config.how-many-can-we-blacklist` | one of `num-faults-tolerated`, `no-blacklisting` | `sequencer.config.standalone.blacklist-leader-selection-policy-config` is configured and `sequencer.type` is `bft-sequencer` | The number of peers that can be simultaneously blacklisted, and defaults to the number of tolerated faults: f = (N-1)/3. |
+| `sequencer.config.standalone.max-batches-per-block-proposal` | int | `sequencer.config.standalone` is configured and `sequencer.type` is `bft-sequencer` | The maximum number of batches that can be included in a single block proposal. |
+| `sequencer.config.standalone.max-requests-in-batch` | int | `sequencer.config.standalone` is configured and `sequencer.type` is `bft-sequencer` | The maximum number of requests that can be included in a single batch. |
+| `sequencer.config.standalone.pbft-view-change-timeout` | duration | `sequencer.config.standalone` is configured and `sequencer.type` is `bft-sequencer` | The base duration to use for view change timeouts for ISS segments. |
+| `sequencer.config.standalone.peers` | array of BftBlockOrderingStandalonePeerConfig | `sequencer.config.standalone` is configured and `sequencer.type` is `bft-sequencer` | The list of peers in the standalone network, including their sequencer IDs and public keys. |
+| `sequencer.config.standalone.peers[].sequencer-id` | string | `sequencer.config.standalone.peers[]` is configured and `sequencer.type` is `bft-sequencer` | The sequencer ID of the peer. |
+| `sequencer.config.standalone.peers[].signing-public-key-proto-file` | path | `sequencer.config.standalone.peers[]` is configured and `sequencer.type` is `bft-sequencer` | The file containing the public key used to verify incoming messages from the peer. |
+| `sequencer.config.standalone.segment-length` | int | `sequencer.config.standalone` is configured and `sequencer.type` is `bft-sequencer` | The number of blocks per segment. |
+| `sequencer.config.standalone.signing-private-key-proto-file` | path | `sequencer.config.standalone` is configured and `sequencer.type` is `bft-sequencer` | The file containing the private key used to sign outgoing messages. |
+| `sequencer.config.standalone.signing-public-key-proto-file` | path | `sequencer.config.standalone` is configured and `sequencer.type` is `bft-sequencer` | The file containing the public key used to verify incoming messages. |
+| `sequencer.config.standalone.test-slowdown.post-ordering-delay.duration` | duration | `sequencer.config.standalone.test-slowdown.post-ordering-delay` is configured and `sequencer.config.standalone.test-slowdown.post-ordering-delay.type` is `constant-distribution` and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.standalone.test-slowdown.post-ordering-delay.high` | duration | `sequencer.config.standalone.test-slowdown.post-ordering-delay` is configured and `sequencer.config.standalone.test-slowdown.post-ordering-delay.type` is `linear-distribution` and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.standalone.test-slowdown.post-ordering-delay.low` | duration | `sequencer.config.standalone.test-slowdown.post-ordering-delay` is configured and `sequencer.config.standalone.test-slowdown.post-ordering-delay.type` is one of `linear-distribution`, `power-distribution` and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.standalone.test-slowdown.post-ordering-delay.mean` | duration | `sequencer.config.standalone.test-slowdown.post-ordering-delay` is configured and `sequencer.config.standalone.test-slowdown.post-ordering-delay.type` is `power-distribution` and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.standalone.test-slowdown.post-ordering-delay.type` | one of `constant-distribution`, `weighted-distribution`, `linear-distribution`, `power-distribution` | `sequencer.config.standalone.test-slowdown.post-ordering-delay` is configured and `sequencer.type` is `bft-sequencer` | Choose one type — see [FiniteDurationDistribution](/global-synchronizer/reference/canton-config/types#finitedurationdistribution). |
+| `sequencer.config.standalone.test-slowdown.post-ordering-delay.weighted-durations` | array of WeightedDuration | `sequencer.config.standalone.test-slowdown.post-ordering-delay` is configured and `sequencer.config.standalone.test-slowdown.post-ordering-delay.type` is `weighted-distribution` and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.standalone.test-slowdown.post-ordering-delay.weighted-durations[].duration` | duration | `sequencer.config.standalone.test-slowdown.post-ordering-delay.weighted-durations[]` is configured and `sequencer.config.standalone.test-slowdown.post-ordering-delay.type` is `weighted-distribution` and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.standalone.test-slowdown.post-ordering-delay.weighted-durations[].weight` | int (PositiveInt) | `sequencer.config.standalone.test-slowdown.post-ordering-delay.weighted-durations[]` is configured and `sequencer.config.standalone.test-slowdown.post-ordering-delay.type` is `weighted-distribution` and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.standalone.test-slowdown.send-delay.default-delay-distribution.duration` | duration | `sequencer.config.standalone.test-slowdown.send-delay.default-delay-distribution` is configured and `sequencer.config.standalone.test-slowdown.send-delay.default-delay-distribution.type` is `constant-distribution` and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.standalone.test-slowdown.send-delay.default-delay-distribution.high` | duration | `sequencer.config.standalone.test-slowdown.send-delay.default-delay-distribution` is configured and `sequencer.config.standalone.test-slowdown.send-delay.default-delay-distribution.type` is `linear-distribution` and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.standalone.test-slowdown.send-delay.default-delay-distribution.low` | duration | `sequencer.config.standalone.test-slowdown.send-delay.default-delay-distribution` is configured and `sequencer.config.standalone.test-slowdown.send-delay.default-delay-distribution.type` is one of `linear-distribution`, `power-distribution` and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.standalone.test-slowdown.send-delay.default-delay-distribution.mean` | duration | `sequencer.config.standalone.test-slowdown.send-delay.default-delay-distribution` is configured and `sequencer.config.standalone.test-slowdown.send-delay.default-delay-distribution.type` is `power-distribution` and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.standalone.test-slowdown.send-delay.default-delay-distribution.type` | one of `constant-distribution`, `weighted-distribution`, `linear-distribution`, `power-distribution` | `sequencer.config.standalone.test-slowdown.send-delay.default-delay-distribution` is configured and `sequencer.type` is `bft-sequencer` | Choose one type — see [FiniteDurationDistribution](/global-synchronizer/reference/canton-config/types#finitedurationdistribution). |
+| `sequencer.config.standalone.test-slowdown.send-delay.default-delay-distribution.weighted-durations` | array of WeightedDuration | `sequencer.config.standalone.test-slowdown.send-delay.default-delay-distribution` is configured and `sequencer.config.standalone.test-slowdown.send-delay.default-delay-distribution.type` is `weighted-distribution` and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.standalone.test-slowdown.send-delay.default-delay-distribution.weighted-durations[].duration` | duration | `sequencer.config.standalone.test-slowdown.send-delay.default-delay-distribution.weighted-durations[]` is configured and `sequencer.config.standalone.test-slowdown.send-delay.default-delay-distribution.type` is `weighted-distribution` and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.standalone.test-slowdown.send-delay.default-delay-distribution.weighted-durations[].weight` | int (PositiveInt) | `sequencer.config.standalone.test-slowdown.send-delay.default-delay-distribution.weighted-durations[]` is configured and `sequencer.config.standalone.test-slowdown.send-delay.default-delay-distribution.type` is `weighted-distribution` and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.standalone.test-slowdown.send-delay.delays-by-recipients[].delay-distribution.duration` | duration | `sequencer.config.standalone.test-slowdown.send-delay.delays-by-recipients[].delay-distribution` is configured and `sequencer.config.standalone.test-slowdown.send-delay.delays-by-recipients[].delay-distribution.type` is `constant-distribution` and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.standalone.test-slowdown.send-delay.delays-by-recipients[].delay-distribution.high` | duration | `sequencer.config.standalone.test-slowdown.send-delay.delays-by-recipients[].delay-distribution` is configured and `sequencer.config.standalone.test-slowdown.send-delay.delays-by-recipients[].delay-distribution.type` is `linear-distribution` and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.standalone.test-slowdown.send-delay.delays-by-recipients[].delay-distribution.low` | duration | `sequencer.config.standalone.test-slowdown.send-delay.delays-by-recipients[].delay-distribution` is configured and `sequencer.config.standalone.test-slowdown.send-delay.delays-by-recipients[].delay-distribution.type` is one of `linear-distribution`, `power-distribution` and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.standalone.test-slowdown.send-delay.delays-by-recipients[].delay-distribution.mean` | duration | `sequencer.config.standalone.test-slowdown.send-delay.delays-by-recipients[].delay-distribution` is configured and `sequencer.config.standalone.test-slowdown.send-delay.delays-by-recipients[].delay-distribution.type` is `power-distribution` and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.standalone.test-slowdown.send-delay.delays-by-recipients[].delay-distribution.type` | one of `constant-distribution`, `weighted-distribution`, `linear-distribution`, `power-distribution` | `sequencer.config.standalone.test-slowdown.send-delay.delays-by-recipients[].delay-distribution` is configured and `sequencer.type` is `bft-sequencer` | Choose one type — see [FiniteDurationDistribution](/global-synchronizer/reference/canton-config/types#finitedurationdistribution). |
+| `sequencer.config.standalone.test-slowdown.send-delay.delays-by-recipients[].delay-distribution.weighted-durations` | array of WeightedDuration | `sequencer.config.standalone.test-slowdown.send-delay.delays-by-recipients[].delay-distribution` is configured and `sequencer.config.standalone.test-slowdown.send-delay.delays-by-recipients[].delay-distribution.type` is `weighted-distribution` and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.standalone.test-slowdown.send-delay.delays-by-recipients[].delay-distribution.weighted-durations[].duration` | duration | `sequencer.config.standalone.test-slowdown.send-delay.delays-by-recipients[].delay-distribution.weighted-durations[]` is configured and `sequencer.config.standalone.test-slowdown.send-delay.delays-by-recipients[].delay-distribution.type` is `weighted-distribution` and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.standalone.test-slowdown.send-delay.delays-by-recipients[].delay-distribution.weighted-durations[].weight` | int (PositiveInt) | `sequencer.config.standalone.test-slowdown.send-delay.delays-by-recipients[].delay-distribution.weighted-durations[]` is configured and `sequencer.config.standalone.test-slowdown.send-delay.delays-by-recipients[].delay-distribution.type` is `weighted-distribution` and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.standalone.test-slowdown.send-delay.delays-by-recipients[].instance-names` | array of string | `sequencer.config.standalone.test-slowdown.send-delay.delays-by-recipients[]` is configured and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.standalone.test-slowdown.topology-delay.get-ordering-topology-delay.duration` | duration | `sequencer.config.standalone.test-slowdown.topology-delay.get-ordering-topology-delay` is configured and `sequencer.config.standalone.test-slowdown.topology-delay.get-ordering-topology-delay.type` is `constant-distribution` and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.standalone.test-slowdown.topology-delay.get-ordering-topology-delay.high` | duration | `sequencer.config.standalone.test-slowdown.topology-delay.get-ordering-topology-delay` is configured and `sequencer.config.standalone.test-slowdown.topology-delay.get-ordering-topology-delay.type` is `linear-distribution` and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.standalone.test-slowdown.topology-delay.get-ordering-topology-delay.low` | duration | `sequencer.config.standalone.test-slowdown.topology-delay.get-ordering-topology-delay` is configured and `sequencer.config.standalone.test-slowdown.topology-delay.get-ordering-topology-delay.type` is one of `linear-distribution`, `power-distribution` and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.standalone.test-slowdown.topology-delay.get-ordering-topology-delay.mean` | duration | `sequencer.config.standalone.test-slowdown.topology-delay.get-ordering-topology-delay` is configured and `sequencer.config.standalone.test-slowdown.topology-delay.get-ordering-topology-delay.type` is `power-distribution` and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.standalone.test-slowdown.topology-delay.get-ordering-topology-delay.type` | one of `constant-distribution`, `weighted-distribution`, `linear-distribution`, `power-distribution` | `sequencer.config.standalone.test-slowdown.topology-delay.get-ordering-topology-delay` is configured and `sequencer.type` is `bft-sequencer` | Choose one type — see [FiniteDurationDistribution](/global-synchronizer/reference/canton-config/types#finitedurationdistribution). |
+| `sequencer.config.standalone.test-slowdown.topology-delay.get-ordering-topology-delay.weighted-durations` | array of WeightedDuration | `sequencer.config.standalone.test-slowdown.topology-delay.get-ordering-topology-delay` is configured and `sequencer.config.standalone.test-slowdown.topology-delay.get-ordering-topology-delay.type` is `weighted-distribution` and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.standalone.test-slowdown.topology-delay.get-ordering-topology-delay.weighted-durations[].duration` | duration | `sequencer.config.standalone.test-slowdown.topology-delay.get-ordering-topology-delay.weighted-durations[]` is configured and `sequencer.config.standalone.test-slowdown.topology-delay.get-ordering-topology-delay.type` is `weighted-distribution` and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.standalone.test-slowdown.topology-delay.get-ordering-topology-delay.weighted-durations[].weight` | int (PositiveInt) | `sequencer.config.standalone.test-slowdown.topology-delay.get-ordering-topology-delay.weighted-durations[]` is configured and `sequencer.config.standalone.test-slowdown.topology-delay.get-ordering-topology-delay.type` is `weighted-distribution` and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.standalone.test-slowdown.topology-delay.request-inspection-delay.duration` | duration | `sequencer.config.standalone.test-slowdown.topology-delay.request-inspection-delay` is configured and `sequencer.config.standalone.test-slowdown.topology-delay.request-inspection-delay.type` is `constant-distribution` and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.standalone.test-slowdown.topology-delay.request-inspection-delay.high` | duration | `sequencer.config.standalone.test-slowdown.topology-delay.request-inspection-delay` is configured and `sequencer.config.standalone.test-slowdown.topology-delay.request-inspection-delay.type` is `linear-distribution` and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.standalone.test-slowdown.topology-delay.request-inspection-delay.low` | duration | `sequencer.config.standalone.test-slowdown.topology-delay.request-inspection-delay` is configured and `sequencer.config.standalone.test-slowdown.topology-delay.request-inspection-delay.type` is one of `linear-distribution`, `power-distribution` and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.standalone.test-slowdown.topology-delay.request-inspection-delay.mean` | duration | `sequencer.config.standalone.test-slowdown.topology-delay.request-inspection-delay` is configured and `sequencer.config.standalone.test-slowdown.topology-delay.request-inspection-delay.type` is `power-distribution` and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.standalone.test-slowdown.topology-delay.request-inspection-delay.type` | one of `constant-distribution`, `weighted-distribution`, `linear-distribution`, `power-distribution` | `sequencer.config.standalone.test-slowdown.topology-delay.request-inspection-delay` is configured and `sequencer.type` is `bft-sequencer` | Choose one type — see [FiniteDurationDistribution](/global-synchronizer/reference/canton-config/types#finitedurationdistribution). |
+| `sequencer.config.standalone.test-slowdown.topology-delay.request-inspection-delay.weighted-durations` | array of WeightedDuration | `sequencer.config.standalone.test-slowdown.topology-delay.request-inspection-delay` is configured and `sequencer.config.standalone.test-slowdown.topology-delay.request-inspection-delay.type` is `weighted-distribution` and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.standalone.test-slowdown.topology-delay.request-inspection-delay.weighted-durations[].duration` | duration | `sequencer.config.standalone.test-slowdown.topology-delay.request-inspection-delay.weighted-durations[]` is configured and `sequencer.config.standalone.test-slowdown.topology-delay.request-inspection-delay.type` is `weighted-distribution` and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.standalone.test-slowdown.topology-delay.request-inspection-delay.weighted-durations[].weight` | int (PositiveInt) | `sequencer.config.standalone.test-slowdown.topology-delay.request-inspection-delay.weighted-durations[]` is configured and `sequencer.config.standalone.test-slowdown.topology-delay.request-inspection-delay.type` is `weighted-distribution` and `sequencer.type` is `bft-sequencer` |  |
+| `sequencer.config.standalone.this-sequencer-id` | string | `sequencer.config.standalone` is configured and `sequencer.type` is `bft-sequencer` | The sequencer ID of the local node. |
+| `sequencer.config.storage.type` | one of `memory`, `h2`, `postgres` | `sequencer.config.storage` is configured and `sequencer.type` is `bft-sequencer` | Choose one type — see [StorageConfig](/global-synchronizer/reference/canton-config/types#storageconfig). |
+| `sequencer.sequencer-type` | string | `sequencer` is configured and `sequencer.type` is `external` |  |
+| `sequencer.type` | one of `database`, `external`, `bft-sequencer` | `sequencer` is configured | Choose one type — see [SequencerConfig](/global-synchronizer/reference/canton-config/types#sequencerconfig). |
+| `sequencer.writer.type` | one of `low-latency`, `high-throughput` | `sequencer.writer` is configured and `sequencer.type` is `database` | Choose one type — see [SequencerWriterConfig](/global-synchronizer/reference/canton-config/types#sequencerwriterconfig). |
+| `storage.type` | one of `memory`, `h2`, `postgres` | `storage` is configured | Choose one type — see [StorageConfig](/global-synchronizer/reference/canton-config/types#storageconfig). |
+| `traffic-config.batch-aggregator-config.type` | one of `batching`, `no-batching` | `traffic-config.batch-aggregator-config` is configured | Choose one type — see [BatchAggregatorConfig](/global-synchronizer/reference/canton-config/types#batchaggregatorconfig). |
+
+
+</Tab>
+</Tabs>
+
+## All options
+
+### Top-level keys
 
 <Tabs>
 <Tab title="HOCON">
@@ -43,1070 +654,7 @@ canton.sequencers.<sequencer> {
 }
 ```
 
-**`admin-api.auth-services[]`** supports these types: `wildcard`, `unsafe-jwt-hmac-256`, `jwt-rs-256-crt`, `jwt-es-256-crt`, `jwt-es-512-crt`, `jwt-jwks`, `party-jwt`. Each block below shows one entry; a list may hold entries of different types.
-
-```hocon
-canton.sequencers.<sequencer>.admin-api.auth-services = [
-  {
-    type = wildcard
-    # takes no further keys
-  }
-]
-```
-
-```hocon
-canton.sequencers.<sequencer>.admin-api.auth-services = [
-  {
-    type = unsafe-jwt-hmac-256
-    access-level = wildcard
-    # max-token-life = <duration>
-    privileged = false
-    secret = "..."   # required
-    # target-audience = <string>
-    # target-scope = <string>
-    users = [
-      {
-        allowed-services = [ ]   # required
-        user-id = "..."   # required
-      }
-    ]
-  }
-]
-```
-
-```hocon
-canton.sequencers.<sequencer>.admin-api.auth-services = [
-  {
-    type = jwt-rs-256-crt
-    access-level = wildcard
-    certificate = "..."   # required
-    # max-token-life = <duration>
-    privileged = false
-    # target-audience = <string>
-    # target-scope = <string>
-    users = [
-      {
-        allowed-services = [ ]   # required
-        user-id = "..."   # required
-      }
-    ]
-  }
-]
-```
-
-```hocon
-canton.sequencers.<sequencer>.admin-api.auth-services = [
-  {
-    type = jwt-es-256-crt
-    access-level = wildcard
-    certificate = "..."   # required
-    # max-token-life = <duration>
-    privileged = false
-    # target-audience = <string>
-    # target-scope = <string>
-    users = [
-      {
-        allowed-services = [ ]   # required
-        user-id = "..."   # required
-      }
-    ]
-  }
-]
-```
-
-```hocon
-canton.sequencers.<sequencer>.admin-api.auth-services = [
-  {
-    type = jwt-es-512-crt
-    access-level = wildcard
-    certificate = "..."   # required
-    # max-token-life = <duration>
-    privileged = false
-    # target-audience = <string>
-    # target-scope = <string>
-    users = [
-      {
-        allowed-services = [ ]   # required
-        user-id = "..."   # required
-      }
-    ]
-  }
-]
-```
-
-```hocon
-canton.sequencers.<sequencer>.admin-api.auth-services = [
-  {
-    type = jwt-jwks
-    access-level = wildcard
-    # max-token-life = <duration>
-    privileged = false
-    # target-audience = <string>
-    # target-scope = <string>
-    url = "..."   # required
-    users = [
-      {
-        allowed-services = [ ]   # required
-        user-id = "..."   # required
-      }
-    ]
-  }
-]
-```
-
-```hocon
-canton.sequencers.<sequencer>.admin-api.auth-services = [
-  {
-    type = party-jwt
-    # takes no further keys
-  }
-]
-```
-
-**`admin-api.tls.cert-chain-file`** supports these types: `pem-file`, `pem-string`. Pick one; each block below is a complete example of that choice.
-
-```hocon
-canton.sequencers.<sequencer>.admin-api.tls.cert-chain-file {
-  type = pem-file
-  pem-file = "/path/to/file"   # required
-}
-```
-
-```hocon
-canton.sequencers.<sequencer>.admin-api.tls.cert-chain-file {
-  type = pem-string
-  pem-bytes = "..."   # required
-}
-```
-
-**`admin-api.tls.client-auth`** supports these types: `require`, `optional`, `none`. Pick one; each block below is a complete example of that choice.
-
-```hocon
-canton.sequencers.<sequencer>.admin-api.tls.client-auth {
-  type = require
-  admin-client {
-    cert-chain-file {
-      type = pem-file|pem-string   # required
-    }
-    private-key-file = "..."   # required
-  }
-}
-```
-
-```hocon
-canton.sequencers.<sequencer>.admin-api.tls.client-auth {
-  type = optional
-  # takes no further keys
-}
-```
-
-```hocon
-canton.sequencers.<sequencer>.admin-api.tls.client-auth {
-  type = none
-  # takes no further keys
-}
-```
-
-**`crypto.kms`** supports these types: `driver`, `aws`, `gcp`. Pick one; each block below is a complete example of that choice.
-
-```hocon
-canton.sequencers.<sequencer>.crypto.kms {
-  type = driver
-  config = { }   # required
-  health-check-period = "10 seconds"
-  name = "..."   # required
-  retries {
-    create-key-check {
-      initial-delay = "30 seconds"   # required
-      max-delay = "30 seconds"   # required
-      max-retries = 0   # required
-    }
-    failures {
-      initial-delay = "30 seconds"   # required
-      max-delay = "30 seconds"   # required
-      max-retries = 0   # required
-    }
-  }
-}
-```
-
-```hocon
-canton.sequencers.<sequencer>.crypto.kms {
-  type = aws
-  audit-logging = false
-  custom-tags {
-    <custom-tag> = [ ]
-  }
-  disable-ssl-verification = false
-  # endpoint-override = <string>
-  multi-region-key = false
-  region = "..."   # required
-  retries {
-    create-key-check {
-      initial-delay = "30 seconds"   # required
-      max-delay = "30 seconds"   # required
-      max-retries = 0   # required
-    }
-    failures {
-      initial-delay = "30 seconds"   # required
-      max-delay = "30 seconds"   # required
-      max-retries = 0   # required
-    }
-  }
-}
-```
-
-```hocon
-canton.sequencers.<sequencer>.crypto.kms {
-  type = gcp
-  audit-logging = false
-  # endpoint-override = <string>
-  key-ring-id = "..."   # required
-  location-id = "..."   # required
-  project-id = "..."   # required
-  retries {
-    create-key-check {
-      initial-delay = "30 seconds"   # required
-      max-delay = "30 seconds"   # required
-      max-retries = 0   # required
-    }
-    failures {
-      initial-delay = "30 seconds"   # required
-      max-delay = "30 seconds"   # required
-      max-retries = 0   # required
-    }
-  }
-}
-```
-
-**`crypto.private-key-store.encryption`** supports these types: `kms`. Pick one; each block below is a complete example of that choice.
-
-```hocon
-canton.sequencers.<sequencer>.crypto.private-key-store.encryption {
-  type = kms
-  reverted = false
-  # wrapper-key-id = <string>
-}
-```
-
-**`init.identity.identifier`** supports these types: `random`, `explicit`, `config`. Pick one; each block below is a complete example of that choice.
-
-```hocon
-canton.sequencers.<sequencer>.init.identity.identifier {
-  type = random
-  # takes no further keys
-}
-```
-
-```hocon
-canton.sequencers.<sequencer>.init.identity.identifier {
-  type = explicit
-  name = "..."   # required
-}
-```
-
-```hocon
-canton.sequencers.<sequencer>.init.identity.identifier {
-  type = config
-  # takes no further keys
-}
-```
-
-**`init.identity`** supports these types: `external`, `auto`, `manual`. Pick one; each block below is a complete example of that choice.
-
-```hocon
-canton.sequencers.<sequencer>.init.identity {
-  type = external
-  certificates = [ ]
-  identifier = "..."   # required
-  # namespace = <string>
-}
-```
-
-```hocon
-canton.sequencers.<sequencer>.init.identity {
-  type = auto
-  identifier {
-    type = random|explicit|config   # required
-  }
-}
-```
-
-```hocon
-canton.sequencers.<sequencer>.init.identity {
-  type = manual
-  # takes no further keys
-}
-```
-
-**`sequencer.config.leader-selection-policy-config-for-pv-34.how-long-to-blacklist`** supports these types: `linear`, `linear-with-parameters`, `exponential`, `no-blacklisting`. Pick one; each block below is a complete example of that choice.
-
-```hocon
-canton.sequencers.<sequencer>.sequencer.config.leader-selection-policy-config-for-pv-34.how-long-to-blacklist {
-  type = linear
-  # maximum-epoch-blacklisted = <int>
-}
-```
-
-```hocon
-canton.sequencers.<sequencer>.sequencer.config.leader-selection-policy-config-for-pv-34.how-long-to-blacklist {
-  type = linear-with-parameters
-  initial-value = 0   # required
-  # maximum-epoch-blacklisted = <int>
-  slope = 0   # required
-}
-```
-
-```hocon
-canton.sequencers.<sequencer>.sequencer.config.leader-selection-policy-config-for-pv-34.how-long-to-blacklist {
-  type = exponential
-  initial-value = 0   # required
-  # maximum-epoch-blacklisted = <int>
-}
-```
-
-```hocon
-canton.sequencers.<sequencer>.sequencer.config.leader-selection-policy-config-for-pv-34.how-long-to-blacklist {
-  type = no-blacklisting
-  # takes no further keys
-}
-```
-
-**`sequencer.config.standalone.test-slowdown.post-ordering-delay`** supports these types: `constant-distribution`, `weighted-distribution`, `linear-distribution`, `power-distribution`. Pick one; each block below is a complete example of that choice.
-
-```hocon
-canton.sequencers.<sequencer>.sequencer.config.standalone.test-slowdown.post-ordering-delay {
-  type = constant-distribution
-  duration = "30 seconds"   # required
-}
-```
-
-```hocon
-canton.sequencers.<sequencer>.sequencer.config.standalone.test-slowdown.post-ordering-delay {
-  type = weighted-distribution
-  weighted-durations = [
-    {
-      duration = "30 seconds"   # required
-      weight = 0   # required
-    }
-  ]
-}
-```
-
-```hocon
-canton.sequencers.<sequencer>.sequencer.config.standalone.test-slowdown.post-ordering-delay {
-  type = linear-distribution
-  high = "30 seconds"   # required
-  low = "30 seconds"   # required
-}
-```
-
-```hocon
-canton.sequencers.<sequencer>.sequencer.config.standalone.test-slowdown.post-ordering-delay {
-  type = power-distribution
-  low = "30 seconds"   # required
-  mean = "30 seconds"   # required
-}
-```
-
-**`sequencer`** supports these types: `database`, `external`, `bft-sequencer`. Pick one; each block below is a complete example of that choice.
-
-```hocon
-canton.sequencers.<sequencer>.sequencer {
-  type = database
-  high-availability {
-    connection-pool {
-      active-timeout = "15 seconds"
-      connection {
-        client-connection-check-interval = "5 seconds"
-        connection-timeout = "10 seconds"
-        health-check-period = "5 seconds"
-        health-check-timeout = "15 seconds"
-        initial-acquisition-interval = "200 milliseconds"
-        initial-acquisition-max-retries = 5
-        keep-alive-count = 5
-        keep-alive-idle = "10 seconds"
-        keep-alive-interval = "1 second"
-        lock {
-          health-check-period = "5 seconds"
-          health-check-timeout = "15 seconds"
-        }
-        max-inconclusive-read-only-checks = 3
-        passive-check-period = "15 seconds"
-      }
-      health-check-period = "5 seconds"
-      initial-locked-connection-timeout = "15 seconds"
-      initial-must-remain-active-connection-timeout = "1 minute"
-    }
-    # enabled = <boolean>
-    exclusive-storage {
-      connection-pool {
-        active-timeout = "15 seconds"
-        connection {
-          client-connection-check-interval = "5 seconds"
-          connection-timeout = "10 seconds"
-          health-check-period = "5 seconds"
-          health-check-timeout = "15 seconds"
-          initial-acquisition-interval = "200 milliseconds"
-          initial-acquisition-max-retries = 5
-          keep-alive-count = 5
-          keep-alive-idle = "10 seconds"
-          keep-alive-interval = "1 second"
-          lock {
-            health-check-period = "5 seconds"
-            health-check-timeout = "15 seconds"
-          }
-          max-inconclusive-read-only-checks = 3
-          passive-check-period = "15 seconds"
-        }
-        health-check-period = "5 seconds"
-        initial-locked-connection-timeout = "15 seconds"
-        initial-must-remain-active-connection-timeout = "1 minute"
-      }
-      max-connections = 2
-    }
-    keep-alive-interval = "50 milliseconds"
-    offline-duration = "8 seconds"
-    online-check-interval = "5 seconds"
-    total-node-count = 10
-  }
-  pruning {
-    max-pruning-batch-size = 50000
-    # pruning-metric-update-interval = <duration>
-    traffic-purchased-retention = "1 hour"
-  }
-  reader {
-    checkpoint-interval = "5 seconds"
-    event-generation-parallelism = 4
-    payload-batch-size = 10
-    payload-batch-window = "5 milliseconds"
-    payload-fetch-parallelism = 2
-    # polling-interval = <duration>
-    read-batch-size = 100
-  }
-  # testing-interceptor = <string>
-  writer {
-    type = low-latency|high-throughput   # required
-  }
-}
-```
-
-```hocon
-canton.sequencers.<sequencer>.sequencer {
-  type = external
-  block {
-    circuit-breaker {
-      enabled = true
-      messages {
-        acknowledgement {
-          allowed-block-delay = "90 seconds"
-          exponential-backoff-factor = 1
-          max-failures = 10
-          max-reset-timeout = "36500 days"
-          reset-timeout = "30 seconds"
-        }
-        commitment {
-          allowed-block-delay = "90 seconds"
-          exponential-backoff-factor = 1
-          max-failures = 10
-          max-reset-timeout = "36500 days"
-          reset-timeout = "30 seconds"
-        }
-        confirmation-request {
-          allowed-block-delay = "90 seconds"
-          exponential-backoff-factor = 1
-          max-failures = 10
-          max-reset-timeout = "36500 days"
-          reset-timeout = "30 seconds"
-        }
-        confirmation-response {
-          allowed-block-delay = "90 seconds"
-          exponential-backoff-factor = 1
-          max-failures = 10
-          max-reset-timeout = "36500 days"
-          reset-timeout = "30 seconds"
-        }
-        lsu-sequencing-test {
-          allowed-block-delay = "90 seconds"
-          exponential-backoff-factor = 1
-          max-failures = 10
-          max-reset-timeout = "36500 days"
-          reset-timeout = "30 seconds"
-        }
-        time-proof {
-          allowed-block-delay = "90 seconds"
-          exponential-backoff-factor = 1
-          max-failures = 10
-          max-reset-timeout = "36500 days"
-          reset-timeout = "30 seconds"
-        }
-        top-up {
-          allowed-block-delay = "90 seconds"
-          exponential-backoff-factor = 1
-          max-failures = 10
-          max-reset-timeout = "36500 days"
-          reset-timeout = "30 seconds"
-        }
-        topology {
-          allowed-block-delay = "90 seconds"
-          exponential-backoff-factor = 1
-          max-failures = 10
-          max-reset-timeout = "36500 days"
-          reset-timeout = "30 seconds"
-        }
-        unexpected {
-          allowed-block-delay = "90 seconds"
-          exponential-backoff-factor = 1
-          max-failures = 10
-          max-reset-timeout = "36500 days"
-          reset-timeout = "30 seconds"
-        }
-        verdict {
-          allowed-block-delay = "90 seconds"
-          exponential-backoff-factor = 1
-          max-failures = 10
-          max-reset-timeout = "36500 days"
-          reset-timeout = "30 seconds"
-        }
-      }
-    }
-    reader {
-      checkpoint-interval = "5 seconds"
-      event-generation-parallelism = 4
-      payload-batch-size = 10
-      payload-batch-window = "5 milliseconds"
-      payload-fetch-parallelism = 2
-      # polling-interval = <duration>
-      read-batch-size = 100
-    }
-    stream-instrumentation {
-      buffer-size = 256
-      is-enabled = false
-    }
-    # testing-interceptor = <string>
-    throughput-cap {
-      clock-tick-interval = "100 milliseconds"
-      delayed-activation = true
-      enabled = false
-      messages {
-        confirmation-request {
-          global-kbps-cap = 2000
-          global-tps-cap = 10
-          per-client-kbps-cap = 1000
-          per-client-tps-cap = 4
-        }
-        confirmation-response {
-          global-kbps-cap = 2000
-          global-tps-cap = 10
-          per-client-kbps-cap = 1000
-          per-client-tps-cap = 4
-        }
-        topology {
-          global-kbps-cap = 2000
-          global-tps-cap = 10
-          per-client-kbps-cap = 1000
-          per-client-tps-cap = 4
-        }
-      }
-      observation-period-seconds = 60
-      strict = true
-      thresholds = [ ]
-      update-every-ms = 100
-    }
-    writer {
-      type = low-latency|high-throughput   # required
-    }
-  }
-  config = "..."   # required
-  sequencer-type = "..."   # required
-}
-```
-
-```hocon
-canton.sequencers.<sequencer>.sequencer {
-  type = bft-sequencer
-  block {
-    circuit-breaker {
-      enabled = true
-      messages {
-        acknowledgement {
-          allowed-block-delay = "90 seconds"
-          exponential-backoff-factor = 1
-          max-failures = 10
-          max-reset-timeout = "36500 days"
-          reset-timeout = "30 seconds"
-        }
-        commitment {
-          allowed-block-delay = "90 seconds"
-          exponential-backoff-factor = 1
-          max-failures = 10
-          max-reset-timeout = "36500 days"
-          reset-timeout = "30 seconds"
-        }
-        confirmation-request {
-          allowed-block-delay = "90 seconds"
-          exponential-backoff-factor = 1
-          max-failures = 10
-          max-reset-timeout = "36500 days"
-          reset-timeout = "30 seconds"
-        }
-        confirmation-response {
-          allowed-block-delay = "90 seconds"
-          exponential-backoff-factor = 1
-          max-failures = 10
-          max-reset-timeout = "36500 days"
-          reset-timeout = "30 seconds"
-        }
-        lsu-sequencing-test {
-          allowed-block-delay = "90 seconds"
-          exponential-backoff-factor = 1
-          max-failures = 10
-          max-reset-timeout = "36500 days"
-          reset-timeout = "30 seconds"
-        }
-        time-proof {
-          allowed-block-delay = "90 seconds"
-          exponential-backoff-factor = 1
-          max-failures = 10
-          max-reset-timeout = "36500 days"
-          reset-timeout = "30 seconds"
-        }
-        top-up {
-          allowed-block-delay = "90 seconds"
-          exponential-backoff-factor = 1
-          max-failures = 10
-          max-reset-timeout = "36500 days"
-          reset-timeout = "30 seconds"
-        }
-        topology {
-          allowed-block-delay = "90 seconds"
-          exponential-backoff-factor = 1
-          max-failures = 10
-          max-reset-timeout = "36500 days"
-          reset-timeout = "30 seconds"
-        }
-        unexpected {
-          allowed-block-delay = "90 seconds"
-          exponential-backoff-factor = 1
-          max-failures = 10
-          max-reset-timeout = "36500 days"
-          reset-timeout = "30 seconds"
-        }
-        verdict {
-          allowed-block-delay = "90 seconds"
-          exponential-backoff-factor = 1
-          max-failures = 10
-          max-reset-timeout = "36500 days"
-          reset-timeout = "30 seconds"
-        }
-      }
-    }
-    reader {
-      checkpoint-interval = "5 seconds"
-      event-generation-parallelism = 4
-      payload-batch-size = 10
-      payload-batch-window = "5 milliseconds"
-      payload-fetch-parallelism = 2
-      # polling-interval = <duration>
-      read-batch-size = 100
-    }
-    stream-instrumentation {
-      buffer-size = 256
-      is-enabled = false
-    }
-    # testing-interceptor = <string>
-    throughput-cap {
-      clock-tick-interval = "100 milliseconds"
-      delayed-activation = true
-      enabled = false
-      messages {
-        confirmation-request {
-          global-kbps-cap = 2000
-          global-tps-cap = 10
-          per-client-kbps-cap = 1000
-          per-client-tps-cap = 4
-        }
-        confirmation-response {
-          global-kbps-cap = 2000
-          global-tps-cap = 10
-          per-client-kbps-cap = 1000
-          per-client-tps-cap = 4
-        }
-        topology {
-          global-kbps-cap = 2000
-          global-tps-cap = 10
-          per-client-kbps-cap = 1000
-          per-client-tps-cap = 4
-        }
-      }
-      observation-period-seconds = 60
-      strict = true
-      thresholds = [ ]
-      update-every-ms = 100
-    }
-    writer {
-      type = low-latency|high-throughput   # required
-    }
-  }
-  config {
-    availability-dissemination-patience = "5 seconds"
-    availability-max-non-ordered-batches-per-node = 1000
-    availability-min-proposal-creation-delay = "250 milliseconds"
-    availability-number-of-attempts-of-downloading-output-fetch-before-warning = 5
-    batch-aggregator {
-      type = batching|no-batching   # required
-    }
-    blocking-db-read-timeout = "1 minute"
-    consensus-block-completion-timeout = "10 seconds"
-    consensus-empty-block-creation-timeout = "500 milliseconds"
-    consensus-enable-flushing-segment = true
-    consensus-enable-log-end-of-epoch-progress = false
-    consensus-flushing-min-blocks = 2
-    consensus-new-epoch-topology-warn-timeout = "2 seconds"
-    # consensus-queue-max-size = <int>
-    consensus-queue-per-node-quota = 1024
-    # dedicated-execution-context-divisor = <int>
-    delayed-init-queue-max-size = 1024
-    enable-performance-metrics = true
-    # epoch-state-transfer-future-epoch-queue-max-size = <int>
-    epoch-state-transfer-future-epoch-queue-per-node-quota = 1024
-    epoch-state-transfer-how-many-future-epochs-to-download-in-parallel = 5
-    epoch-state-transfer-retry-timeout = "4 seconds"
-    epoch-state-transfer-timeout-for-future-epoch = "500 milliseconds"
-    # init-query-timeout = <duration>
-    # init-timeout = <duration>
-    initial-network {
-      connection-management-config {
-        # connection-retry-delay-multiplier = <int>
-        flow-control-buffer = 128
-        flow-control-buffer-drop-newest = false
-        # flow-control-ready-allowance = <int>
-        initial-connection-max-delay = "500 milliseconds"
-        initial-connection-retry-delay = "500 milliseconds"
-        max-connection-attempts-before-warning = 30
-        max-connection-retry-delay = "2 minutes"
-      }
-      endpoint-authentication {
-        auth-token {
-          backoff {
-            base = 2
-            jitter {
-              type = equal|full   # required
-            }
-            max-retry-interval = "2 minutes"
-          }
-          min-retry-interval = "500 milliseconds"
-          refresh-auth-token-before-expiry = "20 seconds"
-          retries = 20
-        }
-        enabled = true
-      }
-      overwrite-stored-endpoints = false
-      peer-endpoints = [
-        {
-          address = "..."   # required
-          channel {
-            # flow-control-window = <int>
-            # initial-flow-control-window = <int>
-            keep-alive-client {
-              idle-timeout = "30 minutes"
-              keep-alive-without-calls = false
-              time = "40 seconds"
-              timeout = "15 seconds"
-            }
-            max-inbound-message-size = 0   # required
-            trace-context-propagation = enabled|disabled   # required
-          }
-          port = 0   # required
-          tls-config {
-            client-cert {
-              cert-chain-file {
-                type = pem-file|pem-string   # required
-              }
-              private-key-file = "..."   # required
-            }
-            enabled = true
-            trust-collection-file {
-              type = pem-file|pem-string   # required
-            }
-          }
-        }
-      ]
-      server-endpoint {
-        address = "..."   # required
-        external-address = "..."   # required
-        external-port = 0   # required
-        external-tls-config {
-          client-cert {
-            cert-chain-file {
-              type = pem-file|pem-string   # required
-            }
-            private-key-file = "..."   # required
-          }
-          enabled = true
-          trust-collection-file {
-            type = pem-file|pem-string   # required
-          }
-        }
-        # flow-control-window = <int>
-        # initial-flow-control-window = <int>
-        keep-alive-server {
-          permit-keep-alive-time = "20 seconds"
-          permit-keep-alive-without-calls = false
-          time = "40 seconds"
-          timeout = "20 seconds"
-        }
-        limits {
-          active {
-            <key> = [ ]
-          }
-          throttle-logging-rate-per-second = 10
-          warn-on-undefined-limits = false
-        }
-        max-concurrent-calls-per-connection = 100000
-        # max-inbound-message-size = <int>
-        # port = <int>
-        tls {
-          cert-chain-file {
-            type = pem-file|pem-string   # required
-          }
-          # ciphers = [ ... ]
-          client-auth {
-            type = require|optional|none   # required
-          }
-          enable-cert-revocation-checking = false
-          minimum-server-protocol-version = "TLSv1.2"
-          private-key-file = "..."   # required
-          trust-collection-file {
-            type = pem-file|pem-string   # required
-          }
-        }
-      }
-    }
-    leader-selection-policy-config-for-pv-34 {
-      how-long-to-blacklist {
-        type = linear|linear-with-parameters|exponential|no-blacklisting   # required
-      }
-      how-many-can-we-blacklist = num-faults-tolerated|no-blacklisting   # required
-    }
-    manual-vacuum-enabled = false
-    max-batch-creation-interval = "100 milliseconds"
-    # max-mempool-queue-size = <int>
-    min-requests-in-batch = 3
-    network-send-attempts = 5
-    # network-send-retry-jitter-cap = <duration>
-    # network-send-retry-minimum-delay = <duration>
-    # output-enqueue-max-retries = <int>
-    output-enqueue-max-retry-delay = "5 seconds"
-    output-fetch-how-many-recipients = 2
-    output-fetch-minimum-delay = "200 milliseconds"
-    output-fetch-timeout = "200 milliseconds"
-    output-fetch-timeout-cap = "200 milliseconds"
-    output-size-of-chunk-of-epochs-to-load-at-start = 10
-    # segment-length-for-pv-34 = <int>
-    send-blacklist-ttl = "3 minutes"
-    sequencer-core-subscription-config {
-      pause-orderer-threshold-buffer-size = 5000
-      pekko-queue-source-buffer-size = 5000
-      resume-orderer-threshold-buffer-size = 1000
-    }
-    standalone {
-      blacklist-leader-selection-policy-config {
-        how-long-to-blacklist {
-          type = linear|linear-with-parameters|exponential|no-blacklisting   # required
-        }
-        how-many-can-we-blacklist = num-faults-tolerated|no-blacklisting   # required
-      }
-      max-batches-per-block-proposal = 0   # required
-      max-requests-in-batch = 0   # required
-      pbft-view-change-timeout = "30 seconds"   # required
-      peers = [
-        {
-          sequencer-id = "..."   # required
-          signing-public-key-proto-file = "/path/to/file"   # required
-        }
-      ]
-      segment-length = 0   # required
-      signing-private-key-proto-file = "/path/to/file"   # required
-      signing-public-key-proto-file = "/path/to/file"   # required
-      test-slowdown {
-        post-ordering-delay {
-          type = constant-distribution|weighted-distribution|linear-distribution|power-distribution   # required
-        }
-        send-delay {
-          default-delay-distribution {
-            type = constant-distribution|weighted-distribution|linear-distribution|power-distribution   # required
-          }
-          delays-by-recipients = [
-            {
-              delay-distribution {
-                type = constant-distribution|weighted-distribution|linear-distribution|power-distribution   # required
-              }
-              instance-names = [ ]   # required
-              # probability-of-grpc-send-accepted-by-flow-control = <number>
-              # probability-of-grpc-send-success = <number>
-            }
-          ]
-        }
-        topology-delay {
-          # broadcast-request-probability = <number>
-          get-ordering-topology-delay {
-            type = constant-distribution|weighted-distribution|linear-distribution|power-distribution   # required
-          }
-          # pending-topology-changes-probability = <number>
-          # possible-ordering-topology-change-in-request-probability = <number>
-          request-inspection-delay {
-            type = constant-distribution|weighted-distribution|linear-distribution|power-distribution   # required
-          }
-        }
-      }
-      this-sequencer-id = "..."   # required
-    }
-    storage {
-      type = memory|h2|postgres   # required
-    }
-    # view-change-timeout-override = <duration>
-  }
-  # config.initial-network.server-endpoint.tls.client-auth.admin-client.cert-chain-file.type selects a further type, shown separately
-}
-```
-
-**`sequencer.writer`** supports these types: `low-latency`, `high-throughput`. Pick one; each block below is a complete example of that choice.
-
-```hocon
-canton.sequencers.<sequencer>.sequencer.writer {
-  type = low-latency
-  # buffered-events-max-memory = <int>
-  buffered-events-preload-batch-size = 50
-  # checkpoint-backfill-parallelism = <int>
-  checkpoint-interval = "30 seconds"
-  # commit-mode-validation = synchronous|local
-  event-write-batch-max-size = 1
-  event-write-max-concurrency = 1
-  payload-queue-size = 1000
-  payload-to-event-margin = "60 seconds"
-  payload-write-batch-max-size = 1
-  payload-write-max-concurrency = 2
-}
-```
-
-```hocon
-canton.sequencers.<sequencer>.sequencer.writer {
-  type = high-throughput
-  # buffered-events-max-memory = <int>
-  buffered-events-preload-batch-size = 50
-  # checkpoint-backfill-parallelism = <int>
-  checkpoint-interval = "30 seconds"
-  # commit-mode-validation = synchronous|local
-  event-write-batch-max-size = 100
-  event-write-max-concurrency = 1
-  payload-queue-size = 1000
-  payload-to-event-margin = "60 seconds"
-  payload-write-batch-max-size = 50
-  payload-write-max-concurrency = 4
-}
-```
-
-**`storage`** supports these types: `memory`, `h2`, `postgres`. Pick one; each block below is a complete example of that choice.
-
-```hocon
-canton.sequencers.<sequencer>.storage {
-  type = memory
-  parameters {
-    connection-allocation {
-      # num-ledger-api = <int>
-      # num-reads = <int>
-      # num-writes = <int>
-    }
-    connection-timeout = "5 seconds"
-    fail-fast-on-startup = true
-    failed-to-fatal-delay = "5 minutes"
-    # max-connections = <int>
-    migrate-and-start = false
-    migrations-paths = [ ]
-    partitions {
-      initial-bft-orderer-tables-partition-size = 1500
-    }
-    repeatable-migrations-paths = [ ]
-    unsafe-baseline-on-migrate = false
-    unsafe-clean-on-validation-error = false
-    # warn-on-slow-query = <duration>
-    warn-on-slow-query-interval = "5 seconds"
-  }
-}
-```
-
-```hocon
-canton.sequencers.<sequencer>.storage {
-  type = h2
-  parameters {
-    connection-allocation {
-      # num-ledger-api = <int>
-      # num-reads = <int>
-      # num-writes = <int>
-    }
-    connection-timeout = "5 seconds"
-    fail-fast-on-startup = true
-    failed-to-fatal-delay = "5 minutes"
-    # max-connections = <int>
-    migrate-and-start = false
-    migrations-paths = [ ]
-    partitions {
-      initial-bft-orderer-tables-partition-size = 1500
-    }
-    repeatable-migrations-paths = [ ]
-    unsafe-baseline-on-migrate = false
-    unsafe-clean-on-validation-error = false
-    # warn-on-slow-query = <duration>
-    warn-on-slow-query-interval = "5 seconds"
-  }
-}
-```
-
-```hocon
-canton.sequencers.<sequencer>.storage {
-  type = postgres
-  parameters {
-    connection-allocation {
-      # num-ledger-api = <int>
-      # num-reads = <int>
-      # num-writes = <int>
-    }
-    connection-timeout = "5 seconds"
-    fail-fast-on-startup = true
-    failed-to-fatal-delay = "5 minutes"
-    # max-connections = <int>
-    migrate-and-start = false
-    migrations-paths = [ ]
-    partitions {
-      initial-bft-orderer-tables-partition-size = 1500
-    }
-    repeatable-migrations-paths = [ ]
-    unsafe-baseline-on-migrate = false
-    unsafe-clean-on-validation-error = false
-    # warn-on-slow-query = <duration>
-    warn-on-slow-query-interval = "5 seconds"
-  }
-}
-```
-
-**`traffic-config.batch-aggregator-config`** supports these types: `batching`, `no-batching`. Pick one; each block below is a complete example of that choice.
-
-```hocon
-canton.sequencers.<sequencer>.traffic-config.batch-aggregator-config {
-  type = batching
-  maximum-batch-size = 500
-  maximum-in-flight = 2
-}
-```
-
-```hocon
-canton.sequencers.<sequencer>.traffic-config.batch-aggregator-config {
-  type = no-batching
-  max-parallel-batches = 2
-  maximum-batch-size = 500
-}
-```
+Takes a `type`: [AuthServiceConfig](/global-synchronizer/reference/canton-config/types#authserviceconfig) at `admin-api.auth-services[]`, [PemFileOrString](/global-synchronizer/reference/canton-config/types#pemfileorstring) at `admin-api.tls.cert-chain-file`, [ServerAuthRequirementConfig](/global-synchronizer/reference/canton-config/types#serverauthrequirementconfig) at `admin-api.tls.client-auth`, [KmsConfig](/global-synchronizer/reference/canton-config/types#kmsconfig) at `crypto.kms`, [EncryptedPrivateStoreConfig](/global-synchronizer/reference/canton-config/types#encryptedprivatestoreconfig) at `crypto.private-key-store.encryption`, [NodeIdentifierConfig](/global-synchronizer/reference/canton-config/types#nodeidentifierconfig) at `init.identity.identifier`, [IdentityConfig](/global-synchronizer/reference/canton-config/types#identityconfig) at `init.identity`, [HowLongToBlacklist](/global-synchronizer/reference/canton-config/types#howlongtoblacklist) at `sequencer.config.leader-selection-policy-config-for-pv-34.how-long-to-blacklist`, [FiniteDurationDistribution](/global-synchronizer/reference/canton-config/types#finitedurationdistribution) at `sequencer.config.standalone.test-slowdown.post-ordering-delay`, [SequencerConfig](/global-synchronizer/reference/canton-config/types#sequencerconfig) at `sequencer`, [SequencerWriterConfig](/global-synchronizer/reference/canton-config/types#sequencerwriterconfig) at `sequencer.writer`, [StorageConfig](/global-synchronizer/reference/canton-config/types#storageconfig) at `storage`, [BatchAggregatorConfig](/global-synchronizer/reference/canton-config/types#batchaggregatorconfig) at `traffic-config.batch-aggregator-config`.
 
 
 </Tab>
@@ -1119,7 +667,7 @@ canton.sequencers.<sequencer>.traffic-config.batch-aggregator-config {
 </Tab>
 </Tabs>
 
-## `admin-api`
+### `admin-api`
 
 <Tabs>
 <Tab title="HOCON">
@@ -1188,169 +736,7 @@ canton.sequencers.<sequencer>.admin-api {
 }
 ```
 
-**`auth-services[]`** supports these types: `wildcard`, `unsafe-jwt-hmac-256`, `jwt-rs-256-crt`, `jwt-es-256-crt`, `jwt-es-512-crt`, `jwt-jwks`, `party-jwt`. Each block below shows one entry; a list may hold entries of different types.
-
-```hocon
-canton.sequencers.<sequencer>.admin-api.auth-services = [
-  {
-    type = wildcard
-    # takes no further keys
-  }
-]
-```
-
-```hocon
-canton.sequencers.<sequencer>.admin-api.auth-services = [
-  {
-    type = unsafe-jwt-hmac-256
-    access-level = wildcard
-    # max-token-life = <duration>
-    privileged = false
-    secret = "..."   # required
-    # target-audience = <string>
-    # target-scope = <string>
-    users = [
-      {
-        allowed-services = [ ]   # required
-        user-id = "..."   # required
-      }
-    ]
-  }
-]
-```
-
-```hocon
-canton.sequencers.<sequencer>.admin-api.auth-services = [
-  {
-    type = jwt-rs-256-crt
-    access-level = wildcard
-    certificate = "..."   # required
-    # max-token-life = <duration>
-    privileged = false
-    # target-audience = <string>
-    # target-scope = <string>
-    users = [
-      {
-        allowed-services = [ ]   # required
-        user-id = "..."   # required
-      }
-    ]
-  }
-]
-```
-
-```hocon
-canton.sequencers.<sequencer>.admin-api.auth-services = [
-  {
-    type = jwt-es-256-crt
-    access-level = wildcard
-    certificate = "..."   # required
-    # max-token-life = <duration>
-    privileged = false
-    # target-audience = <string>
-    # target-scope = <string>
-    users = [
-      {
-        allowed-services = [ ]   # required
-        user-id = "..."   # required
-      }
-    ]
-  }
-]
-```
-
-```hocon
-canton.sequencers.<sequencer>.admin-api.auth-services = [
-  {
-    type = jwt-es-512-crt
-    access-level = wildcard
-    certificate = "..."   # required
-    # max-token-life = <duration>
-    privileged = false
-    # target-audience = <string>
-    # target-scope = <string>
-    users = [
-      {
-        allowed-services = [ ]   # required
-        user-id = "..."   # required
-      }
-    ]
-  }
-]
-```
-
-```hocon
-canton.sequencers.<sequencer>.admin-api.auth-services = [
-  {
-    type = jwt-jwks
-    access-level = wildcard
-    # max-token-life = <duration>
-    privileged = false
-    # target-audience = <string>
-    # target-scope = <string>
-    url = "..."   # required
-    users = [
-      {
-        allowed-services = [ ]   # required
-        user-id = "..."   # required
-      }
-    ]
-  }
-]
-```
-
-```hocon
-canton.sequencers.<sequencer>.admin-api.auth-services = [
-  {
-    type = party-jwt
-    # takes no further keys
-  }
-]
-```
-
-**`tls.cert-chain-file`** supports these types: `pem-file`, `pem-string`. Pick one; each block below is a complete example of that choice.
-
-```hocon
-canton.sequencers.<sequencer>.admin-api.tls.cert-chain-file {
-  type = pem-file
-  pem-file = "/path/to/file"   # required
-}
-```
-
-```hocon
-canton.sequencers.<sequencer>.admin-api.tls.cert-chain-file {
-  type = pem-string
-  pem-bytes = "..."   # required
-}
-```
-
-**`tls.client-auth`** supports these types: `require`, `optional`, `none`. Pick one; each block below is a complete example of that choice.
-
-```hocon
-canton.sequencers.<sequencer>.admin-api.tls.client-auth {
-  type = require
-  admin-client {
-    cert-chain-file {
-      type = pem-file|pem-string   # required
-    }
-    private-key-file = "..."   # required
-  }
-}
-```
-
-```hocon
-canton.sequencers.<sequencer>.admin-api.tls.client-auth {
-  type = optional
-  # takes no further keys
-}
-```
-
-```hocon
-canton.sequencers.<sequencer>.admin-api.tls.client-auth {
-  type = none
-  # takes no further keys
-}
-```
+Takes a `type`: [AuthServiceConfig](/global-synchronizer/reference/canton-config/types#authserviceconfig) at `auth-services[]`, [PemFileOrString](/global-synchronizer/reference/canton-config/types#pemfileorstring) at `tls.cert-chain-file`, [ServerAuthRequirementConfig](/global-synchronizer/reference/canton-config/types#serverauthrequirementconfig) at `tls.client-auth`.
 
 
 </Tab>
@@ -1372,7 +758,7 @@ canton.sequencers.<sequencer>.admin-api.tls.client-auth {
 |     `admin-token-duration` | duration (PositiveFiniteDuration) | `5 minutes` |  |
 |     `fixed-admin-token` | string | _unset_ |  |
 | **auth-services[]** |  |  |  |
-|     `type` | one of `wildcard`, `unsafe-jwt-hmac-256`, `jwt-rs-256-crt`, `jwt-es-256-crt`, `jwt-es-512-crt`, `jwt-jwks`, `party-jwt` | **required** | Selects which of the keys below apply; see the example above. |
+|     `type` | one of `wildcard`, `unsafe-jwt-hmac-256`, `jwt-rs-256-crt`, `jwt-es-256-crt`, `jwt-es-512-crt`, `jwt-jwks`, `party-jwt` | **required** | Choose one type — see [AuthServiceConfig](/global-synchronizer/reference/canton-config/types#authserviceconfig). |
 | **auth-services[]** `type = unsafe-jwt-hmac-256` |  |  |  |
 |     `access-level` | one of `admin`, `wildcard` | `wildcard` |  |
 |     `max-token-life` | duration (NonNegativeDuration) | `NonNegativeDuration(Duration.Inf)` ‡ |  |
@@ -1455,24 +841,24 @@ canton.sequencers.<sequencer>.admin-api.tls.client-auth {
 |     `minimum-server-protocol-version` | string | `TLSv1.2` | minimum supported TLS protocol. Set None (or null in config file) to use default settings defaultMinimumServerProtocol |
 |     `private-key-file` | string (PemFile) | **required** | a file containing the server's private key. The key must not use a password. |
 |     **cert-chain-file** |  |  |  |
-|         `type` | one of `pem-file`, `pem-string` | **required** | A class representing either an existing PEM file path or an inlined PEM string for configuration file fields |
+|         `type` | one of `pem-file`, `pem-string` | **required** | Choose one type — see [PemFileOrString](/global-synchronizer/reference/canton-config/types#pemfileorstring). A class representing either an existing PEM file path or an inlined PEM string for configuration file fields |
 |     **cert-chain-file** `type = pem-file` |  |  |  |
 |         `pem-file` | path (ExistingFile) | **required** |  |
 |     **cert-chain-file** `type = pem-string` |  |  |  |
 |         `pem-bytes` | string | **required** |  |
 |     **client-auth** |  |  |  |
-|         `type` | one of `require`, `optional`, `none` | **required** | Configuration on whether server requires auth, requests auth, or no auth |
+|         `type` | one of `require`, `optional`, `none` | **required** | Choose one type — see [ServerAuthRequirementConfig](/global-synchronizer/reference/canton-config/types#serverauthrequirementconfig). Configuration on whether server requires auth, requests auth, or no auth |
 |     **client-auth** `type = require` |  |  |  |
 |         **admin-client** |  |  |  |
 |             `private-key-file` | string (PemFile) | **required** |  |
 |             **cert-chain-file** |  |  |  |
-|                 `type` | one of `pem-file`, `pem-string` | **required** | A class representing either an existing PEM file path or an inlined PEM string for configuration file fields |
+|                 `type` | one of `pem-file`, `pem-string` | **required** | Choose one type — see [PemFileOrString](/global-synchronizer/reference/canton-config/types#pemfileorstring). A class representing either an existing PEM file path or an inlined PEM string for configuration file fields |
 |             **cert-chain-file** `type = pem-file` |  |  |  |
 |                 `pem-file` | path (ExistingFile) | **required** |  |
 |             **cert-chain-file** `type = pem-string` |  |  |  |
 |                 `pem-bytes` | string | **required** |  |
 |     **trust-collection-file** |  |  |  |
-|         `type` | one of `pem-file`, `pem-string` | **required** | A class representing either an existing PEM file path or an inlined PEM string for configuration file fields |
+|         `type` | one of `pem-file`, `pem-string` | **required** | Choose one type — see [PemFileOrString](/global-synchronizer/reference/canton-config/types#pemfileorstring). A class representing either an existing PEM file path or an inlined PEM string for configuration file fields |
 |     **trust-collection-file** `type = pem-file` |  |  |  |
 |         `pem-file` | path (ExistingFile) | **required** |  |
 |     **trust-collection-file** `type = pem-string` |  |  |  |
@@ -1481,7 +867,7 @@ canton.sequencers.<sequencer>.admin-api.tls.client-auth {
 </Tab>
 </Tabs>
 
-## `crypto`
+### `crypto`
 
 <Tabs>
 <Tab title="HOCON">
@@ -1561,87 +947,7 @@ canton.sequencers.<sequencer>.crypto {
 }
 ```
 
-**`kms`** supports these types: `driver`, `aws`, `gcp`. Pick one; each block below is a complete example of that choice.
-
-```hocon
-canton.sequencers.<sequencer>.crypto.kms {
-  type = driver
-  config = { }   # required
-  health-check-period = "10 seconds"
-  name = "..."   # required
-  retries {
-    create-key-check {
-      initial-delay = "30 seconds"   # required
-      max-delay = "30 seconds"   # required
-      max-retries = 0   # required
-    }
-    failures {
-      initial-delay = "30 seconds"   # required
-      max-delay = "30 seconds"   # required
-      max-retries = 0   # required
-    }
-  }
-}
-```
-
-```hocon
-canton.sequencers.<sequencer>.crypto.kms {
-  type = aws
-  audit-logging = false
-  custom-tags {
-    <custom-tag> = [ ]
-  }
-  disable-ssl-verification = false
-  # endpoint-override = <string>
-  multi-region-key = false
-  region = "..."   # required
-  retries {
-    create-key-check {
-      initial-delay = "30 seconds"   # required
-      max-delay = "30 seconds"   # required
-      max-retries = 0   # required
-    }
-    failures {
-      initial-delay = "30 seconds"   # required
-      max-delay = "30 seconds"   # required
-      max-retries = 0   # required
-    }
-  }
-}
-```
-
-```hocon
-canton.sequencers.<sequencer>.crypto.kms {
-  type = gcp
-  audit-logging = false
-  # endpoint-override = <string>
-  key-ring-id = "..."   # required
-  location-id = "..."   # required
-  project-id = "..."   # required
-  retries {
-    create-key-check {
-      initial-delay = "30 seconds"   # required
-      max-delay = "30 seconds"   # required
-      max-retries = 0   # required
-    }
-    failures {
-      initial-delay = "30 seconds"   # required
-      max-delay = "30 seconds"   # required
-      max-retries = 0   # required
-    }
-  }
-}
-```
-
-**`private-key-store.encryption`** supports these types: `kms`. Pick one; each block below is a complete example of that choice.
-
-```hocon
-canton.sequencers.<sequencer>.crypto.private-key-store.encryption {
-  type = kms
-  reverted = false
-  # wrapper-key-id = <string>
-}
-```
+Takes a `type`: [KmsConfig](/global-synchronizer/reference/canton-config/types#kmsconfig) at `kms`, [EncryptedPrivateStoreConfig](/global-synchronizer/reference/canton-config/types#encryptedprivatestoreconfig) at `private-key-store.encryption`.
 
 
 </Tab>
@@ -1662,7 +968,7 @@ canton.sequencers.<sequencer>.crypto.private-key-store.encryption {
 |     `allowed` | array of S | _unset_ | The optional allowed schemes to use. If none is specified, all the provider's supported schemes of kind S are allowed. |
 |     `default` | depends on use (S) | _unset_ | The optional scheme to use. If none is specified, use the provider's default scheme of kind S. |
 | **kms** |  |  |  |
-|     `type` | one of `driver`, `aws`, `gcp` | **required** | Selects which of the keys below apply; see the example above. |
+|     `type` | one of `driver`, `aws`, `gcp` | **required** | Choose one type — see [KmsConfig](/global-synchronizer/reference/canton-config/types#kmsconfig). |
 |     **retries** |  |  |  |
 |         **create-key-check** |  |  |  |
 |             `initial-delay` | duration (NonNegativeFiniteDuration) | **required** | initial delay before the first retry |
@@ -1699,7 +1005,7 @@ canton.sequencers.<sequencer>.crypto.private-key-store.encryption {
 | **private-key-store** |  |  |  |
 |     **encryption** |  |  |  |
 |         `reverted` | boolean | `false` | when true decrypts the stored private keys and stores them in clear, disabling the encrypted crypto private key store in the process |
-|         `type` | one of `kms` | **required** | Encapsulates possible configurations for different encrypted private stores |
+|         `type` | one of `kms` | **required** | Choose one type — see [EncryptedPrivateStoreConfig](/global-synchronizer/reference/canton-config/types#encryptedprivatestoreconfig). Encapsulates possible configurations for different encrypted private stores |
 |         `wrapper-key-id` | string (KmsKeyId) | _unset_ | defines key identifier for the wrapper key (e.g. ARN for AWS SDK). When it's None Canton will either create a new key or use a previous existent key |
 | **session-signing-keys** |  |  |  |
 |     `cut-off-duration` | duration (NonNegativeFiniteDuration) | `1 minute` | A cut-off duration is applied only when we need to sign something without knowing the exact topology timestamp that will later be used for verification (e.g., when using a currentSnapshotApproximation). The cutoff measures the amount of clock skew that can be tolerated and therefore should be longer than our `ledgerRecordTimeTolerance`. The participant makes a guess t0 at the topology timestamp for verification and will use an existing session signing key k only if the interval [t0 - cutoff, t0 + cutoff] lies fully within k’s validity period. If the full validity interval is known a priori (e.g., we know the maximum sequencing time for the message we want to sign), we need to ensure that we use an existing session signing key k only if the interval [t0 - cutoff, endValidityPeriod] is fully covered. As a result, newly created session signing keys must have a validity period that starts at least cutoffDuration before ts. A typical example of this uncertainty is signing submission requests, where the sequencer-assigned timestamp is unknown in advance. If a new session key is created only after the previous key’s validity interval ends, multiple submissions may fail verification if any clock skew exists between the nodes. |
@@ -1724,7 +1030,7 @@ canton.sequencers.<sequencer>.crypto.private-key-store.encryption {
 </Tab>
 </Tabs>
 
-## `declarative`
+### `declarative`
 
 <Tabs>
 <Tab title="HOCON">
@@ -1762,7 +1068,7 @@ canton.sequencers.<sequencer>.declarative {
 </Tab>
 </Tabs>
 
-## `health`
+### `health`
 
 <Tabs>
 <Tab title="HOCON">
@@ -1784,7 +1090,7 @@ canton.sequencers.<sequencer>.health {
 </Tab>
 </Tabs>
 
-## `init`
+### `init`
 
 <Tabs>
 <Tab title="HOCON">
@@ -1799,55 +1105,7 @@ canton.sequencers.<sequencer>.init {
 }
 ```
 
-**`identity.identifier`** supports these types: `random`, `explicit`, `config`. Pick one; each block below is a complete example of that choice.
-
-```hocon
-canton.sequencers.<sequencer>.init.identity.identifier {
-  type = random
-  # takes no further keys
-}
-```
-
-```hocon
-canton.sequencers.<sequencer>.init.identity.identifier {
-  type = explicit
-  name = "..."   # required
-}
-```
-
-```hocon
-canton.sequencers.<sequencer>.init.identity.identifier {
-  type = config
-  # takes no further keys
-}
-```
-
-**`identity`** supports these types: `external`, `auto`, `manual`. Pick one; each block below is a complete example of that choice.
-
-```hocon
-canton.sequencers.<sequencer>.init.identity {
-  type = external
-  certificates = [ ]
-  identifier = "..."   # required
-  # namespace = <string>
-}
-```
-
-```hocon
-canton.sequencers.<sequencer>.init.identity {
-  type = auto
-  identifier {
-    type = random|explicit|config   # required
-  }
-}
-```
-
-```hocon
-canton.sequencers.<sequencer>.init.identity {
-  type = manual
-  # takes no further keys
-}
-```
+Takes a `type`: [NodeIdentifierConfig](/global-synchronizer/reference/canton-config/types#nodeidentifierconfig) at `identity.identifier`, [IdentityConfig](/global-synchronizer/reference/canton-config/types#identityconfig) at `identity`.
 
 
 </Tab>
@@ -1858,21 +1116,21 @@ canton.sequencers.<sequencer>.init.identity {
 | `generate-intermediate-key` | boolean | `false` | If true (default false), then the node will generate an additional intermediate key. This allows to turn off access to the root key for the node. |
 | `generate-topology-transactions-and-keys` | boolean | `true` | If true (default), then the node will generate automatically the topology transactions and keys once it has the necessary namespace delegations to do so. |
 | **identity** |  |  |  |
-|     `type` | one of `external`, `auto`, `manual` | `auto` † | Control how the identity of the node is determined. At startup, we need to determine the node's identity. We support various modes of operations for different deployments. We distinguish between setting the node-id and subsequently generating the topology transactions and the remaining keys. As such it is possible to manually set the node-id but let the system automatically generate the remaining topology transactions. |
+|     `type` | one of `external`, `auto`, `manual` | `auto` † | Choose one type — see [IdentityConfig](/global-synchronizer/reference/canton-config/types#identityconfig). Control how the identity of the node is determined. At startup, we need to determine the node's identity. We support various modes of operations for different deployments. We distinguish between setting the node-id and subsequently generating the topology transactions and the remaining keys. As such it is possible to manually set the node-id but let the system automatically generate the remaining topology transactions. |
 | **identity** `type = external` |  |  |  |
 |     `certificates` | array of File | `[]` | optional certificates to use (in case we have external root keys) |
 |     `identifier` | string | **required** | the string to use as identifier of the node |
 |     `namespace` | string | _unset_ | optional fingerprint to use as the namespace (default is to extract it from the first certificate) |
 | **identity** `type = auto` |  |  |  |
 |     **identifier** |  |  |  |
-|         `type` | one of `random`, `explicit`, `config` | `config` † | Selects which of the keys below apply; see the example above. |
+|         `type` | one of `random`, `explicit`, `config` | `config` † | Choose one type — see [NodeIdentifierConfig](/global-synchronizer/reference/canton-config/types#nodeidentifierconfig). |
 |     **identifier** `type = explicit` |  |  |  |
 |         `name` | string | **required** | name to use as identifier |
 
 </Tab>
 </Tabs>
 
-## `monitoring`
+### `monitoring`
 
 <Tabs>
 <Tab title="HOCON">
@@ -1930,7 +1188,7 @@ canton.sequencers.<sequencer>.monitoring {
 </Tab>
 </Tabs>
 
-## `parameters`
+### `parameters`
 
 <Tabs>
 <Tab title="HOCON">
@@ -2093,23 +1351,7 @@ canton.sequencers.<sequencer>.parameters {
 }
 ```
 
-**`batching.aggregator`** supports these types: `batching`, `no-batching`. Pick one; each block below is a complete example of that choice.
-
-```hocon
-canton.sequencers.<sequencer>.parameters.batching.aggregator {
-  type = batching
-  maximum-batch-size = 500
-  maximum-in-flight = 2
-}
-```
-
-```hocon
-canton.sequencers.<sequencer>.parameters.batching.aggregator {
-  type = no-batching
-  max-parallel-batches = 2
-  maximum-batch-size = 500
-}
-```
+Takes a `type`: [BatchAggregatorConfig](/global-synchronizer/reference/canton-config/types#batchaggregatorconfig) at `batching.aggregator`.
 
 
 </Tab>
@@ -2149,35 +1391,35 @@ canton.sequencers.<sequencer>.parameters.batching.aggregator {
 |     `pruning-parallelism` | int (PositiveNumeric) | `2` | number of parallel pruning queries to the db. defaults to 2 |
 |     **aggregator** |  |  |  |
 |         `maximum-batch-size` | int (PositiveNumeric) | `500` | Maximum number of queries in a batch. |
-|         `type` | one of `batching`, `no-batching` | `batching` † | Parameters for that batcher that batches queries (e.g., to a DB). |
+|         `type` | one of `batching`, `no-batching` | `batching` † | Choose one type — see [BatchAggregatorConfig](/global-synchronizer/reference/canton-config/types#batchaggregatorconfig). Parameters for that batcher that batches queries (e.g., to a DB). |
 |     **aggregator** `type = batching` |  |  |  |
 |         `maximum-in-flight` | int (PositiveNumeric) | `2` | Maximum number of in-flight get queries. |
 |     **aggregator** `type = no-batching` |  |  |  |
 |         `max-parallel-batches` | int (PositiveNumeric) | `2` | Maximum number of batches to execute in parallel when using runMany. |
 |     **contract-store-aggregator** |  |  |  |
 |         `maximum-batch-size` | int (PositiveNumeric) | `500` (in practice `50`) ◊ | Maximum number of queries in a batch. |
-|         `type` | one of `batching`, `no-batching` | `batching` † | Parameters for that batcher that batches queries (e.g., to a DB). |
+|         `type` | one of `batching`, `no-batching` | `batching` † | Choose one type — see [BatchAggregatorConfig](/global-synchronizer/reference/canton-config/types#batchaggregatorconfig). Parameters for that batcher that batches queries (e.g., to a DB). |
 |     **contract-store-aggregator** `type = batching` |  |  |  |
 |         `maximum-in-flight` | int (PositiveNumeric) | `2` (in practice `5`) ◊ | Maximum number of in-flight get queries. |
 |     **contract-store-aggregator** `type = no-batching` |  |  |  |
 |         `max-parallel-batches` | int (PositiveNumeric) | `2` | Maximum number of batches to execute in parallel when using runMany. |
 |     **mediator-fetch-finalized-responses-aggregator** |  |  |  |
 |         `maximum-batch-size` | int (PositiveNumeric) | `500` | Maximum number of queries in a batch. |
-|         `type` | one of `batching`, `no-batching` | `batching` † | Parameters for that batcher that batches queries (e.g., to a DB). |
+|         `type` | one of `batching`, `no-batching` | `batching` † | Choose one type — see [BatchAggregatorConfig](/global-synchronizer/reference/canton-config/types#batchaggregatorconfig). Parameters for that batcher that batches queries (e.g., to a DB). |
 |     **mediator-fetch-finalized-responses-aggregator** `type = batching` |  |  |  |
 |         `maximum-in-flight` | int (PositiveNumeric) | `2` | Maximum number of in-flight get queries. |
 |     **mediator-fetch-finalized-responses-aggregator** `type = no-batching` |  |  |  |
 |         `max-parallel-batches` | int (PositiveNumeric) | `2` | Maximum number of batches to execute in parallel when using runMany. |
 |     **mediator-store-finalized-responses-aggregator** |  |  |  |
 |         `maximum-batch-size` | int (PositiveNumeric) | `500` | Maximum number of queries in a batch. |
-|         `type` | one of `batching`, `no-batching` | `batching` † | Parameters for that batcher that batches queries (e.g., to a DB). |
+|         `type` | one of `batching`, `no-batching` | `batching` † | Choose one type — see [BatchAggregatorConfig](/global-synchronizer/reference/canton-config/types#batchaggregatorconfig). Parameters for that batcher that batches queries (e.g., to a DB). |
 |     **mediator-store-finalized-responses-aggregator** `type = batching` |  |  |  |
 |         `maximum-in-flight` | int (PositiveNumeric) | `2` | Maximum number of in-flight get queries. |
 |     **mediator-store-finalized-responses-aggregator** `type = no-batching` |  |  |  |
 |         `max-parallel-batches` | int (PositiveNumeric) | `2` | Maximum number of batches to execute in parallel when using runMany. |
 |     **topology-cache-aggregator** |  |  |  |
 |         `maximum-batch-size` | int (PositiveNumeric) | `500` | Maximum number of queries in a batch. |
-|         `type` | one of `batching`, `no-batching` | `batching` † | Parameters for that batcher that batches queries (e.g., to a DB). |
+|         `type` | one of `batching`, `no-batching` | `batching` † | Choose one type — see [BatchAggregatorConfig](/global-synchronizer/reference/canton-config/types#batchaggregatorconfig). Parameters for that batcher that batches queries (e.g., to a DB). |
 |     **topology-cache-aggregator** `type = batching` |  |  |  |
 |         `maximum-in-flight` | int (PositiveNumeric) | `2` | Maximum number of in-flight get queries. |
 |     **topology-cache-aggregator** `type = no-batching` |  |  |  |
@@ -2261,7 +1503,7 @@ canton.sequencers.<sequencer>.parameters.batching.aggregator {
 </Tab>
 </Tabs>
 
-## `public-api`
+### `public-api`
 
 <Tabs>
 <Tab title="HOCON">
@@ -2311,21 +1553,7 @@ canton.sequencers.<sequencer>.public-api {
 }
 ```
 
-**`tls.cert-chain-file`** supports these types: `pem-file`, `pem-string`. Pick one; each block below is a complete example of that choice.
-
-```hocon
-canton.sequencers.<sequencer>.public-api.tls.cert-chain-file {
-  type = pem-file
-  pem-file = "/path/to/file"   # required
-}
-```
-
-```hocon
-canton.sequencers.<sequencer>.public-api.tls.cert-chain-file {
-  type = pem-string
-  pem-bytes = "..."   # required
-}
-```
+Takes a `type`: [PemFileOrString](/global-synchronizer/reference/canton-config/types#pemfileorstring) at `tls.cert-chain-file`.
 
 
 </Tab>
@@ -2366,7 +1594,7 @@ canton.sequencers.<sequencer>.public-api.tls.cert-chain-file {
 |     `minimum-server-protocol-version` | string | `TLSv1.2` |  |
 |     `private-key-file` | string (PemFile) | **required** |  |
 |     **cert-chain-file** |  |  |  |
-|         `type` | one of `pem-file`, `pem-string` | **required** | A class representing either an existing PEM file path or an inlined PEM string for configuration file fields |
+|         `type` | one of `pem-file`, `pem-string` | **required** | Choose one type — see [PemFileOrString](/global-synchronizer/reference/canton-config/types#pemfileorstring). A class representing either an existing PEM file path or an inlined PEM string for configuration file fields |
 |     **cert-chain-file** `type = pem-file` |  |  |  |
 |         `pem-file` | path (ExistingFile) | **required** |  |
 |     **cert-chain-file** `type = pem-string` |  |  |  |
@@ -2375,7 +1603,7 @@ canton.sequencers.<sequencer>.public-api.tls.cert-chain-file {
 </Tab>
 </Tabs>
 
-## `replication`
+### `replication`
 
 <Tabs>
 <Tab title="HOCON">
@@ -2440,7 +1668,7 @@ canton.sequencers.<sequencer>.replication {
 </Tab>
 </Tabs>
 
-## `sequencer-client`
+### `sequencer-client`
 
 <Tabs>
 <Tab title="HOCON">
@@ -2534,7 +1762,7 @@ canton.sequencers.<sequencer>.sequencer-client {
 </Tab>
 </Tabs>
 
-## `sequencer-limits`
+### `sequencer-limits`
 
 <Tabs>
 <Tab title="HOCON">
@@ -2558,7 +1786,7 @@ canton.sequencers.<sequencer>.sequencer-limits {
 </Tab>
 </Tabs>
 
-## `sequencer`
+### `sequencer`
 
 <Tabs>
 <Tab title="HOCON">
@@ -2569,826 +1797,7 @@ canton.sequencers.<sequencer>.sequencer {
 }
 ```
 
-**`config.batch-aggregator`** supports these types: `batching`, `no-batching`. Pick one; each block below is a complete example of that choice.
-
-```hocon
-canton.sequencers.<sequencer>.sequencer.config.batch-aggregator {
-  type = batching
-  maximum-batch-size = 500
-  maximum-in-flight = 2
-}
-```
-
-```hocon
-canton.sequencers.<sequencer>.sequencer.config.batch-aggregator {
-  type = no-batching
-  max-parallel-batches = 2
-  maximum-batch-size = 500
-}
-```
-
-**`config.initial-network.peer-endpoints[].tls-config.trust-collection-file`** supports these types: `pem-file`, `pem-string`. Pick one; each block below is a complete example of that choice.
-
-```hocon
-canton.sequencers.<sequencer>.sequencer.config.initial-network.peer-endpoints = [
-  {
-    tls-config.trust-collection-file {
-      type = pem-file
-      pem-file = "/path/to/file"   # required
-    }
-  }
-]
-```
-
-```hocon
-canton.sequencers.<sequencer>.sequencer.config.initial-network.peer-endpoints = [
-  {
-    tls-config.trust-collection-file {
-      type = pem-string
-      pem-bytes = "..."   # required
-    }
-  }
-]
-```
-
-**`config.initial-network.server-endpoint.tls.client-auth`** supports these types: `require`, `optional`, `none`. Pick one; each block below is a complete example of that choice.
-
-```hocon
-canton.sequencers.<sequencer>.sequencer.config.initial-network.server-endpoint.tls.client-auth {
-  type = require
-  admin-client {
-    cert-chain-file {
-      type = pem-file|pem-string   # required
-    }
-    private-key-file = "..."   # required
-  }
-}
-```
-
-```hocon
-canton.sequencers.<sequencer>.sequencer.config.initial-network.server-endpoint.tls.client-auth {
-  type = optional
-  # takes no further keys
-}
-```
-
-```hocon
-canton.sequencers.<sequencer>.sequencer.config.initial-network.server-endpoint.tls.client-auth {
-  type = none
-  # takes no further keys
-}
-```
-
-**`config.leader-selection-policy-config-for-pv-34.how-long-to-blacklist`** supports these types: `linear`, `linear-with-parameters`, `exponential`, `no-blacklisting`. Pick one; each block below is a complete example of that choice.
-
-```hocon
-canton.sequencers.<sequencer>.sequencer.config.leader-selection-policy-config-for-pv-34.how-long-to-blacklist {
-  type = linear
-  # maximum-epoch-blacklisted = <int>
-}
-```
-
-```hocon
-canton.sequencers.<sequencer>.sequencer.config.leader-selection-policy-config-for-pv-34.how-long-to-blacklist {
-  type = linear-with-parameters
-  initial-value = 0   # required
-  # maximum-epoch-blacklisted = <int>
-  slope = 0   # required
-}
-```
-
-```hocon
-canton.sequencers.<sequencer>.sequencer.config.leader-selection-policy-config-for-pv-34.how-long-to-blacklist {
-  type = exponential
-  initial-value = 0   # required
-  # maximum-epoch-blacklisted = <int>
-}
-```
-
-```hocon
-canton.sequencers.<sequencer>.sequencer.config.leader-selection-policy-config-for-pv-34.how-long-to-blacklist {
-  type = no-blacklisting
-  # takes no further keys
-}
-```
-
-**`config.standalone.test-slowdown.post-ordering-delay`** supports these types: `constant-distribution`, `weighted-distribution`, `linear-distribution`, `power-distribution`. Pick one; each block below is a complete example of that choice.
-
-```hocon
-canton.sequencers.<sequencer>.sequencer.config.standalone.test-slowdown.post-ordering-delay {
-  type = constant-distribution
-  duration = "30 seconds"   # required
-}
-```
-
-```hocon
-canton.sequencers.<sequencer>.sequencer.config.standalone.test-slowdown.post-ordering-delay {
-  type = weighted-distribution
-  weighted-durations = [
-    {
-      duration = "30 seconds"   # required
-      weight = 0   # required
-    }
-  ]
-}
-```
-
-```hocon
-canton.sequencers.<sequencer>.sequencer.config.standalone.test-slowdown.post-ordering-delay {
-  type = linear-distribution
-  high = "30 seconds"   # required
-  low = "30 seconds"   # required
-}
-```
-
-```hocon
-canton.sequencers.<sequencer>.sequencer.config.standalone.test-slowdown.post-ordering-delay {
-  type = power-distribution
-  low = "30 seconds"   # required
-  mean = "30 seconds"   # required
-}
-```
-
-**`config.storage`** supports these types: `memory`, `h2`, `postgres`. Pick one; each block below is a complete example of that choice.
-
-```hocon
-canton.sequencers.<sequencer>.sequencer.config.storage {
-  type = memory
-  parameters {
-    connection-allocation {
-      # num-ledger-api = <int>
-      # num-reads = <int>
-      # num-writes = <int>
-    }
-    connection-timeout = "5 seconds"
-    fail-fast-on-startup = true
-    failed-to-fatal-delay = "5 minutes"
-    # max-connections = <int>
-    migrate-and-start = false
-    migrations-paths = [ ]
-    partitions {
-      initial-bft-orderer-tables-partition-size = 1500
-    }
-    repeatable-migrations-paths = [ ]
-    unsafe-baseline-on-migrate = false
-    unsafe-clean-on-validation-error = false
-    # warn-on-slow-query = <duration>
-    warn-on-slow-query-interval = "5 seconds"
-  }
-}
-```
-
-```hocon
-canton.sequencers.<sequencer>.sequencer.config.storage {
-  type = h2
-  parameters {
-    connection-allocation {
-      # num-ledger-api = <int>
-      # num-reads = <int>
-      # num-writes = <int>
-    }
-    connection-timeout = "5 seconds"
-    fail-fast-on-startup = true
-    failed-to-fatal-delay = "5 minutes"
-    # max-connections = <int>
-    migrate-and-start = false
-    migrations-paths = [ ]
-    partitions {
-      initial-bft-orderer-tables-partition-size = 1500
-    }
-    repeatable-migrations-paths = [ ]
-    unsafe-baseline-on-migrate = false
-    unsafe-clean-on-validation-error = false
-    # warn-on-slow-query = <duration>
-    warn-on-slow-query-interval = "5 seconds"
-  }
-}
-```
-
-```hocon
-canton.sequencers.<sequencer>.sequencer.config.storage {
-  type = postgres
-  parameters {
-    connection-allocation {
-      # num-ledger-api = <int>
-      # num-reads = <int>
-      # num-writes = <int>
-    }
-    connection-timeout = "5 seconds"
-    fail-fast-on-startup = true
-    failed-to-fatal-delay = "5 minutes"
-    # max-connections = <int>
-    migrate-and-start = false
-    migrations-paths = [ ]
-    partitions {
-      initial-bft-orderer-tables-partition-size = 1500
-    }
-    repeatable-migrations-paths = [ ]
-    unsafe-baseline-on-migrate = false
-    unsafe-clean-on-validation-error = false
-    # warn-on-slow-query = <duration>
-    warn-on-slow-query-interval = "5 seconds"
-  }
-}
-```
-
-**`canton.sequencers.<sequencer>.sequencer`** supports these types: `database`, `external`, `bft-sequencer`. Pick one; each block below is a complete example of that choice.
-
-```hocon
-canton.sequencers.<sequencer>.sequencer {
-  type = database
-  high-availability {
-    connection-pool {
-      active-timeout = "15 seconds"
-      connection {
-        client-connection-check-interval = "5 seconds"
-        connection-timeout = "10 seconds"
-        health-check-period = "5 seconds"
-        health-check-timeout = "15 seconds"
-        initial-acquisition-interval = "200 milliseconds"
-        initial-acquisition-max-retries = 5
-        keep-alive-count = 5
-        keep-alive-idle = "10 seconds"
-        keep-alive-interval = "1 second"
-        lock {
-          health-check-period = "5 seconds"
-          health-check-timeout = "15 seconds"
-        }
-        max-inconclusive-read-only-checks = 3
-        passive-check-period = "15 seconds"
-      }
-      health-check-period = "5 seconds"
-      initial-locked-connection-timeout = "15 seconds"
-      initial-must-remain-active-connection-timeout = "1 minute"
-    }
-    # enabled = <boolean>
-    exclusive-storage {
-      connection-pool {
-        active-timeout = "15 seconds"
-        connection {
-          client-connection-check-interval = "5 seconds"
-          connection-timeout = "10 seconds"
-          health-check-period = "5 seconds"
-          health-check-timeout = "15 seconds"
-          initial-acquisition-interval = "200 milliseconds"
-          initial-acquisition-max-retries = 5
-          keep-alive-count = 5
-          keep-alive-idle = "10 seconds"
-          keep-alive-interval = "1 second"
-          lock {
-            health-check-period = "5 seconds"
-            health-check-timeout = "15 seconds"
-          }
-          max-inconclusive-read-only-checks = 3
-          passive-check-period = "15 seconds"
-        }
-        health-check-period = "5 seconds"
-        initial-locked-connection-timeout = "15 seconds"
-        initial-must-remain-active-connection-timeout = "1 minute"
-      }
-      max-connections = 2
-    }
-    keep-alive-interval = "50 milliseconds"
-    offline-duration = "8 seconds"
-    online-check-interval = "5 seconds"
-    total-node-count = 10
-  }
-  pruning {
-    max-pruning-batch-size = 50000
-    # pruning-metric-update-interval = <duration>
-    traffic-purchased-retention = "1 hour"
-  }
-  reader {
-    checkpoint-interval = "5 seconds"
-    event-generation-parallelism = 4
-    payload-batch-size = 10
-    payload-batch-window = "5 milliseconds"
-    payload-fetch-parallelism = 2
-    # polling-interval = <duration>
-    read-batch-size = 100
-  }
-  # testing-interceptor = <string>
-  writer {
-    type = low-latency|high-throughput   # required
-  }
-}
-```
-
-```hocon
-canton.sequencers.<sequencer>.sequencer {
-  type = external
-  block {
-    circuit-breaker {
-      enabled = true
-      messages {
-        acknowledgement {
-          allowed-block-delay = "90 seconds"
-          exponential-backoff-factor = 1
-          max-failures = 10
-          max-reset-timeout = "36500 days"
-          reset-timeout = "30 seconds"
-        }
-        commitment {
-          allowed-block-delay = "90 seconds"
-          exponential-backoff-factor = 1
-          max-failures = 10
-          max-reset-timeout = "36500 days"
-          reset-timeout = "30 seconds"
-        }
-        confirmation-request {
-          allowed-block-delay = "90 seconds"
-          exponential-backoff-factor = 1
-          max-failures = 10
-          max-reset-timeout = "36500 days"
-          reset-timeout = "30 seconds"
-        }
-        confirmation-response {
-          allowed-block-delay = "90 seconds"
-          exponential-backoff-factor = 1
-          max-failures = 10
-          max-reset-timeout = "36500 days"
-          reset-timeout = "30 seconds"
-        }
-        lsu-sequencing-test {
-          allowed-block-delay = "90 seconds"
-          exponential-backoff-factor = 1
-          max-failures = 10
-          max-reset-timeout = "36500 days"
-          reset-timeout = "30 seconds"
-        }
-        time-proof {
-          allowed-block-delay = "90 seconds"
-          exponential-backoff-factor = 1
-          max-failures = 10
-          max-reset-timeout = "36500 days"
-          reset-timeout = "30 seconds"
-        }
-        top-up {
-          allowed-block-delay = "90 seconds"
-          exponential-backoff-factor = 1
-          max-failures = 10
-          max-reset-timeout = "36500 days"
-          reset-timeout = "30 seconds"
-        }
-        topology {
-          allowed-block-delay = "90 seconds"
-          exponential-backoff-factor = 1
-          max-failures = 10
-          max-reset-timeout = "36500 days"
-          reset-timeout = "30 seconds"
-        }
-        unexpected {
-          allowed-block-delay = "90 seconds"
-          exponential-backoff-factor = 1
-          max-failures = 10
-          max-reset-timeout = "36500 days"
-          reset-timeout = "30 seconds"
-        }
-        verdict {
-          allowed-block-delay = "90 seconds"
-          exponential-backoff-factor = 1
-          max-failures = 10
-          max-reset-timeout = "36500 days"
-          reset-timeout = "30 seconds"
-        }
-      }
-    }
-    reader {
-      checkpoint-interval = "5 seconds"
-      event-generation-parallelism = 4
-      payload-batch-size = 10
-      payload-batch-window = "5 milliseconds"
-      payload-fetch-parallelism = 2
-      # polling-interval = <duration>
-      read-batch-size = 100
-    }
-    stream-instrumentation {
-      buffer-size = 256
-      is-enabled = false
-    }
-    # testing-interceptor = <string>
-    throughput-cap {
-      clock-tick-interval = "100 milliseconds"
-      delayed-activation = true
-      enabled = false
-      messages {
-        confirmation-request {
-          global-kbps-cap = 2000
-          global-tps-cap = 10
-          per-client-kbps-cap = 1000
-          per-client-tps-cap = 4
-        }
-        confirmation-response {
-          global-kbps-cap = 2000
-          global-tps-cap = 10
-          per-client-kbps-cap = 1000
-          per-client-tps-cap = 4
-        }
-        topology {
-          global-kbps-cap = 2000
-          global-tps-cap = 10
-          per-client-kbps-cap = 1000
-          per-client-tps-cap = 4
-        }
-      }
-      observation-period-seconds = 60
-      strict = true
-      thresholds = [ ]
-      update-every-ms = 100
-    }
-    writer {
-      type = low-latency|high-throughput   # required
-    }
-  }
-  config = "..."   # required
-  sequencer-type = "..."   # required
-}
-```
-
-```hocon
-canton.sequencers.<sequencer>.sequencer {
-  type = bft-sequencer
-  block {
-    circuit-breaker {
-      enabled = true
-      messages {
-        acknowledgement {
-          allowed-block-delay = "90 seconds"
-          exponential-backoff-factor = 1
-          max-failures = 10
-          max-reset-timeout = "36500 days"
-          reset-timeout = "30 seconds"
-        }
-        commitment {
-          allowed-block-delay = "90 seconds"
-          exponential-backoff-factor = 1
-          max-failures = 10
-          max-reset-timeout = "36500 days"
-          reset-timeout = "30 seconds"
-        }
-        confirmation-request {
-          allowed-block-delay = "90 seconds"
-          exponential-backoff-factor = 1
-          max-failures = 10
-          max-reset-timeout = "36500 days"
-          reset-timeout = "30 seconds"
-        }
-        confirmation-response {
-          allowed-block-delay = "90 seconds"
-          exponential-backoff-factor = 1
-          max-failures = 10
-          max-reset-timeout = "36500 days"
-          reset-timeout = "30 seconds"
-        }
-        lsu-sequencing-test {
-          allowed-block-delay = "90 seconds"
-          exponential-backoff-factor = 1
-          max-failures = 10
-          max-reset-timeout = "36500 days"
-          reset-timeout = "30 seconds"
-        }
-        time-proof {
-          allowed-block-delay = "90 seconds"
-          exponential-backoff-factor = 1
-          max-failures = 10
-          max-reset-timeout = "36500 days"
-          reset-timeout = "30 seconds"
-        }
-        top-up {
-          allowed-block-delay = "90 seconds"
-          exponential-backoff-factor = 1
-          max-failures = 10
-          max-reset-timeout = "36500 days"
-          reset-timeout = "30 seconds"
-        }
-        topology {
-          allowed-block-delay = "90 seconds"
-          exponential-backoff-factor = 1
-          max-failures = 10
-          max-reset-timeout = "36500 days"
-          reset-timeout = "30 seconds"
-        }
-        unexpected {
-          allowed-block-delay = "90 seconds"
-          exponential-backoff-factor = 1
-          max-failures = 10
-          max-reset-timeout = "36500 days"
-          reset-timeout = "30 seconds"
-        }
-        verdict {
-          allowed-block-delay = "90 seconds"
-          exponential-backoff-factor = 1
-          max-failures = 10
-          max-reset-timeout = "36500 days"
-          reset-timeout = "30 seconds"
-        }
-      }
-    }
-    reader {
-      checkpoint-interval = "5 seconds"
-      event-generation-parallelism = 4
-      payload-batch-size = 10
-      payload-batch-window = "5 milliseconds"
-      payload-fetch-parallelism = 2
-      # polling-interval = <duration>
-      read-batch-size = 100
-    }
-    stream-instrumentation {
-      buffer-size = 256
-      is-enabled = false
-    }
-    # testing-interceptor = <string>
-    throughput-cap {
-      clock-tick-interval = "100 milliseconds"
-      delayed-activation = true
-      enabled = false
-      messages {
-        confirmation-request {
-          global-kbps-cap = 2000
-          global-tps-cap = 10
-          per-client-kbps-cap = 1000
-          per-client-tps-cap = 4
-        }
-        confirmation-response {
-          global-kbps-cap = 2000
-          global-tps-cap = 10
-          per-client-kbps-cap = 1000
-          per-client-tps-cap = 4
-        }
-        topology {
-          global-kbps-cap = 2000
-          global-tps-cap = 10
-          per-client-kbps-cap = 1000
-          per-client-tps-cap = 4
-        }
-      }
-      observation-period-seconds = 60
-      strict = true
-      thresholds = [ ]
-      update-every-ms = 100
-    }
-    writer {
-      type = low-latency|high-throughput   # required
-    }
-  }
-  config {
-    availability-dissemination-patience = "5 seconds"
-    availability-max-non-ordered-batches-per-node = 1000
-    availability-min-proposal-creation-delay = "250 milliseconds"
-    availability-number-of-attempts-of-downloading-output-fetch-before-warning = 5
-    batch-aggregator {
-      type = batching|no-batching   # required
-    }
-    blocking-db-read-timeout = "1 minute"
-    consensus-block-completion-timeout = "10 seconds"
-    consensus-empty-block-creation-timeout = "500 milliseconds"
-    consensus-enable-flushing-segment = true
-    consensus-enable-log-end-of-epoch-progress = false
-    consensus-flushing-min-blocks = 2
-    consensus-new-epoch-topology-warn-timeout = "2 seconds"
-    # consensus-queue-max-size = <int>
-    consensus-queue-per-node-quota = 1024
-    # dedicated-execution-context-divisor = <int>
-    delayed-init-queue-max-size = 1024
-    enable-performance-metrics = true
-    # epoch-state-transfer-future-epoch-queue-max-size = <int>
-    epoch-state-transfer-future-epoch-queue-per-node-quota = 1024
-    epoch-state-transfer-how-many-future-epochs-to-download-in-parallel = 5
-    epoch-state-transfer-retry-timeout = "4 seconds"
-    epoch-state-transfer-timeout-for-future-epoch = "500 milliseconds"
-    # init-query-timeout = <duration>
-    # init-timeout = <duration>
-    initial-network {
-      connection-management-config {
-        # connection-retry-delay-multiplier = <int>
-        flow-control-buffer = 128
-        flow-control-buffer-drop-newest = false
-        # flow-control-ready-allowance = <int>
-        initial-connection-max-delay = "500 milliseconds"
-        initial-connection-retry-delay = "500 milliseconds"
-        max-connection-attempts-before-warning = 30
-        max-connection-retry-delay = "2 minutes"
-      }
-      endpoint-authentication {
-        auth-token {
-          backoff {
-            base = 2
-            jitter {
-              type = equal|full   # required
-            }
-            max-retry-interval = "2 minutes"
-          }
-          min-retry-interval = "500 milliseconds"
-          refresh-auth-token-before-expiry = "20 seconds"
-          retries = 20
-        }
-        enabled = true
-      }
-      overwrite-stored-endpoints = false
-      peer-endpoints = [
-        {
-          address = "..."   # required
-          channel {
-            # flow-control-window = <int>
-            # initial-flow-control-window = <int>
-            keep-alive-client {
-              idle-timeout = "30 minutes"
-              keep-alive-without-calls = false
-              time = "40 seconds"
-              timeout = "15 seconds"
-            }
-            max-inbound-message-size = 0   # required
-            trace-context-propagation = enabled|disabled   # required
-          }
-          port = 0   # required
-          tls-config {
-            client-cert {
-              cert-chain-file {
-                type = pem-file|pem-string   # required
-              }
-              private-key-file = "..."   # required
-            }
-            enabled = true
-            trust-collection-file {
-              type = pem-file|pem-string   # required
-            }
-          }
-        }
-      ]
-      server-endpoint {
-        address = "..."   # required
-        external-address = "..."   # required
-        external-port = 0   # required
-        external-tls-config {
-          client-cert {
-            cert-chain-file {
-              type = pem-file|pem-string   # required
-            }
-            private-key-file = "..."   # required
-          }
-          enabled = true
-          trust-collection-file {
-            type = pem-file|pem-string   # required
-          }
-        }
-        # flow-control-window = <int>
-        # initial-flow-control-window = <int>
-        keep-alive-server {
-          permit-keep-alive-time = "20 seconds"
-          permit-keep-alive-without-calls = false
-          time = "40 seconds"
-          timeout = "20 seconds"
-        }
-        limits {
-          active {
-            <key> = [ ]
-          }
-          throttle-logging-rate-per-second = 10
-          warn-on-undefined-limits = false
-        }
-        max-concurrent-calls-per-connection = 100000
-        # max-inbound-message-size = <int>
-        # port = <int>
-        tls {
-          cert-chain-file {
-            type = pem-file|pem-string   # required
-          }
-          # ciphers = [ ... ]
-          client-auth {
-            type = require|optional|none   # required
-          }
-          enable-cert-revocation-checking = false
-          minimum-server-protocol-version = "TLSv1.2"
-          private-key-file = "..."   # required
-          trust-collection-file {
-            type = pem-file|pem-string   # required
-          }
-        }
-      }
-    }
-    leader-selection-policy-config-for-pv-34 {
-      how-long-to-blacklist {
-        type = linear|linear-with-parameters|exponential|no-blacklisting   # required
-      }
-      how-many-can-we-blacklist = num-faults-tolerated|no-blacklisting   # required
-    }
-    manual-vacuum-enabled = false
-    max-batch-creation-interval = "100 milliseconds"
-    # max-mempool-queue-size = <int>
-    min-requests-in-batch = 3
-    network-send-attempts = 5
-    # network-send-retry-jitter-cap = <duration>
-    # network-send-retry-minimum-delay = <duration>
-    # output-enqueue-max-retries = <int>
-    output-enqueue-max-retry-delay = "5 seconds"
-    output-fetch-how-many-recipients = 2
-    output-fetch-minimum-delay = "200 milliseconds"
-    output-fetch-timeout = "200 milliseconds"
-    output-fetch-timeout-cap = "200 milliseconds"
-    output-size-of-chunk-of-epochs-to-load-at-start = 10
-    # segment-length-for-pv-34 = <int>
-    send-blacklist-ttl = "3 minutes"
-    sequencer-core-subscription-config {
-      pause-orderer-threshold-buffer-size = 5000
-      pekko-queue-source-buffer-size = 5000
-      resume-orderer-threshold-buffer-size = 1000
-    }
-    standalone {
-      blacklist-leader-selection-policy-config {
-        how-long-to-blacklist {
-          type = linear|linear-with-parameters|exponential|no-blacklisting   # required
-        }
-        how-many-can-we-blacklist = num-faults-tolerated|no-blacklisting   # required
-      }
-      max-batches-per-block-proposal = 0   # required
-      max-requests-in-batch = 0   # required
-      pbft-view-change-timeout = "30 seconds"   # required
-      peers = [
-        {
-          sequencer-id = "..."   # required
-          signing-public-key-proto-file = "/path/to/file"   # required
-        }
-      ]
-      segment-length = 0   # required
-      signing-private-key-proto-file = "/path/to/file"   # required
-      signing-public-key-proto-file = "/path/to/file"   # required
-      test-slowdown {
-        post-ordering-delay {
-          type = constant-distribution|weighted-distribution|linear-distribution|power-distribution   # required
-        }
-        send-delay {
-          default-delay-distribution {
-            type = constant-distribution|weighted-distribution|linear-distribution|power-distribution   # required
-          }
-          delays-by-recipients = [
-            {
-              delay-distribution {
-                type = constant-distribution|weighted-distribution|linear-distribution|power-distribution   # required
-              }
-              instance-names = [ ]   # required
-              # probability-of-grpc-send-accepted-by-flow-control = <number>
-              # probability-of-grpc-send-success = <number>
-            }
-          ]
-        }
-        topology-delay {
-          # broadcast-request-probability = <number>
-          get-ordering-topology-delay {
-            type = constant-distribution|weighted-distribution|linear-distribution|power-distribution   # required
-          }
-          # pending-topology-changes-probability = <number>
-          # possible-ordering-topology-change-in-request-probability = <number>
-          request-inspection-delay {
-            type = constant-distribution|weighted-distribution|linear-distribution|power-distribution   # required
-          }
-        }
-      }
-      this-sequencer-id = "..."   # required
-    }
-    storage {
-      type = memory|h2|postgres   # required
-    }
-    # view-change-timeout-override = <duration>
-  }
-  # config.initial-network.server-endpoint.tls.client-auth.admin-client.cert-chain-file.type selects a further type, shown separately
-}
-```
-
-**`writer`** supports these types: `low-latency`, `high-throughput`. Pick one; each block below is a complete example of that choice.
-
-```hocon
-canton.sequencers.<sequencer>.sequencer.writer {
-  type = low-latency
-  # buffered-events-max-memory = <int>
-  buffered-events-preload-batch-size = 50
-  # checkpoint-backfill-parallelism = <int>
-  checkpoint-interval = "30 seconds"
-  # commit-mode-validation = synchronous|local
-  event-write-batch-max-size = 1
-  event-write-max-concurrency = 1
-  payload-queue-size = 1000
-  payload-to-event-margin = "60 seconds"
-  payload-write-batch-max-size = 1
-  payload-write-max-concurrency = 2
-}
-```
-
-```hocon
-canton.sequencers.<sequencer>.sequencer.writer {
-  type = high-throughput
-  # buffered-events-max-memory = <int>
-  buffered-events-preload-batch-size = 50
-  # checkpoint-backfill-parallelism = <int>
-  checkpoint-interval = "30 seconds"
-  # commit-mode-validation = synchronous|local
-  event-write-batch-max-size = 100
-  event-write-max-concurrency = 1
-  payload-queue-size = 1000
-  payload-to-event-margin = "60 seconds"
-  payload-write-batch-max-size = 50
-  payload-write-max-concurrency = 4
-}
-```
+Takes a `type`: [BatchAggregatorConfig](/global-synchronizer/reference/canton-config/types#batchaggregatorconfig) at `config.batch-aggregator`, [PemFileOrString](/global-synchronizer/reference/canton-config/types#pemfileorstring) at `config.initial-network.peer-endpoints[].tls-config.trust-collection-file`, [ServerAuthRequirementConfig](/global-synchronizer/reference/canton-config/types#serverauthrequirementconfig) at `config.initial-network.server-endpoint.tls.client-auth`, [HowLongToBlacklist](/global-synchronizer/reference/canton-config/types#howlongtoblacklist) at `config.leader-selection-policy-config-for-pv-34.how-long-to-blacklist`, [FiniteDurationDistribution](/global-synchronizer/reference/canton-config/types#finitedurationdistribution) at `config.standalone.test-slowdown.post-ordering-delay`, [StorageConfig](/global-synchronizer/reference/canton-config/types#storageconfig) at `config.storage`, [SequencerConfig](/global-synchronizer/reference/canton-config/types#sequencerconfig) at `.`, [SequencerWriterConfig](/global-synchronizer/reference/canton-config/types#sequencerwriterconfig) at `writer`.
 
 
 </Tab>
@@ -3396,7 +1805,7 @@ canton.sequencers.<sequencer>.sequencer.writer {
 
 | Key | Type | Default | Description |
 |---|---|---|---|
-| `type` | one of `database`, `external`, `bft-sequencer` | `reference` † | Selects which of the keys below apply; see the example above. |
+| `type` | one of `database`, `external`, `bft-sequencer` | `reference` † | Choose one type — see [SequencerConfig](/global-synchronizer/reference/canton-config/types#sequencerconfig). |
 | **sequencer** `type = database` |  |  |  |
 |     `testing-interceptor` | string (TestingInterceptor) | _unset_ |  |
 |     **high-availability** |  |  |  |
@@ -3468,7 +1877,7 @@ canton.sequencers.<sequencer>.sequencer.writer {
 |         `event-write-max-concurrency` | int | `1` |  |
 |         `payload-queue-size` | int | `1000` |  |
 |         `payload-to-event-margin` | duration (NonNegativeFiniteDuration) | `60 seconds` |  |
-|         `type` | one of `low-latency`, `high-throughput` | **required** | Configuration for the database based sequencer writer |
+|         `type` | one of `low-latency`, `high-throughput` | **required** | Choose one type — see [SequencerWriterConfig](/global-synchronizer/reference/canton-config/types#sequencerwriterconfig). Configuration for the database based sequencer writer |
 |     **writer** `type = low-latency` |  |  |  |
 |         `event-write-batch-max-size` | int | `1` |  |
 |         `payload-write-batch-max-size` | int | `1` |  |
@@ -3589,7 +1998,7 @@ canton.sequencers.<sequencer>.sequencer.writer {
 |             `event-write-max-concurrency` | int | `1` |  |
 |             `payload-queue-size` | int | `1000` |  |
 |             `payload-to-event-margin` | duration (NonNegativeFiniteDuration) | `60 seconds` |  |
-|             `type` | one of `low-latency`, `high-throughput` | `high-throughput` † | Configuration for the database based sequencer writer |
+|             `type` | one of `low-latency`, `high-throughput` | `high-throughput` † | Choose one type — see [SequencerWriterConfig](/global-synchronizer/reference/canton-config/types#sequencerwriterconfig). Configuration for the database based sequencer writer |
 |         **writer** `type = low-latency` |  |  |  |
 |             `event-write-batch-max-size` | int | `1` (in practice `100`) ◊ |  |
 |             `payload-write-batch-max-size` | int | `1` (in practice `50`) ◊ |  |
@@ -3708,7 +2117,7 @@ canton.sequencers.<sequencer>.sequencer.writer {
 |             `event-write-max-concurrency` | int | `1` |  |
 |             `payload-queue-size` | int | `1000` |  |
 |             `payload-to-event-margin` | duration (NonNegativeFiniteDuration) | `60 seconds` |  |
-|             `type` | one of `low-latency`, `high-throughput` | `high-throughput` † | Configuration for the database based sequencer writer |
+|             `type` | one of `low-latency`, `high-throughput` | `high-throughput` † | Choose one type — see [SequencerWriterConfig](/global-synchronizer/reference/canton-config/types#sequencerwriterconfig). Configuration for the database based sequencer writer |
 |         **writer** `type = low-latency` |  |  |  |
 |             `event-write-batch-max-size` | int | `1` (in practice `100`) ◊ |  |
 |             `payload-write-batch-max-size` | int | `1` (in practice `50`) ◊ |  |
@@ -3760,7 +2169,7 @@ canton.sequencers.<sequencer>.sequencer.writer {
 |         `view-change-timeout-override` | duration | _unset_ | Optionally, the base duration to use for view change timeouts for ISS segments. If specified, this value will be used instead of the pbftViewChangeTimeout set in the network-wide SequencingParameters topology transaction. Note that this value is not persisted (in-memory only), and must be set back to None to return using the SequencingParameters value. |
 |         **batch-aggregator** |  |  |  |
 |             `maximum-batch-size` | int (PositiveNumeric) | `500` | Maximum number of queries in a batch. |
-|             `type` | one of `batching`, `no-batching` | **required** | Parameters for that batcher that batches queries (e.g., to a DB). |
+|             `type` | one of `batching`, `no-batching` | **required** | Choose one type — see [BatchAggregatorConfig](/global-synchronizer/reference/canton-config/types#batchaggregatorconfig). Parameters for that batcher that batches queries (e.g., to a DB). |
 |         **batch-aggregator** `type = batching` |  |  |  |
 |             `maximum-in-flight` | int (PositiveNumeric) | `2` | Maximum number of in-flight get queries. |
 |         **batch-aggregator** `type = no-batching` |  |  |  |
@@ -3806,13 +2215,13 @@ canton.sequencers.<sequencer>.sequencer.writer {
 |                     **client-cert** |  |  |  |
 |                         `private-key-file` | string (PemFile) | **required** |  |
 |                         **cert-chain-file** |  |  |  |
-|                             `type` | one of `pem-file`, `pem-string` | **required** | A class representing either an existing PEM file path or an inlined PEM string for configuration file fields |
+|                             `type` | one of `pem-file`, `pem-string` | **required** | Choose one type — see [PemFileOrString](/global-synchronizer/reference/canton-config/types#pemfileorstring). A class representing either an existing PEM file path or an inlined PEM string for configuration file fields |
 |                         **cert-chain-file** `type = pem-file` |  |  |  |
 |                             `pem-file` | path (ExistingFile) | **required** |  |
 |                         **cert-chain-file** `type = pem-string` |  |  |  |
 |                             `pem-bytes` | string | **required** |  |
 |                     **trust-collection-file** |  |  |  |
-|                         `type` | one of `pem-file`, `pem-string` | **required** | A class representing either an existing PEM file path or an inlined PEM string for configuration file fields |
+|                         `type` | one of `pem-file`, `pem-string` | **required** | Choose one type — see [PemFileOrString](/global-synchronizer/reference/canton-config/types#pemfileorstring). A class representing either an existing PEM file path or an inlined PEM string for configuration file fields |
 |                     **trust-collection-file** `type = pem-file` |  |  |  |
 |                         `pem-file` | path (ExistingFile) | **required** |  |
 |                     **trust-collection-file** `type = pem-string` |  |  |  |
@@ -3831,13 +2240,13 @@ canton.sequencers.<sequencer>.sequencer.writer {
 |                     **client-cert** |  |  |  |
 |                         `private-key-file` | string (PemFile) | **required** |  |
 |                         **cert-chain-file** |  |  |  |
-|                             `type` | one of `pem-file`, `pem-string` | **required** | A class representing either an existing PEM file path or an inlined PEM string for configuration file fields |
+|                             `type` | one of `pem-file`, `pem-string` | **required** | Choose one type — see [PemFileOrString](/global-synchronizer/reference/canton-config/types#pemfileorstring). A class representing either an existing PEM file path or an inlined PEM string for configuration file fields |
 |                         **cert-chain-file** `type = pem-file` |  |  |  |
 |                             `pem-file` | path (ExistingFile) | **required** |  |
 |                         **cert-chain-file** `type = pem-string` |  |  |  |
 |                             `pem-bytes` | string | **required** |  |
 |                     **trust-collection-file** |  |  |  |
-|                         `type` | one of `pem-file`, `pem-string` | **required** | A class representing either an existing PEM file path or an inlined PEM string for configuration file fields |
+|                         `type` | one of `pem-file`, `pem-string` | **required** | Choose one type — see [PemFileOrString](/global-synchronizer/reference/canton-config/types#pemfileorstring). A class representing either an existing PEM file path or an inlined PEM string for configuration file fields |
 |                     **trust-collection-file** `type = pem-file` |  |  |  |
 |                         `pem-file` | path (ExistingFile) | **required** |  |
 |                     **trust-collection-file** `type = pem-string` |  |  |  |
@@ -3858,24 +2267,24 @@ canton.sequencers.<sequencer>.sequencer.writer {
 |                     `minimum-server-protocol-version` | string | `TLSv1.2` | minimum supported TLS protocol. Set None (or null in config file) to use default settings defaultMinimumServerProtocol |
 |                     `private-key-file` | string (PemFile) | **required** | a file containing the server's private key. The key must not use a password. |
 |                     **cert-chain-file** |  |  |  |
-|                         `type` | one of `pem-file`, `pem-string` | **required** | A class representing either an existing PEM file path or an inlined PEM string for configuration file fields |
+|                         `type` | one of `pem-file`, `pem-string` | **required** | Choose one type — see [PemFileOrString](/global-synchronizer/reference/canton-config/types#pemfileorstring). A class representing either an existing PEM file path or an inlined PEM string for configuration file fields |
 |                     **cert-chain-file** `type = pem-file` |  |  |  |
 |                         `pem-file` | path (ExistingFile) | **required** |  |
 |                     **cert-chain-file** `type = pem-string` |  |  |  |
 |                         `pem-bytes` | string | **required** |  |
 |                     **client-auth** |  |  |  |
-|                         `type` | one of `require`, `optional`, `none` | **required** | Configuration on whether server requires auth, requests auth, or no auth |
+|                         `type` | one of `require`, `optional`, `none` | **required** | Choose one type — see [ServerAuthRequirementConfig](/global-synchronizer/reference/canton-config/types#serverauthrequirementconfig). Configuration on whether server requires auth, requests auth, or no auth |
 |                     **client-auth** `type = require` |  |  |  |
 |                         **admin-client** |  |  |  |
 |                             `private-key-file` | string (PemFile) | **required** |  |
 |                             **cert-chain-file** |  |  |  |
-|                                 `type` | one of `pem-file`, `pem-string` | **required** | A class representing either an existing PEM file path or an inlined PEM string for configuration file fields |
+|                                 `type` | one of `pem-file`, `pem-string` | **required** | Choose one type — see [PemFileOrString](/global-synchronizer/reference/canton-config/types#pemfileorstring). A class representing either an existing PEM file path or an inlined PEM string for configuration file fields |
 |                             **cert-chain-file** `type = pem-file` |  |  |  |
 |                                 `pem-file` | path (ExistingFile) | **required** |  |
 |                             **cert-chain-file** `type = pem-string` |  |  |  |
 |                                 `pem-bytes` | string | **required** |  |
 |                     **trust-collection-file** |  |  |  |
-|                         `type` | one of `pem-file`, `pem-string` | **required** | A class representing either an existing PEM file path or an inlined PEM string for configuration file fields |
+|                         `type` | one of `pem-file`, `pem-string` | **required** | Choose one type — see [PemFileOrString](/global-synchronizer/reference/canton-config/types#pemfileorstring). A class representing either an existing PEM file path or an inlined PEM string for configuration file fields |
 |                     **trust-collection-file** `type = pem-file` |  |  |  |
 |                         `pem-file` | path (ExistingFile) | **required** |  |
 |                     **trust-collection-file** `type = pem-string` |  |  |  |
@@ -3883,7 +2292,7 @@ canton.sequencers.<sequencer>.sequencer.writer {
 |         **leader-selection-policy-config-for-pv-34** |  |  |  |
 |             `how-many-can-we-blacklist` | one of `num-faults-tolerated`, `no-blacklisting` | **required** | The number of peers that can be simultaneously blacklisted, and defaults to the number of tolerated faults: f = (N-1)/3. |
 |             **how-long-to-blacklist** |  |  |  |
-|                 `type` | one of `linear`, `linear-with-parameters`, `exponential`, `no-blacklisting` | **required** | Selects which of the keys below apply; see the example above. |
+|                 `type` | one of `linear`, `linear-with-parameters`, `exponential`, `no-blacklisting` | **required** | Choose one type — see [HowLongToBlacklist](/global-synchronizer/reference/canton-config/types#howlongtoblacklist). |
 |             **how-long-to-blacklist** `type = linear` |  |  |  |
 |                 `maximum-epoch-blacklisted` | int | _unset_ |  |
 |             **how-long-to-blacklist** `type = linear-with-parameters` |  |  |  |
@@ -3909,7 +2318,7 @@ canton.sequencers.<sequencer>.sequencer.writer {
 |             **blacklist-leader-selection-policy-config** |  |  |  |
 |                 `how-many-can-we-blacklist` | one of `num-faults-tolerated`, `no-blacklisting` | **required** | The number of peers that can be simultaneously blacklisted, and defaults to the number of tolerated faults: f = (N-1)/3. |
 |                 **how-long-to-blacklist** |  |  |  |
-|                     `type` | one of `linear`, `linear-with-parameters`, `exponential`, `no-blacklisting` | **required** | Selects which of the keys below apply; see the example above. |
+|                     `type` | one of `linear`, `linear-with-parameters`, `exponential`, `no-blacklisting` | **required** | Choose one type — see [HowLongToBlacklist](/global-synchronizer/reference/canton-config/types#howlongtoblacklist). |
 |                 **how-long-to-blacklist** `type = linear` |  |  |  |
 |                     `maximum-epoch-blacklisted` | int | _unset_ |  |
 |                 **how-long-to-blacklist** `type = linear-with-parameters` |  |  |  |
@@ -3924,7 +2333,7 @@ canton.sequencers.<sequencer>.sequencer.writer {
 |                 `signing-public-key-proto-file` | path | **required** | The file containing the public key used to verify incoming messages from the peer. |
 |             **test-slowdown** |  |  |  |
 |                 **post-ordering-delay** |  |  |  |
-|                     `type` | one of `constant-distribution`, `weighted-distribution`, `linear-distribution`, `power-distribution` | **required** | Selects which of the keys below apply; see the example above. |
+|                     `type` | one of `constant-distribution`, `weighted-distribution`, `linear-distribution`, `power-distribution` | **required** | Choose one type — see [FiniteDurationDistribution](/global-synchronizer/reference/canton-config/types#finitedurationdistribution). |
 |                 **post-ordering-delay** `type = constant-distribution` |  |  |  |
 |                     `duration` | duration | **required** |  |
 |                 **post-ordering-delay** `type = weighted-distribution` |  |  |  |
@@ -3941,7 +2350,7 @@ canton.sequencers.<sequencer>.sequencer.writer {
 |                 **send-delay** |  |  |  |
 |                     `delays-by-recipients` | array of DelayByRecipients | `[]` | Optional list of specific delay distributions and failure probabilities applied to specific recipients. |
 |                     **default-delay-distribution** |  |  |  |
-|                         `type` | one of `constant-distribution`, `weighted-distribution`, `linear-distribution`, `power-distribution` | **required** | Selects which of the keys below apply; see the example above. |
+|                         `type` | one of `constant-distribution`, `weighted-distribution`, `linear-distribution`, `power-distribution` | **required** | Choose one type — see [FiniteDurationDistribution](/global-synchronizer/reference/canton-config/types#finitedurationdistribution). |
 |                     **default-delay-distribution** `type = constant-distribution` |  |  |  |
 |                         `duration` | duration | **required** |  |
 |                     **default-delay-distribution** `type = weighted-distribution` |  |  |  |
@@ -3960,7 +2369,7 @@ canton.sequencers.<sequencer>.sequencer.writer {
 |                         `probability-of-grpc-send-accepted-by-flow-control` | number | _unset_ |  |
 |                         `probability-of-grpc-send-success` | number | _unset_ |  |
 |                         **delay-distribution** |  |  |  |
-|                             `type` | one of `constant-distribution`, `weighted-distribution`, `linear-distribution`, `power-distribution` | **required** | Selects which of the keys below apply; see the example above. |
+|                             `type` | one of `constant-distribution`, `weighted-distribution`, `linear-distribution`, `power-distribution` | **required** | Choose one type — see [FiniteDurationDistribution](/global-synchronizer/reference/canton-config/types#finitedurationdistribution). |
 |                         **delay-distribution** `type = constant-distribution` |  |  |  |
 |                             `duration` | duration | **required** |  |
 |                         **delay-distribution** `type = weighted-distribution` |  |  |  |
@@ -3979,7 +2388,7 @@ canton.sequencers.<sequencer>.sequencer.writer {
 |                     `pending-topology-changes-probability` | number | _unset_ | Optional probability of the ordering topology returned by `getOrderingTopology` signalling that there are pending topology changes, which triggers getting an up-to-date ordering topology again before starting the subsequent epoch, regardless of whether broadcast submission requests are going to be ordered before the end of the epoch. |
 |                     `possible-ordering-topology-change-in-request-probability` | number | _unset_ | Optional probability of detecting that a broadcast submission request may also alter the ordering topology for the subsequent epoch, which triggers getting an up-to-date ordering topology via `getOrderingTopology` before starting a new epoch. |
 |                     **get-ordering-topology-delay** |  |  |  |
-|                         `type` | one of `constant-distribution`, `weighted-distribution`, `linear-distribution`, `power-distribution` | **required** | Selects which of the keys below apply; see the example above. |
+|                         `type` | one of `constant-distribution`, `weighted-distribution`, `linear-distribution`, `power-distribution` | **required** | Choose one type — see [FiniteDurationDistribution](/global-synchronizer/reference/canton-config/types#finitedurationdistribution). |
 |                     **get-ordering-topology-delay** `type = constant-distribution` |  |  |  |
 |                         `duration` | duration | **required** |  |
 |                     **get-ordering-topology-delay** `type = weighted-distribution` |  |  |  |
@@ -3994,7 +2403,7 @@ canton.sequencers.<sequencer>.sequencer.writer {
 |                         `low` | duration | **required** |  |
 |                         `mean` | duration | **required** |  |
 |                     **request-inspection-delay** |  |  |  |
-|                         `type` | one of `constant-distribution`, `weighted-distribution`, `linear-distribution`, `power-distribution` | **required** | Selects which of the keys below apply; see the example above. |
+|                         `type` | one of `constant-distribution`, `weighted-distribution`, `linear-distribution`, `power-distribution` | **required** | Choose one type — see [FiniteDurationDistribution](/global-synchronizer/reference/canton-config/types#finitedurationdistribution). |
 |                     **request-inspection-delay** `type = constant-distribution` |  |  |  |
 |                         `duration` | duration | **required** |  |
 |                     **request-inspection-delay** `type = weighted-distribution` |  |  |  |
@@ -4009,7 +2418,7 @@ canton.sequencers.<sequencer>.sequencer.writer {
 |                         `low` | duration | **required** |  |
 |                         `mean` | duration | **required** |  |
 |         **storage** |  |  |  |
-|             `type` | one of `memory`, `h2`, `postgres` | `memory` † | Determines how a node stores persistent data. |
+|             `type` | one of `memory`, `h2`, `postgres` | `memory` † | Choose one type — see [StorageConfig](/global-synchronizer/reference/canton-config/types#storageconfig). Determines how a node stores persistent data. |
 |             **parameters** |  |  |  |
 |                 `connection-timeout` | duration (NonNegativeFiniteDuration) | `5 seconds` | How long to wait for acquiring a database connection |
 |                 `fail-fast-on-startup` | boolean | `true` | If true, the node will fail-fast when the database cannot be connected to If false, the node will wait indefinitely for the database to come up |
@@ -4032,7 +2441,7 @@ canton.sequencers.<sequencer>.sequencer.writer {
 </Tab>
 </Tabs>
 
-## `storage`
+### `storage`
 
 <Tabs>
 <Tab title="HOCON">
@@ -4064,88 +2473,7 @@ canton.sequencers.<sequencer>.storage {
 }
 ```
 
-**`canton.sequencers.<sequencer>.storage`** supports these types: `memory`, `h2`, `postgres`. Pick one; each block below is a complete example of that choice.
-
-```hocon
-canton.sequencers.<sequencer>.storage {
-  type = memory
-  parameters {
-    connection-allocation {
-      # num-ledger-api = <int>
-      # num-reads = <int>
-      # num-writes = <int>
-    }
-    connection-timeout = "5 seconds"
-    fail-fast-on-startup = true
-    failed-to-fatal-delay = "5 minutes"
-    # max-connections = <int>
-    migrate-and-start = false
-    migrations-paths = [ ]
-    partitions {
-      initial-bft-orderer-tables-partition-size = 1500
-    }
-    repeatable-migrations-paths = [ ]
-    unsafe-baseline-on-migrate = false
-    unsafe-clean-on-validation-error = false
-    # warn-on-slow-query = <duration>
-    warn-on-slow-query-interval = "5 seconds"
-  }
-}
-```
-
-```hocon
-canton.sequencers.<sequencer>.storage {
-  type = h2
-  parameters {
-    connection-allocation {
-      # num-ledger-api = <int>
-      # num-reads = <int>
-      # num-writes = <int>
-    }
-    connection-timeout = "5 seconds"
-    fail-fast-on-startup = true
-    failed-to-fatal-delay = "5 minutes"
-    # max-connections = <int>
-    migrate-and-start = false
-    migrations-paths = [ ]
-    partitions {
-      initial-bft-orderer-tables-partition-size = 1500
-    }
-    repeatable-migrations-paths = [ ]
-    unsafe-baseline-on-migrate = false
-    unsafe-clean-on-validation-error = false
-    # warn-on-slow-query = <duration>
-    warn-on-slow-query-interval = "5 seconds"
-  }
-}
-```
-
-```hocon
-canton.sequencers.<sequencer>.storage {
-  type = postgres
-  parameters {
-    connection-allocation {
-      # num-ledger-api = <int>
-      # num-reads = <int>
-      # num-writes = <int>
-    }
-    connection-timeout = "5 seconds"
-    fail-fast-on-startup = true
-    failed-to-fatal-delay = "5 minutes"
-    # max-connections = <int>
-    migrate-and-start = false
-    migrations-paths = [ ]
-    partitions {
-      initial-bft-orderer-tables-partition-size = 1500
-    }
-    repeatable-migrations-paths = [ ]
-    unsafe-baseline-on-migrate = false
-    unsafe-clean-on-validation-error = false
-    # warn-on-slow-query = <duration>
-    warn-on-slow-query-interval = "5 seconds"
-  }
-}
-```
+Takes a `type`: [StorageConfig](/global-synchronizer/reference/canton-config/types#storageconfig) at `.`.
 
 
 </Tab>
@@ -4153,7 +2481,7 @@ canton.sequencers.<sequencer>.storage {
 
 | Key | Type | Default | Description |
 |---|---|---|---|
-| `type` | one of `memory`, `h2`, `postgres` | `memory` † | Determines how a node stores persistent data. |
+| `type` | one of `memory`, `h2`, `postgres` | `memory` † | Choose one type — see [StorageConfig](/global-synchronizer/reference/canton-config/types#storageconfig). Determines how a node stores persistent data. |
 | **parameters** |  |  |  |
 |     `connection-timeout` | duration (NonNegativeFiniteDuration) | `5 seconds` (in practice `30 seconds`) ◊ | How long to wait for acquiring a database connection |
 |     `fail-fast-on-startup` | boolean | `true` | If true, the node will fail-fast when the database cannot be connected to If false, the node will wait indefinitely for the database to come up |
@@ -4176,7 +2504,7 @@ canton.sequencers.<sequencer>.storage {
 </Tab>
 </Tabs>
 
-## `time-tracker`
+### `time-tracker`
 
 <Tabs>
 <Tab title="HOCON">
@@ -4211,7 +2539,7 @@ canton.sequencers.<sequencer>.time-tracker {
 </Tab>
 </Tabs>
 
-## `topology`
+### `topology`
 
 <Tabs>
 <Tab title="HOCON">
@@ -4253,7 +2581,7 @@ canton.sequencers.<sequencer>.topology {
 </Tab>
 </Tabs>
 
-## `traffic-config`
+### `traffic-config`
 
 <Tabs>
 <Tab title="HOCON">
@@ -4273,23 +2601,7 @@ canton.sequencers.<sequencer>.traffic-config {
 }
 ```
 
-**`batch-aggregator-config`** supports these types: `batching`, `no-batching`. Pick one; each block below is a complete example of that choice.
-
-```hocon
-canton.sequencers.<sequencer>.traffic-config.batch-aggregator-config {
-  type = batching
-  maximum-batch-size = 500
-  maximum-in-flight = 2
-}
-```
-
-```hocon
-canton.sequencers.<sequencer>.traffic-config.batch-aggregator-config {
-  type = no-batching
-  max-parallel-batches = 2
-  maximum-batch-size = 500
-}
-```
+Takes a `type`: [BatchAggregatorConfig](/global-synchronizer/reference/canton-config/types#batchaggregatorconfig) at `batch-aggregator-config`.
 
 
 </Tab>
@@ -4305,7 +2617,7 @@ canton.sequencers.<sequencer>.traffic-config.batch-aggregator-config {
 | `traffic-purchased-cache-size-per-member` | int (PositiveInt) | `3` | How many traffic purchased entries to keep in memory for each member. |
 | **batch-aggregator-config** |  |  |  |
 |     `maximum-batch-size` | int (PositiveNumeric) | `500` | Maximum number of queries in a batch. |
-|     `type` | one of `batching`, `no-batching` | `batching` † | Parameters for that batcher that batches queries (e.g., to a DB). |
+|     `type` | one of `batching`, `no-batching` | `batching` † | Choose one type — see [BatchAggregatorConfig](/global-synchronizer/reference/canton-config/types#batchaggregatorconfig). Parameters for that batcher that batches queries (e.g., to a DB). |
 | **batch-aggregator-config** `type = batching` |  |  |  |
 |     `maximum-in-flight` | int (PositiveNumeric) | `2` | Maximum number of in-flight get queries. |
 | **batch-aggregator-config** `type = no-batching` |  |  |  |

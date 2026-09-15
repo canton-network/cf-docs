@@ -33,6 +33,7 @@ PAGE_URL_PREFIX = "/global-synchronizer/reference/canton-config"
 SOURCE_REPO = "digital-asset/canton"
 ARTIFACT_PATH_IN_CANTON = "docs-open/target/config-reference.json"
 SUPPORTED_SCHEMA_MAJOR = "2"
+TYPES_PAGE = "types"
 
 PRODUCT_LABEL = "Global Synchronizer"
 PARENT_GROUP_LABEL = "Reference"
@@ -326,8 +327,17 @@ def group_rows(
     return out
 
 
+def union_link(union: str) -> str:
+    return f"{PAGE_URL_PREFIX}/{TYPES_PAGE}#{slug(union)}"
+
+
+def discriminator_index(options: list[dict]) -> dict[str, str]:
+    """Discriminator path -> the union it selects, for every union any of these keys depends on."""
+    return {condition["at"]: condition["of"] for option in options for condition in option["appliesWhen"]}
+
+
 def render_table(options: list[dict], prefix: str, variants_by_type: dict[str, list[str]]) -> list[str]:
-    discriminators = {condition["at"] for option in options for condition in option["appliesWhen"]}
+    discriminators = discriminator_index(options)
     lines = ["| Key | Type | Default | Description |", "|---|---|---|---|"]
     for depth, label, option, note in group_rows(collapse_variants(options), prefix, variants_by_type):
         pad = INDENT * depth
@@ -342,8 +352,9 @@ def render_table(options: list[dict], prefix: str, variants_by_type: dict[str, l
         badge = MATURITY_BADGE.get(option.get("maturity", "stable"), "")
         key = f"{pad}`{label}`" + (f" {badge}" if badge else "")
         description = clean_prose(option.get("doc"))
-        if not description and option["path"] in discriminators:
-            description = "Selects which of the keys below apply; see the example above."
+        if option["path"] in discriminators:
+            union = discriminators[option["path"]]
+            description = f"Choose one type — see [{union}]({union_link(union)})." + (f" {description}" if description else "")
         lines.append(f"| {key} | {render_type(option['valueType'])} | {render_default(option)} | {description} |")
     return lines
 
@@ -501,43 +512,42 @@ def open_path(section: str) -> tuple[list[str], list[str], str]:
     return opening, closing, indent
 
 
-def render_union_example(union: str, discriminator: str, options_by_path: dict[str, list[dict]], variants: list[str], scope: str) -> list[str]:
-    """One complete, standalone HOCON block per variant: the variants are alternatives, and one
-    block holding all of them would read as a configuration that sets every one."""
-    section = discriminator.rsplit(".", 1)[0]
+def render_variant_block(
+    section: str, discriminator: str, tag: str, options_by_path: dict[str, list[dict]]
+) -> tuple[list[str], "OrderedDict[str, str]"]:
+    """A complete, standalone HOCON block for one variant, plus the unions nested inside it
+    (relative path -> union name), which get their own sections rather than being expanded here."""
     discriminator_key = discriminator.rsplit(".", 1)[1]
-    relative_section = section[len(scope) + 1 :] if section.startswith(scope + ".") else section
-    note = (
-        "Each block below shows one entry; a list may hold entries of different types."
-        if section.endswith("[]")
-        else "Pick one; each block below is a complete example of that choice."
-    )
-    lines = [f"**`{relative_section}`** supports these types: " + ", ".join(f"`{tag}`" for tag in variants) + f". {note}", ""]
+    keys = applicable_keys(section, discriminator, tag, options_by_path)
+    nested: "OrderedDict[str, str]" = OrderedDict()
+    for entries in options_by_path.values():
+        for option in entries:
+            if not any(c["at"] == discriminator and c["equals"] == tag for c in option["appliesWhen"]):
+                continue
+            for condition in option["appliesWhen"]:
+                if condition["at"] != discriminator and condition["at"].startswith(section + "."):
+                    nested.setdefault(condition["at"][len(section) + 1 :], condition["of"])
+    opening, closing, indent = open_path(section)
+    block = ["```hocon", *opening, f"{indent}{discriminator_key} = {tag}"]
+    seen: set[str] = set()
+    render_block(nest(keys), indent, block, seen)
+    if not keys and not nested:
+        block.append(f"{indent}# takes no further keys")
+    for path in nested:
+        if path not in seen:
+            block.append(f"{indent}# {path} takes a type of its own, documented separately")
+    block += [*closing, "```", ""]
+    return block, nested
 
-    for tag in variants:
-        keys = applicable_keys(section, discriminator, tag, options_by_path)
-        nested_unions = sorted(
-            {
-                condition["at"][len(section) + 1 :]
-                for entries in options_by_path.values()
-                for option in entries
-                for condition in option["appliesWhen"]
-                if condition["at"].startswith(section + ".")
-                and condition["at"] != discriminator
-                and any(c["at"] == discriminator and c["equals"] == tag for c in option["appliesWhen"])
-            }
-        )
-        opening, closing, indent = open_path(section)
-        block = ["```hocon", *opening, f"{indent}{discriminator_key} = {tag}"]
-        seen: set[str] = set()
-        render_block(nest(keys), indent, block, seen)
-        if not keys and not nested_unions:
-            block.append(f"{indent}# takes no further keys")
-        for nested in nested_unions:
-            if nested not in seen:
-                block.append(f"{indent}# {nested} selects a further type, shown separately")
-        lines += [*block, *closing, "```", ""]
-    return lines
+
+def unions_within(scope: str, unions: dict) -> list[tuple[str, str]]:
+    """(union, shallowest discriminator path) for every union inside one section, in path order."""
+    found: list[tuple[str, str]] = []
+    for union, entry in unions.items():
+        inside = [path for path in entry["paths"] if path.startswith(scope + ".")]
+        if inside:
+            found.append((union, min(inside, key=lambda path: (path.count("."), path))))
+    return sorted(found, key=lambda item: item[1])
 
 
 def render_scope_hocon(scope: str, entries: list[dict], variants_by_type: dict[str, list[str]]) -> list[str]:
@@ -574,12 +584,17 @@ def render_section_views(
     entries: list[dict],
     variants_by_type: dict[str, list[str]],
     unions: dict,
-    options_by_path: dict[str, list[dict]],
 ) -> list[str]:
     """Two views of one section behind tabs, HOCON first: the file you would write is the more
     comprehensible shape, while the table is where the human-written descriptions live."""
     hocon = render_scope_hocon(scope, entries, variants_by_type)
-    hocon += examples_within(scope, unions, variants_by_type, options_by_path)
+    inside = unions_within(scope, unions)
+    if inside:
+        links = ", ".join(
+            f"[{union}]({union_link(union)}) at `{path.rsplit('.', 1)[0][len(scope) + 1 :] or '.'}`"
+            for union, path in inside
+        )
+        hocon += [f"Takes a `type`: {links}.", ""]
     table = render_table(entries, scope, variants_by_type)
     # Tab bodies are left unindented: four leading spaces would turn a line into a code block.
     return [
@@ -599,18 +614,117 @@ def render_section_views(
     ]
 
 
-def examples_within(scope: str, unions: dict, variants_by_type: dict[str, list[str]], options_by_path: dict[str, list[dict]]) -> list[str]:
-    """Examples for the unions inside one table's scope, ahead of it. A union type recurs across
-    the tree, so it is shown once per table at its shallowest occurrence there."""
-    shown: "OrderedDict[str, str]" = OrderedDict()
-    for union, entry in unions.items():
-        inside = [path for path in entry["paths"] if path.startswith(scope + ".")]
-        if inside:
-            shown[union] = min(inside, key=lambda path: (path.count("."), path))
-    lines: list[str] = []
-    for union, discriminator in sorted(shown.items(), key=lambda item: item[1]):
-        lines += render_union_example(union, discriminator, options_by_path, variants_by_type.get(union) or [], scope)
-    return lines
+def required_rows(prefix: str, entries: list[dict], variants_by_type: dict[str, list[str]]):
+    """(relative path, option, enclosing section, variant conditions) for every required key."""
+    rows = []
+    for option, conditions in collapse_variants(entries):
+        if not option["required"]:
+            continue
+        relative = option["path"][len(prefix) :].lstrip(".") or option["path"].split(".")[-1]
+        parent = relative.rsplit(".", 1)[0] if "." in relative else ""
+        union_of = {c["at"]: c["of"] for c in option["appliesWhen"]}
+        gates: list[tuple[str, set[str]]] = []
+        for at in sorted(conditions):
+            tags = conditions[at]
+            known = set(variants_by_type.get(union_of.get(at, ""), []))
+            if known and tags >= known:
+                continue
+            gates.append((at[len(prefix) :].lstrip("."), tags))
+        rows.append((relative, option, parent, gates))
+    return rows
+
+
+def render_required_hocon(prefix: str, entries: list[dict], variants_by_type: dict[str, list[str]]) -> list[str]:
+    """The minimal skeleton: only the keys that must be set. A key required only under a particular
+    `type` is written as a comment carrying that condition, so the block stays a single valid
+    document rather than a mash of mutually exclusive variants."""
+    rows = required_rows(prefix, entries, variants_by_type)
+    if not rows:
+        return []
+    keys: "OrderedDict[str, dict]" = OrderedDict()
+    for relative, option, _parent, gates in rows:
+        tagged = dict(option)
+        if gates:
+            tagged["__when__"] = " and ".join(
+                f"{at.rsplit('.', 1)[-1]} = " + "|".join(sorted(tags)) for at, tags in gates
+            )
+        keys.setdefault(relative, tagged)
+
+    def write(tree: dict, indent: str, out: list[str]) -> None:
+        for name, child in tree.items():
+            option = child.get("__leaf__")
+            if option is None:
+                if name.endswith("[]"):
+                    out += [f"{indent}{name[:-2]} = [", f"{indent}  {{"]
+                    write(child, indent + "    ", out)
+                    out += [f"{indent}  }}", f"{indent}]"]
+                else:
+                    out.append(f"{indent}{name} {{")
+                    write(child, indent + "  ", out)
+                    out.append(f"{indent}}}")
+                continue
+            hint = type_hint(option) if option["valueType"].get("kind") == "enum" else placeholder_for(option)
+            when = option.get("__when__")
+            if when:
+                out.append(f"{indent}# {name} = {hint}   # required when {when}")
+            else:
+                out.append(f"{indent}{name} = {hint}   # required")
+
+    opening, closing, indent = open_path(prefix)
+    block = ["```hocon", *opening]
+    write(nest(OrderedDict(sorted(keys.items()))), indent, block)
+    block += [*closing, "```", ""]
+    return block
+
+
+def render_required_views(prefix: str, entries: list[dict], variants_by_type: dict[str, list[str]]) -> list[str]:
+    hocon = render_required_hocon(prefix, entries, variants_by_type)
+    if not hocon:
+        return ["Nothing under this section has to be set: every key has a default.", ""]
+    table = render_required(prefix, entries, variants_by_type)
+    return [
+        "<Tabs>",
+        '<Tab title="HOCON">',
+        "",
+        *hocon,
+        "",
+        "</Tab>",
+        '<Tab title="Table">',
+        "",
+        *table,
+        "",
+        "</Tab>",
+        "</Tabs>",
+        "",
+    ]
+
+
+def render_required(prefix: str, entries: list[dict], variants_by_type: dict[str, list[str]]) -> list[str]:
+    """Only what has to be set, and under what circumstances.
+
+    Almost nothing in a node's configuration is required outright -- the required keys live inside
+    sections you may or may not use, so each row says when it applies: when its enclosing section
+    is configured, when a `type` has been chosen, or always. A discriminator is itself required
+    whenever its section is, and links to the types page rather than repeating the choice here.
+    """
+    discriminators = discriminator_index(entries)
+    rows: list[str] = []
+    for relative, option, parent, gates in required_rows(prefix, entries, variants_by_type):
+        when: list[str] = []
+        if parent:
+            when.append(f"`{parent}` is configured")
+        for rel_at, tags in gates:
+            listed = ", ".join(f"`{tag}`" for tag in sorted(tags))
+            when.append(f"`{rel_at}` is " + ("one of " if len(tags) > 1 else "") + listed)
+        union = discriminators.get(option["path"])
+        if union:
+            description = f"Choose one type — see [{union}]({union_link(union)})."
+        else:
+            description = clean_prose(option.get("doc"))
+        rows.append(f"| `{relative}` | {render_type(option['valueType'])} | {' and '.join(when) or 'always'} | {description} |")
+    if not rows:
+        return ["Nothing under this section has to be set: every key has a default.", ""]
+    return ["| Key | Type | Required when | Description |", "|---|---|---|---|", *rows, ""]
 
 
 # -- pages -------------------------------------------------------------------------------------
@@ -648,10 +762,14 @@ def reading_guide(artifact: dict, options: list[dict] | None) -> list[str]:
         "A `[]` suffix marks the fields of a list element. Keys marked **alpha** or **beta** are not "
         "covered by compatibility guarantees.",
         "",
-        "Each section is shown two ways. **HOCON** is the section as you would write it: every key "
-        "with its default, and one further block per `type` a section accepts. **Table** lists the "
-        "same keys with their descriptions; a **bold** row names a section and the keys indented "
-        "beneath it live inside it. Switching one section switches them all.",
+        "**Required** lists only what you must set, and when: always, when you configure a particular "
+        "section, or when you have chosen a particular `type`. **All options** shows every section two "
+        "ways: **HOCON** as you would write it, every key with its default, and **Table** with the "
+        "descriptions; a **bold** row names a section and the keys indented beneath it live inside it. "
+        "Switching one section switches them all.",
+        "",
+        "Some sections take a `type` that decides which other keys they accept. Those are documented "
+        f"once on the [types page]({PAGE_URL_PREFIX}/{TYPES_PAGE}) and linked from wherever they occur.",
         "",
         "In the Default column:",
         "",
@@ -681,6 +799,11 @@ def render_node_page(prefix: str, title: str, description: str, options: list[di
         *reading_guide(artifact, options),
         "</Accordion>",
         "",
+        "## Required",
+        "",
+        *render_required_views(prefix, options, variants_by_type),
+        "## All options",
+        "",
     ]
 
     by_subsection: "OrderedDict[str, list[dict]]" = OrderedDict()
@@ -689,14 +812,57 @@ def render_node_page(prefix: str, title: str, description: str, options: list[di
 
     direct = by_subsection.pop("", [])
     if direct:
-        lines += ["## Top-level keys", ""]
-        lines += render_section_views(prefix, direct, variants_by_type, unions, options_by_path)
+        lines += ["### Top-level keys", ""]
+        lines += render_section_views(prefix, direct, variants_by_type, unions)
 
     for subsection, entries in by_subsection.items():
         scope = prefix + "." + subsection
-        lines += [f"## `{subsection}`", ""]
-        lines += render_section_views(scope, entries, variants_by_type, unions, options_by_path)
+        lines += [f"### `{subsection}`", ""]
+        lines += render_section_views(scope, entries, variants_by_type, unions)
 
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def render_types_page(artifact: dict, variants_by_type, unions, options_by_path) -> str:
+    """Every section that takes a `type`, documented once: what each type accepts, as HOCON and as
+    a table, with the places in the configuration where the section occurs."""
+    lines = [
+        *frontmatter("Configuration types", "Sections of the Canton configuration that take a type, and the keys each type accepts."),
+        generated_marker(artifact),
+        "",
+        "Some sections are a choice between shapes. You pick one by setting a `type` key, and that "
+        "choice decides which other keys the section accepts; a key belonging to another type fails "
+        "startup. Each such section is documented here once and linked from every page it appears on. "
+        "Independent choices nest, so a type can contain further `type` keys; those link onward.",
+        "",
+    ]
+    for union in sorted(unions):
+        entry = unions[union]
+        variants = variants_by_type.get(union) or []
+        discriminator = min(entry["paths"], key=lambda path: (path.count("."), path))
+        section = discriminator.rsplit(".", 1)[0]
+        occurrences = sorted(path.rsplit(".", 1)[0] for path in entry["paths"])
+        lines += [f"## {union}", ""]
+        lines.append("Set `type` to one of " + ", ".join(f"`{tag}`" for tag in variants) + ".")
+        lines += ["", "Occurs at:", ""]
+        shown = occurrences[:8]
+        lines += [f"- `{path}`" for path in shown]
+        if len(occurrences) > len(shown):
+            lines.append(f"- … and {len(occurrences) - len(shown)} more")
+        lines.append("")
+        for tag in variants:
+            lines += [f"### `type = {tag}`", ""]
+            block, nested = render_variant_block(section, discriminator, tag, options_by_path)
+            lines += block
+            keys = applicable_keys(section, discriminator, tag, options_by_path)
+            if keys:
+                lines += ["| Key | Type | Default | Description |", "|---|---|---|---|"]
+                for relative, option in keys.items():
+                    lines.append(f"| `{relative}` | {render_type(option['valueType'])} | {render_default(option)} | {clean_prose(option.get('doc'))} |")
+                lines.append("")
+            if nested:
+                links = ", ".join(f"[{inner}]({union_link(inner)}) at `{path}`" for path, inner in nested.items())
+                lines += [f"Further types inside this one: {links}.", ""]
     return "\n".join(lines).rstrip() + "\n"
 
 
@@ -725,7 +891,15 @@ def render_overview(artifact: dict, buckets: "OrderedDict[str, list[dict]]") -> 
             f"    {blurb} {len(entries)} keys under `{prefix}`.",
             "  </Card>",
         ]
-    lines += ["</CardGroup>", "", "## How to read these pages", ""]
+    lines += [
+        f'  <Card title="Configuration types" href="{PAGE_URL_PREFIX}/{TYPES_PAGE}">',
+        "    Sections that take a `type`, with the keys each type accepts and an example of each.",
+        "  </Card>",
+        "</CardGroup>",
+        "",
+        "## How to read these pages",
+        "",
+    ]
     lines += reading_guide(artifact, None)
 
     lines += [
@@ -772,6 +946,7 @@ def render_pages(artifact: dict) -> "OrderedDict[str, str]":
         entries = buckets.get(prefix) or []
         if entries:
             pages[f"{slug(title)}.mdx"] = render_node_page(prefix, title, blurb, entries, artifact, variants_by_type, unions, options_by_path)
+    pages[f"{TYPES_PAGE}.mdx"] = render_types_page(artifact, variants_by_type, unions, options_by_path)
     return pages
 
 

@@ -69,17 +69,48 @@ def sample_artifact() -> dict:
 
 
 class CantonConfigReferenceTests(unittest.TestCase):
-    def test_union_renders_one_block_per_variant_inside_the_list(self) -> None:
-        pages = generator.render_pages(sample_artifact())
-        monitoring = pages["monitoring.mdx"]
-        # The label is relative to the `## metrics` section the example sits under.
-        self.assertIn("**`histograms[].aggregation`** supports these types: `buckets`, `exponential`.", monitoring)
+    def test_types_page_renders_one_block_per_variant_inside_the_list(self) -> None:
+        types = generator.render_pages(sample_artifact())["types.mdx"]
+        self.assertIn("## AggregationType", types)
+        self.assertIn("Set `type` to one of `buckets`, `exponential`.", types)
+        self.assertIn("- `canton.monitoring.metrics.histograms[].aggregation`", types)
         # The list belongs to `histograms`; the aggregation is an object inside an element of it.
-        self.assertIn("canton.monitoring.metrics.histograms = [\n  {\n    aggregation {\n      type = buckets\n      boundaries = [ ]   # required\n    }\n  }\n]", monitoring)
-        self.assertIn("      type = exponential\n      max-buckets = 0   # required\n      max-scale = 0   # required", monitoring)
-        # Alternatives are separate blocks, never siblings in one list; the third block is the
-        # section-level HOCON view that precedes them.
-        self.assertEqual(monitoring.count("```hocon"), 3)
+        self.assertIn("canton.monitoring.metrics.histograms = [\n  {\n    aggregation {\n      type = buckets\n      boundaries = [ ]   # required\n    }\n  }\n]", types)
+        self.assertIn("      type = exponential\n      max-buckets = 0   # required\n      max-scale = 0   # required", types)
+        # Alternatives are separate blocks, never siblings in one list.
+        self.assertEqual(types.count("```hocon"), 2)
+        # Each variant's keys are tabulated beneath its block.
+        self.assertIn("| `max-scale` | int | **required** |  |", types)
+
+    def test_required_section_says_when_and_links_types(self) -> None:
+        monitoring = generator.render_pages(sample_artifact())["monitoring.mdx"]
+        required = monitoring.split("## Required")[1].split("## All options")[0]
+        link = f"{generator.PAGE_URL_PREFIX}/types#aggregationtype"
+        self.assertIn("| `metrics.histograms[].name` | string | `metrics.histograms[]` is configured | Instrument name with wildcards * and ? |", required)
+        self.assertIn(
+            "| `metrics.histograms[].aggregation.type` | one of `buckets`, `exponential` | "
+            f"`metrics.histograms[].aggregation` is configured | Choose one type — see [AggregationType]({link}). |",
+            required,
+        )
+        self.assertIn(
+            "| `metrics.histograms[].aggregation.boundaries` | array of Double | "
+            "`metrics.histograms[].aggregation` is configured and `metrics.histograms[].aggregation.type` is `buckets` |",
+            required,
+        )
+        # Nothing that has a default appears here.
+        self.assertNotIn("| `metrics.histograms` |", required)
+        # The required view also has the skeleton as HOCON, first; variant-gated keys are commented
+        # with their condition so the block stays one valid document.
+        self.assertLess(required.index('<Tab title="HOCON">'), required.index('<Tab title="Table">'))
+        self.assertIn(
+            "canton.monitoring {\n  metrics {\n    histograms = [\n      {\n        aggregation {\n"
+            "          # boundaries = [ ]   # required when type = buckets\n"
+            "          # max-buckets = 0   # required when type = exponential\n"
+            "          # max-scale = 0   # required when type = exponential\n"
+            "          type = buckets|exponential   # required\n        }\n"
+            "        name = \"...\"   # required\n      }\n    ]\n  }\n}",
+            required,
+        )
 
     def test_sections_offer_hocon_first_then_table(self) -> None:
         monitoring = generator.render_pages(sample_artifact())["monitoring.mdx"]
@@ -92,9 +123,14 @@ class CantonConfigReferenceTests(unittest.TestCase):
             "    }\n  ]\n}",
             monitoring,
         )
-        # Variant-specific keys live only in their variant's block.
-        section_block = monitoring.split("```hocon")[1]
-        self.assertNotIn("boundaries", section_block)
+        # Variant-specific keys live on the types page, which the section links to; the only
+        # place they appear here is the commented required skeleton.
+        all_options = monitoring.split("## All options")[1]
+        self.assertNotIn("boundaries = [ ]", all_options)
+        self.assertIn(
+            f"Takes a `type`: [AggregationType]({generator.PAGE_URL_PREFIX}/types#aggregationtype) at `histograms[].aggregation`.",
+            monitoring,
+        )
 
     def test_table_groups_variant_keys_under_type_headers(self) -> None:
         monitoring = generator.render_pages(sample_artifact())["monitoring.mdx"]
@@ -102,7 +138,7 @@ class CantonConfigReferenceTests(unittest.TestCase):
         text = "\n".join(rows).replace(" ", ".")
         # Plain section header carries the discriminator row; variant headers carry their keys.
         self.assertIn("| ....**aggregation** |", text)
-        self.assertIn("| ........`type` | one of `buckets`, `exponential` | **required** | Selects which of the keys below apply; see the example above. |", text)
+        self.assertIn("| ........`type` | one of `buckets`, `exponential` | **required** | Choose one type — see [AggregationType](" + generator.PAGE_URL_PREFIX + "/types#aggregationtype). |", text)
         self.assertIn("| ....**aggregation** `type = buckets` |", text)
         self.assertIn("| ........`boundaries` | array of Double | **required** |  |", text)
         self.assertIn("| ....**aggregation** `type = exponential` |", text)
@@ -125,6 +161,7 @@ class CantonConfigReferenceTests(unittest.TestCase):
         for name in pages:
             if name != "overview.mdx":
                 self.assertIn(f'href="{generator.PAGE_URL_PREFIX}/{name[:-4]}"', overview)
+        self.assertIn("types.mdx", pages)
 
     def test_nav_insertion_is_idempotent_and_anchored(self) -> None:
         docs = {
