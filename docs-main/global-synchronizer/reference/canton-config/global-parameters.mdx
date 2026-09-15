@@ -1,0 +1,337 @@
+---
+title: "Global parameters"
+description: "Process-wide settings: clock, timeouts, startup behaviour."
+---
+
+{/* GENERATED_FROM source="digital-asset/canton" ref="9543a9170cbdaea12c1909dd1d96e8975b60bbdb" version="3.7.0-SNAPSHOT" path="docs-open/target/config-reference.json" */}
+
+Configuration under `canton.parameters` for Canton 3.7.0-SNAPSHOT: 71 keys. Part of the [Canton configuration reference](/global-synchronizer/reference/canton-config/overview).
+
+<Accordion title="How to read this page">
+
+Canton is configured with [HOCON](https://github.com/lightbend/config/blob/master/HOCON.md). Scala field names appear as lowercase-with-dashes, so `maxInboundMessageSize` is written `max-inbound-message-size`. **The key set is closed**: an unrecognised key fails startup rather than being ignored, so a typo is caught immediately.
+
+Paths are rooted at `canton`. Segments in angle brackets are names you choose:
+
+- `<skew>` — `user-chosen name of each entry under canton.parameters.clock.skews`
+
+A `[]` suffix marks the fields of a list element. Keys marked **alpha** or **beta** are not covered by compatibility guarantees.
+
+**Required** lists only what you must set, and when: always, when you configure a particular section, or when you have chosen a particular `type`. **All options** covers every key. Each part is shown as a pair: the HOCON as you would write it, every key with its default, followed by the same keys as a table with their descriptions. A key that only applies under a particular `type` appears in the HOCON as a comment carrying that condition; in the table a **bold** row names a section and the keys indented beneath it live inside it.
+
+Some sections take a `type` that decides which other keys they accept. Those are documented once on the [types page](/global-synchronizer/reference/canton-config/types) and linked from wherever they occur.
+
+In the Default column:
+
+- a value is what the key holds when you do not set it;
+- **required** means startup fails unless you set it;
+- _unset_ means the feature is off, or the surrounding section is absent, until you set it;
+- † marks a value assigned while the configuration loads (a port, for example). The number shown is an example from the environment the defaults were captured in, not a guaranteed default;
+- ‡ marks a default written as an expression in the source that has not been evaluated; the expression is shown so you can find it;
+- ◊ marks a field that declares one default but was seen holding another in a running configuration, because the section that builds it passes an explicit value. Both are shown.
+
+</Accordion>
+
+## Required
+
+```hocon
+canton.parameters {
+  clock {
+    remote-api {
+      channel {
+        # max-inbound-message-size = 0   # required when clock.type = remote-clock
+        # trace-context-propagation = enabled|disabled   # required when clock.type = remote-clock
+      }
+      # port = 0   # required when clock.type = remote-clock
+      tls {
+        client-cert {
+          cert-chain-file {
+            # pem-bytes = "..."   # required when type = pem-string and clock.type = remote-clock
+            # pem-file = "/path/to/file"   # required when type = pem-file and clock.type = remote-clock
+            # type = pem-file|pem-string   # required when clock.type = remote-clock
+          }
+          # private-key-file = "..."   # required when clock.type = remote-clock
+        }
+        trust-collection-file {
+          # pem-bytes = "..."   # required when type = pem-string and clock.type = remote-clock
+          # pem-file = "/path/to/file"   # required when type = pem-file and clock.type = remote-clock
+          # type = pem-file|pem-string   # required when clock.type = remote-clock
+        }
+      }
+    }
+    type = sim-clock|wall-clock|remote-clock   # required
+  }
+  startup-memory-check-config {
+    reporting-level = warn|ignore|crash   # required
+  }
+}
+```
+
+| Key | Type | Required when | Description |
+|---|---|---|---|
+| `clock.remote-api.channel.max-inbound-message-size` | int (NonNegativeInt) | `clock.remote-api.channel` is configured and `clock.type` is `remote-clock` |  |
+| `clock.remote-api.channel.trace-context-propagation` | one of `enabled`, `disabled` | `clock.remote-api.channel` is configured and `clock.type` is `remote-clock` |  |
+| `clock.remote-api.port` | int (Port) | `clock.remote-api` is configured and `clock.type` is `remote-clock` |  |
+| `clock.remote-api.tls.client-cert.cert-chain-file.pem-bytes` | string | `clock.remote-api.tls.client-cert.cert-chain-file` is configured and `clock.remote-api.tls.client-cert.cert-chain-file.type` is `pem-string` and `clock.type` is `remote-clock` |  |
+| `clock.remote-api.tls.client-cert.cert-chain-file.pem-file` | path (ExistingFile) | `clock.remote-api.tls.client-cert.cert-chain-file` is configured and `clock.remote-api.tls.client-cert.cert-chain-file.type` is `pem-file` and `clock.type` is `remote-clock` |  |
+| `clock.remote-api.tls.client-cert.cert-chain-file.type` | one of `pem-file`, `pem-string` | `clock.remote-api.tls.client-cert.cert-chain-file` is configured and `clock.type` is `remote-clock` | Choose one type — see [PemFileOrString](/global-synchronizer/reference/canton-config/types#pemfileorstring). |
+| `clock.remote-api.tls.client-cert.private-key-file` | string (PemFile) | `clock.remote-api.tls.client-cert` is configured and `clock.type` is `remote-clock` |  |
+| `clock.remote-api.tls.trust-collection-file.pem-bytes` | string | `clock.remote-api.tls.trust-collection-file` is configured and `clock.remote-api.tls.trust-collection-file.type` is `pem-string` and `clock.type` is `remote-clock` |  |
+| `clock.remote-api.tls.trust-collection-file.pem-file` | path (ExistingFile) | `clock.remote-api.tls.trust-collection-file` is configured and `clock.remote-api.tls.trust-collection-file.type` is `pem-file` and `clock.type` is `remote-clock` |  |
+| `clock.remote-api.tls.trust-collection-file.type` | one of `pem-file`, `pem-string` | `clock.remote-api.tls.trust-collection-file` is configured and `clock.type` is `remote-clock` | Choose one type — see [PemFileOrString](/global-synchronizer/reference/canton-config/types#pemfileorstring). |
+| `clock.type` | one of `sim-clock`, `wall-clock`, `remote-clock` | `clock` is configured | Choose one type — see [ClockConfig](/global-synchronizer/reference/canton-config/types#clockconfig). |
+| `startup-memory-check-config.reporting-level` | one of `warn`, `ignore`, `crash` | `startup-memory-check-config` is configured |  |
+
+## All options
+
+### Top-level keys
+
+```hocon
+canton.parameters {
+  alpha-version-support = false
+  beta-version-support = false
+  dev-version-support = false
+  enable-additional-consistency-checks = false
+  enable-alpha-state-via-config = false
+  exit-on-fatal-failures = true
+  fail-on-unknown-config-keys = true
+  manual-start = false
+  non-standard-config = false
+  # ports-file = <string>
+  # startup-parallelism = <int>
+  # state-refresh-interval = <duration>
+}
+```
+
+Takes a `type`: [PemFileOrString](/global-synchronizer/reference/canton-config/types#pemfileorstring) at `clock.remote-api.tls.trust-collection-file`, [ClockConfig](/global-synchronizer/reference/canton-config/types#clockconfig) at `clock`.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `alpha-version-support` **alpha** | boolean | `false` | If true, allow synchronizer nodes to use alpha protocol versions and participant nodes to connect to such synchronizers |
+| `beta-version-support` **beta** | boolean | `false` | If true, allow synchronizer nodes to use beta protocol versions and participant nodes to connect to such synchronizers |
+| `dev-version-support` | boolean | `false` | If true, allow synchronizer nodes to use dev protocol versions and participant nodes to connect to such synchronizers |
+| `enable-additional-consistency-checks` | boolean | `false` (in practice `true`) ◊ | if true, run additional consistency checks. This will degrade performance. |
+| `enable-alpha-state-via-config` **alpha** | boolean | `false` | If true, we will start the declarative api functionality |
+| `exit-on-fatal-failures` | boolean | `true` (in practice `false`) ◊ | If true the node will exit/stop the process in case of fatal failures |
+| `fail-on-unknown-config-keys` | boolean | `true` | If set to true, config parsing fails when unknown keys are read provided that non-standard-config is enabled. Default: true. Should not be used in production. |
+| `manual-start` | boolean | `false` | If set to true, the nodes have to be manually started via console (default false) |
+| `non-standard-config` | boolean | `false` (in practice `true`) ◊ | don't fail config validation on non-standard configuration settings |
+| `ports-file` | string | _unset_ | A ports file name, where the ports of all participants will be written to after startup |
+| `startup-parallelism` | int (PositiveInt) | _unset_ | Start up to N nodes in parallel (default is num-threads) |
+| `state-refresh-interval` | duration (NonNegativeFiniteDuration) | _unset_ | If configured, the config file will be reread in the given interval to allow dynamic properties to be picked up immediately |
+
+### `clock`
+
+```hocon
+canton.parameters.clock {
+  remote-api {
+    # address = "127.0.0.1"   # when type = remote-clock
+    channel {
+      # flow-control-window = <int>   # when type = remote-clock
+      # initial-flow-control-window = <int>   # when type = remote-clock
+      keep-alive-client {
+        # idle-timeout = "30 minutes"   # when type = remote-clock
+        # keep-alive-without-calls = false   # when type = remote-clock
+        # time = "40 seconds"   # when type = remote-clock
+        # timeout = "15 seconds"   # when type = remote-clock
+      }
+      # max-inbound-message-size = 0   # required when type = remote-clock
+      # trace-context-propagation = enabled|disabled   # required when type = remote-clock
+    }
+    # port = 0   # required when type = remote-clock
+    tls {
+      client-cert {
+        cert-chain-file {
+          # pem-bytes = "..."   # required when type = remote-clock and type = pem-string
+          # pem-file = "/path/to/file"   # required when type = remote-clock and type = pem-file
+          # type = pem-file|pem-string   # required when type = remote-clock
+        }
+        # private-key-file = "..."   # required when type = remote-clock
+      }
+      # enabled = true   # when type = remote-clock
+      trust-collection-file {
+        # pem-bytes = "..."   # required when type = remote-clock and type = pem-string
+        # pem-file = "/path/to/file"   # required when type = remote-clock and type = pem-file
+        # type = pem-file|pem-string   # required when type = remote-clock
+      }
+    }
+  }
+  skews {
+    # <skew> = [ ]   # when type = wall-clock
+  }
+  type = sim-clock|wall-clock|remote-clock   # required
+}
+```
+
+Takes a `type`: [PemFileOrString](/global-synchronizer/reference/canton-config/types#pemfileorstring) at `remote-api.tls.trust-collection-file`, [ClockConfig](/global-synchronizer/reference/canton-config/types#clockconfig) at `.`.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `type` | one of `sim-clock`, `wall-clock`, `remote-clock` | `wall-clock` † | Choose one type — see [ClockConfig](/global-synchronizer/reference/canton-config/types#clockconfig). |
+| **clock** `type = wall-clock` |  |  |  |
+|     **skews** |  |  |  |
+|         `<skew>` | duration | `[]` | map of clock skews, indexed by node name (used for testing, default empty) Any node whose name is contained in the map will use a WallClock, but the time of the clock will by shifted by the associated duration, which can be positive or negative. The clock shift will be constant during the life of the node. |
+| **clock** `type = remote-clock` |  |  |  |
+|     **remote-api** |  |  |  |
+|         `address` | string | `127.0.0.1` |  |
+|         `port` | int (Port) | **required** |  |
+|         **channel** |  |  |  |
+|             `flow-control-window` | int (PositiveInt) | _unset_ | Switches to manual gRPC flow control and sets its window; if `None`, then it is not configured and the implementation default is used. At most one of `flowControlWindow` and `initialFlowControlWindow` can be set. |
+|             `initial-flow-control-window` | int (PositiveInt) | _unset_ | Switches to automatic gRPC flow control and sets its initial window; if `None`, then it is not configured and the implementation default is used. At most one of `flowControlWindow` and `initialFlowControlWindow` can be set. |
+|             `max-inbound-message-size` | int (NonNegativeInt) | **required** |  |
+|             `trace-context-propagation` | one of `enabled`, `disabled` | **required** |  |
+|             **keep-alive-client** |  |  |  |
+|                 `idle-timeout` | duration (NonNegativeFiniteDuration) | `30 minutes` | If there are no RPCs during this duration, the channel will close all connections and switch to Idle state (default is 30 min) |
+|                 `keep-alive-without-calls` | boolean | `false` | Enables sending of keep alive even when there are no RPCs on the channel (default to false). This increases network resource consumption for idle connections and requires the server to enable permitKeepAliveWithoutCalls. Prefer using idleTimeout. |
+|                 `time` | duration (NonNegativeFiniteDuration) | `40 seconds` | Sets the time without read activity before sending a keepalive ping. Do not set to small numbers (default is 40s) |
+|                 `timeout` | duration (NonNegativeFiniteDuration) | `15 seconds` | Sets the time waiting for read activity after sending a keepalive ping (default is 15s). The default timeout was previously 20s and was lowered to 15s, because besides configuring the gRPC KeepAliveManager, it also sets up the socket's TCP_USER_TIMEOUT (see html). 15s gives a larger margin to detect a faulty connection earlier and retry a submission on another sequencer via amplification, thereby avoiding a request failure. |
+|         **tls** |  |  |  |
+|             `enabled` | boolean | `true` | allows enabling TLS without `trustCollectionFile` or `clientCert` |
+|             **client-cert** |  |  |  |
+|                 `private-key-file` | string (PemFile) | **required** |  |
+|                 **cert-chain-file** |  |  |  |
+|                     `type` | one of `pem-file`, `pem-string` | **required** | Choose one type — see [PemFileOrString](/global-synchronizer/reference/canton-config/types#pemfileorstring). A class representing either an existing PEM file path or an inlined PEM string for configuration file fields |
+|                 **cert-chain-file** `type = pem-file` |  |  |  |
+|                     `pem-file` | path (ExistingFile) | **required** |  |
+|                 **cert-chain-file** `type = pem-string` |  |  |  |
+|                     `pem-bytes` | string | **required** |  |
+|             **trust-collection-file** |  |  |  |
+|                 `type` | one of `pem-file`, `pem-string` | **required** | Choose one type — see [PemFileOrString](/global-synchronizer/reference/canton-config/types#pemfileorstring). A class representing either an existing PEM file path or an inlined PEM string for configuration file fields |
+|             **trust-collection-file** `type = pem-file` |  |  |  |
+|                 `pem-file` | path (ExistingFile) | **required** |  |
+|             **trust-collection-file** `type = pem-string` |  |  |  |
+|                 `pem-bytes` | string | **required** |  |
+
+### `console`
+
+```hocon
+canton.parameters.console {
+  cache-dir = "/home/circleci/.ammonite"
+  colors = true
+  default-limit = 1000
+  verbose = false
+  # working-dir = <path>
+}
+```
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `cache-dir` | path | `/home/circleci/.ammonite` | cache dir, defaults to ~/.ammonite. If none is given, in-memory is used. If you specify a cache dir, the Canton repl will startup faster. In our tests, we have very rarely observed unexpected compile errors when the cache was enabled; if you want to avoid that, set the cache dir to None (i.e. `cache-dir = null` in the config file). |
+| `colors` | boolean | `true` | if true (default), we'll use color output |
+| `default-limit` | int (PositiveInt) | `1000` | default limit parameter for commands that can potentially return many results |
+| `verbose` | boolean | `false` | if true (not default), we'll emit verbose ammonite output |
+| `working-dir` | path | _unset_ | working directory. if none is given, we'll use the working directory of the Canton process |
+
+### `retention-period-defaults`
+
+```hocon
+canton.parameters.retention-period-defaults {
+  mediator = "7 days"
+  sequencer = "7 days"
+}
+```
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `mediator` | duration (NonNegativeFiniteDuration) | `7 days` |  |
+| `sequencer` | duration (NonNegativeFiniteDuration) | `7 days` |  |
+
+### `startup-memory-check-config`
+
+```hocon
+canton.parameters.startup-memory-check-config {
+  reporting-level = warn|ignore|crash   # required
+}
+```
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `reporting-level` | one of `warn`, `ignore`, `crash` | `warn` † |  |
+
+### `threading`
+
+```hocon
+canton.parameters.threading {
+  # core-pool-size = <int>
+  keep-alive = "60 seconds"
+  max-extra-threads = 256
+  # max-pool-size = <int>
+  # min-runnable = <int>
+  # mutex-max-spins = <int>
+  # parallelism = <int>
+}
+```
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `core-pool-size` | int (PositiveInt) | _unset_ |  |
+| `keep-alive` | duration (NonNegativeFiniteDuration) | `60 seconds` | Keep alive time for fork-join pool excess threads. |
+| `max-extra-threads` | int (PositiveInt) | `256` |  |
+| `max-pool-size` | int (PositiveInt) | _unset_ |  |
+| `min-runnable` | int (PositiveInt) | _unset_ |  |
+| `mutex-max-spins` | int (PositiveInt) | _unset_ | Tweak the number of spins we want to run before parking the thread |
+| `parallelism` | int (PositiveInt) | _unset_ | Number of CPU cores to use for the main ec (derived automatically by default) |
+
+### `timeouts`
+
+```hocon
+canton.parameters.timeouts {
+  console {
+    bounded = "1 minute"
+    ledger-command = "1 minute"
+    ping = "30 seconds"
+    testing-bong = "1 minute"
+    unbounded = "3 minutes"
+  }
+  processing {
+    active-init = "1 minute"
+    active-init-retry-delay = "50 milliseconds"
+    # admin-stream-open-bound = <duration>
+    closing = "2 minutes"
+    default = "1 minute"
+    dynamic-state-consistency-timeout = "60 seconds"
+    inspection = "Inf"
+    io = "Inf"
+    network = "2 minutes"
+    sequenced-event-processing-bound = "1 day"
+    sequencer-info = "30 seconds"
+    shutdown-network = "9 seconds"
+    shutdown-processing = "1 minute"
+    shutdown-short = "5 seconds"
+    slow-future-warn = "5 seconds"
+    storage-max-retry-interval = "10 seconds"
+    topology-change-warn-delay = "2 minutes"
+    unbounded = "3 minutes"
+    verify-active = "60 seconds"
+  }
+}
+```
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| **console** |  |  |  |
+|     `bounded` | duration (NonNegativeDuration) | `1 minute` | timeout on how long "bounded" operations, i.e. operations which normally are supposed to conclude in a fixed timeframe can run before the console considers them as failed. |
+|     `ledger-command` | duration (NonNegativeDuration) | `1 minute` | default timeout used for ledger commands |
+|     `ping` | duration (NonNegativeDuration) | `30 seconds` | default ping timeout |
+|     `testing-bong` | duration (NonNegativeDuration) | `1 minute` | default bong timeout |
+|     `unbounded` | duration (NonNegativeDuration) | `3 minutes` | timeout on how long "unbounded" operations can run, potentially infinite. |
+| **processing** |  |  |  |
+|     `active-init` | duration (NonNegativeDuration) | `1 minute` | how long a passive replica should wait for the initialization by the active replica |
+|     `active-init-retry-delay` | duration (NonNegativeDuration) | `50 milliseconds` | delay between attempts while waiting for initialization of the active replica |
+|     `admin-stream-open-bound` | duration (NonNegativeDuration) | `DefaultProcessingTimeouts.adminStreamOpenBound` ‡ | maximum time an admin API streaming call may remain open |
+|     `closing` | duration (NonNegativeDuration) | `2 minutes` | our closing time (which should be strictly larger than any of the shutdown values) |
+|     `default` | duration (NonNegativeDuration) | `1 minute` | default finite processing timeout |
+|     `dynamic-state-consistency-timeout` | duration (NonNegativeDuration) | `60 seconds` | Timeout for dynamic state consistency checks. When we apply some state changes, we sometimes need to wait until they are applied to the entire node. |
+|     `inspection` | duration (NonNegativeDuration) | `Inf` | timeout for the storage inspection commands (can run a long long time) |
+|     `io` | duration (NonNegativeDuration) | `Inf` | timeout for disk based operations |
+|     `network` | duration (NonNegativeDuration) | `2 minutes` | timeout for things related to networking |
+|     `sequenced-event-processing-bound` | duration (NonNegativeDuration) | `1 day` | Maximum time we allow for locally processing a sequenced event. If local processing takes longer, the node will emit an error or crash. |
+|     `sequencer-info` | duration (NonNegativeDuration) | `30 seconds` | how long are we going to try to get the sequencer connection information. setting this high means that connect calls will take quite a while if one of the sequencers is offline. |
+|     `shutdown-network` | duration (NonNegativeDuration) | `9 seconds` | timeout used for shutdown where we interact with some remote system |
+|     `shutdown-processing` | duration (NonNegativeDuration) | `1 minute` | timeout used for shutdown of some processing where we'd like to keep the result (long) |
+|     `shutdown-short` | duration (NonNegativeDuration) | `5 seconds` | everything else shutdown releated (default) |
+|     `slow-future-warn` | duration (NonNegativeDuration) | `5 seconds` | when using future supervision, when should we start to warn about a slow future |
+|     `storage-max-retry-interval` | duration (NonNegativeDuration) | `10 seconds` | max retry interval for storage |
+|     `topology-change-warn-delay` | duration (NonNegativeDuration) | `2 minutes` | maximum delay between the timestamp of the topology snapshot used during submission and the sequencing timestamp, after which we log inconsistency errors as warnings |
+|     `unbounded` | duration (NonNegativeDuration) | `3 minutes` | timeout on how long "unbounded" operations can run. should be infinite in theory. |
+|     `verify-active` | duration (NonNegativeDuration) | `60 seconds` | how long should we wait for the synchronizer to tell us whether we are active or not |

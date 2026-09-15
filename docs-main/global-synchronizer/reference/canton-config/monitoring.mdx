@@ -1,0 +1,370 @@
+---
+title: "Monitoring"
+description: "Logging, metrics, tracing and health checks."
+---
+
+{/* GENERATED_FROM source="digital-asset/canton" ref="9543a9170cbdaea12c1909dd1d96e8975b60bbdb" version="3.7.0-SNAPSHOT" path="docs-open/target/config-reference.json" */}
+
+Configuration under `canton.monitoring` for Canton 3.7.0-SNAPSHOT: 94 keys. Part of the [Canton configuration reference](/global-synchronizer/reference/canton-config/overview).
+
+<Accordion title="How to read this page">
+
+Canton is configured with [HOCON](https://github.com/lightbend/config/blob/master/HOCON.md). Scala field names appear as lowercase-with-dashes, so `maxInboundMessageSize` is written `max-inbound-message-size`. **The key set is closed**: an unrecognised key fails startup rather than being ignored, so a typo is caught immediately.
+
+Paths are rooted at `canton`. Segments in angle brackets are names you choose:
+
+- `<additional-header>` — `user-chosen name of each entry under canton.monitoring.tracing.tracer.exporter.additional-headers`
+
+A `[]` suffix marks the fields of a list element. Keys marked **alpha** or **beta** are not covered by compatibility guarantees.
+
+**Required** lists only what you must set, and when: always, when you configure a particular section, or when you have chosen a particular `type`. **All options** covers every key. Each part is shown as a pair: the HOCON as you would write it, every key with its default, followed by the same keys as a table with their descriptions. A key that only applies under a particular `type` appears in the HOCON as a comment carrying that condition; in the table a **bold** row names a section and the keys indented beneath it live inside it.
+
+Some sections take a `type` that decides which other keys they accept. Those are documented once on the [types page](/global-synchronizer/reference/canton-config/types) and linked from wherever they occur.
+
+In the Default column:
+
+- a value is what the key holds when you do not set it;
+- **required** means startup fails unless you set it;
+- _unset_ means the feature is off, or the surrounding section is absent, until you set it;
+- † marks a value assigned while the configuration loads (a port, for example). The number shown is an example from the environment the defaults were captured in, not a guaranteed default;
+- ‡ marks a default written as an expression in the source that has not been evaluated; the expression is shown so you can find it;
+- ◊ marks a field that declares one default but was seen holding another in a running configuration, because the section that builds it passes an explicit value. Both are shown.
+
+</Accordion>
+
+## Required
+
+```hocon
+canton.monitoring {
+  logging {
+    query-cost {
+      every = "30 seconds"   # required
+    }
+  }
+  metrics {
+    histograms = [
+      {
+        aggregation {
+          # boundaries = [ ]   # required when type = buckets
+          # max-buckets = 0   # required when type = exponential
+          # max-scale = 0   # required when type = exponential
+          type = buckets|exponential   # required
+        }
+        name = "..."   # required
+      }
+    ]
+    reporters = [
+      {
+        auth {
+          # client-id = "..."   # required when metrics.reporters[].type = otlp
+          # client-secret = "..."   # required when metrics.reporters[].type = otlp
+          # token-url = "..."   # required when metrics.reporters[].type = otlp
+          # type = oauth-client-credentials   # required when metrics.reporters[].type = otlp
+        }
+        # directory = "/path/to/file"   # required when type = csv
+        type = prometheus|otlp|csv|logging   # required
+      }
+    ]
+  }
+  tracing {
+    tracer {
+      exporter {
+        type = disabled|zipkin|otlp   # required
+      }
+      sampler {
+        # ratio = 0   # required when type = trace-id-ratio
+        type = always-on|always-off|trace-id-ratio   # required
+      }
+    }
+  }
+}
+```
+
+| Key | Type | Required when | Description |
+|---|---|---|---|
+| `logging.query-cost.every` | duration (NonNegativeFiniteDuration) | `logging.query-cost` is configured | determines the duration between reports |
+| `metrics.histograms[].aggregation.boundaries` | array of Double | `metrics.histograms[].aggregation` is configured and `metrics.histograms[].aggregation.type` is `buckets` |  |
+| `metrics.histograms[].aggregation.max-buckets` | int | `metrics.histograms[].aggregation` is configured and `metrics.histograms[].aggregation.type` is `exponential` |  |
+| `metrics.histograms[].aggregation.max-scale` | int | `metrics.histograms[].aggregation` is configured and `metrics.histograms[].aggregation.type` is `exponential` |  |
+| `metrics.histograms[].aggregation.type` | one of `buckets`, `exponential` | `metrics.histograms[].aggregation` is configured | Choose one type — see [AggregationType](/global-synchronizer/reference/canton-config/types#aggregationtype). |
+| `metrics.histograms[].name` | string | `metrics.histograms[]` is configured | Instrument name that may contain the wildcard characters * and ? |
+| `metrics.reporters[].auth.client-id` | string | `metrics.reporters[].auth` is configured and `metrics.reporters[].type` is `otlp` |  |
+| `metrics.reporters[].auth.client-secret` | string | `metrics.reporters[].auth` is configured and `metrics.reporters[].type` is `otlp` |  |
+| `metrics.reporters[].auth.token-url` | string | `metrics.reporters[].auth` is configured and `metrics.reporters[].type` is `otlp` |  |
+| `metrics.reporters[].auth.type` | one of `oauth-client-credentials` | `metrics.reporters[].auth` is configured and `metrics.reporters[].type` is `otlp` | Choose one type — see [OtlpAuth](/global-synchronizer/reference/canton-config/types#otlpauth). |
+| `metrics.reporters[].directory` | path | `metrics.reporters[]` is configured and `metrics.reporters[].type` is `csv` | where to write the csv files to |
+| `metrics.reporters[].type` | one of `prometheus`, `otlp`, `csv`, `logging` | `metrics.reporters[]` is configured | Choose one type — see [MetricsReporterConfig](/global-synchronizer/reference/canton-config/types#metricsreporterconfig). |
+| `tracing.tracer.exporter.type` | one of `disabled`, `zipkin`, `otlp` | `tracing.tracer.exporter` is configured | Choose one type — see [Exporter](/global-synchronizer/reference/canton-config/types#exporter). |
+| `tracing.tracer.sampler.ratio` | number | `tracing.tracer.sampler` is configured and `tracing.tracer.sampler.type` is `trace-id-ratio` |  |
+| `tracing.tracer.sampler.type` | one of `always-on`, `always-off`, `trace-id-ratio` | `tracing.tracer.sampler` is configured | Choose one type — see [Sampler](/global-synchronizer/reference/canton-config/types#sampler). |
+
+## All options
+
+### Top-level keys
+
+```hocon
+canton.monitoring {
+  dump-num-rolling-log-files = 0
+  sanitize-public-error-messages = true
+}
+```
+
+Takes a `type`: [AggregationType](/global-synchronizer/reference/canton-config/types#aggregationtype) at `metrics.histograms[].aggregation`, [OtlpAuth](/global-synchronizer/reference/canton-config/types#otlpauth) at `metrics.reporters[].auth`, [MetricsReporterConfig](/global-synchronizer/reference/canton-config/types#metricsreporterconfig) at `metrics.reporters[]`, [Exporter](/global-synchronizer/reference/canton-config/types#exporter) at `tracing.tracer.exporter`, [Sampler](/global-synchronizer/reference/canton-config/types#sampler) at `tracing.tracer.sampler`.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `dump-num-rolling-log-files` | int (NonNegativeInt) | `0` | How many of the rolling log files should be included in the remote dump. Default is 0. |
+| `sanitize-public-error-messages` | boolean | `true` | Specifies whether the system should redact error messages sent to clients. By default, Canton redacts error information to maintain a secure baseline. This flag allows for disabling of the redaction to provide detailed diagnostic data, but currently only affects supported services (such as the SequencerConnectService). For all other endpoints, standard baseline redaction remains in effect regardless of this setting. This feature must be enabled in production environments to prevent information leakage and ensure system security. |
+
+### `deadlock-detection`
+
+```hocon
+canton.monitoring.deadlock-detection {
+  enabled = true
+  interval = "3 seconds"
+  warn-interval = "10 seconds"
+}
+```
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `enabled` | boolean | `true` | if true, we'll monitor the EC for deadlocks (or slow processings) |
+| `interval` | duration (NonNegativeFiniteDuration) | `3 seconds` | how often we check the EC |
+| `warn-interval` | duration (NonNegativeFiniteDuration) | `10 seconds` | how often we report a deadlock as still being active |
+
+### `logging`
+
+```hocon
+canton.monitoring.logging {
+  api {
+    debug-in-process-requests = false
+    max-message-lines = 20
+    max-metadata-size = 200
+    max-method-length = 30
+    max-string-length = 250
+    message-payloads = false
+    prefix-grpc-addresses = true
+    warn-beyond-load = 5
+  }
+  delay-logging-threshold = "20 seconds"
+  event-details = false
+  jvm-gc {
+    debug-level = false
+    details = true
+    enabled = false
+    filter = ""
+  }
+  log-config-on-startup = true
+  log-config-with-defaults = false
+  log-slow-futures = false
+  query-cost {
+    every = "30 seconds"   # required
+    log-lines = 15
+    log-operations = false
+    reset-on-output = true
+    sort-by = total
+  }
+}
+```
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `delay-logging-threshold` | duration (NonNegativeFiniteDuration) | `20 seconds` | Logs a warning message once the sequencer client falls behind in processing messages from the sequencer (based on the sequencing timestamp). |
+| `event-details` | boolean | `false` | If set to true, we will log substantial details of internal messages being processed. To be disabled in production! |
+| `log-config-on-startup` | boolean | `true` | If set to true (default), it will log the config on startup (omitting sensitive details) |
+| `log-config-with-defaults` | boolean | `false` | If set to true (default false), the default values of the config will be included |
+| `log-slow-futures` | boolean | `false` (in practice `true`) ◊ | Whether we should active log slow futures (where instructed) |
+| **api** |  |  |  |
+|     `debug-in-process-requests` | boolean | `false` | grpc in-process communication is logged with DEBUG level otherwise only in TRACE |
+|     `max-message-lines` | int | `20` | maximum number of lines to log for a message |
+|     `max-metadata-size` | int | `200` | maximum size of metadata |
+|     `max-method-length` | int | `30` | indicates how much to abbreviate the name of the called method. E.g. "com.digitalasset.canton.MyMethod" may get abbreviated to "c.d.c.MyMethod". The last token will never get abbreviated. |
+|     `max-string-length` | int | `250` | maximum number of characters to log for a string within a message |
+|     `message-payloads` | boolean | `false` (in practice `true`) ◊ | Indicates whether to log message payloads. (To be disabled in production!) Also applies to metadata. |
+|     `prefix-grpc-addresses` | boolean | `true` | Prefix connecting gRPC client addresses with "grpc:" (default: true, false for full backwards compatibility). http is always prefixed with "http:" |
+|     `warn-beyond-load` | int | `5` (in practice `10000`) ◊ | If API logging is turned on, emit a warning on each request if the load exceeds this threshold. |
+| **jvm-gc** |  |  |  |
+|     `debug-level` | boolean | `false` | If true, the logging will happen on debug level, else info |
+|     `details` | boolean | `true` | If set to true (default), the memory details will be included |
+|     `enabled` | boolean | `false` | If set to true, the JVM GC logging will be enabled |
+|     `filter` | string | `""` | An optional filter string to filter for particular GC events |
+| **query-cost** |  |  |  |
+|     `every` | duration (NonNegativeFiniteDuration) | `30 seconds` † | determines the duration between reports |
+|     `log-lines` | int (PositiveInt) | `15` | determines how many lines will be logged, default 15 |
+|     `log-operations` | boolean | `false` | if true (default false), log every query operation |
+|     `reset-on-output` | boolean | `true` | determines whether the statistics will be reset after creating a report |
+|     `sort-by` | one of `count`, `mean`, `total`, `std-dev` | `total` | determines the sorting of the output (default total) |
+
+### `metrics`
+
+```hocon
+canton.monitoring.metrics {
+  cardinality = 2000
+  histograms = [
+    {
+      aggregation {
+        # boundaries = [ ]   # required when type = buckets
+        # max-buckets = 0   # required when type = exponential
+        # max-scale = 0   # required when type = exponential
+        type = buckets|exponential   # required
+      }
+      name = "..."   # required
+      # view-name = <string>
+    }
+  ]
+  jvm-metrics {
+    buffers = true
+    classes = true
+    cpu = true
+    enabled = false
+    experimental = false
+    gc = true
+    memory-pools = true
+    threads = true
+  }
+  qualifiers = [ ]
+  reporters = [
+    {
+      # address = "localhost"   # when type = prometheus
+      auth {
+        # client-id = "..."   # required when reporters[].type = otlp
+        # client-secret = "..."   # required when reporters[].type = otlp
+        # scope = <string>   # when reporters[].type = otlp
+        # token-url = "..."   # required when reporters[].type = otlp
+        # type = oauth-client-credentials   # required when reporters[].type = otlp
+      }
+      # context-keys = [ ]   # when type = csv
+      # directory = "/path/to/file"   # required when type = csv
+      # endpoint = "http://localhost:4317"   # when type = otlp
+      filters = [
+        {
+          contains = ""
+          ends-with = ""
+          starts-with = ""
+        }
+      ]
+      # interval = "10 seconds"   # when type = otlp
+      # log-as-info = true   # when type = logging
+      # port = 9464   # when type = prometheus
+      # protocol = grpc   # when type = otlp
+      type = prometheus|otlp|csv|logging   # required
+    }
+  ]
+}
+```
+
+Takes a `type`: [AggregationType](/global-synchronizer/reference/canton-config/types#aggregationtype) at `histograms[].aggregation`, [OtlpAuth](/global-synchronizer/reference/canton-config/types#otlpauth) at `reporters[].auth`, [MetricsReporterConfig](/global-synchronizer/reference/canton-config/types#metricsreporterconfig) at `reporters[]`.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `cardinality` | int (PositiveInt) | `2000` |  |
+| `histograms` | array of HistogramDefinition | `[]` | customized histogram definitions |
+| `qualifiers` | array of MetricQualification | `errors, latency, saturation, traffic` | which metric qualifiers to include generally. by default, all except Debug metrics are included. The qualifier filtering takes precedence over the individual reporter filters |
+| `reporters` | array of MetricsReporterConfig | `[]` | which reports should be used to report metric output |
+| **histograms[]** |  |  |  |
+|     `name` | string | **required** | Instrument name that may contain the wildcard characters * and ? |
+|     `view-name` | string | _unset_ |  |
+|     **aggregation** |  |  |  |
+|         `type` | one of `buckets`, `exponential` | **required** | Choose one type — see [AggregationType](/global-synchronizer/reference/canton-config/types#aggregationtype). |
+|     **aggregation** `type = buckets` |  |  |  |
+|         `boundaries` | array of Double | **required** |  |
+|     **aggregation** `type = exponential` |  |  |  |
+|         `max-buckets` | int | **required** |  |
+|         `max-scale` | int | **required** |  |
+| **jvm-metrics** |  |  |  |
+|     `buffers` **deprecated** | boolean | `true` |  |
+|     `classes` **deprecated** | boolean | `true` |  |
+|     `cpu` **deprecated** | boolean | `true` |  |
+|     `enabled` | boolean | `false` |  |
+|     `experimental` | boolean | `false` |  |
+|     `gc` **deprecated** | boolean | `true` |  |
+|     `memory-pools` **deprecated** | boolean | `true` |  |
+|     `threads` **deprecated** | boolean | `true` |  |
+| **reporters[]** |  |  |  |
+|     `type` | one of `prometheus`, `otlp`, `csv`, `logging` | **required** | Choose one type — see [MetricsReporterConfig](/global-synchronizer/reference/canton-config/types#metricsreporterconfig). |
+|     **filters[]** |  |  |  |
+|         `contains` | string | `""` |  |
+|         `ends-with` | string | `""` |  |
+|         `starts-with` | string | `""` |  |
+| **reporters[]** `type = prometheus` |  |  |  |
+|     `address` | string | `localhost` |  |
+|     `filters` | array of MetricsFilterConfig | `[]` |  |
+|     `port` | int (Port) | `9464` |  |
+| **reporters[]** `type = otlp` |  |  |  |
+|     `endpoint` | string | `http://localhost:4317` |  |
+|     `filters` | array of MetricsFilterConfig | `[]` |  |
+|     `interval` | duration (NonNegativeFiniteDuration) | `10 seconds` |  |
+|     `protocol` | one of `grpc`, `http-protobuf` | `grpc` |  |
+|     **auth** |  |  |  |
+|         `client-id` | string | **required** |  |
+|         `client-secret` | string | **required** |  |
+|         `scope` | string | _unset_ |  |
+|         `token-url` | string | **required** |  |
+|         `type` | one of `oauth-client-credentials` | **required** | Choose one type — see [OtlpAuth](/global-synchronizer/reference/canton-config/types#otlpauth). |
+| **reporters[]** `type = csv` |  |  |  |
+|     `context-keys` | array of string | `node, synchronizer` | which context keys to include in the name. defaults to node names |
+|     `directory` | path | **required** | where to write the csv files to |
+|     `filters` | array of MetricsFilterConfig | `[]` | which metrics to include |
+|     `interval` | duration (NonNegativeFiniteDuration) | `5 seconds` | how often to write the csv files |
+| **reporters[]** `type = logging` |  |  |  |
+|     `filters` | array of MetricsFilterConfig | `[]` | which metrics to include |
+|     `interval` | duration (NonNegativeFiniteDuration) | `30 seconds` | how often to log the metrics |
+|     `log-as-info` | boolean | `true` |  |
+
+### `tracing`
+
+```hocon
+canton.monitoring.tracing {
+  propagation = enabled
+  tracer {
+    batch-span-processor {
+      # batch-size = <int>
+      # schedule-delay = <duration>
+    }
+    exporter {
+      additional-headers {
+        # <additional-header> = [ ]   # when tracer.exporter.type = otlp
+      }
+      # address = "localhost"   # when type = otlp|zipkin
+      # connect-timeout = <duration>   # when type = otlp
+      # port = 9411   # when type = zipkin
+      # timeout = <duration>   # when type = otlp
+      # trust-collection-path = <string>   # when type = otlp
+      type = disabled|zipkin|otlp   # required
+    }
+    sampler {
+      parent-based = true
+      # ratio = 0   # required when type = trace-id-ratio
+      type = always-on|always-off|trace-id-ratio   # required
+    }
+  }
+}
+```
+
+Takes a `type`: [Exporter](/global-synchronizer/reference/canton-config/types#exporter) at `tracer.exporter`, [Sampler](/global-synchronizer/reference/canton-config/types#sampler) at `tracer.sampler`.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `propagation` | one of `enabled`, `disabled` | `enabled` | How should trace contexts (debugging details associated with actions) be propagated between nodes. |
+| **tracer** |  |  |  |
+|     **batch-span-processor** |  |  |  |
+|         `batch-size` | int | _unset_ |  |
+|         `schedule-delay` | duration | _unset_ |  |
+|     **exporter** |  |  |  |
+|         `type` | one of `disabled`, `zipkin`, `otlp` | `disabled` † | Choose one type — see [Exporter](/global-synchronizer/reference/canton-config/types#exporter). Configuration for how to export spans |
+|     **exporter** `type = zipkin` |  |  |  |
+|         `address` | string | `localhost` |  |
+|         `port` | int | `9411` |  |
+|     **exporter** `type = otlp` |  |  |  |
+|         `address` | string | `localhost` |  |
+|         `connect-timeout` | duration | _unset_ |  |
+|         `port` | int | `4317` |  |
+|         `timeout` | duration | _unset_ |  |
+|         `trust-collection-path` | string | _unset_ |  |
+|         **additional-headers** |  |  |  |
+|             `<additional-header>` | string | `[]` |  |
+|     **sampler** |  |  |  |
+|         `parent-based` | boolean | `true` |  |
+|         `type` | one of `always-on`, `always-off`, `trace-id-ratio` | `always-on` † | Choose one type — see [Sampler](/global-synchronizer/reference/canton-config/types#sampler). |
+|     **sampler** `type = trace-id-ratio` |  |  |  |
+|         `ratio` | number | **required** |  |
