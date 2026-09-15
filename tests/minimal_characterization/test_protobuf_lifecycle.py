@@ -316,8 +316,6 @@ class ProtobufMinimalLifecycleTests(unittest.TestCase):
                 self.assertEqual([label for label in labels if label in {"Alpha", "Beta", "Deprecated"}], [expected] if expected else [])
 
     def test_cli_renders_replacement_metadata(self) -> None:
-        # TODO(https://github.com/digital-asset/docs/issues/341): define the
-        # Protobuf source/overlay convention for replacement metadata.
         package = "com.example.payments.v1"
         manifest_path = self._write_manifest(
             metadata_overlay={

@@ -12,6 +12,7 @@ from pathlib import Path
 from x2mdx.cli import main as cli_main
 from x2mdx.jvm_docs.lifecycle import (
     build_jvm_doc_lifecycle_report_from_sources,
+    deprecated_refs_from_java_html,
     parse_java_type_page,
     parse_scala_type_page,
 )
@@ -33,6 +34,21 @@ class JvmDocsTests(unittest.TestCase):
 
     def tearDown(self) -> None:
         self.temp_dir.cleanup()
+
+    def test_deprecation_notes_survive_old_and_new_javadoc_markup(self) -> None:
+        for note in (
+            '<div class="deprecation-comment">Use <code>newMethod()</code> instead.</div>',
+            '<p>Use <code>newMethod()</code> instead.</p>',
+        ):
+            with self.subTest(markup=note):
+                html = (
+                    '<div class="col-summary-item-name"><a href="com/example/Foo.html#oldMethod()">oldMethod</a></div>'
+                    f'<div class="col-last">{note}</div>'
+                )
+                self.assertEqual(
+                    deprecated_refs_from_java_html(html)["com/example/Foo.html#oldMethod()"],
+                    "Use newMethod() instead.",
+                )
 
     def _build_jar(self, relative_path: str, files: dict[str, str]) -> None:
         jar_path = self.root / relative_path
