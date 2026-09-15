@@ -23,7 +23,7 @@ Paths are rooted at `canton`. Segments in angle brackets are names you choose:
 
 A `[]` suffix marks the fields of a list element. Keys marked **alpha** or **beta** are not covered by compatibility guarantees.
 
-Keys are grouped: a **bold** row names a section and the keys indented beneath it live inside it. A section that takes a `type` is shown once for the keys every type accepts, then once per type for the keys specific to it; a complete HOCON example for each type precedes the table.
+Each section is shown two ways. **HOCON** is the section as you would write it: every key with its default, and one further block per `type` a section accepts. **Table** lists the same keys with their descriptions; a **bold** row names a section and the keys indented beneath it live inside it. Switching one section switches them all.
 
 In the Default column:
 
@@ -37,6 +37,73 @@ In the Default column:
 </Accordion>
 
 ## `admin-api`
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.participants.<participant>.admin-api {
+  address = "127.0.0.1"
+  admin-token-config {
+    act-as-any-party-claim = false
+    admin-claim = false
+    admin-token-duration = "5 minutes"
+    # fixed-admin-token = <string>
+  }
+  auth-services = [
+    {
+      type = wildcard|unsafe-jwt-hmac-256|jwt-rs-256-crt|jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|party-jwt   # required
+    }
+  ]
+  # flow-control-window = <int>
+  initial-flow-control-window = 1048576
+  jwks-cache-config {
+    auto-refresh-after = "0 seconds"
+    cache-expiration = "5 minutes"
+    cache-max-size = 1000
+    connection-timeout = "10 seconds"
+    read-timeout = "10 seconds"
+  }
+  jwt-timestamp-leeway {
+    # default = <int>
+    # expires-at = <int>
+    # issued-at = <int>
+    # not-before = <int>
+  }
+  keep-alive-server {
+    permit-keep-alive-time = "20 seconds"
+    permit-keep-alive-without-calls = false
+    time = "40 seconds"
+    timeout = "20 seconds"
+  }
+  limits {
+    active {
+      <key> = [ ]
+    }
+    throttle-logging-rate-per-second = 10
+    warn-on-undefined-limits = false
+  }
+  max-concurrent-calls-per-connection = 100000
+  max-inbound-message-size = 10485760
+  max-token-lifetime = "5 minutes"
+  port = 30002
+  tls {
+    cert-chain-file {
+      type = pem-file|pem-string   # required
+    }
+    # ciphers = [ ... ]
+    client-auth {
+      type = require|optional|none   # required
+    }
+    enable-cert-revocation-checking = false
+    minimum-server-protocol-version = "TLSv1.2"
+    private-key-file = "..."   # required
+    trust-collection-file {
+      type = pem-file|pem-string   # required
+    }
+  }
+}
+```
 
 **`auth-services[]`** supports these types: `wildcard`, `unsafe-jwt-hmac-256`, `jwt-rs-256-crt`, `jwt-es-256-crt`, `jwt-es-512-crt`, `jwt-jwks`, `party-jwt`. Each block below shows one entry; a list may hold entries of different types.
 
@@ -201,6 +268,10 @@ canton.participants.<participant>.admin-api.tls.client-auth {
   # takes no further keys
 }
 ```
+
+
+</Tab>
+<Tab title="Table">
 
 | Key | Type | Default | Description |
 |---|---|---|---|
@@ -324,7 +395,99 @@ canton.participants.<participant>.admin-api.tls.client-auth {
 |     **trust-collection-file** `type = pem-string` |  |  |  |
 |         `pem-bytes` | string | **required** |  |
 
+</Tab>
+</Tabs>
+
 ## `alpha-dynamic`
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.participants.<participant>.alpha-dynamic {
+  check-self-consistency = true
+  connections = [
+    {
+      connections {
+        <connection> {
+          # custom-trust-certificates = <path>
+          endpoints = [
+            {
+              host = "..."   # required
+              port = 0   # required
+            }
+          ]
+          transport-security = false
+        }
+      }
+      initialize-from-trusted-synchronizer = false
+      # liveness-margin = <int>
+      manual-connect = false
+      priority = 0
+      synchronizer-alias = "..."   # required
+      # trust-threshold = <int>
+    }
+  ]
+  dars = [
+    {
+      # expected-main-package = <string>
+      location = "..."   # required
+      request-headers {
+        # <request-header> = <string>
+      }
+      synchronizers = [ ]
+    }
+  ]
+  enable-multi-synchronizer-topology-feature-flag = false
+  fetched-dar-directory = "/tmp/fetched-dars12534636215432177984"
+  idps = [
+    {
+      # audience = <string>
+      identity-provider-id = "..."   # required
+      is-deactivated = false
+      issuer = "..."   # required
+      jwks-url = "..."   # required
+    }
+  ]
+  parties = [
+    {
+      party = "..."   # required
+      # permission = <unresolved>
+      synchronizers = [ ]
+    }
+  ]
+  remove-connections = false
+  remove-idps = false
+  remove-parties = false
+  remove-users = false
+  users = [
+    {
+      annotations {
+        <annotation> = [ ]
+      }
+      identity-provider-id = ""
+      is-deactivated = false
+      # primary-party = <string>
+      primary-party-authentication = false
+      rights {
+        act-as = [ ]
+        act-as-any-party = false
+        execute-as = [ ]
+        execute-as-any-party = false
+        identity-provider-admin = false
+        participant-admin = false
+        read-as = [ ]
+        read-as-any-party = false
+      }
+      user = "..."   # required
+    }
+  ]
+}
+```
+
+
+</Tab>
+<Tab title="Table">
 
 | Key | Type | Default | Description |
 |---|---|---|---|
@@ -389,7 +552,88 @@ canton.participants.<participant>.admin-api.tls.client-auth {
 |         `read-as` | array of string | `[]` | the name of the parties the user can read as. |
 |         `read-as-any-party` | boolean | `false` | if true then the user can read as any party |
 
+</Tab>
+</Tabs>
+
 ## `crypto`
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.participants.<participant>.crypto {
+  enable-experimental = false
+  encryption {
+    algorithms {
+      # allowed = [ ... ]
+      # default = <generic>
+    }
+    keys {
+      # allowed = [ ... ]
+      # default = <generic>
+    }
+  }
+  hash {
+    # allowed = [ ... ]
+    # default = <generic>
+  }
+  kms {
+    retries {
+      create-key-check {
+        initial-delay = "30 seconds"   # required
+        max-delay = "30 seconds"   # required
+        max-retries = 0   # required
+      }
+      failures {
+        initial-delay = "30 seconds"   # required
+        max-delay = "30 seconds"   # required
+        max-retries = 0   # required
+      }
+    }
+    type = driver|aws|gcp   # required
+  }
+  parallelism {
+    encryption-parallelism = 10
+    signature-verification-parallelism = 10
+  }
+  pbkdf {
+    # allowed = [ ... ]
+    # default = <generic>
+  }
+  private-key-store {
+    encryption {
+      reverted = false
+      type = kms   # required
+      # wrapper-key-id = <string>
+    }
+  }
+  provider = jce
+  session-signing-keys {
+    cut-off-duration = "1 minute"
+    disable-bound-checks = false
+    enabled = false   # required
+    key-eviction-period = "10 minutes"
+    key-validity-duration = "5 minutes"
+    signing-algorithm-spec = ed-25519
+    signing-key-spec = ec-curve-25519
+    tolerance-shift-duration = "2 minutes"
+  }
+  signing {
+    algorithms {
+      # allowed = [ ... ]
+      # default = <generic>
+    }
+    keys {
+      # allowed = [ ... ]
+      # default = <generic>
+    }
+  }
+  symmetric {
+    # allowed = [ ... ]
+    # default = <generic>
+  }
+}
+```
 
 **`kms`** supports these types: `driver`, `aws`, `gcp`. Pick one; each block below is a complete example of that choice.
 
@@ -473,6 +717,10 @@ canton.participants.<participant>.crypto.private-key-store.encryption {
 }
 ```
 
+
+</Tab>
+<Tab title="Table">
+
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `enable-experimental` | boolean | `false` | Whether to enable experimental cryptographic schemes. Should not be used in production environments. |
@@ -547,7 +795,45 @@ canton.participants.<participant>.crypto.private-key-store.encryption {
 |     `allowed` | array of S | _unset_ | The optional allowed schemes to use. If none is specified, all the provider's supported schemes of kind S are allowed. |
 |     `default` | depends on use (S) | _unset_ | The optional scheme to use. If none is specified, use the provider's default scheme of kind S. |
 
+</Tab>
+</Tabs>
+
 ## `http-ledger-api`
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.participants.<participant>.http-ledger-api {
+  address = "127.0.0.1"
+  client-request-timeout {
+    lower-bound = "1 second"
+    upper-bound = "60 seconds"
+  }
+  daml-definitions-service-enabled = false
+  debug-logging-of-http-bodies = false
+  enabled = true
+  # max-inbound-message-size = <int>
+  # path-prefix = <string>
+  port = 30003
+  # port-file = <unresolved>
+  request-timeout = "20 seconds"
+  websocket-config {
+    # heartbeat-period = <duration>
+    # http-list-max-elements-limit = <int>
+    # http-list-wait-time = <duration>
+    # max-burst = <int>
+    # max-duration = <duration>
+    # mode = <string>
+    # throttle-elem = <int>
+    # throttle-per = <duration>
+  }
+}
+```
+
+
+</Tab>
+<Tab title="Table">
 
 | Key | Type | Default | Description |
 |---|---|---|---|
@@ -573,7 +859,26 @@ canton.participants.<participant>.crypto.private-key-store.encryption {
 |     `throttle-elem` | int | `WSC.DefaultThrottleElem` ‡ |  |
 |     `throttle-per` | duration | `WSC.DefaultThrottlePer` ‡ |  |
 
+</Tab>
+</Tabs>
+
 ## `init`
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.participants.<participant>.init {
+  generate-intermediate-key = false
+  generate-topology-transactions-and-keys = true
+  identity {
+    type = external|auto|manual   # required
+  }
+  ledger-api {
+    max-deduplication-duration = "7 days"
+  }
+}
+```
 
 **`identity.identifier`** supports these types: `random`, `explicit`, `config`. Pick one; each block below is a complete example of that choice.
 
@@ -625,6 +930,10 @@ canton.participants.<participant>.init.identity {
 }
 ```
 
+
+</Tab>
+<Tab title="Table">
+
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `generate-intermediate-key` | boolean | `false` |  |
@@ -643,7 +952,191 @@ canton.participants.<participant>.init.identity {
 | **ledger-api** |  |  |  |
 |     `max-deduplication-duration` | duration (NonNegativeFiniteDuration) | `7 days` | The max deduplication duration reported by the participant's ledger configuration service. The participant's command and command submission services accept all command deduplication durations up to this duration. Acceptance of longer ones is at the discretion of the participant and may vary over time. |
 
+</Tab>
+</Tabs>
+
 ## `ledger-api`
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.participants.<participant>.ledger-api {
+  address = "127.0.0.1"
+  admin-token-config {
+    act-as-any-party-claim = false
+    admin-claim = false
+    admin-token-duration = "5 minutes"
+    # fixed-admin-token = <string>
+  }
+  auth-services = [
+    {
+      type = wildcard|unsafe-jwt-hmac-256|jwt-rs-256-crt|jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|party-jwt   # required
+    }
+  ]
+  command-service {
+    contract-prefetching-depth = 3
+    default-tracking-timeout = "5 minutes"
+    max-commands-in-flight = 256
+  }
+  database-connection-timeout = "30 seconds"
+  enable-command-inspection = true
+  # flow-control-window = <int>
+  identity-provider-management {
+    cache-expiry-after-write = "5 minutes"
+  }
+  index-service {
+    acs-filtering-parallelism = 16
+    active-contracts-service-streams {
+      contract-processing-parallelism = 8
+      id-filter-query-parallelism = 2
+      max-ids-per-id-page = 20000
+      max-incomplete-page-size = 20
+      max-pages-per-id-pages-buffer = 1
+      max-parallel-active-id-queries = 4
+      max-parallel-payload-create-queries = 2
+      max-payloads-per-payloads-page = 1000
+      max-working-memory-in-bytes-for-id-pages = 104857600
+    }
+    # api-query-services-thread-pool-size = <int>
+    api-stream-shutdown-timeout = "5s"
+    buffered-events-processing-parallelism = 8
+    buffered-streams-page-size = 100
+    completions-page-size = 1000
+    contract-pruning-db-lock-timeout = "20 seconds"
+    contract-pruning-delay-before-retry = "2 seconds"
+    contract-pruning-max-retries = 10
+    global-max-event-id-queries = 20
+    global-max-event-payload-queries = 10
+    idle-stream-offset-checkpoint-timeout = "1 minute"
+    in-memory-state-updater-parallelism = 2
+    max-contract-key-state-cache-size = 10000
+    max-contract-state-cache-size = 10000
+    max-lookup-limit = 1000
+    max-rejected-completions-by-hash = 10
+    max-transactions-in-memory-fan-out-buffer-size = 1100
+    offset-checkpoint-cache-update-interval = "15 seconds"
+    prepare-package-metadata-time-out-warning = "5 seconds"
+    pruning-db-lock-timeout = "20 seconds"
+    updates-streams {
+      id-filter-query-parallelism = 2
+      max-ids-per-id-page = 20000
+      max-pages-per-id-pages-buffer = 1
+      max-parallel-id-activate-queries = 4
+      max-parallel-id-deactivate-queries = 4
+      max-parallel-id-topology-events-queries = 4
+      max-parallel-id-various-witnessed-queries = 4
+      max-parallel-payload-activate-queries = 2
+      max-parallel-payload-deactivate-queries = 2
+      max-parallel-payload-queries = 2
+      max-parallel-payload-topology-events-queries = 2
+      max-parallel-payload-various-witnessed-queries = 2
+      max-payloads-per-payloads-page = 1000
+      max-working-memory-in-bytes-for-id-pages = 104857600
+      transactions-processing-parallelism = 8
+    }
+  }
+  initial-flow-control-window = 1048576
+  interactive-submission-service {
+    contract-lookup-parallelism = 5
+    enable-verbose-hashing = false
+    enforce-single-root-node = true
+    maximum-number-of-signatures-per-party = 50
+  }
+  jwks-cache-config {
+    auto-refresh-after = "0 seconds"
+    cache-expiration = "5 minutes"
+    cache-max-size = 1000
+    connection-timeout = "10 seconds"
+    read-timeout = "10 seconds"
+  }
+  jwt-timestamp-leeway {
+    # default = <int>
+    # expires-at = <int>
+    # issued-at = <int>
+    # not-before = <int>
+  }
+  keep-alive-server {
+    permit-keep-alive-time = "10 seconds"
+    permit-keep-alive-without-calls = false
+    time = "10 minutes"
+    timeout = "20 seconds"
+  }
+  limits {
+    active {
+      <key> = [ ]
+    }
+    throttle-logging-rate-per-second = 10
+    warn-on-undefined-limits = false
+  }
+  management-service-timeout = "2 minutes"
+  max-concurrent-calls-per-connection = 100000
+  max-inbound-message-size = 10485760
+  max-inbound-metadata-size = 8192
+  max-token-lifetime = "5 minutes"
+  package-service {
+    max-vetted-packages-page-size = 100
+  }
+  party-management-service {
+    max-parties-page-size = 10000
+    max-self-allocated-parties = 0
+  }
+  port = 30001
+  postgres-data-source {
+    client-connection-check-interval = "5 seconds"
+    network-timeout = "60 seconds"
+    synchronous-commit {
+      type = on|off|remote-write|remote-apply|local   # required
+    }
+    tcp-keepalives-count = 5
+    tcp-keepalives-idle = 10
+    tcp-keepalives-interval = 1
+  }
+  rate-limit {
+    max-api-services-index-db-queue-size = 1000
+    max-api-services-queue-size = 10000
+    max-used-heap-space-percentage = 100
+    min-free-heap-space-bytes = 0
+  }
+  state-service {
+    default-acs-page-size = 2000
+    max-acs-page-size = 10000
+  }
+  tls {
+    cert-chain-file {
+      type = pem-file|pem-string   # required
+    }
+    # ciphers = [ ... ]
+    client-auth {
+      type = require|optional|none   # required
+    }
+    enable-cert-revocation-checking = false
+    minimum-server-protocol-version = "TLSv1.2"
+    private-key-file = "..."   # required
+    trust-collection-file {
+      type = pem-file|pem-string   # required
+    }
+  }
+  topology-aware-package-selection {
+    enabled = true
+    max-passes-default = 3
+    max-passes-limit = 4
+  }
+  update-service {
+    ascending-first-page-dynamic-bound-overfetch = 4
+    default-updates-page-size = 100
+    max-updates-page-size = 2000
+  }
+  user-management-service {
+    # additional-admin-user-id = <string>
+    cache-expiry-after-write-in-seconds = 5
+    enabled = true
+    max-cache-size = 100
+    max-rights-per-user = 1000
+    max-users-page-size = 1000
+  }
+}
+```
 
 **`auth-services[]`** supports these types: `wildcard`, `unsafe-jwt-hmac-256`, `jwt-rs-256-crt`, `jwt-es-256-crt`, `jwt-es-512-crt`, `jwt-jwks`, `party-jwt`. Each block below shows one entry; a list may hold entries of different types.
 
@@ -808,6 +1301,10 @@ canton.participants.<participant>.ledger-api.tls.client-auth {
   # takes no further keys
 }
 ```
+
+
+</Tab>
+<Tab title="Table">
 
 | Key | Type | Default | Description |
 |---|---|---|---|
@@ -1030,7 +1527,43 @@ canton.participants.<participant>.ledger-api.tls.client-auth {
 |     `max-rights-per-user` | int | `1000` | maximum number of rights per user |
 |     `max-users-page-size` | int | `1000` | maximum number of users returned |
 
+</Tab>
+</Tabs>
+
 ## `monitoring`
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.participants.<participant>.monitoring {
+  grpc-health-server {
+    address = "0.0.0.0"
+    jwt-timestamp-leeway {
+      # default = <int>
+      # expires-at = <int>
+      # issued-at = <int>
+      # not-before = <int>
+    }
+    keep-alive-server {
+      permit-keep-alive-time = "20 seconds"
+      permit-keep-alive-without-calls = false
+      time = "40 seconds"
+      timeout = "20 seconds"
+    }
+    parallelism = 4
+    # port = <int>
+  }
+  http-health-server {
+    address = "0.0.0.0"
+    port = 0   # required
+  }
+}
+```
+
+
+</Tab>
+<Tab title="Table">
 
 | Key | Type | Default | Description |
 |---|---|---|---|
@@ -1052,7 +1585,374 @@ canton.participants.<participant>.ledger-api.tls.client-auth {
 |     `address` | string | `0.0.0.0` |  |
 |     `port` | int (Port) | **required** |  |
 
+</Tab>
+</Tabs>
+
 ## `parameters`
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.participants.<participant>.parameters {
+  acs-commitments {
+    acs-fetch-parallelism = 16
+    classification-parallelism = 8
+    consistency-check {
+      journal-snapshot-query-limit = 100
+    }
+    contract-change-classification-batch-size = 100
+    contract-change-classification-parallelism = 8
+    counterparty-batch-size = 1000
+    digest-compute-parallelism = 8
+    digest-load-parallelism = 1000
+    # digest-pipeline-buffer-size = <int>
+    # digest-update-persistence-batch-factor = <int>
+    disable-old-acs-commitment-processor = on-new-protocol-versions
+    enable-new-acs-commitment-processor = true
+    load-batching {
+      maximum-batch-size = 500
+      type = batching|no-batching   # required
+    }
+    matching-parallelism = 20
+    max-num-loaded-digests = 10000
+    max-num-updates-between-checkpoints = 100000
+    max-parallel-active-id-queries = 12
+    max-parallel-payload-create-queries = 6
+    period-store {
+      writer-page-size = 100
+    }
+    received-commitment-validation-parallelism = 1
+    reinitializing-journal-tombstones-batch-size = 1000
+    sender {
+      max-batch-size = 100
+      # max-retry-delay = <duration>
+      max-send-delay-fraction = 0.9
+      min-send-delay-fraction = 0
+      parallelism = 10
+    }
+    tracing = disabled
+    use-sequential-digest-accumulator = false
+  }
+  activation-frequency-for-warn-about-consistency-checks = 1000
+  admin-workflow {
+    auto-load-dar = true
+    bong-test-max-level = 0
+    max-bong-duration = "15 minutes"
+    ping-response-timeout = "30 seconds"
+    retries = true
+  }
+  alpha-online-party-replication-support {
+    pause-synchronizer-indexing-during-party-replication = false
+    # test-interceptor = <string>
+    unsafe-sequencer-channel-support = false
+  }
+  alpha-version-support = false
+  auto-sync-protocol-feature-flags = true
+  batching {
+    aggregator {
+      maximum-batch-size = 500
+      type = batching|no-batching   # required
+    }
+    contract-store-aggregator {
+      maximum-batch-size = 500
+      type = batching|no-batching   # required
+    }
+    # in-flight-aggregations-query-interval = <duration>
+    ledger-api-pruning-batch-size = 50000
+    max-acs-import-batch-size = 1000
+    max-items-in-batch = 100
+    max-pruning-batch-size = 1000
+    max-pruning-time-interval = "30 minutes"
+    max-stakeholder-groups-batch-size = 1000
+    max-topology-update-batch-size = 1000
+    max-topology-write-batch-size = 1000
+    mediator-fetch-finalized-responses-aggregator {
+      maximum-batch-size = 500
+      type = batching|no-batching   # required
+    }
+    mediator-store-finalized-responses-aggregator {
+      maximum-batch-size = 500
+      type = batching|no-batching   # required
+    }
+    parallelism = 8
+    pruning-parallelism = 2
+    topology-cache-aggregator {
+      maximum-batch-size = 500
+      type = batching|no-batching   # required
+    }
+  }
+  beta-version-support = false
+  caching {
+    bft-ordering-batch-cache {
+      expire-after-access = "1 minute"
+      maximum-memory = "..."   # required
+    }
+    contract-store {
+      expire-after-access = "1 minute"
+      maximum-size = 0   # required
+    }
+    finalized-mediator-confirmation-requests {
+      expire-after-access = "1 minute"
+      maximum-size = 0   # required
+    }
+    indexed-strings {
+      expire-after-access = "1 minute"
+      maximum-size = 0   # required
+    }
+    key-cache {
+      expire-after-access = "1 minute"
+      maximum-size = 0   # required
+    }
+    kms-metadata-cache {
+      expire-after-access = "1 minute"
+      maximum-size = 0   # required
+    }
+    member-cache {
+      expire-after-access = "1 minute"
+      maximum-size = 0   # required
+    }
+    package-upgrade-cache {
+      maximum-size = 0   # required
+    }
+    package-vetting-cache {
+      expire-after-access = "1 minute"
+      maximum-size = 0   # required
+    }
+    participant-cache {
+      expire-after-access = "1 minute"
+      maximum-size = 0   # required
+    }
+    party-cache {
+      expire-after-access = "1 minute"
+      maximum-size = 0   # required
+    }
+    public-key-conversion-cache {
+      expire-after-access = "1 minute"
+      maximum-size = 0   # required
+    }
+    sequencer-catchup-payload-cache {
+      expire-after-access = "1 minute"
+      maximum-memory = "..."   # required
+    }
+    sequencer-payload-cache {
+      expire-after-access = "1 minute"
+      maximum-memory = "..."   # required
+    }
+    session-encryption-key-cache {
+      enabled = true
+      receiver-cache {
+        expire-after-timeout = "10 minutes"
+        maximum-size = 0   # required
+      }
+      sender-cache {
+        expire-after-timeout = "10 minutes"
+        maximum-size = 0   # required
+      }
+    }
+    synchronizer-client-max-timestamp {
+      expire-after-access = "1 minute"
+      maximum-size = 0   # required
+    }
+    topology-snapshot {
+      expire-after-access = "1 minute"
+      maximum-size = 0   # required
+    }
+  }
+  command-progress-tracker {
+    enabled = true
+    max-failed = 100
+    max-pending = 1000
+    max-succeeded = 100
+  }
+  commitment-asynchronous-initialization = false
+  commitment-checkpoint-interval = "1 minute"
+  commitment-mismatch-debugging = false
+  # commitment-processor-nr-acs-changes-behind-to-trigger-catch-up = <int>
+  commitment-reduce-parallelism = 1
+  commitment-use-db-snapshot-for-participant-lookup = false
+  connect-to-synchronizers-on-startup = true
+  crash-after-failed-validation = true
+  dev-version-support = false
+  disable-upgrade-validation = false
+  do-not-await-on-checking-incoming-commitments = false
+  dont-warn-on-deprecated-pv = false
+  enable-all-ledger-api-reassignments = false
+  enable-strict-dar-validation = true
+  engine {
+    enable-additional-consistency-checks = false
+    enable-engine-stack-traces = false
+    extensions {
+      <extension> {
+        address = "..."   # required
+        auth {
+          type = none|bearer-token-file   # required
+        }
+        connect-timeout = "500 milliseconds"
+        # max-response-body-bytes = <int>
+        max-retries = 3
+        port = 0   # required
+        request-timeout = "8 seconds"
+        retry-initial-delay = "1000 milliseconds"
+        retry-max-delay = "10 seconds"
+        tls {
+          enabled = true
+          trust-collection-file {
+            type = pem-file|pem-string   # required
+          }
+        }
+        validate-on-startup = false
+        version = "v1"
+      }
+    }
+    iterations-between-interruptions = 10000
+    # profile-dir = <unresolved>
+    # snapshot-dir = <unresolved>
+    submission-phase-logging {
+      enabled = true
+      log-level = "DEBUG"
+      matching = [ ]
+    }
+    transaction-limits {
+      acting-parties = 0   # required
+      choice-authorizers = 0   # required
+      choice-observers = 0   # required
+      contract-signatories = 0   # required
+      contract-stakeholders = 0   # required
+      external-call-result-size = 0   # required
+      external-call-results = 0   # required
+      key-maintainers = 0   # required
+      node-children = 0   # required
+      query-result = 0   # required
+      total-informees = 0   # required
+      transaction-input-contracts = 0   # required
+      transaction-nodes = 0   # required
+      transaction-roots = 0   # required
+      value-size = 0   # required
+    }
+    validation-phase-logging {
+      enabled = true
+      log-level = "DEBUG"
+      matching = [ ]
+    }
+  }
+  journal-garbage-collection-delay = "0 seconds"
+  journal-garbage-collection-minimum-gap = "30 minutes"
+  ledger-api-server {
+    contract-id-seeding {
+      type = strong|weak|static   # required
+    }
+    contract-loader {
+      max-batch-size = 50
+      max-queue-size = 10000
+      parallelism = 5
+    }
+    indexer {
+      achs-config {
+        aggregation-threshold = 5
+        buffer-size = 256
+        init-aggregation-threshold = 5
+        init-parallelism = 8
+        last-populated-distance-target = 0   # required
+        population-parallelism = 4
+        removal-parallelism = 4
+        valid-at-distance-target = 0   # required
+      }
+      batching-parallelism = 4
+      contract-pruning-db-lock-timeout = "20 seconds"
+      contract-read-row-db-lock-timeout = "20 seconds"
+      db-prepare-parallelism = 4
+      disable-monotonicity-checks = false
+      enable-compression = false
+      enable-compression-consuming-exercise = false
+      enable-compression-non-consuming-exercise = false
+      ingestion-parallelism = 16
+      input-mapping-parallelism = 16
+      max-input-buffer-size = 50
+      max-output-batched-buffer-size = 16
+      max-tailer-batch-size = 10
+      post-processing-parallelism = 8
+      postgres-data-source {
+        client-connection-check-interval = "5 seconds"
+        network-timeout = "60 seconds"
+        synchronous-commit {
+          type = on|off|remote-write|remote-apply|local   # required
+        }
+        tcp-keepalives-count = 5
+        tcp-keepalives-idle = 10
+        tcp-keepalives-interval = 1
+      }
+      queue-buffer-size = 50
+      queue-max-blocked-offer = 1000
+      queue-recovery-retry-attempt-error-threshold = 100
+      queue-recovery-retry-attempt-warn-threshold = 50
+      queue-recovery-retry-max-wait-millis = 5000
+      queue-recovery-retry-min-wait-millis = 50
+      queue-uncommitted-warn-threshold = 14000
+      restart-delay = "10 seconds"
+      submission-batch-insertion-size = 5000
+      submission-batch-size = 50
+      use-weighted-batching = false
+    }
+    # token-expiry-grace-period-for-streams = <duration>
+  }
+  lsu {
+    automatically-perform-lsu = true
+    handshake {
+      minimum-duration = "5 seconds"
+      periodic-check = "1 second"
+      retry {
+        initial-delay = "30 seconds"   # required
+        max-delay = "30 seconds"   # required
+        max-retries = 0   # required
+      }
+    }
+    lsu-retry {
+      initial-delay = "30 seconds"   # required
+      max-delay = "30 seconds"   # required
+      max-retries = 0   # required
+    }
+    purge-obsolete-topology {
+      chunk-size = 1000
+      cron = "0 0 0 * * ?"
+      max-duration = "30 minutes"
+      purgeable-stores-list-validity = "1 minute"
+    }
+    sequencer-ids-retrieval-retry {
+      initial-delay = "30 seconds"   # required
+      max-delay = "30 seconds"   # required
+      max-retries = 0   # required
+    }
+  }
+  max-unzipped-dar-size = 1073741824
+  minimum-protocol-version = 34
+  package-metadata-view {
+    init-load-parallelism = 16
+    init-process-parallelism = 16
+    init-takes-too-long-initial-delay = "1 minute"
+    init-takes-too-long-interval = "10 seconds"
+  }
+  stores {
+    journal-pruning {
+      initial-interval = "5 seconds"
+      max-buckets = 100
+      max-items-expected-to-prune-per-batch = 100000
+      target-batch-size = 5000
+    }
+    pruning-metric-update-interval = "1 hour"
+    safe-to-prune-commitment-state {
+      type = match|match-or-mismatch|all   # required
+    }
+  }
+  validate-legacy-contracts-v-11 = true
+  warn-if-overloaded-for = "20 seconds"
+  watchdog {
+    # check-interval = <duration>
+    enabled = false   # required
+    # kill-delay = <duration>
+  }
+}
+```
 
 **`acs-commitments.load-batching`** supports these types: `batching`, `no-batching`. Pick one; each block below is a complete example of that choice.
 
@@ -1103,6 +2003,10 @@ canton.participants.<participant>.parameters.engine.extensions.<extension>.tls.t
   pem-bytes = "..."   # required
 }
 ```
+
+
+</Tab>
+<Tab title="Table">
 
 | Key | Type | Default | Description |
 |---|---|---|---|
@@ -1432,7 +2336,46 @@ canton.participants.<participant>.parameters.engine.extensions.<extension>.tls.t
 |     `enabled` | boolean | **required** |  |
 |     `kill-delay` | duration (NonNegativeFiniteDuration) | `NonNegativeFiniteDuration(30.seconds)` ‡ |  |
 
+</Tab>
+</Tabs>
+
 ## `replication`
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.participants.<participant>.replication {
+  connection-pool {
+    active-timeout = "15 seconds"
+    connection {
+      client-connection-check-interval = "5 seconds"
+      connection-timeout = "10 seconds"
+      health-check-period = "5 seconds"
+      health-check-timeout = "15 seconds"
+      initial-acquisition-interval = "200 milliseconds"
+      initial-acquisition-max-retries = 5
+      keep-alive-count = 5
+      keep-alive-idle = "10 seconds"
+      keep-alive-interval = "1 second"
+      lock {
+        health-check-period = "5 seconds"
+        health-check-timeout = "15 seconds"
+      }
+      max-inconclusive-read-only-checks = 3
+      passive-check-period = "15 seconds"
+    }
+    health-check-period = "5 seconds"
+    initial-locked-connection-timeout = "15 seconds"
+    initial-must-remain-active-connection-timeout = "1 minute"
+  }
+  # enabled = <boolean>
+}
+```
+
+
+</Tab>
+<Tab title="Table">
 
 | Key | Type | Default | Description |
 |---|---|---|---|
@@ -1458,7 +2401,61 @@ canton.participants.<participant>.parameters.engine.extensions.<extension>.tls.t
 |             `health-check-period` | duration (PositiveFiniteDuration) | `5 seconds` | Health check period, i.e., how long to wait between one health check completed and the next to start. |
 |             `health-check-timeout` | duration (PositiveFiniteDuration) | `15 seconds` | Timeout for running a health check in seconds granularity. |
 
+</Tab>
+</Tabs>
+
 ## `sequencer-client`
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.participants.<participant>.sequencer-client {
+  acknowledgement-interval = "1 minute"
+  amplify-on-max-sequencing-time-too-far = true
+  auth-token {
+    backoff {
+      base = 2
+      jitter {
+        type = equal|full   # required
+      }
+      max-retry-interval = "2 minutes"
+    }
+    min-retry-interval = "500 milliseconds"
+    refresh-auth-token-before-expiry = "20 seconds"
+    retries = 20
+  }
+  # channel-flow-control-window = <int>
+  channel-initial-flow-control-window = 1048576
+  channel-max-inbound-message-size = 134217728
+  default-max-sequencing-time-offset = "2 minutes"
+  enable-amplification-improvements = true
+  event-inbox-size = 100
+  handshake-retry-attempts = 50
+  handshake-retry-delay = "5 seconds"
+  initial-connection-retry-delay = "10 milliseconds"
+  keep-alive-client {
+    idle-timeout = "30 minutes"
+    keep-alive-without-calls = false
+    time = "40 seconds"
+    timeout = "15 seconds"
+  }
+  max-connection-retry-delay = "30 seconds"
+  maximum-in-flight-event-batches = 20
+  # override-max-request-size = <int>
+  past-events-cache-size = 1000
+  skip-sequenced-event-validation = false
+  startup-connection-retry-delay = "1 second"
+  time-readings-retention = "5 minutes"
+  use-new-aggregator = true
+  use-new-connection-pool = true
+  warn-disconnect-delay = "10 seconds"
+}
+```
+
+
+</Tab>
+<Tab title="Table">
 
 | Key | Type | Default | Description |
 |---|---|---|---|
@@ -1498,7 +2495,40 @@ canton.participants.<participant>.parameters.engine.extensions.<extension>.tls.t
 |     `time` | duration (NonNegativeFiniteDuration) | `40 seconds` | Sets the time without read activity before sending a keepalive ping. Do not set to small numbers (default is 40s) |
 |     `timeout` | duration (NonNegativeFiniteDuration) | `15 seconds` | Sets the time waiting for read activity after sending a keepalive ping (default is 15s). The default timeout was previously 20s and was lowered to 15s, because besides configuring the gRPC KeepAliveManager, it also sets up the socket's TCP_USER_TIMEOUT (see html). 15s gives a larger margin to detect a faulty connection earlier and retry a submission on another sequencer via amplification, thereby avoiding a request failure. |
 
+</Tab>
+</Tabs>
+
 ## `storage`
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.participants.<participant>.storage {
+  parameters {
+    connection-allocation {
+      # num-ledger-api = <int>
+      # num-reads = <int>
+      # num-writes = <int>
+    }
+    connection-timeout = "5 seconds"
+    fail-fast-on-startup = true
+    failed-to-fatal-delay = "5 minutes"
+    # max-connections = <int>
+    migrate-and-start = false
+    migrations-paths = [ ]
+    partitions {
+      initial-bft-orderer-tables-partition-size = 1500
+    }
+    repeatable-migrations-paths = [ ]
+    unsafe-baseline-on-migrate = false
+    unsafe-clean-on-validation-error = false
+    # warn-on-slow-query = <duration>
+    warn-on-slow-query-interval = "5 seconds"
+  }
+  type = memory|h2|postgres   # required
+}
+```
 
 **`canton.participants.<participant>.storage`** supports these types: `memory`, `h2`, `postgres`. Pick one; each block below is a complete example of that choice.
 
@@ -1583,6 +2613,10 @@ canton.participants.<participant>.storage {
 }
 ```
 
+
+</Tab>
+<Tab title="Table">
+
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `type` | one of `memory`, `h2`, `postgres` | `memory` † | Determines how a node stores persistent data. |
@@ -1605,13 +2639,55 @@ canton.participants.<participant>.storage {
 |     **partitions** |  |  |  |
 |         `initial-bft-orderer-tables-partition-size` | int | `1500` | Initial partition size for bft-orderer tables. Note that this config is only read once, during the initial database setup and later changes to this value won't have any effect. This is also only used in Postgres setups. |
 
+</Tab>
+</Tabs>
+
 ## `testing-time`
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.participants.<participant>.testing-time {
+  type = monotonic-time   # required
+}
+```
+
+
+</Tab>
+<Tab title="Table">
 
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `type` | one of `monotonic-time` | **required** | Optional ledger api time service configuration for demo and testing only |
 
+</Tab>
+</Tabs>
+
 ## `topology`
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.participants.<participant>.topology {
+  broadcast-batch-size = 100
+  broadcast-retry-delay = "10 seconds"
+  disable-optional-topology-checks = false
+  dispatch-queue-backpressure-limit = 100
+  enable-topology-state-cache-consistency-checks = false
+  max-topology-state-cache-items = 10000
+  topology-state-cache-eviction-threshold = 250
+  topology-transaction-observation-timeout = "30 seconds"
+  topology-transaction-registration-timeout = "20 seconds"
+  use-time-proofs-to-observe-effective-time = false
+  validate-initial-topology-snapshot = true
+}
+```
+
+
+</Tab>
+<Tab title="Table">
 
 | Key | Type | Default | Description |
 |---|---|---|---|
@@ -1627,7 +2703,37 @@ canton.participants.<participant>.storage {
 | `use-time-proofs-to-observe-effective-time` | boolean | `false` | Whether the node will use time proofs to observe when an effective time has been reached. If false, no time proofs will be sent to the sequencers by any Canton node. |
 | `validate-initial-topology-snapshot` | boolean | `true` | if false, the validation is skipped and the snapshot is directly imported. this is risky as it might create a fork if the validation was changed. therefore, we only use this with great care. the proper solution is to make validation so fast that it doesn't impact performance. |
 
+</Tab>
+</Tabs>
+
 ## `traffic-accounting`
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.participants.<participant>.traffic-accounting {
+  allow-submissions-on-degradation = false
+  enabled = false
+  enforce-cost-on-submissions = false
+  reject-multi-party-submissions = false
+  traffic-enforcement-server {
+    account-lookup-timeout = "20 seconds"
+    database-query-timeout = "1 second"
+    in-process-tea-server-name = "TeaGrpcInProcServer"
+    projection {
+      handler-retry-delay = "1 second"
+      # initial-completion-offset-begin-exclusive = <int>
+      # max-handler-retries = <int>
+      max-projection-restart-backoff = "30 seconds"
+      min-projection-restart-backoff = "1 second"
+      # projection-max-restarts = <int>
+      projection-restart-random-factor = 0.2
+    }
+    type = internal   # required
+  }
+}
+```
 
 **`traffic-enforcement-server`** supports these types: `internal`. Pick one; each block below is a complete example of that choice.
 
@@ -1649,6 +2755,10 @@ canton.participants.<participant>.traffic-accounting.traffic-enforcement-server 
 }
 ```
 
+
+</Tab>
+<Tab title="Table">
+
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `allow-submissions-on-degradation` | boolean | `false` | Whether to allow a submission to proceed without a balance check when the balance cannot be determined, for example due to a database outage. The submission is still charged, so an account that didn't have enough traffic balance might end up with a negative balance until it is topped up. Doesn't apply when the traffic service refuses the request. A bypassed check is logged at WARN. Disabled by default, so a failed lookup fails the submission. |
@@ -1668,3 +2778,6 @@ canton.participants.<participant>.traffic-accounting.traffic-enforcement-server 
 |         `min-projection-restart-backoff` | duration (PositiveFiniteDuration) | `1 second` | minimum amount of time before retrying the projection on failure |
 |         `projection-max-restarts` | int | `Int.MaxValue` ‡ |  |
 |         `projection-restart-random-factor` | number | `0.2` |  |
+
+</Tab>
+</Tabs>

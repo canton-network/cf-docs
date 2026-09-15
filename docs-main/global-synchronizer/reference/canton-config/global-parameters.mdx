@@ -17,7 +17,7 @@ Paths are rooted at `canton`. Segments in angle brackets are names you choose:
 
 A `[]` suffix marks the fields of a list element. Keys marked **alpha** or **beta** are not covered by compatibility guarantees.
 
-Keys are grouped: a **bold** row names a section and the keys indented beneath it live inside it. A section that takes a `type` is shown once for the keys every type accepts, then once per type for the keys specific to it; a complete HOCON example for each type precedes the table.
+Each section is shown two ways. **HOCON** is the section as you would write it: every key with its default, and one further block per `type` a section accepts. **Table** lists the same keys with their descriptions; a **bold** row names a section and the keys indented beneath it live inside it. Switching one section switches them all.
 
 In the Default column:
 
@@ -31,6 +31,26 @@ In the Default column:
 </Accordion>
 
 ## Top-level keys
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.parameters {
+  alpha-version-support = false
+  beta-version-support = false
+  dev-version-support = false
+  enable-additional-consistency-checks = false
+  enable-alpha-state-via-config = false
+  exit-on-fatal-failures = true
+  fail-on-unknown-config-keys = true
+  manual-start = false
+  non-standard-config = false
+  # ports-file = <string>
+  # startup-parallelism = <int>
+  # state-refresh-interval = <duration>
+}
+```
 
 **`clock.remote-api.tls.trust-collection-file`** supports these types: `pem-file`, `pem-string`. Pick one; each block below is a complete example of that choice.
 
@@ -100,6 +120,10 @@ canton.parameters.clock {
 }
 ```
 
+
+</Tab>
+<Tab title="Table">
+
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `alpha-version-support` **alpha** | boolean | `false` | If true, allow synchronizer nodes to use alpha protocol versions and participant nodes to connect to such synchronizers |
@@ -115,7 +139,19 @@ canton.parameters.clock {
 | `startup-parallelism` | int (PositiveInt) | _unset_ | Start up to N nodes in parallel (default is num-threads) |
 | `state-refresh-interval` | duration (NonNegativeFiniteDuration) | _unset_ | If configured, the config file will be reread in the given interval to allow dynamic properties to be picked up immediately |
 
+</Tab>
+</Tabs>
+
 ## `clock`
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.parameters.clock {
+  type = sim-clock|wall-clock|remote-clock   # required
+}
+```
 
 **`remote-api.tls.trust-collection-file`** supports these types: `pem-file`, `pem-string`. Pick one; each block below is a complete example of that choice.
 
@@ -185,6 +221,10 @@ canton.parameters.clock {
 }
 ```
 
+
+</Tab>
+<Tab title="Table">
+
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `type` | one of `sim-clock`, `wall-clock`, `remote-clock` | `wall-clock` † | Selects which of the keys below apply; see the example above. |
@@ -222,7 +262,27 @@ canton.parameters.clock {
 |             **trust-collection-file** `type = pem-string` |  |  |  |
 |                 `pem-bytes` | string | **required** |  |
 
+</Tab>
+</Tabs>
+
 ## `console`
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.parameters.console {
+  cache-dir = "/home/circleci/.ammonite"
+  colors = true
+  default-limit = 1000
+  verbose = false
+  # working-dir = <path>
+}
+```
+
+
+</Tab>
+<Tab title="Table">
 
 | Key | Type | Default | Description |
 |---|---|---|---|
@@ -232,20 +292,75 @@ canton.parameters.clock {
 | `verbose` | boolean | `false` | if true (not default), we'll emit verbose ammonite output |
 | `working-dir` | path | _unset_ | working directory. if none is given, we'll use the working directory of the Canton process |
 
+</Tab>
+</Tabs>
+
 ## `retention-period-defaults`
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.parameters.retention-period-defaults {
+  mediator = "7 days"
+  sequencer = "7 days"
+}
+```
+
+
+</Tab>
+<Tab title="Table">
 
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `mediator` | duration (NonNegativeFiniteDuration) | `7 days` |  |
 | `sequencer` | duration (NonNegativeFiniteDuration) | `7 days` |  |
 
+</Tab>
+</Tabs>
+
 ## `startup-memory-check-config`
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.parameters.startup-memory-check-config {
+  reporting-level = warn|ignore|crash   # required
+}
+```
+
+
+</Tab>
+<Tab title="Table">
 
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `reporting-level` | one of `warn`, `ignore`, `crash` | `warn` † |  |
 
+</Tab>
+</Tabs>
+
 ## `threading`
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.parameters.threading {
+  # core-pool-size = <int>
+  keep-alive = "60 seconds"
+  max-extra-threads = 256
+  # max-pool-size = <int>
+  # min-runnable = <int>
+  # mutex-max-spins = <int>
+  # parallelism = <int>
+}
+```
+
+
+</Tab>
+<Tab title="Table">
 
 | Key | Type | Default | Description |
 |---|---|---|---|
@@ -257,7 +372,50 @@ canton.parameters.clock {
 | `mutex-max-spins` | int (PositiveInt) | _unset_ | Tweak the number of spins we want to run before parking the thread |
 | `parallelism` | int (PositiveInt) | _unset_ | Number of CPU cores to use for the main ec (derived automatically by default) |
 
+</Tab>
+</Tabs>
+
 ## `timeouts`
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.parameters.timeouts {
+  console {
+    bounded = "1 minute"
+    ledger-command = "1 minute"
+    ping = "30 seconds"
+    testing-bong = "1 minute"
+    unbounded = "3 minutes"
+  }
+  processing {
+    active-init = "1 minute"
+    active-init-retry-delay = "50 milliseconds"
+    # admin-stream-open-bound = <duration>
+    closing = "2 minutes"
+    default = "1 minute"
+    dynamic-state-consistency-timeout = "60 seconds"
+    inspection = "Inf"
+    io = "Inf"
+    network = "2 minutes"
+    sequenced-event-processing-bound = "1 day"
+    sequencer-info = "30 seconds"
+    shutdown-network = "9 seconds"
+    shutdown-processing = "1 minute"
+    shutdown-short = "5 seconds"
+    slow-future-warn = "5 seconds"
+    storage-max-retry-interval = "10 seconds"
+    topology-change-warn-delay = "2 minutes"
+    unbounded = "3 minutes"
+    verify-active = "60 seconds"
+  }
+}
+```
+
+
+</Tab>
+<Tab title="Table">
 
 | Key | Type | Default | Description |
 |---|---|---|---|
@@ -287,3 +445,6 @@ canton.parameters.clock {
 |     `topology-change-warn-delay` | duration (NonNegativeDuration) | `2 minutes` | maximum delay between the timestamp of the topology snapshot used during submission and the sequencing timestamp, after which we log inconsistency errors as warnings |
 |     `unbounded` | duration (NonNegativeDuration) | `3 minutes` | timeout on how long "unbounded" operations can run. should be infinite in theory. |
 |     `verify-active` | duration (NonNegativeDuration) | `60 seconds` | how long should we wait for the synchronizer to tell us whether we are active or not |
+
+</Tab>
+</Tabs>

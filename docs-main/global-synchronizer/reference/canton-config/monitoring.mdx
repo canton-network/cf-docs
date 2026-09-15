@@ -17,7 +17,7 @@ Paths are rooted at `canton`. Segments in angle brackets are names you choose:
 
 A `[]` suffix marks the fields of a list element. Keys marked **alpha** or **beta** are not covered by compatibility guarantees.
 
-Keys are grouped: a **bold** row names a section and the keys indented beneath it live inside it. A section that takes a `type` is shown once for the keys every type accepts, then once per type for the keys specific to it; a complete HOCON example for each type precedes the table.
+Each section is shown two ways. **HOCON** is the section as you would write it: every key with its default, and one further block per `type` a section accepts. **Table** lists the same keys with their descriptions; a **bold** row names a section and the keys indented beneath it live inside it. Switching one section switches them all.
 
 In the Default column:
 
@@ -31,6 +31,16 @@ In the Default column:
 </Accordion>
 
 ## Top-level keys
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.monitoring {
+  dump-num-rolling-log-files = 0
+  sanitize-public-error-messages = true
+}
+```
 
 **`metrics.histograms[].aggregation`** supports these types: `buckets`, `exponential`. Pick one; each block below is a complete example of that choice.
 
@@ -203,12 +213,34 @@ canton.monitoring.tracing.tracer.sampler {
 }
 ```
 
+
+</Tab>
+<Tab title="Table">
+
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `dump-num-rolling-log-files` | int (NonNegativeInt) | `0` | How many of the rolling log files should be included in the remote dump. Default is 0. |
 | `sanitize-public-error-messages` | boolean | `true` | Specifies whether the system should redact error messages sent to clients. By default, Canton redacts error information to maintain a secure baseline. This flag allows for disabling of the redaction to provide detailed diagnostic data, but currently only affects supported services (such as the SequencerConnectService). For all other endpoints, standard baseline redaction remains in effect regardless of this setting. This feature must be enabled in production environments to prevent information leakage and ensure system security. |
 
+</Tab>
+</Tabs>
+
 ## `deadlock-detection`
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.monitoring.deadlock-detection {
+  enabled = true
+  interval = "3 seconds"
+  warn-interval = "10 seconds"
+}
+```
+
+
+</Tab>
+<Tab title="Table">
 
 | Key | Type | Default | Description |
 |---|---|---|---|
@@ -216,7 +248,50 @@ canton.monitoring.tracing.tracer.sampler {
 | `interval` | duration (NonNegativeFiniteDuration) | `3 seconds` | how often we check the EC |
 | `warn-interval` | duration (NonNegativeFiniteDuration) | `10 seconds` | how often we report a deadlock as still being active |
 
+</Tab>
+</Tabs>
+
 ## `logging`
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.monitoring.logging {
+  api {
+    debug-in-process-requests = false
+    max-message-lines = 20
+    max-metadata-size = 200
+    max-method-length = 30
+    max-string-length = 250
+    message-payloads = false
+    prefix-grpc-addresses = true
+    warn-beyond-load = 5
+  }
+  delay-logging-threshold = "20 seconds"
+  event-details = false
+  jvm-gc {
+    debug-level = false
+    details = true
+    enabled = false
+    filter = ""
+  }
+  log-config-on-startup = true
+  log-config-with-defaults = false
+  log-slow-futures = false
+  query-cost {
+    every = "30 seconds"   # required
+    log-lines = 15
+    log-operations = false
+    reset-on-output = true
+    sort-by = total
+  }
+}
+```
+
+
+</Tab>
+<Tab title="Table">
 
 | Key | Type | Default | Description |
 |---|---|---|---|
@@ -246,7 +321,51 @@ canton.monitoring.tracing.tracer.sampler {
 |     `reset-on-output` | boolean | `true` | determines whether the statistics will be reset after creating a report |
 |     `sort-by` | one of `count`, `mean`, `total`, `std-dev` | `total` | determines the sorting of the output (default total) |
 
+</Tab>
+</Tabs>
+
 ## `metrics`
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.monitoring.metrics {
+  cardinality = 2000
+  histograms = [
+    {
+      aggregation {
+        type = buckets|exponential   # required
+      }
+      name = "..."   # required
+      # view-name = <string>
+    }
+  ]
+  jvm-metrics {
+    buffers = true
+    classes = true
+    cpu = true
+    enabled = false
+    experimental = false
+    gc = true
+    memory-pools = true
+    threads = true
+  }
+  qualifiers = [ ]
+  reporters = [
+    {
+      filters = [
+        {
+          contains = ""
+          ends-with = ""
+          starts-with = ""
+        }
+      ]
+      type = prometheus|otlp|csv|logging   # required
+    }
+  ]
+}
+```
 
 **`histograms[].aggregation`** supports these types: `buckets`, `exponential`. Pick one; each block below is a complete example of that choice.
 
@@ -364,6 +483,10 @@ canton.monitoring.metrics.reporters = [
 ]
 ```
 
+
+</Tab>
+<Tab title="Table">
+
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `cardinality` | int (PositiveInt) | `2000` |  |
@@ -420,7 +543,32 @@ canton.monitoring.metrics.reporters = [
 |     `interval` | duration (NonNegativeFiniteDuration) | `30 seconds` | how often to log the metrics |
 |     `log-as-info` | boolean | `true` |  |
 
+</Tab>
+</Tabs>
+
 ## `tracing`
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.monitoring.tracing {
+  propagation = enabled
+  tracer {
+    batch-span-processor {
+      # batch-size = <int>
+      # schedule-delay = <duration>
+    }
+    exporter {
+      type = disabled|zipkin|otlp   # required
+    }
+    sampler {
+      parent-based = true
+      type = always-on|always-off|trace-id-ratio   # required
+    }
+  }
+}
+```
 
 **`tracer.exporter`** supports these types: `disabled`, `zipkin`, `otlp`. Pick one; each block below is a complete example of that choice.
 
@@ -477,6 +625,10 @@ canton.monitoring.tracing.tracer.sampler {
 }
 ```
 
+
+</Tab>
+<Tab title="Table">
+
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `propagation` | one of `enabled`, `disabled` | `enabled` | How should trace contexts (debugging details associated with actions) be propagated between nodes. |
@@ -502,3 +654,6 @@ canton.monitoring.tracing.tracer.sampler {
 |         `type` | one of `always-on`, `always-off`, `trace-id-ratio` | `always-on` † | Selects which of the keys below apply; see the example above. |
 |     **sampler** `type = trace-id-ratio` |  |  |  |
 |         `ratio` | number | **required** |  |
+
+</Tab>
+</Tabs>

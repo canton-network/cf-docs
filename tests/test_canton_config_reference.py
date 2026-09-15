@@ -77,8 +77,24 @@ class CantonConfigReferenceTests(unittest.TestCase):
         # The list belongs to `histograms`; the aggregation is an object inside an element of it.
         self.assertIn("canton.monitoring.metrics.histograms = [\n  {\n    aggregation {\n      type = buckets\n      boundaries = [ ]   # required\n    }\n  }\n]", monitoring)
         self.assertIn("      type = exponential\n      max-buckets = 0   # required\n      max-scale = 0   # required", monitoring)
-        # Alternatives are separate blocks, never siblings in one list.
-        self.assertEqual(monitoring.count("```hocon"), 2)
+        # Alternatives are separate blocks, never siblings in one list; the third block is the
+        # section-level HOCON view that precedes them.
+        self.assertEqual(monitoring.count("```hocon"), 3)
+
+    def test_sections_offer_hocon_first_then_table(self) -> None:
+        monitoring = generator.render_pages(sample_artifact())["monitoring.mdx"]
+        self.assertLess(monitoring.index('<Tab title="HOCON">'), monitoring.index('<Tab title="Table">'))
+        # The section-level block lists every key not gated by a nested type, defaults included,
+        # and shows a discriminator as the values it accepts.
+        self.assertIn(
+            "canton.monitoring.metrics {\n  histograms = [\n    {\n      aggregation {\n"
+            "        type = buckets|exponential   # required\n      }\n      name = \"...\"   # required\n"
+            "    }\n  ]\n}",
+            monitoring,
+        )
+        # Variant-specific keys live only in their variant's block.
+        section_block = monitoring.split("```hocon")[1]
+        self.assertNotIn("boundaries", section_block)
 
     def test_table_groups_variant_keys_under_type_headers(self) -> None:
         monitoring = generator.render_pages(sample_artifact())["monitoring.mdx"]

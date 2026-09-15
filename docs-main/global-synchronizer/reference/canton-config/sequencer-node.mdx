@@ -19,7 +19,7 @@ Paths are rooted at `canton`. Segments in angle brackets are names you choose:
 
 A `[]` suffix marks the fields of a list element. Keys marked **alpha** or **beta** are not covered by compatibility guarantees.
 
-Keys are grouped: a **bold** row names a section and the keys indented beneath it live inside it. A section that takes a `type` is shown once for the keys every type accepts, then once per type for the keys specific to it; a complete HOCON example for each type precedes the table.
+Each section is shown two ways. **HOCON** is the section as you would write it: every key with its default, and one further block per `type` a section accepts. **Table** lists the same keys with their descriptions; a **bold** row names a section and the keys indented beneath it live inside it. Switching one section switches them all.
 
 In the Default column:
 
@@ -33,6 +33,15 @@ In the Default column:
 </Accordion>
 
 ## Top-level keys
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.sequencers.<sequencer> {
+  acknowledgements-conflate-window = "45 seconds"
+}
+```
 
 **`admin-api.auth-services[]`** supports these types: `wildcard`, `unsafe-jwt-hmac-256`, `jwt-rs-256-crt`, `jwt-es-256-crt`, `jwt-es-512-crt`, `jwt-jwks`, `party-jwt`. Each block below shows one entry; a list may hold entries of different types.
 
@@ -1099,11 +1108,85 @@ canton.sequencers.<sequencer>.traffic-config.batch-aggregator-config {
 }
 ```
 
+
+</Tab>
+<Tab title="Table">
+
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `acknowledgements-conflate-window` | duration (PositiveFiniteDuration) | `45 seconds` |  |
 
+</Tab>
+</Tabs>
+
 ## `admin-api`
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.sequencers.<sequencer>.admin-api {
+  address = "127.0.0.1"
+  admin-token-config {
+    act-as-any-party-claim = false
+    admin-claim = false
+    admin-token-duration = "5 minutes"
+    # fixed-admin-token = <string>
+  }
+  auth-services = [
+    {
+      type = wildcard|unsafe-jwt-hmac-256|jwt-rs-256-crt|jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|party-jwt   # required
+    }
+  ]
+  # flow-control-window = <int>
+  initial-flow-control-window = 1048576
+  jwks-cache-config {
+    auto-refresh-after = "0 seconds"
+    cache-expiration = "5 minutes"
+    cache-max-size = 1000
+    connection-timeout = "10 seconds"
+    read-timeout = "10 seconds"
+  }
+  jwt-timestamp-leeway {
+    # default = <int>
+    # expires-at = <int>
+    # issued-at = <int>
+    # not-before = <int>
+  }
+  keep-alive-server {
+    permit-keep-alive-time = "20 seconds"
+    permit-keep-alive-without-calls = false
+    time = "40 seconds"
+    timeout = "20 seconds"
+  }
+  limits {
+    active {
+      <key> = [ ]
+    }
+    throttle-logging-rate-per-second = 10
+    warn-on-undefined-limits = false
+  }
+  max-concurrent-calls-per-connection = 100000
+  max-inbound-message-size = 10485760
+  max-token-lifetime = "5 minutes"
+  port = 30006
+  tls {
+    cert-chain-file {
+      type = pem-file|pem-string   # required
+    }
+    # ciphers = [ ... ]
+    client-auth {
+      type = require|optional|none   # required
+    }
+    enable-cert-revocation-checking = false
+    minimum-server-protocol-version = "TLSv1.2"
+    private-key-file = "..."   # required
+    trust-collection-file {
+      type = pem-file|pem-string   # required
+    }
+  }
+}
+```
 
 **`auth-services[]`** supports these types: `wildcard`, `unsafe-jwt-hmac-256`, `jwt-rs-256-crt`, `jwt-es-256-crt`, `jwt-es-512-crt`, `jwt-jwks`, `party-jwt`. Each block below shows one entry; a list may hold entries of different types.
 
@@ -1269,6 +1352,10 @@ canton.sequencers.<sequencer>.admin-api.tls.client-auth {
 }
 ```
 
+
+</Tab>
+<Tab title="Table">
+
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `address` | string | `127.0.0.1` |  |
@@ -1391,7 +1478,88 @@ canton.sequencers.<sequencer>.admin-api.tls.client-auth {
 |     **trust-collection-file** `type = pem-string` |  |  |  |
 |         `pem-bytes` | string | **required** |  |
 
+</Tab>
+</Tabs>
+
 ## `crypto`
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.sequencers.<sequencer>.crypto {
+  enable-experimental = false
+  encryption {
+    algorithms {
+      # allowed = [ ... ]
+      # default = <generic>
+    }
+    keys {
+      # allowed = [ ... ]
+      # default = <generic>
+    }
+  }
+  hash {
+    # allowed = [ ... ]
+    # default = <generic>
+  }
+  kms {
+    retries {
+      create-key-check {
+        initial-delay = "30 seconds"   # required
+        max-delay = "30 seconds"   # required
+        max-retries = 0   # required
+      }
+      failures {
+        initial-delay = "30 seconds"   # required
+        max-delay = "30 seconds"   # required
+        max-retries = 0   # required
+      }
+    }
+    type = driver|aws|gcp   # required
+  }
+  parallelism {
+    encryption-parallelism = 10
+    signature-verification-parallelism = 10
+  }
+  pbkdf {
+    # allowed = [ ... ]
+    # default = <generic>
+  }
+  private-key-store {
+    encryption {
+      reverted = false
+      type = kms   # required
+      # wrapper-key-id = <string>
+    }
+  }
+  provider = jce
+  session-signing-keys {
+    cut-off-duration = "1 minute"
+    disable-bound-checks = false
+    enabled = false   # required
+    key-eviction-period = "10 minutes"
+    key-validity-duration = "5 minutes"
+    signing-algorithm-spec = ed-25519
+    signing-key-spec = ec-curve-25519
+    tolerance-shift-duration = "2 minutes"
+  }
+  signing {
+    algorithms {
+      # allowed = [ ... ]
+      # default = <generic>
+    }
+    keys {
+      # allowed = [ ... ]
+      # default = <generic>
+    }
+  }
+  symmetric {
+    # allowed = [ ... ]
+    # default = <generic>
+  }
+}
+```
 
 **`kms`** supports these types: `driver`, `aws`, `gcp`. Pick one; each block below is a complete example of that choice.
 
@@ -1475,6 +1643,10 @@ canton.sequencers.<sequencer>.crypto.private-key-store.encryption {
 }
 ```
 
+
+</Tab>
+<Tab title="Table">
+
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `enable-experimental` | boolean | `false` | Whether to enable experimental cryptographic schemes. Should not be used in production environments. |
@@ -1549,7 +1721,32 @@ canton.sequencers.<sequencer>.crypto.private-key-store.encryption {
 |     `allowed` | array of S | _unset_ | The optional allowed schemes to use. If none is specified, all the provider's supported schemes of kind S are allowed. |
 |     `default` | depends on use (S) | _unset_ | The optional scheme to use. If none is specified, use the provider's default scheme of kind S. |
 
+</Tab>
+</Tabs>
+
 ## `declarative`
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.sequencers.<sequencer>.declarative {
+  check-self-consistency = false
+  remove-caps = false
+  throughput-cap {
+    <key> {
+      global-kbps-cap = 2000
+      global-tps-cap = 10
+      per-client-kbps-cap = 1000
+      per-client-tps-cap = 4
+    }
+  }
+}
+```
+
+
+</Tab>
+<Tab title="Table">
 
 | Key | Type | Default | Description |
 |---|---|---|---|
@@ -1562,13 +1759,45 @@ canton.sequencers.<sequencer>.crypto.private-key-store.encryption {
 |         `per-client-kbps-cap` | number (PositiveDouble) | `1000` |  |
 |         `per-client-tps-cap` | number (PositiveDouble) | `4` |  |
 
+</Tab>
+</Tabs>
+
 ## `health`
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.sequencers.<sequencer>.health {
+  backend-check-period = "5 seconds"
+}
+```
+
+
+</Tab>
+<Tab title="Table">
 
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `backend-check-period` | duration (NonNegativeFiniteDuration) | `5 seconds` | interval with which the sequencer will poll the health of its backend connection or state. |
 
+</Tab>
+</Tabs>
+
 ## `init`
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.sequencers.<sequencer>.init {
+  generate-intermediate-key = false
+  generate-topology-transactions-and-keys = true
+  identity {
+    type = external|auto|manual   # required
+  }
+}
+```
 
 **`identity.identifier`** supports these types: `random`, `explicit`, `config`. Pick one; each block below is a complete example of that choice.
 
@@ -1620,6 +1849,10 @@ canton.sequencers.<sequencer>.init.identity {
 }
 ```
 
+
+</Tab>
+<Tab title="Table">
+
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `generate-intermediate-key` | boolean | `false` | If true (default false), then the node will generate an additional intermediate key. This allows to turn off access to the root key for the node. |
@@ -1636,7 +1869,43 @@ canton.sequencers.<sequencer>.init.identity {
 |     **identifier** `type = explicit` |  |  |  |
 |         `name` | string | **required** | name to use as identifier |
 
+</Tab>
+</Tabs>
+
 ## `monitoring`
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.sequencers.<sequencer>.monitoring {
+  grpc-health-server {
+    address = "0.0.0.0"
+    jwt-timestamp-leeway {
+      # default = <int>
+      # expires-at = <int>
+      # issued-at = <int>
+      # not-before = <int>
+    }
+    keep-alive-server {
+      permit-keep-alive-time = "20 seconds"
+      permit-keep-alive-without-calls = false
+      time = "40 seconds"
+      timeout = "20 seconds"
+    }
+    parallelism = 4
+    # port = <int>
+  }
+  http-health-server {
+    address = "0.0.0.0"
+    port = 0   # required
+  }
+}
+```
+
+
+</Tab>
+<Tab title="Table">
 
 | Key | Type | Default | Description |
 |---|---|---|---|
@@ -1658,7 +1927,171 @@ canton.sequencers.<sequencer>.init.identity {
 |     `address` | string | `0.0.0.0` |  |
 |     `port` | int (Port) | **required** |  |
 
+</Tab>
+</Tabs>
+
 ## `parameters`
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.sequencers.<sequencer>.parameters {
+  alpha-version-support = false
+  async-writer {
+    aggregation-batch-size = 1000
+    block-info-batch-size = 1000
+    traffic-batch-size = 1000
+  }
+  batching {
+    aggregator {
+      maximum-batch-size = 500
+      type = batching|no-batching   # required
+    }
+    contract-store-aggregator {
+      maximum-batch-size = 500
+      type = batching|no-batching   # required
+    }
+    # in-flight-aggregations-query-interval = <duration>
+    ledger-api-pruning-batch-size = 50000
+    max-acs-import-batch-size = 1000
+    max-items-in-batch = 100
+    max-pruning-batch-size = 1000
+    max-pruning-time-interval = "30 minutes"
+    max-stakeholder-groups-batch-size = 1000
+    max-topology-update-batch-size = 1000
+    max-topology-write-batch-size = 1000
+    mediator-fetch-finalized-responses-aggregator {
+      maximum-batch-size = 500
+      type = batching|no-batching   # required
+    }
+    mediator-store-finalized-responses-aggregator {
+      maximum-batch-size = 500
+      type = batching|no-batching   # required
+    }
+    parallelism = 8
+    pruning-parallelism = 2
+    topology-cache-aggregator {
+      maximum-batch-size = 500
+      type = batching|no-batching   # required
+    }
+  }
+  beta-version-support = false
+  caching {
+    bft-ordering-batch-cache {
+      expire-after-access = "1 minute"
+      maximum-memory = "..."   # required
+    }
+    contract-store {
+      expire-after-access = "1 minute"
+      maximum-size = 0   # required
+    }
+    finalized-mediator-confirmation-requests {
+      expire-after-access = "1 minute"
+      maximum-size = 0   # required
+    }
+    indexed-strings {
+      expire-after-access = "1 minute"
+      maximum-size = 0   # required
+    }
+    key-cache {
+      expire-after-access = "1 minute"
+      maximum-size = 0   # required
+    }
+    kms-metadata-cache {
+      expire-after-access = "1 minute"
+      maximum-size = 0   # required
+    }
+    member-cache {
+      expire-after-access = "1 minute"
+      maximum-size = 0   # required
+    }
+    package-upgrade-cache {
+      maximum-size = 0   # required
+    }
+    package-vetting-cache {
+      expire-after-access = "1 minute"
+      maximum-size = 0   # required
+    }
+    participant-cache {
+      expire-after-access = "1 minute"
+      maximum-size = 0   # required
+    }
+    party-cache {
+      expire-after-access = "1 minute"
+      maximum-size = 0   # required
+    }
+    public-key-conversion-cache {
+      expire-after-access = "1 minute"
+      maximum-size = 0   # required
+    }
+    sequencer-catchup-payload-cache {
+      expire-after-access = "1 minute"
+      maximum-memory = "..."   # required
+    }
+    sequencer-payload-cache {
+      expire-after-access = "1 minute"
+      maximum-memory = "..."   # required
+    }
+    session-encryption-key-cache {
+      enabled = true
+      receiver-cache {
+        expire-after-timeout = "10 minutes"
+        maximum-size = 0   # required
+      }
+      sender-cache {
+        expire-after-timeout = "10 minutes"
+        maximum-size = 0   # required
+      }
+    }
+    synchronizer-client-max-timestamp {
+      expire-after-access = "1 minute"
+      maximum-size = 0   # required
+    }
+    topology-snapshot {
+      expire-after-access = "1 minute"
+      maximum-size = 0   # required
+    }
+  }
+  delay-requests-before-lsu-traffic-init = false
+  dev-version-support = false
+  disable-aggregation-rule-size-check-for-testing = false
+  disable-release-version-handshake-check = false
+  disable-submission-checks-for-testing = false
+  dont-warn-on-deprecated-pv = false
+  enable-async-sequencer-logging = true
+  enable-prevalidation = true
+  enable-reject-delivered-aggregations-on-pv-35 = [ ]
+  lsu-repair {
+    # global-max-sequencing-time-exclusive = <string>
+    lsu-sequencing-bounds-override {
+      lower-bound-sequencing-time-exclusive = "..."   # required
+      upgrade-time = "..."   # required
+    }
+  }
+  lsu {
+    contact-successor-retry {
+      initial-delay = "30 seconds"   # required
+      max-delay = "30 seconds"   # required
+      max-retries = 0   # required
+    }
+  }
+  max-confirmation-requests-burst-factor = 0.5
+  produce-post-ordering-topology-ticks = true
+  time-advancing-topology {
+    grace-period = "500 milliseconds"
+    max-sequencing-time-window = "30 seconds"
+    poll-backoff = "250 milliseconds"
+    sequencing-patience = "1 second"
+  }
+  unsafe-sequencer-channel-support = false
+  watchdog {
+    # check-interval = <duration>
+    enabled = false   # required
+    # kill-delay = <duration>
+  }
+}
+```
 
 **`batching.aggregator`** supports these types: `batching`, `no-batching`. Pick one; each block below is a complete example of that choice.
 
@@ -1677,6 +2110,10 @@ canton.sequencers.<sequencer>.parameters.batching.aggregator {
   maximum-batch-size = 500
 }
 ```
+
+
+</Tab>
+<Tab title="Table">
 
 | Key | Type | Default | Description |
 |---|---|---|---|
@@ -1821,7 +2258,58 @@ canton.sequencers.<sequencer>.parameters.batching.aggregator {
 |     `enabled` | boolean | **required** |  |
 |     `kill-delay` | duration (NonNegativeFiniteDuration) | `NonNegativeFiniteDuration(30.seconds)` ‡ |  |
 
+</Tab>
+</Tabs>
+
 ## `public-api`
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.sequencers.<sequencer>.public-api {
+  address = "127.0.0.1"
+  # flow-control-window = <int>
+  initial-flow-control-window = 1048576
+  jwks-cache-config {
+    auto-refresh-after = "0 seconds"
+    cache-expiration = "5 minutes"
+    cache-max-size = 1000
+    connection-timeout = "10 seconds"
+    read-timeout = "10 seconds"
+  }
+  keep-alive-server {
+    permit-keep-alive-time = "20 seconds"
+    permit-keep-alive-without-calls = false
+    time = "40 seconds"
+    timeout = "20 seconds"
+  }
+  limits {
+    active {
+      <key> = [ ]
+    }
+    throttle-logging-rate-per-second = 10
+    warn-on-undefined-limits = false
+  }
+  max-auth-tokens-per-member = 25
+  max-concurrent-calls-per-connection = 100000
+  max-subscriptions-per-member = 5
+  max-token-expiration-interval = "1 hour"
+  max-token-lifetime = "Inf"
+  nonce-expiration-interval = "1 minute"
+  # override-max-request-size = <int>
+  port = 30005
+  tls {
+    cert-chain-file {
+      type = pem-file|pem-string   # required
+    }
+    # ciphers = [ ... ]
+    minimum-server-protocol-version = "TLSv1.2"
+    private-key-file = "..."   # required
+  }
+  use-exponential-random-token-expiration = false
+}
+```
 
 **`tls.cert-chain-file`** supports these types: `pem-file`, `pem-string`. Pick one; each block below is a complete example of that choice.
 
@@ -1838,6 +2326,10 @@ canton.sequencers.<sequencer>.public-api.tls.cert-chain-file {
   pem-bytes = "..."   # required
 }
 ```
+
+
+</Tab>
+<Tab title="Table">
 
 | Key | Type | Default | Description |
 |---|---|---|---|
@@ -1880,7 +2372,46 @@ canton.sequencers.<sequencer>.public-api.tls.cert-chain-file {
 |     **cert-chain-file** `type = pem-string` |  |  |  |
 |         `pem-bytes` | string | **required** |  |
 
+</Tab>
+</Tabs>
+
 ## `replication`
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.sequencers.<sequencer>.replication {
+  connection-pool {
+    active-timeout = "15 seconds"
+    connection {
+      client-connection-check-interval = "5 seconds"
+      connection-timeout = "10 seconds"
+      health-check-period = "5 seconds"
+      health-check-timeout = "15 seconds"
+      initial-acquisition-interval = "200 milliseconds"
+      initial-acquisition-max-retries = 5
+      keep-alive-count = 5
+      keep-alive-idle = "10 seconds"
+      keep-alive-interval = "1 second"
+      lock {
+        health-check-period = "5 seconds"
+        health-check-timeout = "15 seconds"
+      }
+      max-inconclusive-read-only-checks = 3
+      passive-check-period = "15 seconds"
+    }
+    health-check-period = "5 seconds"
+    initial-locked-connection-timeout = "15 seconds"
+    initial-must-remain-active-connection-timeout = "1 minute"
+  }
+  # enabled = <boolean>
+}
+```
+
+
+</Tab>
+<Tab title="Table">
 
 | Key | Type | Default | Description |
 |---|---|---|---|
@@ -1906,7 +2437,61 @@ canton.sequencers.<sequencer>.public-api.tls.cert-chain-file {
 |             `health-check-period` | duration (PositiveFiniteDuration) | `5 seconds` | Health check period, i.e., how long to wait between one health check completed and the next to start. |
 |             `health-check-timeout` | duration (PositiveFiniteDuration) | `15 seconds` | Timeout for running a health check in seconds granularity. |
 
+</Tab>
+</Tabs>
+
 ## `sequencer-client`
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.sequencers.<sequencer>.sequencer-client {
+  acknowledgement-interval = "1 minute"
+  amplify-on-max-sequencing-time-too-far = true
+  auth-token {
+    backoff {
+      base = 2
+      jitter {
+        type = equal|full   # required
+      }
+      max-retry-interval = "2 minutes"
+    }
+    min-retry-interval = "500 milliseconds"
+    refresh-auth-token-before-expiry = "20 seconds"
+    retries = 20
+  }
+  # channel-flow-control-window = <int>
+  channel-initial-flow-control-window = 1048576
+  channel-max-inbound-message-size = 134217728
+  default-max-sequencing-time-offset = "2 minutes"
+  enable-amplification-improvements = true
+  event-inbox-size = 100
+  handshake-retry-attempts = 50
+  handshake-retry-delay = "5 seconds"
+  initial-connection-retry-delay = "10 milliseconds"
+  keep-alive-client {
+    idle-timeout = "30 minutes"
+    keep-alive-without-calls = false
+    time = "40 seconds"
+    timeout = "15 seconds"
+  }
+  max-connection-retry-delay = "30 seconds"
+  maximum-in-flight-event-batches = 20
+  # override-max-request-size = <int>
+  past-events-cache-size = 1000
+  skip-sequenced-event-validation = false
+  startup-connection-retry-delay = "1 second"
+  time-readings-retention = "5 minutes"
+  use-new-aggregator = true
+  use-new-connection-pool = true
+  warn-disconnect-delay = "10 seconds"
+}
+```
+
+
+</Tab>
+<Tab title="Table">
 
 | Key | Type | Default | Description |
 |---|---|---|---|
@@ -1946,14 +2531,43 @@ canton.sequencers.<sequencer>.public-api.tls.cert-chain-file {
 |     `time` | duration (NonNegativeFiniteDuration) | `40 seconds` | Sets the time without read activity before sending a keepalive ping. Do not set to small numbers (default is 40s) |
 |     `timeout` | duration (NonNegativeFiniteDuration) | `15 seconds` | Sets the time waiting for read activity after sending a keepalive ping (default is 15s). The default timeout was previously 20s and was lowered to 15s, because besides configuring the gRPC KeepAliveManager, it also sets up the socket's TCP_USER_TIMEOUT (see html). 15s gives a larger margin to detect a faulty connection earlier and retry a submission on another sequencer via amplification, thereby avoiding a request failure. |
 
+</Tab>
+</Tabs>
+
 ## `sequencer-limits`
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.sequencers.<sequencer>.sequencer-limits {
+  max-client-protocol-versions = 1000
+  max-member-protocol-versions = 1000
+}
+```
+
+
+</Tab>
+<Tab title="Table">
 
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `max-client-protocol-versions` | int (PositiveInt) | `1000` | maximum number of entries accepted in handshake `clientProtocolVersions` |
 | `max-member-protocol-versions` | int (PositiveInt) | `1000` | maximum number of entries accepted in authentication challenge `memberProtocolVersions` |
 
+</Tab>
+</Tabs>
+
 ## `sequencer`
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.sequencers.<sequencer>.sequencer {
+  type = database|external|bft-sequencer   # required
+}
+```
 
 **`config.batch-aggregator`** supports these types: `batching`, `no-batching`. Pick one; each block below is a complete example of that choice.
 
@@ -2776,6 +3390,10 @@ canton.sequencers.<sequencer>.sequencer.writer {
 }
 ```
 
+
+</Tab>
+<Tab title="Table">
+
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `type` | one of `database`, `external`, `bft-sequencer` | `reference` † | Selects which of the keys below apply; see the example above. |
@@ -3411,7 +4029,40 @@ canton.sequencers.<sequencer>.sequencer.writer {
 |                 **partitions** |  |  |  |
 |                     `initial-bft-orderer-tables-partition-size` | int | `1500` | Initial partition size for bft-orderer tables. Note that this config is only read once, during the initial database setup and later changes to this value won't have any effect. This is also only used in Postgres setups. |
 
+</Tab>
+</Tabs>
+
 ## `storage`
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.sequencers.<sequencer>.storage {
+  parameters {
+    connection-allocation {
+      # num-ledger-api = <int>
+      # num-reads = <int>
+      # num-writes = <int>
+    }
+    connection-timeout = "5 seconds"
+    fail-fast-on-startup = true
+    failed-to-fatal-delay = "5 minutes"
+    # max-connections = <int>
+    migrate-and-start = false
+    migrations-paths = [ ]
+    partitions {
+      initial-bft-orderer-tables-partition-size = 1500
+    }
+    repeatable-migrations-paths = [ ]
+    unsafe-baseline-on-migrate = false
+    unsafe-clean-on-validation-error = false
+    # warn-on-slow-query = <duration>
+    warn-on-slow-query-interval = "5 seconds"
+  }
+  type = memory|h2|postgres   # required
+}
+```
 
 **`canton.sequencers.<sequencer>.storage`** supports these types: `memory`, `h2`, `postgres`. Pick one; each block below is a complete example of that choice.
 
@@ -3496,6 +4147,10 @@ canton.sequencers.<sequencer>.storage {
 }
 ```
 
+
+</Tab>
+<Tab title="Table">
+
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `type` | one of `memory`, `h2`, `postgres` | `memory` † | Determines how a node stores persistent data. |
@@ -3518,7 +4173,30 @@ canton.sequencers.<sequencer>.storage {
 |     **partitions** |  |  |  |
 |         `initial-bft-orderer-tables-partition-size` | int | `1500` | Initial partition size for bft-orderer tables. Note that this config is only read once, during the initial database setup and later changes to this value won't have any effect. This is also only used in Postgres setups. |
 
+</Tab>
+</Tabs>
+
 ## `time-tracker`
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.sequencers.<sequencer>.time-tracker {
+  min-observation-duration = "24 hours"
+  observation-latency = "250 milliseconds"
+  patience-duration = "500 milliseconds"
+  time-request {
+    initial-retry-delay = "200 milliseconds"
+    max-retry-delay = "5 seconds"
+    max-sequencing-delay = "10 seconds"
+  }
+}
+```
+
+
+</Tab>
+<Tab title="Table">
 
 | Key | Type | Default | Description |
 |---|---|---|---|
@@ -3530,7 +4208,33 @@ canton.sequencers.<sequencer>.storage {
 |     `max-retry-delay` | duration (NonNegativeFiniteDuration) | `5 seconds` | The max retry delay if the request to send a sequenced event fails |
 |     `max-sequencing-delay` | duration (NonNegativeFiniteDuration) | `10 seconds` | If our request for a sequenced event was successful, how long should we wait to observe it from the sequencer before starting a new request. |
 
+</Tab>
+</Tabs>
+
 ## `topology`
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.sequencers.<sequencer>.topology {
+  broadcast-batch-size = 100
+  broadcast-retry-delay = "10 seconds"
+  disable-optional-topology-checks = false
+  dispatch-queue-backpressure-limit = 100
+  enable-topology-state-cache-consistency-checks = false
+  max-topology-state-cache-items = 10000
+  topology-state-cache-eviction-threshold = 250
+  topology-transaction-observation-timeout = "30 seconds"
+  topology-transaction-registration-timeout = "20 seconds"
+  use-time-proofs-to-observe-effective-time = false
+  validate-initial-topology-snapshot = true
+}
+```
+
+
+</Tab>
+<Tab title="Table">
 
 | Key | Type | Default | Description |
 |---|---|---|---|
@@ -3546,7 +4250,28 @@ canton.sequencers.<sequencer>.storage {
 | `use-time-proofs-to-observe-effective-time` | boolean | `false` | Whether the node will use time proofs to observe when an effective time has been reached. If false, no time proofs will be sent to the sequencers by any Canton node. |
 | `validate-initial-topology-snapshot` | boolean | `true` | if false, the validation is skipped and the snapshot is directly imported. this is risky as it might create a fork if the validation was changed. therefore, we only use this with great care. the proper solution is to make validation so fast that it doesn't impact performance. |
 
+</Tab>
+</Tabs>
+
 ## `traffic-config`
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.sequencers.<sequencer>.traffic-config {
+  batch-aggregator-config {
+    maximum-batch-size = 500
+    type = batching|no-batching   # required
+  }
+  maximum-traffic-consumed-cache-size = 1000
+  maximum-traffic-purchased-cache-size = 1000
+  pruning-retention-window = "2 hours"
+  submission-timestamp-in-future-tolerance = "5 seconds"
+  traffic-consumed-cache-ttl = "2 hours"
+  traffic-purchased-cache-size-per-member = 3
+}
+```
 
 **`batch-aggregator-config`** supports these types: `batching`, `no-batching`. Pick one; each block below is a complete example of that choice.
 
@@ -3566,6 +4291,10 @@ canton.sequencers.<sequencer>.traffic-config.batch-aggregator-config {
 }
 ```
 
+
+</Tab>
+<Tab title="Table">
+
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `maximum-traffic-consumed-cache-size` | int (PositiveInt) | `1000` | Maximum number of entries (members) to keep in the traffic consumed cache. |
@@ -3581,3 +4310,6 @@ canton.sequencers.<sequencer>.traffic-config.batch-aggregator-config {
 |     `maximum-in-flight` | int (PositiveNumeric) | `2` | Maximum number of in-flight get queries. |
 | **batch-aggregator-config** `type = no-batching` |  |  |  |
 |     `max-parallel-batches` | int (PositiveNumeric) | `2` | Maximum number of batches to execute in parallel when using runMany. |
+
+</Tab>
+</Tabs>

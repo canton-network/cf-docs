@@ -540,6 +540,65 @@ def render_union_example(union: str, discriminator: str, options_by_path: dict[s
     return lines
 
 
+def render_scope_hocon(scope: str, entries: list[dict], variants_by_type: dict[str, list[str]]) -> list[str]:
+    """The whole section as HOCON: every key that applies regardless of any `type` chosen inside
+    it, with a discriminator shown as the values it accepts. Keys specific to one variant follow in
+    that variant's own block, so nothing is listed twice and nothing is left out."""
+    keys: "OrderedDict[str, dict]" = OrderedDict()
+    for option, conditions in collapse_variants(entries):
+        gated = False
+        union_of = {c["at"]: c["of"] for c in option["appliesWhen"]}
+        for at, accepted in conditions.items():
+            if not at.startswith(scope + "."):
+                continue
+            known = set(variants_by_type.get(union_of.get(at, ""), []))
+            if not known or not accepted >= known:
+                gated = True
+                break
+        if gated:
+            continue
+        relative = option["path"][len(scope) :].lstrip(".")
+        if relative:
+            keys.setdefault(relative, option)
+    if not keys:
+        return []
+    opening, closing, indent = open_path(scope)
+    block = ["```hocon", *opening]
+    render_block(nest(OrderedDict(sorted(keys.items()))), indent, block, set())
+    block += [*closing, "```", ""]
+    return block
+
+
+def render_section_views(
+    scope: str,
+    entries: list[dict],
+    variants_by_type: dict[str, list[str]],
+    unions: dict,
+    options_by_path: dict[str, list[dict]],
+) -> list[str]:
+    """Two views of one section behind tabs, HOCON first: the file you would write is the more
+    comprehensible shape, while the table is where the human-written descriptions live."""
+    hocon = render_scope_hocon(scope, entries, variants_by_type)
+    hocon += examples_within(scope, unions, variants_by_type, options_by_path)
+    table = render_table(entries, scope, variants_by_type)
+    # Tab bodies are left unindented: four leading spaces would turn a line into a code block.
+    return [
+        "<Tabs>",
+        '<Tab title="HOCON">',
+        "",
+        *hocon,
+        "",
+        "</Tab>",
+        '<Tab title="Table">',
+        "",
+        *table,
+        "",
+        "</Tab>",
+        "</Tabs>",
+        "",
+    ]
+
+
 def examples_within(scope: str, unions: dict, variants_by_type: dict[str, list[str]], options_by_path: dict[str, list[dict]]) -> list[str]:
     """Examples for the unions inside one table's scope, ahead of it. A union type recurs across
     the tree, so it is shown once per table at its shallowest occurrence there."""
@@ -589,9 +648,10 @@ def reading_guide(artifact: dict, options: list[dict] | None) -> list[str]:
         "A `[]` suffix marks the fields of a list element. Keys marked **alpha** or **beta** are not "
         "covered by compatibility guarantees.",
         "",
-        "Keys are grouped: a **bold** row names a section and the keys indented beneath it live inside "
-        "it. A section that takes a `type` is shown once for the keys every type accepts, then once per "
-        "type for the keys specific to it; a complete HOCON example for each type precedes the table.",
+        "Each section is shown two ways. **HOCON** is the section as you would write it: every key "
+        "with its default, and one further block per `type` a section accepts. **Table** lists the "
+        "same keys with their descriptions; a **bold** row names a section and the keys indented "
+        "beneath it live inside it. Switching one section switches them all.",
         "",
         "In the Default column:",
         "",
@@ -630,14 +690,12 @@ def render_node_page(prefix: str, title: str, description: str, options: list[di
     direct = by_subsection.pop("", [])
     if direct:
         lines += ["## Top-level keys", ""]
-        lines += examples_within(prefix, unions, variants_by_type, options_by_path)
-        lines += render_table(direct, prefix, variants_by_type) + [""]
+        lines += render_section_views(prefix, direct, variants_by_type, unions, options_by_path)
 
     for subsection, entries in by_subsection.items():
         scope = prefix + "." + subsection
         lines += [f"## `{subsection}`", ""]
-        lines += examples_within(scope, unions, variants_by_type, options_by_path)
-        lines += render_table(entries, scope, variants_by_type) + [""]
+        lines += render_section_views(scope, entries, variants_by_type, unions, options_by_path)
 
     return "\n".join(lines).rstrip() + "\n"
 
