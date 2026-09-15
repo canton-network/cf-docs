@@ -10,7 +10,6 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
-from x2mdx.visibility import dev_only_identities
 from x2mdx.protobuf.models import ProtobufSourceSnapshot, ProtobufSources
 
 try:
@@ -131,7 +130,7 @@ def metadata_lifecycle_state(entity: dict[str, Any]) -> str | None:
     metadata = entity.get("metadata")
     lifecycle = metadata.get("lifecycle") if isinstance(metadata, dict) else None
     state = lifecycle.get("state") if isinstance(lifecycle, dict) else None
-    if isinstance(state, str) and state.strip().lower() in {"dev", "alpha", "beta", "stable", "deprecated"}:
+    if isinstance(state, str) and state.strip().lower() in {"alpha", "beta", "stable", "deprecated"}:
         return state.strip().lower()
     return None
 
@@ -211,24 +210,7 @@ class DescriptorSnapshotBuilder:
         self.enum_values: dict[str, dict[str, Any]] = {}
 
     def metadata(self, kind: str, entity_id: str) -> dict[str, Any]:
-        metadata = metadata_for(self.metadata_overlay, kind, entity_id)
-        lifecycle = metadata.get("lifecycle", {})
-        if not isinstance(lifecycle, dict):
-            return metadata
-        transitions = lifecycle.get("versions", {})
-        if not isinstance(transitions, dict):
-            raise ValueError("Protobuf lifecycle.versions must map versions to lifecycle states")
-        for version, state in transitions.items():
-            if not isinstance(version, str) or not version:
-                raise ValueError("Protobuf lifecycle.versions keys must be version strings")
-            if state is not None and (not isinstance(state, str) or state.strip().lower() not in {"dev", "alpha", "beta", "stable", "deprecated"}):
-                raise ValueError(f"Invalid Protobuf lifecycle state for version {version}: {state!r}")
-        eligible = [version for version in transitions
-                    if version_sort_key(version) <= version_sort_key(self.source.version)]
-        if eligible:
-            version = max(eligible, key=version_sort_key)
-            metadata = {**metadata, "lifecycle": {**lifecycle, "state": transitions[version]}}
-        return metadata
+        return metadata_for(self.metadata_overlay, kind, entity_id)
 
     def repo_path(self, import_path: str) -> str:
         return self.import_to_repo_path[import_path]
@@ -910,18 +892,6 @@ def build_protobuf_history_report_from_sources(
         }
         releases.append(release)
 
-    hidden = dev_only_identities(
-        {key: metadata_lifecycle_state(endpoint) for key, endpoint in release["snapshot"]["endpoints"].items()}
-        for release in releases
-    )
-    for release in releases:
-        snapshot = release["snapshot"]
-        snapshot["endpoints"] = {key: endpoint for key, endpoint in snapshot["endpoints"].items() if key not in hidden}
-        for owner in [*snapshot["services"].values(), *snapshot["packages"]]:
-            owner["endpointIds"] = [key for key in owner["endpointIds"] if key not in hidden]
-            if "endpointCount" in owner:
-                owner["endpointCount"] = len(owner["endpointIds"])
-        snapshot["stats"]["endpoints"] = len(snapshot["endpoints"])
     build_release_diffs(releases)
     latest_release = releases[-1]
     return {

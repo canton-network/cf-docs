@@ -2,7 +2,7 @@
 
 Lifecycle labels in generated docs are an alpha feature. Please [share feedback](https://github.com/canton-network/cf-docs/issues).
 
-`dev` hides an API until its latest observed version at or before the publish version has another label (or no label). Removal alone does not make a dev API public. Applies to operations/methods, TypeDoc exports, and Daml modules/functions.
+`dev` hides an API until its latest observed version at or before the publish version has another label (or no label). Removal alone does not make a dev API public. Applies to OpenAPI operations, AsyncAPI channel actions, OpenRPC methods, TypeDoc exports, and Daml modules/functions.
 
 ## OpenAPI
 
@@ -77,9 +77,7 @@ metadata_path: lifecycle.json
 ```json
 {
   "endpoints": {
-    "example.PaymentService/CreatePayment": {
-      "lifecycle": {"state": "dev", "versions": {"1.1.0": "beta"}}
-    }
+    "example.PaymentService/CreatePayment": {"lifecycle": {"state": "beta"}}
   },
   "messages": {
     "example.CreatePaymentRequest": {"lifecycle": {"state": "deprecated"}}
@@ -87,9 +85,7 @@ metadata_path: lifecycle.json
 }
 ```
 
-`lifecycle.versions` overrides the default state from each specified version onward. Use `null` to clear the label.
-
-Accepted `lifecycle.state` values: `dev`, `alpha`, `beta`, `stable`, `deprecated` (case-insensitive).
+Accepted `lifecycle.state` values: `alpha`, `beta`, `stable`, `deprecated` (case-insensitive).
 
 ## Daml
 

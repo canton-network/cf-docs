@@ -215,49 +215,6 @@ def test_daml_function_filter_does_not_hide_module():
     assert mod["md_functions"]
 
 
-@pytest.mark.parametrize("later", ["dev", "beta", "deprecated", None])
-def test_protobuf_versioned_overlay_filters_pages_and_history(later):
-    from tests.minimal_characterization.test_protobuf_lifecycle import (
-        ProtobufMinimalLifecycleTests,
-    )
-    from x2mdx.protobuf.snapshots import load_protobuf_sources
-    from x2mdx.protobuf.lifecycle import build_protobuf_history_report_from_sources
-
-    fixture = ProtobufMinimalLifecycleTests()
-    fixture.setUp()
-    try:
-        key = "com.example.payments.v1.PaymentService/CreatePayment"
-        manifest = fixture._write_manifest(
-            metadata_overlay={
-                "endpoints": {
-                    key: {"lifecycle": {"state": "dev", "versions": {"1.1.0": later}}}
-                }
-            }
-        )
-        sources = load_protobuf_sources(manifest)
-        report = build_protobuf_history_report_from_sources(
-            sources, source_name="test", version_filter="all"
-        )
-        assert (key in report["latestSnapshot"]["endpoints"]) == (later != "dev")
-        assert any(item["id"] == key for item in report["endpointLifecycle"]) == (
-            later != "dev"
-        )
-        for release in report["releases"]:
-            snapshot = release["snapshot"]
-            assert snapshot["stats"]["endpoints"] == len(snapshot["endpoints"])
-            if later == "dev":
-                assert all(
-                    key not in service["endpointIds"]
-                    for service in snapshot["services"].values()
-                )
-                assert all(
-                    key not in package["endpointIds"]
-                    for package in snapshot["packages"]
-                )
-    finally:
-        fixture.tearDown()
-
-
 def test_openrpc_cli_prunes_dev_only_pages(tmp_path):
     import json
     from tests.minimal_characterization.test_openrpc_lifecycle import (
