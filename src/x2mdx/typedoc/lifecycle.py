@@ -93,6 +93,7 @@ def normalize_lifecycle_state(comment: dict[str, Any] | None) -> str | None:
     if comment_has_tag(comment, "@deprecated"):
         return "deprecated"
     for tag_name, state in [
+        ("@preAlpha", "pre-alpha"),
         ("@alpha", "alpha"),
         ("@beta", "beta"),
         ("@stable", "stable"),
@@ -103,7 +104,7 @@ def normalize_lifecycle_state(comment: dict[str, Any] | None) -> str | None:
 
 
 def lifecycle_state_label(value: str) -> str:
-    return value.replace("_", " ").replace("-", " ").title()
+    return "Pre-alpha" if value == "pre-alpha" else value.replace("_", " ").replace("-", " ").title()
 
 
 def extract_first_block_tag_text(comment: dict[str, Any] | None, tag_name: str) -> str | None:

@@ -14,6 +14,8 @@ from x2mdx.render import render_page
 @pytest.mark.parametrize(
     ("state", "label"),
     [
+        ("pre-alpha", "Pre-alpha"),
+        (" PRE-ALPHA ", "Pre-alpha"),
         ("alpha", "Alpha"),
         ("beta", "Beta"),
         (" BETA ", "Beta"),
@@ -42,7 +44,7 @@ def test_prerelease_badge_uses_published_operation_state(
         ),
         history_events=events, publish_version="3.5",
     ))
-    for candidate in ("Alpha", "Beta"):
+    for candidate in ("Pre-alpha", "Alpha", "Beta"):
         assert (f">{candidate}</span>" in rendered) == (candidate == label)
     assert "x-state" not in rendered
 
@@ -582,3 +584,10 @@ def test_removed_operation_has_historical_schema_and_no_live_playground() -> Non
     assert "\napi:" not in rendered
     assert "\nplayground:" not in rendered
     assert "(removed)" in rendered
+
+
+@pytest.mark.parametrize("extra, expected", [({}, "pre-alpha"), ({"x-state": "stable"}, "stable"), ({"x-state": "beta"}, "beta"), ({"deprecated": True}, "deprecated")])
+def test_pre_alpha_operation_tag_respects_explicit_state(extra, expected) -> None:
+    from x2mdx.openapi.history import authored_lifecycle_state
+    operation = {"tags": ["external", "pre-alpha"], **extra}
+    assert authored_lifecycle_state(operation)[0].value == expected

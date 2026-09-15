@@ -75,6 +75,7 @@ def lifecycle_state_label(state: str | None) -> str | None:
 
 def lifecycle_state_tone(state: str | None) -> str:
     return {
+        "pre-alpha": "changed",
         "alpha": "changed",
         "beta": "neutral",
         "stable": "added",

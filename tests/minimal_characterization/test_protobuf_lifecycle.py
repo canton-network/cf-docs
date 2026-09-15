@@ -304,16 +304,26 @@ class ProtobufMinimalLifecycleTests(unittest.TestCase):
         assert_contains_all(create_payment, ["Lifecycle", "Beta", "Alpha", "Deprecated"])
         assert_contains_all(list_payments, ["Lifecycle", "Stable"])
 
+    def test_cli_renders_pre_alpha(self) -> None:
+        package = "com.example.payments.v1"
+        manifest = self._write_manifest(metadata_overlay={
+            "endpoints": {f"{package}.PaymentService/CreatePayment": {"lifecycle": {"state": "pre-alpha"}}},
+            "messages": {f"{package}.CreatePaymentRequest": {"lifecycle": {"state": "PRE-ALPHA"}}},
+        })
+        output = self.root / "pre-alpha"
+        run_x2mdx(["protobuf", "build-api-pages-from-manifest", "--manifest", str(manifest), "--output-dir", str(output)])
+        assert_contains_all(read_mdx(output, "operations/com-example-payments-v1/paymentservice/createpayment.mdx"), [">Pre-alpha</span>", "Lifecycle", "Pre-alpha"])
+
     def test_authored_states_control_endpoint_badges(self) -> None:
         from x2mdx.protobuf.lifecycle import metadata_lifecycle_state
         from x2mdx.protobuf.render import lifecycle_badges
 
-        for raw, expected in [("alpha", "Alpha"), (" BETA ", "Beta"), ("stable", None), ("deprecated", "Deprecated"), ("invalid", None), (None, None)]:
+        for raw, expected in [("pre-alpha", "Pre-alpha"), (" PRE-ALPHA ", "Pre-alpha"), ("alpha", "Alpha"), (" BETA ", "Beta"), ("stable", None), ("deprecated", "Deprecated"), ("invalid", None), (None, None)]:
             with self.subTest(state=raw):
                 state = metadata_lifecycle_state({"metadata": {"lifecycle": {"state": raw}}})
                 badges = lifecycle_badges(state=state, introduced="1.0")
                 labels = [badge.label for badge in badges]
-                self.assertEqual([label for label in labels if label in {"Alpha", "Beta", "Deprecated"}], [expected] if expected else [])
+                self.assertEqual([label for label in labels if label in {"Pre-alpha", "Alpha", "Beta", "Deprecated"}], [expected] if expected else [])
 
     def test_cli_renders_replacement_metadata(self) -> None:
         # TODO(https://github.com/digital-asset/docs/issues/341): define the

@@ -9,20 +9,22 @@ paths:
   /example:
     get:
       operationId: getExample
-      x-state: alpha
+      x-state: pre-alpha
       responses:
         '200':
           description: OK
 ```
 
-Accepted values: `alpha`, `beta`, `stable`, `deprecated` (case-insensitive).
+Accepted values: `pre-alpha`, `alpha`, `beta`, `stable`, `deprecated` (case-insensitive).
+
+An operation tag `pre-alpha` is also recognized when `x-state` is absent; native deprecation takes precedence over the tag.
 
 ## AsyncAPI
 
 ```yaml
 channels:
   payments.created:
-    x-state: alpha
+    x-state: pre-alpha
     subscribe:
       x-state: beta
       message:
@@ -32,7 +34,7 @@ channels:
     x-state: deprecated
 ```
 
-Accepted `x-state` values: `alpha`, `beta`, `stable`, `deprecated` (case-insensitive).
+Accepted `x-state` values: `pre-alpha`, `alpha`, `beta`, `stable`, `deprecated` (case-insensitive).
 
 ## OpenRPC
 
@@ -40,19 +42,19 @@ Accepted `x-state` values: `alpha`, `beta`, `stable`, `deprecated` (case-insensi
 {
   "methods": [{
     "name": "getExample",
-    "x-state": "deprecated",
+    "x-state": "pre-alpha",
     "params": [],
     "result": {"name": "result", "schema": {"type": "string"}}
   }]
 }
 ```
 
-Accepted `x-state` values: `alpha`, `beta`, `stable`, `deprecated` (case-insensitive).
+Accepted `x-state` values: `pre-alpha`, `alpha`, `beta`, `stable`, `deprecated` (case-insensitive).
 
 ## TypeDoc
 
 ```ts
-/** @alpha */
+/** @preAlpha */
 export interface Example {
   id: string;
 }
@@ -63,7 +65,7 @@ export interface LegacyExample {
 }
 ```
 
-Accepted lifecycle tags: `@alpha`, `@beta`, `@stable`, `@deprecated`.
+Accepted lifecycle tags: `@preAlpha`, `@alpha`, `@beta`, `@stable`, `@deprecated`.
 
 ## Protobuf/gRPC
 
@@ -75,7 +77,7 @@ metadata_path: lifecycle.json
 ```json
 {
   "endpoints": {
-    "example.PaymentService/CreatePayment": {"lifecycle": {"state": "beta"}}
+    "example.PaymentService/CreatePayment": {"lifecycle": {"state": "pre-alpha"}}
   },
   "messages": {
     "example.CreatePaymentRequest": {"lifecycle": {"state": "deprecated"}}
@@ -83,12 +85,12 @@ metadata_path: lifecycle.json
 }
 ```
 
-Accepted `lifecycle.state` values: `alpha`, `beta`, `stable`, `deprecated` (case-insensitive).
+Accepted `lifecycle.state` values: `pre-alpha`, `alpha`, `beta`, `stable`, `deprecated` (case-insensitive).
 
 ## Daml
 
 ```daml
-module Example {-# WARNING "Alpha: experimental module." #-} where
+module Example {-# WARNING "Pre-alpha: experimental module." #-} where
 
 {-# WARNING Token "Beta: preview type." #-}
 data Token = Token
@@ -98,4 +100,4 @@ data Token = Token
 module LegacyExample {-# DEPRECATED "Use Example instead." #-} where
 ```
 
-Accepted `WARNING` prefixes: `Alpha:`, `Beta:`, `Stable:` (case-insensitive). Explicit prefixes override legacy matching of `alpha` or `beta` anywhere in warning text; otherwise `alpha` wins over `beta`. Deprecation uses `DEPRECATED` and takes precedence.
+Accepted `WARNING` prefixes: `Pre-alpha:`, `Alpha:`, `Beta:`, `Stable:` (case-insensitive). Explicit prefixes override legacy matching of `pre-alpha`, `alpha`, or `beta` anywhere in warning text; otherwise `pre-alpha` wins over `alpha`, then `beta`. Deprecation uses `DEPRECATED` and takes precedence.

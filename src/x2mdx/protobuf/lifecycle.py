@@ -130,7 +130,7 @@ def metadata_lifecycle_state(entity: dict[str, Any]) -> str | None:
     metadata = entity.get("metadata")
     lifecycle = metadata.get("lifecycle") if isinstance(metadata, dict) else None
     state = lifecycle.get("state") if isinstance(lifecycle, dict) else None
-    if isinstance(state, str) and state.strip().lower() in {"alpha", "beta", "stable", "deprecated"}:
+    if isinstance(state, str) and state.strip().lower() in {"pre-alpha", "alpha", "beta", "stable", "deprecated"}:
         return state.strip().lower()
     return None
 

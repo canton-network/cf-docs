@@ -690,6 +690,9 @@ def authored_lifecycle_state(
             ) from error
     if operation.get("deprecated") is True:
         return LifecycleState.DEPRECATED, "deprecated"
+    tags = operation.get("tags")
+    if isinstance(tags, list) and any(isinstance(tag, str) and tag.strip().lower() == "pre-alpha" for tag in tags):
+        return LifecycleState.PRE_ALPHA, "tags"
     return None, ""
 
 
