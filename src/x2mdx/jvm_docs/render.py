@@ -24,6 +24,7 @@ from x2mdx.jvm_docs.models import JvmDocArtifactLifecycle, JvmDocLifecycleReport
 from x2mdx.output import Page
 from x2mdx.reference_pages import (
     ReferenceBadge,
+    lifecycle_state_badges,
     ReferenceCard,
     ReferenceCollectionPage,
     ReferenceMetaItem,
@@ -82,6 +83,13 @@ def relative_page_link(from_path: Path, to_path: Path) -> str:
 def compute_output_root(overview_output: Path, details_dir: Path) -> Path:
     common = os.path.commonpath([os.path.abspath(str(overview_output)), os.path.abspath(str(details_dir))])
     return Path(common)
+
+
+def authored_lifecycle_badges(symbol: JvmDocSymbolLifecycle) -> list[ReferenceBadge]:
+    state = symbol.lifecycle_state
+    if symbol.removed_version or symbol.deprecated_version is not None:
+        return []
+    return lifecycle_state_badges(state)
 
 
 def latest_doc_link(symbol: JvmDocSymbolLifecycle) -> str:
@@ -350,7 +358,7 @@ def build_type_entries(
             member_rows.append(
                 [
                     markdown_link("Open", upstream_link) if upstream_link else "-",
-                    f"`{md_code(member_label)}`",
+                    f"`{md_code(member_label)}`" + (f" · {member.lifecycle_state.title()}" if member.lifecycle_state in {"alpha", "beta"} and not member.deprecated_version and not member.removed_version else ""),
                     format_lifecycle_value(member.introduced_version),
                     format_lifecycle_value(member.deprecated_version),
                     format_lifecycle_value(member.removed_version),
@@ -672,7 +680,11 @@ def retained_member_rows(
             if member.language == "java"
             else scala_member_owner_and_label(member)[1]
         )
-        status_parts: list[str] = []
+        status_parts: list[str] = (
+            [member.lifecycle_state.title()]
+            if member.lifecycle_state in {"alpha", "beta"} and not member.removed_version and not member.deprecated_version
+            else []
+        )
         if member.removed_version is not None:
             status_parts.append(f"Removed in `{md_code(member.removed_version)}`")
         if member.introduced_version != baseline_version:
@@ -744,7 +756,7 @@ def build_standardized_artifact_pages(
                 summary=f"{len(entries)} documented types",
                 badges=reference_badges_for_history_events(
                     package_events,
-                    kind_label="Java",
+                    kind_label=artifact.language.title(),
                     linked=False,
                 ),
             )
@@ -759,10 +771,10 @@ def build_standardized_artifact_pages(
                 ReferenceCard(
                     title=str(entry["object_name"]),
                     href=relative_page_link(package_page_path, object_path),
-                    summary=symbol.latest_summary or "Java type reference.",
-                    badges=reference_badges_for_history_item(
+                    summary=symbol.latest_summary or f"{artifact.language.title()} type reference.",
+                    badges=authored_lifecycle_badges(symbol) + reference_badges_for_history_item(
                         item,
-                        kind_label="Java",
+                        kind_label=artifact.language.title(),
                         comparison_versions=history_report.comparison_versions,
                         linked=False,
                     ),
@@ -775,7 +787,7 @@ def build_standardized_artifact_pages(
                     ReferenceSection(
                         heading="Signature",
                         body_markdown=(
-                            "```java\n"
+                            f"```{artifact.language}\n"
                             f"{symbol.latest_signature}\n"
                             "```"
                         ),
@@ -807,16 +819,16 @@ def build_standardized_artifact_pages(
                         summary=symbol.latest_summary,
                         back_link=relative_page_link(object_path, package_page_path),
                         back_label="Back to package",
-                        badges=reference_badges_for_history_item(
+                        badges=authored_lifecycle_badges(symbol) + reference_badges_for_history_item(
                             item,
-                            kind_label="Java",
+                            kind_label=artifact.language.title(),
                             comparison_versions=history_report.comparison_versions,
                         ),
                         meta_items=[
                             ReferenceMetaItem("Package", package_name),
                             ReferenceMetaItem(
                                 "Upstream docs",
-                                "Open Javadoc",
+                                "Open Javadoc" if artifact.language == "java" else "Open Scaladoc",
                                 href=latest_doc_link(symbol),
                             ),
                         ],
@@ -836,17 +848,17 @@ def build_standardized_artifact_pages(
                 ReferenceCollectionPage(
                     path=page_path(root, package_page_path),
                     title=package_name,
-                    description=f"Current Java types in {package_name}.",
-                    eyebrow="Java package",
+                    description=f"Current {artifact.language.title()} types in {package_name}.",
+                    eyebrow=f"{artifact.language.title()} package",
                     summary=f"{len(entries)} documented types",
                     back_link=relative_page_link(
                         package_page_path,
                         artifact_page_path,
                     ),
-                    back_label="Back to Java Bindings",
+                    back_label=f"Back to {artifact.language.title()} Bindings",
                     badges=reference_badges_for_history_events(
                         package_events,
-                        kind_label="Java",
+                        kind_label=artifact.language.title(),
                     ),
                     sections=[
                         ReferenceSection(
@@ -867,12 +879,12 @@ def build_standardized_artifact_pages(
         ReferenceCollectionPage(
             path=page_path(root, artifact_page_path),
             title=overview_title,
-            description="Generated Java bindings reference with embedded version history.",
+            description=f"Generated {artifact.language.title()} bindings reference with embedded version history.",
             eyebrow="Ledger API",
-            summary="Current Java binding types generated from published Javadoc snapshots.",
+            summary=f"Current {artifact.language.title()} binding types generated from published {'Javadoc' if artifact.language == 'java' else 'Scaladoc'} snapshots.",
             badges=reference_badges_for_history_events(
                 all_events,
-                kind_label="Java",
+                kind_label=artifact.language.title(),
             ),
             meta_items=[
                 ReferenceMetaItem("Artifact", f"{artifact.group}:{artifact.artifact}"),
@@ -898,6 +910,9 @@ def build_standardized_pages(
     root = compute_output_root(overview_output, details_dir)
     pages: list[Page] = []
     artifact_cards: list[ReferenceCard] = []
+    languages = {artifact.language for artifact in report.artifacts}
+    language_label = next(iter(languages)).title() if len(languages) == 1 else "JVM"
+    docs_label = "Javadoc" if languages == {"java"} else "Scaladoc" if languages == {"scala"} else "Javadoc/Scaladoc"
     for artifact in report.artifacts:
         artifact_page, artifact_pages = build_standardized_artifact_pages(
             artifact,
@@ -916,8 +931,8 @@ def build_standardized_pages(
                     overview_output,
                     root / artifact_page.path,
                 ),
-                summary=f"{len(history_report.current_items())} current Java types",
-                badges=[ReferenceBadge("Java", tone="protocol")],
+                summary=f"{len(history_report.current_items())} current {artifact.language.title()} types",
+                badges=[ReferenceBadge(artifact.language.title(), tone="protocol")],
             )
         )
 
@@ -931,12 +946,12 @@ def build_standardized_pages(
             ReferenceCollectionPage(
                 path=page_path(root, overview_output),
                 title=overview_title,
-                description="Generated Java bindings reference with embedded version history.",
+                description=f"Generated {language_label} bindings reference with embedded version history.",
                 eyebrow="Ledger API",
-                summary="Current Java binding types generated from published Javadoc snapshots.",
+                summary=f"Current {language_label} binding types generated from published {docs_label} snapshots.",
                 badges=reference_badges_for_history_events(
                     overview_events,
-                    kind_label="Java",
+                    kind_label=language_label,
                 ),
                 sections=[ReferenceSection(heading="Artifacts", cards=artifact_cards)],
                 history_events=overview_events,

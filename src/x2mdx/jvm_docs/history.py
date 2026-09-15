@@ -25,7 +25,7 @@ def build_jvm_surface_history_report(
     title: str,
     configured_scope: str,
 ) -> SurfaceHistoryReport:
-    """Normalize Java type lifecycles into the shared history contract."""
+    """Normalize JVM type lifecycles into the shared history contract."""
     if not report.artifacts:
         raise ValueError("JVM history requires at least one artifact")
 
@@ -62,7 +62,7 @@ def build_jvm_surface_history_report(
             route = routes.get(symbol.symbol_key)
             if current_present and route is None:
                 raise ValueError(
-                    f"Current Java type has no reader route: {symbol.symbol_key}"
+                    f"Current JVM type has no reader route: {symbol.symbol_key}"
                 )
 
             introduction_source = symbol.doc_links[symbol.introduced_version]
@@ -73,7 +73,7 @@ def build_jvm_surface_history_report(
                     source=symbol.doc_links[symbol.versions_present[-1]],
                     observed_in_version=symbol.removed_version,
                     location=symbol.symbol,
-                    detail="The type is absent from this Javadoc snapshot.",
+                    detail="The type is absent from this documentation snapshot.",
                 )
 
             transitions: tuple[LifecycleTransition, ...] = ()
@@ -101,7 +101,7 @@ def build_jvm_surface_history_report(
             items.append(
                 HistoryItem(
                     id=symbol.symbol_key,
-                    kind="java_type",
+                    kind=f"{symbol.language}_type",
                     route=route,
                     location=symbol.symbol,
                     first_seen=symbol.introduced_version,
