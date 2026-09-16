@@ -199,6 +199,7 @@ class ProtobufMinimalLifecycleTests(unittest.TestCase):
                 "packages/com-example-payments-v1.mdx",
                 "operations/com-example-payments-v1/paymentservice/createpayment.mdx",
                 "operations/com-example-payments-v1/paymentservice/listpayments.mdx",
+                "operations/com-example-payments-v1/paymentservice/legacypayment.mdx",
             },
         )
         assert_text_tree_matches_fixture(output_dir, "protobuf/default")
@@ -231,7 +232,7 @@ class ProtobufMinimalLifecycleTests(unittest.TestCase):
                 "PaymentResultV2",
             ],
         )
-        assert_contains_none(package, ["LegacyPayment"])
+        assert_contains_all(package, ["LegacyPayment", "Removed in 1.1.0"])
         assert_contains_all(
             create_payment,
             [
@@ -255,8 +256,6 @@ class ProtobufMinimalLifecycleTests(unittest.TestCase):
         )
 
     def test_cli_renders_explicit_lifecycle_states(self) -> None:
-        # TODO(https://github.com/digital-asset/docs/issues/341): define the
-        # Protobuf source/overlay convention for explicit lifecycle states.
         package = "com.example.payments.v1"
         manifest_path = self._write_manifest(
             metadata_overlay={
@@ -264,10 +263,10 @@ class ProtobufMinimalLifecycleTests(unittest.TestCase):
                 "files": {},
                 "services": {},
                 "endpoints": {
-                    f"{package}.PaymentService.CreatePayment": {
+                    f"{package}.PaymentService/CreatePayment": {
                         "lifecycle": {"state": "beta"},
                     },
-                    f"{package}.PaymentService.ListPayments": {
+                    f"{package}.PaymentService/ListPayments": {
                         "lifecycle": {"state": "stable"},
                     },
                 },
@@ -304,6 +303,17 @@ class ProtobufMinimalLifecycleTests(unittest.TestCase):
         assert_contains_all(package_page, ["Lifecycle", "Beta", "Stable"])
         assert_contains_all(create_payment, ["Lifecycle", "Beta", "Alpha", "Deprecated"])
         assert_contains_all(list_payments, ["Lifecycle", "Stable"])
+
+    def test_authored_states_control_endpoint_badges(self) -> None:
+        from x2mdx.protobuf.lifecycle import metadata_lifecycle_state
+        from x2mdx.protobuf.render import lifecycle_badges
+
+        for raw, expected in [("alpha", "Alpha"), (" BETA ", "Beta"), ("stable", None), ("deprecated", "Deprecated"), ("invalid", None), (None, None)]:
+            with self.subTest(state=raw):
+                state = metadata_lifecycle_state({"metadata": {"lifecycle": {"state": raw}}})
+                badges = lifecycle_badges(state=state, introduced="1.0")
+                labels = [badge.label for badge in badges]
+                self.assertEqual([label for label in labels if label in {"Alpha", "Beta", "Deprecated"}], [expected] if expected else [])
 
     def test_cli_renders_replacement_metadata(self) -> None:
         # TODO(https://github.com/digital-asset/docs/issues/341): define the

@@ -268,3 +268,12 @@ def test_shared_reference_colors_match_the_approved_design_tokens() -> None:
     assert "background: var(--x2mdx-ref-success-soft);" in styles
     assert "background: var(--x2mdx-ref-info-soft);" in styles
     assert "background: var(--x2mdx-ref-danger-soft);" in styles
+
+
+def test_authored_deprecation_keeps_dated_badge_and_link():
+    from x2mdx.reference_pages import ReferenceBadge, lifecycle_state_badges
+
+    dated = ReferenceBadge("Deprecated 1.2.0", "removed", "#history-deprecated-1-2-0")
+    assert lifecycle_state_badges("deprecated", existing=[dated]) == []
+    assert lifecycle_state_badges("deprecated") == [ReferenceBadge("Deprecated", "removed")]
+    assert dated.href == "#history-deprecated-1-2-0"
