@@ -602,15 +602,47 @@ def render_scope_hocon(scope: str, entries: list[dict], variants_by_type: dict[s
     return block
 
 
+def path_label(scope: str, qualifier: str | None = None, others: int = 0) -> list[str]:
+    """Where in the configuration a pair sits: the absolute path, and for a variant the `type` it
+    documents. The table beneath is relative to this path; the HOCON is written from the root. A
+    section that occurs in several places is shown at one of them and says how many more there are."""
+    label = f"**Path** `{scope}`"
+    if others:
+        label += f" and {others} more place{'s' if others > 1 else ''} listed above"
+    if qualifier:
+        label += f", with `{qualifier}`" if others else f" with `{qualifier}`"
+    return [label, ""]
+
+
+def tabbed_pair(hocon: list[str], table: list[str]) -> list[str]:
+    """The same keys two ways, one visible at a time: HOCON first, the table behind it."""
+    # Tab bodies are left unindented: four leading spaces would turn a line into a code block.
+    return [
+        "<Tabs>",
+        '<Tab title="HOCON">',
+        "",
+        *hocon,
+        "",
+        "</Tab>",
+        '<Tab title="Table">',
+        "",
+        *table,
+        "",
+        "</Tab>",
+        "</Tabs>",
+        "",
+    ]
+
+
 def render_section_views(
     scope: str,
     entries: list[dict],
     variants_by_type: dict[str, list[str]],
     unions: dict,
 ) -> list[str]:
-    """One section as a pair: HOCON as you would write it, then the same keys as a table with their
-    descriptions. Both cover exactly the same keys."""
-    lines = render_scope_hocon(scope, entries, variants_by_type)
+    """One section as a labelled, tabbed pair: HOCON as you would write it, or the same keys as a
+    table with their descriptions. Both cover exactly the same keys."""
+    lines = path_label(scope)
     inside = unions_within(scope, unions)
     if inside:
         links = ", ".join(
@@ -618,8 +650,11 @@ def render_section_views(
             for union, path in inside
         )
         lines += [f"Takes a `type`: {links}.", ""]
-    lines += render_table(entries, scope, variants_by_type) + [""]
-    return lines
+    hocon = render_scope_hocon(scope, entries, variants_by_type)
+    table = render_table(entries, scope, variants_by_type)
+    if not hocon:
+        return lines + table + [""]
+    return lines + tabbed_pair(hocon, table)
 
 
 def required_rows(prefix: str, entries: list[dict], variants_by_type: dict[str, list[str]]):
@@ -687,7 +722,7 @@ def render_required_views(prefix: str, entries: list[dict], variants_by_type: di
     hocon = render_required_hocon(prefix, entries, variants_by_type)
     if not hocon:
         return ["Nothing under this section has to be set: every key has a default.", ""]
-    return [*hocon, *render_required(prefix, entries, variants_by_type)]
+    return [*path_label(prefix), *tabbed_pair(hocon, render_required(prefix, entries, variants_by_type))]
 
 
 def render_required(prefix: str, entries: list[dict], variants_by_type: dict[str, list[str]]) -> list[str]:
@@ -755,10 +790,11 @@ def reading_guide(artifact: dict, options: list[dict] | None) -> list[str]:
         "",
         "**Required** lists only what you must set, and when: always, when you configure a particular "
         "section, or when you have chosen a particular `type`. **All options** covers every key. Each "
-        "part is shown as a pair: the HOCON as you would write it, every key with its default, followed "
-        "by the same keys as a table with their descriptions. A key that only applies under a particular "
-        "`type` appears in the HOCON as a comment carrying that condition; in the table a **bold** row "
-        "names a section and the keys indented beneath it live inside it.",
+        "part is labelled with its **Path**, the absolute location in the configuration, and shown two "
+        "ways behind tabs: **HOCON** as you would write it from the root, every key with its default, "
+        "and **Table**, the same keys relative to that path with their descriptions. A key that only "
+        "applies under a particular `type` appears in the HOCON as a comment carrying that condition; in "
+        "the table a **bold** row names a section and the keys indented beneath it live inside it.",
         "",
         "Some sections take a `type` that decides which other keys they accept. Those are documented "
         f"once on the [types page]({PAGE_URL_PREFIX}/{TYPES_PAGE}) and linked from wherever they occur.",
@@ -844,14 +880,16 @@ def render_types_page(artifact: dict, variants_by_type, unions, options_by_path)
         lines.append("")
         for tag in variants:
             lines += [f"### `type = {tag}`", ""]
+            lines += path_label(section, f"type = {tag}", others=len(occurrences) - 1)
             block, nested = render_variant_block(section, discriminator, tag, options_by_path)
-            lines += block
             keys = applicable_keys(section, discriminator, tag, options_by_path)
             if keys:
-                lines += ["| Key | Type | Default | Description |", "|---|---|---|---|"]
+                table = ["| Key | Type | Default | Description |", "|---|---|---|---|"]
                 for relative, option in keys.items():
-                    lines.append(f"| `{relative}` | {render_type(option['valueType'])} | {render_default(option)} | {clean_prose(option.get('doc'))} |")
-                lines.append("")
+                    table.append(f"| `{relative}` | {render_type(option['valueType'])} | {render_default(option)} | {clean_prose(option.get('doc'))} |")
+                lines += tabbed_pair(block, table)
+            else:
+                lines += block
             if nested:
                 links = ", ".join(f"[{inner}]({union_link(inner)}) at `{path}`" for path, inner in nested.items())
                 lines += [f"Further types inside this one: {links}.", ""]

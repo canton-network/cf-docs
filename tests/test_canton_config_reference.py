@@ -79,7 +79,13 @@ class CantonConfigReferenceTests(unittest.TestCase):
         self.assertIn("      type = exponential\n      max-buckets = 0   # required\n      max-scale = 0   # required", types)
         # Alternatives are separate blocks, never siblings in one list.
         self.assertEqual(types.count("```hocon"), 2)
-        # Each variant's keys are tabulated beneath its block.
+        # Each variant is labelled with where it sits and which type it documents, and its keys are
+        # tabulated in the tab behind its block.
+        self.assertIn(
+            "### `type = exponential`\n\n**Path** `canton.monitoring.metrics.histograms[].aggregation` with `type = exponential`\n\n"
+            "<Tabs>\n<Tab title=\"HOCON\">",
+            types,
+        )
         self.assertIn("| `max-scale` | int | **required** |  |", types)
 
     def test_required_section_says_when_and_links_types(self) -> None:
@@ -99,8 +105,10 @@ class CantonConfigReferenceTests(unittest.TestCase):
         )
         # Nothing that has a default appears here.
         self.assertNotIn("| `metrics.histograms` |", required)
-        # The required view also has the skeleton as HOCON, first; variant-gated keys are commented
-        # with their condition so the block stays one valid document.
+        # The required view is labelled with where it sits and shows the skeleton as HOCON in the
+        # first tab; variant-gated keys are commented with their condition so the block stays one
+        # valid document.
+        self.assertIn("**Path** `canton.monitoring`\n\n<Tabs>\n<Tab title=\"HOCON\">", required)
         self.assertLess(required.index("```hocon"), required.index("| Key | Type | Required when |"))
         self.assertIn(
             "canton.monitoring {\n  metrics {\n    histograms = [\n      {\n        aggregation {\n"
@@ -115,12 +123,17 @@ class CantonConfigReferenceTests(unittest.TestCase):
     def test_sections_pair_hocon_with_the_table_over_the_same_keys(self) -> None:
         monitoring = generator.render_pages(sample_artifact())["monitoring.mdx"]
         all_options = monitoring.split("## All options")[1]
-        self.assertNotIn("<Tabs>", monitoring)
+        # Every pair is labelled with its absolute path, then tabbed: HOCON first, the table behind it.
+        self.assertIn(
+            "### `metrics`\n\n**Path** `canton.monitoring.metrics`\n\n"
+            f"Takes a `type`: [AggregationType]({generator.PAGE_URL_PREFIX}/types#aggregationtype) at `histograms[].aggregation`.\n\n"
+            "<Tabs>\n<Tab title=\"HOCON\">\n\n```hocon",
+            all_options,
+        )
+        self.assertIn("</Tab>\n<Tab title=\"Table\">\n\n| Key | Type | Default | Description |", all_options)
         self.assertLess(all_options.index("```hocon"), all_options.index("| Key | Type | Default | Description |"))
-        # The section-level block lists every key not gated by a nested type, defaults included,
-        # and shows a discriminator as the values it accepts.
         # The section HOCON is exhaustive: gated keys are commented with their condition, so the
-        # block and the table beneath it cover the same keys.
+        # block and the table behind it cover the same keys.
         self.assertIn(
             "canton.monitoring.metrics {\n  histograms = [\n    {\n      aggregation {\n"
             "        # boundaries = [ ]   # required when type = buckets\n"
@@ -129,10 +142,6 @@ class CantonConfigReferenceTests(unittest.TestCase):
             "        type = buckets|exponential   # required\n      }\n      name = \"...\"   # required\n"
             "    }\n  ]\n}",
             all_options,
-        )
-        self.assertIn(
-            f"Takes a `type`: [AggregationType]({generator.PAGE_URL_PREFIX}/types#aggregationtype) at `histograms[].aggregation`.",
-            monitoring,
         )
 
     def test_table_groups_variant_keys_under_type_headers(self) -> None:
