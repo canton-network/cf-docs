@@ -34,6 +34,9 @@ SOURCE_REPO = "digital-asset/canton"
 ARTIFACT_PATH_IN_CANTON = "docs-open/target/config-reference.json"
 SUPPORTED_SCHEMA_MAJOR = "2"
 TYPES_PAGE = "types"
+REQUIRED_TITLE = "Minimum Required Fields"
+ALL_OPTIONS_TITLE = "All options"
+TYPES_TITLE = "Configuration types"
 
 PRODUCT_LABEL = "Global Synchronizer"
 PARENT_GROUP_LABEL = "Reference"
@@ -140,6 +143,8 @@ def render_type(value_type: dict) -> str:
         return f"enum ({value_type.get('type', 'see types')})"
     if kind == "object":
         return "object"
+    if kind == "section":
+        return f"section ({value_type.get('type', 'object')})"
     if kind == "generic":
         return f"depends on use ({value_type.get('typeParameter', '?')})"
     if kind == "unresolved":
@@ -328,7 +333,16 @@ def group_rows(
 
 
 def union_link(union: str) -> str:
-    return f"{PAGE_URL_PREFIX}/{TYPES_PAGE}#{slug(union)}"
+    """Types are documented on every page where they occur, so the link stays on the page."""
+    return f"#{slug(union)}"
+
+
+def split_sections(options: list[dict]) -> tuple[list[dict], dict[str, dict]]:
+    """Leaves, and the nested objects by path. A section entry says whether the object exists
+    without being written (it has a default) or only when written (it is required)."""
+    leaves = [option for option in options if option["valueType"].get("kind") != "section"]
+    sections = {option["path"]: option for option in options if option["valueType"].get("kind") == "section"}
+    return leaves, sections
 
 
 def discriminator_index(options: list[dict]) -> dict[str, str]:
@@ -662,14 +676,42 @@ def render_section_views(
     return tabbed_pair(hocon + variant_blocks_within(scope, unions, variants_by_type, options_by_path), table)
 
 
-def required_rows(prefix: str, entries: list[dict], variants_by_type: dict[str, list[str]]):
-    """(relative path, option, enclosing section, variant conditions) for every required key."""
+def must_be_written(path: str, prefix: str, sections: dict[str, dict]) -> bool:
+    """Whether every object between the page root and this key exists only when written.
+
+    A key's own `required` flag says only that its case class gives it no default. Whether an
+    operator has to write it depends on the sections above it: `admin-api.port` on a participant
+    is required within `AdminServerConfig`, but the participant constructs that section by
+    default, so nothing has to be written. On a remote participant the same section has no
+    default, so the port is genuinely required. A list element or a map entry exists only when
+    written and is never part of the minimum. Positive evidence is required: a section without
+    an entry is treated as having a default.
+    """
+    relative = path[len(prefix) :].lstrip(".")
+    segments = relative.split(".")
+    for depth in range(1, len(segments)):
+        segment = segments[depth - 1]
+        if segment.endswith("[]") or segment.startswith("<"):
+            return False
+        ancestor = prefix + "." + ".".join(segments[:depth])
+        section = sections.get(ancestor)
+        if section is None or not section["required"] or section["optional"]:
+            return False
+    return True
+
+
+def required_rows(prefix: str, entries: list[dict], sections: dict[str, dict], variants_by_type: dict[str, list[str]]):
+    """(relative path, option, variant conditions) for every key that has to be written for a
+    node under `prefix` to start: required, with no default of any origin, inside sections that
+    are themselves required. A required section none of whose keys make the list is listed
+    itself, since it still has to be present."""
     rows = []
     for option, conditions in collapse_variants(entries):
-        if not option["required"]:
+        if not option["required"] or option["optional"] or option.get("defaultValue") is not None:
             continue
-        relative = option["path"][len(prefix) :].lstrip(".") or option["path"].split(".")[-1]
-        parent = relative.rsplit(".", 1)[0] if "." in relative else ""
+        if not must_be_written(option["path"], prefix, sections):
+            continue
+        relative = option["path"][len(prefix) :].lstrip(".")
         union_of = {c["at"]: c["of"] for c in option["appliesWhen"]}
         gates: list[tuple[str, set[str]]] = []
         for at in sorted(conditions):
@@ -678,19 +720,29 @@ def required_rows(prefix: str, entries: list[dict], variants_by_type: dict[str, 
             if known and tags >= known:
                 continue
             gates.append((at[len(prefix) :].lstrip("."), tags))
-        rows.append((relative, option, parent, gates))
-    return rows
+        rows.append((relative, option, gates))
+    covered = {relative for relative, _, _ in rows}
+    for path, section in sorted(sections.items()):
+        if not path.startswith(prefix + ".") or not section["required"] or section["optional"]:
+            continue
+        if not must_be_written(path, prefix, sections):
+            continue
+        relative = path[len(prefix) + 1 :]
+        if any(key == relative or key.startswith(relative + ".") for key in covered):
+            continue
+        rows.append((relative, section, []))
+    return sorted(rows, key=lambda row: row[0])
 
 
-def render_required_hocon(prefix: str, entries: list[dict], variants_by_type: dict[str, list[str]]) -> list[str]:
+def render_required_hocon(prefix: str, entries: list[dict], sections: dict[str, dict], variants_by_type: dict[str, list[str]]) -> list[str]:
     """The minimal skeleton: only the keys that must be set. A key required only under a particular
     `type` is written as a comment carrying that condition, so the block stays a single valid
     document rather than a mash of mutually exclusive variants."""
-    rows = required_rows(prefix, entries, variants_by_type)
+    rows = required_rows(prefix, entries, sections, variants_by_type)
     if not rows:
         return []
     keys: "OrderedDict[str, dict]" = OrderedDict()
-    for relative, option, _parent, gates in rows:
+    for relative, option, gates in rows:
         tagged = dict(option)
         if gates:
             tagged["__when__"] = condition_text(prefix, relative, [(prefix + "." + at, tags) for at, tags in gates])
@@ -709,6 +761,9 @@ def render_required_hocon(prefix: str, entries: list[dict], variants_by_type: di
                     write(child, indent + "  ", out)
                     out.append(f"{indent}}}")
                 continue
+            if option["valueType"].get("kind") == "section":
+                out.append(f"{indent}{name} {{ }}   # required")
+                continue
             hint = type_hint(option) if option["valueType"].get("kind") == "enum" else placeholder_for(option)
             when = option.get("__when__")
             if when:
@@ -723,27 +778,32 @@ def render_required_hocon(prefix: str, entries: list[dict], variants_by_type: di
     return block
 
 
-def render_required_views(prefix: str, entries: list[dict], variants_by_type: dict[str, list[str]]) -> list[str]:
-    hocon = render_required_hocon(prefix, entries, variants_by_type)
+def render_required_views(prefix: str, entries: list[dict], sections: dict[str, dict], variants_by_type: dict[str, list[str]]) -> list[str]:
+    hocon = render_required_hocon(prefix, entries, sections, variants_by_type)
     if not hocon:
-        return ["Nothing under this section has to be set: every key has a default.", ""]
-    return tabbed_pair(hocon, render_required(prefix, entries, variants_by_type))
+        lines = [f"Nothing under `{prefix}` has to be set: every section is constructed with defaults."]
+        if "<" in prefix:
+            # A node is an entry in a map, so the entry itself must exist even if it is empty.
+            lines += [
+                " Only the entry itself has to exist, so this is a complete configuration:",
+                "",
+                "```hocon",
+                f"{prefix} {{ }}",
+                "```",
+            ]
+        return lines + [""]
+    return tabbed_pair(hocon, render_required(prefix, entries, sections, variants_by_type))
 
 
-def render_required(prefix: str, entries: list[dict], variants_by_type: dict[str, list[str]]) -> list[str]:
-    """Only what has to be set, and under what circumstances.
-
-    Almost nothing in a node's configuration is required outright -- the required keys live inside
-    sections you may or may not use, so each row says when it applies: when its enclosing section
-    is configured, when a `type` has been chosen, or always. A discriminator is itself required
-    whenever its section is, and links to the types page rather than repeating the choice here.
+def render_required(prefix: str, entries: list[dict], sections: dict[str, dict], variants_by_type: dict[str, list[str]]) -> list[str]:
+    """Only what has to be written for the node to start, and under what circumstances: always,
+    or once a particular `type` has been chosen. A discriminator that is itself required links to
+    the type's own section rather than repeating the choice here.
     """
     discriminators = discriminator_index(entries)
     rows: list[str] = []
-    for relative, option, parent, gates in required_rows(prefix, entries, variants_by_type):
+    for relative, option, gates in required_rows(prefix, entries, sections, variants_by_type):
         when: list[str] = []
-        if parent:
-            when.append(f"`{parent}` is configured")
         for rel_at, tags in gates:
             listed = ", ".join(f"`{tag}`" for tag in sorted(tags))
             when.append(f"`{rel_at}` is " + ("one of " if len(tags) > 1 else "") + listed)
@@ -753,8 +813,6 @@ def render_required(prefix: str, entries: list[dict], variants_by_type: dict[str
         else:
             description = clean_prose(option.get("doc"))
         rows.append(f"| `{relative}` | {render_type(option['valueType'])} | {' and '.join(when) or 'always'} | {description} |")
-    if not rows:
-        return ["Nothing under this section has to be set: every key has a default.", ""]
     return ["| Key | Type | Required when | Description |", "|---|---|---|---|", *rows, ""]
 
 
@@ -793,8 +851,10 @@ def reading_guide(artifact: dict, options: list[dict] | None) -> list[str]:
         "A `[]` suffix marks the fields of a list element. Keys marked **alpha** or **beta** are not "
         "covered by compatibility guarantees.",
         "",
-        "**Required** lists only what you must set, and when: always, when you configure a particular "
-        "section, or when you have chosen a particular `type`. **All options** covers every key, one "
+        f"**{REQUIRED_TITLE}** is the smallest configuration that starts: only keys with no default "
+        "inside sections that are not constructed by default, and when each applies: always, or once "
+        "you have chosen a particular `type`. A key marked **required** elsewhere on the page is required "
+        f"only if you write the section that holds it. **{ALL_OPTIONS_TITLE}** covers every key, one "
         "section per heading, where the heading is the section's absolute path. Each is shown two "
         "ways behind tabs: **HOCON** as you would write it from the root, every key with its default, "
         "and **Table**, the same keys relative to the heading with their descriptions. Where a section "
@@ -803,8 +863,9 @@ def reading_guide(artifact: dict, options: list[dict] | None) -> list[str]:
         "names a section and the keys indented beneath it live inside it. In the Required skeleton a key "
         "needed only under a particular `type` is a comment carrying that condition.",
         "",
-        "Some sections take a `type` that decides which other keys they accept. Those are documented "
-        f"once on the [types page]({PAGE_URL_PREFIX}/{TYPES_PAGE}) and linked from wherever they occur.",
+        f"Some sections take a `type` that decides which other keys they accept. **{TYPES_TITLE}** at the "
+        "end of each page documents every such type the page uses, one block and one table per type, and "
+        f"the [types page]({PAGE_URL_PREFIX}/{TYPES_PAGE}) collects them all.",
         "",
         "In the Default column:",
         "",
@@ -821,7 +882,7 @@ def reading_guide(artifact: dict, options: list[dict] | None) -> list[str]:
     ]
 
 
-def render_node_page(prefix: str, title: str, description: str, options: list[dict], artifact: dict, variants_by_type, unions, options_by_path) -> str:
+def render_node_page(prefix: str, title: str, description: str, options: list[dict], sections: dict[str, dict], artifact: dict, variants_by_type, unions, options_by_path) -> str:
     lines = [
         *frontmatter(title, description),
         generated_marker(artifact),
@@ -834,10 +895,10 @@ def render_node_page(prefix: str, title: str, description: str, options: list[di
         *reading_guide(artifact, options),
         "</Accordion>",
         "",
-        "## Required",
+        f"## {REQUIRED_TITLE}",
         "",
-        *render_required_views(prefix, options, variants_by_type),
-        "## All options",
+        *render_required_views(prefix, options, sections, variants_by_type),
+        f"## {ALL_OPTIONS_TITLE}",
         "",
     ]
 
@@ -858,7 +919,58 @@ def render_node_page(prefix: str, title: str, description: str, options: list[di
         lines += [f"### `{scope}`", ""]
         lines += render_section_views(scope, entries, variants_by_type, unions, options_by_path)
 
+    # Every type this page uses, documented here so the page stands alone; the types page
+    # collects the same sections across all pages.
+    used = OrderedDict(
+        (union, {path for path in unions[union]["paths"] if path.startswith(prefix + ".")}) for union in sorted(unions)
+    )
+    used = OrderedDict((union, paths) for union, paths in used.items() if paths)
+    if used:
+        lines += [
+            f"## {TYPES_TITLE}",
+            "",
+            "Sections under this page that take a `type`, and the keys each type accepts. A key "
+            "belonging to another type fails startup.",
+            "",
+        ]
+        for union, paths in used.items():
+            lines += render_union(union, paths, variants_by_type, options_by_path, level=3)
+
     return "\n".join(lines).rstrip() + "\n"
+
+
+def render_union(union: str, paths: set[str], variants_by_type, options_by_path, level: int) -> list[str]:
+    """One section that takes a `type`: which types it accepts, where it occurs among `paths`, and
+    for each type a complete HOCON block paired with a table of the keys that type accepts. Shown
+    at the shallowest occurrence; the others are listed."""
+    variants = variants_by_type.get(union) or []
+    discriminator = min(paths, key=lambda path: (path.count("."), path))
+    section = discriminator.rsplit(".", 1)[0]
+    occurrences = sorted(path.rsplit(".", 1)[0] for path in paths)
+    heading = "#" * level
+    lines = [f"{heading} {union}", ""]
+    lines.append("Set `type` to one of " + ", ".join(f"`{tag}`" for tag in variants) + ".")
+    lines += ["", "Occurs at:", ""]
+    shown = occurrences[:8]
+    lines += [f"- `{path}`" for path in shown]
+    if len(occurrences) > len(shown):
+        lines.append(f"- … and {len(occurrences) - len(shown)} more")
+    lines.append("")
+    for tag in variants:
+        lines += [f"{heading}# `type = {tag}`", ""]
+        block, nested = render_variant_block(section, discriminator, tag, options_by_path)
+        keys = applicable_keys(section, discriminator, tag, options_by_path)
+        if keys:
+            table = ["| Key | Type | Default | Description |", "|---|---|---|---|"]
+            for relative, option in keys.items():
+                table.append(f"| `{relative}` | {render_type(option['valueType'])} | {render_default(option)} | {clean_prose(option.get('doc'))} |")
+            lines += tabbed_pair(block, table)
+        else:
+            lines += block
+        if nested:
+            links = ", ".join(f"[{inner}]({union_link(inner)}) at `{path}`" for path, inner in nested.items())
+            lines += [f"Further types inside this one: {links}.", ""]
+    return lines
 
 
 def render_types_page(artifact: dict, variants_by_type, unions, options_by_path) -> str:
@@ -870,45 +982,19 @@ def render_types_page(artifact: dict, variants_by_type, unions, options_by_path)
         "",
         "Some sections are a choice between shapes. You pick one by setting a `type` key, and that "
         "choice decides which other keys the section accepts; a key belonging to another type fails "
-        "startup. Each such section is documented here once and linked from every page it appears on. "
+        "startup. Every page documents the types it uses; this page collects all of them. "
         "Independent choices nest, so a type can contain further `type` keys; those link onward.",
         "",
     ]
     for union in sorted(unions):
-        entry = unions[union]
-        variants = variants_by_type.get(union) or []
-        discriminator = min(entry["paths"], key=lambda path: (path.count("."), path))
-        section = discriminator.rsplit(".", 1)[0]
-        occurrences = sorted(path.rsplit(".", 1)[0] for path in entry["paths"])
-        lines += [f"## {union}", ""]
-        lines.append("Set `type` to one of " + ", ".join(f"`{tag}`" for tag in variants) + ".")
-        lines += ["", "Occurs at:", ""]
-        shown = occurrences[:8]
-        lines += [f"- `{path}`" for path in shown]
-        if len(occurrences) > len(shown):
-            lines.append(f"- … and {len(occurrences) - len(shown)} more")
-        lines.append("")
-        for tag in variants:
-            lines += [f"### `type = {tag}`", ""]
-            block, nested = render_variant_block(section, discriminator, tag, options_by_path)
-            keys = applicable_keys(section, discriminator, tag, options_by_path)
-            if keys:
-                table = ["| Key | Type | Default | Description |", "|---|---|---|---|"]
-                for relative, option in keys.items():
-                    table.append(f"| `{relative}` | {render_type(option['valueType'])} | {render_default(option)} | {clean_prose(option.get('doc'))} |")
-                lines += tabbed_pair(block, table)
-            else:
-                lines += block
-            if nested:
-                links = ", ".join(f"[{inner}]({union_link(inner)}) at `{path}`" for path, inner in nested.items())
-                lines += [f"Further types inside this one: {links}.", ""]
+        lines += render_union(union, unions[union]["paths"], variants_by_type, options_by_path, level=2)
     return "\n".join(lines).rstrip() + "\n"
 
 
 def render_overview(artifact: dict, buckets: "OrderedDict[str, list[dict]]") -> str:
-    diagnostics = artifact.get("diagnostics", {})
-    total = diagnostics.get("optionsTotal", len(artifact["options"]))
-    documented = diagnostics.get("optionsDocumented", 0)
+    leaves, _sections = split_sections(artifact["options"])
+    total = len(leaves)
+    documented = sum(1 for option in leaves if clean_prose(option.get("doc")))
     coverage = round(documented * 100 / total) if total else 0
     titles = {prefix: (title, blurb) for prefix, title, blurb in SECTIONS}
 
@@ -931,8 +1017,8 @@ def render_overview(artifact: dict, buckets: "OrderedDict[str, list[dict]]") -> 
             "  </Card>",
         ]
     lines += [
-        f'  <Card title="Configuration types" href="{PAGE_URL_PREFIX}/{TYPES_PAGE}">',
-        "    Sections that take a `type`, with the keys each type accepts and an example of each.",
+        f'  <Card title="{TYPES_TITLE}" href="{PAGE_URL_PREFIX}/{TYPES_PAGE}">',
+        "    Every section that takes a `type`, collected from all pages, with the keys each type accepts and an example of each.",
         "  </Card>",
         "</CardGroup>",
         "",
@@ -973,18 +1059,19 @@ def render_overview(artifact: dict, buckets: "OrderedDict[str, list[dict]]") -> 
 
 def render_pages(artifact: dict) -> "OrderedDict[str, str]":
     variants_by_type = {entry["name"]: [v["tag"] for v in entry["variants"]] for entry in artifact["types"]}
-    unions = find_unions(artifact["options"])
+    leaves, sections = split_sections(artifact["options"])
+    unions = find_unions(leaves)
     options_by_path: dict[str, list[dict]] = {}
-    for option in artifact["options"]:
+    for option in leaves:
         options_by_path.setdefault(option["path"], []).append(option)
-    buckets = group_options(artifact["options"])
+    buckets = group_options(leaves)
 
     pages: "OrderedDict[str, str]" = OrderedDict()
     pages["overview.mdx"] = render_overview(artifact, buckets)
     for prefix, title, blurb in SECTIONS:
         entries = buckets.get(prefix) or []
         if entries:
-            pages[f"{slug(title)}.mdx"] = render_node_page(prefix, title, blurb, entries, artifact, variants_by_type, unions, options_by_path)
+            pages[f"{slug(title)}.mdx"] = render_node_page(prefix, title, blurb, entries, sections, artifact, variants_by_type, unions, options_by_path)
     pages[f"{TYPES_PAGE}.mdx"] = render_types_page(artifact, variants_by_type, unions, options_by_path)
     return pages
 

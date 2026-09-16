@@ -44,13 +44,22 @@ def when(tag: str) -> list[dict]:
 
 def sample_artifact() -> dict:
     return {
-        "schemaVersion": "2.0.0",
+        "schemaVersion": "2.1.0",
         "cantonVersion": "3.7.0-test",
         "gitSha": "abc123",
         "rootPath": "canton",
         "defaultsFrom": None,
         "pathPlaceholders": {"<participant>": "user-chosen name of each entry under canton.participants"},
         "options": [
+            # Sections say whether the object exists by default; a participant constructs every
+            # section, a remote participant declares its client sections without defaults.
+            option("canton.monitoring.metrics", valueType={"kind": "section", "type": "MetricsConfig"}, defaultExpr="MetricsConfig()"),
+            option("canton.participants.<participant>.admin-api", valueType={"kind": "section", "type": "AdminServerConfig"}, defaultExpr="AdminServerConfig()"),
+            option("canton.remote-participants.<remote-participant>.admin-api", valueType={"kind": "section", "type": "FullClientConfig"}, required=True),
+            option("canton.remote-participants.<remote-participant>.admin-api.address", defaultValue="127.0.0.1", defaultOrigin="source"),
+            option("canton.remote-participants.<remote-participant>.admin-api.port", valueType={"kind": "scalar", "name": "int", "scalaType": "Port"}, required=True, doc="Port of the admin API"),
+            option("canton.remote-participants.<remote-participant>.ledger-api", valueType={"kind": "section", "type": "FullClientConfig"}, required=True),
+            option("canton.remote-participants.<remote-participant>.ledger-api.address", defaultValue="127.0.0.1", defaultOrigin="source"),
             option("canton.monitoring.metrics.histograms", valueType={"kind": "array", "element": "HistogramDefinition"}, defaultValue=[], defaultOrigin="source", doc="customized histogram definitions"),
             option("canton.monitoring.metrics.histograms[].name", required=True, doc="Instrument name with wildcards * and ?"),
             option(f"{AGGREGATION}.type", valueType={"kind": "enum", "type": "AggregationType", "values": ["buckets", "exponential"]}, required=True),
@@ -79,45 +88,58 @@ class CantonConfigReferenceTests(unittest.TestCase):
         self.assertIn("      type = exponential\n      max-buckets = 0   # required\n      max-scale = 0   # required", types)
         # Alternatives are separate blocks, never siblings in one list.
         self.assertEqual(types.count("```hocon"), 2)
+        self.assertNotIn("**Path**", types)
         # Each variant's keys are tabulated in the tab behind its block.
         self.assertIn("### `type = exponential`\n\n<Tabs>\n<Tab title=\"HOCON\">", types)
         self.assertIn("| `max-scale` | int | **required** |  |", types)
 
-    def test_required_section_says_when_and_links_types(self) -> None:
-        monitoring = generator.render_pages(sample_artifact())["monitoring.mdx"]
-        required = monitoring.split("## Required")[1].split("## All options")[0]
-        link = f"{generator.PAGE_URL_PREFIX}/types#aggregationtype"
-        self.assertIn("| `metrics.histograms[].name` | string | `metrics.histograms[]` is configured | Instrument name with wildcards * and ? |", required)
+    def test_minimum_required_is_what_must_be_written_for_the_node_to_start(self) -> None:
+        pages = generator.render_pages(sample_artifact())
+        title = generator.REQUIRED_TITLE
+        self.assertEqual(title, "Minimum Required Fields")
+        # A participant constructs every section by default, so nothing has to be written except
+        # the entry itself. Keys that are required *within* an optional section are not listed.
+        participant = pages["participant-node.mdx"].split(f"## {title}")[1].split(f"## {generator.ALL_OPTIONS_TITLE}")[0]
+        self.assertIn("Nothing under `canton.participants.<participant>` has to be set", participant)
+        self.assertIn("```hocon\ncanton.participants.<participant> { }\n```", participant)
+        self.assertNotIn("| Key |", participant)
+        self.assertNotIn("extensions", participant)
+        # Under monitoring the required keys live inside list elements, which exist only when
+        # written, so the minimum is empty and there is no node entry to show.
+        monitoring = pages["monitoring.mdx"].split(f"## {title}")[1].split(f"## {generator.ALL_OPTIONS_TITLE}")[0]
+        self.assertIn("Nothing under `canton.monitoring` has to be set", monitoring)
+        self.assertNotIn("```hocon", monitoring)
+        self.assertNotIn("histograms", monitoring)
+        # A remote participant declares its client sections without defaults: the port with no
+        # default must be written; a section with only defaulted keys must still be present.
+        remote = pages["remote-participant.mdx"].split(f"## {title}")[1].split(f"## {generator.ALL_OPTIONS_TITLE}")[0]
         self.assertIn(
-            "| `metrics.histograms[].aggregation.type` | one of `buckets`, `exponential` | "
-            f"`metrics.histograms[].aggregation` is configured | Choose one type — see [AggregationType]({link}). |",
-            required,
+            "```hocon\ncanton.remote-participants.<remote-participant> {\n  admin-api {\n    port = 0   # required\n  }\n"
+            "  ledger-api { }   # required\n}\n```",
+            remote,
         )
-        self.assertIn(
-            "| `metrics.histograms[].aggregation.boundaries` | array of Double | "
-            "`metrics.histograms[].aggregation` is configured and `metrics.histograms[].aggregation.type` is `buckets` |",
-            required,
-        )
-        # Nothing that has a default appears here.
-        self.assertNotIn("| `metrics.histograms` |", required)
-        # The required view is labelled with where it sits and shows the skeleton as HOCON in the
-        # first tab; variant-gated keys are commented with their condition so the block stays one
-        # valid document.
-        self.assertIn("## Required\n\n<Tabs>\n<Tab title=\"HOCON\">", monitoring)
-        self.assertLess(required.index("```hocon"), required.index("| Key | Type | Required when |"))
-        self.assertIn(
-            "canton.monitoring {\n  metrics {\n    histograms = [\n      {\n        aggregation {\n"
-            "          # boundaries = [ ]   # required when type = buckets\n"
-            "          # max-buckets = 0   # required when type = exponential\n"
-            "          # max-scale = 0   # required when type = exponential\n"
-            "          type = buckets|exponential   # required\n        }\n"
-            "        name = \"...\"   # required\n      }\n    ]\n  }\n}",
-            required,
-        )
+        self.assertIn("| `admin-api.port` | int (Port) | always | Port of the admin API |", remote)
+        self.assertIn("| `ledger-api` | section (FullClientConfig) | always |  |", remote)
+        self.assertNotIn("`admin-api.address`", remote)
+        self.assertLess(remote.index("```hocon"), remote.index("| Key | Type | Required when |"))
+
+    def test_every_page_documents_the_types_it_uses(self) -> None:
+        pages = generator.render_pages(sample_artifact())
+        monitoring = pages["monitoring.mdx"]
+        types_section = monitoring.split(f"## {generator.TYPES_TITLE}")[1]
+        self.assertIn("### AggregationType\n\nSet `type` to one of `buckets`, `exponential`.", types_section)
+        self.assertIn("- `canton.monitoring.metrics.histograms[].aggregation`", types_section)
+        self.assertIn("#### `type = buckets`\n\n<Tabs>\n<Tab title=\"HOCON\">", types_section)
+        self.assertIn("| `boundaries` | array of Double | **required** |  |", types_section)
+        # Links from the tables stay on the page.
+        self.assertIn("Choose one type — see [AggregationType](#aggregationtype).", monitoring)
+        # A page that uses no type has no such section; the types page still collects everything.
+        self.assertNotIn(f"## {generator.TYPES_TITLE}", pages["remote-participant.mdx"])
+        self.assertIn("## AggregationType", pages["types.mdx"])
 
     def test_sections_pair_hocon_with_the_table_over_the_same_keys(self) -> None:
         monitoring = generator.render_pages(sample_artifact())["monitoring.mdx"]
-        all_options = monitoring.split("## All options")[1]
+        all_options = monitoring.split(f"## {generator.ALL_OPTIONS_TITLE}")[1].split(f"## {generator.TYPES_TITLE}")[0]
         # Every section heading is its absolute path, and the pair beneath is tabbed: HOCON first,
         # the table behind it.
         self.assertIn(
@@ -148,6 +170,8 @@ class CantonConfigReferenceTests(unittest.TestCase):
         self.assertIn("      type = buckets\n      boundaries = [ ]   # required\n", hocon_tab)
         self.assertIn("      type = exponential\n      max-buckets = 0   # required\n      max-scale = 0   # required\n", hocon_tab)
         self.assertEqual(hocon_tab.count("```hocon"), 3)
+        # The section-level HOCON never lists a section entry as if it were a key.
+        self.assertNotIn("metrics = ", hocon_tab)
 
     def test_table_groups_variant_keys_under_type_headers(self) -> None:
         monitoring = generator.render_pages(sample_artifact())["monitoring.mdx"]
@@ -155,7 +179,7 @@ class CantonConfigReferenceTests(unittest.TestCase):
         text = "\n".join(rows).replace(" ", ".")
         # Plain section header carries the discriminator row; variant headers carry their keys.
         self.assertIn("| ....**aggregation** |", text)
-        self.assertIn("| ........`type` | one of `buckets`, `exponential` | **required** | Choose one type — see [AggregationType](" + generator.PAGE_URL_PREFIX + "/types#aggregationtype). |", text)
+        self.assertIn("| ........`type` | one of `buckets`, `exponential` | **required** | Choose one type — see [AggregationType](#aggregationtype). |", text)
         self.assertIn("| ....**aggregation** `type = buckets` |", text)
         self.assertIn("| ........`boundaries` | array of Double | **required** |  |", text)
         self.assertIn("| ....**aggregation** `type = exponential` |", text)
