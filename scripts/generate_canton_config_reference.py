@@ -592,18 +592,6 @@ def render_scope_hocon(scope: str, entries: list[dict], variants_by_type: dict[s
     return block
 
 
-def path_label(scope: str, qualifier: str | None = None, others: int = 0) -> list[str]:
-    """Where in the configuration a pair sits: the absolute path, and for a variant the `type` it
-    documents. The table beneath is relative to this path; the HOCON is written from the root. A
-    section that occurs in several places is shown at one of them and says how many more there are."""
-    label = f"**Path** `{scope}`"
-    if others:
-        label += f" and {others} more place{'s' if others > 1 else ''} listed above"
-    if qualifier:
-        label += f", with `{qualifier}`" if others else f" with `{qualifier}`"
-    return [label, ""]
-
-
 def tabbed_pair(hocon: list[str], table: list[str]) -> list[str]:
     """The same keys two ways, one visible at a time: HOCON first, the table behind it."""
     # Tab bodies are left unindented: four leading spaces would turn a line into a code block.
@@ -628,12 +616,11 @@ def render_section_views(scope: str, entries: list[dict], variants_by_type: dict
     """One section as a labelled, tabbed pair: HOCON as you would write it, or the same keys as a
     table with their descriptions. Both cover exactly the same keys. Sections inside that take a
     `type` are not announced here: the table's discriminator rows link to the types page."""
-    lines = path_label(scope)
     hocon = render_scope_hocon(scope, entries, variants_by_type)
     table = render_table(entries, scope, variants_by_type)
     if not hocon:
-        return lines + table + [""]
-    return lines + tabbed_pair(hocon, table)
+        return table + [""]
+    return tabbed_pair(hocon, table)
 
 
 def required_rows(prefix: str, entries: list[dict], variants_by_type: dict[str, list[str]]):
@@ -701,7 +688,7 @@ def render_required_views(prefix: str, entries: list[dict], variants_by_type: di
     hocon = render_required_hocon(prefix, entries, variants_by_type)
     if not hocon:
         return ["Nothing under this section has to be set: every key has a default.", ""]
-    return [*path_label(prefix), *tabbed_pair(hocon, render_required(prefix, entries, variants_by_type))]
+    return tabbed_pair(hocon, render_required(prefix, entries, variants_by_type))
 
 
 def render_required(prefix: str, entries: list[dict], variants_by_type: dict[str, list[str]]) -> list[str]:
@@ -768,10 +755,10 @@ def reading_guide(artifact: dict, options: list[dict] | None) -> list[str]:
         "covered by compatibility guarantees.",
         "",
         "**Required** lists only what you must set, and when: always, when you configure a particular "
-        "section, or when you have chosen a particular `type`. **All options** covers every key. Each "
-        "part is labelled with its **Path**, the absolute location in the configuration, and shown two "
+        "section, or when you have chosen a particular `type`. **All options** covers every key, one "
+        "section per heading, where the heading is the section's absolute path. Each is shown two "
         "ways behind tabs: **HOCON** as you would write it from the root, every key with its default, "
-        "and **Table**, the same keys relative to that path with their descriptions. A key that only "
+        "and **Table**, the same keys relative to the heading with their descriptions. A key that only "
         "applies under a particular `type` appears in the HOCON as a comment carrying that condition; in "
         "the table a **bold** row names a section and the keys indented beneath it live inside it.",
         "",
@@ -818,13 +805,16 @@ def render_node_page(prefix: str, title: str, description: str, options: list[di
         by_subsection.setdefault(subsection_key(option["path"], prefix), []).append(option)
 
     direct = by_subsection.pop("", [])
+    # Each heading is the section's absolute path, so a reader knows where in the configuration
+    # the HOCON and table beneath it sit. The HOCON is written from the root; the table is
+    # relative to the heading.
     if direct:
-        lines += ["### Top-level keys", ""]
+        lines += [f"### `{prefix}`", ""]
         lines += render_section_views(prefix, direct, variants_by_type)
 
     for subsection, entries in by_subsection.items():
         scope = prefix + "." + subsection
-        lines += [f"### `{subsection}`", ""]
+        lines += [f"### `{scope}`", ""]
         lines += render_section_views(scope, entries, variants_by_type)
 
     return "\n".join(lines).rstrip() + "\n"
@@ -859,7 +849,6 @@ def render_types_page(artifact: dict, variants_by_type, unions, options_by_path)
         lines.append("")
         for tag in variants:
             lines += [f"### `type = {tag}`", ""]
-            lines += path_label(section, f"type = {tag}", others=len(occurrences) - 1)
             block, nested = render_variant_block(section, discriminator, tag, options_by_path)
             keys = applicable_keys(section, discriminator, tag, options_by_path)
             if keys:
