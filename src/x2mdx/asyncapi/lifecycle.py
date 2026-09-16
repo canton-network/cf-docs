@@ -10,6 +10,7 @@ from typing import cast
 
 import yaml
 
+from x2mdx.visibility import dev_only_identities
 from x2mdx.asyncapi.models import (
     AsyncApiActionDetail,
     AsyncApiChannelDetail,
@@ -69,7 +70,7 @@ def normalize_lifecycle_state(value: object) -> str | None:
     if not isinstance(value, str):
         return None
     normalized = value.strip().lower()
-    if normalized in {"alpha", "beta", "stable", "deprecated"}:
+    if normalized in {"dev", "alpha", "beta", "stable", "deprecated"}:
         return normalized
     return None
 
@@ -630,6 +631,20 @@ def build_asyncapi_report_from_sources(
     snapshot_channels: dict[str, AsyncApiChannelsByName] = {}
     for snapshot in scoped_sources:
         snapshot_channels[snapshot.version] = collect_snapshot_channels(snapshot.document)
+
+    hidden = dev_only_identities(
+        {f"{name}#{action['action']}": action.get("lifecycle_state") or detail.get("lifecycle_state")
+         for name, detail in channels.items() for action in detail["actions"]}
+        for channels in snapshot_channels.values()
+    )
+    for channels in snapshot_channels.values():
+        for name, detail in list(channels.items()):
+            had_actions = bool(detail["actions"])
+            detail["actions"] = [action for action in detail["actions"]
+                                 if f"{name}#{action['action']}" not in hidden]
+            detail["action_names"] = [action["action"] for action in detail["actions"]]
+            if had_actions and not detail["actions"]:
+                del channels[name]
 
     channel_history: dict[str, AsyncApiChannelHistory] = {}
     for snapshot in scoped_sources:
