@@ -80,10 +80,6 @@ import ExternalCantonMainDocsOpenTargetSnippetJsonDataSynchronizerHowtosOperateT
 import ExternalCantonMainDocsOpenTargetSnippetJsonDataSynchronizerHowtosOperateTraffic7 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/synchronizer/howtos/operate/traffic-7.mdx";
 import ExternalCantonMainDocsOpenTargetSnippetJsonDataSynchronizerHowtosOperateTraffic8 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/synchronizer/howtos/operate/traffic-8.mdx";
 
-import ExternalCantonMainDocsOpenTargetSnippetJsonDataSynchronizerHowtosOperateOffboarding1 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/synchronizer/howtos/operate/offboarding-1.mdx";
-
-import ExternalCantonMainCommunityAppSrcTestResourcesExternalHaSequencersRemoteAdminParsing from "/snippets/external/canton/main/community/app/src/test/resources/external-ha-sequencers-remote-admin-parsing.mdx";
-
 
 This page is a reference for configuring, bootstrapping, and operating synchronizer nodes.
 
@@ -242,23 +238,6 @@ While the BFT Sequencer defaults to using the top-level Sequencer storage, confi
 > - Support distinct data read and write patterns with different database backends and settings
 > - Separate backups
 
-## External Sequencer
-
-To use an external Sequencer (for example, CometBFT), configure the underlying Sequencer `type` under `config` in the `sequencer` configuration:
-
-```scala
-sequencer {
-    config {
-        cometbft-node-host = "127.0.0.1"
-        cometbft-node-port = 26627
-    }
-    type = CometBFT
-}
-```
-
-Every external Sequencer requires a corresponding Sequencer Driver on the classpath.
-
-
 {/* COPIED_END */}
 
 
@@ -331,7 +310,7 @@ As with the Admin API, network traffic can (and should) be encrypted using TLS. 
 An example configuration section which enables TLS encryption and server-side TLS authentication is given by:
 
 ``` none
-canton.synchronizer.acme.public-api {
+canton.sequencers.acme.public-api {
   port = 5028
   address = localhost // defaults to 127.0.0.1
   tls {
@@ -345,11 +324,13 @@ canton.synchronizer.acme.public-api {
 
 If TLS is used on the server side with a self-signed certificate, we need to pass the certificate chain during the connect call of the participant. Otherwise, the default root certificates of the Java runtime will be used. An example would be:
 
-<div className="todo">
-
-\#22917: Fix broken literalinclude literalinclude:: CANTON/enterprise/app/src/test/scala/com/digitalasset/canton/integration/tests/MultiSynchronizerIntegrationTests.scala start-after: architecture-handbook-entry-begin: TlsConnect end-before: architecture-handbook-entry-end: TlsConnect dedent:
-
-</div>
+```scala
+participant1.synchronizers.connect(
+  synchronizerAlias = daName,
+  connection = s"https://$hostname:$port",
+  certificatesPath = certs, // path to certificate chain file (.pem) of server
+)
+```
 
 #### Server Authentication
 
@@ -372,13 +353,13 @@ Unlike the ledger or Admin API, the Public API uses Canton's cryptography and to
 3.  The client calls the `SequencerAuthenticationService` to authenticate using a challenge-response protocol and get an access token for the other sequencer services.
 4.  The client connects to the main `SequencerService` using the access token from 3.
 
-The information the client provides in step 2 is verifiable since it is a certificate chain of keys. The synchronizer rejects this if the namespace root key fingerprint included is not permissioned (see `permissioned-synchronizer`) or if the topology state provided is invalid.
+The information the client provides in step 2 is verifiable since it is a certificate chain of keys. The synchronizer rejects this if the namespace root key fingerprint included is not permissioned or if the topology state provided is invalid.
 
 During step 3, the client claims an identity, which is the fingerprint of a namespace root key. If that identity is registered (as done in step 2), the sequencer responds with a challenge consisting of a nonce and all fingerprints of signing keys authorized for that member as per the topology ledger. If the challenge is met successfully by signing the nonce appropriately with a key matching one of the authorized keys, the `SequencerAuthenticationService` responds with a time-limited token which can be used to authenticate more cheaply on the other Public API services.
 
 This authentication mechanism for the restricted services is built into the public sequencer API. You don't need to do anything to set this up; it is enforced automatically and can't be turned off.
 
-The expiration of the token generated in step 2 is valid for one hour by default. The nodes automatically renew the token in the background before it expires. The lifetime of the tokens and of the nonce can be reconfigured using
+The expiration of the token generated in step 3 is valid for one hour by default. The nodes automatically renew the token in the background before it expires. The lifetime of the tokens and of the nonce can be reconfigured using
 
 ``` none
 canton.sequencers.sequencer1.public-api {
@@ -401,7 +382,7 @@ Replace with references to the commands. \#22919
 
 ``` text
 participant1.synchronizers.logout(mySynchronizerAlias)
-mediator1.sequencer_connections.logout()
+mediator1.sequencer_connection.logout()
 ```
 
 
@@ -708,7 +689,6 @@ Finally, check that the Participant Node is healthy and can use the Synchronizer
 
 
 {/* COPIED_START source="docs-website:docs/replicated/canton/3.5/synchronizer/howtos/operate/new_nodes.rst" hash="bd9cb2c5" */}
-{/* DIVERGES FROM SOURCE at "HA Configuration": removed stale "Daml Enterprise only" gating on mediator HA, which contradicted the Note immediately below it (replication enabled by default since Canton 2.4.0). Related to github.com/canton-network/cf-docs/issues/1027 */}
 
 # Add New Nodes
 
@@ -756,7 +736,7 @@ The Database Sequencer is currently unsupported.
     > newSequencerReference.health.wait_for_initialized()
     > ```
 
-At this point, other nodes should be able to connect to the new Sequencer. To avoid problems, the best practice is to wait at least for the "maximum decision duration" (the sum of the `participant_response_timeout` and `mediator_reaction_timeout` dynamic synchronizer parameters with a default of 30 seconds each) before connecting nodes to a newly-onboarded Sequencer.
+At this point, other nodes should be able to connect to the new Sequencer. To avoid problems, the best practice is to wait at least for the "maximum decision duration" (the sum of the `confirmationResponseTimeout` and `mediatorReactionTimeout` dynamic synchronizer parameters with a default of 30 seconds each) before connecting nodes to a newly-onboarded Sequencer.
 
 If you encounter issues, refer to the troubleshooting guide.
 
@@ -818,7 +798,7 @@ Similarly to initializing a distributed synchronizer with separate consoles, dyn
     serial = newSerial,
   )
   // wait for the topology change to be observed by the sequencer
-  utils.retry_until_true(commandTimeouts.bounded) {
+  utils.retry_until_true(consoleEnvironment.commandTimeouts.bounded) {
     sequencer1.topology.sequencers
       .list(sequencer1.synchronizer_id)
       .headOption
@@ -828,7 +808,7 @@ Similarly to initializing a distributed synchronizer with separate consoles, dyn
   }
 
   // fetch the onboarding state and write it to a file
-  val onboardingState = sequencer1.setup.onboarding_state_for_sequencer(sequencer3.id)
+  val onboardingState = sequencer1.setup.onboarding_state_for_sequencerV2(sequencer3.id)
   utils.write_to_file(onboardingState, onboardingStateFile)
 }
 
@@ -837,9 +817,9 @@ Similarly to initializing a distributed synchronizer with separate consoles, dyn
 // * initialize the third sequencer with the onboarding state
 {
   val onboardingState = utils.read_byte_string_from_file(onboardingStateFile)
-  sequencer3.setup.assign_from_onboarding_state(onboardingState)
+  sequencer3.setup.assign_from_onboarding_stateV2(onboardingState)
 
-  sequencer3.health.initialized() shouldBe true
+  sequencer3.health.initialized()
 }
 ```
 
@@ -855,7 +835,7 @@ You can either initialize Mediators as part of the regular distributed synchroni
     > val mediator2Identity = mediator2.topology.transactions.identity_transactions()
     > sequencer1.topology.transactions.load(
     >   mediator2Identity,
-    >   store = synchronizer1Id,
+    >   store = TopologyStoreId.Synchronizer(synchronizer1Id),
     >   ForceFlag.AlienMember,
     > )
     > ```
@@ -864,7 +844,7 @@ You can either initialize Mediators as part of the regular distributed synchroni
 
     > ```scala
     > sequencer1.topology.mediators.propose(
-    >   synchronizer1Id,
+    >   synchronizer1Id.logical,
     >   threshold = PositiveInt.one,
     >   active = Seq(mediator1.id, mediator2.id),
     >   group = NonNegativeInt.zero,
@@ -957,6 +937,7 @@ mySequencer.topology.synchronizer_parameters
           setBalanceRequestSubmissionWindowSize = 10.minutes,
           enforceRateLimiting = false,
           baseEventCost = NonNegativeLong.zero,
+          freeConfirmationResponses = true,
         )
       ),
     ),
@@ -1238,26 +1219,9 @@ val schedule = sequencer1.bft.pruning.get_bft_schedule()
 
 The mediator service uses a hot standby mechanism with an arbitrary number of replicas. During a mediator fail-over, all in-flight requests get purged. As a result, these requests will timeout at the participants. The applications need to retry the underlying commands.
 
-### Running a Stand-Alone Mediator Node
-
-A synchronizer may be statically configured with a single embedded mediator node or it may be configured to work with external mediators. Once the synchronizer has been initialized further mediators can be added at runtime.
-
-By default, a synchronizer will run an embedded mediator node itself. This is useful in simple deployments where all synchronizer functionality can be co-located on a single host. In a distributed setup where synchronizer services are operated over many machines, you can instead configure a synchronizer manager node and bootstrap the synchronizer with mediator(s) running externally.
-
-Mediator nodes can be defined in the same manner as Canton participants and synchronizers.
-
-``` none
-mediators {
-  mediator1 {
-    admin-api.port = 5017
-  }
-```
-
-When the synchronizer starts it will automatically provide the embedded mediator information about the synchronizer. External mediators have to be initialized using runtime administration in order to complete the synchronizer initialization.
-
 ### HA Configuration
 
-Only PostgreSQL and Oracle-based storage are supported for mediator HA.
+Only PostgreSQL-based storage is supported for mediator HA.
 
 Mediator node replicas are configured in the Canton configuration file as individual stand-alone mediator nodes with two required changes for each mediator node replica:
 
@@ -1265,95 +1229,12 @@ Mediator node replicas are configured in the Canton configuration file as indivi
 - Set `replication.enabled = true` for each mediator node replica.
 
 <Note>
-Starting from canton 2.4.0, mediator replication is enabled by default when using supported storage.
+Mediator replication is enabled by default when using supported storage.
 </Note>
 
 Only the active mediator node replica has to be initialized through the synchronizer bootstrap commands. The passive replicas observe the initialization via the shared database.
 
 Further replicas can be started at runtime without any additional setup. They remain passive until the current active mediator node replica fails.
-
-## Sequencer
-
-The database-based sequencer can be horizontally scaled and placed behind a load balancer to provide high availability and performance improvements.
-
-Deploy multiple sequencer nodes for the synchronizer with the following configuration:
-
-> - All sequencer nodes share the same database so ensure that the storage configuration for each sequencer matches.
-> - All sequencer nodes must be configured with `high-availability.enabled = true`.
-
-<Note>
-Starting from Canton 2.4.0, sequencer high availability is enabled by default when using supported storage.
-</Note>
-
-<ExternalCantonMainCommunityAppSrcTestResourcesExternalHaSequencersRemoteAdminParsing />
-
-The synchronizer node only supports embedded sequencers, so a distributed setup using a synchronizer manager node must then be configured to use these sequencer nodes by pointing it at these external services.
-
-Once configured the synchronizer must be bootstrapped with the new external sequencer using the bootstrap_synchronizer operational process. These sequencers share a database so just use a single instance for bootstrapping and the replicas will come online once the shared database has a sufficient state for starting.
-
-As these nodes are likely running in separate processes you could run this command entirely externally using a remote administration configuration.
-
-``` none
-canton {
-  remote-sequencers {
-    sequencer1 {
-      # these details are provided to other nodes to use for how they should connect to the sequencer
-      public-api {
-        address = sequencer1.local
-        port = 1235
-      }
-      # the server used from running administration commands
-      admin-api {
-        address = sequencer1.local
-        port = 1235
-      }
-    }
-  }
-}
-```
-
-There are two methods available for exposing the horizontally scaled sequencer instances to participants.
-
-### Total node count
-
-The `sequencer.high-availability.total-node-count` parameter is used to divide up time among the database sequencers. The parameter should not be changed once a set of sequencer nodes has been deployed. Because each message sequenced must have a unique timestamp, a sequencer node will use timestamps `modulo` the `total-node-count` plus its own index to create timestamps that do not conflict with other sequencer nodes while sequencing the messages in a parallel database insertion process. Canton uses microseconds, which yields a theoretical max throughput of 1 million messages per second per synchronizer. Now, this theoretical throughput is divided equally among all sequencer nodes (`total-node-count`). Therefore, if you set `total-node-count` too high, then a sequencer might not be able to operate at the maximum theoretical throughput. We recommend keeping the default value of `10`, as all above explanations are only theoretical and we have not yet seen a database/hard disk that can handle the theoretical throughput. Also note that a message might contain multiple events, such that we are talking about high numbers here.
-
-### External load balancer
-
-Using a load balancer is recommended when you have a http2+grpc supporting load balancer available, and can't/don't want to expose details of the backend sequencers to clients. An advanced deployment could also support elastically scaling the number of sequencers available and dynamically reconfigure the load balancer for this updated set.
-
-An example [HAProxy]() configuration for exposing GRPC services without TLS looks like:
-
-    frontend domain_frontend
-      bind 1234 proto h2
-      default_backend domain_backend
-
-    backend domain_backend
-      option httpchk
-      http-check connect
-      http-check send meth GET uri /health
-      balance roundrobin
-      server sequencer1 sequencer1.local:1234 proto h2 check port 8080
-      server sequencer2 sequencer2.local:1234 proto h2 check port 8080
-      server sequencer3 sequencer3.local:1234 proto h2 check port 8080
-
-Please note that for quick failover, you also need to add HTTP health checks, as otherwise, you have to wait for the TCP timeout to occur before failover happens. The Public API of the sequencer exposes the standard GRPC health [endpoints](), but these are currently not supported by HAProxy, hence you need to fall back on the HTTP/health endpoint.
-
-### Client-side load balancing
-
-Using client-side load balancing is recommended where an external load-balancing service is unavailable (or lacks http2+grpc support), and the set of sequencers is static and can be configured at the client.
-
-To simply specify multiple sequencers use the `synchronizers.connect_multi` console command when registering/connecting to the synchronizer:
-
-```scala
-myparticipant.synchronizers.connect_multi(
-  "my_synchronizer_alias",
-  Seq("https://sequencer1.example.com", "https://sequencer2.example.com", "https://sequencer3.example.com")
-)
-```
-
-See the sequencer connectivity documentation for more details on how to add many sequencer URLs when combined with other synchronizer connection options. The synchronizer connection configuration can also be changed at runtime to add or replace configured sequencer connections. Note the synchronizer will have to be disconnected and reconnected at the participant for the updated configuration to be used.
-
 
 {/* COPIED_END */}
 
@@ -1386,7 +1267,7 @@ You can protect a Synchronizer from excessive traffic from its members by enabli
 {/* COPIED_END */}
 
 
-{/* COPIED_START source="docs-website:docs/replicated/canton/3.5/synchronizer/howtos/decommission/index.rst" hash="7aac3ee4" */}
+{/* COPIED_START source="docs-website:docs/replicated/canton/3.5/synchronizer/howtos/decommission/index.rst" hash="064f999f" */}
 
 # Decommissioning Canton nodes and Synchronizer entities
 
@@ -1409,54 +1290,93 @@ After that, the sequencer can be decommissioned by removing it from the synchron
 
 ### Disconnecting all nodes from the sequencer to be decommissioned
 
-- Change the sequencer connection on the mediators connected to the sequencer to be decommissioned to use another active sequencer, as per mediator connectivity:
+- Change the sequencer connection on the mediators connected to the sequencer to be decommissioned to use another active sequencer, as per [mediator connectivity](/global-synchronizer/reference/canton-console-commands#sequencer_connection.set):
 
-<div className="todo">
+```scala
+mediator1.sequencer_connection.set(SequencerConnections.single(sequencer1.sequencerConnection))
+```
 
-\#22917: Fix broken literalinclude literalinclude:: CANTON/enterprise/app/src/test/scala/com/digitalasset/canton/integration/tests/offboarding/SequencerOffboardingIntegrationTest.scala language: scala start-after: user-manual-entry-begin: SequencerOffboardingSwitchAwayMediator end-before: user-manual-entry-end: SequencerOffboardingSwitchAwayMediator dedent:
+- Reconnect participants to the synchronizer, as described in [Synchronizer connectivity](/global-synchronizer/reference/canton-console-commands#synchronizer-connectivity), using a sequencer connection to another active sequencer:
 
-</div>
-
-- Reconnect participants to the Synchronizer, as described in Synchronizer connectivity, using a sequencer connection to another active sequencer:
-
-<div className="todo">
-
-\#22917: Fix broken literalinclude literalinclude:: CANTON/enterprise/app/src/test/scala/com/digitalasset/canton/integration/tests/offboarding/SequencerOffboardingIntegrationTest.scala language: scala start-after: user-manual-entry-begin: SequencerOffboardingSwitchAwayParticipant end-before: user-manual-entry-end: SequencerOffboardingSwitchAwayParticipant dedent:
-
-</div>
+```scala
+participant2.synchronizers.disconnect(daName)
+participant2.synchronizers.modify(
+  daName,
+  _.copy(sequencerConnections = SequencerConnections.single(sequencer1.sequencerConnection)),
+)
+participant2.synchronizers.reconnect(daName)
+```
 
 ### Decommissioning the sequencer
 
-Sequencers are part of the synchronizer by virtue of having their node ID equal to the synchronizer id, which also means they all have the same node ID. Since a sequencer’s identity is the same as the synchronizer’s identity, you should leave identity and namespace mappings intact.
+A quorum of synchronizer owners proposes the sequencer out of the synchronizer topology. The remaining active sequencers must still meet the threshold of the sequencer synchronizer state; otherwise, lower the threshold in the same proposal.
 
-However, a sequencer may use its own cryptographic material distinct from other sequencers. In that case, the owner-to-key mappings that lists the keys that pertain to the decommissioned sequencer should be removed:
+```scala
+// find the current sequencer synchronizer state
+val sequencerSynchronizerState =
+  sequencer1.topology.sequencers
+    .list(store = synchronizerId)
+    .headOption
+    .getOrElse(sys.error("Did not find sequencer synchronizer state on the synchronizer"))
 
-1.  Find the correct owner-to-key mappings that pertain to the sequencer by filtering using `filterKeyOwnerUid` and the UID of the sequencer to be decommissioned.
-2.  The remaining synchronizer owners should issue a `owner.topology.transactions.propose` command to remove those mappings.
+// remove the decommissioned sequencer from the synchronizer state
+val threshold = sequencerSynchronizerState.item.threshold
+val activeSequencers = sequencerSynchronizerState.item.active.filterNot(_ == sequencer3.id)
+val newSerial = Some(sequencerSynchronizerState.context.serial.increment)
+sequencer1.topology.sequencers.propose(
+  synchronizerId,
+  threshold,
+  activeSequencers,
+  serial = newSerial,
+)
+sequencer2.topology.sequencers.propose(
+  synchronizerId,
+  threshold,
+  activeSequencers,
+  serial = newSerial,
+)
+```
 
-<ExternalCantonMainDocsOpenTargetSnippetJsonDataSynchronizerHowtosOperateOffboarding1 />
+If the synchronizer runs on BFT sequencers, wait until the ordering topology of the remaining sequencers no longer lists the decommissioned sequencer before stopping it; you can check that with the `bft.get_ordering_topology` command. Stopping it earlier can leave a BFT ordering network of three or fewer sequencers without a quorum.
 
-Finally, the cryptographic material exclusively owned by a decommissioned sequencer must also be disposed of:
+The cryptographic material of a decommissioned sequencer must also be disposed of:
 
 - If it was stored only on the decommissioned sequencer, it must be disposed of together with the decommissioned sequencer node.
 - However, if a decommissioned sequencer’s cryptographic material is managed via a KMS system, it must be disposed of through the KMS; refer to your KMS’ documentation and internal procedures to handle this.
 
 ## Decommissioning a Mediator
 
-Mediators are also part of a synchronizer’s messaging infrastructure and do not store application contracts, so they are disposable as long as precautions are taken to avoid disrupting the synchronization services. This means ensuring that at least one mediator remains on the synchronizer.
+Mediators are also part of a synchronizer’s messaging infrastructure and do not store application contracts, so they are disposable as long as precautions are taken to avoid disrupting the synchronization services. This means ensuring that at least one mediator remains in its mediator group and that the remaining active mediators still meet the group’s threshold; otherwise, lower the threshold in the same proposal.
 
-<div className="todo">
+A quorum of synchronizer owners proposes the mediator out of the synchronizer topology:
 
-\#22917: Fix broken ref If other mediators exist on the synchronizer, a mediator can be decommissioned using a single console command ref:setup.offboard_mediator.
+```scala
+// find the mediator synchronizer state of the group containing the decommissioned mediator
+val mediatorSynchronizerState =
+  sequencer1.topology.mediators
+    .list(synchronizerId)
+    .find(_.item.active.contains(mediator2.id))
+    .getOrElse(sys.error("Did not find the mediator in a mediator synchronizer state on the synchronizer"))
 
-</div>
-
-<div className="todo">
-
-\#22917: Fix broken literalinclude literalinclude:: CANTON/enterprise/app/src/test/scala/com/digitalasset/canton/integration/tests/offboarding/MediatorOffboardingIntegrationTest.scala language: scala start-after: user-manual-entry-begin: OffboardMediator end-before: user-manual-entry-end: OffboardMediator dedent:
-
-</div>
-
+// remove the decommissioned mediator from the synchronizer state
+val threshold = mediatorSynchronizerState.item.threshold
+val activeMediators = mediatorSynchronizerState.item.active.filterNot(_ == mediator2.id)
+val newSerial = Some(mediatorSynchronizerState.context.serial.increment)
+sequencer1.topology.mediators.propose(
+  synchronizerId,
+  threshold,
+  activeMediators,
+  group = mediatorSynchronizerState.item.group,
+  serial = newSerial,
+)
+sequencer2.topology.mediators.propose(
+  synchronizerId,
+  threshold,
+  activeMediators,
+  group = mediatorSynchronizerState.item.group,
+  serial = newSerial,
+)
+```
 
 {/* COPIED_END */}
 
