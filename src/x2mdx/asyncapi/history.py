@@ -86,6 +86,8 @@ def build_asyncapi_history_report(
                     )
                 )
 
+    observations = {key: values for key, values in observations.items()
+                    if (values[-1].action.get("lifecycle_state") or values[-1].channel_detail.get("lifecycle_state")) != "dev"}
     known_item_ids = set(observations)
     items = [
         _history_item(
