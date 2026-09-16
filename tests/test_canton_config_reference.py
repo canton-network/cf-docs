@@ -126,12 +126,13 @@ class CantonConfigReferenceTests(unittest.TestCase):
         # Every pair is labelled with its absolute path, then tabbed: HOCON first, the table behind it.
         self.assertIn(
             "### `metrics`\n\n**Path** `canton.monitoring.metrics`\n\n"
-            f"Takes a `type`: [AggregationType]({generator.PAGE_URL_PREFIX}/types#aggregationtype) at `histograms[].aggregation`.\n\n"
             "<Tabs>\n<Tab title=\"HOCON\">\n\n```hocon",
             all_options,
         )
         self.assertIn("</Tab>\n<Tab title=\"Table\">\n\n| Key | Type | Default | Description |", all_options)
         self.assertLess(all_options.index("```hocon"), all_options.index("| Key | Type | Default | Description |"))
+        # No separate "Takes a `type`" announcement: the discriminator rows carry the link.
+        self.assertNotIn("Takes a `type`", monitoring)
         # The section HOCON is exhaustive: gated keys are commented with their condition, so the
         # block and the table behind it cover the same keys.
         self.assertIn(

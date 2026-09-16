@@ -561,16 +561,6 @@ def render_variant_block(
     return block, nested
 
 
-def unions_within(scope: str, unions: dict) -> list[tuple[str, str]]:
-    """(union, shallowest discriminator path) for every union inside one section, in path order."""
-    found: list[tuple[str, str]] = []
-    for union, entry in unions.items():
-        inside = [path for path in entry["paths"] if path.startswith(scope + ".")]
-        if inside:
-            found.append((union, min(inside, key=lambda path: (path.count("."), path))))
-    return sorted(found, key=lambda item: item[1])
-
-
 def render_scope_hocon(scope: str, entries: list[dict], variants_by_type: dict[str, list[str]]) -> list[str]:
     """The whole section as HOCON: every key, with a discriminator shown as the values it accepts
     and a key that only applies under some `type` commented with that condition -- the same key set
@@ -634,22 +624,11 @@ def tabbed_pair(hocon: list[str], table: list[str]) -> list[str]:
     ]
 
 
-def render_section_views(
-    scope: str,
-    entries: list[dict],
-    variants_by_type: dict[str, list[str]],
-    unions: dict,
-) -> list[str]:
+def render_section_views(scope: str, entries: list[dict], variants_by_type: dict[str, list[str]]) -> list[str]:
     """One section as a labelled, tabbed pair: HOCON as you would write it, or the same keys as a
-    table with their descriptions. Both cover exactly the same keys."""
+    table with their descriptions. Both cover exactly the same keys. Sections inside that take a
+    `type` are not announced here: the table's discriminator rows link to the types page."""
     lines = path_label(scope)
-    inside = unions_within(scope, unions)
-    if inside:
-        links = ", ".join(
-            f"[{union}]({union_link(union)}) at `{path.rsplit('.', 1)[0][len(scope) + 1 :] or '.'}`"
-            for union, path in inside
-        )
-        lines += [f"Takes a `type`: {links}.", ""]
     hocon = render_scope_hocon(scope, entries, variants_by_type)
     table = render_table(entries, scope, variants_by_type)
     if not hocon:
@@ -841,12 +820,12 @@ def render_node_page(prefix: str, title: str, description: str, options: list[di
     direct = by_subsection.pop("", [])
     if direct:
         lines += ["### Top-level keys", ""]
-        lines += render_section_views(prefix, direct, variants_by_type, unions)
+        lines += render_section_views(prefix, direct, variants_by_type)
 
     for subsection, entries in by_subsection.items():
         scope = prefix + "." + subsection
         lines += [f"### `{subsection}`", ""]
-        lines += render_section_views(scope, entries, variants_by_type, unions)
+        lines += render_section_views(scope, entries, variants_by_type)
 
     return "\n".join(lines).rstrip() + "\n"
 
