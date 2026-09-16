@@ -24,6 +24,7 @@ from x2mdx.history import (
     validate_history_report,
     write_history_report,
 )
+from x2mdx.openapi.history import filter_dev_openapi_specs
 from x2mdx.openapi import (
     ManualOpenAPIRenderOptions,
     OpenAPIHistoryScope,
@@ -1151,6 +1152,16 @@ def main() -> int:
         spec_filenames=enabled_filenames,
         force_refresh=args.force_refresh,
     )
+    for family in navigation_families:
+        for spec in family["specs"]:
+            filename = spec["filename"]
+            original = snapshots[filename]
+            public = filter_dev_openapi_specs(original,
+                versions=[release["version"] for release in comparison_releases],
+                publish_version=publish_release["version"])
+            if public[publish_release["version"]] != original[publish_release["version"]]:
+                (docs_root / spec["source"]).write_text(yaml.safe_dump(public[publish_release["version"]], sort_keys=False))
+            snapshots[filename] = public
     history_report = build_splice_history_report(
         source_config=source_config,
         families=navigation_families,
