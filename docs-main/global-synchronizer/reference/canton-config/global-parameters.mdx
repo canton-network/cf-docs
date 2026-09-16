@@ -17,7 +17,7 @@ Paths are rooted at `canton`. Segments in angle brackets are names you choose:
 
 A `[]` suffix marks the fields of a list element. Keys marked **alpha** or **beta** are not covered by compatibility guarantees.
 
-**Required** lists only what you must set, and when: always, when you configure a particular section, or when you have chosen a particular `type`. **All options** covers every key, one section per heading, where the heading is the section's absolute path. Each is shown two ways behind tabs: **HOCON** as you would write it from the root, every key with its default, and **Table**, the same keys relative to the heading with their descriptions. A key that only applies under a particular `type` appears in the HOCON as a comment carrying that condition; in the table a **bold** row names a section and the keys indented beneath it live inside it.
+**Required** lists only what you must set, and when: always, when you configure a particular section, or when you have chosen a particular `type`. **All options** covers every key, one section per heading, where the heading is the section's absolute path. Each is shown two ways behind tabs: **HOCON** as you would write it from the root, every key with its default, and **Table**, the same keys relative to the heading with their descriptions. Where a section takes a `type`, the HOCON tab enumerates one complete block per type after the section block, and the table groups that type's keys under a `type = …` header; in the table a **bold** row names a section and the keys indented beneath it live inside it. In the Required skeleton a key needed only under a particular `type` is a comment carrying that condition.
 
 Some sections take a `type` that decides which other keys they accept. Those are documented once on the [types page](/global-synchronizer/reference/canton-config/types) and linked from wherever they occur.
 
@@ -117,6 +117,90 @@ canton.parameters {
 }
 ```
 
+`clock` supports these types: `sim-clock`, `wall-clock`, `remote-clock`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.parameters.clock {
+  type = sim-clock
+  # takes no further keys
+}
+```
+
+```hocon
+canton.parameters.clock {
+  type = wall-clock
+  skews {
+    <skew> = [ ]
+  }
+}
+```
+
+```hocon
+canton.parameters.clock {
+  type = remote-clock
+  remote-api {
+    address = "127.0.0.1"
+    channel {
+      # flow-control-window = <int>
+      # initial-flow-control-window = <int>
+      keep-alive-client {
+        idle-timeout = "30 minutes"
+        keep-alive-without-calls = false
+        time = "40 seconds"
+        timeout = "15 seconds"
+      }
+      max-inbound-message-size = 0   # required
+      trace-context-propagation = enabled|disabled   # required
+    }
+    port = 0   # required
+    tls {
+      client-cert {
+        cert-chain-file {
+          type = pem-file|pem-string   # required
+        }
+        private-key-file = "..."   # required
+      }
+      enabled = true
+      trust-collection-file {
+        type = pem-file|pem-string   # required
+      }
+    }
+  }
+}
+```
+
+`clock.remote-api.tls.trust-collection-file` supports these types: `pem-file`, `pem-string`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.parameters.clock.remote-api.tls.trust-collection-file {
+  type = pem-file
+  pem-file = "/path/to/file"   # required
+}
+```
+
+```hocon
+canton.parameters.clock.remote-api.tls.trust-collection-file {
+  type = pem-string
+  pem-bytes = "..."   # required
+}
+```
+
+`clock.remote-api.tls.client-cert.cert-chain-file` supports these types: `pem-file`, `pem-string`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.parameters.clock.remote-api.tls.client-cert.cert-chain-file {
+  type = pem-file
+  pem-file = "/path/to/file"   # required
+}
+```
+
+```hocon
+canton.parameters.clock.remote-api.tls.client-cert.cert-chain-file {
+  type = pem-string
+  pem-bytes = "..."   # required
+}
+```
+
 
 </Tab>
 <Tab title="Table">
@@ -146,42 +230,91 @@ canton.parameters {
 
 ```hocon
 canton.parameters.clock {
+  type = sim-clock|wall-clock|remote-clock   # required
+}
+```
+
+`` supports these types: `sim-clock`, `wall-clock`, `remote-clock`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.parameters.clock {
+  type = sim-clock
+  # takes no further keys
+}
+```
+
+```hocon
+canton.parameters.clock {
+  type = wall-clock
+  skews {
+    <skew> = [ ]
+  }
+}
+```
+
+```hocon
+canton.parameters.clock {
+  type = remote-clock
   remote-api {
-    # address = "127.0.0.1"   # when type = remote-clock
+    address = "127.0.0.1"
     channel {
-      # flow-control-window = <int>   # when type = remote-clock
-      # initial-flow-control-window = <int>   # when type = remote-clock
+      # flow-control-window = <int>
+      # initial-flow-control-window = <int>
       keep-alive-client {
-        # idle-timeout = "30 minutes"   # when type = remote-clock
-        # keep-alive-without-calls = false   # when type = remote-clock
-        # time = "40 seconds"   # when type = remote-clock
-        # timeout = "15 seconds"   # when type = remote-clock
+        idle-timeout = "30 minutes"
+        keep-alive-without-calls = false
+        time = "40 seconds"
+        timeout = "15 seconds"
       }
-      # max-inbound-message-size = 0   # required when type = remote-clock
-      # trace-context-propagation = enabled|disabled   # required when type = remote-clock
+      max-inbound-message-size = 0   # required
+      trace-context-propagation = enabled|disabled   # required
     }
-    # port = 0   # required when type = remote-clock
+    port = 0   # required
     tls {
       client-cert {
         cert-chain-file {
-          # pem-bytes = "..."   # required when type = remote-clock and type = pem-string
-          # pem-file = "/path/to/file"   # required when type = remote-clock and type = pem-file
-          # type = pem-file|pem-string   # required when type = remote-clock
+          type = pem-file|pem-string   # required
         }
-        # private-key-file = "..."   # required when type = remote-clock
+        private-key-file = "..."   # required
       }
-      # enabled = true   # when type = remote-clock
+      enabled = true
       trust-collection-file {
-        # pem-bytes = "..."   # required when type = remote-clock and type = pem-string
-        # pem-file = "/path/to/file"   # required when type = remote-clock and type = pem-file
-        # type = pem-file|pem-string   # required when type = remote-clock
+        type = pem-file|pem-string   # required
       }
     }
   }
-  skews {
-    # <skew> = [ ]   # when type = wall-clock
-  }
-  type = sim-clock|wall-clock|remote-clock   # required
+}
+```
+
+`remote-api.tls.trust-collection-file` supports these types: `pem-file`, `pem-string`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.parameters.clock.remote-api.tls.trust-collection-file {
+  type = pem-file
+  pem-file = "/path/to/file"   # required
+}
+```
+
+```hocon
+canton.parameters.clock.remote-api.tls.trust-collection-file {
+  type = pem-string
+  pem-bytes = "..."   # required
+}
+```
+
+`remote-api.tls.client-cert.cert-chain-file` supports these types: `pem-file`, `pem-string`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.parameters.clock.remote-api.tls.client-cert.cert-chain-file {
+  type = pem-file
+  pem-file = "/path/to/file"   # required
+}
+```
+
+```hocon
+canton.parameters.clock.remote-api.tls.client-cert.cert-chain-file {
+  type = pem-string
+  pem-bytes = "..."   # required
 }
 ```
 

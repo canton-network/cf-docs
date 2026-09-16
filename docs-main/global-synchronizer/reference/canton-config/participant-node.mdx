@@ -23,7 +23,7 @@ Paths are rooted at `canton`. Segments in angle brackets are names you choose:
 
 A `[]` suffix marks the fields of a list element. Keys marked **alpha** or **beta** are not covered by compatibility guarantees.
 
-**Required** lists only what you must set, and when: always, when you configure a particular section, or when you have chosen a particular `type`. **All options** covers every key, one section per heading, where the heading is the section's absolute path. Each is shown two ways behind tabs: **HOCON** as you would write it from the root, every key with its default, and **Table**, the same keys relative to the heading with their descriptions. A key that only applies under a particular `type` appears in the HOCON as a comment carrying that condition; in the table a **bold** row names a section and the keys indented beneath it live inside it.
+**Required** lists only what you must set, and when: always, when you configure a particular section, or when you have chosen a particular `type`. **All options** covers every key, one section per heading, where the heading is the section's absolute path. Each is shown two ways behind tabs: **HOCON** as you would write it from the root, every key with its default, and **Table**, the same keys relative to the heading with their descriptions. Where a section takes a `type`, the HOCON tab enumerates one complete block per type after the section block, and the table groups that type's keys under a `type = …` header; in the table a **bold** row names a section and the keys indented beneath it live inside it. In the Required skeleton a key needed only under a particular `type` is a comment carrying that condition.
 
 Some sections take a `type` that decides which other keys they accept. Those are documented once on the [types page](/global-synchronizer/reference/canton-config/types) and linked from wherever they occur.
 
@@ -559,21 +559,7 @@ canton.participants.<participant>.admin-api {
   }
   auth-services = [
     {
-      # access-level = wildcard   # when type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
-      # certificate = "..."   # required when type = jwt-es-256-crt|jwt-es-512-crt|jwt-rs-256-crt
-      # max-token-life = <duration>   # when type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
-      # privileged = false   # when type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
-      # secret = "..."   # required when type = unsafe-jwt-hmac-256
-      # target-audience = <string>   # when type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
-      # target-scope = <string>   # when type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
       type = wildcard|unsafe-jwt-hmac-256|jwt-rs-256-crt|jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|party-jwt   # required
-      # url = "..."   # required when type = jwt-jwks
-      users = [
-        {
-          # allowed-services = [ ]   # required when auth-services[].type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
-          # user-id = "..."   # required when auth-services[].type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
-        }
-      ]
     }
   ]
   # flow-control-window = <int>
@@ -610,31 +596,215 @@ canton.participants.<participant>.admin-api {
   port = 30002
   tls {
     cert-chain-file {
-      # pem-bytes = "..."   # required when type = pem-string
-      # pem-file = "/path/to/file"   # required when type = pem-file
       type = pem-file|pem-string   # required
     }
     # ciphers = [ ... ]
     client-auth {
-      admin-client {
-        cert-chain-file {
-          # pem-bytes = "..."   # required when tls.client-auth.type = require and type = pem-string
-          # pem-file = "/path/to/file"   # required when tls.client-auth.type = require and type = pem-file
-          # type = pem-file|pem-string   # required when tls.client-auth.type = require
-        }
-        # private-key-file = "..."   # required when tls.client-auth.type = require
-      }
       type = require|optional|none   # required
     }
     enable-cert-revocation-checking = false
     minimum-server-protocol-version = "TLSv1.2"
     private-key-file = "..."   # required
     trust-collection-file {
-      # pem-bytes = "..."   # required when type = pem-string
-      # pem-file = "/path/to/file"   # required when type = pem-file
       type = pem-file|pem-string   # required
     }
   }
+}
+```
+
+`auth-services[]` supports these types: `wildcard`, `unsafe-jwt-hmac-256`, `jwt-rs-256-crt`, `jwt-es-256-crt`, `jwt-es-512-crt`, `jwt-jwks`, `party-jwt`. Each block shows one entry; a list may hold entries of different types.
+
+```hocon
+canton.participants.<participant>.admin-api.auth-services = [
+  {
+    type = wildcard
+    # takes no further keys
+  }
+]
+```
+
+```hocon
+canton.participants.<participant>.admin-api.auth-services = [
+  {
+    type = unsafe-jwt-hmac-256
+    access-level = wildcard
+    # max-token-life = <duration>
+    privileged = false
+    secret = "..."   # required
+    # target-audience = <string>
+    # target-scope = <string>
+    users = [
+      {
+        allowed-services = [ ]   # required
+        user-id = "..."   # required
+      }
+    ]
+  }
+]
+```
+
+```hocon
+canton.participants.<participant>.admin-api.auth-services = [
+  {
+    type = jwt-rs-256-crt
+    access-level = wildcard
+    certificate = "..."   # required
+    # max-token-life = <duration>
+    privileged = false
+    # target-audience = <string>
+    # target-scope = <string>
+    users = [
+      {
+        allowed-services = [ ]   # required
+        user-id = "..."   # required
+      }
+    ]
+  }
+]
+```
+
+```hocon
+canton.participants.<participant>.admin-api.auth-services = [
+  {
+    type = jwt-es-256-crt
+    access-level = wildcard
+    certificate = "..."   # required
+    # max-token-life = <duration>
+    privileged = false
+    # target-audience = <string>
+    # target-scope = <string>
+    users = [
+      {
+        allowed-services = [ ]   # required
+        user-id = "..."   # required
+      }
+    ]
+  }
+]
+```
+
+```hocon
+canton.participants.<participant>.admin-api.auth-services = [
+  {
+    type = jwt-es-512-crt
+    access-level = wildcard
+    certificate = "..."   # required
+    # max-token-life = <duration>
+    privileged = false
+    # target-audience = <string>
+    # target-scope = <string>
+    users = [
+      {
+        allowed-services = [ ]   # required
+        user-id = "..."   # required
+      }
+    ]
+  }
+]
+```
+
+```hocon
+canton.participants.<participant>.admin-api.auth-services = [
+  {
+    type = jwt-jwks
+    access-level = wildcard
+    # max-token-life = <duration>
+    privileged = false
+    # target-audience = <string>
+    # target-scope = <string>
+    url = "..."   # required
+    users = [
+      {
+        allowed-services = [ ]   # required
+        user-id = "..."   # required
+      }
+    ]
+  }
+]
+```
+
+```hocon
+canton.participants.<participant>.admin-api.auth-services = [
+  {
+    type = party-jwt
+    # takes no further keys
+  }
+]
+```
+
+`tls.cert-chain-file` supports these types: `pem-file`, `pem-string`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.participants.<participant>.admin-api.tls.cert-chain-file {
+  type = pem-file
+  pem-file = "/path/to/file"   # required
+}
+```
+
+```hocon
+canton.participants.<participant>.admin-api.tls.cert-chain-file {
+  type = pem-string
+  pem-bytes = "..."   # required
+}
+```
+
+`tls.client-auth` supports these types: `require`, `optional`, `none`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.participants.<participant>.admin-api.tls.client-auth {
+  type = require
+  admin-client {
+    cert-chain-file {
+      type = pem-file|pem-string   # required
+    }
+    private-key-file = "..."   # required
+  }
+}
+```
+
+```hocon
+canton.participants.<participant>.admin-api.tls.client-auth {
+  type = optional
+  # takes no further keys
+}
+```
+
+```hocon
+canton.participants.<participant>.admin-api.tls.client-auth {
+  type = none
+  # takes no further keys
+}
+```
+
+`tls.trust-collection-file` supports these types: `pem-file`, `pem-string`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.participants.<participant>.admin-api.tls.trust-collection-file {
+  type = pem-file
+  pem-file = "/path/to/file"   # required
+}
+```
+
+```hocon
+canton.participants.<participant>.admin-api.tls.trust-collection-file {
+  type = pem-string
+  pem-bytes = "..."   # required
+}
+```
+
+`tls.client-auth.admin-client.cert-chain-file` supports these types: `pem-file`, `pem-string`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.participants.<participant>.admin-api.tls.client-auth.admin-client.cert-chain-file {
+  type = pem-file
+  pem-file = "/path/to/file"   # required
+}
+```
+
+```hocon
+canton.participants.<participant>.admin-api.tls.client-auth.admin-client.cert-chain-file {
+  type = pem-string
+  pem-bytes = "..."   # required
 }
 ```
 
@@ -947,20 +1117,6 @@ canton.participants.<participant>.crypto {
     # default = <generic>
   }
   kms {
-    # audit-logging = false   # when type = aws|gcp
-    # config = { }   # required when type = driver
-    custom-tags {
-      # <custom-tag> = [ ]   # when kms.type = aws
-    }
-    # disable-ssl-verification = false   # when type = aws
-    # endpoint-override = <string>   # when type = aws|gcp
-    # health-check-period = "10 seconds"   # when type = driver
-    # key-ring-id = "..."   # required when type = gcp
-    # location-id = "..."   # required when type = gcp
-    # multi-region-key = false   # when type = aws
-    # name = "..."   # required when type = driver
-    # project-id = "..."   # required when type = gcp
-    # region = "..."   # required when type = aws
     retries {
       create-key-check {
         initial-delay = "30 seconds"   # required
@@ -1015,6 +1171,88 @@ canton.participants.<participant>.crypto {
     # allowed = [ ... ]
     # default = <generic>
   }
+}
+```
+
+`kms` supports these types: `driver`, `aws`, `gcp`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.participants.<participant>.crypto.kms {
+  type = driver
+  config = { }   # required
+  health-check-period = "10 seconds"
+  name = "..."   # required
+  retries {
+    create-key-check {
+      initial-delay = "30 seconds"   # required
+      max-delay = "30 seconds"   # required
+      max-retries = 0   # required
+    }
+    failures {
+      initial-delay = "30 seconds"   # required
+      max-delay = "30 seconds"   # required
+      max-retries = 0   # required
+    }
+  }
+}
+```
+
+```hocon
+canton.participants.<participant>.crypto.kms {
+  type = aws
+  audit-logging = false
+  custom-tags {
+    <custom-tag> = [ ]
+  }
+  disable-ssl-verification = false
+  # endpoint-override = <string>
+  multi-region-key = false
+  region = "..."   # required
+  retries {
+    create-key-check {
+      initial-delay = "30 seconds"   # required
+      max-delay = "30 seconds"   # required
+      max-retries = 0   # required
+    }
+    failures {
+      initial-delay = "30 seconds"   # required
+      max-delay = "30 seconds"   # required
+      max-retries = 0   # required
+    }
+  }
+}
+```
+
+```hocon
+canton.participants.<participant>.crypto.kms {
+  type = gcp
+  audit-logging = false
+  # endpoint-override = <string>
+  key-ring-id = "..."   # required
+  location-id = "..."   # required
+  project-id = "..."   # required
+  retries {
+    create-key-check {
+      initial-delay = "30 seconds"   # required
+      max-delay = "30 seconds"   # required
+      max-retries = 0   # required
+    }
+    failures {
+      initial-delay = "30 seconds"   # required
+      max-delay = "30 seconds"   # required
+      max-retries = 0   # required
+    }
+  }
+}
+```
+
+`private-key-store.encryption` supports these types: `kms`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.participants.<participant>.crypto.private-key-store.encryption {
+  type = kms
+  reverted = false
+  # wrapper-key-id = <string>
 }
 ```
 
@@ -1173,17 +1411,61 @@ canton.participants.<participant>.init {
   generate-intermediate-key = false
   generate-topology-transactions-and-keys = true
   identity {
-    # certificates = [ ]   # when type = external
-    identifier {
-      # name = "..."   # required when identity.type = auto and type = explicit
-      # type = random|explicit|config   # required when identity.type = auto
-    }
-    # namespace = <string>   # when type = external
     type = external|auto|manual   # required
   }
   ledger-api {
     max-deduplication-duration = "7 days"
   }
+}
+```
+
+`identity` supports these types: `external`, `auto`, `manual`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.participants.<participant>.init.identity {
+  type = external
+  certificates = [ ]
+  identifier = "..."   # required
+  # namespace = <string>
+}
+```
+
+```hocon
+canton.participants.<participant>.init.identity {
+  type = auto
+  identifier {
+    type = random|explicit|config   # required
+  }
+}
+```
+
+```hocon
+canton.participants.<participant>.init.identity {
+  type = manual
+  # takes no further keys
+}
+```
+
+`identity.identifier` supports these types: `random`, `explicit`, `config`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.participants.<participant>.init.identity.identifier {
+  type = random
+  # takes no further keys
+}
+```
+
+```hocon
+canton.participants.<participant>.init.identity.identifier {
+  type = explicit
+  name = "..."   # required
+}
+```
+
+```hocon
+canton.participants.<participant>.init.identity.identifier {
+  type = config
+  # takes no further keys
 }
 ```
 
@@ -1228,21 +1510,7 @@ canton.participants.<participant>.ledger-api {
   }
   auth-services = [
     {
-      # access-level = wildcard   # when type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
-      # certificate = "..."   # required when type = jwt-es-256-crt|jwt-es-512-crt|jwt-rs-256-crt
-      # max-token-life = <duration>   # when type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
-      # privileged = false   # when type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
-      # secret = "..."   # required when type = unsafe-jwt-hmac-256
-      # target-audience = <string>   # when type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
-      # target-scope = <string>   # when type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
       type = wildcard|unsafe-jwt-hmac-256|jwt-rs-256-crt|jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|party-jwt   # required
-      # url = "..."   # required when type = jwt-jwks
-      users = [
-        {
-          # allowed-services = [ ]   # required when auth-services[].type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
-          # user-id = "..."   # required when auth-services[].type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
-        }
-      ]
     }
   ]
   command-service {
@@ -1375,28 +1643,16 @@ canton.participants.<participant>.ledger-api {
   }
   tls {
     cert-chain-file {
-      # pem-bytes = "..."   # required when type = pem-string
-      # pem-file = "/path/to/file"   # required when type = pem-file
       type = pem-file|pem-string   # required
     }
     # ciphers = [ ... ]
     client-auth {
-      admin-client {
-        cert-chain-file {
-          # pem-bytes = "..."   # required when tls.client-auth.type = require and type = pem-string
-          # pem-file = "/path/to/file"   # required when tls.client-auth.type = require and type = pem-file
-          # type = pem-file|pem-string   # required when tls.client-auth.type = require
-        }
-        # private-key-file = "..."   # required when tls.client-auth.type = require
-      }
       type = require|optional|none   # required
     }
     enable-cert-revocation-checking = false
     minimum-server-protocol-version = "TLSv1.2"
     private-key-file = "..."   # required
     trust-collection-file {
-      # pem-bytes = "..."   # required when type = pem-string
-      # pem-file = "/path/to/file"   # required when type = pem-file
       type = pem-file|pem-string   # required
     }
   }
@@ -1418,6 +1674,202 @@ canton.participants.<participant>.ledger-api {
     max-rights-per-user = 1000
     max-users-page-size = 1000
   }
+}
+```
+
+`auth-services[]` supports these types: `wildcard`, `unsafe-jwt-hmac-256`, `jwt-rs-256-crt`, `jwt-es-256-crt`, `jwt-es-512-crt`, `jwt-jwks`, `party-jwt`. Each block shows one entry; a list may hold entries of different types.
+
+```hocon
+canton.participants.<participant>.ledger-api.auth-services = [
+  {
+    type = wildcard
+    # takes no further keys
+  }
+]
+```
+
+```hocon
+canton.participants.<participant>.ledger-api.auth-services = [
+  {
+    type = unsafe-jwt-hmac-256
+    access-level = wildcard
+    # max-token-life = <duration>
+    privileged = false
+    secret = "..."   # required
+    # target-audience = <string>
+    # target-scope = <string>
+    users = [
+      {
+        allowed-services = [ ]   # required
+        user-id = "..."   # required
+      }
+    ]
+  }
+]
+```
+
+```hocon
+canton.participants.<participant>.ledger-api.auth-services = [
+  {
+    type = jwt-rs-256-crt
+    access-level = wildcard
+    certificate = "..."   # required
+    # max-token-life = <duration>
+    privileged = false
+    # target-audience = <string>
+    # target-scope = <string>
+    users = [
+      {
+        allowed-services = [ ]   # required
+        user-id = "..."   # required
+      }
+    ]
+  }
+]
+```
+
+```hocon
+canton.participants.<participant>.ledger-api.auth-services = [
+  {
+    type = jwt-es-256-crt
+    access-level = wildcard
+    certificate = "..."   # required
+    # max-token-life = <duration>
+    privileged = false
+    # target-audience = <string>
+    # target-scope = <string>
+    users = [
+      {
+        allowed-services = [ ]   # required
+        user-id = "..."   # required
+      }
+    ]
+  }
+]
+```
+
+```hocon
+canton.participants.<participant>.ledger-api.auth-services = [
+  {
+    type = jwt-es-512-crt
+    access-level = wildcard
+    certificate = "..."   # required
+    # max-token-life = <duration>
+    privileged = false
+    # target-audience = <string>
+    # target-scope = <string>
+    users = [
+      {
+        allowed-services = [ ]   # required
+        user-id = "..."   # required
+      }
+    ]
+  }
+]
+```
+
+```hocon
+canton.participants.<participant>.ledger-api.auth-services = [
+  {
+    type = jwt-jwks
+    access-level = wildcard
+    # max-token-life = <duration>
+    privileged = false
+    # target-audience = <string>
+    # target-scope = <string>
+    url = "..."   # required
+    users = [
+      {
+        allowed-services = [ ]   # required
+        user-id = "..."   # required
+      }
+    ]
+  }
+]
+```
+
+```hocon
+canton.participants.<participant>.ledger-api.auth-services = [
+  {
+    type = party-jwt
+    # takes no further keys
+  }
+]
+```
+
+`tls.cert-chain-file` supports these types: `pem-file`, `pem-string`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.participants.<participant>.ledger-api.tls.cert-chain-file {
+  type = pem-file
+  pem-file = "/path/to/file"   # required
+}
+```
+
+```hocon
+canton.participants.<participant>.ledger-api.tls.cert-chain-file {
+  type = pem-string
+  pem-bytes = "..."   # required
+}
+```
+
+`tls.client-auth` supports these types: `require`, `optional`, `none`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.participants.<participant>.ledger-api.tls.client-auth {
+  type = require
+  admin-client {
+    cert-chain-file {
+      type = pem-file|pem-string   # required
+    }
+    private-key-file = "..."   # required
+  }
+}
+```
+
+```hocon
+canton.participants.<participant>.ledger-api.tls.client-auth {
+  type = optional
+  # takes no further keys
+}
+```
+
+```hocon
+canton.participants.<participant>.ledger-api.tls.client-auth {
+  type = none
+  # takes no further keys
+}
+```
+
+`tls.trust-collection-file` supports these types: `pem-file`, `pem-string`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.participants.<participant>.ledger-api.tls.trust-collection-file {
+  type = pem-file
+  pem-file = "/path/to/file"   # required
+}
+```
+
+```hocon
+canton.participants.<participant>.ledger-api.tls.trust-collection-file {
+  type = pem-string
+  pem-bytes = "..."   # required
+}
+```
+
+`tls.client-auth.admin-client.cert-chain-file` supports these types: `pem-file`, `pem-string`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.participants.<participant>.ledger-api.tls.client-auth.admin-client.cert-chain-file {
+  type = pem-file
+  pem-file = "/path/to/file"   # required
+}
+```
+
+```hocon
+canton.participants.<participant>.ledger-api.tls.client-auth.admin-client.cert-chain-file {
+  type = pem-string
+  pem-bytes = "..."   # required
 }
 ```
 
@@ -1730,9 +2182,7 @@ canton.participants.<participant>.parameters {
     disable-old-acs-commitment-processor = on-new-protocol-versions
     enable-new-acs-commitment-processor = true
     load-batching {
-      # max-parallel-batches = 2   # when type = no-batching
       maximum-batch-size = 500
-      # maximum-in-flight = 2   # when type = batching
       type = batching|no-batching   # required
     }
     matching-parallelism = 20
@@ -1772,15 +2222,11 @@ canton.participants.<participant>.parameters {
   auto-sync-protocol-feature-flags = true
   batching {
     aggregator {
-      # max-parallel-batches = 2   # when type = no-batching
       maximum-batch-size = 500
-      # maximum-in-flight = 2   # when type = batching
       type = batching|no-batching   # required
     }
     contract-store-aggregator {
-      # max-parallel-batches = 2   # when type = no-batching
       maximum-batch-size = 500
-      # maximum-in-flight = 2   # when type = batching
       type = batching|no-batching   # required
     }
     # in-flight-aggregations-query-interval = <duration>
@@ -1793,23 +2239,17 @@ canton.participants.<participant>.parameters {
     max-topology-update-batch-size = 1000
     max-topology-write-batch-size = 1000
     mediator-fetch-finalized-responses-aggregator {
-      # max-parallel-batches = 2   # when type = no-batching
       maximum-batch-size = 500
-      # maximum-in-flight = 2   # when type = batching
       type = batching|no-batching   # required
     }
     mediator-store-finalized-responses-aggregator {
-      # max-parallel-batches = 2   # when type = no-batching
       maximum-batch-size = 500
-      # maximum-in-flight = 2   # when type = batching
       type = batching|no-batching   # required
     }
     parallelism = 8
     pruning-parallelism = 2
     topology-cache-aggregator {
-      # max-parallel-batches = 2   # when type = no-batching
       maximum-batch-size = 500
-      # maximum-in-flight = 2   # when type = batching
       type = batching|no-batching   # required
     }
   }
@@ -1917,7 +2357,6 @@ canton.participants.<participant>.parameters {
       <extension> {
         address = "..."   # required
         auth {
-          # token-file = "/path/to/file"   # required when type = bearer-token-file
           type = none|bearer-token-file   # required
         }
         connect-timeout = "500 milliseconds"
@@ -1930,8 +2369,6 @@ canton.participants.<participant>.parameters {
         tls {
           enabled = true
           trust-collection-file {
-            # pem-bytes = "..."   # required when type = pem-string
-            # pem-file = "/path/to/file"   # required when type = pem-file
             type = pem-file|pem-string   # required
           }
         }
@@ -2085,6 +2522,146 @@ canton.participants.<participant>.parameters {
     enabled = false   # required
     # kill-delay = <duration>
   }
+}
+```
+
+`acs-commitments.load-batching` supports these types: `batching`, `no-batching`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.participants.<participant>.parameters.acs-commitments.load-batching {
+  type = batching
+  maximum-batch-size = 500
+  maximum-in-flight = 2
+}
+```
+
+```hocon
+canton.participants.<participant>.parameters.acs-commitments.load-batching {
+  type = no-batching
+  max-parallel-batches = 2
+  maximum-batch-size = 500
+}
+```
+
+`batching.aggregator` supports these types: `batching`, `no-batching`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.participants.<participant>.parameters.batching.aggregator {
+  type = batching
+  maximum-batch-size = 500
+  maximum-in-flight = 2
+}
+```
+
+```hocon
+canton.participants.<participant>.parameters.batching.aggregator {
+  type = no-batching
+  max-parallel-batches = 2
+  maximum-batch-size = 500
+}
+```
+
+`batching.contract-store-aggregator` supports these types: `batching`, `no-batching`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.participants.<participant>.parameters.batching.contract-store-aggregator {
+  type = batching
+  maximum-batch-size = 500
+  maximum-in-flight = 2
+}
+```
+
+```hocon
+canton.participants.<participant>.parameters.batching.contract-store-aggregator {
+  type = no-batching
+  max-parallel-batches = 2
+  maximum-batch-size = 500
+}
+```
+
+`batching.mediator-fetch-finalized-responses-aggregator` supports these types: `batching`, `no-batching`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.participants.<participant>.parameters.batching.mediator-fetch-finalized-responses-aggregator {
+  type = batching
+  maximum-batch-size = 500
+  maximum-in-flight = 2
+}
+```
+
+```hocon
+canton.participants.<participant>.parameters.batching.mediator-fetch-finalized-responses-aggregator {
+  type = no-batching
+  max-parallel-batches = 2
+  maximum-batch-size = 500
+}
+```
+
+`batching.mediator-store-finalized-responses-aggregator` supports these types: `batching`, `no-batching`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.participants.<participant>.parameters.batching.mediator-store-finalized-responses-aggregator {
+  type = batching
+  maximum-batch-size = 500
+  maximum-in-flight = 2
+}
+```
+
+```hocon
+canton.participants.<participant>.parameters.batching.mediator-store-finalized-responses-aggregator {
+  type = no-batching
+  max-parallel-batches = 2
+  maximum-batch-size = 500
+}
+```
+
+`batching.topology-cache-aggregator` supports these types: `batching`, `no-batching`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.participants.<participant>.parameters.batching.topology-cache-aggregator {
+  type = batching
+  maximum-batch-size = 500
+  maximum-in-flight = 2
+}
+```
+
+```hocon
+canton.participants.<participant>.parameters.batching.topology-cache-aggregator {
+  type = no-batching
+  max-parallel-batches = 2
+  maximum-batch-size = 500
+}
+```
+
+`engine.extensions.<extension>.auth` supports these types: `none`, `bearer-token-file`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.participants.<participant>.parameters.engine.extensions.<extension>.auth {
+  type = none
+  # takes no further keys
+}
+```
+
+```hocon
+canton.participants.<participant>.parameters.engine.extensions.<extension>.auth {
+  type = bearer-token-file
+  token-file = "/path/to/file"   # required
+}
+```
+
+`engine.extensions.<extension>.tls.trust-collection-file` supports these types: `pem-file`, `pem-string`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.participants.<participant>.parameters.engine.extensions.<extension>.tls.trust-collection-file {
+  type = pem-file
+  pem-file = "/path/to/file"   # required
+}
+```
+
+```hocon
+canton.participants.<participant>.parameters.engine.extensions.<extension>.tls.trust-collection-file {
+  type = pem-string
+  pem-bytes = "..."   # required
 }
 ```
 
@@ -2614,6 +3191,89 @@ canton.participants.<participant>.storage {
 }
 ```
 
+`` supports these types: `memory`, `h2`, `postgres`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.participants.<participant>.storage {
+  type = memory
+  parameters {
+    connection-allocation {
+      # num-ledger-api = <int>
+      # num-reads = <int>
+      # num-writes = <int>
+    }
+    connection-timeout = "5 seconds"
+    fail-fast-on-startup = true
+    failed-to-fatal-delay = "5 minutes"
+    # max-connections = <int>
+    migrate-and-start = false
+    migrations-paths = [ ]
+    partitions {
+      initial-bft-orderer-tables-partition-size = 1500
+    }
+    repeatable-migrations-paths = [ ]
+    unsafe-baseline-on-migrate = false
+    unsafe-clean-on-validation-error = false
+    # warn-on-slow-query = <duration>
+    warn-on-slow-query-interval = "5 seconds"
+  }
+}
+```
+
+```hocon
+canton.participants.<participant>.storage {
+  type = h2
+  parameters {
+    connection-allocation {
+      # num-ledger-api = <int>
+      # num-reads = <int>
+      # num-writes = <int>
+    }
+    connection-timeout = "5 seconds"
+    fail-fast-on-startup = true
+    failed-to-fatal-delay = "5 minutes"
+    # max-connections = <int>
+    migrate-and-start = false
+    migrations-paths = [ ]
+    partitions {
+      initial-bft-orderer-tables-partition-size = 1500
+    }
+    repeatable-migrations-paths = [ ]
+    unsafe-baseline-on-migrate = false
+    unsafe-clean-on-validation-error = false
+    # warn-on-slow-query = <duration>
+    warn-on-slow-query-interval = "5 seconds"
+  }
+}
+```
+
+```hocon
+canton.participants.<participant>.storage {
+  type = postgres
+  parameters {
+    connection-allocation {
+      # num-ledger-api = <int>
+      # num-reads = <int>
+      # num-writes = <int>
+    }
+    connection-timeout = "5 seconds"
+    fail-fast-on-startup = true
+    failed-to-fatal-delay = "5 minutes"
+    # max-connections = <int>
+    migrate-and-start = false
+    migrations-paths = [ ]
+    partitions {
+      initial-bft-orderer-tables-partition-size = 1500
+    }
+    repeatable-migrations-paths = [ ]
+    unsafe-baseline-on-migrate = false
+    unsafe-clean-on-validation-error = false
+    # warn-on-slow-query = <duration>
+    warn-on-slow-query-interval = "5 seconds"
+  }
+}
+```
+
 
 </Tab>
 <Tab title="Table">
@@ -2732,6 +3392,26 @@ canton.participants.<participant>.traffic-accounting {
       projection-restart-random-factor = 0.2
     }
     type = internal   # required
+  }
+}
+```
+
+`traffic-enforcement-server` supports these types: `internal`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.participants.<participant>.traffic-accounting.traffic-enforcement-server {
+  type = internal
+  account-lookup-timeout = "20 seconds"
+  database-query-timeout = "1 second"
+  in-process-tea-server-name = "TeaGrpcInProcServer"
+  projection {
+    handler-retry-delay = "1 second"
+    # initial-completion-offset-begin-exclusive = <int>
+    # max-handler-retries = <int>
+    max-projection-restart-backoff = "30 seconds"
+    min-projection-restart-backoff = "1 second"
+    # projection-max-restarts = <int>
+    projection-restart-random-factor = 0.2
   }
 }
 ```

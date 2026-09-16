@@ -129,17 +129,25 @@ class CantonConfigReferenceTests(unittest.TestCase):
         self.assertLess(all_options.index("```hocon"), all_options.index("| Key | Type | Default | Description |"))
         # No separate "Takes a `type`" announcement: the discriminator rows carry the link.
         self.assertNotIn("Takes a `type`", monitoring)
-        # The section HOCON is exhaustive: gated keys are commented with their condition, so the
-        # block and the table behind it cover the same keys.
+        # The section block holds the keys that apply whatever the type; then every type site is
+        # enumerated, one complete block per variant, so the HOCON tab and the table cover the same
+        # keys without merging alternatives into one block.
+        hocon_tab = all_options.split('<Tab title="HOCON">')[1].split("</Tab>")[0]
         self.assertIn(
             "canton.monitoring.metrics {\n  histograms = [\n    {\n      aggregation {\n"
-            "        # boundaries = [ ]   # required when type = buckets\n"
-            "        # max-buckets = 0   # required when type = exponential\n"
-            "        # max-scale = 0   # required when type = exponential\n"
             "        type = buckets|exponential   # required\n      }\n      name = \"...\"   # required\n"
             "    }\n  ]\n}",
-            all_options,
+            hocon_tab,
         )
+        self.assertNotIn("# boundaries", hocon_tab)
+        self.assertIn(
+            "`histograms[].aggregation` supports these types: `buckets`, `exponential`. "
+            "Pick one; each block is a complete example of that choice.",
+            hocon_tab,
+        )
+        self.assertIn("      type = buckets\n      boundaries = [ ]   # required\n", hocon_tab)
+        self.assertIn("      type = exponential\n      max-buckets = 0   # required\n      max-scale = 0   # required\n", hocon_tab)
+        self.assertEqual(hocon_tab.count("```hocon"), 3)
 
     def test_table_groups_variant_keys_under_type_headers(self) -> None:
         monitoring = generator.render_pages(sample_artifact())["monitoring.mdx"]

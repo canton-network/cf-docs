@@ -17,7 +17,7 @@ Paths are rooted at `canton`. Segments in angle brackets are names you choose:
 
 A `[]` suffix marks the fields of a list element. Keys marked **alpha** or **beta** are not covered by compatibility guarantees.
 
-**Required** lists only what you must set, and when: always, when you configure a particular section, or when you have chosen a particular `type`. **All options** covers every key, one section per heading, where the heading is the section's absolute path. Each is shown two ways behind tabs: **HOCON** as you would write it from the root, every key with its default, and **Table**, the same keys relative to the heading with their descriptions. A key that only applies under a particular `type` appears in the HOCON as a comment carrying that condition; in the table a **bold** row names a section and the keys indented beneath it live inside it.
+**Required** lists only what you must set, and when: always, when you configure a particular section, or when you have chosen a particular `type`. **All options** covers every key, one section per heading, where the heading is the section's absolute path. Each is shown two ways behind tabs: **HOCON** as you would write it from the root, every key with its default, and **Table**, the same keys relative to the heading with their descriptions. Where a section takes a `type`, the HOCON tab enumerates one complete block per type after the section block, and the table groups that type's keys under a `type = …` header; in the table a **bold** row names a section and the keys indented beneath it live inside it. In the Required skeleton a key needed only under a particular `type` is a comment carrying that condition.
 
 Some sections take a `type` that decides which other keys they accept. Those are documented once on the [types page](/global-synchronizer/reference/canton-config/types) and linked from wherever they occur.
 
@@ -120,6 +120,177 @@ canton.monitoring {
 canton.monitoring {
   dump-num-rolling-log-files = 0
   sanitize-public-error-messages = true
+}
+```
+
+`metrics.reporters[]` supports these types: `prometheus`, `otlp`, `csv`, `logging`. Each block shows one entry; a list may hold entries of different types.
+
+```hocon
+canton.monitoring.metrics.reporters = [
+  {
+    type = prometheus
+    address = "localhost"
+    filters = [
+      {
+        contains = ""
+        ends-with = ""
+        starts-with = ""
+      }
+    ]
+    port = 9464
+  }
+]
+```
+
+```hocon
+canton.monitoring.metrics.reporters = [
+  {
+    type = otlp
+    auth {
+      type = oauth-client-credentials   # required
+    }
+    endpoint = "http://localhost:4317"
+    filters = [
+      {
+        contains = ""
+        ends-with = ""
+        starts-with = ""
+      }
+    ]
+    interval = "10 seconds"
+    protocol = grpc
+  }
+]
+```
+
+```hocon
+canton.monitoring.metrics.reporters = [
+  {
+    type = csv
+    context-keys = [ ]
+    directory = "/path/to/file"   # required
+    filters = [
+      {
+        contains = ""
+        ends-with = ""
+        starts-with = ""
+      }
+    ]
+    interval = "5 seconds"
+  }
+]
+```
+
+```hocon
+canton.monitoring.metrics.reporters = [
+  {
+    type = logging
+    filters = [
+      {
+        contains = ""
+        ends-with = ""
+        starts-with = ""
+      }
+    ]
+    interval = "30 seconds"
+    log-as-info = true
+  }
+]
+```
+
+`metrics.histograms[].aggregation` supports these types: `buckets`, `exponential`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.monitoring.metrics.histograms = [
+  {
+    aggregation {
+      type = buckets
+      boundaries = [ ]   # required
+    }
+  }
+]
+```
+
+```hocon
+canton.monitoring.metrics.histograms = [
+  {
+    aggregation {
+      type = exponential
+      max-buckets = 0   # required
+      max-scale = 0   # required
+    }
+  }
+]
+```
+
+`metrics.reporters[].auth` supports these types: `oauth-client-credentials`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.monitoring.metrics.reporters = [
+  {
+    auth {
+      type = oauth-client-credentials
+      client-id = "..."   # required
+      client-secret = "..."   # required
+      # scope = <string>
+      token-url = "..."   # required
+    }
+  }
+]
+```
+
+`tracing.tracer.exporter` supports these types: `disabled`, `zipkin`, `otlp`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.monitoring.tracing.tracer.exporter {
+  type = disabled
+  # takes no further keys
+}
+```
+
+```hocon
+canton.monitoring.tracing.tracer.exporter {
+  type = zipkin
+  address = "localhost"
+  port = 9411
+}
+```
+
+```hocon
+canton.monitoring.tracing.tracer.exporter {
+  type = otlp
+  additional-headers {
+    <additional-header> = [ ]
+  }
+  address = "localhost"
+  # connect-timeout = <duration>
+  port = 4317
+  # timeout = <duration>
+  # trust-collection-path = <string>
+}
+```
+
+`tracing.tracer.sampler` supports these types: `always-on`, `always-off`, `trace-id-ratio`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.monitoring.tracing.tracer.sampler {
+  type = always-on
+  parent-based = true
+}
+```
+
+```hocon
+canton.monitoring.tracing.tracer.sampler {
+  type = always-off
+  parent-based = true
+}
+```
+
+```hocon
+canton.monitoring.tracing.tracer.sampler {
+  type = trace-id-ratio
+  parent-based = true
+  ratio = 0   # required
 }
 ```
 
@@ -245,9 +416,6 @@ canton.monitoring.metrics {
   histograms = [
     {
       aggregation {
-        # boundaries = [ ]   # required when type = buckets
-        # max-buckets = 0   # required when type = exponential
-        # max-scale = 0   # required when type = exponential
         type = buckets|exponential   # required
       }
       name = "..."   # required
@@ -267,17 +435,6 @@ canton.monitoring.metrics {
   qualifiers = [ ]
   reporters = [
     {
-      # address = "localhost"   # when type = prometheus
-      auth {
-        # client-id = "..."   # required when reporters[].type = otlp
-        # client-secret = "..."   # required when reporters[].type = otlp
-        # scope = <string>   # when reporters[].type = otlp
-        # token-url = "..."   # required when reporters[].type = otlp
-        # type = oauth-client-credentials   # required when reporters[].type = otlp
-      }
-      # context-keys = [ ]   # when type = csv
-      # directory = "/path/to/file"   # required when type = csv
-      # endpoint = "http://localhost:4317"   # when type = otlp
       filters = [
         {
           contains = ""
@@ -285,14 +442,126 @@ canton.monitoring.metrics {
           starts-with = ""
         }
       ]
-      # interval = "10 seconds"   # when type = otlp
-      # log-as-info = true   # when type = logging
-      # port = 9464   # when type = prometheus
-      # protocol = grpc   # when type = otlp
       type = prometheus|otlp|csv|logging   # required
     }
   ]
 }
+```
+
+`reporters[]` supports these types: `prometheus`, `otlp`, `csv`, `logging`. Each block shows one entry; a list may hold entries of different types.
+
+```hocon
+canton.monitoring.metrics.reporters = [
+  {
+    type = prometheus
+    address = "localhost"
+    filters = [
+      {
+        contains = ""
+        ends-with = ""
+        starts-with = ""
+      }
+    ]
+    port = 9464
+  }
+]
+```
+
+```hocon
+canton.monitoring.metrics.reporters = [
+  {
+    type = otlp
+    auth {
+      type = oauth-client-credentials   # required
+    }
+    endpoint = "http://localhost:4317"
+    filters = [
+      {
+        contains = ""
+        ends-with = ""
+        starts-with = ""
+      }
+    ]
+    interval = "10 seconds"
+    protocol = grpc
+  }
+]
+```
+
+```hocon
+canton.monitoring.metrics.reporters = [
+  {
+    type = csv
+    context-keys = [ ]
+    directory = "/path/to/file"   # required
+    filters = [
+      {
+        contains = ""
+        ends-with = ""
+        starts-with = ""
+      }
+    ]
+    interval = "5 seconds"
+  }
+]
+```
+
+```hocon
+canton.monitoring.metrics.reporters = [
+  {
+    type = logging
+    filters = [
+      {
+        contains = ""
+        ends-with = ""
+        starts-with = ""
+      }
+    ]
+    interval = "30 seconds"
+    log-as-info = true
+  }
+]
+```
+
+`histograms[].aggregation` supports these types: `buckets`, `exponential`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.monitoring.metrics.histograms = [
+  {
+    aggregation {
+      type = buckets
+      boundaries = [ ]   # required
+    }
+  }
+]
+```
+
+```hocon
+canton.monitoring.metrics.histograms = [
+  {
+    aggregation {
+      type = exponential
+      max-buckets = 0   # required
+      max-scale = 0   # required
+    }
+  }
+]
+```
+
+`reporters[].auth` supports these types: `oauth-client-credentials`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.monitoring.metrics.reporters = [
+  {
+    auth {
+      type = oauth-client-credentials
+      client-id = "..."   # required
+      client-secret = "..."   # required
+      # scope = <string>
+      token-url = "..."   # required
+    }
+  }
+]
 ```
 
 
@@ -372,22 +641,68 @@ canton.monitoring.tracing {
       # schedule-delay = <duration>
     }
     exporter {
-      additional-headers {
-        # <additional-header> = [ ]   # when tracer.exporter.type = otlp
-      }
-      # address = "localhost"   # when type = otlp|zipkin
-      # connect-timeout = <duration>   # when type = otlp
-      # port = 9411   # when type = zipkin
-      # timeout = <duration>   # when type = otlp
-      # trust-collection-path = <string>   # when type = otlp
       type = disabled|zipkin|otlp   # required
     }
     sampler {
       parent-based = true
-      # ratio = 0   # required when type = trace-id-ratio
       type = always-on|always-off|trace-id-ratio   # required
     }
   }
+}
+```
+
+`tracer.exporter` supports these types: `disabled`, `zipkin`, `otlp`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.monitoring.tracing.tracer.exporter {
+  type = disabled
+  # takes no further keys
+}
+```
+
+```hocon
+canton.monitoring.tracing.tracer.exporter {
+  type = zipkin
+  address = "localhost"
+  port = 9411
+}
+```
+
+```hocon
+canton.monitoring.tracing.tracer.exporter {
+  type = otlp
+  additional-headers {
+    <additional-header> = [ ]
+  }
+  address = "localhost"
+  # connect-timeout = <duration>
+  port = 4317
+  # timeout = <duration>
+  # trust-collection-path = <string>
+}
+```
+
+`tracer.sampler` supports these types: `always-on`, `always-off`, `trace-id-ratio`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.monitoring.tracing.tracer.sampler {
+  type = always-on
+  parent-based = true
+}
+```
+
+```hocon
+canton.monitoring.tracing.tracer.sampler {
+  type = always-off
+  parent-based = true
+}
+```
+
+```hocon
+canton.monitoring.tracing.tracer.sampler {
+  type = trace-id-ratio
+  parent-based = true
+  ratio = 0   # required
 }
 ```
 

@@ -19,7 +19,7 @@ Paths are rooted at `canton`. Segments in angle brackets are names you choose:
 
 A `[]` suffix marks the fields of a list element. Keys marked **alpha** or **beta** are not covered by compatibility guarantees.
 
-**Required** lists only what you must set, and when: always, when you configure a particular section, or when you have chosen a particular `type`. **All options** covers every key, one section per heading, where the heading is the section's absolute path. Each is shown two ways behind tabs: **HOCON** as you would write it from the root, every key with its default, and **Table**, the same keys relative to the heading with their descriptions. A key that only applies under a particular `type` appears in the HOCON as a comment carrying that condition; in the table a **bold** row names a section and the keys indented beneath it live inside it.
+**Required** lists only what you must set, and when: always, when you configure a particular section, or when you have chosen a particular `type`. **All options** covers every key, one section per heading, where the heading is the section's absolute path. Each is shown two ways behind tabs: **HOCON** as you would write it from the root, every key with its default, and **Table**, the same keys relative to the heading with their descriptions. Where a section takes a `type`, the HOCON tab enumerates one complete block per type after the section block, and the table groups that type's keys under a `type = …` header; in the table a **bold** row names a section and the keys indented beneath it live inside it. In the Required skeleton a key needed only under a particular `type` is a comment carrying that condition.
 
 Some sections take a `type` that decides which other keys they accept. Those are documented once on the [types page](/global-synchronizer/reference/canton-config/types) and linked from wherever they occur.
 
@@ -654,6 +654,1699 @@ canton.sequencers.<sequencer> {
 }
 ```
 
+`sequencer` supports these types: `database`, `external`, `bft-sequencer`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.sequencer {
+  type = database
+  high-availability {
+    connection-pool {
+      active-timeout = "15 seconds"
+      connection {
+        client-connection-check-interval = "5 seconds"
+        connection-timeout = "10 seconds"
+        health-check-period = "5 seconds"
+        health-check-timeout = "15 seconds"
+        initial-acquisition-interval = "200 milliseconds"
+        initial-acquisition-max-retries = 5
+        keep-alive-count = 5
+        keep-alive-idle = "10 seconds"
+        keep-alive-interval = "1 second"
+        lock {
+          health-check-period = "5 seconds"
+          health-check-timeout = "15 seconds"
+        }
+        max-inconclusive-read-only-checks = 3
+        passive-check-period = "15 seconds"
+      }
+      health-check-period = "5 seconds"
+      initial-locked-connection-timeout = "15 seconds"
+      initial-must-remain-active-connection-timeout = "1 minute"
+    }
+    # enabled = <boolean>
+    exclusive-storage {
+      connection-pool {
+        active-timeout = "15 seconds"
+        connection {
+          client-connection-check-interval = "5 seconds"
+          connection-timeout = "10 seconds"
+          health-check-period = "5 seconds"
+          health-check-timeout = "15 seconds"
+          initial-acquisition-interval = "200 milliseconds"
+          initial-acquisition-max-retries = 5
+          keep-alive-count = 5
+          keep-alive-idle = "10 seconds"
+          keep-alive-interval = "1 second"
+          lock {
+            health-check-period = "5 seconds"
+            health-check-timeout = "15 seconds"
+          }
+          max-inconclusive-read-only-checks = 3
+          passive-check-period = "15 seconds"
+        }
+        health-check-period = "5 seconds"
+        initial-locked-connection-timeout = "15 seconds"
+        initial-must-remain-active-connection-timeout = "1 minute"
+      }
+      max-connections = 2
+    }
+    keep-alive-interval = "50 milliseconds"
+    offline-duration = "8 seconds"
+    online-check-interval = "5 seconds"
+    total-node-count = 10
+  }
+  pruning {
+    max-pruning-batch-size = 50000
+    # pruning-metric-update-interval = <duration>
+    traffic-purchased-retention = "1 hour"
+  }
+  reader {
+    checkpoint-interval = "5 seconds"
+    event-generation-parallelism = 4
+    payload-batch-size = 10
+    payload-batch-window = "5 milliseconds"
+    payload-fetch-parallelism = 2
+    # polling-interval = <duration>
+    read-batch-size = 100
+  }
+  # testing-interceptor = <string>
+  writer {
+    type = low-latency|high-throughput   # required
+  }
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer {
+  type = external
+  block {
+    circuit-breaker {
+      enabled = true
+      messages {
+        acknowledgement {
+          allowed-block-delay = "90 seconds"
+          exponential-backoff-factor = 1
+          max-failures = 10
+          max-reset-timeout = "36500 days"
+          reset-timeout = "30 seconds"
+        }
+        commitment {
+          allowed-block-delay = "90 seconds"
+          exponential-backoff-factor = 1
+          max-failures = 10
+          max-reset-timeout = "36500 days"
+          reset-timeout = "30 seconds"
+        }
+        confirmation-request {
+          allowed-block-delay = "90 seconds"
+          exponential-backoff-factor = 1
+          max-failures = 10
+          max-reset-timeout = "36500 days"
+          reset-timeout = "30 seconds"
+        }
+        confirmation-response {
+          allowed-block-delay = "90 seconds"
+          exponential-backoff-factor = 1
+          max-failures = 10
+          max-reset-timeout = "36500 days"
+          reset-timeout = "30 seconds"
+        }
+        lsu-sequencing-test {
+          allowed-block-delay = "90 seconds"
+          exponential-backoff-factor = 1
+          max-failures = 10
+          max-reset-timeout = "36500 days"
+          reset-timeout = "30 seconds"
+        }
+        time-proof {
+          allowed-block-delay = "90 seconds"
+          exponential-backoff-factor = 1
+          max-failures = 10
+          max-reset-timeout = "36500 days"
+          reset-timeout = "30 seconds"
+        }
+        top-up {
+          allowed-block-delay = "90 seconds"
+          exponential-backoff-factor = 1
+          max-failures = 10
+          max-reset-timeout = "36500 days"
+          reset-timeout = "30 seconds"
+        }
+        topology {
+          allowed-block-delay = "90 seconds"
+          exponential-backoff-factor = 1
+          max-failures = 10
+          max-reset-timeout = "36500 days"
+          reset-timeout = "30 seconds"
+        }
+        unexpected {
+          allowed-block-delay = "90 seconds"
+          exponential-backoff-factor = 1
+          max-failures = 10
+          max-reset-timeout = "36500 days"
+          reset-timeout = "30 seconds"
+        }
+        verdict {
+          allowed-block-delay = "90 seconds"
+          exponential-backoff-factor = 1
+          max-failures = 10
+          max-reset-timeout = "36500 days"
+          reset-timeout = "30 seconds"
+        }
+      }
+    }
+    reader {
+      checkpoint-interval = "5 seconds"
+      event-generation-parallelism = 4
+      payload-batch-size = 10
+      payload-batch-window = "5 milliseconds"
+      payload-fetch-parallelism = 2
+      # polling-interval = <duration>
+      read-batch-size = 100
+    }
+    stream-instrumentation {
+      buffer-size = 256
+      is-enabled = false
+    }
+    # testing-interceptor = <string>
+    throughput-cap {
+      clock-tick-interval = "100 milliseconds"
+      delayed-activation = true
+      enabled = false
+      messages {
+        confirmation-request {
+          global-kbps-cap = 2000
+          global-tps-cap = 10
+          per-client-kbps-cap = 1000
+          per-client-tps-cap = 4
+        }
+        confirmation-response {
+          global-kbps-cap = 2000
+          global-tps-cap = 10
+          per-client-kbps-cap = 1000
+          per-client-tps-cap = 4
+        }
+        topology {
+          global-kbps-cap = 2000
+          global-tps-cap = 10
+          per-client-kbps-cap = 1000
+          per-client-tps-cap = 4
+        }
+      }
+      observation-period-seconds = 60
+      strict = true
+      thresholds = [ ]
+      update-every-ms = 100
+    }
+    writer {
+      type = low-latency|high-throughput   # required
+    }
+  }
+  config = "..."   # required
+  sequencer-type = "..."   # required
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer {
+  type = bft-sequencer
+  block {
+    circuit-breaker {
+      enabled = true
+      messages {
+        acknowledgement {
+          allowed-block-delay = "90 seconds"
+          exponential-backoff-factor = 1
+          max-failures = 10
+          max-reset-timeout = "36500 days"
+          reset-timeout = "30 seconds"
+        }
+        commitment {
+          allowed-block-delay = "90 seconds"
+          exponential-backoff-factor = 1
+          max-failures = 10
+          max-reset-timeout = "36500 days"
+          reset-timeout = "30 seconds"
+        }
+        confirmation-request {
+          allowed-block-delay = "90 seconds"
+          exponential-backoff-factor = 1
+          max-failures = 10
+          max-reset-timeout = "36500 days"
+          reset-timeout = "30 seconds"
+        }
+        confirmation-response {
+          allowed-block-delay = "90 seconds"
+          exponential-backoff-factor = 1
+          max-failures = 10
+          max-reset-timeout = "36500 days"
+          reset-timeout = "30 seconds"
+        }
+        lsu-sequencing-test {
+          allowed-block-delay = "90 seconds"
+          exponential-backoff-factor = 1
+          max-failures = 10
+          max-reset-timeout = "36500 days"
+          reset-timeout = "30 seconds"
+        }
+        time-proof {
+          allowed-block-delay = "90 seconds"
+          exponential-backoff-factor = 1
+          max-failures = 10
+          max-reset-timeout = "36500 days"
+          reset-timeout = "30 seconds"
+        }
+        top-up {
+          allowed-block-delay = "90 seconds"
+          exponential-backoff-factor = 1
+          max-failures = 10
+          max-reset-timeout = "36500 days"
+          reset-timeout = "30 seconds"
+        }
+        topology {
+          allowed-block-delay = "90 seconds"
+          exponential-backoff-factor = 1
+          max-failures = 10
+          max-reset-timeout = "36500 days"
+          reset-timeout = "30 seconds"
+        }
+        unexpected {
+          allowed-block-delay = "90 seconds"
+          exponential-backoff-factor = 1
+          max-failures = 10
+          max-reset-timeout = "36500 days"
+          reset-timeout = "30 seconds"
+        }
+        verdict {
+          allowed-block-delay = "90 seconds"
+          exponential-backoff-factor = 1
+          max-failures = 10
+          max-reset-timeout = "36500 days"
+          reset-timeout = "30 seconds"
+        }
+      }
+    }
+    reader {
+      checkpoint-interval = "5 seconds"
+      event-generation-parallelism = 4
+      payload-batch-size = 10
+      payload-batch-window = "5 milliseconds"
+      payload-fetch-parallelism = 2
+      # polling-interval = <duration>
+      read-batch-size = 100
+    }
+    stream-instrumentation {
+      buffer-size = 256
+      is-enabled = false
+    }
+    # testing-interceptor = <string>
+    throughput-cap {
+      clock-tick-interval = "100 milliseconds"
+      delayed-activation = true
+      enabled = false
+      messages {
+        confirmation-request {
+          global-kbps-cap = 2000
+          global-tps-cap = 10
+          per-client-kbps-cap = 1000
+          per-client-tps-cap = 4
+        }
+        confirmation-response {
+          global-kbps-cap = 2000
+          global-tps-cap = 10
+          per-client-kbps-cap = 1000
+          per-client-tps-cap = 4
+        }
+        topology {
+          global-kbps-cap = 2000
+          global-tps-cap = 10
+          per-client-kbps-cap = 1000
+          per-client-tps-cap = 4
+        }
+      }
+      observation-period-seconds = 60
+      strict = true
+      thresholds = [ ]
+      update-every-ms = 100
+    }
+    writer {
+      type = low-latency|high-throughput   # required
+    }
+  }
+  config {
+    availability-dissemination-patience = "5 seconds"
+    availability-max-non-ordered-batches-per-node = 1000
+    availability-min-proposal-creation-delay = "250 milliseconds"
+    availability-number-of-attempts-of-downloading-output-fetch-before-warning = 5
+    batch-aggregator {
+      type = batching|no-batching   # required
+    }
+    blocking-db-read-timeout = "1 minute"
+    consensus-block-completion-timeout = "10 seconds"
+    consensus-empty-block-creation-timeout = "500 milliseconds"
+    consensus-enable-flushing-segment = true
+    consensus-enable-log-end-of-epoch-progress = false
+    consensus-flushing-min-blocks = 2
+    consensus-new-epoch-topology-warn-timeout = "2 seconds"
+    # consensus-queue-max-size = <int>
+    consensus-queue-per-node-quota = 1024
+    # dedicated-execution-context-divisor = <int>
+    delayed-init-queue-max-size = 1024
+    enable-performance-metrics = true
+    # epoch-state-transfer-future-epoch-queue-max-size = <int>
+    epoch-state-transfer-future-epoch-queue-per-node-quota = 1024
+    epoch-state-transfer-how-many-future-epochs-to-download-in-parallel = 5
+    epoch-state-transfer-retry-timeout = "4 seconds"
+    epoch-state-transfer-timeout-for-future-epoch = "500 milliseconds"
+    # init-query-timeout = <duration>
+    # init-timeout = <duration>
+    initial-network {
+      connection-management-config {
+        # connection-retry-delay-multiplier = <int>
+        flow-control-buffer = 128
+        flow-control-buffer-drop-newest = false
+        # flow-control-ready-allowance = <int>
+        initial-connection-max-delay = "500 milliseconds"
+        initial-connection-retry-delay = "500 milliseconds"
+        max-connection-attempts-before-warning = 30
+        max-connection-retry-delay = "2 minutes"
+      }
+      endpoint-authentication {
+        auth-token {
+          backoff {
+            base = 2
+            jitter {
+              type = equal|full   # required
+            }
+            max-retry-interval = "2 minutes"
+          }
+          min-retry-interval = "500 milliseconds"
+          refresh-auth-token-before-expiry = "20 seconds"
+          retries = 20
+        }
+        enabled = true
+      }
+      overwrite-stored-endpoints = false
+      peer-endpoints = [
+        {
+          address = "..."   # required
+          channel {
+            # flow-control-window = <int>
+            # initial-flow-control-window = <int>
+            keep-alive-client {
+              idle-timeout = "30 minutes"
+              keep-alive-without-calls = false
+              time = "40 seconds"
+              timeout = "15 seconds"
+            }
+            max-inbound-message-size = 0   # required
+            trace-context-propagation = enabled|disabled   # required
+          }
+          port = 0   # required
+          tls-config {
+            client-cert {
+              cert-chain-file {
+                type = pem-file|pem-string   # required
+              }
+              private-key-file = "..."   # required
+            }
+            enabled = true
+            trust-collection-file {
+              type = pem-file|pem-string   # required
+            }
+          }
+        }
+      ]
+      server-endpoint {
+        address = "..."   # required
+        external-address = "..."   # required
+        external-port = 0   # required
+        external-tls-config {
+          client-cert {
+            cert-chain-file {
+              type = pem-file|pem-string   # required
+            }
+            private-key-file = "..."   # required
+          }
+          enabled = true
+          trust-collection-file {
+            type = pem-file|pem-string   # required
+          }
+        }
+        # flow-control-window = <int>
+        # initial-flow-control-window = <int>
+        keep-alive-server {
+          permit-keep-alive-time = "20 seconds"
+          permit-keep-alive-without-calls = false
+          time = "40 seconds"
+          timeout = "20 seconds"
+        }
+        limits {
+          active {
+            <key> = [ ]
+          }
+          throttle-logging-rate-per-second = 10
+          warn-on-undefined-limits = false
+        }
+        max-concurrent-calls-per-connection = 100000
+        # max-inbound-message-size = <int>
+        # port = <int>
+        tls {
+          cert-chain-file {
+            type = pem-file|pem-string   # required
+          }
+          # ciphers = [ ... ]
+          client-auth {
+            type = require|optional|none   # required
+          }
+          enable-cert-revocation-checking = false
+          minimum-server-protocol-version = "TLSv1.2"
+          private-key-file = "..."   # required
+          trust-collection-file {
+            type = pem-file|pem-string   # required
+          }
+        }
+      }
+    }
+    leader-selection-policy-config-for-pv-34 {
+      how-long-to-blacklist {
+        type = linear|linear-with-parameters|exponential|no-blacklisting   # required
+      }
+      how-many-can-we-blacklist = num-faults-tolerated|no-blacklisting   # required
+    }
+    manual-vacuum-enabled = false
+    max-batch-creation-interval = "100 milliseconds"
+    # max-mempool-queue-size = <int>
+    min-requests-in-batch = 3
+    network-send-attempts = 5
+    # network-send-retry-jitter-cap = <duration>
+    # network-send-retry-minimum-delay = <duration>
+    # output-enqueue-max-retries = <int>
+    output-enqueue-max-retry-delay = "5 seconds"
+    output-fetch-how-many-recipients = 2
+    output-fetch-minimum-delay = "200 milliseconds"
+    output-fetch-timeout = "200 milliseconds"
+    output-fetch-timeout-cap = "200 milliseconds"
+    output-size-of-chunk-of-epochs-to-load-at-start = 10
+    # segment-length-for-pv-34 = <int>
+    send-blacklist-ttl = "3 minutes"
+    sequencer-core-subscription-config {
+      pause-orderer-threshold-buffer-size = 5000
+      pekko-queue-source-buffer-size = 5000
+      resume-orderer-threshold-buffer-size = 1000
+    }
+    standalone {
+      blacklist-leader-selection-policy-config {
+        how-long-to-blacklist {
+          type = linear|linear-with-parameters|exponential|no-blacklisting   # required
+        }
+        how-many-can-we-blacklist = num-faults-tolerated|no-blacklisting   # required
+      }
+      max-batches-per-block-proposal = 0   # required
+      max-requests-in-batch = 0   # required
+      pbft-view-change-timeout = "30 seconds"   # required
+      peers = [
+        {
+          sequencer-id = "..."   # required
+          signing-public-key-proto-file = "/path/to/file"   # required
+        }
+      ]
+      segment-length = 0   # required
+      signing-private-key-proto-file = "/path/to/file"   # required
+      signing-public-key-proto-file = "/path/to/file"   # required
+      test-slowdown {
+        post-ordering-delay {
+          type = constant-distribution|weighted-distribution|linear-distribution|power-distribution   # required
+        }
+        send-delay {
+          default-delay-distribution {
+            type = constant-distribution|weighted-distribution|linear-distribution|power-distribution   # required
+          }
+          delays-by-recipients = [
+            {
+              delay-distribution {
+                type = constant-distribution|weighted-distribution|linear-distribution|power-distribution   # required
+              }
+              instance-names = [ ]   # required
+              # probability-of-grpc-send-accepted-by-flow-control = <number>
+              # probability-of-grpc-send-success = <number>
+            }
+          ]
+        }
+        topology-delay {
+          # broadcast-request-probability = <number>
+          get-ordering-topology-delay {
+            type = constant-distribution|weighted-distribution|linear-distribution|power-distribution   # required
+          }
+          # pending-topology-changes-probability = <number>
+          # possible-ordering-topology-change-in-request-probability = <number>
+          request-inspection-delay {
+            type = constant-distribution|weighted-distribution|linear-distribution|power-distribution   # required
+          }
+        }
+      }
+      this-sequencer-id = "..."   # required
+    }
+    storage {
+      type = memory|h2|postgres   # required
+    }
+    # view-change-timeout-override = <duration>
+  }
+  # config.initial-network.server-endpoint.tls.client-auth.admin-client.cert-chain-file.type takes a type of its own, enumerated below
+}
+```
+
+`storage` supports these types: `memory`, `h2`, `postgres`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.storage {
+  type = memory
+  parameters {
+    connection-allocation {
+      # num-ledger-api = <int>
+      # num-reads = <int>
+      # num-writes = <int>
+    }
+    connection-timeout = "5 seconds"
+    fail-fast-on-startup = true
+    failed-to-fatal-delay = "5 minutes"
+    # max-connections = <int>
+    migrate-and-start = false
+    migrations-paths = [ ]
+    partitions {
+      initial-bft-orderer-tables-partition-size = 1500
+    }
+    repeatable-migrations-paths = [ ]
+    unsafe-baseline-on-migrate = false
+    unsafe-clean-on-validation-error = false
+    # warn-on-slow-query = <duration>
+    warn-on-slow-query-interval = "5 seconds"
+  }
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.storage {
+  type = h2
+  parameters {
+    connection-allocation {
+      # num-ledger-api = <int>
+      # num-reads = <int>
+      # num-writes = <int>
+    }
+    connection-timeout = "5 seconds"
+    fail-fast-on-startup = true
+    failed-to-fatal-delay = "5 minutes"
+    # max-connections = <int>
+    migrate-and-start = false
+    migrations-paths = [ ]
+    partitions {
+      initial-bft-orderer-tables-partition-size = 1500
+    }
+    repeatable-migrations-paths = [ ]
+    unsafe-baseline-on-migrate = false
+    unsafe-clean-on-validation-error = false
+    # warn-on-slow-query = <duration>
+    warn-on-slow-query-interval = "5 seconds"
+  }
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.storage {
+  type = postgres
+  parameters {
+    connection-allocation {
+      # num-ledger-api = <int>
+      # num-reads = <int>
+      # num-writes = <int>
+    }
+    connection-timeout = "5 seconds"
+    fail-fast-on-startup = true
+    failed-to-fatal-delay = "5 minutes"
+    # max-connections = <int>
+    migrate-and-start = false
+    migrations-paths = [ ]
+    partitions {
+      initial-bft-orderer-tables-partition-size = 1500
+    }
+    repeatable-migrations-paths = [ ]
+    unsafe-baseline-on-migrate = false
+    unsafe-clean-on-validation-error = false
+    # warn-on-slow-query = <duration>
+    warn-on-slow-query-interval = "5 seconds"
+  }
+}
+```
+
+`admin-api.auth-services[]` supports these types: `wildcard`, `unsafe-jwt-hmac-256`, `jwt-rs-256-crt`, `jwt-es-256-crt`, `jwt-es-512-crt`, `jwt-jwks`, `party-jwt`. Each block shows one entry; a list may hold entries of different types.
+
+```hocon
+canton.sequencers.<sequencer>.admin-api.auth-services = [
+  {
+    type = wildcard
+    # takes no further keys
+  }
+]
+```
+
+```hocon
+canton.sequencers.<sequencer>.admin-api.auth-services = [
+  {
+    type = unsafe-jwt-hmac-256
+    access-level = wildcard
+    # max-token-life = <duration>
+    privileged = false
+    secret = "..."   # required
+    # target-audience = <string>
+    # target-scope = <string>
+    users = [
+      {
+        allowed-services = [ ]   # required
+        user-id = "..."   # required
+      }
+    ]
+  }
+]
+```
+
+```hocon
+canton.sequencers.<sequencer>.admin-api.auth-services = [
+  {
+    type = jwt-rs-256-crt
+    access-level = wildcard
+    certificate = "..."   # required
+    # max-token-life = <duration>
+    privileged = false
+    # target-audience = <string>
+    # target-scope = <string>
+    users = [
+      {
+        allowed-services = [ ]   # required
+        user-id = "..."   # required
+      }
+    ]
+  }
+]
+```
+
+```hocon
+canton.sequencers.<sequencer>.admin-api.auth-services = [
+  {
+    type = jwt-es-256-crt
+    access-level = wildcard
+    certificate = "..."   # required
+    # max-token-life = <duration>
+    privileged = false
+    # target-audience = <string>
+    # target-scope = <string>
+    users = [
+      {
+        allowed-services = [ ]   # required
+        user-id = "..."   # required
+      }
+    ]
+  }
+]
+```
+
+```hocon
+canton.sequencers.<sequencer>.admin-api.auth-services = [
+  {
+    type = jwt-es-512-crt
+    access-level = wildcard
+    certificate = "..."   # required
+    # max-token-life = <duration>
+    privileged = false
+    # target-audience = <string>
+    # target-scope = <string>
+    users = [
+      {
+        allowed-services = [ ]   # required
+        user-id = "..."   # required
+      }
+    ]
+  }
+]
+```
+
+```hocon
+canton.sequencers.<sequencer>.admin-api.auth-services = [
+  {
+    type = jwt-jwks
+    access-level = wildcard
+    # max-token-life = <duration>
+    privileged = false
+    # target-audience = <string>
+    # target-scope = <string>
+    url = "..."   # required
+    users = [
+      {
+        allowed-services = [ ]   # required
+        user-id = "..."   # required
+      }
+    ]
+  }
+]
+```
+
+```hocon
+canton.sequencers.<sequencer>.admin-api.auth-services = [
+  {
+    type = party-jwt
+    # takes no further keys
+  }
+]
+```
+
+`crypto.kms` supports these types: `driver`, `aws`, `gcp`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.crypto.kms {
+  type = driver
+  config = { }   # required
+  health-check-period = "10 seconds"
+  name = "..."   # required
+  retries {
+    create-key-check {
+      initial-delay = "30 seconds"   # required
+      max-delay = "30 seconds"   # required
+      max-retries = 0   # required
+    }
+    failures {
+      initial-delay = "30 seconds"   # required
+      max-delay = "30 seconds"   # required
+      max-retries = 0   # required
+    }
+  }
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.crypto.kms {
+  type = aws
+  audit-logging = false
+  custom-tags {
+    <custom-tag> = [ ]
+  }
+  disable-ssl-verification = false
+  # endpoint-override = <string>
+  multi-region-key = false
+  region = "..."   # required
+  retries {
+    create-key-check {
+      initial-delay = "30 seconds"   # required
+      max-delay = "30 seconds"   # required
+      max-retries = 0   # required
+    }
+    failures {
+      initial-delay = "30 seconds"   # required
+      max-delay = "30 seconds"   # required
+      max-retries = 0   # required
+    }
+  }
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.crypto.kms {
+  type = gcp
+  audit-logging = false
+  # endpoint-override = <string>
+  key-ring-id = "..."   # required
+  location-id = "..."   # required
+  project-id = "..."   # required
+  retries {
+    create-key-check {
+      initial-delay = "30 seconds"   # required
+      max-delay = "30 seconds"   # required
+      max-retries = 0   # required
+    }
+    failures {
+      initial-delay = "30 seconds"   # required
+      max-delay = "30 seconds"   # required
+      max-retries = 0   # required
+    }
+  }
+}
+```
+
+`init.identity` supports these types: `external`, `auto`, `manual`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.init.identity {
+  type = external
+  certificates = [ ]
+  identifier = "..."   # required
+  # namespace = <string>
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.init.identity {
+  type = auto
+  identifier {
+    type = random|explicit|config   # required
+  }
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.init.identity {
+  type = manual
+  # takes no further keys
+}
+```
+
+`sequencer.writer` supports these types: `low-latency`, `high-throughput`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.writer {
+  type = low-latency
+  # buffered-events-max-memory = <int>
+  buffered-events-preload-batch-size = 50
+  # checkpoint-backfill-parallelism = <int>
+  checkpoint-interval = "30 seconds"
+  # commit-mode-validation = synchronous|local
+  event-write-batch-max-size = 1
+  event-write-max-concurrency = 1
+  payload-queue-size = 1000
+  payload-to-event-margin = "60 seconds"
+  payload-write-batch-max-size = 1
+  payload-write-max-concurrency = 2
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.writer {
+  type = high-throughput
+  # buffered-events-max-memory = <int>
+  buffered-events-preload-batch-size = 50
+  # checkpoint-backfill-parallelism = <int>
+  checkpoint-interval = "30 seconds"
+  # commit-mode-validation = synchronous|local
+  event-write-batch-max-size = 100
+  event-write-max-concurrency = 1
+  payload-queue-size = 1000
+  payload-to-event-margin = "60 seconds"
+  payload-write-batch-max-size = 50
+  payload-write-max-concurrency = 4
+}
+```
+
+`traffic-config.batch-aggregator-config` supports these types: `batching`, `no-batching`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.traffic-config.batch-aggregator-config {
+  type = batching
+  maximum-batch-size = 500
+  maximum-in-flight = 2
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.traffic-config.batch-aggregator-config {
+  type = no-batching
+  max-parallel-batches = 2
+  maximum-batch-size = 500
+}
+```
+
+`admin-api.tls.cert-chain-file` supports these types: `pem-file`, `pem-string`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.admin-api.tls.cert-chain-file {
+  type = pem-file
+  pem-file = "/path/to/file"   # required
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.admin-api.tls.cert-chain-file {
+  type = pem-string
+  pem-bytes = "..."   # required
+}
+```
+
+`admin-api.tls.client-auth` supports these types: `require`, `optional`, `none`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.admin-api.tls.client-auth {
+  type = require
+  admin-client {
+    cert-chain-file {
+      type = pem-file|pem-string   # required
+    }
+    private-key-file = "..."   # required
+  }
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.admin-api.tls.client-auth {
+  type = optional
+  # takes no further keys
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.admin-api.tls.client-auth {
+  type = none
+  # takes no further keys
+}
+```
+
+`admin-api.tls.trust-collection-file` supports these types: `pem-file`, `pem-string`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.admin-api.tls.trust-collection-file {
+  type = pem-file
+  pem-file = "/path/to/file"   # required
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.admin-api.tls.trust-collection-file {
+  type = pem-string
+  pem-bytes = "..."   # required
+}
+```
+
+`crypto.private-key-store.encryption` supports these types: `kms`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.crypto.private-key-store.encryption {
+  type = kms
+  reverted = false
+  # wrapper-key-id = <string>
+}
+```
+
+`init.identity.identifier` supports these types: `random`, `explicit`, `config`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.init.identity.identifier {
+  type = random
+  # takes no further keys
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.init.identity.identifier {
+  type = explicit
+  name = "..."   # required
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.init.identity.identifier {
+  type = config
+  # takes no further keys
+}
+```
+
+`parameters.batching.aggregator` supports these types: `batching`, `no-batching`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.parameters.batching.aggregator {
+  type = batching
+  maximum-batch-size = 500
+  maximum-in-flight = 2
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.parameters.batching.aggregator {
+  type = no-batching
+  max-parallel-batches = 2
+  maximum-batch-size = 500
+}
+```
+
+`parameters.batching.contract-store-aggregator` supports these types: `batching`, `no-batching`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.parameters.batching.contract-store-aggregator {
+  type = batching
+  maximum-batch-size = 500
+  maximum-in-flight = 2
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.parameters.batching.contract-store-aggregator {
+  type = no-batching
+  max-parallel-batches = 2
+  maximum-batch-size = 500
+}
+```
+
+`parameters.batching.mediator-fetch-finalized-responses-aggregator` supports these types: `batching`, `no-batching`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.parameters.batching.mediator-fetch-finalized-responses-aggregator {
+  type = batching
+  maximum-batch-size = 500
+  maximum-in-flight = 2
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.parameters.batching.mediator-fetch-finalized-responses-aggregator {
+  type = no-batching
+  max-parallel-batches = 2
+  maximum-batch-size = 500
+}
+```
+
+`parameters.batching.mediator-store-finalized-responses-aggregator` supports these types: `batching`, `no-batching`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.parameters.batching.mediator-store-finalized-responses-aggregator {
+  type = batching
+  maximum-batch-size = 500
+  maximum-in-flight = 2
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.parameters.batching.mediator-store-finalized-responses-aggregator {
+  type = no-batching
+  max-parallel-batches = 2
+  maximum-batch-size = 500
+}
+```
+
+`parameters.batching.topology-cache-aggregator` supports these types: `batching`, `no-batching`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.parameters.batching.topology-cache-aggregator {
+  type = batching
+  maximum-batch-size = 500
+  maximum-in-flight = 2
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.parameters.batching.topology-cache-aggregator {
+  type = no-batching
+  max-parallel-batches = 2
+  maximum-batch-size = 500
+}
+```
+
+`public-api.tls.cert-chain-file` supports these types: `pem-file`, `pem-string`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.public-api.tls.cert-chain-file {
+  type = pem-file
+  pem-file = "/path/to/file"   # required
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.public-api.tls.cert-chain-file {
+  type = pem-string
+  pem-bytes = "..."   # required
+}
+```
+
+`sequencer.block.writer` supports these types: `low-latency`, `high-throughput`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.block.writer {
+  type = low-latency
+  buffered-events-max-memory = 8388608
+  buffered-events-preload-batch-size = 50
+  checkpoint-backfill-parallelism = 2
+  checkpoint-interval = "30 seconds"
+  commit-mode-validation = synchronous
+  event-write-batch-max-size = 1
+  event-write-max-concurrency = 1
+  payload-queue-size = 1000
+  payload-to-event-margin = "60 seconds"
+  payload-write-batch-max-size = 1
+  payload-write-max-concurrency = 2
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.block.writer {
+  type = high-throughput
+  buffered-events-max-memory = 8388608
+  buffered-events-preload-batch-size = 50
+  checkpoint-backfill-parallelism = 2
+  checkpoint-interval = "30 seconds"
+  commit-mode-validation = synchronous
+  event-write-batch-max-size = 100
+  event-write-max-concurrency = 1
+  payload-queue-size = 1000
+  payload-to-event-margin = "60 seconds"
+  payload-write-batch-max-size = 50
+  payload-write-max-concurrency = 4
+}
+```
+
+`sequencer.config.batch-aggregator` supports these types: `batching`, `no-batching`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.batch-aggregator {
+  type = batching
+  maximum-batch-size = 500
+  maximum-in-flight = 2
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.batch-aggregator {
+  type = no-batching
+  max-parallel-batches = 2
+  maximum-batch-size = 500
+}
+```
+
+`sequencer.config.storage` supports these types: `memory`, `h2`, `postgres`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.storage {
+  type = memory
+  parameters {
+    connection-allocation {
+      # num-ledger-api = <int>
+      # num-reads = <int>
+      # num-writes = <int>
+    }
+    connection-timeout = "5 seconds"
+    fail-fast-on-startup = true
+    failed-to-fatal-delay = "5 minutes"
+    # max-connections = <int>
+    migrate-and-start = false
+    migrations-paths = [ ]
+    partitions {
+      initial-bft-orderer-tables-partition-size = 1500
+    }
+    repeatable-migrations-paths = [ ]
+    unsafe-baseline-on-migrate = false
+    unsafe-clean-on-validation-error = false
+    # warn-on-slow-query = <duration>
+    warn-on-slow-query-interval = "5 seconds"
+  }
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.storage {
+  type = h2
+  parameters {
+    connection-allocation {
+      # num-ledger-api = <int>
+      # num-reads = <int>
+      # num-writes = <int>
+    }
+    connection-timeout = "5 seconds"
+    fail-fast-on-startup = true
+    failed-to-fatal-delay = "5 minutes"
+    # max-connections = <int>
+    migrate-and-start = false
+    migrations-paths = [ ]
+    partitions {
+      initial-bft-orderer-tables-partition-size = 1500
+    }
+    repeatable-migrations-paths = [ ]
+    unsafe-baseline-on-migrate = false
+    unsafe-clean-on-validation-error = false
+    # warn-on-slow-query = <duration>
+    warn-on-slow-query-interval = "5 seconds"
+  }
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.storage {
+  type = postgres
+  parameters {
+    connection-allocation {
+      # num-ledger-api = <int>
+      # num-reads = <int>
+      # num-writes = <int>
+    }
+    connection-timeout = "5 seconds"
+    fail-fast-on-startup = true
+    failed-to-fatal-delay = "5 minutes"
+    # max-connections = <int>
+    migrate-and-start = false
+    migrations-paths = [ ]
+    partitions {
+      initial-bft-orderer-tables-partition-size = 1500
+    }
+    repeatable-migrations-paths = [ ]
+    unsafe-baseline-on-migrate = false
+    unsafe-clean-on-validation-error = false
+    # warn-on-slow-query = <duration>
+    warn-on-slow-query-interval = "5 seconds"
+  }
+}
+```
+
+`sequencer.config.leader-selection-policy-config-for-pv-34.how-long-to-blacklist` supports these types: `linear`, `linear-with-parameters`, `exponential`, `no-blacklisting`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.leader-selection-policy-config-for-pv-34.how-long-to-blacklist {
+  type = linear
+  # maximum-epoch-blacklisted = <int>
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.leader-selection-policy-config-for-pv-34.how-long-to-blacklist {
+  type = linear-with-parameters
+  initial-value = 0   # required
+  # maximum-epoch-blacklisted = <int>
+  slope = 0   # required
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.leader-selection-policy-config-for-pv-34.how-long-to-blacklist {
+  type = exponential
+  initial-value = 0   # required
+  # maximum-epoch-blacklisted = <int>
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.leader-selection-policy-config-for-pv-34.how-long-to-blacklist {
+  type = no-blacklisting
+  # takes no further keys
+}
+```
+
+`admin-api.tls.client-auth.admin-client.cert-chain-file` supports these types: `pem-file`, `pem-string`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.admin-api.tls.client-auth.admin-client.cert-chain-file {
+  type = pem-file
+  pem-file = "/path/to/file"   # required
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.admin-api.tls.client-auth.admin-client.cert-chain-file {
+  type = pem-string
+  pem-bytes = "..."   # required
+}
+```
+
+`sequencer.config.standalone.blacklist-leader-selection-policy-config.how-long-to-blacklist` supports these types: `linear`, `linear-with-parameters`, `exponential`, `no-blacklisting`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.standalone.blacklist-leader-selection-policy-config.how-long-to-blacklist {
+  type = linear
+  # maximum-epoch-blacklisted = <int>
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.standalone.blacklist-leader-selection-policy-config.how-long-to-blacklist {
+  type = linear-with-parameters
+  initial-value = 0   # required
+  # maximum-epoch-blacklisted = <int>
+  slope = 0   # required
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.standalone.blacklist-leader-selection-policy-config.how-long-to-blacklist {
+  type = exponential
+  initial-value = 0   # required
+  # maximum-epoch-blacklisted = <int>
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.standalone.blacklist-leader-selection-policy-config.how-long-to-blacklist {
+  type = no-blacklisting
+  # takes no further keys
+}
+```
+
+`sequencer.config.standalone.test-slowdown.post-ordering-delay` supports these types: `constant-distribution`, `weighted-distribution`, `linear-distribution`, `power-distribution`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.standalone.test-slowdown.post-ordering-delay {
+  type = constant-distribution
+  duration = "30 seconds"   # required
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.standalone.test-slowdown.post-ordering-delay {
+  type = weighted-distribution
+  weighted-durations = [
+    {
+      duration = "30 seconds"   # required
+      weight = 0   # required
+    }
+  ]
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.standalone.test-slowdown.post-ordering-delay {
+  type = linear-distribution
+  high = "30 seconds"   # required
+  low = "30 seconds"   # required
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.standalone.test-slowdown.post-ordering-delay {
+  type = power-distribution
+  low = "30 seconds"   # required
+  mean = "30 seconds"   # required
+}
+```
+
+`sequencer.config.initial-network.peer-endpoints[].tls-config.trust-collection-file` supports these types: `pem-file`, `pem-string`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.initial-network.peer-endpoints = [
+  {
+    tls-config.trust-collection-file {
+      type = pem-file
+      pem-file = "/path/to/file"   # required
+    }
+  }
+]
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.initial-network.peer-endpoints = [
+  {
+    tls-config.trust-collection-file {
+      type = pem-string
+      pem-bytes = "..."   # required
+    }
+  }
+]
+```
+
+`sequencer.config.initial-network.server-endpoint.external-tls-config.trust-collection-file` supports these types: `pem-file`, `pem-string`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.initial-network.server-endpoint.external-tls-config.trust-collection-file {
+  type = pem-file
+  pem-file = "/path/to/file"   # required
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.initial-network.server-endpoint.external-tls-config.trust-collection-file {
+  type = pem-string
+  pem-bytes = "..."   # required
+}
+```
+
+`sequencer.config.initial-network.server-endpoint.tls.cert-chain-file` supports these types: `pem-file`, `pem-string`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.initial-network.server-endpoint.tls.cert-chain-file {
+  type = pem-file
+  pem-file = "/path/to/file"   # required
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.initial-network.server-endpoint.tls.cert-chain-file {
+  type = pem-string
+  pem-bytes = "..."   # required
+}
+```
+
+`sequencer.config.initial-network.server-endpoint.tls.client-auth` supports these types: `require`, `optional`, `none`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.initial-network.server-endpoint.tls.client-auth {
+  type = require
+  admin-client {
+    cert-chain-file {
+      type = pem-file|pem-string   # required
+    }
+    private-key-file = "..."   # required
+  }
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.initial-network.server-endpoint.tls.client-auth {
+  type = optional
+  # takes no further keys
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.initial-network.server-endpoint.tls.client-auth {
+  type = none
+  # takes no further keys
+}
+```
+
+`sequencer.config.initial-network.server-endpoint.tls.trust-collection-file` supports these types: `pem-file`, `pem-string`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.initial-network.server-endpoint.tls.trust-collection-file {
+  type = pem-file
+  pem-file = "/path/to/file"   # required
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.initial-network.server-endpoint.tls.trust-collection-file {
+  type = pem-string
+  pem-bytes = "..."   # required
+}
+```
+
+`sequencer.config.standalone.test-slowdown.send-delay.default-delay-distribution` supports these types: `constant-distribution`, `weighted-distribution`, `linear-distribution`, `power-distribution`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.standalone.test-slowdown.send-delay.default-delay-distribution {
+  type = constant-distribution
+  duration = "30 seconds"   # required
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.standalone.test-slowdown.send-delay.default-delay-distribution {
+  type = weighted-distribution
+  weighted-durations = [
+    {
+      duration = "30 seconds"   # required
+      weight = 0   # required
+    }
+  ]
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.standalone.test-slowdown.send-delay.default-delay-distribution {
+  type = linear-distribution
+  high = "30 seconds"   # required
+  low = "30 seconds"   # required
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.standalone.test-slowdown.send-delay.default-delay-distribution {
+  type = power-distribution
+  low = "30 seconds"   # required
+  mean = "30 seconds"   # required
+}
+```
+
+`sequencer.config.standalone.test-slowdown.topology-delay.get-ordering-topology-delay` supports these types: `constant-distribution`, `weighted-distribution`, `linear-distribution`, `power-distribution`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.standalone.test-slowdown.topology-delay.get-ordering-topology-delay {
+  type = constant-distribution
+  duration = "30 seconds"   # required
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.standalone.test-slowdown.topology-delay.get-ordering-topology-delay {
+  type = weighted-distribution
+  weighted-durations = [
+    {
+      duration = "30 seconds"   # required
+      weight = 0   # required
+    }
+  ]
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.standalone.test-slowdown.topology-delay.get-ordering-topology-delay {
+  type = linear-distribution
+  high = "30 seconds"   # required
+  low = "30 seconds"   # required
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.standalone.test-slowdown.topology-delay.get-ordering-topology-delay {
+  type = power-distribution
+  low = "30 seconds"   # required
+  mean = "30 seconds"   # required
+}
+```
+
+`sequencer.config.standalone.test-slowdown.topology-delay.request-inspection-delay` supports these types: `constant-distribution`, `weighted-distribution`, `linear-distribution`, `power-distribution`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.standalone.test-slowdown.topology-delay.request-inspection-delay {
+  type = constant-distribution
+  duration = "30 seconds"   # required
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.standalone.test-slowdown.topology-delay.request-inspection-delay {
+  type = weighted-distribution
+  weighted-durations = [
+    {
+      duration = "30 seconds"   # required
+      weight = 0   # required
+    }
+  ]
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.standalone.test-slowdown.topology-delay.request-inspection-delay {
+  type = linear-distribution
+  high = "30 seconds"   # required
+  low = "30 seconds"   # required
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.standalone.test-slowdown.topology-delay.request-inspection-delay {
+  type = power-distribution
+  low = "30 seconds"   # required
+  mean = "30 seconds"   # required
+}
+```
+
+`sequencer.config.initial-network.peer-endpoints[].tls-config.client-cert.cert-chain-file` supports these types: `pem-file`, `pem-string`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.initial-network.peer-endpoints = [
+  {
+    tls-config.client-cert.cert-chain-file {
+      type = pem-file
+      pem-file = "/path/to/file"   # required
+    }
+  }
+]
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.initial-network.peer-endpoints = [
+  {
+    tls-config.client-cert.cert-chain-file {
+      type = pem-string
+      pem-bytes = "..."   # required
+    }
+  }
+]
+```
+
+`sequencer.config.initial-network.server-endpoint.external-tls-config.client-cert.cert-chain-file` supports these types: `pem-file`, `pem-string`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.initial-network.server-endpoint.external-tls-config.client-cert.cert-chain-file {
+  type = pem-file
+  pem-file = "/path/to/file"   # required
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.initial-network.server-endpoint.external-tls-config.client-cert.cert-chain-file {
+  type = pem-string
+  pem-bytes = "..."   # required
+}
+```
+
+`sequencer.config.standalone.test-slowdown.send-delay.delays-by-recipients[].delay-distribution` supports these types: `constant-distribution`, `weighted-distribution`, `linear-distribution`, `power-distribution`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.standalone.test-slowdown.send-delay.delays-by-recipients = [
+  {
+    delay-distribution {
+      type = constant-distribution
+      duration = "30 seconds"   # required
+    }
+  }
+]
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.standalone.test-slowdown.send-delay.delays-by-recipients = [
+  {
+    delay-distribution {
+      type = weighted-distribution
+      weighted-durations = [
+        {
+          duration = "30 seconds"   # required
+          weight = 0   # required
+        }
+      ]
+    }
+  }
+]
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.standalone.test-slowdown.send-delay.delays-by-recipients = [
+  {
+    delay-distribution {
+      type = linear-distribution
+      high = "30 seconds"   # required
+      low = "30 seconds"   # required
+    }
+  }
+]
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.standalone.test-slowdown.send-delay.delays-by-recipients = [
+  {
+    delay-distribution {
+      type = power-distribution
+      low = "30 seconds"   # required
+      mean = "30 seconds"   # required
+    }
+  }
+]
+```
+
+`sequencer.config.initial-network.server-endpoint.tls.client-auth.admin-client.cert-chain-file` supports these types: `pem-file`, `pem-string`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.initial-network.server-endpoint.tls.client-auth.admin-client.cert-chain-file {
+  type = pem-file
+  pem-file = "/path/to/file"   # required
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.initial-network.server-endpoint.tls.client-auth.admin-client.cert-chain-file {
+  type = pem-string
+  pem-bytes = "..."   # required
+}
+```
+
 
 </Tab>
 <Tab title="Table">
@@ -681,21 +2374,7 @@ canton.sequencers.<sequencer>.admin-api {
   }
   auth-services = [
     {
-      # access-level = wildcard   # when type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
-      # certificate = "..."   # required when type = jwt-es-256-crt|jwt-es-512-crt|jwt-rs-256-crt
-      # max-token-life = <duration>   # when type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
-      # privileged = false   # when type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
-      # secret = "..."   # required when type = unsafe-jwt-hmac-256
-      # target-audience = <string>   # when type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
-      # target-scope = <string>   # when type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
       type = wildcard|unsafe-jwt-hmac-256|jwt-rs-256-crt|jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|party-jwt   # required
-      # url = "..."   # required when type = jwt-jwks
-      users = [
-        {
-          # allowed-services = [ ]   # required when auth-services[].type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
-          # user-id = "..."   # required when auth-services[].type = jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|jwt-rs-256-crt|unsafe-jwt-hmac-256
-        }
-      ]
     }
   ]
   # flow-control-window = <int>
@@ -732,31 +2411,215 @@ canton.sequencers.<sequencer>.admin-api {
   port = 30006
   tls {
     cert-chain-file {
-      # pem-bytes = "..."   # required when type = pem-string
-      # pem-file = "/path/to/file"   # required when type = pem-file
       type = pem-file|pem-string   # required
     }
     # ciphers = [ ... ]
     client-auth {
-      admin-client {
-        cert-chain-file {
-          # pem-bytes = "..."   # required when tls.client-auth.type = require and type = pem-string
-          # pem-file = "/path/to/file"   # required when tls.client-auth.type = require and type = pem-file
-          # type = pem-file|pem-string   # required when tls.client-auth.type = require
-        }
-        # private-key-file = "..."   # required when tls.client-auth.type = require
-      }
       type = require|optional|none   # required
     }
     enable-cert-revocation-checking = false
     minimum-server-protocol-version = "TLSv1.2"
     private-key-file = "..."   # required
     trust-collection-file {
-      # pem-bytes = "..."   # required when type = pem-string
-      # pem-file = "/path/to/file"   # required when type = pem-file
       type = pem-file|pem-string   # required
     }
   }
+}
+```
+
+`auth-services[]` supports these types: `wildcard`, `unsafe-jwt-hmac-256`, `jwt-rs-256-crt`, `jwt-es-256-crt`, `jwt-es-512-crt`, `jwt-jwks`, `party-jwt`. Each block shows one entry; a list may hold entries of different types.
+
+```hocon
+canton.sequencers.<sequencer>.admin-api.auth-services = [
+  {
+    type = wildcard
+    # takes no further keys
+  }
+]
+```
+
+```hocon
+canton.sequencers.<sequencer>.admin-api.auth-services = [
+  {
+    type = unsafe-jwt-hmac-256
+    access-level = wildcard
+    # max-token-life = <duration>
+    privileged = false
+    secret = "..."   # required
+    # target-audience = <string>
+    # target-scope = <string>
+    users = [
+      {
+        allowed-services = [ ]   # required
+        user-id = "..."   # required
+      }
+    ]
+  }
+]
+```
+
+```hocon
+canton.sequencers.<sequencer>.admin-api.auth-services = [
+  {
+    type = jwt-rs-256-crt
+    access-level = wildcard
+    certificate = "..."   # required
+    # max-token-life = <duration>
+    privileged = false
+    # target-audience = <string>
+    # target-scope = <string>
+    users = [
+      {
+        allowed-services = [ ]   # required
+        user-id = "..."   # required
+      }
+    ]
+  }
+]
+```
+
+```hocon
+canton.sequencers.<sequencer>.admin-api.auth-services = [
+  {
+    type = jwt-es-256-crt
+    access-level = wildcard
+    certificate = "..."   # required
+    # max-token-life = <duration>
+    privileged = false
+    # target-audience = <string>
+    # target-scope = <string>
+    users = [
+      {
+        allowed-services = [ ]   # required
+        user-id = "..."   # required
+      }
+    ]
+  }
+]
+```
+
+```hocon
+canton.sequencers.<sequencer>.admin-api.auth-services = [
+  {
+    type = jwt-es-512-crt
+    access-level = wildcard
+    certificate = "..."   # required
+    # max-token-life = <duration>
+    privileged = false
+    # target-audience = <string>
+    # target-scope = <string>
+    users = [
+      {
+        allowed-services = [ ]   # required
+        user-id = "..."   # required
+      }
+    ]
+  }
+]
+```
+
+```hocon
+canton.sequencers.<sequencer>.admin-api.auth-services = [
+  {
+    type = jwt-jwks
+    access-level = wildcard
+    # max-token-life = <duration>
+    privileged = false
+    # target-audience = <string>
+    # target-scope = <string>
+    url = "..."   # required
+    users = [
+      {
+        allowed-services = [ ]   # required
+        user-id = "..."   # required
+      }
+    ]
+  }
+]
+```
+
+```hocon
+canton.sequencers.<sequencer>.admin-api.auth-services = [
+  {
+    type = party-jwt
+    # takes no further keys
+  }
+]
+```
+
+`tls.cert-chain-file` supports these types: `pem-file`, `pem-string`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.admin-api.tls.cert-chain-file {
+  type = pem-file
+  pem-file = "/path/to/file"   # required
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.admin-api.tls.cert-chain-file {
+  type = pem-string
+  pem-bytes = "..."   # required
+}
+```
+
+`tls.client-auth` supports these types: `require`, `optional`, `none`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.admin-api.tls.client-auth {
+  type = require
+  admin-client {
+    cert-chain-file {
+      type = pem-file|pem-string   # required
+    }
+    private-key-file = "..."   # required
+  }
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.admin-api.tls.client-auth {
+  type = optional
+  # takes no further keys
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.admin-api.tls.client-auth {
+  type = none
+  # takes no further keys
+}
+```
+
+`tls.trust-collection-file` supports these types: `pem-file`, `pem-string`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.admin-api.tls.trust-collection-file {
+  type = pem-file
+  pem-file = "/path/to/file"   # required
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.admin-api.tls.trust-collection-file {
+  type = pem-string
+  pem-bytes = "..."   # required
+}
+```
+
+`tls.client-auth.admin-client.cert-chain-file` supports these types: `pem-file`, `pem-string`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.admin-api.tls.client-auth.admin-client.cert-chain-file {
+  type = pem-file
+  pem-file = "/path/to/file"   # required
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.admin-api.tls.client-auth.admin-client.cert-chain-file {
+  type = pem-string
+  pem-bytes = "..."   # required
 }
 ```
 
@@ -912,20 +2775,6 @@ canton.sequencers.<sequencer>.crypto {
     # default = <generic>
   }
   kms {
-    # audit-logging = false   # when type = aws|gcp
-    # config = { }   # required when type = driver
-    custom-tags {
-      # <custom-tag> = [ ]   # when kms.type = aws
-    }
-    # disable-ssl-verification = false   # when type = aws
-    # endpoint-override = <string>   # when type = aws|gcp
-    # health-check-period = "10 seconds"   # when type = driver
-    # key-ring-id = "..."   # required when type = gcp
-    # location-id = "..."   # required when type = gcp
-    # multi-region-key = false   # when type = aws
-    # name = "..."   # required when type = driver
-    # project-id = "..."   # required when type = gcp
-    # region = "..."   # required when type = aws
     retries {
       create-key-check {
         initial-delay = "30 seconds"   # required
@@ -980,6 +2829,88 @@ canton.sequencers.<sequencer>.crypto {
     # allowed = [ ... ]
     # default = <generic>
   }
+}
+```
+
+`kms` supports these types: `driver`, `aws`, `gcp`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.crypto.kms {
+  type = driver
+  config = { }   # required
+  health-check-period = "10 seconds"
+  name = "..."   # required
+  retries {
+    create-key-check {
+      initial-delay = "30 seconds"   # required
+      max-delay = "30 seconds"   # required
+      max-retries = 0   # required
+    }
+    failures {
+      initial-delay = "30 seconds"   # required
+      max-delay = "30 seconds"   # required
+      max-retries = 0   # required
+    }
+  }
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.crypto.kms {
+  type = aws
+  audit-logging = false
+  custom-tags {
+    <custom-tag> = [ ]
+  }
+  disable-ssl-verification = false
+  # endpoint-override = <string>
+  multi-region-key = false
+  region = "..."   # required
+  retries {
+    create-key-check {
+      initial-delay = "30 seconds"   # required
+      max-delay = "30 seconds"   # required
+      max-retries = 0   # required
+    }
+    failures {
+      initial-delay = "30 seconds"   # required
+      max-delay = "30 seconds"   # required
+      max-retries = 0   # required
+    }
+  }
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.crypto.kms {
+  type = gcp
+  audit-logging = false
+  # endpoint-override = <string>
+  key-ring-id = "..."   # required
+  location-id = "..."   # required
+  project-id = "..."   # required
+  retries {
+    create-key-check {
+      initial-delay = "30 seconds"   # required
+      max-delay = "30 seconds"   # required
+      max-retries = 0   # required
+    }
+    failures {
+      initial-delay = "30 seconds"   # required
+      max-delay = "30 seconds"   # required
+      max-retries = 0   # required
+    }
+  }
+}
+```
+
+`private-key-store.encryption` supports these types: `kms`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.crypto.private-key-store.encryption {
+  type = kms
+  reverted = false
+  # wrapper-key-id = <string>
 }
 ```
 
@@ -1134,14 +3065,58 @@ canton.sequencers.<sequencer>.init {
   generate-intermediate-key = false
   generate-topology-transactions-and-keys = true
   identity {
-    # certificates = [ ]   # when type = external
-    identifier {
-      # name = "..."   # required when identity.type = auto and type = explicit
-      # type = random|explicit|config   # required when identity.type = auto
-    }
-    # namespace = <string>   # when type = external
     type = external|auto|manual   # required
   }
+}
+```
+
+`identity` supports these types: `external`, `auto`, `manual`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.init.identity {
+  type = external
+  certificates = [ ]
+  identifier = "..."   # required
+  # namespace = <string>
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.init.identity {
+  type = auto
+  identifier {
+    type = random|explicit|config   # required
+  }
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.init.identity {
+  type = manual
+  # takes no further keys
+}
+```
+
+`identity.identifier` supports these types: `random`, `explicit`, `config`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.init.identity.identifier {
+  type = random
+  # takes no further keys
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.init.identity.identifier {
+  type = explicit
+  name = "..."   # required
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.init.identity.identifier {
+  type = config
+  # takes no further keys
 }
 ```
 
@@ -1241,15 +3216,11 @@ canton.sequencers.<sequencer>.parameters {
   }
   batching {
     aggregator {
-      # max-parallel-batches = 2   # when type = no-batching
       maximum-batch-size = 500
-      # maximum-in-flight = 2   # when type = batching
       type = batching|no-batching   # required
     }
     contract-store-aggregator {
-      # max-parallel-batches = 2   # when type = no-batching
       maximum-batch-size = 500
-      # maximum-in-flight = 2   # when type = batching
       type = batching|no-batching   # required
     }
     # in-flight-aggregations-query-interval = <duration>
@@ -1262,23 +3233,17 @@ canton.sequencers.<sequencer>.parameters {
     max-topology-update-batch-size = 1000
     max-topology-write-batch-size = 1000
     mediator-fetch-finalized-responses-aggregator {
-      # max-parallel-batches = 2   # when type = no-batching
       maximum-batch-size = 500
-      # maximum-in-flight = 2   # when type = batching
       type = batching|no-batching   # required
     }
     mediator-store-finalized-responses-aggregator {
-      # max-parallel-batches = 2   # when type = no-batching
       maximum-batch-size = 500
-      # maximum-in-flight = 2   # when type = batching
       type = batching|no-batching   # required
     }
     parallelism = 8
     pruning-parallelism = 2
     topology-cache-aggregator {
-      # max-parallel-batches = 2   # when type = no-batching
       maximum-batch-size = 500
-      # maximum-in-flight = 2   # when type = batching
       type = batching|no-batching   # required
     }
   }
@@ -1396,6 +3361,96 @@ canton.sequencers.<sequencer>.parameters {
     enabled = false   # required
     # kill-delay = <duration>
   }
+}
+```
+
+`batching.aggregator` supports these types: `batching`, `no-batching`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.parameters.batching.aggregator {
+  type = batching
+  maximum-batch-size = 500
+  maximum-in-flight = 2
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.parameters.batching.aggregator {
+  type = no-batching
+  max-parallel-batches = 2
+  maximum-batch-size = 500
+}
+```
+
+`batching.contract-store-aggregator` supports these types: `batching`, `no-batching`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.parameters.batching.contract-store-aggregator {
+  type = batching
+  maximum-batch-size = 500
+  maximum-in-flight = 2
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.parameters.batching.contract-store-aggregator {
+  type = no-batching
+  max-parallel-batches = 2
+  maximum-batch-size = 500
+}
+```
+
+`batching.mediator-fetch-finalized-responses-aggregator` supports these types: `batching`, `no-batching`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.parameters.batching.mediator-fetch-finalized-responses-aggregator {
+  type = batching
+  maximum-batch-size = 500
+  maximum-in-flight = 2
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.parameters.batching.mediator-fetch-finalized-responses-aggregator {
+  type = no-batching
+  max-parallel-batches = 2
+  maximum-batch-size = 500
+}
+```
+
+`batching.mediator-store-finalized-responses-aggregator` supports these types: `batching`, `no-batching`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.parameters.batching.mediator-store-finalized-responses-aggregator {
+  type = batching
+  maximum-batch-size = 500
+  maximum-in-flight = 2
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.parameters.batching.mediator-store-finalized-responses-aggregator {
+  type = no-batching
+  max-parallel-batches = 2
+  maximum-batch-size = 500
+}
+```
+
+`batching.topology-cache-aggregator` supports these types: `batching`, `no-batching`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.parameters.batching.topology-cache-aggregator {
+  type = batching
+  maximum-batch-size = 500
+  maximum-in-flight = 2
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.parameters.batching.topology-cache-aggregator {
+  type = no-batching
+  max-parallel-batches = 2
+  maximum-batch-size = 500
 }
 ```
 
@@ -1589,8 +3644,6 @@ canton.sequencers.<sequencer>.public-api {
   port = 30005
   tls {
     cert-chain-file {
-      # pem-bytes = "..."   # required when type = pem-string
-      # pem-file = "/path/to/file"   # required when type = pem-file
       type = pem-file|pem-string   # required
     }
     # ciphers = [ ... ]
@@ -1598,6 +3651,22 @@ canton.sequencers.<sequencer>.public-api {
     private-key-file = "..."   # required
   }
   use-exponential-random-token-expiration = false
+}
+```
+
+`tls.cert-chain-file` supports these types: `pem-file`, `pem-string`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.public-api.tls.cert-chain-file {
+  type = pem-file
+  pem-file = "/path/to/file"   # required
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.public-api.tls.cert-chain-file {
+  type = pem-string
+  pem-bytes = "..."   # required
 }
 ```
 
@@ -1839,546 +3908,1165 @@ canton.sequencers.<sequencer>.sequencer-limits {
 
 ```hocon
 canton.sequencers.<sequencer>.sequencer {
+  type = database|external|bft-sequencer   # required
+}
+```
+
+`` supports these types: `database`, `external`, `bft-sequencer`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.sequencer {
+  type = database
+  high-availability {
+    connection-pool {
+      active-timeout = "15 seconds"
+      connection {
+        client-connection-check-interval = "5 seconds"
+        connection-timeout = "10 seconds"
+        health-check-period = "5 seconds"
+        health-check-timeout = "15 seconds"
+        initial-acquisition-interval = "200 milliseconds"
+        initial-acquisition-max-retries = 5
+        keep-alive-count = 5
+        keep-alive-idle = "10 seconds"
+        keep-alive-interval = "1 second"
+        lock {
+          health-check-period = "5 seconds"
+          health-check-timeout = "15 seconds"
+        }
+        max-inconclusive-read-only-checks = 3
+        passive-check-period = "15 seconds"
+      }
+      health-check-period = "5 seconds"
+      initial-locked-connection-timeout = "15 seconds"
+      initial-must-remain-active-connection-timeout = "1 minute"
+    }
+    # enabled = <boolean>
+    exclusive-storage {
+      connection-pool {
+        active-timeout = "15 seconds"
+        connection {
+          client-connection-check-interval = "5 seconds"
+          connection-timeout = "10 seconds"
+          health-check-period = "5 seconds"
+          health-check-timeout = "15 seconds"
+          initial-acquisition-interval = "200 milliseconds"
+          initial-acquisition-max-retries = 5
+          keep-alive-count = 5
+          keep-alive-idle = "10 seconds"
+          keep-alive-interval = "1 second"
+          lock {
+            health-check-period = "5 seconds"
+            health-check-timeout = "15 seconds"
+          }
+          max-inconclusive-read-only-checks = 3
+          passive-check-period = "15 seconds"
+        }
+        health-check-period = "5 seconds"
+        initial-locked-connection-timeout = "15 seconds"
+        initial-must-remain-active-connection-timeout = "1 minute"
+      }
+      max-connections = 2
+    }
+    keep-alive-interval = "50 milliseconds"
+    offline-duration = "8 seconds"
+    online-check-interval = "5 seconds"
+    total-node-count = 10
+  }
+  pruning {
+    max-pruning-batch-size = 50000
+    # pruning-metric-update-interval = <duration>
+    traffic-purchased-retention = "1 hour"
+  }
+  reader {
+    checkpoint-interval = "5 seconds"
+    event-generation-parallelism = 4
+    payload-batch-size = 10
+    payload-batch-window = "5 milliseconds"
+    payload-fetch-parallelism = 2
+    # polling-interval = <duration>
+    read-batch-size = 100
+  }
+  # testing-interceptor = <string>
+  writer {
+    type = low-latency|high-throughput   # required
+  }
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer {
+  type = external
   block {
     circuit-breaker {
-      # enabled = true   # when type = bft-sequencer|external
+      enabled = true
       messages {
         acknowledgement {
-          # allowed-block-delay = "90 seconds"   # when type = bft-sequencer|external
-          # exponential-backoff-factor = 1   # when type = bft-sequencer|external
-          # max-failures = 10   # when type = bft-sequencer|external
-          # max-reset-timeout = "36500 days"   # when type = bft-sequencer|external
-          # reset-timeout = "30 seconds"   # when type = bft-sequencer|external
+          allowed-block-delay = "90 seconds"
+          exponential-backoff-factor = 1
+          max-failures = 10
+          max-reset-timeout = "36500 days"
+          reset-timeout = "30 seconds"
         }
         commitment {
-          # allowed-block-delay = "90 seconds"   # when type = bft-sequencer|external
-          # exponential-backoff-factor = 1   # when type = bft-sequencer|external
-          # max-failures = 10   # when type = bft-sequencer|external
-          # max-reset-timeout = "36500 days"   # when type = bft-sequencer|external
-          # reset-timeout = "30 seconds"   # when type = bft-sequencer|external
+          allowed-block-delay = "90 seconds"
+          exponential-backoff-factor = 1
+          max-failures = 10
+          max-reset-timeout = "36500 days"
+          reset-timeout = "30 seconds"
         }
         confirmation-request {
-          # allowed-block-delay = "90 seconds"   # when type = bft-sequencer|external
-          # exponential-backoff-factor = 1   # when type = bft-sequencer|external
-          # max-failures = 10   # when type = bft-sequencer|external
-          # max-reset-timeout = "36500 days"   # when type = bft-sequencer|external
-          # reset-timeout = "30 seconds"   # when type = bft-sequencer|external
+          allowed-block-delay = "90 seconds"
+          exponential-backoff-factor = 1
+          max-failures = 10
+          max-reset-timeout = "36500 days"
+          reset-timeout = "30 seconds"
         }
         confirmation-response {
-          # allowed-block-delay = "90 seconds"   # when type = bft-sequencer|external
-          # exponential-backoff-factor = 1   # when type = bft-sequencer|external
-          # max-failures = 10   # when type = bft-sequencer|external
-          # max-reset-timeout = "36500 days"   # when type = bft-sequencer|external
-          # reset-timeout = "30 seconds"   # when type = bft-sequencer|external
+          allowed-block-delay = "90 seconds"
+          exponential-backoff-factor = 1
+          max-failures = 10
+          max-reset-timeout = "36500 days"
+          reset-timeout = "30 seconds"
         }
         lsu-sequencing-test {
-          # allowed-block-delay = "90 seconds"   # when type = bft-sequencer|external
-          # exponential-backoff-factor = 1   # when type = bft-sequencer|external
-          # max-failures = 10   # when type = bft-sequencer|external
-          # max-reset-timeout = "36500 days"   # when type = bft-sequencer|external
-          # reset-timeout = "30 seconds"   # when type = bft-sequencer|external
+          allowed-block-delay = "90 seconds"
+          exponential-backoff-factor = 1
+          max-failures = 10
+          max-reset-timeout = "36500 days"
+          reset-timeout = "30 seconds"
         }
         time-proof {
-          # allowed-block-delay = "90 seconds"   # when type = bft-sequencer|external
-          # exponential-backoff-factor = 1   # when type = bft-sequencer|external
-          # max-failures = 10   # when type = bft-sequencer|external
-          # max-reset-timeout = "36500 days"   # when type = bft-sequencer|external
-          # reset-timeout = "30 seconds"   # when type = bft-sequencer|external
+          allowed-block-delay = "90 seconds"
+          exponential-backoff-factor = 1
+          max-failures = 10
+          max-reset-timeout = "36500 days"
+          reset-timeout = "30 seconds"
         }
         top-up {
-          # allowed-block-delay = "90 seconds"   # when type = bft-sequencer|external
-          # exponential-backoff-factor = 1   # when type = bft-sequencer|external
-          # max-failures = 10   # when type = bft-sequencer|external
-          # max-reset-timeout = "36500 days"   # when type = bft-sequencer|external
-          # reset-timeout = "30 seconds"   # when type = bft-sequencer|external
+          allowed-block-delay = "90 seconds"
+          exponential-backoff-factor = 1
+          max-failures = 10
+          max-reset-timeout = "36500 days"
+          reset-timeout = "30 seconds"
         }
         topology {
-          # allowed-block-delay = "90 seconds"   # when type = bft-sequencer|external
-          # exponential-backoff-factor = 1   # when type = bft-sequencer|external
-          # max-failures = 10   # when type = bft-sequencer|external
-          # max-reset-timeout = "36500 days"   # when type = bft-sequencer|external
-          # reset-timeout = "30 seconds"   # when type = bft-sequencer|external
+          allowed-block-delay = "90 seconds"
+          exponential-backoff-factor = 1
+          max-failures = 10
+          max-reset-timeout = "36500 days"
+          reset-timeout = "30 seconds"
         }
         unexpected {
-          # allowed-block-delay = "90 seconds"   # when type = bft-sequencer|external
-          # exponential-backoff-factor = 1   # when type = bft-sequencer|external
-          # max-failures = 10   # when type = bft-sequencer|external
-          # max-reset-timeout = "36500 days"   # when type = bft-sequencer|external
-          # reset-timeout = "30 seconds"   # when type = bft-sequencer|external
+          allowed-block-delay = "90 seconds"
+          exponential-backoff-factor = 1
+          max-failures = 10
+          max-reset-timeout = "36500 days"
+          reset-timeout = "30 seconds"
         }
         verdict {
-          # allowed-block-delay = "90 seconds"   # when type = bft-sequencer|external
-          # exponential-backoff-factor = 1   # when type = bft-sequencer|external
-          # max-failures = 10   # when type = bft-sequencer|external
-          # max-reset-timeout = "36500 days"   # when type = bft-sequencer|external
-          # reset-timeout = "30 seconds"   # when type = bft-sequencer|external
+          allowed-block-delay = "90 seconds"
+          exponential-backoff-factor = 1
+          max-failures = 10
+          max-reset-timeout = "36500 days"
+          reset-timeout = "30 seconds"
         }
       }
     }
     reader {
-      # checkpoint-interval = "5 seconds"   # when type = bft-sequencer|external
-      # event-generation-parallelism = 4   # when type = bft-sequencer|external
-      # payload-batch-size = 10   # when type = bft-sequencer|external
-      # payload-batch-window = "5 milliseconds"   # when type = bft-sequencer|external
-      # payload-fetch-parallelism = 2   # when type = bft-sequencer|external
-      # polling-interval = <duration>   # when type = bft-sequencer|external
-      # read-batch-size = 100   # when type = bft-sequencer|external
+      checkpoint-interval = "5 seconds"
+      event-generation-parallelism = 4
+      payload-batch-size = 10
+      payload-batch-window = "5 milliseconds"
+      payload-fetch-parallelism = 2
+      # polling-interval = <duration>
+      read-batch-size = 100
     }
     stream-instrumentation {
-      # buffer-size = 256   # when type = bft-sequencer|external
-      # is-enabled = false   # when type = bft-sequencer|external
+      buffer-size = 256
+      is-enabled = false
     }
-    # testing-interceptor = <string>   # when type = bft-sequencer|external
+    # testing-interceptor = <string>
     throughput-cap {
-      # clock-tick-interval = "100 milliseconds"   # when type = bft-sequencer|external
-      # delayed-activation = true   # when type = bft-sequencer|external
-      # enabled = false   # when type = bft-sequencer|external
+      clock-tick-interval = "100 milliseconds"
+      delayed-activation = true
+      enabled = false
       messages {
         confirmation-request {
-          # global-kbps-cap = 2000   # when type = bft-sequencer|external
-          # global-tps-cap = 10   # when type = bft-sequencer|external
-          # per-client-kbps-cap = 1000   # when type = bft-sequencer|external
-          # per-client-tps-cap = 4   # when type = bft-sequencer|external
+          global-kbps-cap = 2000
+          global-tps-cap = 10
+          per-client-kbps-cap = 1000
+          per-client-tps-cap = 4
         }
         confirmation-response {
-          # global-kbps-cap = 2000   # when type = bft-sequencer|external
-          # global-tps-cap = 10   # when type = bft-sequencer|external
-          # per-client-kbps-cap = 1000   # when type = bft-sequencer|external
-          # per-client-tps-cap = 4   # when type = bft-sequencer|external
+          global-kbps-cap = 2000
+          global-tps-cap = 10
+          per-client-kbps-cap = 1000
+          per-client-tps-cap = 4
         }
         topology {
-          # global-kbps-cap = 2000   # when type = bft-sequencer|external
-          # global-tps-cap = 10   # when type = bft-sequencer|external
-          # per-client-kbps-cap = 1000   # when type = bft-sequencer|external
-          # per-client-tps-cap = 4   # when type = bft-sequencer|external
+          global-kbps-cap = 2000
+          global-tps-cap = 10
+          per-client-kbps-cap = 1000
+          per-client-tps-cap = 4
         }
       }
-      # observation-period-seconds = 60   # when type = bft-sequencer|external
-      # strict = true   # when type = bft-sequencer|external
-      # thresholds = [ ]   # when type = bft-sequencer|external
-      # update-every-ms = 100   # when type = bft-sequencer|external
+      observation-period-seconds = 60
+      strict = true
+      thresholds = [ ]
+      update-every-ms = 100
     }
     writer {
-      # buffered-events-max-memory = 8388608   # when type = bft-sequencer|external
-      # buffered-events-preload-batch-size = 50   # when type = bft-sequencer|external
-      # checkpoint-backfill-parallelism = 2   # when type = bft-sequencer|external
-      # checkpoint-interval = "30 seconds"   # when type = bft-sequencer|external
-      # commit-mode-validation = synchronous   # when type = bft-sequencer|external
-      # event-write-batch-max-size = 1   # when type = bft-sequencer|external and type = low-latency
-      # event-write-max-concurrency = 1   # when type = bft-sequencer|external
-      # payload-queue-size = 1000   # when type = bft-sequencer|external
-      # payload-to-event-margin = "60 seconds"   # when type = bft-sequencer|external
-      # payload-write-batch-max-size = 1   # when type = bft-sequencer|external and type = low-latency
-      # payload-write-max-concurrency = 2   # when type = bft-sequencer|external and type = low-latency
-      # type = low-latency|high-throughput   # required when type = bft-sequencer|external
+      type = low-latency|high-throughput   # required
+    }
+  }
+  config = "..."   # required
+  sequencer-type = "..."   # required
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer {
+  type = bft-sequencer
+  block {
+    circuit-breaker {
+      enabled = true
+      messages {
+        acknowledgement {
+          allowed-block-delay = "90 seconds"
+          exponential-backoff-factor = 1
+          max-failures = 10
+          max-reset-timeout = "36500 days"
+          reset-timeout = "30 seconds"
+        }
+        commitment {
+          allowed-block-delay = "90 seconds"
+          exponential-backoff-factor = 1
+          max-failures = 10
+          max-reset-timeout = "36500 days"
+          reset-timeout = "30 seconds"
+        }
+        confirmation-request {
+          allowed-block-delay = "90 seconds"
+          exponential-backoff-factor = 1
+          max-failures = 10
+          max-reset-timeout = "36500 days"
+          reset-timeout = "30 seconds"
+        }
+        confirmation-response {
+          allowed-block-delay = "90 seconds"
+          exponential-backoff-factor = 1
+          max-failures = 10
+          max-reset-timeout = "36500 days"
+          reset-timeout = "30 seconds"
+        }
+        lsu-sequencing-test {
+          allowed-block-delay = "90 seconds"
+          exponential-backoff-factor = 1
+          max-failures = 10
+          max-reset-timeout = "36500 days"
+          reset-timeout = "30 seconds"
+        }
+        time-proof {
+          allowed-block-delay = "90 seconds"
+          exponential-backoff-factor = 1
+          max-failures = 10
+          max-reset-timeout = "36500 days"
+          reset-timeout = "30 seconds"
+        }
+        top-up {
+          allowed-block-delay = "90 seconds"
+          exponential-backoff-factor = 1
+          max-failures = 10
+          max-reset-timeout = "36500 days"
+          reset-timeout = "30 seconds"
+        }
+        topology {
+          allowed-block-delay = "90 seconds"
+          exponential-backoff-factor = 1
+          max-failures = 10
+          max-reset-timeout = "36500 days"
+          reset-timeout = "30 seconds"
+        }
+        unexpected {
+          allowed-block-delay = "90 seconds"
+          exponential-backoff-factor = 1
+          max-failures = 10
+          max-reset-timeout = "36500 days"
+          reset-timeout = "30 seconds"
+        }
+        verdict {
+          allowed-block-delay = "90 seconds"
+          exponential-backoff-factor = 1
+          max-failures = 10
+          max-reset-timeout = "36500 days"
+          reset-timeout = "30 seconds"
+        }
+      }
+    }
+    reader {
+      checkpoint-interval = "5 seconds"
+      event-generation-parallelism = 4
+      payload-batch-size = 10
+      payload-batch-window = "5 milliseconds"
+      payload-fetch-parallelism = 2
+      # polling-interval = <duration>
+      read-batch-size = 100
+    }
+    stream-instrumentation {
+      buffer-size = 256
+      is-enabled = false
+    }
+    # testing-interceptor = <string>
+    throughput-cap {
+      clock-tick-interval = "100 milliseconds"
+      delayed-activation = true
+      enabled = false
+      messages {
+        confirmation-request {
+          global-kbps-cap = 2000
+          global-tps-cap = 10
+          per-client-kbps-cap = 1000
+          per-client-tps-cap = 4
+        }
+        confirmation-response {
+          global-kbps-cap = 2000
+          global-tps-cap = 10
+          per-client-kbps-cap = 1000
+          per-client-tps-cap = 4
+        }
+        topology {
+          global-kbps-cap = 2000
+          global-tps-cap = 10
+          per-client-kbps-cap = 1000
+          per-client-tps-cap = 4
+        }
+      }
+      observation-period-seconds = 60
+      strict = true
+      thresholds = [ ]
+      update-every-ms = 100
+    }
+    writer {
+      type = low-latency|high-throughput   # required
     }
   }
   config {
-    # availability-dissemination-patience = "5 seconds"   # when type = bft-sequencer
-    # availability-max-non-ordered-batches-per-node = 1000   # when type = bft-sequencer
-    # availability-min-proposal-creation-delay = "250 milliseconds"   # when type = bft-sequencer
-    # availability-number-of-attempts-of-downloading-output-fetch-before-warning = 5   # when type = bft-sequencer
+    availability-dissemination-patience = "5 seconds"
+    availability-max-non-ordered-batches-per-node = 1000
+    availability-min-proposal-creation-delay = "250 milliseconds"
+    availability-number-of-attempts-of-downloading-output-fetch-before-warning = 5
     batch-aggregator {
-      # max-parallel-batches = 2   # when type = bft-sequencer and type = no-batching
-      # maximum-batch-size = 500   # when type = bft-sequencer
-      # maximum-in-flight = 2   # when type = bft-sequencer and type = batching
-      # type = batching|no-batching   # required when type = bft-sequencer
+      type = batching|no-batching   # required
     }
-    # blocking-db-read-timeout = "1 minute"   # when type = bft-sequencer
-    # consensus-block-completion-timeout = "10 seconds"   # when type = bft-sequencer
-    # consensus-empty-block-creation-timeout = "500 milliseconds"   # when type = bft-sequencer
-    # consensus-enable-flushing-segment = true   # when type = bft-sequencer
-    # consensus-enable-log-end-of-epoch-progress = false   # when type = bft-sequencer
-    # consensus-flushing-min-blocks = 2   # when type = bft-sequencer
-    # consensus-new-epoch-topology-warn-timeout = "2 seconds"   # when type = bft-sequencer
-    # consensus-queue-max-size = <int>   # when type = bft-sequencer
-    # consensus-queue-per-node-quota = 1024   # when type = bft-sequencer
-    # dedicated-execution-context-divisor = <int>   # when type = bft-sequencer
-    # delayed-init-queue-max-size = 1024   # when type = bft-sequencer
-    # enable-performance-metrics = true   # when type = bft-sequencer
-    # epoch-state-transfer-future-epoch-queue-max-size = <int>   # when type = bft-sequencer
-    # epoch-state-transfer-future-epoch-queue-per-node-quota = 1024   # when type = bft-sequencer
-    # epoch-state-transfer-how-many-future-epochs-to-download-in-parallel = 5   # when type = bft-sequencer
-    # epoch-state-transfer-retry-timeout = "4 seconds"   # when type = bft-sequencer
-    # epoch-state-transfer-timeout-for-future-epoch = "500 milliseconds"   # when type = bft-sequencer
-    # init-query-timeout = <duration>   # when type = bft-sequencer
-    # init-timeout = <duration>   # when type = bft-sequencer
+    blocking-db-read-timeout = "1 minute"
+    consensus-block-completion-timeout = "10 seconds"
+    consensus-empty-block-creation-timeout = "500 milliseconds"
+    consensus-enable-flushing-segment = true
+    consensus-enable-log-end-of-epoch-progress = false
+    consensus-flushing-min-blocks = 2
+    consensus-new-epoch-topology-warn-timeout = "2 seconds"
+    # consensus-queue-max-size = <int>
+    consensus-queue-per-node-quota = 1024
+    # dedicated-execution-context-divisor = <int>
+    delayed-init-queue-max-size = 1024
+    enable-performance-metrics = true
+    # epoch-state-transfer-future-epoch-queue-max-size = <int>
+    epoch-state-transfer-future-epoch-queue-per-node-quota = 1024
+    epoch-state-transfer-how-many-future-epochs-to-download-in-parallel = 5
+    epoch-state-transfer-retry-timeout = "4 seconds"
+    epoch-state-transfer-timeout-for-future-epoch = "500 milliseconds"
+    # init-query-timeout = <duration>
+    # init-timeout = <duration>
     initial-network {
       connection-management-config {
-        # connection-retry-delay-multiplier = <int>   # when type = bft-sequencer
-        # flow-control-buffer = 128   # when type = bft-sequencer
-        # flow-control-buffer-drop-newest = false   # when type = bft-sequencer
-        # flow-control-ready-allowance = <int>   # when type = bft-sequencer
-        # initial-connection-max-delay = "500 milliseconds"   # when type = bft-sequencer
-        # initial-connection-retry-delay = "500 milliseconds"   # when type = bft-sequencer
-        # max-connection-attempts-before-warning = 30   # when type = bft-sequencer
-        # max-connection-retry-delay = "2 minutes"   # when type = bft-sequencer
+        # connection-retry-delay-multiplier = <int>
+        flow-control-buffer = 128
+        flow-control-buffer-drop-newest = false
+        # flow-control-ready-allowance = <int>
+        initial-connection-max-delay = "500 milliseconds"
+        initial-connection-retry-delay = "500 milliseconds"
+        max-connection-attempts-before-warning = 30
+        max-connection-retry-delay = "2 minutes"
       }
       endpoint-authentication {
         auth-token {
           backoff {
-            # base = 2   # when type = bft-sequencer
+            base = 2
             jitter {
-              # type = equal|full   # required when type = bft-sequencer
+              type = equal|full   # required
             }
-            # max-retry-interval = "2 minutes"   # when type = bft-sequencer
+            max-retry-interval = "2 minutes"
           }
-          # min-retry-interval = "500 milliseconds"   # when type = bft-sequencer
-          # refresh-auth-token-before-expiry = "20 seconds"   # when type = bft-sequencer
-          # retries = 20   # when type = bft-sequencer
+          min-retry-interval = "500 milliseconds"
+          refresh-auth-token-before-expiry = "20 seconds"
+          retries = 20
         }
-        # enabled = true   # when type = bft-sequencer
+        enabled = true
       }
-      # overwrite-stored-endpoints = false   # when type = bft-sequencer
+      overwrite-stored-endpoints = false
       peer-endpoints = [
         {
-          # address = "..."   # required when type = bft-sequencer
+          address = "..."   # required
           channel {
-            # flow-control-window = <int>   # when type = bft-sequencer
-            # initial-flow-control-window = <int>   # when type = bft-sequencer
+            # flow-control-window = <int>
+            # initial-flow-control-window = <int>
             keep-alive-client {
-              # idle-timeout = "30 minutes"   # when type = bft-sequencer
-              # keep-alive-without-calls = false   # when type = bft-sequencer
-              # time = "40 seconds"   # when type = bft-sequencer
-              # timeout = "15 seconds"   # when type = bft-sequencer
+              idle-timeout = "30 minutes"
+              keep-alive-without-calls = false
+              time = "40 seconds"
+              timeout = "15 seconds"
             }
-            # max-inbound-message-size = 0   # required when type = bft-sequencer
-            # trace-context-propagation = enabled|disabled   # required when type = bft-sequencer
+            max-inbound-message-size = 0   # required
+            trace-context-propagation = enabled|disabled   # required
           }
-          # port = 0   # required when type = bft-sequencer
+          port = 0   # required
           tls-config {
             client-cert {
               cert-chain-file {
-                # pem-bytes = "..."   # required when type = bft-sequencer and type = pem-string
-                # pem-file = "/path/to/file"   # required when type = bft-sequencer and type = pem-file
-                # type = pem-file|pem-string   # required when type = bft-sequencer
+                type = pem-file|pem-string   # required
               }
-              # private-key-file = "..."   # required when type = bft-sequencer
+              private-key-file = "..."   # required
             }
-            # enabled = true   # when type = bft-sequencer
+            enabled = true
             trust-collection-file {
-              # pem-bytes = "..."   # required when type = bft-sequencer and type = pem-string
-              # pem-file = "/path/to/file"   # required when type = bft-sequencer and type = pem-file
-              # type = pem-file|pem-string   # required when type = bft-sequencer
+              type = pem-file|pem-string   # required
             }
           }
         }
       ]
       server-endpoint {
-        # address = "..."   # required when type = bft-sequencer
-        # external-address = "..."   # required when type = bft-sequencer
-        # external-port = 0   # required when type = bft-sequencer
+        address = "..."   # required
+        external-address = "..."   # required
+        external-port = 0   # required
         external-tls-config {
           client-cert {
             cert-chain-file {
-              # pem-bytes = "..."   # required when type = bft-sequencer and type = pem-string
-              # pem-file = "/path/to/file"   # required when type = bft-sequencer and type = pem-file
-              # type = pem-file|pem-string   # required when type = bft-sequencer
+              type = pem-file|pem-string   # required
             }
-            # private-key-file = "..."   # required when type = bft-sequencer
+            private-key-file = "..."   # required
           }
-          # enabled = true   # when type = bft-sequencer
+          enabled = true
           trust-collection-file {
-            # pem-bytes = "..."   # required when type = bft-sequencer and type = pem-string
-            # pem-file = "/path/to/file"   # required when type = bft-sequencer and type = pem-file
-            # type = pem-file|pem-string   # required when type = bft-sequencer
+            type = pem-file|pem-string   # required
           }
         }
-        # flow-control-window = <int>   # when type = bft-sequencer
-        # initial-flow-control-window = <int>   # when type = bft-sequencer
+        # flow-control-window = <int>
+        # initial-flow-control-window = <int>
         keep-alive-server {
-          # permit-keep-alive-time = "20 seconds"   # when type = bft-sequencer
-          # permit-keep-alive-without-calls = false   # when type = bft-sequencer
-          # time = "40 seconds"   # when type = bft-sequencer
-          # timeout = "20 seconds"   # when type = bft-sequencer
+          permit-keep-alive-time = "20 seconds"
+          permit-keep-alive-without-calls = false
+          time = "40 seconds"
+          timeout = "20 seconds"
         }
         limits {
           active {
-            # <key> = [ ]   # when type = bft-sequencer
+            <key> = [ ]
           }
-          # throttle-logging-rate-per-second = 10   # when type = bft-sequencer
-          # warn-on-undefined-limits = false   # when type = bft-sequencer
+          throttle-logging-rate-per-second = 10
+          warn-on-undefined-limits = false
         }
-        # max-concurrent-calls-per-connection = 100000   # when type = bft-sequencer
-        # max-inbound-message-size = <int>   # when type = bft-sequencer
-        # port = <int>   # when type = bft-sequencer
+        max-concurrent-calls-per-connection = 100000
+        # max-inbound-message-size = <int>
+        # port = <int>
         tls {
           cert-chain-file {
-            # pem-bytes = "..."   # required when type = bft-sequencer and type = pem-string
-            # pem-file = "/path/to/file"   # required when type = bft-sequencer and type = pem-file
-            # type = pem-file|pem-string   # required when type = bft-sequencer
+            type = pem-file|pem-string   # required
           }
-          # ciphers = [ ... ]   # when type = bft-sequencer
+          # ciphers = [ ... ]
           client-auth {
-            admin-client {
-              cert-chain-file {
-                # pem-bytes = "..."   # required when type = bft-sequencer and config.initial-network.server-endpoint.tls.client-auth.type = require and type = pem-string
-                # pem-file = "/path/to/file"   # required when type = bft-sequencer and config.initial-network.server-endpoint.tls.client-auth.type = require and type = pem-file
-                # type = pem-file|pem-string   # required when type = bft-sequencer and config.initial-network.server-endpoint.tls.client-auth.type = require
-              }
-              # private-key-file = "..."   # required when type = bft-sequencer and config.initial-network.server-endpoint.tls.client-auth.type = require
-            }
-            # type = require|optional|none   # required when type = bft-sequencer
+            type = require|optional|none   # required
           }
-          # enable-cert-revocation-checking = false   # when type = bft-sequencer
-          # minimum-server-protocol-version = "TLSv1.2"   # when type = bft-sequencer
-          # private-key-file = "..."   # required when type = bft-sequencer
+          enable-cert-revocation-checking = false
+          minimum-server-protocol-version = "TLSv1.2"
+          private-key-file = "..."   # required
           trust-collection-file {
-            # pem-bytes = "..."   # required when type = bft-sequencer and type = pem-string
-            # pem-file = "/path/to/file"   # required when type = bft-sequencer and type = pem-file
-            # type = pem-file|pem-string   # required when type = bft-sequencer
+            type = pem-file|pem-string   # required
           }
         }
       }
     }
     leader-selection-policy-config-for-pv-34 {
       how-long-to-blacklist {
-        # initial-value = 0   # required when type = bft-sequencer and type = exponential|linear-with-parameters
-        # maximum-epoch-blacklisted = <int>   # when type = bft-sequencer and type = exponential|linear|linear-with-parameters
-        # slope = 0   # required when type = bft-sequencer and type = linear-with-parameters
-        # type = linear|linear-with-parameters|exponential|no-blacklisting   # required when type = bft-sequencer
+        type = linear|linear-with-parameters|exponential|no-blacklisting   # required
       }
-      # how-many-can-we-blacklist = num-faults-tolerated|no-blacklisting   # required when type = bft-sequencer
+      how-many-can-we-blacklist = num-faults-tolerated|no-blacklisting   # required
     }
-    # manual-vacuum-enabled = false   # when type = bft-sequencer
-    # max-batch-creation-interval = "100 milliseconds"   # when type = bft-sequencer
-    # max-mempool-queue-size = <int>   # when type = bft-sequencer
-    # min-requests-in-batch = 3   # when type = bft-sequencer
-    # network-send-attempts = 5   # when type = bft-sequencer
-    # network-send-retry-jitter-cap = <duration>   # when type = bft-sequencer
-    # network-send-retry-minimum-delay = <duration>   # when type = bft-sequencer
-    # output-enqueue-max-retries = <int>   # when type = bft-sequencer
-    # output-enqueue-max-retry-delay = "5 seconds"   # when type = bft-sequencer
-    # output-fetch-how-many-recipients = 2   # when type = bft-sequencer
-    # output-fetch-minimum-delay = "200 milliseconds"   # when type = bft-sequencer
-    # output-fetch-timeout = "200 milliseconds"   # when type = bft-sequencer
-    # output-fetch-timeout-cap = "200 milliseconds"   # when type = bft-sequencer
-    # output-size-of-chunk-of-epochs-to-load-at-start = 10   # when type = bft-sequencer
-    # segment-length-for-pv-34 = <int>   # when type = bft-sequencer
-    # send-blacklist-ttl = "3 minutes"   # when type = bft-sequencer
+    manual-vacuum-enabled = false
+    max-batch-creation-interval = "100 milliseconds"
+    # max-mempool-queue-size = <int>
+    min-requests-in-batch = 3
+    network-send-attempts = 5
+    # network-send-retry-jitter-cap = <duration>
+    # network-send-retry-minimum-delay = <duration>
+    # output-enqueue-max-retries = <int>
+    output-enqueue-max-retry-delay = "5 seconds"
+    output-fetch-how-many-recipients = 2
+    output-fetch-minimum-delay = "200 milliseconds"
+    output-fetch-timeout = "200 milliseconds"
+    output-fetch-timeout-cap = "200 milliseconds"
+    output-size-of-chunk-of-epochs-to-load-at-start = 10
+    # segment-length-for-pv-34 = <int>
+    send-blacklist-ttl = "3 minutes"
     sequencer-core-subscription-config {
-      # pause-orderer-threshold-buffer-size = 5000   # when type = bft-sequencer
-      # pekko-queue-source-buffer-size = 5000   # when type = bft-sequencer
-      # resume-orderer-threshold-buffer-size = 1000   # when type = bft-sequencer
+      pause-orderer-threshold-buffer-size = 5000
+      pekko-queue-source-buffer-size = 5000
+      resume-orderer-threshold-buffer-size = 1000
     }
     standalone {
       blacklist-leader-selection-policy-config {
         how-long-to-blacklist {
-          # initial-value = 0   # required when type = bft-sequencer and type = exponential|linear-with-parameters
-          # maximum-epoch-blacklisted = <int>   # when type = bft-sequencer and type = exponential|linear|linear-with-parameters
-          # slope = 0   # required when type = bft-sequencer and type = linear-with-parameters
-          # type = linear|linear-with-parameters|exponential|no-blacklisting   # required when type = bft-sequencer
+          type = linear|linear-with-parameters|exponential|no-blacklisting   # required
         }
-        # how-many-can-we-blacklist = num-faults-tolerated|no-blacklisting   # required when type = bft-sequencer
+        how-many-can-we-blacklist = num-faults-tolerated|no-blacklisting   # required
       }
-      # max-batches-per-block-proposal = 0   # required when type = bft-sequencer
-      # max-requests-in-batch = 0   # required when type = bft-sequencer
-      # pbft-view-change-timeout = "30 seconds"   # required when type = bft-sequencer
+      max-batches-per-block-proposal = 0   # required
+      max-requests-in-batch = 0   # required
+      pbft-view-change-timeout = "30 seconds"   # required
       peers = [
         {
-          # sequencer-id = "..."   # required when type = bft-sequencer
-          # signing-public-key-proto-file = "/path/to/file"   # required when type = bft-sequencer
+          sequencer-id = "..."   # required
+          signing-public-key-proto-file = "/path/to/file"   # required
         }
       ]
-      # segment-length = 0   # required when type = bft-sequencer
-      # signing-private-key-proto-file = "/path/to/file"   # required when type = bft-sequencer
-      # signing-public-key-proto-file = "/path/to/file"   # required when type = bft-sequencer
+      segment-length = 0   # required
+      signing-private-key-proto-file = "/path/to/file"   # required
+      signing-public-key-proto-file = "/path/to/file"   # required
       test-slowdown {
         post-ordering-delay {
-          # duration = "30 seconds"   # required when type = bft-sequencer and type = constant-distribution
-          # high = "30 seconds"   # required when type = bft-sequencer and type = linear-distribution
-          # low = "30 seconds"   # required when type = bft-sequencer and type = linear-distribution|power-distribution
-          # mean = "30 seconds"   # required when type = bft-sequencer and type = power-distribution
-          # type = constant-distribution|weighted-distribution|linear-distribution|power-distribution   # required when type = bft-sequencer
-          weighted-durations = [
-            {
-              # duration = "30 seconds"   # required when type = bft-sequencer and config.standalone.test-slowdown.post-ordering-delay.type = weighted-distribution
-              # weight = 0   # required when type = bft-sequencer and config.standalone.test-slowdown.post-ordering-delay.type = weighted-distribution
-            }
-          ]
+          type = constant-distribution|weighted-distribution|linear-distribution|power-distribution   # required
         }
         send-delay {
           default-delay-distribution {
-            # duration = "30 seconds"   # required when type = bft-sequencer and type = constant-distribution
-            # high = "30 seconds"   # required when type = bft-sequencer and type = linear-distribution
-            # low = "30 seconds"   # required when type = bft-sequencer and type = linear-distribution|power-distribution
-            # mean = "30 seconds"   # required when type = bft-sequencer and type = power-distribution
-            # type = constant-distribution|weighted-distribution|linear-distribution|power-distribution   # required when type = bft-sequencer
-            weighted-durations = [
-              {
-                # duration = "30 seconds"   # required when type = bft-sequencer and config.standalone.test-slowdown.send-delay.default-delay-distribution.type = weighted-distribution
-                # weight = 0   # required when type = bft-sequencer and config.standalone.test-slowdown.send-delay.default-delay-distribution.type = weighted-distribution
-              }
-            ]
+            type = constant-distribution|weighted-distribution|linear-distribution|power-distribution   # required
           }
           delays-by-recipients = [
             {
               delay-distribution {
-                # duration = "30 seconds"   # required when type = bft-sequencer and type = constant-distribution
-                # high = "30 seconds"   # required when type = bft-sequencer and type = linear-distribution
-                # low = "30 seconds"   # required when type = bft-sequencer and type = linear-distribution|power-distribution
-                # mean = "30 seconds"   # required when type = bft-sequencer and type = power-distribution
-                # type = constant-distribution|weighted-distribution|linear-distribution|power-distribution   # required when type = bft-sequencer
-                weighted-durations = [
-                  {
-                    # duration = "30 seconds"   # required when type = bft-sequencer and config.standalone.test-slowdown.send-delay.delays-by-recipients[].delay-distribution.type = weighted-distribution
-                    # weight = 0   # required when type = bft-sequencer and config.standalone.test-slowdown.send-delay.delays-by-recipients[].delay-distribution.type = weighted-distribution
-                  }
-                ]
+                type = constant-distribution|weighted-distribution|linear-distribution|power-distribution   # required
               }
-              # instance-names = [ ]   # required when type = bft-sequencer
-              # probability-of-grpc-send-accepted-by-flow-control = <number>   # when type = bft-sequencer
-              # probability-of-grpc-send-success = <number>   # when type = bft-sequencer
+              instance-names = [ ]   # required
+              # probability-of-grpc-send-accepted-by-flow-control = <number>
+              # probability-of-grpc-send-success = <number>
             }
           ]
         }
         topology-delay {
-          # broadcast-request-probability = <number>   # when type = bft-sequencer
+          # broadcast-request-probability = <number>
           get-ordering-topology-delay {
-            # duration = "30 seconds"   # required when type = bft-sequencer and type = constant-distribution
-            # high = "30 seconds"   # required when type = bft-sequencer and type = linear-distribution
-            # low = "30 seconds"   # required when type = bft-sequencer and type = linear-distribution|power-distribution
-            # mean = "30 seconds"   # required when type = bft-sequencer and type = power-distribution
-            # type = constant-distribution|weighted-distribution|linear-distribution|power-distribution   # required when type = bft-sequencer
-            weighted-durations = [
-              {
-                # duration = "30 seconds"   # required when type = bft-sequencer and config.standalone.test-slowdown.topology-delay.get-ordering-topology-delay.type = weighted-distribution
-                # weight = 0   # required when type = bft-sequencer and config.standalone.test-slowdown.topology-delay.get-ordering-topology-delay.type = weighted-distribution
-              }
-            ]
+            type = constant-distribution|weighted-distribution|linear-distribution|power-distribution   # required
           }
-          # pending-topology-changes-probability = <number>   # when type = bft-sequencer
-          # possible-ordering-topology-change-in-request-probability = <number>   # when type = bft-sequencer
+          # pending-topology-changes-probability = <number>
+          # possible-ordering-topology-change-in-request-probability = <number>
           request-inspection-delay {
-            # duration = "30 seconds"   # required when type = bft-sequencer and type = constant-distribution
-            # high = "30 seconds"   # required when type = bft-sequencer and type = linear-distribution
-            # low = "30 seconds"   # required when type = bft-sequencer and type = linear-distribution|power-distribution
-            # mean = "30 seconds"   # required when type = bft-sequencer and type = power-distribution
-            # type = constant-distribution|weighted-distribution|linear-distribution|power-distribution   # required when type = bft-sequencer
-            weighted-durations = [
-              {
-                # duration = "30 seconds"   # required when type = bft-sequencer and config.standalone.test-slowdown.topology-delay.request-inspection-delay.type = weighted-distribution
-                # weight = 0   # required when type = bft-sequencer and config.standalone.test-slowdown.topology-delay.request-inspection-delay.type = weighted-distribution
-              }
-            ]
+            type = constant-distribution|weighted-distribution|linear-distribution|power-distribution   # required
           }
         }
       }
-      # this-sequencer-id = "..."   # required when type = bft-sequencer
+      this-sequencer-id = "..."   # required
     }
     storage {
-      parameters {
-        connection-allocation {
-          # num-ledger-api = <int>   # when type = bft-sequencer
-          # num-reads = <int>   # when type = bft-sequencer
-          # num-writes = <int>   # when type = bft-sequencer
-        }
-        # connection-timeout = "5 seconds"   # when type = bft-sequencer
-        # fail-fast-on-startup = true   # when type = bft-sequencer
-        # failed-to-fatal-delay = "5 minutes"   # when type = bft-sequencer
-        # max-connections = <int>   # when type = bft-sequencer
-        # migrate-and-start = false   # when type = bft-sequencer
-        # migrations-paths = [ ]   # when type = bft-sequencer
-        partitions {
-          # initial-bft-orderer-tables-partition-size = 1500   # when type = bft-sequencer
-        }
-        # repeatable-migrations-paths = [ ]   # when type = bft-sequencer
-        # unsafe-baseline-on-migrate = false   # when type = bft-sequencer
-        # unsafe-clean-on-validation-error = false   # when type = bft-sequencer
-        # warn-on-slow-query = <duration>   # when type = bft-sequencer
-        # warn-on-slow-query-interval = "5 seconds"   # when type = bft-sequencer
-      }
-      # type = memory|h2|postgres   # required when type = bft-sequencer
+      type = memory|h2|postgres   # required
     }
-    # view-change-timeout-override = <duration>   # when type = bft-sequencer
+    # view-change-timeout-override = <duration>
   }
-  high-availability {
-    connection-pool {
-      # active-timeout = "15 seconds"   # when type = database
-      connection {
-        # client-connection-check-interval = "5 seconds"   # when type = database
-        # connection-timeout = "10 seconds"   # when type = database
-        # health-check-period = "5 seconds"   # when type = database
-        # health-check-timeout = "15 seconds"   # when type = database
-        # initial-acquisition-interval = "200 milliseconds"   # when type = database
-        # initial-acquisition-max-retries = 5   # when type = database
-        # keep-alive-count = 5   # when type = database
-        # keep-alive-idle = "10 seconds"   # when type = database
-        # keep-alive-interval = "1 second"   # when type = database
-        lock {
-          # health-check-period = "5 seconds"   # when type = database
-          # health-check-timeout = "15 seconds"   # when type = database
-        }
-        # max-inconclusive-read-only-checks = 3   # when type = database
-        # passive-check-period = "15 seconds"   # when type = database
-      }
-      # health-check-period = "5 seconds"   # when type = database
-      # initial-locked-connection-timeout = "15 seconds"   # when type = database
-      # initial-must-remain-active-connection-timeout = "1 minute"   # when type = database
+  # config.initial-network.server-endpoint.tls.client-auth.admin-client.cert-chain-file.type takes a type of its own, enumerated below
+}
+```
+
+`writer` supports these types: `low-latency`, `high-throughput`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.writer {
+  type = low-latency
+  # buffered-events-max-memory = <int>
+  buffered-events-preload-batch-size = 50
+  # checkpoint-backfill-parallelism = <int>
+  checkpoint-interval = "30 seconds"
+  # commit-mode-validation = synchronous|local
+  event-write-batch-max-size = 1
+  event-write-max-concurrency = 1
+  payload-queue-size = 1000
+  payload-to-event-margin = "60 seconds"
+  payload-write-batch-max-size = 1
+  payload-write-max-concurrency = 2
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.writer {
+  type = high-throughput
+  # buffered-events-max-memory = <int>
+  buffered-events-preload-batch-size = 50
+  # checkpoint-backfill-parallelism = <int>
+  checkpoint-interval = "30 seconds"
+  # commit-mode-validation = synchronous|local
+  event-write-batch-max-size = 100
+  event-write-max-concurrency = 1
+  payload-queue-size = 1000
+  payload-to-event-margin = "60 seconds"
+  payload-write-batch-max-size = 50
+  payload-write-max-concurrency = 4
+}
+```
+
+`block.writer` supports these types: `low-latency`, `high-throughput`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.block.writer {
+  type = low-latency
+  buffered-events-max-memory = 8388608
+  buffered-events-preload-batch-size = 50
+  checkpoint-backfill-parallelism = 2
+  checkpoint-interval = "30 seconds"
+  commit-mode-validation = synchronous
+  event-write-batch-max-size = 1
+  event-write-max-concurrency = 1
+  payload-queue-size = 1000
+  payload-to-event-margin = "60 seconds"
+  payload-write-batch-max-size = 1
+  payload-write-max-concurrency = 2
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.block.writer {
+  type = high-throughput
+  buffered-events-max-memory = 8388608
+  buffered-events-preload-batch-size = 50
+  checkpoint-backfill-parallelism = 2
+  checkpoint-interval = "30 seconds"
+  commit-mode-validation = synchronous
+  event-write-batch-max-size = 100
+  event-write-max-concurrency = 1
+  payload-queue-size = 1000
+  payload-to-event-margin = "60 seconds"
+  payload-write-batch-max-size = 50
+  payload-write-max-concurrency = 4
+}
+```
+
+`config.batch-aggregator` supports these types: `batching`, `no-batching`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.batch-aggregator {
+  type = batching
+  maximum-batch-size = 500
+  maximum-in-flight = 2
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.batch-aggregator {
+  type = no-batching
+  max-parallel-batches = 2
+  maximum-batch-size = 500
+}
+```
+
+`config.storage` supports these types: `memory`, `h2`, `postgres`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.storage {
+  type = memory
+  parameters {
+    connection-allocation {
+      # num-ledger-api = <int>
+      # num-reads = <int>
+      # num-writes = <int>
     }
-    # enabled = <boolean>   # when type = database
-    exclusive-storage {
-      connection-pool {
-        # active-timeout = "15 seconds"   # when type = database
-        connection {
-          # client-connection-check-interval = "5 seconds"   # when type = database
-          # connection-timeout = "10 seconds"   # when type = database
-          # health-check-period = "5 seconds"   # when type = database
-          # health-check-timeout = "15 seconds"   # when type = database
-          # initial-acquisition-interval = "200 milliseconds"   # when type = database
-          # initial-acquisition-max-retries = 5   # when type = database
-          # keep-alive-count = 5   # when type = database
-          # keep-alive-idle = "10 seconds"   # when type = database
-          # keep-alive-interval = "1 second"   # when type = database
-          lock {
-            # health-check-period = "5 seconds"   # when type = database
-            # health-check-timeout = "15 seconds"   # when type = database
-          }
-          # max-inconclusive-read-only-checks = 3   # when type = database
-          # passive-check-period = "15 seconds"   # when type = database
-        }
-        # health-check-period = "5 seconds"   # when type = database
-        # initial-locked-connection-timeout = "15 seconds"   # when type = database
-        # initial-must-remain-active-connection-timeout = "1 minute"   # when type = database
-      }
-      # max-connections = 2   # when type = database
+    connection-timeout = "5 seconds"
+    fail-fast-on-startup = true
+    failed-to-fatal-delay = "5 minutes"
+    # max-connections = <int>
+    migrate-and-start = false
+    migrations-paths = [ ]
+    partitions {
+      initial-bft-orderer-tables-partition-size = 1500
     }
-    # keep-alive-interval = "50 milliseconds"   # when type = database
-    # offline-duration = "8 seconds"   # when type = database
-    # online-check-interval = "5 seconds"   # when type = database
-    # total-node-count = 10   # when type = database
+    repeatable-migrations-paths = [ ]
+    unsafe-baseline-on-migrate = false
+    unsafe-clean-on-validation-error = false
+    # warn-on-slow-query = <duration>
+    warn-on-slow-query-interval = "5 seconds"
   }
-  pruning {
-    # max-pruning-batch-size = 50000   # when type = database
-    # pruning-metric-update-interval = <duration>   # when type = database
-    # traffic-purchased-retention = "1 hour"   # when type = database
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.storage {
+  type = h2
+  parameters {
+    connection-allocation {
+      # num-ledger-api = <int>
+      # num-reads = <int>
+      # num-writes = <int>
+    }
+    connection-timeout = "5 seconds"
+    fail-fast-on-startup = true
+    failed-to-fatal-delay = "5 minutes"
+    # max-connections = <int>
+    migrate-and-start = false
+    migrations-paths = [ ]
+    partitions {
+      initial-bft-orderer-tables-partition-size = 1500
+    }
+    repeatable-migrations-paths = [ ]
+    unsafe-baseline-on-migrate = false
+    unsafe-clean-on-validation-error = false
+    # warn-on-slow-query = <duration>
+    warn-on-slow-query-interval = "5 seconds"
   }
-  reader {
-    # checkpoint-interval = "5 seconds"   # when type = database
-    # event-generation-parallelism = 4   # when type = database
-    # payload-batch-size = 10   # when type = database
-    # payload-batch-window = "5 milliseconds"   # when type = database
-    # payload-fetch-parallelism = 2   # when type = database
-    # polling-interval = <duration>   # when type = database
-    # read-batch-size = 100   # when type = database
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.storage {
+  type = postgres
+  parameters {
+    connection-allocation {
+      # num-ledger-api = <int>
+      # num-reads = <int>
+      # num-writes = <int>
+    }
+    connection-timeout = "5 seconds"
+    fail-fast-on-startup = true
+    failed-to-fatal-delay = "5 minutes"
+    # max-connections = <int>
+    migrate-and-start = false
+    migrations-paths = [ ]
+    partitions {
+      initial-bft-orderer-tables-partition-size = 1500
+    }
+    repeatable-migrations-paths = [ ]
+    unsafe-baseline-on-migrate = false
+    unsafe-clean-on-validation-error = false
+    # warn-on-slow-query = <duration>
+    warn-on-slow-query-interval = "5 seconds"
   }
-  # sequencer-type = "..."   # required when type = external
-  # testing-interceptor = <string>   # when type = database
-  type = database|external|bft-sequencer   # required
-  writer {
-    # buffered-events-max-memory = <int>   # when type = database
-    # buffered-events-preload-batch-size = 50   # when type = database
-    # checkpoint-backfill-parallelism = <int>   # when type = database
-    # checkpoint-interval = "30 seconds"   # when type = database
-    # commit-mode-validation = synchronous|local   # when type = database
-    # event-write-batch-max-size = 1   # when type = database and type = low-latency
-    # event-write-max-concurrency = 1   # when type = database
-    # payload-queue-size = 1000   # when type = database
-    # payload-to-event-margin = "60 seconds"   # when type = database
-    # payload-write-batch-max-size = 1   # when type = database and type = low-latency
-    # payload-write-max-concurrency = 2   # when type = database and type = low-latency
-    # type = low-latency|high-throughput   # required when type = database
+}
+```
+
+`config.leader-selection-policy-config-for-pv-34.how-long-to-blacklist` supports these types: `linear`, `linear-with-parameters`, `exponential`, `no-blacklisting`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.leader-selection-policy-config-for-pv-34.how-long-to-blacklist {
+  type = linear
+  # maximum-epoch-blacklisted = <int>
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.leader-selection-policy-config-for-pv-34.how-long-to-blacklist {
+  type = linear-with-parameters
+  initial-value = 0   # required
+  # maximum-epoch-blacklisted = <int>
+  slope = 0   # required
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.leader-selection-policy-config-for-pv-34.how-long-to-blacklist {
+  type = exponential
+  initial-value = 0   # required
+  # maximum-epoch-blacklisted = <int>
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.leader-selection-policy-config-for-pv-34.how-long-to-blacklist {
+  type = no-blacklisting
+  # takes no further keys
+}
+```
+
+`config.standalone.blacklist-leader-selection-policy-config.how-long-to-blacklist` supports these types: `linear`, `linear-with-parameters`, `exponential`, `no-blacklisting`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.standalone.blacklist-leader-selection-policy-config.how-long-to-blacklist {
+  type = linear
+  # maximum-epoch-blacklisted = <int>
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.standalone.blacklist-leader-selection-policy-config.how-long-to-blacklist {
+  type = linear-with-parameters
+  initial-value = 0   # required
+  # maximum-epoch-blacklisted = <int>
+  slope = 0   # required
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.standalone.blacklist-leader-selection-policy-config.how-long-to-blacklist {
+  type = exponential
+  initial-value = 0   # required
+  # maximum-epoch-blacklisted = <int>
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.standalone.blacklist-leader-selection-policy-config.how-long-to-blacklist {
+  type = no-blacklisting
+  # takes no further keys
+}
+```
+
+`config.standalone.test-slowdown.post-ordering-delay` supports these types: `constant-distribution`, `weighted-distribution`, `linear-distribution`, `power-distribution`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.standalone.test-slowdown.post-ordering-delay {
+  type = constant-distribution
+  duration = "30 seconds"   # required
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.standalone.test-slowdown.post-ordering-delay {
+  type = weighted-distribution
+  weighted-durations = [
+    {
+      duration = "30 seconds"   # required
+      weight = 0   # required
+    }
+  ]
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.standalone.test-slowdown.post-ordering-delay {
+  type = linear-distribution
+  high = "30 seconds"   # required
+  low = "30 seconds"   # required
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.standalone.test-slowdown.post-ordering-delay {
+  type = power-distribution
+  low = "30 seconds"   # required
+  mean = "30 seconds"   # required
+}
+```
+
+`config.initial-network.peer-endpoints[].tls-config.trust-collection-file` supports these types: `pem-file`, `pem-string`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.initial-network.peer-endpoints = [
+  {
+    tls-config.trust-collection-file {
+      type = pem-file
+      pem-file = "/path/to/file"   # required
+    }
   }
+]
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.initial-network.peer-endpoints = [
+  {
+    tls-config.trust-collection-file {
+      type = pem-string
+      pem-bytes = "..."   # required
+    }
+  }
+]
+```
+
+`config.initial-network.server-endpoint.external-tls-config.trust-collection-file` supports these types: `pem-file`, `pem-string`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.initial-network.server-endpoint.external-tls-config.trust-collection-file {
+  type = pem-file
+  pem-file = "/path/to/file"   # required
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.initial-network.server-endpoint.external-tls-config.trust-collection-file {
+  type = pem-string
+  pem-bytes = "..."   # required
+}
+```
+
+`config.initial-network.server-endpoint.tls.cert-chain-file` supports these types: `pem-file`, `pem-string`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.initial-network.server-endpoint.tls.cert-chain-file {
+  type = pem-file
+  pem-file = "/path/to/file"   # required
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.initial-network.server-endpoint.tls.cert-chain-file {
+  type = pem-string
+  pem-bytes = "..."   # required
+}
+```
+
+`config.initial-network.server-endpoint.tls.client-auth` supports these types: `require`, `optional`, `none`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.initial-network.server-endpoint.tls.client-auth {
+  type = require
+  admin-client {
+    cert-chain-file {
+      type = pem-file|pem-string   # required
+    }
+    private-key-file = "..."   # required
+  }
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.initial-network.server-endpoint.tls.client-auth {
+  type = optional
+  # takes no further keys
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.initial-network.server-endpoint.tls.client-auth {
+  type = none
+  # takes no further keys
+}
+```
+
+`config.initial-network.server-endpoint.tls.trust-collection-file` supports these types: `pem-file`, `pem-string`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.initial-network.server-endpoint.tls.trust-collection-file {
+  type = pem-file
+  pem-file = "/path/to/file"   # required
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.initial-network.server-endpoint.tls.trust-collection-file {
+  type = pem-string
+  pem-bytes = "..."   # required
+}
+```
+
+`config.standalone.test-slowdown.send-delay.default-delay-distribution` supports these types: `constant-distribution`, `weighted-distribution`, `linear-distribution`, `power-distribution`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.standalone.test-slowdown.send-delay.default-delay-distribution {
+  type = constant-distribution
+  duration = "30 seconds"   # required
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.standalone.test-slowdown.send-delay.default-delay-distribution {
+  type = weighted-distribution
+  weighted-durations = [
+    {
+      duration = "30 seconds"   # required
+      weight = 0   # required
+    }
+  ]
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.standalone.test-slowdown.send-delay.default-delay-distribution {
+  type = linear-distribution
+  high = "30 seconds"   # required
+  low = "30 seconds"   # required
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.standalone.test-slowdown.send-delay.default-delay-distribution {
+  type = power-distribution
+  low = "30 seconds"   # required
+  mean = "30 seconds"   # required
+}
+```
+
+`config.standalone.test-slowdown.topology-delay.get-ordering-topology-delay` supports these types: `constant-distribution`, `weighted-distribution`, `linear-distribution`, `power-distribution`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.standalone.test-slowdown.topology-delay.get-ordering-topology-delay {
+  type = constant-distribution
+  duration = "30 seconds"   # required
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.standalone.test-slowdown.topology-delay.get-ordering-topology-delay {
+  type = weighted-distribution
+  weighted-durations = [
+    {
+      duration = "30 seconds"   # required
+      weight = 0   # required
+    }
+  ]
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.standalone.test-slowdown.topology-delay.get-ordering-topology-delay {
+  type = linear-distribution
+  high = "30 seconds"   # required
+  low = "30 seconds"   # required
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.standalone.test-slowdown.topology-delay.get-ordering-topology-delay {
+  type = power-distribution
+  low = "30 seconds"   # required
+  mean = "30 seconds"   # required
+}
+```
+
+`config.standalone.test-slowdown.topology-delay.request-inspection-delay` supports these types: `constant-distribution`, `weighted-distribution`, `linear-distribution`, `power-distribution`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.standalone.test-slowdown.topology-delay.request-inspection-delay {
+  type = constant-distribution
+  duration = "30 seconds"   # required
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.standalone.test-slowdown.topology-delay.request-inspection-delay {
+  type = weighted-distribution
+  weighted-durations = [
+    {
+      duration = "30 seconds"   # required
+      weight = 0   # required
+    }
+  ]
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.standalone.test-slowdown.topology-delay.request-inspection-delay {
+  type = linear-distribution
+  high = "30 seconds"   # required
+  low = "30 seconds"   # required
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.standalone.test-slowdown.topology-delay.request-inspection-delay {
+  type = power-distribution
+  low = "30 seconds"   # required
+  mean = "30 seconds"   # required
+}
+```
+
+`config.initial-network.peer-endpoints[].tls-config.client-cert.cert-chain-file` supports these types: `pem-file`, `pem-string`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.initial-network.peer-endpoints = [
+  {
+    tls-config.client-cert.cert-chain-file {
+      type = pem-file
+      pem-file = "/path/to/file"   # required
+    }
+  }
+]
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.initial-network.peer-endpoints = [
+  {
+    tls-config.client-cert.cert-chain-file {
+      type = pem-string
+      pem-bytes = "..."   # required
+    }
+  }
+]
+```
+
+`config.initial-network.server-endpoint.external-tls-config.client-cert.cert-chain-file` supports these types: `pem-file`, `pem-string`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.initial-network.server-endpoint.external-tls-config.client-cert.cert-chain-file {
+  type = pem-file
+  pem-file = "/path/to/file"   # required
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.initial-network.server-endpoint.external-tls-config.client-cert.cert-chain-file {
+  type = pem-string
+  pem-bytes = "..."   # required
+}
+```
+
+`config.standalone.test-slowdown.send-delay.delays-by-recipients[].delay-distribution` supports these types: `constant-distribution`, `weighted-distribution`, `linear-distribution`, `power-distribution`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.standalone.test-slowdown.send-delay.delays-by-recipients = [
+  {
+    delay-distribution {
+      type = constant-distribution
+      duration = "30 seconds"   # required
+    }
+  }
+]
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.standalone.test-slowdown.send-delay.delays-by-recipients = [
+  {
+    delay-distribution {
+      type = weighted-distribution
+      weighted-durations = [
+        {
+          duration = "30 seconds"   # required
+          weight = 0   # required
+        }
+      ]
+    }
+  }
+]
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.standalone.test-slowdown.send-delay.delays-by-recipients = [
+  {
+    delay-distribution {
+      type = linear-distribution
+      high = "30 seconds"   # required
+      low = "30 seconds"   # required
+    }
+  }
+]
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.standalone.test-slowdown.send-delay.delays-by-recipients = [
+  {
+    delay-distribution {
+      type = power-distribution
+      low = "30 seconds"   # required
+      mean = "30 seconds"   # required
+    }
+  }
+]
+```
+
+`config.initial-network.server-endpoint.tls.client-auth.admin-client.cert-chain-file` supports these types: `pem-file`, `pem-string`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.initial-network.server-endpoint.tls.client-auth.admin-client.cert-chain-file {
+  type = pem-file
+  pem-file = "/path/to/file"   # required
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.sequencer.config.initial-network.server-endpoint.tls.client-auth.admin-client.cert-chain-file {
+  type = pem-string
+  pem-bytes = "..."   # required
 }
 ```
 
@@ -3056,6 +5744,89 @@ canton.sequencers.<sequencer>.storage {
 }
 ```
 
+`` supports these types: `memory`, `h2`, `postgres`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.storage {
+  type = memory
+  parameters {
+    connection-allocation {
+      # num-ledger-api = <int>
+      # num-reads = <int>
+      # num-writes = <int>
+    }
+    connection-timeout = "5 seconds"
+    fail-fast-on-startup = true
+    failed-to-fatal-delay = "5 minutes"
+    # max-connections = <int>
+    migrate-and-start = false
+    migrations-paths = [ ]
+    partitions {
+      initial-bft-orderer-tables-partition-size = 1500
+    }
+    repeatable-migrations-paths = [ ]
+    unsafe-baseline-on-migrate = false
+    unsafe-clean-on-validation-error = false
+    # warn-on-slow-query = <duration>
+    warn-on-slow-query-interval = "5 seconds"
+  }
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.storage {
+  type = h2
+  parameters {
+    connection-allocation {
+      # num-ledger-api = <int>
+      # num-reads = <int>
+      # num-writes = <int>
+    }
+    connection-timeout = "5 seconds"
+    fail-fast-on-startup = true
+    failed-to-fatal-delay = "5 minutes"
+    # max-connections = <int>
+    migrate-and-start = false
+    migrations-paths = [ ]
+    partitions {
+      initial-bft-orderer-tables-partition-size = 1500
+    }
+    repeatable-migrations-paths = [ ]
+    unsafe-baseline-on-migrate = false
+    unsafe-clean-on-validation-error = false
+    # warn-on-slow-query = <duration>
+    warn-on-slow-query-interval = "5 seconds"
+  }
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.storage {
+  type = postgres
+  parameters {
+    connection-allocation {
+      # num-ledger-api = <int>
+      # num-reads = <int>
+      # num-writes = <int>
+    }
+    connection-timeout = "5 seconds"
+    fail-fast-on-startup = true
+    failed-to-fatal-delay = "5 minutes"
+    # max-connections = <int>
+    migrate-and-start = false
+    migrations-paths = [ ]
+    partitions {
+      initial-bft-orderer-tables-partition-size = 1500
+    }
+    repeatable-migrations-paths = [ ]
+    unsafe-baseline-on-migrate = false
+    unsafe-clean-on-validation-error = false
+    # warn-on-slow-query = <duration>
+    warn-on-slow-query-interval = "5 seconds"
+  }
+}
+```
+
 
 </Tab>
 <Tab title="Table">
@@ -3170,9 +5941,7 @@ canton.sequencers.<sequencer>.topology {
 ```hocon
 canton.sequencers.<sequencer>.traffic-config {
   batch-aggregator-config {
-    # max-parallel-batches = 2   # when type = no-batching
     maximum-batch-size = 500
-    # maximum-in-flight = 2   # when type = batching
     type = batching|no-batching   # required
   }
   maximum-traffic-consumed-cache-size = 1000
@@ -3181,6 +5950,24 @@ canton.sequencers.<sequencer>.traffic-config {
   submission-timestamp-in-future-tolerance = "5 seconds"
   traffic-consumed-cache-ttl = "2 hours"
   traffic-purchased-cache-size-per-member = 3
+}
+```
+
+`batch-aggregator-config` supports these types: `batching`, `no-batching`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.sequencers.<sequencer>.traffic-config.batch-aggregator-config {
+  type = batching
+  maximum-batch-size = 500
+  maximum-in-flight = 2
+}
+```
+
+```hocon
+canton.sequencers.<sequencer>.traffic-config.batch-aggregator-config {
+  type = no-batching
+  max-parallel-batches = 2
+  maximum-batch-size = 500
 }
 ```
 
