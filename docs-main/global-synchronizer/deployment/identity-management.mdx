@@ -21,8 +21,6 @@ import ExternalCantonMainCommunityAppSrcTestResourcesRandomNodeIdentifier from "
 
 {/* COPIED_START source="docs-website:docs/replicated/canton/3.5/participant/howtos/operate/identity_management.rst" hash="b6135af4" */}
 
-Split this entire page into its pieces for specific howtos. High-level explanation covered by overview site.
-
 # Identity Management
 
 On-ledger identity management focuses on the distributed aspect of identities across Canton system entities, while user identity management focuses on individual participants managing access of their users to their ledger APIs.
@@ -35,13 +33,13 @@ The identity management system is self-contained and built without a trusted cen
 
 ### What is a Canton Identity?
 
-When two system entities such as a participant, synchronizer topology manager, mediator or sequencer communicate with each other, they will use asymmetric cryptography to encrypt messages and sign message contents such that only the recipient can decrypt the content, verify the authenticity of the message, or prove its origin. Therefore, we need a method to uniquely identify the system entities and a way to associate encryption and signing keys with them.
+When two system entities such as a participant, mediator or sequencer communicate with each other, they will use asymmetric cryptography to encrypt messages and sign message contents such that only the recipient can decrypt the content, verify the authenticity of the message, or prove its origin. Therefore, we need a method to uniquely identify the system entities and a way to associate encryption and signing keys with them.
 
 On top of that, Canton uses the contract language Daml, which represents contract ownership and rights through [parties](/overview/understand/glossary). But parties are not primary members of the Canton synchronization protocol. They are represented by participants and therefore we need to uniquely identify parties and relate them to participants, such that a participant can represent several parties (and in Canton, a party can be represented by several participants).
 
 ### Unique Identifier
 
-A Canton identity is built out of two components: a random string `X` and a fingerprint of a public key `N`. This combination, `(X,N)`, is called a *unique identifier* and is assumed to be globally unique by design. This unique identifier is used in Canton to refer to particular parties, participants, or synchronizer entities. A system entity (such as a party) is described by the combination of role (party, participant, mediator, sequencer, synchronizer topology manager) and its unique identifier.
+A Canton identity is built out of two components: a random string `X` and a fingerprint of a public key `N`. This combination, `(X,N)`, is called a *unique identifier* and is assumed to be globally unique by design. This unique identifier is used in Canton to refer to particular parties, participants, or synchronizer entities. A system entity (such as a party) is described by the combination of role (party, participant, mediator, sequencer) and its unique identifier.
 
 The system entities require knowledge about the keys that are used for encryption and signing by the respective other entities. This knowledge is distributed and therefore, the system entities require a way to verify that a certain association of an entity with a key is correct and valid. This is the purpose of the fingerprint of a public key in the unique identifier, which is referred to as *Namespace*. The secret key of the corresponding namespace acts as the *root of trust* for that particular namespace, as explained later.
 
@@ -65,11 +63,7 @@ The careful reader will have noted that the described identity system indeed doe
 
 ### Legal Identities
 
-In Canton, we separate a system identity from the legal identity. While the above mechanism allows to establish a common, verified and authorized knowledge of system entities, it doesn't guarantee that a certain unique identifier really corresponds to a particular legal identity. Even more so, while the unique identifier remains stable, a legal identity might change, for example in the case of a merger of two companies. Therefore, Canton provides an administrative command which allows one to associate a randomized system identity with a human readable *display name* using the `participant.parties.set_display_name` command.
-
-<Note>
-A party display name is private to the participant. If such names should be shared among participants, we recommend to build a corresponding Daml workflow and some automation logic, listening to the results of the Daml workflow and updating the display name accordingly.
-</Note>
+In Canton, we separate a system identity from the legal identity. While the above mechanism allows to establish a common, verified and authorized knowledge of system entities, it doesn't guarantee that a certain unique identifier really corresponds to a particular legal identity.
 
 ### Life of a Party
 
@@ -77,15 +71,11 @@ In the tutorials, we use the `participant.parties.enable("name")` function to se
 
 1.  The `participant.parties.enable` function determines the unique identifier of the participant: `participant.id`.
 2.  The party name is built as name::, where the `namespace` is the one of the participant.
-3.  A new party-to-participant mapping is authorized on the Admin API: `participant.topology.party_to_participant_mappings.authorize(...)`
-4.  The `ParticipantTopologyManager` gets invoked by the GRPC request, creating a new `SignedTopologyTransaction` and tests whether the authorization can be added to the local topology state. If it can, the new topology transaction is added to the store.
-5.  The `ParticipantTopologyDispatcher` picks up the new transaction and requests the addition on all synchronizers via the `RegisterTopologyTransactionRequest` message sent to the topology manager through the sequencer.
-6.  A synchronizer receives this request and processes it according to the policy (open or permissioned). The default setting is open.
-7.  If approved, the request service attempts to add the new topology transaction to the `SynchronizerTopologyManager`.
-8.  The `SynchronizerTopologyManager` checks whether the new topology transaction can be added to the synchronizer topology state. If yes, it gets written to the local topology store.
-9.  The `ParticipantTopologyDispatcher` picks up the new transaction and sends it to all participants (and back to itself) through the sequencer.
-10. The sequencer timestamps the transaction and embeds it into the transaction stream.
-11. The participants receive the transaction, verify the integrity and correctness against the topology state and add it to the state with the timestamp of the sequencer, such that everyone has a synchronous topology state.
+3.  A new party-to-participant mapping is proposed on the Admin API: `participant.topology.party_to_participant_mappings.propose(...)`
+4.  The `AuthorizedTopologyManager` gets invoked by the GRPC request, creating a new `SignedTopologyTransaction` and tests whether the authorization can be added to the local topology state. If it can, the new topology transaction is added to the store.
+5.  The `ParticipantTopologyDispatcher` picks up the new transaction and broadcasts it to all members of each connected synchronizer through the sequencer.
+6.  The sequencer timestamps the transaction and embeds it into the transaction stream.
+7.  Each member's `TopologyTransactionProcessor` receives the transaction, verifies the integrity and correctness against the topology state and adds it to the state with the timestamp of the sequencer, such that everyone has a synchronous topology state.
 
 Note that the `participant.parties.enable` macro only works if the participant controls their namespace themselves, either directly by having the namespace key or through delegation (via `NamespaceDelegation`).
 
@@ -121,32 +111,28 @@ consoleEnvironment.run {
 }
 ```
 
-We note that from a user perspective, all that needs to happen by default is to provide the connection information and accept the terms of service (if required by the synchronizer) to set up a new synchronizer connection. There is no separate onboarding step performed, no giant certificate signing exercise happens, everything is set up during the first connection attempt. However, quite a few steps happen behind the scenes. Therefore, we briefly summarise the process here step by step:
+We note that from a user perspective, all that needs to happen by default is to provide the connection information to set up a new synchronizer connection. There is no separate onboarding step performed, no giant certificate signing exercise happens, everything is set up during the first connection attempt. However, quite a few steps happen behind the scenes. Therefore, we briefly summarise the process here step by step:
 
-1.  The administrator of an existing participant needs to invoke the `synchronizers.connect_local` command to add a new synchronizer. The mandatory arguments are a synchronizer *alias* (used internally to refer to a particular connection) and the sequencer connection URL (HTTP or HTTPS) including an optional port *http\[s\]://hostname\[:port\]/path*. Optional are a certificates path for a custom TLS certificate chain (otherwise the default jre root certificates are used) and the *synchronizer id* of a synchronizer. The *synchronizer id* is the unique identifier of the synchronizer that can be defined to prevent man-in-the-middle attacks (very similar to an SSH key fingerprint).
+1.  The administrator of an existing participant needs to invoke the `synchronizers.connect` command to add a new synchronizer. The mandatory arguments are a synchronizer *alias* (used internally to refer to a particular connection) and the sequencer connection URL (HTTP or HTTPS) including an optional port *http\[s\]://hostname\[:port\]/path*. Optional are a certificates path for a custom TLS certificate chain (otherwise the default jre root certificates are used) and the *synchronizer id* of a synchronizer. The *synchronizer id* is the unique identifier of the synchronizer that can be defined to prevent man-in-the-middle attacks (very similar to an SSH key fingerprint).
 2.  The participant opens a GRPC channel to the `SequencerConnectService`.
-3.  The participant contacts the `SequencerConnectService` and checks if using the synchronizer requires signing specific terms of services. If required, the terms of service are displayed to the user and an approval is locally stored at the participant for later. If approved, the participant attempts to connect to the sequencer.
-4.  The participant verifies that the remote synchronizer is running a protocol version compatible with the participant's version using the `SequencerConnectService.handshake`. If the participant runs an incompatible protocol version, the connection will fail.
-5.  The participant downloads and verifies the Synchronizer ID from the Synchronizer. The Synchronizer ID can be used to verify the correct authorization of the topology transactions of the synchronizer entities. If the synchronizer id has been provided previously during the `synchronizers.connect_local` call (or in a previous session), the two IDs are compared. If they are not equal, the connection fails. If the synchronizer id was not provided during the `synchronizers.connect_local` call, the participant uses and stores the one downloaded. We assume here that the synchronizer id is obtained by the participant through a secure channel such that it is sure to be talking to the right synchronizer. Therefore, this secure channel can be either something happening outside of Canton or can be provided by TLS during the first time we contact a synchronizer.
-6.  The participant downloads the *static synchronizer parameters*, which are the parameters used for the transaction protocol on the particular synchronizer, such as the cryptographic keys supported by this synchronizer.
-7.  The participant connects to the sequencer initially as an unauthenticated member. Such members can only send transactions to the synchronizer topology manager. The participant then sends an initial set of topology transactions required to identify the participant and define the keys used by the participant to the `SynchronizerTopologyManagerRequestService`. The request service inspects the validity of the transactions and decides based on the configured synchronizer on-boarding policy. The currently supported policies are `open` (default) and `permissioned`. While `open` is convenient for permissionless systems and for development, it will accept any new participant and any topology transaction. The `permissioned` policy will accept the participant's onboarding transactions only if the participant has been added to the allow-list beforehand.
-8.  The request service forwards the transactions to the synchronizer topology manager, which attempts to add them to the state (and thus trigger the distribution to the other members on a synchronizer). The result of the onboarding request is sent to the unauthenticated member who disconnects upon receiving the response.
-9.  If the onboarding request is approved, the participant now attempts to connect to the sequencer as the actual participant.
-10. Once the participant is properly enabled on the synchronizer and its signing key is known, the participant can subscribe to the `SequencerService` with its identity. To do that and to verify the authorization of any action on the `SequencerService`, the participant must obtain an authorization token from the synchronizer. For this purpose, the participant requests a `Challenge` from the synchronizer. The synchronizer will provide it with a `nonce` and the fingerprint of the key to be used for authentication. The participant signs this nonce (together with the synchronizer id) using the corresponding private key. The reason for the fingerprint is simple: the participant needs to sign the token using the participant's signing key as defined by the synchronizer topology state. However, as the participant will learn the true synchronizer topology state only by reading from the `SequencerService`, it cannot know what the key is. Therefore, the synchronizer discloses this part of the synchronizer topology state as part of the authorization challenge.
-11. Using the created authentication token, the participant starts to use the *SequencerService*. On the synchronizer side, the synchronizer verifies the authenticity and validity of the token by verifying that the token is the expected one and is signed by the participant's signing key. The token is used to authenticate every GRPC invocation and needs to be renewed regularly.
-12. The participant sets up the `ParticipantTopologyDispatcher`, which is the process that tries to push all topology transactions created at the participant node's topology manager to the synchronizer topology manager. If the participant is using its topology manager to manage its identity on its own, these transactions contain all the information about the registered parties or supported packages.
-13. As mentioned above, the first set of messages received by the participant through the sequencer contains the synchronizer topology state, which includes the signing keys of the synchronizer entities. These messages are signed by the sequencer and topology manager and are self-consistent. If the participants know the synchronizer id, they can verify that they are talking to the expected synchronizer and that the keys of the synchronizer entities have been authorized by the owner of the key governing the synchronizer id.
-14. Once the initial topology transactions have been read, the participant is ready to process transactions and send commands.
-15. When a participant is (re-)enabled, the synchronizer topology dispatcher analyses the set of topology transactions the participant has missed before. It sends these transactions to the participant via the sequencer, before publicly enabling the participant. Therefore, when the participant starts to read messages from the sequencer, the initially received messages will be the topology state of the synchronizer.
+3.  The participant verifies that the remote synchronizer is running a protocol version compatible with the participant's version using the `SequencerConnectService.handshake`. If the participant runs an incompatible protocol version, the connection will fail.
+4.  The participant downloads and verifies the Synchronizer ID from the Synchronizer. The Synchronizer ID can be used to verify the correct authorization of the topology transactions of the synchronizer entities. If the synchronizer id has been provided previously during the `synchronizers.connect` call (or in a previous session), the two IDs are compared. If they are not equal, the connection fails. If the synchronizer id was not provided during the `synchronizers.connect` call, the participant uses and stores the one downloaded. We assume here that the synchronizer id is obtained by the participant through a secure channel such that it is sure to be talking to the right synchronizer. Therefore, this secure channel can be either something happening outside of Canton or can be provided by TLS during the first time we contact a synchronizer.
+5.  The participant downloads the *static synchronizer parameters*, which are the parameters used for the transaction protocol on the particular synchronizer, such as the cryptographic keys supported by this synchronizer.
+6.  The participant registers its onboarding topology transactions (its namespace delegation, an owner-to-key mapping, and a synchronizer trust certificate) with the synchronizer through the `SequencerConnectService`, and then connects to the sequencer as the participant.
+7.  Once the participant is properly enabled on the synchronizer and its signing key is known, the participant can subscribe to the `SequencerService` with its identity. To do that and to verify the authorization of any action on the `SequencerService`, the participant must obtain an authorization token from the synchronizer. For this purpose, the participant requests a `Challenge` from the synchronizer. The synchronizer will provide it with a `nonce` and the fingerprint of the key to be used for authentication. The participant signs this nonce (together with the synchronizer id) using the corresponding private key. The reason for the fingerprint is simple: the participant needs to sign the token using the participant's signing key as defined by the synchronizer topology state. However, as the participant will learn the true synchronizer topology state only by reading from the `SequencerService`, it cannot know what the key is. Therefore, the synchronizer discloses this part of the synchronizer topology state as part of the authorization challenge.
+8.  Using the created authentication token, the participant starts to use the *SequencerService*. On the synchronizer side, the synchronizer verifies the authenticity and validity of the token by verifying that the token is the expected one and is signed by the participant's signing key. The token is used to authenticate every GRPC invocation and needs to be renewed regularly.
+9.  The participant sets up the `ParticipantTopologyDispatcher`, which is the process that tries to push all topology transactions created at the participant node's topology manager to the synchronizer topology manager. If the participant is using its topology manager to manage its identity on its own, these transactions contain all the information about the registered parties or supported packages.
+10. As mentioned above, the first set of messages received by the participant through the sequencer contains the synchronizer topology state, which includes the signing keys of the synchronizer entities. If the participants know the synchronizer id, they can verify that they are talking to the expected synchronizer and that the keys of the synchronizer entities have been authorized by the owner of the key governing the synchronizer id.
+11. Once the initial topology transactions have been read, the participant is ready to process transactions and send commands.
 
 ### Default Initialization
 
-The default initialization behavior of participant nodes and synchronizers is to run their own topology manager. This provides a convenient, automatic way to configure the nodes and make them usable without manual intervention, but it can be turned off by setting the `auto-init = false` configuration option **before** the first startup.
+The default initialization behavior of participant nodes and synchronizers is to run their own topology manager. This provides a convenient, automatic way to configure the nodes and make them usable without manual intervention, but it can be turned off by setting `init.generate-topology-transactions-and-keys = false` and `init.identity.type = manual` **before** the first startup.
 
 During the auto initialization, the following steps occur:
 
-1.  On the synchronizer, we generate four signing keys: one for the namespace and one each for the sequencer, mediator and topology manager. On the participant, we generate three keys: a namespace key, a signing key and an encryption key.
-2.  Using the fingerprint of the namespace, we generate the participant identity. For understandability, we use the node name used in the configuration file. This will change into a random identifier for privacy reasons. Once we've generated it, we set it using the `set_id` admin-api call.
+1.  On a sequencer or mediator node, we generate three signing keys: a namespace key, a sequencer authentication key and a protocol signing key. On the participant, we generate four keys: a namespace key, a sequencer authentication key, a protocol signing key and an encryption key.
+2.  Using the fingerprint of the namespace, we generate the participant identity. For understandability, we use the node name used in the configuration file. This will change into a random identifier for privacy reasons. Once we've generated it, the node stores it as its unique identifier.
 3.  We create a root certificate as `NamespaceDelegation` using the namespace key, signing with the namespace key.
 4.  Then, we create an `OwnerToKeyMapping` for the participant or synchronizer entities.
 
@@ -212,7 +198,7 @@ Authorization is managed by the Ledger API's User Management Service. In essence
 
 All these properties except the user ID can be modified. To learn more about annotations refer to the Ledger API Reference documentation. For an overview of the Ledger API's UserManagementService, see the [Ledger API reference](/sdks-tools/api-reference/ledger-api).
 
-You can manage users through the Canton console user management commands, an alpha feature. See the cookbook below for some concrete examples of how to manage users.
+You can manage users through the Canton console user management commands. See the cookbook below for some concrete examples of how to manage users.
 
 ## Cookbook
 
@@ -367,6 +353,86 @@ If a user with the specified ID already exists, then no additional user will be 
 canton.participants.myparticipant.ledger-api.user-management-service.additional-admin-user-id = "my-admin-id"
 ```
 
+{/* COPIED_END */}
+
+{/* COPIED_START source="docs-website:docs/replicated/canton/3.5/participant/howtos/troubleshoot/troubleshooting_guide.rst" hash="3c63d910" */}
+
+#### Regain access after a self lock-out
+
+Canton prohibits self lock-out by making sure that a participant admin cannot deactivate itself, delete itself or take away its own participant rights. In the unlikely event that a self lock-out happens, an administrator has a number of tools that facilitate regaining control of the participant node:
+
+- configure a temporary admin user
+- configure a temporary Canton Admin Token
+- [use the declarative API to add an admin user](/global-synchronizer/reference/canton-configuration-guide#declarative-configuration)
+- use a bootstrap script to add an admin user
+
+##### Configure a temporary admin user
+
+Add a temporary participant admin by appending the following entry to the command line or making an equivalent entry in the configuration file:
+
+``` none
+-C canton.participants.<participant>.ledger-api.user-management-service.additional-admin-user-id=temporary-admin
+```
+
+Mint a JWT token for the `temporary-admin` in your IAM system. Use the obtained token to create a permanent participant admin. You can do it for instance by issuing a curl request to the participant's http endpoint:
+
+``` none
+curl \
+  -H "Authorization: Bearer <JWT-token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+      "rights" : [
+        {
+          "kind": {
+            "ParticipantAdmin" : {
+              "value": {}
+            }
+          }
+        }
+      ],
+      "user" : {
+        "id" : "<permanent-participant-admin>",
+        "identityProviderId" : "",
+        "isDeactivated" : false,
+        "metadata" : null,
+        "primaryParty" : ""
+      }
+  }' \
+  "http://<http-ledger-api.address>:<http-ledger-api.port>/v2/users"
+```
+
+When done, remove the now redundant `temporary-admin` configuration.
+
+##### Configure a temporary Canton Admin Token
+
+Configuring a Canton Admin Token should be considered an exceptional measure and you should revert the configuration as soon as you add a permanent participant admin user.
+
+Generate a random string and add the following options to the canton command line:
+
+``` none
+-C canton.participants.<participant>.ledger-api.admin-token-config.fixed-admin-token=<generated-random-string> \
+-C canton.participants.<participant>.ledger-api.admin-token-config.admin-claim=true \
+-C canton.parameters.non-standard-config=true
+```
+
+Alternatively, make an equivalent entry in the participant's config file. Then, use the generated random string as a JWT token to issue a curl command that creates a permanent participant admin. You can use the curl formulation from [Configure a temporary admin user](#configure-a-temporary-admin-user).
+
+##### Use a bootstrap script to add an admin user
+
+Create an additional participant admin in a bootstrap script:
+
+```scala
+<participant>.ledger_api.users.create(id="<permanent-participant-admin>", participantAdmin=true)
+```
+
+<Note>
+A bootstrap script requires setting the `non-standard-config` and `admin-token-config.admin-claim` flags that allow it to operate with the authority of the internal Canton admin.
+</Note>
+
+{/* COPIED_END */}
+
+{/* COPIED_START source="docs-website:docs/replicated/canton/3.5/participant/howtos/operate/identity_management.rst" hash="b6135af4" */}
+
 ### Adding a new Party to a Participant
 
 The simplest operation is adding a new party to a participant. For this, we add it normally at the topology manager of the participant, which in the default case is part of the participant node. There is a simple macro to enable the party on a given participant if the participant is running their own topology manager:
@@ -384,7 +450,7 @@ And there is the corresponding disable macro:
 participant1.parties.disable(partyId)
 ```
 
-The macros themselves just use `topology.party_to_participant_mappings.authorize` to create the new party, but add some convenience such as automatically determining the parameters for the `authorize` call.
+The macros themselves just use `topology.party_to_participant_mappings.propose` to create the new party, but add some convenience such as automatically determining the parameters for the `propose` call.
 
 <Note>
 Please note that the `participant.parties.enable` macro will add the parties to the same namespace as the participant is in. It only works if the participant has authority over that namespace either by possessing the root or a delegated key.
@@ -638,7 +704,5 @@ node.health.wait_for_initialized()
 ```
 
 Finally, you can begin using the new Participant Node.
-
-{/* COPIED_END */}
 
 {/* COPIED_END */}
