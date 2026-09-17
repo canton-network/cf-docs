@@ -219,7 +219,9 @@ class CantonConfigReferenceTests(unittest.TestCase):
         self.assertIn("Braces \\{x\\} and &lt;angles&gt; must survive MDX", participant)
         self.assertIn("| `port` | int (Port) | **required** |", participant)
         self.assertIn("| `enabled` | boolean | `true` † |", participant)
-        self.assertIn("- `<participant>` — `user-chosen name of each entry under canton.participants`", participant)
+        # The placeholder legend is part of the reading guide, which lives on the overview.
+        overview = generator.render_pages(sample_artifact())["overview.mdx"]
+        self.assertIn("- `<participant>` — `user-chosen name of each entry under canton.participants`", overview)
         # A placeholder that is itself a section header must not become a JSX tag.
         self.assertIn("**&lt;extension&gt;**", participant)
         self.assertNotIn("**<extension>**", participant)
