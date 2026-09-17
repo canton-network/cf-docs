@@ -101,13 +101,18 @@ class CantonConfigReferenceTests(unittest.TestCase):
         self.assertIn("| `max-scale` | int | **required** |  |", types)
 
     def test_minimum_required_is_what_must_be_written_for_the_node_to_start(self) -> None:
-        pages = generator.render_pages(sample_artifact())
-        title = generator.REQUIRED_TITLE
-        self.assertEqual(title, "Minimum Required Fields")
+        artifact = sample_artifact()
+        leaves, sections = generator.split_sections(artifact["options"])
+        variants = {entry["name"]: [v["tag"] for v in entry["variants"]] for entry in artifact["types"]}
+        buckets = generator.group_options(leaves)
+
+        def minimum(prefix: str) -> str:
+            return "\n".join(generator.render_required_views(prefix, buckets[prefix], sections, variants))
+
         # A participant constructs every section by default, so only what startup validation
         # demands is listed: its ports, one of them avoidable by disabling the service. Keys that
         # are required *within* an optional section are not listed.
-        participant = pages["participant-node.mdx"].split(f"## {title}")[1].split(f"## {generator.ALL_OPTIONS_TITLE}")[0]
+        participant = minimum("canton.participants.<participant>")
         self.assertIn(
             "```hocon\ncanton.participants.<participant> {\n  admin-api {\n    port = 0   # required\n  }\n"
             "  http-ledger-api {\n    port = 0   # required unless enabled = false\n  }\n}\n```",
@@ -116,16 +121,14 @@ class CantonConfigReferenceTests(unittest.TestCase):
         self.assertIn("| `admin-api.port` | int (Port) | always | Braces \\{x\\} and &lt;angles&gt; must survive MDX |", participant)
         self.assertIn("| `http-ledger-api.port` | int (Port) | unless `enabled = false` |  |", participant)
         self.assertNotIn("extensions", participant)
-        self.assertNotIn("Nothing under", participant)
         # Under monitoring the required keys live inside list elements, which exist only when
         # written, so the minimum is empty and there is no node entry to show.
-        monitoring = pages["monitoring.mdx"].split(f"## {title}")[1].split(f"## {generator.ALL_OPTIONS_TITLE}")[0]
+        monitoring = minimum("canton.monitoring")
         self.assertIn("Nothing under `canton.monitoring` has to be set", monitoring)
         self.assertNotIn("```hocon", monitoring)
-        self.assertNotIn("histograms", monitoring)
         # A remote participant declares its client sections without defaults: the port with no
         # default must be written; a section with only defaulted keys must still be present.
-        remote = pages["remote-participant.mdx"].split(f"## {title}")[1].split(f"## {generator.ALL_OPTIONS_TITLE}")[0]
+        remote = minimum("canton.remote-participants.<remote-participant>")
         self.assertIn(
             "```hocon\ncanton.remote-participants.<remote-participant> {\n  admin-api {\n    port = 0   # required\n  }\n"
             "  ledger-api { }   # required\n}\n```",
@@ -135,6 +138,15 @@ class CantonConfigReferenceTests(unittest.TestCase):
         self.assertIn("| `ledger-api` | section (FullClientConfig) | always |  |", remote)
         self.assertNotIn("`admin-api.address`", remote)
         self.assertLess(remote.index("```hocon"), remote.index("| Key | Type | Required when |"))
+
+    def test_minimum_required_section_is_held_back_from_the_pages(self) -> None:
+        self.assertFalse(generator.SHOW_REQUIRED)
+        pages = generator.render_pages(sample_artifact())
+        for name, page in pages.items():
+            self.assertNotIn(generator.REQUIRED_TITLE, page, name)
+        participant = pages["participant-node.mdx"]
+        self.assertIn("ports must be set regardless", participant)
+        self.assertLess(participant.index("</Accordion>"), participant.index(f"## {generator.ALL_OPTIONS_TITLE}"))
 
     def test_every_page_documents_the_types_it_uses(self) -> None:
         pages = generator.render_pages(sample_artifact())

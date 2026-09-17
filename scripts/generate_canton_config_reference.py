@@ -35,6 +35,9 @@ ARTIFACT_PATH_IN_CANTON = "docs-open/target/config-reference.json"
 SUPPORTED_SCHEMA_MAJOR = "2"
 TYPES_PAGE = "types"
 REQUIRED_TITLE = "Minimum Required Fields"
+# The minimum section is held back until its rule set has been agreed; the rendering stays so it
+# can be switched on again.
+SHOW_REQUIRED = False
 ALL_OPTIONS_TITLE = "All options"
 TYPES_TITLE = "Configuration types"
 
@@ -873,11 +876,21 @@ def reading_guide(artifact: dict, options: list[dict] | None) -> list[str]:
         "A `[]` suffix marks the fields of a list element. Keys marked **alpha** or **beta** are not "
         "covered by compatibility guarantees.",
         "",
-        f"**{REQUIRED_TITLE}** is the smallest configuration that starts: keys Canton's startup "
-        "validation demands (a node's ports), and keys with no default inside sections that are not "
-        "constructed by default, with when each applies: always, unless you disable the service, or once "
-        "you have chosen a particular `type`. A key marked **required** elsewhere on the page is required "
-        f"only if you write the section that holds it. **{ALL_OPTIONS_TITLE}** covers every key, one "
+        *(
+            [
+                f"**{REQUIRED_TITLE}** is the smallest configuration that starts: keys Canton's startup "
+                "validation demands (a node's ports), and keys with no default inside sections that are not "
+                "constructed by default, with when each applies: always, unless you disable the service, or once "
+                "you have chosen a particular `type`. A key marked **required** elsewhere on the page is required "
+                "only if you write the section that holds it. "
+            ]
+            if SHOW_REQUIRED
+            else [
+                "A key marked **required** is required only if you write the section that holds it; a node's "
+                "ports must be set regardless. "
+            ]
+        ),
+        f"**{ALL_OPTIONS_TITLE}** covers every key, one "
         "section per heading, where the heading is the section's absolute path. Each is shown two "
         "ways behind tabs: **HOCON** as you would write it from the root, every key with its default, "
         "and **Table**, the same keys relative to the heading with their descriptions. Where a section "
@@ -918,9 +931,7 @@ def render_node_page(prefix: str, title: str, description: str, options: list[di
         *reading_guide(artifact, options),
         "</Accordion>",
         "",
-        f"## {REQUIRED_TITLE}",
-        "",
-        *render_required_views(prefix, options, sections, variants_by_type),
+        *([f"## {REQUIRED_TITLE}", "", *render_required_views(prefix, options, sections, variants_by_type)] if SHOW_REQUIRED else []),
         f"## {ALL_OPTIONS_TITLE}",
         "",
     ]
