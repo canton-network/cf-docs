@@ -924,12 +924,8 @@ def render_node_page(prefix: str, title: str, description: str, options: list[di
         generated_marker(artifact),
         "",
         f"Configuration under `{prefix}` for Canton {artifact['cantonVersion']}: {len(options)} keys. "
-        f"Part of the [Canton configuration reference]({PAGE_URL_PREFIX}/overview).",
-        "",
-        '<Accordion title="How to read this page">',
-        "",
-        *reading_guide(artifact, options),
-        "</Accordion>",
+        f"Part of the [Canton configuration reference]({PAGE_URL_PREFIX}/overview), which explains how to "
+        "read these pages.",
         "",
         *([f"## {REQUIRED_TITLE}", "", *render_required_views(prefix, options, sections, variants_by_type)] if SHOW_REQUIRED else []),
         f"## {ALL_OPTIONS_TITLE}",

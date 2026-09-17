@@ -144,9 +144,12 @@ class CantonConfigReferenceTests(unittest.TestCase):
         pages = generator.render_pages(sample_artifact())
         for name, page in pages.items():
             self.assertNotIn(generator.REQUIRED_TITLE, page, name)
+        # The reading guide lives on the overview only; a node page goes straight to its options.
         participant = pages["participant-node.mdx"]
-        self.assertIn("ports must be set regardless", participant)
-        self.assertLess(participant.index("</Accordion>"), participant.index(f"## {generator.ALL_OPTIONS_TITLE}"))
+        self.assertNotIn("How to read", participant)
+        self.assertIn("which explains how to read these pages", participant)
+        self.assertIn("ports must be set regardless", pages["overview.mdx"])
+        self.assertLess(participant.index("Part of the"), participant.index(f"## {generator.ALL_OPTIONS_TITLE}"))
 
     def test_every_page_documents_the_types_it_uses(self) -> None:
         pages = generator.render_pages(sample_artifact())
