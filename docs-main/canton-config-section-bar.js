@@ -20,9 +20,9 @@
   style.textContent =
     "#" + BAR_ID + " {" +
     "  position: fixed; z-index: 25; display: none; align-items: center; gap: 1rem;" +
-    "  box-sizing: border-box; padding: 0.4rem 0 0.4rem;" +
+    "  box-sizing: border-box; padding: 0.55rem 0 0.55rem;" +
     "  border-bottom: 1px solid rgba(128, 128, 128, 0.25);" +
-    "  font-size: 0.8125rem; line-height: 1.25;" +
+    "  font-size: 1rem; line-height: 1.3;" +
     "}" +
     "#" + BAR_ID + "[data-visible=\"true\"] { display: flex; }" +
     "#" + BAR_ID + " .cf-bar-title {" +
@@ -30,13 +30,13 @@
     "  font-weight: 600; color: inherit; text-decoration: none;" +
     "}" +
     "#" + BAR_ID + " .cf-bar-title code {" +
-    "  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.8rem;" +
+    "  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.95rem;" +
     "}" +
     "#" + BAR_ID + " .cf-bar-title .cf-bar-parent { opacity: 0.6; font-weight: 500; }" +
     "#" + BAR_ID + " .cf-bar-views { flex: 0 0 auto; display: inline-flex; gap: 1rem; }" +
     "#" + BAR_ID + " .cf-bar-views button {" +
     "  border: 0; border-bottom: 2px solid transparent; padding: 0.15rem 0; margin: 0;" +
-    "  background: transparent; color: inherit; font: inherit; cursor: pointer; opacity: 0.7;" +
+    "  background: transparent; color: inherit; font: inherit; font-size: 1rem; cursor: pointer; opacity: 0.7;" +
     "}" +
     "#" + BAR_ID + " .cf-bar-views button[aria-pressed=\"true\"] {" +
     "  opacity: 1; font-weight: 600; border-bottom-color: currentColor;" +
@@ -148,24 +148,210 @@
     return VIEWS[0];
   }
 
+  var KEY_LINE = /^\s*#?\s*([A-Za-z0-9_<>\-\[\].]+)\s*(=|\{)/;
+
+  function documentTop(rect) {
+    return rect.top + window.scrollY;
+  }
+
+  // The key named by a table row: its first cell, minus the indentation that marks nesting.
+  // Rows that name a section rather than a key (bold, no code) yield nothing.
+  function rowKey(row) {
+    var cell = row.querySelector("td");
+    if (!cell || !cell.querySelector("code")) {
+      return null;
+    }
+    var key = text(cell.querySelector("code"));
+    return key || null;
+  }
+
+  function lineKey(line) {
+    var match = KEY_LINE.exec(line);
+    return match ? match[1] : null;
+  }
+
+  // The lines of a code block with the vertical extent of each. A highlighter that wraps each
+  // line in its own element gives exact boxes; otherwise lines are laid out from the block's
+  // line height, which is uniform in a monospace block.
+  function codeLines(pre) {
+    var code = pre.querySelector("code") || pre;
+    var wrapped = Array.prototype.filter.call(code.children, function (child) {
+      return /\bline\b/.test(child.className || "");
+    });
+    if (wrapped.length > 1) {
+      return wrapped.map(function (element) {
+        var rect = element.getBoundingClientRect();
+        return { text: element.textContent || "", top: documentTop(rect), bottom: documentTop(rect) + rect.height, element: element };
+      });
+    }
+    var rect = code.getBoundingClientRect();
+    var lines = (code.textContent || "").replace(/\n$/, "").split("\n");
+    var height = rect.height / Math.max(lines.length, 1);
+    var top = documentTop(rect);
+    return lines.map(function (line, index) {
+      return { text: line, top: top + index * height, bottom: top + (index + 1) * height, element: null };
+    });
+  }
+
+  // Every key visible in the section's current view, as {key, top, bottom} in document
+  // coordinates, in reading order.
+  function keyPositions(section) {
+    var positions = [];
+    Array.prototype.forEach.call(section.tabs.querySelectorAll("pre"), function (pre) {
+      if (pre.offsetParent === null) {
+        return;
+      }
+      codeLines(pre).forEach(function (line) {
+        var key = lineKey(line.text);
+        if (key) {
+          positions.push({ key: key, top: line.top, bottom: line.bottom, element: line.element });
+        }
+      });
+    });
+    Array.prototype.forEach.call(section.tabs.querySelectorAll("tbody tr"), function (row) {
+      if (row.offsetParent === null) {
+        return;
+      }
+      var key = rowKey(row);
+      if (key) {
+        var rect = row.getBoundingClientRect();
+        positions.push({ key: key, top: documentTop(rect), bottom: documentTop(rect) + rect.height, element: row });
+      }
+    });
+    return positions.sort(function (a, b) {
+      return a.top - b.top;
+    });
+  }
+
+  function extent(section) {
+    var top = documentTop(section.heading.getBoundingClientRect());
+    var bottom = documentTop(section.tabs.getBoundingClientRect()) + section.tabs.getBoundingClientRect().height;
+    return { top: top, bottom: bottom, height: Math.max(bottom - top, 1) };
+  }
+
+  // Where the reader is in a section before a switch: the first key below the bar, and how far
+  // down the section the bar sits as a fraction of its height. `readingLine` is a viewport
+  // offset; everything measured is in document coordinates.
+  function anchorIn(section, readingLine) {
+    var span = extent(section);
+    var reading = readingLine + window.scrollY;
+    var positions = keyPositions(section);
+    var key = null;
+    for (var i = 0; i < positions.length; i++) {
+      if (positions[i].bottom > reading) {
+        key = positions[i].key;
+        break;
+      }
+    }
+    return { key: key, fraction: (reading - span.top) / span.height };
+  }
+
+  // After the switch, the place in the new view that corresponds to the anchor. The same key
+  // name can recur within a section, so among matches the one at the nearest relative depth
+  // wins. With no match, the same relative depth is kept. Returns what to keep under the bar:
+  // an element when a key matched, else the fraction.
+  function landingFor(section, anchor) {
+    var span = extent(section);
+    var best = null;
+    if (anchor.key) {
+      keyPositions(section).forEach(function (position) {
+        if (position.key !== anchor.key) {
+          return;
+        }
+        var distance = Math.abs((position.top - span.top) / span.height - anchor.fraction);
+        if (best === null || distance < best.distance) {
+          best = { position: position, distance: distance };
+        }
+      });
+    }
+    if (best !== null && best.position.element) {
+      return { element: best.position.element, fraction: null };
+    }
+    if (best !== null) {
+      return { element: null, fraction: (best.position.top - span.top) / span.height };
+    }
+    return { element: null, fraction: anchor.fraction };
+  }
+
+  // Scroll so the landing sits just under the bar, measured now. Whatever the landing, the
+  // result stays inside the section, so the bar keeps showing the section the reader was in.
+  function place(section, landing, readingLine, barHeight) {
+    var span = extent(section);
+    var top = landing.element
+      ? documentTop(landing.element.getBoundingClientRect()) - 4
+      : span.top + landing.fraction * span.height;
+    var scrollTo = top - readingLine;
+    var min = span.top - (readingLine - barHeight) + 1;
+    var max = span.bottom - readingLine - 1;
+    scrollTo = Math.max(min, Math.min(max, scrollTo));
+    if (Math.abs(window.scrollY - scrollTo) > 1) {
+      window.scrollTo(0, scrollTo);
+    }
+  }
+
   function choose(view) {
     if (!current) {
       return;
     }
-    var tab = tabFor(current, view);
-    if (tab && tab.getAttribute("aria-selected") !== "true") {
-      // Switching view changes the section's height; keep the heading where the reader left it
-      // rather than letting the page jump.
-      var before = current.heading.getBoundingClientRect().top;
-      tab.click();
-      window.requestAnimationFrame(function () {
-        var after = current.heading.getBoundingClientRect().top;
-        if (after !== before) {
-          window.scrollBy(0, after - before);
-        }
-        paint();
-      });
+    var section = current;
+    var tab = tabFor(section, view);
+    if (!tab || tab.getAttribute("aria-selected") === "true") {
+      paint();
+      return;
     }
+    var element = bar();
+    var barHeight = element.offsetHeight || 40;
+    // The reading line is the bottom edge of the bar: what sits just beneath it is what the
+    // reader was looking at.
+    var readingLine = navbarBottom() + barHeight;
+    var anchor = anchorIn(section, readingLine);
+    tab.click();
+    // The new view exists only after React has re-rendered, and other sections on the page
+    // switch with it (Mintlify keeps tab groups in step), so wait for the new panel to be laid
+    // out and then re-measure everything rather than assume.
+    var started = Date.now();
+    function settled() {
+      if (tab.getAttribute("aria-selected") !== "true") {
+        return false;
+      }
+      var wantsCode = view === VIEWS[0];
+      var shown = section.tabs.querySelectorAll(wantsCode ? "pre" : "tbody tr");
+      for (var i = 0; i < shown.length; i++) {
+        if (shown[i].offsetParent !== null) {
+          return true;
+        }
+      }
+      return false;
+    }
+    // Mintlify switches every tab group on the page, so content above the section keeps changing
+    // height for a few frames after this one has rendered, and the browser's own scroll anchoring
+    // pulls against any single scroll. The landing is therefore held in place until the layout
+    // has stopped moving, with anchoring switched off meanwhile.
+    var root = document.documentElement;
+    var previousAnchor = root.style.overflowAnchor;
+    root.style.overflowAnchor = "none";
+    var landing = null;
+    var landedAt = 0;
+    function land() {
+      var now = Date.now();
+      if (landing === null) {
+        if (!settled() && now - started < 600) {
+          window.requestAnimationFrame(land);
+          return;
+        }
+        landing = landingFor(section, anchor);
+        landedAt = now;
+      }
+      place(section, landing, readingLine, barHeight);
+      if (now - landedAt < 500) {
+        window.requestAnimationFrame(land);
+        return;
+      }
+      root.style.overflowAnchor = previousAnchor;
+      current = section;
+      schedule();
+    }
+    window.requestAnimationFrame(land);
     paint();
   }
 
