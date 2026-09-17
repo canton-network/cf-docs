@@ -700,17 +700,32 @@ def must_be_written(path: str, prefix: str, sections: dict[str, dict]) -> bool:
     return True
 
 
+def unless_text(prefix: str, relative: str, unless: str) -> str:
+    """`enabled = false` when the condition's key sits beside this one, otherwise its path from
+    the page root."""
+    condition = unless[len(prefix) :].lstrip(".") if unless.startswith(prefix + ".") else unless
+    key_parent = relative.rsplit(".", 1)[0] if "." in relative else ""
+    cond_key = condition.split("=", 1)[0].strip()
+    cond_parent = cond_key.rsplit(".", 1)[0] if "." in cond_key else ""
+    if cond_parent == key_parent and "=" in condition:
+        return cond_key.rsplit(".", 1)[-1] + " =" + condition.split("=", 1)[1]
+    return condition
+
+
 def required_rows(prefix: str, entries: list[dict], sections: dict[str, dict], variants_by_type: dict[str, list[str]]):
     """(relative path, option, variant conditions) for every key that has to be written for a
     node under `prefix` to start: required, with no default of any origin, inside sections that
-    are themselves required. A required section none of whose keys make the list is listed
+    are themselves required, or demanded by Canton's startup validation whatever the sections
+    above it hold (`requiredBy`). A required section none of whose keys make the list is listed
     itself, since it still has to be present."""
     rows = []
     for option, conditions in collapse_variants(entries):
-        if not option["required"] or option["optional"] or option.get("defaultValue") is not None:
-            continue
-        if not must_be_written(option["path"], prefix, sections):
-            continue
+        validated = bool(option.get("requiredBy"))
+        if not validated:
+            if not option["required"] or option["optional"] or option.get("defaultValue") is not None:
+                continue
+            if not must_be_written(option["path"], prefix, sections):
+                continue
         relative = option["path"][len(prefix) :].lstrip(".")
         union_of = {c["at"]: c["of"] for c in option["appliesWhen"]}
         gates: list[tuple[str, set[str]]] = []
@@ -746,6 +761,8 @@ def render_required_hocon(prefix: str, entries: list[dict], sections: dict[str, 
         tagged = dict(option)
         if gates:
             tagged["__when__"] = condition_text(prefix, relative, [(prefix + "." + at, tags) for at, tags in gates])
+        if option.get("requiredUnless"):
+            tagged["__unless__"] = unless_text(prefix, relative, option["requiredUnless"])
         keys.setdefault(relative, tagged)
 
     def write(tree: dict, indent: str, out: list[str]) -> None:
@@ -766,8 +783,11 @@ def render_required_hocon(prefix: str, entries: list[dict], sections: dict[str, 
                 continue
             hint = type_hint(option) if option["valueType"].get("kind") == "enum" else placeholder_for(option)
             when = option.get("__when__")
+            unless = option.get("__unless__")
             if when:
                 out.append(f"{indent}# {name} = {hint}   # required when {when}")
+            elif unless:
+                out.append(f"{indent}{name} = {hint}   # required unless {unless}")
             else:
                 out.append(f"{indent}{name} = {hint}   # required")
 
@@ -804,6 +824,8 @@ def render_required(prefix: str, entries: list[dict], sections: dict[str, dict],
     rows: list[str] = []
     for relative, option, gates in required_rows(prefix, entries, sections, variants_by_type):
         when: list[str] = []
+        if option.get("requiredUnless"):
+            when.append(f"unless `{unless_text(prefix, relative, option['requiredUnless'])}`")
         for rel_at, tags in gates:
             listed = ", ".join(f"`{tag}`" for tag in sorted(tags))
             when.append(f"`{rel_at}` is " + ("one of " if len(tags) > 1 else "") + listed)
@@ -851,8 +873,9 @@ def reading_guide(artifact: dict, options: list[dict] | None) -> list[str]:
         "A `[]` suffix marks the fields of a list element. Keys marked **alpha** or **beta** are not "
         "covered by compatibility guarantees.",
         "",
-        f"**{REQUIRED_TITLE}** is the smallest configuration that starts: only keys with no default "
-        "inside sections that are not constructed by default, and when each applies: always, or once "
+        f"**{REQUIRED_TITLE}** is the smallest configuration that starts: keys Canton's startup "
+        "validation demands (a node's ports), and keys with no default inside sections that are not "
+        "constructed by default, with when each applies: always, unless you disable the service, or once "
         "you have chosen a particular `type`. A key marked **required** elsewhere on the page is required "
         f"only if you write the section that holds it. **{ALL_OPTIONS_TITLE}** covers every key, one "
         "section per heading, where the heading is the section's absolute path. Each is shown two "
@@ -872,7 +895,7 @@ def reading_guide(artifact: dict, options: list[dict] | None) -> list[str]:
         "- a value is what the key holds when you do not set it;",
         "- **required** means startup fails unless you set it;",
         "- _unset_ means the feature is off, or the surrounding section is absent, until you set it;",
-        "- † marks a value assigned while the configuration loads (a port, for example). The number shown "
+        "- † marks a value that was not written in the source but was seen in a loaded configuration. It "
         "is an example from the environment the defaults were captured in, not a guaranteed default;",
         "- ‡ marks a default written as an expression in the source that has not been evaluated; the "
         "expression is shown so you can find it;",

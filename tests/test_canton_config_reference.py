@@ -28,6 +28,8 @@ def option(path: str, **overrides) -> dict:
         "docFormat": None,
         "maturity": "stable",
         "appliesWhen": [],
+        "requiredBy": None,
+        "requiredUnless": None,
         "provenance": {"file": "Test.scala", "line": 1},
         "evidence": ["scaladoc"],
     }
@@ -66,7 +68,12 @@ def sample_artifact() -> dict:
             option(f"{AGGREGATION}.boundaries", valueType={"kind": "array", "element": "Double"}, required=True, appliesWhen=when("buckets")),
             option(f"{AGGREGATION}.max-buckets", valueType={"kind": "scalar", "name": "int"}, required=True, appliesWhen=when("exponential")),
             option(f"{AGGREGATION}.max-scale", valueType={"kind": "scalar", "name": "int"}, required=True, appliesWhen=when("exponential")),
-            option("canton.participants.<participant>.admin-api.port", valueType={"kind": "scalar", "name": "int", "scalaType": "Port"}, defaultValue=30002, defaultOrigin="load-time", doc="Braces {x} and <angles> must survive MDX"),
+            # Ports are demanded by startup validation although their sections have defaults.
+            option("canton.participants.<participant>.admin-api.port", valueType={"kind": "scalar", "name": "int", "scalaType": "Port"}, required=True, optional=False, requiredBy="startup-validation", doc="Braces {x} and <angles> must survive MDX"),
+            option("canton.participants.<participant>.http-ledger-api", valueType={"kind": "section", "type": "JsonApiConfig"}, defaultExpr="JsonApiConfig()"),
+            option("canton.participants.<participant>.http-ledger-api.enabled", valueType={"kind": "scalar", "name": "boolean"}, defaultValue=True, defaultOrigin="source"),
+            option("canton.participants.<participant>.http-ledger-api.port", valueType={"kind": "scalar", "name": "int", "scalaType": "Port"}, required=True, optional=False, requiredBy="startup-validation", requiredUnless="canton.participants.<participant>.http-ledger-api.enabled = false"),
+            option("canton.participants.<participant>.replication.enabled", valueType={"kind": "scalar", "name": "boolean"}, defaultValue=True, defaultOrigin="load-time"),
             option("canton.participants.<participant>.parameters.engine.extensions.<extension>.address", required=True),
         ],
         "types": [
@@ -97,13 +104,19 @@ class CantonConfigReferenceTests(unittest.TestCase):
         pages = generator.render_pages(sample_artifact())
         title = generator.REQUIRED_TITLE
         self.assertEqual(title, "Minimum Required Fields")
-        # A participant constructs every section by default, so nothing has to be written except
-        # the entry itself. Keys that are required *within* an optional section are not listed.
+        # A participant constructs every section by default, so only what startup validation
+        # demands is listed: its ports, one of them avoidable by disabling the service. Keys that
+        # are required *within* an optional section are not listed.
         participant = pages["participant-node.mdx"].split(f"## {title}")[1].split(f"## {generator.ALL_OPTIONS_TITLE}")[0]
-        self.assertIn("Nothing under `canton.participants.<participant>` has to be set", participant)
-        self.assertIn("```hocon\ncanton.participants.<participant> { }\n```", participant)
-        self.assertNotIn("| Key |", participant)
+        self.assertIn(
+            "```hocon\ncanton.participants.<participant> {\n  admin-api {\n    port = 0   # required\n  }\n"
+            "  http-ledger-api {\n    port = 0   # required unless enabled = false\n  }\n}\n```",
+            participant,
+        )
+        self.assertIn("| `admin-api.port` | int (Port) | always | Braces \\{x\\} and &lt;angles&gt; must survive MDX |", participant)
+        self.assertIn("| `http-ledger-api.port` | int (Port) | unless `enabled = false` |  |", participant)
         self.assertNotIn("extensions", participant)
+        self.assertNotIn("Nothing under", participant)
         # Under monitoring the required keys live inside list elements, which exist only when
         # written, so the minimum is empty and there is no node entry to show.
         monitoring = pages["monitoring.mdx"].split(f"## {title}")[1].split(f"## {generator.ALL_OPTIONS_TITLE}")[0]
@@ -189,7 +202,8 @@ class CantonConfigReferenceTests(unittest.TestCase):
     def test_prose_is_mdx_safe_and_load_time_defaults_are_marked(self) -> None:
         participant = generator.render_pages(sample_artifact())["participant-node.mdx"]
         self.assertIn("Braces \\{x\\} and &lt;angles&gt; must survive MDX", participant)
-        self.assertIn("| `port` | int (Port) | `30002` † |", participant)
+        self.assertIn("| `port` | int (Port) | **required** |", participant)
+        self.assertIn("| `enabled` | boolean | `true` † |", participant)
         self.assertIn("- `<participant>` — `user-chosen name of each entry under canton.participants`", participant)
         # A placeholder that is itself a section header must not become a JSX tag.
         self.assertIn("**&lt;extension&gt;**", participant)
