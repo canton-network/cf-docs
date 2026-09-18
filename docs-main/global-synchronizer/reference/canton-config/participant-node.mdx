@@ -1,6 +1,7 @@
 ---
 title: "Participant node"
 description: "Ledger API, admin API, storage, crypto and parameters of a participant."
+mode: "wide"
 ---
 
 {/* GENERATED_FROM source="digital-asset/canton" ref="1be6d4933767495c3ba950e8513086ca10188757" version="3.7.0-SNAPSHOT" path="docs-open/target/config-reference.json" */}
@@ -17,6 +18,12 @@ Configuration under `canton.participants.<participant>` for Canton 3.7.0-SNAPSHO
 ```hocon
 canton.participants.<participant>.admin-api {
   address = "127.0.0.1"
+  # flow-control-window = <int>
+  initial-flow-control-window = 1048576
+  max-concurrent-calls-per-connection = 100000
+  max-inbound-message-size = 10485760
+  max-token-lifetime = "5 minutes"
+  port = 0   # required
   admin-token-config {
     act-as-any-party-claim = false
     admin-claim = false
@@ -28,8 +35,6 @@ canton.participants.<participant>.admin-api {
       type = wildcard|unsafe-jwt-hmac-256|jwt-rs-256-crt|jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|party-jwt   # required
     }
   ]
-  # flow-control-window = <int>
-  initial-flow-control-window = 1048576
   jwks-cache-config {
     auto-refresh-after = "0 seconds"
     cache-expiration = "5 minutes"
@@ -50,27 +55,23 @@ canton.participants.<participant>.admin-api {
     timeout = "20 seconds"
   }
   limits {
+    throttle-logging-rate-per-second = 10
+    warn-on-undefined-limits = false
     active {
       <key> = [ ]
     }
-    throttle-logging-rate-per-second = 10
-    warn-on-undefined-limits = false
   }
-  max-concurrent-calls-per-connection = 100000
-  max-inbound-message-size = 10485760
-  max-token-lifetime = "5 minutes"
-  port = 0   # required
   tls {
-    cert-chain-file {
-      type = pem-file|pem-string   # required
-    }
     # ciphers = [ ... ]
-    client-auth {
-      type = require|optional|none   # required
-    }
     enable-cert-revocation-checking = false
     minimum-server-protocol-version = "TLSv1.2"
     private-key-file = "..."   # required
+    cert-chain-file {
+      type = pem-file|pem-string   # required
+    }
+    client-auth {
+      type = require|optional|none   # required
+    }
     trust-collection-file {
       type = pem-file|pem-string   # required
     }
@@ -220,10 +221,10 @@ canton.participants.<participant>.admin-api.tls.cert-chain-file {
 canton.participants.<participant>.admin-api.tls.client-auth {
   type = require
   admin-client {
+    private-key-file = "..."   # required
     cert-chain-file {
       type = pem-file|pem-string   # required
     }
-    private-key-file = "..."   # required
   }
 }
 ```
@@ -411,40 +412,44 @@ canton.participants.<participant>.admin-api.tls.client-auth.admin-client.cert-ch
 ```hocon
 canton.participants.<participant>.alpha-dynamic {
   check-self-consistency = true
+  enable-multi-synchronizer-topology-feature-flag = false
+  fetched-dar-directory = "/tmp/fetched-dars12534636215432177984"
+  remove-connections = false
+  remove-idps = false
+  remove-parties = false
+  remove-users = false
   connections = [
     {
-      connections {
-        <connection> {
-          # custom-trust-certificates = <path>
-          endpoints = [
-            {
-              host = "..."   # required
-              port = 0   # required
-            }
-          ]
-          transport-security = false
-        }
-      }
       initialize-from-trusted-synchronizer = false
       # liveness-margin = <int>
       manual-connect = false
       priority = 0
       synchronizer-alias = "..."   # required
       # trust-threshold = <int>
+      connections {
+        <connection> {
+          # custom-trust-certificates = <path>
+          transport-security = false
+          endpoints = [
+            {
+              host = "..."   # required
+              port = 0   # required
+            }
+          ]
+        }
+      }
     }
   ]
   dars = [
     {
       # expected-main-package = <string>
       location = "..."   # required
+      synchronizers = [ ]
       request-headers {
         # <request-header> = <string>
       }
-      synchronizers = [ ]
     }
   ]
-  enable-multi-synchronizer-topology-feature-flag = false
-  fetched-dar-directory = "/tmp/fetched-dars12534636215432177984"
   idps = [
     {
       # audience = <string>
@@ -461,19 +466,16 @@ canton.participants.<participant>.alpha-dynamic {
       synchronizers = [ ]
     }
   ]
-  remove-connections = false
-  remove-idps = false
-  remove-parties = false
-  remove-users = false
   users = [
     {
-      annotations {
-        <annotation> = [ ]
-      }
       identity-provider-id = ""
       is-deactivated = false
       # primary-party = <string>
       primary-party-authentication = false
+      user = "..."   # required
+      annotations {
+        <annotation> = [ ]
+      }
       rights {
         act-as = [ ]
         act-as-any-party = false
@@ -484,7 +486,6 @@ canton.participants.<participant>.alpha-dynamic {
         read-as = [ ]
         read-as-any-party = false
       }
-      user = "..."   # required
     }
   ]
 }
@@ -568,6 +569,7 @@ canton.participants.<participant>.alpha-dynamic {
 ```hocon
 canton.participants.<participant>.crypto {
   enable-experimental = false
+  provider = jce
   encryption {
     algorithms {
       # allowed = [ ... ]
@@ -583,6 +585,7 @@ canton.participants.<participant>.crypto {
     # default = <generic>
   }
   kms {
+    type = driver|aws|gcp   # required
     retries {
       create-key-check {
         initial-delay = "30 seconds"   # required
@@ -595,7 +598,6 @@ canton.participants.<participant>.crypto {
         max-retries = 0   # required
       }
     }
-    type = driver|aws|gcp   # required
   }
   parallelism {
     encryption-parallelism = 10
@@ -607,12 +609,11 @@ canton.participants.<participant>.crypto {
   }
   private-key-store {
     encryption {
-      reverted = false
       type = kms   # required
+      reverted = false
       # wrapper-key-id = <string>
     }
   }
-  provider = jce
   session-signing-keys {
     cut-off-duration = "1 minute"
     disable-bound-checks = false
@@ -667,13 +668,13 @@ canton.participants.<participant>.crypto.kms {
 canton.participants.<participant>.crypto.kms {
   type = aws
   audit-logging = false
-  custom-tags {
-    <custom-tag> = [ ]
-  }
   disable-ssl-verification = false
   # endpoint-override = <string>
   multi-region-key = false
   region = "..."   # required
+  custom-tags {
+    <custom-tag> = [ ]
+  }
   retries {
     create-key-check {
       initial-delay = "30 seconds"   # required
@@ -811,10 +812,6 @@ canton.participants.<participant>.crypto.private-key-store.encryption {
 ```hocon
 canton.participants.<participant>.http-ledger-api {
   address = "127.0.0.1"
-  client-request-timeout {
-    lower-bound = "1 second"
-    upper-bound = "60 seconds"
-  }
   daml-definitions-service-enabled = false
   debug-logging-of-http-bodies = false
   enabled = true
@@ -823,6 +820,10 @@ canton.participants.<participant>.http-ledger-api {
   port = 0   # required unless enabled = false
   # port-file = <unresolved>
   request-timeout = "20 seconds"
+  client-request-timeout {
+    lower-bound = "1 second"
+    upper-bound = "60 seconds"
+  }
   websocket-config {
     # heartbeat-period = <duration>
     # http-list-max-elements-limit = <int>
@@ -968,6 +969,16 @@ canton.participants.<participant>.init.identity.identifier {
 ```hocon
 canton.participants.<participant>.ledger-api {
   address = "127.0.0.1"
+  database-connection-timeout = "30 seconds"
+  enable-command-inspection = true
+  # flow-control-window = <int>
+  initial-flow-control-window = 1048576
+  management-service-timeout = "2 minutes"
+  max-concurrent-calls-per-connection = 100000
+  max-inbound-message-size = 10485760
+  max-inbound-metadata-size = 8192
+  max-token-lifetime = "5 minutes"
+  port = 0   # required
   admin-token-config {
     act-as-any-party-claim = false
     admin-claim = false
@@ -984,25 +995,11 @@ canton.participants.<participant>.ledger-api {
     default-tracking-timeout = "5 minutes"
     max-commands-in-flight = 256
   }
-  database-connection-timeout = "30 seconds"
-  enable-command-inspection = true
-  # flow-control-window = <int>
   identity-provider-management {
     cache-expiry-after-write = "5 minutes"
   }
   index-service {
     acs-filtering-parallelism = 16
-    active-contracts-service-streams {
-      contract-processing-parallelism = 8
-      id-filter-query-parallelism = 2
-      max-ids-per-id-page = 20000
-      max-incomplete-page-size = 20
-      max-pages-per-id-pages-buffer = 1
-      max-parallel-active-id-queries = 4
-      max-parallel-payload-create-queries = 2
-      max-payloads-per-payloads-page = 1000
-      max-working-memory-in-bytes-for-id-pages = 104857600
-    }
     # api-query-services-thread-pool-size = <int>
     api-stream-shutdown-timeout = "5s"
     buffered-events-processing-parallelism = 8
@@ -1023,6 +1020,17 @@ canton.participants.<participant>.ledger-api {
     offset-checkpoint-cache-update-interval = "15 seconds"
     prepare-package-metadata-time-out-warning = "5 seconds"
     pruning-db-lock-timeout = "20 seconds"
+    active-contracts-service-streams {
+      contract-processing-parallelism = 8
+      id-filter-query-parallelism = 2
+      max-ids-per-id-page = 20000
+      max-incomplete-page-size = 20
+      max-pages-per-id-pages-buffer = 1
+      max-parallel-active-id-queries = 4
+      max-parallel-payload-create-queries = 2
+      max-payloads-per-payloads-page = 1000
+      max-working-memory-in-bytes-for-id-pages = 104857600
+    }
     updates-streams {
       id-filter-query-parallelism = 2
       max-ids-per-id-page = 20000
@@ -1041,7 +1049,6 @@ canton.participants.<participant>.ledger-api {
       transactions-processing-parallelism = 8
     }
   }
-  initial-flow-control-window = 1048576
   interactive-submission-service {
     contract-lookup-parallelism = 5
     enable-verbose-hashing = false
@@ -1068,17 +1075,12 @@ canton.participants.<participant>.ledger-api {
     timeout = "20 seconds"
   }
   limits {
+    throttle-logging-rate-per-second = 10
+    warn-on-undefined-limits = false
     active {
       <key> = [ ]
     }
-    throttle-logging-rate-per-second = 10
-    warn-on-undefined-limits = false
   }
-  management-service-timeout = "2 minutes"
-  max-concurrent-calls-per-connection = 100000
-  max-inbound-message-size = 10485760
-  max-inbound-metadata-size = 8192
-  max-token-lifetime = "5 minutes"
   package-service {
     max-vetted-packages-page-size = 100
   }
@@ -1086,16 +1088,15 @@ canton.participants.<participant>.ledger-api {
     max-parties-page-size = 10000
     max-self-allocated-parties = 0
   }
-  port = 0   # required
   postgres-data-source {
     client-connection-check-interval = "5 seconds"
     network-timeout = "60 seconds"
-    synchronous-commit {
-      type = on|off|remote-write|remote-apply|local   # required
-    }
     tcp-keepalives-count = 5
     tcp-keepalives-idle = 10
     tcp-keepalives-interval = 1
+    synchronous-commit {
+      type = on|off|remote-write|remote-apply|local   # required
+    }
   }
   rate-limit {
     max-api-services-index-db-queue-size = 1000
@@ -1108,16 +1109,16 @@ canton.participants.<participant>.ledger-api {
     max-acs-page-size = 10000
   }
   tls {
-    cert-chain-file {
-      type = pem-file|pem-string   # required
-    }
     # ciphers = [ ... ]
-    client-auth {
-      type = require|optional|none   # required
-    }
     enable-cert-revocation-checking = false
     minimum-server-protocol-version = "TLSv1.2"
     private-key-file = "..."   # required
+    cert-chain-file {
+      type = pem-file|pem-string   # required
+    }
+    client-auth {
+      type = require|optional|none   # required
+    }
     trust-collection-file {
       type = pem-file|pem-string   # required
     }
@@ -1285,10 +1286,10 @@ canton.participants.<participant>.ledger-api.tls.cert-chain-file {
 canton.participants.<participant>.ledger-api.tls.client-auth {
   type = require
   admin-client {
+    private-key-file = "..."   # required
     cert-chain-file {
       type = pem-file|pem-string   # required
     }
-    private-key-file = "..."   # required
   }
 }
 ```
@@ -1576,6 +1577,8 @@ canton.participants.<participant>.ledger-api.tls.client-auth.admin-client.cert-c
 canton.participants.<participant>.monitoring {
   grpc-health-server {
     address = "0.0.0.0"
+    parallelism = 4
+    # port = <int>
     jwt-timestamp-leeway {
       # default = <int>
       # expires-at = <int>
@@ -1588,8 +1591,6 @@ canton.participants.<participant>.monitoring {
       time = "40 seconds"
       timeout = "20 seconds"
     }
-    parallelism = 4
-    # port = <int>
   }
   http-health-server {
     address = "0.0.0.0"
@@ -1632,12 +1633,33 @@ canton.participants.<participant>.monitoring {
 
 ```hocon
 canton.participants.<participant>.parameters {
+  activation-frequency-for-warn-about-consistency-checks = 1000
+  alpha-version-support = false
+  auto-sync-protocol-feature-flags = true
+  beta-version-support = false
+  commitment-asynchronous-initialization = false
+  commitment-checkpoint-interval = "1 minute"
+  commitment-mismatch-debugging = false
+  # commitment-processor-nr-acs-changes-behind-to-trigger-catch-up = <int>
+  commitment-reduce-parallelism = 1
+  commitment-use-db-snapshot-for-participant-lookup = false
+  connect-to-synchronizers-on-startup = true
+  crash-after-failed-validation = true
+  dev-version-support = false
+  disable-upgrade-validation = false
+  do-not-await-on-checking-incoming-commitments = false
+  dont-warn-on-deprecated-pv = false
+  enable-all-ledger-api-reassignments = false
+  enable-strict-dar-validation = true
+  journal-garbage-collection-delay = "0 seconds"
+  journal-garbage-collection-minimum-gap = "30 minutes"
+  max-unzipped-dar-size = 1073741824
+  minimum-protocol-version = 34
+  validate-legacy-contracts-v-11 = true
+  warn-if-overloaded-for = "20 seconds"
   acs-commitments {
     acs-fetch-parallelism = 16
     classification-parallelism = 8
-    consistency-check {
-      journal-snapshot-query-limit = 100
-    }
     contract-change-classification-batch-size = 100
     contract-change-classification-parallelism = 8
     counterparty-batch-size = 1000
@@ -1647,20 +1669,25 @@ canton.participants.<participant>.parameters {
     # digest-update-persistence-batch-factor = <int>
     disable-old-acs-commitment-processor = on-new-protocol-versions
     enable-new-acs-commitment-processor = true
-    load-batching {
-      maximum-batch-size = 500
-      type = batching|no-batching   # required
-    }
     matching-parallelism = 20
     max-num-loaded-digests = 10000
     max-num-updates-between-checkpoints = 100000
     max-parallel-active-id-queries = 12
     max-parallel-payload-create-queries = 6
+    received-commitment-validation-parallelism = 1
+    reinitializing-journal-tombstones-batch-size = 1000
+    tracing = disabled
+    use-sequential-digest-accumulator = false
+    consistency-check {
+      journal-snapshot-query-limit = 100
+    }
+    load-batching {
+      type = batching|no-batching   # required
+      maximum-batch-size = 500
+    }
     period-store {
       writer-page-size = 100
     }
-    received-commitment-validation-parallelism = 1
-    reinitializing-journal-tombstones-batch-size = 1000
     sender {
       max-batch-size = 100
       # max-retry-delay = <duration>
@@ -1668,10 +1695,7 @@ canton.participants.<participant>.parameters {
       min-send-delay-fraction = 0
       parallelism = 10
     }
-    tracing = disabled
-    use-sequential-digest-accumulator = false
   }
-  activation-frequency-for-warn-about-consistency-checks = 1000
   admin-workflow {
     auto-load-dar = true
     bong-test-max-level = 0
@@ -1684,17 +1708,7 @@ canton.participants.<participant>.parameters {
     # test-interceptor = <string>
     unsafe-sequencer-channel-support = false
   }
-  alpha-version-support = false
-  auto-sync-protocol-feature-flags = true
   batching {
-    aggregator {
-      maximum-batch-size = 500
-      type = batching|no-batching   # required
-    }
-    contract-store-aggregator {
-      maximum-batch-size = 500
-      type = batching|no-batching   # required
-    }
     # in-flight-aggregations-query-interval = <duration>
     ledger-api-pruning-batch-size = 50000
     max-acs-import-batch-size = 1000
@@ -1704,22 +1718,29 @@ canton.participants.<participant>.parameters {
     max-stakeholder-groups-batch-size = 1000
     max-topology-update-batch-size = 1000
     max-topology-write-batch-size = 1000
-    mediator-fetch-finalized-responses-aggregator {
-      maximum-batch-size = 500
-      type = batching|no-batching   # required
-    }
-    mediator-store-finalized-responses-aggregator {
-      maximum-batch-size = 500
-      type = batching|no-batching   # required
-    }
     parallelism = 8
     pruning-parallelism = 2
-    topology-cache-aggregator {
-      maximum-batch-size = 500
+    aggregator {
       type = batching|no-batching   # required
+      maximum-batch-size = 500
+    }
+    contract-store-aggregator {
+      type = batching|no-batching   # required
+      maximum-batch-size = 500
+    }
+    mediator-fetch-finalized-responses-aggregator {
+      type = batching|no-batching   # required
+      maximum-batch-size = 500
+    }
+    mediator-store-finalized-responses-aggregator {
+      type = batching|no-batching   # required
+      maximum-batch-size = 500
+    }
+    topology-cache-aggregator {
+      type = batching|no-batching   # required
+      maximum-batch-size = 500
     }
   }
-  beta-version-support = false
   caching {
     bft-ordering-batch-cache {
       expire-after-access = "1 minute"
@@ -1802,29 +1823,15 @@ canton.participants.<participant>.parameters {
     max-pending = 1000
     max-succeeded = 100
   }
-  commitment-asynchronous-initialization = false
-  commitment-checkpoint-interval = "1 minute"
-  commitment-mismatch-debugging = false
-  # commitment-processor-nr-acs-changes-behind-to-trigger-catch-up = <int>
-  commitment-reduce-parallelism = 1
-  commitment-use-db-snapshot-for-participant-lookup = false
-  connect-to-synchronizers-on-startup = true
-  crash-after-failed-validation = true
-  dev-version-support = false
-  disable-upgrade-validation = false
-  do-not-await-on-checking-incoming-commitments = false
-  dont-warn-on-deprecated-pv = false
-  enable-all-ledger-api-reassignments = false
-  enable-strict-dar-validation = true
   engine {
     enable-additional-consistency-checks = false
     enable-engine-stack-traces = false
+    iterations-between-interruptions = 10000
+    # profile-dir = <unresolved>
+    # snapshot-dir = <unresolved>
     extensions {
       <extension> {
         address = "..."   # required
-        auth {
-          type = none|bearer-token-file   # required
-        }
         connect-timeout = "500 milliseconds"
         # max-response-body-bytes = <int>
         max-retries = 3
@@ -1832,19 +1839,19 @@ canton.participants.<participant>.parameters {
         request-timeout = "8 seconds"
         retry-initial-delay = "1000 milliseconds"
         retry-max-delay = "10 seconds"
+        validate-on-startup = false
+        version = "v1"
+        auth {
+          type = none|bearer-token-file   # required
+        }
         tls {
           enabled = true
           trust-collection-file {
             type = pem-file|pem-string   # required
           }
         }
-        validate-on-startup = false
-        version = "v1"
       }
     }
-    iterations-between-interruptions = 10000
-    # profile-dir = <unresolved>
-    # snapshot-dir = <unresolved>
     submission-phase-logging {
       enabled = true
       log-level = "DEBUG"
@@ -1873,9 +1880,8 @@ canton.participants.<participant>.parameters {
       matching = [ ]
     }
   }
-  journal-garbage-collection-delay = "0 seconds"
-  journal-garbage-collection-minimum-gap = "30 minutes"
   ledger-api-server {
+    # token-expiry-grace-period-for-streams = <duration>
     contract-id-seeding {
       type = strong|weak|static   # required
     }
@@ -1885,16 +1891,6 @@ canton.participants.<participant>.parameters {
       parallelism = 5
     }
     indexer {
-      achs-config {
-        aggregation-threshold = 5
-        buffer-size = 256
-        init-aggregation-threshold = 5
-        init-parallelism = 8
-        last-populated-distance-target = 0   # required
-        population-parallelism = 4
-        removal-parallelism = 4
-        valid-at-distance-target = 0   # required
-      }
       batching-parallelism = 4
       contract-pruning-db-lock-timeout = "20 seconds"
       contract-read-row-db-lock-timeout = "20 seconds"
@@ -1909,16 +1905,6 @@ canton.participants.<participant>.parameters {
       max-output-batched-buffer-size = 16
       max-tailer-batch-size = 10
       post-processing-parallelism = 8
-      postgres-data-source {
-        client-connection-check-interval = "5 seconds"
-        network-timeout = "60 seconds"
-        synchronous-commit {
-          type = on|off|remote-write|remote-apply|local   # required
-        }
-        tcp-keepalives-count = 5
-        tcp-keepalives-idle = 10
-        tcp-keepalives-interval = 1
-      }
       queue-buffer-size = 50
       queue-max-blocked-offer = 1000
       queue-recovery-retry-attempt-error-threshold = 100
@@ -1930,8 +1916,27 @@ canton.participants.<participant>.parameters {
       submission-batch-insertion-size = 5000
       submission-batch-size = 50
       use-weighted-batching = false
+      achs-config {
+        aggregation-threshold = 5
+        buffer-size = 256
+        init-aggregation-threshold = 5
+        init-parallelism = 8
+        last-populated-distance-target = 0   # required
+        population-parallelism = 4
+        removal-parallelism = 4
+        valid-at-distance-target = 0   # required
+      }
+      postgres-data-source {
+        client-connection-check-interval = "5 seconds"
+        network-timeout = "60 seconds"
+        tcp-keepalives-count = 5
+        tcp-keepalives-idle = 10
+        tcp-keepalives-interval = 1
+        synchronous-commit {
+          type = on|off|remote-write|remote-apply|local   # required
+        }
+      }
     }
-    # token-expiry-grace-period-for-streams = <duration>
   }
   lsu {
     automatically-perform-lsu = true
@@ -1961,8 +1966,6 @@ canton.participants.<participant>.parameters {
       max-retries = 0   # required
     }
   }
-  max-unzipped-dar-size = 1073741824
-  minimum-protocol-version = 34
   package-metadata-view {
     init-load-parallelism = 16
     init-process-parallelism = 16
@@ -1970,19 +1973,17 @@ canton.participants.<participant>.parameters {
     init-takes-too-long-interval = "10 seconds"
   }
   stores {
+    pruning-metric-update-interval = "1 hour"
     journal-pruning {
       initial-interval = "5 seconds"
       max-buckets = 100
       max-items-expected-to-prune-per-batch = 100000
       target-batch-size = 5000
     }
-    pruning-metric-update-interval = "1 hour"
     safe-to-prune-commitment-state {
       type = match|match-or-mismatch|all   # required
     }
   }
-  validate-legacy-contracts-v-11 = true
-  warn-if-overloaded-for = "20 seconds"
   watchdog {
     # check-interval = <duration>
     enabled = false   # required
@@ -2473,8 +2474,12 @@ canton.participants.<participant>.parameters.engine.extensions.<extension>.tls.t
 
 ```hocon
 canton.participants.<participant>.replication {
+  # enabled = <boolean>
   connection-pool {
     active-timeout = "15 seconds"
+    health-check-period = "5 seconds"
+    initial-locked-connection-timeout = "15 seconds"
+    initial-must-remain-active-connection-timeout = "1 minute"
     connection {
       client-connection-check-interval = "5 seconds"
       connection-timeout = "10 seconds"
@@ -2485,18 +2490,14 @@ canton.participants.<participant>.replication {
       keep-alive-count = 5
       keep-alive-idle = "10 seconds"
       keep-alive-interval = "1 second"
+      max-inconclusive-read-only-checks = 3
+      passive-check-period = "15 seconds"
       lock {
         health-check-period = "5 seconds"
         health-check-timeout = "15 seconds"
       }
-      max-inconclusive-read-only-checks = 3
-      passive-check-period = "15 seconds"
     }
-    health-check-period = "5 seconds"
-    initial-locked-connection-timeout = "15 seconds"
-    initial-must-remain-active-connection-timeout = "1 minute"
   }
-  # enabled = <boolean>
 }
 ```
 
@@ -2540,18 +2541,6 @@ canton.participants.<participant>.replication {
 canton.participants.<participant>.sequencer-client {
   acknowledgement-interval = "1 minute"
   amplify-on-max-sequencing-time-too-far = true
-  auth-token {
-    backoff {
-      base = 2
-      jitter {
-        type = equal|full   # required
-      }
-      max-retry-interval = "2 minutes"
-    }
-    min-retry-interval = "500 milliseconds"
-    refresh-auth-token-before-expiry = "20 seconds"
-    retries = 20
-  }
   # channel-flow-control-window = <int>
   channel-initial-flow-control-window = 1048576
   channel-max-inbound-message-size = 134217728
@@ -2561,12 +2550,6 @@ canton.participants.<participant>.sequencer-client {
   handshake-retry-attempts = 50
   handshake-retry-delay = "5 seconds"
   initial-connection-retry-delay = "10 milliseconds"
-  keep-alive-client {
-    idle-timeout = "30 minutes"
-    keep-alive-without-calls = false
-    time = "40 seconds"
-    timeout = "15 seconds"
-  }
   max-connection-retry-delay = "30 seconds"
   maximum-in-flight-event-batches = 20
   # override-max-request-size = <int>
@@ -2577,6 +2560,24 @@ canton.participants.<participant>.sequencer-client {
   use-new-aggregator = true
   use-new-connection-pool = true
   warn-disconnect-delay = "10 seconds"
+  auth-token {
+    min-retry-interval = "500 milliseconds"
+    refresh-auth-token-before-expiry = "20 seconds"
+    retries = 20
+    backoff {
+      base = 2
+      max-retry-interval = "2 minutes"
+      jitter {
+        type = equal|full   # required
+      }
+    }
+  }
+  keep-alive-client {
+    idle-timeout = "30 minutes"
+    keep-alive-without-calls = false
+    time = "40 seconds"
+    timeout = "15 seconds"
+  }
 }
 ```
 
@@ -2632,28 +2633,28 @@ canton.participants.<participant>.sequencer-client {
 
 ```hocon
 canton.participants.<participant>.storage {
+  type = memory|h2|postgres   # required
   parameters {
-    connection-allocation {
-      # num-ledger-api = <int>
-      # num-reads = <int>
-      # num-writes = <int>
-    }
     connection-timeout = "5 seconds"
     fail-fast-on-startup = true
     failed-to-fatal-delay = "5 minutes"
     # max-connections = <int>
     migrate-and-start = false
     migrations-paths = [ ]
-    partitions {
-      initial-bft-orderer-tables-partition-size = 1500
-    }
     repeatable-migrations-paths = [ ]
     unsafe-baseline-on-migrate = false
     unsafe-clean-on-validation-error = false
     # warn-on-slow-query = <duration>
     warn-on-slow-query-interval = "5 seconds"
+    connection-allocation {
+      # num-ledger-api = <int>
+      # num-reads = <int>
+      # num-writes = <int>
+    }
+    partitions {
+      initial-bft-orderer-tables-partition-size = 1500
+    }
   }
-  type = memory|h2|postgres   # required
 }
 ```
 
@@ -2663,25 +2664,25 @@ canton.participants.<participant>.storage {
 canton.participants.<participant>.storage {
   type = memory
   parameters {
-    connection-allocation {
-      # num-ledger-api = <int>
-      # num-reads = <int>
-      # num-writes = <int>
-    }
     connection-timeout = "5 seconds"
     fail-fast-on-startup = true
     failed-to-fatal-delay = "5 minutes"
     # max-connections = <int>
     migrate-and-start = false
     migrations-paths = [ ]
-    partitions {
-      initial-bft-orderer-tables-partition-size = 1500
-    }
     repeatable-migrations-paths = [ ]
     unsafe-baseline-on-migrate = false
     unsafe-clean-on-validation-error = false
     # warn-on-slow-query = <duration>
     warn-on-slow-query-interval = "5 seconds"
+    connection-allocation {
+      # num-ledger-api = <int>
+      # num-reads = <int>
+      # num-writes = <int>
+    }
+    partitions {
+      initial-bft-orderer-tables-partition-size = 1500
+    }
   }
 }
 ```
@@ -2690,25 +2691,25 @@ canton.participants.<participant>.storage {
 canton.participants.<participant>.storage {
   type = h2
   parameters {
-    connection-allocation {
-      # num-ledger-api = <int>
-      # num-reads = <int>
-      # num-writes = <int>
-    }
     connection-timeout = "5 seconds"
     fail-fast-on-startup = true
     failed-to-fatal-delay = "5 minutes"
     # max-connections = <int>
     migrate-and-start = false
     migrations-paths = [ ]
-    partitions {
-      initial-bft-orderer-tables-partition-size = 1500
-    }
     repeatable-migrations-paths = [ ]
     unsafe-baseline-on-migrate = false
     unsafe-clean-on-validation-error = false
     # warn-on-slow-query = <duration>
     warn-on-slow-query-interval = "5 seconds"
+    connection-allocation {
+      # num-ledger-api = <int>
+      # num-reads = <int>
+      # num-writes = <int>
+    }
+    partitions {
+      initial-bft-orderer-tables-partition-size = 1500
+    }
   }
 }
 ```
@@ -2717,25 +2718,25 @@ canton.participants.<participant>.storage {
 canton.participants.<participant>.storage {
   type = postgres
   parameters {
-    connection-allocation {
-      # num-ledger-api = <int>
-      # num-reads = <int>
-      # num-writes = <int>
-    }
     connection-timeout = "5 seconds"
     fail-fast-on-startup = true
     failed-to-fatal-delay = "5 minutes"
     # max-connections = <int>
     migrate-and-start = false
     migrations-paths = [ ]
-    partitions {
-      initial-bft-orderer-tables-partition-size = 1500
-    }
     repeatable-migrations-paths = [ ]
     unsafe-baseline-on-migrate = false
     unsafe-clean-on-validation-error = false
     # warn-on-slow-query = <duration>
     warn-on-slow-query-interval = "5 seconds"
+    connection-allocation {
+      # num-ledger-api = <int>
+      # num-reads = <int>
+      # num-writes = <int>
+    }
+    partitions {
+      initial-bft-orderer-tables-partition-size = 1500
+    }
   }
 }
 ```
@@ -2845,6 +2846,7 @@ canton.participants.<participant>.traffic-accounting {
   enforce-cost-on-submissions = false
   reject-multi-party-submissions = false
   traffic-enforcement-server {
+    type = internal   # required
     account-lookup-timeout = "20 seconds"
     database-query-timeout = "1 second"
     in-process-tea-server-name = "TeaGrpcInProcServer"
@@ -2857,7 +2859,6 @@ canton.participants.<participant>.traffic-accounting {
       # projection-max-restarts = <int>
       projection-restart-random-factor = 0.2
     }
-    type = internal   # required
   }
 }
 ```
@@ -3465,13 +3466,13 @@ Stores the configuration for AWS KMS. This configuration is mandatory if we want
 canton.participants.<participant>.crypto.kms {
   type = aws
   audit-logging = false
-  custom-tags {
-    <custom-tag> = [ ]
-  }
   disable-ssl-verification = false
   # endpoint-override = <string>
   multi-region-key = false
   region = "..."   # required
+  custom-tags {
+    <custom-tag> = [ ]
+  }
   retries {
     create-key-check {
       initial-delay = "30 seconds"   # required
@@ -3699,10 +3700,10 @@ A variant of ServerAuthRequirementConfig by which the server requires auth from 
 canton.participants.<participant>.admin-api.tls.client-auth {
   type = require
   admin-client {
+    private-key-file = "..."   # required
     cert-chain-file {
       type = pem-file|pem-string   # required
     }
-    private-key-file = "..."   # required
   }
 }
 ```
@@ -3760,25 +3761,25 @@ Dictates that persistent data is stored in memory. So in fact, the data is not p
 canton.participants.<participant>.storage {
   type = memory
   parameters {
-    connection-allocation {
-      # num-ledger-api = <int>
-      # num-reads = <int>
-      # num-writes = <int>
-    }
     connection-timeout = "5 seconds"
     fail-fast-on-startup = true
     failed-to-fatal-delay = "5 minutes"
     # max-connections = <int>
     migrate-and-start = false
     migrations-paths = [ ]
-    partitions {
-      initial-bft-orderer-tables-partition-size = 1500
-    }
     repeatable-migrations-paths = [ ]
     unsafe-baseline-on-migrate = false
     unsafe-clean-on-validation-error = false
     # warn-on-slow-query = <duration>
     warn-on-slow-query-interval = "5 seconds"
+    connection-allocation {
+      # num-ledger-api = <int>
+      # num-reads = <int>
+      # num-writes = <int>
+    }
+    partitions {
+      initial-bft-orderer-tables-partition-size = 1500
+    }
   }
 }
 ```
@@ -3817,25 +3818,25 @@ canton.participants.<participant>.storage {
 canton.participants.<participant>.storage {
   type = h2
   parameters {
-    connection-allocation {
-      # num-ledger-api = <int>
-      # num-reads = <int>
-      # num-writes = <int>
-    }
     connection-timeout = "5 seconds"
     fail-fast-on-startup = true
     failed-to-fatal-delay = "5 minutes"
     # max-connections = <int>
     migrate-and-start = false
     migrations-paths = [ ]
-    partitions {
-      initial-bft-orderer-tables-partition-size = 1500
-    }
     repeatable-migrations-paths = [ ]
     unsafe-baseline-on-migrate = false
     unsafe-clean-on-validation-error = false
     # warn-on-slow-query = <duration>
     warn-on-slow-query-interval = "5 seconds"
+    connection-allocation {
+      # num-ledger-api = <int>
+      # num-reads = <int>
+      # num-writes = <int>
+    }
+    partitions {
+      initial-bft-orderer-tables-partition-size = 1500
+    }
   }
 }
 ```
@@ -3874,25 +3875,25 @@ canton.participants.<participant>.storage {
 canton.participants.<participant>.storage {
   type = postgres
   parameters {
-    connection-allocation {
-      # num-ledger-api = <int>
-      # num-reads = <int>
-      # num-writes = <int>
-    }
     connection-timeout = "5 seconds"
     fail-fast-on-startup = true
     failed-to-fatal-delay = "5 minutes"
     # max-connections = <int>
     migrate-and-start = false
     migrations-paths = [ ]
-    partitions {
-      initial-bft-orderer-tables-partition-size = 1500
-    }
     repeatable-migrations-paths = [ ]
     unsafe-baseline-on-migrate = false
     unsafe-clean-on-validation-error = false
     # warn-on-slow-query = <duration>
     warn-on-slow-query-interval = "5 seconds"
+    connection-allocation {
+      # num-ledger-api = <int>
+      # num-reads = <int>
+      # num-writes = <int>
+    }
+    partitions {
+      initial-bft-orderer-tables-partition-size = 1500
+    }
   }
 }
 ```

@@ -1,6 +1,7 @@
 ---
 title: "Mediator node"
 description: "Admin API, storage, crypto and parameters of a mediator."
+mode: "wide"
 ---
 
 {/* GENERATED_FROM source="digital-asset/canton" ref="1be6d4933767495c3ba950e8513086ca10188757" version="3.7.0-SNAPSHOT" path="docs-open/target/config-reference.json" */}
@@ -17,6 +18,12 @@ Configuration under `canton.mediators.<mediator>` for Canton 3.7.0-SNAPSHOT: 412
 ```hocon
 canton.mediators.<mediator>.admin-api {
   address = "127.0.0.1"
+  # flow-control-window = <int>
+  initial-flow-control-window = 1048576
+  max-concurrent-calls-per-connection = 100000
+  max-inbound-message-size = 10485760
+  max-token-lifetime = "5 minutes"
+  port = 0   # required
   admin-token-config {
     act-as-any-party-claim = false
     admin-claim = false
@@ -28,8 +35,6 @@ canton.mediators.<mediator>.admin-api {
       type = wildcard|unsafe-jwt-hmac-256|jwt-rs-256-crt|jwt-es-256-crt|jwt-es-512-crt|jwt-jwks|party-jwt   # required
     }
   ]
-  # flow-control-window = <int>
-  initial-flow-control-window = 1048576
   jwks-cache-config {
     auto-refresh-after = "0 seconds"
     cache-expiration = "5 minutes"
@@ -50,27 +55,23 @@ canton.mediators.<mediator>.admin-api {
     timeout = "20 seconds"
   }
   limits {
+    throttle-logging-rate-per-second = 10
+    warn-on-undefined-limits = false
     active {
       <key> = [ ]
     }
-    throttle-logging-rate-per-second = 10
-    warn-on-undefined-limits = false
   }
-  max-concurrent-calls-per-connection = 100000
-  max-inbound-message-size = 10485760
-  max-token-lifetime = "5 minutes"
-  port = 0   # required
   tls {
-    cert-chain-file {
-      type = pem-file|pem-string   # required
-    }
     # ciphers = [ ... ]
-    client-auth {
-      type = require|optional|none   # required
-    }
     enable-cert-revocation-checking = false
     minimum-server-protocol-version = "TLSv1.2"
     private-key-file = "..."   # required
+    cert-chain-file {
+      type = pem-file|pem-string   # required
+    }
+    client-auth {
+      type = require|optional|none   # required
+    }
     trust-collection-file {
       type = pem-file|pem-string   # required
     }
@@ -220,10 +221,10 @@ canton.mediators.<mediator>.admin-api.tls.cert-chain-file {
 canton.mediators.<mediator>.admin-api.tls.client-auth {
   type = require
   admin-client {
+    private-key-file = "..."   # required
     cert-chain-file {
       type = pem-file|pem-string   # required
     }
-    private-key-file = "..."   # required
   }
 }
 ```
@@ -560,6 +561,7 @@ canton.mediators.<mediator>.caching {
 ```hocon
 canton.mediators.<mediator>.crypto {
   enable-experimental = false
+  provider = jce
   encryption {
     algorithms {
       # allowed = [ ... ]
@@ -575,6 +577,7 @@ canton.mediators.<mediator>.crypto {
     # default = <generic>
   }
   kms {
+    type = driver|aws|gcp   # required
     retries {
       create-key-check {
         initial-delay = "30 seconds"   # required
@@ -587,7 +590,6 @@ canton.mediators.<mediator>.crypto {
         max-retries = 0   # required
       }
     }
-    type = driver|aws|gcp   # required
   }
   parallelism {
     encryption-parallelism = 10
@@ -599,12 +601,11 @@ canton.mediators.<mediator>.crypto {
   }
   private-key-store {
     encryption {
-      reverted = false
       type = kms   # required
+      reverted = false
       # wrapper-key-id = <string>
     }
   }
-  provider = jce
   session-signing-keys {
     cut-off-duration = "1 minute"
     disable-bound-checks = false
@@ -659,13 +660,13 @@ canton.mediators.<mediator>.crypto.kms {
 canton.mediators.<mediator>.crypto.kms {
   type = aws
   audit-logging = false
-  custom-tags {
-    <custom-tag> = [ ]
-  }
   disable-ssl-verification = false
   # endpoint-override = <string>
   multi-region-key = false
   region = "..."   # required
+  custom-tags {
+    <custom-tag> = [ ]
+  }
   retries {
     create-key-check {
       initial-delay = "30 seconds"   # required
@@ -891,11 +892,11 @@ canton.mediators.<mediator>.init.identity.identifier {
 ```hocon
 canton.mediators.<mediator>.mediator {
   deduplication-store {
-    persist-batching {
-      maximum-batch-size = 500
-      type = batching|no-batching   # required
-    }
     prune-at-most-every = "10 seconds"
+    persist-batching {
+      type = batching|no-batching   # required
+      maximum-batch-size = 500
+    }
   }
   pruning {
     max-pruning-batch-size = 50000
@@ -953,6 +954,8 @@ canton.mediators.<mediator>.mediator.deduplication-store.persist-batching {
 canton.mediators.<mediator>.monitoring {
   grpc-health-server {
     address = "0.0.0.0"
+    parallelism = 4
+    # port = <int>
     jwt-timestamp-leeway {
       # default = <int>
       # expires-at = <int>
@@ -965,8 +968,6 @@ canton.mediators.<mediator>.monitoring {
       time = "40 seconds"
       timeout = "20 seconds"
     }
-    parallelism = 4
-    # port = <int>
   }
   http-health-server {
     address = "0.0.0.0"
@@ -1010,15 +1011,10 @@ canton.mediators.<mediator>.monitoring {
 ```hocon
 canton.mediators.<mediator>.parameters {
   alpha-version-support = false
+  beta-version-support = false
+  dev-version-support = false
+  dont-warn-on-deprecated-pv = false
   batching {
-    aggregator {
-      maximum-batch-size = 500
-      type = batching|no-batching   # required
-    }
-    contract-store-aggregator {
-      maximum-batch-size = 500
-      type = batching|no-batching   # required
-    }
     # in-flight-aggregations-query-interval = <duration>
     ledger-api-pruning-batch-size = 50000
     max-acs-import-batch-size = 1000
@@ -1028,22 +1024,29 @@ canton.mediators.<mediator>.parameters {
     max-stakeholder-groups-batch-size = 1000
     max-topology-update-batch-size = 1000
     max-topology-write-batch-size = 1000
-    mediator-fetch-finalized-responses-aggregator {
-      maximum-batch-size = 500
-      type = batching|no-batching   # required
-    }
-    mediator-store-finalized-responses-aggregator {
-      maximum-batch-size = 500
-      type = batching|no-batching   # required
-    }
     parallelism = 8
     pruning-parallelism = 2
-    topology-cache-aggregator {
-      maximum-batch-size = 500
+    aggregator {
       type = batching|no-batching   # required
+      maximum-batch-size = 500
+    }
+    contract-store-aggregator {
+      type = batching|no-batching   # required
+      maximum-batch-size = 500
+    }
+    mediator-fetch-finalized-responses-aggregator {
+      type = batching|no-batching   # required
+      maximum-batch-size = 500
+    }
+    mediator-store-finalized-responses-aggregator {
+      type = batching|no-batching   # required
+      maximum-batch-size = 500
+    }
+    topology-cache-aggregator {
+      type = batching|no-batching   # required
+      maximum-batch-size = 500
     }
   }
-  beta-version-support = false
   caching {
     bft-ordering-batch-cache {
       expire-after-access = "1 minute"
@@ -1127,8 +1130,6 @@ canton.mediators.<mediator>.parameters {
     initial-delay = "3 seconds"
     liveness-margin = 3
   }
-  dev-version-support = false
-  dont-warn-on-deprecated-pv = false
   watchdog {
     # check-interval = <duration>
     enabled = false   # required
@@ -1361,8 +1362,12 @@ canton.mediators.<mediator>.parameters.batching.topology-cache-aggregator {
 
 ```hocon
 canton.mediators.<mediator>.replication {
+  # enabled = <boolean>
   connection-pool {
     active-timeout = "15 seconds"
+    health-check-period = "5 seconds"
+    initial-locked-connection-timeout = "15 seconds"
+    initial-must-remain-active-connection-timeout = "1 minute"
     connection {
       client-connection-check-interval = "5 seconds"
       connection-timeout = "10 seconds"
@@ -1373,18 +1378,14 @@ canton.mediators.<mediator>.replication {
       keep-alive-count = 5
       keep-alive-idle = "10 seconds"
       keep-alive-interval = "1 second"
+      max-inconclusive-read-only-checks = 3
+      passive-check-period = "15 seconds"
       lock {
         health-check-period = "5 seconds"
         health-check-timeout = "15 seconds"
       }
-      max-inconclusive-read-only-checks = 3
-      passive-check-period = "15 seconds"
     }
-    health-check-period = "5 seconds"
-    initial-locked-connection-timeout = "15 seconds"
-    initial-must-remain-active-connection-timeout = "1 minute"
   }
-  # enabled = <boolean>
 }
 ```
 
@@ -1428,18 +1429,6 @@ canton.mediators.<mediator>.replication {
 canton.mediators.<mediator>.sequencer-client {
   acknowledgement-interval = "1 minute"
   amplify-on-max-sequencing-time-too-far = true
-  auth-token {
-    backoff {
-      base = 2
-      jitter {
-        type = equal|full   # required
-      }
-      max-retry-interval = "2 minutes"
-    }
-    min-retry-interval = "500 milliseconds"
-    refresh-auth-token-before-expiry = "20 seconds"
-    retries = 20
-  }
   # channel-flow-control-window = <int>
   channel-initial-flow-control-window = 1048576
   channel-max-inbound-message-size = 134217728
@@ -1449,12 +1438,6 @@ canton.mediators.<mediator>.sequencer-client {
   handshake-retry-attempts = 50
   handshake-retry-delay = "5 seconds"
   initial-connection-retry-delay = "10 milliseconds"
-  keep-alive-client {
-    idle-timeout = "30 minutes"
-    keep-alive-without-calls = false
-    time = "40 seconds"
-    timeout = "15 seconds"
-  }
   max-connection-retry-delay = "30 seconds"
   maximum-in-flight-event-batches = 20
   # override-max-request-size = <int>
@@ -1465,6 +1448,24 @@ canton.mediators.<mediator>.sequencer-client {
   use-new-aggregator = true
   use-new-connection-pool = true
   warn-disconnect-delay = "10 seconds"
+  auth-token {
+    min-retry-interval = "500 milliseconds"
+    refresh-auth-token-before-expiry = "20 seconds"
+    retries = 20
+    backoff {
+      base = 2
+      max-retry-interval = "2 minutes"
+      jitter {
+        type = equal|full   # required
+      }
+    }
+  }
+  keep-alive-client {
+    idle-timeout = "30 minutes"
+    keep-alive-without-calls = false
+    time = "40 seconds"
+    timeout = "15 seconds"
+  }
 }
 ```
 
@@ -1520,28 +1521,28 @@ canton.mediators.<mediator>.sequencer-client {
 
 ```hocon
 canton.mediators.<mediator>.storage {
+  type = memory|h2|postgres   # required
   parameters {
-    connection-allocation {
-      # num-ledger-api = <int>
-      # num-reads = <int>
-      # num-writes = <int>
-    }
     connection-timeout = "5 seconds"
     fail-fast-on-startup = true
     failed-to-fatal-delay = "5 minutes"
     # max-connections = <int>
     migrate-and-start = false
     migrations-paths = [ ]
-    partitions {
-      initial-bft-orderer-tables-partition-size = 1500
-    }
     repeatable-migrations-paths = [ ]
     unsafe-baseline-on-migrate = false
     unsafe-clean-on-validation-error = false
     # warn-on-slow-query = <duration>
     warn-on-slow-query-interval = "5 seconds"
+    connection-allocation {
+      # num-ledger-api = <int>
+      # num-reads = <int>
+      # num-writes = <int>
+    }
+    partitions {
+      initial-bft-orderer-tables-partition-size = 1500
+    }
   }
-  type = memory|h2|postgres   # required
 }
 ```
 
@@ -1551,25 +1552,25 @@ canton.mediators.<mediator>.storage {
 canton.mediators.<mediator>.storage {
   type = memory
   parameters {
-    connection-allocation {
-      # num-ledger-api = <int>
-      # num-reads = <int>
-      # num-writes = <int>
-    }
     connection-timeout = "5 seconds"
     fail-fast-on-startup = true
     failed-to-fatal-delay = "5 minutes"
     # max-connections = <int>
     migrate-and-start = false
     migrations-paths = [ ]
-    partitions {
-      initial-bft-orderer-tables-partition-size = 1500
-    }
     repeatable-migrations-paths = [ ]
     unsafe-baseline-on-migrate = false
     unsafe-clean-on-validation-error = false
     # warn-on-slow-query = <duration>
     warn-on-slow-query-interval = "5 seconds"
+    connection-allocation {
+      # num-ledger-api = <int>
+      # num-reads = <int>
+      # num-writes = <int>
+    }
+    partitions {
+      initial-bft-orderer-tables-partition-size = 1500
+    }
   }
 }
 ```
@@ -1578,25 +1579,25 @@ canton.mediators.<mediator>.storage {
 canton.mediators.<mediator>.storage {
   type = h2
   parameters {
-    connection-allocation {
-      # num-ledger-api = <int>
-      # num-reads = <int>
-      # num-writes = <int>
-    }
     connection-timeout = "5 seconds"
     fail-fast-on-startup = true
     failed-to-fatal-delay = "5 minutes"
     # max-connections = <int>
     migrate-and-start = false
     migrations-paths = [ ]
-    partitions {
-      initial-bft-orderer-tables-partition-size = 1500
-    }
     repeatable-migrations-paths = [ ]
     unsafe-baseline-on-migrate = false
     unsafe-clean-on-validation-error = false
     # warn-on-slow-query = <duration>
     warn-on-slow-query-interval = "5 seconds"
+    connection-allocation {
+      # num-ledger-api = <int>
+      # num-reads = <int>
+      # num-writes = <int>
+    }
+    partitions {
+      initial-bft-orderer-tables-partition-size = 1500
+    }
   }
 }
 ```
@@ -1605,25 +1606,25 @@ canton.mediators.<mediator>.storage {
 canton.mediators.<mediator>.storage {
   type = postgres
   parameters {
-    connection-allocation {
-      # num-ledger-api = <int>
-      # num-reads = <int>
-      # num-writes = <int>
-    }
     connection-timeout = "5 seconds"
     fail-fast-on-startup = true
     failed-to-fatal-delay = "5 minutes"
     # max-connections = <int>
     migrate-and-start = false
     migrations-paths = [ ]
-    partitions {
-      initial-bft-orderer-tables-partition-size = 1500
-    }
     repeatable-migrations-paths = [ ]
     unsafe-baseline-on-migrate = false
     unsafe-clean-on-validation-error = false
     # warn-on-slow-query = <duration>
     warn-on-slow-query-interval = "5 seconds"
+    connection-allocation {
+      # num-ledger-api = <int>
+      # num-reads = <int>
+      # num-writes = <int>
+    }
+    partitions {
+      initial-bft-orderer-tables-partition-size = 1500
+    }
   }
 }
 ```
@@ -2245,13 +2246,13 @@ Stores the configuration for AWS KMS. This configuration is mandatory if we want
 canton.mediators.<mediator>.crypto.kms {
   type = aws
   audit-logging = false
-  custom-tags {
-    <custom-tag> = [ ]
-  }
   disable-ssl-verification = false
   # endpoint-override = <string>
   multi-region-key = false
   region = "..."   # required
+  custom-tags {
+    <custom-tag> = [ ]
+  }
   retries {
     create-key-check {
       initial-delay = "30 seconds"   # required
@@ -2474,10 +2475,10 @@ A variant of ServerAuthRequirementConfig by which the server requires auth from 
 canton.mediators.<mediator>.admin-api.tls.client-auth {
   type = require
   admin-client {
+    private-key-file = "..."   # required
     cert-chain-file {
       type = pem-file|pem-string   # required
     }
-    private-key-file = "..."   # required
   }
 }
 ```
@@ -2535,25 +2536,25 @@ Dictates that persistent data is stored in memory. So in fact, the data is not p
 canton.mediators.<mediator>.storage {
   type = memory
   parameters {
-    connection-allocation {
-      # num-ledger-api = <int>
-      # num-reads = <int>
-      # num-writes = <int>
-    }
     connection-timeout = "5 seconds"
     fail-fast-on-startup = true
     failed-to-fatal-delay = "5 minutes"
     # max-connections = <int>
     migrate-and-start = false
     migrations-paths = [ ]
-    partitions {
-      initial-bft-orderer-tables-partition-size = 1500
-    }
     repeatable-migrations-paths = [ ]
     unsafe-baseline-on-migrate = false
     unsafe-clean-on-validation-error = false
     # warn-on-slow-query = <duration>
     warn-on-slow-query-interval = "5 seconds"
+    connection-allocation {
+      # num-ledger-api = <int>
+      # num-reads = <int>
+      # num-writes = <int>
+    }
+    partitions {
+      initial-bft-orderer-tables-partition-size = 1500
+    }
   }
 }
 ```
@@ -2592,25 +2593,25 @@ canton.mediators.<mediator>.storage {
 canton.mediators.<mediator>.storage {
   type = h2
   parameters {
-    connection-allocation {
-      # num-ledger-api = <int>
-      # num-reads = <int>
-      # num-writes = <int>
-    }
     connection-timeout = "5 seconds"
     fail-fast-on-startup = true
     failed-to-fatal-delay = "5 minutes"
     # max-connections = <int>
     migrate-and-start = false
     migrations-paths = [ ]
-    partitions {
-      initial-bft-orderer-tables-partition-size = 1500
-    }
     repeatable-migrations-paths = [ ]
     unsafe-baseline-on-migrate = false
     unsafe-clean-on-validation-error = false
     # warn-on-slow-query = <duration>
     warn-on-slow-query-interval = "5 seconds"
+    connection-allocation {
+      # num-ledger-api = <int>
+      # num-reads = <int>
+      # num-writes = <int>
+    }
+    partitions {
+      initial-bft-orderer-tables-partition-size = 1500
+    }
   }
 }
 ```
@@ -2649,25 +2650,25 @@ canton.mediators.<mediator>.storage {
 canton.mediators.<mediator>.storage {
   type = postgres
   parameters {
-    connection-allocation {
-      # num-ledger-api = <int>
-      # num-reads = <int>
-      # num-writes = <int>
-    }
     connection-timeout = "5 seconds"
     fail-fast-on-startup = true
     failed-to-fatal-delay = "5 minutes"
     # max-connections = <int>
     migrate-and-start = false
     migrations-paths = [ ]
-    partitions {
-      initial-bft-orderer-tables-partition-size = 1500
-    }
     repeatable-migrations-paths = [ ]
     unsafe-baseline-on-migrate = false
     unsafe-clean-on-validation-error = false
     # warn-on-slow-query = <duration>
     warn-on-slow-query-interval = "5 seconds"
+    connection-allocation {
+      # num-ledger-api = <int>
+      # num-reads = <int>
+      # num-writes = <int>
+    }
+    partitions {
+      initial-bft-orderer-tables-partition-size = 1500
+    }
   }
 }
 ```

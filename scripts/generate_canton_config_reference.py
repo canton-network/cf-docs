@@ -537,7 +537,36 @@ def nest(keys: "OrderedDict[str, dict]") -> dict:
                 drop_redundant_arrays(child)
 
     drop_redundant_arrays(tree)
-    return tree
+    return scalars_first(tree)
+
+
+def scalars_first(node: dict) -> dict:
+    """Order every block the way the tables do: single-value keys first, alphabetically, with a
+    `type` discriminator leading, then nested blocks alphabetically. The same walk serves the
+    section blocks, the variant blocks and the skeleton, so all of them match the table."""
+    if node.get("__leaf__") is not None:
+        return node
+
+    def is_block(child: dict) -> bool:
+        # A required section written as `name { }` is a block to the eye even though it is a leaf
+        # in the tree.
+        leaf = child.get("__leaf__")
+        return leaf is None or leaf.get("valueType", {}).get("kind") == "section"
+
+    leaves = sorted(
+        ((name, child) for name, child in node.items() if not is_block(child)),
+        key=lambda item: (item[0] != "type", item[0]),
+    )
+    blocks = sorted(
+        ((name, child) for name, child in node.items() if is_block(child)),
+        key=lambda item: item[0],
+    )
+    ordered: dict = {}
+    for name, child in leaves:
+        ordered[name] = child
+    for name, child in blocks:
+        ordered[name] = scalars_first(child)
+    return ordered
 
 
 def condition_text(scope: str, relative: str, gates: list[tuple[str, set[str]]]) -> str:
@@ -912,8 +941,13 @@ def render_required(prefix: str, entries: list[dict], sections: dict[str, dict],
 # -- pages -------------------------------------------------------------------------------------
 
 
-def frontmatter(title: str, description: str) -> list[str]:
-    return ["---", f'title: "{title}"', f'description: "{description}"', "---", ""]
+def frontmatter(title: str, description: str, wide: bool = False) -> list[str]:
+    """`wide` drops the right-hand table of contents: the key tables need the width, and the
+    pinned section bar carries the place in the page instead."""
+    lines = ["---", f'title: "{title}"', f'description: "{description}"']
+    if wide:
+        lines.append('mode: "wide"')
+    return lines + ["---", ""]
 
 
 def generated_marker(artifact: dict) -> str:
@@ -988,7 +1022,7 @@ def reading_guide(artifact: dict, options: list[dict] | None) -> list[str]:
 
 def render_node_page(prefix: str, title: str, description: str, options: list[dict], sections: dict[str, dict], artifact: dict, variants_by_type, unions, options_by_path) -> str:
     lines = [
-        *frontmatter(title, description),
+        *frontmatter(title, description, wide=True),
         generated_marker(artifact),
         "",
         f"Configuration under `{prefix}` for Canton {artifact['cantonVersion']}: {len(options)} keys. "
@@ -1084,7 +1118,7 @@ def render_types_page(artifact: dict, variants_by_type, unions, options_by_path)
     """Every section that takes a `type`, documented once: what each type accepts, as HOCON and as
     a table, with the places in the configuration where the section occurs."""
     lines = [
-        *frontmatter("Configuration types", "Sections of the Canton configuration that take a type, and the keys each type accepts."),
+        *frontmatter("Configuration types", "Sections of the Canton configuration that take a type, and the keys each type accepts.", wide=True),
         generated_marker(artifact),
         "",
         "Some sections are a choice between shapes. You pick one by setting a `type` key, and that "

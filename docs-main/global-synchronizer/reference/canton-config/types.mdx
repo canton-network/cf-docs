@@ -1,6 +1,7 @@
 ---
 title: "Configuration types"
 description: "Sections of the Canton configuration that take a type, and the keys each type accepts."
+mode: "wide"
 ---
 
 {/* GENERATED_FROM source="digital-asset/canton" ref="1be6d4933767495c3ba950e8513086ca10188757" version="3.7.0-SNAPSHOT" path="docs-open/target/config-reference.json" */}
@@ -460,27 +461,27 @@ canton.parameters.clock {
   type = remote-clock
   remote-api {
     address = "127.0.0.1"
+    port = 0   # required
     channel {
       # flow-control-window = <int>
       # initial-flow-control-window = <int>
+      max-inbound-message-size = 0   # required
+      trace-context-propagation = enabled|disabled   # required
       keep-alive-client {
         idle-timeout = "30 minutes"
         keep-alive-without-calls = false
         time = "40 seconds"
         timeout = "15 seconds"
       }
-      max-inbound-message-size = 0   # required
-      trace-context-propagation = enabled|disabled   # required
     }
-    port = 0   # required
     tls {
+      enabled = true
       client-cert {
+        private-key-file = "..."   # required
         cert-chain-file {
           type = pem-file|pem-string   # required
         }
-        private-key-file = "..."   # required
       }
-      enabled = true
       trust-collection-file {
         type = pem-file|pem-string   # required
       }
@@ -608,14 +609,14 @@ canton.monitoring.tracing.tracer.exporter {
 ```hocon
 canton.monitoring.tracing.tracer.exporter {
   type = otlp
-  additional-headers {
-    <additional-header> = [ ]
-  }
   address = "localhost"
   # connect-timeout = <duration>
   port = 4317
   # timeout = <duration>
   # trust-collection-path = <string>
+  additional-headers {
+    <additional-header> = [ ]
+  }
 }
 ```
 
@@ -1034,13 +1035,13 @@ Stores the configuration for AWS KMS. This configuration is mandatory if we want
 canton.mediators.<mediator>.crypto.kms {
   type = aws
   audit-logging = false
-  custom-tags {
-    <custom-tag> = [ ]
-  }
   disable-ssl-verification = false
   # endpoint-override = <string>
   multi-region-key = false
   region = "..."   # required
+  custom-tags {
+    <custom-tag> = [ ]
+  }
   retries {
     create-key-check {
       initial-delay = "30 seconds"   # required
@@ -1147,6 +1148,7 @@ canton.monitoring.metrics.reporters = [
   {
     type = prometheus
     address = "localhost"
+    port = 9464
     filters = [
       {
         contains = ""
@@ -1154,7 +1156,6 @@ canton.monitoring.metrics.reporters = [
         starts-with = ""
       }
     ]
-    port = 9464
   }
 ]
 ```
@@ -1184,10 +1185,12 @@ canton.monitoring.metrics.reporters = [
 canton.monitoring.metrics.reporters = [
   {
     type = otlp
+    endpoint = "http://localhost:4317"
+    interval = "10 seconds"
+    protocol = grpc
     auth {
       type = oauth-client-credentials   # required
     }
-    endpoint = "http://localhost:4317"
     filters = [
       {
         contains = ""
@@ -1195,8 +1198,6 @@ canton.monitoring.metrics.reporters = [
         starts-with = ""
       }
     ]
-    interval = "10 seconds"
-    protocol = grpc
   }
 ]
 ```
@@ -1234,6 +1235,7 @@ canton.monitoring.metrics.reporters = [
     type = csv
     context-keys = [ ]
     directory = "/path/to/file"   # required
+    interval = "5 seconds"
     filters = [
       {
         contains = ""
@@ -1241,7 +1243,6 @@ canton.monitoring.metrics.reporters = [
         starts-with = ""
       }
     ]
-    interval = "5 seconds"
   }
 ]
 ```
@@ -1274,6 +1275,8 @@ Log metrics reporter configuration This reporter will log the metrics in the giv
 canton.monitoring.metrics.reporters = [
   {
     type = logging
+    interval = "30 seconds"
+    log-as-info = true
     filters = [
       {
         contains = ""
@@ -1281,8 +1284,6 @@ canton.monitoring.metrics.reporters = [
         starts-with = ""
       }
     ]
-    interval = "30 seconds"
-    log-as-info = true
   }
 ]
 ```
@@ -1560,9 +1561,18 @@ Occurs at:
 ```hocon
 canton.sequencers.<sequencer>.sequencer {
   type = database
+  # testing-interceptor = <string>
   high-availability {
+    # enabled = <boolean>
+    keep-alive-interval = "50 milliseconds"
+    offline-duration = "8 seconds"
+    online-check-interval = "5 seconds"
+    total-node-count = 10
     connection-pool {
       active-timeout = "15 seconds"
+      health-check-period = "5 seconds"
+      initial-locked-connection-timeout = "15 seconds"
+      initial-must-remain-active-connection-timeout = "1 minute"
       connection {
         client-connection-check-interval = "5 seconds"
         connection-timeout = "10 seconds"
@@ -1573,21 +1583,21 @@ canton.sequencers.<sequencer>.sequencer {
         keep-alive-count = 5
         keep-alive-idle = "10 seconds"
         keep-alive-interval = "1 second"
+        max-inconclusive-read-only-checks = 3
+        passive-check-period = "15 seconds"
         lock {
           health-check-period = "5 seconds"
           health-check-timeout = "15 seconds"
         }
-        max-inconclusive-read-only-checks = 3
-        passive-check-period = "15 seconds"
       }
-      health-check-period = "5 seconds"
-      initial-locked-connection-timeout = "15 seconds"
-      initial-must-remain-active-connection-timeout = "1 minute"
     }
-    # enabled = <boolean>
     exclusive-storage {
+      max-connections = 2
       connection-pool {
         active-timeout = "15 seconds"
+        health-check-period = "5 seconds"
+        initial-locked-connection-timeout = "15 seconds"
+        initial-must-remain-active-connection-timeout = "1 minute"
         connection {
           client-connection-check-interval = "5 seconds"
           connection-timeout = "10 seconds"
@@ -1598,23 +1608,15 @@ canton.sequencers.<sequencer>.sequencer {
           keep-alive-count = 5
           keep-alive-idle = "10 seconds"
           keep-alive-interval = "1 second"
+          max-inconclusive-read-only-checks = 3
+          passive-check-period = "15 seconds"
           lock {
             health-check-period = "5 seconds"
             health-check-timeout = "15 seconds"
           }
-          max-inconclusive-read-only-checks = 3
-          passive-check-period = "15 seconds"
         }
-        health-check-period = "5 seconds"
-        initial-locked-connection-timeout = "15 seconds"
-        initial-must-remain-active-connection-timeout = "1 minute"
       }
-      max-connections = 2
     }
-    keep-alive-interval = "50 milliseconds"
-    offline-duration = "8 seconds"
-    online-check-interval = "5 seconds"
-    total-node-count = 10
   }
   pruning {
     max-pruning-batch-size = 50000
@@ -1630,7 +1632,6 @@ canton.sequencers.<sequencer>.sequencer {
     # polling-interval = <duration>
     read-batch-size = 100
   }
-  # testing-interceptor = <string>
   writer {
     type = low-latency|high-throughput   # required
   }
@@ -1711,7 +1712,10 @@ Read the node identifier from the config file
 ```hocon
 canton.sequencers.<sequencer>.sequencer {
   type = external
+  config = "..."   # required
+  sequencer-type = "..."   # required
   block {
+    # testing-interceptor = <string>
     circuit-breaker {
       enabled = true
       messages {
@@ -1800,11 +1804,14 @@ canton.sequencers.<sequencer>.sequencer {
       buffer-size = 256
       is-enabled = false
     }
-    # testing-interceptor = <string>
     throughput-cap {
       clock-tick-interval = "100 milliseconds"
       delayed-activation = true
       enabled = false
+      observation-period-seconds = 60
+      strict = true
+      thresholds = [ ]
+      update-every-ms = 100
       messages {
         confirmation-request {
           global-kbps-cap = 2000
@@ -1825,17 +1832,11 @@ canton.sequencers.<sequencer>.sequencer {
           per-client-tps-cap = 4
         }
       }
-      observation-period-seconds = 60
-      strict = true
-      thresholds = [ ]
-      update-every-ms = 100
     }
     writer {
       type = low-latency|high-throughput   # required
     }
   }
-  config = "..."   # required
-  sequencer-type = "..."   # required
 }
 ```
 
@@ -1943,6 +1944,7 @@ Further types inside this one: [SequencerWriterConfig](#sequencerwriterconfig) a
 canton.sequencers.<sequencer>.sequencer {
   type = bft-sequencer
   block {
+    # testing-interceptor = <string>
     circuit-breaker {
       enabled = true
       messages {
@@ -2031,11 +2033,14 @@ canton.sequencers.<sequencer>.sequencer {
       buffer-size = 256
       is-enabled = false
     }
-    # testing-interceptor = <string>
     throughput-cap {
       clock-tick-interval = "100 milliseconds"
       delayed-activation = true
       enabled = false
+      observation-period-seconds = 60
+      strict = true
+      thresholds = [ ]
+      update-every-ms = 100
       messages {
         confirmation-request {
           global-kbps-cap = 2000
@@ -2056,10 +2061,6 @@ canton.sequencers.<sequencer>.sequencer {
           per-client-tps-cap = 4
         }
       }
-      observation-period-seconds = 60
-      strict = true
-      thresholds = [ ]
-      update-every-ms = 100
     }
     writer {
       type = low-latency|high-throughput   # required
@@ -2070,9 +2071,6 @@ canton.sequencers.<sequencer>.sequencer {
     availability-max-non-ordered-batches-per-node = 1000
     availability-min-proposal-creation-delay = "250 milliseconds"
     availability-number-of-attempts-of-downloading-output-fetch-before-warning = 5
-    batch-aggregator {
-      type = batching|no-batching   # required
-    }
     blocking-db-read-timeout = "1 minute"
     consensus-block-completion-timeout = "10 seconds"
     consensus-empty-block-creation-timeout = "500 milliseconds"
@@ -2092,120 +2090,6 @@ canton.sequencers.<sequencer>.sequencer {
     epoch-state-transfer-timeout-for-future-epoch = "500 milliseconds"
     # init-query-timeout = <duration>
     # init-timeout = <duration>
-    initial-network {
-      connection-management-config {
-        # connection-retry-delay-multiplier = <int>
-        flow-control-buffer = 128
-        flow-control-buffer-drop-newest = false
-        # flow-control-ready-allowance = <int>
-        initial-connection-max-delay = "500 milliseconds"
-        initial-connection-retry-delay = "500 milliseconds"
-        max-connection-attempts-before-warning = 30
-        max-connection-retry-delay = "2 minutes"
-      }
-      endpoint-authentication {
-        auth-token {
-          backoff {
-            base = 2
-            jitter {
-              type = equal|full   # required
-            }
-            max-retry-interval = "2 minutes"
-          }
-          min-retry-interval = "500 milliseconds"
-          refresh-auth-token-before-expiry = "20 seconds"
-          retries = 20
-        }
-        enabled = true
-      }
-      overwrite-stored-endpoints = false
-      peer-endpoints = [
-        {
-          address = "..."   # required
-          channel {
-            # flow-control-window = <int>
-            # initial-flow-control-window = <int>
-            keep-alive-client {
-              idle-timeout = "30 minutes"
-              keep-alive-without-calls = false
-              time = "40 seconds"
-              timeout = "15 seconds"
-            }
-            max-inbound-message-size = 0   # required
-            trace-context-propagation = enabled|disabled   # required
-          }
-          port = 0   # required
-          tls-config {
-            client-cert {
-              cert-chain-file {
-                type = pem-file|pem-string   # required
-              }
-              private-key-file = "..."   # required
-            }
-            enabled = true
-            trust-collection-file {
-              type = pem-file|pem-string   # required
-            }
-          }
-        }
-      ]
-      server-endpoint {
-        address = "..."   # required
-        external-address = "..."   # required
-        external-port = 0   # required
-        external-tls-config {
-          client-cert {
-            cert-chain-file {
-              type = pem-file|pem-string   # required
-            }
-            private-key-file = "..."   # required
-          }
-          enabled = true
-          trust-collection-file {
-            type = pem-file|pem-string   # required
-          }
-        }
-        # flow-control-window = <int>
-        # initial-flow-control-window = <int>
-        keep-alive-server {
-          permit-keep-alive-time = "20 seconds"
-          permit-keep-alive-without-calls = false
-          time = "40 seconds"
-          timeout = "20 seconds"
-        }
-        limits {
-          active {
-            <key> = [ ]
-          }
-          throttle-logging-rate-per-second = 10
-          warn-on-undefined-limits = false
-        }
-        max-concurrent-calls-per-connection = 100000
-        # max-inbound-message-size = <int>
-        # port = <int>
-        tls {
-          cert-chain-file {
-            type = pem-file|pem-string   # required
-          }
-          # ciphers = [ ... ]
-          client-auth {
-            type = require|optional|none   # required
-          }
-          enable-cert-revocation-checking = false
-          minimum-server-protocol-version = "TLSv1.2"
-          private-key-file = "..."   # required
-          trust-collection-file {
-            type = pem-file|pem-string   # required
-          }
-        }
-      }
-    }
-    leader-selection-policy-config-for-pv-34 {
-      how-long-to-blacklist {
-        type = linear|linear-with-parameters|exponential|no-blacklisting   # required
-      }
-      how-many-can-we-blacklist = num-faults-tolerated|no-blacklisting   # required
-    }
     manual-vacuum-enabled = false
     max-batch-creation-interval = "100 milliseconds"
     # max-mempool-queue-size = <int>
@@ -2222,30 +2106,149 @@ canton.sequencers.<sequencer>.sequencer {
     output-size-of-chunk-of-epochs-to-load-at-start = 10
     # segment-length-for-pv-34 = <int>
     send-blacklist-ttl = "3 minutes"
+    # view-change-timeout-override = <duration>
+    batch-aggregator {
+      type = batching|no-batching   # required
+    }
+    initial-network {
+      overwrite-stored-endpoints = false
+      connection-management-config {
+        # connection-retry-delay-multiplier = <int>
+        flow-control-buffer = 128
+        flow-control-buffer-drop-newest = false
+        # flow-control-ready-allowance = <int>
+        initial-connection-max-delay = "500 milliseconds"
+        initial-connection-retry-delay = "500 milliseconds"
+        max-connection-attempts-before-warning = 30
+        max-connection-retry-delay = "2 minutes"
+      }
+      endpoint-authentication {
+        enabled = true
+        auth-token {
+          min-retry-interval = "500 milliseconds"
+          refresh-auth-token-before-expiry = "20 seconds"
+          retries = 20
+          backoff {
+            base = 2
+            max-retry-interval = "2 minutes"
+            jitter {
+              type = equal|full   # required
+            }
+          }
+        }
+      }
+      peer-endpoints = [
+        {
+          address = "..."   # required
+          port = 0   # required
+          channel {
+            # flow-control-window = <int>
+            # initial-flow-control-window = <int>
+            max-inbound-message-size = 0   # required
+            trace-context-propagation = enabled|disabled   # required
+            keep-alive-client {
+              idle-timeout = "30 minutes"
+              keep-alive-without-calls = false
+              time = "40 seconds"
+              timeout = "15 seconds"
+            }
+          }
+          tls-config {
+            enabled = true
+            client-cert {
+              private-key-file = "..."   # required
+              cert-chain-file {
+                type = pem-file|pem-string   # required
+              }
+            }
+            trust-collection-file {
+              type = pem-file|pem-string   # required
+            }
+          }
+        }
+      ]
+      server-endpoint {
+        address = "..."   # required
+        external-address = "..."   # required
+        external-port = 0   # required
+        # flow-control-window = <int>
+        # initial-flow-control-window = <int>
+        max-concurrent-calls-per-connection = 100000
+        # max-inbound-message-size = <int>
+        # port = <int>
+        external-tls-config {
+          enabled = true
+          client-cert {
+            private-key-file = "..."   # required
+            cert-chain-file {
+              type = pem-file|pem-string   # required
+            }
+          }
+          trust-collection-file {
+            type = pem-file|pem-string   # required
+          }
+        }
+        keep-alive-server {
+          permit-keep-alive-time = "20 seconds"
+          permit-keep-alive-without-calls = false
+          time = "40 seconds"
+          timeout = "20 seconds"
+        }
+        limits {
+          throttle-logging-rate-per-second = 10
+          warn-on-undefined-limits = false
+          active {
+            <key> = [ ]
+          }
+        }
+        tls {
+          # ciphers = [ ... ]
+          enable-cert-revocation-checking = false
+          minimum-server-protocol-version = "TLSv1.2"
+          private-key-file = "..."   # required
+          cert-chain-file {
+            type = pem-file|pem-string   # required
+          }
+          client-auth {
+            type = require|optional|none   # required
+          }
+          trust-collection-file {
+            type = pem-file|pem-string   # required
+          }
+        }
+      }
+    }
+    leader-selection-policy-config-for-pv-34 {
+      how-many-can-we-blacklist = num-faults-tolerated|no-blacklisting   # required
+      how-long-to-blacklist {
+        type = linear|linear-with-parameters|exponential|no-blacklisting   # required
+      }
+    }
     sequencer-core-subscription-config {
       pause-orderer-threshold-buffer-size = 5000
       pekko-queue-source-buffer-size = 5000
       resume-orderer-threshold-buffer-size = 1000
     }
     standalone {
-      blacklist-leader-selection-policy-config {
-        how-long-to-blacklist {
-          type = linear|linear-with-parameters|exponential|no-blacklisting   # required
-        }
-        how-many-can-we-blacklist = num-faults-tolerated|no-blacklisting   # required
-      }
       max-batches-per-block-proposal = 0   # required
       max-requests-in-batch = 0   # required
       pbft-view-change-timeout = "30 seconds"   # required
+      segment-length = 0   # required
+      signing-private-key-proto-file = "/path/to/file"   # required
+      signing-public-key-proto-file = "/path/to/file"   # required
+      this-sequencer-id = "..."   # required
+      blacklist-leader-selection-policy-config {
+        how-many-can-we-blacklist = num-faults-tolerated|no-blacklisting   # required
+        how-long-to-blacklist {
+          type = linear|linear-with-parameters|exponential|no-blacklisting   # required
+        }
+      }
       peers = [
         {
           sequencer-id = "..."   # required
           signing-public-key-proto-file = "/path/to/file"   # required
         }
       ]
-      segment-length = 0   # required
-      signing-private-key-proto-file = "/path/to/file"   # required
-      signing-public-key-proto-file = "/path/to/file"   # required
       test-slowdown {
         post-ordering-delay {
           type = constant-distribution|weighted-distribution|linear-distribution|power-distribution   # required
@@ -2256,33 +2259,31 @@ canton.sequencers.<sequencer>.sequencer {
           }
           delays-by-recipients = [
             {
-              delay-distribution {
-                type = constant-distribution|weighted-distribution|linear-distribution|power-distribution   # required
-              }
               instance-names = [ ]   # required
               # probability-of-grpc-send-accepted-by-flow-control = <number>
               # probability-of-grpc-send-success = <number>
+              delay-distribution {
+                type = constant-distribution|weighted-distribution|linear-distribution|power-distribution   # required
+              }
             }
           ]
         }
         topology-delay {
           # broadcast-request-probability = <number>
+          # pending-topology-changes-probability = <number>
+          # possible-ordering-topology-change-in-request-probability = <number>
           get-ordering-topology-delay {
             type = constant-distribution|weighted-distribution|linear-distribution|power-distribution   # required
           }
-          # pending-topology-changes-probability = <number>
-          # possible-ordering-topology-change-in-request-probability = <number>
           request-inspection-delay {
             type = constant-distribution|weighted-distribution|linear-distribution|power-distribution   # required
           }
         }
       }
-      this-sequencer-id = "..."   # required
     }
     storage {
       type = memory|h2|postgres   # required
     }
-    # view-change-timeout-override = <duration>
   }
   # config.initial-network.server-endpoint.tls.client-auth.admin-client.cert-chain-file.type takes a type of its own, documented separately
 }
@@ -2635,10 +2636,10 @@ A variant of ServerAuthRequirementConfig by which the server requires auth from 
 canton.mediators.<mediator>.admin-api.tls.client-auth {
   type = require
   admin-client {
+    private-key-file = "..."   # required
     cert-chain-file {
       type = pem-file|pem-string   # required
     }
-    private-key-file = "..."   # required
   }
 }
 ```
@@ -2699,25 +2700,25 @@ Dictates that persistent data is stored in memory. So in fact, the data is not p
 canton.mediators.<mediator>.storage {
   type = memory
   parameters {
-    connection-allocation {
-      # num-ledger-api = <int>
-      # num-reads = <int>
-      # num-writes = <int>
-    }
     connection-timeout = "5 seconds"
     fail-fast-on-startup = true
     failed-to-fatal-delay = "5 minutes"
     # max-connections = <int>
     migrate-and-start = false
     migrations-paths = [ ]
-    partitions {
-      initial-bft-orderer-tables-partition-size = 1500
-    }
     repeatable-migrations-paths = [ ]
     unsafe-baseline-on-migrate = false
     unsafe-clean-on-validation-error = false
     # warn-on-slow-query = <duration>
     warn-on-slow-query-interval = "5 seconds"
+    connection-allocation {
+      # num-ledger-api = <int>
+      # num-reads = <int>
+      # num-writes = <int>
+    }
+    partitions {
+      initial-bft-orderer-tables-partition-size = 1500
+    }
   }
 }
 ```
@@ -2756,25 +2757,25 @@ canton.mediators.<mediator>.storage {
 canton.mediators.<mediator>.storage {
   type = h2
   parameters {
-    connection-allocation {
-      # num-ledger-api = <int>
-      # num-reads = <int>
-      # num-writes = <int>
-    }
     connection-timeout = "5 seconds"
     fail-fast-on-startup = true
     failed-to-fatal-delay = "5 minutes"
     # max-connections = <int>
     migrate-and-start = false
     migrations-paths = [ ]
-    partitions {
-      initial-bft-orderer-tables-partition-size = 1500
-    }
     repeatable-migrations-paths = [ ]
     unsafe-baseline-on-migrate = false
     unsafe-clean-on-validation-error = false
     # warn-on-slow-query = <duration>
     warn-on-slow-query-interval = "5 seconds"
+    connection-allocation {
+      # num-ledger-api = <int>
+      # num-reads = <int>
+      # num-writes = <int>
+    }
+    partitions {
+      initial-bft-orderer-tables-partition-size = 1500
+    }
   }
 }
 ```
@@ -2813,25 +2814,25 @@ canton.mediators.<mediator>.storage {
 canton.mediators.<mediator>.storage {
   type = postgres
   parameters {
-    connection-allocation {
-      # num-ledger-api = <int>
-      # num-reads = <int>
-      # num-writes = <int>
-    }
     connection-timeout = "5 seconds"
     fail-fast-on-startup = true
     failed-to-fatal-delay = "5 minutes"
     # max-connections = <int>
     migrate-and-start = false
     migrations-paths = [ ]
-    partitions {
-      initial-bft-orderer-tables-partition-size = 1500
-    }
     repeatable-migrations-paths = [ ]
     unsafe-baseline-on-migrate = false
     unsafe-clean-on-validation-error = false
     # warn-on-slow-query = <duration>
     warn-on-slow-query-interval = "5 seconds"
+    connection-allocation {
+      # num-ledger-api = <int>
+      # num-reads = <int>
+      # num-writes = <int>
+    }
+    partitions {
+      initial-bft-orderer-tables-partition-size = 1500
+    }
   }
 }
 ```
