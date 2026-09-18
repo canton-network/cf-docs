@@ -74,10 +74,14 @@ def sample_artifact() -> dict:
             option("canton.participants.<participant>.http-ledger-api.enabled", valueType={"kind": "scalar", "name": "boolean"}, defaultValue=True, defaultOrigin="source"),
             option("canton.participants.<participant>.http-ledger-api.port", valueType={"kind": "scalar", "name": "int", "scalaType": "Port"}, required=True, optional=False, requiredBy="startup-validation", requiredUnless="canton.participants.<participant>.http-ledger-api.enabled = false"),
             option("canton.participants.<participant>.replication.enabled", valueType={"kind": "scalar", "name": "boolean"}, defaultValue=True, defaultOrigin="load-time"),
+            option("canton.participants.<participant>.admin-api.auth-services", valueType={"kind": "array", "element": "AuthServiceConfig"}, defaultValue=[], defaultOrigin="source"),
             option("canton.participants.<participant>.parameters.engine.extensions.<extension>.address", required=True),
         ],
         "types": [
-            {"name": "AggregationType", "kind": "coproduct", "discriminator": "type", "variants": [{"tag": "buckets", "type": "Buckets"}, {"tag": "exponential", "type": "Exponential"}], "values": []},
+            {"name": "AggregationType", "kind": "coproduct", "discriminator": "type", "variants": [{"tag": "buckets", "type": "metrics.Buckets"}, {"tag": "exponential", "type": "metrics.Exponential"}], "values": [], "description": "How a histogram groups its observations."},
+            {"name": "Buckets", "kind": "product", "discriminator": None, "variants": [], "values": [], "description": "Explicit bucket [[Boundaries]]."},
+            {"name": "HistogramDefinition", "kind": "product", "discriminator": None, "variants": [], "values": [], "description": "Bucket boundary definitions for histograms"},
+            {"name": "AuthServiceConfig", "kind": "coproduct", "discriminator": "type", "variants": [{"tag": "wildcard", "type": "Wildcard"}], "values": [], "description": None},
         ],
         "deprecatedPaths": [],
         "diagnostics": {"filesParsed": 1, "filesFailed": 0, "optionsTotal": 7, "optionsDocumented": 3},
@@ -98,7 +102,10 @@ class CantonConfigReferenceTests(unittest.TestCase):
         self.assertNotIn("**Path**", types)
         # Each variant's keys are tabulated in the tab behind its block.
         self.assertIn("### `type = exponential`\n\n<Tabs>\n<Tab title=\"HOCON\">", types)
-        self.assertIn("| `max-scale` | int | **required** |  |", types)
+        self.assertIn("| `max-scale` | int | yes |  |  |", types)
+        # The union's and the variant's summaries come from their classes' Scaladoc.
+        self.assertIn("## AggregationType\n\nHow a histogram groups its observations.\n\nSet `type` to one of", types)
+        self.assertIn("### `type = buckets`\n\nExplicit bucket Boundaries.\n\n<Tabs>", types)
 
     def test_minimum_required_is_what_must_be_written_for_the_node_to_start(self) -> None:
         artifact = sample_artifact()
@@ -155,10 +162,11 @@ class CantonConfigReferenceTests(unittest.TestCase):
         pages = generator.render_pages(sample_artifact())
         monitoring = pages["monitoring.mdx"]
         types_section = monitoring.split(f"## {generator.TYPES_TITLE}")[1]
-        self.assertIn("### AggregationType\n\nSet `type` to one of `buckets`, `exponential`.", types_section)
+        self.assertIn("### AggregationType\n\nHow a histogram groups its observations.\n\nSet `type` to one of `buckets`, `exponential`.", types_section)
         self.assertIn("- `canton.monitoring.metrics.histograms[].aggregation`", types_section)
-        self.assertIn("#### `type = buckets`\n\n<Tabs>\n<Tab title=\"HOCON\">", types_section)
-        self.assertIn("| `boundaries` | array of Double | **required** |  |", types_section)
+        self.assertIn("#### `type = buckets`\n\nExplicit bucket Boundaries.\n\n<Tabs>\n<Tab title=\"HOCON\">", types_section)
+        self.assertIn("#### `type = exponential`\n\n<Tabs>\n<Tab title=\"HOCON\">", types_section)
+        self.assertIn("| `boundaries` | array of Double | yes |  |  |", types_section)
         # Links from the tables stay on the page.
         self.assertIn("Choose one type — see [AggregationType](#aggregationtype).", monitoring)
         # A page that uses no type has no such section; the types page still collects everything.
@@ -175,8 +183,8 @@ class CantonConfigReferenceTests(unittest.TestCase):
             all_options,
         )
         self.assertNotIn("**Path**", monitoring)
-        self.assertIn("</Tab>\n<Tab title=\"Table\">\n\n| Key | Type | Default | Description |", all_options)
-        self.assertLess(all_options.index("```hocon"), all_options.index("| Key | Type | Default | Description |"))
+        self.assertIn("</Tab>\n<Tab title=\"Table\">\n\n| Key | Type | Required | Default | Description |", all_options)
+        self.assertLess(all_options.index("```hocon"), all_options.index("| Key | Type | Required | Default | Description |"))
         # No separate "Takes a `type`" announcement: the discriminator rows carry the link.
         self.assertNotIn("Takes a `type`", monitoring)
         # The section block holds the keys that apply whatever the type; then every type site is
@@ -207,9 +215,12 @@ class CantonConfigReferenceTests(unittest.TestCase):
         text = "\n".join(rows).replace(" ", ".")
         # Plain section header carries the discriminator row; variant headers carry their keys.
         self.assertIn("| ....**aggregation** |", text)
-        self.assertIn("| ........`type` | one of `buckets`, `exponential` | **required** | Choose one type — see [AggregationType](#aggregationtype). |", text)
+        self.assertIn("| ........`type` | one of `buckets`, `exponential` | yes |  | Choose one type — see [AggregationType](#aggregationtype). |", text)
+        # A header row for a list element carries its class's summary; a variant header its class's.
+        self.assertIn("| **histograms[]** |  |  |  | Bucket boundary definitions for histograms |", text)
+        self.assertIn("| ....**aggregation** `type = buckets` |  |  |  | Explicit bucket Boundaries. |", text)
         self.assertIn("| ....**aggregation** `type = buckets` |", text)
-        self.assertIn("| ........`boundaries` | array of Double | **required** |  |", text)
+        self.assertIn("| ........`boundaries` | array of Double | yes |  |  |", text)
         self.assertIn("| ....**aggregation** `type = exponential` |", text)
         # The discriminator row leads its group.
         self.assertLess(text.index("`type` | one of"), text.index("`boundaries`"))
@@ -217,8 +228,12 @@ class CantonConfigReferenceTests(unittest.TestCase):
     def test_prose_is_mdx_safe_and_load_time_defaults_are_marked(self) -> None:
         participant = generator.render_pages(sample_artifact())["participant-node.mdx"]
         self.assertIn("Braces \\{x\\} and &lt;angles&gt; must survive MDX", participant)
-        self.assertIn("| `port` | int (Port) | **required** |", participant)
-        self.assertIn("| `enabled` | boolean | `true` † |", participant)
+        self.assertIn("| `port` | int (Port) | yes |  | Braces", participant)
+        self.assertIn("| `port` | int (Port) | unless `enabled = false` |  |  |", participant)
+        self.assertIn("port = 0   # required unless enabled = false", participant)
+        self.assertIn("| `enabled` | boolean |  | `true` † |  |", participant)
+        # An array whose element takes a `type` links to that type's section on the page.
+        self.assertIn("| `auth-services` | array of [AuthServiceConfig](#authserviceconfig) |  | `[]` |  |", participant)
         # The placeholder legend is part of the reading guide, which lives on the overview.
         overview = generator.render_pages(sample_artifact())["overview.mdx"]
         self.assertIn("- `<participant>` — `user-chosen name of each entry under canton.participants`", overview)

@@ -78,6 +78,15 @@ PLACEHOLDERS = {
 }
 
 
+# Filled in by render_pages for the artifact being rendered: the names of types that take a `type`
+# (each documented on the page with a stable anchor, so a Type cell can link to it), the Scaladoc
+# summary of every type that has one (so a header row can say what its section or element is), and
+# which class each (union, tag) selects, by simple name.
+KNOWN_UNIONS: set[str] = set()
+TYPE_SUMMARIES: dict[str, str] = {}
+VARIANT_TYPES: dict[tuple[str, str], str] = {}
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--artifact", type=Path, required=True, help="config-reference.json from Canton")
@@ -138,6 +147,8 @@ def render_type(value_type: dict) -> str:
         return f"{name} ({scala})" if scala and scala != name else name
     if kind == "array":
         element = value_type.get("element", "value")
+        if element in KNOWN_UNIONS:
+            return f"array of [{element}]({union_link(element)})"
         return "array of " + {"String": "string", "Int": "int", "Long": "int", "Boolean": "boolean"}.get(element, element)
     if kind == "enum":
         values = value_type.get("values")
@@ -147,7 +158,10 @@ def render_type(value_type: dict) -> str:
     if kind == "object":
         return "object"
     if kind == "section":
-        return f"section ({value_type.get('type', 'object')})"
+        name = value_type.get("type", "object")
+        if name in KNOWN_UNIONS:
+            return f"section ([{name}]({union_link(name)}))"
+        return f"section ({name})"
     if kind == "generic":
         return f"depends on use ({value_type.get('typeParameter', '?')})"
     if kind == "unresolved":
@@ -166,8 +180,6 @@ def render_default(option: dict) -> str:
         if observed is not None:
             return f"{rendered} (in practice {render_value(observed)}) ◊"
         return rendered
-    if option.get("required"):
-        return "**required**"
     expr = option.get("defaultExpr")
     if expr:
         if expr.strip() == "None":
@@ -227,7 +239,7 @@ def collapse_variants(options: list[dict]) -> list[tuple[dict, dict[str, set[str
     return list(merged.values())
 
 
-Row = tuple[int, str, "dict | None", str]
+Row = tuple[int, str, "dict | None", str, str]
 
 
 def group_rows(
@@ -237,7 +249,7 @@ def group_rows(
 ) -> list[Row]:
     """Order rows into a tree walk that shows both nesting and variant membership.
 
-    Each entry is (depth, label, option-or-None, header note). A discriminated section becomes one
+    Each entry is (depth, label, option-or-None, header note, absolute path). A discriminated section becomes one
     header per `type` value with the keys that value accepts beneath it; keys every variant accepts
     sit under a plain header for the section together with the `type` row. A key accepted by several
     but not all variants is repeated under each, so every variant header is a complete list -- the
@@ -309,7 +321,7 @@ def group_rows(
 
     out: list[Row] = []
 
-    def walk(node: "OrderedDict", depth: int) -> None:
+    def walk(node: "OrderedDict", depth: int, path: str) -> None:
         leaves = [(k, v) for k, v in node.items() if "__leaf__" in v]
         sections = [(k, v) for k, v in node.items() if "__leaf__" not in v]
         first_seen: dict[str, int] = {}
@@ -323,15 +335,16 @@ def group_rows(
             )
         )
         for name, child in leaves:
-            out.append((depth, name, child["__leaf__"], ""))
+            out.append((depth, name, child["__leaf__"], "", f"{path}.{name}"))
         for name, child in sections:
             if isinstance(name, tuple):
-                out.append((depth, name[0], None, name[1]))
+                out.append((depth, name[0], None, name[1], f"{path}.{name[0]}"))
+                walk(child, depth + 1, f"{path}.{name[0]}")
             else:
-                out.append((depth, name, None, ""))
-            walk(child, depth + 1)
+                out.append((depth, name, None, "", f"{path}.{name}"))
+                walk(child, depth + 1, f"{path}.{name}")
 
-    walk(tree, 0)
+    walk(tree, 0, prefix)
     return out
 
 
@@ -353,10 +366,47 @@ def discriminator_index(options: list[dict]) -> dict[str, str]:
     return {condition["at"]: condition["of"] for option in options for condition in option["appliesWhen"]}
 
 
-def render_table(options: list[dict], prefix: str, variants_by_type: dict[str, list[str]]) -> list[str]:
+TABLE_HEADER = ["| Key | Type | Required | Default | Description |", "|---|---|---|---|---|"]
+
+
+def required_cell(option: dict, scope: str) -> str:
+    """`yes`, or the setting that lifts a startup requirement, or nothing."""
+    if not option.get("required"):
+        return ""
+    unless = option.get("requiredUnless")
+    if unless:
+        relative = option["path"][len(scope) :].lstrip(".")
+        return f"unless `{unless_text(scope, relative, unless)}`"
+    return "yes"
+
+
+def header_summary(path: str, sections: dict[str, dict], options_by_path: dict[str, list[dict]], note: str) -> str:
+    """What a header row's section or list element is, from its type's Scaladoc summary. A
+    `type = tag` header describes that variant's class."""
+    name = None
+    if note.startswith("type = "):
+        tag = note[len("type = ") :]
+        discriminator = options_by_path.get(path + ".type", [])
+        union = next((o["valueType"].get("type") for o in discriminator if o["valueType"].get("kind") == "enum"), None)
+        name = VARIANT_TYPES.get((union, tag)) if union else None
+    elif path.endswith("[]"):
+        holder = options_by_path.get(path[:-2], [])
+        name = next((o["valueType"].get("element") for o in holder if o["valueType"].get("kind") == "array"), None)
+    elif path in sections:
+        name = sections[path]["valueType"].get("type")
+    return clean_prose(TYPE_SUMMARIES.get(name or "", None))
+
+
+def render_table(
+    options: list[dict],
+    prefix: str,
+    variants_by_type: dict[str, list[str]],
+    sections: dict[str, dict] | None = None,
+    options_by_path: dict[str, list[dict]] | None = None,
+) -> list[str]:
     discriminators = discriminator_index(options)
-    lines = ["| Key | Type | Default | Description |", "|---|---|---|---|"]
-    for depth, label, option, note in group_rows(collapse_variants(options), prefix, variants_by_type):
+    lines = list(TABLE_HEADER)
+    for depth, label, option, note, path in group_rows(collapse_variants(options), prefix, variants_by_type):
         pad = INDENT * depth
         if option is None:
             # Bold text, not bold code: in the site theme a bold code chip is indistinguishable from a
@@ -364,7 +414,8 @@ def render_table(options: list[dict], prefix: str, variants_by_type: dict[str, l
             # A header can be a placeholder such as `<key>`; outside a code span MDX would read
             # that as a JSX tag, so the label is escaped.
             title = f"{pad}**{mdx_text(label)}**" + (f" `{note}`" if note else "")
-            lines.append(f"| {title} |  |  |  |")
+            summary = header_summary(path, sections or {}, options_by_path or {}, note)
+            lines.append(f"| {title} |  |  |  | {summary} |")
             continue
         badge = MATURITY_BADGE.get(option.get("maturity", "stable"), "")
         key = f"{pad}`{label}`" + (f" {badge}" if badge else "")
@@ -372,7 +423,9 @@ def render_table(options: list[dict], prefix: str, variants_by_type: dict[str, l
         if option["path"] in discriminators:
             union = discriminators[option["path"]]
             description = f"Choose one type — see [{union}]({union_link(union)})." + (f" {description}" if description else "")
-        lines.append(f"| {key} | {render_type(option['valueType'])} | {render_default(option)} | {description} |")
+        lines.append(
+            f"| {key} | {render_type(option['valueType'])} | {required_cell(option, prefix)} | {render_default(option)} | {description} |"
+        )
     return lines
 
 
@@ -515,6 +568,8 @@ def render_block(tree: dict, indent: str, lines: list[str], seen: set[str], path
             hint = type_hint(option) if option["valueType"].get("kind") == "enum" else placeholder_for(option)
             if when:
                 lines.append(f"{indent}# {name} = {hint}   # required when {when}")
+            elif option.get("__unless__"):
+                lines.append(f"{indent}{name} = {hint}   # required unless {option['__unless__']}")
             else:
                 lines.append(f"{indent}{name} = {hint}   # required")
             continue
@@ -601,8 +656,11 @@ def render_scope_hocon(scope: str, entries: list[dict], variants_by_type: dict[s
         if gated:
             continue
         relative = option["path"][len(scope) :].lstrip(".")
-        if relative:
-            keys.setdefault(relative, option)
+        if not relative:
+            continue
+        if option.get("requiredUnless"):
+            option = dict(option, __unless__=unless_text(scope, relative, option["requiredUnless"]))
+        keys.setdefault(relative, option)
     if not keys:
         return []
     opening, closing, indent = open_path(scope)
@@ -667,13 +725,14 @@ def render_section_views(
     variants_by_type: dict[str, list[str]],
     unions: dict,
     options_by_path: dict[str, list[dict]],
+    sections: dict[str, dict] | None = None,
 ) -> list[str]:
     """One section as a tabbed pair: HOCON as you would write it, or the same keys as a table with
     their descriptions. The HOCON tab is the section block followed by one block per variant of
     every `type` inside the section; the table lists the variant keys under `type = …` headers. Both
     cover exactly the same keys."""
     hocon = render_scope_hocon(scope, entries, variants_by_type)
-    table = render_table(entries, scope, variants_by_type)
+    table = render_table(entries, scope, variants_by_type, sections, options_by_path)
     if not hocon:
         return table + [""]
     return tabbed_pair(hocon + variant_blocks_within(scope, unions, variants_by_type, options_by_path), table)
@@ -942,12 +1001,12 @@ def render_node_page(prefix: str, title: str, description: str, options: list[di
     # relative to the heading.
     if direct:
         lines += [f"### `{prefix}`", ""]
-        lines += render_section_views(prefix, direct, variants_by_type, unions, options_by_path)
+        lines += render_section_views(prefix, direct, variants_by_type, unions, options_by_path, sections)
 
     for subsection, entries in by_subsection.items():
         scope = prefix + "." + subsection
         lines += [f"### `{scope}`", ""]
-        lines += render_section_views(scope, entries, variants_by_type, unions, options_by_path)
+        lines += render_section_views(scope, entries, variants_by_type, unions, options_by_path, sections)
 
     # Every type this page uses, documented here so the page stands alone; the types page
     # collects the same sections across all pages.
@@ -979,6 +1038,9 @@ def render_union(union: str, paths: set[str], variants_by_type, options_by_path,
     occurrences = sorted(path.rsplit(".", 1)[0] for path in paths)
     heading = "#" * level
     lines = [f"{heading} {union}", ""]
+    union_summary = clean_prose(TYPE_SUMMARIES.get(union, None))
+    if union_summary:
+        lines += [union_summary, ""]
     lines.append("Set `type` to one of " + ", ".join(f"`{tag}`" for tag in variants) + ".")
     lines += ["", "Occurs at:", ""]
     shown = occurrences[:8]
@@ -988,12 +1050,18 @@ def render_union(union: str, paths: set[str], variants_by_type, options_by_path,
     lines.append("")
     for tag in variants:
         lines += [f"{heading}# `type = {tag}`", ""]
+        summary = clean_prose(TYPE_SUMMARIES.get(VARIANT_TYPES.get((union, tag), ""), None))
+        if summary:
+            lines += [summary, ""]
         block, nested = render_variant_block(section, discriminator, tag, options_by_path)
         keys = applicable_keys(section, discriminator, tag, options_by_path)
         if keys:
-            table = ["| Key | Type | Default | Description |", "|---|---|---|---|"]
+            table = list(TABLE_HEADER)
             for relative, option in keys.items():
-                table.append(f"| `{relative}` | {render_type(option['valueType'])} | {render_default(option)} | {clean_prose(option.get('doc'))} |")
+                table.append(
+                    f"| `{relative}` | {render_type(option['valueType'])} | {required_cell(option, section)} | "
+                    f"{render_default(option)} | {clean_prose(option.get('doc'))} |"
+                )
             lines += tabbed_pair(block, table)
         else:
             lines += block
@@ -1087,7 +1155,23 @@ def render_overview(artifact: dict, buckets: "OrderedDict[str, list[dict]]") -> 
     return "\n".join(lines).rstrip() + "\n"
 
 
+def register_types(artifact: dict) -> None:
+    """Remember, for this artifact, which types take a `type`, every type's summary, and which
+    class each (union, tag) selects, by simple name."""
+    KNOWN_UNIONS.clear()
+    TYPE_SUMMARIES.clear()
+    VARIANT_TYPES.clear()
+    for entry in artifact["types"]:
+        if entry["kind"] == "coproduct":
+            KNOWN_UNIONS.add(entry["name"])
+            for variant in entry["variants"]:
+                VARIANT_TYPES[(entry["name"], variant["tag"])] = variant["type"].rsplit(".", 1)[-1]
+        if entry.get("description"):
+            TYPE_SUMMARIES[entry["name"]] = entry["description"]
+
+
 def render_pages(artifact: dict) -> "OrderedDict[str, str]":
+    register_types(artifact)
     variants_by_type = {entry["name"]: [v["tag"] for v in entry["variants"]] for entry in artifact["types"]}
     leaves, sections = split_sections(artifact["options"])
     unions = find_unions(leaves)
