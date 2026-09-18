@@ -17,6 +17,21 @@ from tests.minimal_characterization.helpers import (
     run_x2mdx,
 )
 
+PACKAGE = "com.example.payments.v1"
+SERVICE_PATH = (6, 0)
+
+
+def message_path(index: int) -> tuple[int, ...]:
+    return (4, index)
+
+
+def field_path(message_index: int, field_index: int) -> tuple[int, ...]:
+    return (4, message_index, 2, field_index)
+
+
+def method_path(method_index: int) -> tuple[int, ...]:
+    return (6, 0, 2, method_index)
+
 
 def make_field(
     name: str,
@@ -49,6 +64,14 @@ def make_method(name: str, request_type: str, response_type: str) -> descriptor_
     return descriptor_pb2.MethodDescriptorProto(name=name, input_type=request_type, output_type=response_type)
 
 
+def add_leading_comments(file_proto: descriptor_pb2.FileDescriptorProto, comments: dict[tuple[int, ...], str]) -> None:
+    """Attach protoc-style leading comments to descriptor paths."""
+    for path, text in comments.items():
+        location = file_proto.source_code_info.location.add()
+        location.path.extend(path)
+        location.leading_comments = text
+
+
 class ProtobufMinimalLifecycleTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temp_dir = tempfile.TemporaryDirectory()
@@ -65,10 +88,22 @@ class ProtobufMinimalLifecycleTests(unittest.TestCase):
         path.write_bytes(gzip.compress(descriptor_set.SerializeToString()))
         return path
 
-    def _write_manifest(self, *, metadata_overlay: dict[str, object] | None = None) -> Path:
+    def _write_manifest(
+        self,
+        *,
+        v1_comments: dict[tuple[int, ...], str] | None = None,
+        v2_comments: dict[tuple[int, ...], str] | None = None,
+    ) -> Path:
+        """Two releases of one payments file.
+
+        v1 messages: 0 CreatePaymentRequest, 1 PaymentResult, 2 LegacyPaymentRequest, 3 LegacyPaymentResult;
+        v1 methods: 0 CreatePayment, 1 LegacyPayment.
+        v2 messages: 0 CreatePaymentRequest, 1 PaymentResultV2, 2 ListPaymentsRequest, 3 ListPaymentsResponse;
+        v2 methods: 0 CreatePayment, 1 ListPayments.
+        """
         import_path = "com/example/payments/v1/payments.proto"
         repo_path = "community/example/src/main/protobuf/com/example/payments/v1/payments.proto"
-        package = "com.example.payments.v1"
+        package = PACKAGE
 
         v1 = descriptor_pb2.FileDescriptorProto(name=import_path, package=package, syntax="proto3")
         v1.message_type.extend(
@@ -87,6 +122,7 @@ class ProtobufMinimalLifecycleTests(unittest.TestCase):
             ]
         )
         v1.service.extend([service_v1])
+        add_leading_comments(v1, v1_comments or {})
 
         v2 = descriptor_pb2.FileDescriptorProto(name=import_path, package=package, syntax="proto3")
         v2.message_type.extend(
@@ -114,28 +150,10 @@ class ProtobufMinimalLifecycleTests(unittest.TestCase):
             ]
         )
         v2.service.extend([service_v2])
+        add_leading_comments(v2, v2_comments or {})
 
         image_v1 = self._write_descriptor_image("1.0.0/image.bin.gz", v1)
         image_v2 = self._write_descriptor_image("1.1.0/image.bin.gz", v2)
-        metadata_path = self.root / "fixtures" / "metadata.json"
-        metadata_path.write_text(
-            json.dumps(
-                metadata_overlay
-                or {
-                    "schemaVersion": 1,
-                    "files": {},
-                    "services": {},
-                    "endpoints": {},
-                    "messages": {},
-                    "fields": {},
-                    "enums": {},
-                    "enumValues": {},
-                },
-                indent=2,
-            )
-            + "\n",
-            encoding="utf-8",
-        )
         manifest_path = self.root / "fixtures" / "manifest.json"
         manifest_path.write_text(
             json.dumps(
@@ -145,7 +163,6 @@ class ProtobufMinimalLifecycleTests(unittest.TestCase):
                         "remote": "https://github.com/example/repo.git",
                         "web_url": "https://github.com/example/repo",
                     },
-                    "metadata_path": str(metadata_path),
                     "versions": [
                         {
                             "version": "1.0.0",
@@ -170,8 +187,7 @@ class ProtobufMinimalLifecycleTests(unittest.TestCase):
         )
         return manifest_path
 
-    def _render_pages(self, relative_output_dir: str = "protobuf-history") -> Path:
-        manifest_path = self._write_manifest()
+    def _render(self, manifest_path: Path, relative_output_dir: str, *extra_args: str) -> Path:
         output_dir = self.root / "out" / relative_output_dir
         run_x2mdx(
             [
@@ -181,13 +197,21 @@ class ProtobufMinimalLifecycleTests(unittest.TestCase):
                 str(manifest_path),
                 "--output-dir",
                 str(output_dir),
-                "--source-name",
-                "minimal protobuf lifecycle fixtures",
-                "--version-filter",
-                "minimal versions",
+                *extra_args,
             ]
         )
         return output_dir
+
+    def _render_pages(self, relative_output_dir: str = "protobuf-history") -> Path:
+        manifest_path = self._write_manifest()
+        return self._render(
+            manifest_path,
+            relative_output_dir,
+            "--source-name",
+            "minimal protobuf lifecycle fixtures",
+            "--version-filter",
+            "minimal versions",
+        )
 
     def test_cli_renders_minimal_source_contract(self) -> None:
         output_dir = self._render_pages()
@@ -256,110 +280,100 @@ class ProtobufMinimalLifecycleTests(unittest.TestCase):
         )
 
     def test_cli_renders_explicit_lifecycle_states(self) -> None:
-        package = "com.example.payments.v1"
         manifest_path = self._write_manifest(
-            metadata_overlay={
-                "schemaVersion": 1,
-                "files": {},
-                "services": {},
-                "endpoints": {
-                    f"{package}.PaymentService/CreatePayment": {
-                        "lifecycle": {"state": "beta"},
-                    },
-                    f"{package}.PaymentService/ListPayments": {
-                        "lifecycle": {"state": "stable"},
-                    },
-                },
-                "messages": {
-                    f"{package}.CreatePaymentRequest": {
-                        "lifecycle": {"state": "alpha"},
-                    },
-                    f"{package}.PaymentResultV2": {
-                        "lifecycle": {"state": "deprecated"},
-                    },
-                },
-                "fields": {},
-                "enums": {},
-                "enumValues": {},
+            v2_comments={
+                method_path(0): " Creates a payment.\n @lifecycle beta\n",
+                method_path(1): " @lifecycle stable\n",
+                message_path(0): " @lifecycle alpha\n",
+                message_path(1): " @lifecycle deprecated\n",
             },
         )
-        output_dir = self.root / "out" / "protobuf-lifecycle-states"
-
-        run_x2mdx(
-            [
-                "protobuf",
-                "build-api-pages-from-manifest",
-                "--manifest",
-                str(manifest_path),
-                "--output-dir",
-                str(output_dir),
-            ]
-        )
+        output_dir = self._render(manifest_path, "protobuf-lifecycle-states")
 
         package_page = read_mdx(output_dir, "packages/com-example-payments-v1.mdx")
         create_payment = read_mdx(output_dir, "operations/com-example-payments-v1/paymentservice/createpayment.mdx")
         list_payments = read_mdx(output_dir, "operations/com-example-payments-v1/paymentservice/listpayments.mdx")
         assert_text_tree_matches_fixture(output_dir, "protobuf/lifecycle")
-        assert_contains_all(package_page, ["Lifecycle", "Beta", "Stable"])
+        assert_contains_all(package_page, ["Lifecycle", "Beta", "Stable", "Creates a payment."])
         assert_contains_all(create_payment, ["Lifecycle", "Beta", "Alpha", "Deprecated"])
         assert_contains_all(list_payments, ["Lifecycle", "Stable"])
+        assert_contains_none(package_page + create_payment + list_payments, ["@lifecycle"])
 
     def test_authored_states_control_endpoint_badges(self) -> None:
-        from x2mdx.protobuf.lifecycle import metadata_lifecycle_state
+        from x2mdx.protobuf.lifecycle import parse_lifecycle_comment
         from x2mdx.protobuf.render import lifecycle_badges
 
-        for raw, expected in [("alpha", "Alpha"), (" BETA ", "Beta"), ("stable", None), ("deprecated", "Deprecated"), ("invalid", None), (None, None)]:
-            with self.subTest(state=raw):
-                state = metadata_lifecycle_state({"metadata": {"lifecycle": {"state": raw}}})
+        for raw, expected in [
+            ("@lifecycle alpha", "Alpha"),
+            ("  @lifecycle   BETA  ", "Beta"),
+            ("@lifecycle stable", None),
+            ("Old.\n@lifecycle deprecated", "Deprecated"),
+            ("@lifecycle invalid", None),
+            ("", None),
+        ]:
+            with self.subTest(comment=raw):
+                _description, state = parse_lifecycle_comment(raw)
                 badges = lifecycle_badges(state=state, introduced="1.0")
                 labels = [badge.label for badge in badges]
                 self.assertEqual([label for label in labels if label in {"Alpha", "Beta", "Deprecated"}], [expected] if expected else [])
 
-    def test_cli_renders_replacement_metadata(self) -> None:
-        # TODO(https://github.com/digital-asset/docs/issues/341): define the
-        # Protobuf source/overlay convention for replacement metadata.
-        package = "com.example.payments.v1"
+    def test_dev_endpoints_stay_hidden_until_public(self) -> None:
         manifest_path = self._write_manifest(
-            metadata_overlay={
-                "schemaVersion": 1,
-                "files": {},
-                "services": {},
-                "endpoints": {
-                    f"{package}.PaymentService.ListPayments": {
-                        "lifecycle": {
-                            "state": "stable",
-                            "replaces": f"{package}.PaymentService.LegacyPayment",
-                        },
-                    },
-                },
-                "messages": {},
-                "fields": {},
-                "enums": {},
-                "enumValues": {},
+            v1_comments={
+                method_path(0): " @lifecycle dev\n",
+                method_path(1): " @lifecycle dev\n",
+            },
+            v2_comments={
+                method_path(0): " Creates a payment.\n @lifecycle beta\n",
+                method_path(1): " @lifecycle dev\n",
             },
         )
-        output_dir = self.root / "out" / "protobuf-replacements"
+        output_dir = self._render(manifest_path, "protobuf-dev")
 
-        run_x2mdx(
-            [
-                "protobuf",
-                "build-api-pages-from-manifest",
-                "--manifest",
-                str(manifest_path),
-                "--output-dir",
-                str(output_dir),
-            ]
+        self.assertEqual(
+            mdx_file_set(output_dir),
+            {
+                "index.mdx",
+                "packages/com-example-payments-v1.mdx",
+                "operations/com-example-payments-v1/paymentservice/createpayment.mdx",
+            },
         )
+        package_page = read_mdx(output_dir, "packages/com-example-payments-v1.mdx")
+        create_payment = read_mdx(output_dir, "operations/com-example-payments-v1/paymentservice/createpayment.mdx")
+        assert_contains_all(create_payment, ["Beta", "Since 1.0.0", "Changed 1.1.0"])
+        assert_contains_all(package_page, ["Beta", "Creates a payment."])
+        # The untagged request/response messages stay in the type inventory; only the dev methods disappear.
+        assert_contains_all(package_page, ["ListPaymentsRequest"])
+        assert_contains_none(package_page + create_payment, ["PaymentService.LegacyPayment", "PaymentService.ListPayments", "@lifecycle"])
 
+    def test_dev_service_hides_untagged_methods(self) -> None:
+        manifest_path = self._write_manifest(
+            v1_comments={SERVICE_PATH: " @lifecycle dev\n"},
+            v2_comments={SERVICE_PATH: " @lifecycle dev\n", method_path(1): " @lifecycle alpha\n"},
+        )
+        output_dir = self._render(manifest_path, "protobuf-dev-service")
+
+        self.assertEqual(
+            mdx_file_set(output_dir),
+            {
+                "index.mdx",
+                "packages/com-example-payments-v1.mdx",
+                "operations/com-example-payments-v1/paymentservice/listpayments.mdx",
+            },
+        )
         list_payments = read_mdx(output_dir, "operations/com-example-payments-v1/paymentservice/listpayments.mdx")
-        assert_text_tree_matches_fixture(output_dir, "protobuf/replacements")
-        assert_contains_all(
-            list_payments,
-            [
-                "Replaces",
-                f"{package}.PaymentService.LegacyPayment",
-            ],
+        assert_contains_all(list_payments, ["Alpha", "Since 1.1.0"])
+
+    def test_dev_fields_are_hidden_from_schemas(self) -> None:
+        manifest_path = self._write_manifest(
+            v2_comments={field_path(1, 1): " Internal only.\n @lifecycle dev\n"},
         )
+        output_dir = self._render(manifest_path, "protobuf-dev-field")
+
+        create_payment = read_mdx(output_dir, "operations/com-example-payments-v1/paymentservice/createpayment.mdx")
+        package_page = read_mdx(output_dir, "packages/com-example-payments-v1.mdx")
+        assert_contains_all(create_payment, ["PaymentResultV2", "payment_id"])
+        assert_contains_none(create_payment + package_page, ["amount", "Internal only."])
 
     def test_cli_prunes_stale_output(self) -> None:
         manifest_path = self._write_manifest()

@@ -2,7 +2,7 @@
 
 Lifecycle labels in generated docs are an alpha feature. Please [share feedback](https://github.com/canton-network/cf-docs/issues).
 
-`dev` hides an API until its latest observed version at or before the publish version has another label (or no label). Removal alone does not make a dev API public. Applies to OpenAPI operations, AsyncAPI channel actions, OpenRPC methods, TypeDoc exports, and Daml modules/functions.
+`dev` hides an API until its latest observed version at or before the publish version has another label (or no label). Removal alone does not make a dev API public. Applies to OpenAPI operations, AsyncAPI channel actions, OpenRPC methods, Protobuf services, methods, messages, fields, enums, and enum values, TypeDoc exports, and Daml modules/functions.
 
 ## OpenAPI
 
@@ -69,23 +69,21 @@ Accepted lifecycle tags: `@dev`, `@alpha`, `@beta`, `@stable`, `@deprecated`.
 
 ## Protobuf/gRPC
 
-```yaml
-# Descriptor manifest
-metadata_path: lifecycle.json
-```
+```proto
+// Creates a payment.
+// @lifecycle alpha
+rpc CreatePayment(CreatePaymentRequest) returns (Payment);
 
-```json
-{
-  "endpoints": {
-    "example.PaymentService/CreatePayment": {"lifecycle": {"state": "beta"}}
-  },
-  "messages": {
-    "example.CreatePaymentRequest": {"lifecycle": {"state": "deprecated"}}
-  }
+// @lifecycle deprecated
+message LegacyPaymentRequest {
+  // @lifecycle dev
+  string internal_id = 2;
 }
 ```
 
-Accepted `lifecycle.state` values: `alpha`, `beta`, `stable`, `deprecated` (case-insensitive).
+Put `@lifecycle <state>` on its own line in the leading comment of a service, rpc, message, field, enum, or enum value. The tag line is removed from the rendered description; the rest of the comment is kept. When several tag lines are present, the last one wins. A tag with an unrecognized value is left in the description unchanged. A `dev` service hides its rpcs unless they carry their own tag.
+
+Accepted values: `dev`, `alpha`, `beta`, `stable`, `deprecated` (case-insensitive).
 
 ## Daml
 
