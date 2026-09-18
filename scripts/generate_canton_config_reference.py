@@ -952,7 +952,7 @@ def render_required(prefix: str, entries: list[dict], sections: dict[str, dict],
 
 
 def frontmatter(title: str, description: str, wide: bool = False) -> list[str]:
-"""`wide` drops the right-hand table of contents. Not used at present: readers wanted the
+    """`wide` drops the right-hand table of contents. Not used at present: readers wanted the
     table of contents kept, so the key tables share the default content width instead."""
     lines = ["---", f'title: "{title}"', f'description: "{description}"']
     if wide:
