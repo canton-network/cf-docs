@@ -588,18 +588,9 @@ def write_manifest(
     manifest_path: Path,
     source_name: str | None = None,
 ) -> Path:
-    metadata_path = source_config.get("metadata_path")
-    metadata_ref: str | None = None
-    if isinstance(metadata_path, str) and metadata_path:
-        resolved = Path(metadata_path)
-        if not resolved.is_absolute():
-            resolved = (REPO_ROOT / resolved).resolve()
-        metadata_ref = str(resolved)
-
     manifest = {
         "source": source_name or source_config.get("source") or "Canton protobuf trees from published release bundles",
         "repo": source_config.get("repo") if isinstance(source_config.get("repo"), dict) else {},
-        "metadata_path": metadata_ref,
         "versions": releases,
     }
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
