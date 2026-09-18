@@ -16,7 +16,7 @@ import ExternalSpliceMainSpliceRstCodeDocsSrcValidatorOperatorValidatorComposeYa
 
 {/* COPIED_START source="splice:docs/src/validator_operator/validator_compose.rst" hash="074ae45b" */}
 
-This section describes how to deploy a standalone validator node on a VM or a local machine using [Docker Compose](https://docs.docker.com/compose/). The deployment consists of the validator node along with associated wallet and CNS UIs and, from Splice 0.9.0 onwards, the [Wallet Gateway and Splice Portfolio](#wallet-gateway-and-splice-portfolio), and onboards the validator node to the target network.
+This section describes how to deploy a standalone validator node on a VM or a local machine using [Docker Compose](https://docs.docker.com/compose/). The deployment consists of the validator node along with associated wallet and CNS UIs and, from Splice 0.9.0 onwards, optionally the [Wallet Gateway and Splice Portfolio](#wallet-gateway-and-splice-portfolio), and onboards the validator node to the target network.
 
 This deployment is useful for:
 
@@ -362,15 +362,15 @@ The Canton Admin API is not exposed by default as it does not yet support auth. 
 ## Wallet Gateway and Splice Portfolio
 
 <Note>
-The Wallet Gateway and Splice Portfolio are part of the Docker Compose deployment from Splice 0.9.0 onwards. On Splice 0.8.x and earlier, `start.sh` deploys only the validator and its wallet and CNS UIs, and the `-G` flag is not available.
+The Wallet Gateway and Splice Portfolio are part of the Docker Compose deployment from Splice 0.9.0 onwards. On Splice 0.8.x and earlier, `start.sh` deploys only the validator and its wallet and CNS UIs, and the `-g` flag is not available. In Splice 0.9.x they are opt-in; from Splice 0.10.0 onwards they will be deployed by default, with a flag to skip them.
 </Note>
 
-The `start.sh` command also deploys the [Wallet Gateway](/integrations/wallet-gateway/overview) and the [Splice Portfolio](/sdks-tools/development-tools/splice-portfolio/overview) as part of the validator. The Wallet Gateway is a wallet implementing the [CIP-0103](https://github.com/canton-foundation/cips/blob/main/cip-0103/cip-0103.md) wallet standard: users manage their parties in it and connect it to dApps. The Splice Portfolio is a dApp for viewing and moving assets that connects to the Wallet Gateway. Parties created in the Wallet Gateway are hosted on the validator's participant. To deploy the validator without them, add the `-G` flag to the `start.sh` command.
+The `start.sh` command can also deploy the [Wallet Gateway](/integrations/wallet-gateway/overview) and the [Splice Portfolio](/sdks-tools/development-tools/splice-portfolio/overview) as part of the validator. The Wallet Gateway is a wallet implementing the [CIP-0103](https://github.com/canton-foundation/cips/blob/main/cip-0103/cip-0103.md) wallet standard: users manage their parties in it and connect it to dApps. The Splice Portfolio is a dApp for viewing and moving assets that connects to the Wallet Gateway. Parties created in the Wallet Gateway are hosted on the validator's participant. To deploy them, add `-g` to the `start.sh` command shown in [Deployment](#deployment); running `start.sh` without `-g` deploys the validator as in earlier releases.
 
 The Wallet Gateway requires `LEDGER_API_AUTH_AUDIENCE` and `VALIDATOR_AUTH_AUDIENCE` in the `.env` file to be equal, which is the case for the shipped defaults. If you deploy with authentication (`-a`), keep them equal when changing them, and also set `WALLET_GATEWAY_UI_CLIENT_ID` and register the callback URL, as described in [Configuring Authentication](#configuring-authentication).
 
 <Note>
-The two audiences must be equal because the Splice Portfolio calls the validator API with the Wallet Gateway's Ledger API tokens. If they differ, `start.sh` refuses to start until you set them to the same value or skip the Wallet Gateway with `-G`. See [Upgrading an existing deployment](#upgrading-an-existing-deployment) if your deployment predates this requirement.
+The two audiences must be equal because the Splice Portfolio calls the validator API with the Wallet Gateway's Ledger API tokens. If they differ, `start.sh -g` refuses to start until you set them to the same value. See [Enabling the Wallet Gateway on an existing deployment](#enabling-the-wallet-gateway-on-an-existing-deployment) if your deployment predates this requirement.
 </Note>
 
 The Wallet Gateway is accessible at [http://walletgateway.localhost](http://walletgateway.localhost) and the Splice Portfolio at [http://portfolio.localhost](http://portfolio.localhost). The versions of both are pinned in the `.env` file as `WALLET_GATEWAY_VERSION` and `PORTFOLIO_VERSION`.
@@ -385,18 +385,18 @@ To use the Splice Portfolio, follow its [first-time setup](/sdks-tools/developme
 Parties created without authentication are not visible after enabling it with `-a`, as the Wallet Gateway keeps separate state for the two modes.
 </Note>
 
-### Upgrading an existing deployment
+### Enabling the Wallet Gateway on an existing deployment
 
-Deployments without authentication need no changes, as long as you use the `.env` file shipped with the new release, in which both audiences are already equal.
+Upgrading an existing deployment to Splice 0.9.x needs no changes: without `-g`, `start.sh` deploys exactly what earlier releases deployed. The steps below are only needed to enable the Wallet Gateway and the Splice Portfolio, and they prepare your deployment for Splice 0.10.0, where they are deployed by default.
 
-If your deployment uses authentication (`-a`) with different values for `LEDGER_API_AUTH_AUDIENCE` and `VALIDATOR_AUTH_AUDIENCE`, as the placeholders in the `.env` file of earlier releases and the [community Keycloak configuration guide](/global-synchronizer/deployment/community-keycloak-config) suggest, `start.sh` refuses to start after the upgrade and reports that the two audiences must be equal. Pick one of the following:
+Deployments without authentication only need equal audiences. If you use the `.env` file shipped with the new release, both are already equal. If you carry over an `.env` file from an earlier release instead, its placeholder audiences `https://ledger_api.example.com` and `https://validator.example.com` differ, so `start.sh -g` refuses to start even without `-a`. Set both variables to the same value, for example `https://canton.network.global`, and start again with `-g`; users have to log in to the wallet and CNS UIs again afterwards.
 
-1. Keep your configuration and add `-G` to your `start.sh` command. This deploys exactly what earlier releases deployed, without the Wallet Gateway and the Splice Portfolio. You can enable them later by following the second option.
-2. Move to a single audience:
-   1. In your OIDC provider, make the tokens issued to the wallet UI and CNS UI apps, and to the validator app backend, carry the ledger API audience, i.e. the value of `LEDGER_API_AUTH_AUDIENCE`. In Auth0 this means authorizing the apps for the ledger API and dropping the separate validator API. In Okta, use the authorization server with the ledger API audience for all apps. In Keycloak, set the `Included Custom Audience` of the `openid` client scope's audience mapper to the ledger API audience.
-   2. Create the OAuth app for the Wallet Gateway UI with `http://walletgateway.localhost/callback` as its callback URL, and set `WALLET_GATEWAY_UI_CLIENT_ID` in `.env`.
-   3. Set `VALIDATOR_AUTH_AUDIENCE` to the same value as `LEDGER_API_AUTH_AUDIENCE` in `.env`.
-   4. Run your `start.sh` command without `-G`. Users have to log in to the wallet and CNS UIs again, as their existing tokens carry the old audience.
+If your deployment uses authentication (`-a`) with different values for `LEDGER_API_AUTH_AUDIENCE` and `VALIDATOR_AUTH_AUDIENCE`, as the placeholders in the `.env` file of earlier releases and the [community Keycloak configuration guide](/global-synchronizer/deployment/community-keycloak-config) suggest, `start.sh -g` refuses to start and reports that the two audiences must be equal. Move to a single audience:
+
+1. In your OIDC provider, make the tokens issued to the wallet UI and CNS UI apps, and to the validator app backend, carry the ledger API audience, i.e. the value of `LEDGER_API_AUTH_AUDIENCE`. In Auth0 this means authorizing the apps for the ledger API and dropping the separate validator API. In Okta, use the authorization server with the ledger API audience for all apps. In Keycloak, set the `Included Custom Audience` of the `openid` client scope's audience mapper to the ledger API audience.
+2. Create the OAuth app for the Wallet Gateway UI with `http://walletgateway.localhost/callback` as its callback URL, and set `WALLET_GATEWAY_UI_CLIENT_ID` in `.env`.
+3. Set `VALIDATOR_AUTH_AUDIENCE` to the same value as `LEDGER_API_AUTH_AUDIENCE` in `.env`.
+4. Run your `start.sh` command with `-g`. Users have to log in to the wallet and CNS UIs again, as their existing tokens carry the old audience.
 
 ## Configuring Authentication
 
@@ -404,7 +404,7 @@ If your deployment uses authentication (`-a`) with different values for `LEDGER_
 The default deployment uses highly insecure self-signed tokens, shared by the participant, the validator API and all UIs, including the Wallet Gateway. Anyone with access to any of the UIs (or the machine and/or its network interface) may log in as a user of their choice and act on that user's parties. For any production use, you should configure proper authentication as described in this section.
 </Warning>
 
-Set up an OIDC provider that meets the [OIDC provider requirements](/global-synchronizer/deployment/validator-kubernetes#oidc-provider-requirements) described for the Kubernetes deployment, which also includes a walkthrough for [Auth0](/global-synchronizer/deployment/validator-kubernetes#configuring-an-auth0-tenant). Community-contributed guides cover [Okta and Keycloak](/global-synchronizer/deployment/oidc-providers) and a [Keycloak setup](/global-synchronizer/deployment/community-keycloak-config). The URLs to configure for callbacks are `http://wallet.localhost` and `http://ans.localhost`, and `http://walletgateway.localhost/callback` for the Wallet Gateway (unless you skip it with `-G`).
+Set up an OIDC provider as described in [Configuring Authentication](/global-synchronizer/deployment/validator-kubernetes#configuring-authentication) for the Kubernetes deployment, which covers the requirements and Auth0; community-contributed guides exist for [Okta and Keycloak](/global-synchronizer/deployment/oidc-providers) and a [Keycloak setup](/global-synchronizer/deployment/community-keycloak-config). The URLs to configure for callbacks are `http://wallet.localhost` and `http://ans.localhost`, and `http://walletgateway.localhost/callback` for the Wallet Gateway (if you deploy it with `-g`).
 
 Once you have set up your OAuth provider, you need to configure it by setting the following environment variables in the `.env` file:
 
@@ -415,14 +415,14 @@ Once you have set up your OAuth provider, you need to configure it by setting th
 | AUTH_WELLKNOWN_URL | The URL of your OIDC provider for obtaining the `openid-configuration`, will typically be `${AUTH_URL}/.well-known/openid-configuration`. |
 | LEDGER_API_AUTH_AUDIENCE | The audience for the participant ledger API, e.g. `https://canton.network.global`. This sets the `ledger-api.auth-services.target-audience` configuration for the participant. |
 | LEDGER_API_AUTH_SCOPE | The scope for the participant ledger API. This sets the participant's `ledger-api.auth-services.target-scope` configuration. Optional. |
-| VALIDATOR_AUTH_AUDIENCE | The audience for the validator backend API, e.g. `https://canton.network.global`. Must equal `LEDGER_API_AUTH_AUDIENCE` unless you skip the Wallet Gateway with `-G`. |
+| VALIDATOR_AUTH_AUDIENCE | The audience for the validator backend API, e.g. `https://canton.network.global`. Must equal `LEDGER_API_AUTH_AUDIENCE` if you deploy the Wallet Gateway with `-g`. |
 | VALIDATOR_AUTH_CLIENT_ID | The client id of the OAuth app for the validator app backend. |
 | VALIDATOR_AUTH_CLIENT_SECRET | The client secret of the OAuth app for the validator app backend. |
 | LEDGER_API_ADMIN_USER | Should match the `sub` field of JWTs issued for the validator app. For some auth providers, this would be formed as `CLIENT_ID@clients`. |
 | WALLET_ADMIN_USER | The user ID of the user which should login as the wallet administrator. Note that this should be the full user id, e.g., `auth0\|43b68e1e4978b000cefba352`, *not* only the suffix `43b68e1e4978b000cefba352`. |
 | WALLET_UI_CLIENT_ID | The client id of the OAuth app for the wallet UI. |
 | ANS_UI_CLIENT_ID | The client id of the OAuth app for the CNS UI. |
-| WALLET_GATEWAY_UI_CLIENT_ID | The client id of the OAuth app for the Wallet Gateway UI. Not needed if you skip the Wallet Gateway with `-G`. |
+| WALLET_GATEWAY_UI_CLIENT_ID | The client id of the OAuth app for the Wallet Gateway UI. Only needed if you deploy the Wallet Gateway with `-g`. |
 | CONTACT_POINT | The contact point for your validator node that can be used by other node operators to reach out to you if needed (slack username or an email address). Optional |
 
 In order to enable auth in the deployment, add the `-a` flag to the `start.sh` command, as follows:
