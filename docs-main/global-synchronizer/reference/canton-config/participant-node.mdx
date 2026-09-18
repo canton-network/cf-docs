@@ -282,7 +282,6 @@ canton.participants.<participant>.admin-api.tls.client-auth.admin-client.cert-ch
 | Key | Type | Required | Default | Description |
 |---|---|---|---|---|
 | `address` | string |  | `127.0.0.1` |  |
-| `auth-services` | array of [AuthServiceConfig](#authserviceconfig) |  | `[]` |  |
 | `flow-control-window` | int (PositiveInt) |  | `ServerConfig.defaultFlowControlWindow` ‡ |  |
 | `initial-flow-control-window` | int (PositiveInt) |  | `1048576` |  |
 | `max-concurrent-calls-per-connection` | int (NonNegativeInt) |  | `100000` |  |
@@ -294,6 +293,7 @@ canton.participants.<participant>.admin-api.tls.client-auth.admin-client.cert-ch
 |     `admin-claim` | boolean |  | `false` |  |
 |     `admin-token-duration` | duration (PositiveFiniteDuration) |  | `5 minutes` |  |
 |     `fixed-admin-token` | string |  | _unset_ |  |
+| `auth-services` | array of [AuthServiceConfig](#authserviceconfig) |  | `[]` |  |
 | **auth-services[]** |  |  |  |  |
 |     `type` | one of `wildcard`, `unsafe-jwt-hmac-256`, `jwt-rs-256-crt`, `jwt-es-256-crt`, `jwt-es-512-crt`, `jwt-jwks`, `party-jwt` | yes |  | Choose one type — see [AuthServiceConfig](#authserviceconfig). |
 | **auth-services[]** `type = unsafe-jwt-hmac-256` |  |  |  | [UNSAFE] Enables JWT-based authorization with shared secret HMAC256 signing: USE THIS EXCLUSIVELY FOR TESTING |
@@ -498,17 +498,13 @@ canton.participants.<participant>.alpha-dynamic {
 | Key | Type | Required | Default | Description |
 |---|---|---|---|---|
 | `check-self-consistency` | boolean |  | `true` | if set to true (default), then after every sync operation we'll check again if it really succeeded |
-| `connections` | array of DeclarativeConnectionConfig |  | `[]` | which connections should be configured |
-| `dars` | array of DeclarativeDarConfig |  | `[]` | which dars should be uploaded |
 | `enable-multi-synchronizer-topology-feature-flag` | boolean |  | `false` | if true, then the participant will enable multi-synchronizers for all synchronizers it is connected to |
 | `fetched-dar-directory` | path |  | `/tmp/fetched-dars12534636215432177984` | temporary directory to store the dars to |
-| `idps` | array of DeclarativeIdpConfig |  | `[]` | which identity providers should be allocated |
-| `parties` | array of DeclarativePartyConfig |  | `[]` | which parties should be allocated |
 | `remove-connections` | boolean |  | `false` | if true, then any excess connection will be disabled |
 | `remove-idps` | boolean |  | `false` | if true, any excess idp found on the node will be deleted |
 | `remove-parties` | boolean |  | `false` | if true, then any "excess party" found on the node will be deleted |
 | `remove-users` | boolean |  | `false` | if true, then any "excess user" found on the node will be deleted |
-| `users` | array of DeclarativeUserConfig |  | `[]` | which users should be allocated |
+| `connections` | array of DeclarativeConnectionConfig |  | `[]` | which connections should be configured |
 | **connections[]** |  |  |  | Declarative synchronizer connection configuration |
 |     `initialize-from-trusted-synchronizer` | boolean |  | `false` | if true then the participant assumes that the synchronizer trust certificate of the participant is already issued |
 |     `liveness-margin` | int (NonNegativeInt) |  | `NonNegativeInt.zero` ‡ |  |
@@ -519,27 +515,31 @@ canton.participants.<participant>.alpha-dynamic {
 |     **connections** |  |  |  |  |
 |         **&lt;connection&gt;** |  |  |  |  |
 |             `custom-trust-certificates` | path |  | _unset_ | if the TLS certificate used cannot be validated against the JVMs trust store, then a trust store can be provided |
-|             `endpoints` | array of Endpoint | yes |  | the list of endpoints for the given sequencer. all endpoints must be of the same sequencer (same-id) |
 |             `transport-security` | boolean |  | `false` | if true then TLS will be used |
+|             `endpoints` | array of Endpoint | yes |  | the list of endpoints for the given sequencer. all endpoints must be of the same sequencer (same-id) |
 |             **endpoints[]** |  |  |  | Networking endpoint where host could be a hostname or ip address. |
 |                 `host` | string | yes |  |  |
 |                 `port` | int (Port) | yes |  |  |
+| `dars` | array of DeclarativeDarConfig |  | `[]` | which dars should be uploaded |
 | **dars[]** |  |  |  | Declarative dar definition |
 |     `expected-main-package` | string |  | _unset_ | which package id should be expected as the main package |
 |     `location` | string | yes |  | the path (or URL) to the dar or dar directory |
 |     `synchronizers` | array of string |  | `[]` |  |
 |     **request-headers** |  |  |  |  |
 |         `<request-header>` | string |  | `Map()` ‡ | optionally add additional request headers to download the dar |
+| `idps` | array of DeclarativeIdpConfig |  | `[]` | which identity providers should be allocated |
 | **idps[]** |  |  |  | Declarative Idp config |
 |     `audience` | string |  | _unset_ |  |
 |     `identity-provider-id` | string | yes |  |  |
 |     `is-deactivated` | boolean |  | `false` |  |
 |     `issuer` | string | yes |  |  |
 |     `jwks-url` | string | yes |  |  |
+| `parties` | array of DeclarativePartyConfig |  | `[]` | which parties should be allocated |
 | **parties[]** |  |  |  | Declarative party definition |
 |     `party` | string | yes |  |  |
 |     `permission` | ParticipantPermissionConfig (unclassified) |  | `ParticipantPermissionConfig.Submission` ‡ | the permission of the hosting participant |
 |     `synchronizers` | array of string |  | `[]` | if not empty, the party will be added to the selected synchronizers only, refered to by alias |
+| `users` | array of DeclarativeUserConfig |  | `[]` | which users should be allocated |
 | **users[]** |  |  |  | Declaratively control users |
 |     `identity-provider-id` | string |  | `""` | the idp of the given user |
 |     `is-deactivated` | boolean |  | `false` | if true then the user is deactivatedd |
@@ -778,8 +778,8 @@ canton.participants.<participant>.crypto.private-key-store.encryption {
 |     `default` | depends on use (S) |  | _unset_ | The optional scheme to use. If none is specified, use the provider's default scheme of kind S. |
 | **private-key-store** |  |  |  | Stores the configuration for a private store |
 |     **encryption** |  |  |  | Encapsulates possible configurations for different encrypted private stores |
-|         `reverted` | boolean |  | `false` | when true decrypts the stored private keys and stores them in clear, disabling the encrypted crypto private key store in the process |
 |         `type` | one of `kms` | yes |  | Choose one type — see [EncryptedPrivateStoreConfig](#encryptedprivatestoreconfig). Encapsulates possible configurations for different encrypted private stores |
+|         `reverted` | boolean |  | `false` | when true decrypts the stored private keys and stores them in clear, disabling the encrypted crypto private key store in the process |
 |         `wrapper-key-id` | string (KmsKeyId) |  | _unset_ | defines key identifier for the wrapper key (e.g. ARN for AWS SDK). When it's None Canton will either create a new key or use a previous existent key |
 | **session-signing-keys** |  |  |  | Configuration for enabling session signing keys with a specified validity period. |
 |     `cut-off-duration` | duration (NonNegativeFiniteDuration) |  | `1 minute` | A cut-off duration is applied only when we need to sign something without knowing the exact topology timestamp that will later be used for verification (e.g., when using a currentSnapshotApproximation). The cutoff measures the amount of clock skew that can be tolerated and therefore should be longer than our `ledgerRecordTimeTolerance`. The participant makes a guess t0 at the topology timestamp for verification and will use an existing session signing key k only if the interval [t0 - cutoff, t0 + cutoff] lies fully within k’s validity period. If the full validity interval is known a priori (e.g., we know the maximum sequencing time for the message we want to sign), we need to ensure that we use an existing session signing key k only if the interval [t0 - cutoff, endValidityPeriod] is fully covered. As a result, newly created session signing keys must have a validity period that starts at least cutoffDuration before ts. A typical example of this uncertainty is signing submission requests, where the sequencer-assigned timestamp is unknown in advance. If a new session key is created only after the previous key’s validity interval ends, multiple submissions may fail verification if any clock skew exists between the nodes. |
@@ -1347,7 +1347,6 @@ canton.participants.<participant>.ledger-api.tls.client-auth.admin-client.cert-c
 | Key | Type | Required | Default | Description |
 |---|---|---|---|---|
 | `address` | string |  | `127.0.0.1` | ledger api server host name. |
-| `auth-services` | array of [AuthServiceConfig](#authserviceconfig) |  | `[]` | type of authentication services used by ledger-api server. If empty, we use a wildcard. Otherwise, the first service response that does not say "unauthenticated" will be used. |
 | `database-connection-timeout` | duration (NonNegativeFiniteDuration) |  | `30 seconds` | database connection timeout |
 | `enable-command-inspection` | boolean |  | `true` | enable command inspection service over the ledger api |
 | `flow-control-window` | int (PositiveInt) |  | `ServerConfig.defaultFlowControlWindow` ‡ |  |
@@ -1363,6 +1362,7 @@ canton.participants.<participant>.ledger-api.tls.client-auth.admin-client.cert-c
 |     `admin-claim` | boolean |  | `false` |  |
 |     `admin-token-duration` | duration (PositiveFiniteDuration) |  | `5 minutes` |  |
 |     `fixed-admin-token` | string |  | _unset_ |  |
+| `auth-services` | array of [AuthServiceConfig](#authserviceconfig) |  | `[]` | type of authentication services used by ledger-api server. If empty, we use a wildcard. Otherwise, the first service response that does not say "unauthenticated" will be used. |
 | **auth-services[]** |  |  |  |  |
 |     `type` | one of `wildcard`, `unsafe-jwt-hmac-256`, `jwt-rs-256-crt`, `jwt-es-256-crt`, `jwt-es-512-crt`, `jwt-jwks`, `party-jwt` | yes |  | Choose one type — see [AuthServiceConfig](#authserviceconfig). |
 | **auth-services[]** `type = unsafe-jwt-hmac-256` |  |  |  | [UNSAFE] Enables JWT-based authorization with shared secret HMAC256 signing: USE THIS EXCLUSIVELY FOR TESTING |
@@ -2186,8 +2186,8 @@ canton.participants.<participant>.parameters.engine.extensions.<extension>.tls.t
 |     **consistency-check** |  |  |  |  |
 |         `journal-snapshot-query-limit` | int (PositiveInt) |  | `100` | The limit (page size) passed to the DigestJournal#snapshot when retrieving ACS digest updates continously. Default is 100. |
 |     **load-batching** |  |  |  | Parameters for that batcher that batches queries (e.g., to a DB). |
-|         `maximum-batch-size` | int (PositiveNumeric) |  | `500` | Maximum number of queries in a batch. |
 |         `type` | one of `batching`, `no-batching` | yes |  | Choose one type — see [BatchAggregatorConfig](#batchaggregatorconfig). Parameters for that batcher that batches queries (e.g., to a DB). |
+|         `maximum-batch-size` | int (PositiveNumeric) |  | `500` | Maximum number of queries in a batch. |
 |     **load-batching** `type = batching` |  |  |  |  |
 |         `maximum-in-flight` | int (PositiveNumeric) |  | `2` | Maximum number of in-flight get queries. |
 |     **load-batching** `type = no-batching` |  |  |  |  |
@@ -2223,36 +2223,36 @@ canton.participants.<participant>.parameters.engine.extensions.<extension>.tls.t
 |     `parallelism` | int (PositiveNumeric) |  | `8` | number of parallel queries to the db. defaults to 8 |
 |     `pruning-parallelism` | int (PositiveNumeric) |  | `2` | number of parallel pruning queries to the db. defaults to 2 |
 |     **aggregator** |  |  |  | Parameters for that batcher that batches queries (e.g., to a DB). |
-|         `maximum-batch-size` | int (PositiveNumeric) |  | `500` | Maximum number of queries in a batch. |
 |         `type` | one of `batching`, `no-batching` | yes | `batching` † | Choose one type — see [BatchAggregatorConfig](#batchaggregatorconfig). Parameters for that batcher that batches queries (e.g., to a DB). |
+|         `maximum-batch-size` | int (PositiveNumeric) |  | `500` | Maximum number of queries in a batch. |
 |     **aggregator** `type = batching` |  |  |  |  |
 |         `maximum-in-flight` | int (PositiveNumeric) |  | `2` | Maximum number of in-flight get queries. |
 |     **aggregator** `type = no-batching` |  |  |  |  |
 |         `max-parallel-batches` | int (PositiveNumeric) |  | `2` | Maximum number of batches to execute in parallel when using runMany. |
 |     **contract-store-aggregator** |  |  |  | Parameters for that batcher that batches queries (e.g., to a DB). |
-|         `maximum-batch-size` | int (PositiveNumeric) |  | `500` (in practice `50`) ◊ | Maximum number of queries in a batch. |
 |         `type` | one of `batching`, `no-batching` | yes | `batching` † | Choose one type — see [BatchAggregatorConfig](#batchaggregatorconfig). Parameters for that batcher that batches queries (e.g., to a DB). |
+|         `maximum-batch-size` | int (PositiveNumeric) |  | `500` (in practice `50`) ◊ | Maximum number of queries in a batch. |
 |     **contract-store-aggregator** `type = batching` |  |  |  |  |
 |         `maximum-in-flight` | int (PositiveNumeric) |  | `2` (in practice `5`) ◊ | Maximum number of in-flight get queries. |
 |     **contract-store-aggregator** `type = no-batching` |  |  |  |  |
 |         `max-parallel-batches` | int (PositiveNumeric) |  | `2` | Maximum number of batches to execute in parallel when using runMany. |
 |     **mediator-fetch-finalized-responses-aggregator** |  |  |  | Parameters for that batcher that batches queries (e.g., to a DB). |
-|         `maximum-batch-size` | int (PositiveNumeric) |  | `500` | Maximum number of queries in a batch. |
 |         `type` | one of `batching`, `no-batching` | yes | `batching` † | Choose one type — see [BatchAggregatorConfig](#batchaggregatorconfig). Parameters for that batcher that batches queries (e.g., to a DB). |
+|         `maximum-batch-size` | int (PositiveNumeric) |  | `500` | Maximum number of queries in a batch. |
 |     **mediator-fetch-finalized-responses-aggregator** `type = batching` |  |  |  |  |
 |         `maximum-in-flight` | int (PositiveNumeric) |  | `2` | Maximum number of in-flight get queries. |
 |     **mediator-fetch-finalized-responses-aggregator** `type = no-batching` |  |  |  |  |
 |         `max-parallel-batches` | int (PositiveNumeric) |  | `2` | Maximum number of batches to execute in parallel when using runMany. |
 |     **mediator-store-finalized-responses-aggregator** |  |  |  | Parameters for that batcher that batches queries (e.g., to a DB). |
-|         `maximum-batch-size` | int (PositiveNumeric) |  | `500` | Maximum number of queries in a batch. |
 |         `type` | one of `batching`, `no-batching` | yes | `batching` † | Choose one type — see [BatchAggregatorConfig](#batchaggregatorconfig). Parameters for that batcher that batches queries (e.g., to a DB). |
+|         `maximum-batch-size` | int (PositiveNumeric) |  | `500` | Maximum number of queries in a batch. |
 |     **mediator-store-finalized-responses-aggregator** `type = batching` |  |  |  |  |
 |         `maximum-in-flight` | int (PositiveNumeric) |  | `2` | Maximum number of in-flight get queries. |
 |     **mediator-store-finalized-responses-aggregator** `type = no-batching` |  |  |  |  |
 |         `max-parallel-batches` | int (PositiveNumeric) |  | `2` | Maximum number of batches to execute in parallel when using runMany. |
 |     **topology-cache-aggregator** |  |  |  | Parameters for that batcher that batches queries (e.g., to a DB). |
-|         `maximum-batch-size` | int (PositiveNumeric) |  | `500` | Maximum number of queries in a batch. |
 |         `type` | one of `batching`, `no-batching` | yes | `batching` † | Choose one type — see [BatchAggregatorConfig](#batchaggregatorconfig). Parameters for that batcher that batches queries (e.g., to a DB). |
+|         `maximum-batch-size` | int (PositiveNumeric) |  | `500` | Maximum number of queries in a batch. |
 |     **topology-cache-aggregator** `type = batching` |  |  |  |  |
 |         `maximum-in-flight` | int (PositiveNumeric) |  | `2` | Maximum number of in-flight get queries. |
 |     **topology-cache-aggregator** `type = no-batching` |  |  |  |  |
@@ -2894,10 +2894,10 @@ canton.participants.<participant>.traffic-accounting.traffic-enforcement-server 
 | `enforce-cost-on-submissions` | boolean |  | `false` | Whether to enforce traffic cost on submissions. If enabled, the participant will validate that the account associated with the submission is correctly permissioned and has sufficient balance to cover the expected traffic cost. If the account has insufficient balance, the submission will be rejected. When disabled, the participant does not contact the traffic service on the submission path at all. Disabled by default. |
 | `reject-multi-party-submissions` | boolean |  | `false` | Whether to reject submissions whose actAs has more than one party. TEA accounts are bound to a single party, so by default such submissions bypass traffic enforcement entirely (validation is skipped and an informational message is logged). When enabled, such submissions are rejected instead. Disabled by default. |
 | **traffic-enforcement-server** |  |  |  |  |
+|     `type` | one of `internal` | yes |  | Choose one type — see [TrafficEnforcementServerConfig](#trafficenforcementserverconfig). |
 |     `account-lookup-timeout` | duration (PositiveFiniteDuration) |  | `20 seconds` | Total per-call budget for the `GetAccount` RPC, covering the client's retries around `databaseQueryTimeout`. Must be strictly greater than `databaseQueryTimeout`, so a timed-out query still leaves room for a retry. |
 |     `database-query-timeout` | duration (PositiveFiniteDuration) |  | `1 second` | Per-attempt deadline for the single database read backing `GetAccount`. Enforced on PostgreSQL via `SET LOCAL statement_timeout`, which is expressed in whole milliseconds, so this must be at least one millisecond. Has no effect on H2 (no millisecond-level query timeout setting). |
 |     `in-process-tea-server-name` | string |  | `TeaGrpcInProcServer` | The name of the in-process gRPC serving the traffic service API of the traffic enforcement server |
-|     `type` | one of `internal` | yes |  | Choose one type — see [TrafficEnforcementServerConfig](#trafficenforcementserverconfig). |
 |     **projection** |  |  |  | Config of the pekko projection in the internal traffic enforcement component |
 |         `handler-retry-delay` | duration (PositiveFiniteDuration) |  | `1 second` | delay between restarts of retrying a failed event processing |
 |         `initial-completion-offset-begin-exclusive` | int |  | _unset_ | the first ever time the TEA is started it will have no prior offset to start its completion stream from. By default it will start at ledgerEnd. Use this config to override the offset at which it will start. |

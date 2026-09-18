@@ -327,19 +327,29 @@ def group_rows(
     def walk(node: "OrderedDict", depth: int, path: str) -> None:
         leaves = [(k, v) for k, v in node.items() if "__leaf__" in v]
         sections = [(k, v) for k, v in node.items() if "__leaf__" not in v]
-        first_seen: dict[str, int] = {}
-        for k, _ in sections:
-            first_seen.setdefault(k[0] if isinstance(k, tuple) else k, len(first_seen))
+        # Blocks by name, a plain header before its `type = …` variants in the union's order: the
+        # same order the HOCON walker uses, so the two views agree. (Ordering by first appearance
+        # of full paths would put `lsu-repair` before `lsu`, since `-` sorts before `.`.)
+        leaves.sort(key=lambda kv: (kv[0] != "type", kv[0]))
         sections.sort(
             key=lambda kv: (
-                first_seen[kv[0][0] if isinstance(kv[0], tuple) else kv[0]],
+                kv[0][0] if isinstance(kv[0], tuple) else kv[0],
                 isinstance(kv[0], tuple),
                 kv[0][2] if isinstance(kv[0], tuple) else 0,
             )
         )
+        # A list of objects is one block in the HOCON (`auth-services = [ { … } ]`), so its own row
+        # (type, default) goes with the blocks, immediately before its `[]` header, rather than up
+        # with the single-value keys. Both views then read scalars first, then blocks, in one order.
+        block_names = {(name[0] if isinstance(name, tuple) else name) for name, _ in sections}
+        deferred = {name: child for name, child in leaves if f"{name}[]" in block_names}
         for name, child in leaves:
-            out.append((depth, name, child["__leaf__"], "", f"{path}.{name}"))
+            if name not in deferred:
+                out.append((depth, name, child["__leaf__"], "", f"{path}.{name}"))
         for name, child in sections:
+            base = name[0] if isinstance(name, tuple) else name
+            if base.endswith("[]") and base[:-2] in deferred:
+                out.append((depth, base[:-2], deferred.pop(base[:-2])["__leaf__"], "", f"{path}.{base[:-2]}"))
             if isinstance(name, tuple):
                 out.append((depth, name[0], None, name[1], f"{path}.{name[0]}"))
                 walk(child, depth + 1, f"{path}.{name[0]}")

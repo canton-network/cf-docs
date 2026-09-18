@@ -1997,7 +1997,6 @@ canton.sequencers.<sequencer>.admin-api.tls.client-auth.admin-client.cert-chain-
 | Key | Type | Required | Default | Description |
 |---|---|---|---|---|
 | `address` | string |  | `127.0.0.1` |  |
-| `auth-services` | array of [AuthServiceConfig](#authserviceconfig) |  | `[]` |  |
 | `flow-control-window` | int (PositiveInt) |  | `ServerConfig.defaultFlowControlWindow` ‡ |  |
 | `initial-flow-control-window` | int (PositiveInt) |  | `1048576` |  |
 | `max-concurrent-calls-per-connection` | int (NonNegativeInt) |  | `100000` |  |
@@ -2009,6 +2008,7 @@ canton.sequencers.<sequencer>.admin-api.tls.client-auth.admin-client.cert-chain-
 |     `admin-claim` | boolean |  | `false` |  |
 |     `admin-token-duration` | duration (PositiveFiniteDuration) |  | `5 minutes` |  |
 |     `fixed-admin-token` | string |  | _unset_ |  |
+| `auth-services` | array of [AuthServiceConfig](#authserviceconfig) |  | `[]` |  |
 | **auth-services[]** |  |  |  |  |
 |     `type` | one of `wildcard`, `unsafe-jwt-hmac-256`, `jwt-rs-256-crt`, `jwt-es-256-crt`, `jwt-es-512-crt`, `jwt-jwks`, `party-jwt` | yes |  | Choose one type — see [AuthServiceConfig](#authserviceconfig). |
 | **auth-services[]** `type = unsafe-jwt-hmac-256` |  |  |  | [UNSAFE] Enables JWT-based authorization with shared secret HMAC256 signing: USE THIS EXCLUSIVELY FOR TESTING |
@@ -2336,8 +2336,8 @@ canton.sequencers.<sequencer>.crypto.private-key-store.encryption {
 |     `default` | depends on use (S) |  | _unset_ | The optional scheme to use. If none is specified, use the provider's default scheme of kind S. |
 | **private-key-store** |  |  |  | Stores the configuration for a private store |
 |     **encryption** |  |  |  | Encapsulates possible configurations for different encrypted private stores |
-|         `reverted` | boolean |  | `false` | when true decrypts the stored private keys and stores them in clear, disabling the encrypted crypto private key store in the process |
 |         `type` | one of `kms` | yes |  | Choose one type — see [EncryptedPrivateStoreConfig](#encryptedprivatestoreconfig). Encapsulates possible configurations for different encrypted private stores |
+|         `reverted` | boolean |  | `false` | when true decrypts the stored private keys and stores them in clear, disabling the encrypted crypto private key store in the process |
 |         `wrapper-key-id` | string (KmsKeyId) |  | _unset_ | defines key identifier for the wrapper key (e.g. ARN for AWS SDK). When it's None Canton will either create a new key or use a previous existent key |
 | **session-signing-keys** |  |  |  | Configuration for enabling session signing keys with a specified validity period. |
 |     `cut-off-duration` | duration (NonNegativeFiniteDuration) |  | `1 minute` | A cut-off duration is applied only when we need to sign something without knowing the exact topology timestamp that will later be used for verification (e.g., when using a currentSnapshotApproximation). The cutoff measures the amount of clock skew that can be tolerated and therefore should be longer than our `ledgerRecordTimeTolerance`. The participant makes a guess t0 at the topology timestamp for verification and will use an existing session signing key k only if the interval [t0 - cutoff, t0 + cutoff] lies fully within k’s validity period. If the full validity interval is known a priori (e.g., we know the maximum sequencing time for the message we want to sign), we need to ensure that we use an existing session signing key k only if the interval [t0 - cutoff, endValidityPeriod] is fully covered. As a result, newly created session signing keys must have a validity period that starts at least cutoffDuration before ts. A typical example of this uncertainty is signing submission requests, where the sequencer-assigned timestamp is unknown in advance. If a new session key is created only after the previous key’s validity interval ends, multiple submissions may fail verification if any clock skew exists between the nodes. |
@@ -2858,36 +2858,36 @@ canton.sequencers.<sequencer>.parameters.batching.topology-cache-aggregator {
 |     `parallelism` | int (PositiveNumeric) |  | `8` | number of parallel queries to the db. defaults to 8 |
 |     `pruning-parallelism` | int (PositiveNumeric) |  | `2` | number of parallel pruning queries to the db. defaults to 2 |
 |     **aggregator** |  |  |  | Parameters for that batcher that batches queries (e.g., to a DB). |
-|         `maximum-batch-size` | int (PositiveNumeric) |  | `500` | Maximum number of queries in a batch. |
 |         `type` | one of `batching`, `no-batching` | yes | `batching` † | Choose one type — see [BatchAggregatorConfig](#batchaggregatorconfig). Parameters for that batcher that batches queries (e.g., to a DB). |
+|         `maximum-batch-size` | int (PositiveNumeric) |  | `500` | Maximum number of queries in a batch. |
 |     **aggregator** `type = batching` |  |  |  |  |
 |         `maximum-in-flight` | int (PositiveNumeric) |  | `2` | Maximum number of in-flight get queries. |
 |     **aggregator** `type = no-batching` |  |  |  |  |
 |         `max-parallel-batches` | int (PositiveNumeric) |  | `2` | Maximum number of batches to execute in parallel when using runMany. |
 |     **contract-store-aggregator** |  |  |  | Parameters for that batcher that batches queries (e.g., to a DB). |
-|         `maximum-batch-size` | int (PositiveNumeric) |  | `500` (in practice `50`) ◊ | Maximum number of queries in a batch. |
 |         `type` | one of `batching`, `no-batching` | yes | `batching` † | Choose one type — see [BatchAggregatorConfig](#batchaggregatorconfig). Parameters for that batcher that batches queries (e.g., to a DB). |
+|         `maximum-batch-size` | int (PositiveNumeric) |  | `500` (in practice `50`) ◊ | Maximum number of queries in a batch. |
 |     **contract-store-aggregator** `type = batching` |  |  |  |  |
 |         `maximum-in-flight` | int (PositiveNumeric) |  | `2` (in practice `5`) ◊ | Maximum number of in-flight get queries. |
 |     **contract-store-aggregator** `type = no-batching` |  |  |  |  |
 |         `max-parallel-batches` | int (PositiveNumeric) |  | `2` | Maximum number of batches to execute in parallel when using runMany. |
 |     **mediator-fetch-finalized-responses-aggregator** |  |  |  | Parameters for that batcher that batches queries (e.g., to a DB). |
-|         `maximum-batch-size` | int (PositiveNumeric) |  | `500` | Maximum number of queries in a batch. |
 |         `type` | one of `batching`, `no-batching` | yes | `batching` † | Choose one type — see [BatchAggregatorConfig](#batchaggregatorconfig). Parameters for that batcher that batches queries (e.g., to a DB). |
+|         `maximum-batch-size` | int (PositiveNumeric) |  | `500` | Maximum number of queries in a batch. |
 |     **mediator-fetch-finalized-responses-aggregator** `type = batching` |  |  |  |  |
 |         `maximum-in-flight` | int (PositiveNumeric) |  | `2` | Maximum number of in-flight get queries. |
 |     **mediator-fetch-finalized-responses-aggregator** `type = no-batching` |  |  |  |  |
 |         `max-parallel-batches` | int (PositiveNumeric) |  | `2` | Maximum number of batches to execute in parallel when using runMany. |
 |     **mediator-store-finalized-responses-aggregator** |  |  |  | Parameters for that batcher that batches queries (e.g., to a DB). |
-|         `maximum-batch-size` | int (PositiveNumeric) |  | `500` | Maximum number of queries in a batch. |
 |         `type` | one of `batching`, `no-batching` | yes | `batching` † | Choose one type — see [BatchAggregatorConfig](#batchaggregatorconfig). Parameters for that batcher that batches queries (e.g., to a DB). |
+|         `maximum-batch-size` | int (PositiveNumeric) |  | `500` | Maximum number of queries in a batch. |
 |     **mediator-store-finalized-responses-aggregator** `type = batching` |  |  |  |  |
 |         `maximum-in-flight` | int (PositiveNumeric) |  | `2` | Maximum number of in-flight get queries. |
 |     **mediator-store-finalized-responses-aggregator** `type = no-batching` |  |  |  |  |
 |         `max-parallel-batches` | int (PositiveNumeric) |  | `2` | Maximum number of batches to execute in parallel when using runMany. |
 |     **topology-cache-aggregator** |  |  |  | Parameters for that batcher that batches queries (e.g., to a DB). |
-|         `maximum-batch-size` | int (PositiveNumeric) |  | `500` | Maximum number of queries in a batch. |
 |         `type` | one of `batching`, `no-batching` | yes | `batching` † | Choose one type — see [BatchAggregatorConfig](#batchaggregatorconfig). Parameters for that batcher that batches queries (e.g., to a DB). |
+|         `maximum-batch-size` | int (PositiveNumeric) |  | `500` | Maximum number of queries in a batch. |
 |     **topology-cache-aggregator** `type = batching` |  |  |  |  |
 |         `maximum-in-flight` | int (PositiveNumeric) |  | `2` | Maximum number of in-flight get queries. |
 |     **topology-cache-aggregator** `type = no-batching` |  |  |  |  |
@@ -2948,16 +2948,16 @@ canton.sequencers.<sequencer>.parameters.batching.topology-cache-aggregator {
 |     **topology-snapshot** |  |  |  | Configurations settings for a single cache |
 |         `expire-after-access` | duration (NonNegativeFiniteDuration) |  | `1 minute` | how quickly after last access items should be expired from the cache |
 |         `maximum-size` | int (PositiveNumeric) | yes | `100` † | the maximum size of the cache |
-| **lsu-repair** |  |  |  |  |
-|     `global-max-sequencing-time-exclusive` | string (CantonTimestamp) |  | _unset_ | Allows to specify an upper bound on the sequencing times: any message with sequencing time strictly greater to this value will not be delivered. Important notes: - SHOULD be set only in disaster recovery scenarios. - MUST be the same value in all sequencers of a synchronizer. |
-|     **lsu-sequencing-bounds-override** |  |  |  | Used to override values usually derived from the LSU announcement. |
-|         `lower-bound-sequencing-time-exclusive` | string (CantonTimestamp) | yes |  | Defined as the highest effective time of the topology store on the broken synchronizer. |
-|         `upgrade-time` | string (CantonTimestamp) | yes |  | The value should be chosen as follows: - At least lowerBoundSequencingTimeExclusive - At least the latest sequencing time on the broken synchronizer - At least the latest effective time of the latest non-rejected topology transaction on the broken synchronizer. - Not too far in the future, as it acts as a strict lower bound on the new synchronizer. |
 | **lsu** |  |  |  | Config for LSU. |
 |     **contact-successor-retry** |  |  |  | Exponential backoff configuration for retries of operations |
 |         `initial-delay` | duration (NonNegativeFiniteDuration) | yes | `15 seconds` † | initial delay before the first retry |
 |         `max-delay` | duration (NonNegativeDuration) | yes | `1 minute` † | max delay between retries |
 |         `max-retries` | int | yes | `2147483647` † | max number of retries |
+| **lsu-repair** |  |  |  |  |
+|     `global-max-sequencing-time-exclusive` | string (CantonTimestamp) |  | _unset_ | Allows to specify an upper bound on the sequencing times: any message with sequencing time strictly greater to this value will not be delivered. Important notes: - SHOULD be set only in disaster recovery scenarios. - MUST be the same value in all sequencers of a synchronizer. |
+|     **lsu-sequencing-bounds-override** |  |  |  | Used to override values usually derived from the LSU announcement. |
+|         `lower-bound-sequencing-time-exclusive` | string (CantonTimestamp) | yes |  | Defined as the highest effective time of the topology store on the broken synchronizer. |
+|         `upgrade-time` | string (CantonTimestamp) | yes |  | The value should be chosen as follows: - At least lowerBoundSequencingTimeExclusive - At least the latest sequencing time on the broken synchronizer - At least the latest effective time of the latest non-rejected topology transaction on the broken synchronizer. - Not too far in the future, as it acts as a strict lower bound on the new synchronizer. |
 | **time-advancing-topology** |  |  |  | Configures the timeouts for time advancement broadcast messages that sequencers send after a topology transaction. |
 |     `grace-period` | duration (NonNegativeFiniteDuration) |  | `500 milliseconds` | Waiting period (measured on the local sequencer clock) on top of the topology change delay for the sequencer before it sends a broadcast message. If it processes another broadcast or topology transaction message during this waiting time whose sequencing time is after the effective timestamp, it will not send a broadcast message. A short grace period leads to faster observation of the topology transaction becoming effective; a long grace period reduces the number of broadcast messages sent. |
 |     `max-sequencing-time-window` | duration (NonNegativeFiniteDuration) |  | `30 seconds` | The difference between the effective timestamp of the topology transaction and the max sequencing time for the time advancement broadcast message. The time advancement broadcast must be sequenced within this time window. |
@@ -4507,6 +4507,7 @@ canton.sequencers.<sequencer>.sequencer.config.initial-network.server-endpoint.t
 |         `polling-interval` | duration (NonNegativeFiniteDuration) |  | _unset_ | how frequently to poll for new events from the database. only used in the enterprise edition if high availability has been configured, otherwise will rely on local writes performed by this sequencer to indicate that new events are available. |
 |         `read-batch-size` | int |  | `100` | max number of events to fetch from the datastore in one page |
 |     **writer** |  |  |  |  |
+|         `type` | one of `low-latency`, `high-throughput` | yes |  | Choose one type — see [SequencerWriterConfig](#sequencerwriterconfig). Configuration for the database based sequencer writer |
 |         `buffered-events-max-memory` | int (BytesUnit) |  | `DefaultBufferedEventsMaxMemory` ‡ |  |
 |         `buffered-events-preload-batch-size` | int (PositiveInt) |  | `50` |  |
 |         `checkpoint-backfill-parallelism` | int (PositiveInt) |  | `DefaultCheckpointBackfillParallelism` ‡ |  |
@@ -4515,7 +4516,6 @@ canton.sequencers.<sequencer>.sequencer.config.initial-network.server-endpoint.t
 |         `event-write-max-concurrency` | int |  | `1` |  |
 |         `payload-queue-size` | int |  | `1000` |  |
 |         `payload-to-event-margin` | duration (NonNegativeFiniteDuration) |  | `60 seconds` |  |
-|         `type` | one of `low-latency`, `high-throughput` | yes |  | Choose one type — see [SequencerWriterConfig](#sequencerwriterconfig). Configuration for the database based sequencer writer |
 |     **writer** `type = low-latency` |  |  |  |  |
 |         `event-write-batch-max-size` | int |  | `1` |  |
 |         `payload-write-batch-max-size` | int |  | `1` |  |
@@ -4628,6 +4628,7 @@ canton.sequencers.<sequencer>.sequencer.config.initial-network.server-endpoint.t
 |                     `per-client-kbps-cap` | number (PositiveDouble) |  | `1000` |  |
 |                     `per-client-tps-cap` | number (PositiveDouble) |  | `4` (in practice `1`) ◊ |  |
 |         **writer** |  |  |  |  |
+|             `type` | one of `low-latency`, `high-throughput` | yes | `high-throughput` † | Choose one type — see [SequencerWriterConfig](#sequencerwriterconfig). Configuration for the database based sequencer writer |
 |             `buffered-events-max-memory` | int (BytesUnit) |  | `8388608` |  |
 |             `buffered-events-preload-batch-size` | int (PositiveInt) |  | `50` |  |
 |             `checkpoint-backfill-parallelism` | int (PositiveInt) |  | `2` |  |
@@ -4636,7 +4637,6 @@ canton.sequencers.<sequencer>.sequencer.config.initial-network.server-endpoint.t
 |             `event-write-max-concurrency` | int |  | `1` |  |
 |             `payload-queue-size` | int |  | `1000` |  |
 |             `payload-to-event-margin` | duration (NonNegativeFiniteDuration) |  | `60 seconds` |  |
-|             `type` | one of `low-latency`, `high-throughput` | yes | `high-throughput` † | Choose one type — see [SequencerWriterConfig](#sequencerwriterconfig). Configuration for the database based sequencer writer |
 |         **writer** `type = low-latency` |  |  |  |  |
 |             `event-write-batch-max-size` | int |  | `1` (in practice `100`) ◊ |  |
 |             `payload-write-batch-max-size` | int |  | `1` (in practice `50`) ◊ |  |
@@ -4747,6 +4747,7 @@ canton.sequencers.<sequencer>.sequencer.config.initial-network.server-endpoint.t
 |                     `per-client-kbps-cap` | number (PositiveDouble) |  | `1000` |  |
 |                     `per-client-tps-cap` | number (PositiveDouble) |  | `4` (in practice `1`) ◊ |  |
 |         **writer** |  |  |  |  |
+|             `type` | one of `low-latency`, `high-throughput` | yes | `high-throughput` † | Choose one type — see [SequencerWriterConfig](#sequencerwriterconfig). Configuration for the database based sequencer writer |
 |             `buffered-events-max-memory` | int (BytesUnit) |  | `8388608` |  |
 |             `buffered-events-preload-batch-size` | int (PositiveInt) |  | `50` |  |
 |             `checkpoint-backfill-parallelism` | int (PositiveInt) |  | `2` |  |
@@ -4755,7 +4756,6 @@ canton.sequencers.<sequencer>.sequencer.config.initial-network.server-endpoint.t
 |             `event-write-max-concurrency` | int |  | `1` |  |
 |             `payload-queue-size` | int |  | `1000` |  |
 |             `payload-to-event-margin` | duration (NonNegativeFiniteDuration) |  | `60 seconds` |  |
-|             `type` | one of `low-latency`, `high-throughput` | yes | `high-throughput` † | Choose one type — see [SequencerWriterConfig](#sequencerwriterconfig). Configuration for the database based sequencer writer |
 |         **writer** `type = low-latency` |  |  |  |  |
 |             `event-write-batch-max-size` | int |  | `1` (in practice `100`) ◊ |  |
 |             `payload-write-batch-max-size` | int |  | `1` (in practice `50`) ◊ |  |
@@ -4806,15 +4806,14 @@ canton.sequencers.<sequencer>.sequencer.config.initial-network.server-endpoint.t
 |         `send-blacklist-ttl` | duration |  | `3 minutes` | The time-to-live for blacklisting randomly chosen peers that have failed to respond to a request as part of a workflow (e.g., batches fetching or a state transfer session). After this time has elapsed, the peer is removed from the blacklist and can be re-contacted. |
 |         `view-change-timeout-override` | duration |  | _unset_ | Optionally, the base duration to use for view change timeouts for ISS segments. If specified, this value will be used instead of the pbftViewChangeTimeout set in the network-wide SequencingParameters topology transaction. Note that this value is not persisted (in-memory only), and must be set back to None to return using the SequencingParameters value. |
 |         **batch-aggregator** |  |  |  |  |
-|             `maximum-batch-size` | int (PositiveNumeric) |  | `500` | Maximum number of queries in a batch. |
 |             `type` | one of `batching`, `no-batching` | yes |  | Choose one type — see [BatchAggregatorConfig](#batchaggregatorconfig). Parameters for that batcher that batches queries (e.g., to a DB). |
+|             `maximum-batch-size` | int (PositiveNumeric) |  | `500` | Maximum number of queries in a batch. |
 |         **batch-aggregator** `type = batching` |  |  |  |  |
 |             `maximum-in-flight` | int (PositiveNumeric) |  | `2` | Maximum number of in-flight get queries. |
 |         **batch-aggregator** `type = no-batching` |  |  |  |  |
 |             `max-parallel-batches` | int (PositiveNumeric) |  | `2` | Maximum number of batches to execute in parallel when using runMany. |
 |         **initial-network** |  |  |  |  |
 |             `overwrite-stored-endpoints` | boolean |  | `false` | whether the peers in storage should be replaced by this config's peers endpoint on startup |
-|             `peer-endpoints` | array of P2PEndpointConfig |  | `[]` | set of peers that the local node expects to connect to on startup |
 |             **connection-management-config** |  |  |  |  |
 |                 `connection-retry-delay-multiplier` | int (NonNegativeInt) |  | `NonNegativeInt.two` ‡ | The backoff factor applied to the delay between subsequent failed retry attempts |
 |                 `flow-control-buffer` | int (PositiveInt) |  | `128` | If set, enables P2P flow control on the sender side with the specified buffer size. If not set, the gRPC implementation will manage send buffers in case of slow receivers (and may OOM). |
@@ -4835,6 +4834,7 @@ canton.sequencers.<sequencer>.sequencer.config.initial-network.server-endpoint.t
 |                         `max-retry-interval` | duration (NonNegativeFiniteDuration) |  | `2 minutes` |  |
 |                         **jitter** |  |  |  |  |
 |                             `type` | one of `equal`, `full` | yes |  |  |
+|             `peer-endpoints` | array of P2PEndpointConfig |  | `[]` | set of peers that the local node expects to connect to on startup |
 |             **peer-endpoints[]** |  |  |  |  |
 |                 `address` | string | yes |  |  |
 |                 `port` | int (Port) | yes |  |  |
@@ -4948,7 +4948,6 @@ canton.sequencers.<sequencer>.sequencer.config.initial-network.server-endpoint.t
 |             `max-batches-per-block-proposal` | int | yes |  | The maximum number of batches that can be included in a single block proposal. |
 |             `max-requests-in-batch` | int | yes |  | The maximum number of requests that can be included in a single batch. |
 |             `pbft-view-change-timeout` | duration | yes |  | The base duration to use for view change timeouts for ISS segments. |
-|             `peers` | array of BftBlockOrderingStandalonePeerConfig | yes |  | The list of peers in the standalone network, including their sequencer IDs and public keys. |
 |             `segment-length` | int | yes |  | The number of blocks per segment. |
 |             `signing-private-key-proto-file` | path | yes |  | The file containing the private key used to sign outgoing messages. |
 |             `signing-public-key-proto-file` | path | yes |  | The file containing the public key used to verify incoming messages. |
@@ -4966,6 +4965,7 @@ canton.sequencers.<sequencer>.sequencer.config.initial-network.server-endpoint.t
 |                 **how-long-to-blacklist** `type = exponential` |  |  |  |  |
 |                     `initial-value` | int | yes |  |  |
 |                     `maximum-epoch-blacklisted` | int |  | _unset_ |  |
+|             `peers` | array of BftBlockOrderingStandalonePeerConfig | yes |  | The list of peers in the standalone network, including their sequencer IDs and public keys. |
 |             **peers[]** |  |  |  |  |
 |                 `sequencer-id` | string | yes |  | The sequencer ID of the peer. |
 |                 `signing-public-key-proto-file` | path | yes |  | The file containing the public key used to verify incoming messages from the peer. |
@@ -4986,7 +4986,6 @@ canton.sequencers.<sequencer>.sequencer.config.initial-network.server-endpoint.t
 |                     `low` | duration | yes |  |  |
 |                     `mean` | duration | yes |  |  |
 |                 **send-delay** |  |  |  |  |
-|                     `delays-by-recipients` | array of DelayByRecipients |  | `[]` | Optional list of specific delay distributions and failure probabilities applied to specific recipients. |
 |                     **default-delay-distribution** |  |  |  |  |
 |                         `type` | one of `constant-distribution`, `weighted-distribution`, `linear-distribution`, `power-distribution` | yes |  | Choose one type — see [FiniteDurationDistribution](#finitedurationdistribution). |
 |                     **default-delay-distribution** `type = constant-distribution` |  |  |  |  |
@@ -5002,6 +5001,7 @@ canton.sequencers.<sequencer>.sequencer.config.initial-network.server-endpoint.t
 |                     **default-delay-distribution** `type = power-distribution` |  |  |  |  |
 |                         `low` | duration | yes |  |  |
 |                         `mean` | duration | yes |  |  |
+|                     `delays-by-recipients` | array of DelayByRecipients |  | `[]` | Optional list of specific delay distributions and failure probabilities applied to specific recipients. |
 |                     **delays-by-recipients[]** |  |  |  |  |
 |                         `instance-names` | array of string | yes |  |  |
 |                         `probability-of-grpc-send-accepted-by-flow-control` | number |  | _unset_ |  |
@@ -5351,8 +5351,8 @@ canton.sequencers.<sequencer>.traffic-config.batch-aggregator-config {
 | `traffic-consumed-cache-ttl` | duration (NonNegativeFiniteDuration) |  | `2 hours` | the duration for which consumed traffic entries are kept in the cache after the last time they've been accessed. |
 | `traffic-purchased-cache-size-per-member` | int (PositiveInt) |  | `3` | How many traffic purchased entries to keep in memory for each member. |
 | **batch-aggregator-config** |  |  |  | Parameters for that batcher that batches queries (e.g., to a DB). |
-|     `maximum-batch-size` | int (PositiveNumeric) |  | `500` | Maximum number of queries in a batch. |
 |     `type` | one of `batching`, `no-batching` | yes | `batching` † | Choose one type — see [BatchAggregatorConfig](#batchaggregatorconfig). Parameters for that batcher that batches queries (e.g., to a DB). |
+|     `maximum-batch-size` | int (PositiveNumeric) |  | `500` | Maximum number of queries in a batch. |
 | **batch-aggregator-config** `type = batching` |  |  |  |  |
 |     `maximum-in-flight` | int (PositiveNumeric) |  | `2` | Maximum number of in-flight get queries. |
 | **batch-aggregator-config** `type = no-batching` |  |  |  |  |

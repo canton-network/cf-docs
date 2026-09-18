@@ -282,7 +282,6 @@ canton.mediators.<mediator>.admin-api.tls.client-auth.admin-client.cert-chain-fi
 | Key | Type | Required | Default | Description |
 |---|---|---|---|---|
 | `address` | string |  | `127.0.0.1` |  |
-| `auth-services` | array of [AuthServiceConfig](#authserviceconfig) |  | `[]` |  |
 | `flow-control-window` | int (PositiveInt) |  | `ServerConfig.defaultFlowControlWindow` ‡ |  |
 | `initial-flow-control-window` | int (PositiveInt) |  | `1048576` |  |
 | `max-concurrent-calls-per-connection` | int (NonNegativeInt) |  | `100000` |  |
@@ -294,6 +293,7 @@ canton.mediators.<mediator>.admin-api.tls.client-auth.admin-client.cert-chain-fi
 |     `admin-claim` | boolean |  | `false` |  |
 |     `admin-token-duration` | duration (PositiveFiniteDuration) |  | `5 minutes` |  |
 |     `fixed-admin-token` | string |  | _unset_ |  |
+| `auth-services` | array of [AuthServiceConfig](#authserviceconfig) |  | `[]` |  |
 | **auth-services[]** |  |  |  |  |
 |     `type` | one of `wildcard`, `unsafe-jwt-hmac-256`, `jwt-rs-256-crt`, `jwt-es-256-crt`, `jwt-es-512-crt`, `jwt-jwks`, `party-jwt` | yes |  | Choose one type — see [AuthServiceConfig](#authserviceconfig). |
 | **auth-services[]** `type = unsafe-jwt-hmac-256` |  |  |  | [UNSAFE] Enables JWT-based authorization with shared secret HMAC256 signing: USE THIS EXCLUSIVELY FOR TESTING |
@@ -770,8 +770,8 @@ canton.mediators.<mediator>.crypto.private-key-store.encryption {
 |     `default` | depends on use (S) |  | _unset_ | The optional scheme to use. If none is specified, use the provider's default scheme of kind S. |
 | **private-key-store** |  |  |  | Stores the configuration for a private store |
 |     **encryption** |  |  |  | Encapsulates possible configurations for different encrypted private stores |
-|         `reverted` | boolean |  | `false` | when true decrypts the stored private keys and stores them in clear, disabling the encrypted crypto private key store in the process |
 |         `type` | one of `kms` | yes |  | Choose one type — see [EncryptedPrivateStoreConfig](#encryptedprivatestoreconfig). Encapsulates possible configurations for different encrypted private stores |
+|         `reverted` | boolean |  | `false` | when true decrypts the stored private keys and stores them in clear, disabling the encrypted crypto private key store in the process |
 |         `wrapper-key-id` | string (KmsKeyId) |  | _unset_ | defines key identifier for the wrapper key (e.g. ARN for AWS SDK). When it's None Canton will either create a new key or use a previous existent key |
 | **session-signing-keys** |  |  |  | Configuration for enabling session signing keys with a specified validity period. |
 |     `cut-off-duration` | duration (NonNegativeFiniteDuration) |  | `1 minute` | A cut-off duration is applied only when we need to sign something without knowing the exact topology timestamp that will later be used for verification (e.g., when using a currentSnapshotApproximation). The cutoff measures the amount of clock skew that can be tolerated and therefore should be longer than our `ledgerRecordTimeTolerance`. The participant makes a guess t0 at the topology timestamp for verification and will use an existing session signing key k only if the interval [t0 - cutoff, t0 + cutoff] lies fully within k’s validity period. If the full validity interval is known a priori (e.g., we know the maximum sequencing time for the message we want to sign), we need to ensure that we use an existing session signing key k only if the interval [t0 - cutoff, endValidityPeriod] is fully covered. As a result, newly created session signing keys must have a validity period that starts at least cutoffDuration before ts. A typical example of this uncertainty is signing submission requests, where the sequencer-assigned timestamp is unknown in advance. If a new session key is created only after the previous key’s validity interval ends, multiple submissions may fail verification if any clock skew exists between the nodes. |
@@ -932,8 +932,8 @@ canton.mediators.<mediator>.mediator.deduplication-store.persist-batching {
 | **deduplication-store** |  |  |  | Configuration for deduplication store |
 |     `prune-at-most-every` | duration (PositiveFiniteDuration) |  | `10 seconds` | An interval to throttle pruning operations to at most once per this duration |
 |     **persist-batching** |  |  |  | Parameters for that batcher that batches queries (e.g., to a DB). |
-|         `maximum-batch-size` | int (PositiveNumeric) |  | `500` | Maximum number of queries in a batch. |
 |         `type` | one of `batching`, `no-batching` | yes | `batching` † | Choose one type — see [BatchAggregatorConfig](#batchaggregatorconfig). Parameters for that batcher that batches queries (e.g., to a DB). |
+|         `maximum-batch-size` | int (PositiveNumeric) |  | `500` | Maximum number of queries in a batch. |
 |     **persist-batching** `type = batching` |  |  |  |  |
 |         `maximum-in-flight` | int (PositiveNumeric) |  | `2` | Maximum number of in-flight get queries. |
 |     **persist-batching** `type = no-batching` |  |  |  |  |
@@ -1251,36 +1251,36 @@ canton.mediators.<mediator>.parameters.batching.topology-cache-aggregator {
 |     `parallelism` | int (PositiveNumeric) |  | `8` | number of parallel queries to the db. defaults to 8 |
 |     `pruning-parallelism` | int (PositiveNumeric) |  | `2` | number of parallel pruning queries to the db. defaults to 2 |
 |     **aggregator** |  |  |  | Parameters for that batcher that batches queries (e.g., to a DB). |
-|         `maximum-batch-size` | int (PositiveNumeric) |  | `500` | Maximum number of queries in a batch. |
 |         `type` | one of `batching`, `no-batching` | yes | `batching` † | Choose one type — see [BatchAggregatorConfig](#batchaggregatorconfig). Parameters for that batcher that batches queries (e.g., to a DB). |
+|         `maximum-batch-size` | int (PositiveNumeric) |  | `500` | Maximum number of queries in a batch. |
 |     **aggregator** `type = batching` |  |  |  |  |
 |         `maximum-in-flight` | int (PositiveNumeric) |  | `2` | Maximum number of in-flight get queries. |
 |     **aggregator** `type = no-batching` |  |  |  |  |
 |         `max-parallel-batches` | int (PositiveNumeric) |  | `2` | Maximum number of batches to execute in parallel when using runMany. |
 |     **contract-store-aggregator** |  |  |  | Parameters for that batcher that batches queries (e.g., to a DB). |
-|         `maximum-batch-size` | int (PositiveNumeric) |  | `500` (in practice `50`) ◊ | Maximum number of queries in a batch. |
 |         `type` | one of `batching`, `no-batching` | yes | `batching` † | Choose one type — see [BatchAggregatorConfig](#batchaggregatorconfig). Parameters for that batcher that batches queries (e.g., to a DB). |
+|         `maximum-batch-size` | int (PositiveNumeric) |  | `500` (in practice `50`) ◊ | Maximum number of queries in a batch. |
 |     **contract-store-aggregator** `type = batching` |  |  |  |  |
 |         `maximum-in-flight` | int (PositiveNumeric) |  | `2` (in practice `5`) ◊ | Maximum number of in-flight get queries. |
 |     **contract-store-aggregator** `type = no-batching` |  |  |  |  |
 |         `max-parallel-batches` | int (PositiveNumeric) |  | `2` | Maximum number of batches to execute in parallel when using runMany. |
 |     **mediator-fetch-finalized-responses-aggregator** |  |  |  | Parameters for that batcher that batches queries (e.g., to a DB). |
-|         `maximum-batch-size` | int (PositiveNumeric) |  | `500` | Maximum number of queries in a batch. |
 |         `type` | one of `batching`, `no-batching` | yes | `batching` † | Choose one type — see [BatchAggregatorConfig](#batchaggregatorconfig). Parameters for that batcher that batches queries (e.g., to a DB). |
+|         `maximum-batch-size` | int (PositiveNumeric) |  | `500` | Maximum number of queries in a batch. |
 |     **mediator-fetch-finalized-responses-aggregator** `type = batching` |  |  |  |  |
 |         `maximum-in-flight` | int (PositiveNumeric) |  | `2` | Maximum number of in-flight get queries. |
 |     **mediator-fetch-finalized-responses-aggregator** `type = no-batching` |  |  |  |  |
 |         `max-parallel-batches` | int (PositiveNumeric) |  | `2` | Maximum number of batches to execute in parallel when using runMany. |
 |     **mediator-store-finalized-responses-aggregator** |  |  |  | Parameters for that batcher that batches queries (e.g., to a DB). |
-|         `maximum-batch-size` | int (PositiveNumeric) |  | `500` | Maximum number of queries in a batch. |
 |         `type` | one of `batching`, `no-batching` | yes | `batching` † | Choose one type — see [BatchAggregatorConfig](#batchaggregatorconfig). Parameters for that batcher that batches queries (e.g., to a DB). |
+|         `maximum-batch-size` | int (PositiveNumeric) |  | `500` | Maximum number of queries in a batch. |
 |     **mediator-store-finalized-responses-aggregator** `type = batching` |  |  |  |  |
 |         `maximum-in-flight` | int (PositiveNumeric) |  | `2` | Maximum number of in-flight get queries. |
 |     **mediator-store-finalized-responses-aggregator** `type = no-batching` |  |  |  |  |
 |         `max-parallel-batches` | int (PositiveNumeric) |  | `2` | Maximum number of batches to execute in parallel when using runMany. |
 |     **topology-cache-aggregator** |  |  |  | Parameters for that batcher that batches queries (e.g., to a DB). |
-|         `maximum-batch-size` | int (PositiveNumeric) |  | `500` | Maximum number of queries in a batch. |
 |         `type` | one of `batching`, `no-batching` | yes | `batching` † | Choose one type — see [BatchAggregatorConfig](#batchaggregatorconfig). Parameters for that batcher that batches queries (e.g., to a DB). |
+|         `maximum-batch-size` | int (PositiveNumeric) |  | `500` | Maximum number of queries in a batch. |
 |     **topology-cache-aggregator** `type = batching` |  |  |  |  |
 |         `maximum-in-flight` | int (PositiveNumeric) |  | `2` | Maximum number of in-flight get queries. |
 |     **topology-cache-aggregator** `type = no-batching` |  |  |  |  |
