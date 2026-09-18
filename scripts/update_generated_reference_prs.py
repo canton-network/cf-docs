@@ -291,7 +291,6 @@ UPDATE_TARGETS = (
         ),
         generate_commands=(nix_develop_command("npm run generate:canton-protobuf-history"),),
         paths=(
-            "config/x2mdx/protobuf-history/metadata.json",
             "docs-main/docs.json",
             "docs-main/appdev/reference/protobuf-history",
             "docs-main/reference/admin-api/protobuf",
