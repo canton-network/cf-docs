@@ -9,7 +9,7 @@ from functools import cmp_to_key
 from pathlib import Path
 from typing import Any
 
-from x2mdx.protobuf.lifecycle import metadata_lifecycle_state
+from x2mdx.protobuf.lifecycle import entity_lifecycle_state
 from x2mdx.history.events import history_events_for_item
 from x2mdx.history.models import HistoryEvent, HistoryEventKind, HistoryItem, SurfaceHistoryReport
 from x2mdx.history.versioning import compare_versions
@@ -288,13 +288,13 @@ def build_package_docs(report: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def lifecycle_meta_items(entity: dict[str, Any]) -> list[ReferenceMetaItem]:
-    state = metadata_lifecycle_state(entity)
+    state = entity_lifecycle_state(entity)
     return [ReferenceMetaItem("Lifecycle", state.title())] if state else []
 
 
 def lifecycle_description(entity: dict[str, Any]) -> str:
     description = str(entity.get("description") or "")
-    state = metadata_lifecycle_state(entity)
+    state = entity_lifecycle_state(entity)
     return "\n\n".join(filter(None, [f"Lifecycle: {state.title()}" if state else "", description]))
 
 
@@ -677,14 +677,14 @@ def build_package_page(
                     summary=compact_text(endpoint.get("description") or endpoint_signature(endpoint), limit=180),
                     badges=(
                         lifecycle_badges(
-                            state=metadata_lifecycle_state(endpoint),
+                            state=entity_lifecycle_state(endpoint),
                             item=history_item,
                             comparison_versions=history_report.comparison_versions,
                             linked=False,
                         )
                         if history_item is not None
                         else lifecycle_badges(
-                            state=metadata_lifecycle_state(endpoint),
+                            state=entity_lifecycle_state(endpoint),
                             introduced=str(lifecycle["introducedIn"]),
                             changed=str(lifecycle.get("lastChangedIn") or ""),
                             removed=str(lifecycle.get("removedIn") or "") or None,
@@ -803,13 +803,13 @@ def build_operation_page(
         ],
         badges=(
             lifecycle_badges(
-                state=metadata_lifecycle_state(endpoint),
+                state=entity_lifecycle_state(endpoint),
                 item=history_item,
                 comparison_versions=comparison_versions,
             )
             if history_item is not None
             else lifecycle_badges(
-                state=metadata_lifecycle_state(endpoint),
+                state=entity_lifecycle_state(endpoint),
                 introduced=str(lifecycle["introducedIn"]),
                 changed=str(lifecycle.get("lastChangedIn") or ""),
                 removed=str(lifecycle.get("removedIn") or "") or None,
