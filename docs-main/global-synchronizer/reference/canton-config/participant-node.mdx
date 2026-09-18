@@ -287,8 +287,8 @@ canton.participants.<participant>.admin-api.tls.client-auth.admin-client.cert-ch
 | `max-concurrent-calls-per-connection` | int (NonNegativeInt) |  | `100000` |  |
 | `max-inbound-message-size` | int (NonNegativeInt) |  | `10485760` |  |
 | `max-token-lifetime` | duration (NonNegativeDuration) |  | `5 minutes` |  |
-| `port` | int (Port) | yes | _unset_ |  |
-| **admin-token-config** |  |  |  | Configuration for admin-token based authorization. The given token will be valid forever but it will not be used internally. Other admin-tokens will be generated and rotated periodically. The fixed token is only used for testing purposes and should not be used in production. The admin-token based authorization will create tokens and rotate them periodically. Each admin-token is valid for the defined token duration. The half of this value is used as the rotation interval, after which a new admin-token is generated (if needed). |
+| `port` | int (Port) | yes |  |  |
+| **admin-token-config** |  |  |  | Configuration for admin-token based authorization. |
 |     `act-as-any-party-claim` | boolean |  | `false` |  |
 |     `admin-claim` | boolean |  | `false` |  |
 |     `admin-token-duration` | duration (PositiveFiniteDuration) |  | `5 minutes` |  |
@@ -371,7 +371,7 @@ canton.participants.<participant>.admin-api.tls.client-auth.admin-client.cert-ch
 |     `warn-on-undefined-limits` | boolean |  | `false` | emit warning if a limit is not configured for a stream |
 |     **active** |  |  |  |  |
 |         `<key>` | int (NonNegativeInt) |  | `[]` | map of service name to maximum number of parallel active requests or streams |
-| **tls** |  |  |  | A wrapper for TLS related server parameters supporting mutual authentication. Certificates and keys must be provided in the PEM format. It is recommended to create them with OpenSSL. Other formats (such as GPG) may also work, but have not been tested. |
+| **tls** |  |  |  | A wrapper for TLS related server parameters supporting mutual authentication. |
 |     `ciphers` | array of string |  | `TlsConfig.defaultCiphers` ‡ | supported ciphers. Set to None (or null in config file) to use default settings defaultCiphers |
 |     `enable-cert-revocation-checking` | boolean |  | `false` | whether to enable certificate revocation checking per https://tersesystems.com/blog/2014/03/22/fixing-certificate-revocation/ |
 |     `minimum-server-protocol-version` | string |  | `TLSv1.2` | minimum supported TLS protocol. Set None (or null in config file) to use default settings defaultMinimumServerProtocol |
@@ -755,7 +755,7 @@ canton.participants.<participant>.crypto.private-key-store.encryption {
 |     `config` | config-value | yes |  | The driver specific raw config section |
 |     `health-check-period` | duration (PositiveFiniteDuration) |  | `10 seconds` | How long to wait between health checks of the KMS driver |
 |     `name` | string | yes |  | The name of the external KMS driver |
-| **kms** `type = aws` |  |  |  | Stores the configuration for AWS KMS. This configuration is mandatory if we want to protect Canton's private keys using an AWS KMS. |
+| **kms** `type = aws` |  |  |  | Stores the configuration for AWS KMS. |
 |     `audit-logging` | boolean |  | `false` | when enabled, all calls to KMS will be logged. Defaults to false. |
 |     `disable-ssl-verification` | boolean |  | `false` | When set to true, SSL verification is disabled. Mostly for testing purposes. Can only be used if non-standard-config is enabled. |
 |     `endpoint-override` | string |  | _unset_ | the [optional] endpoint for a proxy to be used by the KMS client. |
@@ -763,7 +763,7 @@ canton.participants.<participant>.crypto.private-key-store.encryption {
 |     `region` | string | yes |  | defines the AWS region to be use (e.g. us-east-1) |
 |     **custom-tags** |  |  |  |  |
 |         `<custom-tag>` | string |  | `[]` | custom tags to attach to AWS KMS keys created by Canton. |
-| **kms** `type = gcp` |  |  |  | Stores the configuration for GCP KMS. This configuration is mandatory if we want to protect Canton's private keys using a GCP KMS. |
+| **kms** `type = gcp` |  |  |  | Stores the configuration for GCP KMS. |
 |     `audit-logging` | boolean |  | `false` | when enabled, all calls to KMS will be logged. Defaults to false. |
 |     `endpoint-override` | string |  | _unset_ | the [optional] endpoint for a proxy to be used by the KMS client. |
 |     `key-ring-id` | string | yes |  | defines a key-ring to where keys will be added. This can be created as a multi-region key-ring, which enables multi-region keys |
@@ -780,7 +780,7 @@ canton.participants.<participant>.crypto.private-key-store.encryption {
 |         `reverted` | boolean |  | `false` | when true decrypts the stored private keys and stores them in clear, disabling the encrypted crypto private key store in the process |
 |         `type` | one of `kms` | yes |  | Choose one type — see [EncryptedPrivateStoreConfig](#encryptedprivatestoreconfig). Encapsulates possible configurations for different encrypted private stores |
 |         `wrapper-key-id` | string (KmsKeyId) |  | _unset_ | defines key identifier for the wrapper key (e.g. ARN for AWS SDK). When it's None Canton will either create a new key or use a previous existent key |
-| **session-signing-keys** |  |  |  | Configuration for enabling session signing keys with a specified validity period. This setting is applicable only when using a KMS provider with externally stored keys. |
+| **session-signing-keys** |  |  |  | Configuration for enabling session signing keys with a specified validity period. |
 |     `cut-off-duration` | duration (NonNegativeFiniteDuration) |  | `1 minute` | A cut-off duration is applied only when we need to sign something without knowing the exact topology timestamp that will later be used for verification (e.g., when using a currentSnapshotApproximation). The cutoff measures the amount of clock skew that can be tolerated and therefore should be longer than our `ledgerRecordTimeTolerance`. The participant makes a guess t0 at the topology timestamp for verification and will use an existing session signing key k only if the interval [t0 - cutoff, t0 + cutoff] lies fully within k’s validity period. If the full validity interval is known a priori (e.g., we know the maximum sequencing time for the message we want to sign), we need to ensure that we use an existing session signing key k only if the interval [t0 - cutoff, endValidityPeriod] is fully covered. As a result, newly created session signing keys must have a validity period that starts at least cutoffDuration before ts. A typical example of this uncertainty is signing submission requests, where the sequencer-assigned timestamp is unknown in advance. If a new session key is created only after the previous key’s validity interval ends, multiple submissions may fail verification if any clock skew exists between the nodes. |
 |     `disable-bound-checks` | boolean |  | `false` | Flag to disable parameter bounds, allowing any values. Should only be used for testing and requires `nonStandardConfig` to be enabled. |
 |     `enabled` | boolean | yes | `false` † | Enables the usage of session signing keys in the protocol. |
@@ -848,10 +848,10 @@ canton.participants.<participant>.http-ledger-api {
 | `enabled` | boolean |  | `true` |  |
 | `max-inbound-message-size` | int (NonNegativeInt) |  | _unset_ |  |
 | `path-prefix` | string |  | _unset_ |  |
-| `port` | int (Port) | unless `enabled = false` | _unset_ |  |
+| `port` | int (Port) | unless `enabled = false` |  |  |
 | `port-file` | Array (unclassified) |  | _unset_ |  |
 | `request-timeout` | duration |  | `20 seconds` (in practice `20s`) ◊ |  |
-| **client-request-timeout** |  |  |  | Bounds for the client-supplied per-request timeout carried in the `Request-Timeout` header. See RequestTimeoutDirective for how these bounds are enforced. |
+| **client-request-timeout** |  |  |  | Bounds for the client-supplied per-request timeout carried in the `Request-Timeout` header. |
 |     `lower-bound` | duration |  | `1 second` |  |
 |     `upper-bound` | duration |  | `60 seconds` |  |
 | **websocket-config** |  |  |  |  |
@@ -943,7 +943,7 @@ canton.participants.<participant>.init.identity.identifier {
 |---|---|---|---|---|
 | `generate-intermediate-key` | boolean |  | `false` |  |
 | `generate-topology-transactions-and-keys` | boolean |  | `true` |  |
-| **identity** |  |  |  | Control how the identity of the node is determined. At startup, we need to determine the node's identity. We support various modes of operations for different deployments. We distinguish between setting the node-id and subsequently generating the topology transactions and the remaining keys. As such it is possible to manually set the node-id but let the system automatically generate the remaining topology transactions. |
+| **identity** |  |  |  | Control how the identity of the node is determined. |
 |     `type` | one of `external`, `auto`, `manual` | yes | `auto` † | Choose one type — see [IdentityConfig](#identityconfig). Control how the identity of the node is determined. At startup, we need to determine the node's identity. We support various modes of operations for different deployments. We distinguish between setting the node-id and subsequently generating the topology transactions and the remaining keys. As such it is possible to manually set the node-id but let the system automatically generate the remaining topology transactions. |
 | **identity** `type = external` |  |  |  | Read the node identifier from the config file |
 |     `certificates` | array of File |  | `[]` | optional certificates to use (in case we have external root keys) |
@@ -1356,8 +1356,8 @@ canton.participants.<participant>.ledger-api.tls.client-auth.admin-client.cert-c
 | `max-inbound-message-size` | int (NonNegativeInt) |  | `10485760` | maximum inbound message size on the ledger api |
 | `max-inbound-metadata-size` | int (NonNegativeInt) |  | `8192` |  |
 | `max-token-lifetime` | duration (NonNegativeDuration) |  | `5 minutes` |  |
-| `port` | int (Port) | yes | _unset_ | ledger api server port. |
-| **admin-token-config** |  |  |  | Configuration for admin-token based authorization. The given token will be valid forever but it will not be used internally. Other admin-tokens will be generated and rotated periodically. The fixed token is only used for testing purposes and should not be used in production. The admin-token based authorization will create tokens and rotate them periodically. Each admin-token is valid for the defined token duration. The half of this value is used as the rotation interval, after which a new admin-token is generated (if needed). |
+| `port` | int (Port) | yes |  | ledger api server port. |
+| **admin-token-config** |  |  |  | Configuration for admin-token based authorization. |
 |     `act-as-any-party-claim` | boolean |  | `false` |  |
 |     `admin-claim` | boolean |  | `false` |  |
 |     `admin-token-duration` | duration (PositiveFiniteDuration) |  | `5 minutes` |  |
@@ -1520,7 +1520,7 @@ canton.participants.<participant>.ledger-api.tls.client-auth.admin-client.cert-c
 | **state-service** |  |  |  |  |
 |     `default-acs-page-size` | int (PositiveInt) |  | `2000` | max_page_size value for GetActiveContractsPage request without max_page_size specified |
 |     `max-acs-page-size` | int (PositiveInt) |  | `10000` | inclusive limit for max_page_size for GetActiveContractsPage. Requests exceeding this value will be rejected. |
-| **tls** |  |  |  | A wrapper for TLS related server parameters supporting mutual authentication. Certificates and keys must be provided in the PEM format. It is recommended to create them with OpenSSL. Other formats (such as GPG) may also work, but have not been tested. |
+| **tls** |  |  |  | A wrapper for TLS related server parameters supporting mutual authentication. |
 |     `ciphers` | array of string |  | `TlsConfig.defaultCiphers` ‡ | supported ciphers. Set to None (or null in config file) to use default settings defaultCiphers |
 |     `enable-cert-revocation-checking` | boolean |  | `false` | whether to enable certificate revocation checking per https://tersesystems.com/blog/2014/03/22/fixing-certificate-revocation/ |
 |     `minimum-server-protocol-version` | string |  | `TLSv1.2` | minimum supported TLS protocol. Set None (or null in config file) to use default settings defaultMinimumServerProtocol |
@@ -2298,7 +2298,7 @@ canton.participants.<participant>.parameters.engine.extensions.<extension>.tls.t
 |     **sequencer-payload-cache** |  |  |  |  |
 |         `expire-after-access` | duration (NonNegativeFiniteDuration) |  | `1 minute` (in practice `10 minutes`) ◊ |  |
 |         `maximum-memory` | string (PositiveNumeric) | yes | `67108864` † |  |
-|     **session-encryption-key-cache** |  |  |  | Configuration settings for a cache that stores: (a) the public asymmetric encryptions of the session keys for the sender and (b) the decrypting results in the receiver. This reduces the amount of asymmetric operations that need to be performed for each of the views that share the same participant recipient group (i.e. use the same session key). |
+|     **session-encryption-key-cache** |  |  |  | Configuration settings for a cache that stores: (a) the public asymmetric encryptions of the session keys for the sender and (b) the decrypting results in the receiver. |
 |         `enabled` | boolean |  | `true` | enable/disable caching of the session key. Caching is enabled by default, offering a trade-off between secrecy and performance |
 |         **receiver-cache** |  |  |  | Configurations settings for a single cache where elements are evicted after a certain time as elapsed (regardless of access). |
 |             `expire-after-timeout` | duration (PositiveFiniteDuration) |  | `10 minutes` (in practice `10 seconds`) ◊ | how quickly after creation items should be expired from the cache |
@@ -2373,13 +2373,13 @@ canton.participants.<participant>.parameters.engine.extensions.<extension>.tls.t
 |         `matching` | array of string |  | `[]` | if non-empty, then only output lines that match one of the given string. If the supporting * and ? wildcard characters are used, then the string must match, otherwise, the string must be included in the log message. |
 | **ledger-api-server** |  |  |  | Parameters for the ledger api server |
 |     `token-expiry-grace-period-for-streams` | duration (NonNegativeDuration) |  | _unset_ | grace periods for streams that postpone termination beyond the JWT expiry |
-|     **contract-id-seeding** |  |  |  | This type is deprecated and no longer used (see `ledgerApiServerParametersConfigReader` in CantonConfig.scala). It is kept in the code solely for backwards compatibility. |
+|     **contract-id-seeding** |  |  |  | This type is deprecated and no longer used (see `ledgerApiServerParametersConfigReader` in CantonConfig.scala). |
 |         `type` | one of `strong`, `weak`, `static` | yes |  | This type is deprecated and no longer used (see `ledgerApiServerParametersConfigReader` in CantonConfig.scala). It is kept in the code solely for backwards compatibility. |
 |     **contract-loader** |  |  |  | Parameters to control batch loading during phase 1 / interpretation |
 |         `max-batch-size` | int (PositiveInt) |  | `50` | how many contract lookups to batch together |
 |         `max-queue-size` | int (PositiveInt) |  | `10000` | how many parallel lookups can be queued before we start to backpressure loading |
 |         `parallelism` | int (PositiveInt) |  | `5` | how many parallel contract lookup requests should be sent to the db when prepopulating the cache |
-|     **indexer** |  |  |  | See com.digitalasset.canton.platform.indexer.JdbcIndexer for semantics on these configurations. - enableCompression: switches on compression for both consuming and non-consuming exercises, equivalent to setting both enableCompressionConsumingExercise and enableCompressionNonConsumingExercise to true. This is to maintain backward compatibility with existing config files. - enableCompressionConsumingExercise: switches on compression for consuming exercises - enableCompressionNonConsumingExercise: switches on compression for non-consuming exercises |
+|     **indexer** |  |  |  | See com.digitalasset.canton.platform.indexer.JdbcIndexer for semantics on these configurations. |
 |         `batching-parallelism` | int (NonNegativeInt) |  | `4` |  |
 |         `contract-pruning-db-lock-timeout` | duration (PositiveFiniteDuration) |  | `20 seconds` |  |
 |         `contract-read-row-db-lock-timeout` | duration (PositiveFiniteDuration) |  | `20 seconds` |  |
@@ -2405,7 +2405,7 @@ canton.participants.<participant>.parameters.engine.extensions.<extension>.tls.t
 |         `submission-batch-insertion-size` | int |  | `5000` |  |
 |         `submission-batch-size` | int |  | `50` |  |
 |         `use-weighted-batching` | boolean |  | `false` |  |
-|         **achs-config** |  |  |  | Configuration for the Active Contracts Head Snapshot (ACHS). See AchsState for more. |
+|         **achs-config** |  |  |  | Configuration for the Active Contracts Head Snapshot (ACHS). |
 |             `aggregation-threshold` | int |  | `5` | Aggregation threshold for ACHS maintenance batches. |
 |             `buffer-size` | int |  | `256` | Size of the ACHS buffer. |
 |             `init-aggregation-threshold` | int |  | `5` | Aggregation threshold for ACHS maintenance batches during initialization. |
@@ -2451,12 +2451,12 @@ canton.participants.<participant>.parameters.engine.extensions.<extension>.tls.t
 |     `init-takes-too-long-interval` | duration |  | `10 seconds` (in practice `10s`) ◊ |  |
 | **stores** |  |  |  | Parameters for the participant node's stores |
 |     `pruning-metric-update-interval` | duration (PositiveDurationSeconds) |  | `1 hour` | How frequently to update the `max-event-age` pruning progress metric in the background. A setting of None disables background metric updating. |
-|     **journal-pruning** |  |  |  | Control background journal pruning During processing, Canton will keep some data in journals (contract keys, active contracts). These journals can be pruned in order to reclaim space. Background pruning is initiated by the ACS commitment processor once a commitment interval has been completed. Therefore, pruning can't run more frequently than the reconciliation interval of a synchronizer. |
+|     **journal-pruning** |  |  |  | Control background journal pruning During processing, Canton will keep some data in journals (contract keys, active contracts). |
 |         `initial-interval` | duration (NonNegativeFiniteDuration) |  | `5 seconds` | The initial interval size for pruning |
 |         `max-buckets` | int (PositiveInt) |  | `100` | The maximum number of buckets used for any pruning interval |
 |         `max-items-expected-to-prune-per-batch` | int (PositiveInt) |  | `100000` | The maximum on the number of items expected to prune per batch. Implemented by select stores (e.g. ActiveContractStore) to help motivate database filtered index selection. Should be at least an order of magnitude larger than targetBatchSize to not interfere with dynamic bucketing after a participant node has been inactive for a while, but not excessively large to discourage scanning the entire table. |
 |         `target-batch-size` | int (PositiveInt) |  | `5000` | The target batch size for pruning. The actual batch size will evolve under load. |
-|     **safe-to-prune-commitment-state** |  |  |  | Defines which counter-participants cannot block pruning because of the states of their commitments. The modes increasingly relax the pruning conditions. These modes override the default, which is that all counter-participants block pruning when there isn't a timestamp where all counter-participants sent matching commitments, and non-matching participants are not in a no-wait configuration. |
+|     **safe-to-prune-commitment-state** |  |  |  | Defines which counter-participants cannot block pruning because of the states of their commitments. |
 |         `type` | one of `match`, `match-or-mismatch`, `all` | yes |  | Defines which counter-participants cannot block pruning because of the states of their commitments. The modes increasingly relax the pruning conditions. These modes override the default, which is that all counter-participants block pruning when there isn't a timestamp where all counter-participants sent matching commitments, and non-matching participants are not in a no-wait configuration. |
 | **watchdog** |  |  |  |  |
 |     `check-interval` | duration (PositiveFiniteDuration) |  | `PositiveFiniteDuration(15.seconds)` ‡ |  |

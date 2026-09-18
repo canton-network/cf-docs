@@ -80,7 +80,7 @@ def sample_artifact() -> dict:
         "types": [
             {"name": "AggregationType", "kind": "coproduct", "discriminator": "type", "variants": [{"tag": "buckets", "type": "metrics.Buckets"}, {"tag": "exponential", "type": "metrics.Exponential"}], "values": [], "description": "How a histogram groups its observations."},
             {"name": "Buckets", "kind": "product", "discriminator": None, "variants": [], "values": [], "description": "Explicit bucket [[Boundaries]]."},
-            {"name": "HistogramDefinition", "kind": "product", "discriminator": None, "variants": [], "values": [], "description": "Bucket boundary definitions for histograms"},
+            {"name": "HistogramDefinition", "kind": "product", "discriminator": None, "variants": [], "values": [], "description": "Bucket boundary definitions for histograms. Later sentences stay off the header row."},
             {"name": "AuthServiceConfig", "kind": "coproduct", "discriminator": "type", "variants": [{"tag": "wildcard", "type": "Wildcard"}], "values": [], "description": None},
         ],
         "deprecatedPaths": [],
@@ -217,7 +217,8 @@ class CantonConfigReferenceTests(unittest.TestCase):
         self.assertIn("| ....**aggregation** |", text)
         self.assertIn("| ........`type` | one of `buckets`, `exponential` | yes |  | Choose one type — see [AggregationType](#aggregationtype). |", text)
         # A header row for a list element carries its class's summary; a variant header its class's.
-        self.assertIn("| **histograms[]** |  |  |  | Bucket boundary definitions for histograms |", text)
+        self.assertIn("| **histograms[]** |  |  |  | Bucket boundary definitions for histograms. |", text)
+        self.assertNotIn("Later sentences", text)
         self.assertIn("| ....**aggregation** `type = buckets` |  |  |  | Explicit bucket Boundaries. |", text)
         self.assertIn("| ....**aggregation** `type = buckets` |", text)
         self.assertIn("| ........`boundaries` | array of Double | yes |  |  |", text)

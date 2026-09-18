@@ -180,6 +180,9 @@ def render_default(option: dict) -> str:
         if observed is not None:
             return f"{rendered} (in practice {render_value(observed)}) ◊"
         return rendered
+    if option.get("required"):
+        # A required key has nothing to fall back to; the Required column says so.
+        return ""
     expr = option.get("defaultExpr")
     if expr:
         if expr.strip() == "None":
@@ -394,7 +397,13 @@ def header_summary(path: str, sections: dict[str, dict], options_by_path: dict[s
         name = next((o["valueType"].get("element") for o in holder if o["valueType"].get("kind") == "array"), None)
     elif path in sections:
         name = sections[path]["valueType"].get("type")
-    return clean_prose(TYPE_SUMMARIES.get(name or "", None))
+    return first_sentence(clean_prose(TYPE_SUMMARIES.get(name or "", None)))
+
+
+def first_sentence(text: str) -> str:
+    """A header row gets one sentence; the full description lives where the type is documented."""
+    match = re.match(r"(.+?[.!?])(?:\s|$)", text)
+    return match.group(1) if match else text
 
 
 def render_table(

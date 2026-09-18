@@ -287,8 +287,8 @@ canton.mediators.<mediator>.admin-api.tls.client-auth.admin-client.cert-chain-fi
 | `max-concurrent-calls-per-connection` | int (NonNegativeInt) |  | `100000` |  |
 | `max-inbound-message-size` | int (NonNegativeInt) |  | `10485760` |  |
 | `max-token-lifetime` | duration (NonNegativeDuration) |  | `5 minutes` |  |
-| `port` | int (Port) | yes | _unset_ |  |
-| **admin-token-config** |  |  |  | Configuration for admin-token based authorization. The given token will be valid forever but it will not be used internally. Other admin-tokens will be generated and rotated periodically. The fixed token is only used for testing purposes and should not be used in production. The admin-token based authorization will create tokens and rotate them periodically. Each admin-token is valid for the defined token duration. The half of this value is used as the rotation interval, after which a new admin-token is generated (if needed). |
+| `port` | int (Port) | yes |  |  |
+| **admin-token-config** |  |  |  | Configuration for admin-token based authorization. |
 |     `act-as-any-party-claim` | boolean |  | `false` |  |
 |     `admin-claim` | boolean |  | `false` |  |
 |     `admin-token-duration` | duration (PositiveFiniteDuration) |  | `5 minutes` |  |
@@ -371,7 +371,7 @@ canton.mediators.<mediator>.admin-api.tls.client-auth.admin-client.cert-chain-fi
 |     `warn-on-undefined-limits` | boolean |  | `false` | emit warning if a limit is not configured for a stream |
 |     **active** |  |  |  |  |
 |         `<key>` | int (NonNegativeInt) |  | `[]` | map of service name to maximum number of parallel active requests or streams |
-| **tls** |  |  |  | A wrapper for TLS related server parameters supporting mutual authentication. Certificates and keys must be provided in the PEM format. It is recommended to create them with OpenSSL. Other formats (such as GPG) may also work, but have not been tested. |
+| **tls** |  |  |  | A wrapper for TLS related server parameters supporting mutual authentication. |
 |     `ciphers` | array of string |  | `TlsConfig.defaultCiphers` ‡ | supported ciphers. Set to None (or null in config file) to use default settings defaultCiphers |
 |     `enable-cert-revocation-checking` | boolean |  | `false` | whether to enable certificate revocation checking per https://tersesystems.com/blog/2014/03/22/fixing-certificate-revocation/ |
 |     `minimum-server-protocol-version` | string |  | `TLSv1.2` | minimum supported TLS protocol. Set None (or null in config file) to use default settings defaultMinimumServerProtocol |
@@ -534,7 +534,7 @@ canton.mediators.<mediator>.caching {
 | **sequencer-payload-cache** |  |  |  |  |
 |     `expire-after-access` | duration (NonNegativeFiniteDuration) |  | `1 minute` (in practice `10 minutes`) ◊ |  |
 |     `maximum-memory` | string (PositiveNumeric) | yes | `67108864` † |  |
-| **session-encryption-key-cache** |  |  |  | Configuration settings for a cache that stores: (a) the public asymmetric encryptions of the session keys for the sender and (b) the decrypting results in the receiver. This reduces the amount of asymmetric operations that need to be performed for each of the views that share the same participant recipient group (i.e. use the same session key). |
+| **session-encryption-key-cache** |  |  |  | Configuration settings for a cache that stores: (a) the public asymmetric encryptions of the session keys for the sender and (b) the decrypting results in the receiver. |
 |     `enabled` | boolean |  | `true` | enable/disable caching of the session key. Caching is enabled by default, offering a trade-off between secrecy and performance |
 |     **receiver-cache** |  |  |  | Configurations settings for a single cache where elements are evicted after a certain time as elapsed (regardless of access). |
 |         `expire-after-timeout` | duration (PositiveFiniteDuration) |  | `10 minutes` (in practice `10 seconds`) ◊ | how quickly after creation items should be expired from the cache |
@@ -747,7 +747,7 @@ canton.mediators.<mediator>.crypto.private-key-store.encryption {
 |     `config` | config-value | yes |  | The driver specific raw config section |
 |     `health-check-period` | duration (PositiveFiniteDuration) |  | `10 seconds` | How long to wait between health checks of the KMS driver |
 |     `name` | string | yes |  | The name of the external KMS driver |
-| **kms** `type = aws` |  |  |  | Stores the configuration for AWS KMS. This configuration is mandatory if we want to protect Canton's private keys using an AWS KMS. |
+| **kms** `type = aws` |  |  |  | Stores the configuration for AWS KMS. |
 |     `audit-logging` | boolean |  | `false` | when enabled, all calls to KMS will be logged. Defaults to false. |
 |     `disable-ssl-verification` | boolean |  | `false` | When set to true, SSL verification is disabled. Mostly for testing purposes. Can only be used if non-standard-config is enabled. |
 |     `endpoint-override` | string |  | _unset_ | the [optional] endpoint for a proxy to be used by the KMS client. |
@@ -755,7 +755,7 @@ canton.mediators.<mediator>.crypto.private-key-store.encryption {
 |     `region` | string | yes |  | defines the AWS region to be use (e.g. us-east-1) |
 |     **custom-tags** |  |  |  |  |
 |         `<custom-tag>` | string |  | `[]` | custom tags to attach to AWS KMS keys created by Canton. |
-| **kms** `type = gcp` |  |  |  | Stores the configuration for GCP KMS. This configuration is mandatory if we want to protect Canton's private keys using a GCP KMS. |
+| **kms** `type = gcp` |  |  |  | Stores the configuration for GCP KMS. |
 |     `audit-logging` | boolean |  | `false` | when enabled, all calls to KMS will be logged. Defaults to false. |
 |     `endpoint-override` | string |  | _unset_ | the [optional] endpoint for a proxy to be used by the KMS client. |
 |     `key-ring-id` | string | yes |  | defines a key-ring to where keys will be added. This can be created as a multi-region key-ring, which enables multi-region keys |
@@ -772,7 +772,7 @@ canton.mediators.<mediator>.crypto.private-key-store.encryption {
 |         `reverted` | boolean |  | `false` | when true decrypts the stored private keys and stores them in clear, disabling the encrypted crypto private key store in the process |
 |         `type` | one of `kms` | yes |  | Choose one type — see [EncryptedPrivateStoreConfig](#encryptedprivatestoreconfig). Encapsulates possible configurations for different encrypted private stores |
 |         `wrapper-key-id` | string (KmsKeyId) |  | _unset_ | defines key identifier for the wrapper key (e.g. ARN for AWS SDK). When it's None Canton will either create a new key or use a previous existent key |
-| **session-signing-keys** |  |  |  | Configuration for enabling session signing keys with a specified validity period. This setting is applicable only when using a KMS provider with externally stored keys. |
+| **session-signing-keys** |  |  |  | Configuration for enabling session signing keys with a specified validity period. |
 |     `cut-off-duration` | duration (NonNegativeFiniteDuration) |  | `1 minute` | A cut-off duration is applied only when we need to sign something without knowing the exact topology timestamp that will later be used for verification (e.g., when using a currentSnapshotApproximation). The cutoff measures the amount of clock skew that can be tolerated and therefore should be longer than our `ledgerRecordTimeTolerance`. The participant makes a guess t0 at the topology timestamp for verification and will use an existing session signing key k only if the interval [t0 - cutoff, t0 + cutoff] lies fully within k’s validity period. If the full validity interval is known a priori (e.g., we know the maximum sequencing time for the message we want to sign), we need to ensure that we use an existing session signing key k only if the interval [t0 - cutoff, endValidityPeriod] is fully covered. As a result, newly created session signing keys must have a validity period that starts at least cutoffDuration before ts. A typical example of this uncertainty is signing submission requests, where the sequencer-assigned timestamp is unknown in advance. If a new session key is created only after the previous key’s validity interval ends, multiple submissions may fail verification if any clock skew exists between the nodes. |
 |     `disable-bound-checks` | boolean |  | `false` | Flag to disable parameter bounds, allowing any values. Should only be used for testing and requires `nonStandardConfig` to be enabled. |
 |     `enabled` | boolean | yes | `false` † | Enables the usage of session signing keys in the protocol. |
@@ -868,7 +868,7 @@ canton.mediators.<mediator>.init.identity.identifier {
 |---|---|---|---|---|
 | `generate-intermediate-key` | boolean |  | `false` | If true (default false), then the node will generate an additional intermediate key. This allows to turn off access to the root key for the node. |
 | `generate-topology-transactions-and-keys` | boolean |  | `true` | If true (default), then the node will generate automatically the topology transactions and keys once it has the necessary namespace delegations to do so. |
-| **identity** |  |  |  | Control how the identity of the node is determined. At startup, we need to determine the node's identity. We support various modes of operations for different deployments. We distinguish between setting the node-id and subsequently generating the topology transactions and the remaining keys. As such it is possible to manually set the node-id but let the system automatically generate the remaining topology transactions. |
+| **identity** |  |  |  | Control how the identity of the node is determined. |
 |     `type` | one of `external`, `auto`, `manual` | yes | `auto` † | Choose one type — see [IdentityConfig](#identityconfig). Control how the identity of the node is determined. At startup, we need to determine the node's identity. We support various modes of operations for different deployments. We distinguish between setting the node-id and subsequently generating the topology transactions and the remaining keys. As such it is possible to manually set the node-id but let the system automatically generate the remaining topology transactions. |
 | **identity** `type = external` |  |  |  | Read the node identifier from the config file |
 |     `certificates` | array of File |  | `[]` | optional certificates to use (in case we have external root keys) |
@@ -1326,7 +1326,7 @@ canton.mediators.<mediator>.parameters.batching.topology-cache-aggregator {
 |     **sequencer-payload-cache** |  |  |  |  |
 |         `expire-after-access` | duration (NonNegativeFiniteDuration) |  | `1 minute` (in practice `10 minutes`) ◊ |  |
 |         `maximum-memory` | string (PositiveNumeric) | yes | `67108864` † |  |
-|     **session-encryption-key-cache** |  |  |  | Configuration settings for a cache that stores: (a) the public asymmetric encryptions of the session keys for the sender and (b) the decrypting results in the receiver. This reduces the amount of asymmetric operations that need to be performed for each of the views that share the same participant recipient group (i.e. use the same session key). |
+|     **session-encryption-key-cache** |  |  |  | Configuration settings for a cache that stores: (a) the public asymmetric encryptions of the session keys for the sender and (b) the decrypting results in the receiver. |
 |         `enabled` | boolean |  | `true` | enable/disable caching of the session key. Caching is enabled by default, offering a trade-off between secrecy and performance |
 |         **receiver-cache** |  |  |  | Configurations settings for a single cache where elements are evicted after a certain time as elapsed (regardless of access). |
 |             `expire-after-timeout` | duration (PositiveFiniteDuration) |  | `10 minutes` (in practice `10 seconds`) ◊ | how quickly after creation items should be expired from the cache |
@@ -1340,7 +1340,7 @@ canton.mediators.<mediator>.parameters.batching.topology-cache-aggregator {
 |     **topology-snapshot** |  |  |  | Configurations settings for a single cache |
 |         `expire-after-access` | duration (NonNegativeFiniteDuration) |  | `1 minute` | how quickly after last access items should be expired from the cache |
 |         `maximum-size` | int (PositiveNumeric) | yes | `100` † | the maximum size of the cache |
-| **delayed-verdict-sender** |  |  |  | configuration parameters for the delayed verdict sender In order to reduce the load on the sequencer, we can configure the mediators to delay the sending of the verdicts to the sequencer. For every verdict, threshold + immediateExtra mediators will send the verdict immediately. The rest will start to send verdicts after an initial delay plus an incremental delay based on their priority in the queue. The priority is determined rotating the order of the mediators in the topology state using the request-id as an offset (modulo the number of active mediators). |
+| **delayed-verdict-sender** |  |  |  | configuration parameters for the delayed verdict sender In order to reduce the load on the sequencer, we can configure the mediators to delay the sending of the verdicts to the sequencer. |
 |     `delay` | duration (NonNegativeFiniteDuration) |  | `1 second` | incremental delay between senders |
 |     `enabled` | boolean |  | `true` | if true (default), then verdicts will be sent with a delay |
 |     `immediate-before-deadline` | duration (NonNegativeFiniteDuration) |  | `5 seconds` | immediately send the verdict if we are approaching the deadline |
