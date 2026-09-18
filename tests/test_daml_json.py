@@ -441,7 +441,7 @@ class DamlJsonTests(unittest.TestCase):
         self.assertEqual(len(payload["items"]), 3)
         legacy = next(item for item in payload["items"] if item["id"] == "DA.Legacy")
         self.assertFalse(legacy["current_present"])
-        self.assertIsNone(legacy["route"])
+        self.assertIsNotNone(legacy["route"])
         self.assertEqual(legacy["observed_removal"], "1.1.0")
         da_list = next(item for item in payload["items"] if item["id"] == "DA.List")
         self.assertEqual(da_list["last_changed"], "1.1.0")
@@ -449,7 +449,7 @@ class DamlJsonTests(unittest.TestCase):
 
         list_text = (output_dir / "da-list.mdx").read_text(encoding="utf-8")
         overview_text = (output_dir / "index.mdx").read_text(encoding="utf-8")
-        self.assertFalse((output_dir / "da-legacy.mdx").exists())
+        self.assertIn("Removed in 1.1.0", (output_dir / "da-legacy.mdx").read_text())
         self.assertIn("x2mdx-ref-page--collection", list_text)
         self.assertNotIn("history-added-1-0-0", list_text)
         self.assertIn('href="#history-updated-1-1-0">Updated 1.1.0</a>', list_text)

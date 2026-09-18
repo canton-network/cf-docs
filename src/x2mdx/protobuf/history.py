@@ -9,11 +9,14 @@ from x2mdx.history.models import (
     EvidenceKind,
     HistoryItem,
     HistoryMode,
+    LifecycleState,
+    LifecycleTransition,
     ReferenceFormat,
     SourceArtifact,
     SurfaceHistoryReport,
     VersionSelectionPolicy,
 )
+from x2mdx.protobuf.lifecycle import entity_lifecycle_state
 
 
 def build_protobuf_surface_history_report(
@@ -52,7 +55,7 @@ def build_protobuf_surface_history_report(
         first_version, first_endpoint = observations[0]
         last_version, last_endpoint = observations[-1]
         current_present = endpoint_id in latest_endpoint_ids
-        route = routes.get(endpoint_id) if current_present else None
+        route = routes.get(endpoint_id)
         if current_present and route is None:
             raise ValueError(f"Current protobuf endpoint has no reader route: {endpoint_id}")
 
@@ -71,6 +74,8 @@ def build_protobuf_surface_history_report(
             )
             for version, change_types, current in modified_by_id.get(endpoint_id, [])
         )
+
+        transitions = _lifecycle_transitions(observations, report=report)
 
         observed_removal = None
         removal_evidence = None
@@ -104,6 +109,8 @@ def build_protobuf_surface_history_report(
                 removal_evidence=removal_evidence,
                 last_changed=changes[-1].version if changes else None,
                 changes=changes,
+                lifecycle_state=transitions[-1].state if transitions else None,
+                lifecycle_transitions=transitions,
             )
         )
 
@@ -128,9 +135,38 @@ def build_protobuf_surface_history_report(
         version_policy=VersionSelectionPolicy.LATEST_SELECTED_RELEASE,
         items=tuple(sorted(items, key=lambda item: item.id)),
         limitations=(
-            "Descriptor snapshots establish endpoint additions, updates, and removals; authored deprecation and scheduled-removal metadata is not present in this source.",
+            "Descriptor snapshots establish endpoint additions, updates, and removals; lifecycle states come from @lifecycle source comments, and scheduled-removal metadata is not present in this source.",
         ),
     )
+
+
+def _lifecycle_transitions(
+    observations: list[tuple[str, dict[str, Any]]],
+    *,
+    report: dict[str, Any],
+) -> tuple[LifecycleTransition, ...]:
+    """Record each change of the authored ``@lifecycle`` state across releases."""
+    transitions: list[LifecycleTransition] = []
+    previous_state: str | None = None
+    for version, endpoint in observations:
+        state = entity_lifecycle_state(endpoint)
+        if state is None or state == previous_state:
+            continue
+        transitions.append(
+            LifecycleTransition(
+                state=LifecycleState(state),
+                version=version,
+                evidence=Evidence(
+                    kind=EvidenceKind.SOURCE_METADATA,
+                    source=_source(endpoint, report=report, version=version),
+                    observed_in_version=version,
+                    location=_location(endpoint),
+                    detail=f"@lifecycle {state}",
+                ),
+            )
+        )
+        previous_state = state
+    return tuple(transitions)
 
 
 def _source(endpoint: dict[str, Any], *, report: dict[str, Any], version: str) -> str:

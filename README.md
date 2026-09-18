@@ -42,7 +42,7 @@ Use this to report a problem or request new content without editing the source y
 Either:
 
 - [`direnv`](https://direnv.net/)
-- [`nix`](https://nixos.org/download/)
+- [`nix`](https://nixos.org/download/) with `nix-command` and flakes support
 
 OR:
 
@@ -60,6 +60,8 @@ Edit those templates, then run `npm run generate:network-variable-tabs` to updat
 the marked `NETWORKVARS_START` / `NETWORKVARS_END` regions. Generation preserves
 content outside those regions. Edit generated reference pages through their
 owning generators, as before.
+
+For generated API lifecycle settings, see the [examples and accepted values](config/x2mdx/lifecycle.md).
 
 Run `npm run validate:network-variable-tabs` to check generated regions without
 modifying files. Direct edits inside those regions fail validation; edit the
