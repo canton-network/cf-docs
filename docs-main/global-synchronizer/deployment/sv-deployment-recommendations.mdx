@@ -1,0 +1,53 @@
+---
+title: "Super Validator Deployment Recommendations"
+description: "Recommended infrastructure and PostgreSQL configuration for running a Super Validator node"
+---
+
+This page collects deployment recommendations for operators running a Super
+Validator (SV) node. These settings are not strictly required, but following
+them helps your node run reliably and perform well under production load.
+
+## PostgreSQL configuration
+
+<Note>
+The recommended values below are expressed the way many managed PostgreSQL
+providers (for example, GCP Cloud SQL) require them: as plain numbers in the
+unit the parameter expects (KB or MB), rather than human-friendly strings such
+as `2GB`. Adjust the notation to match your platform if it accepts unit
+suffixes directly.
+</Note>
+
+| Parameter | Recommended value | Reason | Reference |
+| --- | --- | --- | --- |
+| `random_page_cost` | `1.1` | Lowers the planner's assumed cost of random disk access. The default of `4.0` assumes spinning disks and causes the planner to avoid index scans. On SSD or network-attached storage, random access is nearly as cheap as sequential access, so a lower value produces better query plans. | [random_page_cost](https://www.postgresql.org/docs/18/runtime-config-query.html#GUC-RANDOM-PAGE-COST) |
+| `temp_file_limit` | `2147483647` | Raises the per-session limit on temporary files (in KB, ~2 TB) so that large analytical or maintenance queries do not fail with `temporary file size exceeds temp_file_limit` under heavy load. | [temp_file_limit](https://www.postgresql.org/docs/18/runtime-config-resource.html#GUC-TEMP-FILE-LIMIT) |
+| `max_wal_size` | `20480` | Increases the maximum WAL size to 20 GB (value in MB). Larger WAL headroom reduces how often checkpoints are forced under write-heavy load, smoothing out I/O spikes and improving throughput. | [max_wal_size](https://www.postgresql.org/docs/18/runtime-config-wal.html#GUC-MAX-WAL-SIZE) |
+| `maintenance_work_mem` | `2000000` | Allocates ~2 GB (value in KB) of memory for maintenance operations such as `VACUUM`, `CREATE INDEX`, and autovacuum. More memory makes these operations significantly faster and helps autovacuum keep up with the SV's write rate. | [maintenance_work_mem](https://www.postgresql.org/docs/18/runtime-config-resource.html#GUC-MAINTENANCE-WORK-MEM) |
+| `work_mem` | `16384` | Raises the per-operation working memory to 16 MB (value in KB), up from the default of 4 MB, to better support large queries. This is still low enough to avoid out-of-memory conditions when many queries run concurrently. Increase it further on instances with more available memory. | [work_mem](https://www.postgresql.org/docs/18/runtime-config-resource.html#GUC-WORK-MEM) |
+| `autovacuum_freeze_max_age` | `500000000` | Raises the maximum transaction age before an aggressive anti-wraparound autovacuum is forced, from the default of 200 million to 500 million. This reduces the impact of large, disruptive autovacuum freeze runs and gives regular autovacuum more time to do the work incrementally. | [autovacuum_freeze_max_age](https://www.postgresql.org/docs/18/runtime-config-autovacuum.html#GUC-AUTOVACUUM-FREEZE-MAX-AGE) |
+
+### Data checksums
+
+We strongly recommend enabling
+[PostgreSQL data checksums](https://www.postgresql.org/docs/18/checksums.html)
+on all databases backing your SV node. Data checksums allow PostgreSQL to detect
+on-disk data corruption early, which can prevent full node breakage in cases of
+state corruption.
+
+Data checksums are **enabled by default** for databases created by the in-cluster
+Postgres Helm chart (`splice-postgres`) and by the Docker Compose based
+deployments.
+
+<Warning title="Existing databases must be migrated explicitly">
+
+Data checksums can only be enabled when a database cluster is first initialized
+(`initdb`). Enabling them by default only affects freshly initialized databases.
+Existing deployments are *not* automatically migrated and will continue to run
+without data checksums until they are explicitly enabled.
+
+Operators of existing deployments should enable checksums on their existing
+databases out-of-band, for example by stopping PostgreSQL and running
+`pg_checksums --enable` against the data directory (see the
+[pg_checksums documentation](https://www.postgresql.org/docs/18/app-pgchecksums.html)).
+
+</Warning>
