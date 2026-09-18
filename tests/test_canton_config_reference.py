@@ -246,11 +246,9 @@ class CantonConfigReferenceTests(unittest.TestCase):
     def test_overview_links_every_page_and_marks_provenance(self) -> None:
         pages = generator.render_pages(sample_artifact())
         overview = pages["overview.mdx"]
-        # Pages with the key tables take the full width; the overview keeps its table of contents.
-        self.assertNotIn('mode: "wide"', overview)
+        # Every page keeps the right-hand table of contents (no wide mode).
         for name, page in pages.items():
-            if name != "overview.mdx":
-                self.assertIn('\nmode: "wide"\n---\n', page, name)
+            self.assertNotIn('mode: "wide"', page, name)
         self.assertIn('GENERATED_FROM source="digital-asset/canton" ref="abc123"', overview)
         for name in pages:
             if name != "overview.mdx":

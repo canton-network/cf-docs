@@ -952,8 +952,8 @@ def render_required(prefix: str, entries: list[dict], sections: dict[str, dict],
 
 
 def frontmatter(title: str, description: str, wide: bool = False) -> list[str]:
-    """`wide` drops the right-hand table of contents: the key tables need the width, and the
-    pinned section bar carries the place in the page instead."""
+"""`wide` drops the right-hand table of contents. Not used at present: readers wanted the
+    table of contents kept, so the key tables share the default content width instead."""
     lines = ["---", f'title: "{title}"', f'description: "{description}"']
     if wide:
         lines.append('mode: "wide"')
@@ -1032,7 +1032,7 @@ def reading_guide(artifact: dict, options: list[dict] | None) -> list[str]:
 
 def render_node_page(prefix: str, title: str, description: str, options: list[dict], sections: dict[str, dict], artifact: dict, variants_by_type, unions, options_by_path) -> str:
     lines = [
-        *frontmatter(title, description, wide=True),
+        *frontmatter(title, description),
         generated_marker(artifact),
         "",
         f"Configuration under `{prefix}` for Canton {artifact['cantonVersion']}: {len(options)} keys. "
@@ -1128,7 +1128,7 @@ def render_types_page(artifact: dict, variants_by_type, unions, options_by_path)
     """Every section that takes a `type`, documented once: what each type accepts, as HOCON and as
     a table, with the places in the configuration where the section occurs."""
     lines = [
-        *frontmatter("Configuration types", "Sections of the Canton configuration that take a type, and the keys each type accepts.", wide=True),
+        *frontmatter("Configuration types", "Sections of the Canton configuration that take a type, and the keys each type accepts."),
         generated_marker(artifact),
         "",
         "Some sections are a choice between shapes. You pick one by setting a `type` key, and that "
