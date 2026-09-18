@@ -450,6 +450,8 @@
   function rescan() {
     window.clearTimeout(rescanTimer);
     rescanTimer = window.setTimeout(function () {
+      // styles.css scopes the reference tables' column layout to this class.
+      document.body.classList.toggle("cf-canton-config", onReferencePage());
       sections = onReferencePage() ? collectSections() : [];
       current = null;
       schedule();
