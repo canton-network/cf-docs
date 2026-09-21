@@ -277,6 +277,59 @@ def test_add_refuses_to_overwrite_an_orphaned_output(
 
 
 
+def test_edit_dry_run_diffs_manifest_and_existing_output_without_writing(
+    authoring_fixture: tuple[Path, Path, Path], capsys: pytest.CaptureFixture[str]
+) -> None:
+    root, manifest, source_dir = authoring_fixture
+    name = "stable-example"
+    write_manifest(
+        manifest,
+        [
+            {
+                "snippetName": name,
+                "sourceRepo": "splice",
+                "sourceFilepath": "example.py",
+                "location": {"type": "fullFile"},
+                "description": "",
+                "options": {"language": "python"},
+            }
+        ],
+    )
+    source = source_dir / "example.py"
+    source.write_text("print('new')\n", encoding="utf-8")
+    commit_source(source_dir)
+    generated = (
+        root / "docs-main" / "snippets" / "external" / "splice" / "main" / f"{name}.mdx"
+    )
+    generated.parent.mkdir(parents=True)
+    generated.write_text("```python\nprint('old')\n```", encoding="utf-8")
+    original_manifest = manifest.read_bytes()
+    original_generated = generated.read_bytes()
+
+    result = author.main(
+        [
+            "edit",
+            "splice",
+            name,
+            "--source-dir",
+            str(source_dir),
+            "--language",
+            "javascript",
+            "--dry-run",
+        ]
+    )
+
+    assert result == 0
+    assert manifest.read_bytes() == original_manifest
+    assert generated.read_bytes() == original_generated
+    output = capsys.readouterr().out
+    assert "Dry run: would edit stable-example; no files written" in output
+    assert '-        "language": "python"' in output
+    assert '+        "language": "javascript"' in output
+    assert "-```python" in output
+    assert "+```javascript" in output
+    assert "-print('old')" in output
+    assert "+print('new')" in output
 
 
 
