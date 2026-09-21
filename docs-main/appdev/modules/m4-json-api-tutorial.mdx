@@ -23,10 +23,10 @@ This example shows how to:
 Before running the project, ensure you have the following installed:
 
 - A Bash-compatible terminal (e.g., macOS Terminal, Git Bash, etc.)
-- **Dpm** — Install following these instructions
+- **Dpm** — Install following [these instructions](/sdks-tools/cli-tools/dpm#installation)
 
 
-- `canton` — Canton release with installation and examples, check Canton demo for details
+- `canton` — Canton release with installation and examples, check Canton installation for details
 - `curl` — command-line HTTP client: [https://github.com/curl/curl](https://github.com/curl/curl) (installation: [https://curl.se/download.html](https://curl.se/download.html))
 - (Optional) `jq` — command-line JSON processor: [https://github.com/jqlang/jq](https://github.com/jqlang/jq) (installation: [https://jqlang.org/download/](https://jqlang.org/download/))
 
@@ -249,18 +249,18 @@ curl localhost:7575/v2/state/ledger-end
 
 ### Next steps
 #### Canton examples
-For a more advanced scenario involving two parties, explore the examples provided with Canton installation: `\<canton_installation\>/examples/json-ledger-api\>`
+For a more advanced scenario involving two parties, explore the examples provided with Canton installation: `<canton_installation>/examples/09-json-api`
 
-A `TypeScript` version is also available that demonstrates how to create a JSON Ledger API client for use in a web browser.
+A [TypeScript version](#get-started-with-canton-the-json-ledger-api-typescript-and-websockets) is also available that demonstrates how to create a JSON Ledger API client for use in a web browser.
 
 #### OpenAPI and AsyncAPI
-Read more about the OpenAPI and AsyncAPI specifications for the Canton JSON Ledger API: `references_json-api`.
+Read more about the [OpenAPI](/reference/json-api-reference/overview) and [AsyncAPI](/reference/json-api-asyncapi-reference/index) specifications for the Canton JSON Ledger API.
 
 #### Authentication and security
-Read how to configure and use jwt token to access JSON Ledger API `json-api-access-tokens`.
+Read how to configure and use jwt token to access JSON Ledger API: [Authentication](/sdks-tools/api-reference/json-api#authentication).
 
 #### Error codes
-For more information about error codes returned by the JSON Ledger API, see `json-error-codes`.
+For more information about error codes returned by the JSON Ledger API, see [Errors](/sdks-tools/api-reference/json-api#errors).
 
 
 {/* COPIED_END */}
@@ -281,16 +281,16 @@ You should be familiar with the basics of TypeScript and tools such as `npm` and
 Before starting, ensure you have the following installed:
 
 - **Node.js and npm** — Download from [https://nodejs.org/en/download/](https://nodejs.org/en/download/). Recommended version: `18.20.x` or later.
-- **Dpm** — Install following these instructions
+- **Dpm** — Install following [these instructions](/sdks-tools/cli-tools/dpm#installation)
 
 
-- **Canton** — Includes pre-built examples. See the Canton demo for details.
+- **Canton** — Includes pre-built examples. See the Canton installation for details.
 
 #### Example TypeScript Project
 Open a terminal and navigate to the JSON Ledger API example folder:
 
 ``` 
-cd <canton_installation>/examples/09-json-ledger-api
+cd <canton_installation>/examples/09-json-api
 ```
 
 Start Canton:
@@ -302,7 +302,7 @@ Start Canton:
 Once the Canton console is ready, open a new terminal and navigate to the TypeScript example folder:
 
 ``` 
-cd <canton_installation>/examples/09-json-ledger-api/typescript
+cd <canton_installation>/examples/09-json-api/typescript
 ```
 
 ### Running the Example
@@ -362,12 +362,16 @@ End of scenario
 ```
 
 ### Code Highlights
-The JSON Ledger API client is configured in \`src/client.ts\`:
+The JSON Ledger API client is configured in `src/client.ts`:
 
 ``` typescript
-import type { paths } from "../generated/api/ledger-api";
+import createClient from "openapi-fetch";
+import type {paths} from "../generated/api/ledger-api";
+import {PARTICIPANT_HOST, PARTICIPANT_PORT} from "./environment";
 
-export const client = createClient<paths>({ baseUrl: "http://localhost:7575" });
+const baseUrl = `http://${PARTICIPANT_HOST}:${PARTICIPANT_PORT}`;
+
+export const client = createClient<paths>({baseUrl});
 ```
 
 The `openapi-fetch` library is used to create the API client.
@@ -438,7 +442,7 @@ else {
 ### Extending the Example
 In this step, you extend the `Iou` template with a new field and update the TypeScript code accordingly.
 
-1.  Open the `Io.daml` file in `canton/examples/09-json-ledger-api/model`.
+1.  Open the `Iou.daml` file in `<canton_installation>/examples/09-json-api/model`.
 2.  Modify the `Iou` template to include a new `comment` field:
 
 ```haskell
@@ -505,7 +509,86 @@ The, execute the `npm run scenario` once again.
 
 ## Related
 
-A TypeScript version is also available that demonstrates how to create a JSON Ledger API client for use in a web browser.
+A [TypeScript version](#get-started-with-canton-the-json-ledger-api-typescript-and-websockets) is also available that demonstrates how to create a JSON Ledger API client for use in a web browser.
 
+{/* COPIED_END */}
+
+{/* COPIED_START source="docs-website:docs/replicated/canton/3.5/sdk/tutorials/json-api/canton_and_the_json_ledger_api_ts_websocket.rst" hash="e0ce792c" */}
+
+## Get Started with Canton, the JSON Ledger API, TypeScript and WebSockets
+This tutorial shows you how to interact with a Canton Ledger using the JSON Ledger API, WebSockets and TypeScript.
+
+### Overview
+You will use and modify an existing example project provided with the Canton distribution. The example project, the setup steps and the code highlights are the same as in the TypeScript tutorial above; this section covers the WebSocket variant.
+
+### Running the Example
+Once the build succeeds, run the example:
+
+``` 
+npm run scenario_websocket
+```
+
+You should see output similar to:
+
+``` 
+Alice creates contract
+Ledger offset: 23
+...
+Bob accepts transfer
+...
+End of scenario
+```
+
+### WebSockets Highlights
+The WebSocket connection establishment logic is in `src/websocket_client.ts`:
+
+``` typescript
+import WebSocket from "isomorphic-ws";
+import {PARTICIPANT_HOST, PARTICIPANT_PORT} from "./environment";
+
+const BASE_WS_URL = `ws://${PARTICIPANT_HOST}:${PARTICIPANT_PORT}`;
+
+export async function connectWs(uri: string): Promise<WebSocket> {
+    return new Promise<WebSocket>((resolve, reject) => {
+        const ws = new WebSocket(BASE_WS_URL + uri, ["daml.ws.auth"]);
+        ws.onopen = () => {
+            resolve(ws);
+        };
+        ws.onerror = (err: any) => {
+            reject(err);
+        };
+    })
+
+}
+```
+
+#### Querying Contracts
+In `src/index_websocket.ts`, contracts are queried like this:
+
+``` typescript
+return new Promise<components["schemas"]["CreatedEvent"][]>((resolve, reject) => {
+    let contracts: components["schemas"]["CreatedEvent"][] = [];
+    return connectWs("/v2/state/active-contracts").then(ws => {
+        ws.send(JSON.stringify(filter));
+        ws.onmessage = function (msg: any) {
+            const data = JSON.parse(msg.data) as components["schemas"]["JsGetActiveContractsResponse"];
+            const contractEntry = (data.contractEntry as components["schemas"]["JsContractEntry"]);
+            if ("JsActiveContract" in contractEntry){
+                contracts.push(contractEntry.JsActiveContract.createdEvent as components["schemas"]["CreatedEvent"]);
+            }
+        }
+        ws.onclose = function () {
+            resolve(contracts);
+        }
+    })
+})
+```
+
+### Extending the Example
+The steps to extend the `Iou` template are the same as in the TypeScript tutorial above; for the WebSocket scenario, the `showAcs` call to modify is in `src/index_websocket.ts`. After rebuilding, run the WebSocket example:
+
+``` 
+npm run scenario_websocket
+```
 
 {/* COPIED_END */}
