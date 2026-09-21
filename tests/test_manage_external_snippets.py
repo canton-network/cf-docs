@@ -281,6 +281,65 @@ def test_add_refuses_to_overwrite_an_orphaned_output(
     assert "Refusing to overwrite" in capsys.readouterr().err
 
 
+def test_move_preserves_name_and_regenerates_output(
+    authoring_fixture: tuple[Path, Path, Path], capsys: pytest.CaptureFixture[str]
+) -> None:
+    root, manifest, source_dir = authoring_fixture
+    name = "stable-example"
+    write_manifest(
+        manifest,
+        [
+            {
+                "snippetName": name,
+                "sourceRepo": "splice",
+                "sourceFilepath": "old.yaml",
+                "location": {"type": "fullFile"},
+                "description": "keep this",
+                "options": {"language": "yaml", "normalizeIndent": False},
+            }
+        ],
+    )
+    source = source_dir / "new.yaml"
+    source.write_text(
+        "# CURRENT_START\n  nested: true\n# CURRENT_END\n",
+        encoding="utf-8",
+    )
+    commit_source(source_dir)
+
+    manifest.chmod(0o640)
+    result = author.main(
+        [
+            "move",
+            "splice",
+            name,
+            "--source-dir",
+            str(source_dir),
+            "--source",
+            "new.yaml",
+            "--marker",
+            "CURRENT",
+        ]
+    )
+
+    assert result == 0
+    entry = json.loads(manifest.read_text(encoding="utf-8"))["snippets"][0]
+    assert entry["snippetName"] == name
+    assert entry["sourceFilepath"] == "new.yaml"
+    assert entry["location"] == {
+        "type": "stringMarker",
+        "start": "CURRENT_START",
+        "end": "CURRENT_END",
+    }
+    assert entry["description"] == "keep this"
+    assert entry["options"] == {"language": "yaml", "normalizeIndent": False}
+    assert stat.S_IMODE(manifest.stat().st_mode) == 0o640
+    output = (
+        root / "docs-main" / "snippets" / "external" / "splice" / "main" / f"{name}.mdx"
+    )
+    assert output.read_text(encoding="utf-8") == "```yaml\n  nested: true\n```"
+    captured = capsys.readouterr().out
+    assert "Moved stable-example; its import path is unchanged" in captured
+    assert "origin/main" in captured
 
 
 def test_edit_dry_run_diffs_manifest_and_existing_output_without_writing(
