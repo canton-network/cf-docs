@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import difflib
+import hashlib
 import json
 import os
 import re
@@ -16,32 +17,27 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from scripts.generate_external_snippets import (
-    REPOS,
-    SnippetRepo,
-    find_source_dir,
-)
+from scripts.generate_external_snippets import REPOS, SnippetRepo
 
 
 CF_DOCS_ROOT = Path(__file__).resolve().parents[1]
 MAIN_VERSION = "main"
+NAME_LENGTH_LIMIT = 100
 
+# Extension table for --language defaults. Anything else needs --language.
 LANGUAGES = {
-    ".daml": "haskell",
-    ".java": "java",
+    ".conf": "hocon",
+    ".daml": "daml",
     ".js": "javascript",
-    ".jsx": "jsx",
     ".json": "json",
     ".md": "markdown",
-    ".mdx": "mdx",
-    ".proto": "protobuf",
     ".py": "python",
+    ".rst": "rst",
     ".scala": "scala",
     ".sh": "bash",
     ".sql": "sql",
     ".toml": "toml",
     ".ts": "typescript",
-    ".tsx": "tsx",
     ".yaml": "yaml",
     ".yml": "yaml",
 }
@@ -52,17 +48,10 @@ class SnippetAuthoringError(Exception):
 
 
 @dataclass(frozen=True)
-class SourceRevision:
-    commit: str
-    remote: str
-    ref: str
-
-
-@dataclass(frozen=True)
 class FileChange:
     heading: str
     path: Path
-    content: bytes | None
+    content: bytes
 
 
 def manifest_path(repo: SnippetRepo) -> Path:
@@ -71,10 +60,6 @@ def manifest_path(repo: SnippetRepo) -> Path:
 
 def helper_path() -> Path:
     return CF_DOCS_ROOT / "scripts" / "helpers" / "generateOutputDocs.js"
-
-
-def source_lock_path() -> Path:
-    return CF_DOCS_ROOT / "config" / "snippet-config" / "snippet-source-lock.json"
 
 
 def output_path(repo: SnippetRepo, snippet_name: str) -> Path:
@@ -93,9 +78,7 @@ def load_manifest(path: Path) -> dict[str, Any]:
     try:
         manifest = json.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError as error:
-        raise SnippetAuthoringError(
-            f"Snippet manifest does not exist: {path}"
-        ) from error
+        raise SnippetAuthoringError(f"Snippet manifest does not exist: {path}") from error
     except json.JSONDecodeError as error:
         raise SnippetAuthoringError(
             f"Snippet manifest is not valid JSON: {path}: {error}"
@@ -109,134 +92,16 @@ def load_manifest(path: Path) -> dict[str, Any]:
     return manifest
 
 
-def load_source_lock() -> dict[str, Any]:
-    path = source_lock_path()
-    if not path.exists():
-        return {"schemaVersion": 1, "snippets": {}}
-    try:
-        lock = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as error:
-        raise SnippetAuthoringError(
-            f"Snippet source lock is not valid JSON: {path}: {error}"
-        ) from error
-    if (
-        not isinstance(lock, dict)
-        or lock.get("schemaVersion") != 1
-        or not isinstance(lock.get("snippets"), dict)
-    ):
-        raise SnippetAuthoringError(
-            f'Snippet source lock must use schemaVersion 1 and a "snippets" object: {path}'
-        )
-    return lock
-
-
-def run_git(source_dir: Path, *arguments: str, check: bool = True) -> str:
-    result = subprocess.run(
-        ["git", "-C", str(source_dir), *arguments],
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    if check and result.returncode != 0:
-        details = (result.stderr or result.stdout).strip()
-        raise SnippetAuthoringError(
-            f"Git command failed in {source_dir}: git {' '.join(arguments)}: {details}"
-        )
-    return result.stdout.strip()
-
-
-def normalized_remote_url(remote: str) -> str:
-    patterns = (
-        r"^(?:git@github\.com:|ssh://git@github\.com/)(?P<repo>[^/]+/[^/]+?)(?:\.git)?$",
-        r"^https?://github\.com/(?P<repo>[^/]+/[^/]+?)(?:\.git)?/?$",
-    )
-    for pattern in patterns:
-        match = re.fullmatch(pattern, remote)
-        if match:
-            return f"https://github.com/{match.group('repo')}"
-    return remote
-
-
-def source_revision(source_dir: Path, source: str) -> SourceRevision:
-    tracked = subprocess.run(
-        ["git", "-C", str(source_dir), "ls-files", "--error-unmatch", "--", source],
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    if tracked.returncode != 0:
-        raise SnippetAuthoringError(
-            f"Snippet source must be tracked before authoring: {source}"
-        )
-    dirty = run_git(
-        source_dir,
-        "status",
-        "--porcelain=v1",
-        "--untracked-files=all",
-        "--",
-        source,
-    )
-    if dirty:
-        raise SnippetAuthoringError(
-            f"Snippet source must match HEAD before its commit can be recorded: {source}"
-        )
-
-    commit = run_git(source_dir, "rev-parse", "--verify", "HEAD")
-    if not re.fullmatch(r"[0-9a-f]{40}", commit):
-        raise SnippetAuthoringError(
-            f"Could not resolve a 40-character source commit: {commit}"
-        )
-
-    refs = {
-        ref
-        for ref in run_git(
-            source_dir,
-            "for-each-ref",
-            "--format=%(refname:short)",
-            f"--points-at={commit}",
-            "refs/remotes",
-        ).splitlines()
-        if "/" in ref and not ref.endswith("/HEAD")
-    }
-    upstream = run_git(
-        source_dir,
-        "rev-parse",
-        "--abbrev-ref",
-        "--symbolic-full-name",
-        "@{upstream}",
-        check=False,
-    )
-    if upstream in refs:
-        remote_ref = upstream
-    elif refs:
-        remote_ref = sorted(refs, key=lambda ref: (not ref.startswith("origin/"), ref))[
-            0
-        ]
-    else:
-        raise SnippetAuthoringError(
-            "Source HEAD must be available at an exact remote-tracking ref; fetch or push it first"
-        )
-
-    remote_name = remote_ref.split("/", 1)[0]
-    remote = normalized_remote_url(
-        run_git(source_dir, "remote", "get-url", remote_name)
-    )
-    return SourceRevision(commit=commit, remote=remote, ref=remote_ref)
-
-
-def revision_record(repo: SnippetRepo, revision: SourceRevision) -> dict[str, str]:
-    return {
-        "repository": repo.name,
-        "commit": revision.commit,
-        "remote": revision.remote,
-        "ref": revision.ref,
-    }
+def validate_source_dir(source_dir: Path) -> Path:
+    if not source_dir.is_dir():
+        raise SnippetAuthoringError(f"--source-dir is not a directory: {source_dir}")
+    return source_dir
 
 
 def normalized_source_path(source: str) -> str:
     if not source or source.startswith("/") or "\\" in source:
         raise SnippetAuthoringError(
-            "--source must be a non-empty repository-relative POSIX path"
+            "--source must be a non-empty checkout-relative POSIX path"
         )
     parts = source.split("/")
     if any(part in {"", ".", ".."} for part in parts):
@@ -252,9 +117,7 @@ def validate_source_file(source_dir: Path, source: str) -> Path:
     try:
         candidate.relative_to(root)
     except ValueError as error:
-        raise SnippetAuthoringError(
-            f"Snippet source escapes its checkout: {source}"
-        ) from error
+        raise SnippetAuthoringError(f"Snippet source escapes its checkout: {source}") from error
     if not candidate.is_file():
         raise SnippetAuthoringError(f"Snippet source file does not exist: {candidate}")
     return candidate
@@ -264,74 +127,51 @@ def infer_language(source: str) -> str:
     suffix = PurePosixPath(source).suffix.lower()
     language = LANGUAGES.get(suffix)
     if not language:
+        known = ", ".join(sorted(LANGUAGES))
         raise SnippetAuthoringError(
-            f"Cannot infer a language from {source!r}; pass --language explicitly"
+            f"Cannot infer a language from {source!r}; pass --language explicitly "
+            f"(known extensions: {known})"
         )
     return language
 
 
-def slug(value: str) -> str:
-    rendered = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
-    if not rendered:
-        raise SnippetAuthoringError(f"Cannot derive a name from {value!r}")
-    return rendered
-
-
-def path_slug(source: str) -> str:
-    path = PurePosixPath(source)
-    without_suffix = path.with_suffix("") if path.suffix else path
-    return slug(without_suffix.as_posix())
-
-
-def marker_pair(args: argparse.Namespace, *, editing: bool) -> dict[str, Any] | None:
-    supplied_exact = bool(args.start_marker or args.end_marker)
-    choices = int(args.full_file) + int(bool(args.marker)) + int(supplied_exact)
-    if choices > 1:
-        raise SnippetAuthoringError(
-            "Choose only one selector: --full-file, --marker, or --start-marker/--end-marker"
-        )
-    if supplied_exact and not (args.start_marker and args.end_marker):
-        raise SnippetAuthoringError(
-            "Pass both --start-marker and --end-marker when using exact markers"
-        )
-    if args.full_file:
+def selector(marker: str | None) -> dict[str, Any]:
+    if marker is None:
         return {"type": "fullFile"}
-    if args.marker:
-        return {
-            "type": "stringMarker",
-            "start": f"{args.marker}_START",
-            "end": f"{args.marker}_END",
-        }
-    if supplied_exact:
-        return {
-            "type": "stringMarker",
-            "start": args.start_marker,
-            "end": args.end_marker,
-        }
-    if editing:
-        return None
-    return {"type": "fullFile"}
+    if not marker or "/" in marker or marker != marker.strip():
+        raise SnippetAuthoringError(f"--marker must be a non-empty marker base name: {marker!r}")
+    return {"type": "stringMarker", "start": f"{marker}_START", "end": f"{marker}_END"}
 
 
-def validate_snippet_name(name: str) -> str:
-    if not name or name.startswith("/") or "\\" in name:
-        raise SnippetAuthoringError(
-            "Snippet names must be non-empty relative POSIX paths"
-        )
-    if any(part in {"", ".", ".."} for part in name.split("/")):
-        raise SnippetAuthoringError(
-            "Snippet names must not contain empty, '.' or '..' path components"
-        )
-    return name
+def _path_slug(value: str) -> str:
+    return re.sub(r"[/.]", "-", value)
 
 
-def derive_snippet_name(
-    repo: SnippetRepo, source: str, location: dict[str, Any]
-) -> str:
-    name = f"{repo.name}-literal-"
-    if location["type"] == "fullFile":
-        return f"{name}full-{path_slug(source)}"
-    return f"{name}marker-{path_slug(source)}-{slug(str(location['start']))}"
+def derive_snippet_name(repo: SnippetRepo, source: str, location: dict[str, Any]) -> str:
+    """Derive the stable snippet name.
+
+    Base rule: strip the extension, replace ``/`` and ``.`` with ``-``, prefix
+    ``<repo>-literal-full-`` or ``<repo>-literal-marker-``; for markers append the
+    lowercased start marker with ``_`` as ``-``.
+
+    Shortening: when the base result exceeds NAME_LENGTH_LIMIT and the path has three
+    or more segments, keep the first segment and the file stem, and replace the
+    segments between with the first six hex characters of SHA-256 over those
+    segments joined by ``/``. The marker suffix is never shortened.
+    """
+    stem_path = re.sub(r"\.[^./]+$", "", source)
+    kind = "full" if location["type"] == "fullFile" else "marker"
+    suffix = ""
+    if kind == "marker":
+        suffix = "-" + str(location["start"]).lower().replace("_", "-")
+    prefix = f"{repo.name}-literal-{kind}-"
+    base = f"{prefix}{_path_slug(stem_path)}{suffix}"
+    segments = stem_path.split("/")
+    if len(base) <= NAME_LENGTH_LIMIT or len(segments) < 3:
+        return base
+    first, stem, middle = segments[0], segments[-1], segments[1:-1]
+    digest = hashlib.sha256("/".join(middle).encode("utf-8")).hexdigest()[:6]
+    return f"{prefix}{_path_slug(first)}-{digest}-{_path_slug(stem)}{suffix}"
 
 
 def duplicate_name_locations(name: str) -> list[Path]:
@@ -348,21 +188,12 @@ def same_source(entry: dict[str, Any], source: str, location: dict[str, Any]) ->
     return entry.get("sourceFilepath") == source and entry.get("location") == location
 
 
-def render_one_snippet(
-    *,
-    source_dir: Path,
-    manifest: dict[str, Any],
-    entry: dict[str, Any],
-) -> bytes:
+def render_one_snippet(*, source_dir: Path, manifest: dict[str, Any], entry: dict[str, Any]) -> bytes:
     helper = helper_path()
     if not helper.is_file():
-        raise SnippetAuthoringError(
-            f"Snippet extraction helper does not exist: {helper}"
-        )
+        raise SnippetAuthoringError(f"Snippet extraction helper does not exist: {helper}")
 
-    single_manifest = {
-        key: value for key, value in manifest.items() if key != "snippets"
-    }
+    single_manifest = {key: value for key, value in manifest.items() if key != "snippets"}
     single_manifest["snippets"] = [entry]
     with tempfile.TemporaryDirectory(prefix="cf-docs-snippet-") as temp_name:
         temp = Path(temp_name)
@@ -374,14 +205,10 @@ def render_one_snippet(
         )
         result = subprocess.run(
             [
-                "node",
-                str(helper),
-                "--repo-root",
-                str(source_dir),
-                "--export-config",
-                str(config),
-                "--output",
-                str(output),
+                "node", str(helper),
+                "--repo-root", str(source_dir),
+                "--export-config", str(config),
+                "--output", str(output),
             ],
             text=True,
             capture_output=True,
@@ -398,6 +225,54 @@ def render_one_snippet(
         return generated.read_bytes()
 
 
+_WS = re.compile(r"\s*")
+
+
+def insert_manifest_entry(text: str, entry: dict[str, Any]) -> str:
+    """Insert ``entry`` into the ``snippets`` array of ``text`` textually.
+
+    The entry goes immediately before the first existing entry whose snippetName
+    sorts after it, or at the end. Every other byte of the manifest is preserved.
+    """
+    header = re.search(r'"snippets"\s*:\s*\[', text)
+    if not header:
+        raise SnippetAuthoringError('Snippet manifest has no "snippets" array to insert into')
+    decoder = json.JSONDecoder()
+    position = header.end()
+    elements: list[tuple[int, int, dict[str, Any]]] = []
+    while True:
+        position = _WS.match(text, position).end()
+        if text.startswith("]", position):
+            close = position
+            break
+        value, end = decoder.raw_decode(text, position)
+        if not isinstance(value, dict):
+            raise SnippetAuthoringError("Snippet manifest entries must be objects")
+        elements.append((position, end, value))
+        position = _WS.match(text, end).end()
+        if text.startswith(",", position):
+            position += 1
+
+    if elements:
+        line_start = text.rfind("\n", 0, elements[0][0]) + 1
+        indent = text[line_start:elements[0][0]]
+        if indent.strip():
+            indent = "    "
+    else:
+        indent = "    "
+    rendered = json.dumps(entry, indent=2, ensure_ascii=False).replace("\n", "\n" + indent)
+
+    name = entry["snippetName"]
+    for start, _end, existing in elements:
+        if str(existing.get("snippetName", "")) > name:
+            return text[:start] + rendered + ",\n" + indent + text[start:]
+    if elements:
+        last_end = elements[-1][1]
+        return text[:last_end] + ",\n" + indent + rendered + text[last_end:]
+    closing_indent = indent[:-2] if indent.endswith("  ") else ""
+    return text[:header.end()] + "\n" + indent + rendered + "\n" + closing_indent + text[close:]
+
+
 def atomic_write(path: Path, content: bytes) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     mode = stat.S_IMODE(path.stat().st_mode) if path.exists() else 0o644
@@ -412,10 +287,6 @@ def atomic_write(path: Path, content: bytes) -> None:
         raise
 
 
-def serialized_json(value: dict[str, Any]) -> bytes:
-    return (json.dumps(value, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
-
-
 def commit_changes(changes: list[FileChange]) -> None:
     originals = {
         change.path: change.path.read_bytes() if change.path.exists() else None
@@ -423,10 +294,7 @@ def commit_changes(changes: list[FileChange]) -> None:
     }
     try:
         for change in changes:
-            if change.content is None:
-                change.path.unlink(missing_ok=True)
-            else:
-                atomic_write(change.path, change.content)
+            atomic_write(change.path, change.content)
     except BaseException:
         for path, original in originals.items():
             if original is None:
@@ -436,37 +304,37 @@ def commit_changes(changes: list[FileChange]) -> None:
         raise
 
 
-def print_file_diff(path: Path, proposed: bytes | None) -> None:
+NO_NEWLINE = "\\ No newline at end of file\n"
+
+
+def render_unified_diff(path: Path, proposed: bytes) -> str:
     original = path.read_bytes() if path.exists() else b""
-    proposed_content = proposed or b""
     try:
         label = path.relative_to(CF_DOCS_ROOT).as_posix()
     except ValueError:
         label = str(path)
-    from_label = f"a/{label}" if path.exists() else "/dev/null"
-    to_label = f"b/{label}" if proposed is not None else "/dev/null"
     diff = difflib.unified_diff(
         original.decode("utf-8").splitlines(keepends=True),
-        proposed_content.decode("utf-8").splitlines(keepends=True),
-        fromfile=from_label,
-        tofile=to_label,
+        proposed.decode("utf-8").splitlines(keepends=True),
+        fromfile=f"a/{label}" if path.exists() else "/dev/null",
+        tofile=f"b/{label}",
     )
-    rendered = "".join(diff)
-    print(rendered, end="" if rendered.endswith("\n") else "\n")
-    if not rendered:
-        print("(no changes)")
+    rendered: list[str] = []
+    for line in diff:
+        if line.endswith("\n"):
+            rendered.append(line)
+        else:
+            # difflib drops the final newline; git marks that explicitly.
+            rendered.append(line + "\n" + NO_NEWLINE)
+    return "".join(rendered)
 
 
-def print_change_preview(
-    *,
-    action: str,
-    snippet_name: str,
-    changes: list[FileChange],
-) -> None:
-    print(f"Dry run: would {action} {snippet_name}; no files written")
+def print_change_preview(*, snippet_name: str, changes: list[FileChange]) -> None:
+    print(f"Dry run: would add {snippet_name}; no files written")
     for change in changes:
         print(f"\n{change.heading}:")
-        print_file_diff(change.path, change.content)
+        rendered = render_unified_diff(change.path, change.content)
+        print(rendered if rendered else "(no changes)", end="" if rendered else "\n")
 
 
 def component_name(repo: SnippetRepo, snippet_name: str) -> str:
@@ -488,57 +356,30 @@ def print_usage(repo: SnippetRepo, snippet_name: str) -> None:
     print(f"\n<{name} />")
 
 
-def source_dir_for(args: argparse.Namespace, repo: SnippetRepo) -> Path:
-    try:
-        return find_source_dir(repo, args.source_dir)
-    except SystemExit as error:
-        raise SnippetAuthoringError(str(error)) from error
-
-
-def authoring_changes(
-    *,
-    manifest_file: Path,
-    manifest: dict[str, Any],
-    lock: dict[str, Any],
-    generated_file: Path,
-    generated_content: bytes | None,
-) -> list[FileChange]:
-    return [
-        FileChange("Manifest diff", manifest_file, serialized_json(manifest)),
-        FileChange("Source lock diff", source_lock_path(), serialized_json(lock)),
-        FileChange("Generated MDX diff", generated_file, generated_content),
-    ]
-
-
 def add(args: argparse.Namespace, repo: SnippetRepo) -> int:
-    source_dir = source_dir_for(args, repo)
+    source_dir = validate_source_dir(args.source_dir)
     source = normalized_source_path(args.source)
     validate_source_file(source_dir, source)
-    revision = source_revision(source_dir, source)
-    location = marker_pair(args, editing=False)
-    assert location is not None
+    location = selector(args.marker)
     language = args.language or infer_language(source)
-    name = validate_snippet_name(
-        args.name or derive_snippet_name(repo, source, location)
-    )
+    name = derive_snippet_name(repo, source, location)
 
     manifest_file = manifest_path(repo)
+    manifest_text = manifest_file.read_text(encoding="utf-8") if manifest_file.exists() else ""
     manifest = load_manifest(manifest_file)
-    lock = load_source_lock()
     duplicates = duplicate_name_locations(name)
     if duplicates:
         locations = ", ".join(str(path) for path in duplicates)
-        raise SnippetAuthoringError(
-            f"Snippet name already exists: {name} ({locations})"
-        )
+        raise SnippetAuthoringError(f"Snippet name already exists: {name} ({locations})")
     for entry in manifest["snippets"]:
         if same_source(entry, source, location):
             raise SnippetAuthoringError(
                 f"A snippet already uses this source and selector: {entry.get('snippetName')}"
             )
-    if name in lock["snippets"]:
+    generated_file = output_path(repo, name)
+    if generated_file.exists():
         raise SnippetAuthoringError(
-            f"Snippet source lock already contains an orphaned entry: {name}"
+            f"Refusing to overwrite an existing output not owned by the manifest: {generated_file}"
         )
 
     entry = {
@@ -549,81 +390,53 @@ def add(args: argparse.Namespace, repo: SnippetRepo) -> int:
         "description": "",
         "options": {"language": language},
     }
-    generated = render_one_snippet(
-        source_dir=source_dir,
-        manifest=manifest,
-        entry=entry,
-    )
-    manifest["snippets"].append(entry)
-    lock["snippets"][name] = revision_record(repo, revision)
-    generated_file = output_path(repo, name)
-    if generated_file.exists():
-        raise SnippetAuthoringError(
-            f"Refusing to overwrite an existing output not owned by the manifest: "
-            f"{generated_file}"
-        )
-    changes = authoring_changes(
-        manifest_file=manifest_file,
-        manifest=manifest,
-        lock=lock,
-        generated_file=generated_file,
-        generated_content=generated,
-    )
+    generated = render_one_snippet(source_dir=source_dir, manifest=manifest, entry=entry)
+    new_manifest_text = insert_manifest_entry(manifest_text, entry)
+    changes = [
+        FileChange("Manifest diff", manifest_file, new_manifest_text.encode("utf-8")),
+        FileChange("Generated MDX diff", generated_file, generated),
+    ]
     if args.dry_run:
-        print_change_preview(
-            action="add",
-            snippet_name=name,
-            changes=changes,
-        )
+        print_change_preview(snippet_name=name, changes=changes)
         print_usage(repo, name)
         return 0
     commit_changes(changes)
 
     print(f"Added {name}")
     print(f"Manifest: {manifest_file.relative_to(CF_DOCS_ROOT)}")
-    print(f"Source:   {revision.commit} at {revision.remote} ({revision.ref})")
     print(f"Output:   {generated_file.relative_to(CF_DOCS_ROOT)}")
     print_usage(repo, name)
     return 0
 
 
-def add_authoring_arguments(
-    parser: argparse.ArgumentParser,
-    *,
-    command: str,
-) -> None:
-    parser.add_argument("repo", choices=sorted(REPOS), help="Source repository key")
-    if command == "add":
-        parser.add_argument("--source", required=True)
-    if command == "add":
-        parser.add_argument("--name", help="Override the derived snippetName")
-    parser.add_argument(
-        "--source-dir",
-        type=Path,
-        help="Local source checkout; common sibling locations are searched when omitted",
-    )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Validate and print manifest/MDX diffs without writing files",
-    )
-    parser.add_argument("--language")
-    parser.add_argument("--full-file", action="store_true")
-    parser.add_argument(
-        "--marker",
-        help="Marker base; expands to <value>_START and <value>_END",
-    )
-    parser.add_argument("--start-marker", help="Exact start marker")
-    parser.add_argument("--end-marker", help="Exact end marker")
-
-
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Add cf-docs external snippets"
-    )
+    parser = argparse.ArgumentParser(description="Add cf-docs external snippets")
     subparsers = parser.add_subparsers(dest="command", required=True)
-    add_parser = subparsers.add_parser("add", help="Add and render a snippet")
-    add_authoring_arguments(add_parser, command="add")
+    add_parser = subparsers.add_parser("add", help="Add and render one snippet from a local checkout")
+    add_parser.add_argument(
+        "repo", metavar="repo", choices=sorted(REPOS),
+        help=f"Source repository key: {', '.join(sorted(REPOS))}",
+    )
+    add_parser.add_argument(
+        "--source-dir", type=Path, required=True,
+        help="Local checkout of the source repository (required; never inferred)",
+    )
+    add_parser.add_argument(
+        "--source", required=True,
+        help="Source file path relative to --source-dir",
+    )
+    add_parser.add_argument(
+        "--marker",
+        help="Marker base name; extracts between <NAME>_START and <NAME>_END. Omit for the whole file",
+    )
+    add_parser.add_argument(
+        "--language",
+        help="Code fence language; defaults from the file extension",
+    )
+    add_parser.add_argument(
+        "--dry-run", action="store_true",
+        help="Validate, print manifest and MDX diffs, write nothing",
+    )
     return parser.parse_args(argv)
 
 
