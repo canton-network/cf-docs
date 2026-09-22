@@ -178,7 +178,7 @@ class ProtobufTests(unittest.TestCase):
         ]), 0)
         page = (output_dir / "operations/com-example-v1/exampleservice/getfoo.mdx").read_text()
         self.assertIn('href="#history-deprecated-1-1-0">Deprecated 1.1.0</a>', page)
-        self.assertIn("<dd>Deprecated</dd>", page)
+        self.assertIn('<span class="x2mdx-ref-meta-value">Deprecated</span>', page)
         self.assertNotIn('x2mdx-ref-badge--removed">Deprecated</span>', page, "authored state must not duplicate the dated deprecation badge")
 
     def test_removed_endpoint_retains_its_last_request_and_response(self) -> None:
@@ -298,8 +298,8 @@ class ProtobufTests(unittest.TestCase):
         self.assertIn("## ExampleService", package_text)
         self.assertIn("ExampleService.GetFoo", package_text)
         self.assertIn("## Protocol Details", operation_text)
-        self.assertIn("<dt>Service</dt>", operation_text)
-        self.assertIn("<dd>ExampleService</dd>", operation_text)
+        self.assertIn('<span class="x2mdx-ref-meta-label">Service</span>', operation_text)
+        self.assertIn('<span class="x2mdx-ref-meta-value">ExampleService</span>', operation_text)
         self.assertIn("x2mdx-ref-right-rail", operation_text)
         self.assertIn("x2mdx-ref-rail-panel", operation_text)
         self.assertIn("```bash grpcurl", operation_text)

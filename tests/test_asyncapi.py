@@ -53,7 +53,7 @@ class AsyncApiTests(unittest.TestCase):
                 for candidate in ("Alpha", "Beta", "Deprecated"):
                     self.assertEqual(f">{candidate}</span>" in page, candidate == label)
                 if label is not None:
-                    self.assertIn(f"<dd>{label}</dd>", page)
+                    self.assertIn(f'<span class="x2mdx-ref-meta-value">{label}</span>', page)
 
     def setUp(self) -> None:
         self.temp_dir = tempfile.TemporaryDirectory()

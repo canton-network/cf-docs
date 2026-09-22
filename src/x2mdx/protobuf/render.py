@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from x2mdx.protobuf.lifecycle import entity_lifecycle_state
-from x2mdx.history.events import history_events_for_item
+from x2mdx.history.events import history_event_anchor, history_events_for_item
 from x2mdx.history.models import HistoryEvent, HistoryEventKind, HistoryItem, SurfaceHistoryReport
 from x2mdx.history.versioning import compare_versions
 from x2mdx.reference_pages import (
@@ -528,6 +528,124 @@ def grpcurl_example(package_name: str, endpoint: dict[str, Any], request_body: A
     return "\n".join(lines)
 
 
+RELEASE_CARD_ENDPOINT_LIMIT = 5
+
+
+def endpoint_label(endpoint: dict[str, Any]) -> str:
+    return f"{endpoint['service']}/{endpoint['name']}"
+
+
+def count_phrase(count: int, singular: str, plural: str | None = None) -> str:
+    noun = singular if count == 1 else (plural or f"{singular}s")
+    return f"{count} {noun}"
+
+
+def release_delta_summary(counts: dict[str, dict[str, int]]) -> str:
+    parts: list[str] = []
+    for key, singular in (("endpoints", "endpoint"), ("messages", "message"), ("enums", "enum")):
+        pieces = [
+            f"{counts[key][kind]} {label}"
+            for kind, label in (("added", "added"), ("modified", "changed"), ("removed", "removed"))
+            if counts[key][kind]
+        ]
+        if pieces:
+            noun = singular if sum(counts[key].values()) == 1 else f"{singular}s"
+            parts.append(f"{noun.capitalize()}: {', '.join(pieces)}")
+    return ". ".join(parts) + "." if parts else "No endpoint, message, or enum changes."
+
+
+def release_baseline_summary(counts: dict[str, dict[str, int]]) -> str:
+    return (
+        "First release covered by this reference: "
+        f"{count_phrase(counts['endpoints']['added'], 'endpoint')}, "
+        f"{count_phrase(counts['messages']['added'], 'message')}, "
+        f"{count_phrase(counts['enums']['added'], 'enum')}."
+    )
+
+
+def release_has_changes(counts: dict[str, dict[str, int]]) -> bool:
+    return any(counts[key][kind] for key in ("endpoints", "messages", "enums") for kind in ("added", "modified", "removed"))
+
+
+def release_summary_cards(
+    report: dict[str, Any],
+    *,
+    output_dir: Path,
+    overview_name: str,
+    history_anchors: set[str],
+) -> tuple[list[ReferenceCard], list[str]]:
+    """Newest-first release cards naming endpoint deltas; quiet releases are returned separately."""
+    overview_path = output_dir / overview_name
+    cards: list[ReferenceCard] = []
+    quiet_versions: list[str] = []
+    releases = list(report["releases"])
+    for index, release in reversed(list(enumerate(releases))):
+        version = str(release["version"])
+        changes = release["changes"]
+        counts = changes["counts"]
+        is_baseline = index == 0
+        if not is_baseline and not release_has_changes(counts):
+            quiet_versions.append(version)
+            continue
+
+        meta_items: list[ReferenceMetaItem] = []
+        badges: list[ReferenceBadge] = []
+        if is_baseline:
+            badges.append(ReferenceBadge("Baseline", tone="neutral"))
+            summary = release_baseline_summary(counts)
+        else:
+            summary = release_delta_summary(counts)
+            endpoint_changes = changes["endpoints"]
+            listed_by_kind = (
+                ("Added", HistoryEventKind.INTRODUCED, list(endpoint_changes["added"])),
+                ("Removed", HistoryEventKind.REMOVED, list(endpoint_changes["removed"])),
+                ("Changed", HistoryEventKind.CHANGED, [change["current"] for change in endpoint_changes["modified"]]),
+            )
+            for label, event_kind, endpoints in listed_by_kind:
+                for endpoint in endpoints[:RELEASE_CARD_ENDPOINT_LIMIT]:
+                    meta_items.append(
+                        ReferenceMetaItem(
+                            label,
+                            endpoint_label(endpoint),
+                            href=page_ref(
+                                overview_path,
+                                operation_page_path(output_dir, endpoint["package"], endpoint["service"], endpoint["name"]),
+                            ),
+                        )
+                    )
+                remaining = len(endpoints) - RELEASE_CARD_ENDPOINT_LIMIT
+                if remaining > 0:
+                    anchor = history_event_anchor(event_kind, version)
+                    meta_items.append(
+                        ReferenceMetaItem(
+                            label,
+                            f"and {remaining} more",
+                            href=f"#{anchor}" if anchor in history_anchors else None,
+                        )
+                    )
+            for kind_label, kind, tone in (("added", "added", "added"), ("removed", "removed", "removed"), ("changed", "modified", "changed")):
+                if counts["endpoints"][kind]:
+                    badges.append(ReferenceBadge(f"{counts['endpoints'][kind]} {kind_label}", tone=tone))
+
+        href = None
+        for kind in (HistoryEventKind.INTRODUCED, HistoryEventKind.REMOVED, HistoryEventKind.CHANGED, HistoryEventKind.DEPRECATED):
+            anchor = history_event_anchor(kind, version)
+            if anchor in history_anchors:
+                href = f"#{anchor}"
+                break
+        cards.append(
+            ReferenceCard(
+                title=version,
+                href=href,
+                summary=summary,
+                badges=badges,
+                meta_items=meta_items,
+            )
+        )
+    quiet_versions.reverse()
+    return cards, quiet_versions
+
+
 def build_overview_page(
     report: dict[str, Any],
     *,
@@ -577,26 +695,23 @@ def build_overview_page(
             )
         )
 
-    release_cards = []
-    for release in report["releases"]:
-        counts = release["changes"]["counts"]
-        release_cards.append(
-            ReferenceCard(
-                title=str(release["version"]),
-                summary="Endpoint / message / enum deltas for this release.",
-                badges=[ReferenceBadge("Release", tone="neutral")],
-                meta_items=[
-                    ReferenceMetaItem("Endpoints", f"{counts['endpoints']['added']} / {counts['endpoints']['modified']} / {counts['endpoints']['removed']}"),
-                    ReferenceMetaItem("Messages", f"{counts['messages']['added']} / {counts['messages']['modified']} / {counts['messages']['removed']}"),
-                    ReferenceMetaItem("Enums", f"{counts['enums']['added']} / {counts['enums']['modified']} / {counts['enums']['removed']}"),
-                ],
-            )
-        )
+    release_cards, quiet_versions = release_summary_cards(
+        report,
+        output_dir=output_dir,
+        overview_name=overview_name,
+        history_anchors={history_event_anchor(event.kind, event.version) for event in overview_events},
+    )
+    release_body = (
+        "Each release lists the endpoints it added, changed, or removed, with message and enum counts. "
+        "Endpoint names link to their reference pages and release versions link to the History section."
+    )
+    if quiet_versions:
+        release_body += " Releases with no API changes: " + ", ".join(f"`{version}`" for version in quiet_versions) + "."
 
     sections = [
         ReferenceSection(
             heading="Release Summary",
-            body_markdown="Counts are shown as added / changed / removed within each release slice.",
+            body_markdown=release_body,
             cards=release_cards,
         )
     ]
