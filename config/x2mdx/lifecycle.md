@@ -2,6 +2,8 @@
 
 Lifecycle labels in generated docs are an alpha feature. Please [share feedback](https://github.com/canton-network/cf-docs/issues).
 
+`dev` hides an API until its latest observed version at or before the publish version has another label (or no label). Removal alone does not make a dev API public. Applies to OpenAPI operations, AsyncAPI channel actions, OpenRPC methods, Protobuf services, methods, messages, fields, enums, and enum values, TypeDoc exports, and Daml modules/functions.
+
 ## OpenAPI
 
 ```yaml
@@ -9,20 +11,20 @@ paths:
   /example:
     get:
       operationId: getExample
-      x-state: alpha
+      x-state: dev
       responses:
         '200':
           description: OK
 ```
 
-Accepted values: `alpha`, `beta`, `stable`, `deprecated` (case-insensitive).
+Accepted values: `dev`, `alpha`, `beta`, `stable`, `deprecated` (case-insensitive).
 
 ## AsyncAPI
 
 ```yaml
 channels:
   payments.created:
-    x-state: alpha
+    x-state: dev
     subscribe:
       x-state: beta
       message:
@@ -32,7 +34,7 @@ channels:
     x-state: deprecated
 ```
 
-Accepted `x-state` values: `alpha`, `beta`, `stable`, `deprecated` (case-insensitive).
+Accepted `x-state` values: `dev`, `alpha`, `beta`, `stable`, `deprecated` (case-insensitive).
 
 ## OpenRPC
 
@@ -40,19 +42,19 @@ Accepted `x-state` values: `alpha`, `beta`, `stable`, `deprecated` (case-insensi
 {
   "methods": [{
     "name": "getExample",
-    "x-state": "deprecated",
+    "x-state": "dev",
     "params": [],
     "result": {"name": "result", "schema": {"type": "string"}}
   }]
 }
 ```
 
-Accepted `x-state` values: `alpha`, `beta`, `stable`, `deprecated` (case-insensitive).
+Accepted `x-state` values: `dev`, `alpha`, `beta`, `stable`, `deprecated` (case-insensitive).
 
 ## TypeDoc
 
 ```ts
-/** @alpha */
+/** @dev */
 export interface Example {
   id: string;
 }
@@ -63,32 +65,30 @@ export interface LegacyExample {
 }
 ```
 
-Accepted lifecycle tags: `@alpha`, `@beta`, `@stable`, `@deprecated`.
+Accepted lifecycle tags: `@dev`, `@alpha`, `@beta`, `@stable`, `@deprecated`.
 
 ## Protobuf/gRPC
 
-```yaml
-# Descriptor manifest
-metadata_path: lifecycle.json
-```
+```proto
+// Creates a payment.
+// @lifecycle alpha
+rpc CreatePayment(CreatePaymentRequest) returns (Payment);
 
-```json
-{
-  "endpoints": {
-    "example.PaymentService/CreatePayment": {"lifecycle": {"state": "beta"}}
-  },
-  "messages": {
-    "example.CreatePaymentRequest": {"lifecycle": {"state": "deprecated"}}
-  }
+// @lifecycle deprecated
+message LegacyPaymentRequest {
+  // @lifecycle dev
+  string internal_id = 2;
 }
 ```
 
-Accepted `lifecycle.state` values: `alpha`, `beta`, `stable`, `deprecated` (case-insensitive).
+Put `@lifecycle <state>` on its own line in the leading comment of a service, rpc, message, field, enum, or enum value. The tag line is removed from the rendered description; the rest of the comment is kept. When several tag lines are present, the last one wins. A tag with an unrecognized value is left in the description unchanged. A `dev` service hides its rpcs unless they carry their own tag.
+
+Accepted values: `dev`, `alpha`, `beta`, `stable`, `deprecated` (case-insensitive).
 
 ## Daml
 
 ```daml
-module Example {-# WARNING "Alpha: experimental module." #-} where
+module Example {-# WARNING "Dev: unreleased module." #-} where
 
 {-# WARNING Token "Beta: preview type." #-}
 data Token = Token
@@ -98,4 +98,4 @@ data Token = Token
 module LegacyExample {-# DEPRECATED "Use Example instead." #-} where
 ```
 
-Accepted `WARNING` prefixes: `Alpha:`, `Beta:`, `Stable:` (case-insensitive). Explicit prefixes override legacy matching of `alpha` or `beta` anywhere in warning text; otherwise `alpha` wins over `beta`. Deprecation uses `DEPRECATED` and takes precedence.
+Accepted `WARNING` prefixes: `Dev:`, `Alpha:`, `Beta:`, `Stable:` (case-insensitive). Explicit prefixes override legacy matching of `alpha` or `beta` anywhere in warning text; otherwise `alpha` wins over `beta`. Deprecation uses `DEPRECATED` and takes precedence.
