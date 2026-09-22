@@ -241,7 +241,14 @@ class ProtobufMinimalLifecycleTests(unittest.TestCase):
                 "minimal protobuf lifecycle fixtures",
                 "minimal versions",
                 "com.example.payments.v1",
-                "1 / 1 / 1",
+                "Endpoints: 1 added, 1 changed, 1 removed. Messages: 3 added, 3 removed.",
+                "First release covered by this reference: 2 endpoints, 4 messages, 0 enums.",
+                'x2mdx-ref-meta-label">Added</span>',
+                'paymentservice/listpayments">PaymentService/ListPayments</a>',
+                'x2mdx-ref-meta-label">Removed</span>',
+                'paymentservice/legacypayment">PaymentService/LegacyPayment</a>',
+                'x2mdx-ref-meta-label">Changed</span>',
+                'paymentservice/createpayment">PaymentService/CreatePayment</a>',
             ],
         )
         assert_contains_all(

@@ -232,7 +232,7 @@ def mdx_title(path: Path) -> str:
 
 def service_name(path: Path) -> str:
     text = path.read_text(encoding="utf-8", errors="replace")
-    match = re.search(r"<dt>Service</dt>\s*<dd>([^<]+)</dd>", text)
+    match = re.search(r"(?:<dt>Service</dt>\s*<dd>|<span class=\"x2mdx-ref-meta-label\">Service</span>\s*<span class=\"x2mdx-ref-meta-value\">)([^<]+)</(?:dd|span)>", text)
     if match:
         return match.group(1)
     return path.parent.name
@@ -322,6 +322,7 @@ def normalize_flattened_links_and_labels(*, output_dir: Path, report: dict[str, 
                 [
                     (f'href="packages/{package_slug}"', f'href="./{package_slug}"'),
                     (f'href="./packages/{package_slug}"', f'href="./{package_slug}"'),
+                    (f'href="./operations/{package_slug}/', f'href="./{package_slug}/'),
                     (
                         f'<a class="x2mdx-ref-card-title" href="./{package_slug}">{html_text(package_name)}</a>',
                         f'<a class="x2mdx-ref-card-title" href="./{package_slug}">{html_text(label)}</a>',
