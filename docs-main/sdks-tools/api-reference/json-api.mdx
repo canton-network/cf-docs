@@ -21,7 +21,7 @@ The full reference consists of the [OpenAPI](/reference/json-api-reference/overv
 | Property | Value |
 |----------|-------|
 | **Protocol** | HTTP/1.1 + JSON |
-| **Default port** | 4003 |
+| **Port** | 7575 in sandbox and LocalNet; set by `http-ledger-api.port`, no built-in default |
 | **Underlying API** | Ledger API v2 (gRPC) |
 | **Authentication** | JWT Bearer tokens |
 
@@ -110,7 +110,18 @@ curl localhost:7575/v2/state/active-contracts \
 
 ### Transaction Streaming
 
-The JSON API supports both HTTP POST and WebSocket connections for streaming updates on `/v2/updates`. WebSocket connections use the `daml.ws.auth` subprotocol.
+The JSON API supports both HTTP POST and WebSocket connections for streaming. The WebSocket channels are listed in the [AsyncAPI reference](/reference/json-api-asyncapi-reference/index). For WebSocket requests, you must pass two subprotocols:
+
+- `jwt.token.<paste-jwt-here>`
+- `daml.ws.auth`
+
+Example using `wscat`:
+
+```bash
+wscat -c http://localhost:7575/v2/state/active-contracts \
+    -s "jwt.token.<paste-jwt-here>" \
+    -s "daml.ws.auth"
+```
 
 ### Ledger End
 
@@ -128,6 +139,10 @@ See [Validator API](/sdks-tools/api-reference/splice-validator-api) for the surr
 ## Configuration
 
 The JSON API is configured via the `http-ledger-api` section of the participant node's configuration. In cn-quickstart LocalNet deployments, it is pre-configured and available at `http://localhost:7575`.
+
+<Warning>
+Never expose the JSON API to the Internet. In production, run it behind a [reverse proxy such as NGINX](https://docs.nginx.com/nginx/admin-guide/web-server/reverse-proxy/).
+</Warning>
 
 The OpenAPI and AsyncAPI specifications are available at runtime:
 
