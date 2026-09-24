@@ -3,13 +3,15 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 import tempfile
 import time
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
-from typing import Mapping, Sequence
-
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+PUBLISH_ATTEMPTS = 3
+PUBLISH_RETRY_DELAY_SECONDS = 5.0
 
 
 def run(
@@ -41,11 +43,30 @@ def gh(*args: str, capture: bool = False) -> str:
     return run(("gh", *args), capture=capture)
 
 
+def retry_publish(operation: str, action: Callable[[], str]) -> str:
+    for attempt in range(1, PUBLISH_ATTEMPTS + 1):
+        try:
+            return action()
+        except subprocess.CalledProcessError as error:
+            if attempt == PUBLISH_ATTEMPTS:
+                raise
+            delay = PUBLISH_RETRY_DELAY_SECONDS * attempt
+            print(
+                f"{operation} attempt {attempt}/{PUBLISH_ATTEMPTS} failed: {error}; "
+                f"retrying in {delay:g}s",
+                file=sys.stderr,
+            )
+            time.sleep(delay)
+    raise AssertionError("unreachable")
+
+
 def env_for_token(token: str) -> dict[str, str]:
     return {"GH_TOKEN": token, "GITHUB_TOKEN": token}
 
 
 def current_repository() -> str:
+    if repository := os.environ.get("GITHUB_REPOSITORY"):
+        return repository
     return gh("repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner", capture=True)
 
 
@@ -73,14 +94,40 @@ def push_branch(branch: str) -> None:
     remote_output = git("ls-remote", "--heads", "origin", branch, capture=True)
     remote_sha = remote_output.split()[0] if remote_output else ""
     if remote_sha:
-        git(
-            "push",
-            f"--force-with-lease={branch_ref}:{remote_sha}",
-            "origin",
-            f"HEAD:{branch_ref}",
+        retry_publish(
+            f"Generated branch push for {branch}",
+            lambda: git(
+                "push",
+                f"--force-with-lease={branch_ref}:{remote_sha}",
+                "origin",
+                f"HEAD:{branch_ref}",
+            ),
         )
     else:
-        git("push", "origin", f"HEAD:{branch_ref}")
+        retry_publish(
+            f"Generated branch push for {branch}",
+            lambda: git("push", "origin", f"HEAD:{branch_ref}"),
+        )
+
+
+def matching_remote_branch_sha(*, branch: str, paths: Sequence[str]) -> str:
+    branch_ref = f"refs/heads/{branch}"
+    remote_output = git("ls-remote", "--heads", "origin", branch, capture=True)
+    if not remote_output:
+        return ""
+
+    remote_sha = remote_output.split()[0]
+    git("fetch", "--no-tags", "origin", branch_ref)
+    changed_paths = git(
+        "diff",
+        "--cached",
+        "--name-only",
+        remote_sha,
+        "--",
+        *paths,
+        capture=True,
+    )
+    return remote_sha if not changed_paths else ""
 
 
 def open_pull_request_number(*, branch: str, base_branch: str, repository: str) -> str:
@@ -146,7 +193,8 @@ def mark_pull_request_ready(*, pr_number: str, repository: str) -> None:
 
 
 def dispatch_mintlify_validation(*, repository: str, branch: str) -> None:
-    gh(
+    command = (
+        "gh",
         "workflow",
         "run",
         "mintlify-validate.yml",
@@ -155,6 +203,8 @@ def dispatch_mintlify_validation(*, repository: str, branch: str) -> None:
         "--ref",
         branch,
     )
+    workflow_token = os.environ.get("GENERATED_DOCS_WORKFLOW_TOKEN", "")
+    run(command, env=env_for_token(workflow_token) if workflow_token else None)
     print(f"Dispatched Mintlify validation for {branch}")
 
 
@@ -258,21 +308,24 @@ def maybe_merge_generated_pr(
         head_sha=head_sha,
         check_name="mintlify validate",
     )
-    run(
-        (
-            "gh",
-            "pr",
-            "merge",
-            pr_number,
-            "--repo",
-            repository,
-            "--admin",
-            "--squash",
-            "--delete-branch",
-            "--match-head-commit",
-            head_sha,
+    retry_publish(
+        f"Generated PR merge for #{pr_number}",
+        lambda: run(
+            (
+                "gh",
+                "pr",
+                "merge",
+                pr_number,
+                "--repo",
+                repository,
+                "--admin",
+                "--squash",
+                "--delete-branch",
+                "--match-head-commit",
+                head_sha,
+            ),
+            env=token_env,
         ),
-        env=token_env,
     )
     print(f"Merged generated-docs PR #{pr_number}")
 
@@ -301,15 +354,31 @@ def create_or_update_pull_request(
     git("add", "--", *paths)
     git("diff", "--cached", "--stat")
     git("diff", "--cached", "--check")
-    git("commit", "--signoff", "-m", title)
-    head_sha = git("rev-parse", "HEAD", capture=True)
-    push_branch(branch)
 
     existing_pr_number = open_pull_request_number(
         branch=branch,
         base_branch=base_branch,
         repository=repository,
     )
+    matching_head_sha = (
+        matching_remote_branch_sha(branch=branch, paths=paths) if existing_pr_number else ""
+    )
+    if matching_head_sha:
+        print(f"Generated paths already match PR #{existing_pr_number}; leaving branch unchanged")
+        maybe_merge_generated_pr(
+            pr_number=existing_pr_number,
+            repository=repository,
+            base_branch=base_branch,
+            branch=branch,
+            head_sha=matching_head_sha,
+            enabled=auto_merge,
+        )
+        return existing_pr_number
+
+    git("commit", "--signoff", "-m", title)
+    head_sha = git("rev-parse", "HEAD", capture=True)
+    push_branch(branch)
+
     if existing_pr_number:
         gh(
             "pr",

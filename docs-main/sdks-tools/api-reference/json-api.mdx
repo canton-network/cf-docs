@@ -10,12 +10,18 @@ import DamlDocsSdksToolsApiReferenceJsonApiL134 from "/snippets/daml-docs/sdks-t
 
 The JSON API provides an HTTP/REST interface to the Canton Ledger API. In Canton 3.x, it is integrated directly into the participant node and translates JSON HTTP requests into gRPC Ledger API calls.
 
+{/* COPIED_START source="docs-website:docs/replicated/canton/3.5/sdk/explanations/json-api/index.rst" hash="68be27ba" */}
+
+The full reference consists of the [OpenAPI](/reference/json-api-reference/overview) and [AsyncAPI](/reference/json-api-asyncapi-reference/index) specifications.
+
+{/* COPIED_END */}
+
 ## Quick Reference
 
 | Property | Value |
 |----------|-------|
 | **Protocol** | HTTP/1.1 + JSON |
-| **Default port** | 7575 |
+| **Port** | 7575 in sandbox and LocalNet; set by `http-ledger-api.port`, no built-in default |
 | **Underlying API** | Ledger API v2 (gRPC) |
 | **Authentication** | JWT Bearer tokens |
 
@@ -96,7 +102,6 @@ curl localhost:7575/v2/state/active-contracts \
       },
       "verbose": false
     },
-    "verbose": false,
     "activeAtOffset": 20
   }'
 ```
@@ -105,7 +110,18 @@ curl localhost:7575/v2/state/active-contracts \
 
 ### Transaction Streaming
 
-The JSON API supports both HTTP POST and WebSocket connections for streaming updates. Use `/v2/updates` or `/v2/updates/flats` for flat transaction streams, and `/v2/updates/trees` for transaction trees. WebSocket connections use the `daml.ws.auth` subprotocol.
+The JSON API supports both HTTP POST and WebSocket connections for streaming. The WebSocket channels are listed in the [AsyncAPI reference](/reference/json-api-asyncapi-reference/index). For WebSocket requests, you must pass two subprotocols:
+
+- `jwt.token.<paste-jwt-here>`
+- `daml.ws.auth`
+
+Example using `wscat`:
+
+```bash
+wscat -c http://localhost:7575/v2/state/active-contracts \
+    -s "jwt.token.<paste-jwt-here>" \
+    -s "daml.ws.auth"
+```
 
 ### Ledger End
 
@@ -124,11 +140,58 @@ See [Validator API](/sdks-tools/api-reference/splice-validator-api) for the surr
 
 The JSON API is configured via the `http-ledger-api` section of the participant node's configuration. In cn-quickstart LocalNet deployments, it is pre-configured and available at `http://localhost:7575`.
 
+<Warning>
+Never expose the JSON API to the Internet. In production, run it behind a [reverse proxy such as NGINX](https://docs.nginx.com/nginx/admin-guide/web-server/reverse-proxy/).
+</Warning>
+
 The OpenAPI and AsyncAPI specifications are available at runtime:
 
 <DamlDocsSdksToolsApiReferenceJsonApiL125 />
 
+{/* COPIED_START source="docs-website:docs/replicated/canton/3.5/sdk/explanations/json-api/index.rst" hash="68be27ba" */}
+
+The configurable options that can be specified via config file include:
+
+``` none
+canton {
+  participants {
+    participant1 {
+      http-ledger-api {
+        // IP address that JSON Ledger API service listens on. Defaults to 127.0.0.1.
+        address = "127.0.0.1"
+        // JSON Ledger API service port number.
+        port = 7575
+        // Prefix added to all JSON endpoints.
+        path-prefix = "example/prefix"
+        websocket-config {
+          // Maximum number of elements returned when using the HTTP POST alternative.
+          http-list-max-elements-limit = 1024
+          // Wait time for new elements before returning the list via the HTTP POST alternative.
+          http-list-wait-time = "1s"
+        }
+      }
+    }
+  }
+}
+```
+
+<Note>
+Your JSON Ledger API service should never be exposed to the Internet. When running in production the JSON Ledger API should be behind a [reverse proxy, such as via NGINX](https://docs.nginx.com/nginx/admin-guide/web-server/reverse-proxy/).
+</Note>
+
+{/* COPIED_END */}
+
 ## Authentication
+
+{/* COPIED_START source="docs-website:docs/replicated/canton/3.5/sdk/explanations/json-api/index.rst" hash="68be27ba" */}
+
+Each request to the JSON Ledger API *must* come with an access token (JWT). The JSON Ledger API *does not* hold on to the access token, which will be only used to fulfill the request it came along with. The same token will be used to issue the request to the Ledger API. The exceptions are the documentation endpoints (`/docs/openapi`, `/docs/asyncapi`), `/v2/version`, and the health endpoints (`/livez`, `/readyz`), which do not require a token.
+
+For a reference on the JWT tokens we use, please read [Authorization](/appdev/deep-dives/authorization).
+
+{/* COPIED_END */}
+
+### Auth via HTTP
 
 Pass a JWT Bearer token in the `Authorization` header:
 
@@ -136,8 +199,84 @@ Pass a JWT Bearer token in the `Authorization` header:
 
 The token must be valid for the OIDC provider configured for your deployment.
 
+{/* COPIED_START source="docs-website:docs/replicated/canton/3.5/sdk/explanations/json-api/index.rst" hash="68be27ba" */}
+
+### Auth via WebSockets
+
+WebSocket clients support a "subprotocols" argument (sometimes simply called "protocols"); this is usually in a list form but occasionally in comma-separated form. Check the documentation for your WebSocket library of choice for details.
+
+For WebSocket requests, you must pass two subprotocols:
+
+- `daml.ws.auth`
+- `jwt.token.<paste-jwt-here>`
+
+Example using `wscat`:
+
+``` none
+wscat -c http://localhost:7575/v2/state/active-contracts \
+    -s "jwt.token.<token>" \
+    -s "daml.ws.auth"
+```
+
+## Errors
+
+The JSON Ledger API reports errors using standard HTTP status codes. When the gRPC Ledger API returns an error code, the JSON Ledger API maps it to an HTTP status code:
+
+| gRPC code | HTTP status |
+|---|---|
+| `INVALID_ARGUMENT`, `FAILED_PRECONDITION`, `OUT_OF_RANGE` | 400 Bad Request |
+| `UNAUTHENTICATED` | 401 Unauthorized |
+| `PERMISSION_DENIED` | 403 Forbidden |
+| `NOT_FOUND` | 404 Not Found |
+| `ABORTED`, `ALREADY_EXISTS` | 409 Conflict |
+| `RESOURCE_EXHAUSTED` | 429 Too Many Requests |
+| `CANCELLED` | 499 Client Closed Request |
+| `INTERNAL`, `UNKNOWN`, `DATA_LOSS` | 500 Internal Server Error |
+| `UNIMPLEMENTED` | 501 Not Implemented |
+| `UNAVAILABLE` | 503 Service Unavailable |
+| `DEADLINE_EXCEEDED` | 504 Gateway Timeout |
+
+A request body that cannot be decoded is answered with 400 Bad Request.
+
+If a client's HTTP GET or POST request reaches an API endpoint, the corresponding response contains a JSON object. Either an expected message (corresponding to endpoint) or an error object specified as in the example below:
+
+``` json
+{
+  "cause" : "The submitted request has invalid arguments: Cannot unassign contracts `List(ContractId(00a7feb291fe1be6289c4d77f3a432b623083ed3f49bf8535f8571aa8bdf68b647ca10122006207a71ac6ed62dae27429b43e456dfbbc411a49d67b7e0067bef4c914c6e8a))`: source and target synchronizers are the same",
+  "code" : "INVALID_ARGUMENT",
+  "context" : {
+    "category" : "8",
+    "definite_answer" : "false",
+    "participant" : "participant1",
+    "test" : "JsonV2Tests",
+    "tid" : "99e67812af315256ef9a02a9fdb94646"
+  },
+  "correlationId" : null,
+  "definiteAnswer" : null,
+  "errorCategory" : 8,
+  "grpcCodeValue" : 3,
+  "resources" : [ ],
+  "retryInfo" : null,
+  "traceId" : "99e67812af315256ef9a02a9fdb94646"
+}
+```
+
+Where:
+
+- `cause` -- a textual message containing readable error reason,
+- `code` -- a Ledger API error code,
+- `context` -- a Ledger API context of an error,
+- `traceId` -- telemetry tracing id,
+- `grpcCodeValue` and `errorCategory` -- defined in [Error Codes](/appdev/reference/error-codes).
+
+### WebSockets Errors
+
+In the case of WebSockets an error might be delivered as a frame. Each incoming frame can either be a correct response (corresponding to the endpoint definition) or an error frame in the format above.
+
+{/* COPIED_END */}
+
 ## Related Pages
 
 - [Ledger API](/sdks-tools/api-reference/ledger-api) — gRPC Ledger API overview
 - [Ledger API Reference (AppDev)](/api-reference) — Detailed service documentation
-- [Wallet Configuration](/integrations/wallet/configuration) — SDK configuration including JSON API endpoints
+- [Wallet Configuration](/sdks-tools/sdks/wallet-sdk/using-the-sdk/configuration) — SDK configuration including JSON API endpoints

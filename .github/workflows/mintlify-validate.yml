@@ -13,10 +13,13 @@ concurrency:
   group: mintlify-validate-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  NIX_CONFIG: "extra-experimental-features = nix-command flakes"
+
 jobs:
   mintlify-validate:
     name: mintlify validate
-    runs-on: ubuntu-latest
+    runs-on: canton-network-cf-docs
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -25,7 +28,23 @@ jobs:
         uses: cachix/install-nix-action@v31
 
       - name: Validate external snippet wrapper
-        run: nix-shell --run 'npm run test:external-snippets'
+        run: nix develop path:nix --command npm run test:external-snippets
+
+      - name: Validate generated-reference history output
+        run: >-
+          nix develop path:nix --command python3 -m pytest
+          tests/test_history_contract.py
+          tests/test_reference_page_history.py
+          tests/test_openapi_manual_render.py
+          tests/test_json_api_openapi.py
+
+      - name: Check JSON Ledger OpenAPI generated output
+        run: |
+          nix develop path:nix --command python3 scripts/generate_json_api_reference.py
+          git diff --exit-code -- \
+          docs-main/docs.json \
+          docs-main/openapi/json-ledger-api/openapi.yaml \
+          docs-main/reference/json-api-reference
 
       - name: Run Mintlify validation
-        run: nix-shell --run 'cd docs-main && npx mint validate'
+        run: nix develop path:nix --command bash -c 'cd docs-main && npx mint validate'

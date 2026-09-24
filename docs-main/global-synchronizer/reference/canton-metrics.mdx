@@ -3,7 +3,7 @@ title: "Canton Metrics"
 description: "Canton node metrics exported for Prometheus scraping."
 ---
 
-{/* GENERATED_FROM source="digital-asset/canton" ref="v3.5.9" path="docs-open/src/sphinx/participant/reference/metrics.rst" */}
+{/* GENERATED_FROM source="digital-asset/canton" ref="v3.5.19" path="docs-open/src/sphinx/participant/reference/metrics.rst" */}
 
 # Metrics
 
@@ -554,6 +554,20 @@ For the metric types referenced below, see the [relevant Prometheus documentatio
 > - **Type**: counter
 > - **Qualification**: Debug
 
+### daml.participant.api.index.db.acquire_contract_pruning_lock
+
+> - **Summary**: The time needed to acquire exclusive table lock for contract pruning.
+> - **Description**: This DB lock ensures serial contract pruning execution. It should take normally very little time to acquire, but external or internal DB queries might prevent acquisition leading to lock contention and timeouts. This metric represents time necessary to do acquire this table lock.
+> - **Type**: timer
+> - **Qualification**: Debug
+
+### daml.participant.api.index.db.acquire_pruning_lock
+
+> - **Summary**: The time needed to acquire exclusive table lock for pruning.
+> - **Description**: This DB lock ensures serial pruning execution. It should take normally very little time to acquire, but external or internal DB queries might prevent acquisition leading to lock contention and timeouts. This metric represents time necessary to do acquire this table lock.
+> - **Type**: timer
+> - **Qualification**: Debug
+
 ### daml.participant.api.index.db.active_contract_keys_lookup.batch.batch_size
 
 > - **Summary**: The batch sizes in the lookup batch-loading Contract Service.
@@ -687,6 +701,13 @@ For the metric types referenced below, see the [relevant Prometheus documentatio
 > - **Type**: gauge
 > - **Qualification**: Debug
 
+### daml.participant.api.indexer.acquire_contract_pruning_lock
+
+> - **Summary**: The time needed to acquire exclusive table lock for contract pruning during indexer initialization.
+> - **Description**: This DB lock ensures serial contract pruning execution. It should take normally very little time to acquire, but external or internal (pruning running the same time) DB queries might prevent acquisition leading to lock contention and timeouts. This metric represents time necessary to acquire this table lock.
+> - **Type**: timer
+> - **Qualification**: Debug
+
 ### daml.participant.api.indexer.deactivation_distances
 
 > - **Summary**: Event sequence id distances between activations and deactivations.
@@ -740,6 +761,15 @@ For the metric types referenced below, see the [relevant Prometheus documentatio
 > - **Description**: The time that a batch of updates spends in blocked waiting for the pruning DB operation to finish.
 > - **Type**: timer
 > - **Qualification**: Debug
+
+### daml.participant.api.indexer.last_received_record_time\*
+
+> - **Summary**: The time of the last event ingested by the index db (in milliseconds since EPOCH).
+> - **Description**: The last received record time is a monotonically increasing integer value that represents the record time of the last event ingested by the index db. It is measured in milliseconds since the EPOCH time.
+> - **Type**: gauge
+> - **Qualification**: Debug
+> - **Labels**:
+>   - **synchronizer_id**: The id of the synchronizer.
 
 ### daml.participant.api.indexer.ledger_end_sequential_id
 
@@ -808,6 +838,13 @@ For the metric types referenced below, see the [relevant Prometheus documentatio
 > - **Qualification**: Debug
 
 ### daml.participant.api.services.get_active_contracts
+
+> - **Summary**: The time to execute an index service operation.
+> - **Description**: The index service is an internal component responsible for access to the index db data. Its operations are invoked whenever a client request received over the ledger api requires access to the index db. This metric captures time statistics of such operations.
+> - **Type**: timer
+> - **Qualification**: Debug
+
+### daml.participant.api.services.get_completion_by_hash
 
 > - **Summary**: The time to execute an index service operation.
 > - **Description**: The index service is an internal component responsible for access to the index db data. Its operations are invoked whenever a client request received over the ledger api requires access to the index db. This metric captures time statistics of such operations.
@@ -1157,11 +1194,81 @@ For the metric types referenced below, see the [relevant Prometheus documentatio
 > - **Type**: gauge
 > - **Qualification**: Saturation
 
+### daml.participant.sync.commitments.buffer-digest-pipeline-1-checkpointing
+
+> - **Summary**: Measures the buffer usage in the digest processor pipeline before checkpointing
+> - **Description**: If this value is at the buffer size (see `buffer-digest-pipeline-size`), then the checkpointing stage backpressures towards the indexer.
+> - **Type**: counter
+> - **Qualification**: Debug
+
+### daml.participant.sync.commitments.buffer-digest-pipeline-2-classification
+
+> - **Summary**: Measures the buffer usage in the digest processor pipeline before classification
+> - **Description**: If this value is at the buffer size (see `buffer-digest-pipeline-size`), then the classification stage backpressures towards the checkpointing stage.
+> - **Type**: counter
+> - **Qualification**: Debug
+
+### daml.participant.sync.commitments.buffer-digest-pipeline-3-accumulation
+
+> - **Summary**: Measures the buffer usage in the digest processor pipeline before accumulation
+> - **Description**: If this value is at the buffer size (see `buffer-digest-pipeline-size`), then the accumulation stage (in particular the `ensurePresent` substage) backpressures towards the classification stage.
+> - **Type**: counter
+> - **Qualification**: Debug
+
+### daml.participant.sync.commitments.buffer-digest-pipeline-3.1-compute-digest-changes
+
+> - **Summary**: Measures the buffer usage in the digest processor's accumulator pipeline before computing the digest changes
+> - **Description**: If this value is at the buffer size (see `buffer-digest-pipeline-size`), then the computation stage backpressures towards the `ensurePresent` stage.
+> - **Type**: counter
+> - **Qualification**: Debug
+
+### daml.participant.sync.commitments.buffer-digest-pipeline-3.2-ompute-digest-join-loading
+
+> - **Summary**: Measures the buffer usage in the digest processor's accumulator pipeline before joining the loading futures
+> - **Description**: If this value is at the buffer size (see `buffer-digest-pipeline-size`), then the join loading stage backpressures towards the computation stage.
+> - **Type**: counter
+> - **Qualification**: Debug
+
+### daml.participant.sync.commitments.buffer-digest-pipeline-3.3-aggregate
+
+> - **Summary**: Measures the buffer usage in the digest processor's accumulator pipeline before aggregating the digest changes
+> - **Description**: If this value is at the buffer size (see `buffer-digest-pipeline-size`), then the aggregation stage backpressures towards the join loading stage.
+> - **Type**: counter
+> - **Qualification**: Debug
+
+### daml.participant.sync.commitments.buffer-digest-pipeline-3.4-persist-changes
+
+> - **Summary**: Measures the buffer usage in the digest processor pipeline before persisting the digest changes
+> - **Description**: If this value is at the buffer size (see `buffer-digest-pipeline-size`), then the persistence stage triggers conflation in the aggregation state.
+> - **Type**: counter
+> - **Qualification**: Debug
+
+### daml.participant.sync.commitments.buffer-digest-pipeline-4-persist-outstanding
+
+> - **Summary**: Measures the buffer usage in the digest processor pipeline before persisting outstanding periods
+> - **Description**: If this value is at the buffer size (see `buffer-digest-pipeline-size`), then the persisting outstanding period stage backpressures towards the accumulator stage.
+> - **Type**: counter
+> - **Qualification**: Debug
+
+### daml.participant.sync.commitments.buffer-digest-pipeline-size
+
+> - **Summary**: Measures the size of the buffers in the digest processor pipeline
+> - **Description**: This value changes only when the buffer size is reconfigured as part of a participant node restart. It helps to visualize in dashboards when buffers are full.
+> - **Type**: gauge
+> - **Qualification**: Debug
+
 ### daml.participant.sync.commitments.catchup-mode-enabled
 
 > - **Summary**: Measures how many times the commitment processor catch-up mode has been triggered.
 > - **Description**: Participant nodes compute bilateral commitments at regular intervals. This metric exposes how often the catch-up mode has been activated. The catch-up mode is triggered according to catch-up config and happens if the participant lags behind on computation. A healthy value is 0. An increasing value indicates intermittent periods when a participant alternates between healthy and struggling to keep up with commitment computation. However, we do not see a constantly increasing value for a participant that is consistently behind commitment computation because, once catch-up mode is activated, the participant remains in catch-up mode until it has completely caught up, and only triggers the metric once. In order to troubleshoot non-zero values, the operator should cross-correlate this value with the `daml.participant.sync.commitments.compute` metric.
 > - **Type**: meter
+> - **Qualification**: Debug
+
+### daml.participant.sync.commitments.checkpoint-watermark
+
+> - **Summary**: Record time of the latest checkpoint that has been persisted
+> - **Description**: Measures up to how far the participant has produced and persisted ACS digests from the ACS and topology changes. If this metric falls significantly behind the ledger end's record time for the given synchronizer, digest processing is likely overloaded.
+> - **Type**: gauge
 > - **Qualification**: Debug
 
 ### daml.participant.sync.commitments.compute
@@ -1170,6 +1277,13 @@ For the metric types referenced below, see the [relevant Prometheus documentatio
 > - **Description**: Participant nodes compute bilateral commitments at regular intervals, i.e., reconciliation intervals. This metric exposes the time spent on each computation in milliseconds. There are two cases that the operator should pay attention to. First, fluctuations in this value are expected if the number of counter-participants or common stakeholder groups changes. However, changes with no apparent reason could indicate a bug and the operator should monitor closely. Second, it is a cause of concern if the value starts approaching or is greater than the reconciliation interval: The participant will perpetually lag behind, because it needs to compute commitments more frequently than it can manage. The operator should consider asking the synchronizer operator to increase the reconciliation interval if the increase in commitment computation is expected, or otherwise investigate the cause.
 > - **Type**: timer
 > - **Qualification**: Debug
+
+### daml.participant.sync.commitments.digest-processor-health
+
+> - **Summary**: Health of a digest processor (0: not-intialized, 1: starting, 2: started, 3: stopping, 4: stopped, 5: failed)
+> - **Description**: Health of a digest processor.
+> - **Type**: gauge
+> - **Qualification**: Errors
 
 ### daml.participant.sync.commitments.largest-counter-participant-latency
 
@@ -1213,10 +1327,171 @@ For the metric types referenced below, see the [relevant Prometheus documentatio
 > - **Type**: gauge
 > - **Qualification**: Latency
 
+### daml.participant.sync.commitments.matcher-health
+
+> - **Summary**: Health of the commitment matcher (0: not-intialized, 1: starting, 2: started, 3: stopping, 4: stopped, 5: failed)
+> - **Description**: Health of the commitment matcher.
+> - **Type**: gauge
+> - **Qualification**: Errors
+
+### daml.participant.sync.commitments.matching-watermark
+
+> - **Summary**: The sequencing time of the latest processed incoming ACS commitment
+> - **Description**: The sequencing time of the latest processed incoming ACS commitment. If this watermark falls behind the `tick-watermark` and the `received-watermark`, then the matching cannot keep up.
+> - **Type**: gauge
+> - **Qualification**: Debug
+
+### daml.participant.sync.commitments.received-watermark
+
+> - **Summary**: Sequencing time of the latest received incoming ACS commitment
+> - **Description**: The sequencing time of the latest received incoming ACS commitment.
+> - **Type**: gauge
+> - **Qualification**: Debug
+
+### daml.participant.sync.commitments.reinitialize-contract-changes
+
+> - **Summary**: Counts the number of contract changes that have been identified as part of reinitializing the digests.
+> - **Description**: This metric measures the progress in the number of identified contract changes upon reinitializing the digests. This metric is reset to 0 at the start of reinitialization. Since the same contract may be processed multiple times (for different counterparties), this metric may exceed the number of active contracts.
+> - **Type**: gauge
+> - **Qualification**: Debug
+
+### daml.participant.sync.commitments.reinitialize-parties
+
+> - **Summary**: Counts the number of parties that have been identified as part of reinitializing the digests.
+> - **Description**: This metric measures progress in the number of counterparties during the digest processor reinitialization. This metric is reset to 0 at the start of reinitialization.
+> - **Type**: gauge
+> - **Qualification**: Debug
+
+### daml.participant.sync.commitments.reinitialize-tombstones
+
+> - **Summary**: Counts the number of tombstones that have been written
+> - **Description**: This metric measures progress in the number of persisted tombstones during the digest processor reinitialization. This metric is reset to 0 at the start of reinitialization.
+> - **Type**: gauge
+> - **Qualification**: Debug
+
+### daml.participant.sync.commitments.running-digest-processor.latest-accumulated-record-time
+
+> - **Summary**: Record time of the latest event that went through the digest accumulation stage in the running digest processor.
+> - **Description**: Record time of the latest event that went through the digest accumulation stage in the running digest processor.
+> - **Type**: gauge
+> - **Qualification**: Debug
+
+### daml.participant.sync.commitments.running-digest-processor.latest-acs-update-record-time
+
+> - **Summary**: Record time of the latest event that was emitted by the internal index service.
+> - **Description**: Record time of the latest event that was emitted by the internal index service.
+> - **Type**: gauge
+> - **Qualification**: Debug
+
+### daml.participant.sync.commitments.running-digest-processor.latest-checkpointed-record-time
+
+> - **Summary**: Record time of the latest event that went through the checkpointing stage in the running digest processor.
+> - **Description**: Record time of the latest event that went through the checkpointing stage in the running digest processor.
+> - **Type**: gauge
+> - **Qualification**: Debug
+
+### daml.participant.sync.commitments.running-digest-processor.latest-classified-record-time
+
+> - **Summary**: Record time of the latest event that went through the classification stage in the running digest processor.
+> - **Description**: Record time of the latest event that went through the classification stage in the running digest processor.
+> - **Type**: gauge
+> - **Qualification**: Debug
+
+### daml.participant.sync.commitments.running-digest-processor.loaded-digests
+
+> - **Summary**: Counts the number of digests that the running digest processor keeps in memory in the accumulator.
+> - **Description**: Measures the memory consumption of the running digest processor. Each digest takes 2kB of raw data plus overhead for the data structures.
+> - **Type**: counter
+> - **Qualification**: Debug
+
+### daml.participant.sync.commitments.running-digest-processor.local-party-change-contract-changes
+
+> - **Summary**: Counts the number of contract changes that have been identified for a local party hosting change.
+> - **Description**: This metric measures the progress in the number of identified contract changes when the running digest processor ingests a local party hosting change. This metric is reset to 0 at the start of processing each local party hosting change. Since the same contract of the local party may be processed multiple times (for different counterparties), this metric may exceed the number of contracts of the local party.
+> - **Type**: gauge
+> - **Qualification**: Debug
+
+### daml.participant.sync.commitments.running-digest-processor.local-party-change-counterparties
+
+> - **Summary**: Counts the number of counterparties that have been identified for sharing contracts with a local party hosting change
+> - **Description**: This metric measures progress in the number of counterparties when the running digest processor ingests a local party hosting change. This metric is reset to 0 at the start of processing each local party hosting change.
+> - **Type**: gauge
+> - **Qualification**: Debug
+
+### daml.participant.sync.commitments.sender.batch-sending-error-count
+
+> - **Summary**: Number of the errors (both retriable and non-retriable) that occurred when sending batches
+> - **Description**: The value should stay very low compared to sent-batch-count. Any spike is the indicator of problems: either transient (like overload of the sequencer(s)) or persistent (example: invalid configuration).
+> - **Type**: counter
+> - **Qualification**: Traffic
+
+### daml.participant.sync.commitments.sender.send-attempt-count
+
+> - **Summary**: Number of attempts of sending the ACS commitments
+> - **Description**: The value should increase by one for each tick in the happy scenario. Faster increases indicate failures (send-failure-count), which will trigger retries.
+> - **Type**: counter
+> - **Qualification**: Traffic
+
+### daml.participant.sync.commitments.sender.send-failure-count
+
+> - **Summary**: Number of the failures in the entire send process (not single batch)
+> - **Description**: The value should stay very low compared to send-attempt-count. Any spike is the indicator of problems: either transient (like overload of the sequencer(s)) or persistent (example: invalid configuration).
+> - **Type**: counter
+> - **Qualification**: Traffic
+
+### daml.participant.sync.commitments.sender.sender-health
+
+> - **Summary**: Health of the commitment sender (0: not-intialized, 1: starting, 2: started, 3: stopping, 4: stopped, 5: failed)
+> - **Description**: Health of ACS commitment sender.
+> - **Type**: gauge
+> - **Qualification**: Errors
+
+### daml.participant.sync.commitments.sender.sent-batch-count
+
+> - **Summary**: Number of sent batches containing ACS commitments and summaries
+> - **Description**: In the happy scenario, The value should increase at each tick proportional to the number of counterparticipants. It can increase more in case of crashes/unhandler errors due to retries.
+> - **Type**: counter
+> - **Qualification**: Traffic
+
+### daml.participant.sync.commitments.sender.sent-commitment-count
+
+> - **Summary**: Number of sent ACS commitments
+> - **Description**: In the happy scenario, the value should increase at each tick proportional to the number of counterparticipants. It can increase more in case of crashes/unhandler errors due to retries.
+> - **Type**: counter
+> - **Qualification**: Traffic
+
+### daml.participant.sync.commitments.sender.watermark-offset
+
+> - **Summary**: Offset of the latest watermark that has been persisted
+> - **Description**: Similar to watermark-timestamp, but stores the numeric offset instead. Cannot be compared with the time values of the ledger, but can be compare with the previous values of the offset. If it's not increasing steadily, the sequencer(s) can be overloaded or there's another type of issue (for example, invalid configuration).
+> - **Type**: gauge
+> - **Qualification**: Debug
+
+### daml.participant.sync.commitments.sender.watermark-timestamp
+
+> - **Summary**: Timestamp (record time) of the latest watermark that has been persisted
+> - **Description**: Measures up to how far the participant has sent the ACS commitments. If this metric falls behind the tick watermarks for the given synchronizer for more significantly than the configured send delay, the sequencer(s) can be overloaded or there's another type of issue (for example, invalid configuration).
+> - **Type**: gauge
+> - **Qualification**: Debug
+
 ### daml.participant.sync.commitments.sequencing-time
 
 > - **Summary**: Measures the time between the end of a commitment period, and the time when the sequencer observes the corresponding commitment.
 > - **Description**: Participant nodes compute bilateral commitments at regular intervals. After a participant computes a commitment, it sends it for sequencing. The time between the end of a commitment interval and sequencing is measured in milliseconds. Because commitment computation is comprised within the measured time, the value is always greater than the `daml.participant.sync.commitments.compute` metric. The operator should pay attention to fluctuations of this value. An increase can be expected, e.g., because the computation time increases. However, a value increase can be a cause of concern, because it can indicate that the participant is lagging behind in processing messages and computing commitments, which is accompanied by `ACS_COMMITMENT_DEGRADATION` warnings in the participant logs. An increase can also indicate that the sequencer is slow in sequencing the commitment messages. The operator should cross-correlate with sequencing metrics such as `daml.sequencer-client.submissions.sequencing` and `daml.sequencer-client.handler.delay.` In this case, the operator should consider changing the preferred sequencer configuration.
+> - **Type**: gauge
+> - **Qualification**: Debug
+
+### daml.participant.sync.commitments.tick-signaller-health
+
+> - **Summary**: Health of the tick signaller (0: not-intialized, 1: starting, 2: started, 3: stopping, 4: stopped, 5: failed)
+> - **Description**: Health of the tick signaller.
+> - **Type**: gauge
+> - **Qualification**: Errors
+
+### daml.participant.sync.commitments.tick-watermark
+
+> - **Summary**: Record time of the latest (reconciliation or affirmation) tick for which ACS digests have been persisted
+> - **Description**: The record time of the latest tick for which ACS digests have been computed and persisted.
 > - **Type**: gauge
 > - **Qualification**: Debug
 
@@ -1262,12 +1537,78 @@ For the metric types referenced below, see the [relevant Prometheus documentatio
 > - **Type**: timer
 > - **Qualification**: Debug
 
+### daml.participant.sync.reassignments.batch-size
+
+> - **Summary**: Number of contracts per reassignment request
+> - **Description**: Records the number of contracts carried by each unassignment and assignment request. The `type` label tells the two apart.
+> - **Type**: histogram
+> - **Qualification**: Debug
+
+### daml.participant.sync.reassignments.finalized
+
+> - **Summary**: Number of unassignments and assignments finalized
+> - **Description**: Records the unassignments and the assignments this reassigning participant finalizes. The `type` label tells the two apart.
+> - **Type**: counter
+> - **Qualification**: Debug
+
+### daml.participant.sync.reassignments.requests
+
+> - **Summary**: Number of unassignment and assignment requests validated
+> - **Description**: Records the unassignment and assignment requests this participant validates. The `type` label tells the two apart.
+> - **Type**: counter
+> - **Qualification**: Debug
+
+### daml.participant.sync.reassignments.submitted
+
+> - **Summary**: Number of unassignments and assignments submitted
+> - **Description**: Records the unassignments and the assignments this participant submits, including the assignments submitted on this participant's own initiative once the exclusivity timeout of an unassignment has elapsed. The `type` label tells unassignments and assignments apart. A submission that is retried is recorded once per attempt.
+> - **Type**: counter
+> - **Qualification**: Debug
+
+### daml.participant.sync.reassignments.unassignment.local-target-timestamp-lag
+
+> - **Summary**: Lag of the target topology behind the requested target timestamp
+> - **Description**: Milliseconds by which this participant's view of the target synchronizer's topology lags behind the target timestamp of an unassignment request, measured during validation. Zero means there is no lag.
+> - **Type**: histogram
+> - **Qualification**: Latency
+
 ### daml.participant.sync.request-tracker.sequencer-counter-queue
 
 > - **Summary**: Size of record order publisher sequencer counter queue
 > - **Description**: Same as for conflict-detection, but measuring the sequencer counter queues for the publishing to the ledger api server according to record time.
 > - **Type**: counter
 > - **Qualification**: Debug
+
+### daml.participant.traffic-enforcement.decisions\*
+
+> - **Summary**: Number of enforcement decisions made
+> - **Description**: The number of enforcement decisions the system has made, labeled by outcome and, where applicable, reason.
+> - **Type**: meter
+> - **Qualification**: Traffic
+> - **Labels**:
+>   - **traffic_enforcement_outcome**: The outcome of the enforcement decision.
+>   - **traffic_enforcement_reason**: Why the decision was reached, present only for outcomes that have a reason.
+
+### daml.participant.traffic-enforcement.enforcement-check-duration
+
+> - **Summary**: Duration of traffic enforcement checks
+> - **Description**: The time taken to perform traffic enforcement checks, including balance lookups and decision making.
+> - **Type**: timer
+> - **Qualification**: Latency
+
+### daml.participant.traffic-enforcement.projection-offset
+
+> - **Summary**: The saved offset of the traffic enforcement projection
+> - **Description**: The saved offset of the traffic enforcement projection.
+> - **Type**: gauge
+> - **Qualification**: Latency
+
+### daml.participant.traffic-enforcement.projection-timestamp
+
+> - **Summary**: The consumed timestamp of the traffic enforcement projection
+> - **Description**: The consumed timestamp of the traffic enforcement projection, indicating how far the system has processed traffic enforcement events.
+> - **Type**: gauge
+> - **Qualification**: Latency
 
 ### daml.pruning
 
@@ -1876,6 +2217,13 @@ For the metric types referenced below, see the [relevant Prometheus documentatio
 > - **Type**: gauge
 > - **Qualification**: Latency
 
+### daml.sequencer.bftordering.consensus.flushed-blocks
+
+> - **Summary**: Flushed blocks
+> - **Description**: Total blocks flushed.
+> - **Type**: meter
+> - **Qualification**: Debug
+
 ### daml.sequencer.bftordering.consensus.incoming-retransmission-requests
 
 > - **Summary**: Incoming retransmissions requests
@@ -1917,6 +2265,13 @@ For the metric types referenced below, see the [relevant Prometheus documentatio
 > - **Description**: Size of the queue containing postponed view messages.
 > - **Type**: gauge
 > - **Qualification**: Saturation
+
+### daml.sequencer.bftordering.consensus.relative-segment-latency
+
+> - **Summary**: Relative segment latency
+> - **Description**: Records the rate and latency it takes to complete a segment after the segment led by this node completed
+> - **Type**: timer
+> - **Qualification**: Latency
 
 ### daml.sequencer.bftordering.consensus.retransmitted-commit-certificates
 
@@ -2114,24 +2469,38 @@ For the metric types referenced below, see the [relevant Prometheus documentatio
 > - **Type**: meter
 > - **Qualification**: Traffic
 
+### daml.sequencer.bftordering.p2p.send.grpc-flow-control-not-ready
+
+> - **Summary**: Duration of gRPC flow control not being ready
+> - **Description**: Records the rate and duration of gRPC flow control not being ready.
+> - **Type**: timer
+> - **Qualification**: Latency
+
 ### daml.sequencer.bftordering.p2p.send.grpc-latency
 
-> - **Summary**: Latency of a gRPC message send
+> - **Summary**: Total latency of a P2P gRPC message send
 > - **Description**: Records the rate of gRPC message sends and their latency (up to receiving them on the other side).
 > - **Type**: timer
 > - **Qualification**: Latency
 
 ### daml.sequencer.bftordering.p2p.send.network-write-latency
 
-> - **Summary**: Message network write latency
-> - **Description**: Records the rate and latency when writing P2P messages to the network.
+> - **Summary**: P2P gRPC `onNext` latency
+> - **Description**: Records the rate and latency when sending messages to the P2P stream via gRPC's `onNext`.
 > - **Type**: timer
+> - **Qualification**: Latency
+
+### daml.sequencer.bftordering.p2p.send.sends-dropped
+
+> - **Summary**: P2P sends dropped
+> - **Description**: Total P2P network sends dropped, labeled by reason.
+> - **Type**: counter
 > - **Qualification**: Latency
 
 ### daml.sequencer.bftordering.p2p.send.sends-retried
 
 > - **Summary**: P2P sends retried
-> - **Description**: Total P2P network sends retried after a delay due to missing connectivity.
+> - **Description**: Total P2P network sends retried after a delay.
 > - **Type**: counter
 > - **Qualification**: Latency
 
@@ -2169,6 +2538,13 @@ For the metric types referenced below, see the [relevant Prometheus documentatio
 > - **Description**: Size of the buffer for the subscription to the sequencer core output, which is used to apply backpressure to the sequencer core when the output is not consumed fast enough.
 > - **Type**: gauge
 > - **Qualification**: Saturation
+
+### daml.sequencer.bftordering.topology.blacklisted-epochs
+
+> - **Summary**: Number of epochs a node has been blacklisted for
+> - **Description**: Number of epochs a node has been blacklisted for after failing to timely lead a segment
+> - **Type**: counter
+> - **Qualification**: Traffic
 
 ### daml.sequencer.bftordering.topology.max-tolerated-faults
 
@@ -2230,6 +2606,8 @@ For the metric types referenced below, see the [relevant Prometheus documentatio
 > - **Labels**:
 >   - **member**: The sender of the submission request
 >   - **type**: Type of request
+>   - **outcome**: (If async logging is enabled) outcome of the event
+>   - **sequencer**: The ordering sequencer id
 
 ### daml.sequencer.block.events\*
 
@@ -2240,6 +2618,8 @@ For the metric types referenced below, see the [relevant Prometheus documentatio
 > - **Labels**:
 >   - **member**: The sender of the submission request
 >   - **type**: Type of request
+>   - **outcome**: (If async logging is enabled) outcome of the event
+>   - **sequencer**: The ordering sequencer id
 
 ### daml.sequencer.block.height
 
@@ -2498,12 +2878,14 @@ For the metric types referenced below, see the [relevant Prometheus documentatio
 > - **Type**: meter
 > - **Qualification**: Traffic
 
-### daml.sequencer.traffic-control.wasted-sequencing-counter
+### daml.sequencer.traffic-control.wasted-sequencing-counter\*
 
 > - **Summary**: Number of events that failed traffic validation and were not delivered because of it.
 > - **Description**: Counter for wasted-sequencing.
 > - **Type**: counter
 > - **Qualification**: Traffic
+> - **Labels**:
+>   - **reason**: The reason for wasted sequencing (discarded or error code)
 
 ### daml.sequencer.traffic-control.wasted-traffic
 

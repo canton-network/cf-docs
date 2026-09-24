@@ -18,15 +18,40 @@ The phases are:
 
 The lifecycle begins when the submitting participant node receives a command from an application through the Ledger API (gRPC). The participant then:
 
-- **Interprets the command** by executing the Daml smart contract code locally in the Daml engine. The engine evaluates the command against the participant's current Active Contract Set (ACS) and produces a full transaction tree — a structure containing every action (creates, exercises, fetches), the consequences of each action, and all associated metadata.
+- **Interprets the command** by executing the Canton smart contract code locally in the Canton engine. The engine evaluates the command against the participant's current Active Contract Set (ACS) and produces a full transaction tree — a structure containing every action (creates, exercises, fetches), the consequences of each action, and all associated metadata.
 
-- **Determines informees** for each action node in the tree. Informees are the parties who are entitled to see a given action — signatories, observers, and actors (executing the choice), as defined by the Daml template. The informee set for each action governs who receives which parts of the transaction.
+- **Determines informees** for each action node in the tree. Informees are the parties who are entitled to see a given action — signatories, observers, and actors (executing the choice), as defined by the Canton template. The informee set for each action governs who receives which parts of the transaction.
 
 - **Decomposes the transaction into views.** Each action node in the transaction tree becomes a separate view. A view contains the action, its consequences, and enough context for validation — but nothing more. Each view is encrypted so that only its informees (and the participants hosting those informees) can decrypt it. Non-informees learn nothing about the action: not the payload, not the parties, not even that the action exists.
 
 - **Computes a root hash** that cryptographically commits to the entire transaction tree. The root hash binds all views together: every confirming participant can verify that the view it received belongs to the same transaction that every other participant is validating. The mediator uses the root hash to correlate confirmation responses.
 
 If the transaction touches contracts on multiple synchronizers, the participant may need to reassign those contracts to a common synchronizer before submission. This is handled by the [Reassignment Protocol](/overview/reference/reassignment-protocol).
+
+### Subtransaction Privacy
+
+{/* COPIED_START source="canton:docs/docs-open-parking-lot/overview/explanations/canton/protocol.rst" lines="393-466" */}
+{/* DIVERGENCE: (1) The source's DvP figure walkthrough (lines 403-424) is not imported: it references protocol.rst's DvP running example, which is not on this page and which upstream has queued for replacement with the ledger model's SimpleAsset/SimpleDvp example (todo in canton#25689). (2) Source lines 434-460 describe a per-view seed hierarchy with KDF-derived per-view keys that has been removed from Canton; steps 1-2 and the witness paragraph below are rewritten from the current implementation (EncryptedViewMessageFactory.scala, LightTransactionViewTree.scala, SessionKeyStore.scala). */}
+
+Canton splits a transaction into views. The submitting participant sends these views via the synchronizer's sequencer to all involved participants on a need-to-know basis. This section explains how the views are encrypted, distributed, and stored so that only the intended recipients learn the contents of the transaction.
+
+Canton captures the hierarchical view structure in a Merkle-like tree, where the hashes commit to the contents of the hidden nodes and subtrees without revealing the content. Using the hashes, every recipient can correctly reconstruct their projection of the transaction from the views they receive.
+
+The submitting participant sends the views to the participants hosting an informee or witness of a view's actions. This ensures **subtransaction privacy** as a participant receives only the data for the witnesses it hosts, not all of the transaction. Each Canton participant persists all messages it receives from the sequencer, including the views.
+
+Moreover, Canton hides the transaction contents from the synchronizer too. To that end, the submitting participant encrypts the views using the following encryption scheme:
+
+1. It generates a short-lived symmetric **session key** for each distinct recipient informee group (set of participants that will receive the view).
+
+2. It encrypts the serialization of each view's Merkle tree with the session key of its recipient group.
+
+3. Finally this session key is encrypted with the public key of each participant hosting an informee of the view. If caching is enabled, the session key and the corresponding ciphertexts, which originated from asymmetrically encrypting this key with a participant's public key, are briefly stored in memory. This temporarily eliminates the need to asymmetrically encrypt/decrypt the session key for future similar views. The encrypted Merkle tree and the encrypted session key for each informee participant form the data that is sent via the sequencer.
+
+The session key is encrypted with the public key of the participants that host an informee, while the encrypted Merkle tree itself is also sent to participants hosting only witnesses. The latter participants can nevertheless decrypt the Merkle tree because the tree for a parent view carries the hashes of its direct subviews together with their encryption keys, so a participant that can decrypt the parent view obtains the subview keys from the parent's content.
+
+Even though the sequencer persists the encrypted views for a limited period, the synchronizer cannot access the symmetric session key, and, consequently, cannot decrypt the views unless it knows the private key of one of the informee participants. Therefore, the transaction contents remain confidential with respect to the synchronizer.
+
+{/* COPIED_END */}
 
 ## Phase 2: Submission (Confirmation Request)
 
@@ -58,9 +83,9 @@ The mediator, upon receiving the informee messages:
 
 Each participant that received views independently validates them. The validation checks are:
 
-- **Conformance** — the participant re-executes the Daml contract logic for each action in the view it received. The re-execution must produce the same consequences (created contracts, archived contracts) as claimed in the view. If the results diverge, the view is malformed or the submitter is dishonest.
+- **Conformance** — the participant re-executes the Canton contract logic for each action in the view it received. The re-execution must produce the same consequences (created contracts, archived contracts) as claimed in the view. If the results diverge, the view is malformed or the submitter is dishonest.
 
-- **Authorization** — the participant checks that every action is properly authorized. For each action, the required parties (signatories, controllers) must have authorized it. Authorization is verified through the party-to-participant topology and the Daml authorization rules.
+- **Authorization** — the participant checks that every action is properly authorized. For each action, the required parties (signatories, controllers) must have authorized it. Authorization is verified through the party-to-participant topology and the Canton authorization rules.
 
 - **Consistency** — the participant checks that all input contracts referenced by the view are still active in its local ACS. A contract that has already been consumed (archived) cannot be used again. This check is what prevents double-spends within a single synchronizer.
 
@@ -99,7 +124,7 @@ The following table summarizes the messages exchanged during the protocol, their
 
 | Message | Sender | Recipient(s) | Content |
 |---------|--------|---------------|---------|
-| **Command** | Application | Submitting participant | Daml command (create, exercise) via Ledger API |
+| **Command** | Application | Submitting participant | Canton command (create, exercise) via Ledger API |
 | **Encrypted views** | Submitting participant | Sequencer, then informee participants | One per action node; encrypted per-informee |
 | **Root hash messages** | Submitting participant | Sequencer, then each recipient participant | Root hash of the full transaction tree |
 | **Informee messages** | Submitting participant | Sequencer, then mediator | Informee list and confirmation policy per view |
@@ -119,7 +144,7 @@ Participants also enforce a **participant response deadline**: they must send th
 
 Transactions can fail at several points in the lifecycle:
 
-- **Preparation failure**: the Daml engine rejects the command (e.g., contract not found, authorization failure, assertion violation). The command is rejected synchronously before any messages are sent. No other nodes are involved.
+- **Preparation failure**: the Canton engine rejects the command (e.g., contract not found, authorization failure, assertion violation). The command is rejected synchronously before any messages are sent. No other nodes are involved.
 
 - **Validation rejection**: a confirming participant finds a conformance, authorization, consistency, or time-bounds violation. It sends a reject MR. Depending on the confirmation policy, a single rejection may be sufficient to reject the entire transaction.
 

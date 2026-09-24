@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import copy
+import json
 import re
 from typing import Any
 
+from x2mdx.visibility import dev_only_identities
 from x2mdx.daml_json.models import DamlDocsReport, DamlDocsSources
 
 SNAPSHOT_VERSION_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)-snapshot\.(\d{8})\.(\d+)$")
@@ -78,6 +80,42 @@ def _compute_deprecation_first_seen(version_modules: list[tuple[str, list[dict[s
             if extract_tagged_warning_messages(module.get("md_warn"), "DeprecatedData"):
                 first_seen[module_name] = version
     return first_seen
+
+
+def _normalized_module(module_doc: dict[str, Any]) -> Any:
+    if isinstance(module_doc, dict):
+        return {
+            key: _normalized_module(value)
+            for key, value in sorted(module_doc.items())
+            if "anchor" not in key.casefold()
+        }
+    if isinstance(module_doc, list):
+        return [_normalized_module(value) for value in module_doc]
+    return module_doc
+
+
+def _compute_module_changes(
+    version_modules: list[tuple[str, list[dict[str, Any]]]],
+) -> dict[str, tuple[str, ...]]:
+    previous_fingerprints: dict[str, str] = {}
+    changes: dict[str, list[str]] = {}
+    for version, modules in version_modules:
+        current_names: set[str] = set()
+        for module in modules:
+            module_name = _module_name(module)
+            if not module_name:
+                continue
+            current_names.add(module_name)
+            fingerprint = json.dumps(
+                _normalized_module(module), sort_keys=True, separators=(",", ":")
+            )
+            previous = previous_fingerprints.get(module_name)
+            if previous is not None and previous != fingerprint:
+                changes.setdefault(module_name, []).append(version)
+            previous_fingerprints[module_name] = fingerprint
+        for missing_name in set(previous_fingerprints) - current_names:
+            previous_fingerprints.pop(missing_name)
+    return {name: tuple(versions) for name, versions in changes.items()}
 
 
 def _build_publish_modules(
@@ -157,11 +195,33 @@ def build_daml_doc_report_from_sources(
     ordered_snapshots = sorted(sources.snapshots, key=lambda snapshot: version_sort_key(snapshot.version))
     version_modules = [(snapshot.version, snapshot.modules) for snapshot in ordered_snapshots]
     selected_publish_version = publish_version or sources.publish_version or ordered_snapshots[-1].version
+    ordered_versions = [version for version, _ in version_modules]
+    if selected_publish_version not in ordered_versions:
+        raise ValueError(f"Publish version '{selected_publish_version}' is not present in selected snapshots: {ordered_versions}")
+    scoped = version_modules[:ordered_versions.index(selected_publish_version) + 1]
+    hidden = dev_only_identities(
+        {_module_name(module): "dev" if is_dev_warning(module.get("md_warn")) else None for module in modules}
+        for _, modules in scoped
+    )
+    version_modules = [(version, [module for module in modules if _module_name(module) not in hidden])
+                       for version, modules in scoped]
+    hidden_functions = dev_only_identities(
+        {f"{_module_name(module)}#{fn['fct_name']}": "dev" if is_dev_warning(fn.get("fct_warns")) else None
+         for module in modules for fn in module.get("md_functions", [])}
+        for _, modules in version_modules
+    )
+    version_modules = copy.deepcopy(version_modules)
+    for _, modules in version_modules:
+        for module in modules:
+            if "md_functions" in module:
+                module["md_functions"] = [fn for fn in module["md_functions"]
+                    if f"{_module_name(module)}#{fn['fct_name']}" not in hidden_functions]
     merged_modules, lifecycle = _build_publish_modules(
         version_modules,
         publish_version=selected_publish_version,
     )
     deprecation_first_seen = _compute_deprecation_first_seen(version_modules)
+    module_changes = _compute_module_changes(version_modules)
     return DamlDocsReport(
         source_name=source_name,
         version_filter=version_filter,
@@ -170,5 +230,16 @@ def build_daml_doc_report_from_sources(
         modules=merged_modules,
         module_lifecycle=lifecycle,
         module_deprecation_first_seen=deprecation_first_seen,
+        module_changes=module_changes,
     )
 
+
+def is_dev_warning(warns: Any) -> bool:
+    """Only an explicit Dev: warning hides a module; prose never does."""
+    if extract_tagged_warning_messages(warns, "DeprecatedData"):
+        return False
+    for message in extract_tagged_warning_messages(warns, "WarnData"):
+        match = re.match(r"^\s*(dev|alpha|beta|stable)\s*:", message, re.IGNORECASE)
+        if match:
+            return match.group(1).lower() == "dev"
+    return False

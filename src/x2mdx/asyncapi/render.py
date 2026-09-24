@@ -4,12 +4,28 @@ from __future__ import annotations
 
 import json
 import re
+from functools import cmp_to_key
 from pathlib import Path
 from typing import Any
 
-from x2mdx.asyncapi.models import AsyncApiChannelLifecycle, AsyncApiReport
+from x2mdx.asyncapi.history import asyncapi_item_id
+from x2mdx.asyncapi.models import (
+    AsyncApiActionDetail,
+    AsyncApiChannelLifecycle,
+    AsyncApiReport,
+    AsyncApiSchemaVariantDetail,
+)
+from x2mdx.history.events import history_events_for_item
+from x2mdx.history.models import (
+    HistoryEvent,
+    HistoryEventKind,
+    HistoryItem,
+    SurfaceHistoryReport,
+)
+from x2mdx.history.versioning import compare_versions
 from x2mdx.reference_pages import (
     ReferenceBadge,
+    lifecycle_state_badges,
     ReferenceBreadcrumb,
     ReferenceCard,
     ReferenceChange,
@@ -23,6 +39,8 @@ from x2mdx.reference_pages import (
     compact_text,
     markdown_page_from_template,
     relative_page_ref,
+    reference_badges_for_history_events,
+    reference_badges_for_history_item,
     render_collection_page,
     render_operation_page,
     safe_markdown_text,
@@ -64,21 +82,138 @@ def lifecycle_state_tone(state: str | None) -> str:
     }.get(state or "", "neutral")
 
 
-def lifecycle_badges(channel: AsyncApiChannelLifecycle) -> list[ReferenceBadge]:
-    badges = [ReferenceBadge("WebSocket", tone="protocol"), ReferenceBadge(f"Since {channel.introduced_version}", tone="added")]
-    state_label = lifecycle_state_label(channel.lifecycle_state)
-    if state_label:
-        badges.append(ReferenceBadge(state_label, tone=lifecycle_state_tone(channel.lifecycle_state)))
-    if channel.changed_in_versions:
-        badges.append(ReferenceBadge(f"Changed {channel.changed_in_versions[-1]}", tone="changed"))
-    if channel.removed_version:
-        badges.append(ReferenceBadge(f"Removed {channel.removed_version}", tone="removed"))
+def lifecycle_badges(
+    channel: AsyncApiChannelLifecycle,
+    *,
+    action: AsyncApiActionDetail | None = None,
+    item: HistoryItem | None = None,
+    events: list[HistoryEvent] | None = None,
+    comparison_versions: tuple[str, ...] = (),
+    linked: bool = True,
+) -> list[ReferenceBadge]:
+    if item is not None:
+        badges = reference_badges_for_history_item(
+            item,
+            kind_label="WebSocket",
+            comparison_versions=comparison_versions,
+            linked=linked,
+        )
+    else:
+        channel_events = events or legacy_channel_history_events(channel)
+        badges = reference_badges_for_history_events(
+            channel_events,
+            kind_label="WebSocket",
+            linked=linked,
+        )
+    state = effective_lifecycle_state(channel, action)
+    badges.extend(lifecycle_state_badges(state, existing=badges))
     return badges
 
 
-def lifecycle_meta_items(channel: AsyncApiChannelLifecycle) -> list[ReferenceMetaItem]:
+def legacy_channel_history_events(
+    channel: AsyncApiChannelLifecycle,
+) -> list[HistoryEvent]:
+    events = [
+        HistoryEvent(
+            kind=HistoryEventKind.CHANGED,
+            version=str(entry["version"]),
+            label="Updated",
+            details=tuple(str(change) for change in entry["changes"]),
+            evidence=(),
+        )
+        for entry in reversed(channel.change_details)
+    ]
+    if channel.lifecycle_state == "deprecated":
+        events.append(
+            HistoryEvent(
+                kind=HistoryEventKind.DEPRECATED,
+                version=(channel.changed_in_versions[-1] if channel.changed_in_versions else channel.introduced_version),
+                label="Deprecated",
+                details=(),
+                evidence=(),
+            )
+        )
+    events.append(
+        HistoryEvent(
+            kind=HistoryEventKind.INTRODUCED,
+            version=channel.introduced_version,
+            label="Added",
+            details=(),
+            evidence=(),
+        )
+    )
+    return events
+
+
+def channel_history_events(
+    items: list[HistoryItem],
+    *,
+    comparison_versions: tuple[str, ...],
+) -> list[HistoryEvent]:
+    combined: dict[tuple[HistoryEventKind, str], HistoryEvent] = {}
+    for item in items:
+        action = item.id.rsplit("#", 1)[-1]
+        for event in history_events_for_item(
+            item,
+            comparison_versions=comparison_versions,
+        ):
+            key = (event.kind, event.version)
+            details = tuple(
+                f"{action}: {detail}" for detail in event.details
+            )
+            existing = combined.get(key)
+            if existing is None:
+                combined[key] = HistoryEvent(
+                    kind=event.kind,
+                    version=event.version,
+                    label="Actions removed in" if event.kind == HistoryEventKind.REMOVED else event.label,
+                    details=details,
+                    evidence=event.evidence,
+                )
+            else:
+                combined[key] = HistoryEvent(
+                    kind=existing.kind,
+                    version=existing.version,
+                    label=existing.label,
+                    details=tuple(dict.fromkeys((*existing.details, *details))),
+                    evidence=tuple(dict.fromkeys((*existing.evidence, *event.evidence))),
+                )
+
+    priority = {
+        HistoryEventKind.REMOVED: -1,
+        HistoryEventKind.REMOVE_AS_OF: 0,
+        HistoryEventKind.DEPRECATED: 1,
+        HistoryEventKind.CHANGED: 2,
+        HistoryEventKind.INTRODUCED: 3,
+        HistoryEventKind.REPLACEMENT: 4,
+    }
+
+    def compare(left: HistoryEvent, right: HistoryEvent) -> int:
+        version_comparison = compare_versions(
+            left.version,
+            right.version,
+            known_order=comparison_versions,
+        )
+        if version_comparison:
+            return -version_comparison
+        return priority[left.kind] - priority[right.kind]
+
+    return sorted(combined.values(), key=cmp_to_key(compare))
+
+
+def effective_lifecycle_state(
+    channel: AsyncApiChannelLifecycle,
+    action: AsyncApiActionDetail | None = None,
+) -> str | None:
+    return (action.get("lifecycle_state") if action is not None else None) or channel.lifecycle_state
+
+
+def lifecycle_meta_items(
+    channel: AsyncApiChannelLifecycle,
+    action: AsyncApiActionDetail | None = None,
+) -> list[ReferenceMetaItem]:
     items: list[ReferenceMetaItem] = []
-    state_label = lifecycle_state_label(channel.lifecycle_state)
+    state_label = lifecycle_state_label(effective_lifecycle_state(channel, action))
     if state_label:
         items.append(ReferenceMetaItem("Lifecycle", state_label))
     if channel.replaces:
@@ -106,8 +241,8 @@ def action_display_title(channel: AsyncApiChannelLifecycle, action_name: str) ->
     return f"{action_name.title()} {channel_short_label(channel.channel)}"
 
 
-def action_schema(action: dict[str, Any], *, anchor: str):
-    message = dict(action.get("message") or {})
+def action_schema(action: AsyncApiActionDetail, *, anchor: str):
+    message = action["message"]
     sample = message.get("sample")
     required_fields = list(message.get("required_fields") or [])
     variant_schemas = [schema_from_variant(variant) for variant in message.get("variants") or []]
@@ -131,7 +266,7 @@ def action_schema(action: dict[str, Any], *, anchor: str):
     )
 
 
-def schema_from_variant(variant: dict[str, Any]) -> ReferenceSchema:
+def schema_from_variant(variant: AsyncApiSchemaVariantDetail) -> ReferenceSchema:
     return schema_from_sample(
         name=str(variant.get("name") or "Variant"),
         sample=variant.get("sample"),
@@ -141,7 +276,7 @@ def schema_from_variant(variant: dict[str, Any]) -> ReferenceSchema:
     )
 
 
-def wscat_example(action: dict[str, Any]) -> str:
+def wscat_example(action: AsyncApiActionDetail) -> str:
     sample = action["message"].get("sample")
     if action["action"] == "publish" and sample is not None:
         return "\n".join(
@@ -157,9 +292,11 @@ def wscat_example(action: dict[str, Any]) -> str:
 
 def build_action_operation(
     channel: AsyncApiChannelLifecycle,
-    action: dict[str, Any],
+    action: AsyncApiActionDetail,
     *,
     output_dir: Path | None,
+    history_item: HistoryItem | None = None,
+    comparison_versions: tuple[str, ...] | None = None,
 ) -> ReferenceOperationPage:
     is_publish = action["action"] == "publish"
     schema = action_schema(action, anchor=f"schema-{slugify(channel.channel)}-{slugify(action['action'])}")
@@ -176,6 +313,16 @@ def build_action_operation(
 
     path = operation_page_path(output_dir, channel, action["action"]) if output_dir is not None else Path("unused.mdx")
     channel_path = channel_page_path(output_dir, channel) if output_dir is not None else Path("unused.mdx")
+    history_events = (
+        list(
+            history_events_for_item(
+                history_item,
+                comparison_versions=comparison_versions or (),
+            )
+        )
+        if history_item is not None
+        else legacy_channel_history_events(channel)
+    )
     inputs = []
     outputs = []
     if is_publish:
@@ -205,7 +352,7 @@ def build_action_operation(
         path=path.relative_to(output_dir).as_posix() if output_dir is not None else "single-page",
         anchor=f"operation-{slugify(channel.channel)}-{slugify(action['action'])}",
         title=action_display_title(channel, str(action["action"])),
-        description=None,
+        description=str(action.get("description") or channel.latest.get("description") or "") or None,
         eyebrow=str(channel.channel),
         summary=None,
         back_link=page_ref(path, channel_path) if output_dir is not None else None,
@@ -217,17 +364,24 @@ def build_action_operation(
         ]
         if output_dir is not None
         else [],
-        badges=lifecycle_badges(channel),
+        badges=lifecycle_badges(
+            channel,
+            action=action,
+            item=history_item,
+            events=history_events,
+            comparison_versions=comparison_versions or (),
+        ),
         meta_items=[
             ReferenceMetaItem("Channel", channel.channel),
             ReferenceMetaItem("Action", str(action["action"])),
-            ReferenceMetaItem("Introduced", channel.introduced_version),
-            ReferenceMetaItem("Removed", channel.removed_version or "-"),
-            *lifecycle_meta_items(channel),
+            *lifecycle_meta_items(channel, action),
         ],
         operation_method=str(action["action"]).upper(),
         operation_target=channel.channel,
-        overview_markdown=None,
+        overview_markdown=safe_markdown_text(
+            str(action.get("description") or channel.latest.get("description") or "")
+        )
+        or None,
         protocol_items=[
             ReferenceMetaItem("Protocol", "WebSocket"),
             ReferenceMetaItem("Channel", channel.channel),
@@ -235,16 +389,22 @@ def build_action_operation(
             ReferenceMetaItem("Operation ID", str(action.get("operation_id") or "-")),
             ReferenceMetaItem("Content type", str(action["message"].get("content_type") or "-")),
             ReferenceMetaItem("Payload", str(action["message"].get("payload_schema") or "-")),
-            *lifecycle_meta_items(channel),
+            *lifecycle_meta_items(channel, action),
         ],
         inputs=inputs,
         outputs=outputs,
         examples=examples,
         lifecycle_changes=[
-            ReferenceChange(version=str(entry["version"]), details="; ".join(str(change) for change in entry["changes"]))
+            ReferenceChange(
+                version=str(entry["version"]),
+                details="; ".join(str(change) for change in entry["changes"]),
+            )
             for entry in channel.change_details
-        ],
+        ]
+        if history_item is None
+        else [],
         related_schemas=[schema] if schema is not None else [],
+        history_events=history_events,
     )
 
 
@@ -255,22 +415,33 @@ def build_overview_page(
     overview_name: str,
     page_title: str,
     page_description: str,
+    history_report: SurfaceHistoryReport,
 ) -> ReferenceCollectionPage:
     overview_path = output_dir / overview_name
-    cards = [
-        ReferenceCard(
-            title=channel.channel,
-            href=page_ref(overview_path, channel_page_path(output_dir, channel)),
-            summary=channel_summary(channel),
-            badges=lifecycle_badges(channel),
-            meta_items=[
-                ReferenceMetaItem("Actions", ", ".join(channel.latest.get("action_names") or []) or "-"),
-                ReferenceMetaItem("Last seen", channel.last_seen_in),
-                *lifecycle_meta_items(channel),
-            ],
+    items_by_id = history_report.items_by_id()
+    cards = []
+    for channel in report.channels:
+        channel_items = [
+            items_by_id[asyncapi_item_id(channel.channel, action["action"])]
+            for action in channel.latest.get("actions", [])
+        ]
+        events = channel_history_events(
+            channel_items,
+            comparison_versions=history_report.comparison_versions,
         )
-        for channel in report.channels
-    ]
+        cards.append(
+            ReferenceCard(
+                title=channel.channel,
+                href=page_ref(overview_path, channel_page_path(output_dir, channel)),
+                summary=channel_summary(channel),
+                badges=lifecycle_badges(channel, events=events, linked=False),
+                meta_items=[
+                    ReferenceMetaItem("Actions", ", ".join(channel.latest.get("action_names") or [])),
+                    ReferenceMetaItem("Last seen", channel.last_seen_in),
+                    *lifecycle_meta_items(channel),
+                ],
+            )
+        )
     return ReferenceCollectionPage(
         path=overview_name,
         title=page_title,
@@ -299,24 +470,42 @@ def build_channel_page(
     *,
     output_dir: Path,
     overview_name: str,
+    history_report: SurfaceHistoryReport,
 ) -> ReferenceCollectionPage:
     page_path = channel_page_path(output_dir, channel)
     overview_path = output_dir / overview_name
-    cards = [
-        ReferenceCard(
-            title=f"{action['action']} {channel.channel}",
-            href=page_ref(page_path, operation_page_path(output_dir, channel, action["action"])),
-            summary=compact_text(action.get("description") or channel.latest.get("description") or "", limit=170),
-            badges=lifecycle_badges(channel),
-            meta_items=[
-                ReferenceMetaItem("Operation ID", str(action.get("operation_id") or "-")),
-                ReferenceMetaItem("Method", str(action.get("ws_method") or "-")),
-                ReferenceMetaItem("Payload", str(action["message"].get("payload_schema") or "-")),
-                *lifecycle_meta_items(channel),
-            ],
-        )
+    items_by_id = history_report.items_by_id()
+    channel_items = [
+        items_by_id[asyncapi_item_id(channel.channel, action["action"])]
         for action in channel.latest.get("actions", [])
     ]
+    events = channel_history_events(
+        channel_items,
+        comparison_versions=history_report.comparison_versions,
+    )
+    cards = []
+    for action in channel.latest.get("actions", []):
+        item = items_by_id[asyncapi_item_id(channel.channel, action["action"])]
+        cards.append(
+            ReferenceCard(
+                title=f"{action['action']} {channel.channel}",
+                href=page_ref(page_path, operation_page_path(output_dir, channel, action["action"])),
+                summary=compact_text(action.get("description") or channel.latest.get("description") or "", limit=170),
+                badges=lifecycle_badges(
+                    channel,
+                    action=action,
+                    item=item,
+                    comparison_versions=history_report.comparison_versions,
+                    linked=False,
+                ),
+                meta_items=[
+                    ReferenceMetaItem("Operation ID", str(action.get("operation_id") or "-")),
+                    ReferenceMetaItem("Method", str(action.get("ws_method") or "-")),
+                    ReferenceMetaItem("Payload", str(action["message"].get("payload_schema") or "-")),
+                    *lifecycle_meta_items(channel, action),
+                ],
+            )
+        )
     return ReferenceCollectionPage(
         path=page_path.relative_to(output_dir).as_posix(),
         title=channel.channel,
@@ -325,12 +514,10 @@ def build_channel_page(
         summary=channel_summary(channel),
         back_link=page_ref(page_path, overview_path),
         back_label="Back to overview",
-        badges=lifecycle_badges(channel),
+        badges=lifecycle_badges(channel, events=events),
         meta_items=[
             ReferenceMetaItem("Channel", channel.channel),
             ReferenceMetaItem("Actions", ", ".join(channel.latest.get("action_names") or []) or "-"),
-            ReferenceMetaItem("Introduced", channel.introduced_version),
-            ReferenceMetaItem("Removed", channel.removed_version or "-"),
             *lifecycle_meta_items(channel),
         ],
         sections=[
@@ -340,6 +527,7 @@ def build_channel_page(
                 cards=cards,
             )
         ],
+        history_events=events,
     )
 
 
@@ -350,7 +538,10 @@ def build_pages(
     overview_name: str = "index.mdx",
     page_title: str = "AsyncAPI WebSocket Reference",
     page_description: str = "WebSocket AsyncAPI reference and version history.",
+    history_report: SurfaceHistoryReport,
 ) -> tuple[Path, list[Any]]:
+    items_by_id = history_report.items_by_id()
+    active_channels = list(report.channels)
     pages = [
         render_collection_page(
             build_overview_page(
@@ -359,13 +550,34 @@ def build_pages(
                 overview_name=overview_name,
                 page_title=page_title,
                 page_description=page_description,
+                history_report=history_report,
             )
         )
     ]
-    for channel in report.channels:
-        pages.append(render_collection_page(build_channel_page(channel, output_dir=output_dir, overview_name=overview_name)))
+    for channel in active_channels:
+        pages.append(
+            render_collection_page(
+                build_channel_page(
+                    channel,
+                    output_dir=output_dir,
+                    overview_name=overview_name,
+                    history_report=history_report,
+                )
+            )
+        )
         for action in channel.latest.get("actions", []):
-            pages.append(render_operation_page(build_action_operation(channel, action, output_dir=output_dir)))
+            history_item = items_by_id[asyncapi_item_id(channel.channel, action["action"])]
+            pages.append(
+                render_operation_page(
+                    build_action_operation(
+                        channel,
+                        action,
+                        output_dir=output_dir,
+                        history_item=history_item,
+                        comparison_versions=history_report.comparison_versions,
+                    )
+                )
+            )
     return output_dir, pages
 
 

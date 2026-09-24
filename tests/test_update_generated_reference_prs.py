@@ -5,7 +5,6 @@ import sys
 from pathlib import Path
 from types import ModuleType
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -49,6 +48,7 @@ def test_update_targets_cover_all_generated_doc_surfaces() -> None:
     assert [target.key for target in module.UPDATE_TARGETS] == [
         "version-dashboard",
         "splice-openapi",
+        "splice-token-standard-v2",
         "wallet-gateway-openrpc",
         "json-api-reference",
         "json-api-asyncapi-reference",
@@ -56,8 +56,13 @@ def test_update_targets_cover_all_generated_doc_surfaces() -> None:
         "canton-protobuf-history",
         "ledger-bindings",
         "daml-standard-library",
+        "daml-script",
         "typescript-bindings",
+        "canton-console-reference",
+        "canton-error-codes-reference",
+        "canton-release-protocol-versions",
         "canton-metrics-reference",
+        "canton-topology-proto-link",
         "canton-release-notes",
         "wallet-gateway-release-notes",
         "wallet-sdk-release-notes",
@@ -65,15 +70,29 @@ def test_update_targets_cover_all_generated_doc_surfaces() -> None:
     ]
 
 
+def test_update_target_commands_use_the_locked_nix_development_shell() -> None:
+    module = load_script_module()
+
+    commands = (
+        command
+        for target in module.UPDATE_TARGETS
+        for command in (*target.source_update_commands, *target.generate_commands)
+    )
+    assert all(
+        command[: len(module.NIX_DEVELOP_PREFIX)] == module.NIX_DEVELOP_PREFIX
+        for command in commands
+    )
+
+
 def test_dashboard_target_runs_network_variable_tabs_after_dashboard_data_generation() -> None:
     module = load_script_module()
     target = next(target for target in module.UPDATE_TARGETS if target.key == "version-dashboard")
 
     assert target.source_update_commands == (
-        ("nix-shell", "--run", "npm run generate:version-compatibility-dashboard"),
+        module.nix_develop_command("npm run generate:version-compatibility-dashboard"),
     )
     assert target.generate_commands == (
-        ("nix-shell", "--run", "npm run generate:network-variable-tabs"),
+        module.nix_develop_command("npm run generate:network-variable-tabs"),
     )
     assert target.source_update_paths == (
         "config/repo-version-config.json",
@@ -91,6 +110,131 @@ def test_java_ledger_bindings_target_does_not_auto_merge() -> None:
     target = next(target for target in module.UPDATE_TARGETS if target.key == "ledger-bindings")
 
     assert target.auto_merge is False
+
+
+def test_splice_openapi_target_regenerates_without_a_source_pin() -> None:
+    module = load_script_module()
+    target = next(target for target in module.UPDATE_TARGETS if target.key == "splice-openapi")
+
+    assert target.source_update_commands == ()
+    assert target.source_update_paths == ()
+    assert target.summary_kind == "static"
+    assert target.summary_path is None
+    assert target.generate_commands == (
+        module.nix_develop_command("npm run generate:splice-mintlify-openapi"),
+    )
+    assert "config/mintlify-openapi/splice-openapi/source-artifacts.json" not in target.paths
+    assert "docs-main/reference/splice-scan-api" in target.paths
+
+
+def test_generated_docs_workflow_uses_merger_app_for_pr_mutations() -> None:
+    workflow = (REPO_ROOT / ".github" / "workflows" / "update-version-dashboard.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert workflow.count("persist-credentials: false") == 2
+    assert "GH_TOKEN: ${{ steps.merger-token.outputs.token || github.token }}" in workflow
+    assert "GITHUB_TOKEN: ${{ steps.merger-token.outputs.token || github.token }}" in workflow
+    assert "GENERATED_DOCS_WORKFLOW_TOKEN: ${{ github.token }}" in workflow
+    assert "uses: cachix/install-nix-action@v31" not in workflow
+    assert "sudo apt-get" not in workflow
+    assert "nix-shell" not in workflow
+    assert 'NIX_CONFIG: "extra-experimental-features = nix-command flakes"' in workflow
+    assert (
+        "run: SKIP_NPM_INSTALL=1 direnv allow . && SKIP_NPM_INSTALL=1 direnv exec . true"
+        in workflow
+    )
+    assert "python3 scripts/check_generated_docs_dependencies.py" in workflow
+    assert "run: SKIP_NPM_INSTALL=1 nix develop path:nix --command gh auth setup-git" in workflow
+    assert 'args=(python3 scripts/update_generated_reference_prs.py --targets "${{ matrix.target }}")' in workflow
+    assert "args+=(--dry-run)" in workflow
+    assert 'SKIP_NPM_INSTALL=1 nix develop path:nix --command "${args[@]}"' in workflow
+
+
+def test_generated_docs_workflow_only_sets_up_daml_for_declared_targets() -> None:
+    module = load_script_module()
+    workflow = (REPO_ROOT / ".github" / "workflows" / "update-version-dashboard.yml").read_text(
+        encoding="utf-8"
+    )
+
+    daml_targets = [target.key for target in module.UPDATE_TARGETS if target.requires_daml_tooling]
+
+    assert daml_targets == ["splice-token-standard-v2", "daml-standard-library", "daml-script"]
+    assert "--print-target-matrix-json" in workflow
+    assert "matrix: ${{ fromJSON(needs.select-targets.outputs.target_matrix) }}" in workflow
+    assert "if: ${{ matrix.requires_daml_tooling }}" in workflow
+    assert "bash scripts/install_daml_tooling.sh" in workflow
+
+
+def test_target_matrix_includes_daml_requirement() -> None:
+    module = load_script_module()
+    targets = module.targets_to_run(["splice-token-standard-v2", "canton-release-notes"])
+
+    assert module.target_matrix(targets) == {
+        "include": [
+            {"target": "splice-token-standard-v2", "requires_daml_tooling": True},
+            {"target": "canton-release-notes", "requires_daml_tooling": False},
+        ]
+    }
+
+
+def test_daml_script_target_wires_source_pin_and_generated_paths() -> None:
+    module = load_script_module()
+    target = next(target for target in module.UPDATE_TARGETS if target.key == "daml-script")
+
+    assert target.branch == "generated-references/daml-script/update"
+    assert target.source_update_commands == (
+        module.nix_develop_command("npm run update:generated-reference-sources -- --source daml-script"),
+    )
+    assert target.source_update_paths == ("config/x2mdx/daml-script/source-artifacts.json",)
+    assert target.generate_commands == (
+        module.nix_develop_command("npm run generate:daml-script-reference"),
+    )
+    assert target.paths == (
+        "config/x2mdx/daml-script/source-artifacts.json",
+        "docs-main/docs.json",
+        "docs-main/appdev/reference/daml-script",
+    )
+    assert target.validation == (
+        "npm run update:generated-reference-sources -- --source daml-script",
+        "npm run generate:daml-script-reference",
+        "git diff --check",
+    )
+
+
+def test_daml_script_target_skips_generation_when_source_is_unchanged(monkeypatch) -> None:
+    module = load_script_module()
+    target = next(target for target in module.UPDATE_TARGETS if target.key == "daml-script")
+    calls: list[tuple[str, ...]] = []
+
+    monkeypatch.setattr(module, "reset_to_base", lambda base_sha: calls.append(("reset", base_sha)))
+    monkeypatch.setattr(module.pr_utils, "write_base_file", lambda base_sha, path: Path("/tmp/before.json"))
+    monkeypatch.setattr(module.pr_utils, "has_changes", lambda paths: False)
+    monkeypatch.setattr(
+        module.pr_utils,
+        "close_stale_pull_request",
+        lambda **kwargs: calls.append(("close", kwargs["branch"])),
+    )
+    monkeypatch.setattr(module, "create_or_update_pull_request", lambda **kwargs: calls.append(("pr",)))
+
+    def fake_run(command: tuple[str, ...]) -> None:
+        calls.append(command)
+
+    monkeypatch.setattr(module.pr_utils, "run", fake_run)
+
+    module.process_target(
+        target=target,
+        base_sha="base-sha",
+        base_branch="main",
+        repository="canton-network/cf-docs",
+    )
+
+    assert calls == [
+        ("reset", "base-sha"),
+        module.nix_develop_command("npm run update:generated-reference-sources -- --source daml-script"),
+        ("close", "generated-references/daml-script/update"),
+    ]
+    assert not any("generate:daml-script-reference" in " ".join(call) for call in calls if isinstance(call, tuple))
 
 
 def test_source_update_targets_skip_generation_when_source_is_unchanged(monkeypatch) -> None:
@@ -122,9 +266,41 @@ def test_source_update_targets_skip_generation_when_source_is_unchanged(monkeypa
 
     assert calls == [
         ("reset", "base-sha"),
-        ("nix-shell", "--run", "npm run update:generated-reference-sources -- --source wallet-gateway-openrpc"),
+        module.nix_develop_command("npm run update:generated-reference-sources -- --source wallet-gateway-openrpc"),
         ("close", "generated-references/wallet-gateway-openrpc/update"),
     ]
+
+
+def test_version_dashboard_skips_timestamp_only_source_changes(monkeypatch, tmp_path: Path) -> None:
+    module = load_script_module()
+    target = next(target for target in module.UPDATE_TARGETS if target.key == "version-dashboard")
+    calls: list[tuple[str, ...]] = []
+
+    monkeypatch.setattr(module, "reset_to_base", lambda base_sha: calls.append(("reset", base_sha)))
+    monkeypatch.setattr(module.pr_utils, "write_base_file", lambda base_sha, path: tmp_path / "before.json")
+    monkeypatch.setattr(module.pr_utils, "has_changes", lambda paths: True)
+    monkeypatch.setattr(module, "summarize_target_changes", lambda target, before_path: [])
+    monkeypatch.setattr(
+        module.pr_utils,
+        "close_stale_pull_request",
+        lambda **kwargs: calls.append(("close", kwargs["branch"])),
+    )
+    monkeypatch.setattr(module, "create_or_update_pull_request", lambda **kwargs: calls.append(("pr",)))
+    monkeypatch.setattr(module.pr_utils, "run", lambda command: calls.append(command))
+
+    module.process_target(
+        target=target,
+        base_sha="base-sha",
+        base_branch="main",
+        repository="canton-network/cf-docs",
+    )
+
+    assert calls == [
+        ("reset", "base-sha"),
+        module.nix_develop_command("npm run generate:version-compatibility-dashboard"),
+        ("close", "version-dashboard/update"),
+    ]
+    assert not any("generate:network-variable-tabs" in " ".join(call) for call in calls)
 
 
 def test_source_update_targets_generate_when_source_changed(monkeypatch, tmp_path: Path) -> None:
@@ -158,8 +334,8 @@ def test_source_update_targets_generate_when_source_changed(monkeypatch, tmp_pat
 
     assert calls == [
         ("reset", "base-sha"),
-        ("nix-shell", "--run", "npm run update:generated-reference-sources -- --source wallet-gateway-openrpc"),
-        ("nix-shell", "--run", "npm run generate:wallet-gateway-openrpc-reference"),
+        module.nix_develop_command("npm run update:generated-reference-sources -- --source wallet-gateway-openrpc"),
+        module.nix_develop_command("npm run generate:wallet-gateway-openrpc-reference"),
         ("pr", "wallet-gateway-openrpc"),
     ]
     assert body_paths
@@ -202,14 +378,20 @@ def test_generated_clean_paths_include_target_paths_and_internal_output() -> Non
 
     assert ".internal" in clean_paths
     assert "docs-main/openapi/splice" in clean_paths
+    assert "docs-main/sdks-tools/api-reference/splice-daml/splice-api-token-holding-v2" in clean_paths
     assert "docs-main/openapi/json-ledger-api" in clean_paths
     assert "docs-main/reference/grpc-ledger-api-reference" in clean_paths
     assert "docs-main/reference/java" in clean_paths
     assert "docs-main/appdev/reference/daml-standard-library" in clean_paths
+    assert "docs-main/appdev/reference/daml-script" in clean_paths
     assert "docs-main/reference/wallet-gateway-json-rpc" in clean_paths
     assert "docs-main/reference/typescript" in clean_paths
     assert "docs-main/snippets/generated/version-dashboard-data.mdx" in clean_paths
     assert "docs-main/global-synchronizer/deployment/validator-kubernetes.mdx" in clean_paths
+    assert "docs-main/global-synchronizer/reference/canton-console-commands.mdx" in clean_paths
+    assert "docs-main/global-synchronizer/reference/error-codes.mdx" in clean_paths
+    assert "docs-main/release-notes/releases-and-versioning.mdx" in clean_paths
+    assert "docs-main/appdev/deep-dives/external-signing-topology.mdx" in clean_paths
     assert "docs-main/global-synchronizer/reference/canton-metrics.mdx" in clean_paths
     assert "docs-main/global-synchronizer/release-notes" in clean_paths
     assert "docs-main/integrations/release-notes/wallet-gateway.mdx" in clean_paths
@@ -421,7 +603,10 @@ def test_main_dry_run_lists_targets_without_git_or_gh(monkeypatch, capsys) -> No
     assert module.main() == 0
     output = capsys.readouterr().out
     assert "version-dashboard: Update generated docs" in output
-    assert "source $ nix-shell --run npm run generate:version-compatibility-dashboard" in output
+    expected_source_command = "source $ " + " ".join(
+        module.nix_develop_command("npm run generate:version-compatibility-dashboard")
+    )
+    assert expected_source_command in output
     assert "npm run generate:network-variable-tabs" in output
 
 
@@ -524,6 +709,117 @@ def test_create_or_update_pull_request_marks_existing_pr_ready(monkeypatch, tmp_
     assert ready_calls == [{"pr_number": "932", "repository": "canton-network/cf-docs"}]
     assert not any("--undo" in call for call in gh_calls)
     assert any(call[:2] == ("pr", "edit") and call[2] == "932" for call in gh_calls)
+
+
+def test_create_or_update_pull_request_keeps_matching_existing_branch(
+    monkeypatch, tmp_path: Path
+) -> None:
+    load_script_module()
+    import generated_reference_pr_utils as pr_utils
+
+    git_calls: list[tuple[str, ...]] = []
+    gh_calls: list[tuple[str, ...]] = []
+    auto_merge_calls: list[dict[str, object]] = []
+
+    def fake_git(*args: str, capture: bool = False) -> str:
+        git_calls.append(args)
+        if args[:2] == ("status", "--porcelain"):
+            return " M generated.mdx"
+        return ""
+
+    def fake_gh(*args: str, capture: bool = False) -> str:
+        gh_calls.append(args)
+        if args[:2] == ("pr", "list"):
+            return "932"
+        return ""
+
+    monkeypatch.setattr(pr_utils, "git", fake_git)
+    monkeypatch.setattr(pr_utils, "gh", fake_gh)
+    monkeypatch.setattr(
+        pr_utils,
+        "matching_remote_branch_sha",
+        lambda **kwargs: "existing123",
+    )
+    monkeypatch.setattr(
+        pr_utils,
+        "push_branch",
+        lambda branch: (_ for _ in ()).throw(AssertionError("branch must not be pushed")),
+    )
+    monkeypatch.setattr(pr_utils, "mark_pull_request_ready", lambda **kwargs: None)
+    monkeypatch.setattr(
+        pr_utils,
+        "maybe_merge_generated_pr",
+        lambda **kwargs: auto_merge_calls.append(kwargs),
+    )
+    body_path = tmp_path / "body.md"
+    body_path.write_text("body", encoding="utf-8")
+
+    pr_number = pr_utils.create_or_update_pull_request(
+        title="Update Java ledger bindings reference",
+        branch="generated-references/ledger-bindings/update",
+        paths=("generated.mdx",),
+        body_path=body_path,
+        base_branch="main",
+        repository="canton-network/cf-docs",
+        auto_merge=False,
+    )
+
+    assert pr_number == "932"
+    assert not any(call[:1] == ("commit",) for call in git_calls)
+    assert gh_calls == [
+        (
+            "pr",
+            "list",
+            "--repo",
+            "canton-network/cf-docs",
+            "--head",
+            "generated-references/ledger-bindings/update",
+            "--base",
+            "main",
+            "--state",
+            "open",
+            "--json",
+            "number",
+            "--jq",
+            ".[0].number // empty",
+        )
+    ]
+    assert auto_merge_calls[0]["head_sha"] == "existing123"
+
+
+def test_matching_remote_branch_sha_compares_staged_target_paths(monkeypatch) -> None:
+    load_script_module()
+    import generated_reference_pr_utils as pr_utils
+
+    git_calls: list[tuple[str, ...]] = []
+
+    def fake_git(*args: str, capture: bool = False) -> str:
+        git_calls.append(args)
+        if args[:3] == ("ls-remote", "--heads", "origin"):
+            return "abc123\trefs/heads/generated/update"
+        if args[:3] == ("diff", "--cached", "--name-only"):
+            return ""
+        return ""
+
+    monkeypatch.setattr(pr_utils, "git", fake_git)
+
+    assert (
+        pr_utils.matching_remote_branch_sha(
+            branch="generated/update",
+            paths=("generated.mdx", "generated/"),
+        )
+        == "abc123"
+    )
+    assert ("fetch", "--no-tags", "origin", "refs/heads/generated/update") in git_calls
+    assert (
+        "diff",
+        "--cached",
+        "--name-only",
+        "abc123",
+        "--",
+        "generated.mdx",
+        "generated/",
+    ) in git_calls
 
 
 def test_create_or_update_pull_request_can_disable_auto_merge(
@@ -679,9 +975,14 @@ def test_dispatch_mintlify_validation_runs_workflow_on_generated_branch(monkeypa
     load_script_module()
     import generated_reference_pr_utils as pr_utils
 
-    calls: list[tuple[str, ...]] = []
+    calls: list[tuple[tuple[str, ...], dict[str, str] | None]] = []
 
-    monkeypatch.setattr(pr_utils, "gh", lambda *args, capture=False: calls.append(args) or "")
+    monkeypatch.setenv("GENERATED_DOCS_WORKFLOW_TOKEN", "workflow-token")
+    monkeypatch.setattr(
+        pr_utils,
+        "run",
+        lambda command, **kwargs: calls.append((tuple(command), kwargs.get("env"))) or "",
+    )
 
     pr_utils.dispatch_mintlify_validation(
         repository="canton-network/cf-docs",
@@ -690,13 +991,17 @@ def test_dispatch_mintlify_validation_runs_workflow_on_generated_branch(monkeypa
 
     assert calls == [
         (
-            "workflow",
-            "run",
-            "mintlify-validate.yml",
-            "--repo",
-            "canton-network/cf-docs",
-            "--ref",
-            "version-dashboard/update",
+            (
+                "gh",
+                "workflow",
+                "run",
+                "mintlify-validate.yml",
+                "--repo",
+                "canton-network/cf-docs",
+                "--ref",
+                "version-dashboard/update",
+            ),
+            {"GH_TOKEN": "workflow-token", "GITHUB_TOKEN": "workflow-token"},
         )
     ]
 
@@ -838,7 +1143,7 @@ def test_generated_pr_policy_accepts_configured_generated_paths() -> None:
             head_sha="abc123",
         ),
         pr_metadata={
-            "author": {"login": "app/github-actions"},
+            "author": {"login": "app/cf-docs-generated-docs-merger"},
             "state": "OPEN",
             "isDraft": False,
             "baseRefName": "main",
@@ -888,8 +1193,38 @@ def test_generated_pr_policy_rejects_unexpected_author_and_paths() -> None:
         },
     )
 
-    assert "expected PR author 'app/github-actions', found 'danielporterda'" in errors
+    assert "expected PR author 'app/cf-docs-generated-docs-merger', found 'danielporterda'" in errors
     assert (
         "changed files outside configured generated paths: .github/workflows/update-version-dashboard.yml"
         in errors
     )
+
+
+def test_generated_pr_policy_rejects_legacy_github_actions_author() -> None:
+    policy = load_policy_module()
+
+    errors = policy.validate_policy(
+        policy_input=policy.PolicyInput(
+            pr_number="932",
+            repository="canton-network/cf-docs",
+            base_branch="main",
+            head_branch="version-dashboard/update",
+            head_sha="abc123",
+        ),
+        pr_metadata={
+            "author": {"login": "app/github-actions"},
+            "state": "OPEN",
+            "isDraft": False,
+            "baseRefName": "main",
+            "headRefName": "version-dashboard/update",
+            "headRefOid": "abc123",
+        },
+        changed_files=("config/repo-version-config.json",),
+        branch_paths={
+            "version-dashboard/update": ("config/repo-version-config.json",),
+        },
+    )
+
+    assert errors == [
+        "expected PR author 'app/cf-docs-generated-docs-merger', found 'app/github-actions'"
+    ]

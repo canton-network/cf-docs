@@ -286,38 +286,9 @@ case "$PACKAGE_SET" in
     generate_json_for_package "daml-prim" "$PRIM_SRC_ROOT" "$PRIM_JSON"
     generate_json_for_package "daml-stdlib" "$STDLIB_SRC_ROOT" "$STDLIB_JSON"
 
-    python3 - "$STDLIB_JSON" "$PRIM_JSON" "$OUTPUT_JSON" <<'PY'
-import json
-import sys
-from pathlib import Path
-
-stdlib_path = Path(sys.argv[1])
-prim_path = Path(sys.argv[2])
-out_path = Path(sys.argv[3])
-
-with stdlib_path.open("r", encoding="utf-8") as f:
-    stdlib_modules = json.load(f)
-with prim_path.open("r", encoding="utf-8") as f:
-    prim_modules = json.load(f)
-
-if not isinstance(stdlib_modules, list) or not isinstance(prim_modules, list):
-    raise SystemExit("Expected list JSON payloads for stdlib and prim.")
-
-combined = []
-seen = set()
-for module in stdlib_modules + prim_modules:
-    if not isinstance(module, dict):
-        continue
-    name = module.get("md_name")
-    if isinstance(name, str) and name in seen:
-        continue
-    if isinstance(name, str):
-        seen.add(name)
-    combined.append(module)
-
-out_path.write_text(json.dumps(combined, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-print(f"Combined modules: {len(combined)} (stdlib={len(stdlib_modules)}, prim={len(prim_modules)})")
-PY
+    # Merge same md_name modules (Prelude / DA.Exception / DA.Stack MOVE collisions)
+    # instead of first-wins, which dropped daml-prim MOVE content.
+    python3 "$SCRIPT_DIR/../../scripts/merge_daml_docs_modules.py" "$STDLIB_JSON" "$PRIM_JSON" "$OUTPUT_JSON"
     ;;
 esac
 

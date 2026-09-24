@@ -53,7 +53,9 @@ def load_network_data(path: Path = NETWORK_DATA_PATH) -> dict[str, Any]:
     node_script = """
 const fs = require('fs');
 const source = fs.readFileSync(process.argv[1], 'utf8');
-const body = source.replace(/export\\s+const\\s+networkData\\s*=\\s*/, 'const networkData = ');
+// Strip only top-level export declarations (e.g. `export const networkData`),
+// not the word "export" inside string substitution values.
+const body = source.replace(/^export\\s+/gm, '');
 const networkData = Function(`${body}; return networkData;`)();
 process.stdout.write(JSON.stringify(networkData));
 """
@@ -291,8 +293,14 @@ def bootstrap_page(page_path: Path, network_data: dict[str, Any], docs_main: Pat
     return changed
 
 
-def update_page(page_path: Path, network_data: dict[str, Any], docs_main: Path = DOCS_MAIN) -> bool:
-    text = page_path.read_text(encoding="utf-8")
+def update_page(
+    page_path: Path,
+    network_data: dict[str, Any],
+    docs_main: Path = DOCS_MAIN,
+    *,
+    check: bool = False,
+) -> bool:
+    text = page_path.read_bytes().decode("utf-8")
     if not GENERATED_BLOCK_RE.search(text):
         return False
 
@@ -300,12 +308,12 @@ def update_page(page_path: Path, network_data: dict[str, Any], docs_main: Path =
         source_ref = match.group("source")
         source_path = resolve_mdx_import(source_ref, docs_main)
         source_text = source_path.read_text(encoding="utf-8")
-        return render_generated_block(source_ref, source_text, network_data, docs_main)
+        rendered = render_generated_block(source_ref, source_text, network_data, docs_main)
+        return re.sub(r"\n{3,}", "\n\n", rendered)
 
     updated = GENERATED_BLOCK_RE.sub(replace_block, text)
-    updated = clean_unused_imports(updated)
-    if updated != text:
-        page_path.write_text(updated, encoding="utf-8")
+    if updated != text and not check:
+        page_path.write_bytes(updated.encode("utf-8"))
     return updated != text
 
 
@@ -319,25 +327,31 @@ def iter_pages(docs_main: Path = DOCS_MAIN) -> list[Path]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Generate static Mintlify tabs for network variable snippets.")
-    parser.add_argument("--bootstrap", action="store_true", help="Extract existing NetworkVariables blocks into source snippets before regenerating.")
-    parser.add_argument("--check", action="store_true", help="Fail if generated output is not up to date.")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--bootstrap", action="store_true", help="Extract existing NetworkVariables blocks into source snippets before regenerating.")
+    mode.add_argument("--check", action="store_true", help="Check generated sections without changing any files.")
     args = parser.parse_args()
 
     network_data = load_network_data()
     changed_pages: list[Path] = []
     for page_path in iter_pages():
-        changed = bootstrap_page(page_path, network_data) if args.bootstrap else update_page(page_path, network_data)
+        changed = bootstrap_page(page_path, network_data) if args.bootstrap else update_page(
+            page_path, network_data, check=args.check
+        )
         if changed:
             changed_pages.append(page_path)
 
     if args.check and changed_pages:
         changed_list = "\n".join(path.relative_to(REPO_ROOT).as_posix() for path in changed_pages)
-        raise SystemExit(f"network variable tabs are out of date:\n{changed_list}")
+        raise SystemExit(
+            "Network variable tabs are stale. Run `npm run generate:network-variable-tabs` "
+            f"and commit the rendered MDX changes.\n{changed_list}"
+        )
 
     if changed_pages:
         print(f"Updated {len(changed_pages)} page(s).")
     else:
-        print("Network variable tabs are up to date.")
+        print("Network variable tabs are rendered and up to date.")
 
 
 if __name__ == "__main__":

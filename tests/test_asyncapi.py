@@ -8,10 +8,12 @@ import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
 
+from x2mdx.asyncapi.history import build_asyncapi_history_report
 from x2mdx.asyncapi.lifecycle import build_asyncapi_report_from_sources, parse_asyncapi
 from x2mdx.asyncapi.models import AsyncApiSourceSnapshot
 from x2mdx.asyncapi.render import build_action_operation
 from x2mdx.cli import main as cli_main
+from x2mdx.history import LifecycleState, load_history_report, validate_history_report
 
 
 def write_text(path: Path, contents: str) -> None:
@@ -20,6 +22,39 @@ def write_text(path: Path, contents: str) -> None:
 
 
 class AsyncApiTests(unittest.TestCase):
+    def test_prerelease_badge_uses_current_action_then_channel(self) -> None:
+        import yaml
+
+        for channel_state, action_state, label in [
+            ("alpha", None, "Alpha"),
+            ("alpha", " BETA ", "Beta"),
+            ("alpha", "stable", None),
+            (None, "beta", "Beta"),
+            ("alpha", "deprecated", "Deprecated"),
+            (None, None, None),
+        ]:
+            with self.subTest(channel=channel_state, action=action_state):
+                manifest = self._write_manifest()
+                for version, state in [("1.0.0", "alpha"), ("1.1.0", channel_state)]:
+                    path = manifest.parent / version / "asyncapi.yaml"
+                    spec = yaml.safe_load(path.read_text())
+                    channel = spec["channels"]["/stream"]
+                    if state is not None:
+                        channel["x-state"] = state
+                    if version == "1.1.0" and action_state is not None:
+                        channel["subscribe"]["x-state"] = action_state
+                    path.write_text(yaml.safe_dump(spec))
+                output = self.root / "badge-pages"
+                self.assertEqual(cli_main([
+                    "asyncapi", "build-api-pages-from-manifest", "--manifest", str(manifest),
+                    "--output-dir", str(output),
+                ]), 0)
+                page = (output / "operations/stream/subscribe.mdx").read_text()
+                for candidate in ("Alpha", "Beta", "Deprecated"):
+                    self.assertEqual(f">{candidate}</span>" in page, candidate == label)
+                if label is not None:
+                    self.assertIn(f'<span class="x2mdx-ref-meta-value">{label}</span>', page)
+
     def setUp(self) -> None:
         self.temp_dir = tempfile.TemporaryDirectory()
         self.root = Path(self.temp_dir.name)
@@ -322,6 +357,67 @@ class AsyncApiTests(unittest.TestCase):
         self.assertEqual(report.per_version_deltas["1.1.0"]["changed_count"], 1)
         self.assertEqual(report.per_version_deltas["1.1.0"]["removed_count"], 1)
 
+    def test_normalized_history_tracks_authored_lifecycle_and_replacement(self) -> None:
+        sources = [
+            self._snapshot(
+                "1.0.0",
+                "published/1.0.0/asyncapi.yaml",
+                """
+                asyncapi: 2.6.0
+                info:
+                  title: Sample WebSocket API
+                  version: 1.0.0
+                channels:
+                  payments.old:
+                    subscribe:
+                      operationId: onOldPayments
+                """,
+            ),
+            self._snapshot(
+                "1.1.0",
+                "published/1.1.0/asyncapi.yaml",
+                """
+                asyncapi: 2.6.0
+                info:
+                  title: Sample WebSocket API
+                  version: 1.1.0
+                channels:
+                  payments.old:
+                    x-state: deprecated
+                    x-remove-as-of: 2.0.0
+                    subscribe:
+                      operationId: onOldPayments
+                  payments.new:
+                    x-state: stable
+                    x-replaces: payments.old
+                    subscribe:
+                      operationId: onNewPayments
+                """,
+            ),
+        ]
+
+        report = build_asyncapi_history_report(
+            sources=sources,
+            routes={
+                ("payments.old", "subscribe"): "reference/old/subscribe",
+                ("payments.new", "subscribe"): "reference/new/subscribe",
+            },
+            surface_id="asyncapi-test",
+            title="AsyncAPI test",
+            configured_scope="Test channel actions",
+        )
+
+        validate_history_report(report)
+        items = report.items_by_id()
+        old = items["payments.old#subscribe"]
+        new = items["payments.new#subscribe"]
+        self.assertEqual(report.comparison_versions, ("1.0.0", "1.1.0"))
+        self.assertEqual(old.lifecycle_state, LifecycleState.DEPRECATED)
+        self.assertEqual(old.remove_as_of, "2.0.0")
+        self.assertEqual(new.lifecycle_state, LifecycleState.STABLE)
+        self.assertEqual(new.replacement_edges[0].from_item_id, old.id)
+        self.assertEqual(old.replacement_edges[0].to_item_id, new.id)
+
     def test_cli_builds_single_file_asyncapi_page_and_updates_docs_json(self) -> None:
         manifest_path = self._write_manifest()
         output_file = self.root / "docs" / "reference" / "asyncapi.mdx"
@@ -381,6 +477,7 @@ class AsyncApiTests(unittest.TestCase):
     def test_cli_builds_multipage_asyncapi_pages_and_updates_docs_json(self) -> None:
         manifest_path = self._write_manifest()
         output_dir = self.root / "docs" / "reference" / "asyncapi"
+        history_report_path = output_dir / "history-report.json"
         docs_json = self.root / "docs" / "docs.json"
         docs_json.parent.mkdir(parents=True, exist_ok=True)
         docs_json.write_text(
@@ -411,6 +508,8 @@ class AsyncApiTests(unittest.TestCase):
                 str(output_dir),
                 "--overview-name",
                 "index.mdx",
+                "--history-report",
+                str(history_report_path),
                 "--docs-json",
                 str(docs_json),
                 "--nav-dropdown",
@@ -425,9 +524,15 @@ class AsyncApiTests(unittest.TestCase):
         channel = (output_dir / "channels" / "stream.mdx").read_text(encoding="utf-8")
         action = (output_dir / "operations" / "stream" / "subscribe.mdx").read_text(encoding="utf-8")
         docs = json.loads(docs_json.read_text(encoding="utf-8"))
+        history_report = load_history_report(history_report_path)
+        validate_history_report(history_report)
 
         self.assertIn("## Channels", overview)
+        self.assertIn('class="x2mdx-ref-card-title"', overview)
+        self.assertNotIn('<a class="x2mdx-ref-card"', overview)
         self.assertIn("## Actions", channel)
+        self.assertIn('class="x2mdx-ref-card-title"', channel)
+        self.assertNotIn('<a class="x2mdx-ref-card"', channel)
         self.assertIn("## Outputs", action)
         self.assertIn("wscat", action)
         self.assertIn("x2mdx-ref-right-rail", action)
@@ -441,11 +546,49 @@ class AsyncApiTests(unittest.TestCase):
         self.assertNotIn("x2mdx-ref-summary", action)
         self.assertNotIn("## Examples", action)
         self.assertIn("## Related Schemas", action)
+        self.assertIn('href="#history-updated-1-1-0"', action)
+        self.assertIn("## History", action)
+        self.assertNotIn("## Lifecycle Changes", action)
+        self.assertLess(action.index("## Related Schemas"), action.index("## History"))
         self.assertEqual(action.count('class="x2mdx-ref-schema"'), 1)
+        self.assertTrue((output_dir / "channels" / "legacy.mdx").exists())
+        self.assertIn("Removed in 1.1.0", (output_dir / "operations" / "legacy" / "subscribe.mdx").read_text())
+        self.assertFalse(history_report.items_by_id()["/legacy#subscribe"].current_present)
+        self.assertEqual(history_report.items_by_id()["/legacy#subscribe"].route, "reference/asyncapi/operations/legacy/subscribe")
+        self.assertEqual(
+            history_report.items_by_id()["/stream#subscribe"].route,
+            "reference/asyncapi/operations/stream/subscribe",
+        )
         self.assertEqual(
             docs["navigation"]["dropdowns"][0]["groups"],
             [{"group": "JSON Ledger API", "pages": ["reference/asyncapi/index"]}],
         )
+
+    def test_removed_action_is_retained_when_its_channel_still_exists(self) -> None:
+        import yaml
+
+        manifest_path = self._write_manifest()
+        current_path = manifest_path.parent / "1.1.0/asyncapi.yaml"
+        current = yaml.safe_load(current_path.read_text())
+        del current["channels"]["/stream"]["publish"]
+        del current["components"]["messages"]["StreamRequest"]
+        del current["components"]["schemas"]["StreamRequest"]
+        current_path.write_text(yaml.safe_dump(current))
+        output_dir = self.root / "out"
+
+        self.assertEqual(cli_main([
+            "asyncapi", "build-api-pages-from-manifest", "--manifest", str(manifest_path),
+            "--output-dir", str(output_dir),
+        ]), 0)
+
+        removed = (output_dir / "operations/stream/publish.mdx").read_text()
+        current_page = (output_dir / "operations/stream/subscribe.mdx").read_text()
+        channel = (output_dir / "channels/stream.mdx").read_text()
+        self.assertIn("Removed in 1.1.0", removed)
+        self.assertIn("party", removed)
+        self.assertNotIn("Removed in", current_page)
+        self.assertIn("publish", channel)
+        self.assertIn("subscribe", channel)
 
     def test_action_adapter_builds_operation_page_context(self) -> None:
         channel = build_asyncapi_report_from_sources(

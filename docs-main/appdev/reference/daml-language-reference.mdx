@@ -1502,6 +1502,88 @@ For context, a simple template definition:
 {/* COPIED_END */}
 
 
+{/* COPIED_START source="docs-website:docs/replicated/daml/3.5/sdk/reference/daml/serializable.rst" hash="df1dd415" */}
+
+## Reference: Serializable
+
+{/* TODO: This section leans more towards a how-to than a reference in tone.
+    Consider moving it and leaving a minimal reference here. */}
+
+Daml programs store data on the distributed ledger, for example contracts and choices.
+
+Consider the template contract and auxiliary datatype `InstrumentId`:
+
+```haskell
+data InstrumendId = InstrumendId with
+  admin : Party
+  id : Text
+    deriving (Eq, Show)
+
+data AssetSummary = AssetSummary with
+  total : Int
+  instrument : InstrumendId
+    deriving (Eq, Show)
+
+template Asset with
+    owner : Party
+    amount : Int
+    instrument : InstrumendId
+  where
+    signatory owner
+```
+
+The Daml compiler will `infer` that it is safe to include `InstrumentId` in a template contract,
+since it does not contain any inherently unserializable types (e.g. functions).
+
+When upgrading the package containing these datatypes,
+we must ensure that we can still read serialized data that was stored in the past.
+Therefore, [Smart Contract Upgrades](/appdev/deep-dives/smart-contract-upgrading-reference) will check that these serializable datatypes are only changed in a backwards-compatible fashion.
+Concretely this means that only optional fields may be added.
+
+This constraint also applies to data types which can be serialized,
+but that are never actually stored on the ledger, such as `AssetSummary` in the example.
+
+### Explicit Serializable
+
+As we mentioned in the previous section, implicitly inferring serializability is problematic for helper types.
+
+These data types, typically used in-memory during complex calculations,
+but not directly referenced in templates or choices,
+are also subject to the strict [Smart Contract Upgrade](/appdev/deep-dives/smart-contract-upgrading-reference) checks.
+
+Therefore, we recommend Daml developers to enable the `--explicit-serializable=yes` option in `build-options` in `daml.yaml`.
+
+This stops the compiler from automatically inferring the serializability of data types.
+Instead, an explicit `Serializable` instance must be derived,
+and this can be omitted on helper data types that are only used in-memory:
+
+```haskell
+data InstrumendId = InstrumendId with
+  admin : Party
+  id : Text
+    deriving (Eq, Show, Serializable)
+
+data AssetSummary = AssetSummary with
+  total : Int
+  instrument : InstrumendId
+    deriving (Eq, Show)
+
+template Asset with
+    owner : Party
+    amount : Int
+    instrument : InstrumendId
+  where
+    signatory owner
+```
+
+While this requires a bit more typing, we recommend turning this on,
+since it forces Daml developers to think about which data types should end up on the ledger,
+and which ones should be upgradeable.
+
+Explicit Serializable will become the default in a future release,
+so users are encouraged to opt-in early.
+
+{/* COPIED_END */}
 
 {/* COPIED_START source="docs-website:docs/replicated/daml/3.4/sdk/reference/daml/exceptions.rst" hash="0c6fee4c" */}
 

@@ -9,7 +9,13 @@ from pathlib import Path
 from google.protobuf import descriptor_pb2
 
 from x2mdx.cli import main as cli_main
-from x2mdx.protobuf.lifecycle import build_protobuf_history_report_from_sources
+from x2mdx.history import LifecycleState, ReferenceFormat, validate_history_report
+from x2mdx.protobuf.history import build_protobuf_surface_history_report
+from x2mdx.protobuf.lifecycle import (
+    build_protobuf_history_report_from_sources,
+    location_comment_and_state,
+    parse_lifecycle_comment,
+)
 from x2mdx.protobuf.render import build_operation_page
 from x2mdx.protobuf.snapshots import load_protobuf_sources
 
@@ -50,7 +56,12 @@ class ProtobufTests(unittest.TestCase):
         path.write_bytes(gzip.compress(descriptor_set.SerializeToString()))
         return path
 
-    def _write_manifest(self) -> Path:
+    def _write_manifest(
+        self,
+        *,
+        v1_method_comment: str | None = None,
+        v2_method_comment: str | None = None,
+    ) -> Path:
         base_import = "com/example/service.proto"
         repo_path = "community/example/src/main/protobuf/com/example/service.proto"
 
@@ -64,6 +75,10 @@ class ProtobufTests(unittest.TestCase):
         service_v1 = descriptor_pb2.ServiceDescriptorProto(name="ExampleService")
         service_v1.method.extend([make_method("GetFoo", ".com.example.v1.FooRequest", ".com.example.v1.FooResponse")])
         v1.service.extend([service_v1])
+        if v1_method_comment is not None:
+            location = v1.source_code_info.location.add()
+            location.path.extend([6, 0, 2, 0])
+            location.leading_comments = v1_method_comment
 
         v2 = descriptor_pb2.FileDescriptorProto(name=base_import, package="com.example.v1", syntax="proto3")
         v2.message_type.extend(
@@ -82,22 +97,13 @@ class ProtobufTests(unittest.TestCase):
             ]
         )
         v2.service.extend([service_v2])
+        if v2_method_comment is not None:
+            location = v2.source_code_info.location.add()
+            location.path.extend([6, 0, 2, 0])
+            location.leading_comments = v2_method_comment
 
         image_v1 = self._write_descriptor_image("snapshots/1.0.0/image.bin.gz", v1)
         image_v2 = self._write_descriptor_image("snapshots/1.1.0/image.bin.gz", v2)
-
-        metadata = {
-            "schemaVersion": 1,
-            "files": {},
-            "services": {},
-            "endpoints": {},
-            "messages": {},
-            "fields": {},
-            "enums": {},
-            "enumValues": {},
-        }
-        metadata_path = self.root / "metadata.json"
-        metadata_path.write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
 
         manifest = {
             "source": "unit test protobuf snapshots",
@@ -105,7 +111,6 @@ class ProtobufTests(unittest.TestCase):
                 "remote": "https://github.com/example/repo.git",
                 "web_url": "https://github.com/example/repo",
             },
-            "metadata_path": str(metadata_path),
             "versions": [
                 {
                     "version": "1.0.0",
@@ -127,6 +132,81 @@ class ProtobufTests(unittest.TestCase):
         manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
         return manifest_path
 
+    def test_parse_lifecycle_comment_strips_recognized_tags(self) -> None:
+        self.assertEqual(parse_lifecycle_comment(" Creates a payment.\n @lifecycle alpha\n"), ("Creates a payment.", "alpha"))
+        self.assertEqual(parse_lifecycle_comment("@LIFECYCLE Deprecated"), ("", "deprecated"))
+        self.assertEqual(parse_lifecycle_comment("@lifecycle alpha\n@lifecycle beta"), ("", "beta"))
+        self.assertEqual(parse_lifecycle_comment("Plain comment."), ("Plain comment.", None))
+        self.assertEqual(parse_lifecycle_comment("@lifecycle alhpa"), ("@lifecycle alhpa", None))
+        self.assertEqual(parse_lifecycle_comment("@lifecycle"), ("@lifecycle", None))
+        self.assertEqual(parse_lifecycle_comment("See @lifecycle alpha for details."), ("See @lifecycle alpha for details.", None))
+
+    def test_location_state_ignores_detached_comments(self) -> None:
+        location = descriptor_pb2.SourceCodeInfo.Location()
+        location.leading_detached_comments.append(" @lifecycle dev\n")
+        location.leading_comments = " Documented.\n"
+        self.assertEqual(location_comment_and_state(location), ("@lifecycle dev\n\nDocumented.", None))
+
+        trailing = descriptor_pb2.SourceCodeInfo.Location()
+        trailing.trailing_comments = " @lifecycle beta\n"
+        self.assertEqual(location_comment_and_state(trailing), ("", "beta"))
+        self.assertEqual(location_comment_and_state(None), ("", None))
+
+    def test_history_items_record_authored_lifecycle_transitions(self) -> None:
+        manifest_path = self._write_manifest(v1_method_comment=" @lifecycle beta\n", v2_method_comment=" @lifecycle deprecated\n")
+        sources = load_protobuf_sources(manifest_path)
+        report = build_protobuf_history_report_from_sources(sources, source_name="unit", version_filter="all")
+        normalized = build_protobuf_surface_history_report(
+            report,
+            routes={endpoint_id: f"/reference/grpc/{endpoint_id}" for endpoint_id in report["latestSnapshot"]["endpoints"]},
+            surface_id="test-grpc",
+            title="Test gRPC",
+            configured_scope="test endpoints",
+            format=ReferenceFormat.GRPC,
+        )
+        validate_history_report(normalized)
+        item = normalized.items_by_id()["com.example.v1.ExampleService/GetFoo"]
+        self.assertEqual([(t.state, t.version) for t in item.lifecycle_transitions], [(LifecycleState.BETA, "1.0.0"), (LifecycleState.DEPRECATED, "1.1.0")])
+        self.assertEqual(item.lifecycle_state, LifecycleState.DEPRECATED)
+        self.assertEqual(item.lifecycle_transitions[-1].evidence.detail, "@lifecycle deprecated")
+        self.assertEqual(normalized.items_by_id()["com.example.v1.ExampleService/GetBar"].lifecycle_transitions, ())
+
+        output_dir = self.root / "out"
+        self.assertEqual(cli_main([
+            "protobuf", "build-api-pages-from-manifest", "--manifest", str(manifest_path),
+            "--output-dir", str(output_dir), "--history-report", str(output_dir / "history-report.json"), "--reader-route-prefix", "reference/protobuf",
+        ]), 0)
+        page = (output_dir / "operations/com-example-v1/exampleservice/getfoo.mdx").read_text()
+        self.assertIn('href="#history-deprecated-1-1-0">Deprecated 1.1.0</a>', page)
+        self.assertIn('<span class="x2mdx-ref-meta-value">Deprecated</span>', page)
+        self.assertNotIn('x2mdx-ref-badge--removed">Deprecated</span>', page, "authored state must not duplicate the dated deprecation badge")
+
+    def test_removed_endpoint_retains_its_last_request_and_response(self) -> None:
+        manifest_path = self._write_manifest()
+        manifest = json.loads(manifest_path.read_text())
+        image_path = Path(manifest["versions"][1]["descriptor_image_path"])
+        descriptors = descriptor_pb2.FileDescriptorSet()
+        descriptors.ParseFromString(gzip.decompress(image_path.read_bytes()))
+        current_file = descriptors.file[0]
+        del current_file.service[0].method[0]
+        current_file.message_type[0].field[0].name = "current_only"
+        image_path.write_bytes(gzip.compress(descriptors.SerializeToString()))
+        output_dir = self.root / "out"
+
+        self.assertEqual(cli_main([
+            "protobuf", "build-api-pages-from-manifest", "--manifest", str(manifest_path),
+            "--output-dir", str(output_dir), "--history-report", str(output_dir / "history-report.json"), "--reader-route-prefix", "reference/protobuf",
+        ]), 0)
+
+        page = (output_dir / "operations/com-example-v1/exampleservice/getfoo.mdx").read_text()
+        package = (output_dir / "packages/com-example-v1.mdx").read_text()
+        self.assertIn("Removed in 1.1.0", page)
+        self.assertIn("history-removed-1-1-0", page)
+        self.assertIn("FooResponse", page)
+        self.assertNotIn("FooResponseV2", page)
+        self.assertNotIn("current_only", page)
+        self.assertIn("getfoo", package)
+
     def test_build_report_tracks_endpoint_lifecycle(self) -> None:
         manifest_path = self._write_manifest()
         sources = load_protobuf_sources(manifest_path)
@@ -144,6 +224,29 @@ class ProtobufTests(unittest.TestCase):
         )
         self.assertEqual(
             lifecycle["com.example.v1.ExampleService/GetBar"]["introducedIn"],
+            "1.1.0",
+        )
+
+        normalized = build_protobuf_surface_history_report(
+            report,
+            routes={
+                endpoint_id: f"/reference/grpc/{endpoint_id.replace('/', '-')}"
+                for endpoint_id in report["latestSnapshot"]["endpoints"]
+            },
+            surface_id="test-grpc",
+            title="Test gRPC",
+            configured_scope="test endpoints",
+            format=ReferenceFormat.GRPC,
+        )
+        validate_history_report(normalized)
+        normalized_items = normalized.items_by_id()
+        self.assertEqual(normalized.comparison_versions, ("1.0.0", "1.1.0"))
+        self.assertEqual(
+            normalized_items["com.example.v1.ExampleService/GetFoo"].last_changed,
+            "1.1.0",
+        )
+        self.assertEqual(
+            normalized_items["com.example.v1.ExampleService/GetBar"].first_seen,
             "1.1.0",
         )
 
@@ -187,12 +290,16 @@ class ProtobufTests(unittest.TestCase):
         self.assertIn("Canton Protobuf Reference", overview_text)
         self.assertIn("## Release Summary", overview_text)
         self.assertIn("com.example.v1", overview_text)
-        self.assertIn('href="packages/com-example-v1"', overview_text)
+        self.assertIn(
+            '<a class="x2mdx-ref-card-title" href="./packages/com-example-v1">com.example.v1</a>',
+            overview_text,
+        )
+        self.assertNotIn('<a class="x2mdx-ref-card"', overview_text)
         self.assertIn("## ExampleService", package_text)
         self.assertIn("ExampleService.GetFoo", package_text)
         self.assertIn("## Protocol Details", operation_text)
-        self.assertIn("<dt>Service</dt>", operation_text)
-        self.assertIn("<dd>ExampleService</dd>", operation_text)
+        self.assertIn('<span class="x2mdx-ref-meta-label">Service</span>', operation_text)
+        self.assertIn('<span class="x2mdx-ref-meta-value">ExampleService</span>', operation_text)
         self.assertIn("x2mdx-ref-right-rail", operation_text)
         self.assertIn("x2mdx-ref-rail-panel", operation_text)
         self.assertIn("```bash grpcurl", operation_text)
@@ -211,6 +318,55 @@ class ProtobufTests(unittest.TestCase):
         self.assertIn("com.example.v1.FooResponseV2", operation_text)
         self.assertEqual(operation_text.count('class="x2mdx-ref-schema"'), 2)
         self.assertFalse(stale_endpoint_file.exists())
+
+    def test_cli_builds_shared_history_pages_and_report(self) -> None:
+        manifest_path = self._write_manifest()
+        output_dir = self.root / "out" / "protobuf-history"
+        history_report = output_dir / "history-report.json"
+
+        result = cli_main(
+            [
+                "protobuf",
+                "build-api-pages-from-manifest",
+                "--manifest",
+                str(manifest_path),
+                "--output-dir",
+                str(output_dir),
+                "--history-report",
+                str(history_report),
+                "--surface-id",
+                "ledger-api-protobuf",
+                "--surface-title",
+                "Ledger API protobuf",
+                "--configured-scope",
+                "Ledger API protobuf service methods",
+                "--reader-route-prefix",
+                "reference/protobuf",
+                "--overview-name",
+                "overview.mdx",
+            ]
+        )
+
+        self.assertEqual(result, 0)
+        self.assertTrue(history_report.exists())
+        self.assertFalse((output_dir / "index.mdx").exists())
+        overview_text = (output_dir / "overview.mdx").read_text(encoding="utf-8")
+        operation_text = (
+            output_dir
+            / "operations"
+            / "com-example-v1"
+            / "exampleservice"
+            / "getfoo.mdx"
+        ).read_text(encoding="utf-8")
+        self.assertIn("## History", overview_text)
+        self.assertNotIn("Present since at least", operation_text)
+        self.assertIn("Updated 1.1.0", operation_text)
+        self.assertNotIn('href="#history-added-1-0-0"', operation_text)
+        self.assertNotIn("Since ", operation_text)
+        self.assertNotIn("Details and History", overview_text)
+        loaded = json.loads(history_report.read_text(encoding="utf-8"))
+        self.assertEqual(loaded["surface_id"], "ledger-api-protobuf")
+        self.assertEqual(loaded["comparison_versions"], ["1.0.0", "1.1.0"])
 
     def test_operation_adapter_collects_request_and_response_schemas(self) -> None:
         ctx = {

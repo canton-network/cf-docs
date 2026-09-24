@@ -1,6 +1,6 @@
 ---
 title: "Connecting a Validator to Multiple Synchronizers"
-description: "How to connect a single validator to the Global Synchronizer and private synchronizers simultaneously"
+description: "How to connect a single validator to the Global Synchronizer and dedicated synchronizers simultaneously"
 ---
 
 import CANTON_DOCS_CN_GS_EXTENSION_SYNCHRONIZERS_LINKING_VALIDATOR_MULTI_SYNC_0 from "/snippets/external/canton/main/docs-open/target/snippet_json_data/docs-cn/global-synchronizer-extension-synchronizers-linking-validator-multi-sync-0.mdx";
@@ -32,19 +32,25 @@ import ExternalCantonMainDocsOpenTargetSnippetJsonDataParticipantHowtosOperateSy
 
 
 
-Canton validators can connect to multiple synchronizers at the same time. This is the foundation of hybrid deployments — your validator participates in the Global Synchronizer for network-wide interoperability while also connecting to one or more private synchronizers for specialized workflows.
+Canton validators can connect to multiple synchronizers at the same time. This is how the MainNet is extended — your
+validator participates in the Global Synchronizer for network-wide interoperability while also connecting to one or more dedicated
+synchronizers for specialized workflows with dedicated bandwidth.
 
 ## How multi-synchronizer connections work
 
-Each synchronizer connection is independent. Your validator maintains a separate communication channel to each synchronizer's sequencer, and contracts are assigned to a specific synchronizer. When you create a contract, it is assigned to one synchronizer. You can later move it to another synchronizer using the unassignment/reassignment protocol.
+Each synchronizer connection is independent. Your validator maintains a separate communication channel to each synchronizer's
+sequencer, and contracts are assigned to a specific synchronizer. When you create a contract, it is assigned to one synchronizer.
+You can later move it to another synchronizer using the unassignment/reassignment protocol.
 
-The validator tracks which synchronizer each contract belongs to and routes transactions accordingly. If a transaction involves contracts on different synchronizers, Canton synchronizes the transaction across both — though this adds latency compared to single-synchronizer transactions.
+The validator tracks which synchronizer each contract belongs to and routes transactions accordingly. If a transaction involves
+contracts on different synchronizers, Canton reassigns the contracts to a common synchronizer that the transaction occurs on —
+though this adds latency compared to single-synchronizer transactions.
 
 ## Adding a synchronizer connection
 
 ### Via Canton Console
 
-If your validator is already running and connected to the Global Synchronizer, you can add a private synchronizer connection at runtime:
+If your validator is already running and connected to the Global Synchronizer, you can add a dedicated synchronizer connection at runtime:
 
 
 <CANTON_DOCS_CN_GS_EXTENSION_SYNCHRONIZERS_LINKING_VALIDATOR_MULTI_SYNC_0 />
@@ -120,17 +126,16 @@ To move a contract to a different synchronizer:
 
 <CantonGlobalSynchronizerExtensionSynchronizersLinkingValidatorMultiSyncL100 />
 
-
 The contract is briefly unavailable between unassignment and reassignment. Both the source and target synchronizer must be connected to your validator, and all stakeholders of the contract must have validators connected to the target synchronizer.
 
 ## Choosing the right synchronizer for a contract
 
 Consider these factors when deciding where to assign a contract:
 
-- **Who needs to see it?** All validators hosting the contract's stakeholders must be connected to the contract's synchronizer. Use the Global Synchronizer for contracts involving external parties.
-- **Transaction frequency** — High-frequency bilateral workflows run more efficiently on a private synchronizer where you control capacity and avoid traffic fees.
+- **Who needs to see it?** All validators hosting the contract's stakeholders must be connected to the contract's synchronizer.
+- **Transaction frequency** — High-frequency bilateral workflows run more efficiently on a dedicated synchronizer where you control capacity with reduced traffic fees.
 - **Settlement needs** — If a contract will eventually interact with Canton Coin or Global Synchronizer contracts, plan for a reassignment step.
-- **Privacy requirements** — Contracts on a private synchronizer are processed exclusively by infrastructure you control. On the Global Synchronizer, the sequencer and mediator are operated by super-validators.
+- **Privacy requirements** — Contracts on a dedicated synchronizer are processed exclusively by infrastructure you control. On the Global Synchronizer, the sequencer and mediator are operated by super-validators.
 
 ## Troubleshooting
 

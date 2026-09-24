@@ -51,6 +51,33 @@ def sample_network_data() -> dict[str, object]:
     }
 
 
+def test_load_network_data_preserves_export_in_substitution_strings(tmp_path: Path) -> None:
+    module = load_script_module()
+    network_data = tmp_path / "version-dashboard-data.mdx"
+    network_data.write_text(
+        """export const lastUpdatedAt = '2026-07-28T08:35:56+00:00';
+export const lastUpdatedLabel = 'July 28, 2026';
+
+export const networkData = {
+  mainnet: {
+    name: 'MainNet',
+    versions: { splice: '0.6.12' },
+    substitutions: {
+      image_tag_set: 'export IMAGE_TAG=0.6.12',
+      chart_version_set: 'export CHART_VERSION=0.6.12',
+    },
+  },
+};
+""",
+        encoding="utf-8",
+    )
+
+    loaded = module.load_network_data(network_data)
+
+    assert loaded["mainnet"]["substitutions"]["image_tag_set"] == "export IMAGE_TAG=0.6.12"
+    assert loaded["mainnet"]["substitutions"]["chart_version_set"] == "export CHART_VERSION=0.6.12"
+
+
 def test_render_generated_block_inlines_imported_snippets_and_substitutes_tokens(tmp_path: Path) -> None:
     module = load_script_module()
     docs_main = tmp_path / "docs-main"
@@ -121,15 +148,23 @@ stale
         encoding="utf-8",
     )
 
+    prefix = 'import Existing from "/snippets/existing.mdx";\n\n\nEditor prose before.\n\n'
+    suffix = '\n\n\nEditor prose after.\n'
+    page.write_text(prefix + page.read_text() + suffix, encoding="utf-8")
+    before = page.read_bytes()
+    assert module.update_page(page, sample_network_data(), docs_main, check=True)
+    assert page.read_bytes() == before
     assert module.update_page(page, sample_network_data(), docs_main)
     first = page.read_text(encoding="utf-8")
     assert "Scan URL: https://scan.dev.example" in first
     assert "stale" not in first
+    assert first.startswith(prefix)
+    assert first.endswith(suffix)
     assert not module.update_page(page, sample_network_data(), docs_main)
     assert page.read_text(encoding="utf-8") == first
 
 
-def test_validate_script_fails_when_generation_changes_tracked_output(tmp_path: Path) -> None:
+def test_validate_script_detects_dirty_stale_output_without_writing(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     docs_main = repo / "docs-main"
     source = docs_main / "snippets" / "networkvars" / "example.mdx"
@@ -173,6 +208,8 @@ stale
         text=True,
     )
 
+    page.write_text(page.read_text() + "\nUncommitted editor prose.\n", encoding="utf-8")
+    before = page.read_bytes()
     stale = subprocess.run(
         ["python3", "scripts/validate_network_variable_tabs.py"],
         cwd=repo,
@@ -183,6 +220,16 @@ stale
     assert stale.returncode == 1
     assert "Network variable tabs are stale" in stale.stderr
     assert "docs-main/example.mdx" in stale.stderr
+    assert page.read_bytes() == before
+
+    subprocess.run(
+        [sys.executable, "scripts/generate_network_variable_tabs.py"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert page.read_text().endswith("\nUncommitted editor prose.\n")
 
     subprocess.run(["git", "add", "docs-main/example.mdx"], cwd=repo, check=True, capture_output=True, text=True)
     subprocess.run(
@@ -202,6 +249,26 @@ stale
     )
     assert current.returncode == 0
     assert "Network variable tabs are rendered and up to date." in current.stdout
+
+
+def test_generation_preserves_ordinary_editor_files(tmp_path: Path) -> None:
+    module = load_script_module()
+    docs_main = tmp_path / "docs-main"
+    docs_main.mkdir()
+    page = docs_main / "new-page.mdx"
+    page.write_text('---\ntitle: New page\n---\n\n\nEditor content.\n', encoding="utf-8")
+    navigation = docs_main / "docs.json"
+    navigation.write_text('{"navigation":{"pages":["new-page"]}}\n', encoding="utf-8")
+    image = docs_main / "new-image.png"
+    image.write_bytes(b"\x89PNG\r\n\x1a\neditor-upload")
+    before = {path: path.read_bytes() for path in docs_main.iterdir()}
+
+    for check in (True, False):
+        assert not any(
+            module.update_page(path, sample_network_data(), docs_main, check=check)
+            for path in module.iter_pages(docs_main)
+        )
+        assert {path: path.read_bytes() for path in docs_main.iterdir()} == before
 
 
 def test_checked_in_network_variable_pages_are_static_tabs() -> None:
