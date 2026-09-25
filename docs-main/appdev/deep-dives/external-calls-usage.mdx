@@ -1,0 +1,118 @@
+---
+title: "Using External Calls"
+description: "A worked example of an external call, the participant configuration for extension services, and the externalCall function reference"
+---
+
+<Note>
+External calls require a synchronizer running protocol version 36 or later and a Daml package
+targeting LF 2.4 or later.
+</Note>
+
+This page covers the practical side of external calls: a worked example, the participant
+configuration, and the `externalCall` function. For how calls travel through the transaction
+and what the participants verify, see
+[External Calls](/appdev/deep-dives/external-calls).
+
+## A Worked Example
+
+Suppose the parties of a workflow want transactions to record an instrument price attested by a
+price oracle that each participant operator runs as an extension service.
+
+Each participant that submits or confirms these transactions configures the oracle under the
+same extension identifier, here `price-oracle`:
+
+```conf
+canton.participants.participant1.parameters.engine.extensions {
+  price-oracle {
+    address = "oracle.example.com"
+    port = 8443
+    version = "v1"
+  }
+}
+```
+
+The Daml choice requests the call with `externalCall`:
+
+```daml
+module PriceOracle where
+
+import DA.ExternalCall (externalCall)
+
+template Instrument
+  with
+    owner : Party
+    isinHex : Text
+  where
+    signatory owner
+
+    nonconsuming choice FetchPrice : Text
+      controller owner
+      do
+        -- "6f70a1b2" pins the oracle configuration the parties agreed on;
+        -- the instrument identifier is the call input.
+        externalCall "price-oracle" "get-price" "6f70a1b2" isinHex
+```
+
+When `FetchPrice` is exercised, the submitting participant sends the configuration and input
+payloads to its `price-oracle` service, records the returned price in the transaction, and the
+choice returns it as a hex-encoded byte string. At confirmation time, the participants hosting
+the checking parties re-execute the same call against their own `price-oracle` service and
+approve only if the outputs match.
+
+## Configuring an Extension Service
+
+Extension services are configured per participant under
+`canton.participants.<participant>.parameters.engine.extensions`, keyed by the extension
+identifier that Daml code passes to `externalCall`:
+
+```conf
+canton.participants.participant1.parameters.engine.extensions {
+  my-extension {
+    address = "extension.example.com"
+    port = 8443
+    version = "v1"
+    max-retries = 3
+    request-timeout = 8s
+  }
+}
+```
+
+Notable parameters (see the scaladoc of `ExtensionServiceConfig` for the full reference):
+
+- `address`, `port`, `version`: the endpoint of the extension service's HTTP API.
+- `tls`: enable TLS towards the service, with `tls.trust-collection-file` naming the trust
+  anchors.
+- `auth`: optional bearer-token authentication (`type = bearer-token-file` with
+  `token-file`); the token is never logged.
+- `connect-timeout`, `request-timeout`, `max-retries`, `retry-initial-delay`,
+  `retry-max-delay`: connection handling; retries apply per logical call.
+- `max-response-body-bytes`: upper bound on accepted service responses.
+- `validate-on-startup`: probe the service's version endpoint when the participant starts.
+
+## The externalCall Function
+
+The function is provided by the Daml standard library module `DA.ExternalCall`:
+
+```daml
+import DA.ExternalCall
+
+externalCall : Text -> Text -> Text -> Text -> Update Text
+```
+
+`externalCall extensionId functionId config input` requests a call to function `functionId`
+of the extension configured on the participant under `extensionId`. The `config` argument
+is the extension configuration hash — the value the parties use to pin the service
+configuration they agreed on, as in the example above — and `input` is the call input; both
+are hex-encoded byte strings, and the empty string represents zero bytes.
+Payloads are canonicalized to lowercase before execution, so two calls that differ only in hex
+casing are the same call. The result is the service response, again as a hex-encoded byte
+string. Malformed payloads, missing extension configuration, extension-service failures, and
+invalid service output fail the update; runtime and service errors include the extension and
+function context.
+
+## Next Steps
+
+- [External Calls](/appdev/deep-dives/external-calls) — How calls travel through the
+  transaction: the flow, validation, and the trust model.
+- [Error Codes Reference](/appdev/reference/error-codes) — The external-call validation error
+  codes carry explanations and resolutions generated from the participant sources.
