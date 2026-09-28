@@ -26,6 +26,37 @@ METRICS_RST = Path("docs-open/src/sphinx/participant/reference/metrics.rst")
 GENERATED_INCLUDES_DIR = Path("docs-open/target/generated")
 USER_AGENT = "cf-docs-canton-metrics-reference/1.0"
 
+# Canton release tags up to v3.5.19 define their `dpm` shell tool by pulling
+# ghcr.io/digital-asset/temp/components/dpm. That registry only keeps the newest tag, so the
+# pinned tag disappears once dpm publishes a newer release and the whole Canton shell fails to
+# build. Canton main now fetches the same binary from digital-asset/dpm GitHub releases; while
+# the checked-out tag still uses the temporary registry, the definition is rewritten to do the
+# same for the version it pins.
+CANTON_DPM_TOOL_NIX = Path("nix/tools/dpm/default.nix")
+CANTON_TEMP_DPM_REGISTRY = "ghcr.io/digital-asset/temp/components/dpm"
+DPM_RELEASE_URL = "https://github.com/digital-asset/dpm/releases/download/{version}/dpm-{version}-{platform}.tar.gz"
+DPM_RELEASE_PLATFORMS = {
+    "x86_64-linux": "linux-amd64",
+    "aarch64-linux": "linux-arm64",
+    "x86_64-darwin": "darwin-amd64",
+    "aarch64-darwin": "darwin-arm64",
+}
+# SHA-256 of each release tarball, checked against the dpm-<version>-checksums.txt release asset.
+DPM_RELEASE_HASHES: dict[str, dict[str, str]] = {
+    "1.0.20": {
+        "x86_64-linux": "sha256-2TzC06qaJvOmvY3FcowNrz5Z7ktp7sVPeh4tt9h36q4=",
+        "aarch64-linux": "sha256-el6oGQPkD2aOTCaSVVbNhO4cdpJyD+W3RUaB+jpRLEQ=",
+        "x86_64-darwin": "sha256-hg0I3ImEGvOocIgMuRM3V/+xocC94e5fRK2ymg0DJVM=",
+        "aarch64-darwin": "sha256-lan2Y/HSzxaMdMXcQY0nG6Z0T+Ru6ECJTLyc/sJHSn8=",
+    },
+    "1.0.22": {
+        "x86_64-linux": "sha256-6/2yBy5i5LCU9MwfmyIaWm/VNmRNiHmdqOE7+TbgiP8=",
+        "aarch64-linux": "sha256-NiyK8BSswtRhDpl7UUxp69XwyTOXrOgISvU5p6smd+k=",
+        "x86_64-darwin": "sha256-UtL4fWSHdl0RihswM8LpXQ/iFlQmXNBPfre/n3QhlEY=",
+        "aarch64-darwin": "sha256-5ocahVLhDgVZ1dpsbHtlnZ6AQRI7UNlV0LFuG0ioAts=",
+    },
+}
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -147,6 +178,78 @@ def allow_direnv(canton_dir: Path) -> None:
     run(["direnv", "allow"], cwd=canton_dir)
 
 
+def canton_dpm_temp_registry_version(nix_source: str) -> str | None:
+    """Return the dpm version a Canton tool definition pulls from the temporary registry, if any."""
+    if CANTON_TEMP_DPM_REGISTRY not in nix_source:
+        return None
+    match = re.search(r'^\s*dpmVersion\s*=\s*"([^"]+)"\s*;', nix_source, flags=re.MULTILINE)
+    if not match:
+        raise ValueError(f"Unable to read dpmVersion from Canton {CANTON_DPM_TOOL_NIX}")
+    return match.group(1)
+
+
+def render_dpm_release_nix(version: str) -> str:
+    hashes = DPM_RELEASE_HASHES.get(version)
+    if hashes is None:
+        known = ", ".join(sorted(DPM_RELEASE_HASHES))
+        raise ValueError(
+            f"No digital-asset/dpm GitHub release hashes recorded for dpm {version}; "
+            f"known versions: {known}. Add the release tarball hashes to DPM_RELEASE_HASHES."
+        )
+    hash_lines = "\n".join(f'    "{system}" = "{hashes[system]}";' for system in DPM_RELEASE_PLATFORMS)
+    platform_lines = "\n".join(f'    "{system}" = "{platform}";' for system, platform in DPM_RELEASE_PLATFORMS.items())
+    url = DPM_RELEASE_URL.format(version="${dpmVersion}", platform="${releasePlatform}")
+    return f"""# Rewritten by cf-docs scripts/generate_canton_metrics_reference.py.
+# The original definition pulled dpm {version} from a temporary ghcr.io registry that drops
+# superseded tags. This fetches the same dpm version from its GitHub release instead.
+{{ pkgs ? import <nixpkgs> {{}} }}:
+
+let
+  dpmVersion = "{version}";
+
+  dpmHashes = {{
+{hash_lines}
+  }};
+  dpmHash = dpmHashes.${{pkgs.stdenv.hostPlatform.system}} or (throw "Unsupported system: ${{pkgs.stdenv.hostPlatform.system}}");
+
+  releasePlatforms = {{
+{platform_lines}
+  }};
+  releasePlatform = releasePlatforms.${{pkgs.stdenv.hostPlatform.system}} or (throw "Unsupported system: ${{pkgs.stdenv.hostPlatform.system}}");
+in
+pkgs.stdenv.mkDerivation {{
+  pname = "dpm";
+  version = dpmVersion;
+
+  src = pkgs.fetchurl {{
+    url = "{url}";
+    hash = dpmHash;
+  }};
+
+  sourceRoot = ".";
+  installPhase = ''
+    install -Dm755 dpm $out/bin/dpm
+  '';
+}}
+"""
+
+
+def repoint_canton_dpm_source(canton_dir: Path) -> str | None:
+    """Rewrite Canton's dpm tool definition to fetch from GitHub releases.
+
+    Returns the dpm version that was repointed, or None when the checkout does not pull dpm from
+    the temporary registry and was left untouched.
+    """
+    nix_file = canton_dir / CANTON_DPM_TOOL_NIX
+    if not nix_file.is_file():
+        return None
+    version = canton_dpm_temp_registry_version(nix_file.read_text(encoding="utf-8"))
+    if version is None:
+        return None
+    nix_file.write_text(render_dpm_release_nix(version), encoding="utf-8")
+    return version
+
+
 def run_generation(*, canton_dir: Path, command: list[str], skip_direnv: bool) -> None:
     generated = canton_dir / GENERATED_INCLUDES_DIR
     if generated.exists():
@@ -261,6 +364,12 @@ def main() -> int:
         force_refresh=args.force_refresh,
     )
     if not args.skip_generation:
+        repointed = repoint_canton_dpm_source(args.canton_dir)
+        if repointed:
+            print(
+                f"Fetching dpm {repointed} from digital-asset/dpm GitHub releases; "
+                f"Canton {source_ref} still pulls it from {CANTON_TEMP_DPM_REGISTRY}"
+            )
         run_generation(canton_dir=args.canton_dir, command=args.generation_command, skip_direnv=args.skip_direnv)
 
     metrics_rst = args.canton_dir / METRICS_RST

@@ -13,6 +13,28 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 from scripts import generate_canton_metrics_reference as generator
 
 
+# Abridged copy of nix/tools/dpm/default.nix from Canton v3.5.19.
+CANTON_TEMP_REGISTRY_DPM_NIX = textwrap.dedent(
+    """\
+    { pkgs ? import <nixpkgs> {} }:
+
+    let
+      dpmPath = "ghcr.io/digital-asset/temp/components/dpm";
+      dpmVersion = "1.0.20";
+      dpmRef = "${dpmPath}:${dpmVersion}";
+    in
+    pkgs.stdenv.mkDerivation {
+      pname = "dpm";
+      version = dpmVersion;
+      src = pkgs.stdenv.mkDerivation {
+        name = "dpm-pull-${dpmRef}";
+        buildCommand = "oras pull -o $out ${dpmRef}";
+      };
+    }
+    """
+)
+
+
 class CantonMetricsReferenceTests(unittest.TestCase):
     def test_defaults_use_public_canton_source(self) -> None:
         self.assertEqual(generator.DEFAULT_RELEASE_REPO, "digital-asset/canton")
@@ -99,6 +121,76 @@ class CantonMetricsReferenceTests(unittest.TestCase):
                 ),
             ],
         )
+
+    def test_repoint_canton_dpm_source_fetches_pinned_version_from_github_release(self) -> None:
+        with TemporaryDirectory() as tmp:
+            canton_dir = Path(tmp)
+            nix_file = canton_dir / generator.CANTON_DPM_TOOL_NIX
+            nix_file.parent.mkdir(parents=True)
+            nix_file.write_text(CANTON_TEMP_REGISTRY_DPM_NIX, encoding="utf-8")
+
+            repointed = generator.repoint_canton_dpm_source(canton_dir)
+            rewritten = nix_file.read_text(encoding="utf-8")
+
+        self.assertEqual(repointed, "1.0.20")
+        self.assertNotIn(generator.CANTON_TEMP_DPM_REGISTRY, rewritten)
+        self.assertIn('dpmVersion = "1.0.20";', rewritten)
+        self.assertIn(
+            "https://github.com/digital-asset/dpm/releases/download/${dpmVersion}/dpm-${dpmVersion}-${releasePlatform}.tar.gz",
+            rewritten,
+        )
+        self.assertIn('"x86_64-linux" = "linux-amd64";', rewritten)
+        self.assertIn(f'"x86_64-linux" = "{generator.DPM_RELEASE_HASHES["1.0.20"]["x86_64-linux"]}";', rewritten)
+        self.assertIn("install -Dm755 dpm $out/bin/dpm", rewritten)
+
+    def test_repoint_canton_dpm_source_leaves_github_release_definitions_alone(self) -> None:
+        original = textwrap.dedent(
+            """\
+            { pkgs ? import <nixpkgs> {} }:
+            let
+              dpmVersion = "1.0.22";
+            in
+            pkgs.stdenv.mkDerivation {
+              name = "dpm-gh";
+              src = builtins.fetchurl {
+                url = "https://github.com/digital-asset/dpm/releases/download/${dpmVersion}/dpm-${dpmVersion}-linux-amd64.tar.gz";
+                sha256 = "sha256:1zw8w0vgjfz1m2fpk22dchvdavss38i9n7ycyjab1r325q3v5zgb";
+              };
+            }
+            """
+        )
+        with TemporaryDirectory() as tmp:
+            canton_dir = Path(tmp)
+            nix_file = canton_dir / generator.CANTON_DPM_TOOL_NIX
+            nix_file.parent.mkdir(parents=True)
+            nix_file.write_text(original, encoding="utf-8")
+
+            repointed = generator.repoint_canton_dpm_source(canton_dir)
+            unchanged = nix_file.read_text(encoding="utf-8")
+
+        self.assertIsNone(repointed)
+        self.assertEqual(unchanged, original)
+
+    def test_repoint_canton_dpm_source_skips_checkouts_without_dpm_tool(self) -> None:
+        with TemporaryDirectory() as tmp:
+            self.assertIsNone(generator.repoint_canton_dpm_source(Path(tmp)))
+
+    def test_repoint_canton_dpm_source_rejects_unrecorded_versions(self) -> None:
+        with TemporaryDirectory() as tmp:
+            canton_dir = Path(tmp)
+            nix_file = canton_dir / generator.CANTON_DPM_TOOL_NIX
+            nix_file.parent.mkdir(parents=True)
+            nix_file.write_text(CANTON_TEMP_REGISTRY_DPM_NIX.replace("1.0.20", "9.9.9"), encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, r"dpm 9\.9\.9"):
+                generator.repoint_canton_dpm_source(canton_dir)
+
+    def test_dpm_release_hashes_cover_every_platform(self) -> None:
+        for version, hashes in generator.DPM_RELEASE_HASHES.items():
+            with self.subTest(version=version):
+                self.assertEqual(set(hashes), set(generator.DPM_RELEASE_PLATFORMS))
+                for digest in hashes.values():
+                    self.assertRegex(digest, r"^sha256-[A-Za-z0-9+/]{43}=$")
 
 
 if __name__ == "__main__":
