@@ -14,39 +14,18 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 from scripts import generate_canton_metrics_reference as generator
 
 
-# Abridged copy of nix/tools/dpm/default.nix from Canton v3.5.19.
-CANTON_TEMP_REGISTRY_DPM_NIX = textwrap.dedent(
-    """\
-    { pkgs ? import <nixpkgs> {} }:
-
-    let
-      dpmPath = "ghcr.io/digital-asset/temp/components/dpm";
-      dpmVersion = "1.0.20";
-      dpmRef = "${dpmPath}:${dpmVersion}";
-    in
-    pkgs.stdenv.mkDerivation {
-      pname = "dpm";
-      version = dpmVersion;
-      src = pkgs.stdenv.mkDerivation {
-        name = "dpm-pull-${dpmRef}";
-        buildCommand = "oras pull -o $out ${dpmRef}";
-      };
-    }
-    """
-)
-
-# Abridged copy of nix/tools/dpm/default.nix from Canton main after it moved to GitHub releases.
+# Abridged Canton nix/tools/dpm/default.nix that fetches dpm from its GitHub release.
 CANTON_GITHUB_RELEASE_DPM_NIX = textwrap.dedent(
     """\
     { pkgs ? import <nixpkgs> {} }:
     let
-      dpmVersion = "1.0.22";
+      dpmVersion = "1.0.20";
     in
     pkgs.stdenv.mkDerivation {
       name = "dpm-gh";
       src = builtins.fetchurl {
         url = "https://github.com/digital-asset/dpm/releases/download/${dpmVersion}/dpm-${dpmVersion}-linux-amd64.tar.gz";
-        sha256 = "sha256:1zw8w0vgjfz1m2fpk22dchvdavss38i9n7ycyjab1r325q3v5zgb";
+        sha256 = "sha256-2TzC06qaJvOmvY3FcowNrz5Z7ktp7sVPeh4tt9h36q4=";
       };
     }
     """
@@ -178,10 +157,10 @@ class CantonMetricsReferenceTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "dpm-1.0.20-linux-arm64.tar.gz"):
             generator.dpm_release_hashes(checksums, "1.0.20")
 
-    def test_repoint_rewrites_temporary_registry_definition(self) -> None:
+    def test_repoint_rewrites_github_release_definition(self) -> None:
         with TemporaryDirectory() as tmp:
             canton_dir = Path(tmp)
-            nix_file = self.write_dpm_tool(canton_dir, CANTON_TEMP_REGISTRY_DPM_NIX)
+            nix_file = self.write_dpm_tool(canton_dir, CANTON_GITHUB_RELEASE_DPM_NIX)
 
             with mock.patch.object(generator, "fetch_dpm_checksums", return_value=DPM_1_0_20_CHECKSUMS) as fetch:
                 repointed = generator.repoint_canton_dpm_source(canton_dir)
@@ -189,7 +168,6 @@ class CantonMetricsReferenceTests(unittest.TestCase):
 
         fetch.assert_called_once_with("1.0.20")
         self.assertEqual(repointed, "1.0.20")
-        self.assertNotIn("ghcr.io", rewritten)
         self.assertIn('dpmVersion = "1.0.20";', rewritten)
         self.assertIn(
             "https://github.com/digital-asset/dpm/releases/download/${dpmVersion}/dpm-${dpmVersion}-${releasePlatform}.tar.gz",
@@ -198,20 +176,6 @@ class CantonMetricsReferenceTests(unittest.TestCase):
         self.assertIn('"x86_64-linux" = "linux-amd64";', rewritten)
         self.assertIn('"x86_64-linux" = "sha256-2TzC06qaJvOmvY3FcowNrz5Z7ktp7sVPeh4tt9h36q4=";', rewritten)
         self.assertIn("install -Dm755 dpm $out/bin/dpm", rewritten)
-
-    def test_repoint_rewrites_github_release_definition_too(self) -> None:
-        checksums = DPM_1_0_20_CHECKSUMS.replace("1.0.20", "1.0.22")
-        with TemporaryDirectory() as tmp:
-            canton_dir = Path(tmp)
-            nix_file = self.write_dpm_tool(canton_dir, CANTON_GITHUB_RELEASE_DPM_NIX)
-
-            with mock.patch.object(generator, "fetch_dpm_checksums", return_value=checksums) as fetch:
-                repointed = generator.repoint_canton_dpm_source(canton_dir)
-            rewritten = nix_file.read_text(encoding="utf-8")
-
-        fetch.assert_called_once_with("1.0.22")
-        self.assertEqual(repointed, "1.0.22")
-        self.assertIn('dpmVersion = "1.0.22";', rewritten)
         self.assertNotIn("builtins.fetchurl", rewritten)
 
     def test_repoint_skips_checkouts_without_dpm_tool(self) -> None:

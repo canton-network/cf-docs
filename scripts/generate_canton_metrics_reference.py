@@ -27,11 +27,9 @@ METRICS_RST = Path("docs-open/src/sphinx/participant/reference/metrics.rst")
 GENERATED_INCLUDES_DIR = Path("docs-open/target/generated")
 USER_AGENT = "cf-docs-canton-metrics-reference/1.0"
 
-# Canton checkouts define their `dpm` shell tool in this file. Release tags through v3.5.19 pull it
-# from ghcr.io/digital-asset/temp/components/dpm, which drops superseded tags, so their shells stop
-# building once dpm publishes a newer release. Every checkout is therefore rewritten to fetch the
-# version it pins from the durable digital-asset/dpm GitHub release, verified against that
-# release's published checksums.
+# Canton checkouts define their `dpm` shell tool in this file. Every checkout is rewritten to fetch
+# the version it pins from the durable digital-asset/dpm GitHub release, verified against that
+# release's published checksums, so older release tags keep building.
 CANTON_DPM_TOOL_NIX = Path("nix/tools/dpm/default.nix")
 DPM_RELEASE_URL = "https://github.com/digital-asset/dpm/releases/download/{version}/dpm-{version}-{platform}.tar.gz"
 DPM_CHECKSUMS_URL = "https://github.com/digital-asset/dpm/releases/download/{version}/dpm-{version}-checksums.txt"
