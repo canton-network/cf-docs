@@ -485,7 +485,7 @@ UPDATE_TARGETS = (
         branch="generated-docs/canton-metrics-reference/update",
         description=(
             "Regenerates the checked-in Canton Metrics reference page from the latest "
-            "Canton release documentation source."
+            "public Canton release binary."
         ),
         generate_commands=(nix_develop_command("npm run generate:canton-metrics-reference"),),
         paths=("docs-main/global-synchronizer/reference/canton-metrics.mdx",),

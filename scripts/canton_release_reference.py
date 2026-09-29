@@ -10,7 +10,7 @@ import shutil
 import stat
 import subprocess
 import tarfile
-from typing import Any
+from typing import Any, Mapping
 import urllib.parse
 import urllib.request
 
@@ -207,8 +207,14 @@ def run_reference_script(
     cache_namespace: str,
     asset: ReleaseAsset,
     force_refresh: bool,
+    environment_overrides: Mapping[str, str] | None = None,
 ) -> Any:
-    script_digest = hashlib.sha256(script_path.read_bytes()).hexdigest()
+    digest = hashlib.sha256(script_path.read_bytes())
+    if environment_overrides:
+        digest.update(
+            json.dumps(dict(sorted(environment_overrides.items()))).encode("utf-8")
+        )
+    script_digest = digest.hexdigest()
     output_path = (
         cache_dir
         / "reference-json"
@@ -230,6 +236,7 @@ def run_reference_script(
     ]
     environment = os.environ.copy()
     environment.pop("CI", None)
+    environment.update(environment_overrides or {})
     completed = subprocess.run(
         command,
         cwd=distribution_root,
