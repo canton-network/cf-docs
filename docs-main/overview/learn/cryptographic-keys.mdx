@@ -136,8 +136,8 @@ This section describes each of the cryptographic keys used in Canton.
 We distinguish between three types of keys: short-term, long-term, and permanent keys.
 This nomenclature is used to simplify the distinction between keys and to make it easier to refer to them afterwards.
 
-- `Short-term keys`: These are the session signing, session encryption and TLS keys. These keys are retained in memory for only a short period of time.
-- `Long-term keys`: These are keys used for topology transaction signing, sequencer authentication, protocol transaction signing, encryption of short-term key secrets, and authorizing session keys.
+- `Short-term keys`: These are the session signing, session encryption and TLS keys. These keys are retained in memory for only a short period of time (i.e. in the order of minutes).
+- `Long-term keys`: These are keys used for topology transaction signing, sequencer authentication, protocol transaction signing, encryption of short-term key secrets, and authorizing session keys. They persist until rotated — either manually or automatically by the node.
 - `Permanent keys`: A namespace **root** key is a permanent key. It cannot be rotated without losing the namespace, as the namespace is identified by the fingerprint of the signing key. This is an architectural feature.
 
 ### TLS keys
@@ -232,15 +232,8 @@ are only used for their intended purposes.
 
 By default, Canton creates a separate key for each usage (except ``Proof-of-Ownership``) to prevent a single key
 from being used to sign different types of requests. By using separate keys for different usages, each signing
-key remains more "isolated", significantly reducing its attack surface and, consequently, the impact of a
-compromised key.
-
-This is particularly critical for root namespace keys, which represent a node's namespace and are
-typically only used to initialize the topology state and delegate authority to an intermediate key responsible
-for signing other topology requests. If a root key is also used, for example, to sign protocol transactions,
-it is exposed frequently — and since this is the root key, the consequences of a key breach would be severe.
-An attacker could perform an oracle attack, potentially recover the key, and gain control of the namespace,
-and thus the node.
+key remains specific in its usage, significantly reducing its attack surface and, consequently, the impact of a
+compromised key. This is particularly critical for root namespace keys due to the central role they play in the security of the node.
 
 ## Public Key Distribution using Topology Management
 

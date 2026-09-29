@@ -4,40 +4,30 @@ description: "Protect Canton private keys using KMS envelope encryption or full 
 ---
 
 Canton nodes maintain a series of cryptographic keys for different purposes [overview of keys](/overview/learn/cryptographic-keys#overview-of-cryptographic-keys-in-canton).
-Given the importance of cryptographic keys in ensuring the security of Canton, we must also ensure that these
-keys themselves are well protected, especially the private encryption and signing keys, so that an attacker cannot
-get hold of them.
 To this end, Canton provides mechanisms to safeguard the storage (i.e. confidentiality at rest) and use of
 private cryptographic key material by integrating with Key Management Services (KMS).
-Short-term keys like [session signing keys](/overview/learn/cryptographic-keys#kms-with-session-signing-keys) do not require additional protection
-because they are temporary and not persisted. **The other keys, which are long-term,** are, by default, stored in
-cleartext, and these are **the ones we need to protect**.
+Please note that short-term keys like [session signing keys](/overview/learn/cryptographic-keys#kms-with-session-signing-keys) do not require additional protection
+because they are temporary and never leave volatile memory.
 
 In the following sections, we describe Canton’s two approaches to securing the storage and usage of keys.
 When enabled, Canton can leverage a KMS to either: (a) `host an encryption key that is used to transparently encrypt the private keys (i.e. envelope
 encryption) before storing them in Canton's database`; or (b) `directly use a KMS to perform cryptographic operations
 without access to the private keys`.
 
-While using envelope encryption we make sure that an attacker who has access to the database
-(e.g., a malicious database operator) cannot get access to the private keys from a node,
-which would compromise the transaction privacy and integrity guarantees of Canton. If we instead decide to
-externalize private key storage, we go one step further and protect against an attacker with privileged
-access to the node’s system that can inspect the memory.
+| Strategy | Pros | Cons |
+| :--- | :--- | :--- |
+| **Envelope Encryption** | • Faster cryptographic operations<br />• Keys are protected at rest | Keys remain present in memory |
+| **Externalized Key Storage (Full KMS)** | Key never resides on the node (even in memory) | Higher latency and operational costs *(can be mitigated using session keys)* |
 
 ## Requirements
 
-- The keys must not be available on disk or in storage in a way that would allow someone with access to the storage to view/access the key.
+- The keys must not be persisted unencrypted on disk or in storage.
 - The keys must not be part of Canton’s container images.
-- A key administrator can rotate both the KMS key and the keys in Canton.
-- Historical contract data can be decrypted using old, encrypted keys that have been superseded. No old keys are used in future transactions.
+- A key administrator can rotate both the KMS-managed and Canton-managed keys.
+- Historical contract data can be decrypted using old, encryption keys that have been superseded. No old keys are used in future transactions.
 - Backup and subsequent restoration of the database supports KMS key rotation and rotation of Canton’s keys.
-- For high availability operation, Canton supports duplication of keys.
+- KMS keys can be protected against accidental or unauthorized deletion, safeguarding both active and historical keys.
 
-<Note>
-    Confidentiality at runtime for the private keys is out of scope.
-    If envelope encryption is used then we do not protect against an attacker that has
-    privileged access to the node’s system and can inspect the memory.
-</Note>
 
 ## Protect private keys with envelope encryption and a KMS
 
@@ -136,17 +126,17 @@ previously generated KMS key manual-kms-key-rotation.
 Our solutions: (a) `private key storage protection using envelope encryption` and (b) `private key externalization`
 comply with all the previously mentioned [requirements](/overview/learn/kms#requirements) in the following ways:
 
-- The keys must not be available on disk or in storage in a way that would allow someone with access to the storage to view/access the key.
+- The keys must not be persisted unencrypted on disk or in storage.
     - The keys are either: (a) only stored in an encrypted form in the database (the corresponding encryption key is stored securely by the KMS in an HSM), or (b) not stored at all by Canton.
 - The keys must not be part of Canton’s container images.
     - The Canton private keys are stored in the (a) database of the node or directly in the (b) external KMS and not in the container image. Credentials to access the KMS can be passed in via the environment when a container is created, the credentials must not be stored in the image.
 - A key administrator can both rotate the KMS key or keys in Canton.
     - Canton already supports manual rotation of keys. In scenario (b) this also involves the re-generation of the keys in the KMS.
     - Support of KMS wrapper key rotation (b) based on either: an KMS automated annual key rotation, or a manual rotation and re-encryption of the Canton private keys.
-- Historical contract data can be decrypted using old, encrypted keys that have been superseded. No old keys are used in future transactions.
+- Historical contract data can be decrypted using old, encryption keys that have been superseded. No old keys are used in future transactions.
     - Canton already supports rotation of keys with a synchronized state on which keys are active across nodes as part of topology management.
 - Backup and subsequent restoration of the database supports KMS key rotation and rotation of Canton’s keys.
     - Database restoration/backup is only needed for (a) protection of keys at rest. As long as the database and the wrapper key are available, backup and restoration are unaffected by key rotation. Replicating a KMS key in multiple regions can also mitigate the impact of a failure in the primary region.
     - A KMS operator must ensure its configured key store has in place a robust disaster recovery plan to prevent the permanent loss of keys.
-- For high availability operation, Canton supports duplication of keys.
-    - Canton supports AWS and GCP multi-region keys when enabled in the configuration, as well as when the operator manually creates the key and just configures the existing key id in Canton. `Note: replicating keys to other regions is a manual process by the operator and not done automatically by Canton.`
+- KMS keys can be protected against accidental or unauthorized deletion, safeguarding both active and historical keys.
+    - Canton supports AWS and GCP multi-region keys, allowing cloud operators to replicate key material across different regions. This ensures that if a key becomes unavailable, nodes can instantly access the same key from another region without requiring Canton to handle complex key replication logic.
