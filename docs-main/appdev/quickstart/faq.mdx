@@ -1,0 +1,311 @@
+---
+title: "QuickStart FAQ"
+description: "Frequently asked questions, make target reference, and LocalNet URLs for the Canton Network App Quickstart."
+---
+
+{/* COPIED_START source="docs-website:docs/replicated/quickstart/3.5/sdk/quickstart/troubleshoot/cnqs-faq.rst" hash="0cdd61e6" */}
+## System requirements & setup
+
+### Have the best technologies been selected for the CN App Quickstart?
+
+The Quickstart is designed to help teams become familiar with Canton Network (CN) application development by providing scaffolding to kickstart development.
+Quickstart is intended to be incrementally extended by you to meet your specific business needs.
+Once you are familiar with the Quickstart, please review the technology choices and the application design to determine what changes are needed - technology and design decisions are ultimately up to you.
+Please be aware that the Canton Network Application Quickstart (CN App Quickstart) is a rapidly evolving work in progress.
+
+### What are the minimum system requirements to run CN App Quickstart LocalNet?
+
+The CN App Quickstart requires Docker Desktop with at least 8 GB of memory allocated to run `LocalNet` properly.
+If your machine has less memory, consider declining Observability when prompted during setup.
+
+### Which browsers are supported for running CN App Quickstart?
+
+Chrome, Edge, and Firefox are recommended.
+Safari requires mapping `app-provider.localhost` in `/etc/hosts` first.
+You may also use the same browser with one user in incognito mode and the other in standard mode.
+
+### Where can I install CN App Quickstart dependencies?
+
+This repository uses `direnv`, `nix`, and `docker-compose` to provide development dependencies:
+
+- how to [install direnv](https://direnv.net/docs/installation.html)
+- how to [install nix](https://nix.dev/install-nix.html)
+- how to [install docker-compose](https://docs.docker.com/compose/install/)
+
+### Do I need to install Nix?
+
+You can use the project files in the `quickstart` directory as a standalone project without nix, but you will need to provide binary dependencies manually.
+We do not offer guidance on how to do this, but you can find the required binaries in `nix/shell.nix`.
+
+### Should I build with make or gradle?
+
+The gradle daemon has been disabled to prevent parallel processing of transcodegen.
+
+Gradle tasks had been known to create order and concurrency issues which caused files to get cleaned too early.
+Always prefer to use the make commands.
+
+### What Daml SDK version should I use?
+
+See the [Version Compatibility Dashboard](/shared/version-compatibility-dashboard) for the versions deployed on each network.
+For a new project, use the versions currently on DevNet.
+
+### How do I obtain Splice contract DAR files?
+
+All Splice DARs are available in the [Splice repository](https://github.com/canton-network/splice/tree/main/daml/dars).
+
+### What version of the Java SDK does the CN Quickstart use?
+
+The CN App Quickstart uses Java SDK version `Eclipse Temurin JDK version 21`.
+
+This information is specified in `quickstart/compose.yaml` and `.env`, respectively.
+
+`quickstart/compose.yaml`
+
+```text
+services:
+backend-service:
+   image: "eclipse-temurin:${JAVA_VERSION}"
+```
+
+`.env`
+
+    JAVA_VERSION=21-jdk
+
+## Common issues & troubleshooting
+
+### How can I check if my CN App Quickstart deployment is running correctly?
+
+Use `make status` to see all running containers and their health status.
+
+### What should I do if containers show as "unhealthy" after startup?
+
+The most common cause is insufficient memory allocation to Docker. Try:
+
+1. Increase Docker memory allocation to at least 8 GB
+
+2. Run `make stop; make clean-all`
+
+3. Run `make setup` and turn off `observability`
+
+4. Restart with `make start`
+
+### How can I monitor system metrics?
+
+You can use Grafana at http://localhost:3030/ to monitor system metrics if `observability` is enabled.
+
+For more information see the Observability and Troubleshooting Overview.
+
+### What should I do if I need to completely reset my environment?
+
+Execute the following commands in order:
+
+1. `make stop`
+
+2. `make clean-all`
+
+3. `make setup` (to reconfigure environment options)
+
+4. `make start`
+
+### How do I resolve "Couldn't find env file" in make build?
+
+If you receive an error message such as:
+
+```text
+Couldn't find env file: /Users/USER/development/canton/cn-quickstart/quickstart/.env.local
+make: \**\* [build-docker-images] Error 15
+```
+
+`make build` and `make start` create `.env.local`; other targets such as `make status` or `make stop` do not.
+Run `make setup` to create it.
+
+## Development & testing
+
+### How do I access the Daml Shell for debugging?
+
+Run `make shell` from the quickstart directory.
+This provides access to useful commands like:
+
+-  `active` - shows summary of contracts
+
+-  `active quickstart-licensing:Licensing.AppInstall:AppInstallRequest` - shows AppInstallRequest contract details
+
+-  `contract [contract-id]` - shows full contract details
+
+### How can I monitor application logs and traces?
+
+The CN App Quickstart provides several observability options:
+
+1. Direct container logs: `docker logs \<container-name\>`
+
+2. Grafana dashboards: http://localhost:3030/
+
+3. Consolidated logs view in Grafana
+
+### Why do backend configurations disappear after restarting the backend service?
+
+Backend service configurations (including tenant registrations, application state, and service registrations) are stored in memory and lost when the service is restarts.
+Run `make restart-backend` to rebuild and restart the backend service with configurations restored.
+
+Persistent storage is in our roadmap, but has not been implemented yet.
+
+### How can I resolve a backend build failure?
+
+Build failures may occur if `.env` is misconfigured.
+If you see errors on `make build` such as:
+
+```text
+> Task :backend:extractProto FAILED
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':backend:extractProto'.
+> Could not resolve all files for configuration ':backend:protobuf'.
+   > Could not find com.daml:ledger-api-proto:.
+   Required by:
+         project :backend
+```
+
+Then verify that the `.env` file contains an accurate daml SDK value in `DAML_RUNTIME_VERSION=`.
+
+## Infrastructure & environment
+
+### What's the difference between LocalNet and DevNet deployment?
+
+`LocalNet` runs everything locally including a Super Validator and Canton Coin wallet, making it more resource intensive but self-contained.
+
+`make start` deploys `LocalNet` only.
+To run against `DevNet`, you operate an external splice-node validator and start the DevNet module separately; see [Deploy the Quickstart to DevNet](/appdev/quickstart/deploy-to-devnet).
+`DevNet` connects to the Global Synchronizer operated by Super Validators and requires SV sponsorship and VPN access.
+
+For more information see the [Project Structure Overview](/appdev/quickstart/project-structure).
+
+### What is ScratchNet?
+
+`ScratchNet` is a persistent Canton Network environment that supports team collaboration while maintaining centralized control.
+It fills the gap between a single-developer LocalNet (constrained by one laptop's resources) and a fully decentralized DevNet (maintained by Super Validators).
+Development teams typically deploy `ScratchNet` on a shared server to enable longer-running instances with persistent data storage across development sessions.
+
+### How can I find out the migration_id of DevNet?
+
+```bash
+curl -s https://docs.dev.global.canton.network.sync.global/info | jq '.synchronizer.active.migration_id'
+```
+
+### Do I need VPN access to use CN App Quickstart?
+
+No. VPN access is only required for `DevNet` connections.
+`LocalNet` does not require VPN access.
+
+### What will I need when I am ready to connect to DevNet?
+
+To connect to CN `DevNet` you need access to a SV Node that is whitelisted on the CN.
+Contact your sponsoring Super Validator agent for connection information.
+
+### How do I log in with Keycloak?
+
+The CN App Quickstart uses Keycloak for authentication when `OAUTH2` is enabled.
+If you have issues with logging in with Keycloak credentials, you may begin troubleshooting by running make status to verify the Keycloak service is running.
+
+Keycloak should show healthy.
+
+```text
+keycloak   quay.io/keycloak/keycloak:26.1.0 "/opt/keycloak/bin/k…"
+keycloak   ## minutes ago Up ## minutes (healthy) 8080/tcp, 8443/tcp, 9000/tcp
+```
+
+Keycloak credentials are set in `docker/modules/keycloak/env/app-user/on/oauth2.env` with the following credentials:
+
+```text
+Username: AUTH_APP_USER_WALLET_ADMIN_USER_NAME (e.g. app-user)
+Password: AUTH_APP_USER_WALLET_ADMIN_USER_PASSWORD (e.g. abc123)
+```
+
+The Keycloak user must have the same ID as the ledger user’s ID.
+This should be reflected in the default behavior.
+
+### How can I begin using lnav with the Quickstart application on MacOS?
+
+On MacOS, `lnav` can be installed with `brew install lnav`.
+`make capture-logs` needs GNU `date`, which the nix shell provides.
+Outside the nix shell, `brew install coreutils` and put its `gnubin` directory first on your `PATH`.
+
+## Best practices & common pitfalls
+
+### How should I handle multiple user testing in the local environment?
+
+Best practices include:
+
+1. Use separate browsers for different users
+
+2. Follow proper logout procedures between user switches
+
+3. Be aware that even incognito mode in the same browser may have session interference
+
+4. Consider using the make commands for testing specific operations (e.g., `make create-app-install-request`)
+
+## Database & query access
+
+### What's the recommended way to query ledger data?
+
+The Participant Query Store (PQS) is recommended for querying ledger data.
+
+## CN App Quickstart Make target reference
+
+| **Target** | **Description** |
+| --- | --- |
+| build | Build frontend, backend, Daml model and docker images. |
+| build-backend | Build the backend service. |
+| build-daml | Build the Daml model. |
+| build-frontend | Build the frontend application. |
+| canton-console | Start the Canton console. Connects to the running app provider, app-user, sv ledgers. |
+| capture-logs | Consumes Docker events and starts capturing logs to `/logs` directory for each service when a `start` Docker event is observed. Ideal for diagnostic purposes. |
+| clean | Clean the build artifacts. |
+| clean-all | Stop and remove all build artifacts, Docker containers and volumes. |
+| clean-application | Like `clean-docker`, but leaves observability services running. |
+| clean-canton-console | Stop and remove the Canton console container. |
+| clean-docker | Stop and remove application Docker containers and volumes. |
+| clean-shell | Stop and remove the Daml Shell container. |
+| compose-config | Displays finalized configuration for each service initiated by `make start`. Dynamic environment variables e.g. `APP_PROVIDER_PARTY` are resolved at run time and not included in this output. |
+| create-app-install-request | Submit an App Install Request from the App User participant node. |
+| generate-NOTICES | Generate the NOTICES file. |
+| logs | Show logs of Docker containers. |
+| restart | Restart the application services. |
+| restart-backend | Build and restart the backend service. |
+| restart-frontend | Build and restart the frontend application. |
+| setup | Configure the local development environment (DevNet/LocalNet, Observability). |
+| shell | Start Daml Shell. Connects to the running application PQS database. |
+| start | Start the application and observability services if enabled. |
+| status | Show status of Docker containers. |
+| stop | Stop the application and observability services. |
+| stop-application | Stop only the application, leaving observability services running. |
+| tail | Tail logs of Docker containers. |
+
+## UI Opening Commands
+
+| **Target** | **Description** |
+| --- | --- |
+| open-app-ui | Open the Application UI in the active browser |
+| open-observe | Open the Grafana UI in the active browser |
+| open-sv-wallet | Open the Super Validator wallet UI in the active browser |
+| open-sv-interface | Open the Super Validator interface UI in the active browser |
+| open-sv-scan | Open the Super Validator Scan UI in the active browser |
+| open-app-user-wallet | Open the App User wallet UI in the active browser |
+
+## LocalNet URLs
+
+| **URL** | **Description** |
+| --- | --- |
+| http://app-provider.localhost:3000 | Main application UI (`http://localhost:3000` redirects here) |
+| http://localhost:3030 | Grafana observability dashboard (if enabled) |
+| http://localhost:4000 | Super Validator gateway - lists available web UI options |
+| http://wallet.localhost:2000 | App User Canton Coin wallet (App Provider `3000`, SV `4000`) |
+| http://sv.localhost:4000 | Super Validator Operations |
+| http://scan.localhost:4000 | Canton Coin Scan web UI - shows balances and validator rewards |
+| http://localhost:3975 | App Provider JSON Ledger API (App User `2975`, SV `4975`) |
+| http://localhost:3903 | App Provider Validator admin API (App User `2903`, SV `4903`) |
+
+Sponsoring Super Validators may offer different URLs for their `DevNet` services.
+
+{/* COPIED_END */}

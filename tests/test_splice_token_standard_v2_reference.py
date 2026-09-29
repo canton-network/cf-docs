@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import importlib.util
+import io
 import json
 import sys
+import urllib.error
 from pathlib import Path
 from types import ModuleType
+from typing import Self
 
 import pytest
 
@@ -47,6 +50,45 @@ def test_source_config_covers_every_token_standard_v2_dar() -> None:
         "splice-api-token-transfer-instruction-v2-1.0.0.dar",
     ]
     assert config["supporting_dars"] == ["splice-api-token-metadata-v1-1.0.0.dar"]
+    assert config["min_version"] == "0.6.11"
+    assert config["package_version"] == "1.0.0"
+    assert "publish_version" not in config
+    assert "revision" not in config
+
+
+def test_release_selection_is_unbounded_and_uses_immutable_tag_revisions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    payloads: list[object] = [
+        [
+            {"name": "0.7.0", "commit": {"sha": "sha-070"}},
+            {"name": "0.6.11", "commit": {"sha": "sha-0611"}},
+            {"name": "0.6.10", "commit": {"sha": "too-old"}},
+            {"name": "0.7.1-rc1", "commit": {"sha": "prerelease"}},
+        ]
+    ]
+    monkeypatch.setattr(
+        token_v2_reference,
+        "github_json",
+        lambda _url: payloads.pop(0),
+    )
+
+    releases = token_v2_reference.selected_releases(
+        source_config={
+            "repository": "canton-network/splice",
+            "tag_regex": r"^(?P<version>0\.[0-9]+\.[0-9]+)$",
+            "min_version": "0.6.11",
+        },
+        include_versions=None,
+    )
+
+    assert releases == [
+        token_v2_reference.ReleaseInfo("0.6.11", "0.6.11", "sha-0611"),
+        token_v2_reference.ReleaseInfo("0.7.0", "0.7.0", "sha-070"),
+    ]
+    assert token_v2_reference.resolve_publish_release(
+        releases=releases, requested_version=None
+    ) == releases[-1]
 
 
 def test_all_reference_pipeline_merges_v2_nav_after_splice_openapi() -> None:
@@ -74,6 +116,58 @@ def test_dar_family_requires_the_configured_package_version() -> None:
             "splice-api-token-holding-v2-current.dar",
             package_version="1.0.0",
         )
+
+
+class FakeDarResponse:
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, *_args: object) -> None:
+        return None
+
+    def read(self) -> bytes:
+        return b"PK-test-dar"
+
+
+def test_ensure_dar_retries_transient_download_failures(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    outcomes: list[object] = [
+        urllib.error.URLError("connection reset by peer"),
+        urllib.error.HTTPError(
+            "https://raw.githubusercontent.test/dar",
+            503,
+            "Service Unavailable",
+            {},
+            io.BytesIO(),
+        ),
+        FakeDarResponse(),
+    ]
+    sleeps: list[float] = []
+
+    def fake_urlopen(_request: object, *, timeout: float) -> FakeDarResponse:
+        assert timeout == 60
+        outcome = outcomes.pop(0)
+        if isinstance(outcome, Exception):
+            raise outcome
+        assert isinstance(outcome, FakeDarResponse)
+        return outcome
+
+    monkeypatch.setattr(token_v2_reference.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(token_v2_reference.time, "sleep", sleeps.append)
+    monkeypatch.setattr(token_v2_reference, "DOWNLOAD_RETRY_DELAY_SECONDS", 2)
+
+    output = token_v2_reference.ensure_dar(
+        repository="canton-network/splice",
+        revision="abc123",
+        filename="splice-api-token-holding-v2-1.0.0.dar",
+        cache_dir=tmp_path,
+        force_refresh=False,
+    )
+
+    assert output.read_bytes() == b"PK-test-dar"
+    assert sleeps == [2, 4]
+    assert outcomes == []
 
 
 def test_dependency_include_dirs_resolves_token_package_names(tmp_path: Path) -> None:
@@ -138,12 +232,16 @@ def test_x2mdx_render_omits_snapshot_and_prioritizes_interfaces(
         source_name="unit test",
         version_filter="unit test",
         docs_json_path=docs_json,
+        history_report_path=tmp_path / "history-report.json",
+        lifecycle_metadata_path=tmp_path / "lifecycle.json",
     )
 
     assert len(commands) == 1
     assert "--omit-module-snapshot" in commands[0]
     assert "--interfaces-first" in commands[0]
-    assert not (output_dir / "index.mdx").exists()
+    assert "--history-report" in commands[0]
+    assert "--lifecycle-metadata" in commands[0]
+    assert (output_dir / "index.mdx").exists()
 
 
 def test_navigation_merge_groups_token_standard_packages_by_version(
@@ -196,6 +294,10 @@ def test_navigation_merge_groups_token_standard_packages_by_version(
         output_root / "splice-api-token-holding-v2" / "splice-api-token-holdingv2.mdx",
         "Splice.Api.Token.HoldingV2",
     )
+    write_mdx(
+        output_root / "splice-api-token-holding-v2" / "index.mdx",
+        "splice-api-token-holding-v2",
+    )
 
     token_v2_reference.update_docs_navigation(
         docs_json_path=docs_json,
@@ -237,6 +339,7 @@ def test_navigation_merge_groups_token_standard_packages_by_version(
                 {
                     "group": "splice-api-token-holding-v2",
                     "pages": [
+                        "sdks-tools/api-reference/splice-daml/splice-api-token-holding-v2/index",
                         "sdks-tools/api-reference/splice-daml/splice-api-token-holding-v2/splice-api-token-holdingv2",
                     ],
                 }
@@ -247,7 +350,7 @@ def test_navigation_merge_groups_token_standard_packages_by_version(
     assert docs_json.read_text(encoding="utf-8") == first_render
 
 
-def test_generated_packages_publish_module_pages_without_overviews() -> None:
+def test_generated_packages_publish_standard_overviews_and_module_history() -> None:
     output_root = (
         REPO_ROOT / "docs-main" / "sdks-tools" / "api-reference" / "splice-daml"
     )
@@ -261,14 +364,29 @@ def test_generated_packages_publish_module_pages_without_overviews() -> None:
     )
     for dar_filename in config["published_dars"]:
         family = token_v2_reference.dar_family(
-            dar_filename, package_version=config["publish_version"]
+            dar_filename, package_version=config["package_version"]
         )
         family_dir = output_root / family
-        assert not (family_dir / "index.mdx").exists()
-        module_pages = list(family_dir.glob("*.mdx"))
+        assert (family_dir / "index.mdx").exists()
+        module_pages = [
+            page for page in family_dir.glob("*.mdx") if page.name != "index.mdx"
+        ]
         assert len(module_pages) == 1
         module_text = module_pages[0].read_text(encoding="utf-8")
         assert "## Module Snapshot" not in module_text
         assert '<Card title="Lifecycle">' not in module_text
         assert '<Card title="Notices">' not in module_text
         assert module_text.index("## Interfaces") < module_text.index("## Data Types")
+        assert 'class="x2mdx-ref-page' in module_text
+        assert "Present since at least" not in module_text
+        if "## History" in module_text:
+            assert module_text.rfind("## History") > module_text.rfind("## Data Types")
+
+    report = token_v2_reference.load_history_report(
+        output_root / "token-standard-v2-history-report.json"
+    )
+    assert report.surface_id == "splice-token-standard-v2-daml"
+    assert report.version_policy.value == "latest_selected_release"
+    assert report.publish_version == report.comparison_versions[-1]
+    assert len(report.comparison_versions) > 1
+    assert len(report.current_items()) == len(config["published_dars"])

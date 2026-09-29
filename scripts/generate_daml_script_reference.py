@@ -5,12 +5,14 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
 from typing import Any
 
 from docs_env import ensure_repo_direnv, repo_direnv_command
+from generated_reference_sources.common import stable_dpm_versions
 import reference_nav
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -23,6 +25,7 @@ DEFAULT_DOCS_JSON = REPO_ROOT / "docs-main" / "docs.json"
 GROUP_LABEL = "Daml Script"
 STDLIB_GROUP_LABEL = "Daml Standard Library"
 MODULES_GROUP_LABEL = "Modules"
+DEFAULT_LIFECYCLE_METADATA = REPO_ROOT / "config" / "x2mdx" / "daml-script" / "lifecycle.json"
 
 
 def parse_args() -> argparse.Namespace:
@@ -38,6 +41,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--nav-group", action="append")
     parser.add_argument("--version", action="append", help="Version to include. Repeat to limit generation.")
     parser.add_argument("--publish-version", help="Version whose docs should be published.")
+    parser.add_argument("--lifecycle-metadata", default=str(DEFAULT_LIFECYCLE_METADATA))
     parser.add_argument("--force-regenerate", action="store_true")
     parser.add_argument(
         "--source-name",
@@ -84,6 +88,28 @@ def read_mdx_title(path: Path) -> str:
         if line.startswith("title: "):
             return line.split(":", 1)[1].strip().strip('"')
     raise ValueError(f"Missing title frontmatter in {path}")
+
+
+def set_mdx_title(path: Path, title: str) -> None:
+    text = path.read_text(encoding="utf-8")
+    if not text.startswith("---\n"):
+        return
+    frontmatter_end = text.find("\n---", 4)
+    if frontmatter_end == -1:
+        return
+    frontmatter = text[:frontmatter_end]
+    replacement = f'title: "{title}"'
+    updated_frontmatter, count = re.subn(
+        r"(?m)^title:\s*(?:\"[^\"]*\"|'[^']*'|.+?)\s*$",
+        replacement,
+        frontmatter,
+        count=1,
+    )
+    if count == 0:
+        updated_frontmatter = frontmatter + "\n" + replacement
+    updated = updated_frontmatter + text[frontmatter_end:]
+    if updated != text:
+        path.write_text(updated, encoding="utf-8")
 
 
 def prune_nav_items(items: list[Any], *, page_refs: set[str], group_labels: set[str]) -> list[Any]:
@@ -208,21 +234,38 @@ def update_docs_navigation(
 
     page_entries: list[tuple[str, str, Path]] = []
     for page in sorted(output_dir.glob("*.mdx")):
-        if page.name == "index.mdx":
-            continue
         title = read_mdx_title(page)
         page_entries.append((title, docs_json_page_ref(page, docs_json_path), page))
-    page_entries.sort(key=lambda item: item[0].lower())
+    page_entries.sort(
+        key=lambda item: (
+            0 if item[2].name == "index.mdx" else 1,
+            item[0].lower(),
+        )
+    )
     page_refs = {page_ref for _title, page_ref, _path in page_entries}
-    index_ref = docs_json_page_ref(output_dir / "index.mdx", docs_json_path)
-    page_refs.add(index_ref)
 
     pruned_pages = prune_nav_items(pages, page_refs=page_refs, group_labels={GROUP_LABEL})
     pages.clear()
     pages.extend(pruned_pages)
     target_pages = ensure_group_path(pages, parent_groups)
-    module_refs = [page_ref for _title, page_ref, _path in page_entries]
+    overview_entry = next(
+        (
+            (page_ref, path)
+            for _title, page_ref, path in page_entries
+            if path.name == "index.mdx"
+        ),
+        None,
+    )
+    module_refs = [
+        page_ref
+        for _title, page_ref, path in page_entries
+        if path.name != "index.mdx"
+    ]
     group_pages: list[Any] = []
+    if overview_entry is not None:
+        overview_ref, overview_path = overview_entry
+        set_mdx_title(overview_path, "Overview")
+        group_pages.append(overview_ref)
     if module_refs:
         group_pages.append({"group": MODULES_GROUP_LABEL, "pages": module_refs})
     group = {
@@ -240,16 +283,23 @@ def main() -> int:
     ensure_repo_direnv(repo_root=REPO_ROOT, script_path=Path(__file__).resolve(), argv=sys.argv[1:])
     args = parse_args()
     source_config = load_json(Path(args.source_config).resolve())
-    configured_versions = source_config.get("versions")
-    if not isinstance(configured_versions, list) or not all(isinstance(item, str) for item in configured_versions):
-        raise ValueError("Source config must define a string list under `versions`")
-    selected_versions = [version for version in configured_versions if not args.version or version in set(args.version)]
+    min_version = source_config.get("min_version")
+    if not isinstance(min_version, str) or not min_version:
+        raise ValueError("Source config must define a non-empty `min_version`")
+    selected_versions = (
+        sorted(
+            set(args.version),
+            key=lambda value: tuple(int(part) for part in value.split(".")),
+        )
+        if args.version
+        else stable_dpm_versions(min_version=min_version)
+    )
     if not selected_versions:
         raise ValueError("No Daml SDK versions selected")
 
     sdk_source = str(source_config.get("sdk_source") or "dpm")
     lf_target = source_config.get("lf_target") if isinstance(source_config.get("lf_target"), str) else None
-    publish_version = args.publish_version or source_config.get("publish_version") or selected_versions[-1]
+    publish_version = args.publish_version or selected_versions[-1]
 
     cache_dir = Path(args.cache_dir).resolve()
     for version in selected_versions:
@@ -286,6 +336,18 @@ def main() -> int:
         GROUP_LABEL,
         "--link-prefix",
         docs_route_prefix(Path(args.output_dir).resolve(), Path(args.docs_json).resolve()),
+        "--history-report",
+        str(Path(args.output_dir).resolve() / "history-report.json"),
+        "--reader-route-prefix",
+        docs_route_prefix(Path(args.output_dir).resolve(), Path(args.docs_json).resolve()),
+        "--surface-id",
+        "daml-script",
+        "--surface-title",
+        GROUP_LABEL,
+        "--configured-scope",
+        "Daml Script modules from stable DPM SDK releases",
+        "--lifecycle-metadata",
+        str(Path(args.lifecycle_metadata).resolve()),
     )
     for version in args.version or []:
         command.extend(["--version", version])
@@ -293,10 +355,6 @@ def main() -> int:
     completed = subprocess.run(command, cwd=REPO_ROOT)
     if completed.returncode != 0:
         return completed.returncode
-
-    index_path = Path(args.output_dir).resolve() / "index.mdx"
-    if index_path.exists():
-        index_path.unlink()
 
     update_docs_navigation(
         docs_json_path=Path(args.docs_json).resolve(),

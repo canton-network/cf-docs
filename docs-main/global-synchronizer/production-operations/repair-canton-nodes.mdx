@@ -1,0 +1,174 @@
+---
+title: "Repair Canton Nodes"
+description: "Recovering a participant node from a lost synchronizer, rehydrating a participant node, and unblocking a participant node synchronizer connection"
+---
+
+{/* COPIED_START source="docs-website:docs/replicated/canton/3.5/participant/howtos/recover/repairing.rst" hash="d2fab628" */}
+
+# Repair procedures
+
+Choose one of the following repair procedures based on the type of participant node fault in need of repair.
+
+<Warning>
+Repairing participant nodes is dangerous and complex. Therefore, you are discouraged from attempting to repair participant nodes on your own unless you have expert knowledge and experience. Instead, you are strongly advised to only repair participant nodes with the help of technical support.
+</Warning>
+
+Repair commands are disabled by default. See [Enabling repair commands](/global-synchronizer/canton-console/advanced-operations#enabling-repair-commands) in the Advanced Operations page.
+
+## Recovering from a lost synchronizer
+
+If a synchronizer is irreparably lost or no longer trusted, the participant nodes previously connected to and sharing active contracts via that synchronizer can recover and migrate their contracts to a new synchronizer. The participant node administrators need to coordinate as follows:
+
+1. Disconnect all participant nodes from the synchronizer deemed lost or untrusted.
+2. Identify the synchronizer configuration of the newly provisioned synchronizer.
+3. All participant node administrators invoke the `migrate_synchronizer` method specifying the alias of the "old" synchronizer as "source" and the "new" synchronizer. Additionally, set the "force" flag to true given that the old synchronizer is either lost or untrusted in this scenario.
+
+   ```scala
+   participants.all.foreach { participant =>
+     participant.repair.migrate_synchronizer(
+       source = oldSynchronizer,
+       target = newSynchronizerConfig,
+       force = true,
+     )
+   }
+   ```
+
+4. The participant nodes connect to the new synchronizer.
+5. The synchronizer loss may have resulted in active contract set inconsistencies. In such cases the participant node administrators need to agree on whether contracts in an inconsistent state on the different participant nodes should be removed or added. Refer to [Troubleshoot ACS Commitments](/global-synchronizer/troubleshooting-guide/transaction-failures#troubleshoot-acs-commitments) to identify and repair ACS differences.
+
+   As these methods are powerful but dangerous, you should not attempt to repair your participant nodes on your own as you risk severe data corruption, but rather in the context of technical support.
+
+## Fully rehydrating a participant node
+
+Fully rehydrating a participant node means recovering the participant node after its database has been fully emptied or lost. If a participant node needs to be rehydrated, but no participant node backup is available or the backup is faulty, you may be able to rehydrate the participant node from a synchronizer as long as the synchronizer has never been pruned, and you have local console access to the participant node. You can preserve the participant node's identity and secret keys.
+
+If you are running your production participant node in a container, you need to create a new configuration file that allows you to access the database of the participant node from an interactive console. Make sure that the participant node process is stopped and that nothing else is accessing the same database. Ensure that database replication is turned on if the participant node has been configured for high availability. Also, make sure that the participant node is configured to not perform auto-initialization to prevent creating a new identity. Downloading the identity exports the node's private keys, which is only allowed when preview commands are enabled:
+
+```hocon
+canton.features.enable-preview-commands = true
+canton.participants.participant1.init = {
+    generate-topology-transactions-and-keys = false
+    identity.type = manual
+}
+```
+
+Then start Canton interactively using the `--manual-start` option to prevent Canton from automatically starting the nodes and reconnecting them to the synchronizers:
+
+```bash
+./bin/canton -c myconfig --manual-start
+```
+
+Then, download the identity state of the participant node to a directory on the machine you are running the process. `protocolVersion` is the protocol version of the synchronizer:
+
+```scala
+repair.identity.download(
+  participant1,
+  synchronizerId,
+  protocolVersion,
+  tempDirParticipant,
+)
+repair.dars.download(participant1, tempDirParticipant)
+participant1.stop()
+```
+
+This stores the topology state, the identity, and the secret keys on the disk in the specified directory. Participant nodes using a Key Management System are not supported: the download fails because KMS-held private keys cannot be exported.
+
+The `dars.download` command is a convenience command to download all Daml archive files (DARs) that have been added to the participant via the console command `participant.dars.upload`. DARs that were uploaded through the Ledger API need to be manually re-uploaded to the new participant node.
+
+After downloading, stop the participant node, back up the database, and then truncate the database. Then, restart the participant node and upload the data again. `staticSynchronizerParameters` are the static parameters of the synchronizer:
+
+```scala
+repair.identity.upload(
+  participant1,
+  tempDirParticipant,
+  synchronizerId,
+  staticSynchronizerParameters,
+  sequencerConnections,
+)
+repair.dars.upload(participant1, tempDirParticipant)
+```
+
+Reconnect the participant node to the synchronizer using a normal connect:
+
+```scala
+participant1.synchronizers.connect_by_config(
+  SynchronizerConnectionConfig(
+    synchronizerAlias = SynchronizerAlias.tryCreate("<your synchronizer alias>"),
+    sequencerConnections = sequencerConnections,
+    initializeFromTrustedSynchronizer = true,
+  )
+)
+```
+
+Note that this replays all transactions from the synchronizer. However, command deduplication is only fully functional once the participant node catches up with the synchronizer. Therefore, you need to ensure that applications relying on command deduplication do not submit commands during recovery.
+
+## Unblocking a participant node synchronizer connection
+
+If a participant node is unable to process events from a synchronizer, and the participant node process continuously crashes when reconnecting to the synchronizer, it may be necessary to "ignore" the problematic event. This procedure describes how to unblock the participant node.
+
+1. Ensure that the cause is not a more common issue such as lack of database connectivity. Only proceed with the following steps if the participant node logs rule out more common issues. Inspect the participant node logs for "internal" errors referring to the synchronizer ID. If the logs show an `ApplicationHandlerException`, note the first and last "sequencing timestamps".
+
+2. Disconnect the participant node from the synchronizer whose events you want to ignore, and restart the participant node after enabling the repair commands and internal state inspection.
+
+   ```hocon
+   canton.features.enable-repair-commands = true
+   canton.features.enable-testing-commands = true
+   ```
+
+   Make sure that the participant node is disconnected from the synchronizer.
+
+3. Determine the "sequencer counters" to ignore.
+
+   - If in step 1 you identified the first and last sequencing timestamps, translate the timestamps to first and last sequencer counters:
+
+     ```scala
+     import com.digitalasset.canton.store.SequencedEventStore.ByTimestamp
+     val sequencedEvent = participant.testing.state_inspection
+       .findMessage(physicalSynchronizerId, ByTimestamp(sequencedEventTimestamp))
+       .getOrElse(throw new Exception("Sequenced event not found"))
+     val sequencerCounter = sequencedEvent.counter
+     ```
+
+   - Otherwise you may choose to ignore the last event that the participant node has processed from the synchronizer and look up the sequencer counter as follows:
+
+     ```scala
+     import com.digitalasset.canton.store.SequencedEventStore.SearchCriterion
+     val lastSequencedEvent = participant.testing.state_inspection
+       .findMessage(physicalSynchronizerId, SearchCriterion.Latest)
+       .getOrElse(throw new Exception("Sequenced event not found"))
+     val lastCounter = lastSequencedEvent.counter
+     ```
+
+4. Use the `repair.ignore_events` command to ignore the sequenced events that the participant node is unable to process. The command takes the physical synchronizer ID and the first and last sequencer counters of the events to ignore as parameters, `fromInclusive` and `toInclusive`, determined in step 3. You should not set the force flag.
+
+   ```scala
+   participant.repair.ignore_events(
+     physicalSynchronizerId,
+     fromInclusive,
+     toInclusive,
+     force = false,
+   )
+   ```
+
+   If you find that you have made a mistake and chose the wrong sequencer counters, you can invoke `repair.unignore_events` to "unignore" the events:
+
+   ```scala
+   participant.repair.unignore_events(
+     physicalSynchronizerId,
+     fromInclusive,
+     toInclusive,
+     force = false,
+   )
+   ```
+
+5. Next, reconnect the participant node to the synchronizer and check that the participant node is able to process sequenced events again. If the participant node is still blocked, you may need to repeat the previous steps.
+
+6. Once the participant node is unblocked consuming events from the synchronizer, participant nodes may have an inconsistent ACS. Look for errors in the log that begin with "ACS_COMMITMENT", for example "ACS_COMMITMENT_MISMATCH". Inspect not only the repaired participant node, but also the other participant nodes that were also involved in the transactions behind the ignored events.
+
+7. If there are ACS inconsistencies, refer to [Troubleshoot ACS Commitments](/global-synchronizer/troubleshooting-guide/transaction-failures#troubleshoot-acs-commitments) to identify and repair ACS differences.
+
+8. Disable repair commands and internal state inspection by removing the configurations added in step 2 and restarting the participant node. This is important to prevent accidental misuse of the repair commands in the future.
+
+As the above steps are powerful but dangerous, you should perform the procedure in the context of technical support.
+
+{/* COPIED_END */}

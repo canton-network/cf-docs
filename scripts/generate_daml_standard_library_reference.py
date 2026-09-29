@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from docs_env import ensure_repo_direnv, repo_direnv_command
+from generated_reference_sources.common import stable_dpm_versions
 import reference_nav
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -22,8 +23,8 @@ DEFAULT_MANIFEST = REPO_ROOT / ".internal" / "generated" / "x2mdx" / "daml-stand
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "docs-main" / "appdev" / "reference" / "daml-standard-library"
 DEFAULT_DOCS_JSON = REPO_ROOT / "docs-main" / "docs.json"
 GROUP_LABEL = "Daml Standard Library"
-DETAILS_AND_HISTORY_LABEL = "Details and history"
 MODULES_GROUP_LABEL = "Modules"
+DEFAULT_LIFECYCLE_METADATA = REPO_ROOT / "config" / "x2mdx" / "daml-standard-library" / "lifecycle.json"
 
 
 def parse_args() -> argparse.Namespace:
@@ -39,6 +40,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--nav-group", action="append")
     parser.add_argument("--version", action="append", help="Version to include. Repeat to limit generation.")
     parser.add_argument("--publish-version", help="Version whose docs should be published.")
+    parser.add_argument("--lifecycle-metadata", default=str(DEFAULT_LIFECYCLE_METADATA))
     parser.add_argument("--force-regenerate", action="store_true")
     parser.add_argument(
         "--source-name",
@@ -236,7 +238,7 @@ def update_docs_navigation(
     for page in sorted(output_dir.glob("*.mdx")):
         title = read_mdx_title(page)
         page_entries.append((title, docs_json_page_ref(page, docs_json_path), page))
-    page_entries.sort(key=lambda item: (0 if item[0] == GROUP_LABEL else 1, item[0].lower(), item[0]))
+    page_entries.sort(key=lambda item: (0 if item[2].name == "index.mdx" else 1, item[0].lower(), item[0]))
     page_refs = {page_ref for _title, page_ref, _path in page_entries}
 
     existing_group_index = find_group_index(find_group_path(pages, parent_groups), GROUP_LABEL)
@@ -247,12 +249,12 @@ def update_docs_navigation(
     overview_entry = next(((page_ref, path) for _title, page_ref, path in page_entries if path.name == "index.mdx"), None)
     module_refs = [page_ref for _title, page_ref, path in page_entries if path.name != "index.mdx"]
     group_pages: list[Any] = []
-    if module_refs:
-        group_pages.append({"group": MODULES_GROUP_LABEL, "pages": module_refs})
     if overview_entry is not None:
         overview_ref, overview_path = overview_entry
-        set_mdx_title(overview_path, DETAILS_AND_HISTORY_LABEL)
+        set_mdx_title(overview_path, "Overview")
         group_pages.append(overview_ref)
+    if module_refs:
+        group_pages.append({"group": MODULES_GROUP_LABEL, "pages": module_refs})
     group = {
         "group": GROUP_LABEL,
         "pages": group_pages,
@@ -271,17 +273,24 @@ def main() -> int:
     ensure_repo_direnv(repo_root=REPO_ROOT, script_path=Path(__file__).resolve(), argv=sys.argv[1:])
     args = parse_args()
     source_config = load_json(Path(args.source_config).resolve())
-    configured_versions = source_config.get("versions")
-    if not isinstance(configured_versions, list) or not all(isinstance(item, str) for item in configured_versions):
-        raise ValueError("Source config must define a string list under `versions`")
-    selected_versions = [version for version in configured_versions if not args.version or version in set(args.version)]
+    min_version = source_config.get("min_version")
+    if not isinstance(min_version, str) or not min_version:
+        raise ValueError("Source config must define a non-empty `min_version`")
+    selected_versions = (
+        sorted(
+            set(args.version),
+            key=lambda value: tuple(int(part) for part in value.split(".")),
+        )
+        if args.version
+        else stable_dpm_versions(min_version=min_version)
+    )
     if not selected_versions:
         raise ValueError("No Daml SDK versions selected")
 
     package_set = str(source_config.get("package_set") or "base")
     sdk_source = str(source_config.get("sdk_source") or "dpm")
     lf_target = source_config.get("lf_target") if isinstance(source_config.get("lf_target"), str) else None
-    publish_version = args.publish_version or source_config.get("publish_version") or selected_versions[-1]
+    publish_version = args.publish_version or selected_versions[-1]
 
     cache_dir = Path(args.cache_dir).resolve()
     for version in selected_versions:
@@ -317,6 +326,18 @@ def main() -> int:
         args.version_filter,
         "--link-prefix",
         docs_route_prefix(Path(args.output_dir).resolve(), Path(args.docs_json).resolve()),
+        "--history-report",
+        str(Path(args.output_dir).resolve() / "history-report.json"),
+        "--reader-route-prefix",
+        docs_route_prefix(Path(args.output_dir).resolve(), Path(args.docs_json).resolve()),
+        "--surface-id",
+        "daml-standard-library",
+        "--surface-title",
+        GROUP_LABEL,
+        "--configured-scope",
+        "Daml Standard Library modules from stable DPM SDK releases",
+        "--lifecycle-metadata",
+        str(Path(args.lifecycle_metadata).resolve()),
     )
     for version in args.version or []:
         command.extend(["--version", version])

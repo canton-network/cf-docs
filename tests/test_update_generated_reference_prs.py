@@ -5,7 +5,6 @@ import sys
 from pathlib import Path
 from types import ModuleType
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -59,7 +58,11 @@ def test_update_targets_cover_all_generated_doc_surfaces() -> None:
         "daml-standard-library",
         "daml-script",
         "typescript-bindings",
+        "canton-console-reference",
+        "canton-error-codes-reference",
+        "canton-release-protocol-versions",
         "canton-metrics-reference",
+        "canton-topology-proto-link",
         "canton-release-notes",
         "wallet-gateway-release-notes",
         "wallet-sdk-release-notes",
@@ -67,15 +70,29 @@ def test_update_targets_cover_all_generated_doc_surfaces() -> None:
     ]
 
 
+def test_update_target_commands_use_the_locked_nix_development_shell() -> None:
+    module = load_script_module()
+
+    commands = (
+        command
+        for target in module.UPDATE_TARGETS
+        for command in (*target.source_update_commands, *target.generate_commands)
+    )
+    assert all(
+        command[: len(module.NIX_DEVELOP_PREFIX)] == module.NIX_DEVELOP_PREFIX
+        for command in commands
+    )
+
+
 def test_dashboard_target_runs_network_variable_tabs_after_dashboard_data_generation() -> None:
     module = load_script_module()
     target = next(target for target in module.UPDATE_TARGETS if target.key == "version-dashboard")
 
     assert target.source_update_commands == (
-        ("nix-shell", "--run", "npm run generate:version-compatibility-dashboard"),
+        module.nix_develop_command("npm run generate:version-compatibility-dashboard"),
     )
     assert target.generate_commands == (
-        ("nix-shell", "--run", "npm run generate:network-variable-tabs"),
+        module.nix_develop_command("npm run generate:network-variable-tabs"),
     )
     assert target.source_update_paths == (
         "config/repo-version-config.json",
@@ -95,6 +112,21 @@ def test_java_ledger_bindings_target_does_not_auto_merge() -> None:
     assert target.auto_merge is False
 
 
+def test_splice_openapi_target_regenerates_without_a_source_pin() -> None:
+    module = load_script_module()
+    target = next(target for target in module.UPDATE_TARGETS if target.key == "splice-openapi")
+
+    assert target.source_update_commands == ()
+    assert target.source_update_paths == ()
+    assert target.summary_kind == "static"
+    assert target.summary_path is None
+    assert target.generate_commands == (
+        module.nix_develop_command("npm run generate:splice-mintlify-openapi"),
+    )
+    assert "config/mintlify-openapi/splice-openapi/source-artifacts.json" not in target.paths
+    assert "docs-main/reference/splice-scan-api" in target.paths
+
+
 def test_generated_docs_workflow_uses_merger_app_for_pr_mutations() -> None:
     workflow = (REPO_ROOT / ".github" / "workflows" / "update-version-dashboard.yml").read_text(
         encoding="utf-8"
@@ -104,7 +136,46 @@ def test_generated_docs_workflow_uses_merger_app_for_pr_mutations() -> None:
     assert "GH_TOKEN: ${{ steps.merger-token.outputs.token || github.token }}" in workflow
     assert "GITHUB_TOKEN: ${{ steps.merger-token.outputs.token || github.token }}" in workflow
     assert "GENERATED_DOCS_WORKFLOW_TOKEN: ${{ github.token }}" in workflow
-    assert "run: gh auth setup-git" in workflow
+    assert "uses: cachix/install-nix-action@v31" not in workflow
+    assert "sudo apt-get" not in workflow
+    assert "nix-shell" not in workflow
+    assert 'NIX_CONFIG: "extra-experimental-features = nix-command flakes"' in workflow
+    assert (
+        "run: SKIP_NPM_INSTALL=1 direnv allow . && SKIP_NPM_INSTALL=1 direnv exec . true"
+        in workflow
+    )
+    assert "python3 scripts/check_generated_docs_dependencies.py" in workflow
+    assert "run: SKIP_NPM_INSTALL=1 nix develop path:nix --command gh auth setup-git" in workflow
+    assert 'args=(python3 scripts/update_generated_reference_prs.py --targets "${{ matrix.target }}")' in workflow
+    assert "args+=(--dry-run)" in workflow
+    assert 'SKIP_NPM_INSTALL=1 nix develop path:nix --command "${args[@]}"' in workflow
+
+
+def test_generated_docs_workflow_only_sets_up_daml_for_declared_targets() -> None:
+    module = load_script_module()
+    workflow = (REPO_ROOT / ".github" / "workflows" / "update-version-dashboard.yml").read_text(
+        encoding="utf-8"
+    )
+
+    daml_targets = [target.key for target in module.UPDATE_TARGETS if target.requires_daml_tooling]
+
+    assert daml_targets == ["splice-token-standard-v2", "daml-standard-library", "daml-script"]
+    assert "--print-target-matrix-json" in workflow
+    assert "matrix: ${{ fromJSON(needs.select-targets.outputs.target_matrix) }}" in workflow
+    assert "if: ${{ matrix.requires_daml_tooling }}" in workflow
+    assert "bash scripts/install_daml_tooling.sh" in workflow
+
+
+def test_target_matrix_includes_daml_requirement() -> None:
+    module = load_script_module()
+    targets = module.targets_to_run(["splice-token-standard-v2", "canton-release-notes"])
+
+    assert module.target_matrix(targets) == {
+        "include": [
+            {"target": "splice-token-standard-v2", "requires_daml_tooling": True},
+            {"target": "canton-release-notes", "requires_daml_tooling": False},
+        ]
+    }
 
 
 def test_daml_script_target_wires_source_pin_and_generated_paths() -> None:
@@ -113,11 +184,11 @@ def test_daml_script_target_wires_source_pin_and_generated_paths() -> None:
 
     assert target.branch == "generated-references/daml-script/update"
     assert target.source_update_commands == (
-        ("nix-shell", "--run", "npm run update:generated-reference-sources -- --source daml-script"),
+        module.nix_develop_command("npm run update:generated-reference-sources -- --source daml-script"),
     )
     assert target.source_update_paths == ("config/x2mdx/daml-script/source-artifacts.json",)
     assert target.generate_commands == (
-        ("nix-shell", "--run", "npm run generate:daml-script-reference"),
+        module.nix_develop_command("npm run generate:daml-script-reference"),
     )
     assert target.paths == (
         "config/x2mdx/daml-script/source-artifacts.json",
@@ -160,7 +231,7 @@ def test_daml_script_target_skips_generation_when_source_is_unchanged(monkeypatc
 
     assert calls == [
         ("reset", "base-sha"),
-        ("nix-shell", "--run", "npm run update:generated-reference-sources -- --source daml-script"),
+        module.nix_develop_command("npm run update:generated-reference-sources -- --source daml-script"),
         ("close", "generated-references/daml-script/update"),
     ]
     assert not any("generate:daml-script-reference" in " ".join(call) for call in calls if isinstance(call, tuple))
@@ -195,7 +266,7 @@ def test_source_update_targets_skip_generation_when_source_is_unchanged(monkeypa
 
     assert calls == [
         ("reset", "base-sha"),
-        ("nix-shell", "--run", "npm run update:generated-reference-sources -- --source wallet-gateway-openrpc"),
+        module.nix_develop_command("npm run update:generated-reference-sources -- --source wallet-gateway-openrpc"),
         ("close", "generated-references/wallet-gateway-openrpc/update"),
     ]
 
@@ -226,7 +297,7 @@ def test_version_dashboard_skips_timestamp_only_source_changes(monkeypatch, tmp_
 
     assert calls == [
         ("reset", "base-sha"),
-        ("nix-shell", "--run", "npm run generate:version-compatibility-dashboard"),
+        module.nix_develop_command("npm run generate:version-compatibility-dashboard"),
         ("close", "version-dashboard/update"),
     ]
     assert not any("generate:network-variable-tabs" in " ".join(call) for call in calls)
@@ -263,8 +334,8 @@ def test_source_update_targets_generate_when_source_changed(monkeypatch, tmp_pat
 
     assert calls == [
         ("reset", "base-sha"),
-        ("nix-shell", "--run", "npm run update:generated-reference-sources -- --source wallet-gateway-openrpc"),
-        ("nix-shell", "--run", "npm run generate:wallet-gateway-openrpc-reference"),
+        module.nix_develop_command("npm run update:generated-reference-sources -- --source wallet-gateway-openrpc"),
+        module.nix_develop_command("npm run generate:wallet-gateway-openrpc-reference"),
         ("pr", "wallet-gateway-openrpc"),
     ]
     assert body_paths
@@ -317,6 +388,10 @@ def test_generated_clean_paths_include_target_paths_and_internal_output() -> Non
     assert "docs-main/reference/typescript" in clean_paths
     assert "docs-main/snippets/generated/version-dashboard-data.mdx" in clean_paths
     assert "docs-main/global-synchronizer/deployment/validator-kubernetes.mdx" in clean_paths
+    assert "docs-main/global-synchronizer/reference/canton-console-commands.mdx" in clean_paths
+    assert "docs-main/global-synchronizer/reference/error-codes.mdx" in clean_paths
+    assert "docs-main/release-notes/releases-and-versioning.mdx" in clean_paths
+    assert "docs-main/appdev/deep-dives/external-signing-topology.mdx" in clean_paths
     assert "docs-main/global-synchronizer/reference/canton-metrics.mdx" in clean_paths
     assert "docs-main/global-synchronizer/release-notes" in clean_paths
     assert "docs-main/integrations/release-notes/wallet-gateway.mdx" in clean_paths
@@ -528,7 +603,10 @@ def test_main_dry_run_lists_targets_without_git_or_gh(monkeypatch, capsys) -> No
     assert module.main() == 0
     output = capsys.readouterr().out
     assert "version-dashboard: Update generated docs" in output
-    assert "source $ nix-shell --run npm run generate:version-compatibility-dashboard" in output
+    expected_source_command = "source $ " + " ".join(
+        module.nix_develop_command("npm run generate:version-compatibility-dashboard")
+    )
+    assert expected_source_command in output
     assert "npm run generate:network-variable-tabs" in output
 
 

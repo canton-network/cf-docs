@@ -38,7 +38,7 @@ def test_protobuf_nav_keeps_packages_category_with_details_last(tmp_path: Path) 
     write_mdx(
         output_dir / "operations" / "com-example" / "exampleservice" / "getexample.mdx",
         "GetExample",
-        "<dl><dt>Service</dt>\n<dd>ExampleService</dd></dl>\n",
+        '<div class="x2mdx-ref-meta-grid"><div class="x2mdx-ref-meta-item"><span class="x2mdx-ref-meta-label">Service</span>\n<span class="x2mdx-ref-meta-value">ExampleService</span></div></div>\n',
     )
 
     group = generated_reference_nav.build_protobuf_nav_group(

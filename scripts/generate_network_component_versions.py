@@ -60,11 +60,18 @@ NPM_PACKAGE_URLS = {
     key: f"https://www.npmjs.com/package/{package_name}"
     for key, package_name in NPM_PACKAGE_NAMES.items()
 }
-DPM_INSTALLER_URL = "https://get.digitalasset.com/install/install.sh"
-DPM_LATEST_URL = "https://get.digitalasset.com/install/latest"
 DPM_RELEASE_REPO = "digital-asset/dpm"
 DPM_LATEST_RELEASE_URL = f"https://api.github.com/repos/{DPM_RELEASE_REPO}/releases/latest"
 DPM_RELEASES_PAGE_URL = f"https://github.com/{DPM_RELEASE_REPO}/releases"
+DAML_SDK_MANIFEST_REPOSITORY = (
+    "europe-docker.pkg.dev/da-images/public/sdk-manifests/open-source"
+)
+DAML_SDK_MANIFEST_BASE_URL = (
+    "https://europe-docker.pkg.dev/v2/da-images/public/"
+    "sdk-manifests/open-source/manifests"
+)
+DAML_SDK_VERSION_ANNOTATION = "org.opencontainers.image.version"
+DAML_SDK_VENDOR_VERSION_ANNOTATION = "com.digitalasset.version"
 WALLET_GATEWAY_PACKAGE_URL = (
     "https://github.com/digital-asset/wallet-gateway/pkgs/container/"
     "wallet-gateway%2Fdocker%2Fwallet-gateway"
@@ -74,8 +81,6 @@ SPLICE_REPOSITORY_URL = "https://github.com/canton-network/splice"
 CANTON_VERSION_SOURCE_REPO_URL = SPLICE_REPOSITORY_URL
 SPLICE_RAW_BASE_URL = "https://raw.githubusercontent.com/canton-network/splice"
 CANTON_SOURCES_PATH = "nix/canton-sources.json"
-DARS_LOCK_PATH = "daml/dars.lock"
-DASHBOARD_DAR_NAMES = ("splice-amulet", "splice-wallet", "splice-dso-governance")
 WALLET_GATEWAY_RELEASE_REPO = "canton-network/wallet"
 WALLET_GATEWAY_RELEASE_TAG_PREFIX = "@canton-network/wallet-gateway-remote@"
 WALLET_GATEWAY_RELEASES_URL = (
@@ -178,6 +183,89 @@ def fetch_npm_latest(package_name: str, timeout: float) -> str:
     return str(data["dist-tags"]["latest"])
 
 
+def daml_sdk_manifest_url(network_key: str) -> str:
+    if network_key not in NETWORKS:
+        raise ValueError(f"Expected Daml SDK network tag, got {network_key!r}")
+    return f"{DAML_SDK_MANIFEST_BASE_URL}/{network_key}"
+
+
+def fetch_daml_sdk_manifest_version(network_key: str, timeout: float) -> str:
+    url = daml_sdk_manifest_url(network_key)
+    data = fetch_manifest_json(url, timeout)
+    if data.get("mediaType") != "application/vnd.oci.image.index.v1+json":
+        raise RuntimeError(f"Expected OCI image index from {url}")
+
+    annotations = data.get("annotations", {})
+    if not isinstance(annotations, dict):
+        raise RuntimeError(f"Expected manifest annotations from {url}")
+    version = str(annotations.get(DAML_SDK_VERSION_ANNOTATION) or "")
+    vendor_version = str(annotations.get(DAML_SDK_VENDOR_VERSION_ANNOTATION) or "")
+    if not STABLE_SEMVER_RE.fullmatch(version):
+        raise RuntimeError(
+            f"Expected stable {DAML_SDK_VERSION_ANNOTATION} annotation from {url}, "
+            f"got {version!r}"
+        )
+    if vendor_version and vendor_version != version:
+        raise RuntimeError(
+            f"Daml SDK version annotation mismatch in {url}: "
+            f"{DAML_SDK_VERSION_ANNOTATION}={version} "
+            f"{DAML_SDK_VENDOR_VERSION_ANNOTATION}={vendor_version}"
+        )
+
+    manifests = data.get("manifests")
+    if not isinstance(manifests, list) or not manifests:
+        raise RuntimeError(f"Expected platform manifests from {url}")
+    for manifest in manifests:
+        if not isinstance(manifest, dict):
+            raise RuntimeError(f"Expected platform manifest object from {url}")
+        manifest_annotations = manifest.get("annotations", {})
+        if not isinstance(manifest_annotations, dict):
+            raise RuntimeError(f"Expected platform manifest annotations from {url}")
+        platform_version = str(
+            manifest_annotations.get(DAML_SDK_VERSION_ANNOTATION) or ""
+        )
+        platform_vendor_version = str(
+            manifest_annotations.get(DAML_SDK_VENDOR_VERSION_ANNOTATION) or ""
+        )
+        if platform_version != version:
+            raise RuntimeError(
+                f"Daml SDK platform version mismatch in {url}: "
+                f"index={version} platform={platform_version!r}"
+            )
+        if platform_vendor_version and platform_vendor_version != version:
+            raise RuntimeError(
+                f"Daml SDK platform vendor version mismatch in {url}: "
+                f"index={version} platform={platform_vendor_version!r}"
+            )
+
+    return version
+
+
+def collect_daml_sdk_versions(timeout: float, existing_config: dict) -> dict[str, str]:
+    versions: dict[str, str] = {}
+    for network_key in NETWORK_ORDER:
+        try:
+            versions[network_key] = fetch_daml_sdk_manifest_version(network_key, timeout)
+        except Exception as exc:
+            previous_version = existing_repo_version(
+                existing_config,
+                "damlSdk",
+                network_key,
+            )
+            if not STABLE_SEMVER_RE.fullmatch(previous_version):
+                raise RuntimeError(
+                    f"{network_key}: failed to collect Daml SDK version and no previous "
+                    f"stable dashboard value is available to preserve: {exc}"
+                ) from exc
+            print(
+                f"WARNING: {network_key}: failed to collect Daml SDK version ({exc}); "
+                f"preserving previous dashboard value {previous_version}",
+                file=sys.stderr,
+            )
+            versions[network_key] = previous_version
+    return versions
+
+
 def version_key(version: str) -> tuple[int, int, int]:
     if not STABLE_SEMVER_RE.fullmatch(version):
         raise ValueError(f"Expected stable semantic version, got {version!r}")
@@ -221,37 +309,6 @@ def fetch_canton_version_from_splice_release_line(
     if not canton_version:
         raise RuntimeError(f"Missing version in {url}")
     return canton_version, branch, splice_blob_file_url(branch, CANTON_SOURCES_PATH)
-
-
-def parse_dars_lock(dars_lock_text: str, source: str) -> dict[str, str]:
-    versions_by_name: dict[str, list[str]] = {}
-    for line_number, line in enumerate(dars_lock_text.splitlines(), start=1):
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#"):
-            continue
-        parts = stripped.split()
-        if len(parts) != 3:
-            raise RuntimeError(f"Malformed dars.lock row in {source}:{line_number}: {line}")
-        name, version, _package_hash = parts
-        versions_by_name.setdefault(name, []).append(version)
-
-    return {
-        name: latest_stable_version(versions_by_name.get(name, []), f"{source} {name}")
-        for name in DASHBOARD_DAR_NAMES
-    }
-
-
-def fetch_dar_versions_from_splice_release_line(
-    branch: str,
-    timeout: float,
-) -> tuple[list[dict[str, str]], str]:
-    url = splice_raw_file_url(branch, DARS_LOCK_PATH)
-    dars_lock_text = fetch_text(url, timeout)
-    dar_versions = parse_dars_lock(dars_lock_text, url)
-    return (
-        [{"name": name, "version": dar_versions[name]} for name in DASHBOARD_DAR_NAMES],
-        splice_blob_file_url(branch, DARS_LOCK_PATH),
-    )
 
 
 def fetch_latest_dpm_version(timeout: float) -> str:
@@ -497,10 +554,6 @@ def collect_network_snapshot(network_key: str, timeout: float) -> dict:
     canton_version, canton_release_line_branch, canton_sources_url = (
         fetch_canton_version_from_splice_release_line(observed_release, timeout)
     )
-    dar_versions, dar_versions_url = fetch_dar_versions_from_splice_release_line(
-        canton_release_line_branch,
-        timeout,
-    )
 
     return {
         "displayName": urls["display_name"],
@@ -508,13 +561,11 @@ def collect_network_snapshot(network_key: str, timeout: float) -> dict:
         "spliceVersion": observed_release,
         "cantonVersion": canton_version,
         "cantonReleaseLineBranch": canton_release_line_branch,
-        "darVersions": dar_versions,
         "migrationId": migration_id,
         "sources": {
             "infoUrl": urls["info_url"],
             "indexUrl": urls["index_url"],
             "cantonSourcesUrl": canton_sources_url,
-            "darVersionsUrl": dar_versions_url,
         },
         "checks": {
             "dockerImageTag": docker_image_tag,
@@ -546,7 +597,6 @@ def network_snapshot_from_existing(existing_config: dict, network_key: str) -> d
     canton_version = str(canton_mapping.get("externalVersion") or "")
     canton_release_line_branch = str(canton_mapping.get("branch") or "")
     migration_id = str(advanced.get("migrationId") or "")
-    dar_versions = list(advanced.get("darVersions") or [])
     if not splice_version or not migration_id:
         return None
 
@@ -557,7 +607,6 @@ def network_snapshot_from_existing(existing_config: dict, network_key: str) -> d
         "infoUrl": existing_sources.get("infoUrl", urls["info_url"]),
         "indexUrl": existing_sources.get("indexUrl", urls["index_url"]),
         "cantonSourcesUrl": existing_sources.get("cantonSourcesUrl", ""),
-        "darVersionsUrl": existing_sources.get("darVersionsUrl", ""),
         "preservedFromPrevious": True,
     }
     return {
@@ -566,7 +615,6 @@ def network_snapshot_from_existing(existing_config: dict, network_key: str) -> d
         "spliceVersion": splice_version,
         "cantonVersion": canton_version,
         "cantonReleaseLineBranch": canton_release_line_branch,
-        "darVersions": dar_versions,
         "migrationId": migration_id,
         "sources": sources,
         "checks": {
@@ -579,7 +627,6 @@ def network_snapshot_from_existing(existing_config: dict, network_key: str) -> d
 
 def collect_snapshot(timeout: float, existing_config: dict) -> dict:
     generated_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
-    latest_dpm_sdk = fetch_text(DPM_LATEST_URL, timeout).strip()
     previous_pqs = previous_stable_pqs_version(existing_config)
     networks: dict[str, dict] = {}
     for network_key in NETWORK_ORDER:
@@ -604,7 +651,7 @@ def collect_snapshot(timeout: float, existing_config: dict) -> dict:
         "generatedAt": generated_at,
         "generatorMode": "public_source_collection_with_manual_fallbacks",
         "networks": networks,
-        "latestDpmSdk": latest_dpm_sdk,
+        "damlSdkVersions": collect_daml_sdk_versions(timeout, existing_config),
         "latestDpm": fetch_latest_dpm_version(timeout),
         "latestPqs": fetch_pqs_version_from_scribe_component(
             timeout,
@@ -631,7 +678,6 @@ def build_versions(existing_config: dict, snapshot: dict) -> dict:
             "advanced": {
                 "minProtocolVersion": existing_advanced_data.get("minProtocolVersion", ""),
                 "migrationId": network["migrationId"],
-                "darVersions": network["darVersions"],
                 "releaseUrl": updated_release_url(network["spliceVersion"]),
             },
             "endpoint": network["endpoint"],
@@ -650,7 +696,7 @@ def repository_url(repository_key: str, existing_config: dict) -> str:
     if repository_key == "canton":
         return CANTON_VERSION_SOURCE_REPO_URL
     if repository_key == "damlSdk":
-        return str(existing.get("url") or "https://github.com/digital-asset/daml/releases")
+        return f"https://{DAML_SDK_MANIFEST_REPOSITORY}"
     if repository_key == "dpm":
         return DPM_RELEASES_PAGE_URL
     if repository_key == "pqs":
@@ -679,11 +725,7 @@ def build_repository_mapping(
             branch = network["cantonReleaseLineBranch"]
             folder_path_repo = CANTON_SOURCES_PATH
         elif repository_key == "damlSdk":
-            external_version = existing_repo_version(
-                existing_config,
-                repository_key,
-                network_key,
-            )
+            external_version = snapshot["damlSdkVersions"][network_key]
             branch = ""
             folder_path_repo = ""
         elif repository_key == "dpm":
@@ -750,16 +792,15 @@ def build_source_contract(snapshot: dict) -> dict:
             "nix/canton-sources.json."
         ),
         "damlSdk": (
-            "Manual/preserved in dashboard config. Intended source: latest stable Daml SDK from "
-            f"{DPM_LATEST_URL} (currently {snapshot['latestDpmSdk']})."
+            "For each network, read its moving mainnet, testnet, or devnet tag from "
+            f"{DAML_SDK_MANIFEST_BASE_URL}. Read {DAML_SDK_VERSION_ANNOTATION} from that "
+            "public Artifact Registry OCI index and cross-check the Digital Asset and "
+            "per-platform version annotations. Preserve only that network's previous stable "
+            "dashboard value if its registry manifest is temporarily unavailable."
         ),
         "dpm": (
             f"Latest stable dpm CLI release tag from {DPM_LATEST_RELEASE_URL} "
             f"(currently {snapshot['latestDpm']})."
-        ),
-        "damlSdkInstaller": (
-            f"DPM installer channel: curl {DPM_INSTALLER_URL} | sh; "
-            f"latest stable SDK from {DPM_LATEST_URL} currently resolves to {snapshot['latestDpmSdk']}."
         ),
         "tokenStandard": f"npm latest dist-tag for {NPM_PACKAGE_NAMES['tokenStandard']}.",
         "walletSdk": f"npm latest dist-tag for {NPM_PACKAGE_NAMES['walletSdk']}.",
@@ -775,10 +816,6 @@ def build_source_contract(snapshot: dict) -> dict:
             "to a prerelease, retain the previous stable dashboard value."
         ),
         "minProtocolVersion": "Manual/fallback until a public live source is identified.",
-        "darVersions": (
-            "Latest stable package rows for splice-amulet, splice-wallet, and "
-            "splice-dso-governance from the observed Splice release-line daml/dars.lock."
-        ),
     }
 
 

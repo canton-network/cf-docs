@@ -41,14 +41,17 @@ def dashboard_snapshot(*, generated_at: str, splice_version: str) -> dict:
             "endpoint": f"scan.{network_key}.example",
             "cantonVersion": "3.5.1",
             "cantonReleaseLineBranch": "release-line-0.6",
-            "darVersions": [],
         }
 
     return {
         "generatedAt": generated_at,
         "generatorMode": "public_source_collection_with_manual_fallbacks",
         "networks": networks,
-        "latestDpmSdk": "3.5.1",
+        "damlSdkVersions": {
+            "mainnet": "3.5.1",
+            "testnet": "3.5.2",
+            "devnet": "3.5.3",
+        },
         "latestDpm": "1.0.21",
         "latestPqs": "3.5.1",
         "latestWalletGateway": "1.4.0",
@@ -57,6 +60,24 @@ def dashboard_snapshot(*, generated_at: str, splice_version: str) -> dict:
             "walletSdk": "1.4.0",
             "dappSdk": "1.1.0",
         },
+    }
+
+
+def daml_sdk_manifest(version: str) -> dict:
+    annotations = {
+        "org.opencontainers.image.version": version,
+        "com.digitalasset.version": version,
+    }
+    return {
+        "mediaType": "application/vnd.oci.image.index.v1+json",
+        "annotations": annotations,
+        "manifests": [
+            {
+                "mediaType": "application/vnd.oci.image.manifest.v1+json",
+                "annotations": annotations,
+                "platform": {"architecture": "amd64", "os": "linux"},
+            }
+        ],
     }
 
 
@@ -95,7 +116,7 @@ def test_build_config_preserves_generated_metadata_when_dashboard_values_do_not_
         generated_at="2026-06-03T12:00:00+00:00",
         splice_version="0.6.3",
     )
-    candidate_snapshot["latestDpmSdk"] = "3.5.2"
+    candidate_snapshot["unpublishedProbe"] = "changed"
 
     result = module.build_config(existing_config, candidate_snapshot)
 
@@ -233,7 +254,6 @@ def test_network_snapshot_from_existing_rebuilds_required_fields() -> None:
                     "infoUrl": "https://docs.dev.example/info",
                     "indexUrl": "https://docs.dev.example/index.html",
                     "cantonSourcesUrl": "https://github.com/example/canton-sources",
-                    "darVersionsUrl": "https://github.com/example/dars.lock",
                 }
             }
         },
@@ -243,7 +263,6 @@ def test_network_snapshot_from_existing_rebuilds_required_fields() -> None:
                 "endpoint": "scan.dev.example",
                 "advanced": {
                     "migrationId": "1",
-                    "darVersions": [{"name": "splice-amulet", "version": "0.1.22"}],
                 },
                 "substitutions": {"version": "0.6.14"},
             }
@@ -285,19 +304,19 @@ def test_collect_snapshot_preserves_previous_network_on_failure(monkeypatch) -> 
             "mainnet": {
                 "name": "MainNet",
                 "endpoint": "scan.main.example",
-                "advanced": {"migrationId": "4", "darVersions": []},
+                "advanced": {"migrationId": "4"},
                 "substitutions": {"version": "0.6.12"},
             },
             "testnet": {
                 "name": "TestNet",
                 "endpoint": "scan.test.example",
-                "advanced": {"migrationId": "1", "darVersions": []},
+                "advanced": {"migrationId": "1"},
                 "substitutions": {"version": "0.6.13"},
             },
             "devnet": {
                 "name": "DevNet",
                 "endpoint": "scan.dev.example",
-                "advanced": {"migrationId": "1", "darVersions": []},
+                "advanced": {"migrationId": "1"},
                 "substitutions": {"version": "0.6.14"},
             },
         },
@@ -338,13 +357,11 @@ def test_collect_snapshot_preserves_previous_network_on_failure(monkeypatch) -> 
             "spliceVersion": existing_config["versions"][network_key]["substitutions"]["version"],
             "cantonVersion": "3.5.1",
             "cantonReleaseLineBranch": "release-line-x",
-            "darVersions": [],
             "migrationId": existing_config["versions"][network_key]["advanced"]["migrationId"],
             "sources": {
                 "infoUrl": f"https://docs.{network_key}.example/info",
                 "indexUrl": f"https://docs.{network_key}.example/index.html",
                 "cantonSourcesUrl": "",
-                "darVersionsUrl": "",
             },
             "checks": {
                 "dockerImageTag": existing_config["versions"][network_key]["substitutions"][
@@ -357,8 +374,16 @@ def test_collect_snapshot_preserves_previous_network_on_failure(monkeypatch) -> 
         }
 
     monkeypatch.setattr(module, "collect_network_snapshot", fake_collect_network_snapshot)
-    monkeypatch.setattr(module, "fetch_text", lambda url, timeout: "3.5.1")
     monkeypatch.setattr(module, "previous_stable_pqs_version", lambda existing_config: "3.5.1")
+    monkeypatch.setattr(
+        module,
+        "collect_daml_sdk_versions",
+        lambda timeout, existing_config: {
+            "mainnet": "3.5.1",
+            "testnet": "3.5.1",
+            "devnet": "3.5.1",
+        },
+    )
     monkeypatch.setattr(module, "fetch_latest_dpm_version", lambda timeout: "1.0.21")
     monkeypatch.setattr(
         module,
@@ -384,7 +409,6 @@ def test_collect_snapshot_raises_when_failed_network_has_no_previous(monkeypatch
         raise RuntimeError(f"{network_key} boom")
 
     monkeypatch.setattr(module, "collect_network_snapshot", fake_collect_network_snapshot)
-    monkeypatch.setattr(module, "fetch_text", lambda url, timeout: "3.5.1")
     monkeypatch.setattr(module, "previous_stable_pqs_version", lambda existing_config: "3.5.1")
 
     with pytest.raises(RuntimeError, match="no previous dashboard config"):
@@ -407,6 +431,116 @@ def test_latest_stable_version_ignores_prerelease_and_debug_tags() -> None:
         )
         == "3.5.1"
     )
+
+
+def test_collect_daml_sdk_versions_uses_each_network_tag(monkeypatch) -> None:
+    module = load_script_module()
+    expected_versions = {
+        "mainnet": "3.5.5",
+        "testnet": "3.5.6",
+        "devnet": "3.5.7",
+    }
+    seen_urls: list[str] = []
+
+    def fake_fetch_manifest_json(url: str, timeout: float) -> dict:
+        seen_urls.append(url)
+        network_key = url.rsplit("/", 1)[-1]
+        assert network_key in expected_versions
+        return daml_sdk_manifest(expected_versions[network_key])
+
+    monkeypatch.setattr(module, "fetch_manifest_json", fake_fetch_manifest_json)
+
+    assert module.collect_daml_sdk_versions(
+        timeout=1.0,
+        existing_config={"repositories": {}},
+    ) == expected_versions
+    assert seen_urls == [
+        f"{module.DAML_SDK_MANIFEST_BASE_URL}/{network_key}"
+        for network_key in module.NETWORK_ORDER
+    ]
+
+
+def test_fetch_daml_sdk_manifest_version_rejects_annotation_mismatch(monkeypatch) -> None:
+    module = load_script_module()
+    manifest = daml_sdk_manifest("3.5.3")
+    manifest["annotations"]["com.digitalasset.version"] = "3.5.2"
+    monkeypatch.setattr(module, "fetch_manifest_json", lambda url, timeout: manifest)
+
+    with pytest.raises(RuntimeError, match="version annotation mismatch"):
+        module.fetch_daml_sdk_manifest_version("mainnet", timeout=1.0)
+
+
+def test_daml_sdk_manifest_url_rejects_unknown_tag() -> None:
+    module = load_script_module()
+
+    with pytest.raises(ValueError, match="Expected Daml SDK network tag"):
+        module.daml_sdk_manifest_url("3.5.4-rc1")
+
+
+def test_collect_daml_sdk_versions_preserves_only_failed_network_value(monkeypatch) -> None:
+    module = load_script_module()
+    existing_config = {
+        "repositories": {
+            "damlSdk": {
+                "versionMapping": {
+                    "mainnet": {"externalVersion": "3.5.5"},
+                    "testnet": {"externalVersion": "3.5.6"},
+                    "devnet": {"externalVersion": "3.5.7"},
+                }
+            }
+        }
+    }
+
+    def fetch_daml_sdk_manifest_version(network_key: str, timeout: float) -> str:
+        if network_key == "testnet":
+            raise RuntimeError("registry unavailable")
+        return {"mainnet": "3.5.8", "devnet": "3.5.10"}[network_key]
+
+    monkeypatch.setattr(
+        module,
+        "fetch_daml_sdk_manifest_version",
+        fetch_daml_sdk_manifest_version,
+    )
+
+    assert module.collect_daml_sdk_versions(1.0, existing_config) == {
+        "mainnet": "3.5.8",
+        "testnet": "3.5.6",
+        "devnet": "3.5.10",
+    }
+
+
+def test_build_config_records_network_daml_sdk_manifest_sources() -> None:
+    module = load_script_module()
+
+    config = module.build_config(
+        {"versions": {}, "repositories": {}},
+        dashboard_snapshot(
+            generated_at="2026-08-05T12:00:00+00:00",
+            splice_version="0.7.0",
+        ),
+    )
+
+    assert config["repositories"]["damlSdk"]["url"] == (
+        f"https://{module.DAML_SDK_MANIFEST_REPOSITORY}"
+    )
+    assert config["repositories"]["damlSdk"]["versionMapping"]["mainnet"] == {
+        "branch": "",
+        "externalVersion": "3.5.1",
+        "folderPathRepo": "",
+    }
+    assert config["repositories"]["damlSdk"]["versionMapping"]["testnet"][
+        "externalVersion"
+    ] == "3.5.2"
+    assert config["repositories"]["damlSdk"]["versionMapping"]["devnet"][
+        "externalVersion"
+    ] == "3.5.3"
+    assert (
+        module.DAML_SDK_VERSION_ANNOTATION
+        in config["_generated"]["sourceContract"]["damlSdk"]
+    )
+    assert "moving mainnet, testnet, or devnet tag" in config["_generated"]["sourceContract"][
+        "damlSdk"
+    ]
 
 
 def test_previous_stable_pqs_version_uses_existing_dashboard_config() -> None:
@@ -544,21 +678,3 @@ def test_fetch_latest_wallet_gateway_version_paginates_releases(monkeypatch) -> 
         f"{module.WALLET_GATEWAY_RELEASES_URL}?per_page=100&page=2",
         f"{module.WALLET_GATEWAY_RELEASES_URL}?per_page=100&page=3",
     ]
-
-
-def test_parse_dars_lock_selects_latest_dashboard_packages_only() -> None:
-    module = load_script_module()
-    dars_lock = """
-splice-amulet 0.1.17 abc
-splice-amulet 0.1.18 def
-splice-wallet 0.1.19 abc
-splice-dso-governance 0.1.23 abc
-splice-dso-governance 0.1.24 def
-unrelated-package 9.9.9 abc
-"""
-
-    assert module.parse_dars_lock(dars_lock, "test-lock") == {
-        "splice-amulet": "0.1.18",
-        "splice-wallet": "0.1.19",
-        "splice-dso-governance": "0.1.24",
-    }

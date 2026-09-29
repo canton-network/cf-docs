@@ -10,6 +10,7 @@ from typing import cast
 
 import yaml
 
+from x2mdx.visibility import dev_only_identities
 from x2mdx.openrpc.models import (
     OpenRpcDocument,
     OpenRpcMethodHistory,
@@ -74,7 +75,7 @@ def normalize_lifecycle_state(value: object) -> str | None:
     if not isinstance(value, str):
         return None
     normalized = value.strip().lower()
-    if normalized in {"alpha", "beta", "stable", "deprecated"}:
+    if normalized in {"dev", "alpha", "beta", "stable", "deprecated"}:
         return normalized
     return None
 
@@ -413,6 +414,7 @@ def extract_method_detail(
             "description": str(method.get("description") or ""),
             "lifecycle_state": normalize_lifecycle_state(method.get("x-state")),
             "replaces": str(method.get("x-replaces")) if isinstance(method.get("x-replaces"), str) else None,
+            "remove_as_of": str(method.get("x-remove-as-of")) if isinstance(method.get("x-remove-as-of"), str) else None,
             "params": [extract_param_detail(doc_index, current_source_path, param) for param in params if isinstance(param, dict)],
             "result": extract_result_detail(doc_index, current_source_path, method.get("result")),
             "fingerprint": "",
@@ -423,6 +425,7 @@ def extract_method_detail(
                 "description": detail["description"],
                 "lifecycle_state": detail["lifecycle_state"],
                 "replaces": detail["replaces"],
+                "remove_as_of": detail["remove_as_of"],
                 "params": detail["params"],
                 "result": detail["result"],
             }
@@ -458,6 +461,8 @@ def describe_method_changes(previous: OpenRpcMethodDetail, current: OpenRpcMetho
         changes.append("lifecycle state updated")
     if previous.get("replaces") != current.get("replaces"):
         changes.append("replacement target updated")
+    if previous.get("remove_as_of") != current.get("remove_as_of"):
+        changes.append("removal schedule updated")
 
     previous_params = {param["name"]: param for param in previous["params"]}
     current_params = {param["name"]: param for param in current["params"]}
@@ -529,6 +534,13 @@ def build_openrpc_report_from_sources(
                 doc_index=version_doc_index[snapshot.version],
                 current_source_path=snapshot.source_path,
             )
+
+        hidden = dev_only_identities(
+            {name: detail.get("lifecycle_state") for name, detail in methods.items()}
+            for methods in per_version_methods.values()
+        )
+        per_version_methods = {version: {name: detail for name, detail in methods.items() if name not in hidden}
+                               for version, methods in per_version_methods.items()}
 
         method_history: dict[str, OpenRpcMethodHistory] = {}
         for snapshot in spec_snapshots:
