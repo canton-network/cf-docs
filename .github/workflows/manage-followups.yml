@@ -1,0 +1,47 @@
+name: Manage PR and issue follow-ups
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: "Write labels, comments, and closures (otherwise dry run)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: manage-followups
+  cancel-in-progress: false
+
+jobs:
+  manage-followups:
+    runs-on: canton-network-cf-docs
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      # Scheduled runs stay dry until the FOLLOWUPS_APPLY repository variable is
+      # set to "true", so the policy can be observed in logs before it acts.
+      - name: Manage follow-ups
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPLY: ${{ inputs.apply || vars.FOLLOWUPS_APPLY == 'true' }}
+        run: |
+          args=(--repo "$GITHUB_REPOSITORY")
+          if [ "$APPLY" = "true" ]; then
+            args+=(--apply)
+          fi
+          python3 scripts/manage_followups.py "${args[@]}"
