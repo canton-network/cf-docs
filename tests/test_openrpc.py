@@ -9,6 +9,7 @@ from contextlib import redirect_stdout
 from pathlib import Path
 
 from x2mdx.cli import main as cli_main
+from x2mdx.openrpc.history import build_openrpc_history_report
 from x2mdx.openrpc.lifecycle import build_openrpc_report_from_sources, parse_openrpc
 from x2mdx.openrpc.models import OpenRpcSourceSnapshot
 from x2mdx.openrpc.render import build_method_page
@@ -20,6 +21,28 @@ def write_text(path: Path, contents: str) -> None:
 
 
 class OpenRpcTests(unittest.TestCase):
+    def test_prerelease_badges_follow_published_method_state(self) -> None:
+        for state, label in [("alpha", "Alpha"), (" BETA ", "Beta"), ("stable", None), ("deprecated", "Deprecated"), (None, None)]:
+            with self.subTest(state=state):
+                manifest = self._write_manifest()
+                for version, value in [("1.0.0", "alpha"), ("1.1.0", state)]:
+                    path = manifest.parent / version / "dapp-api.json"
+                    spec = json.loads(path.read_text())
+                    if value is not None:
+                        spec["methods"][0]["x-state"] = value
+                    path.write_text(json.dumps(spec))
+                output = self.root / "badge-pages"
+                self.assertEqual(cli_main([
+                    "openrpc", "build-api-pages-from-manifest", "--manifest", str(manifest),
+                    "--output-dir", str(output),
+                ]), 0)
+                for relative in ["operations/dapp-api/status.mdx", "specs/dapp-api.mdx"]:
+                    page = (output / relative).read_text()
+                    for candidate in ("Alpha", "Beta"):
+                        self.assertEqual(f">{candidate}</span>" in page, candidate == label)
+                    if label == "Deprecated":
+                        self.assertNotIn('class="x2mdx-ref-badge x2mdx-ref-badge--removed">Deprecated</span>', page)
+
     def setUp(self) -> None:
         self.temp_dir = tempfile.TemporaryDirectory()
         self.root = Path(self.temp_dir.name)
@@ -344,6 +367,27 @@ class OpenRpcTests(unittest.TestCase):
         self.assertEqual(remote_methods["status"].changed_in_versions, ["1.1.0"])
         self.assertIn("result updated (required fields)", remote_methods["status"].change_details[0]["changes"])
 
+    def test_removed_method_keeps_historical_schema_and_collection_link(self) -> None:
+        manifest_path = self._write_manifest()
+        current_path = manifest_path.parent / "1.1.0/dapp-api.json"
+        current = json.loads(current_path.read_text())
+        current["methods"] = [method for method in current["methods"] if method["name"] != "status"]
+        current_path.write_text(json.dumps(current))
+        output_dir = self.root / "out"
+
+        self.assertEqual(cli_main([
+            "openrpc", "build-api-pages-from-manifest", "--manifest", str(manifest_path),
+            "--output-dir", str(output_dir),
+        ]), 0)
+
+        page = (output_dir / "operations/dapp-api/status.mdx").read_text()
+        collection = (output_dir / "specs/dapp-api.mdx").read_text()
+        self.assertIn("Removed in 1.1.0", page)
+        self.assertIn("connected", page)
+        self.assertNotIn("network", page)
+        self.assertIn("status", collection)
+        self.assertIn("Removed in 1.1.0", collection)
+
     def test_cli_builds_openrpc_pages(self) -> None:
         manifest_path = self._write_manifest()
         output_dir = self.root / "out"
@@ -371,6 +415,8 @@ class OpenRpcTests(unittest.TestCase):
 
         self.assertIn("Wallet Gateway OpenRPC", overview)
         self.assertIn('class="x2mdx-ref-card"', overview)
+        self.assertIn('class="x2mdx-ref-card-title"', overview)
+        self.assertNotIn('<a class="x2mdx-ref-card"', overview)
         self.assertIn("## Specs", overview)
         self.assertIn("## Methods", dapp_page)
         self.assertIn("Method pages are the primary reference surface", dapp_page)
@@ -386,6 +432,9 @@ class OpenRpcTests(unittest.TestCase):
         self.assertIn("curl", status_page)
         self.assertIn("<JSON_RPC_URL>", status_page)
         self.assertIn("## Related Schemas", status_page)
+        self.assertIn("## History", status_page)
+        self.assertNotIn("Present since at least", status_page)
+        self.assertIn("Updated 1.1.0", status_page)
         self.assertEqual(status_page.count('class="x2mdx-ref-schema"'), 1)
         self.assertIn("required fields", remote_page)
 
@@ -452,7 +501,20 @@ class OpenRpcTests(unittest.TestCase):
             publish_version="1.1.0",
         )
         spec = report.specs[0]
-        page = build_method_page(spec, spec.methods[0], output_dir=self.root / "out", spec_dir_name="specs")
+        history_report = build_openrpc_history_report(
+            sources=[method],
+            routes={("dapp-api", "status"): "operations/dapp-api/status"},
+            publish_version="1.1.0",
+        )
+        history_item = history_report.items_by_id()["dapp-api#status"]
+        page = build_method_page(
+            spec,
+            spec.methods[0],
+            output_dir=self.root / "out",
+            spec_dir_name="specs",
+            history_item=history_item,
+            comparison_versions=history_report.comparison_versions,
+        )
 
         self.assertEqual(page.path, "operations/dapp-api/status.mdx")
         self.assertEqual(page.badges[0].label, "JSON-RPC")
@@ -463,3 +525,4 @@ class OpenRpcTests(unittest.TestCase):
         self.assertEqual(page.examples[0].title, "cURL")
         self.assertIn('"method": "status"', page.examples[0].body)
         self.assertEqual(page.examples[1].title, "Result")
+        self.assertEqual(page.history_events, [])

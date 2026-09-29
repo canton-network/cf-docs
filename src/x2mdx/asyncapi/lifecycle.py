@@ -5,10 +5,12 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from dataclasses import replace
 from typing import cast
 
 import yaml
 
+from x2mdx.visibility import dev_only_identities
 from x2mdx.asyncapi.models import (
     AsyncApiActionDetail,
     AsyncApiChannelDetail,
@@ -68,9 +70,16 @@ def normalize_lifecycle_state(value: object) -> str | None:
     if not isinstance(value, str):
         return None
     normalized = value.strip().lower()
-    if normalized in {"alpha", "beta", "stable", "deprecated"}:
+    if normalized in {"dev", "alpha", "beta", "stable", "deprecated"}:
         return normalized
     return None
+
+
+def normalize_authored_string(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip()
+    return normalized or None
 
 
 def resolve_local_ref(doc: AsyncApiDocument, node: JsonValue | None, max_depth: int = 8) -> JsonValue | None:
@@ -453,6 +462,9 @@ def extract_action_detail(doc: AsyncApiDocument, action_name: str, action_node: 
             "description": "",
             "ws_method": "",
             "message": extract_message_detail(doc, None),
+            "lifecycle_state": None,
+            "replaces": None,
+            "remove_as_of": None,
         }
 
     bindings = resolved_action.get("bindings")
@@ -468,6 +480,11 @@ def extract_action_detail(doc: AsyncApiDocument, action_name: str, action_node: 
         "description": str(resolved_action.get("description") or ""),
         "ws_method": ws_method,
         "message": extract_message_detail(doc, resolved_action.get("message")),
+        "lifecycle_state": normalize_lifecycle_state(resolved_action.get("x-state")),
+        "replaces": normalize_authored_string(resolved_action.get("x-replaces")),
+        "remove_as_of": normalize_authored_string(
+            resolved_action.get("x-remove-as-of")
+        ),
     }
 
 
@@ -486,7 +503,10 @@ def extract_channel_detail(doc: AsyncApiDocument, channel_name: str, channel_nod
         "anchor": channel_anchor(channel_name),
         "description": str(resolved_channel.get("description") or ""),
         "lifecycle_state": normalize_lifecycle_state(resolved_channel.get("x-state")),
-        "replaces": str(resolved_channel.get("x-replaces")) if isinstance(resolved_channel.get("x-replaces"), str) else None,
+        "replaces": normalize_authored_string(resolved_channel.get("x-replaces")),
+        "remove_as_of": normalize_authored_string(
+            resolved_channel.get("x-remove-as-of")
+        ),
         "actions": actions,
         "action_names": [action["action"] for action in actions],
     }
@@ -519,6 +539,12 @@ def describe_action_changes(
         changes.append(
             f"{label} websocket method changed `{previous['ws_method'] or '-'}` -> `{current['ws_method'] or '-'}`"
         )
+    if previous.get("lifecycle_state") != current.get("lifecycle_state"):
+        changes.append(f"{label} lifecycle state updated")
+    if previous.get("replaces") != current.get("replaces"):
+        changes.append(f"{label} replacement target updated")
+    if previous.get("remove_as_of") != current.get("remove_as_of"):
+        changes.append(f"{label} removal schedule updated")
 
     previous_message = previous["message"]
     current_message = current["message"]
@@ -554,6 +580,8 @@ def describe_channel_changes(previous: AsyncApiChannelDetail, current: AsyncApiC
         changes.append("channel lifecycle state updated")
     if previous.get("replaces") != current.get("replaces"):
         changes.append("channel replacement target updated")
+    if previous.get("remove_as_of") != current.get("remove_as_of"):
+        changes.append("channel removal schedule updated")
 
     previous_actions = {action["action"]: action for action in previous["actions"]}
     current_actions = {action["action"]: action for action in current["actions"]}
@@ -603,6 +631,20 @@ def build_asyncapi_report_from_sources(
     snapshot_channels: dict[str, AsyncApiChannelsByName] = {}
     for snapshot in scoped_sources:
         snapshot_channels[snapshot.version] = collect_snapshot_channels(snapshot.document)
+
+    hidden = dev_only_identities(
+        {f"{name}#{action['action']}": action.get("lifecycle_state") or detail.get("lifecycle_state")
+         for name, detail in channels.items() for action in detail["actions"]}
+        for channels in snapshot_channels.values()
+    )
+    for channels in snapshot_channels.values():
+        for name, detail in list(channels.items()):
+            had_actions = bool(detail["actions"])
+            detail["actions"] = [action for action in detail["actions"]
+                                 if f"{name}#{action['action']}" not in hidden]
+            detail["action_names"] = [action["action"] for action in detail["actions"]]
+            if had_actions and not detail["actions"]:
+                del channels[name]
 
     channel_history: dict[str, AsyncApiChannelHistory] = {}
     for snapshot in scoped_sources:
@@ -704,6 +746,14 @@ def build_asyncapi_report_from_sources(
                 latest=history["details"][last_seen_in],
             )
         )
+
+    for index, channel in enumerate(merged_channels):
+        retained_actions = {action["action"]: action for action in channel.latest.get("actions", [])}
+        history = channel_history[channel.channel]
+        for version in reversed(history["versions"]):
+            for action in history["details"][version].get("actions", []):
+                retained_actions.setdefault(action["action"], action)
+        merged_channels[index] = replace(channel, latest={**channel.latest, "actions": list(retained_actions.values())})
 
     merged_channels.sort(key=lambda channel: (1 if channel.status == "removed" else 0, channel.channel))
 

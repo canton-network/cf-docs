@@ -26,6 +26,7 @@ class LedgerBindingArtifactConfig:
     artifact: str
     language: str
     versions: tuple[str, ...]
+    min_version: str | None
 
 
 @dataclass(frozen=True)
@@ -52,21 +53,35 @@ def parse_source_config(path: Path) -> LedgerBindingsSourceConfig:
         artifact = artifact_json.get("artifact")
         language = artifact_json.get("language")
         versions = artifact_json.get("versions")
+        min_version = artifact_json.get("min_version")
         if not isinstance(group, str) or not group:
             raise ValueError(f"{path} artifacts[{index}] must define group")
         if not isinstance(artifact, str) or not artifact:
             raise ValueError(f"{path} artifacts[{index}] must define artifact")
         if not isinstance(language, str) or not language:
             raise ValueError(f"{path} artifacts[{group}:{artifact}] must define language")
-        if not isinstance(versions, list) or not all(isinstance(version, str) and version for version in versions):
-            raise ValueError(f"{path} artifacts[{group}:{artifact}] must define a non-empty versions string list")
+        has_versions = isinstance(versions, list) and bool(versions) and all(
+            isinstance(version, str) and version for version in versions
+        )
+        has_min_version = isinstance(min_version, str) and bool(min_version)
+        if not has_versions and not has_min_version:
+            raise ValueError(
+                f"{path} artifacts[{group}:{artifact}] must define either a non-empty "
+                "versions string list or min_version"
+            )
+        version_values = (
+            tuple(str(version) for version in versions)
+            if isinstance(versions, list) and has_versions
+            else ()
+        )
         artifacts.append(
             LedgerBindingArtifactConfig(
                 raw=dict(artifact_json),
                 group=group,
                 artifact=artifact,
                 language=language,
-                versions=tuple(versions),
+                versions=version_values,
+                min_version=min_version if has_min_version else None,
             )
         )
     return LedgerBindingsSourceConfig(raw=raw_json, repo_base=repo_base, artifacts=tuple(artifacts))
@@ -116,6 +131,9 @@ def update_source(
     updated_artifacts: list[dict[str, Any]] = []
 
     for artifact in source_config.artifacts:
+        if artifact.min_version is not None:
+            updated_artifacts.append(dict(artifact.raw))
+            continue
         current_version = latest_maven_version(
             source_config.repo_base,
             group=artifact.group,

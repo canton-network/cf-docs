@@ -81,10 +81,10 @@ def test_grpc_nav_update_preserves_admin_api_grpc_group(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     output_dir = docs_json.parent / "reference" / "grpc-ledger-api-reference"
-    details_path = output_dir / "details.mdx"
+    overview_path = output_dir / "overview.mdx"
     package_path = output_dir / "com-daml-ledger-api-v2.mdx"
     operation_path = output_dir / "com-daml-ledger-api-v2" / "commandservice" / "submitandwait.mdx"
-    write_mdx(details_path, "Details and history")
+    write_mdx(overview_path, "Ledger API gRPC")
     write_mdx(package_path, "com.daml.ledger.api.v2")
     write_mdx(operation_path, "SubmitAndWait")
 
@@ -93,7 +93,7 @@ def test_grpc_nav_update_preserves_admin_api_grpc_group(tmp_path: Path) -> None:
         dropdown_label="API Reference",
         parent_groups=["Ledger API"],
         insert_after_group=None,
-        details_path=details_path,
+        overview_path=overview_path,
         page_paths=[package_path, operation_path],
     )
 
@@ -102,10 +102,46 @@ def test_grpc_nav_update_preserves_admin_api_grpc_group(tmp_path: Path) -> None:
     ledger = next(item for item in api_pages if item["group"] == "Ledger API")
     admin = next(item for item in api_pages if item["group"] == "Admin API")
 
-    assert next(item for item in ledger["pages"] if item["group"] == "gRPC API")
+    grpc = next(item for item in ledger["pages"] if item["group"] == "gRPC API")
+    assert grpc["pages"][0] == "reference/grpc-ledger-api-reference/overview"
     assert admin["pages"] == [
         {
             "group": "gRPC API",
             "pages": ["reference/admin-api/protobuf/packages/com-digitalasset-canton-admin"],
         }
+    ]
+
+
+def test_grpc_redirects_replace_details_route_idempotently(tmp_path: Path) -> None:
+    generator = load_script("generate_grpc_ledger_api_reference")
+    docs_json = tmp_path / "docs-main" / "docs.json"
+    docs_json.parent.mkdir(parents=True)
+    docs_json.write_text(
+        json.dumps(
+            {
+                "redirects": [
+                    {
+                        "source": "/reference/grpc-ledger-api-reference/details",
+                        "destination": "/old",
+                    }
+                ]
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    output_dir = docs_json.parent / "reference" / "grpc-ledger-api-reference"
+
+    generator.ensure_grpc_redirects(docs_json_path=docs_json, output_dir=output_dir)
+    generator.ensure_grpc_redirects(docs_json_path=docs_json, output_dir=output_dir)
+
+    assert json.loads(docs_json.read_text(encoding="utf-8"))["redirects"] == [
+        {
+            "source": "/reference/grpc-ledger-api-reference/details",
+            "destination": "/reference/grpc-ledger-api-reference/overview",
+        },
+        {
+            "source": "/reference/grpc-ledger-api-reference",
+            "destination": "/reference/grpc-ledger-api-reference/overview",
+        },
     ]

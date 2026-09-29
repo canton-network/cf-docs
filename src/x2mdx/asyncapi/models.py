@@ -38,6 +38,9 @@ class AsyncApiActionDetail(TypedDict):
     description: str
     ws_method: str
     message: AsyncApiMessageDetail
+    lifecycle_state: str | None
+    replaces: str | None
+    remove_as_of: str | None
 
 
 class AsyncApiChannelDetail(TypedDict):
@@ -46,6 +49,7 @@ class AsyncApiChannelDetail(TypedDict):
     description: str
     lifecycle_state: str | None
     replaces: str | None
+    remove_as_of: str | None
     actions: list[AsyncApiActionDetail]
     action_names: list[str]
 
@@ -68,6 +72,7 @@ class AsyncApiSourceSnapshot:
     version: str
     source_path: str
     document: AsyncApiDocument
+    source_url: str | None = None
 
 
 @dataclass(frozen=True)

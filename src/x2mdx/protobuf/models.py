@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from x2mdx.types import JsonObject
-
 
 @dataclass(frozen=True)
 class ProtobufSourceSnapshot:
@@ -22,4 +20,3 @@ class ProtobufSources:
     source: str | None = None
     repo_remote: str | None = None
     repo_web_url: str | None = None
-    metadata_overlay: JsonObject | None = None

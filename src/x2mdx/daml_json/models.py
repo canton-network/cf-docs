@@ -32,3 +32,4 @@ class DamlDocsReport:
     modules: list[DamlJsonModule]
     module_lifecycle: dict[str, dict[str, str | None]]
     module_deprecation_first_seen: dict[str, str]
+    module_changes: dict[str, tuple[str, ...]]

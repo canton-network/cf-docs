@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import os
 import re
@@ -26,6 +27,18 @@ METRICS_RST = Path("docs-open/src/sphinx/participant/reference/metrics.rst")
 GENERATED_INCLUDES_DIR = Path("docs-open/target/generated")
 USER_AGENT = "cf-docs-canton-metrics-reference/1.0"
 
+# Canton checkouts define their `dpm` shell tool in this file. Every checkout is rewritten to fetch
+# the version it pins from the durable digital-asset/dpm GitHub release, verified against that
+# release's published checksums, so older release tags keep building.
+CANTON_DPM_TOOL_NIX = Path("nix/tools/dpm/default.nix")
+DPM_RELEASE_URL = "https://github.com/digital-asset/dpm/releases/download/{version}/dpm-{version}-{platform}.tar.gz"
+DPM_CHECKSUMS_URL = "https://github.com/digital-asset/dpm/releases/download/{version}/dpm-{version}-checksums.txt"
+DPM_RELEASE_PLATFORMS = {
+    "x86_64-linux": "linux-amd64",
+    "aarch64-linux": "linux-arm64",
+    "x86_64-darwin": "darwin-amd64",
+    "aarch64-darwin": "darwin-arm64",
+}
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -147,6 +160,93 @@ def allow_direnv(canton_dir: Path) -> None:
     run(["direnv", "allow"], cwd=canton_dir)
 
 
+def canton_dpm_version(nix_source: str) -> str:
+    """Return the dpm version pinned by a Canton dpm tool definition."""
+    match = re.search(r'^\s*dpmVersion\s*=\s*"([^"]+)"\s*;', nix_source, flags=re.MULTILINE)
+    if not match:
+        raise ValueError(f"Unable to read dpmVersion from Canton {CANTON_DPM_TOOL_NIX}")
+    return match.group(1)
+
+
+def fetch_dpm_checksums(version: str) -> str:
+    request = urllib.request.Request(
+        DPM_CHECKSUMS_URL.format(version=version),
+        headers={"User-Agent": USER_AGENT},
+    )
+    with urllib.request.urlopen(request, timeout=180) as response:
+        return response.read().decode("utf-8")
+
+
+def dpm_release_hashes(checksums: str, version: str) -> dict[str, str]:
+    """Map each Nix system to the SRI hash of its dpm release tarball."""
+    digests: dict[str, str] = {}
+    for line in checksums.splitlines():
+        parts = line.split()
+        if len(parts) == 2:
+            digests[parts[1]] = parts[0]
+
+    hashes: dict[str, str] = {}
+    for system, platform in DPM_RELEASE_PLATFORMS.items():
+        asset = f"dpm-{version}-{platform}.tar.gz"
+        digest = digests.get(asset)
+        if digest is None or not re.fullmatch(r"[0-9a-f]{64}", digest):
+            raise ValueError(f"dpm {version} checksums do not list a SHA-256 digest for {asset}")
+        hashes[system] = "sha256-" + base64.b64encode(bytes.fromhex(digest)).decode("ascii")
+    return hashes
+
+
+def render_dpm_release_nix(version: str, hashes: dict[str, str]) -> str:
+    hash_lines = "\n".join(f'    "{system}" = "{hashes[system]}";' for system in DPM_RELEASE_PLATFORMS)
+    platform_lines = "\n".join(f'    "{system}" = "{platform}";' for system, platform in DPM_RELEASE_PLATFORMS.items())
+    url = DPM_RELEASE_URL.format(version="${dpmVersion}", platform="${releasePlatform}")
+    return f"""# Rewritten by cf-docs scripts/generate_canton_metrics_reference.py to fetch the pinned dpm
+# version from its GitHub release, verified against the release's published checksums.
+{{ pkgs ? import <nixpkgs> {{}} }}:
+
+let
+  dpmVersion = "{version}";
+
+  dpmHashes = {{
+{hash_lines}
+  }};
+  dpmHash = dpmHashes.${{pkgs.stdenv.hostPlatform.system}} or (throw "Unsupported system: ${{pkgs.stdenv.hostPlatform.system}}");
+
+  releasePlatforms = {{
+{platform_lines}
+  }};
+  releasePlatform = releasePlatforms.${{pkgs.stdenv.hostPlatform.system}} or (throw "Unsupported system: ${{pkgs.stdenv.hostPlatform.system}}");
+in
+pkgs.stdenv.mkDerivation {{
+  pname = "dpm";
+  version = dpmVersion;
+
+  src = pkgs.fetchurl {{
+    url = "{url}";
+    hash = dpmHash;
+  }};
+
+  sourceRoot = ".";
+  installPhase = ''
+    install -Dm755 dpm $out/bin/dpm
+  '';
+}}
+"""
+
+
+def repoint_canton_dpm_source(canton_dir: Path) -> str | None:
+    """Rewrite Canton's dpm tool definition to fetch its pinned version from GitHub releases.
+
+    Returns the pinned dpm version, or None when the checkout has no dpm tool definition.
+    """
+    nix_file = canton_dir / CANTON_DPM_TOOL_NIX
+    if not nix_file.is_file():
+        return None
+    version = canton_dpm_version(nix_file.read_text(encoding="utf-8"))
+    hashes = dpm_release_hashes(fetch_dpm_checksums(version), version)
+    nix_file.write_text(render_dpm_release_nix(version, hashes), encoding="utf-8")
+    return version
+
+
 def run_generation(*, canton_dir: Path, command: list[str], skip_direnv: bool) -> None:
     generated = canton_dir / GENERATED_INCLUDES_DIR
     if generated.exists():
@@ -261,6 +361,9 @@ def main() -> int:
         force_refresh=args.force_refresh,
     )
     if not args.skip_generation:
+        repointed = repoint_canton_dpm_source(args.canton_dir)
+        if repointed:
+            print(f"Fetching dpm {repointed} for Canton {source_ref} from digital-asset/dpm GitHub releases")
         run_generation(canton_dir=args.canton_dir, command=args.generation_command, skip_direnv=args.skip_direnv)
 
     metrics_rst = args.canton_dir / METRICS_RST
