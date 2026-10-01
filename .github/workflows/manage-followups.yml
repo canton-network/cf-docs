@@ -42,6 +42,16 @@ jobs:
         run: |
           args=(--repo "$GITHUB_REPOSITORY")
           if [ "$APPLY" = "true" ]; then
-            args+=(--apply)
+            args+=(--apply --slack-payload followups-slack.json)
           fi
           python3 scripts/manage_followups.py "${args[@]}"
+
+      # Docs-team alerts share the workflow-failure channel. The payload file
+      # only exists on applied runs that raised an alert.
+      - name: Notify docs team in Slack
+        if: ${{ !cancelled() && hashFiles('followups-slack.json') != '' }}
+        uses: slackapi/slack-github-action@v2
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload-file-path: followups-slack.json

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -53,6 +54,8 @@ def pr(**overrides: object) -> object:
         "kind": "pr",
         "number": 1,
         "author": "contrib",
+        "title": "Fix <thing> & stuff",
+        "url": "https://github.com/canton-network/cf-docs/pull/1",
         "created_at": CREATED,
         "labels": set(),
         "requested_reviewers": ["reviewer"],
@@ -67,6 +70,8 @@ def issue(**overrides: object) -> object:
         "kind": "issue",
         "number": 2,
         "author": "contrib",
+        "title": "Page is wrong",
+        "url": "https://github.com/canton-network/cf-docs/issues/2",
         "created_at": CREATED,
         "labels": set(),
         "activities": [by_author(1)],
@@ -203,29 +208,65 @@ def test_close_exemptions(config, overrides) -> None:
     assert mf.MARKER_STALE_WARNING not in markers(plan)
 
 
-def test_review_reminder_for_unassigned_pr(config) -> None:
+def test_unassigned_pr_alerts_docs_team_in_slack_once(config) -> None:
     # 7 business days after Tuesday 2026-09-01 is Thursday 2026-09-10.
     item = pr(requested_reviewers=[])
-    assert not markers(mf.plan_open(item, config, at(9)))
+    assert mf.plan_open(item, config, at(9)).add_labels == {mf.LABEL_AWAITING_REVIEW}
+
     plan = mf.plan_open(item, config, at(10))
-    assert markers(plan) == [mf.MARKER_REVIEW_REMINDER]
-    assert config.reviewer_ping in plan.comments[0].body
+    assert plan.add_labels == {mf.LABEL_AWAITING_REVIEW, mf.LABEL_NEEDS_ASSIGNEE}
+    assert plan.notifications == ["needs a reviewer, waiting 7 business days"]
+    assert not plan.comments
 
-    reminded = pr(requested_reviewers=[], markers=[mf.Marker(mf.MARKER_REVIEW_REMINDER, at(10))])
-    assert not markers(mf.plan_open(reminded, config, at(20)))
+    alerted = pr(
+        requested_reviewers=[],
+        labels={mf.LABEL_AWAITING_REVIEW, mf.LABEL_NEEDS_ASSIGNEE},
+    )
+    assert mf.plan_open(alerted, config, at(20)).is_empty()
 
 
-def test_assigned_reviewer_delay_nudges_author_and_reviewer(config) -> None:
+def test_assigning_reviewer_clears_needs_assignee(config) -> None:
+    item = pr(labels={mf.LABEL_AWAITING_REVIEW, mf.LABEL_NEEDS_ASSIGNEE})
+    plan = mf.plan_open(item, config, at(2))
+    assert plan.remove_labels == {mf.LABEL_NEEDS_ASSIGNEE}
+    assert not plan.notifications
+
+
+def test_awaiting_author_clears_needs_assignee(config) -> None:
+    item = pr(
+        requested_reviewers=[],
+        conflict=True,
+        labels={mf.LABEL_AWAITING_REVIEW, mf.LABEL_NEEDS_ASSIGNEE, mf.LABEL_MERGE_CONFLICT},
+        markers=[mf.Marker(mf.MARKER_CONFLICT, at(2))],
+    )
+    plan = mf.plan_open(item, config, at(3))
+    assert mf.LABEL_NEEDS_ASSIGNEE in plan.remove_labels
+    assert not plan.notifications
+
+
+def test_draft_clears_needs_assignee(config) -> None:
+    item = pr(draft=True, labels={mf.LABEL_AWAITING_REVIEW, mf.LABEL_NEEDS_ASSIGNEE})
+    plan = mf.plan_open(item, config, at(20))
+    assert plan.remove_labels == {mf.LABEL_AWAITING_REVIEW, mf.LABEL_NEEDS_ASSIGNEE}
+    assert not plan.notifications
+
+
+def test_assigned_reviewer_delay_nudges_on_github_and_slack(config) -> None:
     assert not markers(mf.plan_open(pr(), config, at(9)))
     plan = mf.plan_open(pr(), config, at(10))
     assert markers(plan) == [mf.MARKER_REVIEWER_NUDGE]
     body = plan.comments[0].body
     assert "@contrib" in body
     assert "@reviewer" in body
-    assert config.reviewer_ping not in body
+    assert plan.notifications == [
+        "nudged author and reviewer, waiting on review 7 business days"
+    ]
+    assert mf.LABEL_NEEDS_ASSIGNEE not in plan.add_labels
 
     nudged = pr(markers=[mf.Marker(mf.MARKER_REVIEWER_NUDGE, at(10))])
-    assert not markers(mf.plan_open(nudged, config, at(20)))
+    later = mf.plan_open(nudged, config, at(20))
+    assert not markers(later)
+    assert not later.notifications
 
 
 def test_author_reply_in_review_thread_hands_back_to_reviewer(config) -> None:
@@ -276,9 +317,15 @@ def test_issue_awaits_author_only_when_labeled(config) -> None:
     assert markers(plan) == [mf.MARKER_STALE_WARNING]
 
 
-def test_issue_triage_reminder_skips_assigned(config) -> None:
-    assert markers(mf.plan_open(issue(), config, at(10))) == [mf.MARKER_REVIEW_REMINDER]
-    assert not markers(mf.plan_open(issue(assignees=["someone"]), config, at(10)))
+def test_unassigned_issue_alerts_docs_team(config) -> None:
+    plan = mf.plan_open(issue(), config, at(10))
+    assert mf.LABEL_NEEDS_ASSIGNEE in plan.add_labels
+    assert plan.notifications == ["needs an assignee, waiting 7 business days"]
+    assert not plan.comments
+
+    assigned = mf.plan_open(issue(assignees=["someone"]), config, at(10))
+    assert mf.LABEL_NEEDS_ASSIGNEE not in assigned.add_labels
+    assert not assigned.notifications
 
 
 def test_author_comment_reopens_stale_closed_item(config) -> None:
@@ -364,3 +411,75 @@ def test_team_comment_pinging_reviewer_keeps_pr_awaiting_review(config) -> None:
     assert mf.plan_open(item, config, datetime(2026, 10, 1, 17, tzinfo=UTC)).add_labels == {
         mf.LABEL_AWAITING_REVIEW
     }
+
+
+def test_slack_payload_links_and_escapes_items() -> None:
+    payload = mf.slack_payload(
+        "canton-network/cf-docs",
+        [
+            (pr(), "needs a reviewer, waiting 7 business days"),
+            (issue(author="a<b"), "needs an assignee, waiting 9 business days"),
+        ],
+    )
+    assert payload == {
+        "text": "\n".join(
+            [
+                "*Docs follow-ups for canton-network/cf-docs*",
+                "• <https://github.com/canton-network/cf-docs/pull/1|PR #1: Fix &lt;thing&gt; &amp; stuff>"
+                " (@contrib): needs a reviewer, waiting 7 business days",
+                "• <https://github.com/canton-network/cf-docs/issues/2|Issue #2: Page is wrong>"
+                " (@a&lt;b): needs an assignee, waiting 9 business days",
+            ]
+        )
+    }
+
+
+class FakeGitHub:
+    """Serves one open unassigned PR and records writes."""
+
+    repo = "canton-network/cf-docs"
+
+    def __init__(self) -> None:
+        self.writes: list[tuple[str, str]] = []
+
+    def ensure_labels(self) -> None:
+        pass
+
+    def paginate(self, path: str, params: dict | None = None) -> list:
+        if path == "/issues":
+            if (params or {}).get("state") == "closed":
+                return []
+            return [
+                {
+                    "number": 1,
+                    "title": "Fix it",
+                    "html_url": "https://github.com/canton-network/cf-docs/pull/1",
+                    "user": {"login": "contrib"},
+                    "created_at": "2026-09-01T09:00:00Z",
+                    "labels": [],
+                    "assignees": [],
+                    "pull_request": {},
+                }
+            ]
+        return []
+
+    def get(self, path: str, params: dict | None = None) -> dict:
+        assert path == "/pulls/1"
+        return {"draft": False, "requested_reviewers": [], "mergeable": True, "mergeable_state": "clean"}
+
+    def write(self, method: str, path: str, payload: object = None) -> None:
+        self.writes.append((method, path))
+
+
+def test_run_writes_slack_payload_only_when_alerts_exist(config, tmp_path) -> None:
+    github = FakeGitHub()
+    slack = tmp_path / "slack.json"
+
+    assert mf.run(github, config, at(3), slack_path=slack) == 0
+    assert not slack.exists()
+
+    assert mf.run(github, config, at(10), slack_path=slack) == 0
+    payload = json.loads(slack.read_text())
+    assert "PR #1: Fix it" in payload["text"]
+    assert "needs a reviewer" in payload["text"]
+    assert ("POST", "/issues/1/labels") in github.writes

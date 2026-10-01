@@ -9,11 +9,14 @@ Implements the follow-up policy from canton-network/cf-docs#1693:
 - Items awaiting the author get a warning after `warn_business_days` and are
   closed after `close_business_days`. Author activity resets the clock, and an
   author comment on an item closed this way reopens it.
-- Items awaiting review with nobody assigned get one reminder ping, and PRs
-  whose assigned reviewer has not responded get one nudge that tags the author
-  and the reviewers.
+- Items awaiting review with nobody assigned get `status/needs-assignee` and
+  one Slack alert to the docs team. PRs whose assigned reviewer has not
+  responded get one GitHub nudge tagging the author and the reviewers, and the
+  docs team hears about it in Slack.
 
-The script is dry-run by default; pass `--apply` to write to GitHub.
+The script is dry-run by default; pass `--apply` to write to GitHub. With
+`--slack-payload PATH`, Slack alerts are written to PATH as an incoming-webhook
+payload for the workflow to send.
 """
 
 from __future__ import annotations
@@ -39,18 +42,19 @@ LABEL_AWAITING_AUTHOR = "status/awaiting-author"
 LABEL_AWAITING_REVIEW = "status/awaiting-review"
 LABEL_MERGE_CONFLICT = "status/merge-conflict"
 LABEL_CLOSED_STALE = "status/closed-stale"
+LABEL_NEEDS_ASSIGNEE = "status/needs-assignee"
 STATUS_LABELS = {
     LABEL_AWAITING_AUTHOR: ("d93f0b", "Waiting on the contributor"),
     LABEL_AWAITING_REVIEW: ("0e8a16", "Waiting on the docs team"),
     LABEL_MERGE_CONFLICT: ("b60205", "Conflicts with the base branch"),
     LABEL_CLOSED_STALE: ("cccccc", "Closed after no author response"),
+    LABEL_NEEDS_ASSIGNEE: ("fbca04", "Docs team needs to assign a reviewer"),
 }
 
 MARKER_PREFIX = "<!-- cf-docs-followups:"
 MARKER_CONFLICT = "conflict"
 MARKER_STALE_WARNING = "stale-warning"
 MARKER_STALE_CLOSE = "stale-close"
-MARKER_REVIEW_REMINDER = "review-reminder"
 MARKER_REVIEWER_NUDGE = "reviewer-nudge"
 MARKER_REOPENED = "reopened"
 
@@ -63,7 +67,6 @@ ItemKind = Literal["pr", "issue"]
 @dataclass(frozen=True)
 class Config:
     docs_team: frozenset[str]
-    reviewer_ping: str
     exempt_labels: frozenset[str]
     warn_business_days: int
     close_business_days: int
@@ -76,7 +79,6 @@ class Config:
         raw = json.loads(path.read_text(encoding="utf-8"))
         return cls(
             docs_team=frozenset(login.lower() for login in raw["docs_team"]),
-            reviewer_ping=raw["reviewer_ping"],
             exempt_labels=frozenset(raw["exempt_labels"]),
             warn_business_days=raw["warn_business_days"],
             close_business_days=raw["close_business_days"],
@@ -110,6 +112,8 @@ class Item:
     kind: ItemKind
     number: int
     author: str
+    title: str
+    url: str
     created_at: datetime
     labels: set[str]
     draft: bool = False
@@ -137,6 +141,8 @@ class Plan:
     comments: list[Comment] = field(default_factory=list)
     close: bool = False
     reopen: bool = False
+    # Docs-team alerts, sent to Slack rather than posted on GitHub.
+    notifications: list[str] = field(default_factory=list)
 
     def is_empty(self) -> bool:
         return not (
@@ -145,6 +151,7 @@ class Plan:
             or self.comments
             or self.close
             or self.reopen
+            or self.notifications
         )
 
 
@@ -276,16 +283,6 @@ def stale_close_body(item: Item, config: Config) -> str:
     )
 
 
-def review_reminder_body(item: Item, config: Config) -> str:
-    noun = "pull request" if item.kind == "pr" else "issue"
-    need = "a reviewer" if item.kind == "pr" else "an assignee"
-    return (
-        f"{marker_text(MARKER_REVIEW_REMINDER)}\n"
-        f"{config.reviewer_ping}: this {noun} has been waiting on the docs team for "
-        f"{config.review_reminder_business_days} business days without {need}."
-    )
-
-
 def reviewer_nudge_body(item: Item, config: Config) -> str:
     mentions = " ".join(f"@{name}" for name in reviewers(item))
     return (
@@ -324,7 +321,11 @@ def plan_open(item: Item, config: Config, now: datetime) -> Plan:
     plan = Plan()
     if item.draft:
         # Drafts are the author's workspace; clear any state we set earlier.
-        plan.remove_labels |= item.labels & {LABEL_AWAITING_AUTHOR, LABEL_AWAITING_REVIEW}
+        plan.remove_labels |= item.labels & {
+            LABEL_AWAITING_AUTHOR,
+            LABEL_AWAITING_REVIEW,
+            LABEL_NEEDS_ASSIGNEE,
+        }
         return plan
 
     author_at = last_author_activity(item)
@@ -363,6 +364,8 @@ def plan_open(item: Item, config: Config, now: datetime) -> Plan:
 
     if triggers:
         set_status(plan, item, LABEL_AWAITING_AUTHOR)
+        if LABEL_NEEDS_ASSIGNEE in item.labels:
+            plan.remove_labels.add(LABEL_NEEDS_ASSIGNEE)
         plan_stale(plan, item, config, now, clock_start=min(triggers))
     else:
         set_status(plan, item, LABEL_AWAITING_REVIEW)
@@ -403,24 +406,28 @@ def plan_stale(
 def plan_review_reminder(
     plan: Plan, item: Item, config: Config, now: datetime, *, waiting_since: datetime
 ) -> None:
-    if item.kind == "pr" and reviewers(item):
-        # A reviewer is assigned: tag the author and reviewers to follow up.
-        threshold, marker = config.reviewer_nudge_business_days, MARKER_REVIEWER_NUDGE
-        body = reviewer_nudge_body
-    elif config.reviewer_ping and (
-        (item.kind == "pr" and not has_sme(item))
-        or (item.kind == "issue" and not item.assignees)
-    ):
-        # Nobody is assigned: alert the docs team to assign someone.
-        threshold, marker = config.review_reminder_business_days, MARKER_REVIEW_REMINDER
-        body = review_reminder_body
-    else:
+    waited = business_days_between(waiting_since, now)
+    names = reviewers(item) if item.kind == "pr" else []
+    unassigned = not has_sme(item) if item.kind == "pr" else not item.assignees
+
+    # The label records that the docs team was alerted, and clears once someone
+    # is assigned so a later gap alerts again.
+    if not unassigned:
+        if LABEL_NEEDS_ASSIGNEE in item.labels:
+            plan.remove_labels.add(LABEL_NEEDS_ASSIGNEE)
+    elif LABEL_NEEDS_ASSIGNEE not in item.labels and waited >= config.review_reminder_business_days:
+        need = "a reviewer" if item.kind == "pr" else "an assignee"
+        plan.add_labels.add(LABEL_NEEDS_ASSIGNEE)
+        plan.notifications.append(f"needs {need}, waiting {waited} business days")
+
+    if not names or waited < config.reviewer_nudge_business_days:
         return
-    if business_days_between(waiting_since, now) < threshold:
+    if latest_marker(item, MARKER_REVIEWER_NUDGE, since=waiting_since) is not None:
         return
-    if latest_marker(item, marker, since=waiting_since) is not None:
-        return
-    plan.comments.append(Comment(marker, body(item, config)))
+    plan.comments.append(Comment(MARKER_REVIEWER_NUDGE, reviewer_nudge_body(item, config)))
+    plan.notifications.append(
+        f"nudged author and {', '.join(names)}, waiting on review {waited} business days"
+    )
 
 
 # --- GitHub I/O -------------------------------------------------------------
@@ -583,6 +590,8 @@ def load_item(github: GitHub, raw: dict[str, Any]) -> Item:
         kind=kind,
         number=number,
         author=author,
+        title=raw["title"],
+        url=raw["html_url"],
         created_at=parse_time(raw["created_at"]),
         labels={label["name"] for label in raw["labels"]},
         assignees=[assignee["login"] for assignee in raw.get("assignees") or []],
@@ -636,12 +645,29 @@ def describe(item: Item, plan: Plan) -> str:
     parts += [f"comment:{comment.marker}" for comment in plan.comments]
     if plan.close:
         parts.append("close")
+    parts += [f"slack:{note}" for note in plan.notifications]
     return f"{item.kind} #{item.number} (@{item.author}): " + ", ".join(parts)
 
 
-def run(github: GitHub, config: Config, now: datetime) -> int:
+def slack_escape(text: str) -> str:
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def slack_payload(repo: str, alerts: list[tuple[Item, str]]) -> dict[str, str]:
+    lines = [f"*Docs follow-ups for {repo}*"]
+    for item, note in alerts:
+        kind = "PR" if item.kind == "pr" else "Issue"
+        link = f"<{item.url}|{kind} #{item.number}: {slack_escape(item.title)}>"
+        lines.append(f"• {link} (@{slack_escape(item.author)}): {slack_escape(note)}")
+    return {"text": "\n".join(lines)}
+
+
+def run(
+    github: GitHub, config: Config, now: datetime, *, slack_path: Path | None = None
+) -> int:
     github.ensure_labels()
     failures = 0
+    alerts: list[tuple[Item, str]] = []
     work: list[tuple[dict[str, Any], bool]] = [
         (raw, False) for raw in github.paginate("/issues", {"state": "open"})
     ]
@@ -664,9 +690,12 @@ def run(github: GitHub, config: Config, now: datetime) -> int:
                 continue
             print(describe(item, plan))
             apply_plan(github, item, plan)
+            alerts += [(item, note) for note in plan.notifications]
         except RuntimeError as error:
             failures += 1
             print(f"#{raw['number']}: {error}", file=sys.stderr)
+    if slack_path is not None and alerts:
+        slack_path.write_text(json.dumps(slack_payload(github.repo, alerts)), encoding="utf-8")
     return 1 if failures else 0
 
 
@@ -677,12 +706,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--apply", action="store_true", help="write changes to GitHub (default: dry run)"
     )
+    parser.add_argument(
+        "--slack-payload",
+        type=Path,
+        help="write docs-team alerts here as a Slack webhook payload (only if any)",
+    )
     args = parser.parse_args(argv)
     config = Config.load(args.config)
     github = GitHub(args.repo, apply=args.apply)
     if not args.apply:
         print("dry run: no changes will be written")
-    return run(github, config, datetime.now(UTC))
+    return run(github, config, datetime.now(UTC), slack_path=args.slack_payload)
 
 
 if __name__ == "__main__":
