@@ -1,0 +1,25 @@
+
+```haskell
+let chfAsset = SimpleAsset with
+      issuer = bank1
+      owner = carol
+      asset = "1 CHF"
+chf <- submit bank1 do createCmd chfAsset
+disclosedChf <- fromSome <$> queryDisclosure carol chf
+    
+let usdAsset = SimpleAsset with
+      issuer = bank2
+      owner = bob
+      asset = "1 USD"
+usd <- submit bank2 do createCmd usdAsset
+
+proposeDvP <- submit alice $ do
+  createCmd ProposeSimpleDvP with
+     proposer = alice
+     counterparty = bob
+     allocated = chf
+     expected = usdAsset
+     
+(newUsd, newEur) <- submit (actAs bob <> disclose disclosedChf) $ do
+    exerciseCmd proposeDvP $ AcceptAndSettle with toBeAllocated = usd
+```
