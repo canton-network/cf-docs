@@ -67,6 +67,8 @@ ItemKind = Literal["pr", "issue"]
 @dataclass(frozen=True)
 class Config:
     docs_team: frozenset[str]
+    employee_login_suffixes: tuple[str, ...]
+    slack_mention_ids: tuple[str, ...]
     exempt_labels: frozenset[str]
     warn_business_days: int
     close_business_days: int
@@ -79,6 +81,10 @@ class Config:
         raw = json.loads(path.read_text(encoding="utf-8"))
         return cls(
             docs_team=frozenset(login.lower() for login in raw["docs_team"]),
+            employee_login_suffixes=tuple(
+                suffix.lower() for suffix in raw["employee_login_suffixes"]
+            ),
+            slack_mention_ids=tuple(raw["slack_mention_ids"]),
             exempt_labels=frozenset(raw["exempt_labels"]),
             warn_business_days=raw["warn_business_days"],
             close_business_days=raw["close_business_days"],
@@ -126,6 +132,7 @@ class Item:
     # When a team member last applied `status/awaiting-author` (issues only).
     awaiting_author_labeled_at: datetime | None = None
     closed_at: datetime | None = None
+    author_association: str = "NONE"
 
 
 @dataclass(frozen=True)
@@ -373,10 +380,18 @@ def plan_open(item: Item, config: Config, now: datetime) -> Plan:
     return plan
 
 
+def is_employee(item: Item, config: Config) -> bool:
+    # Org membership misses DA staff who contribute without joining the org
+    # (cf-docs#1148), so the `-da` login convention is checked as well.
+    if item.author_association in TEAM_ASSOCIATIONS:
+        return True
+    return item.author.lower().endswith(config.employee_login_suffixes)
+
+
 def is_close_exempt(item: Item, config: Config) -> bool:
     if item.labels & config.exempt_labels:
         return True
-    if item.author.lower() in config.docs_team:
+    if item.author.lower() in config.docs_team or is_employee(item, config):
         return True
     return item.kind == "pr" and not has_sme(item)
 
@@ -599,6 +614,7 @@ def load_item(github: GitHub, raw: dict[str, Any]) -> Item:
         markers=markers,
         awaiting_author_labeled_at=labeled_at,
         closed_at=parse_time(raw["closed_at"]) if raw.get("closed_at") else None,
+        author_association=raw.get("author_association", "NONE"),
     )
     if kind == "pr":
         pull = github.get(f"/pulls/{number}")
@@ -653,8 +669,11 @@ def slack_escape(text: str) -> str:
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
-def slack_payload(repo: str, alerts: list[tuple[Item, str]]) -> dict[str, str]:
-    lines = [f"*Docs follow-ups for {repo}*"]
+def slack_payload(
+    repo: str, alerts: list[tuple[Item, str]], mention_ids: tuple[str, ...] = ()
+) -> dict[str, str]:
+    mentions = "".join(f" <@{member}>" for member in mention_ids)
+    lines = [f"*Docs follow-ups for {repo}*{mentions}"]
     for item, note in alerts:
         kind = "PR" if item.kind == "pr" else "Issue"
         link = f"<{item.url}|{kind} #{item.number}: {slack_escape(item.title)}>"
@@ -695,7 +714,7 @@ def run(
             failures += 1
             print(f"#{raw['number']}: {error}", file=sys.stderr)
     if slack_path is not None and alerts:
-        slack_path.write_text(json.dumps(slack_payload(github.repo, alerts)), encoding="utf-8")
+        slack_path.write_text(json.dumps(slack_payload(github.repo, alerts, config.slack_mention_ids)), encoding="utf-8")
     return 1 if failures else 0
 
 

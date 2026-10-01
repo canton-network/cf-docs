@@ -198,9 +198,14 @@ DOCS_TEAM_FEEDBACK = [
         {"draft": True, "activities": FEEDBACK},
         {"labels": {"on-hold"}, "activities": FEEDBACK},
         {"author": "shreyas-da", "activities": DOCS_TEAM_FEEDBACK},
+        {"author_association": "MEMBER", "activities": FEEDBACK},
+        {"author": "richardkapolnai-da", "author_association": "CONTRIBUTOR", "activities": [
+            mf.Activity("richardkapolnai-da", at(1), is_team=False, is_feedback=False),
+            team(2),
+        ]},
         {"requested_reviewers": [], "conflict": True},
     ],
-    ids=["draft", "exempt-label", "docs-team", "no-sme"],
+    ids=["draft", "exempt-label", "docs-team", "org-member", "da-login", "no-sme"],
 )
 def test_close_exemptions(config, overrides) -> None:
     plan = mf.plan_open(pr(**overrides), config, at(30))
@@ -413,6 +418,11 @@ def test_team_comment_pinging_reviewer_keeps_pr_awaiting_review(config) -> None:
     }
 
 
+def test_external_contributor_is_not_employee(config) -> None:
+    assert not mf.is_employee(pr(author="angelol", author_association="FIRST_TIME_CONTRIBUTOR"), config)
+    assert mf.is_employee(pr(author="JoaoSa-DA"), config)
+
+
 def test_slack_payload_links_and_escapes_items() -> None:
     payload = mf.slack_payload(
         "canton-network/cf-docs",
@@ -420,11 +430,12 @@ def test_slack_payload_links_and_escapes_items() -> None:
             (pr(), "needs a reviewer, waiting 7 business days"),
             (issue(author="a<b"), "needs an assignee, waiting 9 business days"),
         ],
+        ("U1", "U2"),
     )
     assert payload == {
         "text": "\n".join(
             [
-                "*Docs follow-ups for canton-network/cf-docs*",
+                "*Docs follow-ups for canton-network/cf-docs* <@U1> <@U2>",
                 "• <https://github.com/canton-network/cf-docs/pull/1|PR #1: Fix &lt;thing&gt; &amp; stuff>"
                 " (@contrib): needs a reviewer, waiting 7 business days",
                 "• <https://github.com/canton-network/cf-docs/issues/2|Issue #2: Page is wrong>"
