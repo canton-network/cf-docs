@@ -204,18 +204,63 @@ def test_close_exemptions(config, overrides) -> None:
 
 
 def test_review_reminder_for_unassigned_pr(config) -> None:
+    # 7 business days after Tuesday 2026-09-01 is Thursday 2026-09-10.
     item = pr(requested_reviewers=[])
-    assert not markers(mf.plan_open(item, config, at(7)))
-    plan = mf.plan_open(item, config, at(8, 13))
+    assert not markers(mf.plan_open(item, config, at(9)))
+    plan = mf.plan_open(item, config, at(10))
     assert markers(plan) == [mf.MARKER_REVIEW_REMINDER]
     assert config.reviewer_ping in plan.comments[0].body
 
-    reminded = pr(requested_reviewers=[], markers=[mf.Marker(mf.MARKER_REVIEW_REMINDER, at(8))])
+    reminded = pr(requested_reviewers=[], markers=[mf.Marker(mf.MARKER_REVIEW_REMINDER, at(10))])
     assert not markers(mf.plan_open(reminded, config, at(20)))
 
 
-def test_no_review_reminder_when_reviewer_assigned(config) -> None:
-    assert not markers(mf.plan_open(pr(), config, at(20)))
+def test_assigned_reviewer_delay_nudges_author_and_reviewer(config) -> None:
+    assert not markers(mf.plan_open(pr(), config, at(9)))
+    plan = mf.plan_open(pr(), config, at(10))
+    assert markers(plan) == [mf.MARKER_REVIEWER_NUDGE]
+    body = plan.comments[0].body
+    assert "@contrib" in body
+    assert "@reviewer" in body
+    assert config.reviewer_ping not in body
+
+    nudged = pr(markers=[mf.Marker(mf.MARKER_REVIEWER_NUDGE, at(10))])
+    assert not markers(mf.plan_open(nudged, config, at(20)))
+
+
+def test_author_reply_in_review_thread_hands_back_to_reviewer(config) -> None:
+    # Regression for cf-docs#1148: the author answered inside the review thread,
+    # which the issue timeline does not show.
+    review = mf.Activity("thibault-da", at(10, 14), is_team=True, is_feedback=True, is_review=True)
+    reply = mf.pull_activities(
+        [],
+        [
+            {
+                "user": {"login": "contrib", "type": "User"},
+                "author_association": "CONTRIBUTOR",
+                "created_at": "2026-09-10T15:18:28Z",
+            }
+        ],
+        "contrib",
+    )
+    item = pr(requested_reviewers=[], activities=[by_author(1), review, *reply])
+    plan = mf.plan_open(item, config, at(21))
+    assert plan.add_labels == {mf.LABEL_AWAITING_REVIEW}
+    assert markers(plan) == [mf.MARKER_REVIEWER_NUDGE]
+    assert "@thibault-da" in plan.comments[0].body
+
+
+def test_pull_activities_attribute_commits_to_their_authors() -> None:
+    commits = [
+        {"author": {"login": "shreyas-da"}, "commit": {"committer": {"date": "2026-09-10T09:37:35Z"}}},
+        {"author": None, "commit": {"committer": {"date": "2026-09-11T09:00:00Z"}}},
+    ]
+    bot_comment = {"user": {"login": "x[bot]", "type": "Bot"}, "created_at": "2026-09-12T00:00:00Z"}
+    activities = mf.pull_activities(commits, [bot_comment], "contrib")
+    assert [(a.actor, a.is_feedback) for a in activities] == [
+        ("shreyas-da", False),
+        ("contrib", False),
+    ]
 
 
 def test_issue_awaits_author_only_when_labeled(config) -> None:
@@ -273,10 +318,6 @@ def test_timeline_parsing_skips_bots_and_records_markers() -> None:
             "submitted_at": "2026-09-03T00:00:00Z",
         },
         {
-            "event": "committed",
-            "committer": {"date": "2026-09-04T00:00:00Z"},
-        },
-        {
             "event": "labeled",
             "actor": {"login": "reviewer", "type": "User"},
             "label": {"name": mf.LABEL_AWAITING_AUTHOR},
@@ -285,8 +326,41 @@ def test_timeline_parsing_skips_bots_and_records_markers() -> None:
     ]
     activities, found_markers, labeled_at = mf.timeline_activities(events, "contrib")
     assert [m.name for m in found_markers] == ["conflict"]
-    assert [(a.actor, a.is_team, a.is_feedback) for a in activities] == [
-        ("reviewer", True, False),
-        ("contrib", False, False),
+    assert [(a.actor, a.is_team, a.is_feedback, a.is_review) for a in activities] == [
+        ("reviewer", True, False, True),
     ]
     assert labeled_at == datetime(2026, 9, 5, tzinfo=UTC)
+
+
+@pytest.mark.parametrize(
+    ("body", "expected"),
+    [
+        ("Please rename this section.", True),
+        ("@contrib can you rebase?", True),
+        ("@thibault-da any update on this?", False),
+        ("cc @canton-network/docs", False),
+        ("@thibault-da @contrib thoughts?", True),
+        ("mail me at someone@example.com", True),
+    ],
+)
+def test_addresses_author(body, expected) -> None:
+    assert mf.addresses_author(body, "contrib") is expected
+
+
+def test_team_comment_pinging_reviewer_keeps_pr_awaiting_review(config) -> None:
+    # Regression for cf-docs#1148: "@thibault-da any update on this?" from the
+    # docs team must not hand the PR back to its author.
+    events = [
+        {
+            "event": "commented",
+            "user": {"login": "shreyas-da", "type": "User"},
+            "author_association": "MEMBER",
+            "body": "@thibault-da any update on this?",
+            "created_at": "2026-10-01T16:34:32Z",
+        }
+    ]
+    activities, _, _ = mf.timeline_activities(events, "contrib")
+    item = pr(activities=[by_author(10), *activities])
+    assert mf.plan_open(item, config, datetime(2026, 10, 1, 17, tzinfo=UTC)).add_labels == {
+        mf.LABEL_AWAITING_REVIEW
+    }

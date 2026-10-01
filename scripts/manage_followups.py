@@ -9,7 +9,9 @@ Implements the follow-up policy from canton-network/cf-docs#1693:
 - Items awaiting the author get a warning after `warn_business_days` and are
   closed after `close_business_days`. Author activity resets the clock, and an
   author comment on an item closed this way reopens it.
-- Items awaiting review with nobody assigned get one reminder ping.
+- Items awaiting review with nobody assigned get one reminder ping, and PRs
+  whose assigned reviewer has not responded get one nudge that tags the author
+  and the reviewers.
 
 The script is dry-run by default; pass `--apply` to write to GitHub.
 """
@@ -18,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 import urllib.parse
 from dataclasses import dataclass, field
@@ -48,9 +51,11 @@ MARKER_CONFLICT = "conflict"
 MARKER_STALE_WARNING = "stale-warning"
 MARKER_STALE_CLOSE = "stale-close"
 MARKER_REVIEW_REMINDER = "review-reminder"
+MARKER_REVIEWER_NUDGE = "reviewer-nudge"
 MARKER_REOPENED = "reopened"
 
 TEAM_ASSOCIATIONS = frozenset({"OWNER", "MEMBER", "COLLABORATOR"})
+MENTION_PATTERN = re.compile(r"(?<![\w@])@([A-Za-z0-9-]+(?:/[A-Za-z0-9_.-]+)?)")
 
 ItemKind = Literal["pr", "issue"]
 
@@ -62,7 +67,8 @@ class Config:
     exempt_labels: frozenset[str]
     warn_business_days: int
     close_business_days: int
-    review_reminder_days: int
+    review_reminder_business_days: int
+    reviewer_nudge_business_days: int
     reopen_window_days: int
 
     @classmethod
@@ -74,7 +80,8 @@ class Config:
             exempt_labels=frozenset(raw["exempt_labels"]),
             warn_business_days=raw["warn_business_days"],
             close_business_days=raw["close_business_days"],
-            review_reminder_days=raw["review_reminder_days"],
+            review_reminder_business_days=raw["review_reminder_business_days"],
+            reviewer_nudge_business_days=raw["reviewer_nudge_business_days"],
             reopen_window_days=raw["reopen_window_days"],
         )
 
@@ -89,6 +96,7 @@ class Activity:
     # True when the action asks the author for something: a comment or a
     # non-approving review. Approvals and pushes are not feedback.
     is_feedback: bool
+    is_review: bool = False
 
 
 @dataclass(frozen=True)
@@ -203,6 +211,16 @@ def has_sme(item: Item) -> bool:
     return any(a.is_team and a.actor.lower() != author for a in item.activities)
 
 
+def reviewers(item: Item) -> list[str]:
+    """Pending review requests first, then team members who have reviewed."""
+    author = item.author.lower()
+    names = list(item.requested_reviewers)
+    for a in item.activities:
+        if a.is_review and a.is_team and a.actor.lower() != author:
+            names.append(a.actor)
+    return list(dict.fromkeys(names))
+
+
 def set_status(plan: Plan, item: Item, status: str) -> None:
     for label in (LABEL_AWAITING_AUTHOR, LABEL_AWAITING_REVIEW):
         if label == status and label not in item.labels:
@@ -264,7 +282,17 @@ def review_reminder_body(item: Item, config: Config) -> str:
     return (
         f"{marker_text(MARKER_REVIEW_REMINDER)}\n"
         f"{config.reviewer_ping}: this {noun} has been waiting on the docs team for "
-        f"{config.review_reminder_days} days without {need}."
+        f"{config.review_reminder_business_days} business days without {need}."
+    )
+
+
+def reviewer_nudge_body(item: Item, config: Config) -> str:
+    mentions = " ".join(f"@{name}" for name in reviewers(item))
+    return (
+        f"{marker_text(MARKER_REVIEWER_NUDGE)}\n"
+        f"{author_mention(item)}, this pull request has been waiting on review from "
+        f"{mentions} for {config.reviewer_nudge_business_days} business days since your "
+        "last update. Please follow up with your reviewers to keep it moving."
     )
 
 
@@ -375,17 +403,24 @@ def plan_stale(
 def plan_review_reminder(
     plan: Plan, item: Item, config: Config, now: datetime, *, waiting_since: datetime
 ) -> None:
-    if not config.reviewer_ping:
+    if item.kind == "pr" and reviewers(item):
+        # A reviewer is assigned: tag the author and reviewers to follow up.
+        threshold, marker = config.reviewer_nudge_business_days, MARKER_REVIEWER_NUDGE
+        body = reviewer_nudge_body
+    elif config.reviewer_ping and (
+        (item.kind == "pr" and not has_sme(item))
+        or (item.kind == "issue" and not item.assignees)
+    ):
+        # Nobody is assigned: alert the docs team to assign someone.
+        threshold, marker = config.review_reminder_business_days, MARKER_REVIEW_REMINDER
+        body = review_reminder_body
+    else:
         return
-    if item.kind == "pr" and has_sme(item):
+    if business_days_between(waiting_since, now) < threshold:
         return
-    if item.kind == "issue" and item.assignees:
+    if latest_marker(item, marker, since=waiting_since) is not None:
         return
-    if now - waiting_since < timedelta(days=config.review_reminder_days):
-        return
-    if latest_marker(item, MARKER_REVIEW_REMINDER, since=waiting_since) is not None:
-        return
-    plan.comments.append(Comment(MARKER_REVIEW_REMINDER, review_reminder_body(item, config)))
+    plan.comments.append(Comment(marker, body(item, config)))
 
 
 # --- GitHub I/O -------------------------------------------------------------
@@ -444,6 +479,12 @@ class GitHub:
                 )
 
 
+def addresses_author(body: str, author: str) -> bool:
+    """A comment that @-mentions only other people is aimed at them, not the author."""
+    mentions = {name.lower() for name in MENTION_PATTERN.findall(body)}
+    return not mentions or author.lower() in mentions
+
+
 def timeline_activities(
     events: list[dict[str, Any]], author: str
 ) -> tuple[list[Activity], list[Marker], datetime | None]:
@@ -465,7 +506,7 @@ def timeline_activities(
                     actor=user.get("login", ""),
                     at=parse_time(event["created_at"]),
                     is_team=event.get("author_association") in TEAM_ASSOCIATIONS,
-                    is_feedback=True,
+                    is_feedback=addresses_author(event.get("body") or "", author),
                 )
             )
         elif kind == "reviewed":
@@ -478,17 +519,7 @@ def timeline_activities(
                     at=parse_time(event["submitted_at"]),
                     is_team=event.get("author_association") in TEAM_ASSOCIATIONS,
                     is_feedback=event.get("state", "").lower() != "approved",
-                )
-            )
-        elif kind == "committed":
-            # Commits are attributed to the PR author: pushing is the author's move
-            # whoever wrote the commit, and committer dates update on rebase.
-            activities.append(
-                Activity(
-                    actor=author,
-                    at=parse_time(event["committer"]["date"]),
-                    is_team=False,
-                    is_feedback=False,
+                    is_review=True,
                 )
             )
         elif kind in {"head_ref_force_pushed", "ready_for_review", "reopened"}:
@@ -507,6 +538,39 @@ def timeline_activities(
             if label == LABEL_AWAITING_AUTHOR and actor.get("type") != "Bot":
                 labeled_at = parse_time(event["created_at"])
     return activities, markers, labeled_at
+
+
+def pull_activities(
+    commits: list[dict[str, Any]], review_comments: list[dict[str, Any]], author: str
+) -> list[Activity]:
+    """Activity the issue timeline omits: review-thread replies and commit authors."""
+    activities: list[Activity] = []
+    for commit in commits:
+        # Commits without a linked GitHub account are assumed to be the author's.
+        # Committer dates update on rebase, so they approximate push time.
+        login = (commit.get("author") or {}).get("login") or author
+        activities.append(
+            Activity(
+                actor=login,
+                at=parse_time(commit["commit"]["committer"]["date"]),
+                is_team=False,
+                is_feedback=False,
+            )
+        )
+    for comment in review_comments:
+        user = comment.get("user") or {}
+        if user.get("type") == "Bot":
+            continue
+        activities.append(
+            Activity(
+                actor=user.get("login", ""),
+                at=parse_time(comment["created_at"]),
+                is_team=comment.get("author_association") in TEAM_ASSOCIATIONS,
+                is_feedback=True,
+                is_review=True,
+            )
+        )
+    return activities
 
 
 def load_item(github: GitHub, raw: dict[str, Any]) -> Item:
@@ -531,7 +595,15 @@ def load_item(github: GitHub, raw: dict[str, Any]) -> Item:
         pull = github.get(f"/pulls/{number}")
         item.draft = bool(pull.get("draft"))
         item.requested_reviewers = [r["login"] for r in pull.get("requested_reviewers") or []]
-        item.requested_reviewers += [t["slug"] for t in pull.get("requested_teams") or []]
+        org = github.repo.split("/")[0]
+        item.requested_reviewers += [
+            f"{org}/{t['slug']}" for t in pull.get("requested_teams") or []
+        ]
+        item.activities += pull_activities(
+            github.paginate(f"/pulls/{number}/commits"),
+            github.paginate(f"/pulls/{number}/comments"),
+            author,
+        )
         if pull.get("mergeable") is None:
             item.conflict = None
         else:
