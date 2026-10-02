@@ -14,6 +14,12 @@ Implements the follow-up policy from canton-network/cf-docs#1693:
   responded get one GitHub nudge tagging the author and the reviewers, and the
   docs team hears about it in Slack.
 
+Employees are members of the `employee_orgs` in the config. Org membership is
+mostly private, so it is read with `ORG_MEMBERS_TOKEN_<ORG>` (for example
+`ORG_MEMBERS_TOKEN_DIGITAL_ASSET`) or `ORG_MEMBERS_TOKEN`, each able to read that
+org's members. When membership can't be determined, the author is treated as an
+employee, so nobody is closed on a guess.
+
 The script is dry-run by default; pass `--apply` to write to GitHub. With
 `--slack-payload PATH`, Slack alerts are written to PATH as an incoming-webhook
 payload for the workflow to send.
@@ -23,9 +29,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
+import urllib.error
 import urllib.parse
+import urllib.request
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -67,7 +77,7 @@ ItemKind = Literal["pr", "issue"]
 @dataclass(frozen=True)
 class Config:
     docs_team: frozenset[str]
-    employee_login_suffixes: tuple[str, ...]
+    employee_orgs: tuple[str, ...]
     slack_mention_ids: tuple[str, ...]
     exempt_labels: frozenset[str]
     warn_business_days: int
@@ -81,9 +91,7 @@ class Config:
         raw = json.loads(path.read_text(encoding="utf-8"))
         return cls(
             docs_team=frozenset(login.lower() for login in raw["docs_team"]),
-            employee_login_suffixes=tuple(
-                suffix.lower() for suffix in raw["employee_login_suffixes"]
-            ),
+            employee_orgs=tuple(raw["employee_orgs"]),
             slack_mention_ids=tuple(raw["slack_mention_ids"]),
             exempt_labels=frozenset(raw["exempt_labels"]),
             warn_business_days=raw["warn_business_days"],
@@ -132,7 +140,8 @@ class Item:
     # When a team member last applied `status/awaiting-author` (issues only).
     awaiting_author_labeled_at: datetime | None = None
     closed_at: datetime | None = None
-    author_association: str = "NONE"
+    # None when org membership could not be determined.
+    author_is_employee: bool | None = None
 
 
 @dataclass(frozen=True)
@@ -380,18 +389,16 @@ def plan_open(item: Item, config: Config, now: datetime) -> Plan:
     return plan
 
 
-def is_employee(item: Item, config: Config) -> bool:
-    # Org membership misses DA staff who contribute without joining the org
-    # (cf-docs#1148), so the `-da` login convention is checked as well.
-    if item.author_association in TEAM_ASSOCIATIONS:
-        return True
-    return item.author.lower().endswith(config.employee_login_suffixes)
+def is_employee(item: Item) -> bool:
+    # Unknown membership counts as employee: wrongly keeping a PR open is cheap,
+    # wrongly closing one is not.
+    return item.author_is_employee is not False
 
 
 def is_close_exempt(item: Item, config: Config) -> bool:
     if item.labels & config.exempt_labels:
         return True
-    if item.author.lower() in config.docs_team or is_employee(item, config):
+    if item.author.lower() in config.docs_team or is_employee(item):
         return True
     return item.kind == "pr" and not has_sme(item)
 
@@ -507,8 +514,14 @@ def addresses_author(body: str, author: str) -> bool:
     return not mentions or author.lower() in mentions
 
 
+def association_is_team(_login: str, association: str) -> bool:
+    return association in TEAM_ASSOCIATIONS
+
+
 def timeline_activities(
-    events: list[dict[str, Any]], author: str
+    events: list[dict[str, Any]],
+    author: str,
+    is_team: Callable[[str, str], bool] = association_is_team,
 ) -> tuple[list[Activity], list[Marker], datetime | None]:
     activities: list[Activity] = []
     markers: list[Marker] = []
@@ -527,7 +540,7 @@ def timeline_activities(
                 Activity(
                     actor=user.get("login", ""),
                     at=parse_time(event["created_at"]),
-                    is_team=event.get("author_association") in TEAM_ASSOCIATIONS,
+                    is_team=is_team(user.get("login", ""), event.get("author_association", "")),
                     is_feedback=addresses_author(event.get("body") or "", author),
                 )
             )
@@ -539,7 +552,7 @@ def timeline_activities(
                 Activity(
                     actor=user.get("login", ""),
                     at=parse_time(event["submitted_at"]),
-                    is_team=event.get("author_association") in TEAM_ASSOCIATIONS,
+                    is_team=is_team(user.get("login", ""), event.get("author_association", "")),
                     is_feedback=event.get("state", "").lower() != "approved",
                     is_review=True,
                 )
@@ -563,7 +576,10 @@ def timeline_activities(
 
 
 def pull_activities(
-    commits: list[dict[str, Any]], review_comments: list[dict[str, Any]], author: str
+    commits: list[dict[str, Any]],
+    review_comments: list[dict[str, Any]],
+    author: str,
+    is_team: Callable[[str, str], bool] = association_is_team,
 ) -> list[Activity]:
     """Activity the issue timeline omits: review-thread replies and commit authors."""
     activities: list[Activity] = []
@@ -587,7 +603,7 @@ def pull_activities(
             Activity(
                 actor=user.get("login", ""),
                 at=parse_time(comment["created_at"]),
-                is_team=comment.get("author_association") in TEAM_ASSOCIATIONS,
+                is_team=is_team(user.get("login", ""), comment.get("author_association", "")),
                 is_feedback=True,
                 is_review=True,
             )
@@ -595,12 +611,90 @@ def pull_activities(
     return activities
 
 
-def load_item(github: GitHub, raw: dict[str, Any]) -> Item:
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *_args: object, **_kwargs: object) -> None:
+        return None
+
+
+class OrgMembership:
+    """Answers whether a login belongs to any employee org, caching per login."""
+
+    def __init__(
+        self,
+        orgs: tuple[str, ...],
+        tokens: dict[str, str],
+        known: dict[str, bool | None] | None = None,
+    ) -> None:
+        self.orgs = orgs
+        self.tokens = tokens
+        self.cache: dict[str, bool | None] = {k.lower(): v for k, v in (known or {}).items()}
+        self.opener = urllib.request.build_opener(_NoRedirect)
+        for org in orgs:
+            if org not in tokens:
+                print(
+                    f"warning: no members token for {org}; its members count as unknown",
+                    file=sys.stderr,
+                )
+
+    @classmethod
+    def from_env(cls, orgs: tuple[str, ...]) -> OrgMembership:
+        tokens: dict[str, str] = {}
+        for org in orgs:
+            name = "ORG_MEMBERS_TOKEN_" + org.upper().replace("-", "_")
+            token = os.environ.get(name) or os.environ.get("ORG_MEMBERS_TOKEN")
+            if token:
+                tokens[org] = token
+        return cls(orgs, tokens)
+
+    def _check(self, org: str, login: str) -> bool | None:
+        token = self.tokens.get(org)
+        if token is None:
+            return None
+        request = urllib.request.Request(
+            f"{API_ROOT}/orgs/{org}/members/{urllib.parse.quote(login)}",
+            headers={
+                "Accept": "application/vnd.github+json",
+                "Authorization": f"Bearer {token}",
+                "User-Agent": USER_AGENT,
+                "X-GitHub-Api-Version": "2022-11-28",
+            },
+        )
+        try:
+            with self.opener.open(request, timeout=30) as response:
+                return response.status == 204
+        except urllib.error.HTTPError as error:
+            if error.code == 404:
+                return False
+            # 302 means the token cannot see private members of this org.
+            print(f"warning: membership check {org}/{login}: HTTP {error.code}", file=sys.stderr)
+            return None
+        except (urllib.error.URLError, TimeoutError) as error:
+            print(f"warning: membership check {org}/{login}: {error}", file=sys.stderr)
+            return None
+
+    def is_member(self, login: str) -> bool | None:
+        key = login.lower()
+        if key not in self.cache:
+            results = [self._check(org, login) for org in self.orgs]
+            if any(results):
+                self.cache[key] = True
+            elif all(result is False for result in results):
+                self.cache[key] = False
+            else:
+                self.cache[key] = None
+        return self.cache[key]
+
+    def is_team(self, login: str, association: str) -> bool:
+        # Repo collaborators outside the orgs still count as reviewers.
+        return self.is_member(login) is True or association_is_team(login, association)
+
+
+def load_item(github: GitHub, raw: dict[str, Any], membership: OrgMembership) -> Item:
     number = raw["number"]
     kind: ItemKind = "pr" if "pull_request" in raw else "issue"
     author = raw["user"]["login"]
     events = github.paginate(f"/issues/{number}/timeline")
-    activities, markers, labeled_at = timeline_activities(events, author)
+    activities, markers, labeled_at = timeline_activities(events, author, membership.is_team)
     item = Item(
         kind=kind,
         number=number,
@@ -614,7 +708,7 @@ def load_item(github: GitHub, raw: dict[str, Any]) -> Item:
         markers=markers,
         awaiting_author_labeled_at=labeled_at,
         closed_at=parse_time(raw["closed_at"]) if raw.get("closed_at") else None,
-        author_association=raw.get("author_association", "NONE"),
+        author_is_employee=membership.is_member(author),
     )
     if kind == "pr":
         pull = github.get(f"/pulls/{number}")
@@ -628,6 +722,7 @@ def load_item(github: GitHub, raw: dict[str, Any]) -> Item:
             github.paginate(f"/pulls/{number}/commits"),
             github.paginate(f"/pulls/{number}/comments"),
             author,
+            membership.is_team,
         )
         if pull.get("mergeable") is None:
             item.conflict = None
@@ -682,7 +777,12 @@ def slack_payload(
 
 
 def run(
-    github: GitHub, config: Config, now: datetime, *, slack_path: Path | None = None
+    github: GitHub,
+    config: Config,
+    now: datetime,
+    *,
+    membership: OrgMembership,
+    slack_path: Path | None = None,
 ) -> int:
     github.ensure_labels()
     failures = 0
@@ -703,7 +803,7 @@ def run(
     ]
     for raw, closed in work:
         try:
-            item = load_item(github, raw)
+            item = load_item(github, raw, membership)
             plan = plan_closed(item, config, now) if closed else plan_open(item, config, now)
             if plan.is_empty():
                 continue
@@ -735,7 +835,14 @@ def main(argv: list[str] | None = None) -> int:
     github = GitHub(args.repo, apply=args.apply)
     if not args.apply:
         print("dry run: no changes will be written")
-    return run(github, config, datetime.now(UTC), slack_path=args.slack_payload)
+    membership = OrgMembership.from_env(config.employee_orgs)
+    return run(
+        github,
+        config,
+        datetime.now(UTC),
+        membership=membership,
+        slack_path=args.slack_payload,
+    )
 
 
 if __name__ == "__main__":
