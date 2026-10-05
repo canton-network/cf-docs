@@ -128,6 +128,7 @@ def test_new_conflict_labels_and_comments_once(config) -> None:
     assert plan.add_labels == {mf.LABEL_MERGE_CONFLICT, mf.LABEL_AWAITING_AUTHOR}
     assert markers(plan) == [mf.MARKER_CONFLICT]
     assert "@contrib" in plan.comments[0].body
+    assert "git " not in plan.comments[0].body
 
     notified = pr(
         conflict=True,

@@ -255,22 +255,12 @@ def author_mention(item: Item) -> str:
 
 
 def conflict_body(item: Item) -> str:
+    # How to resolve is the author's call, so the comment only reports the state.
     return (
         f"{marker_text(MARKER_CONFLICT)}\n"
         f"{author_mention(item)}, this pull request now has merge conflicts with `main`, "
-        "so it can't be merged as-is.\n\n"
-        "To fix it, update your branch from `main` and resolve the conflicts:\n\n"
-        "```bash\n"
-        "git fetch origin\n"
-        "git merge origin/main   # or: git rebase origin/main\n"
-        "# resolve the conflicted files, then\n"
-        "git commit\n"
-        "git push\n"
-        "```\n\n"
-        "GitHub's [guide to resolving merge conflicts]"
-        "(https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/"
-        "addressing-merge-conflicts/resolving-a-merge-conflict-using-the-command-line) "
-        "covers the details. Once you push, this label clears automatically."
+        "so it can't be merged as-is. Once the conflicts are resolved, this label "
+        "clears automatically."
     )
 
 
