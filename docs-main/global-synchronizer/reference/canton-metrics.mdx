@@ -11,7 +11,7 @@ For the metric types referenced below, see the [relevant Prometheus documentatio
 
 {/* GENERATED_CANTON_METRICS_START */}
 
-{/* GENERATED_FROM source="digital-asset/canton" ref="v3.5.19" asset="canton-open-source-3.5.19.tar.gz" digest="sha256:d5798f9dd41e6b1226c8579b40df9694839df72884c69efb309b52ed2ba09494" participant_metric_count="219" sequencer_metric_count="153" mediator_metric_count="57" */}
+{/* GENERATED_FROM source="digital-asset/canton" ref="v3.6.1" asset="canton-open-source-3.6.1.tar.gz" digest="sha256:45285086270327cb3a7a095cc501d850f274490032aa2a13ff8811f72ba3bfee" participant_metric_count="247" sequencer_metric_count="153" mediator_metric_count="57" */}
 
 ## Participant Metrics
 
@@ -668,13 +668,6 @@ For the metric types referenced below, see the [relevant Prometheus documentatio
 > - **Type**: gauge
 > - **Qualification**: Debug
 
-### daml.participant.api.index.transaction_trees_buffer_size
-
-> - **Summary**: The buffer size for transaction trees requests.
-> - **Description**: An Pekko stream buffer is added at the end of all streaming queries, allowing to absorb temporary downstream backpressure (e.g. when the client is slower than upstream delivery throughput). This metric gauges the size of the buffer for queries requesting transaction trees.
-> - **Type**: counter
-> - **Qualification**: Debug
-
 ### daml.participant.api.index.updates_buffer_size
 
 > - **Summary**: The buffer size for streaming updates requests.
@@ -739,22 +732,22 @@ For the metric types referenced below, see the [relevant Prometheus documentatio
 ### daml.participant.api.indexer.indexer_queue_blocked
 
 > - **Summary**: The amount of blocked enqueue operations for the indexer queue.
-> - **Description**: Indexer queue exerts backpressure by blocking asynchronous enqueue operations. This meter measures the amount of such blocked operations, signalling backpressure materializing from downstream.
-> - **Type**: meter
+> - **Description**: Indexer queue exerts backpressure by blocking asynchronous enqueue operations. This gauge measures the amount of such blocked operations, signalling backpressure materializing from downstream.
+> - **Type**: gauge
 > - **Qualification**: Debug
 
 ### daml.participant.api.indexer.indexer_queue_buffered
 
 > - **Summary**: The size of the buffer before the indexer.
-> - **Description**: This buffer is located before the indexer, increasing amount signals backpressure mounting.
-> - **Type**: meter
+> - **Description**: This gauge is located before the indexer, increasing amount signals backpressure mounting.
+> - **Type**: gauge
 > - **Qualification**: Debug
 
 ### daml.participant.api.indexer.indexer_queue_uncommitted
 
 > - **Summary**: The amount of entries which are uncommitted for the indexer.
-> - **Description**: Uncommitted entries contain all blocked, buffered and submitted, but not yet committed entries. This amount signals the momentum of stream processing, and has a theoretical maximum defined by all the queue perameters.
-> - **Type**: meter
+> - **Description**: Uncommitted entries contain all blocked, buffered and submitted, but not yet committed entries. This amount signals the momentum of stream processing, and has a theoretical maximum defined by all the queue parameters.
+> - **Type**: gauge
 > - **Qualification**: Debug
 
 ### daml.participant.api.indexer.indexer_restart_due_to_missing_contract
@@ -770,6 +763,15 @@ For the metric types referenced below, see the [relevant Prometheus documentatio
 > - **Description**: The time that a batch of updates spends in blocked waiting for the pruning DB operation to finish.
 > - **Type**: timer
 > - **Qualification**: Debug
+
+### daml.participant.api.indexer.last_received_record_time\*
+
+> - **Summary**: The time of the last event ingested by the index db (in milliseconds since EPOCH).
+> - **Description**: The last received record time is a monotonically increasing integer value that represents the record time of the last event ingested by the index db. It is measured in milliseconds since the EPOCH time.
+> - **Type**: gauge
+> - **Qualification**: Debug
+> - **Labels**:
+>   - **synchronizer_id**: The id of the synchronizer.
 
 ### daml.participant.api.indexer.ledger_end_sequential_id
 
@@ -816,19 +818,19 @@ For the metric types referenced below, see the [relevant Prometheus documentatio
 > - **Type**: counter
 > - **Qualification**: Traffic
 
-### daml.participant.api.lapi.streams.transaction_trees_sent
-
-> - **Summary**: The number of the transaction trees sent over the ledger api.
-> - **Description**: The total number of the transaction trees sent over the ledger api streams to all clients.
-> - **Type**: counter
-> - **Qualification**: Traffic
-
 ### daml.participant.api.lapi.streams.updates_sent
 
-> - **Summary**: The number of the flat updates sent over the ledger api.
-> - **Description**: The total number of the flat updates sent over the ledger api streams to all clients.
+> - **Summary**: The number of the updates sent over the ledger api.
+> - **Description**: The total number of the updates sent over the ledger api streams to all clients.
 > - **Type**: counter
 > - **Qualification**: Traffic
+
+### daml.participant.api.services.acs
+
+> - **Summary**: The time to execute an index service operation.
+> - **Description**: The index service is an internal component responsible for access to the index db data. Its operations are invoked whenever a client request received over the ledger api requires access to the index db. This metric captures time statistics of such operations.
+> - **Type**: timer
+> - **Qualification**: Debug
 
 ### daml.participant.api.services.current_ledger_end
 
@@ -838,6 +840,13 @@ For the metric types referenced below, see the [relevant Prometheus documentatio
 > - **Qualification**: Debug
 
 ### daml.participant.api.services.get_active_contracts
+
+> - **Summary**: The time to execute an index service operation.
+> - **Description**: The index service is an internal component responsible for access to the index db data. Its operations are invoked whenever a client request received over the ledger api requires access to the index db. This metric captures time statistics of such operations.
+> - **Type**: timer
+> - **Qualification**: Debug
+
+### daml.participant.api.services.get_completion_by_hash
 
 > - **Summary**: The time to execute an index service operation.
 > - **Description**: The index service is an internal component responsible for access to the index db data. Its operations are invoked whenever a client request received over the ledger api requires access to the index db. This metric captures time statistics of such operations.
@@ -858,13 +867,6 @@ For the metric types referenced below, see the [relevant Prometheus documentatio
 > - **Type**: timer
 > - **Qualification**: Debug
 
-### daml.participant.api.services.get_lf_archive
-
-> - **Summary**: The time to execute an index service operation.
-> - **Description**: The index service is an internal component responsible for access to the index db data. Its operations are invoked whenever a client request received over the ledger api requires access to the index db. This metric captures time statistics of such operations.
-> - **Type**: timer
-> - **Qualification**: Debug
-
 ### daml.participant.api.services.get_participant_id
 
 > - **Summary**: The time to execute an index service operation.
@@ -879,14 +881,7 @@ For the metric types referenced below, see the [relevant Prometheus documentatio
 > - **Type**: timer
 > - **Qualification**: Debug
 
-### daml.participant.api.services.get_update_by_id
-
-> - **Summary**: The time to execute an index service operation.
-> - **Description**: The index service is an internal component responsible for access to the index db data. Its operations are invoked whenever a client request received over the ledger api requires access to the index db. This metric captures time statistics of such operations.
-> - **Type**: timer
-> - **Qualification**: Debug
-
-### daml.participant.api.services.get_update_by_offset
+### daml.participant.api.services.get_update
 
 > - **Summary**: The time to execute an index service operation.
 > - **Description**: The index service is an internal component responsible for access to the index db data. Its operations are invoked whenever a client request received over the ledger api requires access to the index db. This metric captures time statistics of such operations.
@@ -991,21 +986,7 @@ For the metric types referenced below, see the [relevant Prometheus documentatio
 > - **Type**: timer
 > - **Qualification**: Debug
 
-### daml.participant.api.services.list_lf_packages
-
-> - **Summary**: The time to execute an index service operation.
-> - **Description**: The index service is an internal component responsible for access to the index db data. Its operations are invoked whenever a client request received over the ledger api requires access to the index db. This metric captures time statistics of such operations.
-> - **Type**: timer
-> - **Qualification**: Debug
-
 ### daml.participant.api.services.lookup_active_contract
-
-> - **Summary**: The time to execute an index service operation.
-> - **Description**: The index service is an internal component responsible for access to the index db data. Its operations are invoked whenever a client request received over the ledger api requires access to the index db. This metric captures time statistics of such operations.
-> - **Type**: timer
-> - **Qualification**: Debug
-
-### daml.participant.api.services.lookup_configuration
 
 > - **Summary**: The time to execute an index service operation.
 > - **Description**: The index service is an internal component responsible for access to the index db data. Its operations are invoked whenever a client request received over the ledger api requires access to the index db. This metric captures time statistics of such operations.
@@ -1033,13 +1014,6 @@ For the metric types referenced below, see the [relevant Prometheus documentatio
 > - **Type**: timer
 > - **Qualification**: Debug
 
-### daml.participant.api.services.party_entries
-
-> - **Summary**: The time to execute an index service operation.
-> - **Description**: The index service is an internal component responsible for access to the index db data. Its operations are invoked whenever a client request received over the ledger api requires access to the index db. This metric captures time statistics of such operations.
-> - **Type**: timer
-> - **Qualification**: Debug
-
 ### daml.participant.api.services.prune
 
 > - **Summary**: The time to execute an index service operation.
@@ -1058,7 +1032,7 @@ For the metric types referenced below, see the [relevant Prometheus documentatio
 
 > - **Summary**: Optimistic locking with contention might result in retries. This metric tracks if the operation was retried this many times.
 > - **Description**:
-> - **Type**: meter
+> - **Type**: histogram
 > - **Qualification**: Debug
 
 ### daml.participant.api.services.pruning.prune.completed
@@ -1131,13 +1105,6 @@ For the metric types referenced below, see the [relevant Prometheus documentatio
 > - **Type**: timer
 > - **Qualification**: Debug
 
-### daml.participant.api.services.read.state_updates
-
-> - **Summary**: The time to execute a read service operation.
-> - **Description**: The read service is an internal interface for reading the events from the synchronization interfaces. The metrics expose the time needed to execute each operation.
-> - **Type**: timer
-> - **Qualification**: Debug
-
 ### daml.participant.api.services.read.validate_dar
 
 > - **Summary**: The time to execute a read service operation.
@@ -1145,14 +1112,7 @@ For the metric types referenced below, see the [relevant Prometheus documentatio
 > - **Type**: timer
 > - **Qualification**: Debug
 
-### daml.participant.api.services.transaction_trees
-
-> - **Summary**: The time to execute an index service operation.
-> - **Description**: The index service is an internal component responsible for access to the index db data. Its operations are invoked whenever a client request received over the ledger api requires access to the index db. This metric captures time statistics of such operations.
-> - **Type**: timer
-> - **Qualification**: Debug
-
-### daml.participant.api.services.transactions
+### daml.participant.api.services.updates
 
 > - **Summary**: The time to execute an index service operation.
 > - **Description**: The index service is an internal component responsible for access to the index db data. Its operations are invoked whenever a client request received over the ledger api requires access to the index db. This metric captures time statistics of such operations.
@@ -1236,11 +1196,81 @@ For the metric types referenced below, see the [relevant Prometheus documentatio
 > - **Type**: gauge
 > - **Qualification**: Saturation
 
+### daml.participant.sync.commitments.buffer-digest-pipeline-1-checkpointing
+
+> - **Summary**: Measures the buffer usage in the digest processor pipeline before checkpointing
+> - **Description**: If this value is at the buffer size (see `buffer-digest-pipeline-size`), then the checkpointing stage backpressures towards the indexer.
+> - **Type**: counter
+> - **Qualification**: Debug
+
+### daml.participant.sync.commitments.buffer-digest-pipeline-2-classification
+
+> - **Summary**: Measures the buffer usage in the digest processor pipeline before classification
+> - **Description**: If this value is at the buffer size (see `buffer-digest-pipeline-size`), then the classification stage backpressures towards the checkpointing stage.
+> - **Type**: counter
+> - **Qualification**: Debug
+
+### daml.participant.sync.commitments.buffer-digest-pipeline-3-accumulation
+
+> - **Summary**: Measures the buffer usage in the digest processor pipeline before accumulation
+> - **Description**: If this value is at the buffer size (see `buffer-digest-pipeline-size`), then the accumulation stage (in particular the `ensurePresent` substage) backpressures towards the classification stage.
+> - **Type**: counter
+> - **Qualification**: Debug
+
+### daml.participant.sync.commitments.buffer-digest-pipeline-3.1-compute-digest-changes
+
+> - **Summary**: Measures the buffer usage in the digest processor's accumulator pipeline before computing the digest changes
+> - **Description**: If this value is at the buffer size (see `buffer-digest-pipeline-size`), then the computation stage backpressures towards the `ensurePresent` stage.
+> - **Type**: counter
+> - **Qualification**: Debug
+
+### daml.participant.sync.commitments.buffer-digest-pipeline-3.2-ompute-digest-join-loading
+
+> - **Summary**: Measures the buffer usage in the digest processor's accumulator pipeline before joining the loading futures
+> - **Description**: If this value is at the buffer size (see `buffer-digest-pipeline-size`), then the join loading stage backpressures towards the computation stage.
+> - **Type**: counter
+> - **Qualification**: Debug
+
+### daml.participant.sync.commitments.buffer-digest-pipeline-3.3-aggregate
+
+> - **Summary**: Measures the buffer usage in the digest processor's accumulator pipeline before aggregating the digest changes
+> - **Description**: If this value is at the buffer size (see `buffer-digest-pipeline-size`), then the aggregation stage backpressures towards the join loading stage.
+> - **Type**: counter
+> - **Qualification**: Debug
+
+### daml.participant.sync.commitments.buffer-digest-pipeline-3.4-persist-changes
+
+> - **Summary**: Measures the buffer usage in the digest processor pipeline before persisting the digest changes
+> - **Description**: If this value is at the buffer size (see `buffer-digest-pipeline-size`), then the persistence stage triggers conflation in the aggregation state.
+> - **Type**: counter
+> - **Qualification**: Debug
+
+### daml.participant.sync.commitments.buffer-digest-pipeline-4-persist-outstanding
+
+> - **Summary**: Measures the buffer usage in the digest processor pipeline before persisting outstanding periods
+> - **Description**: If this value is at the buffer size (see `buffer-digest-pipeline-size`), then the persisting outstanding period stage backpressures towards the accumulator stage.
+> - **Type**: counter
+> - **Qualification**: Debug
+
+### daml.participant.sync.commitments.buffer-digest-pipeline-size
+
+> - **Summary**: Measures the size of the buffers in the digest processor pipeline
+> - **Description**: This value changes only when the buffer size is reconfigured as part of a participant node restart. It helps to visualize in dashboards when buffers are full.
+> - **Type**: gauge
+> - **Qualification**: Debug
+
 ### daml.participant.sync.commitments.catchup-mode-enabled
 
 > - **Summary**: Measures how many times the commitment processor catch-up mode has been triggered.
 > - **Description**: Participant nodes compute bilateral commitments at regular intervals. This metric exposes how often the catch-up mode has been activated. The catch-up mode is triggered according to catch-up config and happens if the participant lags behind on computation. A healthy value is 0. An increasing value indicates intermittent periods when a participant alternates between healthy and struggling to keep up with commitment computation. However, we do not see a constantly increasing value for a participant that is consistently behind commitment computation because, once catch-up mode is activated, the participant remains in catch-up mode until it has completely caught up, and only triggers the metric once. In order to troubleshoot non-zero values, the operator should cross-correlate this value with the `daml.participant.sync.commitments.compute` metric.
 > - **Type**: meter
+> - **Qualification**: Debug
+
+### daml.participant.sync.commitments.checkpoint-watermark
+
+> - **Summary**: Record time of the latest checkpoint that has been persisted
+> - **Description**: Measures up to how far the participant has produced and persisted ACS digests from the ACS and topology changes. If this metric falls significantly behind the ledger end's record time for the given synchronizer, digest processing is likely overloaded.
+> - **Type**: gauge
 > - **Qualification**: Debug
 
 ### daml.participant.sync.commitments.compute
@@ -1249,6 +1279,13 @@ For the metric types referenced below, see the [relevant Prometheus documentatio
 > - **Description**: Participant nodes compute bilateral commitments at regular intervals, i.e., reconciliation intervals. This metric exposes the time spent on each computation in milliseconds. There are two cases that the operator should pay attention to. First, fluctuations in this value are expected if the number of counter-participants or common stakeholder groups changes. However, changes with no apparent reason could indicate a bug and the operator should monitor closely. Second, it is a cause of concern if the value starts approaching or is greater than the reconciliation interval: The participant will perpetually lag behind, because it needs to compute commitments more frequently than it can manage. The operator should consider asking the synchronizer operator to increase the reconciliation interval if the increase in commitment computation is expected, or otherwise investigate the cause.
 > - **Type**: timer
 > - **Qualification**: Debug
+
+### daml.participant.sync.commitments.digest-processor-health
+
+> - **Summary**: Health of a digest processor (0: not-intialized, 1: starting, 2: started, 3: stopping, 4: stopped, 5: failed)
+> - **Description**: Health of a digest processor.
+> - **Type**: gauge
+> - **Qualification**: Errors
 
 ### daml.participant.sync.commitments.largest-counter-participant-latency
 
@@ -1292,10 +1329,171 @@ For the metric types referenced below, see the [relevant Prometheus documentatio
 > - **Type**: gauge
 > - **Qualification**: Latency
 
+### daml.participant.sync.commitments.matcher-health
+
+> - **Summary**: Health of the commitment matcher (0: not-intialized, 1: starting, 2: started, 3: stopping, 4: stopped, 5: failed)
+> - **Description**: Health of the commitment matcher.
+> - **Type**: gauge
+> - **Qualification**: Errors
+
+### daml.participant.sync.commitments.matching-watermark
+
+> - **Summary**: The sequencing time of the latest processed incoming ACS commitment
+> - **Description**: The sequencing time of the latest processed incoming ACS commitment. If this watermark falls behind the `tick-watermark` and the `received-watermark`, then the matching cannot keep up.
+> - **Type**: gauge
+> - **Qualification**: Debug
+
+### daml.participant.sync.commitments.received-watermark
+
+> - **Summary**: Sequencing time of the latest received incoming ACS commitment
+> - **Description**: The sequencing time of the latest received incoming ACS commitment.
+> - **Type**: gauge
+> - **Qualification**: Debug
+
+### daml.participant.sync.commitments.reinitialize-contract-changes
+
+> - **Summary**: Counts the number of contract changes that have been identified as part of reinitializing the digests.
+> - **Description**: This metric measures the progress in the number of identified contract changes upon reinitializing the digests. This metric is reset to 0 at the start of reinitialization. Since the same contract may be processed multiple times (for different counterparties), this metric may exceed the number of active contracts.
+> - **Type**: gauge
+> - **Qualification**: Debug
+
+### daml.participant.sync.commitments.reinitialize-parties
+
+> - **Summary**: Counts the number of parties that have been identified as part of reinitializing the digests.
+> - **Description**: This metric measures progress in the number of counterparties during the digest processor reinitialization. This metric is reset to 0 at the start of reinitialization.
+> - **Type**: gauge
+> - **Qualification**: Debug
+
+### daml.participant.sync.commitments.reinitialize-tombstones
+
+> - **Summary**: Counts the number of tombstones that have been written
+> - **Description**: This metric measures progress in the number of persisted tombstones during the digest processor reinitialization. This metric is reset to 0 at the start of reinitialization.
+> - **Type**: gauge
+> - **Qualification**: Debug
+
+### daml.participant.sync.commitments.running-digest-processor.latest-accumulated-record-time
+
+> - **Summary**: Record time of the latest event that went through the digest accumulation stage in the running digest processor.
+> - **Description**: Record time of the latest event that went through the digest accumulation stage in the running digest processor.
+> - **Type**: gauge
+> - **Qualification**: Debug
+
+### daml.participant.sync.commitments.running-digest-processor.latest-acs-update-record-time
+
+> - **Summary**: Record time of the latest event that was emitted by the internal index service.
+> - **Description**: Record time of the latest event that was emitted by the internal index service.
+> - **Type**: gauge
+> - **Qualification**: Debug
+
+### daml.participant.sync.commitments.running-digest-processor.latest-checkpointed-record-time
+
+> - **Summary**: Record time of the latest event that went through the checkpointing stage in the running digest processor.
+> - **Description**: Record time of the latest event that went through the checkpointing stage in the running digest processor.
+> - **Type**: gauge
+> - **Qualification**: Debug
+
+### daml.participant.sync.commitments.running-digest-processor.latest-classified-record-time
+
+> - **Summary**: Record time of the latest event that went through the classification stage in the running digest processor.
+> - **Description**: Record time of the latest event that went through the classification stage in the running digest processor.
+> - **Type**: gauge
+> - **Qualification**: Debug
+
+### daml.participant.sync.commitments.running-digest-processor.loaded-digests
+
+> - **Summary**: Counts the number of digests that the running digest processor keeps in memory in the accumulator.
+> - **Description**: Measures the memory consumption of the running digest processor. Each digest takes 2kB of raw data plus overhead for the data structures.
+> - **Type**: counter
+> - **Qualification**: Debug
+
+### daml.participant.sync.commitments.running-digest-processor.local-party-change-contract-changes
+
+> - **Summary**: Counts the number of contract changes that have been identified for a local party hosting change.
+> - **Description**: This metric measures the progress in the number of identified contract changes when the running digest processor ingests a local party hosting change. This metric is reset to 0 at the start of processing each local party hosting change. Since the same contract of the local party may be processed multiple times (for different counterparties), this metric may exceed the number of contracts of the local party.
+> - **Type**: gauge
+> - **Qualification**: Debug
+
+### daml.participant.sync.commitments.running-digest-processor.local-party-change-counterparties
+
+> - **Summary**: Counts the number of counterparties that have been identified for sharing contracts with a local party hosting change
+> - **Description**: This metric measures progress in the number of counterparties when the running digest processor ingests a local party hosting change. This metric is reset to 0 at the start of processing each local party hosting change.
+> - **Type**: gauge
+> - **Qualification**: Debug
+
+### daml.participant.sync.commitments.sender.batch-sending-error-count
+
+> - **Summary**: Number of the errors (both retriable and non-retriable) that occurred when sending batches
+> - **Description**: The value should stay very low compared to sent-batch-count. Any spike is the indicator of problems: either transient (like overload of the sequencer(s)) or persistent (example: invalid configuration).
+> - **Type**: counter
+> - **Qualification**: Traffic
+
+### daml.participant.sync.commitments.sender.send-attempt-count
+
+> - **Summary**: Number of attempts of sending the ACS commitments
+> - **Description**: The value should increase by one for each tick in the happy scenario. Faster increases indicate failures (send-failure-count), which will trigger retries.
+> - **Type**: counter
+> - **Qualification**: Traffic
+
+### daml.participant.sync.commitments.sender.send-failure-count
+
+> - **Summary**: Number of the failures in the entire send process (not single batch)
+> - **Description**: The value should stay very low compared to send-attempt-count. Any spike is the indicator of problems: either transient (like overload of the sequencer(s)) or persistent (example: invalid configuration).
+> - **Type**: counter
+> - **Qualification**: Traffic
+
+### daml.participant.sync.commitments.sender.sender-health
+
+> - **Summary**: Health of the commitment sender (0: not-intialized, 1: starting, 2: started, 3: stopping, 4: stopped, 5: failed)
+> - **Description**: Health of ACS commitment sender.
+> - **Type**: gauge
+> - **Qualification**: Errors
+
+### daml.participant.sync.commitments.sender.sent-batch-count
+
+> - **Summary**: Number of sent batches containing ACS commitments and summaries
+> - **Description**: In the happy scenario, The value should increase at each tick proportional to the number of counterparticipants. It can increase more in case of crashes/unhandler errors due to retries.
+> - **Type**: counter
+> - **Qualification**: Traffic
+
+### daml.participant.sync.commitments.sender.sent-commitment-count
+
+> - **Summary**: Number of sent ACS commitments
+> - **Description**: In the happy scenario, the value should increase at each tick proportional to the number of counterparticipants. It can increase more in case of crashes/unhandler errors due to retries.
+> - **Type**: counter
+> - **Qualification**: Traffic
+
+### daml.participant.sync.commitments.sender.watermark-offset
+
+> - **Summary**: Offset of the latest watermark that has been persisted
+> - **Description**: Similar to watermark-timestamp, but stores the numeric offset instead. Cannot be compared with the time values of the ledger, but can be compare with the previous values of the offset. If it's not increasing steadily, the sequencer(s) can be overloaded or there's another type of issue (for example, invalid configuration).
+> - **Type**: gauge
+> - **Qualification**: Debug
+
+### daml.participant.sync.commitments.sender.watermark-timestamp
+
+> - **Summary**: Timestamp (record time) of the latest watermark that has been persisted
+> - **Description**: Measures up to how far the participant has sent the ACS commitments. If this metric falls behind the tick watermarks for the given synchronizer for more significantly than the configured send delay, the sequencer(s) can be overloaded or there's another type of issue (for example, invalid configuration).
+> - **Type**: gauge
+> - **Qualification**: Debug
+
 ### daml.participant.sync.commitments.sequencing-time
 
 > - **Summary**: Measures the time between the end of a commitment period, and the time when the sequencer observes the corresponding commitment.
 > - **Description**: Participant nodes compute bilateral commitments at regular intervals. After a participant computes a commitment, it sends it for sequencing. The time between the end of a commitment interval and sequencing is measured in milliseconds. Because commitment computation is comprised within the measured time, the value is always greater than the `daml.participant.sync.commitments.compute` metric. The operator should pay attention to fluctuations of this value. An increase can be expected, e.g., because the computation time increases. However, a value increase can be a cause of concern, because it can indicate that the participant is lagging behind in processing messages and computing commitments, which is accompanied by `ACS_COMMITMENT_DEGRADATION` warnings in the participant logs. An increase can also indicate that the sequencer is slow in sequencing the commitment messages. The operator should cross-correlate with sequencing metrics such as `daml.sequencer-client.submissions.sequencing` and `daml.sequencer-client.handler.delay.` In this case, the operator should consider changing the preferred sequencer configuration.
+> - **Type**: gauge
+> - **Qualification**: Debug
+
+### daml.participant.sync.commitments.tick-signaller-health
+
+> - **Summary**: Health of the tick signaller (0: not-intialized, 1: starting, 2: started, 3: stopping, 4: stopped, 5: failed)
+> - **Description**: Health of the tick signaller.
+> - **Type**: gauge
+> - **Qualification**: Errors
+
+### daml.participant.sync.commitments.tick-watermark
+
+> - **Summary**: Record time of the latest (reconciliation or affirmation) tick for which ACS digests have been persisted
+> - **Description**: The record time of the latest tick for which ACS digests have been computed and persisted.
 > - **Type**: gauge
 > - **Qualification**: Debug
 
