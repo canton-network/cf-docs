@@ -81,7 +81,7 @@ The error categories allow you to group errors such that application logic can b
 
 {/* GENERATED_CANTON_ERROR_CODES_START */}
 
-{/* GENERATED_FROM source="digital-asset/canton" ref="v3.5.19" asset="canton-open-source-3.5.19.tar.gz" digest="sha256:d5798f9dd41e6b1226c8579b40df9694839df72884c69efb309b52ed2ba09494" error_code_count="425" */}
+{/* GENERATED_FROM source="digital-asset/canton" ref="v3.6.1" asset="canton-open-source-3.6.1.tar.gz" digest="sha256:45285086270327cb3a7a095cc501d850f274490032aa2a13ff8811f72ba3bfee" error_code_count="442" */}
 
 ## Error Codes Inventory
 
@@ -673,8 +673,8 @@ The error categories allow you to group errors such that application logic can b
 
 - **Explanation:** This error occurs if a network timeout happens during the execution of a query against the index database.
 - **Resolution:** Try increasing the network timeout value in indexer or ledger-api configuration (indexer.postgres_data_source.network_timeout or ledger-api.postgres_data_source.network_timeout).
-- **Category:** `SystemInternalAssumptionViolated`
-- **Conveyance:** This error is logged with log-level ERROR on the server side. It is exposed on the API with grpc-status INTERNAL without any details for security reasons.
+- **Category:** `TransientServerFailure`
+- **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status UNAVAILABLE including a detailed error message.
 
 <div id="error-code-index_db_sql_non_transient_error" />
 
@@ -1185,6 +1185,35 @@ The error categories allow you to group errors such that application logic can b
 - **Category:** `InvalidGivenCurrentSystemStateOther`
 - **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status FAILED_PRECONDITION including a detailed error message.
 
+### ParticipantErrorGroup › LedgerApiErrorGroup › CommandExecutionErrors › Interpreter › ExternalCallError
+
+<div id="error-code-interpretation_external_call_error_execution_failed" />
+
+#### `INTERPRETATION_EXTERNAL_CALL_ERROR_EXECUTION_FAILED`
+
+- **Explanation:** The external-call handler or service returned a failure.
+- **Resolution:** Check participant external-call configuration and the external service response.
+- **Category:** `InvalidGivenCurrentSystemStateOther`
+- **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status FAILED_PRECONDITION including a detailed error message.
+
+<div id="error-code-interpretation_external_call_error_invalid_output" />
+
+#### `INTERPRETATION_EXTERNAL_CALL_ERROR_INVALID_OUTPUT`
+
+- **Explanation:** The external-call service returned output that is not valid canonical hex.
+- **Resolution:** Fix the external service to return canonical lowercase hex output.
+- **Category:** `InvalidGivenCurrentSystemStateOther`
+- **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status FAILED_PRECONDITION including a detailed error message.
+
+<div id="error-code-interpretation_external_call_error_preparation_failed" />
+
+#### `INTERPRETATION_EXTERNAL_CALL_ERROR_PREPARATION_FAILED`
+
+- **Explanation:** External-call preparation failed before the participant issued the external call.
+- **Resolution:** Check the external-call extension id, function id, config hash bytes, and input bytes.
+- **Category:** `InvalidGivenCurrentSystemStateOther`
+- **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status FAILED_PRECONDITION including a detailed error message.
+
 ### ParticipantErrorGroup › LedgerApiErrorGroup › CommandExecutionErrors › Interpreter › LookupErrors
 
 <div id="error-code-contract_key_not_found" />
@@ -1446,6 +1475,15 @@ The error categories allow you to group errors such that application logic can b
 
 ### ParticipantErrorGroup › LedgerApiErrorGroup › RequestValidationErrors
 
+<div id="error-code-deprecated_api_disabled" />
+
+#### `DEPRECATED_API_DISABLED`
+
+- **Explanation:** This error is emitted when a request uses a Ledger API or JSON Ledger API endpoint or request field that was deprecated in an earlier Canton release and is disabled by default in the current one. The error message names the releases that deprecated and disabled the API and, if already decided, the release that removes it.
+- **Resolution:** Migrate your application to the replacement endpoint or request fields. As a temporary measure, the deprecated APIs can be re-enabled with the feature flag named in the error message (for example `canton.participants.\<participant\>.features.deprecated.enable-deprecated-endpoints-34 = true` for the endpoints deprecated in Canton 3.4) in the participant configuration.
+- **Category:** `InvalidGivenCurrentSystemStateOther`
+- **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status FAILED_PRECONDITION including a detailed error message.
+
 <div id="error-code-descending_order_missing_end" />
 
 #### `DESCENDING_ORDER_MISSING_END`
@@ -1554,6 +1592,15 @@ The error categories allow you to group errors such that application logic can b
 - **Category:** `InvalidIndependentOfSystemState`
 - **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status INVALID_ARGUMENT including a detailed error message.
 
+<div id="error-code-no_record_time_found_for_synchronizer_id" />
+
+#### `NO_RECORD_TIME_FOUND_FOR_SYNCHRONIZER_ID`
+
+- **Explanation:** Some of requested synchronizer ids do not have any update recorded.
+- **Resolution:** Ensure that the requested synchronizers are or were connected to this participant and there were sequenced updates on every of the requested synchronizers. If the synchronizer was recently connected, you may need to wait for updates to be sequenced and retry.
+- **Category:** `InvalidGivenCurrentSystemStateResourceMissing`
+- **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status NOT_FOUND including a detailed error message.
+
 <div id="error-code-offset_after_ledger_end" />
 
 #### `OFFSET_AFTER_LEDGER_END`
@@ -1610,6 +1657,15 @@ The error categories allow you to group errors such that application logic can b
 
 ### ParticipantErrorGroup › LedgerApiErrorGroup › RequestValidationErrors › NotFound
 
+<div id="error-code-completion_not_found" />
+
+#### `COMPLETION_NOT_FOUND`
+
+- **Explanation:** The completion does not exist or is not visible to the requesting user.
+- **Resolution:** Check the transaction hash and verify that the requesting user has visibility over the completion.
+- **Category:** `InvalidGivenCurrentSystemStateResourceMissing`
+- **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status NOT_FOUND including a detailed error message.
+
 <div id="error-code-contract_events_not_found" />
 
 #### `CONTRACT_EVENTS_NOT_FOUND`
@@ -1661,6 +1717,24 @@ The error categories allow you to group errors such that application logic can b
 
 - **Explanation:** This rejection is given when a read request tries to access a package which does not exist on the ledger.
 - **Resolution:** Use a package id pertaining to a package existing on the ledger.
+- **Category:** `InvalidGivenCurrentSystemStateResourceMissing`
+- **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status NOT_FOUND including a detailed error message.
+
+<div id="error-code-party_signing_keys_not_found" />
+
+#### `PARTY_SIGNING_KEYS_NOT_FOUND`
+
+- **Explanation:** This rejection is given when signing keys for a party do not exist, or that party does not exist.
+- **Resolution:** The party must exist in the synchronizer topology.
+- **Category:** `InvalidGivenCurrentSystemStateResourceMissing`
+- **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status NOT_FOUND including a detailed error message.
+
+<div id="error-code-synchronizer_not_found" />
+
+#### `SYNCHRONIZER_NOT_FOUND`
+
+- **Explanation:** This rejection is given when a request refers to an unknown synchronizer.
+- **Resolution:** Use a connected synchronizer.
 - **Category:** `InvalidGivenCurrentSystemStateResourceMissing`
 - **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status NOT_FOUND including a detailed error message.
 
@@ -1758,14 +1832,50 @@ The error categories allow you to group errors such that application logic can b
 
 ### ParticipantErrorGroup › LsuError
 
-<div id="error-code-failed_lsu" />
+<div id="error-code-lsu_internal_error" />
 
-#### `FAILED_LSU`
+#### `LSU_INTERNAL_ERROR`
 
-- **Explanation:** TODO(#26113)
-- **Resolution:** TODO(#26113)
+- **Explanation:** An unexpected error in Canton during an LSU. May be caused by concurrent synchronizer connect or disconnect operations during the LSU or by a bug in Canton.
+- **Resolution:** Verify and ensure no modifications are being made to the synchronizer connections during the LSU and retry the LSU. Automatic LSU can be retried by restarting the PN. For a manual LSU resubmit the LSU command. Should the error persist, please reach out to Canton support.
+- **Category:** `InvalidGivenCurrentSystemStateOther`
+- **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status FAILED_PRECONDITION including a detailed error message.
+
+<div id="error-code-lsu_malformed_request" />
+
+#### `LSU_MALFORMED_REQUEST`
+
+- **Explanation:** The LSU request contains errors or fails preconditions for a safe upgrade procedure.
+- **Resolution:** Check the error description and adjust the request accordingly
+- **Category:** `InvalidIndependentOfSystemState`
+- **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status INVALID_ARGUMENT including a detailed error message.
+
+<div id="error-code-lsu_synchronizer_connection_error" />
+
+#### `LSU_SYNCHRONIZER_CONNECTION_ERROR`
+
+- **Explanation:** A failure to connect to the new synchronizer, due to connectivity issues or unsufficient trust configuration.
+- **Resolution:** See the error description for the cause of the failure. After that follow the documentation to perform a manual LSU passing in successor sequencers configuration that overrides the failed connection configuration and fixes the cause
+- **Category:** `InvalidGivenCurrentSystemStateOther`
+- **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status FAILED_PRECONDITION including a detailed error message.
+
+<div id="error-code-lsu_transient_error" />
+
+#### `LSU_TRANSIENT_ERROR`
+
+- **Explanation:** Retries has been exhausted for an operation, that otherwise can intermittently return errors or fail pre-condition checks, while awaiting the synchronizer state to advance towards the upgrade.
+- **Resolution:** Check the error message and resolve possible external causes of the error, i.e. network connectivity problems, resource starvation, misconfigurations, etc. Then retry the LSU. Automatic LSU can be retried by restarting the PN. For a manual LSU resubmit the LSU command.
 - **Category:** `ContentionOnSharedResources`
 - **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status ABORTED including a detailed error message.
+
+<div id="error-code-lsu_wrong_psid" />
+
+#### `LSU_WRONG_PSID`
+
+- **Explanation:** The specified physical synchronizer id doesn't correspond to an expected one. This can be caused by specifying sequencer connections of a wrong synchronizer or by specifying a wrong physical synchronizer id in the upgrade command.
+- **Resolution:** Check and fix the incorrect physical synchronizer id in the upgrade command or the incorrect sequencer connections (i.e. could the sequencer successor connection URL point to the old sequencer?)
+- **Category:** `InvalidIndependentOfSystemState`
+- **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status INVALID_ARGUMENT including a detailed error message.
 
 ### ParticipantErrorGroup › ParticipantInspectionServiceError
 
@@ -2380,7 +2490,7 @@ The error categories allow you to group errors such that application logic can b
 #### `TRAFFIC_ACCOUNT_VALIDATION_FAILED`
 
 - **Explanation:** This error occurs if a Ledger API command submission cannot debit from the given local traffic account.
-- **Resolution:** Inspect the error details, adapt your Ledger API submission or contact the participant operator for adjusting your account details.
+- **Resolution:** Inspect the error details, adapt your Ledger API submission or contact the participant operator for adjusting your account details. The error metadata contains `account_id`, `balance` and `traffic_cost`.
 - **Category:** `InvalidGivenCurrentSystemStateOther`
 - **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status FAILED_PRECONDITION including a detailed error message.
 
@@ -2416,9 +2526,20 @@ The error categories allow you to group errors such that application logic can b
 #### `TRAFFIC_UPDATE_OUT_OF_BOUND`
 
 - **Explanation:** This error indicates that a traffic delta could not be applied, as it would overflow the current credit balance.
-- **Resolution:** Use a lower (absolute) delta value.
+- **Resolution:** Use a lower (absolute) delta value. The error metadata contains `account_id`, `traffic_delta` and `delta_type`.
 - **Category:** `InvalidGivenCurrentSystemStateOther`
 - **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status FAILED_PRECONDITION including a detailed error message.
+
+### ParticipantErrorGroup › TransactionErrorGroup › ExternalCallValidationError
+
+<div id="error-code-external_call_result_disagreement_alarm" />
+
+#### `EXTERNAL_CALL_RESULT_DISAGREEMENT_ALARM`
+
+- **Explanation:** The participant observed external call results that record different outputs for the same external call.
+- **Resolution:** Inspect the submitting participant and the external-call service deployments/configuration for inconsistent or non-deterministic results for the same external-call identity.
+- **Category:** `SecurityAlert`
+- **Conveyance:** This error is logged with log-level WARN on the server side. It is exposed on the API with grpc-status INVALID_ARGUMENT without any details for security reasons.
 
 ### ParticipantErrorGroup › TransactionErrorGroup › LocalAbstainError
 
@@ -2449,6 +2570,15 @@ The error categories allow you to group errors such that application logic can b
 - **Conveyance:** This error is logged with log-level WARN on the server side. It is exposed on the API with grpc-status INVALID_ARGUMENT without any details for security reasons.
 
 ### ParticipantErrorGroup › TransactionErrorGroup › LocalRejectError › ConsistencyRejections
+
+<div id="error-code-local_verdict_external_call_result_disagreement" />
+
+#### `LOCAL_VERDICT_EXTERNAL_CALL_RESULT_DISAGREEMENT`
+
+- **Explanation:** This rejection is made by a participant if external call results visible to a confirming party disagree on the output for the same external call.
+- **Resolution:** Inspect the submitting participant and the external-call service deployments. The same external call was recorded with different outputs, which can indicate a faulty or malicious submitter, inconsistent external-call service configuration, or a service that does not return a stable output for the same external-call identity.
+- **Category:** `InvalidIndependentOfSystemState`
+- **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status INVALID_ARGUMENT including a detailed error message.
 
 <div id="error-code-local_verdict_inactive_contracts" />
 
@@ -2862,6 +2992,15 @@ The error categories allow you to group errors such that application logic can b
 
 ### ParticipantErrorGroup › TransactionErrorGroup › TransactionRoutingError › TopologyErrors
 
+<div id="error-code-decentralized_party_cannot_submit" />
+
+#### `DECENTRALIZED_PARTY_CANNOT_SUBMIT`
+
+- **Explanation:** This error indicates that one or more submitters are hosted with Submission permission on a participant and at the same time have a confirmation threshold greater than 1 in their PartyToParticipant mapping.
+- **Resolution:** Use an external submission instead: give the party its own signing key so that the submission authorization is independent of any hosting participant, and the threshold is satisfied by confirmations from independent participants.
+- **Category:** `InvalidGivenCurrentSystemStateOther`
+- **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status FAILED_PRECONDITION including a detailed error message.
+
 <div id="error-code-informees_not_active" />
 
 #### `INFORMEES_NOT_ACTIVE`
@@ -2960,6 +3099,17 @@ The error categories allow you to group errors such that application logic can b
 
 - **Explanation:** This error indicates that an incoming administrative command could not be processed due to a malformed message.
 - **Resolution:** Inspect the error details and correct your application
+- **Category:** `InvalidIndependentOfSystemState`
+- **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status INVALID_ARGUMENT including a detailed error message.
+
+### ProtoSerializationError
+
+<div id="error-code-proto_serialization_failure" />
+
+#### `PROTO_SERIALIZATION_FAILURE`
+
+- **Explanation:** This error indicates that the response to an incoming administrative command could not be produced due to an internal error.
+- **Resolution:** Contact support
 - **Category:** `InvalidIndependentOfSystemState`
 - **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status INVALID_ARGUMENT including a detailed error message.
 
@@ -3078,6 +3228,15 @@ The error categories allow you to group errors such that application logic can b
 - **Explanation:** This error indicates that the participant is trying to send envelopes to multiple mediators or mediator groups in the same submission request. This most likely indicates that the request is bogus and has been created by a malicious sequencer. So it will not get processed.
 - **Category:** `SecurityAlert`
 - **Conveyance:** This error is logged with log-level WARN on the server side. It is exposed on the API with grpc-status INVALID_ARGUMENT without any details for security reasons.
+
+<div id="error-code-non_empty_topology_timestamp" />
+
+#### `NON_EMPTY_TOPOLOGY_TIMESTAMP`
+
+- **Explanation:** This error indicates that a request is rejected because the topology timestamp is non-empty. Starting from protocol version 36, topology timestamp must be empty.
+- **Resolution:** Remove value of topology timestamp and re-submit the request.
+- **Category:** `ContentionOnSharedResources`
+- **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status ABORTED including a detailed error message.
 
 <div id="error-code-payload_to_event_time_bound_exceeded" />
 
