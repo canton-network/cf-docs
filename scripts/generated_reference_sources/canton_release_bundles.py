@@ -127,23 +127,6 @@ def latest_public_canton_bundle_version(
     raise ValueError(f"No public Canton release bundle found for docs version {docs_version}")
 
 
-def public_canton_bundle_versions(
-    source_config: LedgerApiSourceConfig,
-    *,
-    docs_version: str,
-    repo_dir: Path = DEFAULT_REPO_DIR,
-    remote: str = DEFAULT_CANTON_REMOTE,
-) -> tuple[str, ...]:
-    candidates = stable_canton_bundle_candidates(
-        docs_version=docs_version,
-        repo_dir=repo_dir,
-        remote=remote,
-    )
-    return tuple(
-        version for version in candidates if release_bundle_exists(source_config, canton_version=version)
-    )
-
-
 def stable_canton_bundle_candidates(
     *,
     docs_version: str,
