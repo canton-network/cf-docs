@@ -22,8 +22,6 @@ concurrency:
 jobs:
   manage-followups:
     runs-on: canton-network-cf-docs
-    env:
-      HAS_MEMBERS_APP: ${{ secrets.FOLLOWUPS_APP_ID != '' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -35,36 +33,11 @@ jobs:
         with:
           python-version: "3.14"
 
-      # Org membership is private, so it is read through a GitHub App installed in
-      # both employee orgs with organization Members: read. Without the app,
-      # membership is unknown and nobody is closed.
-      - name: Token for digital-asset members
-        id: da-members
-        if: ${{ env.HAS_MEMBERS_APP == 'true' }}
-        uses: actions/create-github-app-token@v2
-        with:
-          app-id: ${{ secrets.FOLLOWUPS_APP_ID }}
-          private-key: ${{ secrets.FOLLOWUPS_APP_PRIVATE_KEY }}
-          owner: digital-asset
-          permission-members: read
-
-      - name: Token for canton-network members
-        id: cn-members
-        if: ${{ env.HAS_MEMBERS_APP == 'true' }}
-        uses: actions/create-github-app-token@v2
-        with:
-          app-id: ${{ secrets.FOLLOWUPS_APP_ID }}
-          private-key: ${{ secrets.FOLLOWUPS_APP_PRIVATE_KEY }}
-          owner: canton-network
-          permission-members: read
-
       # Scheduled runs stay dry until the FOLLOWUPS_APPLY repository variable is
       # set to "true", so the policy can be observed in logs before it acts.
       - name: Manage follow-ups
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ORG_MEMBERS_TOKEN_DIGITAL_ASSET: ${{ steps.da-members.outputs.token }}
-          ORG_MEMBERS_TOKEN_CANTON_NETWORK: ${{ steps.cn-members.outputs.token }}
           APPLY: ${{ inputs.apply || vars.FOLLOWUPS_APPLY == 'true' }}
         run: |
           args=(--repo "$GITHUB_REPOSITORY")

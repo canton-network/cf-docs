@@ -58,7 +58,6 @@ def pr(**overrides: object) -> object:
         "url": "https://github.com/canton-network/cf-docs/pull/1",
         "created_at": CREATED,
         "labels": set(),
-        "author_is_employee": False,
         "requested_reviewers": ["reviewer"],
         "activities": [by_author(1)],
     }
@@ -75,7 +74,6 @@ def issue(**overrides: object) -> object:
         "url": "https://github.com/canton-network/cf-docs/issues/2",
         "created_at": CREATED,
         "labels": set(),
-        "author_is_employee": False,
         "activities": [by_author(1)],
     }
     fields.update(overrides)
@@ -150,6 +148,23 @@ def test_resolved_conflict_clears_label(config) -> None:
     assert plan.add_labels == {mf.LABEL_AWAITING_REVIEW}
 
 
+def test_unknown_mergeability_holds_nudges_and_closure(config) -> None:
+    # The PR may conflict once GitHub finishes recomputing; don't nudge yet.
+    waiting = mf.plan_open(pr(conflict=None), config, at(10))
+    assert waiting.add_labels == {mf.LABEL_AWAITING_REVIEW}
+    assert not waiting.comments
+    assert not waiting.notifications
+
+    stale = pr(
+        conflict=None,
+        activities=[by_author(1), team(2)],
+        labels={mf.LABEL_AWAITING_AUTHOR},
+        markers=[mf.Marker(mf.MARKER_STALE_WARNING, at(11))],
+    )
+    assert not mf.plan_open(stale, config, at(16)).close
+    assert mf.plan_open(pr(**{**vars(stale), "conflict": False}), config, at(16)).close
+
+
 def test_unknown_mergeability_keeps_existing_conflict_state(config) -> None:
     item = pr(
         conflict=None,
@@ -200,11 +215,11 @@ DOCS_TEAM_FEEDBACK = [
         {"draft": True, "activities": FEEDBACK},
         {"labels": {"on-hold"}, "activities": FEEDBACK},
         {"author": "shreyas-da", "activities": DOCS_TEAM_FEEDBACK},
-        {"author_is_employee": True, "activities": FEEDBACK},
-        {"author_is_employee": None, "activities": FEEDBACK},
+        {"author": "richardkapolnai-da", "activities": FEEDBACK},
+        {"author": "coldice", "activities": FEEDBACK},
         {"requested_reviewers": [], "conflict": True},
     ],
-    ids=["draft", "exempt-label", "docs-team", "employee", "membership-unknown", "no-sme"],
+    ids=["draft", "exempt-label", "docs-team", "da-login", "allowlisted", "no-sme"],
 )
 def test_close_exemptions(config, overrides) -> None:
     plan = mf.plan_open(pr(**overrides), config, at(30))
@@ -308,12 +323,21 @@ def test_pull_activities_attribute_commits_to_their_authors() -> None:
     ]
 
 
-def test_issue_awaits_author_only_when_labeled(config) -> None:
-    unlabeled = issue(activities=[by_author(1), team(2)])
-    assert mf.plan_open(unlabeled, config, at(3)).add_labels == {mf.LABEL_AWAITING_REVIEW}
+def test_issue_team_feedback_awaits_author_automatically(config) -> None:
+    item = issue(activities=[by_author(1), team(2)])
+    assert mf.plan_open(item, config, at(3)).add_labels == {mf.LABEL_AWAITING_AUTHOR}
 
+    labeled = issue(activities=[by_author(1), team(2)], labels={mf.LABEL_AWAITING_AUTHOR})
+    assert markers(mf.plan_open(labeled, config, at(11))) == [mf.MARKER_STALE_WARNING]
+
+    answered = issue(activities=[team(2), by_author(3)], labels={mf.LABEL_AWAITING_AUTHOR})
+    assert mf.plan_open(answered, config, at(4)).add_labels == {mf.LABEL_AWAITING_REVIEW}
+
+
+def test_issue_manual_label_awaits_author(config) -> None:
+    # No team comment: the label alone hands the issue to its author.
     labeled = issue(
-        activities=[by_author(1), team(2)],
+        activities=[by_author(1)],
         labels={mf.LABEL_AWAITING_AUTHOR},
         awaiting_author_labeled_at=at(2),
     )
@@ -417,73 +441,21 @@ def test_team_comment_pinging_reviewer_keeps_pr_awaiting_review(config) -> None:
     }
 
 
-def test_da_style_login_is_not_proof_of_employment(config) -> None:
-    # Usernames are self-chosen, so only org membership exempts an author.
-    item = pr(
-        author="mallory-da",
-        activities=[mf.Activity("mallory-da", at(1), is_team=False, is_feedback=False), team(2)],
-        labels={mf.LABEL_AWAITING_AUTHOR},
-        markers=[mf.Marker(mf.MARKER_STALE_WARNING, at(11))],
-    )
-    assert mf.plan_open(item, config, at(16)).close
+def test_employee_logins(config) -> None:
+    assert mf.is_employee_login("JoaoSa-DA", config)
+    assert mf.is_employee_login("jatinp26", config)
+    # DA-style names without the -da suffix need an explicit allowlist entry.
+    assert mf.is_employee_login("mziolekda", config)
+    assert not mf.is_employee_login("angelol", config)
+    assert not mf.is_employee_login("someoneda", config)
 
 
-class StubMembership(mf.OrgMembership):
-    """Answers membership checks from a table instead of the GitHub API."""
-
-    def __init__(self, table: dict[tuple[str, str], bool | None]) -> None:
-        super().__init__(
-            ("digital-asset", "canton-network"),
-            {"digital-asset": "t", "canton-network": "t"},
-        )
-        self.table = table
-        self.calls: list[tuple[str, str]] = []
-
-    def _check(self, org: str, login: str) -> bool | None:
-        self.calls.append((org, login))
-        return self.table.get((org, login), False)
-
-
-def test_membership_in_either_org_counts() -> None:
-    membership = StubMembership(
-        {("digital-asset", "richardkapolnai-da"): True, ("canton-network", "Jatinp26"): True}
-    )
-    assert membership.is_member("richardkapolnai-da") is True
-    assert membership.is_member("Jatinp26") is True
-    assert membership.is_member("angelol") is False
-
-
-def test_membership_is_unknown_when_any_org_cannot_answer() -> None:
-    membership = StubMembership({("canton-network", "someone"): None})
-    assert membership.is_member("someone") is None
-
-
-def test_membership_is_cached_per_login() -> None:
-    membership = StubMembership({})
-    membership.is_member("angelol")
-    membership.is_member("ANGELOL")
-    assert membership.calls == [("digital-asset", "angelol"), ("canton-network", "angelol")]
-
-
-def test_missing_token_makes_membership_unknown(capsys) -> None:
-    membership = mf.OrgMembership(("digital-asset",), {})
-    assert membership.is_member("anyone") is None
-    assert "no members token for digital-asset" in capsys.readouterr().err
-
-
-def test_team_uses_membership_over_hidden_association() -> None:
+def test_team_member_uses_login_rule_when_association_is_hidden(config) -> None:
     # The Actions token sees private org members as CONTRIBUTOR.
-    membership = StubMembership({("digital-asset", "thibault-da"): True})
-    assert membership.is_team("thibault-da", "CONTRIBUTOR")
-    assert membership.is_team("8bitpal", "COLLABORATOR")
-    assert not membership.is_team("angelol", "NONE")
-
-
-def test_tokens_from_env(monkeypatch) -> None:
-    monkeypatch.setenv("ORG_MEMBERS_TOKEN_DIGITAL_ASSET", "da")
-    monkeypatch.setenv("ORG_MEMBERS_TOKEN", "fallback")
-    membership = mf.OrgMembership.from_env(("digital-asset", "canton-network"))
-    assert membership.tokens == {"digital-asset": "da", "canton-network": "fallback"}
+    assert mf.is_team_member("thibault-da", "CONTRIBUTOR", config)
+    assert mf.is_team_member("coldice", "CONTRIBUTOR", config)
+    assert mf.is_team_member("8bitpal", "COLLABORATOR", config)
+    assert not mf.is_team_member("angelol", "NONE", config)
 
 
 def test_slack_payload_links_and_escapes_items() -> None:
@@ -513,8 +485,9 @@ class FakeGitHub:
 
     repo = "canton-network/cf-docs"
 
-    def __init__(self) -> None:
+    def __init__(self, reviewers: list[str] | None = None) -> None:
         self.writes: list[tuple[str, str]] = []
+        self.reviewers = reviewers or []
 
     def ensure_labels(self) -> None:
         pass
@@ -539,7 +512,12 @@ class FakeGitHub:
 
     def get(self, path: str, params: dict | None = None) -> dict:
         assert path == "/pulls/1"
-        return {"draft": False, "requested_reviewers": [], "mergeable": True, "mergeable_state": "clean"}
+        return {
+            "draft": False,
+            "requested_reviewers": [{"login": name} for name in self.reviewers],
+            "mergeable": True,
+            "mergeable_state": "clean",
+        }
 
     def write(self, method: str, path: str, payload: object = None) -> None:
         self.writes.append((method, path))
@@ -549,12 +527,25 @@ def test_run_writes_slack_payload_only_when_alerts_exist(config, tmp_path) -> No
     github = FakeGitHub()
     slack = tmp_path / "slack.json"
 
-    membership = mf.OrgMembership((), {}, known={"contrib": False})
-    assert mf.run(github, config, at(3), membership=membership, slack_path=slack) == 0
+    assert mf.run(github, config, at(3), slack_path=slack) == 0
     assert not slack.exists()
 
-    assert mf.run(github, config, at(10), membership=membership, slack_path=slack) == 0
+    assert mf.run(github, config, at(10), slack_path=slack) == 0
     payload = json.loads(slack.read_text())
     assert "PR #1: Fix it" in payload["text"]
     assert "needs a reviewer" in payload["text"]
     assert ("POST", "/issues/1/labels") in github.writes
+
+
+def test_manual_reviewer_nudge_suppresses_bot_nudge(config) -> None:
+    # One-off for cf-docs#1148: a human already chased the reviewer.
+    assert config.manual_reviewer_nudges[1148] == datetime(2026, 10, 1, 16, 34, 32, tzinfo=UTC)
+
+    github = FakeGitHub(reviewers=["reviewer"])
+    assert mf.run(github, config, at(10)) == 0
+    assert ("POST", "/issues/1/comments") in github.writes
+
+    suppressed = mf.Config(**{**vars(config), "manual_reviewer_nudges": {1: at(9)}})
+    github = FakeGitHub(reviewers=["reviewer"])
+    assert mf.run(github, suppressed, at(10)) == 0
+    assert ("POST", "/issues/1/comments") not in github.writes
