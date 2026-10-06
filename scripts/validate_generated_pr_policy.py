@@ -127,13 +127,35 @@ def pr_metadata(*, pr_number: str, repository: str) -> dict[str, Any]:
             "--repo",
             repository,
             "--json",
-            "author,baseRefName,headRefName,headRefOid,isDraft,state",
+            "author,baseRefName,changedFiles,headRefName,headRefOid,isDraft,state",
         )
     )
 
 
-def pr_changed_files(*, pr_number: str, repository: str) -> list[str]:
-    return run_gh_lines(("pr", "diff", pr_number, "--repo", repository, "--name-only"))
+def pr_changed_files(*, pr_number: str, repository: str, expected_count: int) -> list[str]:
+    # `gh pr diff --name-only` fetches the full diff, which GitHub refuses above 20,000 lines.
+    # The files endpoint has no line limit but stops listing at 3,000 files, so fail closed
+    # when the listing does not cover every changed file.
+    rows = run_gh_lines(
+        (
+            "api",
+            "--paginate",
+            f"repos/{repository}/pulls/{pr_number}/files",
+            "--jq",
+            '.[] | [.filename, .previous_filename // ""] | @tsv',
+        )
+    )
+    if len(rows) != expected_count:
+        raise RuntimeError(
+            f"GitHub listed {len(rows)} changed files for PR #{pr_number}, expected {expected_count}"
+        )
+    paths: list[str] = []
+    for row in rows:
+        filename, _, previous_filename = row.partition("\t")
+        paths.append(filename)
+        if previous_filename:
+            paths.append(previous_filename)
+    return paths
 
 
 def parse_args() -> argparse.Namespace:
@@ -161,10 +183,15 @@ def main() -> int:
         head_sha=args.head_sha,
         expected_author=args.expected_author,
     )
+    metadata = pr_metadata(pr_number=args.pr_number, repository=args.repository)
     errors = validate_policy(
         policy_input=policy_input,
-        pr_metadata=pr_metadata(pr_number=args.pr_number, repository=args.repository),
-        changed_files=pr_changed_files(pr_number=args.pr_number, repository=args.repository),
+        pr_metadata=metadata,
+        changed_files=pr_changed_files(
+            pr_number=args.pr_number,
+            repository=args.repository,
+            expected_count=metadata["changedFiles"],
+        ),
     )
     if errors:
         for error in errors:
