@@ -13,12 +13,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Sequence
 
+import canton_release_reference
 from generated_reference_sources import canton_release_bundles
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SOURCE_CONFIG = REPO_ROOT / "config" / "x2mdx" / "ledger-api" / "source-artifacts.json"
-DEFAULT_CANTON_REPO_DIR = canton_release_bundles.DEFAULT_REPO_DIR
-DEFAULT_CANTON_REMOTE = canton_release_bundles.DEFAULT_CANTON_REMOTE
+DEFAULT_RELEASE_REPO = canton_release_reference.DEFAULT_RELEASE_REPO
+# Every published release from this version onward gets a page, across all release lines.
+DEFAULT_MIN_VERSION = "3.5.0"
 DOCS_MAIN = REPO_ROOT / "docs-main"
 DEFAULT_RELEASE_INDEX = DOCS_MAIN / "global-synchronizer" / "release-notes" / "canton.mdx"
 DEFAULT_RELEASE_DIR = DOCS_MAIN / "global-synchronizer" / "release-notes" / "canton-releases"
@@ -70,23 +72,49 @@ class PageUpdate:
     changed: bool
 
 
+def published_release_versions(*, release_repo: str) -> tuple[Version, ...]:
+    """Return stable versions with a published, non-prerelease GitHub release.
+
+    A tag or a public bundle alone does not count as a release.
+    """
+    versions: set[Version] = set()
+    page = 1
+    while True:
+        releases = canton_release_reference.github_api_json(
+            f"repos/{release_repo}/releases?per_page=100&page={page}"
+        )
+        if not isinstance(releases, list):
+            raise ValueError(f"Expected a list of GitHub releases for {release_repo}")
+        if not releases:
+            break
+        for release in releases:
+            if not isinstance(release, dict) or release.get("draft") or release.get("prerelease"):
+                continue
+            tag = release.get("tag_name")
+            match = canton_release_reference.STABLE_TAG_RE.fullmatch(tag) if isinstance(tag, str) else None
+            if match is not None:
+                versions.add(Version.parse(match.group("version")))
+        page += 1
+    return tuple(sorted(versions))
+
+
 def release_note_sources(
     *,
     source_config_path: Path,
-    canton_repo_dir: Path,
-    canton_remote: str,
+    release_repo: str,
+    min_version: Version,
     version_prefix: str | None,
 ) -> tuple[ReleaseNoteSource, ...]:
     source_config = canton_release_bundles.parse_source_config(source_config_path)
-    selected_prefix = version_prefix or source_config.publish_version
-    versions = canton_release_bundles.public_canton_bundle_versions(
-        source_config,
-        docs_version=selected_prefix,
-        repo_dir=canton_repo_dir,
-        remote=canton_remote,
+    versions = tuple(
+        str(version)
+        for version in published_release_versions(release_repo=release_repo)
+        if version >= min_version
+        and (version_prefix is None or str(version).startswith(f"{version_prefix}."))
+        and canton_release_bundles.release_bundle_exists(source_config, canton_version=str(version))
     )
     if not versions:
-        raise RuntimeError(f"No public Canton release bundles found for release line {selected_prefix}")
+        raise RuntimeError(f"No published Canton releases with public bundles found from {min_version}")
     return tuple(
         ReleaseNoteSource(
             version=Version.parse(version),
@@ -327,8 +355,8 @@ def update_release_page(
     legacy_release_dir: Path,
     docs_json: Path,
     source_config_path: Path,
-    canton_repo_dir: Path,
-    canton_remote: str,
+    release_repo: str,
+    min_version: Version,
     version_prefix: str | None,
     dry_run: bool,
 ) -> PageUpdate:
@@ -337,8 +365,8 @@ def update_release_page(
     previous_versions = release_versions(previous_text)
     sources = release_note_sources(
         source_config_path=source_config_path,
-        canton_repo_dir=canton_repo_dir,
-        canton_remote=canton_remote,
+        release_repo=release_repo,
+        min_version=min_version,
         version_prefix=version_prefix,
     )
     missing_sources = tuple(source for source in sources if not release_page_path(release_dir, source).exists())
@@ -365,11 +393,16 @@ def update_release_page(
 def parse_args(argv: Iterable[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Update the published Canton release-note pages from release bundles.")
     parser.add_argument("--source-config", type=Path, default=DEFAULT_SOURCE_CONFIG)
-    parser.add_argument("--canton-repo-dir", type=Path, default=DEFAULT_CANTON_REPO_DIR)
-    parser.add_argument("--canton-remote", default=DEFAULT_CANTON_REMOTE)
+    parser.add_argument("--release-repo", default=DEFAULT_RELEASE_REPO)
+    parser.add_argument(
+        "--min-version",
+        type=Version.parse,
+        default=Version.parse(DEFAULT_MIN_VERSION),
+        help="Oldest published Canton release to include.",
+    )
     parser.add_argument(
         "--version-prefix",
-        help="Restrict source selection to a release line such as 3.5. Defaults to the configured publish line.",
+        help="Restrict source selection to a release line such as 3.5. Defaults to all release lines.",
     )
     parser.add_argument("--release-index", type=Path, default=DEFAULT_RELEASE_INDEX)
     parser.add_argument("--release-dir", type=Path, default=DEFAULT_RELEASE_DIR)
@@ -389,8 +422,8 @@ def main(argv: Iterable[str] = sys.argv[1:]) -> int:
         legacy_release_dir=args.legacy_release_dir,
         docs_json=args.docs_json,
         source_config_path=args.source_config,
-        canton_repo_dir=args.canton_repo_dir,
-        canton_remote=args.canton_remote,
+        release_repo=args.release_repo,
+        min_version=args.min_version,
         version_prefix=args.version_prefix,
         dry_run=args.dry_run,
     )

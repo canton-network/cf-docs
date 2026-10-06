@@ -529,7 +529,7 @@ UPDATE_TARGETS = (
         branch="release-notes/canton/update",
         description=(
             "Updates the published Canton release-note pages from the `RELEASE-NOTES.md` "
-            "files in stable public Canton release bundles."
+            "files in the public bundles of published Canton GitHub releases."
         ),
         generate_commands=(nix_develop_command("npm run update:canton-release-notes"),),
         paths=(
