@@ -152,3 +152,14 @@ LSU requires deployment changes for super validators. Concretely:
 4. When using DABFT as the successor node, further changes will be required. Most notably the cometbft node goes away as DABFT runs as part of the sequencer pod. The sequencer pod and SV app will require some additional configuration. Details of this will be added later.
 
 {/* COPIED_END */}
+
+## Checking for a scheduled or in-progress LSU
+
+Any validator operator can check whether an LSU is scheduled or a roll-forward LSU is in progress without SV access and without restarting any node, by querying the public Scan API:
+
+- [`GET /v0/lsu`](/reference/splice-scan-api/get-v0lsu) returns the next scheduled LSU's `topologyFreezeTime`, `upgradeTime`, and `successorPhysicalSynchronizerId`. If no LSU is currently scheduled, the `lsu` field is absent from the response.
+- [`GET /v0/roll-forward-lsu`](/reference/splice-scan-api/get-v0roll-forward-lsu) returns the same kind of information for a roll-forward LSU in progress (see Disaster Recovery through Roll-Forward LSU above), via `upgradeTime`, `currentPhysicalSynchronizerId`, and `successorPhysicalSynchronizerId`. If no roll-forward LSU is in progress, the `rollForwardLsu` field is absent.
+
+<Note>
+Cancelling a scheduled LSU is a Super Validator operation that requires a threshold vote (see LSU Cancellation above) and is only possible between the topology freeze time and the upgrade time. Validators cannot cancel an LSU themselves. If an LSU looks stuck or is not completing outside that window, the documented recovery path is Disaster Recovery through Roll-Forward LSU above, not restarting the node.
+</Note>
