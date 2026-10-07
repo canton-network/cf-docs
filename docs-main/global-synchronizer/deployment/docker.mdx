@@ -7,7 +7,7 @@ description: "Obtain and run Canton Docker images"
 
 # Obtaining the Docker Images
 
-(See Install With Docker for instructions on running the Canton Docker images.)
+(See [Install With Docker](#work-with-the-docker-containers) for instructions on running the Canton Docker images.)
 
 You can download the Canton docker images using:
 
@@ -22,17 +22,56 @@ docker pull \
     europe-docker.pkg.dev/da-images/public/docker/canton-mediator:3.5.19
 ```
 
+Download Canton docker images by network:
+
+<Tabs>
+<Tab title="DevNet">
+```bash
+docker pull \
+    europe-docker.pkg.dev/da-images/public/docker/canton-base:devnet
+docker pull \
+    europe-docker.pkg.dev/da-images/public/docker/canton-participant:devnet
+docker pull \
+    europe-docker.pkg.dev/da-images/public/docker/canton-sequencer:devnet
+docker pull \
+    europe-docker.pkg.dev/da-images/public/docker/canton-mediator:devnet
+```
+</Tab>
+<Tab title="TestNet">
+```bash
+docker pull \
+    europe-docker.pkg.dev/da-images/public/docker/canton-base:testnet
+docker pull \
+    europe-docker.pkg.dev/da-images/public/docker/canton-participant:testnet
+docker pull \
+    europe-docker.pkg.dev/da-images/public/docker/canton-sequencer:testnet
+docker pull \
+    europe-docker.pkg.dev/da-images/public/docker/canton-mediator:testnet
+```
+</Tab>
+<Tab title="MainNet">
+```bash
+docker pull \
+    europe-docker.pkg.dev/da-images/public/docker/canton-base:mainnet
+docker pull \
+    europe-docker.pkg.dev/da-images/public/docker/canton-participant:mainnet
+docker pull \
+    europe-docker.pkg.dev/da-images/public/docker/canton-sequencer:mainnet
+docker pull \
+    europe-docker.pkg.dev/da-images/public/docker/canton-mediator:mainnet
+```
+</Tab>
+</Tabs>
+
 Visit `https://europe-docker.pkg.dev/v2/da-images/public/docker/canton-participant/tags/list` to see available tags.
 
-These docker images are published starting with Canton version 3.4.0.
+These docker images are published starting with Canton version 3.4.8.
 
 Snapshot releases are available at `/da-images/public-unstable/docker/` instead of `/da-images/public/docker/`, but they are not recommended for any production usage and they are periodically cleaned up.
 
 {/* COPIED_END */}
 
 {/* COPIED_START source="docs-website:docs/replicated/canton/3.5/participant/howtos/install/docker.rst" hash="2eaa7e6d" */}
-
-Link to howto for downloading docker images. Link to hardware and software requirements. Explain how to run canton from docker.
 
 # Work With the Docker Containers
 
@@ -50,17 +89,17 @@ docker run \
     -e CANTON_PARTICIPANT_POSTGRES_PORT="5432" \
     -v "$(pwd)/bootstrap.sc:/app/bootstrap.sc" \
     --rm -it \
-    europe-docker.pkg.dev/da-images/public-unstable/docker/canton-participant:3.5.0-ad-hoc.20251021.17321.0.v2cdf16447
+    europe-docker.pkg.dev/da-images/public/docker/canton-participant:mainnet
 ```
 
 Note that you'll need a valid postgres instance.
 
-This image requires you to initialize the participant via a bootstrap script. See Manual identity initialization for more details.
+This image requires you to initialize the participant via a bootstrap script. See [Manual identity initialization](/global-synchronizer/deployment/identity-management#initializing-node-identity-manually) for more details.
 
 To see all configuration defaults and possible env vars, run
 
 ```bash
-cid=$(docker create europe-docker.pkg.dev/da-images/public-unstable/docker/canton-participant:3.5.0-ad-hoc.20251021.17321.0.v2cdf1644) && docker cp "$cid":/app/app.conf ./app.conf && docker rm "$cid"
+cid=$(docker create europe-docker.pkg.dev/da-images/public/docker/canton-participant:mainnet) && docker cp "$cid":/app/app.conf ./app.conf && docker rm "$cid"
 cat app.conf
 ```
 
@@ -100,14 +139,16 @@ Dars must be added dynamically. This is done via remote console or the admin API
 To run a participant console with custom configuration:
 
 ```bash
-docker run -e ADDITIONAL_CONFIG="canton.participants.participant1 {
+docker run -e ADDITIONAL_CONFIG="canton.participants.participant {
       storage.type = memory
       admin-api.port = 5012
       ledger-api.port = 5011
       http-ledger-api.server.port = 5013
     }" \
+    -e AUTH_TARGET_AUDIENCE="audience" \
+    -e AUTH_JWKS_URL="fake.com/jwks" \
     --rm -it \
-    europe-docker.pkg.dev/da-images/public-unstable/docker/canton-participant:3.5.0-ad-hoc.20251021.17321.0.v2cdf1644 \
+    europe-docker.pkg.dev/da-images/public/docker/canton-participant:mainnet \
     --console
 ```
 
