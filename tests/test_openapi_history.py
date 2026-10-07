@@ -313,3 +313,27 @@ def test_openapi_report_does_not_carry_a_cancelled_removal_schedule_forward() ->
     item = report.items_by_id()["public.yaml::getStatus"]
     assert item.remove_as_of is None
     assert item.remove_as_of_evidence is None
+
+
+def test_removed_operation_keeps_a_distinct_route_when_path_is_reused() -> None:
+    specs = {
+        "1.0.0": {"paths": {"/same": {"get": operation("old")}}},
+        "2.0.0": {"paths": {"/same": {"get": operation("new")}}},
+    }
+    report = build_openapi_history_report(
+        surface_id="reuse", title="Reuse", configured_scope="Public",
+        scopes=(OpenAPIHistoryScope(id="api", specs_by_version=specs,
+                                   current_routes={("get", "/same"): "/reference/same"}),),
+        comparison_versions=("1.0.0", "2.0.0"), publish_version="2.0.0",
+        source_artifacts=(SourceArtifact("1.0.0", "https://example.com/1"), SourceArtifact("2.0.0", "https://example.com/2")),
+        version_policy=VersionSelectionPolicy.LATEST_SELECTED_RELEASE,
+    )
+    validate_history_report(report)
+    old, new = report.items_by_id()["api::old"], report.items_by_id()["api::new"]
+    assert new.route == "/reference/same"
+    assert old.route.startswith("/reference/same-removed-")
+    assert old.observed_removal == "2.0.0"
+    events = history_events_for_item(old, comparison_versions=report.comparison_versions)
+    assert events[0].kind == HistoryEventKind.REMOVED
+    assert events[0].version == "2.0.0"
+    assert events[0].label == "Removed in"

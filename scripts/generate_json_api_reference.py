@@ -25,6 +25,7 @@ from x2mdx.history.io import write_history_report
 from x2mdx.history.models import SourceArtifact, SurfaceHistoryReport, VersionSelectionPolicy
 from x2mdx.history.validation import validate_history_report
 from x2mdx.output import Page, RawMarkdown
+from x2mdx.openapi.history import filter_dev_openapi_specs
 from x2mdx.openapi import (
     ManualOpenAPIRenderOptions,
     OpenAPIHistoryScope,
@@ -302,7 +303,7 @@ def openapi_navigation_page_refs(
 ) -> list[str]:
     manual_refs = {
         (operation["method"], operation["path"]): operation["page_ref"]
-        for operation in manual_operations
+        for operation in reversed(manual_operations)
     }
     page_refs: list[str] = []
     for page_ref in openapi_operation_page_refs(spec):
@@ -496,9 +497,8 @@ def write_manual_operation_pages(
     manual_operations: list[dict[str, str]],
     history_report: SurfaceHistoryReport,
 ) -> set[Path]:
-    published_spec = specs_by_version[publish_version]
     history_items_by_route = {
-        item.route: item for item in history_report.current_items() if item.route
+        item.route: item for item in history_report.items if item.route
     }
     written_paths: set[Path] = set()
     for operation in manual_operations:
@@ -513,7 +513,7 @@ def write_manual_operation_pages(
             )
         )
         page = render_manual_openapi_operation(
-            spec=published_spec,
+            spec=specs_by_version[history_item.last_seen],
             options=ManualOpenAPIRenderOptions(
                 method=operation["method"],
                 path=operation["path"],
@@ -521,7 +521,7 @@ def write_manual_operation_pages(
                 server=server,
             ),
             history_events=history_events,
-            publish_version=publish_version,
+            publish_version=history_item.last_seen,
         )
         output_path = docs_json_path.parent / f"{operation['page_ref']}.mdx"
         write_page(page, output_path)
@@ -827,11 +827,26 @@ def main() -> int:
         spec_filename="openapi.yaml",
         force_refresh=args.force_refresh,
     )
+    public_specs = filter_dev_openapi_specs(specs_by_version, versions=version_labels,
+                                            publish_version=publish_entry["version"])
+    if public_specs[publish_entry["version"]] != specs_by_version[publish_entry["version"]]:
+        output_spec.write_text(yaml.safe_dump(public_specs[publish_entry["version"]], sort_keys=False))
+        normalize_mintlify_openapi(output_spec)
+    specs_by_version = public_specs
     manual_operations = configured_manual_operations(
         source_config,
         spec=specs_by_version[publish_entry["version"]],
         directory=args.openapi_directory,
     )
+    public_locations = {location for spec in specs_by_version.values()
+                        for location in openapi_operation_identities(spec)}
+    manual_operations = [operation for operation in manual_operations
+                         if (operation["method"], operation["path"]) in public_locations]
+    historical_locations = {
+        (method.lower(), path): "/" + legacy_openapi_operation_page_ref(method=method, path=path, directory=args.openapi_directory)
+        for snapshot in specs_by_version.values()
+        for method, path in (entry.split(" ", 1) for entry in openapi_operation_page_refs(snapshot))
+    }
     history_report = build_openapi_history_report(
         surface_id="json-ledger-api-openapi",
         title="JSON Ledger API OpenAPI",
@@ -840,7 +855,7 @@ def main() -> int:
             OpenAPIHistoryScope(
                 id="json-ledger-api",
                 specs_by_version=specs_by_version,
-                current_routes={
+                current_routes=historical_locations | {
                     (operation["method"].lower(), operation["path"]): (
                         f"/{operation['page_ref']}"
                     )
@@ -867,6 +882,10 @@ def main() -> int:
     history_report_path = Path(args.history_report).resolve()
     write_history_report(history_report_path, history_report)
     print(f"Generated normalized JSON OpenAPI history report: {history_report_path}")
+    for item in history_report.items:
+        if not item.current_present and item.route and item.location:
+            method, path = item.location.split(": ", 1)[1].split(" ", 1)
+            manual_operations.append({"method": method, "path": path, "page_ref": item.route.lstrip("/")})
     manual_page_paths = write_manual_operation_pages(
         docs_json_path=docs_json_path,
         specs_by_version=specs_by_version,
@@ -891,7 +910,7 @@ def main() -> int:
         openapi_page_refs=openapi_navigation_page_refs(
             specs_by_version[publish_entry["version"]],
             manual_operations=manual_operations,
-        ),
+        ) + [item.route.lstrip("/") for item in history_report.items if not item.current_present and item.route],
     )
     has_native_pages = any(
         is_native_openapi_page_ref(page_ref)

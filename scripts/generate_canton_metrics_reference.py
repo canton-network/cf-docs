@@ -4,277 +4,225 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
-import re
-import shutil
-import subprocess
-import sys
-import urllib.request
 from pathlib import Path
-from typing import Any
+import re
+import sys
+from typing import TypedDict
 
+from canton_release_reference import (
+    DEFAULT_RELEASE_REPO,
+    ReleaseAsset,
+    ensure_release_archive,
+    extract_release,
+    resolve_release_asset,
+    run_reference_script,
+)
 from docs_env import ensure_repo_direnv
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_CACHE_DIR = REPO_ROOT / ".internal" / "cache" / "canton-metrics-reference"
-DEFAULT_CANTON_DIR = DEFAULT_CACHE_DIR / "repos" / "canton"
-DEFAULT_OUTPUT = REPO_ROOT / "docs-main" / "global-synchronizer" / "reference" / "canton-metrics.mdx"
-DEFAULT_REMOTE = "https://github.com/digital-asset/canton.git"
-DEFAULT_RELEASE_REPO = "digital-asset/canton"
-METRICS_RST = Path("docs-open/src/sphinx/participant/reference/metrics.rst")
-GENERATED_INCLUDES_DIR = Path("docs-open/target/generated")
-USER_AGENT = "cf-docs-canton-metrics-reference/1.0"
+DEFAULT_CACHE_DIR = REPO_ROOT / ".internal" / "cache" / "canton-release-reference"
+DEFAULT_OUTPUT = (
+    REPO_ROOT / "docs-main" / "global-synchronizer" / "reference" / "canton-metrics.mdx"
+)
+REFERENCE_SCRIPT = REPO_ROOT / "scripts" / "canton_metrics_reference.canton"
+# Canton registers some metrics only on demand; this flag makes it register all of them for docs.
+METRICS_DOCS_ENVIRONMENT = {"GENERATE_METRICS_FOR_DOCS": ""}
+GENERATED_START = "{/* GENERATED_CANTON_METRICS_START */}"
+GENERATED_END = "{/* GENERATED_CANTON_METRICS_END */}"
+NODE_SECTIONS = (
+    ("participant", "Participant Metrics"),
+    ("sequencer", "Sequencer Metrics"),
+    ("mediator", "Mediator Metrics"),
+)
+
+
+class MetricItem(TypedDict):
+    name: str
+    summary: str
+    description: str
+    type: str
+    qualification: str
+    labels: dict[str, str]
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Generate the Canton Metrics MDX page from the latest Canton release docs build."
+        description="Generate the Canton Metrics reference page from a public Canton release binary."
     )
     parser.add_argument("--release-repo", default=DEFAULT_RELEASE_REPO)
-    parser.add_argument("--remote", default=DEFAULT_REMOTE)
     parser.add_argument(
-        "--canton-ref",
-        help="Canton git ref to generate from. Defaults to the latest GitHub release tag.",
+        "--canton-tag",
+        help="Public Canton release tag. Defaults to the latest GitHub release.",
     )
     parser.add_argument("--cache-dir", type=Path, default=DEFAULT_CACHE_DIR)
-    parser.add_argument(
-        "--canton-dir",
-        type=Path,
-        help="Existing or cached Canton checkout. Defaults to <cache-dir>/repos/canton.",
-    )
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument(
-        "--generation-command",
-        nargs="+",
-        default=["sbt", "--batch", "community-app / bundle", "docs-open / generateIncludes"],
-        help=(
-            "Command to run inside the Canton checkout before reading the metrics RST template and generated "
-            "include files. Quote each SBT task when overriding this."
-        ),
+        "--reference-json",
+        type=Path,
+        help="Use previously generated metrics JSON instead of downloading and running a Canton release.",
     )
-    parser.add_argument(
-        "--skip-generation",
-        action="store_true",
-        help="Use already-generated include files in the Canton checkout.",
-    )
-    parser.add_argument(
-        "--force-refresh",
-        action="store_true",
-        help="Delete and reclone the cached Canton checkout before generation.",
-    )
-    parser.add_argument(
-        "--skip-direnv",
-        action="store_true",
-        help="Run the Canton generation command directly instead of through direnv.",
-    )
+    parser.add_argument("--force-refresh", action="store_true")
     return parser.parse_args()
 
 
-def run(command: list[str], *, cwd: Path | None = None, capture: bool = False) -> str:
-    kwargs: dict[str, Any] = {
-        "cwd": str(cwd) if cwd else None,
-        "check": True,
-        "text": True,
-    }
-    if capture:
-        kwargs["stdout"] = subprocess.PIPE
-        kwargs["stderr"] = subprocess.PIPE
-    completed = subprocess.run(command, **kwargs)
-    return completed.stdout.strip() if capture else ""
-
-
-def github_api_json(path: str) -> Any:
-    request = urllib.request.Request(
-        f"https://api.github.com/{path.lstrip('/')}",
-        headers={
-            "Accept": "application/vnd.github+json",
-            "User-Agent": USER_AGENT,
-        },
-    )
-    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
-    if token:
-        request.add_header("Authorization", f"Bearer {token}")
-    with urllib.request.urlopen(request, timeout=180) as response:
-        return json.loads(response.read().decode("utf-8"))
-
-
-def latest_release_tag(release_repo: str) -> str:
-    gh = shutil.which("gh")
-    if gh:
-        try:
-            tag = run(
-                [
-                    gh,
-                    "release",
-                    "view",
-                    "--repo",
-                    release_repo,
-                    "--json",
-                    "tagName",
-                    "--jq",
-                    ".tagName",
-                ],
-                capture=True,
+def load_metric(value: object, *, node: str) -> MetricItem:
+    if not isinstance(value, dict):
+        raise ValueError(f"Expected {node} metric objects in the Canton metrics JSON")
+    fields: dict[str, str] = {}
+    for key in ("name", "summary", "description", "type", "qualification"):
+        field = value.get(key)
+        if not isinstance(field, str):
+            raise ValueError(
+                f"{node} metric {value.get('name')!r} is missing string field {key!r}"
             )
-            if tag:
-                return tag
-        except subprocess.CalledProcessError:
-            pass
-
-    payload = github_api_json(f"repos/{release_repo}/releases/latest")
-    tag = payload.get("tag_name") if isinstance(payload, dict) else None
-    if not isinstance(tag, str) or not tag:
-        raise ValueError(f"Unable to resolve latest release tag for {release_repo}")
-    return tag
-
-
-def checkout_canton_release(*, canton_dir: Path, remote: str, ref: str, force_refresh: bool) -> None:
-    if force_refresh and canton_dir.exists():
-        shutil.rmtree(canton_dir)
-    canton_dir.parent.mkdir(parents=True, exist_ok=True)
-    if not (canton_dir / ".git").exists():
-        run(["git", "clone", remote, str(canton_dir)])
-    run(["git", "fetch", "origin", "--tags", "--prune"], cwd=canton_dir)
-    run(["git", "checkout", "--detach", ref], cwd=canton_dir)
-    run(["git", "reset", "--hard", ref], cwd=canton_dir)
-    run(["git", "clean", "-ffd"], cwd=canton_dir)
+        fields[key] = field
+    labels = value.get("labels")
+    if not isinstance(labels, dict) or not all(
+        isinstance(label, str) and isinstance(description, str)
+        for label, description in labels.items()
+    ):
+        raise ValueError(f"{node} metric {fields['name']!r} has malformed labels")
+    return MetricItem(
+        name=fields["name"],
+        summary=fields["summary"],
+        description=fields["description"],
+        type=fields["type"],
+        qualification=fields["qualification"],
+        labels=dict(labels),
+    )
 
 
-def allow_direnv(canton_dir: Path) -> None:
-    if not (canton_dir / ".envrc").exists() or not shutil.which("direnv"):
-        return
-    run(["direnv", "allow"], cwd=canton_dir)
+def load_metrics(payload: object) -> dict[str, list[MetricItem]]:
+    metrics = payload.get("metrics") if isinstance(payload, dict) else None
+    if not isinstance(metrics, dict):
+        raise ValueError("Canton metrics JSON is missing its metrics object")
+    loaded: dict[str, list[MetricItem]] = {}
+    for node, _ in NODE_SECTIONS:
+        items = metrics.get(node)
+        if not isinstance(items, list) or not items:
+            raise ValueError(f"Canton metrics JSON has no {node} metrics")
+        loaded[node] = [load_metric(item, node=node) for item in items]
+    return loaded
 
 
-def run_generation(*, canton_dir: Path, command: list[str], skip_direnv: bool) -> None:
-    generated = canton_dir / GENERATED_INCLUDES_DIR
-    if generated.exists():
-        shutil.rmtree(generated)
-    generated.mkdir(parents=True, exist_ok=True)
-    command_without_ci = ["env", "-u", "CI", *command]
-    if skip_direnv or not (canton_dir / ".envrc").exists() or not shutil.which("direnv"):
-        run(command_without_ci, cwd=canton_dir)
-        return
-    allow_direnv(canton_dir)
-    run(["direnv", "exec", str(canton_dir), *command_without_ci], cwd=canton_dir)
+def unique_sorted(items: list[MetricItem]) -> list[MetricItem]:
+    """Drop repeated (name, type) registrations and sort by name, as Canton's docs build does."""
+    seen: set[tuple[str, str]] = set()
+    unique: list[MetricItem] = []
+    for item in items:
+        key = (item["name"], item["type"])
+        if key not in seen:
+            seen.add(key)
+            unique.append(item)
+    return sorted(unique, key=lambda item: item["name"])
 
 
-def resolve_generated_includes(template: str, *, generated_dir: Path) -> str:
-    def replace(match: re.Match[str]) -> str:
-        include_name = match.group(1)
-        include_path = generated_dir / include_name
-        if not include_path.is_file():
-            raise FileNotFoundError(f"Expected generated Canton include at {include_path}")
-        return include_path.read_text(encoding="utf-8").rstrip()
-
-    return re.sub(r"^\.\. generatedinclude::\s+(\S+)\s*$", replace, template, flags=re.MULTILINE)
-
-
-def convert_inline(text: str) -> str:
+def mdx_inline(text: str) -> str:
+    text = " ".join(text.split())
     text = re.sub(r"`([^`<]+?) <([^`>]+)>`_", r"[\1](\2)", text)
     text = re.sub(r"``([^`]+)``", r"`\1`", text)
-    text = text.replace("<", r"\<").replace(">", r"\>")
-    return text.rstrip()
+    return (
+        text.replace("<", r"\<")
+        .replace(">", r"\>")
+        .replace("{", r"\{")
+        .replace("}", r"\}")
+    )
 
 
-def escape_heading(text: str) -> str:
-    return convert_inline(text).replace("*", r"\*")
+def render_metric(item: MetricItem) -> list[str]:
+    # Canton marks labelled metrics with a trailing asterisk: they are only exported to Prometheus.
+    title = mdx_inline(item["name"] + ("*" if item["labels"] else "")).replace(
+        "*", r"\*"
+    )
+    lines = [
+        f"### {title}",
+        "",
+        f"> - **Summary**: {mdx_inline(item['summary'])}".rstrip(),
+        f"> - **Description**: {mdx_inline(item['description'])}".rstrip(),
+        f"> - **Type**: {mdx_inline(item['type'])}".rstrip(),
+        f"> - **Qualification**: {mdx_inline(item['qualification'])}".rstrip(),
+    ]
+    if item["labels"]:
+        lines.append("> - **Labels**:")
+        lines.extend(
+            f">   - **{label}**: {mdx_inline(description)}".rstrip()
+            for label, description in item["labels"].items()
+        )
+    return lines
 
 
-def convert_rst_to_mdx(rst: str, *, source_ref: str) -> str:
-    if "generatedinclude::" in rst:
-        raise ValueError("Metrics RST still contains generatedinclude directives; run the Canton docs generator first.")
-
-    output: list[str] = [
-        "---",
-        'title: "Canton Metrics"',
-        'description: "Canton node metrics exported for Prometheus scraping."',
-        "---",
+def render_generated_block(
+    metrics: dict[str, list[MetricItem]], *, asset: ReleaseAsset
+) -> str:
+    sections = {node: unique_sorted(metrics[node]) for node, _ in NODE_SECTIONS}
+    counts = " ".join(
+        f'{node}_metric_count="{len(sections[node])}"' for node, _ in NODE_SECTIONS
+    )
+    lines = [
+        GENERATED_START,
         "",
         (
             "{/* GENERATED_FROM "
-            f'source="digital-asset/canton" ref="{source_ref}" '
-            f'path="{METRICS_RST.as_posix()}" */}}'
+            f'source="{DEFAULT_RELEASE_REPO}" ref="{asset.tag}" asset="{asset.name}" '
+            f'digest="{asset.digest}" {counts} */}}'
         ),
-        "",
     ]
+    for node, heading in NODE_SECTIONS:
+        lines.extend(["", f"## {heading}"])
+        for item in sections[node]:
+            lines.append("")
+            lines.extend(render_metric(item))
+    lines.extend(["", GENERATED_END])
+    return "\n".join(lines)
 
-    lines = rst.splitlines()
-    index = 0
-    while index < len(lines):
-        line = lines[index].rstrip()
-        stripped = line.strip()
 
-        if not stripped:
-            output.append("")
-            index += 1
-            continue
-
-        if stripped == "..":
-            index += 1
-            while index < len(lines) and (not lines[index].strip() or lines[index].startswith((" ", "\t"))):
-                index += 1
-            continue
-
-        if stripped.startswith(".. "):
-            index += 1
-            continue
-
-        if index + 1 < len(lines):
-            underline = lines[index + 1].strip()
-            if underline and len(underline) >= len(stripped) and set(underline) <= {"-", "~", "^"}:
-                marker = underline[0]
-                level = {"-": "#", "~": "##", "^": "###"}[marker]
-                output.append(f"{level} {escape_heading(stripped)}")
-                output.append("")
-                index += 2
-                continue
-
-        bullet = re.match(r"^(\s*)\*\s+(.*)$", line)
-        if bullet:
-            indent = len(bullet.group(1).replace("\t", "    "))
-            nested = "  " if indent >= 8 else ""
-            output.append(f"> {nested}- {convert_inline(bullet.group(2))}")
-            index += 1
-            continue
-
-        output.append(convert_inline(stripped))
-        index += 1
-
-    content = "\n".join(output)
-    content = re.sub(r"\n{3,}", "\n\n", content)
-    return content.rstrip() + "\n"
+def replace_generated_block(page: str, block: str) -> str:
+    start = page.find(GENERATED_START)
+    end = page.find(GENERATED_END, start)
+    if start == -1 or end == -1:
+        raise ValueError(
+            f"Canton metrics page is missing its {GENERATED_START} and {GENERATED_END} markers"
+        )
+    end += len(GENERATED_END)
+    return page[:start].rstrip() + "\n\n" + block + "\n\n" + page[end:].lstrip()
 
 
 def main() -> int:
+    ensure_repo_direnv(
+        repo_root=REPO_ROOT, script_path=Path(__file__).resolve(), argv=sys.argv[1:]
+    )
     args = parse_args()
-    ensure_repo_direnv(repo_root=REPO_ROOT, script_path=Path(__file__).resolve(), argv=sys.argv[1:])
-    if args.canton_dir is None:
-        args.canton_dir = args.cache_dir / "repos" / "canton"
+    asset = resolve_release_asset(release_repo=args.release_repo, tag=args.canton_tag)
+    if args.reference_json:
+        payload = json.loads(args.reference_json.read_text(encoding="utf-8"))
+    else:
+        archive_path = ensure_release_archive(
+            asset=asset, cache_dir=args.cache_dir, force_refresh=args.force_refresh
+        )
+        distribution_root = extract_release(
+            archive_path=archive_path,
+            asset=asset,
+            cache_dir=args.cache_dir,
+            force_refresh=args.force_refresh,
+        )
+        payload = run_reference_script(
+            distribution_root=distribution_root,
+            script_path=REFERENCE_SCRIPT,
+            cache_dir=args.cache_dir,
+            cache_namespace="metrics",
+            asset=asset,
+            force_refresh=args.force_refresh,
+            environment_overrides=METRICS_DOCS_ENVIRONMENT,
+        )
 
-    source_ref = args.canton_ref or latest_release_tag(args.release_repo)
-    checkout_canton_release(
-        canton_dir=args.canton_dir,
-        remote=args.remote,
-        ref=source_ref,
-        force_refresh=args.force_refresh,
+    metrics = load_metrics(payload)
+    page = args.output.read_text(encoding="utf-8")
+    args.output.write_text(
+        replace_generated_block(page, render_generated_block(metrics, asset=asset)),
+        encoding="utf-8",
     )
-    if not args.skip_generation:
-        run_generation(canton_dir=args.canton_dir, command=args.generation_command, skip_direnv=args.skip_direnv)
-
-    metrics_rst = args.canton_dir / METRICS_RST
-    if not metrics_rst.is_file():
-        raise FileNotFoundError(f"Expected Canton metrics page template at {metrics_rst}")
-
-    resolved_rst = resolve_generated_includes(
-        metrics_rst.read_text(encoding="utf-8"),
-        generated_dir=args.canton_dir / GENERATED_INCLUDES_DIR,
-    )
-    mdx = convert_rst_to_mdx(resolved_rst, source_ref=source_ref)
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(mdx, encoding="utf-8")
-    print(f"Generated {args.output} from Canton {source_ref}")
+    print(f"Generated {args.output} from Canton {asset.tag}")
     return 0
 
 

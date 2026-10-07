@@ -45,7 +45,7 @@ def mdx_title(path: Path) -> str:
 
 def _protobuf_service_name(path: Path) -> str:
     text = path.read_text(encoding="utf-8", errors="replace")
-    match = re.search(r"<dt>Service</dt>\s*<dd>([^<]+)</dd>", text)
+    match = re.search(r"(?:<dt>Service</dt>\s*<dd>|<span class=\"x2mdx-ref-meta-label\">Service</span>\s*<span class=\"x2mdx-ref-meta-value\">)([^<]+)</(?:dd|span)>", text)
     if match:
         return match.group(1)
     return path.parent.name
@@ -53,7 +53,7 @@ def _protobuf_service_name(path: Path) -> str:
 
 def _asyncapi_channel_name(path: Path) -> str:
     text = path.read_text(encoding="utf-8", errors="replace")
-    match = re.search(r"<dt>Channel</dt>\s*<dd>([^<]+)</dd>", text)
+    match = re.search(r"(?:<dt>Channel</dt>\s*<dd>|<span class=\"x2mdx-ref-meta-label\">Channel</span>\s*<span class=\"x2mdx-ref-meta-value\">)([^<]+)</(?:dd|span)>", text)
     if match:
         return match.group(1)
     match = re.search(r'<h1 class="x2mdx-ref-title">([^<]+)</h1>', text)

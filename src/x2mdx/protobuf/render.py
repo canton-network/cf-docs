@@ -9,11 +9,13 @@ from functools import cmp_to_key
 from pathlib import Path
 from typing import Any
 
-from x2mdx.history.events import history_events_for_item
+from x2mdx.protobuf.lifecycle import entity_lifecycle_state
+from x2mdx.history.events import history_event_anchor, history_events_for_item
 from x2mdx.history.models import HistoryEvent, HistoryEventKind, HistoryItem, SurfaceHistoryReport
 from x2mdx.history.versioning import compare_versions
 from x2mdx.reference_pages import (
     ReferenceBadge,
+    lifecycle_state_badges,
     ReferenceBreadcrumb,
     ReferenceCard,
     ReferenceChange,
@@ -86,6 +88,7 @@ def package_group_sort_key(package_name: str, *, has_services: bool) -> tuple[in
 
 def lifecycle_badges(
     *,
+    state: str | None = None,
     introduced: str | None = None,
     changed: str | None = None,
     removed: str | None = None,
@@ -94,23 +97,25 @@ def lifecycle_badges(
     comparison_versions: tuple[str, ...] = (),
     linked: bool = True,
 ) -> list[ReferenceBadge]:
+    state_badges = lifecycle_state_badges(state)
     if item is not None:
-        return reference_badges_for_history_item(
+        badges = reference_badges_for_history_item(
             item,
             kind_label="gRPC",
             comparison_versions=comparison_versions,
             linked=linked,
         )
+        return lifecycle_state_badges(state, existing=badges) + badges
     if events is not None:
         return reference_badges_for_history_events(events, kind_label="gRPC", linked=linked)
     if introduced is None:
-        return [ReferenceBadge("gRPC", tone="protocol")]
+        return state_badges + [ReferenceBadge("gRPC", tone="protocol")]
     badges = [ReferenceBadge("gRPC", tone="protocol"), ReferenceBadge(f"Since {introduced}", tone="added")]
     if changed and changed != introduced:
         badges.append(ReferenceBadge(f"Changed {changed}", tone="changed"))
     if removed:
-        badges.append(ReferenceBadge(f"Removed {removed}", tone="removed"))
-    return badges
+        badges.append(ReferenceBadge(f"Removed in {removed}", tone="removed"))
+    return state_badges + badges
 
 
 def aggregate_history_events(
@@ -131,7 +136,7 @@ def aggregate_history_events(
                 combined[key] = HistoryEvent(
                     kind=event.kind,
                     version=event.version,
-                    label=event.label,
+                    label="Methods removed in" if event.kind == HistoryEventKind.REMOVED else event.label,
                     details=details,
                     evidence=event.evidence,
                 )
@@ -145,6 +150,7 @@ def aggregate_history_events(
                 )
 
     priority = {
+        HistoryEventKind.REMOVED: -1,
         HistoryEventKind.REMOVE_AS_OF: 0,
         HistoryEventKind.DEPRECATED: 1,
         HistoryEventKind.CHANGED: 2,
@@ -203,8 +209,25 @@ def endpoint_snapshot_map(report: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return snapshots
 
 
+def retained_snapshot(report: dict[str, Any]) -> dict[str, Any]:
+    """Last known definitions, used only for historical browsing, not source specs."""
+    import copy
+
+    snapshot = copy.deepcopy(report["latestSnapshot"])
+    for release in reversed(report["releases"]):
+        for category in ("files", "services", "endpoints", "messages", "fields", "enums", "enumValues"):
+            for identity, definition in release["snapshot"][category].items():
+                snapshot[category].setdefault(identity, copy.deepcopy(definition))
+    for service in snapshot["services"].values():
+        service["endpointIds"] = sorted(
+            identity for identity, endpoint in snapshot["endpoints"].items()
+            if endpoint["package"] == service["package"] and endpoint["service"] == service["name"]
+        )
+    return snapshot
+
+
 def build_package_docs(report: dict[str, Any]) -> list[dict[str, Any]]:
-    latest = report["latestSnapshot"]
+    latest = retained_snapshot(report)
     package_docs = {package["package"]: dict(package) for package in latest["packages"]}
     current_services = latest["services"]
     current_endpoints = latest["endpoints"]
@@ -264,6 +287,17 @@ def build_package_docs(report: dict[str, Any]) -> list[dict[str, Any]]:
     )
 
 
+def lifecycle_meta_items(entity: dict[str, Any]) -> list[ReferenceMetaItem]:
+    state = entity_lifecycle_state(entity)
+    return [ReferenceMetaItem("Lifecycle", state.title())] if state else []
+
+
+def lifecycle_description(entity: dict[str, Any]) -> str:
+    description = str(entity.get("description") or "")
+    state = entity_lifecycle_state(entity)
+    return "\n\n".join(filter(None, [f"Lifecycle: {state.title()}" if state else "", description]))
+
+
 def field_type_label(field: dict[str, Any]) -> str:
     if field.get("map"):
         base = "map"
@@ -301,14 +335,14 @@ def message_schema(
         ReferenceSchema(
             name=message["id"],
             summary=f"{len(message['fieldIds'])} fields",
-            description=str(message.get("description") or ""),
+            description=lifecycle_description(message),
             anchor=f"schema-{slugify_segment(message['id'])}",
             fields=[
                 ReferenceField(
                     name=field["name"],
                     type_label=display_field_type(field),
                     required=field.get("label") == "required",
-                    description=str(field.get("description") or ""),
+                    description=lifecycle_description(field),
                 )
                 for field_id in message["fieldIds"]
                 for field in [ctx["fields"][field_id]]
@@ -338,7 +372,7 @@ def enum_schema(enum_doc: dict[str, Any], ctx: dict[str, dict[str, Any]], *, see
         ReferenceSchema(
             name=enum_doc["id"],
             summary=f"{len(enum_doc['valueIds'])} values",
-            description=str(enum_doc.get("description") or ""),
+            description=lifecycle_description(enum_doc),
             anchor=f"schema-{slugify_segment(enum_doc['id'])}",
             enum_values=[
                 str(ctx_value["name"])
@@ -494,6 +528,124 @@ def grpcurl_example(package_name: str, endpoint: dict[str, Any], request_body: A
     return "\n".join(lines)
 
 
+RELEASE_CARD_ENDPOINT_LIMIT = 5
+
+
+def endpoint_label(endpoint: dict[str, Any]) -> str:
+    return f"{endpoint['service']}/{endpoint['name']}"
+
+
+def count_phrase(count: int, singular: str, plural: str | None = None) -> str:
+    noun = singular if count == 1 else (plural or f"{singular}s")
+    return f"{count} {noun}"
+
+
+def release_delta_summary(counts: dict[str, dict[str, int]]) -> str:
+    parts: list[str] = []
+    for key, singular in (("endpoints", "endpoint"), ("messages", "message"), ("enums", "enum")):
+        pieces = [
+            f"{counts[key][kind]} {label}"
+            for kind, label in (("added", "added"), ("modified", "changed"), ("removed", "removed"))
+            if counts[key][kind]
+        ]
+        if pieces:
+            noun = singular if sum(counts[key].values()) == 1 else f"{singular}s"
+            parts.append(f"{noun.capitalize()}: {', '.join(pieces)}")
+    return ". ".join(parts) + "." if parts else "No endpoint, message, or enum changes."
+
+
+def release_baseline_summary(counts: dict[str, dict[str, int]]) -> str:
+    return (
+        "First release covered by this reference: "
+        f"{count_phrase(counts['endpoints']['added'], 'endpoint')}, "
+        f"{count_phrase(counts['messages']['added'], 'message')}, "
+        f"{count_phrase(counts['enums']['added'], 'enum')}."
+    )
+
+
+def release_has_changes(counts: dict[str, dict[str, int]]) -> bool:
+    return any(counts[key][kind] for key in ("endpoints", "messages", "enums") for kind in ("added", "modified", "removed"))
+
+
+def release_summary_cards(
+    report: dict[str, Any],
+    *,
+    output_dir: Path,
+    overview_name: str,
+    history_anchors: set[str],
+) -> tuple[list[ReferenceCard], list[str]]:
+    """Newest-first release cards naming endpoint deltas; quiet releases are returned separately."""
+    overview_path = output_dir / overview_name
+    cards: list[ReferenceCard] = []
+    quiet_versions: list[str] = []
+    releases = list(report["releases"])
+    for index, release in reversed(list(enumerate(releases))):
+        version = str(release["version"])
+        changes = release["changes"]
+        counts = changes["counts"]
+        is_baseline = index == 0
+        if not is_baseline and not release_has_changes(counts):
+            quiet_versions.append(version)
+            continue
+
+        meta_items: list[ReferenceMetaItem] = []
+        badges: list[ReferenceBadge] = []
+        if is_baseline:
+            badges.append(ReferenceBadge("Baseline", tone="neutral"))
+            summary = release_baseline_summary(counts)
+        else:
+            summary = release_delta_summary(counts)
+            endpoint_changes = changes["endpoints"]
+            listed_by_kind = (
+                ("Added", HistoryEventKind.INTRODUCED, list(endpoint_changes["added"])),
+                ("Removed", HistoryEventKind.REMOVED, list(endpoint_changes["removed"])),
+                ("Changed", HistoryEventKind.CHANGED, [change["current"] for change in endpoint_changes["modified"]]),
+            )
+            for label, event_kind, endpoints in listed_by_kind:
+                for endpoint in endpoints[:RELEASE_CARD_ENDPOINT_LIMIT]:
+                    meta_items.append(
+                        ReferenceMetaItem(
+                            label,
+                            endpoint_label(endpoint),
+                            href=page_ref(
+                                overview_path,
+                                operation_page_path(output_dir, endpoint["package"], endpoint["service"], endpoint["name"]),
+                            ),
+                        )
+                    )
+                remaining = len(endpoints) - RELEASE_CARD_ENDPOINT_LIMIT
+                if remaining > 0:
+                    anchor = history_event_anchor(event_kind, version)
+                    meta_items.append(
+                        ReferenceMetaItem(
+                            label,
+                            f"and {remaining} more",
+                            href=f"#{anchor}" if anchor in history_anchors else None,
+                        )
+                    )
+            for kind_label, kind, tone in (("added", "added", "added"), ("removed", "removed", "removed"), ("changed", "modified", "changed")):
+                if counts["endpoints"][kind]:
+                    badges.append(ReferenceBadge(f"{counts['endpoints'][kind]} {kind_label}", tone=tone))
+
+        href = None
+        for kind in (HistoryEventKind.INTRODUCED, HistoryEventKind.REMOVED, HistoryEventKind.CHANGED, HistoryEventKind.DEPRECATED):
+            anchor = history_event_anchor(kind, version)
+            if anchor in history_anchors:
+                href = f"#{anchor}"
+                break
+        cards.append(
+            ReferenceCard(
+                title=version,
+                href=href,
+                summary=summary,
+                badges=badges,
+                meta_items=meta_items,
+            )
+        )
+    quiet_versions.reverse()
+    return cards, quiet_versions
+
+
 def build_overview_page(
     report: dict[str, Any],
     *,
@@ -543,26 +695,23 @@ def build_overview_page(
             )
         )
 
-    release_cards = []
-    for release in report["releases"]:
-        counts = release["changes"]["counts"]
-        release_cards.append(
-            ReferenceCard(
-                title=str(release["version"]),
-                summary="Endpoint / message / enum deltas for this release.",
-                badges=[ReferenceBadge("Release", tone="neutral")],
-                meta_items=[
-                    ReferenceMetaItem("Endpoints", f"{counts['endpoints']['added']} / {counts['endpoints']['modified']} / {counts['endpoints']['removed']}"),
-                    ReferenceMetaItem("Messages", f"{counts['messages']['added']} / {counts['messages']['modified']} / {counts['messages']['removed']}"),
-                    ReferenceMetaItem("Enums", f"{counts['enums']['added']} / {counts['enums']['modified']} / {counts['enums']['removed']}"),
-                ],
-            )
-        )
+    release_cards, quiet_versions = release_summary_cards(
+        report,
+        output_dir=output_dir,
+        overview_name=overview_name,
+        history_anchors={history_event_anchor(event.kind, event.version) for event in overview_events},
+    )
+    release_body = (
+        "Each release lists the endpoints it added, changed, or removed, with message and enum counts. "
+        "Endpoint names link to their reference pages and release versions link to the History section."
+    )
+    if quiet_versions:
+        release_body += " Releases with no API changes: " + ", ".join(f"`{version}`" for version in quiet_versions) + "."
 
     sections = [
         ReferenceSection(
             heading="Release Summary",
-            body_markdown="Counts are shown as added / changed / removed within each release slice.",
+            body_markdown=release_body,
             cards=release_cards,
         )
     ]
@@ -643,18 +792,21 @@ def build_package_page(
                     summary=compact_text(endpoint.get("description") or endpoint_signature(endpoint), limit=180),
                     badges=(
                         lifecycle_badges(
+                            state=entity_lifecycle_state(endpoint),
                             item=history_item,
                             comparison_versions=history_report.comparison_versions,
                             linked=False,
                         )
                         if history_item is not None
                         else lifecycle_badges(
+                            state=entity_lifecycle_state(endpoint),
                             introduced=str(lifecycle["introducedIn"]),
                             changed=str(lifecycle.get("lastChangedIn") or ""),
                             removed=str(lifecycle.get("removedIn") or "") or None,
                         )
                     ),
                     meta_items=[
+                        *lifecycle_meta_items(endpoint),
                         ReferenceMetaItem("Request", endpoint["requestType"]),
                         ReferenceMetaItem("Response", endpoint["responseType"]),
                         ReferenceMetaItem("Client stream", "Yes" if endpoint["clientStreaming"] else "No"),
@@ -677,7 +829,7 @@ def build_package_page(
     file_cards = [
         ReferenceCard(
                 title=file_doc["repoPath"],
-                summary="Current source file in the latest published descriptor snapshot.",
+                summary="Last available source file in the compared descriptor snapshots.",
                 meta_items=[
                     ReferenceMetaItem("Services", str(len(file_doc["serviceIds"]))),
                     ReferenceMetaItem("Messages", str(len(file_doc["messageIds"]))),
@@ -703,7 +855,7 @@ def build_package_page(
         sections.append(
             ReferenceSection(
                 heading="Type Inventory",
-                body_markdown="These are the package-level message and enum shapes in the publish-version snapshot.",
+                body_markdown="These are the last available package-level message and enum shapes. Endpoint pages use the definitions from the last release containing that endpoint.",
                 schemas=related_types,
             )
         )
@@ -755,7 +907,7 @@ def build_operation_page(
         title=endpoint["name"],
         description=None,
         eyebrow=package_name,
-        summary=None,
+        summary=(f"Removed in {history_item.observed_removal}. Historical definition from {history_item.last_seen}." if history_item and not history_item.current_present else None),
         back_link=page_ref(page_path, package_path),
         back_label="Back to package",
         breadcrumbs=[
@@ -766,17 +918,20 @@ def build_operation_page(
         ],
         badges=(
             lifecycle_badges(
+                state=entity_lifecycle_state(endpoint),
                 item=history_item,
                 comparison_versions=comparison_versions,
             )
             if history_item is not None
             else lifecycle_badges(
+                state=entity_lifecycle_state(endpoint),
                 introduced=str(lifecycle["introducedIn"]),
                 changed=str(lifecycle.get("lastChangedIn") or ""),
                 removed=str(lifecycle.get("removedIn") or "") or None,
             )
         ),
         meta_items=[
+            *lifecycle_meta_items(endpoint),
             ReferenceMetaItem("Package", package_name),
             ReferenceMetaItem("Service", endpoint["service"]),
             ReferenceMetaItem("Introduced", str(lifecycle["introducedIn"])),
@@ -785,8 +940,12 @@ def build_operation_page(
         ],
         operation_method="RPC",
         operation_target=f"/{package_name}.{endpoint['service']}/{endpoint['name']}",
-        overview_markdown=None,
+        overview_markdown=(
+            f"**Removed in {history_item.observed_removal}.** Historical definition from {history_item.last_seen}."
+            if history_item and not history_item.current_present else None
+        ),
         protocol_items=[
+            *lifecycle_meta_items(endpoint),
             ReferenceMetaItem("Protocol", "gRPC"),
             ReferenceMetaItem("Service", endpoint["service"]),
             ReferenceMetaItem("RPC", endpoint["name"]),
@@ -797,6 +956,7 @@ def build_operation_page(
             ReferencePanel(
                 title=short_type_name(endpoint["requestType"]),
                 meta_items=[
+                    *lifecycle_meta_items(ctx["messages"].get(endpoint["requestType"], {})),
                     ReferenceMetaItem("Message", endpoint["requestType"]),
                     ReferenceMetaItem("Client stream", "Yes" if endpoint["clientStreaming"] else "No"),
                 ],
@@ -807,6 +967,7 @@ def build_operation_page(
             ReferencePanel(
                 title=short_type_name(endpoint["responseType"]),
                 meta_items=[
+                    *lifecycle_meta_items(ctx["messages"].get(endpoint["responseType"], {})),
                     ReferenceMetaItem("Message", endpoint["responseType"]),
                     ReferenceMetaItem("Server stream", "Yes" if endpoint["serverStreaming"] else "No"),
                 ],
@@ -854,7 +1015,7 @@ def build_pages(
     history_report: SurfaceHistoryReport | None = None,
     overview_name: str = "index.mdx",
 ) -> tuple[Path, list[Any]]:
-    latest = report["latestSnapshot"]
+    latest = retained_snapshot(report)
     ctx = {
         "files": latest["files"],
         "services": latest["services"],
@@ -902,7 +1063,10 @@ def build_pages(
                         endpoint_docs[endpoint_id],
                         lifecycle_map[endpoint_id],
                         output_dir=output_dir,
-                        ctx=ctx,
+                        ctx=next(
+                            release["snapshot"] for release in reversed(report["releases"])
+                            if endpoint_id in release["snapshot"]["endpoints"]
+                        ),
                         history_item=history_items_by_id.get(endpoint_id),
                         comparison_versions=(
                             history_report.comparison_versions

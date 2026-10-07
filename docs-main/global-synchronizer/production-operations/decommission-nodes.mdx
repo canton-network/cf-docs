@@ -3,7 +3,7 @@ title: "Decommission Canton Nodes"
 description: "Procedures for decommissioning Canton nodes and synchronizer entities."
 ---
 
-{/* COPIED_START source="docs-website:docs/replicated/canton/3.5/participant/howtos/decommission/index.rst" hash="c73974a9" */}
+{/* COPIED_START source="docs-website:docs/replicated/canton/3.5/participant/howtos/decommission/index.rst" hash="67c06dfe" */}
 
 # Decommissioning Canton Nodes and Synchronizer Entities
 
@@ -43,8 +43,6 @@ More specifically, for a contract action to be committed:
 - For “create” actions all stakeholders must be hosted on active participants.
 - For consuming “exercise” actions all stakeholders, actors, choice observers, and choice authorizers must be hosted on active participants.
 
-The definition of “informee” is covered by the ledger privacy model section.
-
 The exact prerequisites to be met in order to decommission a participant therefore depend on the design of the Daml application and should be accounted and tested for in the initial Daml design process.
 </Note>
 
@@ -55,21 +53,25 @@ After that, the participant can be disposed of.
 ### Decommissioning a participant once the prerequisites are met
 
 1.  Stop applications from sending commands to the Ledger API of the participant to be decommissioned to avoid failed commands and errors.
-2.  Disconnect the participant to be decommissioned from all synchronizers as described in enabling and disabling connections.
+2.  Disconnect the participant to be decommissioned from all synchronizers as described in [enabling and disabling connections](/global-synchronizer/reference/canton-console-commands#synchronizers.disconnect_all).
+3.  Use the `topology.participant_synchronizer_permissions.propose` command to fully unauthorize the participant on the synchronizer:
 
-<div className="todo">
+```scala
+synchronizerOwners.foreach { synchronizerOwner =>
+  synchronizerOwner.topology.participant_synchronizer_permissions
+    .list(synchronizerId, filterUid = participant2.filterString)
+    .map(_.item.permission)
+    .foreach(permission =>
+      synchronizerOwner.topology.participant_synchronizer_permissions
+        .propose(synchronizerId, participant2.id, permission = permission, change = TopologyChangeOp.Remove)
+    )
+}
+```
 
-\#22917: Fix broken ref \#. Use the ref:sequencer.disable_member command to disable the participant being decommissioned in all sequencers and remove any sequencer data associated with it. \#. Use the ref:topology.participant_synchronizer_states.authorize command to remove the participant from the synchronizer topology via the sequencer manager.
+Finally use the `repair.disable_member` command to disable the participant being decommissioned in all sequencers and remove any sequencer data associated with it.
 
-</div>
-
-The following code snippet demonstrates the last two steps:
-
-<div className="todo">
-
-\#22917: Fix broken literalinclude literalinclude:: CANTON/enterprise/app/src/test/scala/com/digitalasset/canton/integration/tests/offboarding/ParticipantOffboardingIntegrationTest.scala language: scala start-after: user-manual-entry-begin: OffboardParticipant end-before: user-manual-entry-end: OffboardParticipant dedent:
-
-</div>
-
+```scala
+sequencers.all.foreach(_.repair.disable_member(participant2))
+```
 
 {/* COPIED_END */}

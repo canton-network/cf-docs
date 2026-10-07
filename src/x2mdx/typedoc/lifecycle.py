@@ -6,6 +6,7 @@ import json
 import re
 from typing import Any
 
+from x2mdx.visibility import dev_only_identities
 from x2mdx.typedoc.models import TypeDocReport, TypeDocSources
 
 SNAPSHOT_VERSION_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)-snapshot\.(\d{8})\.(\d+)")
@@ -93,6 +94,7 @@ def normalize_lifecycle_state(comment: dict[str, Any] | None) -> str | None:
     if comment_has_tag(comment, "@deprecated"):
         return "deprecated"
     for tag_name, state in [
+        ("@dev", "dev"),
         ("@alpha", "alpha"),
         ("@beta", "beta"),
         ("@stable", "stable"),
@@ -643,6 +645,13 @@ def build_typedoc_report_from_sources(
         groups, exports = collect_snapshot_exports(snapshot.document)
         snapshot_groups[snapshot.version] = groups
         snapshot_exports[snapshot.version] = exports
+
+    hidden = dev_only_identities(
+        {key: doc.get("lifecycle_state") for key, doc in exports.items()}
+        for exports in snapshot_exports.values()
+    )
+    snapshot_exports = {version: {key: doc for key, doc in exports.items() if key not in hidden}
+                        for version, exports in snapshot_exports.items()}
 
     export_history: dict[str, dict[str, Any]] = {}
     for snapshot in scoped_snapshots:

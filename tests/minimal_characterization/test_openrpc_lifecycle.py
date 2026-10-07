@@ -205,6 +205,7 @@ class OpenRpcMinimalLifecycleTests(unittest.TestCase):
                 "operations/wallet/alphapayments.mdx",
                 "operations/wallet/listlegacypayments.mdx",
                 "operations/wallet/listpaymentsv2.mdx",
+                "operations/wallet/listpayments.mdx",
                 "operations/wallet/previewpayments.mdx",
             },
         )
@@ -228,7 +229,8 @@ class OpenRpcMinimalLifecycleTests(unittest.TestCase):
         self.assertEqual(history_report["comparison_versions"], ["1.0.0", "1.1.0"])
         removed = next(item for item in history_report["items"] if item["id"] == "wallet#listPayments")
         self.assertFalse(removed["current_present"])
-        self.assertIsNone(removed["route"])
+        self.assertEqual(removed["route"], "/reference/wallet-gateway-json-rpc/operations/wallet/listpayments")
+        assert_contains_all(read_mdx(output_dir, "operations/wallet/listpayments.mdx"), ["Removed in 1.1.0"])
 
     def test_cli_renders_explicit_lifecycle_states(self) -> None:
         output_dir = self._render_pages("openrpc-lifecycle")

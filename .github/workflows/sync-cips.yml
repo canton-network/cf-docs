@@ -1,0 +1,429 @@
+name: Sync CIP registry
+on:
+  schedule:
+    - cron: "0 4 * * 1"
+  workflow_dispatch: {}
+  
+permissions:
+  contents: write
+  
+concurrency:
+  group: sync-cips
+  cancel-in-progress: false
+  
+env:
+  CIP_PAGE: docs-main/ai-context/cip-registry.mdx
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out cf-docs
+        uses: actions/checkout@v4
+
+      - name: Fetch canton-foundation/cips
+        run: |
+          git clone --depth 1 https://github.com/canton-foundation/cips.git "$RUNNER_TEMP/cips"
+          echo "CIPS_SHA=$(git -C "$RUNNER_TEMP/cips" rev-parse HEAD)" >> "$GITHUB_ENV"
+          echo "CIPS_DATE=$(git -C "$RUNNER_TEMP/cips" log -1 --format=%cI)" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Generate CIP page
+        run: |
+          cat > "$RUNNER_TEMP/generate_cip_page.py" <<'PY'
+          #!/usr/bin/env python3
+          from __future__ import annotations
+          import argparse
+          import re
+          import sys
+          from dataclasses import dataclass, field
+          from pathlib import Path
+
+          REPO_URL = "https://github.com/canton-foundation/cips"
+          BLOB_BASE = f"{REPO_URL}/blob/main"
+          ABSTRACT_MAX_CHARS = 1000
+          SUMMARY_HEADINGS = ["abstract", "summary", "simple summary", "overview", "motivation", "introduction"]
+          STATUS_MEANINGS = {
+              "draft": "Being written and discussed on cip-discuss; not yet submitted for a vote.",
+              "proposed": "Submitted for a Super Validator vote (requires support from at least two Super Validators); not yet approved.",
+              "approved": "Approved by a vote of the Super Validator node operators. If on-chain steps are required, it is not live until it reaches Final.",
+              "active": "Approved and in effect. Used for CIPs that need no on-chain adoption (processes, policies).",
+              "final": "Approved and adopted on-chain by a two-thirds majority of Super Validators (on-chain vote or new software version). In effect.",
+              "deferred": "Paused: no progress is being made, or it did not move to a vote before its deadline.",
+              "withdrawn": "Withdrawn before approval.",
+              "rejected": "Did not pass the Super Validator vote.",
+              "replaced": "Superseded by a later CIP.",
+              "obsolete": "No longer relevant (equivalent to Replaced).",
+          }
+
+          @dataclass
+          class Cip:
+              number: int
+              title: str
+              author: str
+              type: str
+              status: str
+              layer: str = ""
+              path: str | None = None    
+              approved: str = ""
+              created: str = ""
+              post_history: list[str] = field(default_factory=list)
+              abstract: str = ""
+
+              @property
+              def id(self) -> str:
+                  return f"CIP-{self.number:04d}"
+
+              @property
+              def github_url(self) -> str:
+                  if self.path:
+                      return f"{BLOB_BASE}/{self.path}"
+                  return f"{REPO_URL}#readme"
+
+
+          # --------------------------------------------------------------------------- parsing
+
+          ROW_RE = re.compile(r"^\|\s*(\[?cip-(\d{4})\]?(?:\(([^)]*)\))?)\s*\|(.*)$", re.IGNORECASE)
+
+          def parse_readme(readme: Path) -> list[Cip]:
+              cips: dict[int, Cip] = {}
+              for line in readme.read_text(encoding="utf-8").splitlines():
+                  m = ROW_RE.match(line.strip())
+                  if not m:
+                      continue
+                  number = int(m.group(2))
+                  link = (m.group(3) or "").strip()
+                  cells = [c.strip() for c in m.group(4).rstrip("|").split("|")]
+                  # Expected remaining columns: Layer | Title | Author | Type | Status
+                  cells += [""] * (5 - len(cells))
+                  layer, title, author, ctype, status = cells[:5]
+                  path = link.lstrip("/") or None
+                  cips[number] = Cip(
+                      number=number,
+                      title=clean_inline(title) or f"CIP {number:04d}",
+                      author=clean_inline(author),
+                      type=clean_inline(ctype),
+                      status=clean_inline(status) or "Unknown",
+                      layer=clean_inline(layer),
+                      path=path,
+                  )
+              return [cips[k] for k in sorted(cips)]
+
+
+          def clean_inline(s: str) -> str:
+              s = re.sub(r"\s+", " ", s).strip()
+              return s.rstrip(".").strip() if s.endswith("...") else s
+
+
+          PREAMBLE_BLOCK_RE = re.compile(r"(?:<pre>|```[a-z]*)\s*\n(.*?)\n\s*(?:</pre>|```)", re.DOTALL | re.IGNORECASE)
+          KV_RE = re.compile(r"^\s*([A-Za-z][A-Za-z\- ]*?)\s*:\s*(.*)$")
+          URL_RE = re.compile(r"https?://[^\s)>\]]+")
+
+
+          def parse_cip_file(cip: Cip, cips_dir: Path) -> None:
+              if not cip.path:
+                  return
+              f = cips_dir / cip.path
+              if not f.exists() or f.suffix.lower() != ".md":
+                  return
+              text = f.read_text(encoding="utf-8", errors="replace")
+
+              m = PREAMBLE_BLOCK_RE.search(text)
+              if m:
+                  for raw in m.group(1).splitlines():
+                      kv = KV_RE.match(raw)
+                      if not kv:
+                          continue
+                      key, val = kv.group(1).strip().lower(), kv.group(2).strip()
+                      if key == "approved" and val and not cip.approved:
+                          cip.approved = val
+                      elif key == "created" and val and not cip.created:
+                          cip.created = val
+                      elif key in ("post-history", "discussions-to"):
+                          cip.post_history += URL_RE.findall(val)
+                  body = text[m.end():]
+              else:
+                  body = text
+
+              cip.abstract = extract_summary(body)
+
+
+          def extract_summary(body: str) -> str:
+              lines = body.splitlines()
+              heading_idx: dict[str, int] = {}
+              for i, line in enumerate(lines):
+                  h = re.match(r"^\s*#{1,6}\s+(.*?)\s*#*\s*$", line)
+                  if h:
+                      name = h.group(1).strip().strip(":").lower()
+                      heading_idx.setdefault(name, i)
+
+              for wanted in SUMMARY_HEADINGS:
+                  if wanted in heading_idx:
+                      para = first_paragraphs(lines[heading_idx[wanted] + 1:])
+                      if para:
+                          return truncate(para)
+
+              # Fallback: first prose paragraph anywhere after the preamble.
+              para = first_paragraphs(lines)
+              return truncate(para) if para else ""
+
+
+          def first_paragraphs(lines: list[str]) -> str:
+              """Collect prose until the next heading, stopping once we have enough text."""
+              paras: list[str] = []
+              buf: list[str] = []
+              in_code = False
+              for line in lines:
+                  s = line.strip()
+                  if s.startswith("```"):
+                      in_code = not in_code
+                      continue
+                  if in_code:
+                      continue
+                  if re.match(r"^#{1,6}\s", s):
+                      break
+                  if not s:
+                      if buf:
+                          paras.append(" ".join(buf))
+                          buf = []
+                          if sum(len(p) for p in paras) >= ABSTRACT_MAX_CHARS:
+                              break
+                      continue
+                  # Skip non-prose: lists of links, tables, images, html, preamble remnants
+                  if re.match(r"^(\||<|!\[|\*\s*\[|-\s*\[)", s):
+                      continue
+                  buf.append(s)
+              if buf:
+                  paras.append(" ".join(buf))
+              return "\n\n".join(p for p in paras if len(p) > 20)
+
+
+          def truncate(text: str) -> str:
+              if len(text) <= ABSTRACT_MAX_CHARS:
+                  return text
+              cut = text[:ABSTRACT_MAX_CHARS]
+              end = max(cut.rfind(". "), cut.rfind(".\n"))
+              if end > ABSTRACT_MAX_CHARS * 0.5:
+                  cut = cut[: end + 1]
+              return cut.rstrip() + " …"
+
+
+          # --------------------------------------------------------------------------- MDX safety
+
+          INLINE_CODE_RE = re.compile(r"(`+)(.+?)\1", re.DOTALL)
+          MD_LINK_RE = re.compile(r"\[([^\]]*)\]\(([^)]*)\)")
+
+
+          def mdx_escape(text: str) -> str:
+              """Escape characters MDX would parse as JSX/expressions, leaving inline code alone.
+              Relative markdown links are made absolute (they'd 404 on docs.canton.network)."""
+              def fix_link(m: re.Match) -> str:
+                  label, href = m.group(1), m.group(2).strip()
+                  if href and not re.match(r"^(https?:|mailto:|#)", href):
+                      href = f"{BLOB_BASE}/{href.lstrip('./')}"
+                  return f"[{label}]({href})"
+
+              out, last = [], 0
+              for m in INLINE_CODE_RE.finditer(text):
+                  out.append(_esc(text[last:m.start()]))
+                  out.append(m.group(0))
+                  last = m.end()
+              out.append(_esc(text[last:]))
+              return MD_LINK_RE.sub(fix_link, "".join(out))
+
+
+          def _esc(s: str) -> str:
+              return (s.replace("\\", "\\\\")
+                       .replace("{", "\\{").replace("}", "\\}")
+                       .replace("<", "&lt;").replace(">", "&gt;"))
+
+
+          def yaml_str(s: str) -> str:
+              return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+          # --------------------------------------------------------------------------- rendering
+
+          def aliases(n: int) -> str:
+              return ", ".join([f"CIP-{n:04d}", f"CIP {n:04d}", f"CIP-{n}", f"CIP {n}", f"CIP{n}"])
+
+
+          def render(cips: list[Cip], source_sha: str, source_date: str) -> str:
+              by_status: dict[str, int] = {}
+              for c in cips:
+                  by_status[c.status] = by_status.get(c.status, 0) + 1
+
+              out: list[str] = []
+              out.append("---")
+              out.append('title: "Canton Improvement Proposals (CIPs)"')
+              out.append('sidebarTitle: "CIP registry"')
+              out.append('description: "Every Canton Improvement Proposal for the Global Synchronizer: what it is about, its current status, and where to read the full text."')
+              out.append('keywords: ["CIP", "CIPs", "Canton Improvement Proposal", "CIP status", "approved CIPs", "Super Validator vote", "governance", "tokenomics"]')
+              out.append("---")
+              out.append("")
+              out.append("{/* AUTO-GENERATED by .github/workflows/sync-cips.yml from canton-foundation/cips. Do not edit by hand; changes will be overwritten. */}")
+              out.append("")
+              out.append(
+                  "Canton Improvement Proposals (CIPs) are the governance mechanism for the Global Synchronizer. "
+                  "A CIP is discussed on the [cip-discuss](https://lists.sync.global/g/cip-discuss) mailing list, "
+                  "voted on by the Super Validator node operators, and announced on "
+                  "[cip-announce](https://lists.sync.global/g/cip-announce) once approved. "
+                  f"The canonical text of every CIP lives in the [canton-foundation/cips]({REPO_URL}) repository."
+              )
+              out.append("")
+              out.append("<Note>")
+              out.append(
+                  f"This page is generated automatically from the CIP repository "
+                  f"(source commit [`{source_sha[:7]}`]({REPO_URL}/commit/{source_sha}), {source_date[:10]}). "
+                  "For the authoritative and most recent text, always follow the link to the CIP on GitHub."
+              )
+              out.append("</Note>")
+              out.append("")
+              out.append("<Warning>")
+              out.append(
+                  "**Approved does not always mean live.** Under the CIP process (CIP-0000), an approved CIP that needs no "
+                  "on-chain steps becomes **Active** immediately. One that changes on-chain behavior becomes **Final** only "
+                  "after two-thirds of Super Validators adopt it on-chain, through an on-chain vote or by upgrading to a "
+                  "software version that implements it. So: Active or Final means in effect; Approved means voted but "
+                  "possibly not yet rolled out. For exact rollout timing, check the Splice release notes."
+              )
+              out.append("</Warning>")
+              out.append("")
+
+              out.append("## What each status means")
+              out.append("")
+              out.append("| Status | Meaning | CIPs |")
+              out.append("|---|---|---|")
+              for status in sorted(by_status, key=lambda s: (-by_status[s], s)):
+                  meaning = STATUS_MEANINGS.get(status.lower(), "")
+                  out.append(f"| {mdx_escape(status)} | {meaning} | {by_status[status]} |")
+              out.append("")
+
+              out.append("## All CIPs at a glance")
+              out.append("")
+              out.append("| CIP | Title | Type | Status |")
+              out.append("|---|---|---|---|")
+              for c in reversed(cips):  # newest first
+                  out.append(f"| {c.id} | {mdx_escape(c.title).replace('|', '/')} | {mdx_escape(c.type)} | {mdx_escape(c.status)} |")
+              out.append("")
+
+              out.append("## CIP details")
+              out.append("")
+              for c in reversed(cips):
+                  out.append(f"### {c.id}: {mdx_escape(c.title)}")
+                  out.append("")
+                  out.append(f"Also referred to as: {aliases(c.number)}.")
+                  out.append("")
+                  facts = [f"**Status:** {mdx_escape(c.status)}"]
+                  if c.type:
+                      facts.append(f"**Type:** {mdx_escape(c.type)}")
+                  if c.layer:
+                      facts.append(f"**Layer:** {mdx_escape(c.layer)}")
+                  if c.author:
+                      facts.append(f"**Author:** {mdx_escape(c.author)}")
+                  if c.created:
+                      facts.append(f"**Created:** {mdx_escape(c.created)}")
+                  if c.approved:
+                      facts.append(f"**Approved:** {mdx_escape(c.approved)}")
+                  out.append(" · ".join(facts))
+                  out.append("")
+                  if c.abstract:
+                      out.append(mdx_escape(c.abstract))
+                  else:
+                      out.append(f"{c.id} proposes: {mdx_escape(c.title)}. See the full text for details.")
+                  out.append("")
+                  links = [f"[Read the full {c.id} on GitHub]({c.github_url})"]
+                  for i, url in enumerate(dict.fromkeys(c.post_history)):
+                      label = "Discussion thread" if i == 0 else f"Discussion thread {i + 1}"
+                      links.append(f"[{label}]({url})")
+                  out.append(" · ".join(links))
+                  out.append("")
+
+              return "\n".join(out).rstrip() + "\n"
+
+
+          # --------------------------------------------------------------------------- main
+
+          def main() -> int:
+              ap = argparse.ArgumentParser()
+              ap.add_argument("--cips-dir", required=True, type=Path)
+              ap.add_argument("--out", required=True, type=Path)
+              ap.add_argument("--source-sha", default="unknown")
+              ap.add_argument("--source-date", default="")
+              ap.add_argument("--min-cips", type=int, default=50,
+                              help="Fail instead of writing if fewer CIPs are parsed (guards against README format changes).")
+              args = ap.parse_args()
+
+              readme = args.cips_dir / "README.md"
+              if not readme.exists():
+                  print(f"error: {readme} not found", file=sys.stderr)
+                  return 1
+
+              cips = parse_readme(readme)
+              if len(cips) < args.min_cips:
+                  print(f"error: parsed only {len(cips)} CIPs (< {args.min_cips}); refusing to overwrite the page", file=sys.stderr)
+                  return 1
+
+              for c in cips:
+                  parse_cip_file(c, args.cips_dir)
+
+              args.out.parent.mkdir(parents=True, exist_ok=True)
+              args.out.write_text(render(cips, args.source_sha, args.source_date), encoding="utf-8")
+
+              with_abstract = sum(1 for c in cips if c.abstract)
+              print(f"wrote {args.out}: {len(cips)} CIPs, {with_abstract} with summaries, latest {cips[-1].id} ({cips[-1].status})")
+              return 0
+
+
+          if __name__ == "__main__":
+              sys.exit(main())
+          PY
+          python "$RUNNER_TEMP/generate_cip_page.py" \
+            --cips-dir "$RUNNER_TEMP/cips" \
+            --out "$CIP_PAGE" \
+            --source-sha "$CIPS_SHA" \
+            --source-date "$CIPS_DATE"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Validate MDX (never push a page that breaks the Mintlify build)
+        run: |
+          mkdir -p "$RUNNER_TEMP/mdxcheck" && cd "$RUNNER_TEMP/mdxcheck"
+          npm init -y >/dev/null
+          npm pkg set type=module >/dev/null
+          npm install --no-audit --no-fund --silent @mdx-js/mdx@3 remark-gfm@4 remark-frontmatter@5
+          cat > validate.mjs <<'JS'
+          // Fails the workflow if the generated page is not valid MDX, so a bad render never reaches main.
+          import { readFile } from "node:fs/promises";
+          import { compile } from "@mdx-js/mdx";
+          import remarkGfm from "remark-gfm";
+          import remarkFrontmatter from "remark-frontmatter";
+
+          const file = process.argv[2];
+          if (!file) { console.error("usage: node validate-mdx.mjs <file.mdx>"); process.exit(2); }
+          try {
+            await compile(await readFile(file, "utf8"), { remarkPlugins: [remarkGfm, remarkFrontmatter] });
+            console.log(`MDX OK: ${file}`);
+          } catch (err) {
+            console.error(`MDX compile failed for ${file}:\n${err.message}`);
+            process.exit(1);
+          }
+          JS
+          node validate.mjs "$GITHUB_WORKSPACE/$CIP_PAGE"
+
+      - name: Commit if changed
+        run: |
+          git add "$CIP_PAGE"
+          if git diff --cached --quiet; then
+            echo "CIP page unchanged."
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "docs(cips): sync CIP registry with canton-foundation/cips@${CIPS_SHA:0:7}"
+          git push

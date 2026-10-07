@@ -78,6 +78,8 @@ def build_openrpc_history_report(
                 )
             )
 
+    observations = {key: values for key, values in observations.items()
+                    if values[-1].detail.get("lifecycle_state") != "dev"}
     known_item_ids = set(observations)
     items = [
         _history_item(
@@ -131,7 +133,7 @@ def _history_item(
 
     current = next((item for item in observations if item.version == publish_version), None)
     current_present = current is not None
-    route = routes.get((current.spec_id, current.detail["name"])) if current else None
+    route = routes.get((last.spec_id, last.detail["name"]))
     if current is not None and route is None:
         raise ValueError(f"Current OpenRPC method has no reader route: {item_id}")
 

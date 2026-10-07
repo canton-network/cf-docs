@@ -227,6 +227,20 @@ def manual_operation_page_refs(openapi_path: Path, *, directory: str) -> list[st
     ]
 
 
+def removed_operation_page_refs(docs_root: Path, filename: str, *, history_report_path: Path | None = None) -> list[str]:
+    report_path = history_report_path or docs_root / "openapi" / "splice" / "history-report.json"
+    if not report_path.is_file():
+        return []
+    from x2mdx.history import load_history_report, validate_history_report
+
+    report = load_history_report(report_path)
+    validate_history_report(report)
+    return sorted(
+        item.route.lstrip("/") for item in report.items
+        if item.id.startswith(filename + "::") and not item.current_present and item.route
+    )
+
+
 def mintlify_operation_slug(summary: str) -> str:
     without_braced_params = re.sub(r"\{[^}]+}", "", summary)
     return re.sub(r"[^A-Za-z0-9]+", "", without_braced_params).lower()
@@ -301,6 +315,7 @@ def validate_explicit_manual_nav_pages(
     docs_json_path: Path,
     top_group: dict[str, Any],
     expected_specs: list[dict[str, Any]],
+    history_report_path: Path | None = None,
 ) -> None:
     docs_root = docs_json_path.parent
     top_group_pages = top_group.get("pages")
@@ -332,6 +347,7 @@ def validate_explicit_manual_nav_pages(
             docs_root / spec["source"],
             directory=spec["directory"],
         )
+        expected_pages += removed_operation_page_refs(docs_root, spec["filename"], history_report_path=history_report_path)
         if actual_pages != expected_pages:
             raise ValueError(
                 f"Splice manual OpenAPI nav pages differ for {spec['nav_label']}:\n"
@@ -358,6 +374,7 @@ def validate_splice_nav(
     *,
     source_config_path: Path = DEFAULT_SOURCE_CONFIG,
     docs_json_path: Path = DEFAULT_DOCS_JSON,
+    history_report_path: Path | None = None,
 ) -> None:
     source_config = load_json(source_config_path)
     docs = load_json(docs_json_path)
@@ -398,6 +415,7 @@ def validate_splice_nav(
         docs_json_path=docs_json_path,
         top_group=top_group,
         expected_specs=expected_specs,
+        history_report_path=history_report_path,
     )
 
 

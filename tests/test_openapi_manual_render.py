@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from x2mdx.history.models import HistoryEventKind
 from x2mdx.openapi import (
     ManualOpenAPIRenderOptions,
@@ -7,6 +9,56 @@ from x2mdx.openapi import (
     render_manual_openapi_operation,
 )
 from x2mdx.render import render_page
+
+
+@pytest.mark.parametrize(
+    ("state", "label"),
+    [
+        ("alpha", "Alpha"),
+        ("beta", "Beta"),
+        (" BETA ", "Beta"),
+        ("stable", None),
+        (None, None),
+        ("deprecated", None),
+    ],
+)
+def test_prerelease_badge_uses_published_operation_state(
+    state: str | None, label: str | None,
+) -> None:
+    earlier = operation_spec(changed=False)
+    earlier["paths"]["/v2/updates/flats"]["post"]["x-state"] = "alpha"
+    current = operation_spec(changed=False)
+    if state is not None:
+        current["paths"]["/v2/updates/flats"]["post"]["x-state"] = state
+    events = operation_history_events(
+        specs_by_version={"3.4": earlier, "3.5": current},
+        versions=["3.4", "3.5"], publish_version="3.5",
+        method="post", path="/v2/updates/flats", source_name="release fixtures",
+    )
+    rendered = render_page(render_manual_openapi_operation(
+        spec=current,
+        options=ManualOpenAPIRenderOptions(
+            method="post", path="/v2/updates/flats", output_path="operation.mdx",
+        ),
+        history_events=events, publish_version="3.5",
+    ))
+    for candidate in ("Alpha", "Beta"):
+        assert (f">{candidate}</span>" in rendered) == (candidate == label)
+    assert "x-state" not in rendered
+
+
+@pytest.mark.parametrize("state", ["preview", True])
+def test_prerelease_badge_rejects_invalid_state(state: str | bool) -> None:
+    spec = operation_spec(changed=False)
+    spec["paths"]["/v2/updates/flats"]["post"]["x-state"] = state
+    with pytest.raises(ValueError, match="x-state"):
+        render_manual_openapi_operation(
+            spec=spec,
+            options=ManualOpenAPIRenderOptions(
+                method="post", path="/v2/updates/flats", output_path="operation.mdx",
+            ),
+            history_events=[], publish_version="3.5",
+        )
 
 
 def operation_spec(*, changed: bool) -> dict:
@@ -506,3 +558,27 @@ def test_humanized_operation_title_drops_a_dangling_preposition() -> None:
     )
 
     assert 'title: "POST /v2/updates/flats"' in rendered
+
+
+def test_removed_operation_has_historical_schema_and_no_live_playground() -> None:
+    from x2mdx.history import Evidence, EvidenceKind, HistoryEvent
+
+    removal = HistoryEvent(
+        kind=HistoryEventKind.REMOVED, version="2.0.0", label="Removed in",
+        details=("Last available in 1.0.0.",),
+        evidence=(Evidence(EvidenceKind.SNAPSHOT_DIFF, "https://example.com/2", "2.0.0"),),
+    )
+    rendered = render_page(render_manual_openapi_operation(
+        spec=operation_spec(changed=False),
+        options=ManualOpenAPIRenderOptions(method="POST", path="/v2/updates/flats", output_path="removed.mdx"),
+        history_events=[removal], publish_version="1.0.0",
+    ))
+    assert "Removed in 2.0.0" in rendered
+    assert "Historical definition from 1.0.0" in rendered
+    assert 'href="#history-removed-2-0-0"' in rendered
+    assert 'id="history-removed-2-0-0"' in rendered
+    assert "First offset to read after." in rendered
+    assert "beginExclusive" in rendered
+    assert "\napi:" not in rendered
+    assert "\nplayground:" not in rendered
+    assert "(removed)" in rendered

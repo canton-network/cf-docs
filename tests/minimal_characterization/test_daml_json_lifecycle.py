@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import shutil
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -189,8 +191,6 @@ class DamlJsonMinimalLifecycleTests(unittest.TestCase):
         assert_contains_none(alpha, ["WarnData", "ADTDoc", "RecordC", "TypeFun"])
 
     def test_cli_renders_explicit_lifecycle_states(self) -> None:
-        # TODO(https://github.com/digital-asset/docs/issues/341): define the
-        # Daml JSON source convention for beta and stable lifecycle states.
         manifest_path = self._write_beta_stable_manifest()
         output_dir = self.root / "out" / "daml-json-lifecycle"
 
@@ -210,9 +210,60 @@ class DamlJsonMinimalLifecycleTests(unittest.TestCase):
         beta = read_mdx(output_dir, "da-beta.mdx")
         stable = read_mdx(output_dir, "da-stable.mdx")
         assert_text_tree_matches_fixture(output_dir, "daml_json/beta_stable")
-        # Until beta gets a dedicated lifecycle label, beta warnings render as Warning.
-        assert_contains_all(beta, ["Lifecycle", "Warning.", "Beta: preview module."])
+        assert_contains_all(beta, ["Lifecycle", "Beta (preview).", "Beta: preview module."])
         assert_contains_all(stable, ["Lifecycle", "Stable.", "Stable: supported module."])
+
+    def test_warning_prefixes_override_legacy_keyword_matching(self) -> None:
+        from x2mdx.daml_json.render import warning_lifecycle_state, module_prerelease_badges
+        for text, state in [("Alpha: experimental", "alpha"), (" BETA: preview", "beta"), ("Stable: supported", "stable"), ("Alphabetical order", "alpha"), ("Uses alpha internally", "alpha"), ("This is BETA software", "beta"), ("Supported module", None)]:
+            with self.subTest(text=text):
+                self.assertEqual(warning_lifecycle_state({"WarnData": [text]}), state)
+        for messages, state in [
+            (["This is alpha software", "Beta: preview"], "beta"),
+            (["This is beta software", "Alpha: experimental"], "alpha"),
+            (["Uses alpha internally", "Stable: supported"], "stable"),
+            (["Stable: formerly beta", "This is alpha software"], "stable"),
+            (["This is beta software", "This is alpha software"], "alpha"),
+        ]:
+            with self.subTest(messages=messages):
+                self.assertEqual(warning_lifecycle_state({"WarnData": messages}), state)
+        warning = [{"WarnData": "Alpha: old"}, {"DeprecatedData": "Use Current"}]
+        self.assertEqual(warning_lifecycle_state(warning), "deprecated")
+        self.assertEqual(module_prerelease_badges({"md_warn": warning}), [])
+        self.assertEqual(module_prerelease_badges({"md_warn": {"WarnData": "Beta: preview"}}, removed=True), [])
+
+    def test_cli_renders_legacy_warnings_with_explicit_overrides(self) -> None:
+        modules = self._write_json("compatibility.json", [
+            module_doc("LegacyAlpha", "Legacy alpha", warnings=["This is alpha software"]),
+            module_doc("LegacyBeta", "Legacy beta", warnings=["This is beta software"]),
+            module_doc("ExplicitBeta", "Override alpha", warnings=["This is alpha software", "Beta: preview"]),
+            module_doc("ExplicitStable", "Override alpha", warnings=["This is alpha software", "Stable: supported"]),
+        ])
+        manifest = self._write_json("compatibility-manifest.json", {"versions": [{"version": "1.0.0", "json_path": str(modules)}]})
+        output = self.root / "compatibility-pages"
+        run_x2mdx(["daml-json", "build-api-pages-from-manifest", "--manifest", str(manifest), "--output-dir", str(output), "--history-report", str(output / "history.json"), "--reader-route-prefix", "reference/daml", "--surface-id", "daml"])
+        assert_contains_all(read_mdx(output, "legacyalpha.mdx"), [">Alpha</span>"])
+        assert_contains_all(read_mdx(output, "legacybeta.mdx"), [">Beta</span>"])
+        beta = read_mdx(output, "explicitbeta.mdx")
+        assert_contains_all(beta, [">Beta</span>"])
+        assert_contains_none(beta, [">Alpha</span>"])
+        stable = read_mdx(output, "explicitstable.mdx")
+        assert_contains_all(stable, ["Stable: supported"])
+        assert_contains_none(stable, [">Alpha</span>"])
+
+    @unittest.skipUnless(shutil.which("damlc"), "Daml compiler is required for source extraction")
+    def test_daml_source_annotations_survive_extraction(self) -> None:
+        source = Path(__file__).resolve().parents[1] / "fixtures" / "daml-lifecycle" / "Example.daml"
+        extracted = self.root / "modules.json"
+        subprocess.run(["damlc", "docs", "--format", "json", "--combine", "--output", str(extracted), str(source), str(source.with_name("LegacyExample.daml"))], cwd=self.root, check=True, capture_output=True, text=True)
+        manifest = self._write_json("source-manifest.json", {"versions": [{"version": "1.0.0", "json_path": str(extracted)}]})
+        output = self.root / "source-pages"
+        run_x2mdx(["daml-json", "build-api-pages-from-manifest", "--manifest", str(manifest), "--output-dir", str(output), "--history-report", str(output / "history.json"), "--reader-route-prefix", "reference/daml", "--surface-id", "daml"])
+        legacy = read_mdx(output, "legacyexample.mdx")
+        self.assertIn(">Deprecated 1.0.0</a>", legacy)
+        self.assertNotIn('class="x2mdx-ref-badge x2mdx-ref-badge--removed">Deprecated</span>', legacy)
+        text = read_mdx(output, "example.mdx")
+        assert_contains_all(text, [">Alpha</span>", "Beta: preview type.", "Beta: preview function."])
 
     def test_cli_renders_replacement_metadata(self) -> None:
         output_dir = self._render_pages("daml-json-replacements")

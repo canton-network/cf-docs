@@ -12,6 +12,7 @@ from x2mdx.history.versioning import compare_versions
 from x2mdx.output import Page
 from x2mdx.reference_pages import (
     ReferenceBadge,
+    lifecycle_state_badges,
     ReferenceMetaItem,
     reference_badges_for_history_events,
 )
@@ -93,6 +94,8 @@ def _export_context(
     lifecycle_bits = [
         f"Kind: `{export['kind_label']}`",
     ]
+    if export.get("removed_in"):
+        lifecycle_bits.append(f"Removed in {export['removed_in']}. Retained for historical reference.")
     if export["lifecycle_label"]:
         lifecycle_bits.append(f"Lifecycle: `{export['lifecycle_label']}`")
     if export["replaces"]:
@@ -120,6 +123,9 @@ def _export_context(
             ReferenceBadge(str(export["kind_label"]), "protocol"),
             ReferenceBadge(f"Added {export['introduced_in']}", "added"),
         ]
+
+    state = export.get("lifecycle_state")
+    badges.extend(lifecycle_state_badges(state, existing=badges))
 
     return {
         "anchor": str(export["anchor"]),
@@ -150,7 +156,7 @@ def _export_context(
 
 def package_history_events(history_report: SurfaceHistoryReport) -> list[HistoryEvent]:
     grouped: dict[tuple[HistoryEventKind, str], list[tuple[str, HistoryEvent]]] = defaultdict(list)
-    for item in history_report.current_items():
+    for item in history_report.items:
         symbol_name = item.id.rsplit("::", 1)[-1]
         for event in history_events_for_item(
             item,
@@ -176,7 +182,7 @@ def package_history_events(history_report: SurfaceHistoryReport) -> list[History
             HistoryEvent(
                 kind=kind,
                 version=version,
-                label=entries[0][1].label,
+                label="Exports removed in" if kind == HistoryEventKind.REMOVED else entries[0][1].label,
                 details=details,
                 evidence=tuple(
                     dict.fromkeys(
@@ -189,6 +195,7 @@ def package_history_events(history_report: SurfaceHistoryReport) -> list[History
         )
 
     priority = {
+        HistoryEventKind.REMOVED: -1,
         HistoryEventKind.REMOVE_AS_OF: 0,
         HistoryEventKind.DEPRECATED: 1,
         HistoryEventKind.CHANGED: 2,
@@ -217,9 +224,9 @@ def build_page(
     page_description: str,
     history_report: SurfaceHistoryReport | None = None,
 ) -> Page:
-    current_exports = [export for export in report.exports if export["status"] == "active"]
+    retained_exports = list(report.exports)
     exports_by_group: dict[str, list[dict[str, object]]] = defaultdict(list)
-    for export in current_exports:
+    for export in retained_exports:
         exports_by_group[export["group"]].append(export)
 
     grouped_exports = []
@@ -272,9 +279,9 @@ def build_page(
                 code_span(export["introduced_in"]),
                 escape_md_cell(render_change_summary(export["change_details"])),
                 code_span(export["lifecycle_label"]) if export["lifecycle_label"] == "Deprecated" else "-",
-                "-",
+                code_span(str(export["removed_in"])) if export.get("removed_in") else "-",
             ]
-            for export in current_exports
+            for export in retained_exports
         ],
         grouped_exports=grouped_exports,
         history_events=history_events,
