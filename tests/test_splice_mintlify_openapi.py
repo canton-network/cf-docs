@@ -493,3 +493,242 @@ def test_removed_navigation_uses_custom_history_report(tmp_path: Path) -> None:
     filename = removed.id.split("::", 1)[0]
     pages = module.removed_operation_page_refs(tmp_path, filename, history_report_path=custom_path)
     assert removed.route.lstrip("/") in pages
+
+
+def _derived_source_config() -> dict[str, object]:
+    return {
+        "enabled_nav_specs": ["scan-proxy.yaml", "scan-proxy-token-metadata-v1.yaml"],
+        "excluded_specs": [
+            {"filename": "token-metadata-v1.yaml", "reason": "Only the proxied copy is enabled here."}
+        ],
+        "families": [
+            {
+                "group": "Validator APIs",
+                "specs": [
+                    {
+                        "filename": "scan-proxy.yaml",
+                        "nav_label": "Scan Proxy API",
+                        "source": "openapi/splice/validator/scan-proxy.yaml",
+                        "directory": "reference/splice-scan-proxy-api",
+                    },
+                    {
+                        "filename": "scan-proxy-token-metadata-v1.yaml",
+                        "nav_label": "Scan Proxy Token Metadata Service",
+                        "source": "openapi/splice/validator/scan-proxy-token-metadata-v1.yaml",
+                        "directory": "reference/splice-scan-proxy-token-metadata-service",
+                        "derived_from": {
+                            "filename": "token-metadata-v1.yaml",
+                            "path_prefix": "/v0/scan-proxy",
+                            "server_url": "https://example.com/api/validator",
+                        },
+                    },
+                ],
+            },
+            {
+                "group": "Token Standard APIs",
+                "specs": [
+                    {
+                        "filename": "token-metadata-v1.yaml",
+                        "nav_label": "Token Metadata Service",
+                        "source": "openapi/splice/token-standard/token-metadata-v1.yaml",
+                        "directory": "reference/splice-token-metadata-service",
+                    }
+                ],
+            },
+        ],
+    }
+
+
+_TOKEN_METADATA_SPEC = """openapi: 3.0.0
+info:
+  title: token metadata service
+  description: |
+    Implemented by token registries.
+  version: 1.2.0
+paths:
+  /registry/metadata/v1/info:
+    get:
+      operationId: getRegistryInfo
+      summary: Registry info
+      responses:
+        "200":
+          description: ok
+  /registry/metadata/v1/instruments/{instrumentId}:
+    get:
+      operationId: getInstrument
+      summary: Instrument
+      responses:
+        "200":
+          description: ok
+components:
+  schemas:
+    ErrorResponse:
+      type: object
+"""
+
+
+def test_derived_spec_prefixes_paths_and_remounts_on_validator_server() -> None:
+    module = load_script_module("generate_splice_mintlify_openapi.py")
+    families = module.normalized_families(_derived_source_config())
+    derived = module.derived_spec_configs(families)
+    assert list(derived) == ["scan-proxy-token-metadata-v1.yaml"]
+
+    import yaml
+
+    base = yaml.safe_load(_TOKEN_METADATA_SPEC)
+    payload = module.derive_spec_payload(
+        base_spec=base, spec_config=derived["scan-proxy-token-metadata-v1.yaml"]
+    )
+
+    assert list(payload) == ["openapi", "info", "servers", "paths", "components"]
+    assert payload["servers"] == [{"url": "https://example.com/api/validator"}]
+    assert payload["info"]["title"] == "token metadata service (validator scan proxy)"
+    assert payload["info"]["version"] == "1.2.0"
+    assert payload["info"]["description"].startswith("Implemented by token registries.\n\n")
+    assert "`/api/validator/v0/scan-proxy`" in payload["info"]["description"]
+    assert "`token-metadata-v1.yaml`" in payload["info"]["description"]
+    assert list(payload["paths"]) == [
+        "/v0/scan-proxy/registry/metadata/v1/info",
+        "/v0/scan-proxy/registry/metadata/v1/instruments/{instrumentId}",
+    ]
+    assert payload["paths"]["/v0/scan-proxy/registry/metadata/v1/info"]["get"]["operationId"] == "getRegistryInfo"
+    assert payload["components"] == base["components"]
+    # The base document is not mutated.
+    assert list(base["paths"]) == [
+        "/registry/metadata/v1/info",
+        "/registry/metadata/v1/instruments/{instrumentId}",
+    ]
+
+    dumped = module.dump_openapi_yaml(payload).decode("utf-8")
+    assert "  description: |-\n    Implemented by token registries.\n" in dumped
+    assert module.manual_operation_page_refs(
+        spec=payload, directory="reference/splice-scan-proxy-token-metadata-service"
+    ) == [
+        "reference/splice-scan-proxy-token-metadata-service/get-v0scan-proxyregistrymetadatav1info",
+        "reference/splice-scan-proxy-token-metadata-service/get-v0scan-proxyregistrymetadatav1instruments:instrumentid",
+    ]
+
+
+def test_derived_spec_bytes_are_built_from_archive_specs() -> None:
+    module = load_script_module("generate_splice_mintlify_openapi.py")
+    families = module.normalized_families(_derived_source_config())
+    derived = module.derived_spec_configs(families)
+
+    produced = module.derived_spec_bytes(
+        derived_specs=derived,
+        spec_bytes={"token-metadata-v1.yaml": _TOKEN_METADATA_SPEC.encode("utf-8")},
+    )
+
+    assert list(produced) == ["scan-proxy-token-metadata-v1.yaml"]
+    text = produced["scan-proxy-token-metadata-v1.yaml"].decode("utf-8")
+    assert "/v0/scan-proxy/registry/metadata/v1/info:" in text
+    assert "url: https://example.com/api/validator" in text
+
+
+def test_derived_specs_require_a_configured_non_derived_base() -> None:
+    import pytest
+
+    module = load_script_module("generate_splice_mintlify_openapi.py")
+
+    missing_base = _derived_source_config()
+    missing_base["families"] = missing_base["families"][:1]
+    with pytest.raises(ValueError, match="not a configured spec"):
+        module.normalized_families(missing_base)
+
+    chained = _derived_source_config()
+    chained["families"][1]["specs"][0]["derived_from"] = {
+        "filename": "scan-proxy.yaml",
+        "path_prefix": "/v0/scan-proxy",
+        "server_url": "https://example.com/api/validator",
+    }
+    with pytest.raises(ValueError, match="itself derived"):
+        module.normalized_families(chained)
+
+    bad_prefix = _derived_source_config()
+    bad_prefix["families"][0]["specs"][1]["derived_from"]["path_prefix"] = "v0/scan-proxy/"
+    with pytest.raises(ValueError, match="path_prefix"):
+        module.normalized_families(bad_prefix)
+
+
+def test_materialize_release_specs_synthesizes_derived_snapshots(tmp_path: Path, monkeypatch) -> None:
+    import io
+    import tarfile
+
+    module = load_script_module("generate_splice_mintlify_openapi.py")
+    families = module.normalized_families(_derived_source_config())
+    derived = module.derived_spec_configs(families)
+
+    archive = tmp_path / "0.9.1_openapi.tar.gz"
+    with tarfile.open(archive, "w:gz") as handle:
+        for name, text in {
+            "token-standard/openapi/token-metadata-v1.yaml": _TOKEN_METADATA_SPEC,
+            "validator/openapi/scan-proxy.yaml": "openapi: 3.0.0\ninfo:\n  title: Validator API\npaths:\n  /v0/scan-proxy/dso:\n    get:\n      operationId: getDso\n      summary: Dso\n      responses:\n        '200':\n          description: ok\n",
+        }.items():
+            data = text.encode("utf-8")
+            info = tarfile.TarInfo(name)
+            info.size = len(data)
+            handle.addfile(info, io.BytesIO(data))
+    monkeypatch.setattr(module, "ensure_archive", lambda **_kwargs: archive)
+
+    release = {"version": "0.9.1", "tag": "v0.9.1", "asset_name": archive.name, "download_url": "https://example.invalid"}
+    parsed = module.materialize_release_specs(
+        cache_dir=tmp_path / "cache",
+        release=release,
+        spec_filenames={"scan-proxy.yaml", "scan-proxy-token-metadata-v1.yaml"},
+        force_refresh=False,
+        derived_specs=derived,
+    )
+
+    assert sorted(parsed) == ["scan-proxy-token-metadata-v1.yaml", "scan-proxy.yaml"]
+    assert list(parsed["scan-proxy-token-metadata-v1.yaml"]["paths"]) == [
+        "/v0/scan-proxy/registry/metadata/v1/info",
+        "/v0/scan-proxy/registry/metadata/v1/instruments/{instrumentId}",
+    ]
+    assert (tmp_path / "cache" / "fixtures" / "0.9.1" / "scan-proxy-token-metadata-v1.yaml").exists()
+
+    # A release that predates the base spec yields no derived snapshot either.
+    older = tmp_path / "0.5.10_openapi.tar.gz"
+    with tarfile.open(older, "w:gz") as handle:
+        data = b"openapi: 3.0.0\ninfo:\n  title: Validator API\npaths: {}\n"
+        info = tarfile.TarInfo("validator/openapi/scan-proxy.yaml")
+        info.size = len(data)
+        handle.addfile(info, io.BytesIO(data))
+    monkeypatch.setattr(module, "ensure_archive", lambda **_kwargs: older)
+    parsed_older = module.materialize_release_specs(
+        cache_dir=tmp_path / "cache",
+        release={**release, "version": "0.5.10", "tag": "v0.5.10"},
+        spec_filenames={"scan-proxy.yaml", "scan-proxy-token-metadata-v1.yaml"},
+        force_refresh=False,
+        derived_specs=derived,
+    )
+    assert sorted(parsed_older) == ["scan-proxy.yaml"]
+
+
+def test_checked_in_source_config_derives_every_token_standard_spec_for_scan_proxy() -> None:
+    module = load_script_module("generate_splice_mintlify_openapi.py")
+    source_config = module.load_json(module.DEFAULT_SOURCE_CONFIG)
+    families = module.normalized_families(source_config)
+    derived = module.derived_spec_configs(families)
+    token_standard = {
+        spec["filename"]
+        for family in families
+        if family["group"] == "Token Standard APIs"
+        for spec in family["specs"]
+    }
+
+    assert {spec["derived_from"]["filename"] for spec in derived.values()} == token_standard
+    assert all(filename.startswith("scan-proxy-") for filename in derived)
+    assert set(derived) <= set(source_config["enabled_nav_specs"])
+    validator_specs = [
+        spec["filename"]
+        for family in families
+        if family["group"] == "Validator APIs"
+        for spec in family["specs"]
+    ]
+    assert validator_specs.index("scan-proxy.yaml") < min(
+        validator_specs.index(filename) for filename in derived
+    )
+    for spec in derived.values():
+        assert spec["derived_from"]["path_prefix"] == "/v0/scan-proxy"
+        assert spec["derived_from"]["server_url"] == "https://example.com/api/validator"
+        assert spec["directory"].startswith("reference/splice-scan-proxy-")
