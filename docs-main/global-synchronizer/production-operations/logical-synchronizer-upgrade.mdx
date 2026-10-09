@@ -152,3 +152,9 @@ LSU requires deployment changes for super validators. Concretely:
 4. When using DABFT as the successor node, further changes will be required. Most notably the cometbft node goes away as DABFT runs as part of the sequencer pod. The sequencer pod and SV app will require some additional configuration. Details of this will be added later.
 
 {/* COPIED_END */}
+
+## Recovery timing and sequencer pruning
+
+Resolving a stuck or desynchronized node through the disaster recovery or roll-forward procedures above is time-boxed by sequencer pruning on the old physical synchronizer. [SV Pruning](/global-synchronizer/production-operations/sv-pruning) recommends a sequencer `retentionPeriod` of 30 days. If a node has not caught up or completed recovery before that retention period elapses, the sequencer will have pruned the data the node needs to resync, and recovery is no longer possible.
+
+This is a separate concern from the 30-day window mentioned in step 10 above, which is about when super validators remove the old physical synchronizer's node deployment after a successful upgrade. Both commonly default to 30 days, but they are not the same clock: the deployment removal window only matters once the upgrade has succeeded, while the sequencer pruning window applies throughout any recovery effort following a stuck or failed LSU, starting from the last time data was sequenced on the old synchronizer, not from the upgrade time.
