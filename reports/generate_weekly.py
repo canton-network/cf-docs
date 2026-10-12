@@ -2,8 +2,7 @@
 """Generate the cf-docs weekly contribution report as a self-contained HTML page.
 
 Data comes from the GitHub GraphQL API (through the authenticated `gh` CLI) and from
-`origin/main` in the local clone. The layout reuses the stylesheet of the 2026-W37
-design sample so every week renders the same way.
+`origin/main` in the local clone. The layout comes from weekly_style.css.
 
 Usage: generate_weekly.py [--end 2026-10-05] [--out reports/weekly/2026-10-05/index.html]
 Each report covers the seven days ending at noon US Eastern on a Monday, so consecutive
@@ -26,7 +25,7 @@ from pathlib import Path
 
 REPO = "canton-network/cf-docs"
 HERE = Path(__file__).resolve().parent
-STYLE_SOURCE = HERE / "weekly" / "2026-W37" / "index.html"
+STYLE_SOURCE = HERE / "weekly_style.css"
 UTC = dt.timezone.utc
 
 PRINT_CSS = """
@@ -730,7 +729,7 @@ def build(monday: dt.date, start: dt.datetime, end: dt.datetime) -> str:
       <div><dt>Week.</dt> <dd>Seven days ending Monday 12:00 US Eastern; each report starts where the previous one ended. Week-over-week compares the preceding seven days.</dd></div>
     </dl>"""
 
-    style = re.search(r"<style>(.*?)</style>", STYLE_SOURCE.read_text(), re.S)[1] + PRINT_CSS
+    style = STYLE_SOURCE.read_text() + PRINT_CSS
     return f"""<!doctype html>
 <html lang="en" data-theme="light">
 <head>
