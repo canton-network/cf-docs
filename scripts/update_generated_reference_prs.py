@@ -122,6 +122,13 @@ UPDATE_TARGETS = (
             "docs-main/reference/splice-ans-api",
             "docs-main/reference/splice-scan-api",
             "docs-main/reference/splice-scan-proxy-api",
+            "docs-main/reference/splice-scan-proxy-token-metadata-service",
+            "docs-main/reference/splice-scan-proxy-transfer-instruction-api",
+            "docs-main/reference/splice-scan-proxy-transfer-instruction-v2-api",
+            "docs-main/reference/splice-scan-proxy-allocation-api",
+            "docs-main/reference/splice-scan-proxy-allocation-v2-api",
+            "docs-main/reference/splice-scan-proxy-allocation-instruction-api",
+            "docs-main/reference/splice-scan-proxy-allocation-instruction-v2-api",
             "docs-main/reference/splice-scan-streaming-api",
             "docs-main/reference/splice-token-metadata-service",
             "docs-main/reference/splice-transfer-instruction-api",
@@ -529,7 +536,7 @@ UPDATE_TARGETS = (
         branch="release-notes/canton/update",
         description=(
             "Updates the published Canton release-note pages from the `RELEASE-NOTES.md` "
-            "files in stable public Canton release bundles."
+            "files in the public bundles of published Canton GitHub releases."
         ),
         generate_commands=(nix_develop_command("npm run update:canton-release-notes"),),
         paths=(
