@@ -86,7 +86,9 @@ expected = json.load(open('$work/new.expected.json'))
 a = wb['Activity']
 got = {'PRs opened': a['A8'].value, 'PRs merged': a['C8'].value, 'PRs closed without merging': a['E8'].value,
        'PRs reviewed (reviewer–PR pairs)': a['A12'].value, 'Issues opened': a['C12'].value,
-       'Issues closed': a['E12'].value}
+       'Issues closed': a['E12'].value,
+       'Open PRs untouched 30+ days': wb['Open work']['C8'].value,
+       'Open issues untouched 30+ days': wb['Open work']['C12'].value}
 for k, v in got.items():
     if v != expected[k]:
         problems.append(f'Activity {k}: sheet {v}, expected {expected[k]}')

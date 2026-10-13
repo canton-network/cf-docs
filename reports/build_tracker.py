@@ -45,18 +45,70 @@ REFETCH_OVERLAP = dt.timedelta(days=2)
 
 # ---------- GitHub ----------
 
-PR_NODE = """
+# Timeline events that count as someone working on an item. Bots, including the
+# follow-up automation (github-actions), also produce these; they are filtered out when
+# the records are built, so "untouched" means untouched by a person.
+ACTOR_EVENTS = ["LabeledEvent", "UnlabeledEvent", "ClosedEvent", "ReopenedEvent", "AssignedEvent",
+                "RenamedTitleEvent", "CrossReferencedEvent"]
+PR_ACTOR_EVENTS = ACTOR_EVENTS + ["MergedEvent", "ReadyForReviewEvent", "ConvertToDraftEvent",
+                                  "ReviewRequestedEvent", "HeadRefForcePushedEvent"]
+
+
+def enum_name(typename: str) -> str:
+    return "".join("_" + c if c.isupper() else c for c in typename).lstrip("_").upper()
+
+
+def timeline(events: list[str], extra_types: list[str], extra_fragments: str) -> str:
+    types = ", ".join(enum_name(t) for t in ["IssueComment"] + extra_types + events)
+    fragments = "".join(f" ... on {t} {{ createdAt actor {{ login __typename }} }}" for t in events)
+    return (f"timelineItems(last: 50, itemTypes: [{types}]) {{ nodes {{ __typename"
+            f" ... on IssueComment {{ createdAt author {{ login __typename }} }}{extra_fragments}{fragments} }} }}")
+
+
+PR_NODE = f"""
   number title url createdAt mergedAt closedAt updatedAt state isDraft reviewDecision
-  author { login __typename }
-  reviews(first: 100) { nodes { author { login __typename } state submittedAt } }
+  author {{ login __typename }}
+  reviews(first: 100) {{ nodes {{ author {{ login __typename }} state submittedAt }} }}
+  {timeline(PR_ACTOR_EVENTS, ["PullRequestReview", "PullRequestCommit"],
+            " ... on PullRequestReview { submittedAt author { login __typename } }"
+            " ... on PullRequestCommit { commit { committedDate } }")}
 """
 
-ISSUE_NODE = """
+ISSUE_NODE = f"""
   number title url createdAt closedAt updatedAt state
-  author { login __typename }
-  labels(first: 10) { nodes { name } }
-  comments { totalCount }
+  author {{ login __typename }}
+  labels(first: 10) {{ nodes {{ name }} }}
+  comments(last: 100) {{ totalCount nodes {{ author {{ login __typename }} }} }}
+  {timeline(ACTOR_EVENTS, [], "")}
 """
+
+AUTOMATION = set(json.loads((HERE / "contributors.json").read_text())["bots"])
+
+
+def is_automation(account: dict | None) -> bool:
+    if not account:
+        return False  # deleted accounts show as null: a person, as far as we can tell
+    login = account.get("login", "")
+    return account.get("__typename") == "Bot" or login.endswith("[bot]") or login in AUTOMATION
+
+
+def human_activity(node: dict) -> tuple[dt.datetime, bool]:
+    """Last time a person acted on the item (at least its creation), and whether a bot closed it last."""
+    latest = utc(node["createdAt"])
+    last_close = None
+    for event in node["timelineItems"]["nodes"]:
+        kind = event["__typename"]
+        if kind == "PullRequestCommit":
+            when, who = event["commit"]["committedDate"], {}
+        else:
+            when = event.get("createdAt") or event.get("submittedAt")
+            who = event.get("actor") if "actor" in event else event.get("author")
+        if kind == "ClosedEvent":
+            last_close = who
+        if when and not is_automation(who):
+            latest = max(latest, utc(when))
+    closed_by_bot = node["state"] == "CLOSED" and is_automation(last_close) if last_close is not None else False
+    return latest, closed_by_bot
 
 
 def fetch_updated(field: str, node: str, since: dt.datetime | None) -> list[dict]:
@@ -111,6 +163,7 @@ def pr_record(node: dict) -> tuple[dict, list[dict]]:
             reviews.append({"pr": node["number"], "url": node["url"], "reviewer": reviewer,
                             "bot": reviewer_bot, "state": r["state"], "submitted": eastern(r["submittedAt"])})
     peer = [r for r in reviews if not r["bot"]]
+    human, closed_by_bot = human_activity(node)
     return {
         "number": node["number"], "title": node["title"], "url": node["url"], "author": author,
         "created": eastern(node["createdAt"]), "merged": eastern(node["mergedAt"]),
@@ -118,15 +171,19 @@ def pr_record(node: dict) -> tuple[dict, list[dict]]:
         "updated": eastern(node["updatedAt"]),
         "first_review": min((r["submitted"] for r in peer), default=None),
         "peer_reviews": len(peer), "decision": node.get("reviewDecision") or "",
+        "human_updated": eastern(human.isoformat()), "auto_closed": closed_by_bot,
     }, reviews
 
 
 def issue_record(node: dict) -> dict:
+    human, closed_by_bot = human_activity(node)
     return {
         "number": node["number"], "title": node["title"], "url": node["url"], "author": author_of(node)[0],
         "created": eastern(node["createdAt"]), "closed": eastern(node["closedAt"]), "state": node["state"],
         "labels": ", ".join(lab["name"] for lab in node["labels"]["nodes"]),
-        "comments": node["comments"]["totalCount"], "updated": eastern(node["updatedAt"]),
+        "comments": sum(not is_automation(c.get("author")) for c in node["comments"]["nodes"]),
+        "updated": eastern(node["updatedAt"]),
+        "human_updated": eastern(human.isoformat()), "auto_closed": closed_by_bot,
     }
 
 
@@ -141,6 +198,8 @@ def load_existing(path: Path) -> dict:
     """Data, affiliations and last refresh time from an exported tracker."""
     wb = load_workbook(path, data_only=True)
     state = {"prs": {}, "issues": {}, "reviews": [], "contributors": {}, "refreshed": None}
+    complete = ("Last human activity (ET)" in [c.value for c in wb["PRs"][1]]
+                and "Comments (people)" in [c.value for c in wb["Issues"][1]])
     for row in rows_by_header(wb["PRs"]):
         n = int(row["PR"])
         state["prs"][n] = {
@@ -149,6 +208,7 @@ def load_existing(path: Path) -> dict:
             "closed": row["Closed (ET)"], "state": row["State"], "draft": bool(row["Draft"]),
             "updated": row["Last updated (ET)"], "first_review": row["First review (ET)"],
             "peer_reviews": int(row["Peer reviews"] or 0), "decision": row["Review decision"] or "",
+            "human_updated": row.get("Last human activity (ET)"), "auto_closed": bool(row.get("Closed by automation")),
         }
     for row in rows_by_header(wb["Reviews"]):
         n = int(row["PR"])
@@ -161,12 +221,13 @@ def load_existing(path: Path) -> dict:
         state["issues"][n] = {
             "number": n, "title": row["Title"], "url": row.get("URL") or f"https://github.com/{REPO}/issues/{n}",
             "author": row["Author"], "created": row["Created (ET)"], "closed": row["Closed (ET)"],
-            "state": row["State"], "labels": row["Labels"] or "", "comments": int(row["Comments"] or 0),
-            "updated": row["Last updated (ET)"],
+            "state": row["State"], "labels": row["Labels"] or "",
+            "comments": int(row.get("Comments (people)") or 0), "updated": row["Last updated (ET)"],
+            "human_updated": row.get("Last human activity (ET)"), "auto_closed": bool(row.get("Closed by automation")),
         }
     for row in rows_by_header(wb["Contributors"]):
         state["contributors"][row["Login"]] = (row.get("Affiliation (edit me)") or row.get("Affiliation"), row["Basis"])
-    if "_meta" in wb.sheetnames and wb["_meta"]["B1"].value:
+    if complete and "_meta" in wb.sheetnames and wb["_meta"]["B1"].value:
         state["refreshed"] = dt.datetime.fromisoformat(str(wb["_meta"]["B1"].value))
     return state
 
@@ -260,7 +321,8 @@ def build(existing: Path | None, out: Path) -> None:
     # --- PRs ---
     header_row(pr_ws, 1, ["PR", "Title", "Author", "Affiliation", "Author type", "Created (ET)", "Merged (ET)",
                           "Closed (ET)", "State", "Draft", "Last updated (ET)", "First review (ET)",
-                          "Hours to first review", "Hours open to merge", "Peer reviews", "Review decision", "URL"])
+                          "Hours to first review", "Hours open to merge", "Peer reviews", "Review decision", "URL",
+                          "Last human activity (ET)", "Closed by automation"])
     for i, p in enumerate(prs, start=2):
         link(pr_ws.cell(row=i, column=1), p["number"], p["url"])
         pr_ws.cell(row=i, column=2, value=p["title"])
@@ -276,10 +338,12 @@ def build(existing: Path | None, out: Path) -> None:
         pr_ws.cell(row=i, column=15, value=p["peer_reviews"])
         pr_ws.cell(row=i, column=16, value=p["decision"])
         pr_ws.cell(row=i, column=17, value=p["url"])
+        pr_ws.cell(row=i, column=18, value=p["human_updated"]).number_format = DATE_FMT
+        pr_ws.cell(row=i, column=19, value=p["auto_closed"])
     pr_ws.freeze_panes = "B2"
-    pr_ws.auto_filter.ref = f"A1:Q{p_last}"
+    pr_ws.auto_filter.ref = f"A1:S{p_last}"
     widths(pr_ws, {"A": 8, "B": 50, "C": 22, "D": 18, "E": 11, "F": 16, "G": 16, "H": 16, "I": 9, "J": 7,
-                   "K": 16, "L": 16, "M": 11, "N": 11, "O": 9, "P": 18, "Q": 12})
+                   "K": 16, "L": 16, "M": 11, "N": 11, "O": 9, "P": 18, "Q": 12, "R": 16, "S": 11})
 
     # --- Reviews (authors reviewing their own PR are excluded) ---
     header_row(rev_ws, 1, ["PR", "Reviewer", "Affiliation", "State", "Submitted (ET)",
@@ -300,7 +364,8 @@ def build(existing: Path | None, out: Path) -> None:
 
     # --- Issues ---
     header_row(iss_ws, 1, ["Issue", "Title", "Author", "Affiliation", "Created (ET)", "Closed (ET)", "State",
-                           "Labels", "Comments", "Last updated (ET)", "URL"])
+                           "Labels", "Comments (people)", "Last updated (ET)", "URL", "Last human activity (ET)",
+                           "Closed by automation", "Topic labels"])
     for i, n in enumerate(issues, start=2):
         link(iss_ws.cell(row=i, column=1), n["number"], n["url"])
         iss_ws.cell(row=i, column=2, value=n["title"])
@@ -312,10 +377,15 @@ def build(existing: Path | None, out: Path) -> None:
         iss_ws.cell(row=i, column=8, value=n["labels"])
         iss_ws.cell(row=i, column=9, value=n["comments"])
         iss_ws.cell(row=i, column=11, value=n["url"])
+        iss_ws.cell(row=i, column=12, value=n["human_updated"]).number_format = DATE_FMT
+        iss_ws.cell(row=i, column=13, value=n["auto_closed"])
+        # Labels other than the follow-up automation's status/* labels.
+        iss_ws.cell(row=i, column=14, value=", ".join(
+            lab for lab in (x.strip() for x in n["labels"].split(",")) if lab and not lab.startswith("status/")))
     iss_ws.freeze_panes = "B2"
-    iss_ws.auto_filter.ref = f"A1:K{i_last}"
+    iss_ws.auto_filter.ref = f"A1:N{i_last}"
     widths(iss_ws, {"A": 8, "B": 50, "C": 22, "D": 18, "E": 16, "F": 16, "G": 9, "H": 24, "I": 10, "J": 16,
-                    "K": 12})
+                    "K": 12, "L": 16, "M": 11, "N": 22})
 
     # --- Contributors: column B is the one place people edit ---
     header_row(contrib, 1, ["Login", "Affiliation (edit me)", "Basis", "PRs opened (all time)",
@@ -384,6 +454,11 @@ def expected_default_view(prs, issues, reviews, contributors, asof: dt.datetime)
         "PRs reviewed (reviewer–PR pairs)": sum(within(r["submitted"]) and person(r["reviewer"]) for r in first_pairs),
         "Issues opened": sum(within(i["created"]) and person(i["author"]) for i in issues),
         "Issues closed": sum(within(i["closed"]) and person(i["author"]) for i in issues),
+        # Open work tab, not tied to the period: untouched by people for 30+ days.
+        "Open PRs untouched 30+ days": sum(p["state"] == "OPEN" and not p["draft"] and person(p["author"])
+                                           and p["human_updated"] < asof - dt.timedelta(days=30) for p in prs),
+        "Open issues untouched 30+ days": sum(i["state"] == "OPEN" and person(i["author"])
+                                              and i["human_updated"] < asof - dt.timedelta(days=30) for i in issues),
         "period": [start.isoformat(), end.isoformat()],
     }
 
@@ -412,8 +487,11 @@ def build_about(ws) -> None:
         ("Everyone means everyone except bots. Affiliation filters by the author of the PR or issue, or by the "
          "reviewer for reviews.", ""),
         ("PRs reviewed counts each reviewer once per PR, in the period of their first review on it.", ""),
-        ("Untouched means no comment, commit, review or label change. Draft PRs are left out of staleness unless "
-         "you include them.", ""),
+        ("Untouched means no comment, commit, review, label or other change by a person. Bots, including the "
+         "follow-up automation that labels, nudges and closes stale items, do not count. Draft PRs are left out of "
+         "staleness unless you include them.", ""),
+        ("Comments on issues count only comments from people. Topic labels are labels other than the automation's "
+         "status/ labels. Closed counts say how many closures the automation made.", ""),
         ("", ""),
         ("Refresh", "h"),
         ("Every Monday afternoon the latest GitHub activity is added. Edits outside the Contributors tab are not "

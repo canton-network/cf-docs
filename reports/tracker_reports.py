@@ -30,8 +30,7 @@ HAIR = Side(style="hair", color="E8EBF0")
 PERIODS = ["Last week", "Last 4 weeks", "Last 13 weeks", "This month", "Last month", "This quarter",
            "Last quarter", "Year to date", "All time", "Custom"]
 AFFILIATIONS = ["Everyone", "Digital Asset", "Canton Foundation", "External"]
-FIRST_DAY = "DATE(2025,12,1)"  # before the repository's first activity
-MAX_BUCKETS = 60
+MAX_BUCKETS = 156  # three years of weeks
 
 
 @dataclass
@@ -114,7 +113,7 @@ def period_cells(ws, r: Ranges, period: str, custom_from: str, custom_to: str, h
     ws[f"{h}3"] = (f'=SWITCH({period},"Last week",{h}2-7,"Last 4 weeks",{h}2-28,"Last 13 weeks",{h}2-91,'
                    f'"This month",{month0},"Last month",EDATE({month0},-1),"This quarter",{quarter0},'
                    f'"Last quarter",EDATE({quarter0},-3),"Year to date",DATE(YEAR({a}),1,1),'
-                   f'"All time",{FIRST_DAY},"Custom",{custom_from},{h}2-7)')
+                   f'"All time",INT(MIN({r.P("F")},{r.I("E")})),"Custom",{custom_from},{h}2-7)')
     ws[f"{h}4"] = (f'=SWITCH({period},"Last week",{h}2,"Last 4 weeks",{h}2,"Last 13 weeks",{h}2,'
                    f'"Last month",{month0},"Last quarter",{quarter0},"Custom",{custom_to}+1,{a})')
     ws[f"{h}5"] = f"={h}3-({h}4-{h}3)"
@@ -210,8 +209,8 @@ def activity(ws, r: Ranges) -> None:
     dropdown(ws, "A5", "A6", "PERIOD", PERIODS, "Last week")
     dropdown(ws, "C5", "C6", "GROUP TREND BY", ["Week", "Month", "Quarter"], "Week")
     dropdown(ws, "E5", "E6", "AFFILIATION", AFFILIATIONS, "Everyone")
-    date_input(ws, "G5", "G6", "CUSTOM FROM", "=DATE(2026,9,1)")
-    date_input(ws, "I5", "I6", "CUSTOM TO (INCLUSIVE)", "=DATE(2026,9,30)")
+    date_input(ws, "G5", "G6", "CUSTOM FROM", f"=EDATE(DATE(YEAR({r.asof}),MONTH({r.asof}),1),-1)")
+    date_input(ws, "I5", "I6", "CUSTOM TO (INCLUSIVE)", f"=DATE(YEAR({r.asof}),MONTH({r.asof}),1)-1")
     ws.merge_cells("A6:B6"), ws.merge_cells("C6:D6"), ws.merge_cells("E6:F6"), ws.merge_cells("G6:H6"), \
         ws.merge_cells("I6:J6")
     p = period_cells(ws, r, "$A$6", "$G$6", "$I$6")
@@ -241,10 +240,16 @@ def activity(ws, r: Ranges) -> None:
         ("issues_opened", "Issues opened"), ("issues_closed", "Issues closed"),
         ("open_issues", "Open issues at period end"),
     ]
+    auto_closed = {
+        "closed": f'COUNTIFS({between(r.P("H"), s, e)},{r.P("G")},"",{r.P("D")},{crit},{r.P("S")},TRUE)',
+        "issues_closed": f'COUNTIFS({between(r.I("F"), s, e)},{r.I("D")},{crit},{r.I("M")},TRUE)',
+    }
     for k, (key, label) in enumerate(tiles):
         cur, old = m[key](s, e), m[key](ps, s)
         sub = (f'=IFERROR("previous period "&TEXT({old},"0.0"),"")' if key == "first_review"
                else compare(cur, old))
+        if key in auto_closed:
+            label = f'="{label}"&IF({auto_closed[key]}>0," · "&{auto_closed[key]}&" by the follow-up automation","")'
         tile(ws, 8 + 4 * (k // 4), 1 + 2 * (k % 4), f"={cur}", label, sub,
              "0.0" if key == "first_review" else "0")
 
@@ -302,6 +307,10 @@ def activity(ws, r: Ranges) -> None:
     section(ws, 16, (f'="PRs and issues per "&{group}&", "&TEXT({s},"d mmm")&" – "&TEXT({e}-1/86400,"d mmm yyyy")'
                      f'&IF({aff}="Everyone",", everyone except bots",", "&{aff}&" only")'))
     ws.add_chart(chart, "A17")
+    ws.merge_cells("A36:J36")
+    ws["A36"] = (f'=IF({n.replace("MIN(" + str(MAX_BUCKETS) + ",", "(")}>{MAX_BUCKETS},'
+                 f'"The trend shows only the first {MAX_BUCKETS} rows; choose a coarser grouping to see the whole period.","")')
+    ws["A36"].font = font(9, bold=True, color="B3261E")
     notes(ws, 33, [
         "Affiliation filters by the PR or issue author (and by reviewer for PRs reviewed). Everyone means everyone except bots.",
         "Bars are labelled with the days they cover. Weeks run Monday 12:00 to Monday 12:00 US Eastern; months and quarters are calendar periods.",
@@ -316,8 +325,8 @@ def people(ws, r: Ranges) -> None:
     dropdown(ws, "A5", "A6", "PERIOD", PERIODS, "Last 4 weeks")
     dropdown(ws, "C5", "C6", "AFFILIATION", AFFILIATIONS, "Everyone")
     dropdown(ws, "E5", "E6", "SORT BY", ["PRs opened", "PRs merged", "PRs reviewed", "Issues opened"], "PRs opened")
-    date_input(ws, "G5", "G6", "CUSTOM FROM", "=DATE(2026,9,1)")
-    date_input(ws, "I5", "I6", "CUSTOM TO (INCLUSIVE)", "=DATE(2026,9,30)")
+    date_input(ws, "G5", "G6", "CUSTOM FROM", f"=EDATE(DATE(YEAR({r.asof}),MONTH({r.asof}),1),-1)")
+    date_input(ws, "I5", "I6", "CUSTOM TO (INCLUSIVE)", f"=DATE(YEAR({r.asof}),MONTH({r.asof}),1)-1")
     for span in ("A6:B6", "C6:D6", "E6:F6", "G6:H6", "I6:J6"):
         ws.merge_cells(span)
     p = period_cells(ws, r, "$A$6", "$G$6", "$I$6")
@@ -332,11 +341,13 @@ def people(ws, r: Ranges) -> None:
         i = row + 2 + k
         q = f'"{name}"'
         ws.cell(row=i, column=1, value=name)
+        # An empty FILTER is an error, not zero rows: blank those out before counting.
         ws.cell(row=i, column=2, value=(
-            f'=IFERROR(COUNTA(UNIQUE(VSTACK('
-            f'FILTER({r.P("C")},{r.P("D")}={q},{r.P("F")}>={s},{r.P("F")}<{e}),'
-            f'FILTER({r.R("B")},{r.R("C")}={q},{r.R("E")}>={s},{r.R("E")}<{e}),'
-            f'FILTER({r.I("C")},{r.I("D")}={q},{r.I("E")}>={s},{r.I("E")}<{e})))),0)'))
+            f'=IFERROR(ROWS(UNIQUE(LET(x,VSTACK('
+            f'IFERROR(FILTER({r.P("C")},{r.P("D")}={q},{r.P("F")}>={s},{r.P("F")}<{e}),""),'
+            f'IFERROR(FILTER({r.R("B")},{r.R("C")}={q},{r.R("E")}>={s},{r.R("E")}<{e}),""),'
+            f'IFERROR(FILTER({r.I("C")},{r.I("D")}={q},{r.I("E")}>={s},{r.I("E")}<{e}),"")),'
+            f'FILTER(x,x<>"")))),0)'))
         ws.cell(row=i, column=3, value=f'=COUNTIFS({r.P("D")},{q},{r.P("F")},">="&{s},{r.P("F")},"<"&{e})')
         ws.cell(row=i, column=4, value=f'=COUNTIFS({r.P("D")},{q},{r.P("G")},">="&{s},{r.P("G")},"<"&{e})')
         ws.cell(row=i, column=5, value=(f'=COUNTIFS({r.R("C")},{q},{r.R("E")},">="&{s},{r.R("E")},"<"&{e},'
@@ -377,17 +388,22 @@ def open_work(ws, r: Ranges) -> None:
         ws.merge_cells(span)
     a = r.asof
     masthead(ws, '="Open work right now"',
-             f'="Not tied to a period. Untouched = days since the last comment, commit, review or label change. '
+             f'="Not tied to a period. Untouched = days since a person last commented, committed, reviewed, labelled or '
+             f'otherwise changed it; bots, including the follow-up automation, are ignored. '
              f'Data refreshed "&TEXT({a},"d mmm yyyy h:mm AM/PM")&" ET."')
-    ready = f'{r.P("I")},"OPEN",{r.P("J")},FALSE'
+    ready = f'{r.P("I")},"OPEN",{r.P("J")},FALSE,{r.P("D")},"<>Bot"'
     tiles = [
-        (f'=COUNTIFS({ready})', "Open PRs (not drafts)", f'=COUNTIFS({r.P("I")},"OPEN",{r.P("J")},TRUE)&" drafts besides"'),
-        (f'=COUNTIFS({ready},{r.P("K")},"<"&({a}-30))', "PRs untouched 30+ days", '="drafts not counted"'),
+        (f'=COUNTIFS({ready})', "Open PRs (not drafts)",
+         f'=COUNTIFS({r.P("I")},"OPEN",{r.P("J")},TRUE,{r.P("D")},"<>Bot")&" drafts besides · bots excluded"'),
+        (f'=COUNTIFS({ready},{r.P("R")},"<"&({a}-30))', "PRs untouched 30+ days", '="by people · drafts not counted"'),
         (f'=COUNTIFS({ready},{r.P("P")},"APPROVED")', "PRs approved, not merged", '="ready to ship"'),
         (f'=COUNTIFS({ready},{r.P("P")},"CHANGES_REQUESTED")', "PRs with changes requested", '="waiting on authors"'),
-        (f'=COUNTIFS({r.I("G")},"OPEN")', "Open issues", f'=COUNTIFS({r.I("G")},"OPEN",{r.I("I")},0)&" never commented on"'),
-        (f'=COUNTIFS({r.I("G")},"OPEN",{r.I("J")},"<"&({a}-30))', "Issues untouched 30+ days", '=""'),
-        (f'=COUNTIFS({r.I("G")},"OPEN",{r.I("H")},"")', "Open issues without labels", '=""'),
+        (f'=COUNTIFS({r.I("G")},"OPEN",{r.I("D")},"<>Bot")', "Open issues",
+         f'=COUNTIFS({r.I("G")},"OPEN",{r.I("D")},"<>Bot",{r.I("I")},0)&" with no comments from people"'),
+        (f'=COUNTIFS({r.I("G")},"OPEN",{r.I("D")},"<>Bot",{r.I("L")},"<"&({a}-30))', "Issues untouched 30+ days",
+         '="by people"'),
+        (f'=COUNTIFS({r.I("G")},"OPEN",{r.I("D")},"<>Bot",{r.I("N")},"")', "Open issues without a topic label",
+         '="status/ labels not counted"'),
         (f'=COUNTIFS({r.I("G")},"OPEN",{r.I("D")},"External")', "Open issues from outside the team", '=""'),
     ]
     for k, (value, label, sub) in enumerate(tiles):
@@ -396,7 +412,7 @@ def open_work(ws, r: Ranges) -> None:
     row = 17
     section(ws, row, "List", "Filtered by the yellow dropdowns. Numbers link to GitHub.")
     table_header(ws, row + 1, ["#", "Title", "Author", "Affiliation", "Untouched (days)", "", "Opened"])
-    ws.cell(row=row + 1, column=6, value='=IF($A$6="Pull requests","Review state","Comments")')
+    ws.cell(row=row + 1, column=6, value='=IF($A$6="Pull requests","Review state","Comments (people)")')
     min_days = 'SWITCH($E$6,"Any time",0,"7 days",7,"30 days",30,"90 days",90)'
     order = 'IF($I$6="Newest first",7,5)'
 
@@ -407,14 +423,14 @@ def open_work(ws, r: Ranges) -> None:
 
     pr = listing(
         {"link": f'HYPERLINK({r.P("Q")},"#"&{r.P("A")})', "title": r.P("B"), "author": r.P("C"),
-         "aff": r.P("D"), "touched": r.P("K"), "opened": f'TEXT({r.P("F")},"yyyy-mm-dd")',
+         "aff": r.P("D"), "touched": r.P("R"), "opened": f'TEXT({r.P("F")},"yyyy-mm-dd")',
          "extra": f'IF({r.P("J")},"draft",IF({r.P("P")}="","no decision",LOWER(SUBSTITUTE({r.P("P")},"_"," "))))'},
         f'({r.P("I")}="OPEN")*((($G$6="Include drafts")+({r.P("J")}=FALSE))>0)*'
-        f'(({a}-{r.P("K")})>={min_days})*{aff_ok(r.P("D"), "$C$6")}')
+        f'(({a}-{r.P("R")})>={min_days})*{aff_ok(r.P("D"), "$C$6")}')
     iss = listing(
         {"link": f'HYPERLINK({r.I("K")},"#"&{r.I("A")})', "title": r.I("B"), "author": r.I("C"),
-         "aff": r.I("D"), "touched": r.I("J"), "opened": f'TEXT({r.I("E")},"yyyy-mm-dd")', "extra": r.I("I")},
-        f'({r.I("G")}="OPEN")*(({a}-{r.I("J")})>={min_days})*{aff_ok(r.I("D"), "$C$6")}')
+         "aff": r.I("D"), "touched": r.I("L"), "opened": f'TEXT({r.I("E")},"yyyy-mm-dd")', "extra": r.I("I")},
+        f'({r.I("G")}="OPEN")*(({a}-{r.I("L")})>={min_days})*{aff_ok(r.I("D"), "$C$6")}')
     ws.cell(row=row + 2, column=1, value=f'=IFERROR(IF($A$6="Pull requests",{pr},{iss}),"Nothing matches these filters.")')
     for col, width in {"A": 9, "B": 52, "C": 18, "D": 17, "E": 13, "F": 17, "G": 13}.items():
         ws.column_dimensions[col].width = width
