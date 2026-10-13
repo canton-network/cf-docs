@@ -16,7 +16,7 @@ from x2mdx.jvm_docs.lifecycle import (
     parse_scala_type_page,
 )
 from x2mdx.jvm_docs.models import JvmDocArtifactLifecycle, JvmDocLifecycleReport, JvmDocSymbolLifecycle
-from x2mdx.jvm_docs.render import build_pages, current_member_rows
+from x2mdx.jvm_docs.render import build_pages, retained_member_rows
 from x2mdx.render import render_page
 from x2mdx.jvm_docs.snapshots import load_jvm_doc_sources
 
@@ -571,7 +571,7 @@ class JvmDocsTests(unittest.TestCase):
         legacy = next(item for item in payload["items"] if item["location"] == "com.example.Legacy")
         self.assertFalse(legacy["current_present"])
         self.assertEqual(legacy["observed_removal"], "1.1.0")
-        self.assertIsNone(legacy.get("route"))
+        self.assertIsNotNone(legacy.get("route"))
 
         artifact_page = details_dir / "bindings-java.mdx"
         package_dir = details_dir / "bindings-java-packages" / "com-example"
@@ -584,7 +584,8 @@ class JvmDocsTests(unittest.TestCase):
         self.assertTrue(package_page.exists())
         self.assertTrue(foo_page.exists())
         self.assertTrue(bar_page.exists())
-        self.assertFalse(legacy_page.exists())
+        self.assertTrue(legacy_page.exists())
+        self.assertIn("Removed in 1.1.0", legacy_page.read_text(encoding="utf-8"))
 
         overview_text = overview.read_text(encoding="utf-8")
         foo_text = foo_page.read_text(encoding="utf-8")
@@ -627,7 +628,7 @@ class JvmDocsTests(unittest.TestCase):
             latest_doc_path="com/example/Foo.html",
         )
 
-        rows = current_member_rows(
+        rows = retained_member_rows(
             {"members": [baseline_member, added_member]},
             baseline_version="1.0.0",
             publish_version="1.2.0",

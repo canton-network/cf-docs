@@ -363,10 +363,30 @@ def render_function(fn: dict[str, Any]) -> str:
         parts.append(f'<span id="{anchor}"></span>')
     parts.append(mdx_function_heading(name))
     parts.append(signature)
+    parts.extend(render_warn_blocks(fn.get("fct_warns")))
     descr = render_doc_blocks(fn.get("fct_descr"))
     if descr:
         parts.append(descr)
     return "\n\n".join(parts)
+
+
+def warning_lifecycle_state(warns: Any) -> str | None:
+    if extract_tagged_warning_messages(warns, "DeprecatedData"):
+        return "deprecated"
+    messages = extract_tagged_warning_messages(warns, "WarnData")
+    for message in messages:
+        match = re.match(r"^\s*(dev|alpha|beta|stable)\s*:", message, re.IGNORECASE)
+        if match:
+            return match.group(1).lower()
+    for state in ("alpha", "beta"):
+        if any(state in message.lower() for message in messages):
+            return state
+    return None
+
+
+def module_prerelease_badges(module: dict[str, Any], *, removed: bool = False) -> list[ReferenceBadge]:
+    state = warning_lifecycle_state(module.get("md_warn"))
+    return [ReferenceBadge(state.title(), tone="changed")] if not removed and state in {"alpha", "beta"} else []
 
 
 def render_warn_blocks(warns: Any) -> list[str]:
@@ -704,7 +724,10 @@ def module_template_context(
 
     module_warnings = extract_tagged_warning_messages(module_doc.get("md_warn"), "WarnData")
     module_deprecations = extract_tagged_warning_messages(module_doc.get("md_warn"), "DeprecatedData")
-    module_alpha_warning = next((msg for msg in module_warnings if "alpha" in msg.lower()), None)
+    module_state = warning_lifecycle_state(module_doc.get("md_warn"))
+    module_prerelease_warning = next((msg for msg in module_warnings if re.match(r"^\s*(alpha|beta)\s*:", msg, re.IGNORECASE)), None)
+    if module_prerelease_warning is None and module_state in {"alpha", "beta"}:
+        module_prerelease_warning = next((msg for msg in module_warnings if module_state in msg.lower()), None)
     module_deprecation_warning = module_deprecations[0] if module_deprecations else None
     replacement_target = extract_exact_replacement_target(module_deprecations)
 
@@ -725,10 +748,14 @@ def module_template_context(
     lifecycle = "Stable."
     if module_status == "removed":
         lifecycle = "Removed."
-    elif module_alpha_warning:
-        lifecycle = "Alpha (experimental)."
     elif module_deprecation_warning:
         lifecycle = "Deprecated."
+    elif module_state == "alpha":
+        lifecycle = "Alpha (experimental)."
+    elif module_state == "beta":
+        lifecycle = "Beta (preview)."
+    elif module_state == "stable":
+        lifecycle = "Stable."
     elif module_warnings:
         lifecycle = "Warning."
 
@@ -743,10 +770,10 @@ def module_template_context(
             if removed_in != "-"
             else "This module is removed and is shown here for historical reference."
         )
-    elif module_alpha_warning:
-        primary_warning = module_alpha_warning
     elif module_deprecation_warning:
         primary_warning = module_deprecation_warning
+    elif module_prerelease_warning:
+        primary_warning = module_prerelease_warning
 
     token = _TYPE_LINK_CONTEXT.set(type_links) if type_links is not None else None
     try:
@@ -872,7 +899,7 @@ def build_reader_module_routes(
     return {
         name: f"{prefix}/{module_page_slug(name)}"
         for name, lifecycle in report.module_lifecycle.items()
-        if lifecycle.get("status") == "active" and name not in EXCLUDED_MODULE_NAMES
+        if name not in EXCLUDED_MODULE_NAMES
     }
 
 
@@ -897,7 +924,7 @@ def aggregate_history_events(
                 combined[key] = HistoryEvent(
                     kind=event.kind,
                     version=event.version,
-                    label=event.label,
+                    label="Modules removed in" if event.kind == HistoryEventKind.REMOVED else event.label,
                     details=details,
                     evidence=event.evidence,
                 )
@@ -913,6 +940,7 @@ def aggregate_history_events(
                 )
 
     priority = {
+        HistoryEventKind.REMOVED: -1,
         HistoryEventKind.REMOVE_AS_OF: 0,
         HistoryEventKind.DEPRECATED: 1,
         HistoryEventKind.CHANGED: 2,
@@ -954,7 +982,6 @@ def build_standardized_pages(
             ).lower(),
         )
         if str(module.get("md_name", "")) in history_by_id
-        and history_by_id[str(module.get("md_name", ""))].current_present
         and str(module.get("md_name", "")) not in EXCLUDED_MODULE_NAMES
     ]
     anchor_to_page = build_anchor_page_index(modules)
@@ -976,7 +1003,7 @@ def build_standardized_pages(
                 title=display_name,
                 href=module_link,
                 summary=module_summary_preview(module),
-                badges=reference_badges_for_history_item(
+                badges=module_prerelease_badges(module, removed=not item.current_present) + reference_badges_for_history_item(
                     item,
                     kind_label="Daml",
                     comparison_versions=history_report.comparison_versions,
@@ -1005,14 +1032,14 @@ def build_standardized_pages(
                 template_name="daml_json/standardized_module.md.j2",
                 page_title=display_name,
                 page_summary=module_summary_preview(module),
-                page_badges=reference_badges_for_history_item(
+                page_badges=module_prerelease_badges(module, removed=not item.current_present) + reference_badges_for_history_item(
                     item,
                     kind_label="Daml",
                     comparison_versions=history_report.comparison_versions,
                 ),
                 page_meta_items=[
                     ReferenceMetaItem("Module", name),
-                    ReferenceMetaItem("Latest release", history_report.publish_version),
+                    ReferenceMetaItem("Last available release" if not item.current_present else "Latest release", item.last_seen),
                 ],
                 history_events=list(
                     history_events_for_item(
@@ -1040,7 +1067,7 @@ def build_standardized_pages(
                 kind_label="Daml",
             ),
             meta_items=[
-                ReferenceMetaItem("Latest release", history_report.publish_version),
+                ReferenceMetaItem("Last available release" if not item.current_present else "Latest release", item.last_seen),
                 ReferenceMetaItem("Versions", str(len(history_report.comparison_versions))),
                 ReferenceMetaItem("Current modules", str(len(history_report.current_items()))),
             ],
@@ -1125,7 +1152,7 @@ def build_pages(
                 title=display_name,
                 href=module_link,
                 summary=module_summary_preview(module_doc),
-                badges=module_lifecycle_badges(
+                badges=module_prerelease_badges(module_doc, removed=lifecycle.get("status") == "removed") + module_lifecycle_badges(
                     lifecycle=lifecycle,
                     deprecation_version=deprecation_version,
                 ),

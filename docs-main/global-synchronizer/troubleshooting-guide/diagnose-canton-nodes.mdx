@@ -1,0 +1,333 @@
+---
+title: "Diagnose Canton Nodes"
+description: "Reading Canton node logs and diagnosing timeouts, auth rejections, dropped connections, database bottlenecks, and contention"
+---
+
+{/* COPIED_START source="docs-website:docs/replicated/canton/3.5/participant/howtos/troubleshoot/troubleshooting_guide.rst" hash="3c63d910" */}
+
+Distributed systems can fail in many ways and finding the cause of an error is not straightforward. This guide captures the common steps our engineers take when trying to troubleshoot issues found during development or support.
+
+## Key knowledge
+
+### Canton transaction processing steps
+
+Canton transaction processing has the following key steps involved.
+When we debug, we try to find out which of the steps fails / is slow / faulty. This can help narrow down the component and the issue. As all the message exchange happens via the sequencer, you effectively observe whether the information came into the node and where the action that the node was supposed to take was taken by responding with a message to the sequencer (or emitting a command result on the Ledger API). The phases, as numbered in the log lines, are:
+
+- Phase 1: Submitting participant prepares the confirmation request based on the command input. The confirmation request is sent to the sequencer, addressing the mediator and the validating participants.
+- Phase 2: The mediator receives the request from the sequencer, registers the transaction and starts to wait for confirmations.
+- Phase 3: The validating participants receive the confirmation request from the sequencer and perform their validations. The two main checks that happen here are: validation (is the transaction correct and properly authorized?) and conflict detection (are all contracts that are spent or fetched in the transaction still active?).
+- Phase 4: The confirming participants, a subset of the validating participants, send their verdict on each sub-transaction they are privy to via the sequencer to the mediator. The verdict can be `LocalApprove` or some rejection reason.
+- Phase 5: The mediator receives the mediator responses (approvals and rejections) from the participants via the sequencer and validates them. If the mediator receives enough responses for the given transaction, it will compute the "Verdict", which is the final decision on the transaction.
+- Phase 6: The mediator sends its verdict to all validating participants of a transaction via the sequencer.
+- Phase 7: The participants receive the mediator verdict and register it to the record order publisher. While the validation can happen in parallel, the record publisher will ensure that the transactions are emitted in order.
+
+Phase 1 logs a start and a completion line; phases 2 to 7 log one line each. These log lines start with `Phase 1`, `Phase 2`, and so on.
+
+### Internal errors
+
+If internal consistency checks fail and indicate a possible bug in Canton, Canton will include the term `internal error` into the log message. Please contact support if you see an internal error.
+
+## Log files
+
+### Canton trace ids
+
+All Canton log statements contain a trace-id. This tracing is turned on by default and the `trace-id` is passed between the distributed processes:
+
+```none
+c.d.c.p.p.s.InFlightSubmissionTracker:participant=participant1
+tid:d5df95972a95b5ff00cb5cc3346c545f - NOT_SEQUENCED_TIMEOUT(2,d5df9597):
+Transaction was not sequenced within the pre-defined max sequencing time and has
+therefore timed out err-context:{location=SubmissionTrackingData.scala:175,
+timestamp=2022-10-19T17:45:56.393151Z}
+```
+
+In the above example, we see the trace id twice: `tid:d5df95972a95b5ff00cb5cc3346c545f` and `NOT_SEQUENCED_TIMEOUT(2,d5df9597)`. By filtering according to the `trace-id`, you can find almost all log statements that relate to a particular command. However, sometimes we also need to find out the command id of a transaction. The submission of a command is logged by the command submission service at the same trace id, in a line that begins with `Phase 1 started`:
+
+```none
+2025-12-10 15:09:53,534 [⋮] INFO
+c.d.c.p.a.s.c.CommandSubmissionServiceImpl:participant=participant1
+tid:05039baf6c56bcabb0af5564aad66657 - Phase 1 started: Submitting [⋮]
+```
+
+With [detailed API logging](/global-synchronizer/reference/observability-configuration#detailed-logging) turned on, the `ApiRequestLogger` entry for the same request contains the submitted command, including its `commandId`, `userId`, `submissionId` and `workflowId`, which can be used to filter the logs.
+
+### Extract the context of a log message
+
+The log lines often also contain the "context" of the component. This log line tells us which component of which participant (participant1) of which synchronizer connection (`psid`, the physical synchronizer id) has been emitting this log line. It also includes the trace ID of the underlying request:
+
+```none
+2025-12-10 15:24:55,237 [⋮] DEBUG
+c.d.c.p.p.TransactionProcessingSteps:participant=participant1/psid=mySynchronizer::122032922613::34-0
+tid:05039baf6c56bcabb0af5564aad66657 - Preparing batch for transaction submission
+```
+
+### Compare with a happy path successful logging trace
+
+Many components will log something and it is impossible to document every micro-step that happens (as this is also subject to change). But it makes sense to compare a failure trace with a successful transaction trace. To get such a trace, you start up a Canton "simple topology" example setup and run a simple:
+
+```scala
+participant1.health.ping(participant2)
+```
+
+You then open the log file and filter for the command processing of that ping (search for "Starting ping"). This will give you a "clean happy path trace". You can then subsequently compare your failure trace to the happy-path trace and look for the differences, i.e. where did the steps start to take a different path etc.
+
+### Use the API request logger to locate the component
+
+One key logging component is the `ApiRequestLogger`. The gRPC request-logging interceptor logs every incoming and outgoing request / message through it. Therefore, we can easily observe when a transaction left a node and when it arrived at a subsequent node. If API logging is turned on, the API request logger will print the full detail of all the gRPC messages into the log files.
+
+## Using lnav to view log files
+
+See [Viewing Logs](/global-synchronizer/reference/observability-configuration#viewing-logs) for setting up lnav with the Canton log format.
+
+### Look at all warnings and errors
+
+Canton's error reporting has been designed to log a warning/error whenever it detects that something is not working as it should. Therefore, any problem will likely show up in the log file. On the flip side, Canton may log a huge number of warnings/errors, in particular if a node or the database goes down. If the first warning or error does not completely explain the situation, it is important to look at all such messages. Use the following recipe:
+
+1. Set the minimum log level to WARN to display only warnings and errors (`:set-min-log-level warn`).
+2. Look at the first message. Mark the message (pressing `m`) so you can later get back to the message.
+3. Define an out-filter to hide the first message and all similar messages.
+4. Repeat steps (2) and (3) until you have filtered out all messages.
+5. Disable all out-filters. You can now press `u` and `U` to step through all marked warning and error messages.
+
+### Show gaps in logging times
+
+Once you start filtering for a particular command trace, you might want to hit `shift-t`. This will show you the delta time between the first log line and the subsequent one. Usually, you just need to find the "gap". This will tell you immediately where something got stuck / slow / timed out:
+
+- open the log files of all components
+- search for the first error / warn (i.e. hit `w` or `e`)
+- pick the trace-id (as described above) and filter for it
+- hit `shift-t` and find the gap.
+
+## Timeout errors
+
+Any transaction submitted to Canton is either successfully worked off (accepted or rejected) or eventually timed out. If a transaction hits a timeout, the application is informed of the rejection reasons by an appropriate completion event on the gRPC Ledger API.
+
+### Use a ping to determine if your system is broken or just slow / overloaded / contentious
+
+Many issues only surface under high load. Therefore, it often makes sense to diagnose timeout issues using a:
+
+```scala
+participant1.health.ping(...)
+```
+
+while the system is idle. If the ping works, then you likely have a throughput / performance / contention issue and you should continue with the performance and contention sections below.
+
+If the ping doesn't work and never did before, you should check your [synchronizer connectivity](/global-synchronizer/troubleshooting-guide/connectivity-issues).
+
+If previously, transaction processing worked and now stopped working, while all nodes are up and running, and reporting to be healthy, you should raise an issue with support.
+
+By turning on debug logging, you can then figure out which step of transaction processing failed by comparing the trace in the logs to the Phase 1-7 explanation, isolating out which component did not respond.
+
+## Auth errors
+
+For security reasons, Canton removes all details from auth errors. On the client side, you usually only see `PERMISSION_DENIED/An error occurred. Please contact the operator and inquire about the request <no-correlation-id> with tid <no-tid>`, so you need to inspect server logs to debug auth errors.
+
+To use an auth-enabled Ledger API, the caller needs to attach an access token to the gRPC request. These tokens are attached in the `Authorization` HTTP header. To see headers attached to incoming and outgoing requests, you need to set the log level to `TRACE` and enable `canton.monitoring.logging.api.message-payloads = true`. `ApiRequestLogger` will then output log lines containing `received headers` or `sending response headers`.
+
+Filter-in expressions for lnav:
+
+- `com.digitalasset.canton.auth.Authorizer`
+- `c.d.c.a.AuthInterceptor`
+- `c.d.c.l.a.ApiRequestLogger`
+
+Common patterns from the Canton log:
+
+- `PERMISSION_DENIED(7,0): Could not resolve is_deactivated status for user`
+
+  You are using a token for a user that is not (yet) allocated. The log line contains the name of the user that needs to be allocated.
+
+- `PERMISSION_DENIED(7,0): Claims are only valid for userId`
+
+  You are using the wrong user ID when submitting commands. The log line contains the expected user ID.
+
+- `UNAUTHENTICATED(6,0): The command is missing a (valid) JWT token`
+
+  You did not attach a token to the request, or the token could not be decoded. Use [JWT.IO](https://jwt.io/#debugger-io) to verify that the token string is a valid JWT.
+
+- `PERMISSION_DENIED(7,0): Claims do not authorize to act as party`
+
+  The log line contains the name of the missing claim, but not the actual claims. Consult the user management service to see whether you need to grant more rights to the user. In either case debug the token to see if it contains the expected elements using [JWT.IO](https://jwt.io/#debugger-io).
+
+## Disconnections
+
+Intermittent network failures cause the majority of disconnections that occur in real-life scenarios. Less frequently, disconnections happen when network proxies, load balancers, or other elements of the network infrastructure terminate the client-server connection because they think that there is no activity going on in the communication channel. Such disconnections are predictable and can be avoided by carefully configuring the components' keep-alive parameters.
+
+There are two keep-alive mechanisms to consider for the gRPC protocol stack: the low-level TCP keep-alive feature and the HTTP/2 pings. Canton endpoints utilize the latter. The article describing [how to use HTTP/2 PING-based keep-alives](https://grpc.io/docs/guides/keepalive/) is a good place to become familiar with the basics of this mechanism.
+
+The keep-alive parameters have to be set on all components involved. The parameters on both ends should be set consistently, and the keep-alive time setting on the client should not be set lower than the `permit-keep-alive-time` of the Ledger API server. The proxy inactivity timeouts should be more lenient than the client and server settings.
+
+You can determine if disconnections are caused by a misalignment of keep-alive settings on different components by enabling detailed networking logging on the Ledger API server. If the specific implementation allows, simultaneously increase the log level in the client application.
+
+The easiest way to start the keep-alive logging is to start the Canton participant with the `--debug` flag. Alternatively, you can modify the logger's configuration in the `logback.xml` file. You then have to bump the log level of the `io.grpc.netty.shaded.io.grpc.netty.NettyServerHandler`, the `io.grpc.netty.shaded.io.grpc.netty.NettyClientHandler` and the `com.digitalasset.canton.platform.apiserver.GrpcConnectionLogger` to `DEBUG`.
+
+Once that is done, you can observe the lifecycle events of the underlying gRPC channels such as their opening and closing:
+
+```none
+[..] DEBUG c.d.c.p.a.GrpcConnectionLogger:participant=participant - Grpc connection open: {io.grpc.Grpc.TRANSPORT_ATTR_LOCAL_ADDR=/127.0.0.1:5001,
+io.grpc.internal.GrpcAttributes.securityLevel=NONE, io.grpc.Grpc.TRANSPORT_ATTR_REMOTE_ADDR=/127.0.0.1:49944}
+[..] DEBUG c.d.c.p.a.GrpcConnectionLogger:participant=participant - Grpc connection closed: {io.grpc.Grpc.TRANSPORT_ATTR_LOCAL_ADDR=/127.0.0.1:5001,
+io.grpc.internal.GrpcAttributes.securityLevel=NONE, io.grpc.Grpc.TRANSPORT_ATTR_REMOTE_ADDR=/127.0.0.1:49944}
+```
+
+Likewise, the netty handlers log the header and data frames being exchanged, the pings (each component that receives a ping message sends a response back that contains the ack flag set to true), and the `GO_AWAY` messages that the clients and the servers exchange when they disconnect in an organized manner.
+
+From these logs you can get a pretty good idea of what happened around the moment when the connection was terminated. In particular, the absence of the ping, data and header messages may indicate that there was no activity on the channel, which may have prompted the proxy to terminate the connection. Similarly, the absence of the courtesy `GO_AWAY` messages may indicate that the connection was terminated abruptly.
+
+## Performance issues
+
+### How to measure database performance
+
+To get a first impression of database performance, enable the following metrics:
+
+- Metrics containing `executor.waittime`. These metrics show the time a db command needs to wait until Canton sends it to the db. High values indicate that the db is a bottleneck.
+- Metrics containing `executor.queued`. These metrics show the number of db commands waiting in a queue for being sent to the db. High values indicate that the db is a bottleneck.
+- Metrics containing `executor.running`. These metrics show the number of tasks currently being executed by the db. Very high values indicate that Canton is overloading the db. Very low values indicate that Canton is not fully loading the db. The number of db connections can be configured via `canton.<path-to-my-node>.storage.parameters.max-connections`.
+
+### How to diagnose slow database queries
+
+If database metrics indicate that the database is a bottleneck you may want to obtain more detailed information on query performance. For that, you need to enable query cost monitoring (`canton.monitoring.logging.query-cost.every = 60s`). Once you have done that, Canton will log every 60 seconds a report on query statistics:
+
+```none
+2025-01-22 10:23:14,006 [⋮] INFO  c.d.c.r.DbStorageMulti$:⋮/mediator=mediator1 - Here is our list of the 15 most expensive database queries for daml.db-storage.write.executor with load now=0.00, avg=0.00
+count=    950 mean=   0.70 ms, stddev=   0.71 ms, total=  0.7 s total
+count=    197 mean=   0.90 ms, stddev=   0.69 ms, total=  0.2 s com.digitalasset.canton.store.db.DbSequencedEventStore.$anonfun$store$2(DbSequencedEventStore.scala:124)
+count=     96 mean=   1.16 ms, stddev=   0.87 ms, total=  0.1 s com.digitalasset.canton.synchronizer.mediator.store.DbFinalizedResponseStore.$anonfun$store$1(FinalizedResponseStore.scala:223)
+count=    196 mean=   0.48 ms, stddev=   0.37 ms, total=  0.1 s com.digitalasset.canton.store.CursorPreheadStore.advancePreheadTo(CursorPreheadStore.scala:38)
+count=    104 mean=   0.78 ms, stddev=   1.09 ms, total=  0.1 s com.digitalasset.canton.synchronizer.mediator.store.DbMediatorDeduplicationStore$$anon$1.executeBatch(MediatorDeduplicationStore.scala:327)
+count=    196 mean=   0.34 ms, stddev=   0.19 ms, total=  0.1 s com.digitalasset.canton.synchronizer.mediator.store.DbMediatorDeduplicationStore.prunePersistentData(MediatorDeduplicationStore.scala:351)
+count=     45 mean=   1.24 ms, stddev=   0.68 ms, total=  0.1 s com.digitalasset.canton.time.Clock$Queued.$anonfun$run$1(Clock.scala:89)
+```
+
+The information in here can be very useful:
+
+- `count` means how often has this query run in the last period.
+- `mean` means what was the average execution time of that query.
+- `total` = `count` * `mean`.
+- The trailing entry, for example `DbSequencedEventStore.$anonfun$store$2(DbSequencedEventStore.scala:124)`, is really the query with the place in the source code that is being run.
+
+Please note that the "execution time" of the query does not include "queuing time" in the connection pool. The time is really the time it took from sending to the JDBC driver to getting the result back.
+
+Now, you do the following analysis:
+
+- if you have for example `max-connections = 4` and you log once a minute, if the total time of the queries approaches 240s, then you are obviously using up all db connections that are available.
+- if a single query runs for `60s`, then that query might be a sequential bottleneck, as it has been running for 60s out of the 60s interval.
+- the mean time should also tell you roughly the db latency, as there are some cheap read queries that should run *< 1ms*. If these queries take a long time, then you know that the database has high latencies or is overloaded.
+- all the queries should normally take between 5-15ms. If you see queries taking consistently longer (e.g. all of them 60 - 70ms), then your database system is overloaded, queuing too many database requests on the database. You might want to increase the database resources (CPUs) or reduce the number of connections. While seeming counter intuitive, giving too many db connections to a node will reduce the throughput, not increase it.
+
+### How to find the bottleneck
+
+In some situations, you would like to understand which component is causing a particular bottleneck. You can do that using the following technique.
+
+#### Theory
+
+In a model system with several computing stages:
+
+*Input -> Stage1 -> Stage2 -> Stage3 -> Stage4 -> Stage5 -> Output*
+
+The maximum throughput of the system is given by the minimum of the maximum throughputs of all stages. Let's assume that the max throughput is limited by Stage3 that has 100 tx/s.
+
+Now, if you have an input source that will throttle its submission based on the number of "open requests", then we know that the average latency of each transaction is going to be
+
+*latency = num-open-requests / max-throughput*
+
+The latency will grow linearly with the number of open requests. Now, as we previously defined that
+
+*throughput(Stage 3) < throughput (all other Stages)*
+
+We know that the open requests will be starting to pile up in front of Stage 3, because all other stages are processing every transaction much faster.
+
+Therefore, if we run the system under full load with N pending requests, such that the observed latency is large compared to the "zero load latency" of the system, then the bottleneck is trivially observable from the trace of a command: there will be a gap in the trace of a command, where the transaction is not being processed for (*observed latency - zero load latency*). That gap is the sequential bottleneck.
+
+#### Practical
+
+1. Find out what the zero load latency of your system is by running a simple ping over an idle system. A ping does two end-to-end transactions, so your zero load latency is just half of the observed ping latency.
+2. Run the system under full load again, including debug logging. You should be able to load the system such that the observed latency is at least an order of magnitude larger than the zero load latency.
+3. Open the log files and pick a transaction in the middle of your test run:
+   - Look for "TransactionAccepted" somewhere in the log file and pick the trace-id
+   - Filter for the trace-id and find the command-id. Add the command-id to the filter
+   - Hit Shift-T to see the time differences.
+   - Find the gaps
+
+To increase confidence, repeat this assessment on a few more transactions.
+
+## Contention
+
+### Why do you get contention
+
+This section explains how to deal with situations where many commands are failing with errors such as:
+
+- `LOCAL_VERDICT_LOCKED_CONTRACTS`
+- `LOCAL_VERDICT_INACTIVE_CONTRACTS`
+- `CONTRACT_NOT_FOUND`
+- `DUPLICATE_CONTRACT_KEY`
+
+Canton is not just a distributed system, but a distributed **racy** system where different independent actors may race for contracts or other resources. The transaction is built in phase 1, looking at the contract state at that time. The validation / conflict detection happens then in phase 3. If any other transaction changed that particular contract in the time between phase 1 and phase 3, the transaction will fail.
+
+Whether you get `LOCAL_VERDICT_INACTIVE_CONTRACTS`, `LOCAL_VERDICT_LOCKED_CONTRACTS` or `CONTRACT_NOT_FOUND` just depends on timing of the competing transaction. `LOCKED` means: there is a transaction about to change this resource, but we have not yet received the final verdict on it.
+
+### How to find contention
+
+In a distributed application, where different systems submit transactions, it is often not easy to understand where the contention is coming from. Here is a recipe that can be used on the Canton level:
+
+1. Ensure that you have turned on [detailed API logging](/global-synchronizer/reference/observability-configuration#detailed-logging) with debug logs.
+2. Run your system / tests until you have collected enough information / rejections.
+3. Open the log files and search for one of the rejections, i.e. search for `LOCKED`.
+4. Filter by the trace-id of this rejection. Determine the command-id using the `ApiRequestLogger` entry for the submission. Add the command-id to the filter.
+5. Now, find the `ApiRequestLogger` log entry of the CommandSubmissionService. This log entry contains the entire command that the application has submitted (if you turned on the detailed API logging). I.e. the "exercise choice" that caused the contention.
+6. Then, go back to the rejection (i.e. the one with `LOCKED`). This rejection will contain a `ResourceInfo`, referring to the contract that caused the rejection.
+
+Using the above recipe, you determine the choice and which contract in that particular choice created the problem. This should be sufficient to find the problematic parts in the model.
+
+## Use bisection to narrow down the root cause
+
+In this section an alternative approach is outlined that could help you if the guidelines in the previous sections were insufficient to resolve the problem. To apply that approach, you do not need a deep understanding of Canton. It is not only suitable to investigate problems inside of Canton, it also helps to discover problems coming from the environment.
+
+The approach is best explained with an example. Suppose you have developed a Canton deployment and successfully tested it on your local machine. After moving it to the distributed test environment, it is showing some problems. So you have two Canton deployments, a local one and a distributed one, one of them works correctly, the other one is broken.
+
+You notice the following differences between the two deployments:
+
+- The local deployment runs all nodes in a single process. The distributed deployment runs nodes in different processes.
+- The local deployment runs all nodes on the same machine. The distributed deployment runs nodes on different machines.
+- Only the distributed deployment has TLS enabled.
+- Only the distributed deployment has high-availability enabled.
+- The distributed deployment runs in a docker container (e.g. by using a cloud environment). The local deployment does not use docker.
+
+To better understand which of the differences is causing the problem, you setup a new deployment that has **only half of the differences**. That could mean, you setup a new deployment with the following characteristics:
+
+- It runs nodes in **different processes** (like the distributed deployment)
+- It runs nodes on the same machine (like the local deployment).
+- It has TLS **enabled**.
+- It has high availability disabled.
+- It does not use docker.
+
+For the sake of reference, let's call it "Deployment 3". Now you rerun the test. If the test succeeds (as for the local deployment), you know that the problem in the distributed deployment is caused by the network, by high-availability, or by docker. If the test fails (as for the distributed deployment), you know that the problem is caused by running several processes, by using TLS or by both. For the sake of the illustration, let's assume the test succeeds.
+
+To further narrow down the root cause, you setup yet another deployment that is "in the middle" between "Deployment 3" (which was successful) and the distributed deployment (which was failing). That could mean:
+
+- It runs nodes in different processes.
+- It runs nodes on **different** machines (like the distributed deployment).
+- It has TLS enabled.
+- It has high availability disabled.
+- It does not use docker.
+
+Let's call it "Deployment 4". Again, you rerun the test. If the test succeeds, you know that the problem in the distributed deployment is caused by high-availability or by docker. If the test fails, you know that the problem is caused by some combination of running nodes in different processes, on different machines and having TLS enabled. Let's assume that the test fails.
+
+To further narrow down the root cause, try to set up the simplest possible deployment that still has the problem. That could mean:
+
+- You simplify your test, e.g., **run a ping** instead of a complex workflow. It runs **only two nodes** (because you are aiming for a minimal example).
+- The two nodes run **in different processes on different machines** (because that seemed to be the root cause).
+- TLS is **disabled** (because that seemed not to trigger the problem).
+- High availability is disabled.
+- It does not use docker.
+
+Let's call it "Deployment 5". If the test fails on "Deployment 5", you have a minimal example to reproduce the problem. You know that the problem is caused by running two nodes on different machines. The problem is independent of your workflow, occurs already with two nodes and without enabling TLS. If the test succeeds on "Deployment 5", you have not yet understood the root cause. In that case, you need to do yet another iteration with a deployment "in the middle" between "Deployment 4" and "Deployment 5".
+
+The following guidelines are helpful to make this approach successful:
+
+- Try to keep the list of differences between successful and failing deployment **as complete as possible**. If the root cause is not on your list, you can't find it. Differences can come from configuration, Daml models, ledger applications, deployment (in process, network, docker, kubernetes, ...), hardware, operating system.
+- Always **aim at the middle** between the successful and failing deployment to learn the most with every new deployment you create and test. That is the fastest path to the root cause.
+- **Don't make assumptions up front** of which difference may or may not cause the problem. For example, if you are making the assumption that the problem is not caused by TLS, you may save one iteration, if you are right. But you will take a long detour, if you are wrong.
+- Do not assume that the problem is caused by a single difference between the two deployments. It could very well be that a **combination of differences** is needed to **reproduce the problem**.
+
+{/* COPIED_END */}

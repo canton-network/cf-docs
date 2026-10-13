@@ -30,7 +30,7 @@ from x2mdx.protobuf.lifecycle import (
 from x2mdx.history import ReferenceFormat, validate_history_report, write_history_report
 from x2mdx.protobuf.history import build_protobuf_surface_history_report
 from x2mdx.protobuf.render import build_pages, package_page_path, slugify_segment
-from x2mdx.protobuf.render import operation_page_path
+from x2mdx.protobuf.render import operation_page_path, endpoint_snapshot_map
 from x2mdx.protobuf.snapshots import load_protobuf_sources
 from x2mdx.render import write_pages
 
@@ -232,7 +232,7 @@ def mdx_title(path: Path) -> str:
 
 def service_name(path: Path) -> str:
     text = path.read_text(encoding="utf-8", errors="replace")
-    match = re.search(r"<dt>Service</dt>\s*<dd>([^<]+)</dd>", text)
+    match = re.search(r"(?:<dt>Service</dt>\s*<dd>|<span class=\"x2mdx-ref-meta-label\">Service</span>\s*<span class=\"x2mdx-ref-meta-value\">)([^<]+)</(?:dd|span)>", text)
     if match:
         return match.group(1)
     return path.parent.name
@@ -322,6 +322,7 @@ def normalize_flattened_links_and_labels(*, output_dir: Path, report: dict[str, 
                 [
                     (f'href="packages/{package_slug}"', f'href="./{package_slug}"'),
                     (f'href="./packages/{package_slug}"', f'href="./{package_slug}"'),
+                    (f'href="./operations/{package_slug}/', f'href="./{package_slug}/'),
                     (
                         f'<a class="x2mdx-ref-card-title" href="./{package_slug}">{html_text(package_name)}</a>',
                         f'<a class="x2mdx-ref-card-title" href="./{package_slug}">{html_text(label)}</a>',
@@ -597,7 +598,7 @@ def endpoint_routes(
     docs_json_path: Path,
 ) -> dict[str, str]:
     routes: dict[str, str] = {}
-    for endpoint_id, endpoint in report["latestSnapshot"]["endpoints"].items():
+    for endpoint_id, endpoint in endpoint_snapshot_map(report).items():
         generated_path = operation_page_path(
             output_dir,
             str(endpoint["package"]),

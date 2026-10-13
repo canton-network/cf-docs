@@ -296,7 +296,8 @@ class TypeDocTests(unittest.TestCase):
         self.assertIn("[`Thing`](#variable-thing)", text)
         self.assertIn("`1.1.0`: summary updated; members added: `kind`", text)
         self.assertIn("| Name | Kind | Summary | Introduced | Changed | Deprecated | Removed |", text)
-        self.assertNotIn("#type-alias-thing", text)
+        self.assertIn("#type-alias-thing", text)
+        self.assertIn("Removed in 1.1.0", text)
         self.assertIn("Widget interface updated.", text)
         self.assertIn("## History", text)
         self.assertIn('href="#history-updated-1-1-0"', text)
@@ -306,7 +307,7 @@ class TypeDocTests(unittest.TestCase):
         history = json.loads(history_report.read_text(encoding="utf-8"))
         items = {item["id"]: item for item in history["items"]}
         self.assertFalse(items["@daml/types::Type Aliases::Thing"]["current_present"])
-        self.assertIsNone(items["@daml/types::Type Aliases::Thing"]["route"])
+        self.assertEqual(items["@daml/types::Type Aliases::Thing"]["route"], "/reference/typescript#type-alias-thing")
         self.assertEqual(
             items["@daml/types::Functions::makeWidget"]["route"],
             "/reference/typescript#function-makewidget",

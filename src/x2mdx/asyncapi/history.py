@@ -86,6 +86,8 @@ def build_asyncapi_history_report(
                     )
                 )
 
+    observations = {key: values for key, values in observations.items()
+                    if (values[-1].action.get("lifecycle_state") or values[-1].channel_detail.get("lifecycle_state")) != "dev"}
     known_item_ids = set(observations)
     items = [
         _history_item(
@@ -173,7 +175,7 @@ def _history_item(
     )
     current_present = current is not None
     location_observation = current or last
-    route = None
+    route = routes.get((last.channel, last.action["action"]))
     if current is not None:
         route = routes.get((current.channel, current.action["action"]))
         if route is None:

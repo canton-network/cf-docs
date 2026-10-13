@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import http.client
 import json
 import os
 import ssl
@@ -40,6 +41,8 @@ def request_json(
     timeout_seconds: float = 30,
     attempts: int = DEFAULT_ATTEMPTS,
     retry_delay_seconds: float = DEFAULT_RETRY_DELAY_SECONDS,
+    method: str = "GET",
+    payload: Any = None,
 ) -> Any:
     if attempts < 1:
         raise ValueError("attempts must be at least 1")
@@ -55,11 +58,17 @@ def request_json(
     if token:
         headers["Authorization"] = f"Bearer {token}"
 
-    request = urllib.request.Request(url, headers=headers)
+    data = None
+    if payload is not None:
+        data = json.dumps(payload).encode("utf-8")
+        headers["Content-Type"] = "application/json"
+
+    request = urllib.request.Request(url, data=data, headers=headers, method=method)
     for attempt in range(1, attempts + 1):
         try:
             with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
-                return json.loads(response.read().decode("utf-8"))
+                body = response.read()
+                return json.loads(body.decode("utf-8")) if body else None
         except urllib.error.HTTPError as error:
             message = error.read().decode("utf-8", errors="replace")
             detail = f"HTTP {error.code}: {message}"
@@ -76,7 +85,15 @@ def request_json(
                 delay=delay,
             )
             time.sleep(delay)
-        except (urllib.error.URLError, TimeoutError, ssl.SSLError) as error:
+        # http.client errors such as RemoteDisconnected escape urlopen unwrapped
+        # when GitHub drops a connection; treat them like other network errors.
+        except (
+            urllib.error.URLError,
+            TimeoutError,
+            ssl.SSLError,
+            ConnectionError,
+            http.client.HTTPException,
+        ) as error:
             detail = str(error)
             if attempt == attempts:
                 raise RuntimeError(

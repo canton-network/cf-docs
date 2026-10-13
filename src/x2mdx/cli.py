@@ -738,7 +738,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 write_history_report,
             )
             from x2mdx.protobuf.history import build_protobuf_surface_history_report
-            from x2mdx.protobuf.render import build_pages, operation_page_path
+            from x2mdx.protobuf.render import build_pages, operation_page_path, endpoint_snapshot_map
             from x2mdx.render import write_pages
 
             report = build_protobuf_report_from_manifest_args(args)
@@ -763,7 +763,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                         .with_suffix("")
                         .as_posix()
                     )
-                    for endpoint_id, endpoint in report["latestSnapshot"]["endpoints"].items()
+                    for endpoint_id, endpoint in endpoint_snapshot_map(report).items()
                 }
                 history_report = build_protobuf_surface_history_report(
                     report,
@@ -883,8 +883,6 @@ def main(argv: Sequence[str] | None = None) -> int:
                 )
                 routes: dict[tuple[str, str], str] = {}
                 for channel in report.channels:
-                    if channel.status != "active":
-                        continue
                     for action in channel.latest.get("actions", []):
                         operation_path = operation_page_path(
                             output_dir,
@@ -961,8 +959,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             route_prefix = args.link_prefix.rstrip("/") if args.link_prefix else None
             for spec in report.specs:
                 for method in spec.methods:
-                    if method.status != "active":
-                        continue
                     operation_path = operation_page_path(output_dir, spec, method)
                     relative_route = operation_path.relative_to(output_dir).with_suffix("").as_posix()
                     route = f"{route_prefix}/{relative_route}" if route_prefix else relative_route

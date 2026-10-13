@@ -486,8 +486,8 @@ def test_openapi_overview_links_raw_spec_without_history_label() -> None:
     )
 
     assert 'title: "JSON Ledger API OpenAPI"' in rendered
-    assert "Operations</dt>" in rendered
-    assert "67</dd>" in rendered
+    assert 'x2mdx-ref-meta-label">Operations</span>' in rendered
+    assert 'x2mdx-ref-meta-value">67</span>' in rendered
     assert "(/openapi/json-ledger-api/openapi.yaml)" in rendered
     assert "Details and history" not in rendered
 

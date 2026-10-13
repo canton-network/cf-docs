@@ -11,17 +11,6 @@ import yaml
 from x2mdx.protobuf.models import ProtobufSourceSnapshot, ProtobufSources
 from x2mdx.types import JsonObject
 
-DEFAULT_METADATA_SHAPE = {
-    "schemaVersion": 1,
-    "files": {},
-    "services": {},
-    "endpoints": {},
-    "messages": {},
-    "fields": {},
-    "enums": {},
-    "enumValues": {},
-}
-
 
 def _load_manifest(path: Path) -> JsonObject:
     if path.suffix.lower() in {".yaml", ".yml"}:
@@ -31,21 +20,6 @@ def _load_manifest(path: Path) -> JsonObject:
     if not isinstance(payload, dict):
         raise ValueError(f"Expected object at manifest root: {path}")
     return cast(JsonObject, payload)
-
-
-def _load_metadata_overlay(path: Path | None) -> JsonObject:
-    data = cast(JsonObject, json.loads(json.dumps(DEFAULT_METADATA_SHAPE)))
-    if path is None or not path.exists():
-        return data
-    raw = json.loads(path.read_text(encoding="utf-8"))
-    for key in data:
-        if key == "schemaVersion":
-            data[key] = raw.get(key, data[key])
-            continue
-        value = raw.get(key, {})
-        if isinstance(value, dict):
-            data[key] = value
-    return data
 
 
 def load_protobuf_sources(
@@ -97,13 +71,6 @@ def load_protobuf_sources(
     if not snapshots:
         raise ValueError("No protobuf snapshots selected from manifest")
 
-    metadata_path = manifest.get("metadata_path")
-    resolved_metadata_path: Path | None = None
-    if isinstance(metadata_path, str) and metadata_path:
-        resolved_metadata_path = Path(metadata_path)
-        if not resolved_metadata_path.is_absolute():
-            resolved_metadata_path = manifest_root / resolved_metadata_path
-
     raw_repo = manifest.get("repo")
     repo: JsonObject = raw_repo if isinstance(raw_repo, dict) else {}
     return ProtobufSources(
@@ -111,5 +78,4 @@ def load_protobuf_sources(
         source=manifest.get("source") if isinstance(manifest.get("source"), str) else None,
         repo_remote=repo.get("remote") if isinstance(repo.get("remote"), str) else None,
         repo_web_url=repo.get("web_url") if isinstance(repo.get("web_url"), str) else None,
-        metadata_overlay=_load_metadata_overlay(resolved_metadata_path),
     )

@@ -552,14 +552,12 @@ def build_artifact_page(
     return artifact_page, package_pages
 
 
-def current_type_entries(
+def retained_type_entries(
     artifact: JvmDocArtifactLifecycle,
 ) -> list[dict[str, Any]]:
     return [
         entry
         for entry in build_type_entries(artifact)
-        if entry["symbol"].removed_version is None
-        and artifact.versions[-1] in entry["symbol"].versions_present
     ]
 
 
@@ -572,7 +570,7 @@ def build_reader_type_routes(
     routes: dict[str, str] = {}
     for artifact in report.artifacts:
         package_groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
-        for entry in current_type_entries(artifact):
+        for entry in retained_type_entries(artifact):
             package_groups[str(entry["package"])].append(entry)
         for package_name in sorted(package_groups):
             used_slugs: set[str] = set()
@@ -613,7 +611,7 @@ def aggregate_history_events(
                 combined[key] = HistoryEvent(
                     kind=event.kind,
                     version=event.version,
-                    label=event.label,
+                    label="Types removed in" if event.kind == HistoryEventKind.REMOVED else event.label,
                     details=details,
                     evidence=event.evidence,
                 )
@@ -629,6 +627,7 @@ def aggregate_history_events(
                 )
 
     priority = {
+        HistoryEventKind.REMOVED: -1,
         HistoryEventKind.REMOVE_AS_OF: 0,
         HistoryEventKind.DEPRECATED: 1,
         HistoryEventKind.CHANGED: 2,
@@ -651,7 +650,7 @@ def aggregate_history_events(
 
 def markdown_table(headers: list[str], rows: list[list[str]]) -> str:
     if not rows:
-        return "No current entries."
+        return "No entries."
     lines = [
         "| " + " | ".join(headers) + " |",
         "| " + " | ".join("---" for _ in headers) + " |",
@@ -660,7 +659,7 @@ def markdown_table(headers: list[str], rows: list[list[str]]) -> str:
     return "\n".join(lines)
 
 
-def current_member_rows(
+def retained_member_rows(
     entry: dict[str, Any],
     *,
     baseline_version: str,
@@ -668,16 +667,14 @@ def current_member_rows(
 ) -> list[list[str]]:
     rows: list[list[str]] = []
     for member in entry["members"]:
-        if member.removed_version is not None:
-            continue
-        if publish_version not in member.versions_present:
-            continue
         label = (
             java_member_label(member)
             if member.language == "java"
             else scala_member_owner_and_label(member)[1]
         )
         status_parts: list[str] = []
+        if member.removed_version is not None:
+            status_parts.append(f"Removed in `{md_code(member.removed_version)}`")
         if member.introduced_version != baseline_version:
             status_parts.append(f"Added `{md_code(member.introduced_version)}`")
         if member.deprecated_version is not None:
@@ -713,7 +710,7 @@ def build_standardized_artifact_pages(
     history_by_id = history_report.items_by_id()
 
     package_groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
-    for entry in current_type_entries(artifact):
+    for entry in retained_type_entries(artifact):
         package_groups[str(entry["package"])].append(entry)
 
     package_cards: list[ReferenceCard] = []
@@ -744,7 +741,7 @@ def build_standardized_artifact_pages(
             ReferenceCard(
                 title=package_name,
                 href=relative_page_link(artifact_page_path, package_page_path),
-                summary=f"{len(entries)} current types",
+                summary=f"{len(entries)} documented types",
                 badges=reference_badges_for_history_events(
                     package_events,
                     kind_label="Java",
@@ -789,7 +786,7 @@ def build_standardized_artifact_pages(
                     heading="Members",
                     body_markdown=markdown_table(
                         ["Member", "Lifecycle", "Upstream docs"],
-                        current_member_rows(
+                        retained_member_rows(
                             entry,
                             baseline_version=history_report.comparison_versions[0],
                             publish_version=history_report.publish_version,
@@ -841,7 +838,7 @@ def build_standardized_artifact_pages(
                     title=package_name,
                     description=f"Current Java types in {package_name}.",
                     eyebrow="Java package",
-                    summary=f"{len(entries)} current types",
+                    summary=f"{len(entries)} documented types",
                     back_link=relative_page_link(
                         package_page_path,
                         artifact_page_path,

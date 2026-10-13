@@ -41,6 +41,7 @@ class IdentityConfidence(StrEnum):
 
 
 class LifecycleState(StrEnum):
+    DEV = "dev"
     ALPHA = "alpha"
     BETA = "beta"
     STABLE = "stable"
@@ -48,6 +49,7 @@ class LifecycleState(StrEnum):
 
 
 class HistoryEventKind(StrEnum):
+    REMOVED = "removed"
     REMOVE_AS_OF = "remove_as_of"
     DEPRECATED = "deprecated"
     CHANGED = "changed"

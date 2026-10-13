@@ -59,7 +59,7 @@ def build_jvm_surface_history_report(
                 symbol.removed_version is None
                 and publish_version in symbol.versions_present
             )
-            route = routes.get(symbol.symbol_key) if current_present else None
+            route = routes.get(symbol.symbol_key)
             if current_present and route is None:
                 raise ValueError(
                     f"Current Java type has no reader route: {symbol.symbol_key}"

@@ -114,7 +114,7 @@ def build_typedoc_surface_history_report(
         export = cast(dict[str, Any], raw_export)
         item_id = typedoc_item_id(report.package_name, str(export["key"]))
         current_present = export["status"] == "active"
-        route = f"{reader_route}#{export['anchor']}" if current_present else None
+        route = f"{reader_route}#{export['anchor']}"
         removed_in = export.get("removed_in")
         location = str(export.get("source_location") or export["key"])
         changes = tuple(
@@ -214,6 +214,6 @@ def build_typedoc_surface_history_report(
         items=tuple(items),
         limitations=(
             "TypeDoc snapshots establish exported-symbol additions, normalized updates, authored lifecycle states, and removals.",
-            "Current symbols are anchored within one package reader page; removed symbols remain report-only.",
+            "Current symbols are anchored within one package reader page; removed symbols retain their historical definition and anchor.",
         ),
     )

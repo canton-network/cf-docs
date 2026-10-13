@@ -115,7 +115,10 @@ To interpret the above notation:
 - `iss` is a field which specifies the identity provider id
 - `exp` is an optional field which specifies the JWT expiration date (in seconds since EPOCH)
 
-### Scope-Based Tokens
+### Scope-Based Tokens (deprecated)
+
+**Deprecated** since Canton 3.5.1: using (only) `scope` to target a specific API with an optional `aud` does not conform to JWT best practices.
+Consider using Audience-Based Tokens instead.
 
 ```json
 {
@@ -185,3 +188,11 @@ To mitigate the risk associated with token loss or theft, we *strongly recommend
 Using long-lived tokens goes against best practices and risks a costly reconfiguration of your IAM token issuance mechanism should a token be compromised. A token loss may necessitate rotating the token signing key. This action invalidates all outstanding tokens through the JSON Web Key Set (JWKS) mechanism. Consult your IAM system's documentation for detailed strategies on mitigating JWT token theft.
 
 {/* COPIED_END */}
+
+## Enabling authorization on a participant node
+
+Authorization is configured on the participant node operator's side, not by the application developer.
+
+To enable it, set `auth-services` under the participant's `ledger-api` configuration block to point at your identity provider's JWKS endpoint (or a shared secret, for simpler setups). See [gRPC Ledger API Configuration](/global-synchronizer/reference/api-configuration#grpc-ledger-api-configuration) for the config block and the available `auth-services` and `jwt-timestamp-leeway` parameters.
+
+For OAuth 2.0/OIDC identity provider setup specifically (Keycloak, Auth0, and similar), see [OIDC Providers](/global-synchronizer/deployment/oidc-providers).
