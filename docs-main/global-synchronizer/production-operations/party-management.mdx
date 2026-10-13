@@ -172,7 +172,7 @@ Otherwise, you must apply an offline party replication procedure.
 <Note>
 **Party replication** is different from **party migration**. A party migration includes an additional final step, that is removing (or *offboarding*) the party from its original participant.
 
-Party offboarding, and thus party migration, is currently not supported.
+Party offboarding, and thus party migration, is currently not officially supported but can be approximated (see below).
 </Note>
 
 ## Party replication authorization
@@ -535,6 +535,97 @@ You have successfully multi-hosted Alice on `source` and `target` participants.
 {/* COPIED_END */}
 
 {/* COPIED_END */}
+
+## Containing a compromised party
+
+A multi-hosted party whose key may be compromised. How to respond depends on which key was compromised.
+
+### If only the protocol signing key is compromised
+
+A party onboarded with separate namespace and protocol signing keys can recover by rolling the compromised signing key: submit an updated `PartyToParticipant` mapping with new signing keys, signed by the still-safe namespace key. The party keeps working and no further steps are needed.
+
+### If the namespace key is compromised
+
+A party onboarded through `GenerateExternalPartyTopology` has a single key that serves as both the namespace key and the protocol signing key by default. In that default case, a compromised key is a compromised namespace key: it cannot simply be rotated away, since the attacker can still change the party's topology, for example lowering the confirmation threshold or hosting the party on their own participant. Removing the party on your own node does not contain this by itself.
+
+**The recommended response is for every confirming participant to downgrade itself to Observation.** This does not require the party's signature:
+
+```scala
+import com.digitalasset.canton.topology.ForceFlags
+import com.digitalasset.canton.topology.ForceFlag.DisablePartyWithActiveContracts
+import com.digitalasset.canton.topology.ForceFlag.AllowInsufficientParticipantPermissionForSignatoryParty
+
+val partyLiteral = "<your-party-literal-here>"
+val party = PartyId.tryFromProtoPrimitive(partyLiteral)
+val myValidator = participant.id
+val synchronizerId = participant.synchronizers.id_of("global")
+
+participant.topology.party_to_participant_mappings.propose_delta(
+  party = party,
+  adds = Seq(myValidator -> ParticipantPermission.Observation),
+  store = synchronizerId,
+  forceFlags = ForceFlags(
+    DisablePartyWithActiveContracts,
+    AllowInsufficientParticipantPermissionForSignatoryParty,
+  ),
+)
+```
+
+Every confirming node needs to do this, not just enough to drop below the confirmation threshold, since the attacker can lower the threshold themselves.
+
+#### Why downgrade to Observation
+
+- **Reversible**: Observation can be undone later, for example if this turns out to be a false alarm. Removal cannot, the party can never be re-onboarded to that participant.
+- **Pruning**: Observation does not affect pruning. The contracts of a removed party can never be pruned.
+- **The last host**: Observation works even there, needing at most `AllowInsufficientParticipantPermissionForSignatoryParty`. Removal on the last host becomes a full `REMOVE` requiring the party's own signature, which you do not have if the namespace key is compromised.
+
+<Warning>
+Disabling confirmation for a party, whether by Observation downgrade or removal, freezes any contract where that party is a signatory: once no host confirms on its behalf, those contracts can no longer be exercised or archived, and the assets in them are frozen permanently. Fully offboarding the party from every node also affects contracts where it is any kind of stakeholder, and transactions where it is merely an informee, for example a choice observer. This is an inherent consequence of containing a compromised party, not a reason to prefer one method over the other.
+</Warning>
+
+### Removing a party
+
+A party can be fully removed, but as of this writing it is not an official runbook and not recommended:
+
+1. Every confirming node downgrades to Observation, as above.
+2. The party owner removes the `PartyToParticipant` mapping entirely (`REMOVE`).
+3. The party owner revokes the party's root `NamespaceDelegation` with `topology.namespace_delegations.propose_revocation`, signed with the party's namespace key. Do this last: once it is done, nodes can no longer change how they host the party.
+
+### parties.disable
+
+[`parties.disable`](#disable-a-party) is a wrapper around removing a node from the party's mapping. It works for external parties, but the Observation downgrade above is the recommended approach instead.
+
+## Approximating migration
+
+Full party migration is not officially supported as a single procedure, but you can reach a similar practical outcome in two steps using what is already documented:
+
+<Warning>
+Doing this out of order, or before replication has actually finished, risks permanent loss of access to the party's contracts, and loss of funds if it holds Canton Coin or other assets. Do not retire the original participant as a host until you have confirmed the party is fully activated and has its ACS on the new participant. Party removal may also have effects on contracts and pruning. 
+</Warning>
+
+1. **Replicate** the party to the new participant with [Offline party replication](#offline-party-replication-steps) above. Confirm the party is fully activated and has its ACS on the new participant before continuing.
+2. **Retire the original participant as a host.** Once the party has another host, the original participant can remove itself from the party's `PartyToParticipant` mapping on its own, without needing the party's signature:
+
+   ```scala
+   import com.digitalasset.canton.topology.ForceFlags
+   import com.digitalasset.canton.topology.ForceFlag.DisablePartyWithActiveContracts
+
+   val partyLiteral = "<your-party-literal-here>"
+   val party = PartyId.tryFromProtoPrimitive(partyLiteral)
+   val myValidator = participant.id
+   val synchronizerId = participant.synchronizers.id_of("global")
+
+   participant.topology.party_to_participant_mappings.propose_delta(
+     party = party,
+     removes = Seq(myValidator),
+     store = synchronizerId,
+     forceFlags = ForceFlags(DisablePartyWithActiveContracts),
+   )
+   ```
+
+   `DisablePartyWithActiveContracts` is needed because the original participant still has the party's contracts in its own local ACS, even after replication copies them to the new participant. If you would rather keep the original participant able to unhost itself later without re-deciding, downgrade it to Observation instead (see [Containing a compromised party](#containing-a-compromised-party) above for that command) rather than removing it outright.
+
+This is not the same as a single supported migration command as the party is never moved, and you are responsible for confirming replication actually completed before retiring the original host. See [Containing a compromised party](#containing-a-compromised-party) above for the trade-offs between downgrading a party to Observation and full removal.
 
 {/* COPIED_START source="docs-website:docs/replicated/canton/3.5/participant/howtos/operate/parties/decentralized_parties.rst" hash="f99bf5c3" */}
 
@@ -914,7 +1005,7 @@ With that, the party is fully set up and can be used.
 
 To add and remove members, the steps are the same: There is a threshold of the existing members and any new members must submit the three topology transactions. It is also possible to only add them to some, but not all, of the three mappings, but usually it makes sense to keep the three in sync.
 
-Note that adding a member to `PartyToParticipant` requires not just a topology transaction but a full party migration including an ACS export and import. The details of this are outside of the scope of this topic.
+Note that adding a member to `PartyToParticipant` requires not just a topology transaction but a full party migration including an ACS export and import.
 
 ## Next steps
 
