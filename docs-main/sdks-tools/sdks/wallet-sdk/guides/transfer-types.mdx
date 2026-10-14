@@ -1,14 +1,14 @@
 ---
-title: 'Transfer Types'
-description: 'Two-step vs one-step transfers / pre-approvals, accepting/rejecting/withdrawing two-step transfers, and transfer pre-approvals.'
+title: "Transfer Types"
+description: "Two-step vs one-step transfers / pre-approvals, accepting/rejecting/withdrawing two-step transfers, and transfer pre-approvals."
 ---
-
 
 ## Two-step transfer vs one-step transfer
 
 The default behavior for all tokens are a two-step transfer, this matches how funds are usually transferred in TradFi, however this is counter-intuitive in the blockchain world. Canton Coin supports setting up a "Transfer Pre-approval", this allows a party to designate that he wants to auto-accept all incoming transfer, giving a similar behavior of the blockchain world.
 
-``` typescript
+{/* include [`snippets/create-transfer-preapproval.ts`](../../examples/snippets/create-transfer-preapproval.ts) */}
+```typescript
 import { SDK, localNetStaticConfig } from '@canton-network/wallet-sdk'
 
 export default async function () {
@@ -26,6 +26,7 @@ export default async function () {
         await sdk.amulet.preapproval.command.create({
             parties: {
                 receiver: myParty,
+                provider: global.VALIDATOR_OPERATOR_PARTY,
             },
         })
 
@@ -40,12 +41,14 @@ export default async function () {
         })
 }
 ```
+{/* /include */}
 
 ## Accepting or rejecting a two-step transfer
 
 If no Transfer pre-approval have been set up, then it is required to fetch incoming transfer instructions and consume either the `Accept` or `Reject` choice, this can be done easily using the Wallet SDK.
 
-``` typescript
+{/* include [`snippets/read-pending-transfer-instructions.ts`](../../examples/snippets/read-pending-transfer-instructions.ts) */}
+```typescript
 import { SDK, localNetStaticConfig } from '@canton-network/wallet-sdk'
 
 export default async function () {
@@ -60,10 +63,12 @@ export default async function () {
     await sdk.token.transfer.pending(myParty)
 }
 ```
+{/* /include */}
 
 the above give a list of pending transfer instructions, you can then exercise the accept or reject choice on them:
 
-``` typescript
+{/* include [`snippets/accept-or-reject-transfer.ts`](../../examples/snippets/accept-or-reject-transfer.ts) */}
+```typescript
 import { SDK, localNetStaticConfig } from '@canton-network/wallet-sdk'
 
 export default async function () {
@@ -114,12 +119,14 @@ export default async function () {
     }
 }
 ```
+{/* /include */}
 
 ## Withdrawing a two-step transfer before it gets accepted
 
 Apart from accepting or rejecting a transfer instruction, it is also possible for the sender to `withdraw` the offer, thereby retrieving the locked funds.
 
-``` typescript
+{/* include [`snippets/withdraw-transfer-instruction.ts`](../../examples/snippets/withdraw-transfer-instruction.ts) */}
+```typescript
 import { SDK, localNetStaticConfig } from '@canton-network/wallet-sdk'
 
 export default async function () {
@@ -151,13 +158,16 @@ export default async function () {
         .execute({ partyId: myParty })
 }
 ```
+{/* /include */}
 
 ## How do I quickly setup transfer preapproval?
 
 It is worth nothing that using the validator operator party as the providing party causes the transfer pre-approval to auto-renew. The below script setup transfer preapproval for Bob and performs a one-step transfer from Alice to Bob:
 
-``` typescript
-import { Holding, PrettyContract } from '@canton-network/core-tx-parser'
+{/* include [`scripts/05-preapproval.ts`](../../examples/scripts/05-preapproval.ts) */}
+```typescript
+import type { PrettyContract } from '@canton-network/core-tx-parser'
+import type { HoldingView } from '@canton-network/core-token-standard'
 import { localNetStaticConfig, SDK } from '@canton-network/wallet-sdk'
 import { pino } from 'pino'
 import {
@@ -284,7 +294,7 @@ logger.info({ sentValue }, 'Executed transfer from Alice to Bob with value:')
 const aliceUtxos = await sdk.token.utxos.list({ partyId: alice.partyId })
 const bobUtxos = await sdk.token.utxos.list({ partyId: bob.partyId })
 
-const partyAmuletValue = (utxos: PrettyContract<Holding>[]) =>
+const partyAmuletValue = (utxos: PrettyContract<HoldingView>[]) =>
     utxos.reduce(
         (acc, utxo) => acc + parseFloat(utxo.interfaceViewValue.amount),
         0
@@ -404,13 +414,17 @@ const renewedPreapprovalStillActive = preapprovalACS.some(
 if (cancelled === null && !renewedPreapprovalStillActive) {
     logger.info(`Successfully cancelled`)
 }
+
+// Forcefully exit to prevent floating ledger retries from crashing the event loop
+process.exit(0)
 ```
+{/* /include */}
 
 ## How to renew or cancel a transfer preapproval
 
 If you have used the validator operator party as the provider, then it will automatically renew the transfer preapproval approximately 20 days before expiry, however there are cases where you would like to perform the preapproval renewal manually:
 
-``` javascript
+```typescript
 await amulet.preapproval.renew({
     parties: {
         receiver: myPartyId,
@@ -423,13 +437,13 @@ You can also deploy a secondary transfer preapproval, however this means that th
 
 If you have accidentally created a transfer preapproval that you dont want to keep you can perform a cancel instead:
 
-``` javascript
+```typescript
 const [cancelPreapprovalCommand, cancelDisclosedContracts] =
-await amulet.preapproval.command.cancel({
-    parties: {
-        receiver: myPartyId,
-    },
-})
+    await amulet.preapproval.command.cancel({
+        parties: {
+            receiver: myPartyId,
+        },
+    })
 await sdk.ledger
     .prepare({
         partyId: myPartyId,

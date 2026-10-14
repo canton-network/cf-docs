@@ -3,16 +3,14 @@ title: "Party Namespace"
 description: "Migrate party management from Wallet SDK v0 to v1."
 ---
 
-{/* COPIED_START source="splice-wallet-kernel:docs/wallet-integration-guide/src/wallet-sdk-v1-migration-guide/party.rst" hash="bc376f31" */}
-
-
 The party namespace provides methods to manage wallet parties on the Canton Network. In v1, the party namespace replaces the stateful party management from v0.
 
 ## Availability
 
 The party namespace is always available as part of the basic SDK interface. It's initialized automatically when you create an SDK instance and doesn't require additional configuration via `extend()`.
 
-``` typescript
+{/* include [`snippets/party.ts`](../../examples/snippets/party.ts) */}
+```typescript
 import { SDK, localNetStaticConfig } from '@canton-network/wallet-sdk'
 
 export default async function () {
@@ -25,6 +23,7 @@ export default async function () {
     await sdk.party.list()
 }
 ```
+{/* /include */}
 
 ## Key changes from v0 to v1
 
@@ -38,14 +37,14 @@ v1 uses an explicit approach where you pass the party ID to each operation. This
 
 <div className="before-after">
 
-``` javascript
+```typescript
 sdk.setPartyId(myPartyId)
 const result = await sdk.userLedger.doSomething()
 ```
 
 ---
 
-``` javascript
+```typescript
 const result = await sdk.ledger
     .prepare({ partyId: myPartyId, ... })
     .sign(privateKey)
@@ -62,18 +61,17 @@ Refer to [Preparing and signing a transaction](/sdks-tools/sdks/wallet-sdk/guide
 
 <div className="before-after">
 
-``` javascript
-const internalParty =
-await sdk.adminLedger!.allocateInternalParty(partyHint)
+```typescript
+const internalParty = await sdk.adminLedger!.allocateInternalParty(partyHint)
 ```
 
 ---
 
-``` javascript
+```typescript
 // v1 - no state, explicit party ID
 const internalParty = await sdk.party.internal.allocate({
     partyHint: 'my-service',
-    synchronizerId: 'my-synchronizer-id'
+    synchronizerId: 'my-synchronizer-id',
 })
 ```
 
@@ -81,7 +79,8 @@ const internalParty = await sdk.party.internal.allocate({
 
 The below example demonstrates the full usage of the feature:
 
-``` javascript title="Full example: allocate, list, and multi-host parties" expandable
+{/* include [Full example: allocate, list, and multi-host parties](../../examples/scripts/03-parties.ts) title="Full example: allocate, list, and multi-host parties" expandable */}
+```typescript title="Full example: allocate, list, and multi-host parties" expandable
 import pino from 'pino'
 import { localNetStaticConfig, SDK } from '@canton-network/wallet-sdk'
 import {
@@ -144,7 +143,7 @@ logger.info('Preparing multi hosted party...')
 
 const participantEndpoints = [
     {
-        url: new URL('http://127.0.0.1:3975'),
+        url: localNetStaticConfig.LOCALNET_APP_PROVIDER_LEDGER_URL,
         tokenProviderConfig: TOKEN_PROVIDER_CONFIG_DEFAULT,
     },
 ]
@@ -216,7 +215,11 @@ logger.info(
     observingPingResult,
     'Successfully validated observing party allocation via Canton.Internal.Ping'
 )
+
+// Forcefully exit to prevent floating ledger retries from crashing the event loop
+process.exit(0)
 ```
+{/* /include */}
 
 **External parties**
 
@@ -224,16 +227,16 @@ An external party uses an external key pair for signing. You provide the public 
 
 <div className="before-after">
 
-``` javascript
+```typescript
 const party = await sdk.userLedger?.signAndAllocateExternalParty(
-        privateKey,
-        partyHint
-    )
+    privateKey,
+    partyHint
+)
 ```
 
 ---
 
-``` javascript
+```typescript
 const party = await sdk.party.external
     .create(publicKey, { partyHint: 'my-party' })
     .sign(privateKey)
@@ -250,13 +253,13 @@ We recommend always providing a `partyHint` when creating a party. Refer to [Cho
 
 <div className="before-after">
 
-``` javascript
+```typescript
 const wallets = await sdk.userLedger?.listWallets()
 ```
 
 ---
 
-``` javascript
+```typescript
 const partyIds = await sdk.party.list()
 ```
 
@@ -268,9 +271,10 @@ This method returns all parties where the user has `CanActAs`, `CanReadAs`, or `
 
 <div className="before-after">
 
-``` javascript
+```typescript
 const preparedParty = await sdk.userLedger?.generateExternalParty(
-    keyPair.publicKey, partyHint
+    keyPair.publicKey,
+    partyHint
 )
 const allocatedParty = await sdk.userLedger?.allocateExternalParty(
     signature,
@@ -280,7 +284,7 @@ const allocatedParty = await sdk.userLedger?.allocateExternalParty(
 
 ---
 
-``` javascript
+```typescript
 const party = await sdk.party.external
     .create(publicKey, options)
     .execute(signature, executeOptions)
@@ -291,13 +295,12 @@ const party = await sdk.party.external
 ## Migration reference
 
 | v0 method                                                            | v1 method                                                                      |
-|----------------------------------------------------------------------|--------------------------------------------------------------------------------|
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
 | `sdk.setPartyId(partyId)`                                            | Pass `partyId` explicitly to each operation                                    |
 | `sdk.userLedger.listWallets()`                                       | `sdk.party.list()`                                                             |
 | `sdk.userLedger.signAndAllocateExternalParty(privateKey, partyHint)` | `sdk.party.external.create(publicKey, {partyHint}).sign(privateKey).execute()` |
 | `sdk.topology?.prepareExternalPartyTopology()`                       | `sdk.party.external.create().prepare()` (implicit on create)                   |
 | `sdk.topology?.submitExternalPartyTopology()`                        | `sdk.party.external.create().sign().execute()`                                 |
-
 
 ## See also
 
@@ -306,5 +309,3 @@ const party = await sdk.party.external
 - [Configuration](/sdks-tools/sdks/wallet-sdk/using-the-sdk/configuration) — SDK configuration
 - [Creating an external party](/sdks-tools/sdks/wallet-sdk/guides/creating-an-external-party) — External party onboarding
 - [Preparing and signing a transaction](/sdks-tools/sdks/wallet-sdk/guides/preparing-and-signing-a-transaction) — Transaction lifecycle
-
-{/* COPIED_END */}

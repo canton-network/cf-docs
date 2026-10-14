@@ -28,15 +28,19 @@ The `store.connection` object selects one of three backends.
 
 Recommended for production for its robustness, concurrent access, and backup support.
 
-| Field | Required | Description |
-| --- | --- | --- |
-| `type` | yes | Must be `"postgres"`. |
-| `host` | yes | Hostname or IP of the PostgreSQL server. |
-| `port` | no (default `5432`) | Port PostgreSQL listens on. |
-| `user` | yes | Database user to connect with. |
-| `password` | yes | Password for the database user. |
-| `database` | yes | Name of the database to use (must exist). |
-| `ssl` | no | TLS settings, passed through to the Node.js `pg` driver. See [PostgreSQL over TLS/SSL](#postgresql-over-tls-ssl). |
+| Field         | Required            | Description                                                                                                       |
+| ------------- | ------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `type`        | yes                 | Must be `"postgres"`.                                                                                             |
+| `host`        | yes                 | Hostname or IP of the PostgreSQL server.                                                                          |
+| `port`        | no (default `5432`) | Port PostgreSQL listens on.                                                                                       |
+| `user`        | yes                 | Database user to connect with.                                                                                    |
+| `password`    | one of              | Password for the database user. Do not set together with `passwordEnv`.                                           |
+| `passwordEnv` | one of              | Name of the environment variable that holds the database password. Prefer this in production.                     |
+| `database`    | yes                 | Name of the database to use (must exist).                                                                         |
+| `ssl`         | no                  | TLS settings, passed through to the Node.js `pg` driver. See [PostgreSQL over TLS/SSL](#postgresql-over-tls-ssl). |
+
+Provide exactly one of `password` or `passwordEnv`. For Helm, inject the variable with `extraEnv`
+and a Kubernetes secret; see [Deploy](/integrations/wallet-gateway/operate/deploy#postgresql).
 
 ```json
 {
@@ -106,10 +110,10 @@ For a local Docker-based Postgres-over-TLS walkthrough, see
 
 Suitable for single-instance deployments and local development. Stores all data in one file.
 
-| Field | Required | Description |
-| --- | --- | --- |
-| `type` | yes | Must be `"sqlite"`. |
-| `database` | yes | Path to the SQLite database file. |
+| Field      | Required | Description                       |
+| ---------- | -------- | --------------------------------- |
+| `type`     | yes      | Must be `"sqlite"`.               |
+| `database` | yes      | Path to the SQLite database file. |
 
 ```json
 {
@@ -126,9 +130,9 @@ Suitable for single-instance deployments and local development. Stores all data 
 
 Keeps all data in RAM. Useful for testing, not for production.
 
-| Field | Required | Description |
-| --- | --- | --- |
-| `type` | yes | Must be `"memory"`. |
+| Field  | Required | Description         |
+| ------ | -------- | ------------------- |
+| `type` | yes      | Must be `"memory"`. |
 
 ```json
 {
@@ -182,7 +186,7 @@ Maintain separate configuration files per environment (for example `config.dev.j
 `config.staging.json`, `config.prod.json`) to isolate settings and credentials.
 
 Never commit secrets. Override sensitive values with environment variables using the `Env`
-suffix on the field, for example `clientSecretEnv`:
+suffix on the field, for example `clientSecretEnv` or `passwordEnv`:
 
 ```json
 {
@@ -216,10 +220,10 @@ Additional guidance:
 
 ### Suggested environment profiles
 
-| Setting | Development | Production |
-| --- | --- | --- |
-| Store | SQLite or memory | PostgreSQL |
-| Authentication | Self-signed | OAuth |
-| Network endpoints | Localhost | Production endpoints |
-| CORS | Permissive | Restricted to known origins |
-| Secrets | Inline (non-sensitive) | Environment variables or secret manager |
+| Setting           | Development            | Production                              |
+| ----------------- | ---------------------- | --------------------------------------- |
+| Store             | SQLite or memory       | PostgreSQL                              |
+| Authentication    | Self-signed            | OAuth                                   |
+| Network endpoints | Localhost              | Production endpoints                    |
+| CORS              | Permissive             | Restricted to known origins             |
+| Secrets           | Inline (non-sensitive) | Environment variables or secret manager |
