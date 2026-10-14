@@ -581,10 +581,13 @@ def test_scribe_release_line_tag_uses_canton_major_minor() -> None:
 
     assert module.scribe_release_line_tag("3.5.12") == "3.5"
     assert module.scribe_release_line_tag("3.6.0") == "3.6"
-    with pytest.raises(RuntimeError, match="Cannot derive Scribe release-line tag"):
-        module.scribe_release_line_tag("3.6.0-rc1")
-    with pytest.raises(RuntimeError, match="Cannot derive Scribe release-line tag"):
-        module.scribe_release_line_tag("")
+    assert module.scribe_release_line_tag("3.7.0-rc1") == "3.7"
+    assert module.scribe_release_line_tag("3.7.0-snapshot.20261010.18000.0.vabcdef12") == "3.7"
+    assert module.scribe_release_line_tag("4.0.0") == "4.0"
+    assert module.scribe_release_line_tag("10.12.3") == "10.12"
+    for bad_version in ["", "4", "main", "v3.6.0"]:
+        with pytest.raises(RuntimeError, match="Cannot derive Scribe release-line tag"):
+            module.scribe_release_line_tag(bad_version)
 
 
 def test_collect_pqs_versions_uses_each_network_canton_release_line(monkeypatch) -> None:
@@ -648,6 +651,46 @@ def test_collect_pqs_versions_preserves_only_failed_network_value(monkeypatch) -
         "testnet": {"releaseLineTag": "3.5", "version": "3.5.8"},
         "devnet": {"releaseLineTag": "3.6", "version": "3.6.0"},
     }
+
+
+def test_collect_pqs_versions_keeps_values_until_new_release_lines_are_published(
+    monkeypatch,
+) -> None:
+    module = load_script_module()
+    existing_config = {
+        "repositories": {
+            "pqs": {
+                "versionMapping": {
+                    "mainnet": {"externalVersion": "3.6.0"},
+                    "testnet": {"externalVersion": "3.6.0"},
+                    "devnet": {"externalVersion": "3.6.0"},
+                }
+            }
+        }
+    }
+    networks = {
+        "mainnet": {"cantonVersion": "3.6.4"},
+        "testnet": {"cantonVersion": "3.7.0"},
+        "devnet": {"cantonVersion": "4.0.0-snapshot.20270101.1.0.vabcdef12"},
+    }
+    seen_tags: list[str] = []
+
+    def fake_fetch_manifest_json(url: str, timeout: float) -> dict:
+        tag = url.rsplit("/", 1)[-1]
+        seen_tags.append(tag)
+        if tag != "3.6":
+            raise RuntimeError(f"HTTP Error 404: manifest unknown for {tag}")
+        return {"annotations": {"org.opencontainers.image.version": "3.6.2"}}
+
+    monkeypatch.setattr(module, "fetch_manifest_json", fake_fetch_manifest_json)
+
+    assert module.collect_pqs_versions(1.0, existing_config, networks) == {
+        "mainnet": {"releaseLineTag": "3.6", "version": "3.6.2"},
+        "testnet": {"releaseLineTag": "3.6", "version": "3.6.0"},
+        "devnet": {"releaseLineTag": "3.6", "version": "3.6.0"},
+    }
+    # Each new line is still attempted every run, so it is picked up once published.
+    assert seen_tags == ["3.6", "3.7", "4.0"]
 
 
 def test_collect_pqs_versions_raises_when_failed_network_has_no_previous(monkeypatch) -> None:

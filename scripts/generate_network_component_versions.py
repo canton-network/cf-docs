@@ -109,6 +109,8 @@ OCI_MANIFEST_ACCEPT = ", ".join(
     ]
 )
 STABLE_SEMVER_RE = re.compile(r"\d+\.\d+\.\d+")
+# Leading major.minor of any Canton version string, including snapshot and rc builds.
+RELEASE_LINE_RE = re.compile(r"(?P<major>\d+)\.(?P<minor>\d+)(?:[.\-+].*)?")
 USER_AGENT = "cf-docs-version-dashboard-generator"
 
 
@@ -344,13 +346,18 @@ def fetch_latest_wallet_gateway_version(timeout: float) -> str:
 
 
 def scribe_release_line_tag(canton_version: str) -> str:
-    """Scribe tracks Canton release lines, so the floating tag is Canton's major.minor."""
-    if not STABLE_SEMVER_RE.fullmatch(canton_version):
+    """Scribe tracks Canton release lines, so the floating tag is Canton's major.minor.
+
+    Snapshot and rc Canton versions map to their line too, so a network that moves to
+    3.7 or 4.0 before Scribe publishes that tag reads the new line as soon as it exists
+    and keeps its previous value until then.
+    """
+    match = RELEASE_LINE_RE.fullmatch(canton_version)
+    if not match:
         raise RuntimeError(
             f"Cannot derive Scribe release-line tag from Canton version {canton_version!r}"
         )
-    major, minor, _patch = canton_version.split(".")
-    return f"{major}.{minor}"
+    return f"{match.group('major')}.{match.group('minor')}"
 
 
 def pqs_scribe_manifest_url(release_line_tag: str) -> str:
