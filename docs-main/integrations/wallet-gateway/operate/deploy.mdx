@@ -63,9 +63,11 @@ docker run -p 3030:3030 \
 The login page is then available at `http://localhost:3030`.
 
 <Warning>
+
 If you use the internal signing provider, its `signingStore` holds private keys. Put it on
 durable, access-controlled storage, or use a participant node or external custody provider
 instead. See [Signing providers](/integrations/wallet-gateway/operate/signing-providers).
+
 </Warning>
 
 ## Helm
@@ -158,15 +160,14 @@ bootstrap:
 
 ### Signing provider environment variables
 
-Besides the dynamic `clientSecretEnv` variables in config, external signing providers read a few
-static environment variables:
+Signing provider secrets stay in the environment. In explicit mode, config `*Env` fields name
+those variables (defaults below). In legacy mode the same default names are used.
 
-| Provider | Variable | Description |
-| --- | --- | --- |
-| Fireblocks | `FIREBLOCKS_API_KEY` | API key for the Fireblocks integration. |
-| Fireblocks | `FIREBLOCKS_SECRET` | Secret for the Fireblocks integration. |
-| Blockdaemon | `BLOCKDAEMON_API_KEY` | API key for the Blockdaemon integration. |
-| Blockdaemon | `BLOCKDAEMON_API_URL` | URL for the Blockdaemon API. |
+| Provider    | Config field                             | Default variable      | Description                              |
+| ----------- | ---------------------------------------- | --------------------- | ---------------------------------------- |
+| Fireblocks  | `signingProviders.fireblocks.apiKeyEnv`  | `FIREBLOCKS_API_KEY`  | API key for the Fireblocks integration.  |
+| Fireblocks  | `signingProviders.fireblocks.secretEnv`  | `FIREBLOCKS_SECRET`   | Secret for the Fireblocks integration.   |
+| Blockdaemon | `signingProviders.blockdaemon.apiKeyEnv` | `BLOCKDAEMON_API_KEY` | API key for the Blockdaemon integration. |
 
 See [Signing providers](/integrations/wallet-gateway/operate/signing-providers) for more.
 
@@ -216,6 +217,30 @@ store:
         password: '<DB_PASSWORD>'
 ```
 
+Prefer `passwordEnv` over an inline password so the credential comes from the environment (or a
+Kubernetes secret) rather than the config file:
+
+```yaml
+# config YAML for Helm
+config:
+    store:
+        connection:
+            type: 'postgres'
+            host: '<HOST_NAME>'
+            port: 5432
+            database: '<DB_NAME>'
+            user: '<DB_USERNAME>'
+            passwordEnv: 'POSTGRES_DB_PASSWORD'
+
+extraEnv:
+    # example names for illustrative purposes: adapt to your specific needs
+    - name: POSTGRES_DB_PASSWORD
+      valueFrom:
+          secretKeyRef:
+              name: my-database-secrets
+              key: postgres-db-password
+```
+
 For TLS to PostgreSQL, add an `ssl` block (passed through to the Node.js `pg` driver). See
 [PostgreSQL over TLS/SSL](/integrations/wallet-gateway/reference/configuration-reference#postgresql-over-tls-ssl).
 
@@ -225,9 +250,11 @@ For local development you can run PostgreSQL in Docker with TLS enabled and poin
 Gateway's `store` / `signingStore` at it.
 
 <Note>
+
 This configures TLS **between the Wallet Gateway and PostgreSQL**. It does not configure HTTPS
 for browsers. For browser/client HTTPS, terminate TLS in your reverse proxy or ingress and set
 `kernel.publicUrl` to the external `https://...` URL.
+
 </Note>
 
 **1. Create TLS files for Postgres (self-signed):**
