@@ -444,6 +444,18 @@ def _static_rst_to_mdx(lines: list[str]) -> str:
     return "\n".join(output).strip()
 
 
+def _wrap_example_connection_url(value: str) -> str:
+    # TEMPORARY: Canton help text ships a bare example URL; wrap it so Mintlify
+    # does not autolink it as a real destination. Remove this once the source in
+    # ParticipantAdministration.scala uses backticks around https://url:port.
+    # Skip already-backticked occurrences.
+    return re.sub(
+        r"(?<!`)https://url:port(?!`)",
+        "`https://url:port`",
+        value,
+    )
+
+
 def _apply_current_content_edits(value: str) -> str:
     replacements = {
         "The generated config can be passed to `daml script` via the `participant-config` parameter. More information about the file format can be found in the documentation: It takes three arguments:": (
@@ -496,7 +508,7 @@ def _apply_current_content_edits(value: str) -> str:
     }
     for before, after in replacements.items():
         value = value.replace(before, after)
-    return value
+    return _wrap_example_connection_url(value)
 
 
 def _apply_legacy_snapshot_edits(value: str) -> str:
