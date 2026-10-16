@@ -3,16 +3,14 @@ title: "Ledger Namespace"
 description: "Migrate prepare/sign/execute, ACS, and DAR operations from v0 to v1."
 ---
 
-{/* COPIED_START source="splice-wallet-kernel:docs/wallet-integration-guide/src/wallet-sdk-v1-migration-guide/ledger.rst" hash="2d397a68" */}
-
-
 The ledger namespace is used for preparing, signing, and executing transactions and other Ledger API operations.
 
 ## Availability
 
 The ledger namespace is always available as part of the basic SDK interface. It's initialized automatically when you create an SDK instance and doesn't require additional configuration via `extend()`.
 
-``` typescript
+{/* include [`snippets/ledger.ts`](../../examples/snippets/ledger.ts) */}
+```typescript
 import { localNetStaticConfig, SDK } from '@canton-network/wallet-sdk'
 
 export default async function () {
@@ -34,6 +32,7 @@ export default async function () {
         .execute({ partyId })
 }
 ```
+{/* /include */}
 
 ## Key changes from v0 to v1
 
@@ -51,27 +50,27 @@ Previously, a single method would handle everything.
 
 <div className="before-after">
 
-``` javascript
+```typescript
 await sdk.userLedger.prepareSignExecuteAndWaitFor(
-   commands,
-   privateKey,
-   workFlowId,
-   disclosedContracts
+    commands,
+    privateKey,
+    workFlowId,
+    disclosedContracts
 )
 ```
 
 ---
 
-``` javascript
+```typescript
 await sdk.ledger
-      .prepare({
-         partyId: partyId,
-         commands: [...],
-      })
-      .sign(privateKey)
-      .execute({
-         partyId: partyId,
-      })
+    .prepare({
+        partyId: partyId,
+        commands: [...],
+    })
+    .sign(privateKey)
+    .execute({
+        partyId: partyId,
+    })
 ```
 
 </div>
@@ -80,7 +79,8 @@ Each step in lifecycle is clearer, workflowIds are generated automatically and t
 
 The below example demonstrates how offline signing works.
 
-``` javascript title="Full example: online and offline signing" expandable
+{/* include [Full example: online and offline signing](../../examples/scripts/01-init.ts) title="Full example: online and offline signing" expandable */}
+```typescript title="Full example: online and offline signing" expandable
 import {
     localNetStaticConfig,
     SDK,
@@ -245,30 +245,36 @@ if (senderAmuletUtxos.length === 0) {
 }
 
 logger.info('Tap command for Amulet for Sender submitted and UTXO received')
+
+// Forcefully exit to prevent floating ledger retries from crashing the event loop
+process.exit(0)
 ```
+{/* /include */}
 
 **Active Contract Set (ACS) queries**
 
 <div className="before-after">
 
-``` javascript
+```typescript
 const contracts = await sdk.userLedger.activeContracts({
-   offset,
-   templateIds: [...],
-   parties: [],
-   filterByParty: true
+    offset,
+    templateIds: [...],
+    parties: [],
+    filterByParty: true,
 })
 
-const contractId = LedgerController.getActiveContractCid(contracts?.[0]?.contractEntry!)
+const contractId = LedgerController.getActiveContractCid(
+    contracts?.[0]?.contractEntry!
+)
 ```
 
 ---
 
-``` javascript
+```typescript
 const contracts = await sdk.ledger.acs.read({
-   parties: [...],
-   templateIds: [...],
-   filterByParty: true
+    parties: [...],
+    templateIds: [...],
+    filterByParty: true,
 })
 
 const contractId = contracts[0].contractId
@@ -282,17 +288,17 @@ No need to manually enter get the ledger end for the offset and there is direct 
 
 <div className="before-after">
 
-``` javascript
+```typescript
 const isPackageUploaded = await sdk.userLedger.isPackageUploaded(PACKAGED_ID)
 
-if(!isPackageUploaded){
-   await sdk.adminLedger.uploadDar(darBytes)
+if (!isPackageUploaded) {
+    await sdk.adminLedger.uploadDar(darBytes)
 }
 ```
 
 ---
 
-``` javascript
+```typescript
 //automatically checks if uploaded and skips if present
 await sdk.ledger.dar.upload(darBytes, packageId)
 ```
@@ -302,12 +308,11 @@ await sdk.ledger.dar.upload(darBytes, packageId)
 ## Migration reference
 
 | v0 method                                     | v1 method                                                                                       |
-|-----------------------------------------------|-------------------------------------------------------------------------------------------------|
+| --------------------------------------------- | ----------------------------------------------------------------------------------------------- |
 | `sdk.userLedger.prepareSignExecuteAndWaitFor` | `sdk.ledger.prepare({partyId, commands, disclosedContracts}).sign(privateKey).execute(partyId)` |
 | `sdk.userLedger.activeContracts`              | `sdk.ledger.acs.read`                                                                           |
 | `sdk.adminLedger.uploadDar`                   | `sdk.ledger.dar.upload`                                                                         |
 | `sdk.userLedger.isPackageUploaded`            | `sdk.ledger.dar.check`                                                                          |
-
 
 ## See also
 
@@ -315,5 +320,3 @@ await sdk.ledger.dar.upload(darBytes, packageId)
 - [Migration cheat sheet](/sdks-tools/sdks/wallet-sdk/using-the-sdk/v0-to-v1-migration/migration-cheat-sheet)
 - [Configuration](/sdks-tools/sdks/wallet-sdk/using-the-sdk/configuration) — SDK configuration
 - [Preparing and signing a transaction](/sdks-tools/sdks/wallet-sdk/guides/preparing-and-signing-a-transaction) — Transaction lifecycle
-
-{/* COPIED_END */}

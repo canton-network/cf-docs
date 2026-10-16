@@ -1,76 +1,104 @@
 ---
-title: 'Quickstart'
-description: 'Install the Wallet SDK, configure it, create a key pair and party, and create and submit a transfer.'
+title: "Quickstart"
+description: "Install the Wallet SDK, connect it to a validator, and create your first external party."
 ---
 
-import DamlDocsSdksToolsSdksWalletSdkL69 from "/snippets/daml-docs/sdks-tools_sdks_wallet-sdk_L69.mdx";
-import DamlDocsSdksToolsSdksWalletSdkL93 from "/snippets/daml-docs/sdks-tools_sdks_wallet-sdk_L93.mdx";
-import DamlDocsSdksToolsSdksWalletSdkL129 from "/snippets/daml-docs/sdks-tools_sdks_wallet-sdk_L129.mdx";
-import DamlDocsSdksToolsSdksWalletSdkL144 from "/snippets/daml-docs/sdks-tools_sdks_wallet-sdk_L144.mdx";
-import DamlDocsSdksToolsSdksWalletSdkL161 from "/snippets/daml-docs/sdks-tools_sdks_wallet-sdk_L161.mdx";
-import DamlDocsSdksToolsSdksWalletSdkL205 from "/snippets/daml-docs/sdks-tools_sdks_wallet-sdk_L205.mdx";
-import DamlDocsSdksToolsSdksWalletSdkL214 from "/snippets/daml-docs/sdks-tools_sdks_wallet-sdk_L214.mdx";
-import CantonIntegrationsWalletSdkDownloadL14 from "/snippets/canton-docs/integrations_wallet_sdk-download_L14.mdx";
-import CantonIntegrationsWalletSdkDownloadL20 from "/snippets/canton-docs/integrations_wallet_sdk-download_L20.mdx";
+This is the shortest working path with the Wallet SDK: install it, connect to a validator, and create an external party. The example runs against a local validator. To use DevNet, TestNet or MainNet, change the configuration as described in [Configuration](/sdks-tools/sdks/wallet-sdk/using-the-sdk/configuration).
 
 ## Prerequisites
 
-- Node.js (v18+)
-- A running Canton validator node (either self-hosted or via a node-as-a-service provider). Any network validator 
-can be used -- [Splice LocalNet](/sdks-tools/development-tools/localnet) is convenient for development and testing, 
-but DevNet, TestNet, or MainNet validators work as well.
+- Node.js. The SDK currently supports NodeJS environments only.
+- A running Canton validator. [Splice LocalNet](/sdks-tools/development-tools/localnet) is convenient for development and testing, but DevNet, TestNet and MainNet validators work as well.
 
-## Installation
+## Install the SDK
 
-The Wallet SDK is available as a package on the NPM registry. You can install it using your preferred package manager.
+The Wallet SDK is available as a package on the NPM registry. Install it with your preferred package manager.
 
 <Tabs>
   <Tab title="npm">
-  <CantonIntegrationsWalletSdkDownloadL14 />
+    ```shell
+    npm install @canton-network/wallet-sdk
+    ```
   </Tab>
   <Tab title="yarn">
-  <CantonIntegrationsWalletSdkDownloadL20 />
+    ```shell
+    yarn add @canton-network/wallet-sdk
+    ```
   </Tab>
   <Tab title="pnpm">
-  ```shell
-  pnpm add @canton-network/wallet-sdk
-  ```
+    ```shell
+    pnpm add @canton-network/wallet-sdk
+    ```
   </Tab>
 </Tabs>
 
-Alternatively, to do dApp development only, the dApp SDK can be used which has a smaller bundle size and is optimized for browser usage. The dApp SDK can be installed with:
+To build only a dApp, the [dApp SDK](/sdks-tools/sdks/dapp-sdk/quickstart) can be used instead. It has a smaller bundle size and is optimized for browser usage. Both SDKs use the same underlying core packages. Where only part of the code is needed, for example transaction visualization or hash verification, those packages can be used independently.
 
-    <Tabs>
-    <Tab title="npm">
-        ```shell
-        npm install @canton-network/dapp-sdk
-        ```
-    </Tab>
-    <Tab title="yarn">
-        ```shell
-        yarn add @canton-network/dapp-sdk
-        ```
-    </Tab>
-    <Tab title="pnpm">
-        ```shell
-        pnpm add @canton-network/dapp-sdk
-        ```
-    </Tab>
-</Tabs>
+## Connect and create a party
 
-Both SDKs use the same underlying core packages and where only partial code is needed (like for transaction visualization or hash verification) those packages can be used independently.
+Create the SDK with an auth configuration and the URL of the ledger API, generate a key pair, and create the party. An external party is controlled by a key pair: its ID is made of a hint and the fingerprint of the public key. The SDK creates the party's topology transactions, signs them with the private key, and submits them.
 
-## Configuration
+{/* include [`snippets/allocate-party.ts`](../examples/snippets/allocate-party.ts) */}
+```typescript
+import {
+    SDK,
+    type TokenProviderConfig,
+    localNetStaticConfig,
+} from '@canton-network/wallet-sdk'
 
-The SDK requires configuration for authentication, ledger access, and token standard connectivity. For local development against a Splice LocalNet, 
-you can use the built-in defaults:
+export default async function () {
+    const auth: TokenProviderConfig = {
+        method: 'self_signed',
+        issuer: 'unsafe-auth',
+        credentials: {
+            clientId: 'ledger-api-user',
+            clientSecret: 'unsafe',
+            audience: 'https://canton.network.global',
+            scope: '',
+        },
+    }
 
-<DamlDocsSdksToolsSdksWalletSdkL69 />
+    /*
+    if using OAuth, provide a different auth config when initializing the SDK such as:
+        const auth = {
+        method: 'client_credentials',
+        configUrl: 'https://my-oauth-url',
+        credentials: {
+            clientId: 'your-client-id',
+            clientSecret: 'your-client-secret',
+            audience: `https://daml.com/jwt/aud/participant/${participantId}`,
+            scope: 'openid daml_ledger_api offline_access',
+        },
+    }
+    */
 
-When moving to a production or non-LocalNet environment, you need custom factory functions that point to your specific endpoints. See 
-[Configuration](/sdks-tools/sdks/wallet-sdk/using-the-sdk/configuration) for details.
+    const sdk = await SDK.create({
+        auth,
+        ledgerClientUrl: localNetStaticConfig.LOCALNET_APP_USER_LEDGER_URL,
+    })
+
+    const key = sdk.keys.generate()
+
+    // partyHint is optional but recommended to make it easier to identify the party
+    const partyHint = 'my-wallet-1'
+
+    await sdk.party.external
+        .create(key.publicKey, { partyHint })
+        .sign(key.privateKey)
+        .execute()
+}
+```
+{/* /include */}
+
+- `auth` tells the SDK how to get an access token. `self_signed` is for local development only. For a real validator use OAuth (`client_credentials`), as shown in the commented block and in [Configuration](/sdks-tools/sdks/wallet-sdk/using-the-sdk/configuration).
+- `localNetStaticConfig` holds the default endpoints of a Splice LocalNet.
+- `sdk.keys.generate()` creates the key pair. Keep the private key safe: it signs everything the party does.
+- The `partyHint` makes the party easier to recognize. It is optional but recommended.
 
 ## Next steps
 
-- [Guides](/sdks-tools/sdks/wallet-sdk/guides/creating-an-external-party) — See how to create external parties, read data, signing transactions, and more
-- [Using the SDK: Configuration](/sdks-tools/sdks/wallet-sdk/using-the-sdk/configuration) — configure the SDK for other environments
+- [Creating an External Party](/sdks-tools/sdks/wallet-sdk/guides/creating-an-external-party): the same flow step by step, with key pairs, fingerprints and topology transactions.
+- [Configuration](/sdks-tools/sdks/wallet-sdk/using-the-sdk/configuration): connect to other environments and use other authentication methods.
+- [Preparing and Signing a Transaction](/sdks-tools/sdks/wallet-sdk/guides/preparing-and-signing-a-transaction): submit your first transaction.
+- [Transfer Types](/sdks-tools/sdks/wallet-sdk/guides/transfer-types): one-step and two-step transfers.
+- [v0 to v1 Migration Guide](/sdks-tools/sdks/wallet-sdk/using-the-sdk/v0-to-v1-migration): if you used the earlier controller-based SDK.

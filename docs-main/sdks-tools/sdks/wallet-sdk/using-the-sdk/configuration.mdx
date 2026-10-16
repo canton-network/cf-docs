@@ -3,139 +3,139 @@ title: "Configuration"
 description: "Configure the Wallet SDK for the right environment and configuring authentication."
 ---
 
-import CantonDocsIntegrationsWalletConfigurationL70 from "/snippets/canton-docs/integrations_wallet_configuration_L70.mdx";
-
 ## Wallet SDK Configuration
 
-The following code examples show you how to initialize the wallet-sdk. This is the default config that can be used in combination with a non-altered [Localnet](https://docs.canton.network/sdks-tools/development-tools/localnet) running instance.
+The following code examples show you how to initialize the wallet-sdk. This is the default config that can be used in combination with a non-altered [Localnet](/sdks-tools/development-tools/localnet) running instance.
 However as soon as you need to migrate your script, code and deployment to a different environment these default configurations are no longer viable to use. In those cases, the values for the registries, auth, etc must be modified.
 
 Static configuration initialization where an auth config and ledgerClientUrl are configured:
 
+{/* include [`snippets/config-template.ts`](../../examples/snippets/config-template.ts) */}
 ```typescript
-import { SDK, localNetStaticConfig } from "@canton-network/wallet-sdk";
+import { SDK, localNetStaticConfig } from '@canton-network/wallet-sdk'
 
 export default async function () {
-  const sdk = await SDK.create({
-    auth: {
-      method: "self_signed",
-      issuer: "unsafe-auth",
-      credentials: {
-        clientId: "ledger-api-user",
-        clientSecret: "unsafe",
-        audience: "https://canton.network.global",
-        scope: "",
-      },
-    },
-    ledgerClientUrl: new URL("http://localhost:2975"),
-    token: {
-      registries: [
-        new URL("http://localhost:2000/api/validator/v0/scan-proxy"),
-      ],
-      auth: global.TOKEN_PROVIDER_CONFIG_DEFAULT,
-    },
-    amulet: {
-      scanApiUrl: localNetStaticConfig.LOCALNET_SCAN_API_URL,
-      auth: TOKEN_PROVIDER_CONFIG_DEFAULT,
-      registryUrl: localNetStaticConfig.LOCALNET_REGISTRY_API_URL,
-    },
-    asset: {
-      registries: [localNetStaticConfig.LOCALNET_REGISTRY_API_URL],
-      auth: TOKEN_PROVIDER_CONFIG_DEFAULT,
-    },
-  });
+    const sdk = await SDK.create({
+        auth: {
+            method: 'self_signed',
+            issuer: 'unsafe-auth',
+            credentials: {
+                clientId: 'ledger-api-user',
+                clientSecret: 'unsafe',
+                audience: 'https://canton.network.global',
+                scope: '',
+            },
+        },
+        ledgerClientUrl: new URL('http://localhost:2975'),
+        token: {
+            registries: [
+                new URL('http://localhost:2000/api/validator/v0/scan-proxy'),
+            ],
+            auth: global.TOKEN_PROVIDER_CONFIG_DEFAULT,
+        },
+        amulet: {
+            scanApiUrl: localNetStaticConfig.LOCALNET_SCAN_API_URL,
+            auth: TOKEN_PROVIDER_CONFIG_DEFAULT,
+            registryUrl: localNetStaticConfig.LOCALNET_REGISTRY_API_URL,
+        },
+        asset: {
+            registries: [localNetStaticConfig.LOCALNET_REGISTRY_API_URL],
+            auth: TOKEN_PROVIDER_CONFIG_DEFAULT,
+        },
+    })
 
-  // OR, you can defer loading config by calling .extend()
+    // OR, you can defer loading config by calling .extend()
 
-  const basicSDK = await SDK.create({
-    auth: {
-      method: "self_signed",
-      issuer: "unsafe-auth",
-      credentials: {
-        clientId: "ledger-api-user",
-        clientSecret: "unsafe",
-        audience: "https://canton.network.global",
-        scope: "",
-      },
-    },
-    ledgerClientUrl: new URL("http://localhost:2975"),
-  });
+    const basicSDK = await SDK.create({
+        auth: {
+            method: 'self_signed',
+            issuer: 'unsafe-auth',
+            credentials: {
+                clientId: 'ledger-api-user',
+                clientSecret: 'unsafe',
+                audience: 'https://canton.network.global',
+                scope: '',
+            },
+        },
+        ledgerClientUrl: new URL('http://localhost:2975'),
+    })
 
-  // Extend with token namespace
-  const tokenExtendedSDK = await basicSDK.extend({
-    token: {
-      validatorUrl: new URL("http://localhost:2000/api/validator"),
-      registries: [
-        new URL("http://localhost:2000/api/validator/v0/scan-proxy"),
-      ],
-      auth: global.TOKEN_PROVIDER_CONFIG_DEFAULT,
-    },
-  });
+    // Extend with token namespace
+    const tokenExtendedSDK = await basicSDK.extend({
+        token: {
+            validatorUrl: new URL('http://localhost:2000/api/validator'),
+            registries: [
+                new URL('http://localhost:2000/api/validator/v0/scan-proxy'),
+            ],
+            auth: global.TOKEN_PROVIDER_CONFIG_DEFAULT,
+        },
+    })
 
-  // Can extend further with more namespaces
-  const fullyExtendedSDK = await tokenExtendedSDK.extend({
-    amulet: {
-      validatorUrl: localNetStaticConfig.LOCALNET_APP_VALIDATOR_URL,
-      scanApiUrl: localNetStaticConfig.LOCALNET_SCAN_API_URL,
-      auth: global.TOKEN_PROVIDER_CONFIG_DEFAULT,
-      registryUrl: localNetStaticConfig.LOCALNET_REGISTRY_API_URL,
-    },
-  });
+    // Can extend further with more namespaces
+    const fullyExtendedSDK = await tokenExtendedSDK.extend({
+        amulet: {
+            validatorUrl: localNetStaticConfig.LOCALNET_APP_VALIDATOR_URL,
+            scanApiUrl: localNetStaticConfig.LOCALNET_SCAN_API_URL,
+            auth: global.TOKEN_PROVIDER_CONFIG_DEFAULT,
+            registryUrl: localNetStaticConfig.LOCALNET_REGISTRY_API_URL,
+        },
+    })
 }
 ```
+{/* /include */}
 
 Namespace initialization can be deferred until later, so the basicSDK with just ledgerApi capabilities and default namespaces can be initialized.
 Here is an example with the basicSDK initialization and the extended namespaces:
 
 ```typescript
-import { SDK, localNetStaticConfig } from "@canton-network/wallet-sdk";
+import { SDK, localNetStaticConfig } from '@canton-network/wallet-sdk'
 
 export default async function () {
-  const basicSDK = await SDK.create({
-    auth: {
-      method: "self_signed",
-      issuer: "unsafe-auth",
-      credentials: {
-        clientId: "ledger-api-user",
-        clientSecret: "unsafe",
-        audience: "https://canton.network.global",
-        scope: "",
-      },
-    },
-    ledgerClientUrl: new URL("http://localhost:2975"),
-  });
+    const basicSDK = await SDK.create({
+        auth: {
+            method: 'self_signed',
+            issuer: 'unsafe-auth',
+            credentials: {
+                clientId: 'ledger-api-user',
+                clientSecret: 'unsafe',
+                audience: 'https://canton.network.global',
+                scope: '',
+            },
+        },
+        ledgerClientUrl: new URL('http://localhost:2975'),
+    })
 
-  // Extend with token namespace
-  const tokenExtendedSDK = await basicSDK.extend({
-    token: {
-      validatorUrl: new URL("http://localhost:2000/api/validator"),
-      registries: [
-        new URL("http://localhost:2000/api/validator/v0/scan-proxy"),
-      ],
-      auth: global.TOKEN_PROVIDER_CONFIG_DEFAULT,
-    },
-  });
+    // Extend with token namespace
+    const tokenExtendedSDK = await basicSDK.extend({
+        token: {
+            validatorUrl: new URL('http://localhost:2000/api/validator'),
+            registries: [
+                new URL('http://localhost:2000/api/validator/v0/scan-proxy'),
+            ],
+            auth: global.TOKEN_PROVIDER_CONFIG_DEFAULT,
+        },
+    })
 
-  // Can extend further with more namespaces
-  const fullyExtendedSDK = await tokenExtendedSDK.extend({
-    amulet: {
-      validatorUrl: localNetStaticConfig.LOCALNET_APP_VALIDATOR_URL,
-      scanApiUrl: localNetStaticConfig.LOCALNET_SCAN_API_URL,
-      auth: global.TOKEN_PROVIDER_CONFIG_DEFAULT,
-      registryUrl: localNetStaticConfig.LOCALNET_REGISTRY_API_URL,
-    },
-  });
+    // Can extend further with more namespaces
+    const fullyExtendedSDK = await tokenExtendedSDK.extend({
+        amulet: {
+            validatorUrl: localNetStaticConfig.LOCALNET_APP_VALIDATOR_URL,
+            scanApiUrl: localNetStaticConfig.LOCALNET_SCAN_API_URL,
+            auth: global.TOKEN_PROVIDER_CONFIG_DEFAULT,
+            registryUrl: localNetStaticConfig.LOCALNET_REGISTRY_API_URL,
+        },
+    })
 }
 ```
 
-An alternative way to inialize the wallet-sdk is through the provider. The provider is an abstraction that ultimately interacts with the Ledger (JSON LAPI). This can be implemented for either a dApp consumer, direct ledger user, or alternative transport channels such as Wallet Connect.
+An alternative way to initialize the wallet-sdk is through the provider. The provider is an abstraction that ultimately interacts with the Ledger (JSON LAPI). This can be implemented for either a dApp consumer, direct ledger user, or alternative transport channels such as Wallet Connect.
 
 ```typescript
-import { SDK, localNetStaticConfig } from "@canton-network/wallet-sdk";
+import { SDK, localNetStaticConfig } from '@canton-network/wallet-sdk'
 
 // Notice that `auth` and `ledgerClientUrl` are no longer needed
 // when supplying sdk with custom provider
-const sdk = await SDK.create(config, provider);
+const sdk = await SDK.create(config, provider)
 ```
 
 ## How do I validate my configurations?
@@ -146,37 +146,37 @@ Knowing if you are using the correct url and port can be daunting, here is a few
 
 ```json
 {
-  "version": "3.4.12-SNAPSHOT",
-  "features": {
-    "experimental": {
-      "staticTime": {
-        "supported": false
-      },
-      "commandInspectionService": {
-        "supported": true
-      }
-    },
-    "userManagement": {
-      "supported": true,
-      "maxRightsPerUser": 1000,
-      "maxUsersPageSize": 1000
-    },
-    "partyManagement": {
-      "maxPartiesPageSize": 10000
-    },
-    "offsetCheckpoint": {
-      "maxOffsetCheckpointEmissionDelay": {
-        "seconds": 75,
-        "nanos": 0,
-        "unknownFields": {
-          "fields": {}
+    "version": "3.4.12-SNAPSHOT",
+    "features": {
+        "experimental": {
+            "staticTime": {
+                "supported": false
+            },
+            "commandInspectionService": {
+                "supported": true
+            }
+        },
+        "userManagement": {
+            "supported": true,
+            "maxRightsPerUser": 1000,
+            "maxUsersPageSize": 1000
+        },
+        "partyManagement": {
+            "maxPartiesPageSize": 10000
+        },
+        "offsetCheckpoint": {
+            "maxOffsetCheckpointEmissionDelay": {
+                "seconds": 75,
+                "nanos": 0,
+                "unknownFields": {
+                    "fields": {}
+                }
+            }
+        },
+        "packageFeature": {
+            "maxVettedPackagesPageSize": 100
         }
-      }
-    },
-    "packageFeature": {
-      "maxVettedPackagesPageSize": 100
     }
-  }
 }
 ```
 
@@ -196,16 +196,16 @@ the fields may vary based on your configuration.
 
 The wallet-sdk can either take in a Provider (which will have auth bundled into it) or a LedgerClientUrl + TokenProviderConfig. In our examples, we have provided a default TokenProviderConfig for connecting to localnet, which uses a self-signed token.
 
-```javascript
+```typescript
 {
-method: 'self_signed',
-issuer: 'unsafe-auth',
-credentials: {
-   clientId: 'ledger-api-user',
-   clientSecret: 'unsafe',
-   audience: 'https://canton.network.global',
-   scope: '',
-},
+    method: 'self_signed',
+    issuer: 'unsafe-auth',
+    credentials: {
+        clientId: 'ledger-api-user',
+        clientSecret: 'unsafe',
+        audience: 'https://canton.network.global',
+        scope: '',
+    },
 }
 ```
 
@@ -213,32 +213,32 @@ The value for some of the audiences in localnet would have to be adjusted to mat
 
 When upgrading your setup from a localnet setup to a production or client facing environment then it might make more sense to add proper authentication to the ledger api and other services. The community contributions include okta and keycloak [OIDC](/global-synchronizer/deployment/oidc-providers). These can easily be configured for the SDK using a different TokenProviderConfig. The following programmatic methods of token fetching are supported:
 
-> 1.  \`static\`: a fixed, in-memory token. Only used for compatibility, it will totally break for expired tokens.
-> 2.  \`self_signed\`: only for development purposes, used for Canton setups that accept HMAC256 self signed tokens.
-> 3.  \`client_credentials\`: used to programmatically acquire tokens via oauth2, a.k.a "machine-to-machine" tokens
+> 1.  `static`: a fixed, in-memory token. Only used for compatibility, it will totally break for expired tokens.
+> 2.  `self_signed`: only for development purposes, used for Canton setups that accept HMAC256 self signed tokens.
+> 3.  `client_credentials`: used to programmatically acquire tokens via oauth2, a.k.a "machine-to-machine" tokens
 
-```javascript
+```typescript
 export type TokenProviderConfig =
-   | {
-         method: 'static'
-         token: string
+    | {
+          method: 'static'
+          token: string
       }
-   | {
-         method: 'self_signed'
-         issuer: string
-         credentials: ClientCredentials
+    | {
+          method: 'self_signed'
+          issuer: string
+          credentials: ClientCredentials
       }
-   | {
-         method: 'client_credentials'
-         configUrl: string
-         credentials: ClientCredentials
+    | {
+          method: 'client_credentials'
+          configUrl: string
+          credentials: ClientCredentials
       }
 
 export interface ClientCredentials {
- clientId: string
- clientSecret: string
- scope: string | undefined
- audience: string | undefined
+    clientId: string
+    clientSecret: string
+    scope: string | undefined
+    audience: string | undefined
 }
 ```
 
@@ -252,4 +252,4 @@ Each non-LocalNet environment requires different connection endpoints. Configure
 - **Auth token** — A valid JWT token from your OIDC provider
 - **Validator API URL** — The validator app's REST API endpoint (optional for token/amulet namespaces, if not provided will use the scan api)
 
-See the [config template](https://github.com/canton-network/wallet-gateway/blob/main/docs/wallet-integration-guide/examples/snippets/config-template.ts) in the Wallet SDK repository for a complete example.
+See the [config template](https://github.com/canton-network/wallet/blob/main/docs/wallet-integration-guide/examples/snippets/config-template.ts) in the Wallet SDK repository for a complete example.
