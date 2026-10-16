@@ -1,0 +1,21 @@
+
+```haskell
+template SimpleDvP with
+    party1 : Party
+    party2 : Party
+    asset1 : ContractId SimpleAsset
+    asset2 : ContractId SimpleAsset
+  where
+    signatory party1
+    signatory party2
+
+    choice Settle : (ContractId SimpleAsset, ContractId SimpleAsset)
+      with
+        actor : Party
+      controller actor
+      do
+        assert $ actor == party1 || actor == party2
+        new1 <- exercise asset1 Transfer with newOwner = party2
+        new2 <- exercise asset2 Transfer with newOwner = party1
+        pure (new1, new2)
+```

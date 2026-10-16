@@ -6,7 +6,6 @@ description: "Understanding Canton's UTXO-based ledger model with contracts, sta
 import DamlOverviewLearnLedgerModelL101 from "/snippets/daml-docs/overview_learn_ledger-model_L101.mdx";
 import DamlOverviewLearnLedgerModelL122 from "/snippets/daml-docs/overview_learn_ledger-model_L122.mdx";
 import DamlOverviewLearnLedgerModelL180 from "/snippets/daml-docs/overview_learn_ledger-model_L180.mdx";
-import DamlOverviewLearnLedgerModelL241 from "/snippets/daml-docs/overview_learn_ledger-model_L241.mdx";
 import DamlOverviewLearnLedgerModelL269 from "/snippets/daml-docs/overview_learn_ledger-model_L269.mdx";
 import DamlOverviewLearnLedgerModelL283 from "/snippets/daml-docs/overview_learn_ledger-model_L283.mdx";
 import DamlOverviewLearnLedgerModelL81 from "/snippets/daml-docs/overview_learn_ledger-model_L81.mdx";
@@ -83,7 +82,7 @@ Signatories are the primary authorities on a contract.
 
 **Properties:**
 - Must authorize contract creation
-- May authorize contract archival (if controller on a consuming choice)
+- Must authorize contract archival
 - Always see the contract and all actions on it
 - Defined in the template with `signatory` keyword
 
@@ -96,7 +95,7 @@ Signatories are the primary authorities on a contract.
 Observers can see the contract but cannot act on it unilaterally.
 
 **Properties:**
-- See the contract and actions on it
+- See the contract and consuming choices exercised on it
 - Cannot archive or exercise choices (unless also a controller)
 - Defined with `observer` keyword
 
@@ -117,18 +116,13 @@ Controllers can exercise specific choices on a contract.
 
 **When to use:** When a party should be able to trigger specific actions.
 
-### Actors
-
-Actors are the parties submitting or authorizing a transaction.
-
 ### Role Comparison
 
 | Role | Can Create? | Can See? | Can Exercise? | Can Archive? |
 |------|-------------|----------|---------------|--------------|
 | **Signatory** | Yes | Always | If controller | Must authorize |
-| **Observer** | No | Always | If controller | No |
+| **Observer** | No | Contract + consuming choices | If controller | No |
 | **Controller** | No | Choice + consequences | Yes (their choices) | Via consuming choice |
-| **Actor** | If signatory | If stakeholder | If controller | If signatory |
 
 ## Transaction Structure
 
@@ -162,7 +156,7 @@ A **consuming** choice (the default) archives the contract when exercised. Use t
 
 ## Views
 
-Each stakeholder sees a **view** of the transaction: only the parts they're entitled to.
+Each party sees a **view** of the transaction: only the parts they're entitled to.
 
 ### View Composition
 
@@ -199,29 +193,9 @@ flowchart TB
 2. **Observers see the contract** and consuming choices exercised on it
 3. **Controllers see choices** they can exercise and their consequences
 
-## Contract Keys
-
-<Note>
-Contract keys are not yet supported in Canton Network deployments. Check the [release notes](/global-synchronizer/release-notes/canton) for availability.
-</Note>
-
-Contracts can have **keys**—identifiers that allow lookup without knowing the contract ID.
-
-<DamlOverviewLearnLedgerModelL241 />
-
-They support **lookup** so you can find a contract by its key without knowing the contract ID. Every key has a **maintainer**, the party responsible for the key.
-
-<Warning>
-Keys are global within a synchronizer. Design keys carefully to avoid leaking information about contract existence.
-</Warning>
-
 ## Ledger Time
 
-Canton uses **ledger time** for contract operations. Time is:
-
-- Assigned by the synchronizer
-- Monotonically increasing per synchronizer
-- Used for time-based contract logic
+Canton uses **ledger time** for time-based contract logic.
 
 <DamlOverviewLearnLedgerModelL269 />
 
@@ -240,3 +214,4 @@ The ledger enforces this atomicity — either the entire swap commits or none of
 - [Contract Templates](/appdev/modules/m3-contract-templates) — write your first Daml contracts
 - [Choices](/appdev/modules/m3-choices) — add behavior to contracts
 - [Privacy Model](/overview/learn/privacy-model) — how views enable privacy
+- [Ledger Model reference](/overview/reference/ledger-model/structure) — the formal model: structure, privacy, integrity, time, causality
