@@ -1,103 +1,184 @@
 from __future__ import annotations
 
 import sys
-import textwrap
 import unittest
 from pathlib import Path
-from tempfile import TemporaryDirectory
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
-from scripts import generate_canton_metrics_reference as generator
+from scripts import generate_canton_metrics_reference as generator  # noqa: E402
+
+
+ASSET = generator.ReleaseAsset(
+    tag="v1.2.3",
+    version="1.2.3",
+    name="canton-open-source-1.2.3.tar.gz",
+    url="https://example.com/canton-open-source-1.2.3.tar.gz",
+    size=1,
+    digest="sha256:" + "a" * 64,
+)
+
+
+def metric(name: str, **overrides: object) -> dict[str, object]:
+    item: dict[str, object] = {
+        "name": name,
+        "summary": f"Summary of {name}.",
+        "description": f"Description of {name}.",
+        "type": "counter",
+        "qualification": "Debug",
+        "labels": {},
+    }
+    item.update(overrides)
+    return item
+
+
+def payload(**sections: list[dict[str, object]]) -> dict[str, object]:
+    metrics: dict[str, object] = {
+        "participant": [metric("daml.participant.example")],
+        "sequencer": [metric("daml.sequencer.example")],
+        "mediator": [metric("daml.mediator.example")],
+    }
+    metrics.update(sections)
+    return {"metrics": metrics}
 
 
 class CantonMetricsReferenceTests(unittest.TestCase):
-    def test_defaults_use_public_canton_source(self) -> None:
+    def test_generation_runs_metrics_script_with_docs_flag(self) -> None:
+        self.assertTrue(generator.REFERENCE_SCRIPT.is_file())
+        self.assertEqual(
+            generator.METRICS_DOCS_ENVIRONMENT, {"GENERATE_METRICS_FOR_DOCS": ""}
+        )
         self.assertEqual(generator.DEFAULT_RELEASE_REPO, "digital-asset/canton")
-        self.assertEqual(generator.DEFAULT_REMOTE, "https://github.com/digital-asset/canton.git")
 
-    def test_resolve_generated_includes(self) -> None:
-        with TemporaryDirectory() as tmp:
-            generated_dir = Path(tmp)
-            (generated_dir / "metrics.inc").write_text("daml.example\n^^^^^^^^^^^^", encoding="utf-8")
-
-            resolved = generator.resolve_generated_includes(
-                "Before\n.. generatedinclude:: metrics.inc\nAfter\n",
-                generated_dir=generated_dir,
-            )
-
-        self.assertEqual(resolved, "Before\ndaml.example\n^^^^^^^^^^^^\nAfter\n")
-
-    def test_convert_resolved_metrics_rst_to_mdx(self) -> None:
-        rst = textwrap.dedent(
-            """\
-            .. _reference-metrics:
-
-            Metrics
-            -------
-
-            For the metric types referenced below, see the `relevant Prometheus documentation <https://prometheus.io/docs/tutorials/understanding_metric_types/>`_.
-
-            Participant Metrics
-            ~~~~~~~~~~~~~~~~~~~
-
-            daml.example.metric*
-            ^^^^^^^^^^^^^^^^^^^^
-            \t* **Summary**: Example summary with ``code``.
-            \t* **Description**: The value for <operation>.
-            \t* **Type**: meter
-            \t* **Qualification**: Debug
-            \t* **Labels**:
-            \t\t* **sender**: The sequencer who sent the message
-            """
+    def test_render_metric_matches_canton_docs_formatting(self) -> None:
+        item = generator.load_metric(
+            metric(
+                "daml.db.commit",
+                summary="The time needed to perform the SQL query commit.",
+                description=(
+                    "This metric measures the time relating to the <operation>.\n"
+                    "    It roughly corresponds to calling ``commit()`` on a {connection};\n"
+                    "see `the guide <https://example.com/guide>`_."
+                ),
+                type="timer",
+                labels={
+                    "name": "The operation/pool for which the metric is registered."
+                },
+            ),
+            node="participant",
         )
 
-        mdx = generator.convert_rst_to_mdx(rst, source_ref="v1.2.3")
+        self.assertEqual(
+            generator.render_metric(item),
+            [
+                r"### daml.db.commit\*",
+                "",
+                "> - **Summary**: The time needed to perform the SQL query commit.",
+                (
+                    r"> - **Description**: This metric measures the time relating to the \<operation\>. "
+                    r"It roughly corresponds to calling `commit()` on a \{connection\}; "
+                    "see [the guide](https://example.com/guide)."
+                ),
+                "> - **Type**: timer",
+                "> - **Qualification**: Debug",
+                "> - **Labels**:",
+                ">   - **name**: The operation/pool for which the metric is registered.",
+            ],
+        )
 
-        self.assertIn('source="digital-asset/canton"', mdx)
-        self.assertIn('ref="v1.2.3"', mdx)
-        self.assertIn("# Metrics", mdx)
-        self.assertIn("[relevant Prometheus documentation](https://prometheus.io/docs/tutorials/understanding_metric_types/)", mdx)
-        self.assertIn("### daml.example.metric\\*", mdx)
-        self.assertIn("> - **Summary**: Example summary with `code`.", mdx)
-        self.assertIn(r"> - **Description**: The value for \<operation\>.", mdx)
-        self.assertIn(">   - **sender**: The sequencer who sent the message", mdx)
+    def test_render_generated_block_sorts_deduplicates_and_records_provenance(
+        self,
+    ) -> None:
+        metrics = generator.load_metrics(
+            payload(
+                participant=[
+                    metric("daml.participant.zeta"),
+                    metric("daml.participant.alpha"),
+                    metric("daml.participant.zeta", summary="A repeated registration."),
+                ]
+            )
+        )
 
-    def test_unresolved_generatedinclude_is_rejected(self) -> None:
-        with self.assertRaisesRegex(ValueError, "generatedinclude"):
-            generator.convert_rst_to_mdx(".. generatedinclude:: metrics.inc\n", source_ref="v1.2.3")
+        block = generator.render_generated_block(metrics, asset=ASSET)
 
-    def test_run_generation_unsets_ci_for_canton_docs_generator(self) -> None:
-        with TemporaryDirectory() as tmp:
-            canton_dir = Path(tmp)
-            (canton_dir / ".envrc").write_text("use nix\n", encoding="utf-8")
-            calls: list[tuple[list[str], Path | None]] = []
-            original_run = generator.run
-            original_which = generator.shutil.which
-            try:
-                generator.run = lambda command, cwd=None, capture=False: calls.append((command, cwd)) or ""
-                generator.shutil.which = lambda name: "/usr/bin/direnv" if name == "direnv" else None
+        self.assertTrue(block.startswith(generator.GENERATED_START + "\n"))
+        self.assertTrue(block.endswith("\n" + generator.GENERATED_END))
+        self.assertIn(
+            '{/* GENERATED_FROM source="digital-asset/canton" ref="v1.2.3" '
+            'asset="canton-open-source-1.2.3.tar.gz" digest="sha256:' + "a" * 64 + '" '
+            'participant_metric_count="2" sequencer_metric_count="1" mediator_metric_count="1" */}',
+            block,
+        )
+        self.assertLess(
+            block.index("## Participant Metrics"), block.index("## Sequencer Metrics")
+        )
+        self.assertLess(
+            block.index("## Sequencer Metrics"), block.index("## Mediator Metrics")
+        )
+        self.assertLess(
+            block.index("### daml.participant.alpha"),
+            block.index("### daml.participant.zeta"),
+        )
+        self.assertEqual(block.count("### daml.participant.zeta"), 1)
+        self.assertNotIn("A repeated registration.", block)
 
-                generator.run_generation(
-                    canton_dir=canton_dir,
-                    command=["sbt", "docs-open / generateIncludes"],
-                    skip_direnv=False,
-                )
-            finally:
-                generator.run = original_run
-                generator.shutil.which = original_which
+    def test_load_metrics_rejects_missing_or_empty_sections(self) -> None:
+        with self.assertRaisesRegex(ValueError, "metrics object"):
+            generator.load_metrics({"console": []})
+        with self.assertRaisesRegex(ValueError, "no mediator metrics"):
+            generator.load_metrics(payload(mediator=[]))
+
+    def test_load_metrics_rejects_malformed_items(self) -> None:
+        with self.assertRaisesRegex(ValueError, "'summary'"):
+            generator.load_metrics(
+                payload(sequencer=[metric("daml.sequencer.example", summary=None)])
+            )
+        with self.assertRaisesRegex(ValueError, "malformed labels"):
+            generator.load_metrics(
+                payload(sequencer=[metric("daml.sequencer.example", labels={"x": 1})])
+            )
+
+    def test_replace_generated_block_keeps_authored_sections(self) -> None:
+        page = "\n".join(
+            [
+                "# Metrics",
+                "",
+                "Intro.",
+                "",
+                generator.GENERATED_START,
+                "",
+                "old generated content",
+                "",
+                generator.GENERATED_END,
+                "",
+                "## Health Metrics",
+                "",
+                "Authored content.",
+                "",
+            ]
+        )
+        block = f"{generator.GENERATED_START}\n\nnew generated content\n\n{generator.GENERATED_END}"
+
+        updated = generator.replace_generated_block(page, block)
 
         self.assertEqual(
-            calls,
-            [
-                (["direnv", "allow"], canton_dir),
-                (
-                    ["direnv", "exec", str(canton_dir), "env", "-u", "CI", "sbt", "docs-open / generateIncludes"],
-                    canton_dir,
-                ),
-            ],
+            updated,
+            f"# Metrics\n\nIntro.\n\n{block}\n\n## Health Metrics\n\nAuthored content.\n",
+        )
+
+    def test_replace_generated_block_requires_markers(self) -> None:
+        with self.assertRaisesRegex(ValueError, "missing its"):
+            generator.replace_generated_block("# Metrics\n", "block")
+
+    def test_committed_page_has_generated_block_markers(self) -> None:
+        page = generator.DEFAULT_OUTPUT.read_text(encoding="utf-8")
+
+        self.assertEqual(page.count(generator.GENERATED_START), 1)
+        self.assertEqual(page.count(generator.GENERATED_END), 1)
+        self.assertLess(
+            page.index(generator.GENERATED_END), page.index("## Health Metrics")
         )
 
 

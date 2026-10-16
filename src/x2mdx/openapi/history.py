@@ -167,6 +167,9 @@ def _history_items_for_scope(
         scope=scope,
         comparison_versions=comparison_versions,
     )
+    observations = {key: values for key, values in observations.items()
+                    if authored_lifecycle_state(values[-1].operation)[0] != LifecycleState.DEV}
+
     known_item_ids = {
         _scoped_item_id(scope_id=scope.id, local_id=local_id)
         for local_id in observations
@@ -404,6 +407,26 @@ def _observations_by_identity(
                 )
             )
     return observations
+
+
+def filter_dev_openapi_specs(
+    specs_by_version: Mapping[str, dict[str, Any]], *, versions: list[str], publish_version: str,
+) -> dict[str, dict[str, Any]]:
+    """Remove dev-only operation identities from every published snapshot."""
+    from copy import deepcopy
+    comparison = tuple(versions[:versions.index(publish_version) + 1])
+    scope = OpenAPIHistoryScope(id="visibility", specs_by_version=specs_by_version)
+    observations = _observations_by_identity(scope=scope, comparison_versions=comparison)
+    result = {version: deepcopy(specs_by_version[version]) for version in comparison if version in specs_by_version}
+    for snapshots in observations.values():
+        if authored_lifecycle_state(snapshots[-1].operation)[0] != LifecycleState.DEV:
+            continue
+        for snapshot in snapshots:
+            paths = result[snapshot.version]["paths"]
+            paths[snapshot.path].pop(snapshot.method, None)
+            if not any(method in paths[snapshot.path] for method in HTTP_METHODS):
+                del paths[snapshot.path]
+    return result
 
 
 def _changes(

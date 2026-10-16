@@ -39,47 +39,102 @@ def write_source_config(path: Path, *, publish_version: str = "3.5") -> None:
     )
 
 
-def test_release_note_sources_default_to_configured_release_line(monkeypatch, tmp_path: Path) -> None:
+def stub_github_releases(monkeypatch, module, releases: list[dict[str, object]]) -> list[str]:
+    requested: list[str] = []
+
+    def github_api_json(path: str) -> object:
+        requested.append(path)
+        return releases if path.endswith("&page=1") else []
+
+    monkeypatch.setattr(module.canton_release_reference, "github_api_json", github_api_json)
+    return requested
+
+
+def test_release_note_sources_include_every_published_release_line(monkeypatch, tmp_path: Path) -> None:
     module = load_script_module()
     source_config = tmp_path / "source-artifacts.json"
     write_source_config(source_config)
+    requested = stub_github_releases(
+        monkeypatch,
+        module,
+        [
+            {"tag_name": "v3.6.1", "draft": False, "prerelease": False},
+            {"tag_name": "v3.5.10", "draft": False, "prerelease": False},
+            {"tag_name": "v3.5.6", "draft": False, "prerelease": False},
+            {"tag_name": "v3.4.12", "draft": False, "prerelease": False},
+        ],
+    )
+    monkeypatch.setattr(module.canton_release_bundles, "release_bundle_exists", lambda _config, **_kwargs: True)
 
+    sources = module.release_note_sources(
+        source_config_path=source_config,
+        release_repo="digital-asset/canton",
+        min_version=module.Version.parse("3.5.0"),
+        version_prefix=None,
+    )
+
+    assert requested[0] == "repos/digital-asset/canton/releases?per_page=100&page=1"
+    assert [str(source.version) for source in sources] == ["3.5.6", "3.5.10", "3.6.1"]
+    assert [source.archive_path for source in sources] == [
+        "canton-open-source-3.5.6/RELEASE-NOTES.md",
+        "canton-open-source-3.5.10/RELEASE-NOTES.md",
+        "canton-open-source-3.6.1/RELEASE-NOTES.md",
+    ]
+    assert sources[-1].url == "https://www.canton.io/releases/canton-open-source-3.6.1.tar.gz"
+
+
+def test_release_note_sources_skip_versions_without_a_published_release(monkeypatch, tmp_path: Path) -> None:
+    module = load_script_module()
+    source_config = tmp_path / "source-artifacts.json"
+    write_source_config(source_config)
+    stub_github_releases(
+        monkeypatch,
+        module,
+        [
+            {"tag_name": "v3.6.2", "draft": True, "prerelease": False},
+            {"tag_name": "v3.6.1", "draft": False, "prerelease": False},
+            {"tag_name": "v3.6.1-rc1", "draft": False, "prerelease": True},
+            {"tag_name": "v3.5.11", "draft": False, "prerelease": False},
+            {"tag_name": "v3.5.10", "draft": False, "prerelease": False},
+        ],
+    )
+    checked: list[str] = []
     monkeypatch.setattr(
         module.canton_release_bundles,
-        "public_canton_bundle_versions",
-        lambda _config, **kwargs: ("3.5.6", "3.5.10") if kwargs["docs_version"] == "3.5" else (),
+        "release_bundle_exists",
+        lambda _config, *, canton_version: checked.append(canton_version) or canton_version != "3.5.11",
     )
 
     sources = module.release_note_sources(
         source_config_path=source_config,
-        canton_repo_dir=tmp_path / "canton",
-        canton_remote="https://github.com/digital-asset/canton.git",
+        release_repo="digital-asset/canton",
+        min_version=module.Version.parse("3.5.0"),
         version_prefix=None,
     )
 
-    assert [str(source.version) for source in sources] == ["3.5.6", "3.5.10"]
-    assert [source.archive_path for source in sources] == [
-        "canton-open-source-3.5.6/RELEASE-NOTES.md",
-        "canton-open-source-3.5.10/RELEASE-NOTES.md",
-    ]
-    assert sources[-1].url == "https://www.canton.io/releases/canton-open-source-3.5.10.tar.gz"
+    # 3.6.0 has a public bundle but no GitHub release, so it is never considered.
+    assert "3.6.0" not in checked
+    assert [str(source.version) for source in sources] == ["3.5.10", "3.6.1"]
 
 
 def test_release_note_sources_can_select_release_line(monkeypatch, tmp_path: Path) -> None:
     module = load_script_module()
     source_config = tmp_path / "source-artifacts.json"
-    write_source_config(source_config, publish_version="3.6")
-
-    monkeypatch.setattr(
-        module.canton_release_bundles,
-        "public_canton_bundle_versions",
-        lambda _config, **kwargs: ("3.5.6",) if kwargs["docs_version"] == "3.5" else (),
+    write_source_config(source_config)
+    stub_github_releases(
+        monkeypatch,
+        module,
+        [
+            {"tag_name": "v3.6.1", "draft": False, "prerelease": False},
+            {"tag_name": "v3.5.6", "draft": False, "prerelease": False},
+        ],
     )
+    monkeypatch.setattr(module.canton_release_bundles, "release_bundle_exists", lambda _config, **_kwargs: True)
 
     sources = module.release_note_sources(
         source_config_path=source_config,
-        canton_repo_dir=tmp_path / "canton",
-        canton_remote="https://github.com/digital-asset/canton.git",
+        release_repo="digital-asset/canton",
+        min_version=module.Version.parse("3.5.0"),
         version_prefix="3.5",
     )
 
@@ -139,8 +194,8 @@ def test_update_release_page_downloads_only_missing_release_pages(monkeypatch, t
         legacy_release_dir=tmp_path / "legacy",
         docs_json=tmp_path / "docs.json",
         source_config_path=tmp_path / "source-artifacts.json",
-        canton_repo_dir=tmp_path / "canton",
-        canton_remote="https://github.com/digital-asset/canton.git",
+        release_repo="digital-asset/canton",
+        min_version=module.Version.parse("3.5.0"),
         version_prefix=None,
         dry_run=False,
     )
@@ -292,8 +347,8 @@ Old.
         legacy_release_dir=legacy_release_dir,
         docs_json=docs_json,
         source_config_path=tmp_path / "source-artifacts.json",
-        canton_repo_dir=tmp_path / "canton",
-        canton_remote="https://github.com/digital-asset/canton.git",
+        release_repo="digital-asset/canton",
+        min_version=module.Version.parse("3.5.0"),
         version_prefix=None,
         dry_run=False,
     )

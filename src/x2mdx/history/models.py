@@ -41,6 +41,7 @@ class IdentityConfidence(StrEnum):
 
 
 class LifecycleState(StrEnum):
+    DEV = "dev"
     ALPHA = "alpha"
     BETA = "beta"
     STABLE = "stable"

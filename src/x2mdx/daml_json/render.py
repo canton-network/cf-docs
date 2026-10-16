@@ -375,7 +375,7 @@ def warning_lifecycle_state(warns: Any) -> str | None:
         return "deprecated"
     messages = extract_tagged_warning_messages(warns, "WarnData")
     for message in messages:
-        match = re.match(r"^\s*(alpha|beta|stable)\s*:", message, re.IGNORECASE)
+        match = re.match(r"^\s*(dev|alpha|beta|stable)\s*:", message, re.IGNORECASE)
         if match:
             return match.group(1).lower()
     for state in ("alpha", "beta"):

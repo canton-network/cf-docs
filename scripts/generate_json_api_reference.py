@@ -25,6 +25,7 @@ from x2mdx.history.io import write_history_report
 from x2mdx.history.models import SourceArtifact, SurfaceHistoryReport, VersionSelectionPolicy
 from x2mdx.history.validation import validate_history_report
 from x2mdx.output import Page, RawMarkdown
+from x2mdx.openapi.history import filter_dev_openapi_specs
 from x2mdx.openapi import (
     ManualOpenAPIRenderOptions,
     OpenAPIHistoryScope,
@@ -826,11 +827,21 @@ def main() -> int:
         spec_filename="openapi.yaml",
         force_refresh=args.force_refresh,
     )
+    public_specs = filter_dev_openapi_specs(specs_by_version, versions=version_labels,
+                                            publish_version=publish_entry["version"])
+    if public_specs[publish_entry["version"]] != specs_by_version[publish_entry["version"]]:
+        output_spec.write_text(yaml.safe_dump(public_specs[publish_entry["version"]], sort_keys=False))
+        normalize_mintlify_openapi(output_spec)
+    specs_by_version = public_specs
     manual_operations = configured_manual_operations(
         source_config,
         spec=specs_by_version[publish_entry["version"]],
         directory=args.openapi_directory,
     )
+    public_locations = {location for spec in specs_by_version.values()
+                        for location in openapi_operation_identities(spec)}
+    manual_operations = [operation for operation in manual_operations
+                         if (operation["method"], operation["path"]) in public_locations]
     historical_locations = {
         (method.lower(), path): "/" + legacy_openapi_operation_page_ref(method=method, path=path, directory=args.openapi_directory)
         for snapshot in specs_by_version.values()

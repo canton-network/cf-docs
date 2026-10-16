@@ -119,3 +119,23 @@ If this returns `true`, you need to increase Docker's memory allocation (see the
 <Note>
 Before running cn-quickstart, you must execute `make setup` and `make build` before `make start`. Skipping these steps causes startup failures that can look like resource problems.
 </Note>
+
+## Using the Oracle JDK
+
+When running `dpm sandbox` on the Oracle JDK, you may get an error such as the following when executing transactions:
+
+```none
+java.lang.SecurityException: JCE cannot authenticate the provider BC
+        at java.base/javax.crypto.JceSecurity.getInstance(JceSecurity.java:150)
+        at java.base/javax.crypto.Mac.getInstance(Mac.java:272)
+        at com.digitalasset.canton.crypto.provider.jce.JcePureCrypto.$anonfun$computeHmacWithSecretInternal$1(JcePureCrypto.scala:873)
+        (...)
+```
+
+The Canton JAR embeds the BouncyCastle provider, and the Oracle JVM verifies the signature of third-party security providers. `dpm sandbox` launches Canton with `java -jar`, which cannot take an additional class path entry. Download the [BouncyCastle provider JAR](https://mvnrepository.com/artifact/org.bouncycastle/bcprov-jdk18on) and start the sandbox directly from the cached Canton component, with the BouncyCastle JAR ahead of the Canton JAR on the class path:
+
+```shell
+java -cp bcprov-jdk18on-<version>.jar:$HOME/.dpm/cache/components/canton-open-source/<canton-version>/lib/canton-open-source-<canton-version>.jar com.digitalasset.canton.CantonCommunityApp sandbox
+```
+
+Replace `<canton-version>` with the Canton version dpm installed. Any options you normally pass to `dpm sandbox`, such as `--dev`, go after `sandbox`.

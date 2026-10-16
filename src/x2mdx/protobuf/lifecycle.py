@@ -1,4 +1,8 @@
-"""Build descriptor-backed protobuf history reports from local snapshot manifests."""
+"""Build descriptor-backed protobuf history reports from local snapshot manifests.
+
+Lifecycle states are authored as ``@lifecycle <state>`` lines inside the
+leading comment of a service, method, message, field, enum, or enum value.
+"""
 
 from __future__ import annotations
 
@@ -11,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from x2mdx.protobuf.models import ProtobufSourceSnapshot, ProtobufSources
+from x2mdx.visibility import dev_only_identities
 
 try:
     from google.protobuf import descriptor_pb2
@@ -21,6 +26,8 @@ else:
     IMPORT_ERROR = None
 
 STABLE_VERSION_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
+LIFECYCLE_STATES = frozenset({"dev", "alpha", "beta", "stable", "deprecated"})
+LIFECYCLE_TAG_RE = re.compile(r"^\s*@lifecycle\b[ \t]*(?P<value>\S*)[ \t]*$", re.IGNORECASE)
 FILE_MESSAGE_FIELD_NUMBER = 4
 FILE_ENUM_FIELD_NUMBER = 5
 FILE_SERVICE_FIELD_NUMBER = 6
@@ -72,6 +79,24 @@ def normalize_comment(raw: str) -> str:
     return "\n".join(lines).strip()
 
 
+def parse_lifecycle_comment(raw: str) -> tuple[str, str | None]:
+    """Split ``@lifecycle <state>`` tag lines out of a comment.
+
+    Recognized tag lines are removed from the returned description and the last
+    one wins. A tag with an unrecognized value is left in the description so the
+    typo stays visible instead of silently disappearing.
+    """
+    kept: list[str] = []
+    state: str | None = None
+    for line in normalize_comment(raw).splitlines():
+        match = LIFECYCLE_TAG_RE.match(line)
+        if match and match.group("value").lower() in LIFECYCLE_STATES:
+            state = match.group("value").lower()
+            continue
+        kept.append(line)
+    return "\n".join(kept).strip(), state
+
+
 def strip_leading_dot(value: str) -> str:
     return value[1:] if value.startswith(".") else value
 
@@ -91,23 +116,24 @@ def build_location_map(file_proto: Any) -> dict[tuple[int, ...], Any]:
     return {tuple(location.path): location for location in file_proto.source_code_info.location}
 
 
-def location_comment(location: Any | None) -> str:
+def location_comment_and_state(location: Any | None) -> tuple[str, str | None]:
+    """Return the documentation comment and authored lifecycle state for a location.
+
+    Only the attached leading (or, failing that, trailing) comment may carry an
+    ``@lifecycle`` tag; detached comments contribute description text only.
+    """
     if location is None:
-        return ""
+        return "", None
     parts: list[str] = []
     for detached in location.leading_detached_comments:
         normalized = normalize_comment(detached)
         if normalized:
             parts.append(normalized)
-    if location.leading_comments:
-        normalized = normalize_comment(location.leading_comments)
-        if normalized:
-            parts.append(normalized)
-    elif location.trailing_comments:
-        normalized = normalize_comment(location.trailing_comments)
-        if normalized:
-            parts.append(normalized)
-    return "\n\n".join(parts).strip()
+    attached = location.leading_comments or location.trailing_comments
+    description, state = parse_lifecycle_comment(attached) if attached else ("", None)
+    if description:
+        parts.append(description)
+    return "\n\n".join(parts).strip(), state
 
 
 def location_line(location: Any | None) -> int | None:
@@ -116,23 +142,18 @@ def location_line(location: Any | None) -> int | None:
     return location.span[0] + 1
 
 
-def comment_and_line(location_map: dict[tuple[int, ...], Any], path: tuple[int, ...]) -> tuple[str, int | None]:
+def comment_state_and_line(
+    location_map: dict[tuple[int, ...], Any],
+    path: tuple[int, ...],
+) -> tuple[str, str | None, int | None]:
     location = location_map.get(path)
-    return location_comment(location), location_line(location)
+    description, state = location_comment_and_state(location)
+    return description, state, location_line(location)
 
 
-def metadata_for(overlay: dict[str, Any], kind: str, entity_id: str) -> dict[str, Any]:
-    value = overlay.get(kind, {}).get(entity_id, {})
-    return value if isinstance(value, dict) else {}
-
-
-def metadata_lifecycle_state(entity: dict[str, Any]) -> str | None:
-    metadata = entity.get("metadata")
-    lifecycle = metadata.get("lifecycle") if isinstance(metadata, dict) else None
-    state = lifecycle.get("state") if isinstance(lifecycle, dict) else None
-    if isinstance(state, str) and state.strip().lower() in {"alpha", "beta", "stable", "deprecated"}:
-        return state.strip().lower()
-    return None
+def entity_lifecycle_state(entity: dict[str, Any]) -> str | None:
+    state = entity.get("lifecycleState")
+    return state if isinstance(state, str) and state in LIFECYCLE_STATES else None
 
 
 def load_descriptor_set_from_image(image_path: str) -> Any:
@@ -190,7 +211,6 @@ class DescriptorSnapshotBuilder:
         source: ProtobufSourceSnapshot,
         repo_web_url: str | None,
         descriptor_set: Any,
-        metadata_overlay: dict[str, Any],
     ) -> None:
         ensure_descriptor_constants()
         self.source = source
@@ -198,7 +218,6 @@ class DescriptorSnapshotBuilder:
         self.descriptor_set = descriptor_set
         self.import_to_repo_path = source.import_to_repo_path
         self.owned_import_paths = set(self.import_to_repo_path)
-        self.metadata_overlay = metadata_overlay
         self.location_maps = {file_proto.name: build_location_map(file_proto) for file_proto in descriptor_set.file}
         self.message_index, self.enum_index = collect_type_indexes(descriptor_set)
         self.files: dict[str, dict[str, Any]] = {}
@@ -208,9 +227,6 @@ class DescriptorSnapshotBuilder:
         self.fields: dict[str, dict[str, Any]] = {}
         self.enums: dict[str, dict[str, Any]] = {}
         self.enum_values: dict[str, dict[str, Any]] = {}
-
-    def metadata(self, kind: str, entity_id: str) -> dict[str, Any]:
-        return metadata_for(self.metadata_overlay, kind, entity_id)
 
     def repo_path(self, import_path: str) -> str:
         return self.import_to_repo_path[import_path]
@@ -311,7 +327,7 @@ class DescriptorSnapshotBuilder:
     ) -> dict[str, Any]:
         locmap = self.file_locmap(file_proto.name)
         path = message_path + (MESSAGE_FIELD_FIELD_NUMBER, field_idx)
-        description, line = comment_and_line(locmap, path)
+        description, state, line = comment_state_and_line(locmap, path)
         field_proto = message_proto.field[field_idx]
         field_id = f"{message_full_name}#{field_proto.name}"
         resolved = self.resolve_type_ref(field_proto)
@@ -341,7 +357,7 @@ class DescriptorSnapshotBuilder:
             "description": description,
             "line": line,
             "sourceUrl": self.file_source_url(file_proto.name, line),
-            "metadata": self.metadata("fields", field_id),
+            "lifecycleState": state,
         }
         self.fields[field_id] = field_doc
         return field_doc
@@ -356,7 +372,7 @@ class DescriptorSnapshotBuilder:
         value_proto: Any,
     ) -> dict[str, Any]:
         locmap = self.file_locmap(file_proto.name)
-        description, line = comment_and_line(locmap, enum_path + (ENUM_VALUE_FIELD_NUMBER, value_idx))
+        description, state, line = comment_state_and_line(locmap, enum_path + (ENUM_VALUE_FIELD_NUMBER, value_idx))
         value_id = f"{enum_full_name}#{value_proto.name}"
         value_doc = {
             "id": value_id,
@@ -368,7 +384,7 @@ class DescriptorSnapshotBuilder:
             "description": description,
             "line": line,
             "sourceUrl": self.file_source_url(file_proto.name, line),
-            "metadata": self.metadata("enumValues", value_id),
+            "lifecycleState": state,
         }
         self.enum_values[value_id] = value_doc
         return value_doc
@@ -382,7 +398,7 @@ class DescriptorSnapshotBuilder:
         parent_message_id: str | None,
     ) -> dict[str, Any]:
         locmap = self.file_locmap(file_proto.name)
-        description, line = comment_and_line(locmap, enum_path)
+        description, state, line = comment_state_and_line(locmap, enum_path)
         enum_full_name = self.enum_full_name(file_proto, parent_message_id, enum_proto.name)
         values = [
             self.build_enum_value(
@@ -404,7 +420,7 @@ class DescriptorSnapshotBuilder:
             "description": description,
             "line": line,
             "sourceUrl": self.file_source_url(file_proto.name, line),
-            "metadata": self.metadata("enums", enum_full_name),
+            "lifecycleState": state,
             "valueIds": [value["id"] for value in values],
             "valueShape": [self.build_enum_value_shape(value) for value in values],
         }
@@ -420,7 +436,7 @@ class DescriptorSnapshotBuilder:
         parent_message_id: str | None,
     ) -> dict[str, Any]:
         locmap = self.file_locmap(file_proto.name)
-        description, line = comment_and_line(locmap, message_path)
+        description, state, line = comment_state_and_line(locmap, message_path)
         message_full_name = self.message_full_name(file_proto, parent_message_id, message_proto.name)
         real_oneof_indexes = self.real_oneof_indexes(message_proto)
         fields = [
@@ -438,7 +454,7 @@ class DescriptorSnapshotBuilder:
         for oneof_idx, oneof_proto in enumerate(message_proto.oneof_decl):
             if oneof_idx not in real_oneof_indexes:
                 continue
-            oneof_description, oneof_line = comment_and_line(locmap, message_path + (MESSAGE_ONEOF_FIELD_NUMBER, oneof_idx))
+            oneof_description, _oneof_state, oneof_line = comment_state_and_line(locmap, message_path + (MESSAGE_ONEOF_FIELD_NUMBER, oneof_idx))
             oneofs.append(
                 {
                     "name": oneof_proto.name,
@@ -480,7 +496,7 @@ class DescriptorSnapshotBuilder:
             "description": description,
             "line": line,
             "sourceUrl": self.file_source_url(file_proto.name, line),
-            "metadata": self.metadata("messages", message_full_name),
+            "lifecycleState": state,
             "fieldIds": [field["id"] for field in fields],
             "fieldShape": [self.build_field_shape(field) for field in fields],
             "oneofs": oneofs,
@@ -492,7 +508,7 @@ class DescriptorSnapshotBuilder:
 
     def build_method(self, *, file_proto: Any, service_doc: dict[str, Any], service_idx: int, method_idx: int, method_proto: Any) -> dict[str, Any]:
         locmap = self.file_locmap(file_proto.name)
-        description, line = comment_and_line(locmap, (FILE_SERVICE_FIELD_NUMBER, service_idx, SERVICE_METHOD_FIELD_NUMBER, method_idx))
+        description, state, line = comment_state_and_line(locmap, (FILE_SERVICE_FIELD_NUMBER, service_idx, SERVICE_METHOD_FIELD_NUMBER, method_idx))
         endpoint_id = f"{service_doc['id']}/{method_proto.name}"
         endpoint_doc = {
             "id": endpoint_id,
@@ -505,7 +521,7 @@ class DescriptorSnapshotBuilder:
             "description": description,
             "line": line,
             "sourceUrl": self.file_source_url(file_proto.name, line),
-            "metadata": self.metadata("endpoints", endpoint_id),
+            "lifecycleState": state,
             "requestType": strip_leading_dot(method_proto.input_type),
             "responseType": strip_leading_dot(method_proto.output_type),
             "clientStreaming": bool(method_proto.client_streaming),
@@ -516,7 +532,7 @@ class DescriptorSnapshotBuilder:
 
     def build_service(self, *, file_proto: Any, service_idx: int, service_proto: Any) -> dict[str, Any]:
         locmap = self.file_locmap(file_proto.name)
-        description, line = comment_and_line(locmap, (FILE_SERVICE_FIELD_NUMBER, service_idx))
+        description, state, line = comment_state_and_line(locmap, (FILE_SERVICE_FIELD_NUMBER, service_idx))
         service_full_name = join_full_name(file_proto.package, [service_proto.name])
         service_doc = {
             "id": service_full_name,
@@ -527,7 +543,7 @@ class DescriptorSnapshotBuilder:
             "description": description,
             "line": line,
             "sourceUrl": self.file_source_url(file_proto.name, line),
-            "metadata": self.metadata("services", service_full_name),
+            "lifecycleState": state,
             "endpointIds": [],
         }
         self.services[service_full_name] = service_doc
@@ -590,7 +606,7 @@ class DescriptorSnapshotBuilder:
             if file_proto.name not in self.owned_import_paths:
                 continue
             locmap = self.file_locmap(file_proto.name)
-            description, line = comment_and_line(locmap, ())
+            description, state, line = comment_state_and_line(locmap, ())
             repo_path = self.repo_path(file_proto.name)
             file_doc = {
                 "id": repo_path,
@@ -601,7 +617,7 @@ class DescriptorSnapshotBuilder:
                 "description": description,
                 "line": line,
                 "sourceUrl": self.file_source_url(file_proto.name, line),
-                "metadata": self.metadata("files", repo_path),
+                "lifecycleState": state,
                 "dependencies": list(file_proto.dependency),
                 "serviceIds": [],
                 "messageIds": [],
@@ -866,6 +882,97 @@ def build_endpoint_lifecycle(releases: list[dict[str, Any]]) -> list[dict[str, A
     return [lifecycle[key] for key in sorted(lifecycle)]
 
 
+def effective_endpoint_state(snapshot: dict[str, Any], endpoint: dict[str, Any]) -> str | None:
+    """An endpoint without its own tag inherits a ``dev`` tag from its service."""
+    state = entity_lifecycle_state(endpoint)
+    if state is not None:
+        return state
+    service = snapshot["services"].get(endpoint["serviceFullName"], {})
+    return "dev" if entity_lifecycle_state(service) == "dev" else None
+
+
+def own_state(_snapshot: dict[str, Any], entity: dict[str, Any]) -> str | None:
+    return entity_lifecycle_state(entity)
+
+
+def hide_dev_only_entities(releases: list[dict[str, Any]]) -> None:
+    """Drop ``@lifecycle dev`` entities whose last observation is still dev.
+
+    Visibility is decided per identity across all releases, so an API that was
+    dev in one release and public later stays visible with its full history,
+    while a removed dev API never appears.
+    """
+    snapshots = [release["snapshot"] for release in releases]
+
+    def hidden_in(category: str, state_fn) -> set[str]:
+        return dev_only_identities(
+            {identity: state_fn(snapshot, entity) for identity, entity in snapshot[category].items()}
+            for snapshot in snapshots
+        )
+
+    hidden_services = hidden_in("services", own_state)
+    hidden_endpoints = hidden_in("endpoints", effective_endpoint_state)
+    hidden_messages = hidden_in("messages", own_state)
+    hidden_enums = hidden_in("enums", own_state)
+    hidden_fields = hidden_in("fields", own_state)
+    hidden_enum_values = hidden_in("enumValues", own_state)
+
+    hidden_type_prefixes = tuple(f"{identity}." for identity in hidden_messages)
+
+    def under_hidden_message(identity: str) -> bool:
+        return identity.startswith(hidden_type_prefixes) or identity.split("#", 1)[0] in hidden_messages
+
+    def keep(hidden: set[str], entities: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
+        return {
+            identity: entity
+            for identity, entity in entities.items()
+            if identity not in hidden and not under_hidden_message(identity)
+        }
+
+    def filter_parallel(ids: list[str], shapes: list[Any], present: dict[str, Any]) -> tuple[list[str], list[Any]]:
+        pairs = [(identity, shape) for identity, shape in zip(ids, shapes) if identity in present]
+        return [identity for identity, _shape in pairs], [shape for _identity, shape in pairs]
+
+    for snapshot in snapshots:
+        snapshot["endpoints"] = keep(hidden_endpoints, snapshot["endpoints"])
+        snapshot["messages"] = keep(hidden_messages, snapshot["messages"])
+        snapshot["enums"] = keep(hidden_enums, snapshot["enums"])
+        snapshot["fields"] = keep(hidden_fields, snapshot["fields"])
+        snapshot["enumValues"] = keep(hidden_enum_values, snapshot["enumValues"])
+
+        services: dict[str, dict[str, Any]] = {}
+        for identity, service in snapshot["services"].items():
+            had_endpoints = bool(service["endpointIds"])
+            service["endpointIds"] = [key for key in service["endpointIds"] if key in snapshot["endpoints"]]
+            if identity in hidden_services or (had_endpoints and not service["endpointIds"]):
+                continue
+            services[identity] = service
+        snapshot["services"] = services
+
+        for message in snapshot["messages"].values():
+            message["fieldIds"], message["fieldShape"] = filter_parallel(message["fieldIds"], message["fieldShape"], snapshot["fields"])
+            for oneof in message["oneofs"]:
+                oneof["fieldIds"] = [key for key in oneof["fieldIds"] if key in snapshot["fields"]]
+            message["nestedMessageIds"] = [key for key in message["nestedMessageIds"] if key in snapshot["messages"]]
+            message["enumIds"] = [key for key in message["enumIds"] if key in snapshot["enums"]]
+        for enum_doc in snapshot["enums"].values():
+            enum_doc["valueIds"], enum_doc["valueShape"] = filter_parallel(enum_doc["valueIds"], enum_doc["valueShape"], snapshot["enumValues"])
+        for file_doc in snapshot["files"].values():
+            for key, category in (("serviceIds", "services"), ("messageIds", "messages"), ("enumIds", "enums")):
+                file_doc[key] = [identity for identity in file_doc[key] if identity in snapshot[category]]
+        for package in snapshot["packages"]:
+            for key, category in (
+                ("serviceIds", "services"),
+                ("endpointIds", "endpoints"),
+                ("messageIds", "messages"),
+                ("enumIds", "enums"),
+            ):
+                package[key] = [identity for identity in package[key] if identity in snapshot[category]]
+                package[key.removesuffix("Ids") + "Count"] = len(package[key])
+        for key in ("services", "endpoints", "messages", "fields", "enums", "enumValues"):
+            snapshot["stats"][key] = len(snapshot[key])
+
+
 def build_protobuf_history_report_from_sources(
     sources: ProtobufSources,
     *,
@@ -874,14 +981,12 @@ def build_protobuf_history_report_from_sources(
 ) -> dict[str, Any]:
     ordered_sources = sorted(sources.snapshots, key=lambda snapshot: version_sort_key(snapshot.version))
     releases: list[dict[str, Any]] = []
-    metadata_overlay = sources.metadata_overlay or {}
     for snapshot in ordered_sources:
         descriptor_set = load_descriptor_set_from_image(snapshot.descriptor_image_path)
         builder = DescriptorSnapshotBuilder(
             source=snapshot,
             repo_web_url=sources.repo_web_url,
             descriptor_set=descriptor_set,
-            metadata_overlay=metadata_overlay,
         )
         release = {
             "tag": snapshot.tag,
@@ -892,6 +997,7 @@ def build_protobuf_history_report_from_sources(
         }
         releases.append(release)
 
+    hide_dev_only_entities(releases)
     build_release_diffs(releases)
     latest_release = releases[-1]
     return {
