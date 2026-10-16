@@ -20,6 +20,7 @@ import argparse
 import datetime as dt
 import json
 import subprocess
+import time
 from pathlib import Path
 
 from openpyxl import Workbook, load_workbook
@@ -114,9 +115,9 @@ def human_activity(node: dict) -> tuple[dt.datetime, bool]:
 def fetch_updated(field: str, node: str, since: dt.datetime | None) -> list[dict]:
     """Pull requests or issues updated at or after `since` (all of them when None), newest first."""
     query = (
-        "query($owner: String!, $name: String!, $after: String) {"
+        "query($owner: String!, $name: String!, $after: String, $first: Int!) {"
         "  repository(owner: $owner, name: $name) {"
-        f"    {field}(first: 100, after: $after, orderBy: {{field: UPDATED_AT, direction: DESC}}) {{"
+        f"    {field}(first: $first, after: $after, orderBy: {{field: UPDATED_AT, direction: DESC}}) {{"
         "      pageInfo { hasNextPage endCursor }"
         f"      nodes {{ {node} }}"
         "    }"
@@ -126,11 +127,7 @@ def fetch_updated(field: str, node: str, since: dt.datetime | None) -> list[dict
     nodes: list[dict] = []
     after: str | None = None
     while True:
-        args = ["gh", "api", "graphql", "-f", f"query={query}", "-f", f"owner={OWNER}", "-f", f"name={NAME}"]
-        if after:
-            args += ["-f", f"after={after}"]
-        conn = json.loads(subprocess.run(args, check=True, capture_output=True, text=True).stdout)
-        conn = conn["data"]["repository"][field]
+        conn = graphql_page(query, field, after)
         for item in conn["nodes"]:
             if since and utc(item["updatedAt"]) < since:
                 return nodes
@@ -138,6 +135,24 @@ def fetch_updated(field: str, node: str, since: dt.datetime | None) -> list[dict
         if not conn["pageInfo"]["hasNextPage"]:
             return nodes
         after = conn["pageInfo"]["endCursor"]
+
+
+def graphql_page(query: str, field: str, after: str | None) -> dict:
+    """One page, retried with smaller pages: GitHub times out on large pages of timelines."""
+    error = ""
+    for attempt, first in enumerate((100, 50, 25, 25, 10)):
+        args = ["gh", "api", "graphql", "-f", f"query={query}", "-f", f"owner={OWNER}", "-f", f"name={NAME}",
+                "-F", f"first={first}"]
+        if after:
+            args += ["-f", f"after={after}"]
+        result = subprocess.run(args, capture_output=True, text=True)
+        if result.returncode == 0:
+            data = json.loads(result.stdout)
+            if data.get("data") and data["data"]["repository"]:
+                return data["data"]["repository"][field]
+        error = (result.stderr or result.stdout).strip()[:500]
+        time.sleep(5 * (attempt + 1))
+    raise SystemExit(f"GitHub query for {field} failed after retries: {error}")
 
 
 def utc(value: str) -> dt.datetime:
@@ -229,6 +244,7 @@ def load_existing(path: Path) -> dict:
         state["contributors"][row["Login"]] = (row.get("Affiliation (edit me)") or row.get("Affiliation"), row["Basis"])
     if complete and "_meta" in wb.sheetnames and wb["_meta"]["B1"].value:
         state["refreshed"] = dt.datetime.fromisoformat(str(wb["_meta"]["B1"].value))
+        state["automation"] = sorted(filter(None, str(wb["_meta"]["B4"].value or "").split(",")))
     return state
 
 
@@ -264,6 +280,10 @@ def build(existing: Path | None, out: Path) -> None:
     now = dt.datetime.now(UTC)
     state = load_existing(existing) if existing else {
         "prs": {}, "issues": {}, "reviews": [], "contributors": {}, "refreshed": None}
+    sheet_bots = {login for login, (affiliation_value, _) in state["contributors"].items() if affiliation_value == "Bot"}
+    AUTOMATION.update(sheet_bots)
+    if sorted(AUTOMATION) != state.get("automation"):
+        state["refreshed"] = None
     since = state["refreshed"] - REFETCH_OVERLAP if state["refreshed"] else None
 
     typenames: dict[str, bool] = {}
@@ -285,28 +305,36 @@ def build(existing: Path | None, out: Path) -> None:
     issues = [state["issues"][n] for n in sorted(state["issues"])]
     reviews = sorted(state["reviews"], key=lambda r: (r["submitted"], r["pr"], r["reviewer"]))
 
-    # Contributors: keep every affiliation already in the sheet; classify only new logins.
+    # Contributors: every affiliation already in the Sheet is kept (people edit them there);
+    # new logins get the automatic rule. Basis says which applied.
     labels = {"da": "Digital Asset", "cf": "Canton Foundation", "ext": "External", "bot": "Bot"}
-    contributors = dict(state["contributors"])
+
+    def by_rule(name: str, is_bot: bool) -> tuple[str, str]:
+        affiliation_value = labels[aff.of({"login": name, "__typename": "Bot" if is_bot else "User"})]
+        if affiliation_value == "Bot":
+            return affiliation_value, "bot account"
+        if name in aff.da or name in aff.cf:
+            return affiliation_value, "contributors.json"
+        if looks_like_da(name):
+            return affiliation_value, "login has a -da / DA marker"
+        return affiliation_value, "not mapped: default external"
+
+    contributors = {}
     seen = {p["author"] for p in prs} | {i["author"] for i in issues} | {r["reviewer"] for r in reviews}
-    for name in seen - contributors.keys():
-        is_bot = typenames.get(name, False)
-        affiliation = labels[aff.of({"login": name, "__typename": "Bot" if is_bot else "User"})]
-        if affiliation == "Bot":
-            basis = "bot account"
-        elif name in aff.da or name in aff.cf:
-            basis = "contributors.json"
-        elif looks_like_da(name):
-            basis = "login has a -da / DA marker"
+    for name in seen | state["contributors"].keys():
+        old = state["contributors"].get(name)
+        was_bot = typenames.get(name, bool(old and old[1] == "bot account"))
+        rule = by_rule(name, was_bot)
+        if old is None or old[0] == rule[0]:
+            contributors[name] = rule
         else:
-            basis = "not mapped: default external"
-        contributors[name] = (affiliation, basis)
+            contributors[name] = (old[0], "set in the Sheet")
 
     wb = Workbook()
     # Cells the report formulas spill into have no formatting of their own; make Arial the default.
     wb._named_styles["Normal"].font = Font(name=FONT, size=10)
-    wb.active.title = "Activity"
-    for title in ("People", "Open work", "Contributors", "PRs", "Reviews", "Issues", "About", "_meta"):
+    wb.active.title = "Overview"
+    for title in ("Activity", "People", "Open work", "Contributors", "PRs", "Reviews", "Issues", "About", "_meta"):
         wb.create_sheet(title)
     contrib, pr_ws, rev_ws, iss_ws, meta = (wb[t] for t in ("Contributors", "PRs", "Reviews", "Issues", "_meta"))
 
@@ -411,6 +439,7 @@ def build(existing: Path | None, out: Path) -> None:
     meta["A1"], meta["B1"] = "last_refresh_utc", now.replace(microsecond=0).isoformat()
     meta["A2"], meta["B2"] = "as_of_et", refreshed_et
     meta["B2"].number_format = DATE_FMT
+    meta["A4"], meta["B4"] = "automation_logins", ",".join(sorted(AUTOMATION))
     meta.sheet_state = "hidden"
 
     add_reports(wb, Ranges(p_last=p_last, r_last=r_last, i_last=i_last, c_last=c_last))
@@ -468,7 +497,11 @@ def build_about(ws) -> None:
         ("cf-docs contribution tracker", "title"),
         (f"Pull requests, issues and reviews from github.com/{REPO}.", ""),
         ("", ""),
-        ("Reports (change the yellow cells at the top of each)", "h"),
+        ("Reports", "h"),
+        ("Overview: last week's headline numbers and trend charts for the last 26 weeks and every month. It has "
+         "no filters, so it looks the same for everyone.", ""),
+        ("The other report tabs have yellow dropdowns. They are shared: changing one changes the view for everyone "
+         "with the Sheet open, and each daily refresh sets them back to their defaults.", ""),
         ("Activity: totals and a trend for any period, compared with the period before. Choose the period, how to "
          "group the trend (week, month or quarter) and an affiliation.", ""),
         ("People: who opened, merged and reviewed PRs and opened issues in a period, by person and by affiliation.", ""),
@@ -494,8 +527,8 @@ def build_about(ws) -> None:
          "status/ labels. Closed counts say how many closures the automation made.", ""),
         ("", ""),
         ("Refresh", "h"),
-        ("Every Monday afternoon the latest GitHub activity is added. Edits outside the Contributors tab are not "
-         "kept.", ""),
+        ("Every morning the latest GitHub activity is added. Affiliations edited on the Contributors tab are kept "
+         "(Basis then says \"set in the Sheet\"); other edits are not.", ""),
     ]
     for r, (text, kind) in enumerate(lines, start=1):
         cell = ws.cell(row=r, column=1, value=text)

@@ -72,27 +72,27 @@ print('uploaded $1:', r['modifiedTime'])"
 if $upload; then
   upload "$work/new.xlsx"
   # Check Google's own results: no error values on the report tabs, and the default
-  # Activity view (last week, everyone) equal to the independently computed figures.
+  # Overview figures (last week) and Open work counts equal to the independently computed ones.
   drive -o "$work/after.xlsx" "https://www.googleapis.com/drive/v3/files/$sheet_id/export?mimeType=$xlsx"
   if ! reports/tracker_env.sh "python3 - <<'PY'
 import json
 from openpyxl import load_workbook
 wb = load_workbook('$work/after.xlsx', data_only=True)
 codes = {'#REF', '#VALUE', '#NAME', '#DIV', '#N/A', '#NUM', '#NULL', '#ERROR'}
-problems = [f'{t}!{c.coordinate}={c.value}' for t in ('Activity', 'People', 'Open work')
+problems = [f'{t}!{c.coordinate}={c.value}' for t in ('Overview', 'Activity', 'People', 'Open work')
             for row in wb[t].iter_rows() for c in row
             if isinstance(c.value, str) and c.value.rstrip('!?/0').upper() in codes]
 expected = json.load(open('$work/new.expected.json'))
-a = wb['Activity']
-got = {'PRs opened': a['A8'].value, 'PRs merged': a['C8'].value, 'PRs closed without merging': a['E8'].value,
-       'PRs reviewed (reviewer–PR pairs)': a['A12'].value, 'Issues opened': a['C12'].value,
-       'Issues closed': a['E12'].value,
+a = wb['Overview']
+got = {'PRs opened': a['A5'].value, 'PRs merged': a['C5'].value,
+       'PRs reviewed (reviewer–PR pairs)': a['E5'].value, 'Issues opened': a['A9'].value,
+       'Issues closed': a['C9'].value,
        'Open PRs untouched 30+ days': wb['Open work']['C8'].value,
        'Open issues untouched 30+ days': wb['Open work']['C12'].value}
 for k, v in got.items():
     if v != expected[k]:
-        problems.append(f'Activity {k}: sheet {v}, expected {expected[k]}')
-print('activity (last week):', a['A2'].value, '|', ', '.join(f'{k} {v}' for k, v in got.items()))
+        problems.append(f'{k}: sheet {v}, expected {expected[k]}')
+print('overview (last week):', a['A3'].value[:60], '|', ', '.join(f'{k} {v}' for k, v in got.items()))
 if problems:
     raise SystemExit('check failed: ' + '; '.join(problems[:20]))
 print('report tabs: no errors; default view matches')

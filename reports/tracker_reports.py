@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from openpyxl.chart import BarChart, Reference, Series
+from openpyxl.chart import BarChart, LineChart, Reference, Series
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.worksheet.datavalidation import DataValidation
 
@@ -206,7 +206,7 @@ def aff_crit(choice: str) -> str:
 # ---------- Activity ----------
 
 def activity(ws, r: Ranges) -> None:
-    dropdown(ws, "A5", "A6", "PERIOD", PERIODS, "Last week")
+    dropdown(ws, "A5", "A6", "PERIOD", PERIODS, "Last 13 weeks")
     dropdown(ws, "C5", "C6", "GROUP TREND BY", ["Week", "Month", "Quarter"], "Week")
     dropdown(ws, "E5", "E6", "AFFILIATION", AFFILIATIONS, "Everyone")
     date_input(ws, "G5", "G6", "CUSTOM FROM", f"=EDATE(DATE(YEAR({r.asof}),MONTH({r.asof}),1),-1)")
@@ -436,9 +436,172 @@ def open_work(ws, r: Ranges) -> None:
         ws.column_dimensions[col].width = width
     ws.freeze_panes = "A7"
 
+# ---------- Overview ----------
+
+OVERVIEW_WEEKS = 26
+OVERVIEW_MONTHS = 36
+
+
+def span_label(start: str, end: str) -> str:
+    """Array formula text: "14–21 Sep" for the days a bucket covers (end excluded)."""
+    last = f"({end}-1/86400)"
+    return (f'IF(MONTH({start})=MONTH({last}),TEXT({start},"d")&"–"&TEXT({last},"d mmm"),'
+            f'TEXT({start},"d mmm")&"–"&TEXT({last},"d mmm"))')
+
+
+def line_chart(ws, title: str, rows: tuple[int, int], series: list[tuple[int, str, str]], anchor: str,
+               width: float = 12.5, height: float = 7.5, bar: bool = False, category_col: int = 1,
+               x_title: str | None = None) -> None:
+    chart = BarChart() if bar else LineChart()
+    if bar:
+        chart.type, chart.grouping = "col", "clustered"
+    chart.title = title
+    chart.height, chart.width = height, width
+    chart.legend.position = "b"
+    first, last = rows
+    for col, name, color in series:
+        s = Series(Reference(ws, min_col=col, min_row=first, max_row=last), title=name)
+        s.graphicalProperties.line.solidFill = color
+        if bar:
+            s.graphicalProperties.solidFill = color
+        else:
+            s.graphicalProperties.line.width = 28575  # 2.25 pt
+            s.smooth = False
+        chart.series.append(s)
+    chart.set_categories(Reference(ws, min_col=category_col, min_row=first, max_row=last))
+    if x_title:
+        chart.x_axis.title = x_title
+    ws.add_chart(chart, anchor)
+
+
+def overview(ws, r: Ranges) -> None:
+    """A fixed view, the same for everyone: last week, the last 26 weeks, and every month."""
+    a = r.asof
+    ws["Z1"] = "helper"
+    ws["Z2"] = f"=LET(d,INT({a})-WEEKDAY(INT({a}),3)+0.5,IF(d>{a},d-7,d))"  # end of the last full week
+    ws["Z2"].number_format = "yyyy-mm-dd hh:mm"
+    ws.column_dimensions["Z"].hidden = True
+    end = "$Z$2"
+    masthead(ws, '="Overview"',
+             f'="Last full week: "&TEXT({end}-7,"d mmm")&" – "&TEXT({end},"d mmm yyyy")&", Monday noon to Monday '
+             f'noon US Eastern. The same for everyone: this tab has no filters. Bots are excluded. Data refreshed "'
+             f'&TEXT({a},"d mmm yyyy h:mm AM/PM")&" ET."')
+
+    def week_count(rng: str, extra: str, weeks_back: int) -> str:
+        s, e = f"({end}-{7 * (weeks_back + 1)})", f"({end}-{7 * weeks_back})"
+        return f'COUNTIFS({rng},">="&{s},{rng},"<"&{e}{extra})'
+
+    people_pr = f',{r.P("D")},"<>Bot"'
+    measures = {
+        "PRs opened": (r.P("F"), people_pr),
+        "PRs merged": (r.P("G"), people_pr),
+        "PRs reviewed": (r.R("E"), f',{r.R("C")},"<>Bot",{r.R("F")},TRUE'),
+        "Issues opened": (r.I("E"), f',{r.I("D")},"<>Bot"'),
+        "Issues closed": (r.I("F"), f',{r.I("D")},"<>Bot"'),
+    }
+
+    def period_tile(k: int, name: str) -> None:
+        rng, extra = measures[name]
+        last, prev = week_count(rng, extra, 0), week_count(rng, extra, 1)
+        avg = "(" + "+".join(week_count(rng, extra, w) for w in range(4)) + ")/4"
+        tile(ws, 5 + 4 * (k // 4), 1 + 2 * (k % 4), f"={last}", f"{name} last week",
+             f'="previous week "&{prev}&" · 4-week average "&TEXT({avg},"0.0")')
+
+    for k, name in enumerate(["PRs opened", "PRs merged", "PRs reviewed"]):
+        period_tile(k, name)
+    median = (f'IFERROR(MEDIAN(FILTER({r.P("M")},{r.P("F")}>={end}-7,{r.P("F")}<{end},{r.P("M")}<>"",'
+              f'{r.P("D")}<>"Bot")),"–")')
+    median_prev = median.replace(f"{end}-7", f"{end}-14").replace(f"<{end},", f"<{end}-7,")
+    tile(ws, 5, 7, f"={median}", "Median hours to first review", f'="previous week "&IFERROR(TEXT({median_prev},"0.0"),"–")', "0.0")
+    for k, name in enumerate(["Issues opened", "Issues closed"]):
+        period_tile(4 + k, name)
+    ready = f'{r.P("I")},"OPEN",{r.P("J")},FALSE,{r.P("D")},"<>Bot"'
+    tile(ws, 9, 5, f"=COUNTIFS({ready})", "Open PRs now (not drafts)",
+         f'=COUNTIFS({ready},{r.P("R")},"<"&({a}-30))&" untouched by people for 30+ days"')
+    tile(ws, 9, 7, f'=COUNTIFS({r.I("G")},"OPEN",{r.I("D")},"<>Bot")', "Open issues now",
+         f'=COUNTIFS({r.I("G")},"OPEN",{r.I("D")},"<>Bot",{r.I("L")},"<"&({a}-30))&" untouched by people for 30+ days"')
+
+    # --- Weekly table (feeds the charts) ---
+    wk_head, wk_first = 68, 69
+    wk_last = wk_first + OVERVIEW_WEEKS - 1
+    section(ws, wk_head - 1, f"Weekly figures, last {OVERVIEW_WEEKS} weeks",
+            "Each row is Monday noon to Monday noon US Eastern. The charts above come from this table.")
+    table_header(ws, wk_head, ["Week", "PRs opened", "PRs merged", "PRs closed without merging", "PRs reviewed",
+                               "Issues opened", "Issues closed", "Open issues at week end", "Open PRs at week end",
+                               "Opened by Digital Asset", "Opened by Canton Foundation", "Opened by External",
+                               "Median hours to first review", "Week starting (chart label)"])
+    P, R_, I = r.P, r.R, r.I
+
+    def open_at(created: str, closed: str, who: str, at: str) -> str:
+        return (f'COUNTIFS({created},"<"&{at},{closed},"",{who},"<>Bot")'
+                f'+COUNTIFS({created},"<"&{at},{closed},">="&{at},{who},"<>Bot")')
+
+    ws.cell(row=wk_first, column=1, value=(
+        f'=ARRAYFORMULA(LET(k,SEQUENCE({OVERVIEW_WEEKS}),st,{end}-7*({OVERVIEW_WEEKS}+1-k),en,st+7,'
+        f'HSTACK({span_label("st", "en")},'
+        f'COUNTIFS({P("F")},">="&st,{P("F")},"<"&en,{P("D")},"<>Bot"),'
+        f'COUNTIFS({P("G")},">="&st,{P("G")},"<"&en,{P("D")},"<>Bot"),'
+        f'COUNTIFS({P("H")},">="&st,{P("H")},"<"&en,{P("G")},"",{P("D")},"<>Bot"),'
+        f'COUNTIFS({R_("E")},">="&st,{R_("E")},"<"&en,{R_("C")},"<>Bot",{R_("F")},TRUE),'
+        f'COUNTIFS({I("E")},">="&st,{I("E")},"<"&en,{I("D")},"<>Bot"),'
+        f'COUNTIFS({I("F")},">="&st,{I("F")},"<"&en,{I("D")},"<>Bot"),'
+        f'{open_at(I("E"), I("F"), I("D"), "en")},'
+        f'{open_at(P("F"), P("H"), P("D"), "en")},'
+        f'COUNTIFS({P("F")},">="&st,{P("F")},"<"&en,{P("D")},"Digital Asset"),'
+        f'COUNTIFS({P("F")},">="&st,{P("F")},"<"&en,{P("D")},"Canton Foundation"),'
+        f'COUNTIFS({P("F")},">="&st,{P("F")},"<"&en,{P("D")},"External"),'
+        f'MAP(st,en,LAMBDA(a,b,IFERROR(MEDIAN(FILTER({P("M")},{P("F")}>=a,{P("F")}<b,{P("M")}<>"",'
+        f'{P("D")}<>"Bot")),""))),'
+        f'TEXT(st,"d mmm"))))'))
+    for i in range(wk_first, wk_last + 1):
+        ws.cell(row=i, column=13).number_format = "0.0"
+
+    # --- Monthly table, from the first month with activity ---
+    mo_head = wk_last + 4
+    mo_first = mo_head + 1
+    mo_last = mo_first + OVERVIEW_MONTHS - 1
+    section(ws, mo_head - 1, "Monthly figures since the start", "Calendar months, US Eastern. The current month is to date.")
+    table_header(ws, mo_head, ["Month", "PRs opened", "PRs merged", "PRs closed without merging", "PRs reviewed",
+                               "Issues opened", "Issues closed", "Open issues at month end"])
+    first_day = f"INT(MIN({P('F')},{I('E')}))"
+    m0 = f"DATE(YEAR({first_day}),MONTH({first_day}),1)"
+    n = f"MIN({OVERVIEW_MONTHS},(YEAR({a})-YEAR({first_day}))*12+MONTH({a})-MONTH({first_day})+1)"
+    ws.cell(row=mo_first, column=1, value=(
+        f'=ARRAYFORMULA(LET(k,SEQUENCE({n})-1,st,EDATE({m0},k),nx,EDATE({m0},k+1),en,IF(nx>{a},{a},nx),'
+        f'HSTACK(TEXT(st,"mmm yyyy")&IF(nx>{a}," (to date)",""),'
+        f'COUNTIFS({P("F")},">="&st,{P("F")},"<"&en,{P("D")},"<>Bot"),'
+        f'COUNTIFS({P("G")},">="&st,{P("G")},"<"&en,{P("D")},"<>Bot"),'
+        f'COUNTIFS({P("H")},">="&st,{P("H")},"<"&en,{P("G")},"",{P("D")},"<>Bot"),'
+        f'COUNTIFS({R_("E")},">="&st,{R_("E")},"<"&en,{R_("C")},"<>Bot",{R_("F")},TRUE),'
+        f'COUNTIFS({I("E")},">="&st,{I("E")},"<"&en,{I("D")},"<>Bot"),'
+        f'COUNTIFS({I("F")},">="&st,{I("F")},"<"&en,{I("D")},"<>Bot"),'
+        f'{open_at(I("E"), I("F"), I("D"), "en")})))'))
+
+    # --- Charts ---
+    blue, mid, light, slate = "1F4E8C", "4A86C8", "A9C6E8", "5B6C8F"
+    orange, peach = "E07B39", "F2B880"
+    wk = (wk_first, wk_last)
+    weekly = {"category_col": 14, "x_title": "Week starting Monday (noon to noon ET)"}
+    section(ws, 13, f"Weekly trends, last {OVERVIEW_WEEKS} weeks")
+    line_chart(ws, "Pull requests per week", wk, [(2, "Opened", blue), (3, "Merged", mid), (5, "Reviewed", slate)],
+               "A14", **weekly)
+    line_chart(ws, "Issues per week", wk, [(6, "Opened", orange), (7, "Closed", peach)], "F14", **weekly)
+    line_chart(ws, "Open at the end of each week", wk, [(9, "Open PRs", blue), (8, "Open issues", orange)], "A31",
+               **weekly)
+    line_chart(ws, "PRs opened per week, by affiliation", wk,
+               [(10, "Digital Asset", blue), (11, "Canton Foundation", orange), (12, "External", "2E9E6B")], "F31",
+               **weekly)
+    section(ws, 48, "Since the start, by month")
+    line_chart(ws, "PRs and issues per month", (mo_first, mo_last),
+               [(2, "PRs opened", blue), (3, "PRs merged", mid), (6, "Issues opened", orange), (7, "Issues closed", peach)],
+               "A49", width=25, height=8, bar=True)
+    ws.column_dimensions["A"].width = 19
+    ws.freeze_panes = "A4"
+
 
 def add_reports(wb, r: Ranges) -> None:
-    for title, builder in (("Activity", activity), ("People", people), ("Open work", open_work)):
+    for title, builder in (("Overview", overview), ("Activity", activity), ("People", people),
+                           ("Open work", open_work)):
         ws = wb[title]
         builder(ws, r)
         ws.sheet_view.showGridLines = False
