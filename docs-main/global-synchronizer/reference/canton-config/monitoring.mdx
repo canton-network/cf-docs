@@ -1,0 +1,1081 @@
+---
+title: "Monitoring"
+description: "Logging, metrics, tracing and health checks."
+---
+
+{/* GENERATED_FROM source="digital-asset/canton" ref="1be6d4933767495c3ba950e8513086ca10188757" version="3.7.0-SNAPSHOT" path="docs-open/target/config-reference.json" */}
+
+Configuration under `canton.monitoring` for Canton 3.7.0-SNAPSHOT: 94 keys. Part of the [Canton configuration reference](/global-synchronizer/reference/canton-config/overview), which explains how to read these pages.
+
+## All options
+
+### `canton.monitoring`
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.monitoring {
+  dump-num-rolling-log-files = 0
+  sanitize-public-error-messages = true
+}
+```
+
+`metrics.reporters[]` supports these types: `prometheus`, `otlp`, `csv`, `logging`. Each block shows one entry; a list may hold entries of different types.
+
+```hocon
+canton.monitoring.metrics.reporters = [
+  {
+    type = prometheus
+    address = "localhost"
+    port = 9464
+    filters = [
+      {
+        contains = ""
+        ends-with = ""
+        starts-with = ""
+      }
+    ]
+  }
+]
+```
+
+```hocon
+canton.monitoring.metrics.reporters = [
+  {
+    type = otlp
+    endpoint = "http://localhost:4317"
+    interval = "10 seconds"
+    protocol = grpc
+    auth {
+      type = oauth-client-credentials   # required
+    }
+    filters = [
+      {
+        contains = ""
+        ends-with = ""
+        starts-with = ""
+      }
+    ]
+  }
+]
+```
+
+```hocon
+canton.monitoring.metrics.reporters = [
+  {
+    type = csv
+    context-keys = [ ]
+    directory = "/path/to/file"   # required
+    interval = "5 seconds"
+    filters = [
+      {
+        contains = ""
+        ends-with = ""
+        starts-with = ""
+      }
+    ]
+  }
+]
+```
+
+```hocon
+canton.monitoring.metrics.reporters = [
+  {
+    type = logging
+    interval = "30 seconds"
+    log-as-info = true
+    filters = [
+      {
+        contains = ""
+        ends-with = ""
+        starts-with = ""
+      }
+    ]
+  }
+]
+```
+
+`metrics.histograms[].aggregation` supports these types: `buckets`, `exponential`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.monitoring.metrics.histograms = [
+  {
+    aggregation {
+      type = buckets
+      boundaries = [ ]   # required
+    }
+  }
+]
+```
+
+```hocon
+canton.monitoring.metrics.histograms = [
+  {
+    aggregation {
+      type = exponential
+      max-buckets = 0   # required
+      max-scale = 0   # required
+    }
+  }
+]
+```
+
+`metrics.reporters[].auth` supports these types: `oauth-client-credentials`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.monitoring.metrics.reporters = [
+  {
+    auth {
+      type = oauth-client-credentials
+      client-id = "..."   # required
+      client-secret = "..."   # required
+      # scope = <string>
+      token-url = "..."   # required
+    }
+  }
+]
+```
+
+`tracing.tracer.exporter` supports these types: `disabled`, `zipkin`, `otlp`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.monitoring.tracing.tracer.exporter {
+  type = disabled
+  # takes no further keys
+}
+```
+
+```hocon
+canton.monitoring.tracing.tracer.exporter {
+  type = zipkin
+  address = "localhost"
+  port = 9411
+}
+```
+
+```hocon
+canton.monitoring.tracing.tracer.exporter {
+  type = otlp
+  address = "localhost"
+  # connect-timeout = <duration>
+  port = 4317
+  # timeout = <duration>
+  # trust-collection-path = <string>
+  additional-headers {
+    <additional-header> = [ ]
+  }
+}
+```
+
+`tracing.tracer.sampler` supports these types: `always-on`, `always-off`, `trace-id-ratio`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.monitoring.tracing.tracer.sampler {
+  type = always-on
+  parent-based = true
+}
+```
+
+```hocon
+canton.monitoring.tracing.tracer.sampler {
+  type = always-off
+  parent-based = true
+}
+```
+
+```hocon
+canton.monitoring.tracing.tracer.sampler {
+  type = trace-id-ratio
+  parent-based = true
+  ratio = 0   # required
+}
+```
+
+
+</Tab>
+<Tab title="Table">
+
+| Key | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `dump-num-rolling-log-files` | int (NonNegativeInt) |  | `0` | How many of the rolling log files should be included in the remote dump. Default is 0. |
+| `sanitize-public-error-messages` | boolean |  | `true` | Specifies whether the system should redact error messages sent to clients. By default, Canton redacts error information to maintain a secure baseline. This flag allows for disabling of the redaction to provide detailed diagnostic data, but currently only affects supported services (such as the SequencerConnectService). For all other endpoints, standard baseline redaction remains in effect regardless of this setting. This feature must be enabled in production environments to prevent information leakage and ensure system security. |
+
+</Tab>
+</Tabs>
+
+### `canton.monitoring.deadlock-detection`
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.monitoring.deadlock-detection {
+  enabled = true
+  interval = "3 seconds"
+  warn-interval = "10 seconds"
+}
+```
+
+
+</Tab>
+<Tab title="Table">
+
+| Key | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `enabled` | boolean |  | `true` | if true, we'll monitor the EC for deadlocks (or slow processings) |
+| `interval` | duration (NonNegativeFiniteDuration) |  | `3 seconds` | how often we check the EC |
+| `warn-interval` | duration (NonNegativeFiniteDuration) |  | `10 seconds` | how often we report a deadlock as still being active |
+
+</Tab>
+</Tabs>
+
+### `canton.monitoring.logging`
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.monitoring.logging {
+  delay-logging-threshold = "20 seconds"
+  event-details = false
+  log-config-on-startup = true
+  log-config-with-defaults = false
+  log-slow-futures = false
+  api {
+    debug-in-process-requests = false
+    max-message-lines = 20
+    max-metadata-size = 200
+    max-method-length = 30
+    max-string-length = 250
+    message-payloads = false
+    prefix-grpc-addresses = true
+    warn-beyond-load = 5
+  }
+  jvm-gc {
+    debug-level = false
+    details = true
+    enabled = false
+    filter = ""
+  }
+  query-cost {
+    every = "30 seconds"   # required
+    log-lines = 15
+    log-operations = false
+    reset-on-output = true
+    sort-by = total
+  }
+}
+```
+
+
+</Tab>
+<Tab title="Table">
+
+| Key | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `delay-logging-threshold` | duration (NonNegativeFiniteDuration) |  | `20 seconds` | Logs a warning message once the sequencer client falls behind in processing messages from the sequencer (based on the sequencing timestamp). |
+| `event-details` | boolean |  | `false` | If set to true, we will log substantial details of internal messages being processed. To be disabled in production! |
+| `log-config-on-startup` | boolean |  | `true` | If set to true (default), it will log the config on startup (omitting sensitive details) |
+| `log-config-with-defaults` | boolean |  | `false` | If set to true (default false), the default values of the config will be included |
+| `log-slow-futures` | boolean |  | `false` (in practice `true`) ◊ | Whether we should active log slow futures (where instructed) |
+| **api** |  |  |  | Control logging of the ApiRequestLogger Every GRPC service invocation is logged through the ApiRequestLogger. |
+|     `debug-in-process-requests` | boolean |  | `false` | grpc in-process communication is logged with DEBUG level otherwise only in TRACE |
+|     `max-message-lines` | int |  | `20` | maximum number of lines to log for a message |
+|     `max-metadata-size` | int |  | `200` | maximum size of metadata |
+|     `max-method-length` | int |  | `30` | indicates how much to abbreviate the name of the called method. E.g. "com.digitalasset.canton.MyMethod" may get abbreviated to "c.d.c.MyMethod". The last token will never get abbreviated. |
+|     `max-string-length` | int |  | `250` | maximum number of characters to log for a string within a message |
+|     `message-payloads` | boolean |  | `false` (in practice `true`) ◊ | Indicates whether to log message payloads. (To be disabled in production!) Also applies to metadata. |
+|     `prefix-grpc-addresses` | boolean |  | `true` | Prefix connecting gRPC client addresses with "grpc:" (default: true, false for full backwards compatibility). http is always prefixed with "http:" |
+|     `warn-beyond-load` | int |  | `5` (in practice `10000`) ◊ | If API logging is turned on, emit a warning on each request if the load exceeds this threshold. |
+| **jvm-gc** |  |  |  | Configure GC logging |
+|     `debug-level` | boolean |  | `false` | If true, the logging will happen on debug level, else info |
+|     `details` | boolean |  | `true` | If set to true (default), the memory details will be included |
+|     `enabled` | boolean |  | `false` | If set to true, the JVM GC logging will be enabled |
+|     `filter` | string |  | `""` | An optional filter string to filter for particular GC events |
+| **query-cost** |  |  |  | Configuration for monitoring the cost of db queries. |
+|     `every` | duration (NonNegativeFiniteDuration) | yes | `30 seconds` † | determines the duration between reports |
+|     `log-lines` | int (PositiveInt) |  | `15` | determines how many lines will be logged, default 15 |
+|     `log-operations` | boolean |  | `false` | if true (default false), log every query operation |
+|     `reset-on-output` | boolean |  | `true` | determines whether the statistics will be reset after creating a report |
+|     `sort-by` | one of `count`, `mean`, `total`, `std-dev` |  | `total` | determines the sorting of the output (default total) |
+
+</Tab>
+</Tabs>
+
+### `canton.monitoring.metrics`
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.monitoring.metrics {
+  cardinality = 2000
+  qualifiers = [ ]
+  histograms = [
+    {
+      name = "..."   # required
+      # view-name = <string>
+      aggregation {
+        type = buckets|exponential   # required
+      }
+    }
+  ]
+  jvm-metrics {
+    buffers = true
+    classes = true
+    cpu = true
+    enabled = false
+    experimental = false
+    gc = true
+    memory-pools = true
+    threads = true
+  }
+  reporters = [
+    {
+      type = prometheus|otlp|csv|logging   # required
+      filters = [
+        {
+          contains = ""
+          ends-with = ""
+          starts-with = ""
+        }
+      ]
+    }
+  ]
+}
+```
+
+`reporters[]` supports these types: `prometheus`, `otlp`, `csv`, `logging`. Each block shows one entry; a list may hold entries of different types.
+
+```hocon
+canton.monitoring.metrics.reporters = [
+  {
+    type = prometheus
+    address = "localhost"
+    port = 9464
+    filters = [
+      {
+        contains = ""
+        ends-with = ""
+        starts-with = ""
+      }
+    ]
+  }
+]
+```
+
+```hocon
+canton.monitoring.metrics.reporters = [
+  {
+    type = otlp
+    endpoint = "http://localhost:4317"
+    interval = "10 seconds"
+    protocol = grpc
+    auth {
+      type = oauth-client-credentials   # required
+    }
+    filters = [
+      {
+        contains = ""
+        ends-with = ""
+        starts-with = ""
+      }
+    ]
+  }
+]
+```
+
+```hocon
+canton.monitoring.metrics.reporters = [
+  {
+    type = csv
+    context-keys = [ ]
+    directory = "/path/to/file"   # required
+    interval = "5 seconds"
+    filters = [
+      {
+        contains = ""
+        ends-with = ""
+        starts-with = ""
+      }
+    ]
+  }
+]
+```
+
+```hocon
+canton.monitoring.metrics.reporters = [
+  {
+    type = logging
+    interval = "30 seconds"
+    log-as-info = true
+    filters = [
+      {
+        contains = ""
+        ends-with = ""
+        starts-with = ""
+      }
+    ]
+  }
+]
+```
+
+`histograms[].aggregation` supports these types: `buckets`, `exponential`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.monitoring.metrics.histograms = [
+  {
+    aggregation {
+      type = buckets
+      boundaries = [ ]   # required
+    }
+  }
+]
+```
+
+```hocon
+canton.monitoring.metrics.histograms = [
+  {
+    aggregation {
+      type = exponential
+      max-buckets = 0   # required
+      max-scale = 0   # required
+    }
+  }
+]
+```
+
+`reporters[].auth` supports these types: `oauth-client-credentials`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.monitoring.metrics.reporters = [
+  {
+    auth {
+      type = oauth-client-credentials
+      client-id = "..."   # required
+      client-secret = "..."   # required
+      # scope = <string>
+      token-url = "..."   # required
+    }
+  }
+]
+```
+
+
+</Tab>
+<Tab title="Table">
+
+| Key | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `cardinality` | int (PositiveInt) |  | `2000` |  |
+| `qualifiers` | array of MetricQualification |  | `errors, latency, saturation, traffic` | which metric qualifiers to include generally. by default, all except Debug metrics are included. The qualifier filtering takes precedence over the individual reporter filters |
+| `histograms` | array of HistogramDefinition |  | `[]` | customized histogram definitions |
+| **histograms[]** |  |  |  | Bucket boundary definitions for histograms |
+|     `name` | string | yes |  | Instrument name that may contain the wildcard characters * and ? |
+|     `view-name` | string |  | _unset_ |  |
+|     **aggregation** |  |  |  |  |
+|         `type` | one of `buckets`, `exponential` | yes |  | Choose one type — see [AggregationType](#aggregationtype). |
+|     **aggregation** `type = buckets` |  |  |  |  |
+|         `boundaries` | array of Double | yes |  |  |
+|     **aggregation** `type = exponential` |  |  |  |  |
+|         `max-buckets` | int | yes |  |  |
+|         `max-scale` | int | yes |  |  |
+| **jvm-metrics** |  |  |  | Control and enable jvm metrics |
+|     `buffers` **deprecated** | boolean |  | `true` |  |
+|     `classes` **deprecated** | boolean |  | `true` |  |
+|     `cpu` **deprecated** | boolean |  | `true` |  |
+|     `enabled` | boolean |  | `false` |  |
+|     `experimental` | boolean |  | `false` |  |
+|     `gc` **deprecated** | boolean |  | `true` |  |
+|     `memory-pools` **deprecated** | boolean |  | `true` |  |
+|     `threads` **deprecated** | boolean |  | `true` |  |
+| `reporters` | array of [MetricsReporterConfig](#metricsreporterconfig) |  | `[]` | which reports should be used to report metric output |
+| **reporters[]** |  |  |  |  |
+|     `type` | one of `prometheus`, `otlp`, `csv`, `logging` | yes |  | Choose one type — see [MetricsReporterConfig](#metricsreporterconfig). |
+|     **filters[]** |  |  |  | Metrics filter |
+|         `contains` | string |  | `""` |  |
+|         `ends-with` | string |  | `""` |  |
+|         `starts-with` | string |  | `""` |  |
+| **reporters[]** `type = prometheus` |  |  |  |  |
+|     `address` | string |  | `localhost` |  |
+|     `filters` | array of MetricsFilterConfig |  | `[]` |  |
+|     `port` | int (Port) |  | `9464` |  |
+| **reporters[]** `type = otlp` |  |  |  |  |
+|     `endpoint` | string |  | `http://localhost:4317` |  |
+|     `filters` | array of MetricsFilterConfig |  | `[]` |  |
+|     `interval` | duration (NonNegativeFiniteDuration) |  | `10 seconds` |  |
+|     `protocol` | one of `grpc`, `http-protobuf` |  | `grpc` |  |
+|     **auth** |  |  |  |  |
+|         `type` | one of `oauth-client-credentials` | yes |  | Choose one type — see [OtlpAuth](#otlpauth). |
+|         `client-id` | string | yes |  |  |
+|         `client-secret` | string | yes |  |  |
+|         `scope` | string |  | _unset_ |  |
+|         `token-url` | string | yes |  |  |
+| **reporters[]** `type = csv` |  |  |  | CSV metrics reporter configuration This reporter will write the given metrics into respective csv files. |
+|     `context-keys` | array of string |  | `node, synchronizer` | which context keys to include in the name. defaults to node names |
+|     `directory` | path | yes |  | where to write the csv files to |
+|     `filters` | array of MetricsFilterConfig |  | `[]` | which metrics to include |
+|     `interval` | duration (NonNegativeFiniteDuration) |  | `5 seconds` | how often to write the csv files |
+| **reporters[]** `type = logging` |  |  |  | Log metrics reporter configuration This reporter will log the metrics in the given interval |
+|     `filters` | array of MetricsFilterConfig |  | `[]` | which metrics to include |
+|     `interval` | duration (NonNegativeFiniteDuration) |  | `30 seconds` | how often to log the metrics |
+|     `log-as-info` | boolean |  | `true` |  |
+
+</Tab>
+</Tabs>
+
+### `canton.monitoring.tracing`
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.monitoring.tracing {
+  propagation = enabled
+  tracer {
+    batch-span-processor {
+      # batch-size = <int>
+      # schedule-delay = <duration>
+    }
+    exporter {
+      type = disabled|zipkin|otlp   # required
+    }
+    sampler {
+      type = always-on|always-off|trace-id-ratio   # required
+      parent-based = true
+    }
+  }
+}
+```
+
+`tracer.exporter` supports these types: `disabled`, `zipkin`, `otlp`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.monitoring.tracing.tracer.exporter {
+  type = disabled
+  # takes no further keys
+}
+```
+
+```hocon
+canton.monitoring.tracing.tracer.exporter {
+  type = zipkin
+  address = "localhost"
+  port = 9411
+}
+```
+
+```hocon
+canton.monitoring.tracing.tracer.exporter {
+  type = otlp
+  address = "localhost"
+  # connect-timeout = <duration>
+  port = 4317
+  # timeout = <duration>
+  # trust-collection-path = <string>
+  additional-headers {
+    <additional-header> = [ ]
+  }
+}
+```
+
+`tracer.sampler` supports these types: `always-on`, `always-off`, `trace-id-ratio`. Pick one; each block is a complete example of that choice.
+
+```hocon
+canton.monitoring.tracing.tracer.sampler {
+  type = always-on
+  parent-based = true
+}
+```
+
+```hocon
+canton.monitoring.tracing.tracer.sampler {
+  type = always-off
+  parent-based = true
+}
+```
+
+```hocon
+canton.monitoring.tracing.tracer.sampler {
+  type = trace-id-ratio
+  parent-based = true
+  ratio = 0   # required
+}
+```
+
+
+</Tab>
+<Tab title="Table">
+
+| Key | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `propagation` | one of `enabled`, `disabled` |  | `enabled` | How should trace contexts (debugging details associated with actions) be propagated between nodes. |
+| **tracer** |  |  |  |  |
+|     **batch-span-processor** |  |  |  |  |
+|         `batch-size` | int |  | _unset_ |  |
+|         `schedule-delay` | duration |  | _unset_ |  |
+|     **exporter** |  |  |  | Configuration for how to export spans |
+|         `type` | one of `disabled`, `zipkin`, `otlp` | yes | `disabled` † | Choose one type — see [Exporter](#exporter). Configuration for how to export spans |
+|     **exporter** `type = zipkin` |  |  |  | Zipkin exporter is deprecated from opentelemetry, with removal planned for mid-2026. |
+|         `address` | string |  | `localhost` |  |
+|         `port` | int |  | `9411` |  |
+|     **exporter** `type = otlp` |  |  |  |  |
+|         `address` | string |  | `localhost` |  |
+|         `connect-timeout` | duration |  | _unset_ |  |
+|         `port` | int |  | `4317` |  |
+|         `timeout` | duration |  | _unset_ |  |
+|         `trust-collection-path` | string |  | _unset_ |  |
+|         **additional-headers** |  |  |  |  |
+|             `<additional-header>` | string |  | `[]` |  |
+|     **sampler** |  |  |  |  |
+|         `type` | one of `always-on`, `always-off`, `trace-id-ratio` | yes | `always-on` † | Choose one type — see [Sampler](#sampler). |
+|         `parent-based` | boolean |  | `true` |  |
+|     **sampler** `type = trace-id-ratio` |  |  |  |  |
+|         `ratio` | number | yes |  |  |
+
+</Tab>
+</Tabs>
+
+## Configuration types
+
+Sections under this page that take a `type`, and the keys each type accepts. A key belonging to another type fails startup.
+
+### AggregationType
+
+Set `type` to one of `buckets`, `exponential`.
+
+Occurs at:
+
+- `canton.monitoring.metrics.histograms[].aggregation`
+
+#### `type = buckets`
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.monitoring.metrics.histograms = [
+  {
+    aggregation {
+      type = buckets
+      boundaries = [ ]   # required
+    }
+  }
+]
+```
+
+
+</Tab>
+<Tab title="Table">
+
+| Key | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `boundaries` | array of Double | yes |  |  |
+
+</Tab>
+</Tabs>
+
+#### `type = exponential`
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.monitoring.metrics.histograms = [
+  {
+    aggregation {
+      type = exponential
+      max-buckets = 0   # required
+      max-scale = 0   # required
+    }
+  }
+]
+```
+
+
+</Tab>
+<Tab title="Table">
+
+| Key | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `max-buckets` | int | yes |  |  |
+| `max-scale` | int | yes |  |  |
+
+</Tab>
+</Tabs>
+
+### Exporter
+
+Configuration for how to export spans
+
+Set `type` to one of `disabled`, `zipkin`, `otlp`.
+
+Occurs at:
+
+- `canton.monitoring.tracing.tracer.exporter`
+
+#### `type = disabled`
+
+```hocon
+canton.monitoring.tracing.tracer.exporter {
+  type = disabled
+  # takes no further keys
+}
+```
+
+#### `type = zipkin`
+
+Zipkin exporter is deprecated from opentelemetry, with removal planned for mid-2026. See https://opentelemetry.io/blog/2025/deprecating-zipkin-exporters/ for more details.
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.monitoring.tracing.tracer.exporter {
+  type = zipkin
+  address = "localhost"
+  port = 9411
+}
+```
+
+
+</Tab>
+<Tab title="Table">
+
+| Key | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `address` | string |  | `localhost` |  |
+| `port` | int |  | `9411` |  |
+
+</Tab>
+</Tabs>
+
+#### `type = otlp`
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.monitoring.tracing.tracer.exporter {
+  type = otlp
+  address = "localhost"
+  # connect-timeout = <duration>
+  port = 4317
+  # timeout = <duration>
+  # trust-collection-path = <string>
+  additional-headers {
+    <additional-header> = [ ]
+  }
+}
+```
+
+
+</Tab>
+<Tab title="Table">
+
+| Key | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `additional-headers.<additional-header>` | string |  | `[]` |  |
+| `address` | string |  | `localhost` |  |
+| `connect-timeout` | duration |  | _unset_ |  |
+| `port` | int |  | `4317` |  |
+| `timeout` | duration |  | _unset_ |  |
+| `trust-collection-path` | string |  | _unset_ |  |
+
+</Tab>
+</Tabs>
+
+### MetricsReporterConfig
+
+Set `type` to one of `prometheus`, `otlp`, `csv`, `logging`.
+
+Occurs at:
+
+- `canton.monitoring.metrics.reporters[]`
+
+#### `type = prometheus`
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.monitoring.metrics.reporters = [
+  {
+    type = prometheus
+    address = "localhost"
+    port = 9464
+    filters = [
+      {
+        contains = ""
+        ends-with = ""
+        starts-with = ""
+      }
+    ]
+  }
+]
+```
+
+
+</Tab>
+<Tab title="Table">
+
+| Key | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `address` | string |  | `localhost` |  |
+| `filters` | array of MetricsFilterConfig |  | `[]` |  |
+| `filters[].contains` | string |  | `""` |  |
+| `filters[].ends-with` | string |  | `""` |  |
+| `filters[].starts-with` | string |  | `""` |  |
+| `port` | int (Port) |  | `9464` |  |
+
+</Tab>
+</Tabs>
+
+#### `type = otlp`
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.monitoring.metrics.reporters = [
+  {
+    type = otlp
+    endpoint = "http://localhost:4317"
+    interval = "10 seconds"
+    protocol = grpc
+    auth {
+      type = oauth-client-credentials   # required
+    }
+    filters = [
+      {
+        contains = ""
+        ends-with = ""
+        starts-with = ""
+      }
+    ]
+  }
+]
+```
+
+
+</Tab>
+<Tab title="Table">
+
+| Key | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `auth.type` | one of `oauth-client-credentials` | yes |  |  |
+| `endpoint` | string |  | `http://localhost:4317` |  |
+| `filters` | array of MetricsFilterConfig |  | `[]` |  |
+| `filters[].contains` | string |  | `""` |  |
+| `filters[].ends-with` | string |  | `""` |  |
+| `filters[].starts-with` | string |  | `""` |  |
+| `interval` | duration (NonNegativeFiniteDuration) |  | `10 seconds` |  |
+| `protocol` | one of `grpc`, `http-protobuf` |  | `grpc` |  |
+
+</Tab>
+</Tabs>
+
+Further types inside this one: [OtlpAuth](#otlpauth) at `auth.type`.
+
+#### `type = csv`
+
+CSV metrics reporter configuration This reporter will write the given metrics into respective csv files. Please note that you should use filters as otherwise, you'll get many files
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.monitoring.metrics.reporters = [
+  {
+    type = csv
+    context-keys = [ ]
+    directory = "/path/to/file"   # required
+    interval = "5 seconds"
+    filters = [
+      {
+        contains = ""
+        ends-with = ""
+        starts-with = ""
+      }
+    ]
+  }
+]
+```
+
+
+</Tab>
+<Tab title="Table">
+
+| Key | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `context-keys` | array of string |  | `node, synchronizer` | which context keys to include in the name. defaults to node names |
+| `directory` | path | yes |  | where to write the csv files to |
+| `filters` | array of MetricsFilterConfig |  | `[]` | which metrics to include |
+| `filters[].contains` | string |  | `""` |  |
+| `filters[].ends-with` | string |  | `""` |  |
+| `filters[].starts-with` | string |  | `""` |  |
+| `interval` | duration (NonNegativeFiniteDuration) |  | `5 seconds` | how often to write the csv files |
+
+</Tab>
+</Tabs>
+
+#### `type = logging`
+
+Log metrics reporter configuration This reporter will log the metrics in the given interval
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.monitoring.metrics.reporters = [
+  {
+    type = logging
+    interval = "30 seconds"
+    log-as-info = true
+    filters = [
+      {
+        contains = ""
+        ends-with = ""
+        starts-with = ""
+      }
+    ]
+  }
+]
+```
+
+
+</Tab>
+<Tab title="Table">
+
+| Key | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `filters` | array of MetricsFilterConfig |  | `[]` | which metrics to include |
+| `filters[].contains` | string |  | `""` |  |
+| `filters[].ends-with` | string |  | `""` |  |
+| `filters[].starts-with` | string |  | `""` |  |
+| `interval` | duration (NonNegativeFiniteDuration) |  | `30 seconds` | how often to log the metrics |
+| `log-as-info` | boolean |  | `true` |  |
+
+</Tab>
+</Tabs>
+
+### OtlpAuth
+
+Set `type` to one of `oauth-client-credentials`.
+
+Occurs at:
+
+- `canton.monitoring.metrics.reporters[].auth`
+
+#### `type = oauth-client-credentials`
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.monitoring.metrics.reporters = [
+  {
+    auth {
+      type = oauth-client-credentials
+      client-id = "..."   # required
+      client-secret = "..."   # required
+      # scope = <string>
+      token-url = "..."   # required
+    }
+  }
+]
+```
+
+
+</Tab>
+<Tab title="Table">
+
+| Key | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `client-id` | string | yes |  |  |
+| `client-secret` | string | yes |  |  |
+| `scope` | string |  | _unset_ |  |
+| `token-url` | string | yes |  |  |
+
+</Tab>
+</Tabs>
+
+### Sampler
+
+Set `type` to one of `always-on`, `always-off`, `trace-id-ratio`.
+
+Occurs at:
+
+- `canton.monitoring.tracing.tracer.sampler`
+
+#### `type = always-on`
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.monitoring.tracing.tracer.sampler {
+  type = always-on
+  parent-based = true
+}
+```
+
+
+</Tab>
+<Tab title="Table">
+
+| Key | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `parent-based` | boolean |  | `true` |  |
+
+</Tab>
+</Tabs>
+
+#### `type = always-off`
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.monitoring.tracing.tracer.sampler {
+  type = always-off
+  parent-based = true
+}
+```
+
+
+</Tab>
+<Tab title="Table">
+
+| Key | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `parent-based` | boolean |  | `true` |  |
+
+</Tab>
+</Tabs>
+
+#### `type = trace-id-ratio`
+
+<Tabs>
+<Tab title="HOCON">
+
+```hocon
+canton.monitoring.tracing.tracer.sampler {
+  type = trace-id-ratio
+  parent-based = true
+  ratio = 0   # required
+}
+```
+
+
+</Tab>
+<Tab title="Table">
+
+| Key | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `parent-based` | boolean |  | `true` |  |
+| `ratio` | number | yes |  |  |
+
+</Tab>
+</Tabs>
