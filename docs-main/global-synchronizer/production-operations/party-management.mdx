@@ -548,7 +548,11 @@ A party onboarded with separate namespace and protocol signing keys can recover 
 
 A party onboarded through `GenerateExternalPartyTopology` has a single key that serves as both the namespace key and the protocol signing key by default. In that default case, a compromised key is a compromised namespace key: it cannot simply be rotated away, since the attacker can still change the party's topology, for example lowering the confirmation threshold or hosting the party on their own participant. Removing the party on your own node does not contain this by itself.
 
-**The recommended response is for every confirming participant to downgrade itself to Observation.** This does not require the party's signature:
+<Warning>
+As long as the namespace key is compromised, the attacker can author a new `PartyToParticipant` mapping that hosts the party on a participant they control, with full confirmation rights, regardless of what the legitimate hosts do to their own hosting permissions. Downgrading existing hosts to Observation, below, stops those specific participants from confirming on the party's behalf. It does not stop the attacker from standing up a new host elsewhere, and so does not by itself contain the party. The only step that actually ends the attacker's ability to re-host the party is revoking the party's root `NamespaceDelegation`, covered in [Removing a party](#removing-a-party) below. That step is destructive and not an official runbook, which is why it is not the first recommendation, but the Observation downgrade alone should not be treated as having contained a compromised namespace key.
+</Warning>
+
+**The recommended immediate step is for every confirming participant to downgrade itself to Observation.** This does not require the party's signature and stops those participants from confirming further transactions while you decide on and execute a complete response:
 
 ```scala
 import com.digitalasset.canton.topology.ForceFlags
@@ -593,7 +597,7 @@ A party can be fully removed, but as of this writing it is not an official runbo
 
 ### parties.disable
 
-[`parties.disable`](#disable-a-party) is a wrapper around removing a node from the party's mapping. It works for external parties, but the Observation downgrade above is the recommended approach instead.
+[`parties.disable`](#disable-a-party) is a wrapper around removing a node from the party's mapping. It works for external parties, but the Observation downgrade above is the recommended first step instead, with the same caveat: neither stops an attacker with the namespace key from re-hosting the party elsewhere.
 
 ## Approximating migration
 
