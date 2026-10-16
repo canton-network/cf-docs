@@ -379,4 +379,17 @@ This allows implementation of [Delivery versus Payment (DVP) Transfer Workflows]
 
 {/* COPIED_END */}
 
+## Common pitfall: unresolved registry token packages
+
+Your participant must have a registry token's DAR packages installed before it can interpret contracts and transactions involving that token — this is separate from having the Wallet SDK or CLI code that talks to the registry's off-ledger API. If a transfer involving a registry-issued token fails to resolve with an error like `UNRESOLVED_PACKAGE_NAME`, check that the relevant DARs are uploaded and vetted on your participant.
+
+## Detecting transfer preapproval from choice-context
+
+Whether a transfer is credited immediately or requires an explicit accept is determined by whether the receiver has a transfer preapproval, which is discoverable from the choice-context response before submitting the accept/transfer:
+
+- For CC, if the receiver has a transfer preapproval, the choice context returns an additional value named `transfer-preapproval` containing the `ContractId` of the corresponding preapproval contract.
+- For Registry Utility tokens, the choice context itself is the same regardless of whether a preapproval exists, but the returned `factoryId` differs: if a preapproval exists, the `TransferPreapproval` contract's factory is returned, so `TransferFactory_Transfer` should be called on that contract; otherwise the default factory is returned.
+
+This is why some inbound transfers show up as an already-credited balance while others show up as a pending offer needing `TransferInstruction_Accept`.
+
 {/* Mintlify preview rebuild marker. */}
