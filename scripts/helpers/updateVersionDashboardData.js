@@ -18,6 +18,7 @@ const OUTPUT_PATH = path.join(PROJECT_ROOT, 'docs-main/snippets/generated/versio
 const VERSION_ORDER = [
   'splice',
   'canton',
+  'damlLf',
   'damlSdk',
   'pqs',
   'tokenStandard',
