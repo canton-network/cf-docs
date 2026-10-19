@@ -14,15 +14,26 @@ from pathlib import Path
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
+from canton_release_reference import (
+    ensure_release_archive,
+    extract_release,
+    resolve_release_asset,
+    run_reference_script,
+)
+
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_REPO_CONFIG_OUTPUT = REPO_ROOT / "config" / "repo-version-config.json"
 HELPER_SCRIPT = REPO_ROOT / "scripts" / "helpers" / "updateVersionDashboardData.js"
+CANTON_LF_VERSIONS_SCRIPT = REPO_ROOT / "scripts" / "canton_lf_versions.canton"
+CANTON_RELEASE_CACHE_DIR = REPO_ROOT / ".internal" / "cache" / "canton-release-reference"
+CANTON_RELEASES_PAGE_URL = "https://github.com/digital-asset/canton/releases"
 
 NETWORK_ORDER = ["mainnet", "testnet", "devnet"]
 RENDERED_REPOSITORY_ORDER = [
     "splice",
     "canton",
+    "damlLf",
     "damlSdk",
     "dpm",
     "pqs",
@@ -441,6 +452,106 @@ def collect_pqs_versions(
     return pqs_versions
 
 
+def canton_release_tag(canton_version: str) -> str:
+    if not STABLE_SEMVER_RE.fullmatch(canton_version):
+        raise ValueError(
+            f"Canton version {canton_version!r} is not a stable public release"
+        )
+    return f"v{canton_version}"
+
+
+def format_lf_versions(versions: list[str]) -> str:
+    """Collapse a contiguous run of minor versions within one major into a range."""
+    parsed = [tuple(int(part) for part in version.split(".")) for version in versions]
+    if not parsed:
+        raise ValueError("Canton release reported no stable Daml-LF versions")
+    contiguous = len(parsed) > 1 and all(
+        later[0] == earlier[0] and later[1] == earlier[1] + 1
+        for earlier, later in zip(parsed, parsed[1:])
+    )
+    if contiguous:
+        return f"{versions[0]}–{versions[-1]}"
+    return ", ".join(versions)
+
+
+def fetch_canton_stable_lf_versions(release_tag: str) -> list[str]:
+    asset = resolve_release_asset(tag=release_tag)
+    archive_path = ensure_release_archive(
+        asset=asset, cache_dir=CANTON_RELEASE_CACHE_DIR, force_refresh=False
+    )
+    distribution_root = extract_release(
+        archive_path=archive_path,
+        asset=asset,
+        cache_dir=CANTON_RELEASE_CACHE_DIR,
+        force_refresh=False,
+    )
+    payload = run_reference_script(
+        distribution_root=distribution_root,
+        script_path=CANTON_LF_VERSIONS_SCRIPT,
+        cache_dir=CANTON_RELEASE_CACHE_DIR,
+        cache_namespace="stable-lf-versions",
+        asset=asset,
+        force_refresh=False,
+    )
+    versions = payload.get("stableLfVersions") if isinstance(payload, dict) else None
+    if not isinstance(versions, list) or not all(
+        isinstance(version, str) and re.fullmatch(r"\d+\.\d+", version)
+        for version in versions
+    ):
+        raise ValueError(
+            f"Canton {release_tag} reported invalid stable Daml-LF versions: {versions!r}"
+        )
+    return versions
+
+
+def collect_daml_lf_versions(
+    existing_config: dict,
+    networks: dict[str, dict],
+) -> dict[str, dict[str, str]]:
+    """Read the stable Daml-LF versions accepted by each network's Canton release.
+
+    A Canton release tag is immutable, so a network whose Canton version is unchanged
+    keeps its recorded value instead of downloading the release binary again.
+    """
+    probed: dict[str, str] = {}
+    lf_versions: dict[str, dict[str, str]] = {}
+    for network_key in NETWORK_ORDER:
+        previous = (
+            existing_config.get("repositories", {})
+            .get("damlLf", {})
+            .get("versionMapping", {})
+            .get(network_key, {})
+        )
+        previous_version = str(previous.get("externalVersion") or "")
+        previous_tag = str(previous.get("folderPathRepo") or "")
+        canton_version = str(networks[network_key].get("cantonVersion") or "")
+        try:
+            release_tag = canton_release_tag(canton_version)
+            if release_tag == previous_tag and previous_version:
+                version = previous_version
+            else:
+                if release_tag not in probed:
+                    probed[release_tag] = format_lf_versions(
+                        fetch_canton_stable_lf_versions(release_tag)
+                    )
+                version = probed[release_tag]
+        except Exception as exc:
+            if not previous_version:
+                raise RuntimeError(
+                    f"{network_key}: failed to collect Daml-LF versions and no previous "
+                    f"dashboard value is available to preserve: {exc}"
+                ) from exc
+            print(
+                f"WARNING: {network_key}: failed to collect Daml-LF versions ({exc}); "
+                f"preserving previous dashboard value {previous_version}",
+                file=sys.stderr,
+            )
+            release_tag = previous_tag
+            version = previous_version
+        lf_versions[network_key] = {"releaseTag": release_tag, "version": version}
+    return lf_versions
+
+
 def clean_html_text(value: str) -> str:
     value = re.sub(r"<.*?>", "", value)
     return " ".join(html.unescape(value).split())
@@ -713,6 +824,7 @@ def collect_snapshot(timeout: float, existing_config: dict) -> dict:
         "damlSdkVersions": collect_daml_sdk_versions(timeout, existing_config),
         "latestDpm": fetch_latest_dpm_version(timeout),
         "pqsVersions": collect_pqs_versions(timeout, existing_config, networks),
+        "damlLfVersions": collect_daml_lf_versions(existing_config, networks),
         "latestWalletGateway": fetch_latest_wallet_gateway_version(timeout),
         "npmVersions": {
             key: fetch_npm_latest(package_name, timeout)
@@ -748,6 +860,8 @@ def repository_url(repository_key: str, existing_config: dict) -> str:
         return "https://github.com/canton-network/splice/releases"
     if repository_key == "canton":
         return CANTON_VERSION_SOURCE_REPO_URL
+    if repository_key == "damlLf":
+        return CANTON_RELEASES_PAGE_URL
     if repository_key == "damlSdk":
         return f"https://{DAML_SDK_MANIFEST_REPOSITORY}"
     if repository_key == "dpm":
@@ -777,6 +891,11 @@ def build_repository_mapping(
             external_version = network["cantonVersion"]
             branch = network["cantonReleaseLineBranch"]
             folder_path_repo = CANTON_SOURCES_PATH
+        elif repository_key == "damlLf":
+            daml_lf = snapshot["damlLfVersions"][network_key]
+            external_version = daml_lf["version"]
+            branch = ""
+            folder_path_repo = daml_lf["releaseTag"]
         elif repository_key == "damlSdk":
             external_version = snapshot["damlSdkVersions"][network_key]
             branch = ""
@@ -844,6 +963,14 @@ def build_source_contract(snapshot: dict) -> dict:
             "Use the observed Splice version from the network /info endpoint, derive the "
             "matching canton-network/splice release-line branch, then read version from "
             "nix/canton-sources.json."
+        ),
+        "damlLf": (
+            "For each network, download the public digital-asset/canton release matching "
+            "that network's Canton version and run scripts/canton_lf_versions.canton to read "
+            "LanguageVersion.stableLfVersions, the Daml-LF versions participants accept "
+            "without LF beta or dev support. Reuse the recorded value while the network's "
+            "Canton release tag is unchanged; preserve only that network's previous value if "
+            "the release cannot be read."
         ),
         "damlSdk": (
             "For each network, read its moving mainnet, testnet, or devnet tag from "

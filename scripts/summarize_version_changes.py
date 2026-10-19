@@ -24,6 +24,7 @@ SOURCE_ATTR_RE = re.compile(r'(?P<key>[a-zA-Z0-9_-]+)="(?P<value>[^"]*)"')
 
 COMPONENT_LABELS = {
     "splice": "Splice",
+    "damlLf": "Daml-LF",
     "damlSdk": "Canton / Daml SDK",
     "pqs": "PQS",
     "tokenStandard": "Token Standard",

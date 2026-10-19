@@ -56,6 +56,10 @@ def dashboard_snapshot(*, generated_at: str, splice_version: str) -> dict:
             network_key: {"releaseLineTag": "3.5", "version": "3.5.1"}
             for network_key in ["mainnet", "testnet", "devnet"]
         },
+        "damlLfVersions": {
+            network_key: {"releaseTag": "v3.5.1", "version": "2.1–2.2"}
+            for network_key in ["mainnet", "testnet", "devnet"]
+        },
         "latestWalletGateway": "1.4.0",
         "npmVersions": {
             "tokenStandard": "1.4.0",
@@ -378,6 +382,14 @@ def test_collect_snapshot_preserves_previous_network_on_failure(monkeypatch) -> 
     )
     monkeypatch.setattr(
         module,
+        "collect_daml_lf_versions",
+        lambda existing_config, networks: {
+            network_key: {"releaseTag": "v3.5.1", "version": "2.1–2.2"}
+            for network_key in networks
+        },
+    )
+    monkeypatch.setattr(
+        module,
         "collect_daml_sdk_versions",
         lambda timeout, existing_config: {
             "mainnet": "3.5.1",
@@ -410,6 +422,14 @@ def test_collect_snapshot_raises_when_failed_network_has_no_previous(monkeypatch
         "collect_pqs_versions",
         lambda timeout, existing_config, networks: {
             network_key: {"releaseLineTag": "3.5", "version": "3.5.1"}
+            for network_key in networks
+        },
+    )
+    monkeypatch.setattr(
+        module,
+        "collect_daml_lf_versions",
+        lambda existing_config, networks: {
+            network_key: {"releaseTag": "v3.5.1", "version": "2.1–2.2"}
             for network_key in networks
         },
     )
@@ -777,6 +797,119 @@ def test_build_config_records_pqs_scribe_component_source() -> None:
     }
     assert "org.opencontainers.image.version" in config["_generated"]["sourceContract"]["pqs"]
     assert "Canton version" in config["_generated"]["sourceContract"]["pqs"]
+
+
+def daml_lf_config(versions: dict[str, tuple[str, str]]) -> dict:
+    return {
+        "repositories": {
+            "damlLf": {
+                "versionMapping": {
+                    network_key: {
+                        "branch": "",
+                        "externalVersion": version,
+                        "folderPathRepo": release_tag,
+                    }
+                    for network_key, (release_tag, version) in versions.items()
+                }
+            }
+        }
+    }
+
+
+def test_format_lf_versions_collapses_contiguous_minors() -> None:
+    module = load_script_module()
+
+    assert module.format_lf_versions(["2.1", "2.2", "2.3", "2.4"]) == "2.1–2.4"
+    assert module.format_lf_versions(["2.1", "2.3"]) == "2.1, 2.3"
+    assert module.format_lf_versions(["2.1"]) == "2.1"
+    with pytest.raises(ValueError):
+        module.format_lf_versions([])
+
+
+def test_canton_release_tag_rejects_snapshot_versions() -> None:
+    module = load_script_module()
+
+    assert module.canton_release_tag("3.6.1") == "v3.6.1"
+    with pytest.raises(ValueError):
+        module.canton_release_tag("3.6.2-snapshot.20261001.0")
+
+
+def test_collect_daml_lf_versions_probes_each_new_release_once(monkeypatch) -> None:
+    module = load_script_module()
+    networks = {
+        "mainnet": {"cantonVersion": "3.6.1"},
+        "testnet": {"cantonVersion": "3.6.2"},
+        "devnet": {"cantonVersion": "3.6.2"},
+    }
+    seen_tags: list[str] = []
+
+    def fake_fetch(release_tag: str) -> list[str]:
+        seen_tags.append(release_tag)
+        return ["2.1", "2.2", "2.3", "2.4"]
+
+    monkeypatch.setattr(module, "fetch_canton_stable_lf_versions", fake_fetch)
+
+    existing_config = daml_lf_config({"mainnet": ("v3.6.1", "2.1–2.3")})
+    assert module.collect_daml_lf_versions(existing_config, networks) == {
+        "mainnet": {"releaseTag": "v3.6.1", "version": "2.1–2.3"},
+        "testnet": {"releaseTag": "v3.6.2", "version": "2.1–2.4"},
+        "devnet": {"releaseTag": "v3.6.2", "version": "2.1–2.4"},
+    }
+    assert seen_tags == ["v3.6.2"]
+
+
+def test_collect_daml_lf_versions_preserves_only_failed_network_value(monkeypatch) -> None:
+    module = load_script_module()
+    networks = {
+        "mainnet": {"cantonVersion": "3.6.1"},
+        "testnet": {"cantonVersion": "3.6.1"},
+        "devnet": {"cantonVersion": "3.7.0-snapshot.20261001.0"},
+    }
+    monkeypatch.setattr(
+        module, "fetch_canton_stable_lf_versions", lambda release_tag: ["2.1", "2.2"]
+    )
+
+    existing_config = daml_lf_config({"devnet": ("v3.6.2", "2.1–2.4")})
+    assert module.collect_daml_lf_versions(existing_config, networks) == {
+        "mainnet": {"releaseTag": "v3.6.1", "version": "2.1–2.2"},
+        "testnet": {"releaseTag": "v3.6.1", "version": "2.1–2.2"},
+        "devnet": {"releaseTag": "v3.6.2", "version": "2.1–2.4"},
+    }
+
+
+def test_collect_daml_lf_versions_raises_when_failed_network_has_no_previous(
+    monkeypatch,
+) -> None:
+    module = load_script_module()
+    networks = {network_key: {"cantonVersion": "3.6.1"} for network_key in module.NETWORK_ORDER}
+
+    def failing_fetch(release_tag: str) -> list[str]:
+        raise RuntimeError("release asset unavailable")
+
+    monkeypatch.setattr(module, "fetch_canton_stable_lf_versions", failing_fetch)
+
+    with pytest.raises(RuntimeError, match="no previous dashboard value"):
+        module.collect_daml_lf_versions({"repositories": {}}, networks)
+
+
+def test_build_config_records_daml_lf_canton_release_source() -> None:
+    module = load_script_module()
+
+    config = module.build_config(
+        {"versions": {}, "repositories": {}},
+        dashboard_snapshot(
+            generated_at="2026-06-03T12:00:00+00:00",
+            splice_version="0.6.3",
+        ),
+    )
+
+    assert config["repositories"]["damlLf"]["url"] == module.CANTON_RELEASES_PAGE_URL
+    assert config["repositories"]["damlLf"]["versionMapping"]["mainnet"] == {
+        "branch": "",
+        "externalVersion": "2.1–2.2",
+        "folderPathRepo": "v3.5.1",
+    }
+    assert "stableLfVersions" in config["_generated"]["sourceContract"]["damlLf"]
 
 
 def test_request_headers_use_github_token_for_github_api(monkeypatch) -> None:
