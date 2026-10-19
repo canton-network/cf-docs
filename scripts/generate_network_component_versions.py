@@ -96,10 +96,9 @@ PQS_IMAGE_REPOSITORY = (
 PQS_SCRIBE_COMPONENT_REPOSITORY = (
     "europe-docker.pkg.dev/da-images/public/components/scribe"
 )
-PQS_SCRIBE_RELEASE_LINE_TAG = "3.5"
-PQS_SCRIBE_MANIFEST_URL = (
-    "https://europe-docker.pkg.dev/v2/da-images/public/components/"
-    f"scribe/manifests/{PQS_SCRIBE_RELEASE_LINE_TAG}"
+# Scribe publishes one floating major.minor tag per Canton release line.
+PQS_SCRIBE_MANIFEST_BASE_URL = (
+    "https://europe-docker.pkg.dev/v2/da-images/public/components/scribe/manifests"
 )
 OCI_MANIFEST_ACCEPT = ", ".join(
     [
@@ -110,6 +109,8 @@ OCI_MANIFEST_ACCEPT = ", ".join(
     ]
 )
 STABLE_SEMVER_RE = re.compile(r"\d+\.\d+\.\d+")
+# Leading major.minor of any Canton version string, including snapshot and rc builds.
+RELEASE_LINE_RE = re.compile(r"(?P<major>\d+)\.(?P<minor>\d+)(?:[.\-+].*)?")
 USER_AGENT = "cf-docs-version-dashboard-generator"
 
 
@@ -344,33 +345,100 @@ def fetch_latest_wallet_gateway_version(timeout: float) -> str:
     return latest_stable_version(versions, WALLET_GATEWAY_RELEASES_URL)
 
 
-def previous_stable_pqs_version(existing_config: dict) -> str:
-    versions = [
-        existing_repo_version(existing_config, "pqs", network_key)
-        for network_key in NETWORK_ORDER
-    ]
-    return latest_stable_version(versions, "existing PQS dashboard config")
+def scribe_release_line_tag(canton_version: str) -> str:
+    """Scribe tracks Canton release lines, so the floating tag is Canton's major.minor.
+
+    Snapshot and rc Canton versions map to their line too, so a network that moves to
+    3.7 or 4.0 before Scribe publishes that tag reads the new line as soon as it exists
+    and keeps its previous value until then.
+    """
+    match = RELEASE_LINE_RE.fullmatch(canton_version)
+    if not match:
+        raise RuntimeError(
+            f"Cannot derive Scribe release-line tag from Canton version {canton_version!r}"
+        )
+    return f"{match.group('major')}.{match.group('minor')}"
+
+
+def pqs_scribe_manifest_url(release_line_tag: str) -> str:
+    return f"{PQS_SCRIBE_MANIFEST_BASE_URL}/{release_line_tag}"
+
+
+def previous_stable_pqs_version(existing_config: dict, network_key: str) -> str:
+    """The network's previous stable PQS value, else the newest stable value on any network."""
+    own_version = existing_repo_version(existing_config, "pqs", network_key)
+    if STABLE_SEMVER_RE.fullmatch(own_version):
+        return own_version
+    versions = [existing_repo_version(existing_config, "pqs", key) for key in NETWORK_ORDER]
+    try:
+        return latest_stable_version(versions, "existing PQS dashboard config")
+    except RuntimeError:
+        return ""
 
 
 def fetch_pqs_version_from_scribe_component(
+    release_line_tag: str,
     timeout: float,
     *,
     previous_stable_version: str,
 ) -> str:
-    data = fetch_manifest_json(PQS_SCRIBE_MANIFEST_URL, timeout)
+    url = pqs_scribe_manifest_url(release_line_tag)
+    data = fetch_manifest_json(url, timeout)
     annotations = data.get("annotations", {})
     if not isinstance(annotations, dict):
-        raise RuntimeError(f"Expected manifest annotations from {PQS_SCRIBE_MANIFEST_URL}")
+        raise RuntimeError(f"Expected manifest annotations from {url}")
     version = str(
         annotations.get("org.opencontainers.image.version")
         or annotations.get("com.digitalasset.version")
         or ""
     )
     if not version:
-        raise RuntimeError(f"Missing Scribe image version annotation in {PQS_SCRIBE_MANIFEST_URL}")
+        raise RuntimeError(f"Missing Scribe image version annotation in {url}")
     if STABLE_SEMVER_RE.fullmatch(version):
         return version
+    if not previous_stable_version:
+        raise RuntimeError(
+            f"{url} resolves to prerelease {version} and no previous stable dashboard "
+            "value is available to preserve"
+        )
     return previous_stable_version
+
+
+def collect_pqs_versions(
+    timeout: float,
+    existing_config: dict,
+    networks: dict[str, dict],
+) -> dict[str, dict[str, str]]:
+    """Read each network's PQS version from the Scribe release line matching its Canton version."""
+    pqs_versions: dict[str, dict[str, str]] = {}
+    for network_key in NETWORK_ORDER:
+        previous_version = previous_stable_pqs_version(existing_config, network_key)
+        canton_version = str(networks[network_key].get("cantonVersion") or "")
+        try:
+            release_line_tag = scribe_release_line_tag(canton_version)
+            version = fetch_pqs_version_from_scribe_component(
+                release_line_tag,
+                timeout,
+                previous_stable_version=previous_version,
+            )
+        except Exception as exc:
+            if not previous_version:
+                raise RuntimeError(
+                    f"{network_key}: failed to collect PQS version and no previous "
+                    f"stable dashboard value is available to preserve: {exc}"
+                ) from exc
+            print(
+                f"WARNING: {network_key}: failed to collect PQS version ({exc}); "
+                f"preserving previous dashboard value {previous_version}",
+                file=sys.stderr,
+            )
+            release_line_tag = scribe_release_line_tag(previous_version)
+            version = previous_version
+        pqs_versions[network_key] = {
+            "releaseLineTag": release_line_tag,
+            "version": version,
+        }
+    return pqs_versions
 
 
 def clean_html_text(value: str) -> str:
@@ -619,7 +687,6 @@ def network_snapshot_from_existing(existing_config: dict, network_key: str) -> d
 
 def collect_snapshot(timeout: float, existing_config: dict) -> dict:
     generated_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
-    previous_pqs = previous_stable_pqs_version(existing_config)
     networks: dict[str, dict] = {}
     for network_key in NETWORK_ORDER:
         try:
@@ -645,10 +712,7 @@ def collect_snapshot(timeout: float, existing_config: dict) -> dict:
         "networks": networks,
         "damlSdkVersions": collect_daml_sdk_versions(timeout, existing_config),
         "latestDpm": fetch_latest_dpm_version(timeout),
-        "latestPqs": fetch_pqs_version_from_scribe_component(
-            timeout,
-            previous_stable_version=previous_pqs,
-        ),
+        "pqsVersions": collect_pqs_versions(timeout, existing_config, networks),
         "latestWalletGateway": fetch_latest_wallet_gateway_version(timeout),
         "npmVersions": {
             key: fetch_npm_latest(package_name, timeout)
@@ -722,9 +786,10 @@ def build_repository_mapping(
             branch = ""
             folder_path_repo = ""
         elif repository_key == "pqs":
-            external_version = snapshot["latestPqs"]
+            pqs = snapshot["pqsVersions"][network_key]
+            external_version = pqs["version"]
             branch = ""
-            folder_path_repo = f"{PQS_SCRIBE_COMPONENT_REPOSITORY}:{PQS_SCRIBE_RELEASE_LINE_TAG}"
+            folder_path_repo = f"{PQS_SCRIBE_COMPONENT_REPOSITORY}:{pqs['releaseLineTag']}"
         elif repository_key in NPM_PACKAGE_NAMES:
             external_version = snapshot["npmVersions"][repository_key]
             branch = ""
@@ -799,10 +864,12 @@ def build_source_contract(snapshot: dict) -> dict:
             f"{WALLET_GATEWAY_RELEASE_REPO}."
         ),
         "pqs": (
-            "Read org.opencontainers.image.version from the public Artifact Registry "
-            f"Scribe component image {PQS_SCRIBE_COMPONENT_REPOSITORY}:"
-            f"{PQS_SCRIBE_RELEASE_LINE_TAG}. If the floating release-line tag resolves "
-            "to a prerelease, retain the previous stable dashboard value."
+            "For each network, derive the Scribe release line (major.minor) from that "
+            "network's Canton version, then read org.opencontainers.image.version from the "
+            "public Artifact Registry Scribe component image "
+            f"{PQS_SCRIBE_COMPONENT_REPOSITORY}:<release-line>. If the floating "
+            "release-line tag resolves to a prerelease or cannot be read, retain that "
+            "network's previous stable dashboard value."
         ),
     }
 
