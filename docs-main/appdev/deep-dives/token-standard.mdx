@@ -383,13 +383,17 @@ This allows implementation of [Delivery versus Payment (DVP) Transfer Workflows]
 
 Your participant must have a registry token's DAR packages installed before it can interpret contracts and transactions involving that token — this is separate from having the Wallet SDK or CLI code that talks to the registry's off-ledger API. If a transfer involving a registry-issued token fails to resolve with an error like `UNRESOLVED_PACKAGE_NAME`, check that the relevant DARs are uploaded and vetted on your participant.
 
-## Detecting transfer preapproval from choice-context
+## Detecting whether a transfer completed in one step
 
-Whether a transfer is credited immediately or requires an explicit accept is determined by whether the receiver has a transfer preapproval, which is discoverable from the choice-context response before submitting the accept/transfer:
+`TransferFactory_Transfer` and `TransferInstruction_Accept` both return a
+[`TransferInstructionResult`](/sdks-tools/api-reference/splice-daml/splice-api-token-transfer-instruction-v2/splice-api-token-transferinstructionv2#type-splice-api-token-transferinstructionv2-transferinstructionresult-97952),
+whose `output` field tells you what happened:
 
-- For CC, if the receiver has a transfer preapproval, the choice context returns an additional value named `transfer-preapproval` containing the `ContractId` of the corresponding preapproval contract.
-- For Registry Utility tokens, the choice context itself is the same regardless of whether a preapproval exists, but the returned `factoryId` differs: if a preapproval exists, the `TransferPreapproval` contract's factory is returned, so `TransferFactory_Transfer` should be called on that contract; otherwise the default factory is returned.
+- `TransferInstructionResult_Completed`: the transfer finished in one step. `receiverHoldingCids` lists the receiver's new holdings.
+- `TransferInstructionResult_Pending`: the transfer still needs `TransferInstruction_Accept` (or rejection or withdrawal) on the `transferInstructionCid` it returns.
 
-This is why some inbound transfers show up as an already-credited balance while others show up as a pending offer needing `TransferInstruction_Accept`.
+This is observed as the result of exercising the choice, not a prediction you can make beforehand: for non-external parties the output comes back with the exercise result of the `submit-and-wait` call itself; for external parties, only once the prepared transaction is signed and executed. The `prepare` response is an opaque, unsigned payload and does not expose a decoded `output` field, so there is no documented way to preview the outcome before committing to it.
+
+The reason a transfer completes in one step is that `TransferFactory_Transfer`'s `actors` argument already includes every party required to authorize it -- commonly because the receiver has a standing transfer preapproval, which implementations treat as pre-authorization on the receiver's behalf. This is why some inbound transfers show up as an already-credited balance while others show up as a pending offer.
 
 {/* Mintlify preview rebuild marker. */}
