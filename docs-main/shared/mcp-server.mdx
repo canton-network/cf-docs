@@ -1,0 +1,66 @@
+---
+title: "MCP Server"
+description: "Connect an AI agent directly to the Canton Network docs via MCP"
+---
+
+Canton Network docs expose a public [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server, so an AI agent can search and read this documentation directly instead of relying on training data or a generic web search.
+
+**URL:** `https://docs.canton.network/mcp`
+
+**Transport:** HTTP. **Authentication:** none -- the server is public and advertised through `https://docs.canton.network/.well-known/mcp.json`.
+
+## Tools
+
+The server exposes three tools to a connected MCP client:
+
+| Tool | Purpose |
+|------|---------|
+| **Search** | Searches across the docs and returns relevant snippets with titles and links |
+| **Query docs filesystem** | Reads and navigates the docs as a virtual filesystem using shell-style commands, including batch reads across multiple pages in one call |
+| **Submit feedback** | Reports a documentation issue back to the docs team when an agent finds a page that's wrong |
+
+## Connecting a client
+
+### Claude Code
+
+```bash
+claude mcp add --transport http canton-docs https://docs.canton.network/mcp
+```
+
+### Claude Desktop
+
+1. Open Claude settings → Connectors
+2. Click **Add custom connector**
+3. Enter a name and `https://docs.canton.network/mcp` as the URL
+4. Click **Add**
+5. In a chat, use the attachments button to select the connector
+
+### Cursor
+
+1. Open the command palette (`Cmd+Shift+P` / `Ctrl+Shift+P`)
+2. Search **Open MCP settings** → **Add custom MCP**
+3. Add to `mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "canton-docs": {
+      "url": "https://docs.canton.network/mcp"
+    }
+  }
+}
+```
+
+Any other MCP-compatible client (Cursor, Goose, ChatGPT, and others) can connect the same way, pointing at the same URL.
+
+<Note>
+Every page also exposes an **MCP** option in its contextual menu (next to Copy, Claude, ChatGPT), which copies a ready-to-use connection snippet for that page's client.
+</Note>
+
+## Other agent-facing surfaces
+
+Besides the MCP server, agents reach these docs through:
+
+- [`/llms.txt`](/llms.txt) -- a navigable index of the documentation, with large sections split into `/_llms/*.txt` sub-indexes
+- Per-page Markdown, at any page's URL with `.md` appended
+- [`/skill.md`](/skill.md) -- a project skill file summarizing Canton Network for coding agents
