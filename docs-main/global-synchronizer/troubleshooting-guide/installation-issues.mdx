@@ -121,3 +121,21 @@ Test connectivity:
 
 
 If connections time out, work with your network team to open the required egress rules. For DevNet, you also need VPN connectivity to the DevNet sequencer.
+
+## Using the Oracle JDK
+
+When using the Oracle JDK, you may get an error such as the following when executing transactions:
+
+```none
+java.lang.SecurityException: JCE cannot authenticate the provider BC
+        at java.base/javax.crypto.JceSecurity.getInstance(JceSecurity.java:150)
+        at java.base/javax.crypto.Mac.getInstance(Mac.java:272)
+        at com.digitalasset.canton.crypto.provider.jce.JcePureCrypto.$anonfun$computeHmacWithSecretInternal$1(JcePureCrypto.scala:873)
+        (...)
+```
+
+The Canton JAR embeds the BouncyCastle provider, and the Oracle JVM verifies the signature of third-party security providers. Download the [BouncyCastle provider JAR](https://mvnrepository.com/artifact/org.bouncycastle/bcprov-jdk18on) and place it ahead of the Canton JAR on the class path:
+
+```shell
+java -cp bcprov-jdk18on-<version>.jar:./lib/canton-open-source-<canton-version>.jar com.digitalasset.canton.CantonCommunityApp -c <config files...>
+```

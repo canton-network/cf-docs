@@ -10,6 +10,7 @@ from typing import cast
 
 import yaml
 
+from x2mdx.visibility import dev_only_identities
 from x2mdx.openrpc.models import (
     OpenRpcDocument,
     OpenRpcMethodHistory,
@@ -74,7 +75,7 @@ def normalize_lifecycle_state(value: object) -> str | None:
     if not isinstance(value, str):
         return None
     normalized = value.strip().lower()
-    if normalized in {"alpha", "beta", "stable", "deprecated"}:
+    if normalized in {"dev", "alpha", "beta", "stable", "deprecated"}:
         return normalized
     return None
 
@@ -533,6 +534,13 @@ def build_openrpc_report_from_sources(
                 doc_index=version_doc_index[snapshot.version],
                 current_source_path=snapshot.source_path,
             )
+
+        hidden = dev_only_identities(
+            {name: detail.get("lifecycle_state") for name, detail in methods.items()}
+            for methods in per_version_methods.values()
+        )
+        per_version_methods = {version: {name: detail for name, detail in methods.items() if name not in hidden}
+                               for version, methods in per_version_methods.items()}
 
         method_history: dict[str, OpenRpcMethodHistory] = {}
         for snapshot in spec_snapshots:

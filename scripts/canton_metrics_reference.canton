@@ -1,0 +1,30 @@
+import io.circe.Encoder
+import io.circe.generic.auto._
+import io.circe.syntax._
+import com.digitalasset.canton.CantonCommunityApp
+import com.digitalasset.canton.metrics.MetricDoc
+
+// Run with GENERATE_METRICS_FOR_DOCS set so that metrics Canton registers on demand are included.
+implicit val metricEncoder: Encoder[MetricDoc.Item] =
+  Encoder.forProduct6("name", "summary", "description", "type", "qualification", "labels")(item =>
+    (
+      item.name,
+      item.summary,
+      item.description,
+      item.metricType,
+      item.qualification.toString,
+      item.labelsWithDescription,
+    )
+  )
+
+val (participantMetrics, sequencerMetrics, mediatorMetrics) =
+  CantonCommunityApp.environment.metricsRegistry.metricsDoc()
+
+case class Metrics(
+    participant: Seq[MetricDoc.Item],
+    sequencer: Seq[MetricDoc.Item],
+    mediator: Seq[MetricDoc.Item],
+)
+case class Output(metrics: Metrics)
+
+println(Output(Metrics(participantMetrics, sequencerMetrics, mediatorMetrics)).asJson.spaces2)
