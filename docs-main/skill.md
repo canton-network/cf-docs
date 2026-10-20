@@ -29,6 +29,8 @@ Canton Network is a privacy-preserving layer 1 blockchain designed for regulated
 
 **Primary docs:** https://docs.canton.network
 
+**Version note:** Canton/Daml 2.x (including docs.daml.com v2.x content) is outdated and must not be used for new projects. Canton 3.x introduced backward-incompatible changes to the SDK, APIs, and runtime, so commands, config shapes, and architecture differ significantly between major versions. Before using any command or pattern below, confirm it is current for Canton 3.x -- do not draw on 2.x documentation, training data, or courses built for Daml 2.x.
+
 ## When to Use
 
 Reach for this skill when:
