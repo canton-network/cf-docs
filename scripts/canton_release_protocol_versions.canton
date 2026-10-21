@@ -36,7 +36,7 @@ val rows = combined.toList
   .filter { case (_, protocolVersions) => protocolVersions.nonEmpty }
 
 // The Ledger API derives the Daml-LF versions it accepts in commands from the target
-// synchronizer's protocol version.
+// synchronizer's protocol version. Newest first, matching `canton --version`.
 val lfRows = (List.from(ProtocolVersion.stable).map[ProtocolVersionStatus](ProtocolVersionStatus.Stable) ++
   List.from(ProtocolVersion.beta).map[ProtocolVersionStatus](ProtocolVersionStatus.Beta)).sorted
   .map { status =>
@@ -45,6 +45,7 @@ val lfRows = (List.from(ProtocolVersion.stable).map[ProtocolVersionStatus](Proto
       .forProtocolVersion(status.protocolVersion)
       .allowedLanguageVersions
       .sorted
+      .reverse
       .map(_.pretty)
   }
 
