@@ -294,10 +294,20 @@ def render_page(source_path: Path, network_data: dict[str, Any], docs_main: Path
     def replace_block(match: re.Match[str]) -> str:
         # The editor may indent tab children; dedent so code blocks keep their meaning.
         block_body = textwrap.dedent(match.group("body").strip("\n")).strip()
+        if re.search(r"</?Tabs?[\s>]", block_body):
+            raise ValueError(
+                f'{source_ref}: a <Tab title="{TEMPLATE_TAB_TITLE}"> must be the only tab in its <Tabs> block '
+                "and cannot contain tabs. Remove the other tabs."
+            )
         used_imports = {ref.name: ref for ref in imported_components_used(block_body, page_imports)}
         return render_network_tabs(block_body, used_imports, network_data, docs_main)
 
     body = NETWORKVARS_BLOCK_RE.sub(replace_block, body)
+    if re.search(rf'<Tab\s+title="{re.escape(TEMPLATE_TAB_TITLE)}"', body):
+        raise ValueError(
+            f'{source_ref}: a <Tab title="{TEMPLATE_TAB_TITLE}"> must be the only tab in its <Tabs> block. '
+            "Remove the other tabs; network-specific content belongs inside it."
+        )
     body = collapse_import_header_blank_lines(remove_unused_imports(body)).lstrip("\n")
     return f"{frontmatter}{generated_notice(source_ref)}\n\n{body}"
 

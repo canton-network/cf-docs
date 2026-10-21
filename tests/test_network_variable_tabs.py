@@ -213,6 +213,22 @@ def test_template_must_be_hidden(tmp_path: Path) -> None:
         module.render_page(source, sample_network_data(), docs_main)
 
 
+@pytest.mark.parametrize(
+    "block",
+    [
+        '<Tabs>\n<Tab title="All networks">\nShared |gsf_scan_url|\n</Tab>\n<Tab title="DevNet">\nExtra\n</Tab>\n</Tabs>',
+        '<Tabs>\n<Tab title="DevNet">\nExtra\n</Tab>\n<Tab title="All networks">\nShared |gsf_scan_url|\n</Tab>\n</Tabs>',
+    ],
+)
+def test_all_networks_tab_must_be_the_only_tab(tmp_path: Path, block: str) -> None:
+    module = load_script_module()
+    docs_main = tmp_path / "docs-main"
+    source = write_template(docs_main, "extra-tab.mdx", f"---\ntitle: Extra\nhidden: true\n---\n\n{block}\n")
+
+    with pytest.raises(ValueError, match="only tab"):
+        module.render_page(source, sample_network_data(), docs_main)
+
+
 def test_generated_page_without_template_is_orphaned(tmp_path: Path) -> None:
     module = load_script_module()
     docs_main = tmp_path / "docs-main"
