@@ -475,7 +475,8 @@ UPDATE_TARGETS = (
         description=(
             "Regenerates the Canton release-to-protocol and protocol-to-Daml-LF "
             "compatibility tables, including the version dashboard's Daml-LF table, "
-            "from runtime metadata in the latest public Canton release binary."
+            "from runtime metadata in the latest public Canton release binary of each "
+            "supported release line."
         ),
         generate_commands=(nix_develop_command("npm run generate:canton-release-protocol-versions"),),
         paths=(

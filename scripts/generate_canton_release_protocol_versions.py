@@ -13,6 +13,7 @@ from canton_release_reference import (
     ReleaseAsset,
     ensure_release_archive,
     extract_release,
+    latest_patch_tags_by_release_line,
     resolve_release_asset,
     run_reference_script,
 )
@@ -28,6 +29,14 @@ DEFAULT_LF_SNIPPET_OUTPUT = (
     REPO_ROOT / "docs-main" / "snippets" / "generated" / "protocol-lf-versions.mdx"
 )
 REFERENCE_SCRIPT = REPO_ROOT / "scripts" / "canton_release_protocol_versions.canton"
+# Release lines before 3.6 have no InterpretationConfig; this script derives the same mapping
+# from their engine mode.
+LEGACY_LF_REFERENCE_SCRIPT = (
+    REPO_ROOT / "scripts" / "canton_protocol_lf_versions_legacy.canton"
+)
+LEGACY_LF_RELEASE_LINES_BEFORE = (3, 6)
+# Supported minor release lines: the latest and the one before it.
+DEFAULT_RELEASE_LINE_COUNT = 2
 GENERATED_START = "{/* GENERATED_CANTON_RELEASE_PROTOCOL_VERSIONS_START */}"
 GENERATED_END = "{/* GENERATED_CANTON_RELEASE_PROTOCOL_VERSIONS_END */}"
 LF_GENERATED_START = "{/* GENERATED_CANTON_PROTOCOL_LF_VERSIONS_START */}"
@@ -40,7 +49,13 @@ def parse_args() -> argparse.Namespace:
         description="Generate Canton release-to-protocol compatibility from a public release binary."
     )
     parser.add_argument("--release-repo", default=DEFAULT_RELEASE_REPO)
-    parser.add_argument("--canton-tag")
+    parser.add_argument(
+        "--canton-tag",
+        help="Probe only this release instead of the latest patch of each supported line.",
+    )
+    parser.add_argument(
+        "--release-line-count", type=int, default=DEFAULT_RELEASE_LINE_COUNT
+    )
     parser.add_argument("--cache-dir", type=Path, default=DEFAULT_CACHE_DIR)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument(
@@ -103,22 +118,65 @@ def render_section(rows: list[tuple[str, list[str]]], *, asset: ReleaseAsset) ->
     return "\n".join(lines)
 
 
-def render_lf_section(rows: list[tuple[str, list[str]]], *, asset: ReleaseAsset) -> str:
+def release_line(asset: ReleaseAsset) -> tuple[int, int]:
+    major, minor, _ = (int(part) for part in asset.version.split("."))
+    return major, minor
+
+
+def merge_lf_rows(
+    sources: list[tuple[ReleaseAsset, list[tuple[str, list[str]]]]],
+) -> list[tuple[str, list[str]]]:
+    """Merge per-release protocol/Daml-LF rows, newest protocol version first.
+
+    Canton keeps a stable protocol version's interpretation config fixed, so release lines
+    that support the same protocol version must agree on it.
+    """
+    merged: dict[int, tuple[str, list[str], str]] = {}
+    for asset, rows in sources:
+        for label, versions in rows:
+            protocol = int(label.removesuffix("*"))
+            if protocol not in merged:
+                merged[protocol] = (label, versions, asset.tag)
+                continue
+            previous_label, previous_versions, previous_tag = merged[protocol]
+            if previous_versions != versions:
+                raise ValueError(
+                    f"Protocol version {protocol}: {previous_tag} reports "
+                    f"{previous_versions} but {asset.tag} reports {versions}"
+                )
+            if previous_label.endswith("*") and not label.endswith("*"):
+                merged[protocol] = (label, versions, previous_tag)
+    return [
+        (label, versions)
+        for _, (label, versions, _) in sorted(merged.items(), reverse=True)
+    ]
+
+
+def describe_releases(assets: list[ReleaseAsset]) -> str:
+    noun = "release reports" if len(assets) == 1 else "releases report"
+    return f"The public Canton {' and '.join(asset.version for asset in assets)} {noun}"
+
+
+def render_lf_section(
+    rows: list[tuple[str, list[str]]], *, assets: list[ReleaseAsset]
+) -> str:
     lines = [
         LF_GENERATED_START,
         "",
         (
             "{/* GENERATED_FROM "
-            f'source="{DEFAULT_RELEASE_REPO}" ref="{asset.tag}" asset="{asset.name}" '
-            f'digest="{asset.digest}" protocol_version_count="{len(rows)}" */}}'
+            f'source="{DEFAULT_RELEASE_REPO}" '
+            f'refs="{" ".join(asset.tag for asset in assets)}" '
+            f'assets="{" ".join(asset.name for asset in assets)}" '
+            f'digests="{" ".join(asset.digest for asset in assets)}" '
+            f'protocol_version_count="{len(rows)}" */}}'
         ),
         "",
         "## Protocol and Daml-LF Compatibility",
         "",
         (
-            f"The public Canton {asset.version} release reports which Daml-LF versions a "
-            "participant accepts in commands submitted to a synchronizer running each "
-            "protocol version."
+            f"{describe_releases(assets)} which Daml-LF versions a participant accepts in "
+            "commands submitted to a synchronizer running each protocol version."
         ),
         "",
         "| Protocol version | Supported Daml-LF versions |",
@@ -131,13 +189,20 @@ def render_lf_section(rows: list[tuple[str, list[str]]], *, asset: ReleaseAsset)
     return "\n".join(lines)
 
 
-def render_lf_snippet(rows: list[tuple[str, list[str]]], *, asset: ReleaseAsset) -> str:
+def render_lf_snippet(
+    rows: list[tuple[str, list[str]]], *, assets: list[ReleaseAsset]
+) -> str:
     """Render the protocol/Daml-LF rows as MDX exports for the version dashboard."""
     source = {
-        "cantonVersion": asset.version,
-        "tag": asset.tag,
-        "asset": asset.name,
-        "digest": asset.digest,
+        "releases": [
+            {
+                "cantonVersion": asset.version,
+                "tag": asset.tag,
+                "asset": asset.name,
+                "digest": asset.digest,
+            }
+            for asset in assets
+        ]
     }
     entries = [
         {
@@ -167,51 +232,97 @@ def replace_section(
     return page.rstrip() + "\n\n" + section + "\n"
 
 
+def probe_release(
+    asset: ReleaseAsset, *, script_path: Path, cache_namespace: str, args: argparse.Namespace
+) -> object:
+    archive_path = ensure_release_archive(
+        asset=asset, cache_dir=args.cache_dir, force_refresh=args.force_refresh
+    )
+    distribution_root = extract_release(
+        archive_path=archive_path,
+        asset=asset,
+        cache_dir=args.cache_dir,
+        force_refresh=args.force_refresh,
+    )
+    return run_reference_script(
+        distribution_root=distribution_root,
+        script_path=script_path,
+        cache_dir=args.cache_dir,
+        cache_namespace=cache_namespace,
+        asset=asset,
+        force_refresh=args.force_refresh,
+    )
+
+
+def probe_lf_rows(
+    asset: ReleaseAsset, *, args: argparse.Namespace
+) -> list[tuple[str, list[str]]]:
+    if release_line(asset) < LEGACY_LF_RELEASE_LINES_BEFORE:
+        payload = probe_release(
+            asset,
+            script_path=LEGACY_LF_REFERENCE_SCRIPT,
+            cache_namespace="protocol-lf-versions-legacy",
+            args=args,
+        )
+    else:
+        payload = probe_release(
+            asset,
+            script_path=REFERENCE_SCRIPT,
+            cache_namespace="release-protocol-versions",
+            args=args,
+        )
+    return load_rows(payload, "protocolVersionsToLfVersions")
+
+
 def main() -> int:
     ensure_repo_direnv(
         repo_root=REPO_ROOT, script_path=Path(__file__).resolve(), argv=sys.argv[1:]
     )
     args = parse_args()
-    asset = resolve_release_asset(release_repo=args.release_repo, tag=args.canton_tag)
+    tags = (
+        [args.canton_tag]
+        if args.canton_tag
+        else latest_patch_tags_by_release_line(
+            release_repo=args.release_repo, line_count=args.release_line_count
+        )
+    )
+    assets = [resolve_release_asset(release_repo=args.release_repo, tag=tag) for tag in tags]
+    # The newest release line provides the release-to-protocol history.
+    asset = assets[0]
     if args.reference_json:
         payload = json.loads(args.reference_json.read_text(encoding="utf-8"))
+        assets = [asset]
+        lf_sources = [(asset, load_rows(payload, "protocolVersionsToLfVersions"))]
     else:
-        archive_path = ensure_release_archive(
-            asset=asset, cache_dir=args.cache_dir, force_refresh=args.force_refresh
-        )
-        distribution_root = extract_release(
-            archive_path=archive_path,
-            asset=asset,
-            cache_dir=args.cache_dir,
-            force_refresh=args.force_refresh,
-        )
-        payload = run_reference_script(
-            distribution_root=distribution_root,
+        payload = probe_release(
+            asset,
             script_path=REFERENCE_SCRIPT,
-            cache_dir=args.cache_dir,
             cache_namespace="release-protocol-versions",
-            asset=asset,
-            force_refresh=args.force_refresh,
+            args=args,
+        )
+        lf_sources = [(asset, load_rows(payload, "protocolVersionsToLfVersions"))]
+        lf_sources.extend(
+            (older, probe_lf_rows(older, args=args)) for older in assets[1:]
         )
 
     rows = load_rows(payload)
-    lf_rows = load_rows(payload, "protocolVersionsToLfVersions")
+    lf_rows = merge_lf_rows(lf_sources)
     page = args.output.read_text(encoding="utf-8")
     page = replace_section(page, render_section(rows, asset=asset))
     page = replace_section(
         page,
-        render_lf_section(lf_rows, asset=asset),
+        render_lf_section(lf_rows, assets=assets),
         LF_GENERATED_START,
         LF_GENERATED_END,
     )
     args.output.write_text(page, encoding="utf-8")
     args.lf_snippet_output.parent.mkdir(parents=True, exist_ok=True)
     args.lf_snippet_output.write_text(
-        render_lf_snippet(lf_rows, asset=asset), encoding="utf-8"
+        render_lf_snippet(lf_rows, assets=assets), encoding="utf-8"
     )
     print(
-        f"Generated {len(rows)} Canton release/protocol rows and {len(lf_rows)} "
-        f"protocol/Daml-LF rows from {asset.tag} in {args.output}"
+        f"Generated {len(rows)} Canton release/protocol rows from {asset.tag} and "
+        f"{len(lf_rows)} protocol/Daml-LF rows from {', '.join(tags)} in {args.output}"
     )
     return 0
 
