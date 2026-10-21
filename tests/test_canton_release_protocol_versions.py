@@ -87,6 +87,22 @@ class CantonReleaseProtocolVersionsTests(unittest.TestCase):
             generator.render_lf_section([("37*", ["2.1"])], asset=self.asset),
         )
 
+    def test_render_lf_snippet_exports_dashboard_rows(self) -> None:
+        snippet = generator.render_lf_snippet(
+            [("34", ["2.1", "2.2"]), ("37*", ["2.1"])], asset=self.asset
+        )
+        self.assertIn(
+            'export const protocolLfVersionsSource = {"cantonVersion": "3.5.15", '
+            '"tag": "v3.5.15"',
+            snippet,
+        )
+        self.assertIn(
+            '  {"protocolVersion": "34", "beta": false, "lfVersions": ["2.1", "2.2"]},',
+            snippet,
+        )
+        self.assertIn('{"protocolVersion": "37", "beta": true', snippet)
+        self.assertTrue(snippet.endswith("];\n"))
+
     def test_both_sections_coexist_and_regenerate_in_place(self) -> None:
         page = "Frontmatter\n\nExisting release guidance.\n"
         release = generator.render_section([("3.6", ["34", "35"])], asset=self.asset)

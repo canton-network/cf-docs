@@ -24,6 +24,9 @@ DEFAULT_CACHE_DIR = REPO_ROOT / ".internal" / "cache" / "canton-release-referenc
 DEFAULT_OUTPUT = (
     REPO_ROOT / "docs-main" / "release-notes" / "releases-and-versioning.mdx"
 )
+DEFAULT_LF_SNIPPET_OUTPUT = (
+    REPO_ROOT / "docs-main" / "snippets" / "generated" / "protocol-lf-versions.mdx"
+)
 REFERENCE_SCRIPT = REPO_ROOT / "scripts" / "canton_release_protocol_versions.canton"
 GENERATED_START = "{/* GENERATED_CANTON_RELEASE_PROTOCOL_VERSIONS_START */}"
 GENERATED_END = "{/* GENERATED_CANTON_RELEASE_PROTOCOL_VERSIONS_END */}"
@@ -40,6 +43,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--canton-tag")
     parser.add_argument("--cache-dir", type=Path, default=DEFAULT_CACHE_DIR)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument(
+        "--lf-snippet-output", type=Path, default=DEFAULT_LF_SNIPPET_OUTPUT
+    )
     parser.add_argument("--reference-json", type=Path)
     parser.add_argument("--force-refresh", action="store_true")
     parser.add_argument("--docs-json")
@@ -125,6 +131,29 @@ def render_lf_section(rows: list[tuple[str, list[str]]], *, asset: ReleaseAsset)
     return "\n".join(lines)
 
 
+def render_lf_snippet(rows: list[tuple[str, list[str]]], *, asset: ReleaseAsset) -> str:
+    """Render the protocol/Daml-LF rows as MDX exports for the version dashboard."""
+    source = {
+        "cantonVersion": asset.version,
+        "tag": asset.tag,
+        "asset": asset.name,
+        "digest": asset.digest,
+    }
+    entries = [
+        {
+            "protocolVersion": protocol.removesuffix("*"),
+            "beta": protocol.endswith("*"),
+            "lfVersions": versions,
+        }
+        for protocol, versions in rows
+    ]
+    lines = [f"export const protocolLfVersionsSource = {json.dumps(source)};", ""]
+    lines.append("export const protocolLfVersions = [")
+    lines.extend(f"  {json.dumps(entry)}," for entry in entries)
+    lines.append("];")
+    return "\n".join(lines) + "\n"
+
+
 def replace_section(
     page: str,
     section: str,
@@ -176,6 +205,10 @@ def main() -> int:
         LF_GENERATED_END,
     )
     args.output.write_text(page, encoding="utf-8")
+    args.lf_snippet_output.parent.mkdir(parents=True, exist_ok=True)
+    args.lf_snippet_output.write_text(
+        render_lf_snippet(lf_rows, asset=asset), encoding="utf-8"
+    )
     print(
         f"Generated {len(rows)} Canton release/protocol rows and {len(lf_rows)} "
         f"protocol/Daml-LF rows from {asset.tag} in {args.output}"
