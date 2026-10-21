@@ -61,7 +61,7 @@ def test_audit_follows_nested_and_page_template_references(tmp_path: Path) -> No
     docs_main, snippets = layout(tmp_path)
     write(
         docs_main / "src" / "page.mdx",
-        'import Block from "/snippets/internal/block.mdx";\n\n<NetworkVariables>\n<Block />\n</NetworkVariables>\n',
+        'import Block from "/snippets/internal/block.mdx";\n\n<Tabs>\n<Tab title=\"All networks\">\n<Block />\n</Tab>\n</Tabs>\n',
     )
     write(
         snippets / "internal" / "block.mdx",

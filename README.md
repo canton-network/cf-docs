@@ -64,7 +64,8 @@ template, not the generated page. Templates are hidden pages (`hidden: true`,
 listed under the hidden "Page templates" product in `docs.json`) so the Mintlify
 editor can open them without publishing them in navigation, search, or the sitemap.
 
-Inside a template, wrap network-dependent content in `<NetworkVariables>`. Use
+Inside a template, wrap network-dependent content in a single tab,
+`<Tabs>` / `<Tab title="All networks">`, which the Mintlify editor can edit. Use
 `|token|` placeholders for values from the version dashboard data and
 `<div data-network-only="devnet,testnet">` for network-specific content. Run
 `npm run generate:network-variable-tabs` to render one tab per network into the

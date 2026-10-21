@@ -4,6 +4,7 @@ import argparse
 import json
 import re
 import subprocess
+import textwrap
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -21,16 +22,16 @@ IMPORT_RE = re.compile(
     r"^import\s+(?P<name>[A-Za-z_$][\w$]*)\s+from\s+[\"'](?P<path>[^\"']+\.mdx)[\"'];\s*$",
     re.MULTILINE,
 )
-NETWORKVARS_IMPORT_RE = re.compile(
-    r"^import\s+\{\s*NetworkVariables\s*\}\s+from\s+[\"']/snippets/components/network-variables\.mdx[\"'];?[ \t]*\n?",
-    re.MULTILINE,
-)
 NETWORK_DATA_IMPORT_RE = re.compile(
     r"^import\s+\{\s*networkData\s*\}\s+from\s+[\"']/snippets/generated/version-dashboard-data\.mdx[\"'];\s*\n?",
     re.MULTILINE,
 )
+# A network-specific block in a template is a single "All networks" tab. It uses a
+# built-in component because the Mintlify editor cannot render components exported
+# from snippet files. The generator expands it into one tab per network.
+TEMPLATE_TAB_TITLE = "All networks"
 NETWORKVARS_BLOCK_RE = re.compile(
-    r"<NetworkVariables(?P<attrs>[^>]*)>(?P<body>.*?)</NetworkVariables>",
+    r"<Tabs>\s*<Tab\s+title=\"" + re.escape(TEMPLATE_TAB_TITLE) + r"\"\s*>(?P<body>.*?)</Tab>\s*</Tabs>",
     re.DOTALL,
 )
 FRONTMATTER_RE = re.compile(r"\A---\n(?P<body>.*?\n)---\n", re.DOTALL)
@@ -232,7 +233,6 @@ def render_network_tabs(
 
 
 def remove_unused_imports(text: str) -> str:
-    text = NETWORKVARS_IMPORT_RE.sub("", text)
     network_data_match = NETWORK_DATA_IMPORT_RE.search(text)
     if network_data_match:
         without_network_data_import = text[: network_data_match.start()] + text[network_data_match.end() :]
@@ -292,7 +292,8 @@ def render_page(source_path: Path, network_data: dict[str, Any], docs_main: Path
     page_imports = find_imports(body, docs_main)
 
     def replace_block(match: re.Match[str]) -> str:
-        block_body = match.group("body").strip()
+        # The editor may indent tab children; dedent so code blocks keep their meaning.
+        block_body = textwrap.dedent(match.group("body").strip("\n")).strip()
         used_imports = {ref.name: ref for ref in imported_components_used(block_body, page_imports)}
         return render_network_tabs(block_body, used_imports, network_data, docs_main)
 

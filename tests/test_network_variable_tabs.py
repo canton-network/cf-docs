@@ -153,20 +153,29 @@ hidden: true
 
 import Existing from "/snippets/existing.mdx";
 
-import { NetworkVariables } from "/snippets/components/network-variables.mdx";
 import BlockSnippet from "/snippets/external/block.mdx";
 
 Editor prose before.
 
 <Existing />
 
-<NetworkVariables>
+<Tabs>
+  <Tab title="All networks">
+    Scan URL: |gsf_scan_url|
 
-Scan URL: |gsf_scan_url|
+    ```bash
+    curl |gsf_scan_url|/api
+    ```
 
-<BlockSnippet />
+    <BlockSnippet />
+  </Tab>
+</Tabs>
 
-</NetworkVariables>
+<Tabs>
+<Tab title="Ordinary tab">
+Kept as written: |gsf_scan_url|
+</Tab>
+</Tabs>
 
 Editor prose after.
 """,
@@ -184,7 +193,9 @@ Editor prose after.
         'import Existing from "/snippets/existing.mdx";\n\nEditor prose before.'
     )
     assert "hidden: true" not in rendered
-    assert "NetworkVariables" not in rendered
+    assert 'title="All networks"' not in rendered
+    assert "```bash\ncurl https://scan.dev.example/api\n```" in rendered
+    assert '<Tab title="Ordinary tab">\nKept as written: |gsf_scan_url|\n</Tab>' in rendered
     assert "BlockSnippet" not in rendered
     assert "Scan URL: https://scan.dev.example" in rendered
     assert "Block snippet for https://scan.test.example" in rendered
@@ -234,7 +245,7 @@ def test_validate_script_detects_hand_edited_output_without_writing(tmp_path: Pa
     write_template(
         docs_main,
         "example.mdx",
-        "---\ntitle: Example\nhidden: true\n---\n\n<NetworkVariables>\nScan URL: |gsf_scan_url|\n</NetworkVariables>\n",
+        "---\ntitle: Example\nhidden: true\n---\n\n<Tabs>\n<Tab title=\"All networks\">\nScan URL: |gsf_scan_url|\n</Tab>\n</Tabs>\n",
     )
     script_dir = repo / "scripts"
     script_dir.mkdir()
@@ -315,8 +326,7 @@ def test_checked_in_templates_are_hidden_listed_and_rendered() -> None:
         page = module.output_path_for_source(template, docs_main)
         text = page.read_text(encoding="utf-8")
         assert module.generated_notice(module.source_ref_for_path(template, docs_main)) in text
-        assert "<NetworkVariables" not in text
-        assert "network-variables.mdx" not in text
+        assert '<Tab title="All networks">' not in text
         assert "<Tabs>" in text
         assert "<Tab title=" in text
 
