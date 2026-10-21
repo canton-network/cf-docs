@@ -150,6 +150,26 @@ class CantonReleaseProtocolVersionsTests(unittest.TestCase):
             )
             self.assertEqual(generator.load_published_lf_rows(snippet), rows)
 
+    def test_load_published_lf_rows_rejects_unreadable_snippets(self) -> None:
+        valid = generator.render_lf_snippet([self.row(36, ["2.4"])], asset=self.asset)
+        broken = {
+            "reformatted row": valid.replace(
+                '  {"protocolVersion": "36"', "  {\n    protocolVersion: '36'"
+            ),
+            "missing export": valid.replace("protocolLfVersions = [", "rows = ["),
+            "empty rows": valid.replace(
+                valid[valid.index("  {") : valid.index("];")], ""
+            ),
+            "missing field": valid.replace('"beta": false, ', ""),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            snippet = Path(directory) / "protocol-lf-versions.mdx"
+            for name, text in broken.items():
+                with self.subTest(name):
+                    snippet.write_text(text, encoding="utf-8")
+                    with self.assertRaisesRegex(ValueError, "protocolLfVersions"):
+                        generator.load_published_lf_rows(snippet)
+
     def test_carry_forward_keeps_stable_rows_the_release_dropped(self) -> None:
         probed = [self.row(37, ["2.5", "2.4"]), self.row(36, ["2.4", "2.3"])]
         published = [

@@ -130,25 +130,44 @@ def probed_lf_rows(rows: list[tuple[str, list[str]]], *, asset: ReleaseAsset) ->
     ]
 
 
+LF_SNIPPET_ROWS_START = "export const protocolLfVersions = ["
+LF_SNIPPET_ROWS_END = "];"
+
+
 def load_published_lf_rows(snippet: Path) -> list[LfRow]:
-    """Read the rows the dashboard snippet last published."""
+    """Read the rows the dashboard snippet last published.
+
+    Carried-forward rows exist only in this snippet, so anything other than the format
+    `render_lf_snippet` writes fails instead of silently dropping them.
+    """
     if not snippet.is_file():
         return []
+    lines = [line.strip() for line in snippet.read_text(encoding="utf-8").splitlines()]
+    if LF_SNIPPET_ROWS_START not in lines or LF_SNIPPET_ROWS_END not in lines:
+        raise ValueError(f"{snippet} does not contain the generated protocolLfVersions rows")
+    start = lines.index(LF_SNIPPET_ROWS_START) + 1
+    end = lines.index(LF_SNIPPET_ROWS_END, start)
     rows: list[LfRow] = []
-    for line in snippet.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not (line.startswith('{"protocolVersion"') and line.endswith("},")):
+    for number, line in enumerate(lines[start:end], start=start + 1):
+        if not line:
             continue
-        entry = json.loads(line.removesuffix(","))
-        rows.append(
-            LfRow(
-                protocol_version=int(entry["protocolVersion"]),
-                beta=bool(entry["beta"]),
-                lf_versions=list(entry["lfVersions"]),
-                last_reported_by=str(entry.get("lastReportedBy", "")),
-                carried_forward=bool(entry.get("carriedForward", False)),
+        try:
+            if not line.endswith(","):
+                raise ValueError("missing trailing comma")
+            entry = json.loads(line.removesuffix(","))
+            rows.append(
+                LfRow(
+                    protocol_version=int(entry["protocolVersion"]),
+                    beta=bool(entry["beta"]),
+                    lf_versions=list(entry["lfVersions"]),
+                    last_reported_by=str(entry.get("lastReportedBy", "")),
+                    carried_forward=bool(entry.get("carriedForward", False)),
+                )
             )
-        )
+        except (ValueError, KeyError, TypeError) as error:
+            raise ValueError(f"{snippet}:{number}: unreadable protocolLfVersions row: {error}") from error
+    if not rows:
+        raise ValueError(f"{snippet} has no protocolLfVersions rows")
     return rows
 
 
@@ -246,9 +265,9 @@ def render_lf_snippet(rows: list[LfRow], *, asset: ReleaseAsset) -> str:
         for row in rows
     ]
     lines = [f"export const protocolLfVersionsSource = {json.dumps(source)};", ""]
-    lines.append("export const protocolLfVersions = [")
+    lines.append(LF_SNIPPET_ROWS_START)
     lines.extend(f"  {json.dumps(entry)}," for entry in entries)
-    lines.append("];")
+    lines.append(LF_SNIPPET_ROWS_END)
     return "\n".join(lines) + "\n"
 
 
