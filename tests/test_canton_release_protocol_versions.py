@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import sys
+import tempfile
 import unittest
 
 
@@ -22,14 +23,6 @@ class CantonReleaseProtocolVersionsTests(unittest.TestCase):
             url="https://github.com/digital-asset/canton/releases/download/v3.5.15/canton-open-source-3.5.15.tar.gz",
             size=123,
             digest="sha256:" + "a" * 64,
-        )
-        self.older = generator.ReleaseAsset(
-            tag="v3.4.9",
-            version="3.4.9",
-            name="canton-open-source-3.4.9.tar.gz",
-            url="https://github.com/digital-asset/canton/releases/download/v3.4.9/canton-open-source-3.4.9.tar.gz",
-            size=456,
-            digest="sha256:" + "b" * 64,
         )
 
     def test_uses_public_release_source(self) -> None:
@@ -81,94 +74,125 @@ class CantonReleaseProtocolVersionsTests(unittest.TestCase):
                 {"releaseVersionsToProtocolVersions": []}, "protocolVersionsToLfVersions"
             )
 
+    def row(self, protocol, versions, *, beta=False, by="v3.5.15", carried=False):
+        return generator.LfRow(
+            protocol_version=protocol,
+            beta=beta,
+            lf_versions=versions,
+            last_reported_by=by,
+            carried_forward=carried,
+        )
+
+    def test_probed_lf_rows_parse_beta_labels(self) -> None:
+        self.assertEqual(
+            generator.probed_lf_rows([("37*", ["2.5"]), ("36", ["2.4"])], asset=self.asset),
+            [self.row(37, ["2.5"], beta=True), self.row(36, ["2.4"])],
+        )
+
     def test_render_lf_section_lists_lf_versions_per_protocol_version(self) -> None:
         section = generator.render_lf_section(
-            [("36", ["2.4", "2.3", "2.2", "2.1"]), ("34", ["2.2", "2.1"])],
-            assets=[self.asset, self.older],
+            [self.row(36, ["2.4", "2.3", "2.2", "2.1"]), self.row(34, ["2.2", "2.1"])],
+            asset=self.asset,
         )
         self.assertTrue(section.startswith(generator.LF_GENERATED_START))
+        self.assertIn('ref="v3.5.15"', section)
         self.assertIn('protocol_version_count="2"', section)
-        self.assertIn('refs="v3.5.15 v3.4.9"', section)
-        self.assertIn("The public Canton 3.5.15 and 3.4.9 releases report", section)
+        self.assertIn("The public Canton 3.5.15 release reports", section)
         self.assertIn("| 36 | 2.4, 2.3, 2.2, 2.1 |", section)
         self.assertIn("| 34 | 2.2, 2.1 |", section)
         self.assertNotIn("asterisk", section)
-        single = generator.render_lf_section([("37*", ["2.1"])], assets=[self.asset])
-        self.assertIn("asterisk", single)
-        self.assertIn("The public Canton 3.5.15 release reports", single)
+        self.assertNotIn(generator.CARRIED_FORWARD_MARK, section)
+
+    def test_render_lf_section_marks_beta_and_carried_rows(self) -> None:
+        section = generator.render_lf_section(
+            [
+                self.row(37, ["2.5"], beta=True),
+                self.row(34, ["2.2", "2.1"], by="v3.4.9", carried=True),
+            ],
+            asset=self.asset,
+        )
+        self.assertIn("| 37* | 2.5 |", section)
+        self.assertIn("| 34 † | 2.2, 2.1 |", section)
+        self.assertIn("asterisk", section)
+        self.assertIn("† Not supported by Canton 3.5.15.", section)
 
     def test_render_lf_snippet_exports_dashboard_rows(self) -> None:
         snippet = generator.render_lf_snippet(
-            [("34", ["2.1", "2.2"]), ("37*", ["2.1"])], assets=[self.asset, self.older]
+            [
+                self.row(37, ["2.5"], beta=True),
+                self.row(34, ["2.2", "2.1"], by="v3.4.9", carried=True),
+            ],
+            asset=self.asset,
         )
         self.assertIn(
-            'export const protocolLfVersionsSource = {"releases": [{"cantonVersion": "3.5.15", '
+            'export const protocolLfVersionsSource = {"cantonVersion": "3.5.15", '
             '"tag": "v3.5.15"',
             snippet,
         )
-        self.assertIn('{"cantonVersion": "3.4.9", "tag": "v3.4.9"', snippet)
         self.assertIn(
-            '  {"protocolVersion": "34", "beta": false, "lfVersions": ["2.1", "2.2"]},',
+            '  {"protocolVersion": "34", "beta": false, "lfVersions": ["2.2", "2.1"], '
+            '"lastReportedBy": "v3.4.9", "carriedForward": true},',
             snippet,
         )
         self.assertIn('{"protocolVersion": "37", "beta": true', snippet)
         self.assertTrue(snippet.endswith("];\n"))
 
-    def test_both_sections_coexist_and_regenerate_in_place(self) -> None:
-        page = "Frontmatter\n\nExisting release guidance.\n"
-        release = generator.render_section([("3.6", ["34", "35"])], asset=self.asset)
-        lf = generator.render_lf_section([("34", ["2.1", "2.2"])], assets=[self.asset])
-
-        def regenerate(text: str) -> str:
-            text = generator.replace_section(text, release)
-            return generator.replace_section(
-                text, lf, generator.LF_GENERATED_START, generator.LF_GENERATED_END
+    def test_published_rows_round_trip_through_the_snippet(self) -> None:
+        rows = [
+            self.row(36, ["2.4", "2.3"]),
+            self.row(34, ["2.2", "2.1"], by="v3.4.9", carried=True),
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            snippet = Path(directory) / "protocol-lf-versions.mdx"
+            self.assertEqual(generator.load_published_lf_rows(snippet), [])
+            snippet.write_text(
+                generator.render_lf_snippet(rows, asset=self.asset), encoding="utf-8"
             )
+            self.assertEqual(generator.load_published_lf_rows(snippet), rows)
 
-        first = regenerate(page)
-        second = regenerate(first)
-        self.assertEqual(first, second)
-        self.assertLess(
-            first.index(generator.GENERATED_END),
-            first.index(generator.LF_GENERATED_START),
-        )
-
-    def test_merge_lf_rows_unions_release_lines_newest_protocol_first(self) -> None:
-        merged = generator.merge_lf_rows(
-            [
-                (self.asset, [("36", ["2.4", "2.3"]), ("35", ["2.3", "2.2"])]),
-                (self.older, [("35", ["2.3", "2.2"]), ("34", ["2.2", "2.1"])]),
-            ]
-        )
+    def test_carry_forward_keeps_stable_rows_the_release_dropped(self) -> None:
+        probed = [self.row(37, ["2.5", "2.4"]), self.row(36, ["2.4", "2.3"])]
+        published = [
+            self.row(36, ["2.4", "2.3"], by="v3.4.9"),
+            self.row(35, ["2.3", "2.2"], by="v3.4.9"),
+            self.row(34, ["2.2", "2.1"], by="v3.3.1", carried=True),
+        ]
         self.assertEqual(
-            merged,
-            [("36", ["2.4", "2.3"]), ("35", ["2.3", "2.2"]), ("34", ["2.2", "2.1"])],
+            generator.carry_forward_lf_rows(probed, published, asset=self.asset),
+            [
+                self.row(37, ["2.5", "2.4"]),
+                self.row(36, ["2.4", "2.3"]),
+                self.row(35, ["2.3", "2.2"], by="v3.4.9", carried=True),
+                self.row(34, ["2.2", "2.1"], by="v3.3.1", carried=True),
+            ],
         )
 
-    def test_merge_lf_rows_prefers_stable_label_over_beta(self) -> None:
-        merged = generator.merge_lf_rows(
-            [(self.asset, [("36", ["2.4"])]), (self.older, [("36*", ["2.4"])])]
+    def test_carry_forward_restores_a_row_the_release_reports_again(self) -> None:
+        probed = [self.row(35, ["2.3", "2.2"])]
+        published = [self.row(35, ["2.3", "2.2"], by="v3.4.9", carried=True)]
+        self.assertEqual(
+            generator.carry_forward_lf_rows(probed, published, asset=self.asset),
+            [self.row(35, ["2.3", "2.2"])],
         )
-        self.assertEqual(merged, [("36", ["2.4"])])
-        merged = generator.merge_lf_rows(
-            [(self.asset, [("36*", ["2.4"])]), (self.older, [("36", ["2.4"])])]
-        )
-        self.assertEqual(merged, [("36", ["2.4"])])
 
-    def test_merge_lf_rows_rejects_disagreeing_release_lines(self) -> None:
-        with self.assertRaisesRegex(ValueError, "Protocol version 35: v3.5.15 reports"):
-            generator.merge_lf_rows(
-                [
-                    (self.asset, [("35", ["2.3", "2.2"])]),
-                    (self.older, [("35", ["2.2"])]),
-                ]
-            )
-
-    def test_older_release_lines_use_the_legacy_probe(self) -> None:
-        self.assertLess(
-            generator.release_line(self.older), generator.LEGACY_LF_RELEASE_LINES_BEFORE
+    def test_carry_forward_drops_beta_rows_and_accepts_beta_changes(self) -> None:
+        probed = [self.row(37, ["2.5", "2.4"], beta=True)]
+        published = [
+            self.row(37, ["2.4"], beta=True, by="v3.4.9"),
+            self.row(38, ["2.6"], beta=True, by="v3.4.9"),
+        ]
+        self.assertEqual(
+            generator.carry_forward_lf_rows(probed, published, asset=self.asset),
+            [self.row(37, ["2.5", "2.4"], beta=True)],
         )
-        self.assertTrue(generator.LEGACY_LF_REFERENCE_SCRIPT.is_file())
+
+    def test_carry_forward_rejects_a_changed_stable_row(self) -> None:
+        probed = [self.row(35, ["2.3"])]
+        published = [self.row(35, ["2.3", "2.2"], by="v3.4.9")]
+        with self.assertRaisesRegex(
+            ValueError, r"Protocol version 35: v3.4.9 reported \['2.3', '2.2'\]"
+        ):
+            generator.carry_forward_lf_rows(probed, published, asset=self.asset)
 
     def test_select_latest_patch_tags_picks_newest_patch_per_line(self) -> None:
         releases = [
