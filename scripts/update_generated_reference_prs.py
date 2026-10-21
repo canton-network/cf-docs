@@ -473,8 +473,9 @@ UPDATE_TARGETS = (
         title="Update Canton release/protocol compatibility",
         branch="generated-docs/canton-release-protocol-versions/update",
         description=(
-            "Regenerates the Canton release-to-protocol compatibility table from "
-            "runtime metadata in the latest public Canton release binary."
+            "Regenerates the Canton release-to-protocol and protocol-to-Daml-LF "
+            "compatibility tables from runtime metadata in the latest public Canton "
+            "release binary."
         ),
         generate_commands=(nix_develop_command("npm run generate:canton-release-protocol-versions"),),
         paths=("docs-main/release-notes/releases-and-versioning.mdx",),

@@ -1,5 +1,5 @@
 import io.circe.syntax._
-import com.digitalasset.canton.version.{ProtocolVersion, ReleaseVersionToProtocolVersions}
+import com.digitalasset.canton.version.{InterpretationConfig, ProtocolVersion, ReleaseVersionToProtocolVersions}
 
 sealed trait ProtocolVersionStatus {
   def protocolVersion: ProtocolVersion
@@ -35,4 +35,24 @@ val rows = combined.toList
   }
   .filter { case (_, protocolVersions) => protocolVersions.nonEmpty }
 
-println(io.circe.Json.obj("releaseVersionsToProtocolVersions" -> rows.asJson).spaces2)
+// The Ledger API derives the Daml-LF versions it accepts in commands from the target
+// synchronizer's protocol version.
+val lfRows = (List.from(ProtocolVersion.stable).map[ProtocolVersionStatus](ProtocolVersionStatus.Stable) ++
+  List.from(ProtocolVersion.beta).map[ProtocolVersionStatus](ProtocolVersionStatus.Beta)).sorted
+  .map { status =>
+    val suffix = if (status.isBeta) "*" else ""
+    s"${status.protocolVersion}$suffix" -> InterpretationConfig
+      .forProtocolVersion(status.protocolVersion)
+      .allowedLanguageVersions
+      .sorted
+      .map(_.pretty)
+  }
+
+println(
+  io.circe.Json
+    .obj(
+      "releaseVersionsToProtocolVersions" -> rows.asJson,
+      "protocolVersionsToLfVersions" -> lfRows.asJson,
+    )
+    .spaces2
+)

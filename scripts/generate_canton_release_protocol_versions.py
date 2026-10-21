@@ -27,6 +27,9 @@ DEFAULT_OUTPUT = (
 REFERENCE_SCRIPT = REPO_ROOT / "scripts" / "canton_release_protocol_versions.canton"
 GENERATED_START = "{/* GENERATED_CANTON_RELEASE_PROTOCOL_VERSIONS_START */}"
 GENERATED_END = "{/* GENERATED_CANTON_RELEASE_PROTOCOL_VERSIONS_END */}"
+LF_GENERATED_START = "{/* GENERATED_CANTON_PROTOCOL_LF_VERSIONS_START */}"
+LF_GENERATED_END = "{/* GENERATED_CANTON_PROTOCOL_LF_VERSIONS_END */}"
+BETA_LEGEND = r"\* A trailing asterisk identifies a beta protocol version."
 
 
 def parse_args() -> argparse.Namespace:
@@ -43,15 +46,13 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def load_rows(payload: object) -> list[tuple[str, list[str]]]:
-    if not isinstance(payload, dict) or not isinstance(
-        payload.get("releaseVersionsToProtocolVersions"), list
-    ):
-        raise ValueError(
-            "Canton reference JSON must contain a releaseVersionsToProtocolVersions list"
-        )
+def load_rows(
+    payload: object, key: str = "releaseVersionsToProtocolVersions"
+) -> list[tuple[str, list[str]]]:
+    if not isinstance(payload, dict) or not isinstance(payload.get(key), list):
+        raise ValueError(f"Canton reference JSON must contain a {key} list")
     rows: list[tuple[str, list[str]]] = []
-    for index, row in enumerate(payload["releaseVersionsToProtocolVersions"]):
+    for index, row in enumerate(payload[key]):
         if (
             not isinstance(row, list)
             or len(row) != 2
@@ -60,7 +61,7 @@ def load_rows(payload: object) -> list[tuple[str, list[str]]]:
             or not row[1]
             or not all(isinstance(value, str) and value for value in row[1])
         ):
-            raise ValueError(f"Release/protocol row {index} is invalid")
+            raise ValueError(f"{key} row {index} is invalid")
         rows.append((row[0], cast(list[str], row[1])))
     return rows
 
@@ -88,7 +89,7 @@ def render_section(rows: list[tuple[str, list[str]]], *, asset: ReleaseAsset) ->
     lines.extend(
         [
             "",
-            r"\* A trailing asterisk identifies a beta protocol version.",
+            BETA_LEGEND,
             "",
             GENERATED_END,
         ]
@@ -96,10 +97,43 @@ def render_section(rows: list[tuple[str, list[str]]], *, asset: ReleaseAsset) ->
     return "\n".join(lines)
 
 
-def replace_section(page: str, section: str) -> str:
-    if GENERATED_START in page:
-        start = page.index(GENERATED_START)
-        end = page.index(GENERATED_END, start) + len(GENERATED_END)
+def render_lf_section(rows: list[tuple[str, list[str]]], *, asset: ReleaseAsset) -> str:
+    lines = [
+        LF_GENERATED_START,
+        "",
+        (
+            "{/* GENERATED_FROM "
+            f'source="{DEFAULT_RELEASE_REPO}" ref="{asset.tag}" asset="{asset.name}" '
+            f'digest="{asset.digest}" protocol_version_count="{len(rows)}" */}}'
+        ),
+        "",
+        "## Protocol and Daml-LF Compatibility",
+        "",
+        (
+            f"The public Canton {asset.version} release reports which Daml-LF versions a "
+            "participant accepts in commands submitted to a synchronizer running each "
+            "protocol version."
+        ),
+        "",
+        "| Protocol version | Supported Daml-LF versions |",
+        "| --- | --- |",
+    ]
+    lines.extend(f"| {protocol} | {', '.join(versions)} |" for protocol, versions in rows)
+    if any(protocol.endswith("*") for protocol, _ in rows):
+        lines.extend(["", BETA_LEGEND])
+    lines.extend(["", LF_GENERATED_END])
+    return "\n".join(lines)
+
+
+def replace_section(
+    page: str,
+    section: str,
+    start_marker: str = GENERATED_START,
+    end_marker: str = GENERATED_END,
+) -> str:
+    if start_marker in page:
+        start = page.index(start_marker)
+        end = page.index(end_marker, start) + len(end_marker)
         return page[:start].rstrip() + "\n\n" + section + "\n" + page[end:].lstrip()
     return page.rstrip() + "\n\n" + section + "\n"
 
@@ -132,12 +166,19 @@ def main() -> int:
         )
 
     rows = load_rows(payload)
+    lf_rows = load_rows(payload, "protocolVersionsToLfVersions")
     page = args.output.read_text(encoding="utf-8")
-    args.output.write_text(
-        replace_section(page, render_section(rows, asset=asset)), encoding="utf-8"
+    page = replace_section(page, render_section(rows, asset=asset))
+    page = replace_section(
+        page,
+        render_lf_section(lf_rows, asset=asset),
+        LF_GENERATED_START,
+        LF_GENERATED_END,
     )
+    args.output.write_text(page, encoding="utf-8")
     print(
-        f"Generated {len(rows)} Canton release/protocol rows from {asset.tag} in {args.output}"
+        f"Generated {len(rows)} Canton release/protocol rows and {len(lf_rows)} "
+        f"protocol/Daml-LF rows from {asset.tag} in {args.output}"
     )
     return 0
 
