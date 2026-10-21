@@ -291,8 +291,9 @@ def test_validate_script_detects_hand_edited_output_without_writing(tmp_path: Pa
 
     page.write_text(page.read_text() + "\nHand edit to the generated page.\n", encoding="utf-8")
     before = page.read_bytes()
+    report_path = tmp_path / "report.json"
     stale = subprocess.run(
-        [sys.executable, "scripts/validate_network_variable_tabs.py"],
+        [sys.executable, "scripts/validate_network_variable_tabs.py", "--report", str(report_path)],
         cwd=repo,
         check=False,
         capture_output=True,
@@ -303,6 +304,29 @@ def test_validate_script_detects_hand_edited_output_without_writing(tmp_path: Pa
     assert "docs-main/src/" in stale.stderr
     assert "docs-main/example.mdx" in stale.stderr
     assert page.read_bytes() == before
+    assert json.loads(report_path.read_text(encoding="utf-8")) == {
+        "stale": [{"page": "docs-main/example.mdx", "template": "docs-main/src/example.mdx"}],
+        "orphans": [],
+        "errors": [],
+    }
+
+    write_template(
+        docs_main,
+        "broken.mdx",
+        '---\ntitle: Broken\nhidden: true\n---\n\n<Tabs>\n<Tab title="All networks">\nA\n</Tab>\n<Tab title="DevNet">\nB\n</Tab>\n</Tabs>\n',
+    )
+    broken = subprocess.run(
+        [sys.executable, "scripts/validate_network_variable_tabs.py", "--report", str(report_path)],
+        cwd=repo,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert broken.returncode == 1
+    assert "could not be rendered" in broken.stderr
+    errors = json.loads(report_path.read_text(encoding="utf-8"))["errors"]
+    assert [error["template"] for error in errors] == ["docs-main/src/broken.mdx"]
+    assert "only tab" in errors[0]["message"]
 
 
 def test_generation_preserves_ordinary_editor_files(tmp_path: Path) -> None:

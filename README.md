@@ -77,7 +77,8 @@ For generated API lifecycle settings, see the [examples and accepted values](con
 
 Run `npm run validate:network-variable-tabs` to check generated pages without
 modifying files. Direct edits to a generated page fail validation; edit its
-template instead. Ordinary page edits and new images do not require
+template instead. On pull requests, CI also posts a comment naming the template
+to edit and quoting lines that exist only in the generated page. Ordinary page edits and new images do not require
 regeneration.
 
 ### Running the dev server

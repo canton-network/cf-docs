@@ -354,34 +354,58 @@ def orphaned_outputs(docs_main: Path = DOCS_MAIN) -> list[Path]:
     return orphans
 
 
+def relative_to_repo(path: Path) -> str:
+    return path.relative_to(REPO_ROOT).as_posix()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Render docs-main/src/ page templates into published pages with static network tabs."
     )
     parser.add_argument("--check", action="store_true", help="Check generated pages without changing any files.")
+    parser.add_argument(
+        "--report",
+        type=Path,
+        help="Write stale pages, orphaned pages, and template errors to this JSON file.",
+    )
     args = parser.parse_args()
 
     network_data = load_network_data()
-    changed_pages = [
-        output_path_for_source(source_path)
-        for source_path in iter_sources()
-        if update_page(source_path, network_data, check=args.check)
-    ]
-    orphans = orphaned_outputs()
-    if orphans:
-        orphan_list = "\n".join(path.relative_to(REPO_ROOT).as_posix() for path in orphans)
-        raise SystemExit(
-            "Generated pages have no template under docs-main/src/. "
-            f"Restore the template or delete the page.\n{orphan_list}"
-        )
+    changed_pages: list[Path] = []
+    stale: list[dict[str, str]] = []
+    errors: list[dict[str, str]] = []
+    for source_path in iter_sources():
+        output_path = output_path_for_source(source_path)
+        try:
+            changed = update_page(source_path, network_data, check=args.check)
+        except ValueError as error:
+            errors.append({"template": relative_to_repo(source_path), "message": str(error)})
+            continue
+        if changed:
+            changed_pages.append(output_path)
+            stale.append({"page": relative_to_repo(output_path), "template": relative_to_repo(source_path)})
+    orphans = [relative_to_repo(path) for path in orphaned_outputs()]
 
+    if args.report:
+        report = {"stale": stale if args.check else [], "orphans": orphans, "errors": errors}
+        args.report.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+
+    problems: list[str] = []
+    if errors:
+        problems.append("Page templates could not be rendered.\n" + "\n".join(error["message"] for error in errors))
+    if orphans:
+        problems.append(
+            "Generated pages have no template under docs-main/src/. "
+            "Restore the template or delete the page.\n" + "\n".join(orphans)
+        )
     if args.check and changed_pages:
-        changed_list = "\n".join(path.relative_to(REPO_ROOT).as_posix() for path in changed_pages)
-        raise SystemExit(
+        problems.append(
             "Network variable tabs are stale. Edit the template under docs-main/src/, "
             "run `npm run generate:network-variable-tabs`, and commit the rendered MDX changes.\n"
-            f"{changed_list}"
+            + "\n".join(relative_to_repo(path) for path in changed_pages)
         )
+    if problems:
+        raise SystemExit("\n\n".join(problems))
 
     if changed_pages:
         print(f"Updated {len(changed_pages)} page(s).")
