@@ -32,10 +32,7 @@ DEFAULT_LF_SNIPPET_OUTPUT = (
 REFERENCE_SCRIPT = REPO_ROOT / "scripts" / "canton_release_protocol_versions.canton"
 GENERATED_START = "{/* GENERATED_CANTON_RELEASE_PROTOCOL_VERSIONS_START */}"
 GENERATED_END = "{/* GENERATED_CANTON_RELEASE_PROTOCOL_VERSIONS_END */}"
-LF_GENERATED_START = "{/* GENERATED_CANTON_PROTOCOL_LF_VERSIONS_START */}"
-LF_GENERATED_END = "{/* GENERATED_CANTON_PROTOCOL_LF_VERSIONS_END */}"
 BETA_LEGEND = r"\* A trailing asterisk identifies a beta protocol version."
-CARRIED_FORWARD_MARK = "†"
 
 
 def parse_args() -> argparse.Namespace:
@@ -200,52 +197,6 @@ def carry_forward_lf_rows(
     return [rows[protocol] for protocol in sorted(rows, reverse=True)]
 
 
-def lf_row_label(row: LfRow) -> str:
-    beta = "*" if row.beta else ""
-    carried = f" {CARRIED_FORWARD_MARK}" if row.carried_forward else ""
-    return f"{row.protocol_version}{beta}{carried}"
-
-
-def carried_forward_legend(asset: ReleaseAsset) -> str:
-    return (
-        f"{CARRIED_FORWARD_MARK} Not supported by Canton {asset.version}. Listed as reported "
-        "by the earlier Canton release that last supported it."
-    )
-
-
-def render_lf_section(rows: list[LfRow], *, asset: ReleaseAsset) -> str:
-    lines = [
-        LF_GENERATED_START,
-        "",
-        (
-            "{/* GENERATED_FROM "
-            f'source="{DEFAULT_RELEASE_REPO}" ref="{asset.tag}" asset="{asset.name}" '
-            f'digest="{asset.digest}" protocol_version_count="{len(rows)}" */}}'
-        ),
-        "",
-        "## Protocol and Daml-LF Compatibility",
-        "",
-        (
-            f"The public Canton {asset.version} release reports which Daml-LF versions a "
-            "participant accepts in commands submitted to a synchronizer running each "
-            "protocol version."
-        ),
-        "",
-        "| Protocol version | Supported Daml-LF versions |",
-        "| --- | --- |",
-    ]
-    lines.extend(f"| {lf_row_label(row)} | {', '.join(row.lf_versions)} |" for row in rows)
-    legends = []
-    if any(row.beta for row in rows):
-        legends.append(BETA_LEGEND)
-    if any(row.carried_forward for row in rows):
-        legends.append(carried_forward_legend(asset))
-    for legend in legends:
-        lines.extend(["", legend])
-    lines.extend(["", LF_GENERATED_END])
-    return "\n".join(lines)
-
-
 def render_lf_snippet(rows: list[LfRow], *, asset: ReleaseAsset) -> str:
     """Render the protocol/Daml-LF rows as MDX exports for the version dashboard."""
     source = {
@@ -271,15 +222,10 @@ def render_lf_snippet(rows: list[LfRow], *, asset: ReleaseAsset) -> str:
     return "\n".join(lines) + "\n"
 
 
-def replace_section(
-    page: str,
-    section: str,
-    start_marker: str = GENERATED_START,
-    end_marker: str = GENERATED_END,
-) -> str:
-    if start_marker in page:
-        start = page.index(start_marker)
-        end = page.index(end_marker, start) + len(end_marker)
+def replace_section(page: str, section: str) -> str:
+    if GENERATED_START in page:
+        start = page.index(GENERATED_START)
+        end = page.index(GENERATED_END, start) + len(GENERATED_END)
         return page[:start].rstrip() + "\n\n" + section + "\n" + page[end:].lstrip()
     return page.rstrip() + "\n\n" + section + "\n"
 
@@ -322,12 +268,6 @@ def main() -> int:
     )
     page = args.output.read_text(encoding="utf-8")
     page = replace_section(page, render_section(rows, asset=asset))
-    page = replace_section(
-        page,
-        render_lf_section(lf_rows, asset=asset),
-        LF_GENERATED_START,
-        LF_GENERATED_END,
-    )
     args.output.write_text(page, encoding="utf-8")
     args.lf_snippet_output.parent.mkdir(parents=True, exist_ok=True)
     args.lf_snippet_output.write_text(

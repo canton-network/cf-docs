@@ -89,33 +89,6 @@ class CantonReleaseProtocolVersionsTests(unittest.TestCase):
             [self.row(37, ["2.5"], beta=True), self.row(36, ["2.4"])],
         )
 
-    def test_render_lf_section_lists_lf_versions_per_protocol_version(self) -> None:
-        section = generator.render_lf_section(
-            [self.row(36, ["2.4", "2.3", "2.2", "2.1"]), self.row(34, ["2.2", "2.1"])],
-            asset=self.asset,
-        )
-        self.assertTrue(section.startswith(generator.LF_GENERATED_START))
-        self.assertIn('ref="v3.5.15"', section)
-        self.assertIn('protocol_version_count="2"', section)
-        self.assertIn("The public Canton 3.5.15 release reports", section)
-        self.assertIn("| 36 | 2.4, 2.3, 2.2, 2.1 |", section)
-        self.assertIn("| 34 | 2.2, 2.1 |", section)
-        self.assertNotIn("asterisk", section)
-        self.assertNotIn(generator.CARRIED_FORWARD_MARK, section)
-
-    def test_render_lf_section_marks_beta_and_carried_rows(self) -> None:
-        section = generator.render_lf_section(
-            [
-                self.row(37, ["2.5"], beta=True),
-                self.row(34, ["2.2", "2.1"], by="v3.4.9", carried=True),
-            ],
-            asset=self.asset,
-        )
-        self.assertIn("| 37* | 2.5 |", section)
-        self.assertIn("| 34 † | 2.2, 2.1 |", section)
-        self.assertIn("asterisk", section)
-        self.assertIn("† Not supported by Canton 3.5.15.", section)
-
     def test_render_lf_snippet_exports_dashboard_rows(self) -> None:
         snippet = generator.render_lf_snippet(
             [
