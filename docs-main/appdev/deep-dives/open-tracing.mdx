@@ -3,13 +3,11 @@ title: "Open Tracing in Ledger API Client Applications"
 description: "Adding OpenTelemetry-based distributed tracing to Daml applications interacting with the Ledger API."
 ---
 
-{/* DIVERGENCE: replaced "Daml Enterprise" with "Canton" -- there's no more separate Enterprise product/edition as of Canton 3.5; upstream docs-website source (docs/replicated/daml/3.4/sdk/sdlc-howtos/applications/observe/open-tracing.rst, hash 03a5f726) still uses the old name. Related to issue #615. */}
-
 {/* COPIED_START source="docs-website:docs/replicated/daml/3.4/sdk/sdlc-howtos/applications/observe/open-tracing.rst" hash="03a5f726" */}
 
 ## Introduction
 
-Distributed tracing is a technique used for troubleshooting performance issues in a microservices environment like Canton. Tracing in Canton has been described in a page dedicated to monitoring (Canton Monitoring / Tracing). This guide describes how to write **Ledger API** client applications so that distributed traces and spans can seamlessly continue between the client and Canton software components.
+Distributed tracing is a technique used for troubleshooting performance issues in a microservices environment like Canton. Tracing in Canton has been described in a page dedicated to monitoring ([Tracing](/global-synchronizer/reference/observability-configuration#tracing)). This guide describes how to write **Ledger API** client applications so that distributed traces and spans can seamlessly continue between the client and Canton software components.
 
 To study a **Ledger API** client application with OpenTelemetry support in detail, see this [example on GitHub](https://github.com/digital-asset/ex-java-bindings-with-opentelemetry).
 
@@ -19,20 +17,21 @@ To familiarize yourself with the broader topic of open tracing, consult the offi
 
 ## Set Up an OpenTelemetry Environment
 
-To observe distributed tracing in action, you first need to start an OpenTelemetry backend server. Canton supports Jaeger, Zipkin, or OTLP formats. To start a Jaeger server you can use the following docker command:
+To observe distributed tracing in action, you first need to start an OpenTelemetry backend server. Canton exports traces in OTLP format. To start a Jaeger server you can use the following docker command:
 
     docker run --rm -it --name jaeger\
       -p 16686:16686 \
       -p 14250:14250 \
-      jaegertracing/all-in-one:1.22.0
+      -p 4317:4317 \
+      jaegertracing/all-in-one:latest
 
 You also have to start Canton with OpenTelemetry exporting enabled. You can achieve it by defining a new `jaeger.conf` configuration file:
 
 ```
 canton.monitoring.tracing.tracer.exporter {
-  type = jaeger
+  type = otlp
   address = "localhost" // it's the default, so can be omitted
-  port = 14250 // it's the default, so can be omitted
+  port = 4317 // it's the default, so can be omitted
 }
 ```
 
@@ -121,17 +120,13 @@ The gRPC interceptors that were mounted at the initialization stage do the rest 
 
 ## Continue Spans Across Different Applications
 
-Sometimes you may wish to continue the same span across multiple Daml transactions forming a single workflow. This may be especially interesting when different client application instances interact through the ledger and yet their entire conversation should be seen as a single coherent succession of spans. In that case, it is possible to extract the trace context associated with the past transactions from the Transaction, TransactionTree, or Completion records that are returned from the following **Ledger API** calls:
+Sometimes you may wish to continue the same span across multiple Daml transactions forming a single workflow. This may be especially interesting when different client application instances interact through the ledger and yet their entire conversation should be seen as a single coherent succession of spans. In that case, it is possible to extract the trace context associated with the past transactions from the Transaction or Completion records that are returned from the following **Ledger API** calls:
 
 - `UpdateService.GetUpdates`
-- `UpdateService.GetUpdateTrees`
-- `UpdateService.GetTransactionByOffset`
-- `UpdateService.GetTransactionById`
-- `UpdateService.GetTransactionTreeByOffset`
-- `UpdateService.GetTransactionTreeById`
+- `UpdateService.GetUpdatesPage`
 - `UpdateService.GetUpdateByOffset`
 - `UpdateService.GetUpdateById`
-- `CommandCompletionService.CompletionStream`
+- `CommandCompletionService.GetCompletions`
 
 You can extract the context by using a helper function implemented in the example:
 
@@ -149,7 +144,7 @@ Finally, you generate a new span within the original context. You can use the al
 
 ```java
 openTelemetry.runInNewSpan("follow", () ->
-  submissionService.submit(SubmitRequest.toProto(ledgerId, commandsSubmission))
+  submissionService.submit(SubmitRequest.toProto(commandsSubmission))
 )
 ```
 
