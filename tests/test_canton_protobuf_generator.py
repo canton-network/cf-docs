@@ -254,12 +254,10 @@ class CantonProtobufGeneratorTests(unittest.TestCase):
             encoding="utf-8",
         )
 
-        ledger_output = docs_root / "appdev" / "reference" / "protobuf-history"
-        ledger_legacy_output = docs_root / "reference" / "protobuf"
+        ledger_output = docs_root / "reference" / "protobuf"
         admin_output = docs_root / "reference" / "admin-api" / "protobuf"
         self.write_mdx(ledger_output, "overview.mdx", "Ledger API protobuf")
-        self.write_mdx(ledger_legacy_output, "overview.mdx", "Ledger API protobuf")
-        self.write_mdx(ledger_legacy_output, "packages/com-daml-ledger-api-v2.mdx", "com.daml.ledger.api.v2")
+        self.write_mdx(ledger_output, "packages/com-daml-ledger-api-v2.mdx", "com.daml.ledger.api.v2")
         self.write_mdx(admin_output, "overview.mdx", "Admin API protobuf")
         self.write_mdx(admin_output, "packages/com-digitalasset-canton-admin-health-v30.mdx", "com.digitalasset.canton.admin.health.v30")
 
@@ -267,7 +265,6 @@ class CantonProtobufGeneratorTests(unittest.TestCase):
             docs_json_path=docs_json,
             dropdown_label="API Reference",
             ledger_output_dir=ledger_output,
-            ledger_legacy_output_dir=ledger_legacy_output,
             admin_output_dir=admin_output,
         )
 
@@ -300,20 +297,11 @@ class CantonProtobufGeneratorTests(unittest.TestCase):
         docs_root.mkdir(parents=True)
         docs_json.write_text('{"redirects": []}\n', encoding="utf-8")
 
-        generator.ensure_ledger_protobuf_redirects(
-            docs_json_path=docs_json,
-            output_dirs=(
-                docs_root / "reference" / "protobuf",
-                docs_root / "appdev" / "reference" / "protobuf-history",
-            ),
-        )
-        generator.ensure_ledger_protobuf_redirects(
-            docs_json_path=docs_json,
-            output_dirs=(
-                docs_root / "reference" / "protobuf",
-                docs_root / "appdev" / "reference" / "protobuf-history",
-            ),
-        )
+        for _ in range(2):
+            generator.ensure_ledger_protobuf_redirects(
+                docs_json_path=docs_json,
+                output_dir=docs_root / "reference" / "protobuf",
+            )
 
         self.assertEqual(
             json.loads(docs_json.read_text(encoding="utf-8"))["redirects"],
@@ -328,11 +316,61 @@ class CantonProtobufGeneratorTests(unittest.TestCase):
                 },
                 {
                     "source": "/appdev/reference/protobuf-history",
-                    "destination": "/appdev/reference/protobuf-history/overview",
+                    "destination": "/reference/protobuf/overview",
                 },
                 {
                     "source": "/appdev/reference/protobuf-history/index",
-                    "destination": "/appdev/reference/protobuf-history/overview",
+                    "destination": "/reference/protobuf/overview",
+                },
+                {
+                    "source": "/appdev/reference/protobuf-history/:slug*",
+                    "destination": "/reference/protobuf/:slug*",
+                },
+            ],
+        )
+
+    def test_ledger_protobuf_redirects_retarget_retired_render_root(self) -> None:
+        docs_root = self.root / "docs-main"
+        docs_json = docs_root / "docs.json"
+        docs_root.mkdir(parents=True)
+        docs_json.write_text(
+            json.dumps(
+                {
+                    "redirects": [
+                        {
+                            "source": "/appdev/reference/protobuf-history",
+                            "destination": "/appdev/reference/protobuf-history/overview",
+                        },
+                        {
+                            "source": "/appdev/reference/protobuf-history/index",
+                            "destination": "/appdev/reference/protobuf-history/overview",
+                        },
+                    ]
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        generator.ensure_ledger_protobuf_redirects(
+            docs_json_path=docs_json,
+            output_dir=docs_root / "reference" / "protobuf",
+        )
+
+        redirects = json.loads(docs_json.read_text(encoding="utf-8"))["redirects"]
+        self.assertFalse(
+            any(redirect["destination"].startswith("/appdev/") for redirect in redirects)
+        )
+        self.assertEqual(
+            redirects[:2],
+            [
+                {
+                    "source": "/appdev/reference/protobuf-history",
+                    "destination": "/reference/protobuf/overview",
+                },
+                {
+                    "source": "/appdev/reference/protobuf-history/index",
+                    "destination": "/reference/protobuf/overview",
                 },
             ],
         )
