@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Add and edit external snippet manifest entries from a local source checkout."""
+"""Add, edit, and delete external snippet manifest entries from a local source checkout."""
 
 from __future__ import annotations
 
@@ -52,7 +52,7 @@ class SnippetAuthoringError(Exception):
 class FileChange:
     heading: str
     path: Path
-    content: bytes
+    content: bytes | None  # None deletes the file
 
 
 def manifest_path(repo: SnippetRepo) -> Path:
@@ -309,6 +309,23 @@ def replace_manifest_entry(text: str, entry: dict[str, Any]) -> str:
     return text[:element.start] + rendered + text[element.end:]
 
 
+def remove_manifest_entry(text: str, snippet_name: str) -> str:
+    """Remove the named entry and one separator; every other byte is preserved."""
+    header_end, close, elements = manifest_elements(text)
+    indexes = [i for i, e in enumerate(elements) if e.value.get("snippetName") == snippet_name]
+    if len(indexes) != 1:
+        raise SnippetAuthoringError(
+            f"Expected exactly one manifest entry named {snippet_name!r}; found {len(indexes)}"
+        )
+    index = indexes[0]
+    element = elements[index]
+    if index + 1 < len(elements):
+        return text[:element.start] + text[elements[index + 1].start:]
+    if index > 0:
+        return text[:elements[index - 1].end] + text[element.end:]
+    return text[:header_end] + text[close:]
+
+
 def atomic_write(path: Path, content: bytes) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     mode = stat.S_IMODE(path.stat().st_mode) if path.exists() else 0o644
@@ -330,7 +347,10 @@ def commit_changes(changes: list[FileChange]) -> None:
     }
     try:
         for change in changes:
-            atomic_write(change.path, change.content)
+            if change.content is None:
+                change.path.unlink(missing_ok=True)
+            else:
+                atomic_write(change.path, change.content)
     except BaseException:
         for path, original in originals.items():
             if original is None:
@@ -343,7 +363,7 @@ def commit_changes(changes: list[FileChange]) -> None:
 NO_NEWLINE = "\\ No newline at end of file\n"
 
 
-def render_unified_diff(path: Path, proposed: bytes) -> str:
+def render_unified_diff(path: Path, proposed: bytes | None) -> str:
     original = path.read_bytes() if path.exists() else b""
     try:
         label = path.relative_to(CF_DOCS_ROOT).as_posix()
@@ -351,9 +371,9 @@ def render_unified_diff(path: Path, proposed: bytes) -> str:
         label = str(path)
     diff = difflib.unified_diff(
         original.decode("utf-8").splitlines(keepends=True),
-        proposed.decode("utf-8").splitlines(keepends=True),
+        (proposed or b"").decode("utf-8").splitlines(keepends=True),
         fromfile=f"a/{label}" if path.exists() else "/dev/null",
-        tofile=f"b/{label}",
+        tofile=f"b/{label}" if proposed is not None else "/dev/null",
     )
     rendered: list[str] = []
     for line in diff:
@@ -522,8 +542,58 @@ def edit(args: argparse.Namespace, repo: SnippetRepo) -> int:
     return 0
 
 
+def find_references(generated_file: Path) -> list[str]:
+    """Return ``path:line`` for every docs-main line that still points at ``generated_file``."""
+    docs_root = CF_DOCS_ROOT / "docs-main"
+    target = generated_file.relative_to(docs_root).as_posix().removesuffix(".mdx")
+    pattern = re.compile(rf"{re.escape(target)}(?:\.mdx)?(?=$|['\"\s;)\]}}>])")
+    searchable = {".js", ".jsx", ".json", ".md", ".mdx", ".ts", ".tsx"}
+    references: list[str] = []
+    for path in sorted(docs_root.rglob("*")):
+        if not path.is_file() or path == generated_file or path.suffix.lower() not in searchable:
+            continue
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+            if pattern.search(line):
+                references.append(f"{path.relative_to(CF_DOCS_ROOT).as_posix()}:{number}")
+    return references
+
+
+def delete(args: argparse.Namespace, repo: SnippetRepo) -> int:
+    manifest_file = manifest_path(repo)
+    manifest_text = manifest_file.read_text(encoding="utf-8") if manifest_file.exists() else ""
+    manifest = load_manifest(manifest_file)
+    find_manifest_entry(manifest, manifest_file, args.snippet_name)
+    generated_file = output_path(repo, args.snippet_name)
+    references = find_references(generated_file)
+    if references:
+        rendered = "\n  ".join(references)
+        raise SnippetAuthoringError(
+            f"Cannot delete {args.snippet_name}; remove these page references first:\n  {rendered}"
+        )
+
+    changes = [
+        FileChange(
+            "Manifest diff",
+            manifest_file,
+            remove_manifest_entry(manifest_text, args.snippet_name).encode("utf-8"),
+        )
+    ]
+    if generated_file.exists():
+        changes.append(FileChange("Generated MDX diff", generated_file, None))
+    if args.dry_run:
+        print_change_preview(action="delete", snippet_name=args.snippet_name, changes=changes)
+        return 0
+    commit_changes(changes)
+
+    print(f"Deleted {args.snippet_name}")
+    for change in changes:
+        verb = "Removed" if change.content is None else "Wrote"
+        print(f"{verb} {change.path.relative_to(CF_DOCS_ROOT)}")
+    return 0
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Add or edit cf-docs external snippets")
+    parser = argparse.ArgumentParser(description="Add, edit, or delete cf-docs external snippets")
     subparsers = parser.add_subparsers(dest="command", required=True)
     add_parser = subparsers.add_parser("add", help="Add and render one snippet from a local checkout")
     add_parser.add_argument(
@@ -578,6 +648,19 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--dry-run", action="store_true",
         help="Validate, print manifest and MDX diffs, write nothing",
     )
+
+    delete_parser = subparsers.add_parser(
+        "delete", help="Delete one unreferenced snippet and its generated MDX",
+    )
+    delete_parser.add_argument(
+        "repo", metavar="repo", choices=sorted(REPOS),
+        help=f"Source repository key: {', '.join(sorted(REPOS))}",
+    )
+    delete_parser.add_argument("snippet_name", help="Existing stable snippetName")
+    delete_parser.add_argument(
+        "--dry-run", action="store_true",
+        help="Validate, print manifest and MDX diffs, write nothing",
+    )
     return parser.parse_args(argv)
 
 
@@ -587,7 +670,9 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "add":
             return add(args, repo)
-        return edit(args, repo)
+        if args.command == "edit":
+            return edit(args, repo)
+        return delete(args, repo)
     except (OSError, SnippetAuthoringError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
