@@ -31,3 +31,23 @@ directories, the file stem, and the marker.
 Uncommitted edits in the checkout are extracted as-is, so you can add markers
 to a source file and preview the snippet before the upstream change lands.
 Source provenance is not recorded yet.
+
+## Edit
+
+Snippets do not update themselves. When you change a snippet's source, re-render
+it from your checkout:
+
+```bash
+npm run snippets:edit -- splice splice-literal-full-apps-example --source-dir ../splice
+```
+
+To find the snippets that use a source file, search the repository manifest:
+
+```bash
+grep -n '"sourceFilepath": "apps/example.yaml"' config/snippet-config/splice-snippet-list-remote.json
+```
+
+Add `--marker NAME` or `--full-file` to change what is extracted, or
+`--language` to change the code fence. The snippet name and page imports never
+change. Edit writes the manifest only when the entry changes, and the MDX only
+when its content changes; `--dry-run` previews both.

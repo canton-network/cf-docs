@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import shutil
 from pathlib import Path
 
@@ -263,3 +264,161 @@ def test_insert_preserves_real_canton_manifest_bytes() -> None:
     assert json.loads(new)["snippets"][-1] == entry
     rendered = json.dumps(entry, indent=2, ensure_ascii=False).replace("\n", "\n    ")
     assert new.replace(",\n    " + rendered, "", 1) == text
+
+
+def edit_args(source_dir: Path, name: str, *extra: str) -> list[str]:
+    return ["edit", "splice", name, "--source-dir", str(source_dir), *extra]
+
+
+def entry_span(text: str, name: str) -> tuple[int, int]:
+    _, _, elements = author.manifest_elements(text)
+    element = next(e for e in elements if e.value["snippetName"] == name)
+    return element.start, element.end
+
+
+def test_edit_rerenders_changed_source_without_touching_the_manifest(
+    authoring_fixture: tuple[Path, Path, Path], capsys: pytest.CaptureFixture[str]
+) -> None:
+    root, manifest, source_dir = authoring_fixture
+    source = source_dir / "aaa.py"
+    source.write_text("x = 1\n", encoding="utf-8")
+    name = "splice-literal-full-aaa"
+    assert author.main(edit_args(source_dir, name)) == 0
+    assert output_for(root, name).read_text(encoding="utf-8") == "```python\nx = 1\n```"
+
+    source.write_text("x = 2\n", encoding="utf-8")
+    assert author.main(edit_args(source_dir, name)) == 0
+
+    assert output_for(root, name).read_text(encoding="utf-8") == "```python\nx = 2\n```"
+    assert manifest.read_text(encoding="utf-8") == MANIFEST_TEXT
+    assert "its import path is unchanged" in capsys.readouterr().out
+
+
+def test_edit_reports_an_up_to_date_snippet_and_writes_nothing(
+    authoring_fixture: tuple[Path, Path, Path], capsys: pytest.CaptureFixture[str]
+) -> None:
+    root, manifest, source_dir = authoring_fixture
+    (source_dir / "aaa.py").write_text("x = 1\n", encoding="utf-8")
+    name = "splice-literal-full-aaa"
+    assert author.main(edit_args(source_dir, name)) == 0
+    output = output_for(root, name)
+    stamp = output.stat().st_mtime_ns
+    capsys.readouterr()
+
+    assert author.main(edit_args(source_dir, name)) == 0
+
+    assert output.stat().st_mtime_ns == stamp
+    assert manifest.read_text(encoding="utf-8") == MANIFEST_TEXT
+    assert "already up to date" in capsys.readouterr().out
+
+
+def test_edit_marker_keeps_the_name_and_preserves_other_manifest_bytes(
+    authoring_fixture: tuple[Path, Path, Path]
+) -> None:
+    root, manifest, source_dir = authoring_fixture
+    (source_dir / "zzz.py").write_text("a\n# DEMO_START\nb = 1\n# DEMO_END\n", encoding="utf-8")
+    name = "splice-literal-full-zzz"
+
+    assert author.main(edit_args(source_dir, name, "--marker", "DEMO")) == 0
+
+    text = manifest.read_text(encoding="utf-8")
+    entry = next(s for s in json.loads(text)["snippets"] if s["snippetName"] == name)
+    assert entry["location"] == {"type": "stringMarker", "start": "DEMO_START", "end": "DEMO_END"}
+    start, end = entry_span(text, name)
+    old_start, old_end = entry_span(MANIFEST_TEXT, name)
+    assert text[:start] == MANIFEST_TEXT[:old_start]
+    assert text[end:] == MANIFEST_TEXT[old_end:]
+    assert output_for(root, name).read_text(encoding="utf-8") == "```python\nb = 1\n```"
+
+
+def test_edit_full_file_and_language_change_the_entry(authoring_fixture: tuple[Path, Path, Path]) -> None:
+    root, manifest, source_dir = authoring_fixture
+    (source_dir / "zzz.py").write_text("# DEMO_START\nb = 1\n# DEMO_END\n", encoding="utf-8")
+    name = "splice-literal-full-zzz"
+    assert author.main(edit_args(source_dir, name, "--marker", "DEMO")) == 0
+
+    assert author.main(edit_args(source_dir, name, "--full-file", "--language", "text")) == 0
+
+    entry = next(
+        s for s in json.loads(manifest.read_text(encoding="utf-8"))["snippets"]
+        if s["snippetName"] == name
+    )
+    assert entry["location"] == {"type": "fullFile"}
+    assert entry["options"] == {"language": "text"}
+    assert output_for(root, name).read_text(encoding="utf-8").startswith("```text\n# DEMO_START")
+
+
+def test_edit_refuses_marker_and_full_file_together(authoring_fixture: tuple[Path, Path, Path]) -> None:
+    _, _, source_dir = authoring_fixture
+    with pytest.raises(SystemExit):
+        author.main(edit_args(source_dir, "splice-literal-full-aaa", "--marker", "X", "--full-file"))
+
+
+@pytest.mark.parametrize(
+    ("name", "extra", "message"),
+    [
+        ("splice-literal-full-missing", (), "Expected exactly one snippet"),
+        ("splice-literal-full-aaa", ("--marker", "ABSENT"), "Snippet extraction failed"),
+        ("splice-literal-full-zzz", (), "Snippet source file does not exist"),
+    ],
+)
+def test_edit_refusals_write_nothing(
+    authoring_fixture: tuple[Path, Path, Path],
+    capsys: pytest.CaptureFixture[str],
+    name: str,
+    extra: tuple[str, ...],
+    message: str,
+) -> None:
+    root, manifest, source_dir = authoring_fixture
+    (source_dir / "aaa.py").write_text("x = 1\n", encoding="utf-8")
+
+    assert author.main(edit_args(source_dir, name, *extra)) == 1
+
+    assert manifest.read_text(encoding="utf-8") == MANIFEST_TEXT
+    assert not (root / "docs-main").exists()
+    assert message in capsys.readouterr().err
+
+
+def test_edit_refuses_a_selector_another_snippet_uses(
+    authoring_fixture: tuple[Path, Path, Path], capsys: pytest.CaptureFixture[str]
+) -> None:
+    _, manifest, source_dir = authoring_fixture
+    (source_dir / "aaa.py").write_text("# DEMO_START\nx\n# DEMO_END\n", encoding="utf-8")
+    assert author.main(add_args(source_dir, "aaa.py", "--marker", "DEMO")) == 0
+    before = manifest.read_bytes()
+
+    assert author.main(edit_args(source_dir, "splice-literal-full-aaa", "--marker", "DEMO")) == 1
+
+    assert manifest.read_bytes() == before
+    assert "already uses this source and selector" in capsys.readouterr().err
+
+
+def test_edit_dry_run_prints_diffs_and_writes_nothing(
+    authoring_fixture: tuple[Path, Path, Path], capsys: pytest.CaptureFixture[str]
+) -> None:
+    root, manifest, source_dir = authoring_fixture
+    (source_dir / "aaa.py").write_text("x = 1\n", encoding="utf-8")
+
+    assert author.main(edit_args(source_dir, "splice-literal-full-aaa", "--language", "text", "--dry-run")) == 0
+
+    out = capsys.readouterr().out
+    assert "Dry run: would edit splice-literal-full-aaa; no files written" in out
+    assert re.search(r'^\+\s+"language": "text"$', out, re.MULTILINE)
+    assert "+```text" in out
+    assert manifest.read_text(encoding="utf-8") == MANIFEST_TEXT
+    assert not (root / "docs-main").exists()
+
+
+def test_replace_preserves_real_canton_manifest_bytes() -> None:
+    path = Path(author.__file__).resolve().parents[1] / "config" / "snippet-config" / "canton-snippet-list-remote.json"
+    text = path.read_text(encoding="utf-8")
+    _, _, elements = author.manifest_elements(text)
+    target = elements[len(elements) // 2]
+    changed = {**target.value, "description": "probe"}
+
+    new = author.replace_manifest_entry(text, changed)
+
+    start, end = entry_span(new, target.value["snippetName"])
+    assert new[:start] == text[:target.start]
+    assert new[end:] == text[target.end:]
+    assert json.loads(new)["snippets"][len(elements) // 2] == changed
