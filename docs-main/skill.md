@@ -43,6 +43,10 @@ Reach for this skill when:
 - **Querying ledger state** via PQS or the Ledger API
 - **Troubleshooting transaction failures, party allocation issues, or synchronizer connectivity**
 - **Migrating from Ethereum/Solidity** to understand immutable contracts and explicit authorization
+- **Integrating an exchange, wallet, or custody product** using the Canton Network Token Standard (CIP-0056), the Wallet SDK, the dApp SDK, or the Scan API
+- **Operating a validator**: deploying, onboarding to the Global Synchronizer, upgrading, backing up, and recovering a node
+
+For role-based starting points (app developer, integrator, validator operator), see [Who Should Use This Documentation](https://docs.canton.network/overview/understand/who-should-read).
 
 Do not use this skill for:
 - Fully public applications where transparency is the feature
@@ -70,7 +74,7 @@ my-project/
 ### daml.yaml Essentials
 
 ```yaml
-sdk-version: 3.6.2
+sdk-version: 3.6.2       # check the current version: https://docs.canton.network/shared/version-compatibility-dashboard
 name: my-package
 version: 0.0.1
 source: daml
@@ -89,7 +93,7 @@ exposed-modules:
 | **Template** | Smart contract definition (immutable) | `template Asset with owner : Party` |
 | **Signatory** | Must authorize contract creation | `signatory owner` |
 | **Observer** | Can see contract, cannot act | `observer bank` |
-| **Controller** | Can exercise choices | `controller owner can` |
+| **Controller** | Can exercise choices | `controller owner` (inside a `choice` block) |
 | **Choice** | Action on a contract | `choice Transfer : ContractId Asset` |
 | **Consuming** | Archives the contract | `consuming choice Transfer` |
 | **Non-consuming** | Contract remains active | `nonconsuming choice GetBalance` |
@@ -117,8 +121,8 @@ exposed-modules:
 | `participant.parties.enable("alice")` | Allocate new party |
 | `participant.packages.list()` | List uploaded packages |
 | `participant.dars.upload("path/to/file.dar")` | Upload DAR file |
-| `participant.topology.party_to_participant_mappings.list()` | Show party-to-participant mappings |
-| `participant.testing.acs_search.all()` | Query active contracts (debug only) |
+| `participant.topology.party_to_participant_mappings.list_from_all()` | Show party-to-participant mappings |
+| `participant.ledger_api.state.acs.of_party(alice)` | Query a party's active contracts |
 
 ### Ledger API Endpoints (JSON)
 
@@ -139,6 +143,7 @@ exposed-modules:
 | Unit testing smart contract logic | **Sandbox** | Fast, in-memory, single process |
 | Testing multi-party workflows locally | **LocalNet** | Multiple validators, real synchronizer simulation |
 | Integration testing backend services | **Sandbox or LocalNet** | Depends on party distribution needs |
+| First deployment to a shared network | **DevNet** | Shared development network (IP allowlist required); test Canton Coin from the Tap |
 | Pre-production validation | **TestNet** | Real network, persistent state |
 | Production deployment | **MainNet** | Global Synchronizer, live validators |
 
@@ -158,7 +163,7 @@ exposed-modules:
 | Automation, backend-driven actions | **Local** | Validator signs on behalf; simpler |
 | User wallets, explicit signing | **External** | User controls keys; more secure |
 | Testing | **Local** | Faster iteration |
-| Production | **External** | Better security posture |
+| Production | **Either** | Local for app and backend parties; external when the end user must hold their own keys |
 
 ### Daml Script vs. Integration Tests vs. E2E Tests
 
@@ -194,18 +199,18 @@ exposed-modules:
 
 5. **Deploy to ledger**
    - Upload DAR via Canton Console: `participant.dars.upload("path.dar")` -- this vets the packages automatically if the participant is connected to only one synchronizer
-   - For explicit control, or on a multi-synchronizer participant, vet manually: `participant.topology.vetted_packages.propose_delta(participant, adds = Seq(...))`
+   - For explicit control, or on a multi-synchronizer participant, vet manually: `participant.topology.vetted_packages.propose_delta(participant.id, adds = Seq(...))`
    - Verify with `participant.packages.list()`
 
 6. **Allocate parties**
    - Use Canton Console: `participant.parties.enable("alice")`
    - Or via Ledger API: `POST /v2/parties`
-   - Verify mapping: `participant.topology.party_to_participant_mappings.list()`
+   - Verify mapping: `participant.topology.party_to_participant_mappings.list_from_all()`
 
 7. **Submit commands**
    - Via Ledger API (gRPC or JSON)
    - Via backend service using generated Java/TypeScript bindings
-   - Include party, command ID, and ledger offset
+   - Include the acting party (`actAs`), a `commandId`, and the `userId`
 
 8. **Query and monitor**
    - Use PQS for production queries
@@ -226,7 +231,7 @@ exposed-modules:
 
 1. **Check party allocation**
    - Verify party exists: `participant.parties.list()`
-   - Verify party-to-participant mapping: `participant.topology.party_to_participant_mappings.list()`
+   - Verify party-to-participant mapping: `participant.topology.party_to_participant_mappings.list_from_all()`
    - If missing, allocate: `participant.parties.enable("party-name")`
 
 2. **Check package upload**
@@ -240,7 +245,7 @@ exposed-modules:
    - Review Daml template for authorization rules
 
 4. **Check ledger state**
-   - Query active contracts: `participant.testing.acs_search.all()`
+   - Query the party's active contracts: `participant.ledger_api.state.acs.of_party(party)`
    - Verify contract exists and is visible to party
    - Check contract state matches expectations
 
@@ -268,7 +273,7 @@ exposed-modules:
 
 - **Package vetting**: `dars.upload` vets automatically when the participant is connected to a single synchronizer. On a multi-synchronizer participant, vet explicitly per synchronizer with `topology.vetted_packages.propose_delta`.
 
-- **Multi-hosting delays**: If a party is hosted on multiple validators, all validators must confirm before the transaction commits. This introduces latency.
+- **Multi-hosting delays**: If a party is hosted on multiple validators, enough of them to meet the party's confirmation threshold must approve before the transaction commits. This adds latency.
 
 - **Daml-LF version mismatch**: Ensure your `daml.yaml` specifies a compatible Daml-LF version. Mismatches cause compilation or runtime errors.
 
@@ -281,6 +286,12 @@ exposed-modules:
 - **JSON API authentication**: The JSON API requires valid tokens. Ensure your authentication provider (Keycloak, OAuth) is configured and accessible.
 
 - **PQS lag**: PQS may lag behind the ledger. For critical operations, query the Ledger API directly.
+
+## How to Answer
+
+- Check console commands and API calls against the docs before giving them: use the MCP server's search, or the [Canton Console command reference](https://docs.canton.network/global-synchronizer/reference/canton-console-commands).
+- Cite the docs page URL in your answer.
+- If the docs don't cover something, say so and point to [Support Channels](https://docs.canton.network/shared/support-channels) or the [Support Checklist](https://docs.canton.network/shared/support-checklist) rather than improvising.
 
 ## Verification Checklist
 
@@ -309,13 +320,25 @@ Before submitting work:
 1. [Canton Network QuickStart](https://docs.canton.network/appdev/quickstart) — Run a complete full-stack app locally; the fastest path to a first working app
 2. [What is Canton Network](https://docs.canton.network/overview/understand/what-is-canton) — Overview and use cases
 3. [Core Concepts](https://docs.canton.network/overview/understand/core-concepts) — Parties, validators, synchronizers, templates
-4. [Module 3: Daml Smart Contracts](https://docs.canton.network/appdev/modules/m3-dev-environment) — Language fundamentals and contract development
+4. [Module 3: Language Fundamentals](https://docs.canton.network/appdev/modules/m3-language-fundamentals) — Daml language fundamentals and contract development
 5. [Module 4: Building Applications](https://docs.canton.network/appdev/modules/m4-building-apps-intro) — Full-stack development with SDKs and APIs
 6. [Canton Console Essential Commands](https://docs.canton.network/global-synchronizer/canton-console/essential-commands) — Node administration and debugging
 7. [Ledger API Reference](https://docs.canton.network/sdks-tools/api-reference/ledger-api) — gRPC and JSON API documentation
 8. [Testing Strategies](https://docs.canton.network/appdev/modules/m5-testing-strategies) — Unit, integration, and E2E testing approaches
 9. [Troubleshooting Guide](https://docs.canton.network/appdev/troubleshooting) — Common issues and solutions
 10. [MCP Server](https://docs.canton.network/shared/mcp-server) — Connect this agent directly to search and read these docs
+
+**Integrations (exchanges, wallets, custody):**
+- [Integrations Overview](https://docs.canton.network/integrations/overview) — Starting point for integrating with Canton Network
+- [Token Standard](https://docs.canton.network/appdev/deep-dives/token-standard) — CIP-0056 holdings, transfers, and allocations
+- [Wallet SDK](https://docs.canton.network/sdks-tools/sdks/wallet-sdk/overview) — Build wallets and custody integrations
+- [dApp SDK](https://docs.canton.network/sdks-tools/sdks/dapp-sdk/overview) — Connect dApps to CIP-0103 wallets
+- [Scan API](https://docs.canton.network/sdks-tools/api-reference/splice-scan-api) — Read Global Synchronizer state
+
+**Validator operations:**
+- [Global Synchronizer Introduction](https://docs.canton.network/global-synchronizer/understand/introduction) — What running a validator involves
+- [Onboarding Process](https://docs.canton.network/global-synchronizer/deployment/onboarding-process) — Getting a validator onto DevNet, TestNet, and MainNet
+- [Version Compatibility Dashboard](https://docs.canton.network/shared/version-compatibility-dashboard) — Current versions per network
 
 ---
 
