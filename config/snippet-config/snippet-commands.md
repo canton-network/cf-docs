@@ -51,3 +51,20 @@ Add `--marker NAME` or `--full-file` to change what is extracted, or
 `--language` to change the code fence. The snippet name and page imports never
 change. Edit writes the manifest only when the entry changes, and the MDX only
 when its content changes; `--dry-run` previews both.
+
+Before you re-render:
+
+- Check out the source revision you mean to publish. Edit renders whatever is in
+  your checkout, so an outdated checkout reverts newer content; in the
+  `--dry-run` diff that shows up as unexpected removed lines.
+- Canton snippets with a `jsonIndex` selector read generated files under
+  `docs-open/target/snippet_json_data/`. Generate them first in the Canton
+  checkout (this needs Docker):
+
+  ```bash
+  sbt "docs-open / reset" "docs-open / generateSphinxSnippets"
+  ```
+
+- Snippets with a `lines` selector extract fixed line numbers, so check the
+  diff carefully: if lines were added or removed above the range, edit renders
+  the wrong lines without an error.
