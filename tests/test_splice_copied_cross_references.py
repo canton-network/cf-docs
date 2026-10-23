@@ -74,7 +74,7 @@ EXPECTED_LINK_COUNTS = [
     ("docs-main/global-synchronizer/production-operations/scalability.mdx", "token standard", "/appdev/deep-dives/token-standard", 1),
     ("docs-main/global-synchronizer/production-operations/splice-metrics-overview.mdx", "Adding ad-hoc configuration", "/global-synchronizer/deployment/configuration", 1),
     ("docs-main/global-synchronizer/production-operations/splice-metrics-overview.mdx", "metrics reference", "/global-synchronizer/reference/metrics-reference", 1),
-    ("docs-main/global-synchronizer/production-operations/splice-metrics-overview.mdx", "validator-metrics-reference", "/global-synchronizer/reference/metrics-reference", 1),
+    ("docs-main/global-synchronizer/production-operations/splice-metrics-overview.mdx", "Validator Metrics", "/global-synchronizer/reference/metrics-reference#validator-metrics", 1),
     ("docs-main/global-synchronizer/production-operations/sv-backup.mdx", "logical synchronizer upgrades", "/global-synchronizer/production-operations/logical-synchronizer-upgrade", 1),
     ("docs-main/global-synchronizer/production-operations/sv-backup.mdx", "pruning", "/global-synchronizer/production-operations/sv-pruning", 2),
     ("docs-main/global-synchronizer/production-operations/sv-security.mdx", "above", "/global-synchronizer/production-operations/sv-security", 1),
