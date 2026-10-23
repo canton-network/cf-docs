@@ -12,7 +12,7 @@ npm run snippets:add -- splice --source-dir ../splice --source apps/example.yaml
 
 Arguments:
 
-- `repo` (positional): one of `canton`, `cn-quickstart`, `daml`, `daml-shell`, `splice`. Never inferred.
+- `repo` (positional): a registered repository key; `--help` lists them. Never inferred.
 - `--source-dir`: local checkout of that repository. Required.
 - `--source`: file path relative to the checkout.
 - `--marker NAME`: extract between `NAME_START` and `NAME_END`; omit for the whole file.
@@ -92,3 +92,20 @@ npm run snippets:move -- splice splice-literal-full-apps-example --source-dir ..
 The snippet name and page imports stay unchanged. The selector is kept unless
 you pass `--marker` or `--full-file`; the language follows the new extension
 unless you pass `--language`.
+
+## Add a repository
+
+Each source repository has one manifest,
+`config/snippet-config/<repo>-snippet-list-remote.json`, and the repository key
+is that file name's prefix. To add snippets from a repository that has none yet:
+
+```bash
+npm run snippets:add-repo -- dpm
+```
+
+Use the GitHub repository name as the key: lowercase letters and digits joined
+by single hyphens. The command creates the empty manifest; `snippets:add` then
+accepts the new key and writes its output under
+`docs-main/snippets/external/<repo>/main/`. A repository that needs a
+preparation step before extraction, as Canton does, also needs an entry in
+`REPO_PREPARATION` in `scripts/generate_external_snippets.py`.

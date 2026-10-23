@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Add, edit, move, and delete external snippet manifest entries from a local source checkout."""
+"""Add repositories, and add, edit, move, and delete external snippets from a local source checkout."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from scripts.generate_external_snippets import REPOS, SnippetRepo
+from scripts.generate_external_snippets import MANIFEST_SUFFIX, SnippetRepo, discover_repos
 
 
 CF_DOCS_ROOT = Path(__file__).resolve().parents[1]
@@ -55,8 +55,12 @@ class FileChange:
     content: bytes | None  # None deletes the file
 
 
+def config_dir() -> Path:
+    return CF_DOCS_ROOT / "config" / "snippet-config"
+
+
 def manifest_path(repo: SnippetRepo) -> Path:
-    return CF_DOCS_ROOT / "config" / "snippet-config" / repo.config_name
+    return config_dir() / repo.config_name
 
 
 def helper_path() -> Path:
@@ -600,13 +604,53 @@ def delete(args: argparse.Namespace, repo: SnippetRepo) -> int:
     return 0
 
 
+REPO_KEY = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
+EMPTY_MANIFEST = b'{\n  "snippets": []\n}\n'
+
+
+def add_repo(args: argparse.Namespace) -> int:
+    """Register a source repository by creating its empty snippet manifest."""
+    name = args.repo
+    if not REPO_KEY.fullmatch(name):
+        raise SnippetAuthoringError(
+            f"Repository key {name!r} must be lowercase letters and digits joined by "
+            "single hyphens, such as 'daml-shell'"
+        )
+    manifest_file = config_dir() / f"{name}{MANIFEST_SUFFIX}"
+    if manifest_file.exists():
+        raise SnippetAuthoringError(
+            f"Repository already exists: {manifest_file.relative_to(CF_DOCS_ROOT)}"
+        )
+    output_dir = CF_DOCS_ROOT / "docs-main" / "snippets" / "external" / name
+    if output_dir.exists():
+        raise SnippetAuthoringError(
+            f"Refusing to add {name}: {output_dir.relative_to(CF_DOCS_ROOT)} already "
+            "exists without a manifest"
+        )
+
+    changes = [FileChange("Manifest diff", manifest_file, EMPTY_MANIFEST)]
+    if args.dry_run:
+        print_change_preview(action="add repository", snippet_name=name, changes=changes)
+        return 0
+    commit_changes(changes)
+
+    print(f"Added repository {name}")
+    print(f"Manifest: {manifest_file.relative_to(CF_DOCS_ROOT)}")
+    print("\nAdd its first snippet with:")
+    print(f"npm run snippets:add -- {name} --source-dir <checkout> --source <path>")
+    return 0
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Add, edit, move, or delete cf-docs external snippets")
+    parser = argparse.ArgumentParser(
+        description="Add repositories, and add, edit, move, or delete cf-docs external snippets"
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
+    repos = sorted(discover_repos(config_dir()))
     add_parser = subparsers.add_parser("add", help="Add and render one snippet from a local checkout")
     add_parser.add_argument(
-        "repo", metavar="repo", choices=sorted(REPOS),
-        help=f"Source repository key: {', '.join(sorted(REPOS))}",
+        "repo", metavar="repo", choices=repos,
+        help=f"Source repository key: {', '.join(repos)}",
     )
     add_parser.add_argument(
         "--source-dir", type=Path, required=True,
@@ -635,8 +679,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     ):
         update_parser = subparsers.add_parser(command, help=help_text)
         update_parser.add_argument(
-            "repo", metavar="repo", choices=sorted(REPOS),
-            help=f"Source repository key: {', '.join(sorted(REPOS))}",
+            "repo", metavar="repo", choices=repos,
+            help=f"Source repository key: {', '.join(repos)}",
         )
         update_parser.add_argument("snippet_name", help="Existing stable snippetName")
         update_parser.add_argument(
@@ -667,21 +711,35 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "delete", help="Delete one unreferenced snippet and its generated MDX",
     )
     delete_parser.add_argument(
-        "repo", metavar="repo", choices=sorted(REPOS),
-        help=f"Source repository key: {', '.join(sorted(REPOS))}",
+        "repo", metavar="repo", choices=repos,
+        help=f"Source repository key: {', '.join(repos)}",
     )
     delete_parser.add_argument("snippet_name", help="Existing stable snippetName")
     delete_parser.add_argument(
         "--dry-run", action="store_true",
         help="Validate, print manifest and MDX diffs, write nothing",
     )
+
+    add_repo_parser = subparsers.add_parser(
+        "add-repo", help="Register a source repository with an empty snippet manifest",
+    )
+    add_repo_parser.add_argument(
+        "repo", metavar="repo",
+        help="New repository key, usually the GitHub repository name, such as 'daml-shell'",
+    )
+    add_repo_parser.add_argument(
+        "--dry-run", action="store_true",
+        help="Validate and print the manifest diff, write nothing",
+    )
     return parser.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    repo = REPOS[args.repo]
     try:
+        if args.command == "add-repo":
+            return add_repo(args)
+        repo = discover_repos(config_dir())[args.repo]
         if args.command == "add":
             return add(args, repo)
         if args.command in {"edit", "move"}:

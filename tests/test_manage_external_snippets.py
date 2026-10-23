@@ -195,7 +195,7 @@ def test_language_defaults_from_table_and_flag_overrides(
 
 
 def test_derive_snippet_name_shortens_long_paths_deterministically() -> None:
-    repo = author.REPOS["splice"]
+    repo = author.discover_repos(author.config_dir())["splice"]
     short = "apps/app/src/pack/examples/sv-helm/validator-values.yaml"
     assert author.derive_snippet_name(repo, short, {"type": "fullFile"}) == (
         "splice-literal-full-apps-app-src-pack-examples-sv-helm-validator-values"
@@ -627,3 +627,72 @@ def test_move_requires_a_source(authoring_fixture: tuple[Path, Path, Path]) -> N
     _, _, source_dir = authoring_fixture
     with pytest.raises(SystemExit):
         author.main(["move", "splice", "splice-literal-full-aaa", "--source-dir", str(source_dir)])
+
+
+def test_add_repo_creates_an_empty_manifest_that_add_can_use(
+    authoring_fixture: tuple[Path, Path, Path], tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root, _, _ = authoring_fixture
+    manifest = root / "config" / "snippet-config" / "dpm-snippet-list-remote.json"
+
+    assert author.main(["add-repo", "dpm"]) == 0
+
+    assert manifest.read_text(encoding="utf-8") == '{\n  "snippets": []\n}\n'
+    assert "npm run snippets:add -- dpm --source-dir" in capsys.readouterr().out
+
+    source_dir = tmp_path / "dpm"
+    source_dir.mkdir()
+    (source_dir / "hello.sh").write_text("echo hi\n", encoding="utf-8")
+    assert author.main(["add", "dpm", "--source-dir", str(source_dir), "--source", "hello.sh"]) == 0
+    entry = json.loads(manifest.read_text(encoding="utf-8"))["snippets"][0]
+    assert entry["snippetName"] == "dpm-literal-full-hello"
+    assert entry["sourceRepo"] == "dpm"
+    output = root / "docs-main" / "snippets" / "external" / "dpm" / "main" / "dpm-literal-full-hello.mdx"
+    assert output.read_text(encoding="utf-8") == "```bash\necho hi\n```"
+
+
+@pytest.mark.parametrize("name", ["Dpm", "dpm_tool", "dpm-", "dpm--tool", "dpm/tool", ""])
+def test_add_repo_rejects_malformed_keys(
+    authoring_fixture: tuple[Path, Path, Path], capsys: pytest.CaptureFixture[str], name: str
+) -> None:
+    root, _, _ = authoring_fixture
+    before = sorted(p.name for p in (root / "config" / "snippet-config").iterdir())
+
+    assert author.main(["add-repo", name]) == 1
+
+    assert sorted(p.name for p in (root / "config" / "snippet-config").iterdir()) == before
+    assert "must be lowercase letters and digits" in capsys.readouterr().err
+
+
+def test_add_repo_refuses_an_existing_repository(
+    authoring_fixture: tuple[Path, Path, Path], capsys: pytest.CaptureFixture[str]
+) -> None:
+    _, manifest, _ = authoring_fixture
+    assert author.main(["add-repo", "splice"]) == 1
+    assert manifest.read_text(encoding="utf-8") == MANIFEST_TEXT
+    assert "Repository already exists" in capsys.readouterr().err
+
+
+def test_add_repo_refuses_orphaned_output(
+    authoring_fixture: tuple[Path, Path, Path], capsys: pytest.CaptureFixture[str]
+) -> None:
+    root, _, _ = authoring_fixture
+    (root / "docs-main" / "snippets" / "external" / "dpm").mkdir(parents=True)
+
+    assert author.main(["add-repo", "dpm"]) == 1
+
+    assert not (root / "config" / "snippet-config" / "dpm-snippet-list-remote.json").exists()
+    assert "already exists without a manifest" in capsys.readouterr().err
+
+
+def test_add_repo_dry_run_writes_nothing(
+    authoring_fixture: tuple[Path, Path, Path], capsys: pytest.CaptureFixture[str]
+) -> None:
+    root, _, _ = authoring_fixture
+
+    assert author.main(["add-repo", "dpm", "--dry-run"]) == 0
+
+    out = capsys.readouterr().out
+    assert "Dry run: would add repository dpm; no files written" in out
+    assert '+  "snippets": []' in out
+    assert not (root / "config" / "snippet-config" / "dpm-snippet-list-remote.json").exists()
