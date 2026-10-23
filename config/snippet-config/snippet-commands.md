@@ -68,3 +68,14 @@ Before you re-render:
 - Snippets with a `lines` selector extract fixed line numbers, so check the
   diff carefully: if lines were added or removed above the range, edit renders
   the wrong lines without an error.
+
+## Delete
+
+Remove the snippet's imports and component usages from pages, then run:
+
+```bash
+npm run snippets:delete -- splice splice-literal-full-apps-example
+```
+
+Delete refuses while any page still references the snippet, and lists those
+references. Otherwise it removes the manifest entry and the generated MDX.

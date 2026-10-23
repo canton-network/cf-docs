@@ -422,3 +422,102 @@ def test_replace_preserves_real_canton_manifest_bytes() -> None:
     assert new[:start] == text[:target.start]
     assert new[end:] == text[target.end:]
     assert json.loads(new)["snippets"][len(elements) // 2] == changed
+
+
+def test_delete_removes_entry_and_output_and_preserves_other_bytes(
+    authoring_fixture: tuple[Path, Path, Path]
+) -> None:
+    root, manifest, source_dir = authoring_fixture
+    (source_dir / "examples").mkdir()
+    (source_dir / "examples" / "hello.py").write_text("x = 1\n", encoding="utf-8")
+    assert author.main(add_args(source_dir, "examples/hello.py")) == 0
+    name = "splice-literal-full-examples-hello"
+
+    assert author.main(["delete", "splice", name]) == 0
+
+    assert manifest.read_text(encoding="utf-8") == MANIFEST_TEXT
+    assert not output_for(root, name).exists()
+
+
+@pytest.mark.parametrize("position", ["first", "last"])
+def test_delete_handles_first_and_last_entries(
+    authoring_fixture: tuple[Path, Path, Path], position: str
+) -> None:
+    _, manifest, _ = authoring_fixture
+    removed, kept = ("aaa", "zzz") if position == "first" else ("zzz", "aaa")
+
+    assert author.main(["delete", "splice", f"splice-literal-full-{removed}"]) == 0
+
+    data = json.loads(manifest.read_text(encoding="utf-8"))
+    assert [s["snippetName"] for s in data["snippets"]] == [f"splice-literal-full-{kept}"]
+    assert data["urlSubstitutions"] == {"https://example.invalid": "replacement"}
+
+
+def test_delete_last_remaining_entry_leaves_an_empty_array(
+    authoring_fixture: tuple[Path, Path, Path]
+) -> None:
+    _, manifest, _ = authoring_fixture
+    assert author.main(["delete", "splice", "splice-literal-full-aaa"]) == 0
+    assert author.main(["delete", "splice", "splice-literal-full-zzz"]) == 0
+    assert json.loads(manifest.read_text(encoding="utf-8"))["snippets"] == []
+
+
+def test_delete_refuses_while_a_page_references_the_snippet(
+    authoring_fixture: tuple[Path, Path, Path], capsys: pytest.CaptureFixture[str]
+) -> None:
+    root, manifest, source_dir = authoring_fixture
+    (source_dir / "aaa.py").write_text("x = 1\n", encoding="utf-8")
+    name = "splice-literal-full-aaa"
+    assert author.main(edit_args(source_dir, name)) == 0
+    page = root / "docs-main" / "guide.mdx"
+    page.write_text(
+        f"import A from '/snippets/external/splice/main/{name}.mdx';\n\n<A />\n",
+        encoding="utf-8",
+    )
+    capsys.readouterr()
+
+    assert author.main(["delete", "splice", name]) == 1
+
+    assert manifest.read_text(encoding="utf-8") == MANIFEST_TEXT
+    assert output_for(root, name).exists()
+    assert "docs-main/guide.mdx:1" in capsys.readouterr().err
+
+
+def test_delete_ignores_references_to_names_sharing_a_prefix(
+    authoring_fixture: tuple[Path, Path, Path]
+) -> None:
+    root, _, _ = authoring_fixture
+    page = root / "docs-main" / "guide.mdx"
+    page.parent.mkdir(parents=True)
+    page.write_text(
+        "import A from '/snippets/external/splice/main/splice-literal-full-aaa-longer.mdx';\n",
+        encoding="utf-8",
+    )
+    assert author.main(["delete", "splice", "splice-literal-full-aaa"]) == 0
+
+
+def test_delete_dry_run_prints_diffs_and_writes_nothing(
+    authoring_fixture: tuple[Path, Path, Path], capsys: pytest.CaptureFixture[str]
+) -> None:
+    root, manifest, source_dir = authoring_fixture
+    (source_dir / "aaa.py").write_text("x = 1\n", encoding="utf-8")
+    name = "splice-literal-full-aaa"
+    assert author.main(edit_args(source_dir, name)) == 0
+    capsys.readouterr()
+
+    assert author.main(["delete", "splice", name, "--dry-run"]) == 0
+
+    out = capsys.readouterr().out
+    assert f"Dry run: would delete {name}; no files written" in out
+    assert "+++ /dev/null" in out
+    assert manifest.read_text(encoding="utf-8") == MANIFEST_TEXT
+    assert output_for(root, name).exists()
+
+
+def test_delete_unknown_name_is_refused(
+    authoring_fixture: tuple[Path, Path, Path], capsys: pytest.CaptureFixture[str]
+) -> None:
+    _, manifest, _ = authoring_fixture
+    assert author.main(["delete", "splice", "splice-literal-full-missing"]) == 1
+    assert manifest.read_text(encoding="utf-8") == MANIFEST_TEXT
+    assert "Expected exactly one snippet" in capsys.readouterr().err
