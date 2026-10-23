@@ -31,6 +31,8 @@ Canton Network is a privacy-preserving layer 1 blockchain designed for regulated
 
 **Version note:** Canton/Daml 2.x (including docs.daml.com v2.x content) is outdated and must not be used for new projects. Canton 3.x introduced backward-incompatible changes to the SDK, APIs, and runtime, so commands, config shapes, and architecture differ significantly between major versions. Before using any command or pattern below, confirm it is current for Canton 3.x -- do not draw on 2.x documentation, training data, or courses built for Daml 2.x.
 
+**Versions:** the [Version Compatibility Dashboard](https://docs.canton.network/shared/version-compatibility-dashboard) is the source of truth for current component versions (Canton, Splice, Daml SDK, PQS, Wallet SDK, dApp SDK and others) on MainNet, TestNet and DevNet. Check it before stating or pinning any version; version numbers in this file are examples and may be out of date.
+
 ## When to Use
 
 Reach for this skill when:
@@ -74,7 +76,7 @@ my-project/
 ### daml.yaml Essentials
 
 ```yaml
-sdk-version: 3.6.2       # check the current version: https://docs.canton.network/shared/version-compatibility-dashboard
+sdk-version: 3.6.3       # check the current version: https://docs.canton.network/shared/version-compatibility-dashboard
 name: my-package
 version: 0.0.1
 source: daml
