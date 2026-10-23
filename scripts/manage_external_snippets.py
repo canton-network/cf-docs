@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Add external snippet manifest entries from a local source checkout."""
+"""Add and edit external snippet manifest entries from a local source checkout."""
 
 from __future__ import annotations
 
 import argparse
+import copy
 import difflib
 import hashlib
 import json
@@ -143,6 +144,9 @@ def selector(marker: str | None) -> dict[str, Any]:
     return {"type": "stringMarker", "start": f"{marker}_START", "end": f"{marker}_END"}
 
 
+SELECTOR_TYPES = {"fullFile", "stringMarker", "lines", "jsonIndex", "regexWrap"}
+
+
 def _path_slug(value: str) -> str:
     return re.sub(r"[/.]", "-", value)
 
@@ -228,49 +232,81 @@ def render_one_snippet(*, source_dir: Path, manifest: dict[str, Any], entry: dic
 _WS = re.compile(r"\s*")
 
 
+@dataclass(frozen=True)
+class ManifestElement:
+    start: int
+    end: int
+    value: dict[str, Any]
+
+
+def manifest_elements(text: str) -> tuple[int, int, list[ManifestElement]]:
+    """Locate each entry of the ``snippets`` array in ``text``.
+
+    Returns the offset just after ``[``, the offset of the closing ``]``, and the
+    span of every entry, so callers can edit the array without reformatting it.
+    """
+    header = re.search(r'"snippets"\s*:\s*\[', text)
+    if not header:
+        raise SnippetAuthoringError('Snippet manifest has no "snippets" array')
+    decoder = json.JSONDecoder()
+    position = header.end()
+    elements: list[ManifestElement] = []
+    while True:
+        position = _WS.match(text, position).end()
+        if text.startswith("]", position):
+            return header.end(), position, elements
+        value, end = decoder.raw_decode(text, position)
+        if not isinstance(value, dict):
+            raise SnippetAuthoringError("Snippet manifest entries must be objects")
+        elements.append(ManifestElement(position, end, value))
+        position = _WS.match(text, end).end()
+        if text.startswith(",", position):
+            position += 1
+
+
+def entry_indent(text: str, start: int) -> str:
+    line_start = text.rfind("\n", 0, start) + 1
+    indent = text[line_start:start]
+    return "    " if indent.strip() else indent
+
+
+def render_manifest_entry(entry: dict[str, Any], indent: str) -> str:
+    return json.dumps(entry, indent=2, ensure_ascii=False).replace("\n", "\n" + indent)
+
+
 def insert_manifest_entry(text: str, entry: dict[str, Any]) -> str:
     """Insert ``entry`` into the ``snippets`` array of ``text`` textually.
 
     The entry goes immediately before the first existing entry whose snippetName
     sorts after it, or at the end. Every other byte of the manifest is preserved.
     """
-    header = re.search(r'"snippets"\s*:\s*\[', text)
-    if not header:
-        raise SnippetAuthoringError('Snippet manifest has no "snippets" array to insert into')
-    decoder = json.JSONDecoder()
-    position = header.end()
-    elements: list[tuple[int, int, dict[str, Any]]] = []
-    while True:
-        position = _WS.match(text, position).end()
-        if text.startswith("]", position):
-            close = position
-            break
-        value, end = decoder.raw_decode(text, position)
-        if not isinstance(value, dict):
-            raise SnippetAuthoringError("Snippet manifest entries must be objects")
-        elements.append((position, end, value))
-        position = _WS.match(text, end).end()
-        if text.startswith(",", position):
-            position += 1
-
-    if elements:
-        line_start = text.rfind("\n", 0, elements[0][0]) + 1
-        indent = text[line_start:elements[0][0]]
-        if indent.strip():
-            indent = "    "
-    else:
-        indent = "    "
-    rendered = json.dumps(entry, indent=2, ensure_ascii=False).replace("\n", "\n" + indent)
+    header_end, close, elements = manifest_elements(text)
+    indent = entry_indent(text, elements[0].start) if elements else "    "
+    rendered = render_manifest_entry(entry, indent)
 
     name = entry["snippetName"]
-    for start, _end, existing in elements:
-        if str(existing.get("snippetName", "")) > name:
-            return text[:start] + rendered + ",\n" + indent + text[start:]
+    for element in elements:
+        if str(element.value.get("snippetName", "")) > name:
+            return text[:element.start] + rendered + ",\n" + indent + text[element.start:]
     if elements:
-        last_end = elements[-1][1]
+        last_end = elements[-1].end
         return text[:last_end] + ",\n" + indent + rendered + text[last_end:]
     closing_indent = indent[:-2] if indent.endswith("  ") else ""
-    return text[:header.end()] + "\n" + indent + rendered + "\n" + closing_indent + text[close:]
+    return text[:header_end] + "\n" + indent + rendered + "\n" + closing_indent + text[close:]
+
+
+def replace_manifest_entry(text: str, entry: dict[str, Any]) -> str:
+    """Replace the entry named like ``entry`` in place; every other byte is preserved."""
+    _, _, elements = manifest_elements(text)
+    matches = [e for e in elements if e.value.get("snippetName") == entry["snippetName"]]
+    if len(matches) != 1:
+        raise SnippetAuthoringError(
+            f"Expected exactly one manifest entry named {entry['snippetName']!r}; "
+            f"found {len(matches)}"
+        )
+    element = matches[0]
+    rendered = render_manifest_entry(entry, entry_indent(text, element.start))
+    return text[:element.start] + rendered + text[element.end:]
 
 
 def atomic_write(path: Path, content: bytes) -> None:
@@ -329,8 +365,8 @@ def render_unified_diff(path: Path, proposed: bytes) -> str:
     return "".join(rendered)
 
 
-def print_change_preview(*, snippet_name: str, changes: list[FileChange]) -> None:
-    print(f"Dry run: would add {snippet_name}; no files written")
+def print_change_preview(*, action: str, snippet_name: str, changes: list[FileChange]) -> None:
+    print(f"Dry run: would {action} {snippet_name}; no files written")
     for change in changes:
         print(f"\n{change.heading}:")
         rendered = render_unified_diff(change.path, change.content)
@@ -397,7 +433,7 @@ def add(args: argparse.Namespace, repo: SnippetRepo) -> int:
         FileChange("Generated MDX diff", generated_file, generated),
     ]
     if args.dry_run:
-        print_change_preview(snippet_name=name, changes=changes)
+        print_change_preview(action="add", snippet_name=name, changes=changes)
         print_usage(repo, name)
         return 0
     commit_changes(changes)
@@ -409,8 +445,85 @@ def add(args: argparse.Namespace, repo: SnippetRepo) -> int:
     return 0
 
 
+def find_manifest_entry(
+    manifest: dict[str, Any], manifest_file: Path, snippet_name: str
+) -> dict[str, Any]:
+    matches = [entry for entry in manifest["snippets"] if entry.get("snippetName") == snippet_name]
+    if len(matches) != 1:
+        raise SnippetAuthoringError(
+            f"Expected exactly one snippet named {snippet_name!r} in "
+            f"{manifest_file.relative_to(CF_DOCS_ROOT)}; found {len(matches)}"
+        )
+    return matches[0]
+
+
+def requested_selector(args: argparse.Namespace) -> dict[str, Any] | None:
+    if args.full_file:
+        return selector(None)
+    if args.marker is not None:
+        return selector(args.marker)
+    return None
+
+
+def edit(args: argparse.Namespace, repo: SnippetRepo) -> int:
+    """Re-render one snippet from its current source, optionally changing its selector or language.
+
+    The snippet name, and therefore the page import path, never changes. Only the
+    manifest entry and the generated MDX are written, and only when they differ.
+    """
+    source_dir = validate_source_dir(args.source_dir)
+    manifest_file = manifest_path(repo)
+    manifest_text = manifest_file.read_text(encoding="utf-8") if manifest_file.exists() else ""
+    manifest = load_manifest(manifest_file)
+    current = find_manifest_entry(manifest, manifest_file, args.snippet_name)
+
+    source = normalized_source_path(str(current.get("sourceFilepath", "")))
+    validate_source_file(source_dir, source)
+    location = requested_selector(args) or current.get("location")
+    if not isinstance(location, dict) or location.get("type") not in SELECTOR_TYPES:
+        raise SnippetAuthoringError(f"Snippet has an unsupported selector: {location!r}")
+
+    entry = copy.deepcopy(current)
+    entry["location"] = location
+    options = entry.get("options") if isinstance(entry.get("options"), dict) else {}
+    entry["options"] = options
+    options["language"] = args.language or options.get("language") or infer_language(source)
+    for other in manifest["snippets"]:
+        if other is not current and same_source(other, source, location):
+            raise SnippetAuthoringError(
+                f"Another snippet already uses this source and selector: {other.get('snippetName')}"
+            )
+
+    generated = render_one_snippet(source_dir=source_dir, manifest=manifest, entry=entry)
+    generated_file = output_path(repo, args.snippet_name)
+    changes = []
+    if entry != current:
+        changes.append(
+            FileChange(
+                "Manifest diff",
+                manifest_file,
+                replace_manifest_entry(manifest_text, entry).encode("utf-8"),
+            )
+        )
+    if not generated_file.exists() or generated_file.read_bytes() != generated:
+        changes.append(FileChange("Generated MDX diff", generated_file, generated))
+
+    if not changes:
+        print(f"{args.snippet_name} is already up to date")
+        return 0
+    if args.dry_run:
+        print_change_preview(action="edit", snippet_name=args.snippet_name, changes=changes)
+        return 0
+    commit_changes(changes)
+
+    print(f"Edited {args.snippet_name}; its import path is unchanged")
+    for change in changes:
+        print(f"Wrote {change.path.relative_to(CF_DOCS_ROOT)}")
+    return 0
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Add cf-docs external snippets")
+    parser = argparse.ArgumentParser(description="Add or edit cf-docs external snippets")
     subparsers = parser.add_subparsers(dest="command", required=True)
     add_parser = subparsers.add_parser("add", help="Add and render one snippet from a local checkout")
     add_parser.add_argument(
@@ -437,6 +550,34 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--dry-run", action="store_true",
         help="Validate, print manifest and MDX diffs, write nothing",
     )
+
+    edit_parser = subparsers.add_parser(
+        "edit",
+        help="Re-render one snippet from its current source, keeping its name and import path",
+    )
+    edit_parser.add_argument(
+        "repo", metavar="repo", choices=sorted(REPOS),
+        help=f"Source repository key: {', '.join(sorted(REPOS))}",
+    )
+    edit_parser.add_argument("snippet_name", help="Existing stable snippetName")
+    edit_parser.add_argument(
+        "--source-dir", type=Path, required=True,
+        help="Local checkout of the source repository (required; never inferred)",
+    )
+    selection = edit_parser.add_mutually_exclusive_group()
+    selection.add_argument(
+        "--marker",
+        help="Switch to extracting between <NAME>_START and <NAME>_END",
+    )
+    selection.add_argument(
+        "--full-file", action="store_true",
+        help="Switch to extracting the whole file",
+    )
+    edit_parser.add_argument("--language", help="Change the code fence language")
+    edit_parser.add_argument(
+        "--dry-run", action="store_true",
+        help="Validate, print manifest and MDX diffs, write nothing",
+    )
     return parser.parse_args(argv)
 
 
@@ -444,7 +585,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     repo = REPOS[args.repo]
     try:
-        return add(args, repo)
+        if args.command == "add":
+            return add(args, repo)
+        return edit(args, repo)
     except (OSError, SnippetAuthoringError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
