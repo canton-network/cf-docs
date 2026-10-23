@@ -79,3 +79,16 @@ npm run snippets:delete -- splice splice-literal-full-apps-example
 
 Delete refuses while any page still references the snippet, and lists those
 references. Otherwise it removes the manifest entry and the generated MDX.
+
+## Move
+
+When a snippet's source file moves or is renamed, point the snippet at the new
+path:
+
+```bash
+npm run snippets:move -- splice splice-literal-full-apps-example --source-dir ../splice --source apps/renamed.yaml
+```
+
+The snippet name and page imports stay unchanged. The selector is kept unless
+you pass `--marker` or `--full-file`; the language follows the new extension
+unless you pass `--language`.

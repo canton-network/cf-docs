@@ -521,3 +521,109 @@ def test_delete_unknown_name_is_refused(
     assert author.main(["delete", "splice", "splice-literal-full-missing"]) == 1
     assert manifest.read_text(encoding="utf-8") == MANIFEST_TEXT
     assert "Expected exactly one snippet" in capsys.readouterr().err
+
+
+def move_args(source_dir: Path, name: str, source: str, *extra: str) -> list[str]:
+    return ["move", "splice", name, "--source-dir", str(source_dir), "--source", source, *extra]
+
+
+def test_move_points_the_entry_at_a_new_path_and_keeps_the_name(
+    authoring_fixture: tuple[Path, Path, Path], capsys: pytest.CaptureFixture[str]
+) -> None:
+    root, manifest, source_dir = authoring_fixture
+    (source_dir / "moved").mkdir()
+    (source_dir / "moved" / "aaa.py").write_text("x = 3\n", encoding="utf-8")
+    name = "splice-literal-full-aaa"
+
+    assert author.main(move_args(source_dir, name, "moved/aaa.py")) == 0
+
+    text = manifest.read_text(encoding="utf-8")
+    entry = next(s for s in json.loads(text)["snippets"] if s["snippetName"] == name)
+    assert entry["sourceFilepath"] == "moved/aaa.py"
+    assert entry["location"] == {"type": "fullFile"}
+    assert entry["options"] == {"language": "python"}
+    start, end = entry_span(text, name)
+    old_start, old_end = entry_span(MANIFEST_TEXT, name)
+    assert text[:start] == MANIFEST_TEXT[:old_start]
+    assert text[end:] == MANIFEST_TEXT[old_end:]
+    assert output_for(root, name).read_text(encoding="utf-8") == "```python\nx = 3\n```"
+    assert f"Moved {name}; its import path is unchanged" in capsys.readouterr().out
+
+
+def test_move_language_follows_a_new_extension_unless_given(
+    authoring_fixture: tuple[Path, Path, Path]
+) -> None:
+    _, manifest, source_dir = authoring_fixture
+    (source_dir / "aaa.yaml").write_text("a: 1\n", encoding="utf-8")
+    (source_dir / "zzz.yaml").write_text("z: 1\n", encoding="utf-8")
+
+    assert author.main(move_args(source_dir, "splice-literal-full-aaa", "aaa.yaml")) == 0
+    assert author.main(
+        move_args(source_dir, "splice-literal-full-zzz", "zzz.yaml", "--language", "text")
+    ) == 0
+
+    languages = {
+        s["snippetName"]: s["options"]["language"]
+        for s in json.loads(manifest.read_text(encoding="utf-8"))["snippets"]
+    }
+    assert languages == {"splice-literal-full-aaa": "yaml", "splice-literal-full-zzz": "text"}
+
+
+def test_move_can_change_the_selector(authoring_fixture: tuple[Path, Path, Path]) -> None:
+    root, manifest, source_dir = authoring_fixture
+    (source_dir / "new.py").write_text("# DEMO_START\nb = 1\n# DEMO_END\n", encoding="utf-8")
+    name = "splice-literal-full-aaa"
+
+    assert author.main(move_args(source_dir, name, "new.py", "--marker", "DEMO")) == 0
+
+    entry = next(
+        s for s in json.loads(manifest.read_text(encoding="utf-8"))["snippets"]
+        if s["snippetName"] == name
+    )
+    assert entry["location"] == {"type": "stringMarker", "start": "DEMO_START", "end": "DEMO_END"}
+    assert output_for(root, name).read_text(encoding="utf-8") == "```python\nb = 1\n```"
+
+
+@pytest.mark.parametrize(
+    ("source", "message"),
+    [
+        ("absent.py", "Snippet source file does not exist"),
+        ("../outside.py", "must not contain empty, '.' or '..'"),
+        ("zzz.py", "already uses this source and selector"),
+    ],
+)
+def test_move_refusals_write_nothing(
+    authoring_fixture: tuple[Path, Path, Path],
+    capsys: pytest.CaptureFixture[str],
+    source: str,
+    message: str,
+) -> None:
+    root, manifest, source_dir = authoring_fixture
+    (source_dir / "zzz.py").write_text("z = 1\n", encoding="utf-8")
+
+    assert author.main(move_args(source_dir, "splice-literal-full-aaa", source)) == 1
+
+    assert manifest.read_text(encoding="utf-8") == MANIFEST_TEXT
+    assert not (root / "docs-main").exists()
+    assert message in capsys.readouterr().err
+
+
+def test_move_dry_run_prints_diffs_and_writes_nothing(
+    authoring_fixture: tuple[Path, Path, Path], capsys: pytest.CaptureFixture[str]
+) -> None:
+    root, manifest, source_dir = authoring_fixture
+    (source_dir / "new.py").write_text("x = 1\n", encoding="utf-8")
+
+    assert author.main(move_args(source_dir, "splice-literal-full-aaa", "new.py", "--dry-run")) == 0
+
+    out = capsys.readouterr().out
+    assert "Dry run: would move splice-literal-full-aaa; no files written" in out
+    assert re.search(r'^\+\s+"sourceFilepath": "new.py",$', out, re.MULTILINE)
+    assert manifest.read_text(encoding="utf-8") == MANIFEST_TEXT
+    assert not (root / "docs-main").exists()
+
+
+def test_move_requires_a_source(authoring_fixture: tuple[Path, Path, Path]) -> None:
+    _, _, source_dir = authoring_fixture
+    with pytest.raises(SystemExit):
+        author.main(["move", "splice", "splice-literal-full-aaa", "--source-dir", str(source_dir)])

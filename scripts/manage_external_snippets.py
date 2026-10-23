@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Add, edit, and delete external snippet manifest entries from a local source checkout."""
+"""Add, edit, move, and delete external snippet manifest entries from a local source checkout."""
 
 from __future__ import annotations
 
@@ -486,28 +486,36 @@ def requested_selector(args: argparse.Namespace) -> dict[str, Any] | None:
 
 
 def edit(args: argparse.Namespace, repo: SnippetRepo) -> int:
-    """Re-render one snippet from its current source, optionally changing its selector or language.
+    """Re-render one snippet, optionally changing its source, selector, or language.
 
+    ``edit`` keeps the recorded source path; ``move`` points the entry at a new one.
     The snippet name, and therefore the page import path, never changes. Only the
     manifest entry and the generated MDX are written, and only when they differ.
     """
+    moving = args.command == "move"
     source_dir = validate_source_dir(args.source_dir)
     manifest_file = manifest_path(repo)
     manifest_text = manifest_file.read_text(encoding="utf-8") if manifest_file.exists() else ""
     manifest = load_manifest(manifest_file)
     current = find_manifest_entry(manifest, manifest_file, args.snippet_name)
 
-    source = normalized_source_path(str(current.get("sourceFilepath", "")))
+    recorded = str(current.get("sourceFilepath", ""))
+    source = normalized_source_path(args.source if moving else recorded)
     validate_source_file(source_dir, source)
     location = requested_selector(args) or current.get("location")
     if not isinstance(location, dict) or location.get("type") not in SELECTOR_TYPES:
         raise SnippetAuthoringError(f"Snippet has an unsupported selector: {location!r}")
 
     entry = copy.deepcopy(current)
+    entry["sourceFilepath"] = source
     entry["location"] = location
     options = entry.get("options") if isinstance(entry.get("options"), dict) else {}
     entry["options"] = options
-    options["language"] = args.language or options.get("language") or infer_language(source)
+    extension_changed = PurePosixPath(source).suffix != PurePosixPath(recorded).suffix
+    if args.language:
+        options["language"] = args.language
+    elif extension_changed or not options.get("language"):
+        options["language"] = infer_language(source)
     for other in manifest["snippets"]:
         if other is not current and same_source(other, source, location):
             raise SnippetAuthoringError(
@@ -532,11 +540,11 @@ def edit(args: argparse.Namespace, repo: SnippetRepo) -> int:
         print(f"{args.snippet_name} is already up to date")
         return 0
     if args.dry_run:
-        print_change_preview(action="edit", snippet_name=args.snippet_name, changes=changes)
+        print_change_preview(action=args.command, snippet_name=args.snippet_name, changes=changes)
         return 0
     commit_changes(changes)
 
-    print(f"Edited {args.snippet_name}; its import path is unchanged")
+    print(f"{'Moved' if moving else 'Edited'} {args.snippet_name}; its import path is unchanged")
     for change in changes:
         print(f"Wrote {change.path.relative_to(CF_DOCS_ROOT)}")
     return 0
@@ -593,7 +601,7 @@ def delete(args: argparse.Namespace, repo: SnippetRepo) -> int:
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Add, edit, or delete cf-docs external snippets")
+    parser = argparse.ArgumentParser(description="Add, edit, move, or delete cf-docs external snippets")
     subparsers = parser.add_subparsers(dest="command", required=True)
     add_parser = subparsers.add_parser("add", help="Add and render one snippet from a local checkout")
     add_parser.add_argument(
@@ -621,33 +629,39 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Validate, print manifest and MDX diffs, write nothing",
     )
 
-    edit_parser = subparsers.add_parser(
-        "edit",
-        help="Re-render one snippet from its current source, keeping its name and import path",
-    )
-    edit_parser.add_argument(
-        "repo", metavar="repo", choices=sorted(REPOS),
-        help=f"Source repository key: {', '.join(sorted(REPOS))}",
-    )
-    edit_parser.add_argument("snippet_name", help="Existing stable snippetName")
-    edit_parser.add_argument(
-        "--source-dir", type=Path, required=True,
-        help="Local checkout of the source repository (required; never inferred)",
-    )
-    selection = edit_parser.add_mutually_exclusive_group()
-    selection.add_argument(
-        "--marker",
-        help="Switch to extracting between <NAME>_START and <NAME>_END",
-    )
-    selection.add_argument(
-        "--full-file", action="store_true",
-        help="Switch to extracting the whole file",
-    )
-    edit_parser.add_argument("--language", help="Change the code fence language")
-    edit_parser.add_argument(
-        "--dry-run", action="store_true",
-        help="Validate, print manifest and MDX diffs, write nothing",
-    )
+    for command, help_text in (
+        ("edit", "Re-render one snippet from its current source, keeping its name and import path"),
+        ("move", "Point one snippet at a new source path, keeping its name and import path"),
+    ):
+        update_parser = subparsers.add_parser(command, help=help_text)
+        update_parser.add_argument(
+            "repo", metavar="repo", choices=sorted(REPOS),
+            help=f"Source repository key: {', '.join(sorted(REPOS))}",
+        )
+        update_parser.add_argument("snippet_name", help="Existing stable snippetName")
+        update_parser.add_argument(
+            "--source-dir", type=Path, required=True,
+            help="Local checkout of the source repository (required; never inferred)",
+        )
+        if command == "move":
+            update_parser.add_argument(
+                "--source", required=True,
+                help="New source file path relative to --source-dir",
+            )
+        selection = update_parser.add_mutually_exclusive_group()
+        selection.add_argument(
+            "--marker",
+            help="Switch to extracting between <NAME>_START and <NAME>_END",
+        )
+        selection.add_argument(
+            "--full-file", action="store_true",
+            help="Switch to extracting the whole file",
+        )
+        update_parser.add_argument("--language", help="Change the code fence language")
+        update_parser.add_argument(
+            "--dry-run", action="store_true",
+            help="Validate, print manifest and MDX diffs, write nothing",
+        )
 
     delete_parser = subparsers.add_parser(
         "delete", help="Delete one unreferenced snippet and its generated MDX",
@@ -670,7 +684,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "add":
             return add(args, repo)
-        if args.command == "edit":
+        if args.command in {"edit", "move"}:
             return edit(args, repo)
         return delete(args, repo)
     except (OSError, SnippetAuthoringError) as error:
