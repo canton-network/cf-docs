@@ -34,37 +34,43 @@ class SnippetRepo:
     needs_docker: bool = False
 
 
-REPOS: dict[str, SnippetRepo] = {
-    "cn-quickstart": SnippetRepo(
-        name="cn-quickstart",
-        config_name="cn-quickstart-snippet-list-remote.json",
-        aliases=("cn-quickstart",),
-    ),
-    "canton": SnippetRepo(
-        name="canton",
-        config_name="canton-snippet-list-remote.json",
-        aliases=("canton",),
-        prepare=(
-            'sbt "docs-open / reset" "docs-open / generateSphinxSnippets"',
-        ),
+MANIFEST_SUFFIX = "-snippet-list-remote.json"
+
+
+@dataclass(frozen=True)
+class RepoPreparation:
+    """Source-repository steps that must run before extraction."""
+
+    prepare: tuple[str, ...]
+    needs_docker: bool = False
+
+
+# The only per-repository settings that cannot be derived from a manifest file name.
+REPO_PREPARATION: dict[str, RepoPreparation] = {
+    "canton": RepoPreparation(
+        prepare=('sbt "docs-open / reset" "docs-open / generateSphinxSnippets"',),
         needs_docker=True,
     ),
-    "daml": SnippetRepo(
-        name="daml",
-        config_name="daml-snippet-list-remote.json",
-        aliases=("daml",),
-    ),
-    "daml-shell": SnippetRepo(
-        name="daml-shell",
-        config_name="daml-shell-snippet-list-remote.json",
-        aliases=("daml-shell",),
-    ),
-    "splice": SnippetRepo(
-        name="splice",
-        config_name="splice-snippet-list-remote.json",
-        aliases=("splice",),
-    ),
 }
+
+
+def discover_repos(config_dir: Path) -> dict[str, SnippetRepo]:
+    """Return one snippet repository per ``<name>-snippet-list-remote.json`` manifest."""
+    repos: dict[str, SnippetRepo] = {}
+    for path in sorted(config_dir.glob(f"*{MANIFEST_SUFFIX}")):
+        name = path.name.removesuffix(MANIFEST_SUFFIX)
+        preparation = REPO_PREPARATION.get(name, RepoPreparation(prepare=()))
+        repos[name] = SnippetRepo(
+            name=name,
+            config_name=path.name,
+            aliases=(name,),
+            prepare=preparation.prepare,
+            needs_docker=preparation.needs_docker,
+        )
+    return repos
+
+
+REPOS: dict[str, SnippetRepo] = discover_repos(CF_DOCS_ROOT / "config" / "snippet-config")
 
 
 def parse_args() -> argparse.Namespace:

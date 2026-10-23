@@ -53,7 +53,6 @@ def snippet(
 def config_layout(tmp_path: Path, snippets: list[dict], repo: str = "daml") -> Path:
     config_dir = tmp_path / "config"
     filename = f"{repo}-snippet-list-remote.json"
-    write_json(config_dir / "remote-snippet-lists.json", {"snippetLists": [filename]})
     write_json(config_dir / filename, {"snippets": snippets})
     return config_dir
 
@@ -153,10 +152,6 @@ def test_main_writes_log_and_respects_flags(tmp_path: Path, monkeypatch, capsys)
 def test_source_dir_requires_single_repo(tmp_path: Path) -> None:
     module = load_script_module()
     config_dir = tmp_path / "config"
-    write_json(
-        config_dir / "remote-snippet-lists.json",
-        {"snippetLists": ["daml-snippet-list-remote.json", "dpm-snippet-list-remote.json"]},
-    )
     write_json(config_dir / "daml-snippet-list-remote.json", {"snippets": []})
     write_json(config_dir / "dpm-snippet-list-remote.json", {"snippets": []})
 
@@ -166,3 +161,16 @@ def test_source_dir_requires_single_repo(tmp_path: Path) -> None:
         assert "Pass a repo name when using --source-dir" in str(error)
     else:
         raise AssertionError("expected SystemExit")
+
+
+def test_every_remote_manifest_is_validated(tmp_path: Path) -> None:
+    module = load_script_module()
+    config_dir = tmp_path / "config"
+    write_json(config_dir / "daml-snippet-list-remote.json", {"snippets": []})
+    write_json(config_dir / "dpm-snippet-list-remote.json", {"snippets": []})
+    write_json(config_dir / "snippet-list-local.json", {"snippets": []})
+
+    assert module.load_remote_list_files(config_dir) == [
+        "daml-snippet-list-remote.json",
+        "dpm-snippet-list-remote.json",
+    ]
