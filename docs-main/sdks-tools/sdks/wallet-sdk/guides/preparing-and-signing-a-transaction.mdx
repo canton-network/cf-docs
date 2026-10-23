@@ -3,9 +3,6 @@ title: 'Preparing and Signing a Transaction'
 description: 'The end-to-end external-party signing flow: build a command, select UTXOs, prepare, validate, visualize, sign, submit, and observe a transaction.'
 ---
 
-
-{/* COPIED_START source="splice-wallet-kernel:docs/wallet-integration-guide/src/preparing-and-signing-transactions/index.rst" hash="39205f15" */}
-
 ## High-level Signing Process
 
 The basic steps of preparing and signing a transaction using an external party are as follows:
@@ -26,11 +23,11 @@ The below performs a two-step transfer between Alice and Bob and expose their ho
 
 <Tabs>
     <Tab title="Creating a transfer">
-        ``` typescript
+        {/* include ../../examples/scripts/02-two-step-transfer/index.ts */}
+        ```typescript
         import { localNetStaticConfig, SDK } from '@canton-network/wallet-sdk'
-        import { pino } from 'pino'
         import _accept from './_accept.js'
-        import { TransferTestScriptParameters } from './types.js'
+        import type { TransferTestScriptParameters } from './types.js'
         import _reject from './_reject.js'
         import _withdraw from './_withdraw.js'
         import _expire from './_expire.js'
@@ -38,13 +35,16 @@ The below performs a two-step transfer between Alice and Bob and expose their ho
             TOKEN_NAMESPACE_CONFIG,
             TOKEN_PROVIDER_CONFIG_DEFAULT,
             AMULET_NAMESPACE_CONFIG,
+            localNetGlobalSynchronizer,
         } from '../utils/index.js'
 
-        const logger = pino({ name: 'v1-02-two-step-transfer', level: 'info' })
+        import { configureLogging } from '../utils/configure-logging.js'
+        const logger = await configureLogging()
 
         const sdk = await SDK.create({
             auth: TOKEN_PROVIDER_CONFIG_DEFAULT,
             ledgerClientUrl: localNetStaticConfig.LOCALNET_APP_USER_LEDGER_URL,
+            synchronizerId: localNetGlobalSynchronizer,
             token: TOKEN_NAMESPACE_CONFIG,
             amulet: AMULET_NAMESPACE_CONFIG,
         })
@@ -110,12 +110,16 @@ The below performs a two-step transfer between Alice and Bob and expose their ho
         await _withdraw(transferTestScriptParameters)
 
         await _expire(transferTestScriptParameters)
+
+        // Forcefully exit to prevent floating ledger retries from crashing the event loop
+        process.exit(0)
         ```
     </Tab>
     <Tab title="Accepting a transfer">
-        ``` typescript
+        {/* include ../../examples/scripts/02-two-step-transfer/_accept.ts */}
+        ```typescript
         import { localNetStaticConfig } from '@canton-network/wallet-sdk'
-        import { TransferTestScriptParameters } from './types.js'
+        import type { TransferTestScriptParameters } from './types.js'
 
         export default async (args: TransferTestScriptParameters) => {
             const { sdk, sender, receiver, senderKeys, receiverKeys, logger } = args
@@ -194,9 +198,10 @@ The below performs a two-step transfer between Alice and Bob and expose their ho
         ```
     </Tab>
     <Tab title="Rejecting a transfer">
-        ``` typescript
+        {/* include ../../examples/scripts/02-two-step-transfer/_reject.ts */}
+        ```typescript
         import { localNetStaticConfig } from '@canton-network/wallet-sdk'
-        import { TransferTestScriptParameters } from './types.js'
+        import type { TransferTestScriptParameters } from './types.js'
 
         export default async (args: TransferTestScriptParameters) => {
             const { sdk, receiver, sender, senderKeys, receiverKeys, logger } = args
@@ -258,9 +263,10 @@ The below performs a two-step transfer between Alice and Bob and expose their ho
         ```
     </Tab>
     <Tab title="Withdrawing a transfer">
-        ``` typescript
+        {/* include ../../examples/scripts/02-two-step-transfer/_withdraw.ts */}
+        ```typescript
         import { localNetStaticConfig } from '@canton-network/wallet-sdk'
-        import { TransferTestScriptParameters } from './types.js'
+        import type { TransferTestScriptParameters } from './types.js'
 
         export default async (args: TransferTestScriptParameters) => {
             const { sdk, receiver, sender, senderKeys, logger } = args
@@ -345,7 +351,8 @@ The Wallet SDK allow us to build such a command easily:
 
 <Tabs>
     <Tab title="SDK">
-        ``` typescript
+        {/* include ../../examples/snippets/create-transfer-command.ts */}
+        ```typescript
         import { SDK, localNetStaticConfig } from '@canton-network/wallet-sdk'
 
         export default async function () {
@@ -353,6 +360,7 @@ The Wallet SDK allow us to build such a command easily:
             const sdk = await SDK.create({
                 auth: global.TOKEN_PROVIDER_CONFIG_DEFAULT,
                 ledgerClientUrl: localNetStaticConfig.LOCALNET_APP_USER_LEDGER_URL,
+                synchronizerId: global.LOCALNET_GLOBAL_SYNCHRONIZER,
                 token: global.TOKEN_NAMESPACE_CONFIG,
             })
 
@@ -375,6 +383,7 @@ The Wallet SDK allow us to build such a command easily:
         ```
     </Tab>
     <Tab title="cURL">
+        {/* include ../../examples/bash/create-command.sh */}
         ```bash
         # In the examples below, replace the following with your own values: "YOUR_NODE_JSON_API", "OFFSET_FROM_1", "WALLET_ID", "YOUR_CHOICE_OF_INPUT_CIDs",
         # "SENDER_PARTY_ID", "RECEIVER_PARTY_ID"
@@ -413,28 +422,28 @@ The Wallet SDK allow us to build such a command easily:
             # 3. c) Get the TransferFactory and context from the asset admin:
         curl -X POST -H "Content-Type: application/json" https://scan.sv-1.dev.global.canton.network.sync.global/registry/transfer-instruction/v1/transfer-factory -d '{
         "choiceArguments" : {
-        "expectedAdmin" : "DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
-        "transfer" : {
+          "expectedAdmin" : "DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
+          "transfer" : {
             "sender" : "SENDER_PARTY_ID",
             "receiver" : "RECEIVER_PARTY_ID",
             "amount" : "1000.0",
             "instrumentId" : {
-            "admin" : "DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
-            "id" : "Amulet"
+              "admin" : "DSO::1220be58c29e65de40bf273be1dc2b266d43a9a002ea5b18955aeef7aac881bb471a",
+              "id" : "Amulet"
             },
             "requestedAt" : "2025-07-11T12:45:00Z",
             "executeBefore" : "2025-07-12T12:45:00Z",
             "inputHoldingCids" : [
-            "YOUR_CHOICE_OF_INPUT_CIDs"
+              "YOUR_CHOICE_OF_INPUT_CIDs"
             ],
             "meta" : { "values" : {} }
-        },
-        "extraArgs" : {
+          },
+          "extraArgs" : {
             "context": { "values" : {} },
             "meta" : { "values" : {} }
-        }
+          }
             }
-        }'
+          }'
         # Example output:
         # {
         #   "factoryId": "009f00e5bf0…", – ContractId of the transferfactory to use
@@ -442,6 +451,8 @@ The Wallet SDK allow us to build such a command easily:
         #   "choiceContext": { … }, – data to stick in the extra arguments
         #   "disclosedContracts": [ … ] – any admin-private contracts on chain needed for preparation
         # }
+
+
 
         # 4. The information obtained can be used to construct the transfer and transaction in the prepare step:
         #
@@ -473,7 +484,8 @@ In a more professional way, you would want to carefully pick which utxo's you wo
 more information on that, see the next section [UTXO Selection and Management](#utxo-selection-and-management). Alongside, you might also want to define a custom 
 expiration time for when the transaction should automatically expire.
 
-``` typescript
+{/* include ../../examples/snippets/create-transfer-command-full.ts */}
+```typescript
 import { SDK, localNetStaticConfig } from '@canton-network/wallet-sdk'
 
 export default async function () {
@@ -481,6 +493,7 @@ export default async function () {
     const sdk = await SDK.create({
         auth: global.TOKEN_PROVIDER_CONFIG_DEFAULT,
         ledgerClientUrl: localNetStaticConfig.LOCALNET_APP_USER_LEDGER_URL,
+        synchronizerId: global.LOCALNET_GLOBAL_SYNCHRONIZER,
         token: global.TOKEN_NAMESPACE_CONFIG,
     })
 
@@ -505,8 +518,8 @@ if we call `sdk.token.utxos.list({partyId, includeLocked: true})` then it will s
 ### UTXO Selection and Management
 
 If you opt to choose your own UTXOs, it's advised that you read the other documentation sections on 
-[Holding UTXO Management](https://docs.canton.network/appdev/deep-dives/token-standard#holding-utxo-management) and 
-[UTXO Model and Dust Expiry](https://docs.canton.network/overview/reference/canton-coin-tokenomics#utxo-model-and-dust-expiry)
+[Holding UTXO Management](/appdev/deep-dives/token-standard#holding-utxo-management) and 
+[UTXO Model and Dust Expiry](/overview/reference/canton-coin-tokenomics#utxo-model-and-dust-expiry)
 
 
 ## Preparing the Transaction
@@ -519,13 +532,15 @@ To prepare a transaction we need to send the commands to the ledger.
 
 <Tabs>
     <Tab title="SDK">
-        ``` typescript
+        {/* include ../../examples/snippets/prepare-transfer-transaction.ts */}
+        ```typescript
         import { SDK, localNetStaticConfig } from '@canton-network/wallet-sdk'
 
         export default async function () {
             const sdk = await SDK.create({
                 auth: global.TOKEN_PROVIDER_CONFIG_DEFAULT,
                 ledgerClientUrl: localNetStaticConfig.LOCALNET_APP_USER_LEDGER_URL,
+                synchronizerId: global.LOCALNET_GLOBAL_SYNCHRONIZER,
                 token: global.TOKEN_NAMESPACE_CONFIG,
             })
 
@@ -550,11 +565,12 @@ To prepare a transaction we need to send the commands to the ledger.
         ```
     </Tab>
     <Tab title="cURL">
+        {/* include ../../examples/bash/prepare-transaction.sh */}
         ```bash
         # In the example below, replace the values with your own
 
         # PrepareTransaction call with all the inputs gathered.
-        curl -X POST http://YOUR_NODE_JSON_API/v2/interactive-submission/prepare -d {
+         curl -X POST http://YOUR_NODE_JSON_API/v2/interactive-submission/prepare -d {
             "userId" : "USER_ID",
             "commandId" : "curl-transfer-test",
             "actAs" : ["SENDER_PARTY_ID"],
@@ -563,21 +579,21 @@ To prepare a transaction we need to send the commands to the ledger.
             "verboseHashing": false,
             "packageIdSelectionPreference" : [],
             "commands" : [ {
-            "ExerciseCommand" : {
+              "ExerciseCommand" : {
                 "templateId" : "#splice-api-token-transfer-instruction-v1:Splice.Api.Token.TransferInstructionV1:TransferFactory",
                 "contractId" : "009f00e5bf0…",
                 "choice" : "TransferFactory_Transfer",
                 "choiceArgument" : { 
-                ... ,
-                "extraArgs" : {
+                  ... ,
+                  "extraArgs" : {
                     "context": { ... },
                     ...
+                  }
                 }
-                }
-            }
+              }
             } ],
             "disclosedContracts" : [ … ]
-        }
+          }
         ```
     </Tab>
 </Tabs>
@@ -592,7 +608,8 @@ On top of visualizing the transaction, it's also important to compute the transa
 
 The hash can be computed using the Wallet SDK:
 
-``` typescript
+{/* include ../../examples/snippets/compute-transaction-hash.ts */}
+```typescript
 import { SDK, localNetStaticConfig } from '@canton-network/wallet-sdk'
 
 export default async function () {
@@ -600,6 +617,7 @@ export default async function () {
     const sdk = await SDK.create({
         auth: global.TOKEN_PROVIDER_CONFIG_DEFAULT,
         ledgerClientUrl: localNetStaticConfig.LOCALNET_APP_USER_LEDGER_URL,
+        synchronizerId: global.LOCALNET_GLOBAL_SYNCHRONIZER,
     })
 
     const transaction = global.PREPARED_TRANSACTION
@@ -632,7 +650,7 @@ for instance on the `getTransactionById` or `listHoldingTransactions` (Detailed 
 
 The Transactions will have format:
 
-``` javascript
+```typescript
 export interface Transaction {
     updateId: string // unique updateId
     offset: number // the ledger offset (local validator)
@@ -644,7 +662,7 @@ export interface Transaction {
 
 A single transaction can contain multiple events (deposits and withdrawals are considered events). In order to figure out the on chain transaction it is required to iterate over all the events. The events have the format:
 
-``` javascript
+```typescript
 export interface TokenStandardEvent {
     label: Label // used to identify the type of transaction
     lockedHoldingsChange: HoldingsChange // all the changes to locked holdings
@@ -661,6 +679,7 @@ below you can have a look at different event types and how to potentially visual
     <Tab title="Tap operation">
     Here is an example on how a "tap" event looks like (Performing tap):
 
+    {/* include ../../examples/snippets/tap-event.json */}
     ```json
     {
         "updateId": "1220a8d78d06461abd045813491f9997a1bcf2f29d4c2a9afadeb89616998201b40a",
@@ -710,7 +729,7 @@ below you can have a look at different event types and how to potentially visual
     }
     ```
 
-    The tap gives a nice and simple view some key values to look at. Using the `label` we can quickly gage what is happening:
+    The tap gives a nice and simple view some key values to look at. Using the `label` we can quickly gauge what is happening:
 
     ```json
     "label": {
@@ -761,6 +780,7 @@ below you can have a look at different event types and how to potentially visual
     <Tab title="Merge Split">
         A Merge or split is usually done by performing a transfer to yourself, by selecting several input utxos they can be consolidated into one and likewise a transfer to yourself of one big utxo can be used to split it into two. Below is the usual merge split that you would see if you use an utxo that is bigger than the transferred amount when performing a two-step transfer:
 
+        {/* include ../../examples/snippets/merge-split-event.json */}
         ```json
         {
             "updateId": "1220f5c5a8403d830babd0b25124701ec59c0540d3f75377fe48df34c89a955f7bfc",
@@ -1056,6 +1076,7 @@ below you can have a look at different event types and how to potentially visual
     <Tab title="Transfer Out">
         When Bob accepts the transfer we see the actual transfer out event. This is seen from Alice point of view
 
+        {/* include ../../examples/snippets/transfer-out-event.json */}
         ```json
         {
             "updateId": "122064654ed225797ea8161eb0730d38beff917201cecb00079666192cda648bb182",
@@ -1246,6 +1267,7 @@ below you can have a look at different event types and how to potentially visual
     <Tab title="Transfer In">
         Bob will see a transfer in once he has accepted the transferInstruction from Alice. If Bob had set up transfer pre-approval, then he would only see the below transfer:
 
+        {/* include ../../examples/snippets/transfer-in-event.json */}
         ```json
         {
             "updateId": "122064654ed225797ea8161eb0730d38beff917201cecb00079666192cda648bb182",
@@ -1422,7 +1444,8 @@ Below shows an example in the Wallet SDK and using cURL commands:
 
 <Tabs>
     <Tab title="SDK">
-        ``` typescript
+        {/* include ../../examples/snippets/sign-transaction-hash.ts */}
+        ```typescript
         import {
             SDK,
             localNetStaticConfig,
@@ -1433,6 +1456,7 @@ Below shows an example in the Wallet SDK and using cURL commands:
             const sdk = await SDK.create({
                 auth: global.TOKEN_PROVIDER_CONFIG_DEFAULT,
                 ledgerClientUrl: localNetStaticConfig.LOCALNET_APP_USER_LEDGER_URL,
+                synchronizerId: global.LOCALNET_GLOBAL_SYNCHRONIZER,
             })
             const keys = sdk.keys.generate()
 
@@ -1444,10 +1468,12 @@ Below shows an example in the Wallet SDK and using cURL commands:
         ```
     </Tab>
     <Tab title="cURL">
+        {/* include ../../examples/bash/sign-transaction-hash.sh */}
         ```bash
         # In this example the hash is signed using openssl and "PREPARE_TRANSACTION_RESPONSE.json" is the JSON output from the prepare 
         # transaction step is here. "PRIVATE_KEY_FILE" should be the private key of the namespace of the external party. For more information
-        # on the openssl commands to generate the key see here:
+        # on the openssl commands to generate the key see the External Signing Tutorial:
+        # https://docs.canton.network/appdev/deep-dives/external-signing-onboarding
 
         TRANSACTION_HASH=$(cat create_ping_prepare_response.json | jq -r .prepared_transaction_hash)
         PREPARED_TRANSACTION=$(cat create_ping_prepare_response.json | jq -r .prepared_transaction)
@@ -1462,25 +1488,30 @@ Below shows an example in the Wallet SDK and using cURL commands:
 
 The SDK exposes functionality that can be used in an offline environment to sign and validate transactions the below script shows an entire interaction between `Alice` and `Bob` with signing happening in an offline environment and online environment that performs the prepare and submit.
 
-``` typescript
+{/* include ../../examples/scripts/14-offline-signing.ts */}
+```typescript
 import {
     localNetStaticConfig,
     SDK,
     signTransactionHash,
 } from '@canton-network/wallet-sdk'
-import { pino } from 'pino'
 import {
     TOKEN_NAMESPACE_CONFIG,
     TOKEN_PROVIDER_CONFIG_DEFAULT,
     AMULET_NAMESPACE_CONFIG,
+    localNetGlobalSynchronizer,
 } from './utils/index.js'
 
-const onlineLogger = pino({ name: '14-online-localnet', level: 'info' })
-const offlineLogger = pino({ name: '14-oggline-localnet', level: 'info' })
+import { configureLogging } from './utils/configure-logging.js'
+const logger = await configureLogging()
+
+const onlineLogger = logger.child({ name: 'online' })
+const offlineLogger = logger.child({ name: 'offline' })
 
 const onlineSDK = await SDK.create({
     auth: TOKEN_PROVIDER_CONFIG_DEFAULT,
     ledgerClientUrl: localNetStaticConfig.LOCALNET_APP_USER_LEDGER_URL,
+    synchronizerId: localNetGlobalSynchronizer,
     amulet: AMULET_NAMESPACE_CONFIG,
     token: TOKEN_NAMESPACE_CONFIG,
 })
@@ -1791,9 +1822,10 @@ await onlineSDK.ledger.execute(signedAcceptTransferHash, {
 })
 
 onlineLogger.info('Accepted transfer instruction')
+
+// Forcefully exit to prevent floating ledger retries from crashing the event loop
+process.exit(0)
 ```
-
-
 
 ## Submitting the Transaction
 
@@ -1801,18 +1833,19 @@ Once the transaction is signed, it can be executed on the validator. You can obs
 
 <Tabs>
     <Tab title="SDK">
-        ``` typescript
+        {/* include ../../examples/snippets/execute-transaction.ts */}
+        ```typescript
         import {
             SDK,
             localNetStaticConfig,
             signTransactionHash,
         } from '@canton-network/wallet-sdk'
-        import { v4 } from 'uuid'
 
         export default async function () {
             const sdk = await SDK.create({
                 auth: global.TOKEN_PROVIDER_CONFIG_DEFAULT,
                 ledgerClientUrl: localNetStaticConfig.LOCALNET_APP_USER_LEDGER_URL,
+                synchronizerId: global.LOCALNET_GLOBAL_SYNCHRONIZER,
             })
             const myParty = global.EXISTING_PARTY_1
             const keys = global.EXISTING_PARTY_1_KEYS
@@ -1823,7 +1856,7 @@ Once the transaction is signed, it can be executed on the validator. You can obs
                         templateId:
                             '#canton-builtin-admin-workflow-ping:Canton.Internal.Ping:Ping',
                         createArguments: {
-                            id: v4(),
+                            id: crypto.randomUUID(),
                             initiator: myParty,
                             responder: myParty,
                         },
@@ -1854,6 +1887,7 @@ Once the transaction is signed, it can be executed on the validator. You can obs
         ```
     </Tab>
     <Tab title="cURL">
+        {/* include ../../examples/bash/execute-transaction.sh */}
         ```bash
         curl http://localhost:7575/v2/interactive-submission/execute -d {
             "preparedTransaction": "$PREPARED_TRANSACTION",
@@ -1885,4 +1919,4 @@ Once the transaction is signed, it can be executed on the validator. You can obs
 
 ## Observing the Transaction
 
-The `execute` method in the `ledger`` namespace will execute the submission and wait for a response. THs returns an \`updateId` and `completionOffset`. Additionally, you can continuously monitor holdings changes using token standard history parser.
+The `execute` method in the `ledger` namespace will execute the submission and wait for a response. This returns an `updateId` and `completionOffset`. Additionally, you can continuously monitor holdings changes using token standard history parser.

@@ -17,10 +17,11 @@ Using the wallet SDK you can quickly allocate a party using the following code s
 
 <Tabs>
     <Tab title="Quick using Splice LocalNet">
-        ``` typescript
+        {/* include ../../examples/snippets/allocate-party.ts */}
+        ```typescript
         import {
             SDK,
-            TokenProviderConfig,
+            type TokenProviderConfig,
             localNetStaticConfig,
         } from '@canton-network/wallet-sdk'
 
@@ -53,6 +54,7 @@ Using the wallet SDK you can quickly allocate a party using the following code s
             const sdk = await SDK.create({
                 auth,
                 ledgerClientUrl: localNetStaticConfig.LOCALNET_APP_USER_LEDGER_URL,
+                synchronizerId: global.LOCALNET_GLOBAL_SYNCHRONIZER,
             })
 
             const key = sdk.keys.generate()
@@ -68,25 +70,27 @@ Using the wallet SDK you can quickly allocate a party using the following code s
         ```
     </Tab>
     <Tab title="Comprehensive using Splice LocalNet">
-        ``` typescript
+        {/* include ../../examples/scripts/01-init.ts */}
+        ```typescript
         import {
             localNetStaticConfig,
             SDK,
             signTransactionHash,
         } from '@canton-network/wallet-sdk'
-        import { pino } from 'pino'
-        import { v4 } from 'uuid'
         import {
             TOKEN_NAMESPACE_CONFIG,
             TOKEN_PROVIDER_CONFIG_DEFAULT,
             AMULET_NAMESPACE_CONFIG,
+            localNetGlobalSynchronizer,
         } from './utils/index.js'
+        import { configureLogging } from './utils/configure-logging.js'
 
-        const logger = pino({ name: 'v1-01-ping-localnet', level: 'info' })
+        const logger = await configureLogging()
 
         const sdk = await SDK.create({
             auth: TOKEN_PROVIDER_CONFIG_DEFAULT,
             ledgerClientUrl: localNetStaticConfig.LOCALNET_APP_USER_LEDGER_URL,
+            synchronizerId: localNetGlobalSynchronizer,
             token: TOKEN_NAMESPACE_CONFIG,
             amulet: AMULET_NAMESPACE_CONFIG,
         })
@@ -136,7 +140,7 @@ Using the wallet SDK you can quickly allocate a party using the following code s
                     templateId:
                         '#canton-builtin-admin-workflow-ping:Canton.Internal.Ping:Ping',
                     createArguments: {
-                        id: v4(),
+                        id: crypto.randomUUID(),
                         initiator: sender.partyId,
                         responder: sender.partyId,
                     },
@@ -233,6 +237,9 @@ Using the wallet SDK you can quickly allocate a party using the following code s
         }
 
         logger.info('Tap command for Amulet for Sender submitted and UTXO received')
+
+        // Forcefully exit to prevent floating ledger retries from crashing the event loop
+        process.exit(0)
         ```
     </Tab>
 </Tabs>
@@ -241,13 +248,15 @@ Using the wallet SDK you can quickly allocate a party using the following code s
 
 The process for creating a key using standard encryption practices is similar that in other blockchains. The full details of supported cryptographic algorithms can be found [Here](/overview/learn/cryptographic-keys). By default an **Ed25519** encryption is used. There exists many libraries that can be used to generate such a key pair, you can do it simply with the WalletSDK using:
 
-``` typescript
+{/* include ../../examples/snippets/create-key-pair.ts */}
+```typescript
 import { SDK, localNetStaticConfig } from '@canton-network/wallet-sdk'
 
 export default async function () {
     const sdk = await SDK.create({
         auth: global.TOKEN_PROVIDER_CONFIG_DEFAULT,
         ledgerClientUrl: localNetStaticConfig.LOCALNET_APP_USER_LEDGER_URL,
+        synchronizerId: global.LOCALNET_GLOBAL_SYNCHRONIZER,
     })
     sdk.keys.generate()
 }
@@ -261,7 +270,8 @@ Using a mnemonic phrase allows for deterministic key generation, which simplifie
 
 A typescript example of generating an Ed25519 key pair with a BIP-0039 mnemonic phrase using the libraries bip39 and ed25519 as dependencies is shown below:
 
-``` typescript
+{/* include ../../examples/snippets/create-key-from-mnenomic-phrase.ts */}
+```typescript
 import { getPublicKeyFromPrivate } from '@canton-network/wallet-sdk'
 import naclUtil from 'tweetnacl-util'
 import * as bip39 from 'bip39'
@@ -304,13 +314,15 @@ The unique party id is defined as **\${partyHint}::\${fingerprint}**. The partyH
 
 The wallet SDK has a built in function to generate the fingerprint:
 
-``` typescript
+{/* include ../../examples/snippets/generate-fingerprint.ts */}
+```typescript
 import { SDK, localNetStaticConfig } from '@canton-network/wallet-sdk'
 
 export default async function () {
     const sdk = await SDK.create({
         auth: global.TOKEN_PROVIDER_CONFIG_DEFAULT,
         ledgerClientUrl: localNetStaticConfig.LOCALNET_APP_USER_LEDGER_URL,
+        synchronizerId: global.LOCALNET_GLOBAL_SYNCHRONIZER,
     })
 
     const keys = EXISTING_PARTY_1_KEYS
@@ -325,13 +337,14 @@ this can be used to determine the unique party id beforehand or recompute the fi
 
 When onboarding using external signing, multiple topology transactions are required to be generated and signed. This is because both the keyHolder (the party) and the node (the validator) need to agree on the hosting relationship. The three transactions that needs to be generated are:
 
-- \`PartyToParticipant\`: This transaction indicates that the party agrees to be hosted by the participant (validator).
-- \`ParticipantToParty\`: This transaction indicates that the participant (validator) agrees to host the party.
-- \`KeyToParty\`: This transaction indicates that the key (public key) is associated with the party.
+- `PartyToParticipant`: This transaction indicates that the party agrees to be hosted by the participant (validator).
+- `ParticipantToParty`: This transaction indicates that the participant (validator) agrees to host the party.
+- `KeyToParty`: This transaction indicates that the key (public key) is associated with the party.
 
 Once all the transactions are built they can be combined into a single hash and submitted as part of a single signature. The wallet SDK has helper functions to generate these transactions:
 
-``` typescript
+{/* include ../../examples/snippets/create-topology-transactions.ts */}
+```typescript
 import { SDK, localNetStaticConfig } from '@canton-network/wallet-sdk'
 
 export default async function () {
@@ -339,6 +352,7 @@ export default async function () {
     const sdk = await SDK.create({
         auth: global.TOKEN_PROVIDER_CONFIG_DEFAULT,
         ledgerClientUrl: localNetStaticConfig.LOCALNET_APP_USER_LEDGER_URL,
+        synchronizerId: global.LOCALNET_GLOBAL_SYNCHRONIZER,
     })
     const key = sdk.keys.generate()
 
@@ -357,7 +371,8 @@ export default async function () {
 
 Sometimes converting the topology transactions to human readable json might be needed, for this you can use the `.decode()` function:
 
-``` typescript
+{/* include ../../examples/snippets/decode-transaction.ts */}
+```typescript
 import { SDK, localNetStaticConfig } from '@canton-network/wallet-sdk'
 
 export default async function () {
@@ -365,6 +380,7 @@ export default async function () {
     const sdk = await SDK.create({
         auth: global.TOKEN_PROVIDER_CONFIG_DEFAULT,
         ledgerClientUrl: localNetStaticConfig.LOCALNET_APP_USER_LEDGER_URL,
+        synchronizerId: global.LOCALNET_GLOBAL_SYNCHRONIZER,
         amulet: AMULET_NAMESPACE_CONFIG,
     })
 
@@ -389,7 +405,8 @@ export default async function () {
 
 Since the topology transactions need to be submitted together the combined hash needs to be signed. The wallet SDK has a helper function to sign the combined hash:
 
-``` typescript
+{/* include ../../examples/snippets/sign-transaction-hash.ts */}
+```typescript
 import {
     SDK,
     localNetStaticConfig,
@@ -400,6 +417,7 @@ export default async function () {
     const sdk = await SDK.create({
         auth: global.TOKEN_PROVIDER_CONFIG_DEFAULT,
         ledgerClientUrl: localNetStaticConfig.LOCALNET_APP_USER_LEDGER_URL,
+        synchronizerId: global.LOCALNET_GLOBAL_SYNCHRONIZER,
     })
     const keys = sdk.keys.generate()
 
@@ -414,7 +432,8 @@ export default async function () {
 
 Once the signature is generated, the topology transactions can be submitted to the validator. The wallet SDK has a helper function to submit the transactions:
 
-``` typescript
+{/* include ../../examples/snippets/submit-signed-topology-transaction.ts */}
+```typescript
 import {
     SDK,
     localNetStaticConfig,
@@ -425,6 +444,7 @@ export default async function () {
     const sdk = await SDK.create({
         auth: global.TOKEN_PROVIDER_CONFIG_DEFAULT,
         ledgerClientUrl: localNetStaticConfig.LOCALNET_APP_USER_LEDGER_URL,
+        synchronizerId: global.LOCALNET_GLOBAL_SYNCHRONIZER,
     })
 
     //Online signing
@@ -467,21 +487,24 @@ To facilitate multi-hosting we simply need to extend `partyToParticipant` and `P
 
 The below script allows you (by using the SDK) to host a single party on both `app-user` and `app-provider` validators.
 
-``` typescript
-import pino from 'pino'
+{/* include ../../examples/scripts/03-parties.ts */}
+```typescript
 import { localNetStaticConfig, SDK } from '@canton-network/wallet-sdk'
 import {
     TOKEN_PROVIDER_CONFIG_DEFAULT,
     AMULET_NAMESPACE_CONFIG,
+    localNetGlobalSynchronizer,
 } from './utils/index.js'
 
-const logger = pino({ name: 'v1-03-parties', level: 'info' })
+import { configureLogging } from './utils/configure-logging.js'
+const logger = await configureLogging()
 
 const userId = localNetStaticConfig.LOCALNET_USER_ID
 
 const sdk = await SDK.create({
     auth: TOKEN_PROVIDER_CONFIG_DEFAULT,
     ledgerClientUrl: localNetStaticConfig.LOCALNET_APP_USER_LEDGER_URL,
+    synchronizerId: localNetGlobalSynchronizer,
     amulet: AMULET_NAMESPACE_CONFIG,
 })
 
@@ -530,7 +553,7 @@ logger.info('Preparing multi hosted party...')
 
 const participantEndpoints = [
     {
-        url: new URL('http://127.0.0.1:3975'),
+        url: localNetStaticConfig.LOCALNET_APP_PROVIDER_LEDGER_URL,
         tokenProviderConfig: TOKEN_PROVIDER_CONFIG_DEFAULT,
     },
 ]
@@ -602,4 +625,7 @@ logger.info(
     observingPingResult,
     'Successfully validated observing party allocation via Canton.Internal.Ping'
 )
+
+// Forcefully exit to prevent floating ledger retries from crashing the event loop
+process.exit(0)
 ```

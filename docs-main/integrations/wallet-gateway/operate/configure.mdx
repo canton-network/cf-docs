@@ -1,12 +1,12 @@
 ---
 title: "Configure the Wallet Gateway"
-description: "Understand the Wallet Gateway configuration file: kernel, server, and store settings."
+description: "Understand the Wallet Gateway configuration file: kernel, server, store, and hashing scheme settings."
 ---
 
 The Wallet Gateway reads a single JSON configuration file that defines who the Wallet Gateway is,
 how it serves requests, where it persists data, and which networks and identity providers it
-starts with. This guide covers the file's structure and the kernel, server, and store
-sections. For networks and authentication, see
+starts with. This guide covers the file's structure and the kernel, server, store, and hashing
+scheme sections. For networks and authentication, see
 [Networks & identity providers](/integrations/wallet-gateway/operate/networks-and-identity).
 For an exhaustive field reference, see the
 [Configuration reference](/integrations/wallet-gateway/reference/configuration-reference).
@@ -27,7 +27,7 @@ wallet-gateway --config-schema
 
 ## File structure
 
-The configuration file has five top-level sections:
+The configuration file has these top-level sections:
 
 | Section | Required | Purpose |
 | --- | --- | --- |
@@ -36,6 +36,8 @@ The configuration file has five top-level sections:
 | `store` | yes | Database connection for sessions, wallets, networks, IDPs, and transactions. |
 | `bootstrap` | yes | Networks and identity providers seeded on first run. |
 | `signingStore` | no | Secondary database for keys when using internal signing. |
+| `signingProviders` | no       | signing providers configuration.                                             |
+| `hashingScheme`    | no       | Ledger hashing scheme version used to compute transaction hashes.            |
 
 A minimal configuration for a local setup looks like this:
 
@@ -198,6 +200,20 @@ The internal signing provider stores private keys in the signing store database.
 in production systems with valuable assets. See
 [Signing providers](/integrations/wallet-gateway/operate/signing-providers).
 </Warning>
+
+## Hashing scheme
+
+The optional `hashingScheme` section selects the hashing scheme version used to compute
+transaction hashes on the ledger. It defaults to `HASHING_SCHEME_VERSION_V3` and can be
+downgraded to `HASHING_SCHEME_VERSION_V2` if a connected participant still requires it.
+
+```json
+{
+    "hashingScheme": {
+        "version": "HASHING_SCHEME_VERSION_V3"
+    }
+}
+```
 
 ## Next steps
 
