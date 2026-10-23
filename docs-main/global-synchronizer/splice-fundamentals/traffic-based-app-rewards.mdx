@@ -76,14 +76,23 @@ for a specific party and round. They differ from
 `Splice.Amulet.RewardCouponV2` coupons can be minted in two ways:
 
 1. **Automated minting** via the Splice Wallet backend that is part of the
-   validator app. This works for onboarded internal parties and for external
-   parties with an active
-   [minting delegation](/global-synchronizer/splice-fundamentals/rewards-minting).
+   validator app. For onboarded internal parties, the
+   `CollectRewardsAndMergeAmuletsTrigger` polls for eligible coupons and
+   submits the consuming transfer. For external parties with an active
+   [minting delegation](/global-synchronizer/splice-fundamentals/rewards-minting),
+   `MintingDelegationCollectRewardsTrigger` does the same on the delegate's
+   behalf. Either way this requires no action from the party or operator:
+   there is no API to list pending `RewardCouponV2` contracts or to trigger
+   collection on demand, and the only way to confirm a coupon was minted is
+   to check the resulting CC in the party's transaction history. See
+   [Wallet Automation](/overview/reference/splice-wallet-reference#wallet-automation).
 
 2. **Direct minting** by constructing calls to `AmuletRules_Transfer` that
    use the coupon as a transfer input. These calls can be made directly
    against the Ledger API, or indirectly via custom Daml code deployed to
-   the validator node.
+   the validator node. This is the only path that requires a manual,
+   application-driven step, and it is only necessary outside the standard
+   wallet backend automation above.
 
 ## How It Works
 
