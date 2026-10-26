@@ -1,11 +1,5 @@
 # Snippet commands
 
-Run from the cf-docs root with Python 3.14 and Node.js 24, or the repository's
-direnv/Nix environment. These tutorials assume a `dpm` checkout at `../dpm`;
-substitute your repository key and checkout path as needed.
-
-Commands read your current local source, including uncommitted edits, and update
-only `main` snippets under `docs-main/snippets/external/<repo>/main/`.
 Add `--dry-run` to any command to preview changes without writing.
 
 ## Register a repository
@@ -14,8 +8,7 @@ Add `--dry-run` to any command to preview changes without writing.
 npm run snippets:add-repo -- dpm
 ```
 
-This creates `config/snippet-config/dpm-snippet-list-remote.json`. Register each
-repository once, before adding its first snippet; the checkout must already exist.
+This creates `config/snippet-config/dpm-snippet-list-remote.json`. Register each repository once, before adding its first snippet; the checkout must already exist.
 
 ## Add a snippet
 
