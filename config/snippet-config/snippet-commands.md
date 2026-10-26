@@ -1,111 +1,70 @@
 # Snippet commands
 
-Run from the cf-docs root in its direnv/Nix environment. Examples use `splice`;
-replace the repository key, checkout path, and source path as needed.
-Authoring updates only `main` snippets.
+Run from the cf-docs root with Python 3.14 and Node.js 24, or the repository's
+direnv/Nix environment. These tutorials assume a `dpm` checkout at `../dpm`;
+substitute your repository key and checkout path as needed.
 
-## Add
+Commands read your current local source, including uncommitted edits, and update
+only `main` snippets under `docs-main/snippets/external/<repo>/main/`.
+Add `--dry-run` to any command to preview changes without writing.
 
-```bash
-npm run snippets:add -- splice --source-dir ../splice --source apps/example.yaml
-```
-
-Arguments:
-
-- `repo` (positional): a registered repository key; `--help` lists them. Never inferred.
-- `--source-dir`: local checkout of that repository. Required.
-- `--source`: file path relative to the checkout.
-- `--marker NAME`: extract between `NAME_START` and `NAME_END`; omit for the whole file.
-- `--language`: code fence language; defaults from the file extension (`yaml`, `yml`, `json`, `sh`, `daml`, `scala`, `py`, `ts`, `js`, `rst`, `md`, `conf`, `sql`, `toml`).
-- `--dry-run`: validate, print manifest and MDX diffs, write nothing.
-
-The command runs the extractor on the new entry before writing anything. It
-writes exactly two files: the repository manifest, with the entry inserted in
-name order, and the generated MDX under `docs-main/snippets/external/<repo>/main/`.
-Then it prints the import and component usage to paste into a page.
-
-The snippet name is derived from the source path and marker. Names over 100
-characters keep the first path segment, a six-character hash of the dropped
-directories, the file stem, and the marker.
-
-Uncommitted edits in the checkout are extracted as-is, so you can add markers
-to a source file and preview the snippet before the upstream change lands.
-Source provenance is not recorded yet.
-
-## Edit
-
-Snippets do not update themselves. When you change a snippet's source, re-render
-it from your checkout:
-
-```bash
-npm run snippets:edit -- splice splice-literal-full-apps-example --source-dir ../splice
-```
-
-To find the snippets that use a source file, search the repository manifest:
-
-```bash
-grep -n '"sourceFilepath": "apps/example.yaml"' config/snippet-config/splice-snippet-list-remote.json
-```
-
-Add `--marker NAME` or `--full-file` to change what is extracted, or
-`--language` to change the code fence. The snippet name and page imports never
-change. Edit writes the manifest only when the entry changes, and the MDX only
-when its content changes; `--dry-run` previews both.
-
-Before you re-render:
-
-- Check out the source revision you mean to publish. Edit renders whatever is in
-  your checkout, so an outdated checkout reverts newer content; in the
-  `--dry-run` diff that shows up as unexpected removed lines.
-- Canton snippets with a `jsonIndex` selector read generated files under
-  `docs-open/target/snippet_json_data/`. Generate them first in the Canton
-  checkout (this needs Docker):
-
-  ```bash
-  sbt "docs-open / reset" "docs-open / generateSphinxSnippets"
-  ```
-
-- Snippets with a `lines` selector extract fixed line numbers, so check the
-  diff carefully: if lines were added or removed above the range, edit renders
-  the wrong lines without an error.
-
-## Delete
-
-Remove the snippet's imports and component usages from pages, then run:
-
-```bash
-npm run snippets:delete -- splice splice-literal-full-apps-example
-```
-
-Delete refuses while any page still references the snippet, and lists those
-references. Otherwise it removes the manifest entry and the generated MDX.
-
-## Move
-
-When a snippet's source file moves or is renamed, point the snippet at the new
-path:
-
-```bash
-npm run snippets:move -- splice splice-literal-full-apps-example --source-dir ../splice --source apps/renamed.yaml
-```
-
-The snippet name and page imports stay unchanged. The selector is kept unless
-you pass `--marker` or `--full-file`; the language follows the new extension
-unless you pass `--language`.
-
-## Add a repository
-
-Each source repository has one manifest,
-`config/snippet-config/<repo>-snippet-list-remote.json`, and the repository key
-is that file name's prefix. To add snippets from a repository that has none yet:
+## Register a repository
 
 ```bash
 npm run snippets:add-repo -- dpm
 ```
 
-Use the GitHub repository name as the key: lowercase letters and digits joined
-by single hyphens. The command creates the empty manifest; `snippets:add` then
-accepts the new key and writes its output under
-`docs-main/snippets/external/<repo>/main/`. A repository that needs a
-preparation step before extraction, as Canton does, also needs an entry in
-`REPO_PREPARATION` in `scripts/generate_external_snippets.py`.
+This creates `config/snippet-config/dpm-snippet-list-remote.json`. Register each
+repository once, before adding its first snippet; the checkout must already exist.
+
+## Add a snippet
+
+Create a small source file, then extract it:
+
+```bash
+printf 'message: hello\n' > ../dpm/example.yaml
+npm run snippets:add -- dpm --source-dir ../dpm --source example.yaml
+```
+
+The command creates `dpm-literal-full-example.mdx` and prints the page import
+and component usage. Paste both into a documentation page to display the snippet.
+`--source` is relative to the source checkout; omitting `--marker` extracts the
+whole file. To extract a section, surround it with `# EXAMPLE_START` and
+`# EXAMPLE_END` comments and add `--marker EXAMPLE`.
+
+## Edit a snippet
+
+Change the original source, then re-render the existing snippet:
+
+```bash
+printf 'message: goodbye\n' > ../dpm/example.yaml
+npm run snippets:edit -- dpm dpm-literal-full-example --source-dir ../dpm
+```
+
+The snippet name and page imports stay unchanged. Use `--marker NAME` or
+`--full-file` to change the selection, and `--language LANG` to change the fence.
+For existing snippets, use the name recorded in the repository's manifest.
+
+## Move a snippet's source
+
+Rename the source file, then update its mapping:
+
+```bash
+mv ../dpm/example.yaml ../dpm/renamed.yaml
+npm run snippets:move -- dpm dpm-literal-full-example --source-dir ../dpm --source renamed.yaml
+```
+
+The snippet is re-rendered from the new path; its name and page imports stay
+unchanged.
+
+## Delete a snippet
+
+Remove its imports and component usages from documentation pages, then run:
+
+```bash
+npm run snippets:delete -- dpm dpm-literal-full-example
+```
+
+Deletion refuses while a page still references the snippet and lists those
+references. Otherwise it removes the manifest entry and generated MDX, leaving
+the original source file and repository manifest in place.
