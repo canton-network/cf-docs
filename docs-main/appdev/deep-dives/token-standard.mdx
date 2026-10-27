@@ -2,6 +2,7 @@
 title: "Token Standard"
 description: "The Canton Network Token Standard APIs and Daml interfaces"
 ---
+{/* Generated from /src/appdev/deep-dives/token-standard.mdx by `npm run generate:network-variable-tabs`. Edit that file, not this one. */}
 
 {/* COPIED_START source="splice:docs/src/app_dev/token_standard/index.rst" hash="f20ad600" */}
 
@@ -33,36 +34,35 @@ We recommend wallet providers to implement a UTXO management strategy that:
 
 ### Setting up MergeDelegations
 
-{/* NETWORKVARS_START source="/snippets/networkvars/appdev/deep-dives/token-standard-1.mdx" */}
 <Tabs>
 
-<Tab title="DevNet (0.9.1)">
+<Tab title="DevNet (0.9.4)">
 
 Assuming you are a wallet provider that runs a validator node for your users, you can set up `MergeDelegation` contracts for your users as follows.
 
-1.  Extract the latest version of the `splice-util-token-standard-wallet.dar` file from the release bundle (<a href="https://github.com/digital-asset/decentralized-canton-sync/releases/download/v0.9.1/0.9.1_splice-node.tar.gz">Download Bundle (DevNet 0.9.1)</a>).
+1.  Extract the latest version of the `splice-util-token-standard-wallet.dar` file from the release bundle (<a href="https://github.com/digital-asset/decentralized-canton-sync/releases/download/v0.9.4/0.9.4_splice-node.tar.gz">Download Bundle (DevNet 0.9.4)</a>).
 2.  Upload the extracted `.dar` file to your validator node.
 3.  Adjust your user onboarding procedure such that the users signs the creation of a `MergeDelegationProposal` contract (see [docs](/sdks-tools/api-reference/splice-daml/splice-util-token-standard-wallet/splice-util-token-wallet-mergedelegation#type-splice-util-token-wallet-mergedelegation-mergedelegationproposal-17546)).
 4.  Accept the `MergeDelegationProposal` contracts by exercising their `Accept` choice using your wallet provider's party.
 
 </Tab>
 
-<Tab title="TestNet (0.9.0)">
+<Tab title="TestNet (0.9.3)">
 
 Assuming you are a wallet provider that runs a validator node for your users, you can set up `MergeDelegation` contracts for your users as follows.
 
-1.  Extract the latest version of the `splice-util-token-standard-wallet.dar` file from the release bundle (<a href="https://github.com/digital-asset/decentralized-canton-sync/releases/download/v0.9.0/0.9.0_splice-node.tar.gz">Download Bundle (TestNet 0.9.0)</a>).
+1.  Extract the latest version of the `splice-util-token-standard-wallet.dar` file from the release bundle (<a href="https://github.com/digital-asset/decentralized-canton-sync/releases/download/v0.9.3/0.9.3_splice-node.tar.gz">Download Bundle (TestNet 0.9.3)</a>).
 2.  Upload the extracted `.dar` file to your validator node.
 3.  Adjust your user onboarding procedure such that the users signs the creation of a `MergeDelegationProposal` contract (see [docs](/sdks-tools/api-reference/splice-daml/splice-util-token-standard-wallet/splice-util-token-wallet-mergedelegation#type-splice-util-token-wallet-mergedelegation-mergedelegationproposal-17546)).
 4.  Accept the `MergeDelegationProposal` contracts by exercising their `Accept` choice using your wallet provider's party.
 
 </Tab>
 
-<Tab title="MainNet (0.8.4)">
+<Tab title="MainNet (0.9.3)">
 
 Assuming you are a wallet provider that runs a validator node for your users, you can set up `MergeDelegation` contracts for your users as follows.
 
-1.  Extract the latest version of the `splice-util-token-standard-wallet.dar` file from the release bundle (<a href="https://github.com/digital-asset/decentralized-canton-sync/releases/download/v0.8.4/0.8.4_splice-node.tar.gz">Download Bundle (MainNet 0.8.4)</a>).
+1.  Extract the latest version of the `splice-util-token-standard-wallet.dar` file from the release bundle (<a href="https://github.com/digital-asset/decentralized-canton-sync/releases/download/v0.9.3/0.9.3_splice-node.tar.gz">Download Bundle (MainNet 0.9.3)</a>).
 2.  Upload the extracted `.dar` file to your validator node.
 3.  Adjust your user onboarding procedure such that the users signs the creation of a `MergeDelegationProposal` contract (see [docs](/sdks-tools/api-reference/splice-daml/splice-util-token-standard-wallet/splice-util-token-wallet-mergedelegation#type-splice-util-token-wallet-mergedelegation-mergedelegationproposal-17546)).
 4.  Accept the `MergeDelegationProposal` contracts by exercising their `Accept` choice using your wallet provider's party.
@@ -70,7 +70,6 @@ Assuming you are a wallet provider that runs a validator node for your users, yo
 </Tab>
 
 </Tabs>
-{/* NETWORKVARS_END */}
 
 ### Using MergeDelegations
 
@@ -378,5 +377,22 @@ This allows implementation of [Delivery versus Payment (DVP) Transfer Workflows]
 - V1 Daml reference: [splice-api-token-allocation-request-v1](/sdks-tools/api-reference/splice-daml/splice-api-token-allocation-request-v1)
 
 {/* COPIED_END */}
+
+## Common pitfall: unresolved registry token packages
+
+Your validator must have a registry token's DAR packages installed before it can interpret contracts and transactions involving that token. This is separate from having the Wallet SDK or CLI code that talks to the registry's off-ledger API. If a transfer involving a registry-issued token fails to resolve with an error like `UNRESOLVED_PACKAGE_NAME`, check that the relevant DARs are uploaded and vetted on your validator.
+
+## Detecting whether a transfer completed in one step
+
+`TransferFactory_Transfer` and `TransferInstruction_Accept` both return a
+[`TransferInstructionResult`](/sdks-tools/api-reference/splice-daml/splice-api-token-transfer-instruction-v2/splice-api-token-transferinstructionv2#type-splice-api-token-transferinstructionv2-transferinstructionresult-97952),
+whose `output` field tells you what happened:
+
+- `TransferInstructionResult_Completed`: the transfer finished in one step. `receiverHoldingCids` lists the receiver's new holdings.
+- `TransferInstructionResult_Pending`: the transfer still needs `TransferInstruction_Accept` (or rejection or withdrawal) on the `transferInstructionCid` it returns.
+
+This is observed as the result of exercising the choice, not a prediction you can make beforehand. For non-external parties, the output comes back with the exercise result of the `submit-and-wait` call itself. For external parties, it comes back only once the prepared transaction is signed and executed. The `prepare` response is an opaque, unsigned payload and does not expose a decoded `output` field, so there is no documented way to preview the outcome before committing to it.
+
+The reason a transfer completes in one step is that `TransferFactory_Transfer`'s `actors` argument already includes every party required to authorize it, commonly because the receiver has a standing transfer preapproval, which implementations treat as pre-authorization on the receiver's behalf. This is why some inbound transfers show up as an already-credited balance while others show up as a pending offer.
 
 {/* Mintlify preview rebuild marker. */}
