@@ -4,6 +4,7 @@ description: "Compatibility matrix for Canton Network component versions"
 ---
 
 import { networkData, lastUpdatedLabel } from '/snippets/generated/version-dashboard-data.mdx'; 
+import { protocolLfVersions, protocolLfVersionsSource } from '/snippets/generated/protocol-lf-versions.mdx';
 
 
 export const componentDescriptions = {
@@ -15,11 +16,6 @@ export const componentDescriptions = {
   walletSdk: { text: 'TypeScript SDK for wallet providers and exchanges.', link: 'https://www.npmjs.com/package/@canton-network/wallet-sdk', linkText: 'npm package' },
   dappSdk: { text: 'Browser-optimized SDK for building decentralized applications.', link: 'https://www.npmjs.com/package/@canton-network/dapp-sdk', linkText: 'npm package' },
   walletGateway: { text: 'Server-side gateway for dApp/validator/wallet communication.', link: 'https://github.com/canton-network/wallet-gateway', linkText: 'GitHub' },
-}
-
-export const parameterTooltips = {
-  minProtocolVersion: 'Minimum Canton protocol version required for network participation. Implied by Splice version.',
-  migrationId: 'Network migration identifier. Used when configuring a validator for the first time.',
 }
 
 export const Tooltip = ({ children, content, link, linkText }) => {
@@ -170,29 +166,6 @@ export const NetworkCard = ({ network, data }) => {
       {advancedOpen && (
         <div className="px-3 py-3 bg-gray-950 border-t border-gray-800 space-y-3">
           <div>
-            <div className="text-[10px] text-gray-500 uppercase tracking-wide mb-1">Network Parameters</div>
-            <div className="space-y-1">
-              <div className="flex justify-between items-center text-xs">
-                <span className="text-gray-400 flex items-center">
-                  Min Protocol Version
-                  <Tooltip content={parameterTooltips.minProtocolVersion}>
-                    <InfoIcon size={10} />
-                  </Tooltip>
-                </span>
-                <span className="font-mono text-gray-300">{data.advanced.minProtocolVersion}</span>
-              </div>
-              <div className="flex justify-between items-center text-xs">
-                <span className="text-gray-400 flex items-center">
-                  Migration ID
-                  <Tooltip content={parameterTooltips.migrationId}>
-                    <InfoIcon size={10} />
-                  </Tooltip>
-                </span>
-                <span className="font-mono text-gray-300">{data.advanced.migrationId}</span>
-              </div>
-            </div>
-          </div>
-          <div>
             <div className="text-[10px] text-gray-500 uppercase tracking-wide mb-1">Release Notes</div>
             <a
               href={data.advanced.releaseUrl}
@@ -224,6 +197,43 @@ export const VersionDashboard = () => {
         <NetworkCard network="devnet" data={networkData.devnet} />
       </div>
       <div className="bg-gray-900 rounded-xl border border-gray-800 p-5">
+        <h3 className="text-base font-semibold text-white mt-0 mb-2 flex items-center gap-2">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F9FFCB" strokeWidth="2">
+            <rect x="3" y="3" width="18" height="18" rx="2" />
+            <path d="M3 9h18M9 21V9" />
+          </svg>
+          Protocol and Daml-LF Compatibility
+        </h3>
+        <p className="text-xs text-gray-500 mt-0 mb-4">
+          Daml-LF versions a participant accepts in commands submitted to a synchronizer running each protocol version, as reported by the public Canton {protocolLfVersionsSource.cantonVersion} release.
+        </p>
+        <div className="text-sm">
+          <div className="flex pb-2 text-gray-500 font-medium">
+            <span className="shrink-0" style={{ width: '10rem' }}>Protocol version</span>
+            <span>Supported Daml-LF versions</span>
+          </div>
+          {protocolLfVersions.map((row) => (
+            <div key={row.protocolVersion} className="flex py-2 border-t border-gray-800 font-mono text-xs">
+              <span className="shrink-0 text-gray-300" style={{ width: '10rem' }}>
+                {row.protocolVersion}{row.beta ? ' (beta)' : ''}{row.carriedForward ? ' †' : ''}
+              </span>
+              <span className="text-gray-400">{row.lfVersions.join(', ')}</span>
+            </div>
+          ))}
+        </div>
+        {protocolLfVersions.some((row) => row.carriedForward) && (
+          <p className="text-xs text-gray-500 mt-3 mb-0">
+            † Not supported by Canton {protocolLfVersionsSource.cantonVersion}. Listed as reported by the earlier Canton release that last supported it.
+          </p>
+        )}
+        <a
+          href="/release-notes/releases-and-versioning#canton-release-and-protocol-compatibility"
+          className="inline-flex items-center gap-1 mt-4 text-xs text-cyan-400 hover:text-cyan-300 transition-colors"
+        >
+          Protocol versions supported by each Canton release →
+        </a>
+      </div>
+      <div className="bg-gray-900 rounded-xl border border-gray-800 p-5">
         <h3 className="text-base font-semibold text-white mt-0 mb-4 flex items-center gap-2">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F9FFCB" strokeWidth="2">
             <circle cx="12" cy="12" r="3" />
@@ -231,22 +241,18 @@ export const VersionDashboard = () => {
           </svg>
           Network Endpoints
         </h3>
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-gray-500">
-              <th className="pb-2 font-medium">Network</th>
-              <th className="pb-2 font-medium">Primary Scan API</th>
-            </tr>
-          </thead>
-          <tbody>
-            {Object.entries(networkData).map(([key, data]) => (
-              <tr key={key} className="border-t border-gray-800">
-                <td className="py-2 font-medium" style={{ color: data.color }}>{data.name}</td>
-                <td className="py-2 font-mono text-xs text-gray-400 break-all">{data.endpoint}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="text-sm">
+          <div className="flex pb-2 text-gray-500 font-medium">
+            <span className="shrink-0" style={{ width: '7rem' }}>Network</span>
+            <span>Primary Scan API</span>
+          </div>
+          {Object.entries(networkData).map(([key, data]) => (
+            <div key={key} className="flex items-baseline py-2 border-t border-gray-800">
+              <span className="shrink-0 font-medium" style={{ width: '7rem', color: data.color }}>{data.name}</span>
+              <span className="min-w-0 font-mono text-xs text-gray-400 break-all">{data.endpoint}</span>
+            </div>
+          ))}
+        </div>
         <div className="mt-4 pt-4 border-t border-gray-800">
           <button
             onClick={() => setShowAllEndpoints(!showAllEndpoints)}

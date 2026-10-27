@@ -56,15 +56,15 @@ def test_audit_reports_missing_and_orphan_snippets(tmp_path: Path) -> None:
     assert result.orphans == ("/snippets/orphan.mdx",)
 
 
-def test_audit_follows_nested_and_networkvars_references(tmp_path: Path) -> None:
+def test_audit_follows_nested_and_page_template_references(tmp_path: Path) -> None:
     module = load_script_module()
     docs_main, snippets = layout(tmp_path)
     write(
-        docs_main / "page.mdx",
-        '{/* NETWORKVARS_START source="/snippets/networkvars/block.mdx" */}\n',
+        docs_main / "src" / "page.mdx",
+        'import Block from "/snippets/internal/block.mdx";\n\n<Tabs>\n<Tab title=\"All networks\">\n<Block />\n</Tab>\n</Tabs>\n',
     )
     write(
-        snippets / "networkvars" / "block.mdx",
+        snippets / "internal" / "block.mdx",
         'import Nested from "/snippets/internal/nested.mdx";\n\n<Nested />\n',
     )
     write(snippets / "internal" / "nested.mdx", "```bash\necho nested\n```\n")
@@ -78,7 +78,7 @@ def test_audit_follows_nested_and_networkvars_references(tmp_path: Path) -> None
 
     assert result.missing == ()
     assert result.orphans == ()
-    assert "/snippets/networkvars/block.mdx" in result.referenced
+    assert "/snippets/internal/block.mdx" in result.referenced
     assert "/snippets/internal/nested.mdx" in result.referenced
     assert "/snippets/generated/data.mdx" in result.referenced
 

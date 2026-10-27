@@ -7,6 +7,9 @@ boost: 3
 import DamlDocsSdksToolsDevelopmentToolsPqsL62 from "/snippets/daml-docs/sdks-tools_development-tools_pqs_L62.mdx";
 import DamlDocsSdksToolsDevelopmentToolsPqsL73 from "/snippets/daml-docs/sdks-tools_development-tools_pqs_L73.mdx";
 import DamlDocsSdksToolsDevelopmentToolsPqsL85 from "/snippets/daml-docs/sdks-tools_development-tools_pqs_L85.mdx";
+import DamlDocsSdksToolsDevelopmentToolsPqsL331 from "/snippets/daml-docs/sdks-tools_development-tools_pqs_L331.mdx";
+import DamlDocsSdksToolsDevelopmentToolsPqsL339 from "/snippets/daml-docs/sdks-tools_development-tools_pqs_L339.mdx";
+import DamlDocsSdksToolsDevelopmentToolsPqsL343 from "/snippets/daml-docs/sdks-tools_development-tools_pqs_L343.mdx";
 import DamlDocsSdksToolsDevelopmentToolsPqsL96 from "/snippets/daml-docs/sdks-tools_development-tools_pqs_L96.mdx";
 
 
@@ -63,17 +66,21 @@ PQS configuration includes:
 
 ## Install and download
 
-PQS `3.5.x` is built against the Daml SDK and Canton `3.5.x` releases (same major and minor versions), and is tested for compatibility with multiple Canton Participant Node versions (see Compatibility below).
+PQS 3.6 is built against the corresponding minor versions of the Daml SDK and Canton, and is tested for compatibility with the previous Canton minor version (see Compatibility below).
 
-### Jar (as Part of Daml SDK)
+### JAR (as Part of Daml SDK)
 
-The dpm CLI tool is used to download the `scribe.jar` file, as follows:
+The dpm CLI tool is used to download the `pqs.jar` file, as follows:
 
-> 1.  `dpm install <version>` (e.g., `dpm install 3.5.1`) to get the latest SDK release which includes `scribe.jar`.
+> 1.  `dpm install <version>` (e.g., `dpm install 3.6.0`) to get the latest SDK release which includes `pqs.jar`.
 > 2. `dpm pqs` to run commands against the jar file
 
 <Note>
-    To locate the directory where the scribe.jar file is, enter `dpm resolve | grep scribe` which will show the path to the raw jar file.
+    To locate the directory where the `pqs.jar` file is, enter `dpm resolve | grep participant-query-store` which will show the path to the raw jar file.
+</Note>
+
+<Note>
+  Prior to version 3.6, this component was named `scribe` and the JAR file was `scribe.jar`.
 </Note>
 
 
@@ -87,11 +94,11 @@ The dpm CLI tool is used to download the `scribe.jar` file, as follows:
 Alternatively, PQS can be started as a Docker container:
 
 ``` text
-docker run -it europe-docker.pkg.dev/da-images/public/docker/participant-query-store:3.5.2 --version
+docker run -it europe-docker.pkg.dev/da-images/public/docker/participant-query-store:3.6.1 --version
 Picked up JAVA_TOOL_OPTIONS: -javaagent:/open-telemetry.jar
-scribe, version: v3.5.2
-daml-sdk.version: 3.5.1
-postgres-document.schema: 041
+PQS, version: v3.6.1
+daml-sdk.version: 3.6.2
+postgres-document.schema: 043
 ```
 
 ### Helm Chart
@@ -103,7 +110,7 @@ We provide a helm chart to install PQS:
 
 ``` text
 helm upgrade --install -n pqs participant-query-store -f values.yaml \
-oci://europe-docker.pkg.dev/da-images/public/charts/participant-query-store:3.5.2
+oci://europe-docker.pkg.dev/da-images/public/charts/participant-query-store:3.6.1
 ```
 
 | Source        | Location                                                                                                                                                                 |
@@ -118,7 +125,7 @@ oci://europe-docker.pkg.dev/da-images/public/charts/participant-query-store:3.5.
 # Defines the container image registry, repository, and tag used for the PQS application
 image:
   repo: europe-docker.pkg.dev/da-images/public/docker
-  tag: "3.5.2"
+  tag: "3.6.1"
 
 # Defines a Kubernetes ServiceAccount name and its annotations when create is true
 # Otherwise, specifies an existing Kubernetes ServiceAccount by name
@@ -228,7 +235,7 @@ pqs:
     ledger:
       auth: OAuth
       bufferSize: "128"
-      cacheDir: "/tmp/scribe"
+      cacheDir: "/tmp/pqs"
       host: participant
       keepAlive:
         time: PT40S
@@ -251,7 +258,7 @@ pqs:
       int64AsString: "true"
       numericAsString: "true"
     postgres:
-      appName: scribe
+      appName: pqs
       bufferSize: "128"
       database: public
       host: postgres
@@ -287,7 +294,7 @@ PQS is tested for compatibility with multiple versions of dependencies, as follo
 
 | Dependency              | Versions                                                                               |
 |-------------------------|------------------------                                                                |
-| Canton Participant Node | Current and previous version<br />*(For example, PQS 3.5 supports Canton 3.4 and 3.5)* |
+| Canton Participant Node | Current and previous version<br />*(For example, PQS 3.6 supports Canton 3.5 and 3.6)* |
 | Java Runtime (Temurin)  | 17, 21                                                                                 |
 | PostgreSQL              | 14, 15, 16, 17, 18                                                                     |
 
@@ -316,9 +323,25 @@ Count active contracts by template:
 
 ### Party Filtering
 
-Find contracts where a specific party is a signatory:
+Find active contracts where a specific party is a signatory:
 
 <DamlDocsSdksToolsDevelopmentToolsPqsL96 />
+
+### Contract Lookup by ID
+
+Find contract by ID:
+
+<DamlDocsSdksToolsDevelopmentToolsPqsL331 />
+
+### Key Filtering
+
+Find active contracts by key:
+
+<DamlDocsSdksToolsDevelopmentToolsPqsL339 />
+
+Find active contracts by key hash:
+
+<DamlDocsSdksToolsDevelopmentToolsPqsL343 />
 
 ## Performance Optimization
 

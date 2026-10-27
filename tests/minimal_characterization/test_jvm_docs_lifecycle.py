@@ -23,8 +23,8 @@ def write_javadoc_jar(root: Path, version: str, sources: dict[str, str]) -> Path
         text=True,
         capture_output=True,
     ).stdout.strip()
-    if not javadoc_version.startswith("javadoc 17."):
-        raise AssertionError(f"Expected repo-local Javadoc 17, got: {javadoc_version}")
+    if not javadoc_version.startswith("javadoc 25."):
+        raise AssertionError(f"Expected repo-local Javadoc 25, got: {javadoc_version}")
 
     source_root = root / "src" / version
     docs_root = root / "javadoc" / version
