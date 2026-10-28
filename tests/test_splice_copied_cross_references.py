@@ -7,8 +7,6 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 EXPECTED_LINK_COUNTS = [
-    ("docs-main/overview/reference/canton-coin-tokenomics.mdx", "Scan State API", "/sdks-tools/api-reference/splice-scan-current-state-api", 1),
-    ("docs-main/overview/reference/canton-coin-tokenomics.mdx", "minting delegation", "/global-synchronizer/splice-fundamentals/rewards-minting", 1),
     ("docs-main/appdev/modules/m4-featured-app-activity-marker.mdx", "types_of_activity_records", "/overview/reference/canton-coin-tokenomics", 1),
     ("docs-main/appdev/modules/m7-canton-coin-preapprovals.mdx", "API docs", "/sdks-tools/api-reference/splice-validator-api", 1),
     ("docs-main/appdev/modules/m7-canton-coin-preapprovals.mdx", "limit on the number of parties", "/global-synchronizer/production-operations/scalability", 1),
@@ -21,10 +19,10 @@ EXPECTED_LINK_COUNTS = [
     ("docs-main/global-synchronizer/deployment/kubernetes-deployment.mdx", "configure pruning", "/global-synchronizer/production-operations/sv-pruning", 1),
     ("docs-main/global-synchronizer/deployment/kubernetes-deployment.mdx", "environment variables", "/global-synchronizer/deployment/configuration", 1),
     ("docs-main/global-synchronizer/deployment/kubernetes-deployment.mdx", "logical synchronizer upgrade", "/global-synchronizer/production-operations/logical-synchronizer-upgrade", 1),
-    ("docs-main/snippets/networkvars/global-synchronizer/deployment/kubernetes-deployment-1.mdx", "logical synchronizer upgrade", "/global-synchronizer/production-operations/logical-synchronizer-upgrade", 1),
-    ("docs-main/snippets/networkvars/global-synchronizer/deployment/kubernetes-deployment-4.mdx", "configure pruning", "/global-synchronizer/production-operations/sv-pruning", 1),
+    ("docs-main/src/global-synchronizer/deployment/kubernetes-deployment.mdx", "logical synchronizer upgrade", "/global-synchronizer/production-operations/logical-synchronizer-upgrade", 1),
+    ("docs-main/src/global-synchronizer/deployment/kubernetes-deployment.mdx", "configure pruning", "/global-synchronizer/production-operations/sv-pruning", 1),
     ("docs-main/global-synchronizer/deployment/onboarding-process.mdx", "validator helm chart configuration", "/global-synchronizer/deployment/validator-kubernetes", 1),
-    ("docs-main/snippets/networkvars/global-synchronizer/deployment/onboarding-process-1.mdx", "validator helm chart configuration", "/global-synchronizer/deployment/validator-kubernetes", 1),
+    ("docs-main/src/global-synchronizer/deployment/onboarding-process.mdx", "validator helm chart configuration", "/global-synchronizer/deployment/validator-kubernetes", 1),
     ("docs-main/global-synchronizer/deployment/sv-operations.mdx", "Cache mechanism", "/global-synchronizer/deployment/sv-operations", 1),
     ("docs-main/global-synchronizer/deployment/sv-operations.mdx", "cometbft-identity", "/global-synchronizer/deployment/kubernetes-deployment", 1),
     ("docs-main/global-synchronizer/deployment/sv-operations.mdx", "constructs a party exclusion config", "/global-synchronizer/deployment/sv-operations", 1),
@@ -35,14 +33,17 @@ EXPECTED_LINK_COUNTS = [
     ("docs-main/global-synchronizer/deployment/sv-operations.mdx", "synchronizer traffic parameters", "/global-synchronizer/deployment/synchronizer-traffic", 1),
     ("docs-main/global-synchronizer/deployment/sv-operations.mdx", "this instruction to prepare for validator onboarding", "/global-synchronizer/deployment/validator-kubernetes", 1),
     ("docs-main/global-synchronizer/deployment/sv-operations.mdx", "traffic consumption", "/global-synchronizer/deployment/synchronizer-traffic", 1),
-    ("docs-main/global-synchronizer/deployment/synchronizer-traffic.mdx", "Docker-compose one", "/global-synchronizer/deployment/validator-docker-compose", 1),
-    ("docs-main/global-synchronizer/deployment/synchronizer-traffic.mdx", "Grafana dashboard", "/global-synchronizer/production-operations/splice-metrics-overview", 1),
-    ("docs-main/global-synchronizer/deployment/synchronizer-traffic.mdx", "Kubernetes validator deployment guide", "/global-synchronizer/deployment/validator-kubernetes", 1),
-    ("docs-main/global-synchronizer/deployment/synchronizer-traffic.mdx", "SV operations docs", "/global-synchronizer/deployment/sv-operations", 1),
-    ("docs-main/global-synchronizer/deployment/synchronizer-traffic.mdx", "abort ledger submissions", "/global-synchronizer/troubleshooting-guide/troubleshooting-methodology", 1),
-    ("docs-main/global-synchronizer/deployment/synchronizer-traffic.mdx", "abort ledger submissions if the balance has fallen below a predefined amount", "/global-synchronizer/troubleshooting-guide/troubleshooting-methodology", 1),
+    ("docs-main/global-synchronizer/deployment/synchronizer-traffic.mdx", "Docker-compose one", "/global-synchronizer/deployment/validator-docker-compose#configuring-automatic-traffic-purchases", 1),
+    ("docs-main/global-synchronizer/deployment/synchronizer-traffic.mdx", "Grafana dashboard", "/global-synchronizer/production-operations/splice-metrics-overview#grafana-dashboards", 2),
+    ("docs-main/global-synchronizer/deployment/synchronizer-traffic.mdx", "Kubernetes validator deployment guide", "/global-synchronizer/deployment/validator-kubernetes#configuring-automatic-traffic-purchases", 1),
+    ("docs-main/global-synchronizer/deployment/synchronizer-traffic.mdx", "SV operations docs", "/global-synchronizer/deployment/sv-operations#determining-good-synchronizer-traffic-parameters", 1),
+    ("docs-main/global-synchronizer/deployment/synchronizer-traffic.mdx", "abort ledger submissions", "/global-synchronizer/troubleshooting-guide/troubleshooting-methodology#traffic-balance-below-reserved-amount", 1),
+    ("docs-main/global-synchronizer/deployment/synchronizer-traffic.mdx", "abort ledger submissions if the balance has fallen below a predefined amount", "/global-synchronizer/troubleshooting-guide/troubleshooting-methodology#traffic-balance-below-reserved-amount", 1),
     ("docs-main/global-synchronizer/deployment/synchronizer-traffic.mdx", "metrics", "/global-synchronizer/production-operations/splice-metrics-overview", 1),
-    ("docs-main/snippets/networkvars/global-synchronizer/deployment/synchronizer-traffic-1.mdx", "SV operations docs", "/global-synchronizer/deployment/sv-operations", 1),
+    ("docs-main/global-synchronizer/deployment/synchronizer-traffic.mdx", "Daml API docs", "/sdks-tools/api-reference/splice-daml/splice-amulet/splice-decentralizedsynchronizer#type-splice-decentralizedsynchronizer-membertraffic-74049", 1),
+    ("docs-main/global-synchronizer/deployment/synchronizer-traffic.mdx", "Daml API docs", "/sdks-tools/api-reference/splice-daml/splice-amulet/splice-decentralizedsynchronizer#type-splice-decentralizedsynchronizer-synchronizerfeesconfig-12142", 1),
+    ("docs-main/src/global-synchronizer/deployment/synchronizer-traffic.mdx", "SV operations docs", "/global-synchronizer/deployment/sv-operations#determining-good-synchronizer-traffic-parameters", 1),
+    ("docs-main/src/global-synchronizer/deployment/synchronizer-traffic.mdx", "Daml API docs", "/sdks-tools/api-reference/splice-daml/splice-amulet/splice-decentralizedsynchronizer#type-splice-decentralizedsynchronizer-synchronizerfeesconfig-12142", 1),
     ("docs-main/global-synchronizer/deployment/validator-docker-compose.mdx", "Users, Parties and Wallets in the Splice Wallet section", "/global-synchronizer/deployment/validator-users", 1),
     ("docs-main/global-synchronizer/deployment/validator-docker-compose.mdx", "authentication section", "/global-synchronizer/deployment/validator-kubernetes", 1),
     ("docs-main/global-synchronizer/deployment/validator-docker-compose.mdx", "automatically purchase traffic", "/global-synchronizer/deployment/synchronizer-traffic", 1),
@@ -96,8 +97,8 @@ EXPECTED_LINK_COUNTS = [
     ("docs-main/global-synchronizer/production-operations/validator-disaster-recovery.mdx", "identities backup", "/global-synchronizer/production-operations/validator-backups", 1),
     ("docs-main/global-synchronizer/production-operations/validator-disaster-recovery.mdx", "logical synchronizer upgrade", "/global-synchronizer/production-operations/logical-synchronizer-upgrade", 1),
     ("docs-main/global-synchronizer/production-operations/validator-disaster-recovery.mdx", "participant console", "/global-synchronizer/canton-console/essential-commands", 1),
-    ("docs-main/snippets/networkvars/global-synchronizer/production-operations/validator-disaster-recovery-1.mdx", "participant console", "/global-synchronizer/canton-console/essential-commands", 1),
-    ("docs-main/snippets/networkvars/global-synchronizer/production-operations/validator-disaster-recovery-2.mdx", "docs for the validator external signing API", "/sdks-tools/api-reference/splice-validator-api", 1),
+    ("docs-main/src/global-synchronizer/production-operations/validator-disaster-recovery.mdx", "participant console", "/global-synchronizer/canton-console/essential-commands", 1),
+    ("docs-main/src/global-synchronizer/production-operations/validator-disaster-recovery.mdx", "docs for the validator external signing API", "/sdks-tools/api-reference/splice-validator-api", 1),
     ("docs-main/global-synchronizer/production-operations/validator-security.mdx", "Docker Compose-based deployments", "/global-synchronizer/deployment/validator-docker-compose", 1),
     ("docs-main/global-synchronizer/production-operations/validator-security.mdx", "Helm-based deployment", "/global-synchronizer/deployment/validator-kubernetes", 1),
     ("docs-main/global-synchronizer/production-operations/validator-security.mdx", "above", "/global-synchronizer/production-operations/validator-security", 1),
@@ -107,13 +108,11 @@ EXPECTED_LINK_COUNTS = [
     ("docs-main/global-synchronizer/troubleshooting-guide/troubleshooting-methodology.mdx", "purchase any traffic", "/global-synchronizer/deployment/synchronizer-traffic", 1),
     ("docs-main/global-synchronizer/troubleshooting-guide/troubleshooting-methodology.mdx", "purchase traffic", "/global-synchronizer/deployment/synchronizer-traffic", 1),
     ("docs-main/global-synchronizer/troubleshooting-guide/troubleshooting-methodology.mdx", "validator_reonboard", "/global-synchronizer/production-operations/validator-disaster-recovery", 1),
-    ("docs-main/overview/reference/canton-coin-tokenomics.mdx", "Scan State API", "/sdks-tools/api-reference/splice-scan-current-state-api", 1),
-    ("docs-main/overview/reference/canton-coin-tokenomics.mdx", "minting delegation", "/global-synchronizer/splice-fundamentals/rewards-minting", 1),
     ("docs-main/sdks-tools/api-reference/splice-architecture.mdx", "app_dev_daml_api", "/sdks-tools/api-reference/splice-daml-apis", 1),
     ("docs-main/sdks-tools/api-reference/splice-daml-apis.mdx", "Canton Coin transfer preapproval", "/appdev/modules/m7-canton-coin-preapprovals", 1),
     ("docs-main/sdks-tools/api-reference/splice-daml-apis.mdx", "featured wallet provider party", "/overview/reference/canton-coin-tokenomics", 1),
     ("docs-main/sdks-tools/api-reference/splice-daml-apis.mdx", "how_to_become_a_featured_application", "/overview/reference/canton-coin-tokenomics", 1),
-    ("docs-main/snippets/networkvars/sdks-tools/api-reference/splice-daml-apis-1.mdx", "how_to_become_a_featured_application", "/overview/reference/canton-coin-tokenomics", 1),
+    ("docs-main/src/sdks-tools/api-reference/splice-daml-apis.mdx", "how_to_become_a_featured_application", "/overview/reference/canton-coin-tokenomics", 1),
     ("docs-main/sdks-tools/api-reference/splice-http-apis.mdx", "app_dev_scan_api", "/sdks-tools/api-reference/splice-scan-api", 1),
     ("docs-main/sdks-tools/api-reference/splice-http-apis.mdx", "app_dev_validator_api", "/sdks-tools/api-reference/splice-validator-api", 1),
     ("docs-main/sdks-tools/api-reference/splice-overview.mdx", "Canton Network Token Standard", "/sdks-tools/api-reference/splice-daml-apis", 1),
@@ -135,7 +134,7 @@ EXPECTED_LINK_COUNTS = [
     ("docs-main/sdks-tools/api-reference/splice-scan-api.mdx", "validator-api-scan-proxy", "/sdks-tools/api-reference/splice-validator-api", 1),
     ("docs-main/sdks-tools/api-reference/splice-scan-bulk-data-api.mdx", "Listing_all_SV_Sequencers", "/sdks-tools/api-reference/splice-scan-gs-connectivity-api", 1),
     ("docs-main/sdks-tools/api-reference/splice-scan-bulk-data-api.mdx", "scan_openapi", "/sdks-tools/api-reference/splice-apis", 1),
-    ("docs-main/snippets/networkvars/sdks-tools/api-reference/splice-scan-bulk-data-api-1.mdx", "scan_openapi", "/sdks-tools/api-reference/splice-apis", 1),
+    ("docs-main/src/sdks-tools/api-reference/splice-scan-bulk-data-api.mdx", "scan_openapi", "/sdks-tools/api-reference/splice-apis", 1),
     ("docs-main/sdks-tools/api-reference/splice-scan-cc-reference-data-api.mdx", "scan_current_state_api", "/sdks-tools/api-reference/splice-scan-current-state-api", 1),
     ("docs-main/sdks-tools/api-reference/splice-scan-current-state-api.mdx", "overall Splice network operations", "/sdks-tools/api-reference/splice-scan-gs-operations-api", 1),
     ("docs-main/sdks-tools/api-reference/splice-scan-current-state-api.mdx", "traffic fees", "/global-synchronizer/deployment/synchronizer-traffic", 1),
@@ -160,8 +159,8 @@ REMOVED_INLINE_CODE_REFERENCES = [
     ("docs-main/global-synchronizer/deployment/sv-operations.mdx", "`sv-helm`"),
     ("docs-main/global-synchronizer/deployment/sv-operations.mdx", "`sv-identity`"),
     ("docs-main/global-synchronizer/deployment/sv-operations.mdx", "`sv-security`"),
-    ("docs-main/snippets/networkvars/sdks-tools/api-reference/splice-daml-apis-1.mdx", "`how_to_become_a_featured_application`"),
-    ("docs-main/snippets/networkvars/sdks-tools/api-reference/splice-scan-bulk-data-api-1.mdx", "`scan_openapi`"),
+    ("docs-main/src/sdks-tools/api-reference/splice-daml-apis.mdx", "`how_to_become_a_featured_application`"),
+    ("docs-main/src/sdks-tools/api-reference/splice-scan-bulk-data-api.mdx", "`scan_openapi`"),
     ("docs-main/global-synchronizer/deployment/validator-kubernetes.mdx", "`error-insufficient-funds`"),
     ("docs-main/global-synchronizer/deployment/validator-users.mdx", "`helm_validator_topup`"),
     ("docs-main/global-synchronizer/production-operations/disaster-recovery.mdx", "`Backup of Node Identities`"),
@@ -210,6 +209,79 @@ REMOVED_INLINE_CODE_REFERENCES = [
     ("docs-main/sdks-tools/api-reference/splice-validator-api.mdx", "`validator-api-user-wallet-internal`"),
     ("docs-main/sdks-tools/api-reference/splice-validator-api.mdx", "`validator-api-user-wallet`"),
 ]
+
+
+SPLICE_DAML_ROUTE = "/sdks-tools/api-reference/splice-daml"
+
+EXPECTED_DAML_TYPE_LINKS = [
+    ("docs-main/appdev/deep-dives/token-standard.mdx", "docs", "splice-util-token-standard-wallet/splice-util-token-wallet-mergedelegation", "type-splice-util-token-wallet-mergedelegation-mergedelegation-14952"),
+    ("docs-main/appdev/deep-dives/token-standard.mdx", "docs", "splice-util-token-standard-wallet/splice-util-token-wallet-mergedelegation", "type-splice-util-token-wallet-mergedelegation-batchmergeutility-64168"),
+    ("docs-main/appdev/deep-dives/token-standard.mdx", "choice", "splice-util-token-standard-wallet/splice-util-token-wallet-mergedelegation", "type-splice-util-token-wallet-mergedelegation-mergedelegationmerge-40083"),
+    ("docs-main/appdev/deep-dives/token-standard.mdx", "choice", "splice-util-token-standard-wallet/splice-util-token-wallet-mergedelegation", "type-splice-util-token-wallet-mergedelegation-batchmergeutilitybatchmerge-8070"),
+    ("docs-main/src/appdev/deep-dives/token-standard.mdx", "docs", "splice-util-token-standard-wallet/splice-util-token-wallet-mergedelegation", "type-splice-util-token-wallet-mergedelegation-mergedelegationproposal-17546"),
+    ("docs-main/sdks-tools/api-reference/splice-daml-apis.mdx", "bulk transfers", "splice-util-featured-app-proxies/splice-util-featuredapp-walletuserproxy", "type-splice-util-featuredapp-walletuserproxy-walletuserproxybatchtransfer-93002"),
+    ("docs-main/src/sdks-tools/api-reference/splice-daml-apis.mdx", "template", "splice-util-featured-app-proxies/splice-util-featuredapp-walletuserproxy", "type-splice-util-featuredapp-walletuserproxy-walletuserproxy-95528"),
+    ("docs-main/src/sdks-tools/api-reference/splice-daml-apis.mdx", "choice", "splice-util-featured-app-proxies/splice-util-featuredapp-walletuserproxy", "type-splice-util-featuredapp-walletuserproxy-walletuserproxytransferfactorytransfer-32457"),
+    ("docs-main/sdks-tools/api-reference/splice-overview.mdx", "AmuletRules_Transfer", "splice-amulet/splice-amuletrules", "type-splice-amuletrules-amuletrulestransfer-23235"),
+    ("docs-main/overview/reference/splice-wallet-reference.mdx", "`AmuletRules_Transfer`", "splice-amulet/splice-amuletrules", "type-splice-amuletrules-amuletrulestransfer-23235"),
+    ("docs-main/overview/reference/splice-wallet-reference.mdx", "`ValidatorRewardCoupon`", "splice-amulet/splice-amulet", "type-splice-amulet-validatorrewardcoupon-76808"),
+    ("docs-main/overview/reference/splice-wallet-reference.mdx", "`Transfer`", "splice-api-token-transfer-instruction-v1/splice-api-token-transferinstructionv1", "type-splice-api-token-transferinstructionv1-transfer-51973"),
+    ("docs-main/overview/reference/splice-wallet-reference.mdx", "`TransferPreapproval`", "splice-wallet/splice-wallet-transferpreapproval", "type-splice-wallet-transferpreapproval-transferpreapprovalproposal-39002"),
+    ("docs-main/appdev/modules/m4-featured-app-activity-marker.mdx", "AppRewardCoupon", "splice-amulet/splice-amulet", "type-splice-amulet-apprewardcoupon-57229"),
+    ("docs-main/appdev/modules/m4-featured-app-activity-marker.mdx", "FeaturedAppRight", "splice-amulet/splice-amulet", "type-splice-amulet-featuredappright-765"),
+    ("docs-main/appdev/modules/m4-featured-app-activity-marker.mdx", "ValidatorRewardCoupon", "splice-amulet/splice-amulet", "type-splice-amulet-validatorrewardcoupon-76808"),
+    ("docs-main/appdev/modules/m4-featured-app-activity-marker.mdx", "FeaturedAppActivityMarker", "splice-amulet/splice-amulet", "type-splice-amulet-featuredappactivitymarker-16451"),
+    ("docs-main/appdev/modules/m4-featured-app-activity-marker.mdx", "FeaturedAppRight", "splice-api-featured-app-v1/splice-api-featuredapprightv1", "type-splice-api-featuredapprightv1-featuredappright-34177"),
+    ("docs-main/appdev/modules/m4-featured-app-activity-marker.mdx", "FeaturedAppRight_CreateActivityMarker", "splice-api-featured-app-v1/splice-api-featuredapprightv1", "type-splice-api-featuredapprightv1-featuredapprightcreateactivitymarker-36646"),
+    ("docs-main/appdev/modules/m4-featured-app-activity-marker.mdx", "AppRewardBeneficiary", "splice-api-featured-app-v1/splice-api-featuredapprightv1", "type-splice-api-featuredapprightv1-apprewardbeneficiary-32645"),
+    ("docs-main/global-synchronizer/splice-fundamentals/rewards-minting.mdx", "ValidatorRewardCoupon", "splice-amulet/splice-amulet", "type-splice-amulet-validatorrewardcoupon-76808"),
+    ("docs-main/global-synchronizer/splice-fundamentals/rewards-minting.mdx", "UnclaimedActivityRecord", "splice-amulet/splice-amulet", "type-splice-amulet-unclaimedactivityrecord-97331"),
+    ("docs-main/global-synchronizer/splice-fundamentals/rewards-minting.mdx", "DevelopmentFundCoupon", "splice-amulet/splice-amulet", "type-splice-amulet-developmentfundcoupon-75673"),
+    ("docs-main/global-synchronizer/splice-fundamentals/rewards-minting.mdx", "AppRewardCoupon", "splice-amulet/splice-amulet", "type-splice-amulet-apprewardcoupon-57229"),
+    ("docs-main/global-synchronizer/splice-fundamentals/rewards-minting.mdx", "ValidatorLivenessActivityRecord", "splice-amulet/splice-validatorlicense", "type-splice-validatorlicense-validatorlivenessactivityrecord-17293"),
+    ("docs-main/global-synchronizer/splice-fundamentals/rewards-minting.mdx", "SvRewardCoupon", "splice-amulet/splice-amulet", "type-splice-amulet-svrewardcoupon-68580"),
+    ("docs-main/global-synchronizer/splice-fundamentals/rewards-minting.mdx", "ValidatorRight", "splice-amulet/splice-amulet", "type-splice-amulet-validatorright-15964"),
+    ("docs-main/global-synchronizer/splice-fundamentals/sv-live-tokenomics.mdx", "SvRewardCoupon", "splice-amulet/splice-amulet", "type-splice-amulet-svrewardcoupon-68580"),
+    ("docs-main/global-synchronizer/release-notes/splice.mdx", "batch/bulk transfers", "splice-util-featured-app-proxies/splice-util-featuredapp-walletuserproxy", "type-splice-util-featuredapp-walletuserproxy-walletuserproxybatchtransfer-93002"),
+    ("docs-main/global-synchronizer/release-notes/splice.mdx", '"holdingFees"', "splice-amulet/splice-amuletrules", "type-splice-amuletrules-transfersummary-17366"),
+    ("docs-main/global-synchronizer/release-notes/splice.mdx", '"summary" field', "splice-amulet/splice-amuletrules", "type-splice-amuletrules-transferresult-93164"),
+]
+
+REMOVED_DAML_TYPE_PLACEHOLDERS = [
+    ("docs-main/appdev/deep-dives/token-standard.mdx", "(see docs)"),
+    ("docs-main/src/appdev/deep-dives/token-standard.mdx", "(see docs)"),
+]
+
+SPLICE_DAML_TYPE_LINK_RE = re.compile(
+    r"\]\((?P<route>" + re.escape(SPLICE_DAML_ROUTE) + r"/[^)#\s]+)#(?P<anchor>type-[^)\s]+)\)"
+)
+
+
+def test_splice_copied_daml_type_references_are_markdown_links() -> None:
+    for relative_path, text, page, anchor in EXPECTED_DAML_TYPE_LINKS:
+        markdown_link = f"[{text}]({SPLICE_DAML_ROUTE}/{page}#{anchor})"
+        assert markdown_link in (REPO_ROOT / relative_path).read_text(encoding="utf-8"), (
+            f"{relative_path} should contain {markdown_link!r}"
+        )
+
+
+def test_splice_copied_daml_type_placeholders_are_removed() -> None:
+    for relative_path, placeholder in REMOVED_DAML_TYPE_PLACEHOLDERS:
+        assert placeholder not in (REPO_ROOT / relative_path).read_text(encoding="utf-8")
+
+
+def test_splice_daml_type_links_resolve_to_generated_anchors() -> None:
+    docs_main = REPO_ROOT / "docs-main"
+    targets: dict[Path, str] = {}
+    broken = []
+    for page in sorted(docs_main.rglob("*.mdx")):
+        for match in SPLICE_DAML_TYPE_LINK_RE.finditer(page.read_text(encoding="utf-8")):
+            target = docs_main / f"{match['route'].lstrip('/')}.mdx"
+            if target not in targets:
+                targets[target] = target.read_text(encoding="utf-8") if target.exists() else ""
+            if f'id="{match["anchor"]}"' not in targets[target]:
+                broken.append(f"{page.relative_to(REPO_ROOT)}: {match['route']}#{match['anchor']}")
+    assert not broken, "Daml type links point at missing generated anchors:\n" + "\n".join(broken)
 
 
 def test_splice_copied_internal_cross_references_are_markdown_links() -> None:

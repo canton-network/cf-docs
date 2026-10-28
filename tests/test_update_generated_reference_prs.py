@@ -5,6 +5,8 @@ import sys
 from pathlib import Path
 from types import ModuleType
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -413,18 +415,18 @@ def test_target_paths_exist_in_base_checkout() -> None:
     assert {key: paths for key, paths in missing_paths.items() if paths} == {}
 
 
-def test_network_variable_tab_target_pages_match_generated_blocks() -> None:
+def test_network_variable_tab_target_pages_match_page_templates() -> None:
     module = load_script_module()
+    source_root = REPO_ROOT / "docs-main" / "src"
 
-    generated_block_pages = tuple(
+    template_output_pages = tuple(
         sorted(
-            path.relative_to(REPO_ROOT).as_posix()
-            for path in (REPO_ROOT / "docs-main").rglob("*.mdx")
-            if "{/* NETWORKVARS_START" in path.read_text(encoding="utf-8")
+            f"docs-main/{path.relative_to(source_root).as_posix()}"
+            for path in source_root.rglob("*.mdx")
         )
     )
 
-    assert module.NETWORK_VARIABLE_TAB_PAGES == generated_block_pages
+    assert module.NETWORK_VARIABLE_TAB_PAGES == template_output_pages
 
 
 def test_body_markdown_includes_description_changes_and_validation() -> None:
@@ -1228,3 +1230,38 @@ def test_generated_pr_policy_rejects_legacy_github_actions_author() -> None:
     assert errors == [
         "expected PR author 'app/cf-docs-generated-docs-merger', found 'app/github-actions'"
     ]
+
+
+def test_generated_pr_policy_lists_files_without_fetching_diff(monkeypatch) -> None:
+    policy = load_policy_module()
+    calls: list[tuple[str, ...]] = []
+
+    def fake_run_gh_lines(args):
+        calls.append(tuple(args))
+        return [
+            "docs-main/reference/protobuf/new.mdx\t",
+            "docs-main/reference/protobuf/renamed.mdx\t.github/workflows/old.yml",
+        ]
+
+    monkeypatch.setattr(policy, "run_gh_lines", fake_run_gh_lines)
+
+    paths = policy.pr_changed_files(
+        pr_number="1799", repository="canton-network/cf-docs", expected_count=2
+    )
+
+    assert calls[0][:3] == ("api", "--paginate", "repos/canton-network/cf-docs/pulls/1799/files")
+    assert paths == [
+        "docs-main/reference/protobuf/new.mdx",
+        "docs-main/reference/protobuf/renamed.mdx",
+        ".github/workflows/old.yml",
+    ]
+
+
+def test_generated_pr_policy_fails_closed_on_truncated_file_list(monkeypatch) -> None:
+    policy = load_policy_module()
+    monkeypatch.setattr(policy, "run_gh_lines", lambda args: ["docs-main/a.mdx\t"])
+
+    with pytest.raises(RuntimeError, match="listed 1 changed files for PR #1799, expected 3001"):
+        policy.pr_changed_files(
+            pr_number="1799", repository="canton-network/cf-docs", expected_count=3001
+        )

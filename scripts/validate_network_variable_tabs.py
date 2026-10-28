@@ -12,7 +12,7 @@ def main() -> None:
     # Compare fresh output with all targets, including already-dirty and untracked
     # files. Git status alone misses edits to files that were dirty before rendering.
     result = subprocess.run(
-        [sys.executable, str(REPO_ROOT / "scripts/generate_network_variable_tabs.py"), "--check"],
+        [sys.executable, str(REPO_ROOT / "scripts/generate_network_variable_tabs.py"), "--check", *sys.argv[1:]],
         cwd=REPO_ROOT,
         check=False,
     )

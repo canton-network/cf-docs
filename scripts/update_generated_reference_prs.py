@@ -122,6 +122,13 @@ UPDATE_TARGETS = (
             "docs-main/reference/splice-ans-api",
             "docs-main/reference/splice-scan-api",
             "docs-main/reference/splice-scan-proxy-api",
+            "docs-main/reference/splice-scan-proxy-token-metadata-service",
+            "docs-main/reference/splice-scan-proxy-transfer-instruction-api",
+            "docs-main/reference/splice-scan-proxy-transfer-instruction-v2-api",
+            "docs-main/reference/splice-scan-proxy-allocation-api",
+            "docs-main/reference/splice-scan-proxy-allocation-v2-api",
+            "docs-main/reference/splice-scan-proxy-allocation-instruction-api",
+            "docs-main/reference/splice-scan-proxy-allocation-instruction-v2-api",
             "docs-main/reference/splice-scan-streaming-api",
             "docs-main/reference/splice-token-metadata-service",
             "docs-main/reference/splice-transfer-instruction-api",
@@ -292,7 +299,6 @@ UPDATE_TARGETS = (
         generate_commands=(nix_develop_command("npm run generate:canton-protobuf-history"),),
         paths=(
             "docs-main/docs.json",
-            "docs-main/appdev/reference/protobuf-history",
             "docs-main/reference/admin-api/protobuf",
             "docs-main/reference/protobuf",
         ),
@@ -466,11 +472,16 @@ UPDATE_TARGETS = (
         title="Update Canton release/protocol compatibility",
         branch="generated-docs/canton-release-protocol-versions/update",
         description=(
-            "Regenerates the Canton release-to-protocol compatibility table from "
-            "runtime metadata in the latest public Canton release binary."
+            "Regenerates the Canton release-to-protocol compatibility table and the "
+            "version dashboard's protocol-to-Daml-LF table from runtime metadata in the "
+            "latest public Canton release binary, keeping published rows for protocol "
+            "versions that release no longer supports."
         ),
         generate_commands=(nix_develop_command("npm run generate:canton-release-protocol-versions"),),
-        paths=("docs-main/release-notes/releases-and-versioning.mdx",),
+        paths=(
+            "docs-main/release-notes/releases-and-versioning.mdx",
+            "docs-main/snippets/generated/protocol-lf-versions.mdx",
+        ),
         summary_kind="static",
         summary_path=None,
         summary_label=None,
@@ -485,7 +496,7 @@ UPDATE_TARGETS = (
         branch="generated-docs/canton-metrics-reference/update",
         description=(
             "Regenerates the checked-in Canton Metrics reference page from the latest "
-            "Canton release documentation source."
+            "public Canton release binary."
         ),
         generate_commands=(nix_develop_command("npm run generate:canton-metrics-reference"),),
         paths=("docs-main/global-synchronizer/reference/canton-metrics.mdx",),
@@ -529,7 +540,7 @@ UPDATE_TARGETS = (
         branch="release-notes/canton/update",
         description=(
             "Updates the published Canton release-note pages from the `RELEASE-NOTES.md` "
-            "files in stable public Canton release bundles."
+            "files in the public bundles of published Canton GitHub releases."
         ),
         generate_commands=(nix_develop_command("npm run update:canton-release-notes"),),
         paths=(

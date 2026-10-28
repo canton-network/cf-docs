@@ -10,7 +10,7 @@ import shutil
 import stat
 import subprocess
 import tarfile
-from typing import Any
+from typing import Any, Mapping
 import urllib.parse
 import urllib.request
 
@@ -101,6 +101,41 @@ def resolve_release_asset(
         size=size,
         digest=digest,
     )
+
+
+def select_latest_patch_tags(releases: list[Any], *, line_count: int) -> list[str]:
+    """Return the newest stable tag of each of the newest `line_count` major.minor lines."""
+    latest: dict[tuple[int, int], tuple[int, str]] = {}
+    for release in releases:
+        if not isinstance(release, dict) or release.get("draft") or release.get("prerelease"):
+            continue
+        tag = release.get("tag_name")
+        tag_match = STABLE_TAG_RE.fullmatch(tag) if isinstance(tag, str) else None
+        if tag_match is None:
+            continue
+        major, minor, patch = (int(part) for part in tag_match.group("version").split("."))
+        if (major, minor) not in latest or patch > latest[(major, minor)][0]:
+            latest[(major, minor)] = (patch, tag)
+    lines = sorted(latest, reverse=True)[:line_count]
+    if not lines:
+        raise ValueError("No stable Canton releases found")
+    return [latest[line][1] for line in lines]
+
+
+def latest_patch_tags_by_release_line(
+    *, release_repo: str = DEFAULT_RELEASE_REPO, line_count: int
+) -> list[str]:
+    releases: list[Any] = []
+    page = 1
+    while True:
+        payload = github_api_json(f"repos/{release_repo}/releases?per_page=100&page={page}")
+        if not isinstance(payload, list):
+            raise ValueError(f"Expected a GitHub release list for {release_repo}")
+        if not payload:
+            break
+        releases.extend(payload)
+        page += 1
+    return select_latest_patch_tags(releases, line_count=line_count)
 
 
 def sha256(path: Path) -> str:
@@ -207,8 +242,14 @@ def run_reference_script(
     cache_namespace: str,
     asset: ReleaseAsset,
     force_refresh: bool,
+    environment_overrides: Mapping[str, str] | None = None,
 ) -> Any:
-    script_digest = hashlib.sha256(script_path.read_bytes()).hexdigest()
+    digest = hashlib.sha256(script_path.read_bytes())
+    if environment_overrides:
+        digest.update(
+            json.dumps(dict(sorted(environment_overrides.items()))).encode("utf-8")
+        )
+    script_digest = digest.hexdigest()
     output_path = (
         cache_dir
         / "reference-json"
@@ -230,6 +271,7 @@ def run_reference_script(
     ]
     environment = os.environ.copy()
     environment.pop("CI", None)
+    environment.update(environment_overrides or {})
     completed = subprocess.run(
         command,
         cwd=distribution_root,
