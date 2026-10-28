@@ -6,12 +6,19 @@ on:
       - main
   workflow_dispatch:
 
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
   validate-network-variable-tabs:
     runs-on: canton-network-cf-docs
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
+        with:
+          # The PR comment compares generated pages with the base commit.
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v5
@@ -26,7 +33,25 @@ jobs:
       - name: Test network rendering and generated-docs automation
         run: |
           python3 -m pip install pytest
-          python3 -m pytest tests/test_network_variable_tabs.py tests/test_update_generated_reference_prs.py tests/test_generate_external_snippets.py tests/test_manage_followups.py tests/test_splice_copied_cross_references.py::test_splice_daml_type_links_resolve_to_generated_anchors
+          python3 -m pytest tests/test_network_variable_tabs.py tests/test_comment_generated_page_edits.py tests/test_update_generated_reference_prs.py tests/test_generate_external_snippets.py tests/test_manage_followups.py tests/test_splice_copied_cross_references.py::test_splice_daml_type_links_resolve_to_generated_anchors
 
       - name: Validate rendered network variable tabs
-        run: npm run validate:network-variable-tabs
+        id: validate
+        run: npm run validate:network-variable-tabs -- --report "$RUNNER_TEMP/network-tabs-report.json"
+
+      # Fork PRs get a read-only token, so only same-repository branches (including
+      # Mintlify editor branches) get the explanatory comment.
+      - name: Explain generated-page problems on the pull request
+        if: >-
+          always()
+          && github.event_name == 'pull_request'
+          && github.event.pull_request.head.repo.full_name == github.repository
+          && (steps.validate.outcome == 'success' || steps.validate.outcome == 'failure')
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          python3 scripts/comment_generated_page_edits.py
+          --report "$RUNNER_TEMP/network-tabs-report.json"
+          --base "${{ github.event.pull_request.base.sha }}"
+          --repo "${{ github.repository }}"
+          --pr "${{ github.event.pull_request.number }}"
