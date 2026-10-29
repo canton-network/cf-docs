@@ -125,3 +125,29 @@ SV operators are encouraged to monitor wasted traffic across all synchronizer me
 Note that wasted traffic is less relevant for SVs themselves, as SV components have unlimited traffic. Note also that SV mediators and sequencers waste traffic as part of their regular operation: They heavily use aggregate submissions where sequencers collect messages from a group of senders and only deliver a single message per recipient once a threshold of individual submissions has been sequenced; sequenced individual submissions beyond the aggregation threshold count as wasted traffic. All that said, should an SV component suddenly exhibit a significant increase in wasted traffic, this likely points to an actual issue that should be investigated.
 
 {/* COPIED_END */}
+
+## Calculating traffic cost
+
+The parameters above combine into formulas for the questions operators ask most often.
+
+**Remaining base rate (free) traffic at time `t`**, given the balance `last_balance` at the last submission time `last_time`:
+
+```
+available_base_rate(t) = min(
+  burstAmount,
+  last_balance + burstAmount * (t - last_time) / burstWindow
+)
+```
+
+This directly follows from the accrual rule above: the balance grows linearly and caps at `burstAmount` once a full `burstWindow` of inactivity has elapsed.
+
+**Cost of purchasing `N` bytes of extra traffic:**
+
+```
+cost_USD = (N / 1,000,000) * extraTrafficPrice
+cost_CC  = cost_USD / amuletPrice
+```
+
+`amuletPrice` is the USD-per-CC conversion rate recorded on the current `OpenMiningRound` contract (see the `extraTrafficPrice` query above); CC is always charged as `usd_amount / amuletPrice`, per the Daml implementation in `AmuletRules.daml`. `N` must be at least `minTopupAmount`. The validator's top-up automation always buys at least `minTopupAmount`; if `targetThroughput × minTopupInterval` is smaller, it buys `minTopupAmount` and spaces top-ups further apart.
+
+**Worked example**, using the DevNet values above (`burstAmount` = 400,000 bytes, `burstWindow` = 1,200,000,000 microseconds = 20 minutes, `extraTrafficPrice` = 60 USD/MB, `minTopupAmount` = 200,000 bytes): buying the minimum top-up of 200,000 bytes (0.2 MB) costs `0.2 * 60 = 12` USD, converted to CC at the round's `amuletPrice` using the formula above.
