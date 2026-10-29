@@ -3,9 +3,6 @@ title: "Asset Namespace"
 description: "Migrate asset discovery and registry lookups from v0 to v1."
 ---
 
-{/* COPIED_START source="splice-wallet-kernel:docs/wallet-integration-guide/src/wallet-sdk-v1-migration-guide/asset.rst" hash="35d418f7" */}
-
-
 The asset namespace provides methods to discover and find token assets from registries on the Canton Network. In v1, the asset namespace introduces a dedicated API for asset discovery and management.
 
 ## Key changes from v0 to v1
@@ -25,7 +22,7 @@ The asset namespace is an extended namespace that requires configuration. You ca
 
 **Option 1: Initialize during SDK creation**
 
-``` javascript
+```typescript
 const sdk = await SDK.create({
     auth: authConfig,
     ledgerClientUrl: 'http://localhost:2975',
@@ -41,7 +38,7 @@ const assetList = sdk.asset.list
 
 **Option 2: Add asset namespace later using extend()**
 
-``` javascript
+```typescript
 // Create basic SDK first
 const basicSDK = await SDK.create({
     auth: authConfig,
@@ -64,7 +61,7 @@ const assetList = extendedSDK.asset.list
 
 The `AssetConfig` type defines the configuration for the asset namespace:
 
-``` typescript
+```typescript
 type AssetConfig = {
     auth: TokenProviderConfig
     registries: URL[]
@@ -76,17 +73,29 @@ type AssetConfig = {
 
 You can preview the example config here:
 
-``` typescript title="Example LocalNet namespace configs" expandable
-import { JSContractEntry } from '@canton-network/core-ledger-client'
+{/* include ../../examples/scripts/utils/index.ts */}
+```typescript title="Example LocalNet namespace configs" expandable
+import type { JSContractEntry } from '@canton-network/core-ledger-client'
 import {
-    TokenProviderConfig,
+    type TokenProviderConfig,
     localNetStaticConfig,
+    type TokenConfig,
+    type AmuletConfig,
+    type AssetConfig,
 } from '@canton-network/wallet-sdk'
-import {
-    TokenConfig,
-    AmuletConfig,
-    AssetConfig,
-} from '@canton-network/wallet-sdk'
+
+export {
+    logAllContracts,
+    type ContractReadSpec as ContractSpec,
+} from './acs-logger.js'
+
+// Shared, LocalNet-only helpers. They live in the private `core-wallet-test-utils`
+// package so they never leak into the published SDK.
+export {
+    localNetGlobalSynchronizer,
+    synchronizerByAlias,
+    type KnownSynchronizers,
+} from '@canton-network/core-wallet-test-utils/localnet'
 
 export function getActiveContractCid(entry: JSContractEntry) {
     if ('JsActiveContract' in entry) {
@@ -110,8 +119,19 @@ export const TOKEN_NAMESPACE_CONFIG: TokenConfig = {
     auth: TOKEN_PROVIDER_CONFIG_DEFAULT,
 }
 
+export const TOKEN_NAMESPACE_CONFIG_SIMPLE: TokenConfig = {
+    registries: [localNetStaticConfig.LOCALNET_REGISTRY_API_URL],
+    auth: TOKEN_PROVIDER_CONFIG_DEFAULT,
+}
+
 export const AMULET_NAMESPACE_CONFIG: AmuletConfig = {
     validatorUrl: localNetStaticConfig.LOCALNET_APP_VALIDATOR_URL,
+    scanApiUrl: localNetStaticConfig.LOCALNET_SCAN_API_URL,
+    auth: TOKEN_PROVIDER_CONFIG_DEFAULT,
+    registryUrl: localNetStaticConfig.LOCALNET_REGISTRY_API_URL,
+}
+
+export const AMULET_NAMESPACE_CONFIG_SIMPLE: AmuletConfig = {
     scanApiUrl: localNetStaticConfig.LOCALNET_SCAN_API_URL,
     auth: TOKEN_PROVIDER_CONFIG_DEFAULT,
     registryUrl: localNetStaticConfig.LOCALNET_REGISTRY_API_URL,
@@ -129,7 +149,7 @@ The asset namespace provides a `list` getter to retrieve all assets from configu
 
 <div className="before-after">
 
-``` javascript
+```typescript
 // v0 - manually fetch from token standard service
 const tokenStandardService = new TokenStandardService(
     provider, logger, auth, false
@@ -141,7 +161,7 @@ const assetList = await tokenStandardService.registriesToAssets(
 
 ---
 
-``` javascript
+```typescript
 const assetList = sdk.asset.list
 ```
 
@@ -153,7 +173,7 @@ The `find` method allows you to search for a specific asset by ID, optionally fi
 
 <div className="before-after">
 
-``` javascript
+```typescript
 // v0 - manually filter assets
 const tokenStandardService = new TokenStandardService(
     provider, logger, auth, false
@@ -168,7 +188,7 @@ const amuletAsset = assets.find(
 
 ---
 
-``` javascript
+```typescript
 const amuletAsset = await sdk.asset.find('Amulet')
 ```
 
@@ -178,7 +198,7 @@ const amuletAsset = await sdk.asset.find('Amulet')
 
 When multiple registries contain assets with the same ID, you can specify the registry URL to disambiguate:
 
-``` javascript
+```typescript
 const amuletAsset = await sdk.asset.find(
     'Amulet',
     new URL('https://registry.example.com')
@@ -193,7 +213,7 @@ The asset namespace includes built-in error handling for common scenarios:
 
 If an asset with the specified ID does not exist in any registry:
 
-``` javascript
+```typescript
 try {
     const unknownAsset = await sdk.asset.find('NonExistentAsset')
 } catch (error) {
@@ -206,7 +226,7 @@ try {
 
 If multiple assets with the same ID exist across different registries and no registry URL is provided:
 
-``` javascript
+```typescript
 try {
     const duplicateAsset = await sdk.asset.find('CommonAsset')
 } catch (error) {
@@ -219,24 +239,29 @@ try {
 
 In the below example you can find the usage of the `find` method:
 
-``` typescript title="Full example: find assets in an OTC trade flow" expandable
-import pino from 'pino'
+{/* include ../../examples/scripts/04-token-standard-allocation.ts */}
+```typescript title="Full example: find assets in an OTC trade flow" expandable
 import { localNetStaticConfig, SDK } from '@canton-network/wallet-sdk'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import fs from 'fs/promises'
-import { KeyPair } from '@canton-network/core-signing-lib'
+import type { KeyPair } from '@canton-network/core-signing-lib'
 import { ASSET_CONFIG } from './utils/index.js'
-import { GenerateTransactionResponse } from '@canton-network/core-ledger-client'
+import type { GenerateTransactionResponse } from '@canton-network/core-ledger-client'
 import {
     TOKEN_NAMESPACE_CONFIG,
     TOKEN_PROVIDER_CONFIG_DEFAULT,
     AMULET_NAMESPACE_CONFIG,
+    localNetGlobalSynchronizer,
 } from './utils/index.js'
 
-const logger = pino({ name: 'v1-token-standard-allocation', level: 'info' })
+import { configureLogging } from './utils/configure-logging.js'
+const logger = await configureLogging()
 
-type PartyInfo = Omit<GenerateTransactionResponse, 'topologyTransactions'> & {
+export type PartyInfo = Omit<
+    GenerateTransactionResponse,
+    'topologyTransactions'
+> & {
     topologyTransactions?: string[] | undefined
     keyPair: KeyPair
 }
@@ -244,6 +269,7 @@ type PartyInfo = Omit<GenerateTransactionResponse, 'topologyTransactions'> & {
 const sdk = await SDK.create({
     auth: TOKEN_PROVIDER_CONFIG_DEFAULT,
     ledgerClientUrl: localNetStaticConfig.LOCALNET_APP_USER_LEDGER_URL,
+    synchronizerId: localNetGlobalSynchronizer,
     token: TOKEN_NAMESPACE_CONFIG,
     amulet: AMULET_NAMESPACE_CONFIG,
     asset: ASSET_CONFIG,
@@ -647,6 +673,9 @@ await sdk.token.utxos
 await sdk.token.holdings({ partyId: recipient.partyId }).then((allHoldings) => {
     logger.info(allHoldings, 'List holding transactions (Bob)')
 })
+
+// Forcefully exit to prevent floating ledger retries from crashing the event loop
+process.exit(0)
 ```
 
 ## Migration reference
