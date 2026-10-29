@@ -81,7 +81,7 @@ The error categories allow you to group errors such that application logic can b
 
 {/* GENERATED_CANTON_ERROR_CODES_START */}
 
-{/* GENERATED_FROM source="digital-asset/canton" ref="v3.6.4" asset="canton-open-source-3.6.4.tar.gz" digest="sha256:5441af83237d891e326dca825527ac0a076a848fbfdcb142d69c29e7010fa8f9" error_code_count="442" */}
+{/* GENERATED_FROM source="digital-asset/canton" ref="v3.7.0" asset="canton-open-source-3.7.0.tar.gz" digest="sha256:9cfe6196a4640ab30844ce61a7974508799a6bf83ce65c2acadffe1f0c95c4a5" error_code_count="452" */}
 
 ## Error Codes Inventory
 
@@ -505,7 +505,7 @@ The error categories allow you to group errors such that application logic can b
 
 #### `PACKAGE_SERVICE_NOT_CONNECTED_TO_SYNCHRONIZER`
 
-- **Resolution:** Connect to a synchronzer before vetting a package.
+- **Resolution:** Connect to a synchronizer before vetting a package.
 - **Category:** `InvalidGivenCurrentSystemStateOther`
 - **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status FAILED_PRECONDITION including a detailed error message.
 
@@ -1479,8 +1479,8 @@ The error categories allow you to group errors such that application logic can b
 
 #### `DEPRECATED_API_DISABLED`
 
-- **Explanation:** This error is emitted when a request uses a Ledger API or JSON Ledger API endpoint or request field that was deprecated in an earlier Canton release and is disabled by default in the current one. The error message names the releases that deprecated and disabled the API and, if already decided, the release that removes it.
-- **Resolution:** Migrate your application to the replacement endpoint or request fields. As a temporary measure, the deprecated APIs can be re-enabled with the feature flag named in the error message (for example `canton.participants.\<participant\>.features.deprecated.enable-deprecated-endpoints-34 = true` for the endpoints deprecated in Canton 3.4) in the participant configuration.
+- **Explanation:** This error is emitted when a request uses a deprecated Ledger API or JSON Ledger API endpoint that the participant operator disabled before its removal. The error message names the releases that deprecated the API and remove it.
+- **Resolution:** Migrate your application to the replacement named in the API documentation. Alternatively, remove the `= false` setting of the feature flag named in the error message (for example `canton.participants.\<participant\>.features.deprecated.enable-deprecated-endpoints-37` for the endpoints deprecated in Canton 3.7) from the participant configuration.
 - **Category:** `InvalidGivenCurrentSystemStateOther`
 - **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status FAILED_PRECONDITION including a detailed error message.
 
@@ -1646,6 +1646,15 @@ The error categories allow you to group errors such that application logic can b
 - **Category:** `InvalidGivenCurrentSystemStateOther`
 - **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status FAILED_PRECONDITION including a detailed error message.
 
+<div id="error-code-record_time_not_observed_yet" />
+
+#### `RECORD_TIME_NOT_OBSERVED_YET`
+
+- **Explanation:** This rejection is given when a read request tries to access record time that was not observed yet for a particular synchronizer.
+- **Resolution:** Either wait for participant to catch up with the requested synchronizer of request an earlier record time.
+- **Category:** `InvalidGivenCurrentSystemStateSeekAfterEnd`
+- **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status OUT_OF_RANGE including a detailed error message.
+
 <div id="error-code-unknown_resource" />
 
 #### `UNKNOWN_RESOURCE`
@@ -1729,6 +1738,15 @@ The error categories allow you to group errors such that application logic can b
 - **Category:** `InvalidGivenCurrentSystemStateResourceMissing`
 - **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status NOT_FOUND including a detailed error message.
 
+<div id="error-code-record_time_not_found" />
+
+#### `RECORD_TIME_NOT_FOUND`
+
+- **Explanation:** Record time is either before synchronizer connection was established or it was pruned already.
+- **Resolution:** Make sure that record time was not pruned yet and that the connection from this participant node to this synchronizer was established before this record time.
+- **Category:** `InvalidGivenCurrentSystemStateResourceMissing`
+- **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status NOT_FOUND including a detailed error message.
+
 <div id="error-code-synchronizer_not_found" />
 
 #### `SYNCHRONIZER_NOT_FOUND`
@@ -1776,15 +1794,6 @@ The error categories allow you to group errors such that application logic can b
 - **Category:** `SystemInternalAssumptionViolated`
 - **Conveyance:** This error is logged with log-level ERROR on the server side. It is exposed on the API with grpc-status INTERNAL without any details for security reasons.
 
-<div id="error-code-maximum_number_of_streams" />
-
-#### `MAXIMUM_NUMBER_OF_STREAMS`
-
-- **Explanation:** This error happens when the number of concurrent gRPC streaming requests exceeds the configured limit.
-- **Resolution:** The following actions can be taken: 1. Review the historical need for concurrent streaming by inspecting the metric given in the message. 2. Review the maximum streams limit configured in the rate limiting configuration. 3. Try to space out streaming requests such that they do not need to run in parallel with each other.
-- **Category:** `ContentionOnSharedResources`
-- **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status ABORTED including a detailed error message.
-
 <div id="error-code-no_preferred_packages_found" />
 
 #### `NO_PREFERRED_PACKAGES_FOUND`
@@ -1818,15 +1827,6 @@ The error categories allow you to group errors such that application logic can b
 
 - **Explanation:** Participant pruning of contracts is blocked, giving up. Please try again later. Safe contract pruning is implemented using database locks and with optimistic locking and retries. This error happens if all the retry attempts are exhausted.
 - **Resolution:** As the root cause of this type of lock contention should be automatically resolved in-between retries, please retry the operation again. If this kind of error emerges more often, please try to increase the number of retries defined by the `contract-pruning-max-retries` configuration parameter and/or increase the delay duration defined by the `contract-pruning-delay-before-retry` configuration parameter. In case this problem persists, please contact technical support.
-- **Category:** `ContentionOnSharedResources`
-- **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status ABORTED including a detailed error message.
-
-<div id="error-code-threadpool_overloaded" />
-
-#### `THREADPOOL_OVERLOADED`
-
-- **Explanation:** This happens when the rate of submitted gRPC requests requires more CPU or database power than is available.
-- **Resolution:** The following actions can be taken: Here the 'queue size' for the threadpool is considered as reported by the executor itself. 1. Review the historical 'queue size' growth by inspecting the metric given in the message. 2. Review the maximum 'queue size' limits configured in the rate limiting configuration. 3. Try to space out requests that are likely to require a lot of CPU or database power.
 - **Category:** `ContentionOnSharedResources`
 - **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status ABORTED including a detailed error message.
 
@@ -2137,6 +2137,26 @@ The error categories allow you to group errors such that application logic can b
 - **Resolution:** Retry after operator intervention.
 - **Category:** `InvalidGivenCurrentSystemStateOther`
 - **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status FAILED_PRECONDITION including a detailed error message.
+
+### ParticipantErrorGroup › ReplicateAcsError
+
+<div id="error-code-replicate_acs_disconnected_from_synchronizer" />
+
+#### `REPLICATE_ACS_DISCONNECTED_FROM_SYNCHRONIZER`
+
+- **Explanation:** This error indicates that replicating ACS to a participant and a synchronizer has been interrupted by a participant having disconnected from a synchronizer.
+- **Resolution:** Reconnect the participant to the synchronizer to unblock ACS replication.
+- **Category:** `InvalidGivenCurrentSystemStateOther`
+- **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status FAILED_PRECONDITION including a detailed error message.
+
+<div id="error-code-replicate_acs_other" />
+
+#### `REPLICATE_ACS_OTHER`
+
+- **Explanation:** This error is currently used as a catch-all for a variety of failures that prevent replicating ACS to a participant and synchronizer.
+- **Resolution:** Inspect the message, potentially rebuild the target participant, and retry replicating the ACS.
+- **Category:** `SystemInternalAssumptionViolated`
+- **Conveyance:** This error is logged with log-level ERROR on the server side. It is exposed on the API with grpc-status INTERNAL without any details for security reasons.
 
 ### ParticipantErrorGroup › SyncServiceError
 
@@ -2494,6 +2514,15 @@ The error categories allow you to group errors such that application logic can b
 - **Category:** `InvalidGivenCurrentSystemStateOther`
 - **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status FAILED_PRECONDITION including a detailed error message.
 
+<div id="error-code-traffic_correlation_conflict" />
+
+#### `TRAFFIC_CORRELATION_CONFLICT`
+
+- **Explanation:** An earlier submission with the same change id and submission id is still waiting for its completion.
+- **Resolution:** Retry shortly, use a new command id for a new command, or contact the participant operator if the problem continues. The error metadata contains `change_id_hash` and `submission_id`.
+- **Category:** `ContentionOnSharedResources`
+- **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status ABORTED including a detailed error message.
+
 <div id="error-code-traffic_fatal_failure" />
 
 #### `TRAFFIC_FATAL_FAILURE`
@@ -2512,6 +2541,15 @@ The error categories allow you to group errors such that application logic can b
 - **Category:** `InvalidGivenCurrentSystemStateOther`
 - **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status FAILED_PRECONDITION including a detailed error message.
 
+<div id="error-code-traffic_top_up_not_credited" />
+
+#### `TRAFFIC_TOP_UP_NOT_CREDITED`
+
+- **Explanation:** This error indicates that a traffic purchase was committed on the ledger, but its traffic was not credited because its choice result does not have the shape TEA expects.
+- **Resolution:** Check that the TEA version matches the deployed traffic purchase Daml model, then credit the affected account through the TEA API. The error metadata contains `update_id` and `offset`.
+- **Category:** `SystemInternalAssumptionViolated`
+- **Conveyance:** This error is logged with log-level ERROR on the server side. It is exposed on the API with grpc-status INTERNAL without any details for security reasons.
+
 <div id="error-code-traffic_transient_failure" />
 
 #### `TRAFFIC_TRANSIENT_FAILURE`
@@ -2520,6 +2558,15 @@ The error categories allow you to group errors such that application logic can b
 - **Resolution:** Retry the request. When retrying an account update, reuse the deduplication id of the original request, otherwise the update may be applied a second time. If the problem persists, contact the participant operator.
 - **Category:** `TransientServerFailure`
 - **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status UNAVAILABLE including a detailed error message.
+
+<div id="error-code-traffic_unsafe_to_prune" />
+
+#### `TRAFFIC_UNSAFE_TO_PRUNE`
+
+- **Explanation:** This error occurs if a prune request's cutoff is within the minimum pruning window, the same limit as ledger pruning: the participant's `init.ledger-api.max-deduplication-duration`.
+- **Resolution:** Prune at or before `safe_before_or_at`. The retention is the participant's `init.ledger-api.max-deduplication-duration`. The error metadata contains `before_or_at`, `safe_before_or_at` and `minimum_retention`.
+- **Category:** `InvalidGivenCurrentSystemStateOther`
+- **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status FAILED_PRECONDITION including a detailed error message.
 
 <div id="error-code-traffic_update_out_of_bound" />
 
@@ -2990,6 +3037,15 @@ The error categories allow you to group errors such that application logic can b
 - **Category:** `InvalidIndependentOfSystemState`
 - **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status INVALID_ARGUMENT including a detailed error message.
 
+<div id="error-code-invalid_submission_id" />
+
+#### `INVALID_SUBMISSION_ID`
+
+- **Explanation:** The provided submission id is invalid.
+- **Resolution:** Resubmit the command with a valid submission id.
+- **Category:** `InvalidIndependentOfSystemState`
+- **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status INVALID_ARGUMENT including a detailed error message.
+
 ### ParticipantErrorGroup › TransactionErrorGroup › TransactionRoutingError › TopologyErrors
 
 <div id="error-code-decentralized_party_cannot_submit" />
@@ -3000,6 +3056,15 @@ The error categories allow you to group errors such that application logic can b
 - **Resolution:** Use an external submission instead: give the party its own signing key so that the submission authorization is independent of any hosting participant, and the threshold is satisfied by confirmations from independent participants.
 - **Category:** `InvalidGivenCurrentSystemStateOther`
 - **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status FAILED_PRECONDITION including a detailed error message.
+
+<div id="error-code-frozen_parties" />
+
+#### `FROZEN_PARTIES`
+
+- **Explanation:** This error indicates that the request could be routed if none of its parties were frozen. A party is frozen on a synchronizer while one of its hosting participants has the Freezing hosting state. While frozen, the party has no hosting participants on that synchronizer, so no request that involves it can be routed there.
+- **Resolution:** Retry after the freeze ends, that is, once no hosting participant of the party has the Freezing hosting state on the synchronizer.
+- **Category:** `InvalidGivenCurrentSystemStateResourceMissing`
+- **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status NOT_FOUND including a detailed error message.
 
 <div id="error-code-informees_not_active" />
 
@@ -3162,14 +3227,6 @@ The error categories allow you to group errors such that application logic can b
 - **Category:** `SecurityAlert`
 - **Conveyance:** This error is logged with log-level WARN on the server side. It is exposed on the API with grpc-status INVALID_ARGUMENT without any details for security reasons.
 
-<div id="error-code-invalid_envelope_signature" />
-
-#### `INVALID_ENVELOPE_SIGNATURE`
-
-- **Explanation:** This error indicates that the sequencer has detected an invalid envelope signature in the submission request. This most likely indicates that the request is bogus and has been created by a malicious sequencer. So it will not get processed.
-- **Category:** `SecurityAlert`
-- **Conveyance:** This error is logged with log-level WARN on the server side. It is exposed on the API with grpc-status INVALID_ARGUMENT without any details for security reasons.
-
 <div id="error-code-invalid_ledger_event" />
 
 #### `INVALID_LEDGER_EVENT`
@@ -3220,14 +3277,6 @@ The error categories allow you to group errors such that application logic can b
 - **Resolution:** Verify that the sequencer node has been properly configured with logical upgrade predecessor information for the new sequencer. Currently it is expected that a config option `canton.sequencers.\<sequencer\>.parameters.sequencing-time-lower-bound-exclusive` has been specified and is set to the announced LSU upgrade time.
 - **Category:** `InvalidGivenCurrentSystemStateOther`
 - **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status FAILED_PRECONDITION including a detailed error message.
-
-<div id="error-code-multiple_mediator_recipients" />
-
-#### `MULTIPLE_MEDIATOR_RECIPIENTS`
-
-- **Explanation:** This error indicates that the participant is trying to send envelopes to multiple mediators or mediator groups in the same submission request. This most likely indicates that the request is bogus and has been created by a malicious sequencer. So it will not get processed.
-- **Category:** `SecurityAlert`
-- **Conveyance:** This error is logged with log-level WARN on the server side. It is exposed on the API with grpc-status INVALID_ARGUMENT without any details for security reasons.
 
 <div id="error-code-non_empty_topology_timestamp" />
 
@@ -3438,6 +3487,15 @@ The error categories allow you to group errors such that application logic can b
 - **Category:** `UnredactedSecurityAlert`
 - **Conveyance:** This error is logged with log-level WARN on the server side and exposed on the API with grpc-status INVALID_ARGUMENT including a detailed error message.
 
+<div id="error-code-sequencer_submission_request_malformed_rejected" />
+
+#### `SEQUENCER_SUBMISSION_REQUEST_MALFORMED_REJECTED`
+
+- **Explanation:** This error occurs when the sequencer receives an invalid submission request. The request will be rejected so that the sender can be charged for the submission attempt.
+- **Resolution:** Check if the sender is running an attack. If you can rule out an attack, please reach out to Canton support.
+- **Category:** `UnredactedSecurityAlert`
+- **Conveyance:** This error is logged with log-level WARN on the server side and exposed on the API with grpc-status INVALID_ARGUMENT including a detailed error message.
+
 <div id="error-code-sequencer_submission_request_refused" />
 
 #### `SEQUENCER_SUBMISSION_REQUEST_REFUSED`
@@ -3470,7 +3528,7 @@ The error categories allow you to group errors such that application logic can b
 #### `SEQUENCER_UNAVAILABLE`
 
 - **Explanation:** The sequencer is currently unavailable.
-- **Resolution:** Retry quickly.
+- **Resolution:** Retry with backoff and jittering.
 - **Category:** `TransientServerFailure`
 - **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status UNAVAILABLE including a detailed error message.
 
@@ -3594,6 +3652,15 @@ The error categories allow you to group errors such that application logic can b
 - **Category:** `InvalidGivenCurrentSystemStateOther`
 - **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status FAILED_PRECONDITION including a detailed error message.
 
+<div id="error-code-topology_cannot_generate_key" />
+
+#### `TOPOLOGY_CANNOT_GENERATE_KEY`
+
+- **Explanation:** It was not possible to generate a new key.
+- **Resolution:** Verify the parameters used for generating the key.
+- **Category:** `InvalidGivenCurrentSystemStateOther`
+- **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status FAILED_PRECONDITION including a detailed error message.
+
 <div id="error-code-topology_cannot_remove_mapping" />
 
 #### `TOPOLOGY_CANNOT_REMOVE_MAPPING`
@@ -3618,6 +3685,15 @@ The error categories allow you to group errors such that application logic can b
 
 - **Explanation:** This error indicates that a dangerous command that could break a node was rejected. This is the case if a dangerous command is run on a node to issue transactions for another node. Such commands must be run with force, as they are very dangerous and could easily break the node. As an example, if we assign an encryption key to a participant that the participant does not have, then the participant will be unable to process an incoming transaction. Therefore we must be very careful to not create such situations.
 - **Resolution:** Set the ForceFlag.AlienMember if you really know what you are doing.
+- **Category:** `InvalidGivenCurrentSystemStateOther`
+- **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status FAILED_PRECONDITION including a detailed error message.
+
+<div id="error-code-topology_hosting_states_not_expressible" />
+
+#### `TOPOLOGY_HOSTING_STATES_NOT_EXPRESSIBLE`
+
+- **Explanation:** This error indicates that a topology transaction, or a v30 mapping in Authorize or GenerateTransactions, would replace a party-to-participant mapping that has hosting states it cannot express. A topology transaction of protocol version 36 and a v30 mapping cannot express the Nominated and Freezing hosting states: they turn a listed participant in one of these states into an Onboarding or Active one, and remove an omitted one.
+- **Resolution:** Submit the transaction for the synchronizer's protocol version, or send the mapping as v31, which can express all hosting states. Set the ForceFlag.AllowV30PartyToParticipantAfterHostingStates if you really know what you are doing.
 - **Category:** `InvalidGivenCurrentSystemStateOther`
 - **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status FAILED_PRECONDITION including a detailed error message.
 
@@ -3698,7 +3774,7 @@ The error categories allow you to group errors such that application logic can b
 #### `TOPOLOGY_INVALID_SUCCESSOR_PHYSICAL_SYNCHRONIZER_ID`
 
 - **Explanation:** This error indicates that the successor synchronizer id is not valid.
-- **Resolution:** Change the physical synchronizer id of the successor so that it satisfies: - it is greater than the current physical synchronizer id - it is greater than all previous synchronizer announcements
+- **Resolution:** Change the physical synchronizer id of the successor so that it satisfies: - it is greater than the current physical synchronizer id - it is greater than all previous synchronizer announcements - its protocol version is not lower than the current protocol version, if the current protocol version is 37 or higher (protocol version downgrades are forbidden)
 - **Category:** `InvalidIndependentOfSystemState`
 - **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status INVALID_ARGUMENT including a detailed error message.
 
@@ -3726,6 +3802,15 @@ The error categories allow you to group errors such that application logic can b
 
 - **Explanation:** This error indicates that the synchronizer upgrade announcement specified an invalid upgrade time.
 - **Resolution:** Resubmit the synchronizer announcement with an upgrade time sufficiently in the future.
+- **Category:** `InvalidGivenCurrentSystemStateOther`
+- **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status FAILED_PRECONDITION including a detailed error message.
+
+<div id="error-code-topology_key_store_lookup_error" />
+
+#### `TOPOLOGY_KEY_STORE_LOOKUP_ERROR`
+
+- **Explanation:** This indicates an error while trying to communicate with the key store.
+- **Resolution:** Check the configuration of the secret key store for the node.
 - **Category:** `InvalidGivenCurrentSystemStateOther`
 - **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status FAILED_PRECONDITION including a detailed error message.
 
@@ -4003,6 +4088,15 @@ The error categories allow you to group errors such that application logic can b
 - **Resolution:** Allocate a new party with unique keys. If you're trying to change the hosting nodes of the party, follow the party replication procedure instead.
 - **Category:** `InvalidGivenCurrentSystemStateResourceExists`
 - **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status ALREADY_EXISTS including a detailed error message.
+
+<div id="error-code-hosting_state_prevents_party_allocation" />
+
+#### `HOSTING_STATE_PREVENTS_PARTY_ALLOCATION`
+
+- **Explanation:** This error occurs when a party is allocated on a participant whose entry in the party's hosting mapping is Nominated or Freezing. Allocating the party would rewrite the entry to Active, but such an entry must move forward only through an explicit hosting state change.
+- **Resolution:** Change this participant's hosting state for the party explicitly, or remove this participant's entry from the party's hosting mapping.
+- **Category:** `InvalidGivenCurrentSystemStateOther`
+- **Conveyance:** This error is logged with log-level INFO on the server side and exposed on the API with grpc-status FAILED_PRECONDITION including a detailed error message.
 
 <div id="error-code-known_package_version" />
 
