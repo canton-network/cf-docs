@@ -24,6 +24,10 @@ where `\<token\>` is an OAuth2 Bearer Token with enough claims to access the Val
 
 If you are using a docker-compose deployment, replace `https://wallet.validator.YOUR_HOSTNAME` with `http://wallet.localhost`. If you are running the docker-compose deployment with no auth, you can use the utility Python script `get-token.py` to generate a token for the `curl` command by running `python get-token.py administrator` (requires [pyjwt](https://pypi.org/project/PyJWT/)).
 
+From Splice 0.10.0 onwards, downloading the participant's private keys is disabled by default, which makes this endpoint fail unless your participant uses an external KMS.
+To take an identities backup of a participant without KMS, enable key downloads temporarily:
+set `enableKeyDownload: true` in the values of the `splice-participant` Helm chart, or pass `--enable-key-download` to `start.sh` for docker-compose deployments.
+
 ## Backups of postgres instances
 
 To backup a validator node, we recommend to back up all Postgres instances at least every 4 hours. To restore the node from a backup, the backup must be less than 30 days old; see [Restoring a validator from backups](/global-synchronizer/production-operations/validator-disaster-recovery#restoring-a-validator-from-backups). Note that there is a strict order requirement between the backups: **the backup of the validator app's postgres instance must be taken at a point in time strictly earlier than that of the participant**. Please make sure the app's instance backup is completed before starting the participant one.
