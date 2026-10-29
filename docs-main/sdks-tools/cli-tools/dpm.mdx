@@ -332,6 +332,21 @@ For multi-package projects, build all sub-packages:
 
 ### Exploration
 
+**`dpm inspect-dar`** -- List the files and packages inside a DAR, including each package's name, version, and package ID. Add `--json` for output that is easier to parse in scripts and more stable across SDK versions. `dpm inspect-dar` runs the same command as `dpm damlc inspect-dar`.
+
+```bash
+dpm inspect-dar --json .daml/dist/mypkg-1.0.0.dar
+```
+
+The JSON output has three top-level fields: `files` lists every file in the archive, `main_package_id` is the package ID of the DAR's main package, and `packages` maps each package ID in the DAR, including dependencies, to its `name`, `version`, and `path`. The `version` is the one set in the package's `daml.yaml`. To read the main package's ID and version:
+
+```bash
+dpm inspect-dar --json .daml/dist/mypkg-1.0.0.dar \
+  | jq -r '{ main_package_id, version: .packages[.main_package_id].version }'
+```
+
+For a full example of both output formats, see [Inspecting a DAR file](/appdev/reference/daml-lf-reference#inspecting-a-dar-file).
+
 Use `--help` on any command to see available options:
 
 <DamlDocsSdksToolsCliToolsDpmL98 />
