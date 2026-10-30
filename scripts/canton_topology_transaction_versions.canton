@@ -1,11 +1,18 @@
 import io.circe.syntax._
 import com.digitalasset.canton.topology.transaction.TopologyTransaction
-import com.digitalasset.canton.version.ProtocolVersion
+import com.digitalasset.canton.version.{ProtoVersion, ProtocolVersion}
+
+// Canton 3.6 returns ProtoVersion; Canton 3.7 returns Either[String, ProtoVersion].
+def topologyTransactionProtoVersion(protocolVersion: ProtocolVersion): String =
+  (TopologyTransaction.protoVersionFor(protocolVersion): Any) match {
+    case version: ProtoVersion => version.v.toString
+    case Right(version: ProtoVersion) => version.v.toString
+    case Left(error) => sys.error(error.toString)
+    case other => sys.error(s"Unexpected protoVersionFor result: $other")
+  }
 
 val rows = ProtocolVersion.supported.filterNot(_.isDev).map { protocolVersion =>
-  protocolVersion.v.toString -> List(
-    TopologyTransaction.protoVersionFor(protocolVersion).v.toString
-  )
+  protocolVersion.v.toString -> List(topologyTransactionProtoVersion(protocolVersion))
 }
 
 println(
