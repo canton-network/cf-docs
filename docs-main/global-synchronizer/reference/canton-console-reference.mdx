@@ -107,6 +107,19 @@ docker run -it --rm --network splice-validator -v $(pwd)/console.conf:/app/app.c
 
 </Tabs>
 
+### Repair commands and key downloads
+
+`features.enable-repair-commands` in `console.conf` only enables the repair commands in your console. From Splice 0.10.0 onwards, the participant's repair service is disabled by default, so `participant.repair` commands also require enabling it on the participant itself:
+
+- Helm: set `enableRepairCommands: true` in the values of the `splice-participant` chart.
+- Docker compose: add `canton.features.enable-repair-commands = yes` as [additional configuration](/global-synchronizer/deployment/configuration#adding-ad-hoc-configuration) of the participant.
+
+Similarly, commands that export a participant's private keys require key downloads to be enabled on the participant:
+set `enableKeyDownload: true` in the values of the `splice-participant` chart, or pass `--enable-key-download` to `start.sh` for docker-compose deployments.
+Note that this is not relevant for participants that use an external KMS; here the key export commands are always enabled, and never return private keys.
+
+It is recommended to disable repair commands and key downloads again once there is no specific reason to keep them enabled, to prevent accidental abuse and minimize attack surface.
+
 ## Sequencer console
 
 <Tabs>
