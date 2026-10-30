@@ -1,0 +1,56 @@
+---
+title: "Topology Key Monitor"
+sidebarTitle: "Topology Key Monitor"
+description: "Get alerted when topology transactions are signed by keys you track"
+---
+
+The `splice-topology-key-monitor` Helm chart deploys a small service that watches the topology state of a participant and logs a warning whenever a topology transaction or proposal signed by one of a configured set of keys appears. Use it to get alerted when one such key is used.
+
+<Note>
+The chart is available starting with Splice 0.9.5.
+</Note>
+
+## How it works
+
+The monitor runs a Canton console script against the admin API of your participant. On every poll it:
+
+1. Looks up the synchronizers registered on the participant under the configured aliases (`global` by default).
+2. Lists the topology transactions and the topology proposals on each of these synchronizers that became effective since the previous poll.
+3. Logs a `WARN` line for every transaction or proposal that carries a signature from one of the tracked keys. The line states whether it is a transaction or a proposal, the synchronizer, the matched key fingerprints and the full transaction.
+
+<Warning>
+The monitor only reports transactions that become effective after it started. It keeps no state across restarts, so transactions that become effective while the monitor is not running are not reported.
+</Warning>
+
+## Installing the monitor
+
+Create a values file, for example `topology-key-monitor-values.yaml`:
+
+```yaml
+keys:
+  - "1220a1b2..."
+```
+
+Install the chart into the namespace of your participant. For an SV, this is the `sv` namespace:
+
+```bash
+helm install topology-key-monitor oci://ghcr.io/digital-asset/decentralized-canton-sync/helm/splice-topology-key-monitor -n sv --version ${CHART_VERSION} -f topology-key-monitor-values.yaml --wait
+```
+
+### Configuration
+
+| Value | Default | Description |
+|-------|---------|-------------|
+| `keys` | `[]` | Fingerprints of the keys to track. Required. |
+| `expectedSynchronizerAliases` | `[global]` | Aliases of the synchronizers to monitor. |
+| `participant.address` | `participant` | Address of the participant. The default matches the `participant` release installed by the SV and validator Helm deployments. |
+| `participant.adminApiPort` | `5002` | Admin API port of the participant. |
+| `pollIntervalSeconds` | `60` | Time between two polls. |
+| `slowQueryThresholdSeconds` | `5` | A topology query that takes longer than this is logged as a warning. |
+| `missingSynchronizerGracePeriodSeconds` | `600` | How long an expected synchronizer can be missing before this is logged as a warning. |
+
+## Alerting
+
+The monitor logs JSON to stdout from the `topology-key-monitor` container. Configure your log-based alerting to fire on every log line with level `WARN` or higher from that container.
+
+If your alerting already fires on all warnings from the namespace of your participant, exclude the `topology-key-monitor` container from that alert and add a dedicated one, so that a tracked-key match is not hidden among other warnings.
