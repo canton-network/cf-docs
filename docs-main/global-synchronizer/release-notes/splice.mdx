@@ -95,17 +95,20 @@ description: "Release notes and version history for Global Synchronizer software
       - This release introduces protocol version 37. Please see the release notes for Canton [3.7.0](/global-synchronizer/release-notes/canton-releases/3-7-0) for more details.
       - This release contains various security improvements as well as dependency upgrades.
 
-  - LocalNet
-
-    - **Behavior change** All host ports published by LocalNet (Postgres, the participant Ledger, Admin and JSON APIs,
-      the validator admin APIs and the Swagger UI) are now bound to `127.0.0.1` instead of all interfaces.
-      These services use default credentials or no authentication, so they must not be reachable from the network.
-      To expose them on another interface, set `HOST_BIND_IP` (as already supported for the web UIs), for example `HOST_BIND_IP=0.0.0.0`.
-
   - Validator
 
     - **Behavior change** When auth is disabled, setting `allowedOrigins` in the `splice-validator` Helm chart is mandatory.
       The Docker Compose validator deployment sets it automatically.
+
+     - Add `/v1/scan-proxy/dso`, which serves the DSO information from Scan's `/v1/dso`.
+       `/v0/scan-proxy/dso` is deprecated: it fails when the validator is connected to more than one Scan
+       instance, as the `sv_user` and `sv_party_id` fields differ between Scan instances.
+
+     - The validator now starts automation external parties with keys embedded in a
+       `PartyToParticipant` mapping by default. The prior behavior can
+       be restored with the
+       `canton.validator-apps.validator_backend.support-embedded-party-signing-keys = false` but it is recommended to instead make sure that the
+       `ValidatorRight` contracts are [configured such that they won't start automation](https://docs.canton.network/global-synchronizer/production-operations/scalability#bypassing-the-limit).
 
   - Health checks of Canton nodes
 
@@ -136,7 +139,7 @@ description: "Release notes and version history for Global Synchronizer software
         The Docker images use a `HEALTHCHECK` start period of 10 minutes, so containers report unhealthy if migrations take longer,
         and report healthy again once the migrations are done.
 
-  - Docker Compose deployments and localnet
+  - Docker Compose deployments and LocalNet
 
     - **Breaking** The Docker Compose deployments (validator, sv and localnet) now set the default Postgres version to 18.
       Additionally, due to [upstream image's changes](https://github.com/docker-library/postgres/pull/1259) the data volume is now mounted to `/var/lib/postgresql` instead of `/var/lib/postgresql/data`.
@@ -148,6 +151,11 @@ description: "Release notes and version history for Global Synchronizer software
       The nginx process runs as a non-root user and listens on container port 8080 instead of 80.
       The published host ports are unchanged. If you use a custom `nginx.conf`, update its `listen` ports to 8080
       and set `pid /tmp/nginx.pid;` so the unprivileged user can write the pid file.
+
+    - **Behavior change** All host ports published by LocalNet (Postgres, the participant Ledger, Admin and JSON APIs,
+      the validator admin APIs and the Swagger UI) are now bound to `127.0.0.1` instead of all interfaces.
+      These services use default credentials or no authentication, so they must not be reachable from the network.
+      To expose them on another interface, set `HOST_BIND_IP` (as already supported for the web UIs), for example `HOST_BIND_IP=0.0.0.0`.
 
   - Participant
 
@@ -195,18 +203,6 @@ description: "Release notes and version history for Global Synchronizer software
     - **Breaking**: The Grafana dashboards in the release bundle now use the V2 resource format.
       Upgrade to Grafana 13 or newer before importing them.
       Dashboard UIDs are unchanged, so existing dashboard links will keep working.
-
-  - Validator app
-
-     - Add `/v1/scan-proxy/dso`, which serves the DSO information from Scan's `/v1/dso`.
-       `/v0/scan-proxy/dso` is deprecated: it fails when the validator is connected to more than one Scan
-       instance, as the `sv_user` and `sv_party_id` fields differ between Scan instances.
-
-     - The validator now starts automation external parties with keys embedded in a
-       `PartyToParticipant` mapping by default. The prior behavior can
-       be restored with the
-       `canton.validator-apps.validator_backend.support-embedded-party-signing-keys = false` but it is recommended to instead make sure that the
-       `ValidatorRight` contracts are [configured such that they won't start automation](https://docs.canton.network/global-synchronizer/production-operations/scalability#bypassing-the-limit).
 
   - Docker images
 
