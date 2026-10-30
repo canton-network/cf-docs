@@ -3,7 +3,7 @@ title: "Canton Console Commands"
 description: "Canton admin console command reference: participant, mediator, sequencer, and topology commands."
 ---
 
-{/* GENERATED_FROM source="canton-open-source-3.7.0.tar.gz" ref="v3.7.0" digest="sha256:9cfe6196a4640ab30844ce61a7974508799a6bf83ce65c2acadffe1f0c95c4a5" template_source="digital-asset/canton:docs-open/src/main/resources/console.rst.template" template_commit="72bba4ca58c62aafee337035af885e47594e98ec" template_blob="3126accb7ff4175295a594648f25683f29b5e65c" raw_command_count="699" rendered_command_count="655" */}
+{/* GENERATED_FROM source="canton-open-source-3.7.1.tar.gz" ref="v3.7.1" digest="sha256:18ea244ed77a83c7a93a4edb0d1db04ef04123871300be09f9a208cf79260a32" template_source="digital-asset/canton:docs-open/src/main/resources/console.rst.template" template_commit="e23eddfdc926c2e0f64d58221faa964398a9ecd6" template_blob="3126accb7ff4175295a594648f25683f29b5e65c" raw_command_count="699" rendered_command_count="655" */}
 
 <div id="canton_console_reference">
 
@@ -5718,7 +5718,7 @@ It uses the party's most recent activation on the target participant to determin
 
 "Activation" on the target participant means the new hosting arrangement has been authorized by both the party itself and the target participant via party-to-participant topology transactions.
 
-This command will fail if the party has not yet been activated on the target participant.
+This command is only meant for party replication. It cannot export the ACS of a party that is already hosted on the target participant (for example, the exporting participant itself, or a party onboarded before `beginOffsetExclusive`). To export the ACS of a party without replicating it, use `repair.export_acs` instead.
 
 Upon successful completion, the command writes a GZIP-compressed ACS snapshot file. While designed to work in tandem with the `import_party_acs` command, the resulting file is a standard ACS snapshot that can also be used with other compatible commands (such as `repair.import_acs`).
 
@@ -5727,7 +5727,7 @@ Parameters:
 - `party`: The party being replicated, it must already be active on the target participant.
 - `synchronizerId`: Restricts the export to the given synchronizer.
 - `targetParticipantId`: Unique identifier of the target participant where the party will be replicated. Restricts the export to contracts not already known to the target participant.
-- `beginOffsetExclusive`: Exclusive ledger offset used as a starting point to find the party's activation on the target participant.
+- `beginOffsetExclusive`: Exclusive ledger offset used as a starting point to find the party's activation on the target participant. Must strictly predate the party-to-participant topology transaction that onboards the party on the target participant; otherwise the command waits for an activation that never comes and fails after `waitForActivationTimeout`.
 - `exportFilePath`: The path denoting the file where the ACS snapshot will be stored. Defaults to "canton-acs-export.gz" when undefined.
 - `waitForActivationTimeout`: The maximum duration the service will wait to find the topology transaction that activates the party on the target participant.
 - `timeout`: A timeout for this operation to complete.
