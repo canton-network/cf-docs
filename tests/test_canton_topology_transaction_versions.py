@@ -48,6 +48,36 @@ class CantonTopologyTransactionVersionsTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "row 0"):
             generator.load_rows({key: [["34", []]]})
 
+    def test_merge_keeps_rows_dropped_by_newer_release(self) -> None:
+        page = (
+            "Before\n\n"
+            + generator.render_table(
+                [("34", ["30"]), ("35", ["30"]), ("36", ["30"]), ("2147483646", ["30"])],
+                asset=self.asset,
+            )
+            + "\n\nAfter\n"
+        )
+        merged = generator.merge_rows(
+            generator.load_page_rows(page),
+            [("36", ["30"]), ("37", ["31"]), ("2147483646", ["31"])],
+        )
+
+        self.assertEqual(
+            merged,
+            [
+                ("34", ["30"]),
+                ("35", ["30"]),
+                ("36", ["30"]),
+                ("37", ["31"]),
+                ("2147483646", ["31"]),
+            ],
+        )
+
+    def test_load_page_rows_rejects_malformed_rows(self) -> None:
+        page = f"{generator.TABLE_HEADER}\n| --- | --- |\n| dev | 30 |\n"
+        with self.assertRaisesRegex(ValueError, "row is invalid"):
+            generator.load_page_rows(page)
+
     def test_render_table_includes_all_rows_and_provenance(self) -> None:
         table = generator.render_table(
             [("34", ["30"]), ("35", ["30"])], asset=self.asset
