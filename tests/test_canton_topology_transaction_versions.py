@@ -8,6 +8,7 @@ import unittest
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
+from scripts import canton_release_reference  # noqa: E402
 from scripts import generate_all_reference_docs  # noqa: E402
 from scripts import generate_canton_topology_transaction_versions as generator  # noqa: E402
 
@@ -47,6 +48,41 @@ class CantonTopologyTransactionVersionsTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(ValueError, "row 0"):
             generator.load_rows({key: [["34", []]]})
+
+    def test_merge_keeps_rows_dropped_by_newer_release(self) -> None:
+        page = (
+            "Before\n\n"
+            + generator.render_table(
+                [("34", ["30"]), ("35", ["30"]), ("36", ["30"])],
+                asset=self.asset,
+            )
+            + "\n\nAfter\n"
+        )
+        merged = generator.merge_rows(
+            generator.load_page_rows(page),
+            [("36", ["30"]), ("37", ["31"])],
+        )
+
+        self.assertEqual(
+            merged,
+            [("34", ["30"]), ("35", ["30"]), ("36", ["30"]), ("37", ["31"])],
+        )
+
+    def test_load_page_rows_rejects_malformed_rows(self) -> None:
+        page = f"{generator.TABLE_HEADER}\n| --- | --- |\n| dev | 30 |\n"
+        with self.assertRaisesRegex(ValueError, "row is invalid"):
+            generator.load_page_rows(page)
+
+    def test_default_release_is_highest_version_not_most_recent(self) -> None:
+        releases = [
+            {"tag_name": "v3.6.5", "draft": False, "prerelease": False},
+            {"tag_name": "v3.7.0", "draft": False, "prerelease": False},
+            {"tag_name": "v3.6.4", "draft": False, "prerelease": False},
+        ]
+        self.assertEqual(
+            canton_release_reference.select_latest_patch_tags(releases, line_count=1),
+            ["v3.7.0"],
+        )
 
     def test_render_table_includes_all_rows_and_provenance(self) -> None:
         table = generator.render_table(
