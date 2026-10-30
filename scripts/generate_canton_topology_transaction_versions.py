@@ -13,6 +13,7 @@ from canton_release_reference import (
     ReleaseAsset,
     ensure_release_archive,
     extract_release,
+    latest_patch_tags_by_release_line,
     resolve_release_asset,
     run_reference_script,
 )
@@ -130,7 +131,10 @@ def main() -> int:
         repo_root=REPO_ROOT, script_path=Path(__file__).resolve(), argv=sys.argv[1:]
     )
     args = parse_args()
-    asset = resolve_release_asset(release_repo=args.release_repo, tag=args.canton_tag)
+    tag = args.canton_tag or latest_patch_tags_by_release_line(
+        release_repo=args.release_repo, line_count=1
+    )[0]
+    asset = resolve_release_asset(release_repo=args.release_repo, tag=tag)
     if args.reference_json:
         payload = json.loads(args.reference_json.read_text(encoding="utf-8"))
     else:
